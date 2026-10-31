@@ -10,6 +10,8 @@ const bodySchema = z.object({
   filename: z.string().min(1).max(500),
   bytes: z.number().int().positive(),
   mime: z.string().min(1),
+  /** E5: Media panel uploads (video / image / audio) — same bucket, signing and limits. */
+  kind: z.literal('media').optional(),
 })
 
 export async function POST(request: Request) {

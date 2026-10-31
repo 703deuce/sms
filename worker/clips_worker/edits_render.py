@@ -141,6 +141,10 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         and not edits.get("textItems")
         and not _e4_color(edits)
         and not edits.get("segmentSpeeds")
+        # E5: source segments replace frames / sound.
+        and not edits.get("sourceSegments")
+        # E5b: inserts lengthen the export.
+        and not edits.get("inserts")
     )
 
 
@@ -1535,12 +1539,25 @@ def render_edited_clip(
         )
         stage("speakercrop_nc_done")
 
+    from clips_worker.media_sources import apply_full_render_sources
+
+    # E5: other sources (uploads / Rooms angles / multicam) over source-time spans, before the E4
+    # color pass and the cut so color, cuts, transitions, keyframes and speed all apply to them.
+    full_render = apply_full_render_sources(
+        full_render, edits, clip_start_ms, clip_end_ms, work_dir, (audio_assets or {}).get("media_paths")
+    )
+
     from clips_worker.color import apply_full_render_color
 
     # E4: source-anchored color looks on full_render (source time) → cut.mp4 and the E3 transition
     # handles (both cut from full_render) carry the right look per side.
     full_render = apply_full_render_color(full_render, edits, clip_start_ms, clip_end_ms, work_dir)
 
+    if render_meta is not None:
+        # E5b: exact keep segments (source ms) for the insert splice after the export post-step.
+        render_meta["keep_segs_src"] = [
+            (clip_start_ms + int(round(a * 1000)), clip_start_ms + int(round(b * 1000))) for a, b in segs_sec
+        ]
     cut_mp4 = work_dir / "cut.mp4"
     if len(segs_sec) == 1 and segs_sec[0][0] <= 0.01 and abs(segs_sec[0][1] - (clip_end_ms - clip_start_ms) / 1000) < 0.1:
         shutil.copy(full_render, cut_mp4)

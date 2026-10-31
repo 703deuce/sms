@@ -8841,6 +8841,7 @@ model ClipUpload {
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   projects  ClipProject[]
   parts     ClipUploadPart[]
+  projectMedia ClipProjectMedia[]
 
   @@index([workspaceId, createdAt])
   @@map("clip_uploads")
@@ -8899,6 +8900,8 @@ model ClipProject {
   sourceKind         String            @default("upload")
   folder             ClipProjectFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
   t2vDraft           T2vDraft?
+  projectMedia       ClipProjectMedia[]
+  mediaTranscripts   ClipMediaTranscript[]
 
   /// Partial unique index `clip_projects_workspace_t2v_hub_title` on ("workspaceId", title)
   /// WHERE title = '__t2v_workspace_jobs__' AND "deletedAt" IS NULL — see migration
@@ -9706,6 +9709,63 @@ model ClipEditVersion {
 
   @@index([clipId, createdAt])
   @@map("clip_edit_versions")
+}
+
+/// E5 project media library: user uploads linked to a clip project (migration 20261031120000_clip_project_media).
+model ClipProjectMedia {
+  id             String   @id
+  projectId      String
+  workspaceId    String
+  uploadId       String
+  /// video | image | audio
+  mediaType      String
+  label          String?
+  durationMs     Int?
+  width          Int?
+  height         Int?
+  hasAudio       Boolean?
+  /// Audio sync of an uploaded angle: angle media ms = main source ms + syncOffsetMs.
+  syncOffsetMs   Int?
+  syncConfidence Float?
+  /// none | queued | done | low_confidence | failed
+  syncStatus     String   @default("none")
+  createdAt      DateTime @default(now())
+
+  project ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  upload  ClipUpload  @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, uploadId], map: "clip_project_media_project_upload_key")
+  @@index([workspaceId], map: "clip_project_media_workspace_idx")
+  @@map("clip_project_media")
+}
+
+/// E5b on-demand transcript of a project's own media (uploaded clip or Rooms take track).
+model ClipMediaTranscript {
+  id                 String   @id
+  projectId          String
+  workspaceId        String
+  /// upload | take
+  ref                String
+  /// ClipUpload id or RecordingTrack id
+  refId              String
+  /// queued | running | done | failed
+  status             String   @default("queued")
+  /// MEDIA-time words [{w, s, e, p?, spk?}] (seconds)
+  words              Json?
+  language           String?
+  durationMs         Int?
+  estimatedUsdMicros Int?
+  costUsdMicros      Int?
+  provider           String?
+  error              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+
+  project ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, ref, refId], map: "clip_media_transcripts_project_ref_key")
+  @@index([workspaceId], map: "clip_media_transcripts_workspace_idx")
+  @@map("clip_media_transcripts")
 }
 
 model DubTrack {

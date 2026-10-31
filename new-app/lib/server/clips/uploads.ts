@@ -16,7 +16,10 @@ export function extFromFilename(name: string) {
   return m?.[1] || 'mp4'
 }
 
-export async function createClipUpload(workspaceId: string, input: { filename: string; bytes: number; mime: string }) {
+export async function createClipUpload(
+  workspaceId: string,
+  input: { filename: string; bytes: number; mime: string; kind?: 'media' },
+) {
   if (!input.bytes || input.bytes < 1) throw new Error('Invalid file size')
   const maxBytes = clipUploadEffectiveMaxBytes()
   if (input.bytes > maxBytes) {
@@ -49,6 +52,7 @@ export async function createClipUpload(workspaceId: string, input: { filename: s
       s3UploadId,
       uploadMode: session.mode,
       storageDriver: driver,
+      ...(input.kind ? { kind: input.kind } : {}),
     },
   })
   return {

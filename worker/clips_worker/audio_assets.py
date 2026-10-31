@@ -7,14 +7,28 @@ from pathlib import Path
 from clips_worker.storage import download_object
 
 
-def load_audio_assets(conn, edits: dict, work_dir: Path) -> dict:
+def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = None) -> dict:
     audio = edits.get("audio") or {}
     music = audio.get("music")
     sfx_list = audio.get("sfx") or []
 
     music_path = None
     music_meta = None
-    if music and music.get("generationId"):
+    if music and music.get("uploadId"):
+        # E5: the user's own audio upload (media library), same mix / window / fades as AI music.
+        up = (media or {}).get(str(music["uploadId"]))
+        if up is not None:
+            music_path = up
+            music_meta = {
+                "volume": float(music.get("volume", 0.25)),
+                "duckDepth": float(music.get("duckDepth", 0.7)),
+                "fadeInMs": int(music.get("fadeInMs", 500)),
+                "fadeOutMs": int(music.get("fadeOutMs", 1000)),
+                "startMs": music.get("startMs"),
+                "endMs": music.get("endMs"),
+                "inMs": music.get("inMs"),
+            }
+    elif music and music.get("generationId"):
         with conn.cursor() as cur:
             cur.execute('SELECT "storageKey" FROM ai_generations WHERE id=%s', (music["generationId"],))
             row = cur.fetchone()
@@ -34,6 +48,11 @@ def load_audio_assets(conn, edits: dict, work_dir: Path) -> dict:
 
     sfx_paths: list[tuple[Path, int, float]] = []
     for i, item in enumerate(sfx_list):
+        if item.get("uploadId"):
+            up = (media or {}).get(str(item["uploadId"]))
+            if up is not None:
+                sfx_paths.append((up, int(item.get("atMs", 0)), float(item.get("volume", 0.8))))
+            continue
         gid = item.get("generationId")
         if not gid:
             continue

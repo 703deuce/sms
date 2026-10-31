@@ -197,7 +197,7 @@ describe('Producer pop-over', () => {
 
   it('shows paid-tool cost; proposal → Preview auditions, Accept applies once', () => {
     const s = setup()
-    expect(s.t.getByTestId('stub-cost').textContent).toMatch(/^2 credits · ~\$/)
+    expect(s.t.getByTestId('stub-cost').textContent).toMatch(/^2 credits$/)
     click(s.t.getByTestId('stub-propose'))
     expect(s.t.getByTestId('producer-proposal').textContent).toContain('2 proposed changes')
     click(s.t.getByTestId('producer-preview'))

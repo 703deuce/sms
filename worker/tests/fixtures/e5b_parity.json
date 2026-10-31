@@ -1,0 +1,503 @@
+{
+  "cases": [
+    {
+      "input": {
+        "segs": [
+          [
+            10000,
+            40000
+          ]
+        ],
+        "sources": [
+          {
+            "id": "upl_v",
+            "ref": "upload",
+            "refId": "upl_v",
+            "mediaType": "video",
+            "label": "drone.mp4",
+            "durationMs": 8000
+          },
+          {
+            "id": "upl_i",
+            "ref": "upload",
+            "refId": "upl_i",
+            "mediaType": "image",
+            "label": "logo.png"
+          },
+          {
+            "id": "upl_a",
+            "ref": "upload",
+            "refId": "upl_a",
+            "mediaType": "audio",
+            "label": "song.mp3"
+          },
+          {
+            "id": "trk_b",
+            "ref": "take",
+            "refId": "trk_b",
+            "mediaType": "video",
+            "label": "Guest cam",
+            "syncMs": -1500
+          }
+        ],
+        "inserts": [
+          {
+            "id": "a",
+            "sourceId": "upl_v",
+            "atSrcMs": 20000,
+            "inMs": 400,
+            "durMs": 2000
+          }
+        ],
+        "sourceSegments": [
+          {
+            "id": "s",
+            "sourceId": "upl_v",
+            "startMs": 12000,
+            "endMs": 14000,
+            "inMs": 0,
+            "audio": "source"
+          }
+        ],
+        "wordFixes": {
+          "1885000001": "Y!"
+        }
+      },
+      "words": [
+        {
+          "w": "a",
+          "s": 10.2,
+          "e": 10.5,
+          "i": 0
+        },
+        {
+          "w": "b",
+          "s": 12.25,
+          "e": 12.5,
+          "i": 1
+        },
+        {
+          "w": "c",
+          "s": 13,
+          "e": 13.4,
+          "i": 2
+        },
+        {
+          "w": "d",
+          "s": 30,
+          "e": 30.3,
+          "i": 3
+        }
+      ],
+      "transcripts": {
+        "upl_v": [
+          {
+            "w": "x",
+            "s": 0.5005,
+            "e": 0.7
+          },
+          {
+            "w": "y",
+            "s": 1.2,
+            "e": 1.5,
+            "p": 0.9
+          },
+          {
+            "w": " ",
+            "s": 1.6,
+            "e": 1.7
+          },
+          {
+            "w": "z",
+            "s": 2.5,
+            "e": 2.9
+          }
+        ],
+        "trk_b": [
+          {
+            "w": "g1",
+            "s": 10,
+            "e": 10.4
+          },
+          {
+            "w": "g2",
+            "s": 11,
+            "e": 11.3
+          }
+        ]
+      },
+      "inserts": [
+        {
+          "id": "a",
+          "sourceId": "upl_v",
+          "atSrcMs": 20000,
+          "inMs": 400,
+          "durMs": 2000
+        }
+      ],
+      "windows": [
+        {
+          "id": "a",
+          "sourceId": "upl_v",
+          "baseMs": 10000,
+          "startMs": 10000,
+          "endMs": 12000,
+          "inMs": 400,
+          "durMs": 2000,
+          "audio": "source",
+          "fit": "cover"
+        }
+      ],
+      "merged": [
+        {
+          "w": "a",
+          "s": 10.2,
+          "e": 10.5,
+          "i": 0
+        },
+        {
+          "w": "x",
+          "s": 12.5,
+          "e": 12.7,
+          "i": 1885000000
+        },
+        {
+          "w": "y",
+          "s": 13.2,
+          "e": 13.5,
+          "p": 0.9,
+          "i": 1885000001
+        },
+        {
+          "w": "d",
+          "s": 30,
+          "e": 30.3,
+          "i": 3
+        }
+      ],
+      "insertWords": [
+        {
+          "w": "x",
+          "startMs": 10100,
+          "endMs": 10300,
+          "i": 1885000000,
+          "insertId": "a"
+        },
+        {
+          "w": "Y!",
+          "startMs": 10800,
+          "endMs": 11100,
+          "i": 1885000001,
+          "insertId": "a"
+        }
+      ],
+      "buckets": {
+        "upl_v": 885,
+        "trk_b": 957,
+        "clip_ünï": 351
+      }
+    },
+    {
+      "input": {
+        "segs": [
+          [
+            10000,
+            20000
+          ],
+          [
+            25000,
+            40000
+          ]
+        ],
+        "sources": [
+          {
+            "id": "upl_v",
+            "ref": "upload",
+            "refId": "upl_v",
+            "mediaType": "video",
+            "label": "drone.mp4",
+            "durationMs": 8000
+          },
+          {
+            "id": "upl_i",
+            "ref": "upload",
+            "refId": "upl_i",
+            "mediaType": "image",
+            "label": "logo.png"
+          },
+          {
+            "id": "upl_a",
+            "ref": "upload",
+            "refId": "upl_a",
+            "mediaType": "audio",
+            "label": "song.mp3"
+          },
+          {
+            "id": "trk_b",
+            "ref": "take",
+            "refId": "trk_b",
+            "mediaType": "video",
+            "label": "Guest cam",
+            "syncMs": -1500
+          }
+        ],
+        "inserts": [
+          {
+            "id": "e",
+            "sourceId": "upl_i",
+            "atSrcMs": 0,
+            "append": true,
+            "durMs": 1500
+          },
+          {
+            "id": "b",
+            "sourceId": "upl_v",
+            "atSrcMs": 22000,
+            "durMs": 3000,
+            "fit": "contain"
+          },
+          {
+            "id": "c",
+            "sourceId": "trk_b",
+            "atSrcMs": 15000,
+            "inMs": 9000,
+            "durMs": 3000
+          },
+          {
+            "id": "d",
+            "sourceId": "upl_v",
+            "atSrcMs": 15000,
+            "durMs": 900,
+            "audio": "mute"
+          },
+          {
+            "id": "x",
+            "sourceId": "upl_a",
+            "atSrcMs": 15000,
+            "durMs": 900
+          }
+        ],
+        "sourceSegments": [
+          {
+            "id": "g",
+            "sourceId": "trk_b",
+            "startMs": 12000,
+            "endMs": 14000
+          }
+        ],
+        "wordFixes": {}
+      },
+      "words": [
+        {
+          "w": "a",
+          "s": 10.2,
+          "e": 10.5,
+          "i": 0
+        },
+        {
+          "w": "b",
+          "s": 12.25,
+          "e": 12.5,
+          "i": 1
+        },
+        {
+          "w": "c",
+          "s": 13,
+          "e": 13.4,
+          "i": 2
+        },
+        {
+          "w": "d",
+          "s": 30,
+          "e": 30.3,
+          "i": 3
+        }
+      ],
+      "transcripts": {
+        "upl_v": [
+          {
+            "w": "x",
+            "s": 0.5005,
+            "e": 0.7
+          },
+          {
+            "w": "y",
+            "s": 1.2,
+            "e": 1.5,
+            "p": 0.9
+          },
+          {
+            "w": " ",
+            "s": 1.6,
+            "e": 1.7
+          },
+          {
+            "w": "z",
+            "s": 2.5,
+            "e": 2.9
+          }
+        ],
+        "trk_b": [
+          {
+            "w": "g1",
+            "s": 10,
+            "e": 10.4
+          },
+          {
+            "w": "g2",
+            "s": 11,
+            "e": 11.3
+          }
+        ]
+      },
+      "inserts": [
+        {
+          "id": "e",
+          "sourceId": "upl_i",
+          "atSrcMs": 0,
+          "append": true,
+          "inMs": 0,
+          "durMs": 1500,
+          "audio": "mute"
+        },
+        {
+          "id": "b",
+          "sourceId": "upl_v",
+          "atSrcMs": 22000,
+          "inMs": 0,
+          "durMs": 3000,
+          "fit": "contain"
+        },
+        {
+          "id": "c",
+          "sourceId": "trk_b",
+          "atSrcMs": 15000,
+          "inMs": 9000,
+          "durMs": 3000
+        },
+        {
+          "id": "d",
+          "sourceId": "upl_v",
+          "atSrcMs": 15000,
+          "inMs": 0,
+          "durMs": 900,
+          "audio": "mute"
+        }
+      ],
+      "windows": [
+        {
+          "id": "c",
+          "sourceId": "trk_b",
+          "baseMs": 5000,
+          "startMs": 5000,
+          "endMs": 8000,
+          "inMs": 9000,
+          "durMs": 3000,
+          "audio": "source",
+          "fit": "cover"
+        },
+        {
+          "id": "d",
+          "sourceId": "upl_v",
+          "baseMs": 5000,
+          "startMs": 8000,
+          "endMs": 8900,
+          "inMs": 0,
+          "durMs": 900,
+          "audio": "mute",
+          "fit": "cover"
+        },
+        {
+          "id": "b",
+          "sourceId": "upl_v",
+          "baseMs": 10000,
+          "startMs": 13900,
+          "endMs": 16900,
+          "inMs": 0,
+          "durMs": 3000,
+          "audio": "source",
+          "fit": "contain"
+        },
+        {
+          "id": "e",
+          "sourceId": "upl_i",
+          "baseMs": 25000,
+          "startMs": 31900,
+          "endMs": 33400,
+          "inMs": 0,
+          "durMs": 1500,
+          "audio": "mute",
+          "fit": "cover"
+        }
+      ],
+      "merged": [
+        {
+          "w": "a",
+          "s": 10.2,
+          "e": 10.5,
+          "i": 0
+        },
+        {
+          "w": "b",
+          "s": 12.25,
+          "e": 12.5,
+          "i": 1
+        },
+        {
+          "w": "c",
+          "s": 13,
+          "e": 13.4,
+          "i": 2
+        },
+        {
+          "w": "d",
+          "s": 30,
+          "e": 30.3,
+          "i": 3
+        }
+      ],
+      "insertWords": [
+        {
+          "w": "g1",
+          "startMs": 6000,
+          "endMs": 6400,
+          "i": 1957000000,
+          "insertId": "c"
+        },
+        {
+          "w": "g2",
+          "startMs": 7000,
+          "endMs": 7300,
+          "i": 1957000001,
+          "insertId": "c"
+        },
+        {
+          "w": "x",
+          "startMs": 14400,
+          "endMs": 14600,
+          "i": 1885000000,
+          "insertId": "b"
+        },
+        {
+          "w": "y",
+          "startMs": 15100,
+          "endMs": 15400,
+          "i": 1885000001,
+          "insertId": "b"
+        },
+        {
+          "w": "z",
+          "startMs": 16400,
+          "endMs": 16800,
+          "i": 1885000003,
+          "insertId": "b"
+        }
+      ],
+      "buckets": {
+        "upl_v": 885,
+        "trk_b": 957,
+        "clip_ünï": 351
+      }
+    }
+  ]
+}

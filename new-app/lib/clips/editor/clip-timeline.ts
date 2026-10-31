@@ -329,7 +329,7 @@ export function buildTimelineItems(input: {
       startMs: item.startMs,
       endMs: item.endMs,
       inMs: item.inMs ?? 0,
-      label: item.source === 'ai' ? 'AI B-roll' : 'Stock B-roll',
+      label: item.source === 'ai' ? 'AI B-roll' : item.source === 'upload' ? (item.still ? 'Image' : 'Upload B-roll') : 'Stock B-roll',
       caps: { move: true, trimStart: true, trimEnd: true, split: true, del: true },
     })
   }
@@ -896,14 +896,18 @@ export function renderTimingSpec(effective: ClipEditsV2): RenderTimingSpec {
 
 /** B-roll preview media for split items (same asset/generation as the original). */
 export function brollMediaForItems<
-  R extends { id: string; assetId?: string; generationId?: string; url: string | null },
+  R extends { id: string; assetId?: string; generationId?: string; uploadId?: string; url: string | null },
 >(items: BrollItem[], rows: R[]): R[] {
   const byId = new Map(rows.map((r) => [r.id, r]))
   const out = [...rows]
   for (const it of items) {
     if (byId.has(it.id)) continue
     const match = rows.find((r) =>
-      it.source === 'ai' ? r.generationId === it.generationId : r.assetId === it.assetId,
+      it.source === 'ai'
+        ? r.generationId === it.generationId
+        : it.source === 'upload'
+          ? r.uploadId === it.uploadId
+          : r.assetId === it.assetId,
     ) ?? byId.get(it.id.split('~')[0]!)
     if (match) out.push({ ...match, id: it.id })
   }

@@ -6,5 +6,13 @@
     "allowedHeaders": ["*"],
     "exposeHeaders": ["ETag"],
     "maxAgeSeconds": 3600
+  },
+  {
+    "corsRuleName": "transovo-clips-browser-read-signed",
+    "allowedOrigins": ["https://transovo.ai", "https://www.transovo.ai"],
+    "allowedOperations": ["s3_get", "s3_head"],
+    "allowedHeaders": ["*"],
+    "exposeHeaders": ["Content-Length", "Content-Range", "Accept-Ranges"],
+    "maxAgeSeconds": 3600
   }
 ]

@@ -1,0 +1,399 @@
+'use client'
+
+import { useMemo, useRef, useState } from 'react'
+import { AudioLines, Film, Image as ImageIcon, Plus, RefreshCw, Upload, Video, X } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SliderRow } from '@/components/clips/editor/e4/slider-row'
+import { MEDIA_ACCEPT, type ProjectMediaApi } from '@/components/clips/editor/use-project-media'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import type { SourceWord } from '@/lib/clips/source-words'
+import { MEDIA_DND_TYPE, mediaLanesFor, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
+import {
+  applyMulticamSegments,
+  buildMulticamSegments,
+  patchSourceSegment,
+  pruneSources,
+  removeSourceSegment,
+  segmentAudio,
+  sourceById,
+  speakersInWords,
+  upsertSource,
+  type ClipMulticam,
+  type SourceAudio,
+} from '@/lib/clips/editor/sources'
+import { insertMediaAt, sourceFromItem, type InsertMode } from '@/lib/clips/editor/media-add'
+import { MediaTranscribeControl } from '@/components/clips/editor/media-transcribe-control'
+import { InsertsSection } from '@/components/clips/editor/media-inserts-section'
+
+const LANE_LABEL: Record<MediaDropLane, string> = { video: 'Video', broll: 'B-roll', music: 'Music', sfx: 'SFX' }
+/** 'visual' = video + images (B-roll Upload tab). */
+type Filter = 'all' | 'video' | 'image' | 'audio' | 'visual'
+
+function dur(ms: number | null | undefined): string {
+  if (!ms || ms <= 0) return ''
+  const s = Math.round(ms / 1000)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+export function MediaThumb({ item, className = 'h-16 w-full' }: { item: ProjectMediaItem; className?: string }) {
+  if (item.mediaType === 'image' && item.url) {
+    return <img src={item.url} alt="" className={`${className} rounded object-cover`} draggable={false} />
+  }
+  if (item.mediaType === 'video' && item.url) {
+    // Poster frame straight from the signed URL (metadata + first frame only).
+    return <video src={`${item.url}#t=0.1`} muted playsInline preload="metadata" className={`${className} rounded bg-black object-cover`} />
+  }
+  return (
+    <div className={`${className} flex items-center justify-center rounded bg-muted text-muted-foreground`}>
+      {item.mediaType === 'audio' ? <AudioLines className="size-5" /> : <Film className="size-5" />}
+    </div>
+  )
+}
+
+/** Library grid shared by the Media panel and the B-roll "Upload" tab. */
+export function MediaLibraryGrid({
+  media,
+  filter = 'all',
+  lanes,
+  onAdd,
+  onReplaceSelected,
+  canReplace = false,
+  compact = false,
+  onInsert,
+}: {
+  media: ProjectMediaApi
+  filter?: Filter
+  /** Lanes offered on each card (default: every lane the media fits). */
+  lanes?: MediaDropLane[]
+  onAdd: (item: ProjectMediaItem, lane: MediaDropLane) => void
+  onReplaceSelected?: (item: ProjectMediaItem) => void
+  canReplace?: boolean
+  compact?: boolean
+  /** E5b: insert at the playhead / append at the end (lengthens the video). */
+  onInsert?: (item: ProjectMediaItem, mode: InsertMode) => void
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [over, setOver] = useState(false)
+  const shown = media.items.filter((i) =>
+    filter === 'all' ? true : filter === 'visual' ? i.mediaType !== 'audio' : i.mediaType === filter,
+  )
+  const accept = filter === 'all' ? MEDIA_ACCEPT : filter === 'visual' ? 'video/*,image/*' : `${filter}/*`
+  const pick = (files: FileList | null) => {
+    if (files?.length) void media.uploadFiles([...files])
+  }
+  return (
+    <div className="flex flex-col gap-2" data-testid="media-library">
+      <div
+        className={`flex flex-col items-center gap-1 rounded-md border border-dashed p-3 text-center text-xs ${over ? 'border-primary bg-primary/5' : 'border-border'}`}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('Files')) {
+            e.preventDefault()
+            setOver(true)
+          }
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setOver(false)
+          pick(e.dataTransfer.files)
+        }}
+        data-testid="media-dropzone"
+      >
+        <Upload className="size-4 text-muted-foreground" />
+        <span className="text-muted-foreground">Drop video, images or audio</span>
+        <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()} data-testid="media-upload-button">
+          Upload
+        </Button>
+        <input ref={fileRef} type="file" accept={accept} multiple className="hidden" onChange={(e) => {
+          pick(e.target.files)
+          e.target.value = ''
+        }} />
+      </div>
+      {media.uploads.map((u) => (
+        <div key={u.key} className="flex items-center gap-2 rounded border p-2 text-xs" data-testid="media-upload-row">
+          <span className="min-w-0 flex-1 truncate">{u.filename}</span>
+          {u.state === 'error' ? (
+            <>
+              <span className="text-destructive">{u.error}</span>
+              <Button size="sm" variant="ghost" onClick={() => media.dismissUpload(u.key)} aria-label="Dismiss"><X className="size-3" /></Button>
+            </>
+          ) : (
+            <span className="tabular-nums text-muted-foreground">{u.state === 'finalizing' ? 'Finishing…' : `${u.percent}%`}</span>
+          )}
+        </div>
+      ))}
+      {media.error ? <p className="text-xs text-destructive">{media.error}</p> : null}
+      {!shown.length && !media.loading ? (
+        <p className="text-xs text-muted-foreground">No media yet. Uploads are stored with this project.</p>
+      ) : null}
+      <ul className="grid grid-cols-2 gap-2">
+        {shown.map((item) => {
+          const fits = (lanes ?? mediaLanesFor(item)).filter((l) => mediaLanesFor(item).includes(l))
+          return (
+            <li
+              key={item.id}
+              className="flex flex-col gap-1 rounded border p-1.5 text-[11px]"
+              draggable={fits.length > 0}
+              onDragStart={(e) => {
+                e.dataTransfer.setData(MEDIA_DND_TYPE, item.id)
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
+              data-testid="media-item"
+              data-media-type={item.mediaType}
+            >
+              <div className="relative">
+                <MediaThumb item={item} className={compact ? 'h-12 w-full' : undefined} />
+                {item.durationMs ? (
+                  <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 text-[10px] text-white">{dur(item.durationMs)}</span>
+                ) : null}
+                {item.ref === 'take' || item.syncMs != null ? (
+                  <span className="absolute left-0.5 top-0.5 rounded bg-black/70 px-1 text-[10px] text-white" title="Synced to the main video">
+                    {item.isMain ? 'Main' : item.syncStatus === 'clock' ? 'Rooms sync' : item.syncStatus === 'low_confidence' ? 'Sync ?' : 'Synced'}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1">
+                {item.mediaType === 'image' ? <ImageIcon className="size-3 shrink-0" /> : item.mediaType === 'audio' ? <AudioLines className="size-3 shrink-0" /> : <Video className="size-3 shrink-0" />}
+                <span className="min-w-0 flex-1 truncate" title={item.label}>{item.label}</span>
+                {item.ref === 'upload' ? (
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={`Remove ${item.label} from project media`}
+                    onClick={() => void media.remove(item.id).catch((e) => toast.error(e instanceof Error ? e.message : 'Remove failed'))}
+                  >
+                    <X className="size-3" />
+                  </button>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {fits.map((lane) => (
+                  <Button key={lane} size="xs" variant="outline" className="h-6 px-1.5 text-[10px]" onClick={() => onAdd(item, lane)} data-testid={`media-add-${lane}`}>
+                    <Plus className="size-3" />
+                    {LANE_LABEL[lane]}
+                  </Button>
+                ))}
+                {canReplace && onReplaceSelected && fits.includes('video') ? (
+                  <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[10px]" onClick={() => onReplaceSelected(item)} data-testid="media-use-for-selected">
+                    Use for selected
+                  </Button>
+                ) : null}
+                {onInsert && fits.includes('video') ? (
+                  <>
+                    <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[10px]" onClick={() => onInsert(item, 'insert')} title="Insert at the playhead — everything after it moves right" data-testid="media-insert">
+                      Insert
+                    </Button>
+                    <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[10px]" onClick={() => onInsert(item, 'append')} title="Add to the end of the clip" data-testid="media-append">
+                      Append
+                    </Button>
+                  </>
+                ) : null}
+                <MediaTranscribeControl media={media} item={item} />
+                {item.ref === 'upload' && item.mediaType === 'video' ? (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="h-6 px-1.5 text-[10px]"
+                    disabled={item.syncStatus === 'queued'}
+                    onClick={() => void media.syncAudio(item.id).catch((e) => toast.error(e instanceof Error ? e.message : 'Sync failed'))}
+                    title="Line this angle up with the main video by its audio"
+                    data-testid="media-sync-audio"
+                  >
+                    <RefreshCw className={`size-3 ${item.syncStatus === 'queued' ? 'animate-spin' : ''}`} />
+                    {item.syncStatus === 'queued' ? 'Syncing…' : item.syncMs != null ? 'Re-sync' : 'Sync by audio'}
+                  </Button>
+                ) : null}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+const AUDIO_LABEL: Record<SourceAudio, string> = { main: 'Main', source: 'Clip', mix: 'Both' }
+
+export function MediaPanel({
+  media,
+  edits,
+  words,
+  selectedVideo,
+  selectedSegmentId,
+  onSelectSegment,
+  onAdd,
+  onReplaceSelected,
+  onEdits,
+  playheadSourceMs,
+}: {
+  media: ProjectMediaApi
+  edits: ClipEditsV2
+  words: SourceWord[]
+  selectedVideo: { srcInMs: number; srcOutMs: number } | null
+  selectedSegmentId: string | null
+  onSelectSegment: (id: string | null) => void
+  onAdd: (item: ProjectMediaItem, lane: MediaDropLane) => void
+  onReplaceSelected: (item: ProjectMediaItem) => void
+  onEdits: (next: ClipEditsV2) => void
+  playheadSourceMs: number
+}) {
+  const [filter, setFilter] = useState<Filter>('all')
+  const seg = edits.sourceSegments?.find((s) => s.id === selectedSegmentId) ?? null
+  const segSource = seg ? sourceById(edits.sources, seg.sourceId) : undefined
+
+  const angles = useMemo(
+    () => media.items.filter((i) => i.mediaType === 'video' && !i.isMain && (i.ref === 'take' || i.syncMs != null)),
+    [media.items],
+  )
+  const mainItem = media.items.find((i) => i.isMain)
+  const speakers = useMemo(() => speakersInWords(words, edits.trim.in, edits.trim.out), [words, edits.trim.in, edits.trim.out])
+  const mc: ClipMulticam = edits.multicam ?? {}
+  const autoCount = edits.sourceSegments?.filter((s) => s.auto).length ?? 0
+
+  const patchSeg = (patch: Parameters<typeof patchSourceSegment>[2]) => {
+    if (!seg) return
+    onEdits({ ...edits, sourceSegments: patchSourceSegment(edits.sourceSegments, seg.id, patch, edits.sources) })
+  }
+  const removeSeg = () => {
+    if (!seg) return
+    const sourceSegments = removeSourceSegment(edits.sourceSegments, seg.id)
+    onEdits({ ...edits, sourceSegments, sources: pruneSources(edits.sources, sourceSegments, edits.multicam, edits.inserts) })
+    onSelectSegment(null)
+  }
+
+  const setSpeaker = (spk: string, value: string) => {
+    let sources = edits.sources
+    if (value !== 'main') {
+      const it = angles.find((a) => a.refId === value)
+      if (it) sources = upsertSource(sources, sourceFromItem(it)).sources
+    }
+    const map = { ...(mc.speakerSources ?? {}), [spk]: value }
+    onEdits({ ...edits, sources, multicam: { ...mc, speakerSources: map } })
+  }
+
+  const generate = () => {
+    // Refresh angle sync values first (an audio re-sync may have landed since they were added).
+    let sources = edits.sources
+    for (const a of angles) if (sources?.some((s) => s.id === a.refId)) sources = upsertSource(sources, sourceFromItem(a)).sources
+    const gen = buildMulticamSegments(words, edits.trim.in, edits.trim.out, mc, sources)
+    const sourceSegments = applyMulticamSegments(edits.sourceSegments, gen, edits.trim.in, edits.trim.out, sources)
+    onEdits({ ...edits, sources, sourceSegments })
+    toast.success(gen.length ? `${gen.length} camera cut${gen.length === 1 ? '' : 's'}` : 'No speaker turns long enough to cut to an angle')
+  }
+  const onInsert = (item: ProjectMediaItem, mode: InsertMode) => {
+    const res = insertMediaAt(edits, item, playheadSourceMs, mode, () => crypto.randomUUID())
+    if (!res.edits) {
+      toast.message(res.message)
+      return
+    }
+    onEdits(res.edits)
+    if (res.message) toast.message(res.message)
+  }
+
+  const clearAuto = () => {
+    const sourceSegments = applyMulticamSegments(edits.sourceSegments, [], edits.trim.in, edits.trim.out, edits.sources)
+    onEdits({ ...edits, sourceSegments })
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-3" data-testid="media-panel">
+      {seg ? (
+        <section className="space-y-2 rounded-md border p-2" data-testid="media-segment-editor">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium">{segSource?.label ?? 'Source'} on Video</span>
+            <Button size="xs" variant="ghost" onClick={() => onSelectSegment(null)} aria-label="Close">
+              <X className="size-3" />
+            </Button>
+          </div>
+          {segSource?.mediaType === 'video' ? (
+            <div className="flex items-center gap-1" role="group" aria-label="Sound in this segment">
+              <Label className="w-12 text-[11px]">Sound</Label>
+              {(['main', 'source', 'mix'] as const).map((m) => (
+                <Button key={m} size="xs" variant={segmentAudio(seg, segSource) === m ? 'default' : 'outline'} onClick={() => patchSeg({ audio: m })} data-testid={`media-seg-audio-${m}`}>
+                  {AUDIO_LABEL[m]}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          <div className="flex items-center gap-1" role="group" aria-label="Framing">
+            <Label className="w-12 text-[11px]">Frame</Label>
+            {(['cover', 'contain'] as const).map((f) => (
+              <Button key={f} size="xs" variant={(seg.fit ?? 'cover') === f ? 'default' : 'outline'} onClick={() => patchSeg({ fit: f })} data-testid={`media-seg-fit-${f}`}>
+                {f === 'cover' ? 'Fill' : 'Fit'}
+              </Button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <Button size="xs" variant="outline" disabled={playheadSourceMs <= seg.startMs + 100 || playheadSourceMs >= seg.endMs} onClick={() => patchSeg({ endMs: Math.round(playheadSourceMs) })}>
+              End at playhead
+            </Button>
+            <Button size="xs" variant="outline" disabled={playheadSourceMs >= seg.endMs - 100 || playheadSourceMs <= seg.startMs} onClick={() => {
+              const shift = Math.round(playheadSourceMs) - seg.startMs
+              patchSeg({ startMs: Math.round(playheadSourceMs), ...(seg.inMs !== undefined ? { inMs: seg.inMs + shift } : {}) })
+            }}>
+              Start at playhead
+            </Button>
+            <Button size="xs" variant="destructive" onClick={removeSeg} data-testid="media-seg-remove">Remove</Button>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="flex gap-1 rounded-md border border-border p-1" role="group" aria-label="Media type">
+        {(['all', 'video', 'image', 'audio'] as const).map((f) => (
+          <Button key={f} size="sm" variant={filter === f ? 'default' : 'ghost'} onClick={() => setFilter(f)}>
+            {f === 'all' ? 'All' : f === 'video' ? 'Video' : f === 'image' ? 'Images' : 'Audio'}
+          </Button>
+        ))}
+      </div>
+      <MediaLibraryGrid media={media} filter={filter} onAdd={onAdd} onReplaceSelected={onReplaceSelected} canReplace={Boolean(selectedVideo)} onInsert={onInsert} />
+      <InsertsSection edits={edits} media={media} onEdits={onEdits} />
+      <p className="text-[11px] text-muted-foreground">
+        Drag onto a timeline lane or use + Video / B-roll / Music / SFX. Video segments replace the picture of that part of the clip; the transcript and captions stay on the main video unless you transcribe that clip. Insert / Append add footage and lengthen the video.
+      </p>
+
+      {angles.length ? (
+        <section className="space-y-2 rounded-md border p-2" data-testid="media-multicam">
+          <div className="text-xs font-semibold">Multicam</div>
+          <p className="text-[11px] text-muted-foreground">
+            Cut to the active speaker’s camera (same rules as the script editor: hold ≥ min, wide shot on overlaps).
+          </p>
+          {speakers.length ? (
+            speakers.map((spk) => (
+              <div key={spk} className="flex items-center gap-2">
+                <Label className="w-20 text-[11px]">Speaker {Number(spk) + 1}</Label>
+                <Select
+                  items={[{ value: 'main', label: mainItem ? `${mainItem.label} (main)` : 'Main camera' }, ...angles.map((a) => ({ value: a.refId, label: a.label }))]}
+                  value={mc.speakerSources?.[spk] ?? 'main'}
+                  onValueChange={(v) => typeof v === 'string' && setSpeaker(spk, v)}
+                >
+                  <SelectTrigger size="sm" className="min-w-0 flex-1" data-testid={`multicam-speaker-${spk}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="main">{mainItem ? `${mainItem.label} (main)` : 'Main camera'}</SelectItem>
+                    {angles.map((a) => (
+                      <SelectItem key={a.refId} value={a.refId}>{a.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))
+          ) : (
+            <p className="text-[11px] text-muted-foreground">No speaker labels in this transcript — switch angles per segment with “Use for selected”.</p>
+          )}
+          <SliderRow label="Min shot" value={(mc.minHoldMs ?? 2000) / 1000} min={0.5} max={10} step={0.5} unit=" s" testId="multicam-hold"
+            onCommit={(v) => onEdits({ ...edits, multicam: { ...mc, minHoldMs: Math.round(v * 1000) } })} />
+          <SliderRow label="Wide shot every" value={(mc.wideEveryMs ?? 45_000) / 1000} min={5} max={120} step={5} unit=" s" testId="multicam-wide"
+            onCommit={(v) => onEdits({ ...edits, multicam: { ...mc, wideEveryMs: Math.round(v * 1000) } })} />
+          <div className="flex gap-1">
+            <Button size="sm" onClick={generate} disabled={!speakers.length} data-testid="multicam-generate">Generate camera cuts</Button>
+            {autoCount ? <Button size="sm" variant="ghost" onClick={clearAuto}>Clear {autoCount} auto cut{autoCount === 1 ? '' : 's'}</Button> : null}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  )
+}

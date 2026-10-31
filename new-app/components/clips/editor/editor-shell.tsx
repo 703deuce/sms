@@ -87,6 +87,11 @@ import {
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
+import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
+import { mediaUrlFor, useMediaTranscripts, useProjectMedia } from '@/components/clips/editor/use-project-media'
+import { mergeMediaWords } from '@/lib/clips/editor/media-words'
+import { addMediaToLane, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
+import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import {
@@ -407,7 +412,15 @@ export function EditorShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once on open
   }, [])
 
-  const { words: editorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
+  const { words: clipEditorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
+  // E5b: words of transcribed media join the transcript where that clip's own sound plays.
+  const mediaTranscripts = useMediaTranscripts(projectId)
+  const editSources = edits.sources
+  const editSourceSegments = edits.sourceSegments
+  const editorWords = useMemo(
+    () => mergeMediaWords(clipEditorWords, { sources: editSources, sourceSegments: editSourceSegments }, mediaTranscripts.transcripts),
+    [clipEditorWords, editSources, editSourceSegments, mediaTranscripts.transcripts],
+  )
   const [versionsEnabled, setVersionsEnabled] = useState(true)
   const [editVersions, setEditVersions] = useState<EditVersionRow[]>([])
   const vocabMountRef = useRef(false)
@@ -574,8 +587,13 @@ export function EditorShell({
 
   const audioNorm = useMemo(() => normalizeAudioEdits(edits.audio), [edits.audio])
   const studioSound = audioNorm.studioSound
-  const musicGenId = edits.audio?.music?.generationId ?? null
+  // E5: project media library (uploads + Rooms angles) — Media panel, B-roll Upload tab, preview.
+  const media = useProjectMedia(projectId, mediaTranscripts)
+  const mediaItems = media.items
+  const musicUploadId = edits.audio?.music?.uploadId ?? null
+  const musicGenId = musicUploadId ? null : (edits.audio?.music?.generationId ?? null)
   const musicGen = useGeneration(musicGenId)
+  const musicUrl = musicUploadId ? mediaUrlFor(mediaItems, musicUploadId) : musicGen.downloadUrl
   const aiExtras = clipEditorAiExtrasEnabled()
   // E2: hidden / muted timeline lanes apply to preview exactly as the worker applies them to export
   // (a muted Voice lane also drops the dub track, as export does).
@@ -718,10 +736,73 @@ export function EditorShell({
       .then((data) => setBrandTemplates(data.items ?? []))
       .catch(() => setBrandTemplates([]))
   }, [])
-  const sfxPreview = useSfxCues(edits.audio?.sfx ?? [])
-  const previewBrollMedia = useMemo(
-    () => brollMediaForItems(edits.broll ?? [], brollMedia),
-    [brollMedia, edits.broll],
+  const uploadUrlFor = useCallback((id: string) => mediaUrlFor(mediaItems, id), [mediaItems])
+  const sfxPreview = useSfxCues(edits.audio?.sfx ?? [], uploadUrlFor)
+  const previewBrollMedia = useMemo(() => {
+    // E5: uploaded B-roll (videos / stills) resolves through the project media library.
+    const uploadRows: BrollMediaRow[] = []
+    for (const it of edits.broll ?? []) {
+      if (it.source !== 'upload') continue
+      const m = mediaItems.find((x) => x.refId === it.uploadId)
+      uploadRows.push({
+        id: it.id,
+        source: 'upload',
+        uploadId: it.uploadId,
+        url: m?.url ?? null,
+        mediaType: it.still || m?.mediaType === 'image' ? 'image' : 'video',
+      } as BrollMediaRow)
+    }
+    return brollMediaForItems(edits.broll ?? [], [...brollMedia, ...uploadRows])
+  }, [brollMedia, edits.broll, mediaItems])
+  const sourceUrls = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const it of mediaItems) if (it.url) m[it.refId] = it.url
+    return m
+  }, [mediaItems])
+  const [selectedVideo, setSelectedVideo] = useState<{ srcInMs: number; srcOutMs: number } | null>(null)
+  const [selectedSourceSegmentId, setSelectedSourceSegmentId] = useState<string | null>(null)
+  const applyAdd = useCallback(
+    (res: ReturnType<typeof addMediaToLane>) => {
+      if (!res.edits) {
+        toast.message(res.message)
+        return
+      }
+      setEdits(res.edits)
+      if (res.message) toast.message(res.message)
+    },
+    [setEdits],
+  )
+  const onAddMedia = useCallback(
+    (item: ProjectMediaItem, lane: MediaDropLane, atOutMs: number = outputMs) => {
+      applyAdd(
+        addMediaToLane(edits, timebaseFor(previewEditsForTimeline), item, lane, atOutMs, () => crypto.randomUUID()),
+      )
+    },
+    [applyAdd, edits, outputMs, previewEditsForTimeline],
+  )
+  const onDropMedia = useCallback(
+    (lane: MediaDropLane, atOutMs: number, mediaId: string) => {
+      const item = mediaItems.find((m) => m.id === mediaId)
+      if (item) onAddMedia(item, lane, atOutMs)
+    },
+    [mediaItems, onAddMedia],
+  )
+  const onReplaceSelected = useCallback(
+    (item: ProjectMediaItem) => {
+      if (!selectedVideo) {
+        toast.message('Select a Video clip on the timeline first')
+        return
+      }
+      applyAdd(replaceVideoRange(edits, item, selectedVideo.srcInMs, selectedVideo.srcOutMs, () => crypto.randomUUID()))
+    },
+    [applyAdd, edits, selectedVideo],
+  )
+  const onSelectSourceSegment = useCallback(
+    (id: string) => {
+      setSelectedSourceSegmentId(id)
+      selectPanel('media')
+    },
+    [selectPanel],
   )
   // E4: per-item speed → the music bed follows the video rate (pitch-preserved like export atempo).
   const musicRate = renderEdits.segmentSpeeds?.length
@@ -729,6 +810,11 @@ export function EditorShell({
     : undefined
   const onTimelineSelection = useCallback(
     (item: TimelineItem | null) => {
+      setSelectedVideo(
+        item?.lane === 'video' && item.srcInMs != null && item.srcOutMs != null
+          ? { srcInMs: item.srcInMs, srcOutMs: item.srcOutMs }
+          : null,
+      )
       if (item?.lane === 'video' && item.srcInMs != null && item.srcOutMs != null) {
         setColorTarget({ kind: 'segment', fromMs: item.srcInMs, toMs: item.srcOutMs, label: item.label })
       } else if (item?.lane === 'broll') {
@@ -745,7 +831,7 @@ export function EditorShell({
     videoRef,
     edits: renderEdits,
     words: duckWords,
-    musicUrl: musicGen.downloadUrl,
+    musicUrl,
     dubUrl: dubAudioUrl,
     useDubAudio,
     sfxCues: renderEdits.audio?.sfx?.length ? sfxPreview.cues : [],
@@ -1231,6 +1317,9 @@ export function EditorShell({
             onRemoveBroll={removeBroll}
             onBrollMedia={mergeBrollMedia}
             onFlushEdits={() => void flushSave()}
+            uploadSlot={
+              <MediaLibraryGrid media={media} filter="visual" lanes={['broll']} onAdd={(item, lane) => onAddMedia(item, lane)} compact />
+            }
           />
           </EditorPanelErrorBoundary>
         </div>
@@ -1315,6 +1404,24 @@ export function EditorShell({
         <div className={panel === 'color' ? undefined : 'hidden'} aria-hidden={panel !== 'color'} data-testid="editor-panel-color">
           <EditorPanelErrorBoundary label="Color">
           <ColorPanel edits={edits} target={colorTarget} onEdits={setEdits} onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)} />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
+      {panelMounted('media') ? (
+        <div className={panel === 'media' ? undefined : 'hidden'} aria-hidden={panel !== 'media'} data-testid="editor-panel-media">
+          <EditorPanelErrorBoundary label="Media">
+          <MediaPanel
+            media={media}
+            edits={edits}
+            words={editorWords}
+            selectedVideo={selectedVideo}
+            selectedSegmentId={selectedSourceSegmentId}
+            onSelectSegment={setSelectedSourceSegmentId}
+            onAdd={(item, lane) => onAddMedia(item, lane)}
+            onReplaceSelected={onReplaceSelected}
+            onEdits={setEdits}
+            playheadSourceMs={playheadSourceMs}
+          />
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
@@ -1460,6 +1567,7 @@ export function EditorShell({
               brandLogoUrl={brandLogoUrl}
               cropTrack={cropTrack}
               brollMedia={previewBrollMedia}
+              sourceUrls={sourceUrls}
               videoRef={videoRef}
               onTick={onTick}
               channelDisplay={streamChannelDisplay}
@@ -1522,6 +1630,7 @@ export function EditorShell({
             videoUrl={videoUrl}
             editorAssets={editorAssets}
             brollMedia={previewBrollMedia}
+            sourceUrls={sourceUrls}
             onSeekOutput={seekOutput}
             onTrimChange={setTrim}
             clipStartMs={bounds.clipStartMs}
@@ -1543,10 +1652,13 @@ export function EditorShell({
             canUndo={canUndo}
             canRedo={canRedo}
             mediaOffsetMs={mediaOffsetMs}
-            musicUrl={musicGen.downloadUrl}
+            musicUrl={musicUrl}
             sfxDurationsMs={sfxPreview.durationsMs}
             onOpenCover={() => selectPanel('thumbnail')}
             onSelectionChange={onTimelineSelection}
+            onDropMedia={onDropMedia}
+            onSelectSourceSegment={onSelectSourceSegment}
+            selectedSourceSegmentId={selectedSourceSegmentId}
           />
           <PlayerControls
             playing={playing}

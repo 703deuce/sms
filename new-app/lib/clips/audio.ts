@@ -1,5 +1,8 @@
 export type ClipAudioMusic = {
+  /** AI generation id, or (E5) the ClipUpload id when `uploadId` is set (lane / item id stays unique). */
   generationId: string
+  /** E5: the user's own audio from the project media library. */
+  uploadId?: string
   volume?: number
   duckDepth?: number
   fadeInMs?: number
@@ -13,6 +16,8 @@ export type ClipAudioMusic = {
 
 export type ClipAudioSfx = {
   generationId: string
+  /** E5: user upload (generationId === uploadId). */
+  uploadId?: string
   atMs: number
   volume?: number
 }
@@ -74,10 +79,12 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
   let musicOut: ClipAudioMusic | null = null
   if (music && typeof music === 'object' && music !== null) {
     const m = music as Record<string, unknown>
-    const generationId = String(m.generationId || '')
+    const uploadId = uploadRef(m.uploadId)
+    const generationId = uploadId ?? String(m.generationId || '')
     if (generationId) {
       musicOut = {
         generationId,
+        ...(uploadId ? { uploadId } : {}),
         volume: clamp01(m.volume, DEFAULT_MUSIC_VOLUME),
         duckDepth: clamp01(m.duckDepth, DEFAULT_DUCK_DEPTH),
         fadeInMs: num(m.fadeInMs, DEFAULT_MUSIC_FADE_IN_MS),
@@ -107,15 +114,32 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
     .map((row) => {
       if (!row || typeof row !== 'object') return null
       const s = row as Record<string, unknown>
-      const generationId = String(s.generationId || '')
+      const uploadId = uploadRef(s.uploadId)
+      const rawId = String(s.generationId || '')
+      // E5b: an uploaded sound placed more than once keeps a per-placement id `<uploadId>~N`.
+      const generationId = uploadId ? (rawId.startsWith(`${uploadId}~`) && rawId.length <= uploadId.length + 8 ? rawId : uploadId) : rawId
       if (!generationId) return null
       return {
         generationId,
+        ...(uploadId ? { uploadId } : {}),
         atMs: Math.max(0, Math.round(num(s.atMs, 0))),
         volume: clamp01(s.volume, DEFAULT_SFX_VOLUME),
       }
     })
     .filter(Boolean) as ClipAudioSfx[]
+  // Lane ids must stay unique (older saves could hold the same upload twice under one id).
+  const usedIds = new Set<string>()
+  for (const cue of sfx) {
+    if (!usedIds.has(cue.generationId)) {
+      usedIds.add(cue.generationId)
+      continue
+    }
+    if (!cue.uploadId) continue
+    let n = 2
+    while (usedIds.has(`${cue.uploadId}~${n}`)) n++
+    cue.generationId = `${cue.uploadId}~${n}`
+    usedIds.add(cue.generationId)
+  }
   return { music: musicOut, sfx, studioSound: studioOut }
 }
 
@@ -145,4 +169,15 @@ export function stripArtistSongNames(text: string): string {
     .replace(ARTIST_NAME_RE, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
+}
+
+/** E5: a ClipUpload id used as a music / SFX source (strict charset; never a URL). */
+function uploadRef(v: unknown): string | undefined {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return /^[A-Za-z0-9_-]{1,120}$/.test(s) ? s : undefined
+}
+
+/** E5: key for preview URL lookups — uploads resolve from the media library, not /generations. */
+export function isUploadAudio(a: { uploadId?: string } | null | undefined): boolean {
+  return Boolean(a?.uploadId)
 }
