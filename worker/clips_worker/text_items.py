@@ -36,12 +36,82 @@ _AN = {"left": 4, "center": 5, "right": 6}
 _METRIC_FONT = {"Montserrat": "Montserrat Black", "Poppins": "Poppins ExtraBold"}
 
 
-def text_block_width_px(text: str, font_id: str, fontsize: float) -> float:
-    """Advance width of the widest line at ASS ``fontsize`` (same metrics as the preview)."""
+GRADIENT_BANDS = 24
+LINE_HEIGHT_MIN, LINE_HEIGHT_MAX = 0.7, 2.5
+LETTER_SPACING_MIN, LETTER_SPACING_MAX = -20, 100
+MAX_MARKS = 50
+_BAD_FAMILY = set(',{}\\\r\n\t')
+
+
+def user_font_id(font) -> str | None:
+    """G3b: ``user:<id>`` → id of a workspace font (clip_fonts row), else None."""
+    f = str(font or "")
+    if not f.startswith("user:"):
+        return None
+    fid = f[5:]
+    if not (1 <= len(fid) <= 64) or not all(c.isalnum() and c.isascii() or c in "_-" for c in fid):
+        return None
+    return fid
+
+
+def safe_family(v) -> str:
+    """ASS-safe family name (no commas / override braces / backslashes), ≤ 64 chars."""
+    return "".join(c for c in str(v or "") if c not in _BAD_FAMILY).strip()[:64]
+
+
+def font_names(st: dict) -> tuple[str, str]:
+    """(Style Fontname, caption_fit metrics name) of a text style. G3b: user fonts use their
+    family name (style.fontFamily, the clip_fonts row's name) for both."""
+    font = str(st.get("font") or "")
+    if user_font_id(font):
+        fam = safe_family(st.get("fontFamily"))
+        if fam:
+            return fam, fam
+    if font not in TEXT_FONTS:
+        font = "Montserrat"
+    return TEXT_FONTS[font], _METRIC_FONT.get(font, font)
+
+
+def letter_spacing_px(st: dict, h: int) -> float:
+    try:
+        v = float(st.get("letterSpacing") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if v != v or not v:
+        return 0.0
+    return _px(min(LETTER_SPACING_MAX, max(LETTER_SPACING_MIN, v)), h)
+
+
+def line_height_mult(st: dict) -> float:
+    """1.0 = libass' own line spacing (one event); anything else lays lines out one event each."""
+    try:
+        v = float(st.get("lineHeight") or 1)
+    except (TypeError, ValueError):
+        return 1.0
+    if v != v:
+        return 1.0
+    return round(min(LINE_HEIGHT_MAX, max(LINE_HEIGHT_MIN, v)), 2)
+
+
+def gradient_of(st: dict) -> dict | None:
+    g = st.get("gradient")
+    if not isinstance(g, dict):
+        return None
+    from clips_worker.text_shapes import is_hex
+
+    a, b = g.get("from"), g.get("to")
+    if not (is_hex(a) and is_hex(b)):
+        return None
+    return {"from": a, "to": b, "dir": "h" if g.get("dir") == "h" else "v"}
+
+
+def text_block_width_px(text: str, font_id: str, fontsize: float, spacing: float = 0.0) -> float:
+    """Advance width of the widest line at ASS ``fontsize`` (same metrics as the preview).
+    ``font_id`` is a TEXT_FONTS id or (G3b) a metrics name; ``spacing`` = ASS Spacing px per char."""
     from clips_worker.caption_fit import text_width_px
 
     name = _METRIC_FONT.get(font_id, font_id)
-    return max((text_width_px(line, name, fontsize) for line in str(text).split("\n")), default=0.0)
+    return max((text_width_px(line, name, fontsize) + spacing * len(line) for line in str(text).split("\n")), default=0.0)
 
 
 def _align_dx(align: str, block_w: float) -> float:
@@ -78,12 +148,20 @@ def _esc(text: str) -> str:
 
 
 def text_items(edits: dict) -> list[dict]:
+    from clips_worker.text_shapes import item_kind, shape_spec
+
     raw = edits.get("textItems")
     if not isinstance(raw, list):
         return []
     out = []
     for it in raw:
-        if not isinstance(it, dict) or not str(it.get("text") or "").strip() or not it.get("id"):
+        if not isinstance(it, dict) or not it.get("id"):
+            continue
+        # G3b: shapes / stickers / progress bars have no text.
+        if item_kind(it) == "text":
+            if not str(it.get("text") or "").strip():
+                continue
+        elif shape_spec(it) is None:
             continue
         try:
             a, b = int(round(float(it["startMs"]))), int(round(float(it["endMs"])))
@@ -108,7 +186,7 @@ def _px(v, h: int) -> float:
 
 def _styles_for(i: int, it: dict, h: int) -> tuple[str, str | None]:
     st = it["style"]
-    font = TEXT_FONTS.get(str(st.get("font") or ""), "Montserrat Black")
+    font = font_names(st)[0]
     size = max(1, round(float(st.get("size") or 96) * h / REF_H))
     an = _AN.get(str(st.get("align") or "center"), 5)
     primary = _ass_color(st.get("color") or "#FFFFFF")
@@ -119,13 +197,14 @@ def _styles_for(i: int, it: dict, h: int) -> tuple[str, str | None]:
     outline_w = _px((stroke or {}).get("width") or 0, h) if stroke else 0
     back_c = _ass_color((shadow or {}).get("color") or "#000000", _alpha_for_opacity((shadow or {}).get("opacity", 100))) if shadow else "&HFF000000"
     shadow_d = _px((shadow or {}).get("dist") or 0, h) if shadow else 0
-    text_style = (f"Style: T{i},{font},{size},{primary},{primary},{outline_c},{back_c},0,0,0,0,100,100,0,0,1,"
+    sp = letter_spacing_px(st, h) or 0
+    text_style = (f"Style: T{i},{font},{size},{primary},{primary},{outline_c},{back_c},0,0,0,0,100,100,{sp},0,1,"
                   f"{outline_w},{shadow_d},{an},0,0,0,1")
     box_style = None
     if box:
         box_c = _ass_color(box.get("color") or "#000000", _alpha_for_opacity(box.get("opacity", 100)))
         pad = _px(box.get("pad") or 0, h)
-        box_style = (f"Style: B{i},{font},{size},&HFF000000,&HFF000000,{box_c},&HFF000000,0,0,0,0,100,100,0,0,3,"
+        box_style = (f"Style: B{i},{font},{size},&HFF000000,&HFF000000,{box_c},&HFF000000,0,0,0,0,100,100,{sp},0,3,"
                      f"{pad},0,{an},0,0,0,1")
     return text_style, box_style
 
@@ -137,30 +216,140 @@ def _anchor(it: dict, w: int, h: int) -> tuple[float, float]:
 _IDENT = {"x": 0.0, "y": 0.0, "scale": 100.0, "rotation": 0.0, "opacity": 100.0}
 
 
-def _unit_body(txt: str, unit: dict, op: float, shadow_a: int, scale: float) -> str:
-    """G3a: per line / word / character alpha (+ pop height) inline overrides on the text layer."""
+def norm_marks(raw, n: int) -> list[dict]:
+    """G3b: bold / italic ranges [{s, e, b?, i?}] in code points of item.text (UI → normalizer)."""
+    out: list[dict] = []
+    for m in raw if isinstance(raw, list) else []:
+        if not isinstance(m, dict) or not (m.get("b") is True or m.get("i") is True):
+            continue
+        try:
+            s0, e0 = int(m["s"]), int(m["e"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        s0, e0 = max(0, s0), min(n, e0)
+        if e0 <= s0:
+            continue
+        out.append({"s": s0, "e": e0, **({"b": True} if m.get("b") is True else {}), **({"i": True} if m.get("i") is True else {})})
+        if len(out) >= MAX_MARKS:
+            break
+    return out
+
+
+def rich_chars(it: dict, upper: bool) -> list[tuple[str, int]]:
+    """Display characters with mark bits (1 = bold, 2 = italic); upper-casing keeps each char's bits."""
+    text = str(it["text"])
+    flags = [0] * len(text)
+    for m in norm_marks(it.get("marks"), len(text)):
+        bit = (1 if m.get("b") else 0) | (2 if m.get("i") else 0)
+        for k in range(m["s"], m["e"]):
+            flags[k] |= bit
+    out: list[tuple[str, int]] = []
+    for ch, f in zip(text, flags):
+        for c in (ch.upper() if upper else ch):
+            out.append((c, f))
+    return out
+
+
+def _mark_tag(old: int, new: int) -> str:
+    t = ""
+    if (old ^ new) & 1:
+        t += "\\b1" if new & 1 else "\\b0"
+    if (old ^ new) & 2:
+        t += "\\i1" if new & 2 else "\\i0"
+    return "{" + t + "}"
+
+
+def rich_lines(chars: list[tuple[str, int]], pieces: list[tuple[str, bool]], tags: list[str | None],
+               per_line: bool) -> list[str]:
+    """ASS body of the display text: each piece's tag (unit alpha …) before it, \\b / \\i toggles
+    where the marks change. per_line → one string per line (marks re-opened on each line), else one
+    string with \\N breaks."""
+    lines = [""]
+    state = 0
+    pos = 0
+    for (piece, _u), tag in zip(pieces, tags):
+        if tag:
+            lines[-1] += tag
+        for ch in piece:
+            f = chars[pos][1] if pos < len(chars) else 0
+            pos += 1
+            if ch == "\n":
+                if per_line:
+                    lines.append("")
+                    state = 0
+                else:
+                    lines[-1] += "\\N"
+                continue
+            if f != state:
+                lines[-1] += _mark_tag(state, f)
+                state = f
+            lines[-1] += _esc(ch)
+    return lines
+
+
+def _unit_tags(txt: str, unit: dict, op: float, shadow_a: int, scale: float, box_a: int | None) -> tuple[list, list[str | None]]:
+    """G3a per line / word / character alpha (+ pop height) tags. box_a set → the BOX layer: \\3a per
+    unit (G3b: the box fades with its unit; separators take the next unit's tag)."""
     pieces = split_units(txt, unit["unit"])
     n = sum(1 for _, u in pieces if u)
-    parts: list[str] = []
+    tags: list[str | None] = []
     k = 0
     for piece, is_unit in pieces:
         if not is_unit:
-            parts.append(_esc(piece))
+            tags.append(None)
             continue
         kk = n - 1 - k if unit["rev"] else k
         uo, us = unit_state(unit["type"], kk, n, unit["t"], unit["d"])
         o = op * uo
-        a = round(255 * (1 - o))
-        a_sh = round(255 - (255 - shadow_a) * o)
-        tag = rf"\1a&H{a:02X}&\3a&H{a:02X}&\4a&H{a_sh:02X}&"
+        if box_a is None:
+            a = round(255 * (1 - o))
+            a_sh = round(255 - (255 - shadow_a) * o)
+            tag = rf"\1a&H{a:02X}&\3a&H{a:02X}&\4a&H{a_sh:02X}&"
+        else:
+            a_b = round(255 - (255 - box_a) * o)
+            tag = rf"\3a&H{a_b:02X}&"
         if us != 1.0:
             tag += rf"\fscy{round(scale * us, 2)}"
-        parts.append("{" + tag + "}" + _esc(piece))
+        tags.append("{" + tag + "}")
         k += 1
-    return "".join(parts)
+    if box_a is not None:
+        nxt = None
+        for j in range(len(tags) - 1, -1, -1):
+            if pieces[j][1]:
+                nxt = tags[j]
+            elif nxt:
+                tags[j] = nxt
+    return pieces, tags
+
+
+def _gradient_bands(g: dict, cx: float, cy: float, bw: float, bh: float, w: int, h: int) -> list[str]:
+    """G3b gradient text: GRADIENT_BANDS screen-space \\clip stripes over the block (top → bottom or
+    left → right) partitioning the frame, each with its interpolated \\1c (libass has no gradients)."""
+    n = GRADIENT_BANDS
+    a = g["from"].lstrip("#")
+    b = g["to"].lstrip("#")
+    ca = [int(a[0:2], 16), int(a[2:4], 16), int(a[4:6], 16)]
+    cb = [int(b[0:2], 16), int(b[2:4], 16), int(b[4:6], 16)]
+    vert = g["dir"] == "v"
+    lim = h if vert else w
+    lo = (cy - bh / 2) if vert else (cx - bw / 2)
+    span = bh if vert else bw
+    edges = [0] + [min(lim, max(0, round(lo + span * k / n))) for k in range(1, n)] + [lim]
+    out: list[str] = []
+    for k in range(n):
+        e0, e1 = edges[k], edges[k + 1]
+        if e1 <= e0:
+            continue
+        t = k / (n - 1)
+        r, gg, bb = (round(ca[j] + (cb[j] - ca[j]) * t) for j in range(3))
+        clip = rf"\clip(0,{e0},{w},{e1})" if vert else rf"\clip({e0},0,{e1},{h})"
+        out.append(clip + rf"\1c&H{bb:02X}{gg:02X}{r:02X}&")
+    return out
 
 
 def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str | None:
+    from clips_worker.text_shapes import item_kind
+
     items = text_items(edits)
     if not items:
         return None
@@ -175,31 +364,61 @@ def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str
     events: list[str] = []
     for i, it in enumerate(items):
         ts, bs = _styles_for(i, it, h)
+        lt, lb = (2 * i + 1, 2 * i) if z_on else (1, 0)
+        if item_kind(it) != "text":
+            from clips_worker.text_shapes_ass import shape_item_events
+
+            styles.append(ts)
+            events.extend(shape_item_events(i, it, edits, w=w, h=h, fps=fps, layer=lt))
+            continue
         styles.append(ts)
         if bs:
             styles.append(bs)
         st = it["style"]
-        txt = str(it["text"])
-        if st.get("case") == "upper":
-            txt = txt.upper()
-        esc = _esc(txt)
+        chars = rich_chars(it, st.get("case") == "upper")
+        txt = "".join(c for c, _ in chars)
         ax, ay = _anchor(it, w, h)
         align = str(st.get("align") or "center")
         an = _AN.get(align, 5)
-        font_id = str(st.get("font") or "")
-        font_id = font_id if font_id in TEXT_FONTS else "Montserrat"
+        metric = font_names(st)[1]
         fsize = max(1, round(float(st.get("size") or 96) * h / REF_H))
-        block_w = text_block_width_px(txt, font_id, fsize) if an != 5 else 0.0
-        lt, lb = (2 * i + 1, 2 * i) if z_on else (1, 0)
+        sp = letter_spacing_px(st, h)
+        grad = gradient_of(st)
+        lhm = line_height_mult(st)
+        per_line = lhm != 1.0
+        n_lines = txt.count("\n") + 1
+        lh = fsize * lhm
+        block_w = text_block_width_px(txt, metric, fsize, sp) if (an != 5 or (grad and grad["dir"] == "h")) else 0.0
+        block_h = n_lines * lh
         layers = [(lt, f"T{i}")] + ([(lb, f"B{i}")] if bs else [])
         target = f"text:{it['id']}"
         start, end = it["startMs"], it["endMs"]
         motion = has_motion(edits, target)
         anim = norm_anim(it.get("anim"))
-        static_tag = rf"{{\an{an}\pos({round(ax + _align_dx(align, block_w))},{round(ay)})}}"
+        plain = [(txt, False)]
+        plain_lines = rich_lines(chars, plain, [None], per_line)
+
+        def line_y(j: int, cy: float, scale: float) -> int:
+            return round(cy + (j - (n_lines - 1) / 2) * lh * scale / 100)
+
+        def emit(layer: int, style: str, s_cs: int, e_cs: int, tag_of, bodies: list[str], cy: float, scale: float,
+                 bands: list[str] | None) -> None:
+            for band in (bands or [""]) if style.startswith("T") else [""]:
+                if per_line:
+                    for j, body in enumerate(bodies):
+                        events.append(f"Dialogue: {layer},{_ts(s_cs)},{_ts(e_cs)},{style},,0,0,0,,{tag_of(line_y(j, cy, scale), band)}{body}")
+                else:
+                    events.append(f"Dialogue: {layer},{_ts(s_cs)},{_ts(e_cs)},{style},,0,0,0,,{tag_of(None, band)}{bodies[0]}")
+
+        sx = round(ax + _align_dx(align, block_w))
+
+        def static_tag(yy, band):
+            return rf"{{\an{an}\pos({sx},{round(ay) if yy is None else yy}){band}}}"
+
+        static_bands = _gradient_bands(grad, ax, ay, block_w, block_h, w, h) if grad else None
         if not motion and not anim:
             for layer, style in layers:
-                events.append(f"Dialogue: {layer},{_ts(start // 10)},{_ts(end // 10)},{style},,0,0,0,,{static_tag}{esc}")
+                emit(layer, style, start // 10, end // 10, static_tag, plain_lines, ay, 100.0, static_bands)
             continue
         shadow = st.get("shadow") if isinstance(st.get("shadow"), dict) else None
         shadow_a = _alpha_for_opacity(shadow.get("opacity", 100)) if shadow else 255
@@ -224,7 +443,7 @@ def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str
         for si, (fa_, fb_) in enumerate(spans):
             if si == 1 and mid:
                 for layer, style in layers:
-                    events.append(f"Dialogue: {layer},{_ts(mid[0])},{_ts(mid[1])},{style},,0,0,0,,{static_tag}{esc}")
+                    emit(layer, style, mid[0], mid[1], static_tag, plain_lines, ay, 100.0, static_bands)
             for f in range(fa_, fb_):
                 t_ms = f * 1000 / fps
                 s_cs = int(math.floor(f * 100 / fps + 1e-9))
@@ -242,21 +461,34 @@ def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str
                 a_txt = round(255 * (1 - op))
                 a_sh = round(255 - (255 - shadow_a) * op)
                 a_box = round(255 - (255 - box_a) * op)
-                px = round(ax + tf["x"] * w / 100)
-                py = round(ay + tf["y"] * h / 100)
+                cxf = ax + tf["x"] * w / 100
+                cyf = ay + tf["y"] * h / 100
+                px = round(cxf)
+                py = round(cyf)
                 sc = round(tf["scale"], 2)
                 rot = round(-tf["rotation"], 2)
                 # Scale about the block centre (the anchor): the \\an4/6 point moves with the scaled width.
-                pxa = round(ax + tf["x"] * w / 100 + _align_dx(align, block_w * tf["scale"] / 100))
-                base = rf"\an{an}\pos({pxa},{py})\org({px},{py})\fscx{sc}\fscy{sc}\frz{rot}"
-                body = _unit_body(txt, unit, op, shadow_a, tf["scale"]) if unit else esc
+                pxa = round(cxf + _align_dx(align, block_w * tf["scale"] / 100))
+                if unit:
+                    pieces, ttags = _unit_tags(txt, unit, op, shadow_a, tf["scale"], None)
+                    t_lines = rich_lines(chars, pieces, ttags, per_line)
+                    b_lines = rich_lines(chars, *_unit_tags(txt, unit, op, shadow_a, tf["scale"], box_a), per_line) if bs else plain_lines
+                else:
+                    t_lines = b_lines = plain_lines
+                bands = _gradient_bands(grad, cxf, cyf, block_w * tf["scale"] / 100, block_h * tf["scale"] / 100, w, h) if grad else None
                 for layer, style in layers:
                     if style.startswith("T"):
-                        tag = rf"{{{base}\1a&H{a_txt:02X}&\3a&H{a_txt:02X}&\4a&H{a_sh:02X}&}}"
-                        events.append(f"Dialogue: {layer},{_ts(s_cs)},{_ts(e_cs)},{style},,0,0,0,,{tag}{body}")
+                        alpha = rf"\1a&H{a_txt:02X}&\3a&H{a_txt:02X}&\4a&H{a_sh:02X}&"
+                        bodies = t_lines
                     else:
-                        tag = rf"{{{base}\1a&HFF&\3a&H{a_box:02X}&\4a&HFF&}}"
-                        events.append(f"Dialogue: {layer},{_ts(s_cs)},{_ts(e_cs)},{style},,0,0,0,,{tag}{esc}")
+                        alpha = rf"\1a&HFF&\3a&H{a_box:02X}&\4a&HFF&"
+                        bodies = b_lines
+
+                    def tag_of(yy, band, _alpha=alpha):
+                        y = py if yy is None else yy
+                        return rf"{{\an{an}\pos({pxa},{y})\org({px},{py})\fscx{sc}\fscy{sc}\frz{rot}{_alpha}{band}}}"
+
+                    emit(layer, style, s_cs, e_cs, tag_of, bodies, cyf, tf["scale"], bands)
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {w}
@@ -278,8 +510,9 @@ def apply_text_items(video: Path, out: Path, edits: dict, *, play_w: int, play_h
 
     ass_path = out.parent / "text_items.ass"
     ass_path.write_text(ass, encoding="utf-8")
-    from clips_worker.title_fit import clip_fonts_dir
+    from clips_worker.user_fonts import fonts_dir_for
 
-    burn_ass(video, ass_path, out, fontsdir=clip_fonts_dir())
+    # G3b: bundled fonts + the workspace fonts the items use (user_fonts.prepare_user_fonts).
+    burn_ass(video, ass_path, out, fontsdir=fonts_dir_for(edits))
     print(f"[clipper:text_items] n={len(text_items(edits))}", flush=True)
     return out

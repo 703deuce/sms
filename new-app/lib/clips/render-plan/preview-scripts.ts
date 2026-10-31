@@ -24,7 +24,7 @@ export const PREVIEW_SCRIPT_ORDER: PreviewScriptKey[] = ['captions', 'hook', 'te
 
 export type PreviewScriptInput = {
   edits: Dict
-  words: ReadonlyArray<{ w: string; s: number; e: number; idx?: number; spk?: number }>
+  words: ReadonlyArray<{ w: string; s: number; e: number; idx?: number; spk?: number; ln?: number; br?: boolean; it?: boolean; bo?: boolean }>
   playW: number
   playH: number
   durationMs: number
@@ -90,7 +90,16 @@ export function buildPreviewScripts(o: PreviewScriptInput): PreviewScripts {
   const cap = (e.captions ?? {}) as Dict
   let captions: string | null = null
   if (cap.enabled !== false && o.words.length) {
-    const words: AssWord[] = o.words.map((w, i) => ({ w: String(w.w ?? ''), s: w.s, e: w.e, i: w.idx ?? i, spk: w.spk ?? 0 }))
+    // G3afix: manual caption lines carry `ln` (one caption per line — G3a dropped it here, so the
+    // preview re-chunked them by words per line) plus their cue breaks and <i>/<b>.
+    const words: AssWord[] = o.words.map((w, i) => {
+      const a: AssWord = { w: String(w.w ?? ''), s: w.s, e: w.e, i: w.idx ?? i, spk: w.spk ?? 0 }
+      if (typeof w.ln === 'number') a.ln = w.ln
+      if (w.br) a.br = true
+      if (w.it) a.it = true
+      if (w.bo) a.bo = true
+      return a
+    })
     captions = buildCaptionsAss(words, exportCaptionEdits(cap, o), o.playW, o.playH)
   }
   // edits_render: the T6 title already shows the hook line → no hook burn.
@@ -159,11 +168,21 @@ export const CLIP_FONT_FILES: Record<string, string> = {
   'dejavu sans': 'DejaVuSans-Bold.ttf',
 }
 
+/** G3b: workspace fonts (family, lower-case → same-origin file URL) — use-workspace-fonts fills it. */
+const USER_FONT_URLS = new Map<string, string>()
+export function registerUserFontUrl(family: string, url: string): void {
+  if (family && !CLIP_FONT_FILES[family.toLowerCase()]) USER_FONT_URLS.set(family.toLowerCase(), url)
+}
+
 export function fontUrlsForAss(ass: string, base = '/fonts/clip/'): string[] {
   const files = new Set<string>()
   for (const f of assFontFamilies(ass)) {
     const file = CLIP_FONT_FILES[f.toLowerCase()]
     if (file) files.add(base + file)
+    else {
+      const user = USER_FONT_URLS.get(f.toLowerCase())
+      if (user) files.add(user)
+    }
   }
   return [...files]
 }

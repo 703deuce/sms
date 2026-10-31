@@ -3,8 +3,10 @@
 import type { CSSProperties } from 'react'
 import { captionFontStack } from '@/lib/clips/caption-fonts'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { textDisplay } from '@/lib/clips/editor/text-items'
+import type { TextItem } from '@/lib/clips/editor/text-items'
 import { textItemCss } from '@/lib/clips/editor/text-frame'
+import { richChars } from '@/lib/clips/render-plan/text-items-ass'
+import { SHAPE_LIBRARY } from '@/lib/clips/render-plan/text-shapes'
 import { orderedStack } from '@/lib/clips/editor/layer-props'
 
 /**
@@ -33,7 +35,9 @@ export function TextItemsPreview({
     <>
       {items.map((it) => {
         const css = textItemCss(it, boxH)
-        const fontFamily = captionFontStack(it.style.font === 'Montserrat' ? 'Montserrat Black' : it.style.font)
+        const fontFamily = css.userFamily
+          ? `"${css.userFamily}", ${captionFontStack('Montserrat Black')}`
+          : captionFontStack(it.style.font === 'Montserrat' ? 'Montserrat Black' : it.style.font)
         return (
           <div
             key={it.id}
@@ -48,27 +52,121 @@ export function TextItemsPreview({
           >
             <div
               className="absolute"
-              style={css.anchor as CSSProperties}
+              style={(it.kind === 'progress' ? { ...css.anchor, width: `${it.progress?.w ?? 100}%` } : css.anchor) as CSSProperties}
               data-testid="preview-text-block"
               data-align={it.style.align}
             >
-              {textDisplay(it)
-                .split('\n')
-                .map((line, i) => (
-                  <div key={i} style={{ height: css.linePx, lineHeight: `${css.linePx}px`, whiteSpace: 'pre' }}>
+              {it.kind ? (
+                <ShapeSvg item={it} boxH={boxH} selected={selectedId === it.id} />
+              ) : (
+                richLines(it).map((runs, i) => (
+                  <div key={i} style={{ height: css.rowPx, lineHeight: `${css.rowPx}px`, whiteSpace: 'pre' }}>
                     <span
                       style={{ ...(css.text as CSSProperties), fontFamily, ...(css.box as CSSProperties | null) }}
                       className={selectedId === it.id ? 'outline outline-1 outline-dashed outline-white/70' : undefined}
                       data-testid="preview-text-line"
                     >
-                      {line || ' '}
+                      {runs.length
+                        ? runs.map(([t, f], k) => (
+                            <span
+                              key={k}
+                              style={{
+                                ...(css.gradient as CSSProperties | null),
+                                ...(f & 1 ? { fontWeight: 900 } : {}),
+                                ...(f & 2 ? { fontStyle: 'italic' } : {}),
+                              }}
+                              data-mark={f || undefined}
+                            >
+                              {t}
+                            </span>
+                          ))
+                        : ' '}
                     </span>
                   </div>
-                ))}
+                ))
+              )}
             </div>
           </div>
         )
       })}
     </>
+  )
+}
+
+/** G3b: display lines → runs of [text, mark bits] (same chars / marks the ASS burns). */
+function richLines(it: TextItem): [string, number][][] {
+  const lines: [string, number][][] = [[]]
+  for (const [c, f] of richChars(it as unknown as Record<string, unknown>, it.style.case === 'upper')) {
+    if (c === '\n') {
+      lines.push([])
+      continue
+    }
+    const cur = lines[lines.length - 1]!
+    const last = cur[cur.length - 1]
+    if (last && last[1] === f) last[0] += c
+    else cur.push([c, f])
+  }
+  return lines
+}
+
+/** ASS drawing (unit box 0..1000: m / l / b) → SVG path. */
+export function assPathToSvg(d: string): string {
+  const out: string[] = []
+  let started = false
+  for (const tok of d.split(/\s+/).filter(Boolean)) {
+    if (tok === 'm') {
+      if (started) out.push('Z')
+      started = true
+      out.push('M')
+    } else if (tok === 'l') out.push('L')
+    else if (tok === 'b') out.push('C')
+    else out.push(tok)
+  }
+  if (started) out.push('Z')
+  return out.join(' ')
+}
+
+/** DOM stand-in for a shape / sticker / progress bar (libass draws the real one; this is the hit box). */
+function ShapeSvg({ item, boxH, selected }: { item: TextItem; boxH: number; selected: boolean }) {
+  const k = boxH / 1920
+  const st = item.style
+  let w: number | string
+  let h: number
+  let parts: [string, string][] = []
+  if (item.kind === 'shape' && item.shape) {
+    w = item.shape.w * k
+    h = item.shape.h * k
+    const d = SHAPE_LIBRARY.shapes[item.shape.type]?.d
+    if (d) parts = [[st.color, d]]
+  } else if (item.kind === 'sticker' && item.sticker) {
+    w = h = st.size * k
+    parts = (SHAPE_LIBRARY.stickers[item.sticker]?.parts ?? []).map((p) => [p.c ?? st.color, p.d])
+  } else {
+    const p = item.progress ?? { w: 100, h: 16, trackOpacity: 35 }
+    return (
+      <div
+        style={{ width: '100%', height: p.h * k, background: st.color }}
+        className={selected ? 'outline outline-1 outline-dashed outline-white/70' : undefined}
+        data-testid="preview-shape"
+        data-kind="progress"
+      />
+    )
+  }
+  const stroke = st.stroke && st.stroke.width > 0 ? { stroke: st.stroke.color, strokeWidth: 2 * st.stroke.width * k } : {}
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox="0 0 1000 1000"
+      preserveAspectRatio="none"
+      overflow="visible"
+      className={selected ? 'outline outline-1 outline-dashed outline-white/70' : undefined}
+      data-testid="preview-shape"
+      data-kind={item.kind}
+    >
+      {parts.map(([c, d], i) => (
+        <path key={i} d={assPathToSvg(d)} fill={c} {...stroke} vectorEffect="non-scaling-stroke" />
+      ))}
+    </svg>
   )
 }

@@ -5,6 +5,7 @@
  */
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { LAYER_ANIM_IDENTITY, layerAnimAt } from '@/lib/clips/editor/layer-anim'
 import {
   IDENTITY_TRANSFORM,
   isIdentityTransform,
@@ -132,7 +133,12 @@ export function brollFrame(edits: ClipEditsV2, outMs: number, boxW: number): Bro
     out.items[it.id] = { box: null, dip: { opacity: 0, background: 'transparent' } }
     if (!(outMs >= s && outMs < e)) continue
     const target = `broll:${it.id}` as const
-    const kfT = layerTransformAt(edits, target, outMs - it.startMs)
+    const kf0 = layerTransformAt(edits, target, outMs - it.startMs)
+    // G3b: in / out / loop preset on top of the keyframes (export: motion.layer_motion_chain).
+    const an = layerAnimAt(it, outMs - it.startMs)
+    const kfT = an === LAYER_ANIM_IDENTITY
+      ? kf0
+      : { x: kf0.x + an.dx, y: kf0.y + an.dy, scale: kf0.scale * an.sc, rotation: kf0.rotation + an.rot, opacity: kf0.opacity * an.op }
     out.items[it.id]!.box = {
       ...NONE,
       transform: join(keyframeTransform(kfT), flipCss(layerFlip(edits, target))),

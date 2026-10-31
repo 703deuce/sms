@@ -231,7 +231,8 @@ def _broll_window(parts, w, cur_w, b_w, current, lab, edits, target, start, widt
 
 
 def _shift_target(edits: dict, target: str, by_s: float) -> dict:
-    """Same keyframes with local time shifted (window-local rendering)."""
+    """Same keyframes with local time shifted (window-local rendering); G3b: the in / out / loop
+    preset reads the same shift from ``_animShiftMs`` (motion.layer_anim)."""
     from clips_worker.motion import normalize_keyframes
 
     out = []
@@ -239,7 +240,9 @@ def _shift_target(edits: dict, target: str, by_s: float) -> dict:
         if k["target"] == target:
             k = {**k, "points": [{**p, "tMs": p["tMs"] - by_s * 1000} for p in k["points"]]}
         out.append(k)
-    return {**edits, "keyframes": out}
+    prev = edits.get("_animShiftMs") if isinstance(edits.get("_animShiftMs"), dict) else {}
+    shift = {**prev, target: float(prev.get(target) or 0.0) + by_s * 1000}
+    return {**edits, "keyframes": out, "_animShiftMs": shift}
 
 
 def load_broll_specs(conn, edits: dict, work_dir, media: dict | None = None) -> list[dict]:

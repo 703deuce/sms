@@ -11,7 +11,20 @@
  *
  * No React imports, so lib/clips/edits.ts can use it.
  */
-import { normAnim, type TextAnim } from '@/lib/clips/render-plan/text-anim'
+import { normAnim, normLayerAnim, type TextAnim } from '@/lib/clips/render-plan/text-anim'
+import { normMarks, safeFamily, userFontId, type TextMark } from '@/lib/clips/render-plan/text-rich'
+import {
+  PROGRESS_H_MAX,
+  PROGRESS_H_MIN,
+  PROGRESS_W_MAX,
+  PROGRESS_W_MIN,
+  SHAPE_LIBRARY,
+  SHAPE_MAX,
+  SHAPE_MIN,
+  type ShapeKind,
+} from '@/lib/clips/render-plan/text-shapes'
+
+export type { TextMark } from '@/lib/clips/render-plan/text-rich'
 
 export type TextAlign = 'left' | 'center' | 'right'
 export type TextCase = 'none' | 'upper'
@@ -19,6 +32,8 @@ export type TextCase = 'none' | 'upper'
 export type TextStroke = { color: string; width: number }
 export type TextShadow = { color: string; opacity: number; dist: number }
 export type TextBox = { color: string; opacity: number; pad: number }
+/** G3b: two-colour gradient fill (top → bottom 'v' or left → right 'h'). */
+export type TextGradient = { from: string; to: string; dir: 'v' | 'h' }
 
 export type TextStyle = {
   font: TextFontId
@@ -30,7 +45,17 @@ export type TextStyle = {
   stroke?: TextStroke
   shadow?: TextShadow
   box?: TextBox
+  /** G3b: a workspace font (`font: 'user:<id>'`) — its family name, as the ASS Fontname. */
+  fontFamily?: string
+  /** G3b: extra px between letters at a 1920 px tall frame (−20…100; absent = 0). */
+  letterSpacing?: number
+  /** G3b: line height multiplier (0.7…2.5; absent = 1 = the font's own). */
+  lineHeight?: number
+  gradient?: TextGradient
 }
+
+export type ShapeGeom = { type: string; w: number; h: number }
+export type ProgressGeom = { w: number; h: number; track?: string; trackOpacity: number }
 
 export type TextItem = {
   id: string
@@ -44,6 +69,13 @@ export type TextItem = {
   presetId?: string
   /** G3a: in / out / loop animation (render-plan/text-anim.ts == worker text_anim.py). */
   anim?: TextAnim
+  /** G3b: bold / italic ranges in code points of `text`. */
+  marks?: TextMark[]
+  /** G3b: a shape / sticker / progress bar instead of text (render-plan/text-shapes.ts). */
+  kind?: ShapeKind
+  shape?: ShapeGeom
+  sticker?: string
+  progress?: ProgressGeom
 }
 
 /**
@@ -59,7 +91,9 @@ export const TEXT_FONTS = [
   { id: 'Archivo Black', label: 'Archivo Black', ass: 'Archivo Black', weight: 400 },
   { id: 'Luckiest Guy', label: 'Luckiest Guy', ass: 'Luckiest Guy', weight: 400 },
 ] as const
-export type TextFontId = (typeof TEXT_FONTS)[number]['id']
+export type BuiltinFontId = (typeof TEXT_FONTS)[number]['id']
+/** G3b: `user:<id>` = an uploaded workspace font (clip_fonts). */
+export type TextFontId = BuiltinFontId | `user:${string}`
 const FONT_IDS = TEXT_FONTS.map((f) => f.id) as readonly string[]
 
 export const TEXT_SIZE_MIN = 24
@@ -67,7 +101,13 @@ export const TEXT_SIZE_MAX = 240
 export const TEXT_MIN_MS = 300
 export const TEXT_DEFAULT_MS = 3000
 export const TEXT_MAX_CHARS = 200
-export const TEXT_MAX_ITEMS = 30
+export const TEXT_MAX_ITEMS = 60
+/** G3b: stickers are sized by style.size (px@1920) up to half the frame height. */
+export const STICKER_SIZE_MAX = 960
+export const LETTER_SPACING_MIN = -20
+export const LETTER_SPACING_MAX = 100
+export const LINE_HEIGHT_MIN = 0.7
+export const LINE_HEIGHT_MAX = 2.5
 
 export const DEFAULT_TEXT_STYLE: TextStyle = {
   font: 'Montserrat',
@@ -110,12 +150,15 @@ function num(v: unknown, lo: number, hi: number, fallback: number): number {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback
 }
 
-export function normalizeTextStyle(raw: unknown): TextStyle {
+export function normalizeTextStyle(raw: unknown, maxSize: number = TEXT_SIZE_MAX): TextStyle {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const d = DEFAULT_TEXT_STYLE
+  // G3b: a workspace font needs its family name (the ASS Fontname); without one it falls back.
+  const fam = safeFamily(o.fontFamily)
+  const userFont = userFontId(o.font) && fam ? (o.font as TextFontId) : null
   const style: TextStyle = {
-    font: (typeof o.font === 'string' && FONT_IDS.includes(o.font) ? o.font : d.font) as TextFontId,
-    size: Math.round(num(o.size, TEXT_SIZE_MIN, TEXT_SIZE_MAX, d.size)),
+    font: userFont ?? ((typeof o.font === 'string' && FONT_IDS.includes(o.font) ? o.font : d.font) as TextFontId),
+    size: Math.round(num(o.size, TEXT_SIZE_MIN, maxSize, d.size)),
     color: hex(o.color, d.color),
     align: o.align === 'left' || o.align === 'right' ? o.align : 'center',
     case: o.case === 'upper' ? 'upper' : 'none',
@@ -129,6 +172,14 @@ export function normalizeTextStyle(raw: unknown): TextStyle {
   const bx = o.box as Record<string, unknown> | undefined
   if (bx && typeof bx === 'object' && Number(bx.opacity ?? 100) > 0)
     style.box = { color: hex(bx.color, '#000000'), opacity: Math.round(num(bx.opacity, 0, 100, 100)), pad: Math.round(num(bx.pad, 0, 80, 16)) }
+  if (userFont) style.fontFamily = fam
+  const ls = Math.round(num(o.letterSpacing, LETTER_SPACING_MIN, LETTER_SPACING_MAX, 0))
+  if (ls) style.letterSpacing = ls
+  const lh = Math.round(num(o.lineHeight, LINE_HEIGHT_MIN, LINE_HEIGHT_MAX, 1) * 100) / 100
+  if (lh !== 1) style.lineHeight = lh
+  const g = o.gradient as Record<string, unknown> | undefined
+  if (g && typeof g === 'object' && HEX.test(String(g.from)) && HEX.test(String(g.to)))
+    style.gradient = { from: hex(g.from, '#FFFFFF'), to: hex(g.to, '#FFFFFF'), dir: g.dir === 'h' ? 'h' : 'v' }
   return style
 }
 
@@ -142,8 +193,11 @@ export function normalizeTextItems(raw: unknown, clipEndMs?: number): TextItem[]
     if (!r || typeof r !== 'object') continue
     const o = r as Record<string, unknown>
     const id = String(o.id ?? '').slice(0, 64)
-    const text = String(o.text ?? '').replace(/\r/g, '').slice(0, TEXT_MAX_CHARS)
-    if (!id || seen.has(id) || !/^[A-Za-z0-9_~-]+$/.test(id) || !text.trim()) continue
+    const kind = o.kind === 'shape' || o.kind === 'sticker' || o.kind === 'progress' ? o.kind : undefined
+    const text = kind ? '' : Array.from(String(o.text ?? '').replace(/\r/g, '')).slice(0, TEXT_MAX_CHARS).join('')
+    if (!id || seen.has(id) || !/^[A-Za-z0-9_~-]+$/.test(id) || (!kind && !text.trim())) continue
+    const geom = kind ? normalizeShapeGeom(kind, o) : null
+    if (kind && !geom) continue
     let a = Math.round(Number(o.startMs))
     let b = Math.round(Number(o.endMs))
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue
@@ -158,15 +212,103 @@ export function normalizeTextItems(raw: unknown, clipEndMs?: number): TextItem[]
       endMs: b,
       x: Math.round(num(o.x, 0, 100, 50) * 10) / 10,
       y: Math.round(num(o.y, 0, 100, 50) * 10) / 10,
-      style: normalizeTextStyle(o.style),
+      style: normalizeTextStyle(o.style, kind === 'sticker' ? STICKER_SIZE_MAX : TEXT_SIZE_MAX),
     }
     if (typeof o.presetId === 'string' && o.presetId.length <= 64) item.presetId = o.presetId
-    const anim = normAnim(o.anim)
+    if (kind && geom) Object.assign(item, { kind }, geom)
+    // G3b: shapes / stickers / progress take whole-layer presets only (worker norm_layer_anim).
+    const anim = kind ? normLayerAnim(o.anim) : normAnim(o.anim)
     if (anim) item.anim = anim
+    if (!kind) {
+      const marks = canonicalMarks(normMarks(o.marks, Array.from(text).length), Array.from(text).length)
+      if (marks.length) item.marks = marks
+    }
     out.push(item)
     if (out.length >= TEXT_MAX_ITEMS) break
   }
   return out.length ? out.sort((p, q) => p.startMs - q.startMs) : undefined
+}
+
+function normalizeShapeGeom(kind: ShapeKind, o: Record<string, unknown>): Pick<TextItem, 'shape' | 'sticker' | 'progress'> | null {
+  if (kind === 'shape') {
+    const sh = (o.shape && typeof o.shape === 'object' ? o.shape : {}) as Record<string, unknown>
+    if (typeof sh.type !== 'string' || !Object.hasOwn(SHAPE_LIBRARY.shapes, sh.type)) return null
+    return { shape: { type: sh.type, w: Math.round(num(sh.w, SHAPE_MIN, SHAPE_MAX, 400)), h: Math.round(num(sh.h, SHAPE_MIN, SHAPE_MAX, 400)) } }
+  }
+  if (kind === 'sticker') {
+    return typeof o.sticker === 'string' && Object.hasOwn(SHAPE_LIBRARY.stickers, o.sticker) ? { sticker: o.sticker } : null
+  }
+  const p = (o.progress && typeof o.progress === 'object' ? o.progress : {}) as Record<string, unknown>
+  const progress: ProgressGeom = {
+    w: Math.round(num(p.w, PROGRESS_W_MIN, PROGRESS_W_MAX, 100) * 10) / 10,
+    h: Math.round(num(p.h, PROGRESS_H_MIN, PROGRESS_H_MAX, 16)),
+    trackOpacity: Math.round(num(p.trackOpacity, 0, 100, 35)),
+  }
+  if (typeof p.track === 'string' && HEX.test(p.track)) progress.track = p.track.toUpperCase()
+  return { progress }
+}
+
+/** Per-code-point mark bits (1 bold, 2 italic) → the fewest ranges (canonical stored form). */
+export function marksToFlags(marks: TextMark[] | undefined, n: number): number[] {
+  const flags = new Array<number>(n).fill(0)
+  for (const m of marks ?? []) for (let k = Math.max(0, m.s); k < Math.min(n, m.e); k++) flags[k]! |= (m.b ? 1 : 0) | (m.i ? 2 : 0)
+  return flags
+}
+
+export function flagsToMarks(flags: number[]): TextMark[] {
+  const out: TextMark[] = []
+  let k = 0
+  while (k < flags.length) {
+    const f = flags[k]!
+    let e = k + 1
+    while (e < flags.length && flags[e] === f) e++
+    if (f) out.push({ s: k, e, ...(f & 1 ? { b: true as const } : {}), ...(f & 2 ? { i: true as const } : {}) })
+    k = e
+  }
+  return out.slice(0, 50)
+}
+
+function canonicalMarks(marks: TextMark[], n: number): TextMark[] {
+  return flagsToMarks(marksToFlags(marks, n))
+}
+
+/**
+ * Toggle bold / italic on code points [s, e) (a textarea selection; empty = the whole text): on when
+ * any char in the range lacks it, else off.
+ */
+export function toggleMark(item: Pick<TextItem, 'text' | 'marks'>, bit: 1 | 2, s0: number, e0: number): TextMark[] | undefined {
+  const n = Array.from(item.text).length
+  let [s, e] = [Math.max(0, Math.min(s0, e0)), Math.min(n, Math.max(s0, e0))]
+  if (e <= s) [s, e] = [0, n]
+  const flags = marksToFlags(item.marks, n)
+  const on = flags.slice(s, e).some((f) => !(f & bit))
+  for (let k = s; k < e; k++) flags[k] = on ? flags[k]! | bit : flags[k]! & ~bit
+  const out = flagsToMarks(flags)
+  return out.length ? out : undefined
+}
+
+/** UTF-16 offset (textarea selection) → code-point index. */
+export function cpIndex(text: string, utf16: number): number {
+  return Array.from(text.slice(0, Math.max(0, utf16))).length
+}
+
+/**
+ * Text edited → marks follow it: the common prefix keeps its marks, the common suffix keeps its
+ * marks (shifted), the replaced middle takes the style of the char before it.
+ */
+export function remapMarks(oldText: string, newText: string, marks: TextMark[] | undefined): TextMark[] | undefined {
+  if (!marks?.length) return undefined
+  const a = Array.from(oldText)
+  const b = Array.from(newText)
+  const fa = marksToFlags(marks, a.length)
+  let p = 0
+  while (p < a.length && p < b.length && a[p] === b[p]) p++
+  let q = 0
+  while (q < a.length - p && q < b.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++
+  const fill = p > 0 ? fa[p - 1]! : 0
+  const fb = [...fa.slice(0, p), ...new Array<number>(b.length - p - q).fill(fill), ...fa.slice(a.length - q)]
+  const out = flagsToMarks(fb)
+  return out.length ? out : undefined
 }
 
 export function textDisplay(item: Pick<TextItem, 'text' | 'style'>): string {
@@ -206,4 +348,199 @@ export function textIdOfTarget(target: string): string | null {
 /** ASS px at PlayResY = h for a value in px@1920 (worker text_items._px / fontsize). */
 export function textAssPx(v: number, h: number): number {
   return Math.round(((v * h) / 1920) * 100) / 100
+}
+
+/** G3b: base style for shapes / stickers / progress (no stroke). */
+const PLAIN_STYLE: TextStyle = { font: 'Montserrat', size: 96, color: '#FFFFFF', align: 'center', case: 'none' }
+
+/** G3b: timeline / layer label for any text-lane item. */
+export function textItemLabel(t: Pick<TextItem, 'text' | 'kind' | 'shape' | 'sticker'>): string {
+  if (t.kind === 'shape') return `Shape · ${SHAPE_LIBRARY.shapes[t.shape?.type ?? '']?.label ?? 'Shape'}`
+  if (t.kind === 'sticker') return `Sticker · ${SHAPE_LIBRARY.stickers[t.sticker ?? '']?.label ?? 'Sticker'}`
+  if (t.kind === 'progress') return 'Progress bar'
+  return t.text.split('\n')[0]!.trim() || 'Text'
+}
+
+function itemWindow(playheadMs: number, clipEndMs: number, lenMs = TEXT_DEFAULT_MS): [number, number] {
+  const end = Math.max(TEXT_MIN_MS, Math.floor(clipEndMs))
+  const a = Math.max(0, Math.min(Math.round(playheadMs), end - TEXT_MIN_MS))
+  return [a, Math.min(end, a + lenMs)]
+}
+
+/** G3b: a library shape at the playhead (centred, 400 × 400 px@1920 unless the shape wants a bar). */
+export function newShapeItem(id: string, type: string, playheadMs: number, clipEndMs: number): TextItem {
+  const [a, b] = itemWindow(playheadMs, clipEndMs)
+  const wide = type === 'rect' || type === 'rounded' || type === 'arrow'
+  return {
+    id,
+    text: '',
+    kind: 'shape',
+    shape: { type, w: wide ? 640 : 400, h: wide ? 220 : 400 },
+    startMs: a,
+    endMs: b,
+    x: 50,
+    y: 50,
+    style: { ...PLAIN_STYLE, color: '#FACC15' },
+    anim: { in: { type: 'pop', unit: 'block', durMs: 400 }, out: { type: 'fade', unit: 'block', durMs: 300 } },
+  }
+}
+
+export function newStickerItem(id: string, sticker: string, playheadMs: number, clipEndMs: number): TextItem {
+  const [a, b] = itemWindow(playheadMs, clipEndMs)
+  return {
+    id,
+    text: '',
+    kind: 'sticker',
+    sticker,
+    startMs: a,
+    endMs: b,
+    x: 50,
+    y: 50,
+    style: { ...PLAIN_STYLE, size: 240 },
+    anim: { in: { type: 'pop', unit: 'block', durMs: 400 }, out: { type: 'fade', unit: 'block', durMs: 300 } },
+  }
+}
+
+/** G3b: progress bar — fills left → right over its own length; default = the whole clip at the bottom. */
+export function newProgressItem(id: string, clipEndMs: number): TextItem {
+  const end = Math.max(TEXT_MIN_MS, Math.floor(clipEndMs))
+  return {
+    id,
+    text: '',
+    kind: 'progress',
+    progress: { w: 100, h: 16, track: '#FFFFFF', trackOpacity: 35 },
+    startMs: 0,
+    endMs: end,
+    x: 50,
+    y: 99.5,
+    style: { ...PLAIN_STYLE, color: '#FACC15' },
+  }
+}
+
+/**
+ * G3b: animated title templates — one click adds 1–3 ready-made items (text + shapes) with in / out
+ * / loop presets. Everything stays a plain editable item afterwards.
+ */
+type TemplatePart = Omit<TextItem, 'id' | 'startMs' | 'endMs'> & { delayMs?: number }
+export type TitleTemplate = { id: string; label: string; parts: TemplatePart[] }
+const blockIn = (type: TextAnimEdgeType, durMs = 500) => ({ type, unit: 'block' as const, durMs })
+type TextAnimEdgeType = NonNullable<TextAnim['in']>['type']
+
+export const TITLE_TEMPLATES: TitleTemplate[] = [
+  {
+    id: 'pop_title',
+    label: 'Pop title',
+    parts: [{
+      text: 'BIG NEWS', x: 50, y: 40,
+      style: { font: 'Anton', size: 150, color: '#FACC15', align: 'center', case: 'upper', stroke: { color: '#000000', width: 10 } },
+      anim: { in: blockIn('pop', 450), out: blockIn('zoom', 350), loop: { type: 'pulse', periodMs: 1200 } },
+    }],
+  },
+  {
+    id: 'typewriter',
+    label: 'Typewriter',
+    parts: [{
+      text: 'Here is the thing…', x: 50, y: 40,
+      style: { font: 'Poppins', size: 84, color: '#FFFFFF', align: 'center', case: 'none', box: { color: '#000000', opacity: 80, pad: 16 } },
+      anim: { in: { type: 'typewriter', unit: 'char', durMs: 1200 }, out: blockIn('fade', 300) },
+    }],
+  },
+  {
+    id: 'word_pop',
+    label: 'Word by word',
+    parts: [{
+      text: 'WAIT FOR IT', x: 50, y: 40,
+      style: { font: 'Montserrat', size: 110, color: '#FFFFFF', align: 'center', case: 'upper', box: { color: '#E11D48', opacity: 100, pad: 14 } },
+      anim: { in: { type: 'pop', unit: 'word', durMs: 900 }, out: { type: 'fade', unit: 'word', durMs: 500 } },
+    }],
+  },
+  {
+    id: 'gradient_glow',
+    label: 'Gradient',
+    parts: [{
+      text: 'LEVEL UP', x: 50, y: 40,
+      style: { font: 'Luckiest Guy', size: 140, color: '#FFFFFF', align: 'center', case: 'upper', stroke: { color: '#0F172A', width: 8 }, gradient: { from: '#22D3EE', to: '#A855F7', dir: 'v' }, letterSpacing: 6 },
+      anim: { in: blockIn('zoom', 500), out: blockIn('fade', 400), loop: { type: 'bounce', periodMs: 1400 } },
+    }],
+  },
+  {
+    id: 'lower_third',
+    label: 'Lower third',
+    parts: [
+      {
+        text: '', kind: 'shape', shape: { type: 'rounded', w: 640, h: 170 }, x: 38, y: 80,
+        style: { ...PLAIN_STYLE, color: '#0F172A' },
+        anim: { in: blockIn('slide_right', 450), out: blockIn('slide_left', 400) },
+      },
+      {
+        text: 'Your Name\n<i>Title · Company</i>', x: 38, y: 80, delayMs: 150,
+        style: { font: 'Poppins', size: 56, color: '#FFFFFF', align: 'center', case: 'none', lineHeight: 1.1 },
+        anim: { in: blockIn('slide_right', 450), out: blockIn('slide_left', 400) },
+      },
+    ],
+  },
+  {
+    id: 'subscribe',
+    label: 'Subscribe',
+    parts: [
+      {
+        text: '', kind: 'shape', shape: { type: 'rounded', w: 560, h: 150 }, x: 50, y: 72,
+        style: { ...PLAIN_STYLE, color: '#DC2626' },
+        anim: { in: blockIn('pop', 400), out: blockIn('zoom', 300) },
+      },
+      {
+        text: 'SUBSCRIBE', x: 50, y: 72,
+        style: { font: 'Archivo Black', size: 72, color: '#FFFFFF', align: 'center', case: 'upper', letterSpacing: 4 },
+        anim: { in: blockIn('pop', 400), out: blockIn('zoom', 300) },
+      },
+      {
+        text: '', kind: 'sticker', sticker: 'pointer', x: 70, y: 78, delayMs: 400,
+        style: { ...PLAIN_STYLE, size: 180 },
+        anim: { in: blockIn('slide_up', 400), out: blockIn('fade', 300), loop: { type: 'bounce', periodMs: 900 } },
+      },
+    ],
+  },
+]
+
+/** Template → items at the playhead (ids from `mkId`), clamped to the clip like "Add text". */
+export function newTemplateItems(templateId: string, mkId: () => string, playheadMs: number, clipEndMs: number): TextItem[] {
+  const tpl = TITLE_TEMPLATES.find((t) => t.id === templateId)
+  if (!tpl) return []
+  const [a, b] = itemWindow(playheadMs, clipEndMs)
+  return tpl.parts.map(({ delayMs, ...p }) => {
+    const s = Math.min(b - TEXT_MIN_MS, a + (delayMs ?? 0))
+    const parsed = p.kind ? null : parseInlineMarks(p.text)
+    return {
+      ...p,
+      ...(parsed ? { text: parsed.text, ...(parsed.marks.length ? { marks: parsed.marks } : {}) } : {}),
+      id: mkId(),
+      startMs: Math.max(a, s),
+      endMs: b,
+      style: { ...p.style },
+    } as TextItem
+  })
+}
+
+/** `<b>` / `<i>` inline tags → plain text + marks (used by templates only). */
+export function parseInlineMarks(src: string): { text: string; marks: TextMark[] } {
+  const flags: number[] = []
+  const chars: string[] = []
+  let cur = 0
+  const re = /<(\/?)([bi])>/gi
+  let last = 0
+  let m: RegExpExecArray | null
+  const push = (seg: string) => {
+    for (const c of Array.from(seg)) {
+      chars.push(c)
+      flags.push(cur)
+    }
+  }
+  while ((m = re.exec(src))) {
+    push(src.slice(last, m.index))
+    const bit = m[2]!.toLowerCase() === 'b' ? 1 : 2
+    cur = m[1] ? cur & ~bit : cur | bit
+    last = m.index + m[0].length
+  }
+  push(src.slice(last))
+  return { text: chars.join(''), marks: flagsToMarks(flags) }
 }

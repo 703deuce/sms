@@ -10370,3 +10370,22 @@ model SwTableRead {
 
   @@map("sw_table_reads")
 }
+
+/// G3b workspace font (Text → Upload font). File on clip storage; metrics = caption-fit row.
+model ClipFont {
+  id            String    @id
+  workspaceId   String
+  /// name ID 1 — the ASS Fontname
+  family        String
+  filename      String
+  storageKey    String
+  storageDriver String?
+  bytes         Int
+  /// {unitsPerEm, defaultAdv, assEmPerFontsize, adv}
+  metrics       Json
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  @@index([workspaceId], map: "clip_fonts_workspace_idx")
+  @@map("clip_fonts")
+}

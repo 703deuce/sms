@@ -53,6 +53,22 @@ export function normAnim(raw: unknown): TextAnim | null {
   return Object.keys(out).length ? out : null
 }
 
+/** G3b: layers (B-roll / images / shapes / stickers / progress bars) take the block presets only. */
+export const LAYER_ANIM_TYPES = TEXT_ANIM_IN_TYPES.filter((t) => t !== 'typewriter')
+
+/** G3b: in / out / loop for a non-text layer — whole-layer presets, typewriter → fade (py norm_layer_anim). */
+export function normLayerAnim(raw: unknown): TextAnim | null {
+  const a = normAnim(raw)
+  if (!a) return null
+  const out: TextAnim = {}
+  for (const edge of ['in', 'out'] as const) {
+    const e = a[edge]
+    if (e) out[edge] = { type: e.type === 'typewriter' ? 'fade' : e.type, unit: 'block', durMs: e.durMs }
+  }
+  if (a.loop) out.loop = a.loop
+  return Object.keys(out).length ? out : null
+}
+
 export function fitDurations(anim: TextAnim, lengthMs: number): [number, number] {
   const di = anim.in ? anim.in.durMs : 0
   const dOut = anim.out ? anim.out.durMs : 0
@@ -74,6 +90,12 @@ export const easeBack = (p: number): number => {
 const clamp01 = (v: number) => (v < 0.0 ? 0.0 : v > 1.0 ? 1.0 : v)
 
 type Block = { op: number; sc: number; dx: number; dy: number }
+/**
+ * G3afix: an OUT slide is named by the direction it LEAVES in ("Slide down" exits downward), so it
+ * replays the mirrored in-curve (block_state of the opposite slide) — text_anim.OUT_MOTION.
+ */
+export const OUT_MOTION: Record<string, string> = { slide_up: 'slide_down', slide_down: 'slide_up', slide_left: 'slide_right', slide_right: 'slide_left' }
+
 export function blockState(type: string, p0: number): Block {
   const p = clamp01(p0)
   const e = easeOut(p)
@@ -174,7 +196,7 @@ export function frameAnim(anim: TextAnim, tMs: number, start: number, end: numbe
   const aOut = anim.out
   if (aOut && dOut > 0 && tr < dOut) {
     if (aOut.unit === 'block') {
-      const b = blockState(aOut.type, tr / dOut)
+      const b = blockState(OUT_MOTION[aOut.type] ?? aOut.type, tr / dOut)
       op = op * b.op
       sc = sc * b.sc
       dx = dx + b.dx

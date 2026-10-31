@@ -53,6 +53,25 @@ def norm_anim(raw) -> dict | None:
     return out or None
 
 
+# G3b: layers (B-roll / images / shapes / stickers / progress bars) take the block presets only.
+LAYER_TYPES = tuple(t for t in IN_TYPES if t != "typewriter")
+
+
+def norm_layer_anim(raw) -> dict | None:
+    """G3b: in / out / loop for a non-text layer — whole-layer presets (typewriter → fade)."""
+    a = norm_anim(raw)
+    if not a:
+        return None
+    out: dict = {}
+    for edge in ("in", "out"):
+        if edge in a:
+            typ = a[edge]["type"]
+            out[edge] = {"type": "fade" if typ == "typewriter" else typ, "unit": "block", "durMs": a[edge]["durMs"]}
+    if "loop" in a:
+        out["loop"] = a["loop"]
+    return out or None
+
+
 def fit_durations(anim: dict, length_ms: int) -> tuple[int, int]:
     """In / out lengths that fit the item (scaled down together when they would overlap)."""
     di = anim["in"]["durMs"] if "in" in anim else 0
@@ -75,6 +94,11 @@ def ease_back(p: float) -> float:
 
 def _clamp01(v: float) -> float:
     return 0.0 if v < 0.0 else (1.0 if v > 1.0 else v)
+
+
+# G3afix: an OUT slide is named by the direction it LEAVES in ("slide_down" exits downward), so it
+# replays the mirrored in-curve (TS OUT_MOTION).
+OUT_MOTION = {"slide_up": "slide_down", "slide_down": "slide_up", "slide_left": "slide_right", "slide_right": "slide_left"}
 
 
 def block_state(typ: str, p: float) -> dict:
@@ -171,7 +195,7 @@ def frame_anim(anim: dict, t_ms: float, start: int, end: int, d_in: int, d_out: 
     a_out = anim.get("out")
     if a_out and d_out > 0 and tr < d_out:
         if a_out["unit"] == "block":
-            b = block_state(a_out["type"], tr / d_out)
+            b = block_state(OUT_MOTION.get(a_out["type"], a_out["type"]), tr / d_out)
             op, sc, dx, dy = op * b["op"], sc * b["sc"], dx + b["dx"], dy + b["dy"]
         elif unit is None:
             unit = {"type": a_out["type"], "unit": a_out["unit"], "t": tr, "d": d_out, "rev": True}

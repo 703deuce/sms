@@ -62,7 +62,7 @@ describe('G3a manual caption lines == worker caption_lines.py', () => {
 describe('G3a SRT / VTT / TXT', () => {
   it('parses SRT (BOM, CRLF, tags, multi-line cues) and VTT (mm:ss.mmm, cue ids, header)', () => {
     const srt = '\uFEFF1\r\n00:00:01,000 --> 00:00:02,500\r\n<i>Hello</i> {\\an8}there\r\nfriend\r\n\r\n2\r\n00:00:03,000 --> 00:00:04,000\r\nBye\r\n'
-    expect(parseSubtitles(srt).map(({ text, startMs, endMs }) => [text, startMs, endMs])).toEqual([['Hello there friend', 1000, 2500], ['Bye', 3000, 4000]])
+    expect(parseSubtitles(srt).map(({ text, startMs, endMs }) => [text, startMs, endMs])).toEqual([['<i>Hello</i> there\nfriend', 1000, 2500], ['Bye', 3000, 4000]]) // G3afix: cue lines + <i> kept
     const vtt = 'WEBVTT\n\nintro\n00:01.000 --> 00:02.000 align:start\nHi\n\n00:00:02.5 --> 00:00:03.000\nYo\n'
     expect(parseSubtitles(vtt, { durationMs: 2800 }).map(({ text, startMs, endMs }) => [text, startMs, endMs])).toEqual([['Hi', 1000, 2000], ['Yo', 2500, 2800]])
   })

@@ -187,26 +187,26 @@ Dialogue: 1,0:00:01.50,0:00:01.53,T2,,0,0,0,,{\an5\pos(1344,899)\org(1344,899)\f
 Dialogue: 0,0:00:01.50,0:00:01.53,B2,,0,0,0,,{\an5\pos(1344,899)\org(1344,899)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H80&\4a&HFF&}Bounce + keys
 Dialogue: 1,0:00:01.53,0:00:01.56,T2,,0,0,0,,{\an5\pos(1344,897)\org(1344,897)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}Bounce + keys
 Dialogue: 0,0:00:01.53,0:00:01.56,B2,,0,0,0,,{\an5\pos(1344,897)\org(1344,897)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H80&\4a&HFF&}Bounce + keys
-Dialogue: 1,0:00:01.56,0:00:01.60,T2,,0,0,0,,{\an5\pos(1344,896)\org(1344,896)\fscx100.0\fscy100.0\frz-0.0\1a&H01&\3a&H01&\4a&HFF&}Bounce + keys
-Dialogue: 0,0:00:01.56,0:00:01.60,B2,,0,0,0,,{\an5\pos(1344,896)\org(1344,896)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H81&\4a&HFF&}Bounce + keys
-Dialogue: 1,0:00:01.60,0:00:01.63,T2,,0,0,0,,{\an5\pos(1344,897)\org(1344,897)\fscx100.0\fscy100.0\frz-0.0\1a&H04&\3a&H04&\4a&HFF&}Bounce + keys
-Dialogue: 0,0:00:01.60,0:00:01.63,B2,,0,0,0,,{\an5\pos(1344,897)\org(1344,897)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H82&\4a&HFF&}Bounce + keys
-Dialogue: 1,0:00:01.63,0:00:01.66,T2,,0,0,0,,{\an5\pos(1344,899)\org(1344,899)\fscx100.0\fscy100.0\frz-0.0\1a&H09&\3a&H09&\4a&HFF&}Bounce + keys
-Dialogue: 0,0:00:01.63,0:00:01.66,B2,,0,0,0,,{\an5\pos(1344,899)\org(1344,899)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H85&\4a&HFF&}Bounce + keys
-Dialogue: 1,0:00:01.66,0:00:01.70,T2,,0,0,0,,{\an5\pos(1344,900)\org(1344,900)\fscx100.0\fscy100.0\frz-0.0\1a&H12&\3a&H12&\4a&HFF&}Bounce + keys
-Dialogue: 0,0:00:01.66,0:00:01.70,B2,,0,0,0,,{\an5\pos(1344,900)\org(1344,900)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H89&\4a&HFF&}Bounce + keys
-Dialogue: 1,0:00:01.70,0:00:01.73,T2,,0,0,0,,{\an5\pos(1344,900)\org(1344,900)\fscx100.0\fscy100.0\frz-0.0\1a&H20&\3a&H20&\4a&HFF&}Bounce + keys
-Dialogue: 0,0:00:01.70,0:00:01.73,B2,,0,0,0,,{\an5\pos(1344,900)\org(1344,900)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H90&\4a&HFF&}Bounce + keys
-Dialogue: 1,0:00:01.73,0:00:01.76,T2,,0,0,0,,{\an5\pos(1344,897)\org(1344,897)\fscx100.0\fscy100.0\frz-0.0\1a&H33&\3a&H33&\4a&HFF&}Bounce + keys
-Dialogue: 0,0:00:01.73,0:00:01.76,B2,,0,0,0,,{\an5\pos(1344,897)\org(1344,897)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H99&\4a&HFF&}Bounce + keys
-Dialogue: 1,0:00:01.76,0:00:01.80,T2,,0,0,0,,{\an5\pos(1344,891)\org(1344,891)\fscx100.0\fscy100.0\frz-0.0\1a&H4C&\3a&H4C&\4a&HFF&}Bounce + keys
-Dialogue: 0,0:00:01.76,0:00:01.80,B2,,0,0,0,,{\an5\pos(1344,891)\org(1344,891)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&HA6&\4a&HFF&}Bounce + keys
-Dialogue: 1,0:00:01.80,0:00:01.83,T2,,0,0,0,,{\an5\pos(1344,882)\org(1344,882)\fscx100.0\fscy100.0\frz-0.0\1a&H6C&\3a&H6C&\4a&HFF&}Bounce + keys
-Dialogue: 0,0:00:01.80,0:00:01.83,B2,,0,0,0,,{\an5\pos(1344,882)\org(1344,882)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&HB6&\4a&HFF&}Bounce + keys
-Dialogue: 1,0:00:01.83,0:00:01.86,T2,,0,0,0,,{\an5\pos(1344,867)\org(1344,867)\fscx100.0\fscy100.0\frz-0.0\1a&H94&\3a&H94&\4a&HFF&}Bounce + keys
-Dialogue: 0,0:00:01.83,0:00:01.86,B2,,0,0,0,,{\an5\pos(1344,867)\org(1344,867)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&HC9&\4a&HFF&}Bounce + keys
-Dialogue: 1,0:00:01.86,0:00:01.90,T2,,0,0,0,,{\an5\pos(1344,848)\org(1344,848)\fscx100.0\fscy100.0\frz-0.0\1a&HC4&\3a&HC4&\4a&HFF&}Bounce + keys
-Dialogue: 0,0:00:01.86,0:00:01.90,B2,,0,0,0,,{\an5\pos(1344,848)\org(1344,848)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&HE2&\4a&HFF&}Bounce + keys
+Dialogue: 1,0:00:01.56,0:00:01.60,T2,,0,0,0,,{\an5\pos(1344,897)\org(1344,897)\fscx100.0\fscy100.0\frz-0.0\1a&H01&\3a&H01&\4a&HFF&}Bounce + keys
+Dialogue: 0,0:00:01.56,0:00:01.60,B2,,0,0,0,,{\an5\pos(1344,897)\org(1344,897)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H81&\4a&HFF&}Bounce + keys
+Dialogue: 1,0:00:01.60,0:00:01.63,T2,,0,0,0,,{\an5\pos(1344,900)\org(1344,900)\fscx100.0\fscy100.0\frz-0.0\1a&H04&\3a&H04&\4a&HFF&}Bounce + keys
+Dialogue: 0,0:00:01.60,0:00:01.63,B2,,0,0,0,,{\an5\pos(1344,900)\org(1344,900)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H82&\4a&HFF&}Bounce + keys
+Dialogue: 1,0:00:01.63,0:00:01.66,T2,,0,0,0,,{\an5\pos(1344,905)\org(1344,905)\fscx100.0\fscy100.0\frz-0.0\1a&H09&\3a&H09&\4a&HFF&}Bounce + keys
+Dialogue: 0,0:00:01.63,0:00:01.66,B2,,0,0,0,,{\an5\pos(1344,905)\org(1344,905)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H85&\4a&HFF&}Bounce + keys
+Dialogue: 1,0:00:01.66,0:00:01.70,T2,,0,0,0,,{\an5\pos(1344,912)\org(1344,912)\fscx100.0\fscy100.0\frz-0.0\1a&H12&\3a&H12&\4a&HFF&}Bounce + keys
+Dialogue: 0,0:00:01.66,0:00:01.70,B2,,0,0,0,,{\an5\pos(1344,912)\org(1344,912)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H89&\4a&HFF&}Bounce + keys
+Dialogue: 1,0:00:01.70,0:00:01.73,T2,,0,0,0,,{\an5\pos(1344,921)\org(1344,921)\fscx100.0\fscy100.0\frz-0.0\1a&H20&\3a&H20&\4a&HFF&}Bounce + keys
+Dialogue: 0,0:00:01.70,0:00:01.73,B2,,0,0,0,,{\an5\pos(1344,921)\org(1344,921)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H90&\4a&HFF&}Bounce + keys
+Dialogue: 1,0:00:01.73,0:00:01.76,T2,,0,0,0,,{\an5\pos(1344,931)\org(1344,931)\fscx100.0\fscy100.0\frz-0.0\1a&H33&\3a&H33&\4a&HFF&}Bounce + keys
+Dialogue: 0,0:00:01.73,0:00:01.76,B2,,0,0,0,,{\an5\pos(1344,931)\org(1344,931)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&H99&\4a&HFF&}Bounce + keys
+Dialogue: 1,0:00:01.76,0:00:01.80,T2,,0,0,0,,{\an5\pos(1344,943)\org(1344,943)\fscx100.0\fscy100.0\frz-0.0\1a&H4C&\3a&H4C&\4a&HFF&}Bounce + keys
+Dialogue: 0,0:00:01.76,0:00:01.80,B2,,0,0,0,,{\an5\pos(1344,943)\org(1344,943)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&HA6&\4a&HFF&}Bounce + keys
+Dialogue: 1,0:00:01.80,0:00:01.83,T2,,0,0,0,,{\an5\pos(1344,954)\org(1344,954)\fscx100.0\fscy100.0\frz-0.0\1a&H6C&\3a&H6C&\4a&HFF&}Bounce + keys
+Dialogue: 0,0:00:01.80,0:00:01.83,B2,,0,0,0,,{\an5\pos(1344,954)\org(1344,954)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&HB6&\4a&HFF&}Bounce + keys
+Dialogue: 1,0:00:01.83,0:00:01.86,T2,,0,0,0,,{\an5\pos(1344,967)\org(1344,967)\fscx100.0\fscy100.0\frz-0.0\1a&H94&\3a&H94&\4a&HFF&}Bounce + keys
+Dialogue: 0,0:00:01.83,0:00:01.86,B2,,0,0,0,,{\an5\pos(1344,967)\org(1344,967)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&HC9&\4a&HFF&}Bounce + keys
+Dialogue: 1,0:00:01.86,0:00:01.90,T2,,0,0,0,,{\an5\pos(1344,981)\org(1344,981)\fscx100.0\fscy100.0\frz-0.0\1a&HC4&\3a&HC4&\4a&HFF&}Bounce + keys
+Dialogue: 0,0:00:01.86,0:00:01.90,B2,,0,0,0,,{\an5\pos(1344,981)\org(1344,981)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&HE2&\4a&HFF&}Bounce + keys
 Dialogue: 1,0:00:00.00,0:00:00.03,T3,,0,0,0,,{\an5\pos(960,162)\org(960,162)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}flicker
 Dialogue: 1,0:00:00.03,0:00:00.06,T3,,0,0,0,,{\an5\pos(960,162)\org(960,162)\fscx100.0\fscy100.0\frz-0.0\1a&H02&\3a&H02&\4a&HFF&}flicker
 Dialogue: 1,0:00:00.06,0:00:00.10,T3,,0,0,0,,{\an5\pos(960,162)\org(960,162)\fscx100.0\fscy100.0\frz-0.0\1a&H07&\3a&H07&\4a&HFF&}flicker

@@ -258,8 +258,125 @@ def has_crop(edits: dict, target: str) -> bool:
 
 
 def has_layer_fx(edits: dict, target: str) -> bool:
-    """Keyframes / static transform / crop, or a flip: the layer needs the motion chain."""
-    return has_motion(edits, target) or any(layer_flip(edits, target))
+    """Keyframes / static transform / crop, a flip or (G3b) an in / out / loop preset: the layer
+    needs the motion chain."""
+    return has_motion(edits, target) or any(layer_flip(edits, target)) or layer_anim(edits, target) is not None
+
+
+# ---------------------------------------------------------------------------
+# G3b: in / out / loop presets on B-roll layers (mirror of new-app lib/clips/editor/layer-anim.ts)
+# ---------------------------------------------------------------------------
+
+def layer_anim(edits: dict, target: str) -> tuple[dict, int, float] | None:
+    """(anim, item length ms, local shift ms) of a B-roll item with a preset, else None.
+    The shift is set by broll_render._shift_target for window-local (transition) renders."""
+    if not (isinstance(target, str) and target.startswith("broll:") and len(target) > 6):
+        return None
+    bid = target[6:]
+    for b in edits.get("broll") or []:
+        if not isinstance(b, dict) or str(b.get("id")) != bid:
+            continue
+        from clips_worker.text_anim import norm_layer_anim
+
+        a = norm_layer_anim(b.get("anim"))
+        if not a:
+            return None
+        try:
+            ln = int(round(float(b["endMs"]))) - int(round(float(b["startMs"])))
+        except (KeyError, TypeError, ValueError):
+            return None
+        if ln <= 0:
+            return None
+        shift = _finite(((edits.get("_animShiftMs") or {}) if isinstance(edits.get("_animShiftMs"), dict) else {}).get(target)) or 0.0
+        return a, ln, shift
+    return None
+
+
+def layer_anim_at(edits: dict, target: str, local_ms: float) -> dict:
+    """Preset multipliers / offsets at item-local ms: {op, sc, dx, dy, rot} (identity without one)."""
+    la = layer_anim(edits, target)
+    if not la:
+        return {"op": 1.0, "sc": 1.0, "dx": 0.0, "dy": 0.0, "rot": 0.0}
+    from clips_worker.text_anim import fit_durations, frame_anim
+
+    a, ln, shift = la
+    d_in, d_out = fit_durations(a, ln)
+    fa = frame_anim(a, local_ms + shift, 0, ln, d_in, d_out)
+    return {k: fa[k] for k in ("op", "sc", "dx", "dy", "rot")}
+
+
+def _ease_out_x(p: str) -> str:
+    return f"(1-(1-{p})*(1-{p})*(1-{p}))"
+
+
+def _ease_back_x(p: str) -> str:
+    q = f"({p}-1)"
+    return f"(1+2.70158*{q}*{q}*{q}+1.70158*{q}*{q})"
+
+
+def _block_x(typ: str, p: str) -> dict:
+    """text_anim.block_state as ffmpeg expressions of progress p (sc / dx / dy; op is per frame)."""
+    e = _ease_out_x(p)
+    if typ == "pop":
+        return {"sc": f"(0.3+0.7*{_ease_back_x(p)})"}
+    if typ == "zoom":
+        return {"sc": f"(0.4+0.6*{e})"}
+    if typ == "slide_up":
+        return {"dy": f"((1-{e})*8)"}
+    if typ == "slide_down":
+        return {"dy": f"(0-(1-{e})*8)"}
+    if typ == "slide_left":
+        return {"dx": f"((1-{e})*10)"}
+    if typ == "slide_right":
+        return {"dx": f"(0-(1-{e})*10)"}
+    return {}
+
+
+def layer_anim_exprs(edits: dict, target: str, *, var: str = "t", origin_s: float = 0.0) -> dict:
+    """{sc, dx, dy, rot} ffmpeg expressions (seconds variable `var`) equal to layer_anim_at; keys
+    whose value never changes are left out."""
+    la = layer_anim(edits, target)
+    if not la:
+        return {}
+    from clips_worker.text_anim import OUT_MOTION, fit_durations
+
+    a, ln, shift = la
+    d_in, d_out = fit_durations(a, ln)
+    lms = f"(({var}-{_num(origin_s)})*1000+{_num(shift)})"
+    mul: dict[str, list[str]] = {"sc": []}
+    add: dict[str, list[str]] = {"dx": [], "dy": [], "rot": []}
+    if "in" in a and d_in > 0:
+        p = f"clip({lms}/{d_in},0,1)"
+        for k, v in _block_x(a["in"]["type"], p).items():
+            (mul if k == "sc" else add)[k].append(f"if(lt({lms},{d_in}),{v},{1 if k == 'sc' else 0})")
+    if "out" in a and d_out > 0:
+        rem = f"({ln}-{lms})"
+        p = f"clip({rem}/{d_out},0,1)"
+        # G3afix: an out slide leaves in its named direction (mirrored in-curve).
+        for k, v in _block_x(OUT_MOTION.get(a["out"]["type"], a["out"]["type"]), p).items():
+            (mul if k == "sc" else add)[k].append(f"if(lt({rem},{d_out}),{v},{1 if k == 'sc' else 0})")
+    lp = a.get("loop")
+    if lp:
+        per = lp["periodMs"]
+        tri = f"(1-abs(2*(mod({lms},{per})/{per})-1))"
+        sm = f"({tri}*{tri}*(3-2*{tri}))"
+        if lp["type"] == "pulse":
+            mul["sc"].append(f"(1+0.08*{sm})")
+        elif lp["type"] == "bounce":
+            add["dy"].append(f"(0-2*{sm})")
+        elif lp["type"] == "wiggle":
+            add["rot"].append(f"(6*(2*{sm}-1))")
+    out = {k: "*".join(v) for k, v in mul.items() if v}
+    out.update({k: "+".join(v) for k, v in add.items() if v})
+    return out
+
+
+def layer_opacity_at(edits: dict, target: str, t_s: float, origin_s: float) -> float:
+    """Keyframed opacity × preset opacity (0..1) at output second t_s."""
+    v = _opacity_at(find_track(edits, target, "opacity"), t_s, origin_s)
+    if layer_anim(edits, target) is None:
+        return v
+    return v * layer_anim_at(edits, target, (t_s - origin_s) * 1000)["op"]
 
 
 def stack_order(items: list[dict], z_of) -> list[dict]:
@@ -533,6 +650,13 @@ def layer_motion_chain(edits: dict, target: str, *, w: int, h: int, origin_s: fl
     """
     tr = {p: find_track(edits, target, p) for p in ("x", "y", "scale", "rotation", "opacity")}
     ex = {p: track_expr(tr[p], p, var=var, origin_s=origin_s) for p in tr}
+    # G3b: in / out / loop preset on top of the keyframes (x/y add, scale multiplies, opacity per frame).
+    anim_on = layer_anim(edits, target) is not None
+    if anim_on:
+        ax = layer_anim_exprs(edits, target, var=var, origin_s=origin_s)
+        for p, k, op in (("x", "dx", "+"), ("y", "dy", "+"), ("scale", "sc", "*"), ("rotation", "rot", "+")):
+            if k in ax:
+                ex[p] = f"({ex[p]}){op}({ax[k]})"
     crop_on = has_crop(edits, target)
     crop_anim = crop_on and any((find_track(edits, target, p) or {}).get("points") for p in CROP_PROPS)
     crop_tag = f"crop_{label_out}"
@@ -569,12 +693,12 @@ def layer_motion_chain(edits: dict, target: str, *, w: int, h: int, origin_s: fl
         chain.append(
             f"scale=w='max(2,trunc(iw*({ex['scale']})/200)*2)':h='max(2,trunc(ih*({ex['scale']})/200)*2)':eval=frame"
         )
-    opacity_anim = bool(tr["opacity"] and tr["opacity"].get("points"))
-    if ex["opacity"] != "100":
+    opacity_anim = bool(tr["opacity"] and tr["opacity"].get("points")) or anim_on
+    if ex["opacity"] != "100" or anim_on:
         tag = f"ccm_{label_out}"
         if cmd_file and opacity_anim:
             cmds.append(tag)
-        chain.append(f"colorchannelmixer@{tag}=aa={_opacity_at(tr['opacity'], 0, origin_s):.4f}")
+        chain.append(f"colorchannelmixer@{tag}=aa={layer_opacity_at(edits, target, 0, origin_s):.4f}")
     need_sendcmd = bool(cmd_file and cmds)
     if need_sendcmd:
         chain.insert(0, f"sendcmd=f='{cmd_file}'")
@@ -656,7 +780,7 @@ def layer_sendcmd(edits: dict, target: str, tags: list[str], *, w: int, h: int, 
         for f in range(f0, f1 + 1):
             t = f / fps
             if tag.startswith("ccm_"):
-                v = round(_opacity_at(find_track(edits, target, "opacity"), t, origin_s), 4)
+                v = round(layer_opacity_at(edits, target, t, origin_s), 4)
                 cur = ("ccm", v)
                 parts = [f"colorchannelmixer@{tag} aa {v}"]
             else:
