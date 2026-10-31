@@ -3,8 +3,17 @@
  * across the trimmed span (trim.in..trim.out), matching how timeline.tsx lays out word chips.
  */
 
-/** Readable default: ~36px for a 300ms word, enough for a short word at 10px. */
-export const TIMELINE_DEFAULT_PX_PER_SEC = 120
+/**
+ * 100% zoom. E1fix: 120 px/s gave a 300 ms word 36 px, so "energy," / "capital," were cut off and
+ * neighbours ran together (live test). 160 px/s is the floor; the initial zoom goes higher when the
+ * clip's own words need it (readablePxPerSec).
+ */
+export const TIMELINE_DEFAULT_PX_PER_SEC = 160
+/** Upper bound for the automatic initial zoom (manual zoom still goes to MAX). */
+export const TIMELINE_READABLE_MAX_PX_PER_SEC = 360
+/** Average glyph advance of the 11px chip font, plus chip padding. */
+export const TIMELINE_WORD_CHAR_PX = 6.4
+export const TIMELINE_WORD_PAD_PX = 6
 export const TIMELINE_MIN_PX_PER_SEC = 4
 export const TIMELINE_MAX_PX_PER_SEC = 800
 export const TIMELINE_ZOOM_STEP = 1.25
@@ -22,10 +31,73 @@ export function fitPxPerSec(spanMs: number, viewportPx: number): number {
   return clampPxPerSec(viewportPx / (spanMs / 1000))
 }
 
-/** Initial zoom: readable default, but never wider than needed when the clip already fits. */
-export function initialPxPerSec(spanMs: number, viewportPx: number): number {
+/** Estimated px a word label needs at the chip font. */
+export function wordLabelWidthPx(text: string): number {
+  return Math.ceil(text.trim().length * TIMELINE_WORD_CHAR_PX + TIMELINE_WORD_PAD_PX)
+}
+
+/**
+ * E1fix: scale at which `coverage` (default 75%) of this clip's words show their full label.
+ * Clamped to [DEFAULT, READABLE_MAX]; DEFAULT when there are no usable words.
+ */
+export function readablePxPerSec(
+  words: ReadonlyArray<{ text: string; durMs: number }>,
+  coverage = 0.75,
+): number {
+  const need = words
+    .filter((w) => w.durMs >= 40 && w.text.trim().length > 0)
+    .map((w) => wordLabelWidthPx(w.text) / (w.durMs / 1000))
+    .sort((a, b) => a - b)
+  if (!need.length) return TIMELINE_DEFAULT_PX_PER_SEC
+  const idx = Math.min(need.length - 1, Math.max(0, Math.floor(need.length * coverage)))
+  return Math.min(TIMELINE_READABLE_MAX_PX_PER_SEC, Math.max(TIMELINE_DEFAULT_PX_PER_SEC, need[idx]))
+}
+
+/**
+ * Initial zoom: readable (default, or what the clip's words need), but never wider than needed
+ * when the clip already fits at that scale.
+ */
+export function initialPxPerSec(spanMs: number, viewportPx: number, readable = TIMELINE_DEFAULT_PX_PER_SEC): number {
   const fit = fitPxPerSec(spanMs, viewportPx)
-  return fit >= TIMELINE_DEFAULT_PX_PER_SEC ? fit : TIMELINE_DEFAULT_PX_PER_SEC
+  const want = clampPxPerSec(Math.max(TIMELINE_DEFAULT_PX_PER_SEC, readable))
+  return fit >= want ? fit : want
+}
+
+export type TimelineZoomKeyAction = 'in' | 'out' | 'fit'
+
+/** +/= zoom in, -/_ zoom out, 0 fit. No modifiers (Ctrl/Cmd +/-/0 stays browser zoom). */
+export function timelineZoomKeyAction(e: {
+  key: string
+  ctrlKey?: boolean
+  metaKey?: boolean
+  altKey?: boolean
+}): TimelineZoomKeyAction | null {
+  if (e.ctrlKey || e.metaKey || e.altKey) return null
+  if (e.key === '+' || e.key === '=') return 'in'
+  if (e.key === '-' || e.key === '_') return 'out'
+  if (e.key === '0') return 'fit'
+  return null
+}
+
+const NON_TEXT_INPUT_TYPES = new Set(['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'color', 'file', 'image'])
+
+/** True when typing into this element should not trigger editor shortcuts. */
+export function isTextEntryTarget(target: unknown): boolean {
+  if (!target || typeof target !== 'object') return false
+  const el = target as {
+    tagName?: string
+    type?: string
+    isContentEditable?: boolean
+    getAttribute?: (n: string) => string | null
+    closest?: (s: string) => unknown
+  }
+  const tag = (el.tagName || '').toUpperCase()
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true
+  if (tag === 'INPUT') return !NON_TEXT_INPUT_TYPES.has((el.type || 'text').toLowerCase())
+  if (el.isContentEditable) return true
+  const role = el.getAttribute?.('role')
+  if (role === 'textbox' || role === 'searchbox' || role === 'combobox' || role === 'spinbutton') return true
+  return Boolean(el.closest?.('[contenteditable="true"],[contenteditable=""]'))
 }
 
 /** Track width in px; never narrower than the viewport so short clips fill the panel. */

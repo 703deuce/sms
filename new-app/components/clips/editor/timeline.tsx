@@ -22,10 +22,13 @@ import {
   autoscrollLeftForPlayhead,
   fitPxPerSec,
   initialPxPerSec,
+  isTextEntryTarget,
   outputMsToSourceMs,
   pxPerSecToSlider,
+  readablePxPerSec,
   sliderToPxPerSec,
   sourceMsToTrackPct,
+  timelineZoomKeyAction,
   trackWidthPx,
   zoomBy,
   zoomPercent,
@@ -124,9 +127,22 @@ export function Timeline({
     return () => ro.disconnect()
   }, [])
 
+  // E1fix: initial zoom is what this clip's words need to be readable (>= 100%), Fit if it fits.
+  const readableScale = useMemo(
+    () =>
+      readablePxPerSec(
+        words
+          .map((w) => {
+            const { startMs, endMs } = wordSourceMs(w)
+            return { text: wordDisplayText(w, edits.wordFixes), durMs: endMs - startMs, startMs, endMs }
+          })
+          .filter((w) => w.endMs >= previewEdits.trim.in && w.startMs <= previewEdits.trim.out),
+      ),
+    [words, edits.wordFixes, previewEdits.trim.in, previewEdits.trim.out],
+  )
   useEffect(() => {
-    if (pxPerSec == null && trackViewportPx > 0) setPxPerSec(initialPxPerSec(span, trackViewportPx))
-  }, [pxPerSec, span, trackViewportPx])
+    if (pxPerSec == null && trackViewportPx > 0) setPxPerSec(initialPxPerSec(span, trackViewportPx, readableScale))
+  }, [pxPerSec, span, trackViewportPx, readableScale])
 
   const applyZoom = useCallback(
     (nextPxPerSec: number, anchorX?: number) => {
@@ -167,6 +183,25 @@ export function Timeline({
     setPxPerSec(fitPxPerSec(span, trackViewportPx))
   }
   const zoomDefault = () => applyZoom(TIMELINE_DEFAULT_PX_PER_SEC)
+
+  // E1fix: +/-/0 work whenever focus is not in a text field (before: only after clicking the
+  // timeline). When the timeline itself is focused its onKeyDown handles the key first and calls
+  // preventDefault, so this window listener skips it (no double zoom).
+  const zoomKeysRef = useRef({ zoomIn, zoomOut, zoomFit })
+  zoomKeysRef.current = { zoomIn, zoomOut, zoomFit }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return
+      const action = timelineZoomKeyAction(e)
+      if (!action || isTextEntryTarget(e.target)) return
+      e.preventDefault()
+      if (action === 'in') zoomKeysRef.current.zoomIn()
+      else if (action === 'out') zoomKeysRef.current.zoomOut()
+      else zoomKeysRef.current.zoomFit()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // Ctrl/Cmd + wheel zooms around the cursor (non-passive so the page does not zoom).
   useEffect(() => {
@@ -378,7 +413,7 @@ export function Timeline({
                 key={w.i}
                 type="button"
                 data-testid="timeline-word"
-                className={`absolute top-1 h-6 overflow-hidden whitespace-nowrap rounded px-0.5 text-left text-[11px] leading-6 text-white ${bg}`}
+                className={`absolute top-1 h-6 overflow-hidden text-ellipsis whitespace-nowrap rounded px-0.5 text-left text-[11px] leading-6 text-white shadow-[inset_-1px_0_0_rgba(0,0,0,0.45)] ${bg}`}
                 style={{ left: `${left}%`, width: `${Math.max(wPct, 0.4)}%` }}
                 onClick={(ev) => {
                   ev.stopPropagation()

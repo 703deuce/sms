@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server'
-import { z } from 'zod'
+import { stockBrollInsertBodySchema } from '@/lib/clips/broll-api-schema'
 import { jsonError } from '@/lib/server/api-error'
 import { ensureStockAsset, findCachedHit } from '@/lib/server/ai/pixabay'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
-const bodySchema = z.object({
-  providerId: z.string().min(1),
-  startMs: z.number().int().min(0),
-  endMs: z.number().int().min(0),
-})
+// E1fix: shared schema rounds fractional playhead ms instead of rejecting "Expected integer".
+const bodySchema = stockBrollInsertBodySchema
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {

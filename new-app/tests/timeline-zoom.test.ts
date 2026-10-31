@@ -30,7 +30,7 @@ describe('timeline zoom', () => {
     expect(oldWordPx).toBe(15)
     const span = 60_000
     const w = trackWidthPx(span, TIMELINE_DEFAULT_PX_PER_SEC)
-    expect((w / span) * 300).toBeGreaterThanOrEqual(36)
+    expect((w / span) * 300).toBeGreaterThanOrEqual(48)
   })
 
   it('fit-to-view fills the viewport exactly', () => {

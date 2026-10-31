@@ -53,7 +53,7 @@ import type { CleanupProposal } from '@/lib/clips/editor/cleanup-proposals'
 import { deriveClipFromEditor } from '@/lib/clips-api'
 import { LayersPanel } from '@/components/clips/editor/layers-panel'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
-import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
+import { applyBrandTemplateToEdits, describeTemplateChange, templateAppliedMessage } from '@/lib/clips/apply-brand'
 import { applyAutoTemplateToEdits, applyTemplateV3ToEdits, templateFromEdits } from '@/lib/clips/layers-template'
 import { clipStyleSettingsFromEdits, type BrandTemplateSettings } from '@/lib/clips/brand'
 import { saveClipBrandTemplate } from '@/lib/clips-api'
@@ -659,7 +659,16 @@ export function EditorShell({
   }, [enqueueStudioSound])
 
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
-  const [brandTemplates, setBrandTemplates] = useState<{ id: string; name: string; settings: unknown }[]>([])
+  const [brandTemplates, setBrandTemplates] = useState<
+    {
+      id: string
+      name: string
+      settings: unknown
+      logoKey?: string | null
+      introVideoKey?: string | null
+      outroVideoKey?: string | null
+    }[]
+  >([])
   const outDur = editorPreviewDurationMs(edits, editorWords)
   const displayDur = useMemo(
     () => displayDurationMs({ ...editorPreviewEdits(edits, editorWords), speed: edits.speed }),
@@ -736,13 +745,22 @@ export function EditorShell({
     (templateId: string) => {
       const row = brandTemplates.find((t) => t.id === templateId)
       if (!row) return
-      setEdits(
-        applyBrandTemplateToEdits(edits, {
+      let next: ClipEditsV2
+      try {
+        next = applyBrandTemplateToEdits(edits, {
           id: row.id,
+          logoKey: row.logoKey ?? null,
+          introVideoKey: row.introVideoKey ?? null,
+          outroVideoKey: row.outroVideoKey ?? null,
           settings: row.settings as BrandTemplateSettings,
-        }),
-      )
-      toast.success('Template applied')
+        })
+      } catch (e) {
+        toast.error(e instanceof Error ? `Template could not be applied: ${e.message}` : 'Template could not be applied')
+        return
+      }
+      setEdits(next)
+      // E1fix: say what changed (or that nothing did) instead of a bare "Template applied".
+      toast.success(templateAppliedMessage(row.name, describeTemplateChange(edits, next)))
     },
     [brandTemplates, edits, setEdits],
   )

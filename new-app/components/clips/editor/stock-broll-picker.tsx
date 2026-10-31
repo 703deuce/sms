@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { clipsFetch } from '@/lib/clips-api'
+import { brollInsertWindow } from '@/lib/clips/broll'
 
 type Hit = {
   providerId: string
@@ -91,8 +92,7 @@ export function StockBrollPicker({
                 size="sm"
                 className="absolute bottom-1 left-1 right-1 text-xs"
                 onClick={() => {
-                  const startMs = playheadMs
-                  const endMs = Math.min(playheadMs + 3000, clipEndMs)
+                  const { startMs, endMs } = brollInsertWindow(playheadMs, clipEndMs)
                   onInsert(h.providerId, startMs, endMs)
                   onClose()
                 }}

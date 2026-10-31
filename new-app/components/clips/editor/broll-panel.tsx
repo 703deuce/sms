@@ -6,7 +6,7 @@ import { AiBrollCard } from '@/components/clips/editor/ai-broll-card'
 import { StockBrollPicker } from '@/components/clips/editor/stock-broll-picker'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { Button } from '@/components/ui/button'
-import type { BrollItem } from '@/lib/clips/broll'
+import { toIntMs, type BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
@@ -58,7 +58,10 @@ export function BrollPanel({
   const mediaById = useMemo(() => new Map(brollMedia.map((m) => [m.id, m])), [brollMedia])
   const defaultQuery = aiMeta?.brollIdeas?.[0] || ''
 
-  const insertStock = async (providerId: string, startMs: number, endMs: number) => {
+  const insertStock = async (providerId: string, rawStartMs: number, rawEndMs: number) => {
+    // E1fix: the playhead is fractional ms; the API and worker store integer ms.
+    const startMs = toIntMs(rawStartMs)
+    const endMs = Math.max(startMs, toIntMs(rawEndMs))
     const itemId = crypto.randomUUID()
     const data = await clipsFetch<{
       assetId: string
@@ -161,14 +164,14 @@ export function BrollPanel({
         method: 'POST',
         body: JSON.stringify({
           prompt: s.prompt,
-          atMs: s.atMs,
+          atMs: toIntMs(s.atMs),
           durationS: s.durationS,
           resolution: s.resolution || '480p',
         }),
       })
       pendingAi.current = {
         generationId: data.generationId,
-        atMs: s.atMs,
+        atMs: toIntMs(s.atMs),
         durationS: s.durationS,
         itemId: crypto.randomUUID(),
       }
