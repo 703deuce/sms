@@ -129,6 +129,38 @@ export async function findInFlightRender(
   return job ? { render, jobId: job.id } : null
 }
 
+/**
+ * FV4c: the newest QUEUED / RENDERING render of this clip (any edits hash) that still has a live
+ * RENDER_CLIP job — the export dialog re-attaches to it after a close / reopen or a page reload.
+ */
+export async function findActiveRenderForClip(
+  workspaceId: string,
+  clipId: string,
+  now: number = Date.now(),
+) {
+  const prisma = getPrisma()
+  const render = await prisma.clipRender.findFirst({
+    where: {
+      clipId,
+      workspaceId,
+      status: { in: ['QUEUED', 'RENDERING'] },
+      createdAt: { gte: new Date(now - IN_FLIGHT_RENDER_MAX_AGE_MS) },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (!render) return null
+  const job = await prisma.clipJob.findFirst({
+    where: {
+      clipId,
+      type: 'RENDER_CLIP',
+      status: { in: ['QUEUED', 'RUNNING'] },
+      payload: { path: ['renderId'], equals: render.id },
+    },
+    select: { id: true },
+  })
+  return job ? { render, jobId: job.id } : null
+}
+
 export async function enqueueRenderClip(
   workspaceId: string,
   clipId: string,
