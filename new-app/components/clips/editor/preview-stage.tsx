@@ -7,9 +7,8 @@ import { normalizeEditSpeed, orderedKeepSegments } from '@/lib/clips/edits'
 import { editorPreviewCaptionClipWords, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
-import { resolveTemplateGeometryById } from '@/lib/clips/templates/geometry'
+import { editorTemplateSpec } from '@/lib/clips/templates/editor-spec'
 import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
-import { signalsOrDefaults } from '@/lib/clips/templates/signals'
 import { TemplateStage, TemplateTitleOverlay } from '@/components/clips/editor/template-stage'
 import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
@@ -479,10 +478,9 @@ export function PreviewStage({
   }, [fitTopPreview, edits, composeSpec])
 
   const templatePreview = useMemo(() => {
-    if (!t6TemplatesEnabled() || !videoUrl || compositePreview) return null
-    const tid = edits.layout?.template?.id
-    if (!tid) return null
-    return resolveTemplateGeometryById(tid, signalsOrDefaults(aiMeta), edits)
+    if (!videoUrl || compositePreview) return null
+    // T6.5: same spec helper as the layout studio's 9:16 preview.
+    return editorTemplateSpec(edits, aiMeta)
   }, [videoUrl, compositePreview, edits, aiMeta])
 
   const brand = (edits.brand || {}) as ClipBrandEdits

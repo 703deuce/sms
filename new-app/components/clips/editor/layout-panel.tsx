@@ -277,6 +277,7 @@ export function LayoutPanel({
           channelId={channelId}
           clipType={clipType}
           sourceTimeSec={(edits.trim.in - mediaOffsetMs) / 1000}
+          aiMeta={aiMeta}
         />
       ) : null}
       {layoutOptions.length > 0 ? (
