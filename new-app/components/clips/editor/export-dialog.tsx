@@ -6,6 +6,8 @@ import { createExportToast } from '@/lib/clips/editor/export-toast'
 import { EXPORT_POLL_MAX_ERRORS, startExportStatusPoll } from '@/lib/clips/editor/export-poll'
 import {
   activeRenderToResume,
+  exportButtonState,
+  RESUME_LOOKUP_MAX_WAIT_MS,
   formatExportProgressLine,
   isRenderInFlight,
   monotonicPct,
@@ -128,6 +130,12 @@ export function ExportDialog({
   // FV4c: set once Export MP4 was clicked in this open session, so a late active-render lookup
   // never overwrites the render the user just started.
   const exportClickedRef = useRef(false)
+  // FV4d: the in-flight render this dialog re-attached to (wins over saved export preferences).
+  const resumeRef = useRef<{ resolution: '720p' | '1080p' | null; aspectRatio: ClipProjectSettings['aspectRatio'] | null } | null>(null)
+  const [lookupPending, setLookupPending] = useState(false)
+  // FV4d: resolution of the render currently in flight (attached or just started) — Export stays
+  // blocked for that resolution only.
+  const [inFlightResolution, setInFlightResolution] = useState<string | null>(null)
   // E2fix: one toast per export, settled on READY / FAILED / poll error, dismissed on close.
   const exportToast = useMemo(() => createExportToast(toast), [])
   useEffect(() => () => exportToast.dismiss(), [exportToast])
@@ -160,7 +168,12 @@ export function ExportDialog({
       setRemoveDeadAir(Boolean(edits.silenceTrim?.enabled))
       setAlsoSrt(prefs.alsoSrt)
       setExportSfx(prefs.exportSfx)
-      if (fullVideo) {
+      const resumed = resumeRef.current
+      if (resumed) {
+        // FV4d: re-attached to an in-flight render — keep its resolution / aspect selected.
+        if (resumed.resolution) setResolution(resumed.resolution)
+        if (resumed.aspectRatio) setAspect(resumed.aspectRatio)
+      } else if (fullVideo) {
         const a = edits.aspectRatio ?? '16:9'
         setAspect(a)
         setResolution(can('', 'export_1080p') ? '1080p' : '720p')
@@ -221,6 +234,7 @@ export function ExportDialog({
       setRenderPhase(null)
       setRenderEtaSec(null)
       setRenderDetail(null)
+      setInFlightResolution(null)
     }
   }, [open, exportToast])
 
@@ -229,25 +243,54 @@ export function ExportDialog({
   useEffect(() => {
     if (!open) {
       exportClickedRef.current = false
+      resumeRef.current = null
+      setLookupPending(false)
       return
     }
     let cancelled = false
+    const t0 = Date.now()
+    // FV4d: "Checking…" (disabled) until the lookup answers, at most RESUME_LOOKUP_MAX_WAIT_MS, so a
+    // fresh Export MP4 never flashes before "Rendering…". A late answer still re-attaches.
+    setLookupPending(true)
+    const timer = setTimeout(() => {
+      if (!cancelled) setLookupPending(false)
+    }, RESUME_LOOKUP_MAX_WAIT_MS)
     void Promise.resolve()
       .then(() => clipsFetch<unknown>(`/api/clips/clips/${clipId}/active-render`))
       .then((data) => {
+        if (cancelled) return
+        clearTimeout(timer)
+        setLookupPending(false)
         const resume = activeRenderToResume(data)
-        if (cancelled || !resume || exportClickedRef.current) return
+        logEditorDecision('export_progress', {
+          clipId,
+          resumeLookupMs: Date.now() - t0,
+          resumed: Boolean(resume && !exportClickedRef.current),
+          renderId: resume?.renderId ?? null,
+          status: resume?.status ?? null,
+          resolution: resume?.resolution ?? null,
+        })
+        if (!resume || exportClickedRef.current) return
+        resumeRef.current = { resolution: resume.resolution, aspectRatio: resume.aspectRatio }
         setRenderId(resume.renderId)
         setStatus(resume.status)
         setDownloadUrl(null)
         setErrorDetail(null)
-        logEditorDecision('export_progress', { clipId, renderId: resume.renderId, status: resume.status, resumed: true })
+        // FV4d: show the running render's settings, whatever the saved / default selection was.
+        setExportPlatform('none')
+        if (resume.resolution) setResolution(resume.resolution)
+        if (resume.aspectRatio) setAspect(resume.aspectRatio)
+        setInFlightResolution(resume.resolution)
       })
       .catch(() => {
         /* lookup is best-effort; Export MP4 still dedupes server-side by edits hash */
+        if (cancelled) return
+        clearTimeout(timer)
+        setLookupPending(false)
       })
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
   }, [open, clipId])
 
@@ -327,8 +370,18 @@ export function ExportDialog({
 
   // FV4b: a render of this clip is still QUEUED / RENDERING — no second Export MP4 click.
   const renderInFlight = isRenderInFlight(renderId, status)
+  const selectedResolution =
+    exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].resolution : resolution
+  // FV4d: blocked only for the in-flight render's own resolution; "Checking…" while the lookup runs.
+  const exportButton = exportButtonState({
+    lookupPending,
+    busy,
+    renderInFlight,
+    inFlightResolution,
+    selectedResolution,
+  })
   const startExport = async () => {
-    if (busy || renderInFlight) return
+    if (exportButton.disabled) return
     exportClickedRef.current = true
     setBusy(true)
     setErrorDetail(null)
@@ -394,6 +447,7 @@ export function ExportDialog({
       }
       setRenderId(data.renderId)
       setStatus(data.status)
+      setInFlightResolution(selectedResolution)
       if (typeof data.durationMs === 'number') setDurationMs(data.durationMs)
       if (data.downloadUrl) {
         setDownloadUrl(data.downloadUrl)
@@ -742,6 +796,11 @@ export function ExportDialog({
             })}
           </p>
         )}
+        {exportButton.note ? (
+          <p className="mt-1 text-xs text-muted-foreground" role="note" data-testid="export-other-resolution-note">
+            {exportButton.note}
+          </p>
+        ) : null}
         {renderId && durationMs != null && durationMs > 0 && (
           <p className="mt-1 text-xs text-muted-foreground">
             Clip length: {Math.round(editedDurationMs / 1000)}s
@@ -770,11 +829,13 @@ export function ExportDialog({
           {!downloadUrl ? (
             <Button
               onClick={() => void startExport()}
-              disabled={busy || renderInFlight}
+              disabled={exportButton.disabled}
               data-testid="export-mp4-button"
-              title={renderInFlight ? 'This clip is already rendering — wait for it to finish' : undefined}
+              title={
+                exportButton.blockedByInFlight ? 'This clip is already rendering — wait for it to finish' : undefined
+              }
             >
-              {renderInFlight ? 'Rendering…' : busy ? 'Exporting…' : 'Export MP4'}
+              {exportButton.label}
             </Button>
           ) : (
             <Button render={<a href={downloadUrl} download={filename} />}>Download MP4</Button>

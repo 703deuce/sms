@@ -84,7 +84,8 @@ describe('FV4c ExportDialog re-attaches to an in-flight render on open', () => {
     await waitFor(() =>
       expect(clipsFetch).toHaveBeenCalledWith('/api/clips/clips/clip_fv4c/active-render'),
     )
-    expect(getByTestId('export-mp4-button').textContent).toBe('Export MP4')
+    // FV4d: "Checking…" while the lookup is pending, then a fresh Export MP4.
+    await waitFor(() => expect(getByTestId('export-mp4-button').textContent).toBe('Export MP4'))
     expect(getRenderStatus).not.toHaveBeenCalled()
   })
 })
