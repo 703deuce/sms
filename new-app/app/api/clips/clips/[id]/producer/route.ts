@@ -15,19 +15,24 @@ export const maxDuration = 300
 
 const bodySchema = z.object({
   message: z.string().min(1).max(4000),
+  /** E4 pop-over: return the proposed edits without saving them (the editor previews / accepts). */
+  dryRun: z.boolean().optional(),
 })
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   let clipId = ''
   let workspaceId = ''
   let userMessage = ''
+  let dryRun = false
   try {
     const params = await ctx.params
     clipId = params.id
     workspaceId = await resolveWorkspaceId()
     const clip = await getClipForWorkspace(workspaceId, clipId)
     if (!clip) return jsonError(new Error('Not found'), 404)
-    userMessage = bodySchema.parse(await request.json()).message
+    const body = bodySchema.parse(await request.json())
+    userMessage = body.message
+    dryRun = body.dryRun === true
   } catch (err) {
     return jsonError(err, 400)
   }
@@ -99,7 +104,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         send('edits', { edits: applied.edits, changeCount: applied.changeCount })
 
         const prisma = getPrisma()
-        if (applied.changeCount > 0) {
+        if (applied.changeCount > 0 && !dryRun) {
           await prisma.clip.update({
             where: { id: clipId },
             data: { edits: applied.edits as object },

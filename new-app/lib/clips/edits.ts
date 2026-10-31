@@ -15,6 +15,9 @@ import {
   type CutTransition,
   type KeyframeTrack,
 } from '@/lib/clips/editor/motion-schema'
+import { hasColor, normalizeColorEdits, type ClipColorEdits } from '@/lib/clips/editor/color'
+import { normalizeSegmentSpeeds, speedWarpPieces, warpedDurationMs, type SegmentSpeed } from '@/lib/clips/editor/speed'
+import { normalizeTextItems, type TextItem } from '@/lib/clips/editor/text-items'
 
 export type CutRange = [number, number]
 
@@ -160,6 +163,12 @@ export type ClipEditsV2 = {
   keyframes?: KeyframeTrack[]
   /** E3 Video-lane cut transitions, keyed by the source start of the segment after the cut. */
   transitions?: CutTransition[]
+  /** E4 text items on the Text lane (output ms; keyframe target `text:<id>`). */
+  textItems?: TextItem[]
+  /** E4 color looks (Adjust + Filters): whole video, per Video item (source range), per B-roll id. */
+  color?: ClipColorEdits
+  /** E4 per-item speed 0.25–4× over SOURCE ranges (pitch-preserved; export post-step warp). */
+  segmentSpeeds?: SegmentSpeed[]
 }
 
 export type ClipBounds = {
@@ -425,6 +434,9 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.videoSplits?.length) payload.videoSplits = null
   if (!edits.keyframes?.length) payload.keyframes = null
   if (!edits.transitions?.length) payload.transitions = null
+  if (!edits.textItems?.length) payload.textItems = null
+  if (!edits.color) payload.color = null
+  if (!edits.segmentSpeeds?.length) payload.segmentSpeeds = null
   return payload
 }
 
@@ -530,6 +542,9 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     videoSplits: normalizeVideoSplits(o.videoSplits, trim.in, trim.out),
     keyframes: normalizeKeyframeTracks(o.keyframes),
     transitions: normalizeCutTransitions(o.transitions),
+    textItems: normalizeTextItems(o.textItems),
+    color: normalizeColorEdits(o.color),
+    segmentSpeeds: normalizeSegmentSpeeds(o.segmentSpeeds),
     vocabApplied:
       typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
     loudnessLufs:
@@ -609,7 +624,11 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     !edits.timelineLanes?.voice?.muted &&
     // E3: keyframes / cut transitions are export-only changes to the frames.
     !edits.keyframes?.length &&
-    !edits.transitions?.length
+    !edits.transitions?.length &&
+    // E4: text / color / per-item speed change the frames or the length.
+    !edits.textItems?.length &&
+    !hasColor(edits.color) &&
+    !edits.segmentSpeeds?.length
   )
 }
 
@@ -714,7 +733,11 @@ export function orderedKeepSegments(edits: ClipEditsV2): [number, number][] {
 
 export function displayDurationMs(edits: ClipEditsV2): number {
   const speed = normalizeEditSpeed(edits.speed) ?? 1
-  return Math.round(outputDurationMs(edits) / speed)
+  // E4: per-item speeds warp the edit timeline before the global speed (export_post order).
+  const base = edits.segmentSpeeds?.length
+    ? warpedDurationMs(speedWarpPieces(orderedKeepSegments(edits), edits.segmentSpeeds))
+    : outputDurationMs(edits)
+  return Math.round(base / speed)
 }
 
 const MIN_SEGMENT_MS = 80

@@ -137,7 +137,17 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         # E3: keyframes / cut transitions change the frames — never reuse preview.mp4.
         and not edits.get("keyframes")
         and not edits.get("transitions")
+        # E4: text items / color looks / per-item speed change the frames or the length.
+        and not edits.get("textItems")
+        and not _e4_color(edits)
+        and not edits.get("segmentSpeeds")
     )
+
+
+def _e4_color(edits: dict) -> bool:
+    from clips_worker.color import has_color
+
+    return has_color(edits)
 
 
 def _timeline_voice_muted(edits: dict) -> bool:
@@ -744,6 +754,14 @@ def _legacy_compose(
         hooked = work_dir / "hooked.mp4"
         apply_hook_overlay(out_mp4, hooked, edits, play_w=play_w, play_h=play_h)
         shutil.copy(hooked, out_mp4)
+
+    from clips_worker.text_items import apply_text_items, has_text_items
+
+    if has_text_items(edits):
+        # E4: Text-lane items, burned in the same stage as the hook title (output ms).
+        texted = work_dir / "text_items.mp4"
+        apply_text_items(out_mp4, texted, edits, play_w=play_w, play_h=play_h)
+        shutil.copy(texted, out_mp4)
 
     zoom_cfg = edits.get("zoom") if isinstance(edits.get("zoom"), dict) else {}
     if zoom_cfg.get("enabled") and not zoom_done and isinstance(ctx.get("t6_spec"), dict):
@@ -1493,6 +1511,12 @@ def render_edited_clip(
         )
         stage("speakercrop_nc_done")
 
+    from clips_worker.color import apply_full_render_color
+
+    # E4: source-anchored color looks on full_render (source time) → cut.mp4 and the E3 transition
+    # handles (both cut from full_render) carry the right look per side.
+    full_render = apply_full_render_color(full_render, edits, clip_start_ms, clip_end_ms, work_dir)
+
     cut_mp4 = work_dir / "cut.mp4"
     if len(segs_sec) == 1 and segs_sec[0][0] <= 0.01 and abs(segs_sec[0][1] - (clip_end_ms - clip_start_ms) / 1000) < 0.1:
         shutil.copy(full_render, cut_mp4)
@@ -1509,6 +1533,15 @@ def render_edited_clip(
         ]
         cut_mp4 = apply_motion_after_cut(cut_mp4, full_render, edits, concat_ms, clip_start_ms, work_dir)
         stage("motion_done")
+
+    if render_meta is not None and edits.get("segmentSpeeds"):
+        # E4: per-item speed warp map in edit ms, applied by export_post after the full render.
+        from clips_worker.speed import normalize_segment_speeds, speed_warp_pieces
+
+        concat_src = [
+            (clip_start_ms + int(round(a * 1000)), clip_start_ms + int(round(b * 1000))) for a, b in segs_sec
+        ]
+        render_meta["speed_warp"] = speed_warp_pieces(concat_src, normalize_segment_speeds(edits.get("segmentSpeeds")))
 
     remapped, _ = words_after_edits(src_words, edits)
     caption_words = remapped

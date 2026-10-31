@@ -16,6 +16,7 @@ import { signalsOrDefaults } from '@/lib/clips/templates/signals'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import { TemplateStage } from '@/components/clips/editor/template-stage'
 import { resolveTemplateGeometry } from '@/lib/clips/templates/geometry'
+import { templateLayoutPatch } from '@/lib/clips/editor/starter-templates'
 
 const LANES: TemplateLane[] = ['gaming', 'irl', 'just_chatting', 'podcast']
 
@@ -51,21 +52,8 @@ export function TemplateLayoutPanel({
   const applyTemplate = (id: string, auto: boolean, reason?: string, family?: string) => {
     const t = T6_TEMPLATES_BY_ID[id]
     if (!t) return
-    const famLane = (family && templateInFamily(t, family) ? family : t.lane) as TemplateLane
-    const usesTrim = t.panels.some((p) => p.src === 'trim_sides' || p.src === 'action_box')
-    const fallback =
-      t.lane === 'irl' && /^I[1-4]$/.test(t.id) ? 'fit_blur' : (t.fallbackMode as ClipEditsV2['layout']['mode'])
-    onEdits({
-      ...edits,
-      layout: {
-        ...edits.layout,
-        mode: fallback,
-        cropBox: usesTrim ? edits.layout.cropBox : undefined,
-        layoutSegments: undefined,
-        userPicked: !auto,
-        template: { id, auto, reason, lane: famLane, boxes: edits.layout.template?.boxes },
-      },
-    })
+    // E4: shared with the Templates picker (identical edits from both places).
+    onEdits(templateLayoutPatch(edits, t, { auto, reason, family }))
   }
 
   return (

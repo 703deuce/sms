@@ -59,6 +59,8 @@ def apply_timeline_lane_state(edits: dict) -> dict:
     hook = out.get("hookOverlay")
     if (lanes.get("text") or {}).get("hidden") and isinstance(hook, dict) and hook.get("enabled"):
         out["hookOverlay"] = {**hook, "enabled": False}
+    if (lanes.get("text") or {}).get("hidden") and out.get("textItems"):
+        out["textItems"] = None  # E4: hiding the Text lane hides text items too
     audio = out.get("audio")
     if isinstance(audio, dict):
         a = dict(audio)

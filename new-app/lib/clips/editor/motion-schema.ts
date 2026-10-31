@@ -6,6 +6,7 @@
  *  - target 'video' | 'voice' | 'text'  → OUTPUT ms (the E2 single time base; text = hook overlay, starts at 0)
  *  - target `broll:<id>`                 → item-local ms (0 = item start); content-anchored via inMs
  *  - target 'music'                      → local to the music window start (0 = window start)
+ *  - target `text:<id>` (E4 text item)  → item-local ms (0 = item start)
  */
 
 export type Ease = 'linear' | 'in' | 'out' | 'inOut'
@@ -15,7 +16,7 @@ export const EASE_LABELS: Record<Ease, string> = { linear: 'Linear', in: 'Ease i
 export type KeyProp = 'x' | 'y' | 'scale' | 'rotation' | 'opacity' | 'volume'
 export const KEY_PROPS: readonly KeyProp[] = ['x', 'y', 'scale', 'rotation', 'opacity', 'volume'] as const
 
-export type KeyframeTarget = 'video' | 'voice' | 'music' | 'text' | `broll:${string}`
+export type KeyframeTarget = 'video' | 'voice' | 'music' | 'text' | `broll:${string}` | `text:${string}`
 
 /** One keyframe. `ease` shapes the segment from this point to the next (After Effects "outgoing"). */
 export type KeyPoint = { tMs: number; v: number; ease?: Ease }
@@ -93,7 +94,7 @@ function clampN(n: number, lo: number, hi: number): number {
 
 function isTarget(t: unknown): t is KeyframeTarget {
   if (typeof t !== 'string') return false
-  return t === 'video' || t === 'voice' || t === 'music' || t === 'text' || (t.startsWith('broll:') && t.length > 6)
+  return t === 'video' || t === 'voice' || t === 'music' || t === 'text' || (t.startsWith('broll:') && t.length > 6) || (t.startsWith('text:') && t.length > 5)
 }
 
 /** Which properties a target can animate (CapCut: visual layers vs audio). */

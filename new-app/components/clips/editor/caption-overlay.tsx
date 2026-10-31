@@ -13,8 +13,9 @@ import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
 import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
 import { captionHighlightContrastText } from '@/lib/clips/caption-active-style'
 import { previewCaptionBottomPct, previewCaptionTopPct } from '@/lib/clips/caption-safe-area'
-import { captionFontStack, captionFontWeight, cssEmPerAssFontsize, previewCaptionStrokePx } from '@/lib/clips/caption-fonts'
+import { captionFontStack, captionFontWeight, previewCaptionStrokePx } from '@/lib/clips/caption-fonts'
 import { exportPixelSize } from '@/lib/clips/export-aspect'
+import { assEmPerFontsize, captionChunkFit, captionFitConfigForEdits, captionSafeWidthPct } from '@/lib/clips/caption-fit'
 
 function positionStyle(position: string, marginVPct: number): React.CSSProperties | undefined {
   if (position === 'top') return { top: `${marginVPct}%` }
@@ -53,13 +54,15 @@ export function CaptionOverlay({
   const preset = resolveT6CaptionPreset(cap, t6Caps)
   const captionFont = cap.font?.trim() || preset.font
   const animation = (cap.animation || preset.animation) as string
-  const wpl = cap.wordsPerLine ?? preset.wordsPerLine
+  // E3fix2: chunking, font size, safe width and line breaks mirror the export ASS (caption-fit.ts).
+  const aspect = edits.aspectRatio ?? '9:16'
+  const fitCfg = useMemo(() => captionFitConfigForEdits(edits.captions ?? {}, t6Caps, aspect), [edits.captions, t6Caps, aspect])
+  const wpl = Math.max(1, fitCfg.wordsPerLine)
   const caseMode = (cap.case || preset.case) as string
-  const sizePct = cap.size ?? preset.sizePct
   const exportPlayH = exportPixelSize(edits.aspectRatio ?? '9:16', '720p').height
   const assScale = boxHeightPx > 0 ? boxHeightPx / exportPlayH : 1
-  const emRatio = cssEmPerAssFontsize(preset.font)
-  const fontSize = Math.max(12, (boxHeightPx * sizePct) / 100 * emRatio)
+  const emRatio = assEmPerFontsize(fitCfg.font)
+  const fontSize = Math.max(12, ((boxHeightPx * fitCfg.fontsize) / fitCfg.refH) * emRatio)
   const colors = cap.colors
   const emphasis = new Set(cap.emphasis ?? [])
 
@@ -80,6 +83,19 @@ export function CaptionOverlay({
     () => words.slice(lineStart, lineStart + wpl),
     [lineStart, wpl, words],
   )
+  const lineFit = useMemo(
+    () =>
+      captionChunkFit(
+        fitCfg,
+        lineWords.map((w, i) => ({ w: w.w, i: w.idx ?? lineStart + i })),
+        new Set(cap.emphasis ?? []),
+      ),
+    [cap.emphasis, fitCfg, lineStart, lineWords],
+  )
+  const lineRows = useMemo(() => {
+    const cuts = [0, ...lineFit.breaks, lineWords.length]
+    return cuts.slice(0, -1).map((a, r) => ({ from: a, to: cuts[r + 1]! }))
+  }, [lineFit.breaks, lineWords.length])
 
   const pb = cap.progressBar
   const showProgress = Boolean(pb?.enabled) && outputDurationSec > 0
@@ -93,8 +109,6 @@ export function CaptionOverlay({
       : previewCaptionBottomPct(cap, exportPlayH)
   const posStyle = positionStyle(position, marginVPct)
   const captionPosClass = positionClass(position)
-  const playW = exportPixelSize(edits.aspectRatio ?? '9:16', '720p').width
-  const inlinePad = `${Math.max((72 / playW) * 100, 10)}%`
   const emojiPosClass =
     position === 'top'
       ? 'top-[14%]'
@@ -150,18 +164,27 @@ export function CaptionOverlay({
         : null}
       {activeIdx >= 0 && lineWords.length ? (
     <div
-      className={`pointer-events-none absolute inset-x-0 z-[25] flex max-w-full flex-wrap justify-center gap-x-1 gap-y-0.5 text-center ${captionPosClass}`}
+      className={`pointer-events-none absolute inset-x-0 z-[25] flex max-w-full flex-col items-center gap-y-0.5 text-center ${captionPosClass}`}
       style={{
         fontFamily: captionFontStack(captionFont),
         fontWeight: captionFontWeight(captionFont, preset.weight),
-        columnGap: cpBoxBg ? 0 : undefined,
-        paddingInline: inlinePad,
-        maxWidth: `${100 - parseFloat(inlinePad) * 2}%`,
+        maxWidth: `${captionSafeWidthPct(aspect)}%`,
         marginInline: 'auto',
         ...posStyle,
       }}
+      data-testid="caption-line"
+      data-breaks={lineFit.breaks.join(',')}
+      data-fit-scale={lineFit.scale}
     >
-      {lineWords.map((w, i) => {
+      {lineRows.map((row) => (
+      <div
+        key={`row${row.from}`}
+        className="flex max-w-full flex-wrap justify-center gap-x-1"
+        style={{ columnGap: cpBoxBg ? 0 : undefined }}
+        data-testid="caption-row"
+      >
+      {lineWords.slice(row.from, row.to).map((w, ri) => {
+        const i = row.from + ri
         const globalIdx = lineStart + i
         const active = globalIdx === activeIdx
         const spk = (w as ClipWord & { spk?: number }).spk ?? 0
@@ -172,7 +195,8 @@ export function CaptionOverlay({
         const isEmph = emphasis.has(w.idx ?? globalIdx)
         const idx = wordKey(w) ?? globalIdx
         const emoji = showEmojis ? captionEmojiForWord(w, globalIdx, emojiMap) : undefined
-        const prevWord = i > 0 ? lineWords[i - 1]?.w : words[lineStart - 1]?.w
+        // E3fix2: like the export (captions_ass.disp_words), sentence case restarts at each chunk.
+        const prevWord = i > 0 ? lineWords[i - 1]?.w : undefined
         const sentenceStart = caseMode === 'sentence' && isSentenceBoundary(prevWord)
         const text = formatCaptionWord(w.w, caseMode, sentenceStart) + (emoji && !hasEmojiMap ? ` ${emoji}` : '')
         const strokeW = preset.outlineW
@@ -187,7 +211,7 @@ export function CaptionOverlay({
         const highlightBg = activeColor || highlightColor
         const contrast = captionHighlightContrastText(highlightBg)
         const style: React.CSSProperties = {
-          fontSize,
+          fontSize: fontSize * lineFit.scale,
           color: useHighlight
             ? contrast
             : active || isEmph
@@ -246,6 +270,8 @@ export function CaptionOverlay({
           </span>
         )
       })}
+      </div>
+      ))}
     </div>
       ) : null}
     </>

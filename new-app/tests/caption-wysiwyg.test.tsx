@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { render } from '@testing-library/react'
 import { CAPTION_PRESETS, presetSlugToId, resolveCaptionPreset } from '@/lib/clips/caption-presets'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
-import { cssEmPerAssFontsize, previewCaptionStrokePx } from '@/lib/clips/caption-fonts'
+import { previewCaptionStrokePx } from '@/lib/clips/caption-fonts'
+import { assEmPerFontsize } from '@/lib/clips/caption-fit'
 import { previewCaptionBottomPct, previewCaptionTopPct } from '@/lib/clips/caption-safe-area'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 
@@ -45,7 +46,9 @@ describe('CaptionOverlay WYSIWYG', () => {
           expect(line?.style.fontWeight).toBe('800')
           const resolved = resolveCaptionPreset(edits.captions)
           const sizePct = edits.captions?.size ?? resolved.sizePct
-          const ratio = cssEmPerAssFontsize(resolved.font)
+          // E3fix2: libass em per Fontsize of the real face (Poppins 0.5675, Montserrat Black 0.6402 —
+          // measured on an ffmpeg 5.1 render), not the flat 0.714 that drew preview captions 11–26 % too big.
+          const ratio = assEmPerFontsize(edits.captions?.font?.trim() || resolved.font)
           const expectedSize = (640 * sizePct) / 100 * ratio
           const span = container.querySelector('[class*="z-[25]"] span.inline-block') as HTMLElement | null
           expect(span).toBeTruthy()

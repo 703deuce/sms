@@ -5,7 +5,7 @@
  * effective edits (silence trim + loop-friendly end + section order) the worker
  * renders. Every lane item maps 1:1 onto an existing `edits` field:
  *
- *   text  → edits.hookOverlay (0 .. durationMs)
+ *   text  → edits.hookOverlay (0 .. durationMs) + E4 edits.textItems[] {startMs, endMs} (output ms)
  *   video → keep segments of the EDL (trim + cutRanges + sectionOrder), further divided at
  *           edits.videoSplits (E2fix: S / Split on the Video lane)
  *   broll → edits.broll[] {startMs, endMs, inMs?}           (output ms)
@@ -28,6 +28,7 @@ import {
 import { splitLayoutSegmentAt } from '@/lib/clips/layout-segments'
 import { reconcileItemMotion, rippleGlobalKeyframes } from '@/lib/clips/editor/keyframes'
 import { remapCutTransitions } from '@/lib/clips/editor/transitions'
+import { TEXT_MIN_MS, type TextItem } from '@/lib/clips/editor/text-items'
 import {
   LANE_ORDER,
   LANE_TOGGLES,
@@ -188,6 +189,7 @@ export function applyTimelineLaneState(edits: ClipEditsV2): ClipEditsV2 {
   if (lanes.text?.hidden && edits.hookOverlay?.enabled) {
     next = { ...next, hookOverlay: { ...edits.hookOverlay, enabled: false } }
   }
+  if (lanes.text?.hidden && (edits.textItems?.length ?? 0) > 0) next = { ...next, textItems: undefined }
   const audio = next.audio
   if (audio) {
     let a = audio
@@ -278,6 +280,16 @@ export function buildTimelineItems(input: {
       endMs: Math.min(dur, clamp(ho.durationMs ?? 2500, HOOK_MIN_MS, HOOK_MAX_MS)),
       label: ho.text?.trim() || 'Hook title',
       caps: { ...NO_CAPS, trimEnd: true, del: true },
+    })
+  }
+  for (const t of edits.textItems ?? []) {
+    lanes.text.push({
+      lane: 'text',
+      id: t.id,
+      startMs: t.startMs,
+      endMs: t.endMs,
+      label: t.text.split('\n')[0]!.trim() || 'Text',
+      caps: { move: true, trimStart: true, trimEnd: true, split: true, del: true },
     })
   }
 
@@ -434,6 +446,10 @@ function patchBroll(edits: ClipEditsV2, id: string, patch: Partial<BrollItem>): 
   }
 }
 
+function patchText(edits: ClipEditsV2, id: string, patch: Partial<TextItem>): ClipEditsV2 {
+  return { ...edits, textItems: (edits.textItems ?? []).map((t) => (t.id === id ? { ...t, ...patch } : t)) }
+}
+
 function patchMusic(edits: ClipEditsV2, patch: Partial<ClipAudioMusic>): ClipEditsV2 {
   const audio = edits.audio
   if (!audio?.music) return edits
@@ -472,6 +488,7 @@ export function moveItems(ctx: OpCtx, refs: ItemRef[], deltaMs: number): ClipEdi
   let next = ctx.edits
   for (const it of items) {
     if (it.lane === 'broll') next = patchBroll(next, it.id, { startMs: it.startMs + d, endMs: it.endMs + d })
+    else if (it.lane === 'text') next = patchText(next, it.id, { startMs: it.startMs + d, endMs: it.endMs + d })
     else if (it.lane === 'music') next = patchMusic(next, { startMs: it.startMs + d, endMs: it.endMs + d })
     else if (it.lane === 'sfx') next = patchSfx(next, it.id, { atMs: it.startMs + d })
   }
@@ -503,6 +520,15 @@ export function trimItem(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: 
     const e = clamp(to, it.startMs + minLen, dur)
     if (e === it.endMs) return null
     return it.lane === 'broll' ? patchBroll(ctx.edits, it.id, { endMs: e }) : patchMusic(ctx.edits, { endMs: e })
+  }
+
+  if (it.lane === 'text' && it.id !== 'hook') {
+    if (edge === 'start') {
+      const s = clamp(to, 0, it.endMs - TEXT_MIN_MS)
+      return s === it.startMs ? null : patchText(ctx.edits, it.id, { startMs: s })
+    }
+    const e = clamp(to, it.startMs + TEXT_MIN_MS, dur)
+    return e === it.endMs ? null : patchText(ctx.edits, it.id, { endMs: e })
   }
 
   if (it.lane === 'text') {
@@ -627,6 +653,16 @@ export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2
       next = { ...next, broll: [...list.slice(0, idx), left, right, ...list.slice(idx + 1)] }
       changed = true
     }
+    if (r.lane === 'text') {
+      if (t - it.startMs < TEXT_MIN_MS || it.endMs - t < TEXT_MIN_MS) continue
+      const list = next.textItems ?? []
+      const idx = list.findIndex((x) => x.id === it.id)
+      if (idx < 0) continue
+      const src = list[idx]!
+      const right: TextItem = { ...src, id: splitBrollId(src.id, t, list.map((x) => x.id)), startMs: t }
+      next = { ...next, textItems: [...list.slice(0, idx), { ...src, endMs: t }, right, ...list.slice(idx + 1)] }
+      changed = true
+    }
   }
   return changed ? next : null
 }
@@ -709,6 +745,8 @@ export function deleteItems(ctx: OpCtx, refs: ItemRef[]): ClipEditsV2 | null {
     else if (r.lane === 'music' && next.audio) next = { ...next, audio: { ...next.audio, music: null } }
     else if (r.lane === 'sfx' && next.audio)
       next = { ...next, audio: { ...next.audio, sfx: next.audio.sfx.filter((s) => s.generationId !== r.id) } }
+    else if (r.lane === 'text' && r.id !== 'hook')
+      next = { ...next, textItems: (next.textItems ?? []).filter((t) => t.id !== r.id) }
     else if (r.lane === 'text' && next.hookOverlay) next = { ...next, hookOverlay: { ...next.hookOverlay, enabled: false } }
     else if (r.lane === 'video') videoCuts.push([it.srcInMs!, it.srcOutMs!])
   }
@@ -733,13 +771,18 @@ function sameSegs(a: Timebase, b: Timebase): boolean {
 }
 
 function anchoredJson(e: ClipEditsV2): string {
-  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null])
+  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null, e.textItems ?? null])
 }
 
 /** E3: anything that must follow the EDL or its items (ripple / reconcile). */
 export function hasAnchoredContent(e: ClipEditsV2): boolean {
   return Boolean(
-    e.broll?.length || e.audio?.sfx?.length || e.audio?.music || e.keyframes?.length || e.transitions?.length,
+    e.broll?.length ||
+      e.audio?.sfx?.length ||
+      e.audio?.music ||
+      e.keyframes?.length ||
+      e.transitions?.length ||
+      e.textItems?.length,
   )
 }
 
@@ -781,6 +824,22 @@ export function rippleAnchoredItems(
           s = Math.max(0, Math.min(s, e - BROLL_MIN_MS))
         }
         return s === it.startMs && e === it.endMs ? it : ({ ...it, startMs: s, endMs: e } as BrollItem)
+      }),
+    }
+  }
+  if (next.textItems?.length) {
+    // E4: text items follow their source content like B-roll.
+    out = {
+      ...out,
+      textItems: next.textItems.map((it) => {
+        let s = mapStart(it.startMs)
+        let e = mapEnd(it.endMs)
+        if (e - s < TEXT_MIN_MS) e = s + TEXT_MIN_MS
+        if (e > dur) {
+          e = dur
+          s = Math.max(0, Math.min(s, e - TEXT_MIN_MS))
+        }
+        return s === it.startMs && e === it.endMs ? it : { ...it, startMs: s, endMs: e }
       }),
     }
   }

@@ -29,6 +29,14 @@ import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { clipLayoutChip, clipTypeBadge, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
 import { Timeline } from '@/components/clips/editor/timeline'
+import { TextPanel } from '@/components/clips/editor/text-panel'
+import { TemplatesPanel } from '@/components/clips/editor/templates-panel'
+import { ColorPanel, type ColorTarget } from '@/components/clips/editor/color-panel'
+import { ProducerPopover } from '@/components/clips/editor/producer-popover'
+import { TemplateLayoutPanel } from '@/components/clips/editor/template-layout-panel'
+import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
+import { speedAtSource } from '@/lib/clips/editor/speed'
+import type { TimelineItem } from '@/lib/clips/editor/clip-timeline'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { sourceMsAtOutput, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
@@ -64,7 +72,7 @@ import { clipsFetch } from '@/lib/clips-api'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
 import { EditorVersionsMenu, EditorLayoutMenu, type EditVersionRow } from '@/components/clips/editor/editor-versions-menu'
-import { normalizeEdits } from '@/lib/clips/edits'
+import { normalizeEdits, normalizeEditSpeed } from '@/lib/clips/edits'
 import { LayoutQuickPicker } from '@/components/clips/editor/layout-quick-picker'
 import type { StickerLayer } from '@/lib/clips/layers'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
@@ -177,6 +185,11 @@ export function EditorShell({
   const [fillerReviewOpen, setFillerReviewOpen] = useState(false)
   const [gapReviewOpen, setGapReviewOpen] = useState(false)
   const [auditionEdits, setAuditionEdits] = useState<ClipEditsV2 | null>(null)
+  // E4: Text / Color panels follow the timeline selection; ✨ Producer pop-over.
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null)
+  const [colorTarget, setColorTarget] = useState<ColorTarget>({ kind: 'video' })
+  const [producerOpen, setProducerOpen] = useState(false)
+  const [producerPendingPaid, setProducerPendingPaid] = useState(0)
   const [pendingDerivedClipId, setPendingDerivedClipId] = useState<string | null>(null)
   const [gapToolSettings, setGapToolSettings] = useState<ClipGapToolSettings>({
     mode: 'more_than',
@@ -254,6 +267,8 @@ export function EditorShell({
     setLayoutModeAtSource,
     updateBrollItem,
     applyRestoredEdits,
+    applyProducerPatch,
+    producerStrip,
   } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, editsSaveVersion, words })
 
   const onApplyCleanupProposal = useCallback(
@@ -691,7 +706,25 @@ export function EditorShell({
     () => brollMediaForItems(edits.broll ?? [], brollMedia),
     [brollMedia, edits.broll],
   )
+  // E4: per-item speed → the music bed follows the video rate (pitch-preserved like export atempo).
+  const musicRate = renderEdits.segmentSpeeds?.length
+    ? (normalizeEditSpeed(renderEdits.speed) ?? 1) * speedAtSource(renderEdits.segmentSpeeds, playheadSourceMs)
+    : undefined
+  const onTimelineSelection = useCallback(
+    (item: TimelineItem | null) => {
+      if (item?.lane === 'video' && item.srcInMs != null && item.srcOutMs != null) {
+        setColorTarget({ kind: 'segment', fromMs: item.srcInMs, toMs: item.srcOutMs, label: item.label })
+      } else if (item?.lane === 'broll') {
+        setColorTarget({ kind: 'broll', id: item.id, label: item.label })
+      } else {
+        setColorTarget({ kind: 'video' })
+      }
+      if (item?.lane === 'text' && item.id !== 'hook') setSelectedTextId(item.id)
+    },
+    [],
+  )
   useAudioMix({
+    musicRate,
     videoRef,
     edits: renderEdits,
     words: duckWords,
@@ -1213,6 +1246,60 @@ export function EditorShell({
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
+      {panelMounted('text') ? (
+        <div className={panel === 'text' ? undefined : 'hidden'} aria-hidden={panel !== 'text'} data-testid="editor-panel-text">
+          <EditorPanelErrorBoundary label="Text">
+          <TextPanel
+            edits={edits}
+            onEdits={setEdits}
+            playheadMs={outputMs}
+            durationMs={outDur}
+            selectedId={selectedTextId}
+            onSelect={setSelectedTextId}
+          />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
+      {panelMounted('templates') ? (
+        <div className={panel === 'templates' ? undefined : 'hidden'} aria-hidden={panel !== 'templates'} data-testid="editor-panel-templates">
+          <EditorPanelErrorBoundary label="Templates">
+          <TemplatesPanel
+            edits={edits}
+            onEdits={setEdits}
+            playheadMs={outputMs}
+            durationMs={outDur}
+            brandTemplates={brandTemplates}
+            onApplyBrand={applyBrandTemplateById}
+            layoutSlot={
+              t6TemplatesEnabled() ? (
+                <TemplateLayoutPanel
+                  edits={edits}
+                  onEdits={setEdits}
+                  aiMeta={aiMeta as Record<string, unknown> | null}
+                  videoUrl={videoUrl}
+                  posterUrl={posterUrl}
+                />
+              ) : (
+                <LayoutQuickPicker
+                  value={edits.layout.mode}
+                  edits={edits}
+                  facecamLayout={facecamLayout}
+                  reframeV2Enabled={reframeV2Enabled}
+                  onPick={onLayoutPick}
+                />
+              )
+            }
+          />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
+      {panelMounted('color') ? (
+        <div className={panel === 'color' ? undefined : 'hidden'} aria-hidden={panel !== 'color'} data-testid="editor-panel-color">
+          <EditorPanelErrorBoundary label="Color">
+          <ColorPanel edits={edits} target={colorTarget} onEdits={setEdits} onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)} />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
     </>
   )
 
@@ -1239,6 +1326,10 @@ export function EditorShell({
           onRetrySave={() => {
             void flushSave()
           }}
+          onOpenProducer={() => setProducerOpen((o) => !o)}
+          producerOpen={producerOpen}
+          producerStrip={producerStrip ? { changeCount: producerStrip.changeCount, onUndo: undo } : null}
+          pendingPaidCount={producerPendingPaid}
           layoutSlot={
             <EditorLayoutMenu>
               <LayoutQuickPicker
@@ -1261,6 +1352,20 @@ export function EditorShell({
             />
           }
         />
+      <EditorPanelErrorBoundary label="AI Producer">
+        <ProducerPopover
+          open={producerOpen}
+          onClose={() => setProducerOpen(false)}
+          clipId={clipId}
+          bounds={bounds}
+          edits={edits}
+          durationMs={outDur}
+          onAudition={setAuditionEdits}
+          onAccept={(next, before, n) => applyProducerPatch(next, before, n)}
+          onUndo={undo}
+          onPendingPaidChange={setProducerPendingPaid}
+        />
+      </EditorPanelErrorBoundary>
       <ClipFillerReview
         clipId={clipId}
         words={editorWords}
@@ -1343,6 +1448,7 @@ export function EditorShell({
                 edits.layout.mode === 'facecam_pip' && edits.layout.facecam?.box ? onPipCornerChange : undefined
               }
               aiMeta={aiMeta as Record<string, unknown> | null}
+              selectedTextId={panel === 'text' ? selectedTextId : null}
             />
             {studioPreviewLoading ? (
               <div
@@ -1414,6 +1520,7 @@ export function EditorShell({
             musicUrl={musicGen.downloadUrl}
             sfxDurationsMs={sfxPreview.durationsMs}
             onOpenCover={() => selectPanel('thumbnail')}
+            onSelectionChange={onTimelineSelection}
           />
           <PlayerControls
             playing={playing}

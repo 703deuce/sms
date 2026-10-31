@@ -1,0 +1,321 @@
+{
+ "cases": [
+  {
+   "id": "exact",
+   "fps": 30,
+   "segs": [
+    [
+     0,
+     4860
+    ],
+    [
+     5140,
+     6140
+    ],
+    [
+     6820,
+     8140
+    ],
+    [
+     8660,
+     40500
+    ]
+   ],
+   "transitions": [
+    {
+     "srcMs": 5140,
+     "type": "push_left",
+     "durMs": 500
+    }
+   ],
+   "expected": [
+    {
+     "k": 1,
+     "srcMs": 5140,
+     "type": "push_left",
+     "startFrame": 138,
+     "frames": 15
+    }
+   ]
+  },
+  {
+   "id": "off_by_5ms_now_matches",
+   "fps": 30,
+   "segs": [
+    [
+     0,
+     4860
+    ],
+    [
+     5140,
+     6140
+    ],
+    [
+     6820,
+     8140
+    ],
+    [
+     8660,
+     40500
+    ]
+   ],
+   "transitions": [
+    {
+     "srcMs": 5145,
+     "type": "push_left",
+     "durMs": 500
+    }
+   ],
+   "expected": [
+    {
+     "k": 1,
+     "srcMs": 5140,
+     "type": "push_left",
+     "startFrame": 138,
+     "frames": 15
+    }
+   ]
+  },
+  {
+   "id": "off_by_16ms_inside_half_frame",
+   "fps": 30,
+   "segs": [
+    [
+     0,
+     4860
+    ],
+    [
+     5140,
+     6140
+    ],
+    [
+     6820,
+     8140
+    ],
+    [
+     8660,
+     40500
+    ]
+   ],
+   "transitions": [
+    {
+     "srcMs": 6804,
+     "type": "push_left",
+     "durMs": 500
+    }
+   ],
+   "expected": [
+    {
+     "k": 2,
+     "srcMs": 6820,
+     "type": "push_left",
+     "startFrame": 168,
+     "frames": 15
+    }
+   ]
+  },
+  {
+   "id": "off_by_17ms_outside_half_frame",
+   "fps": 30,
+   "segs": [
+    [
+     0,
+     4860
+    ],
+    [
+     5140,
+     6140
+    ],
+    [
+     6820,
+     8140
+    ],
+    [
+     8660,
+     40500
+    ]
+   ],
+   "transitions": [
+    {
+     "srcMs": 6837,
+     "type": "push_left",
+     "durMs": 500
+    }
+   ],
+   "expected": []
+  },
+  {
+   "id": "fps25_off_by_20ms",
+   "fps": 25,
+   "segs": [
+    [
+     0,
+     4860
+    ],
+    [
+     5140,
+     6140
+    ],
+    [
+     6820,
+     8140
+    ],
+    [
+     8660,
+     40500
+    ]
+   ],
+   "transitions": [
+    {
+     "srcMs": 8680,
+     "type": "crossfade",
+     "durMs": 500
+    }
+   ],
+   "expected": [
+    {
+     "k": 3,
+     "srcMs": 8660,
+     "type": "crossfade",
+     "startFrame": 173,
+     "frames": 13
+    }
+   ]
+  },
+  {
+   "id": "duplicate_keeps_nearest",
+   "fps": 30,
+   "segs": [
+    [
+     0,
+     4860
+    ],
+    [
+     5140,
+     6140
+    ],
+    [
+     6820,
+     8140
+    ],
+    [
+     8660,
+     40500
+    ]
+   ],
+   "transitions": [
+    {
+     "srcMs": 5150,
+     "type": "wipe_left",
+     "durMs": 500
+    },
+    {
+     "srcMs": 5141,
+     "type": "dip_black",
+     "durMs": 500
+    }
+   ],
+   "expected": [
+    {
+     "k": 1,
+     "srcMs": 5140,
+     "type": "dip_black",
+     "startFrame": 138,
+     "frames": 15
+    }
+   ]
+  },
+  {
+   "id": "all_three_cuts",
+   "fps": 30,
+   "segs": [
+    [
+     0,
+     4860
+    ],
+    [
+     5140,
+     6140
+    ],
+    [
+     6820,
+     8140
+    ],
+    [
+     8660,
+     40500
+    ]
+   ],
+   "transitions": [
+    {
+     "srcMs": 8660,
+     "type": "zoom_in",
+     "durMs": 500
+    },
+    {
+     "srcMs": 5139,
+     "type": "push_left",
+     "durMs": 500
+    },
+    {
+     "srcMs": 6821,
+     "type": "crossfade",
+     "durMs": 300
+    }
+   ],
+   "expected": [
+    {
+     "k": 1,
+     "srcMs": 5140,
+     "type": "push_left",
+     "startFrame": 138,
+     "frames": 15
+    },
+    {
+     "k": 2,
+     "srcMs": 6820,
+     "type": "crossfade",
+     "startFrame": 171,
+     "frames": 9
+    },
+    {
+     "k": 3,
+     "srcMs": 8660,
+     "type": "zoom_in",
+     "startFrame": 208,
+     "frames": 15
+    }
+   ]
+  },
+  {
+   "id": "first_segment_start_is_not_a_cut",
+   "fps": 30,
+   "segs": [
+    [
+     0,
+     4860
+    ],
+    [
+     5140,
+     6140
+    ],
+    [
+     6820,
+     8140
+    ],
+    [
+     8660,
+     40500
+    ]
+   ],
+   "transitions": [
+    {
+     "srcMs": 3,
+     "type": "push_left",
+     "durMs": 500
+    }
+   ],
+   "expected": []
+  }
+ ]
+}

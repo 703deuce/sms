@@ -18,12 +18,24 @@ export function ProducerPanel({
   edits,
   onApplyEdits,
   onUndo: _onUndo,
+  dryRun = false,
+  onProposal,
+  costLabel,
+  onPendingPaidChange,
 }: {
   clipId: string
   bounds: ClipBounds
   edits: ClipEditsV2
   onApplyEdits: (edits: ClipEditsV2, changeCount: number, before: ClipEditsV2) => void
   onUndo: () => void
+  /** E4 pop-over: the server proposes edits without saving them; the editor previews / accepts. */
+  dryRun?: boolean
+  /** E4: receives the proposed edits instead of onApplyEdits (Preview / Accept / Undo outside). */
+  onProposal?: (edits: ClipEditsV2, changeCount: number, before: ClipEditsV2, summaries: string[]) => void
+  /** E4: cost line for a paid tool card (credits + USD estimate), shown before Generate. */
+  costLabel?: (tool: { name: string; args: Record<string, unknown> }) => string
+  /** E4: paid tools awaiting Generate / Skip (top-bar ✨ dot). */
+  onPendingPaidChange?: (count: number) => void
 }) {
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
@@ -44,6 +56,10 @@ export function ProducerPanel({
   }, [loadThread])
 
   useEffect(() => {
+    onPendingPaidChange?.(pendingPaid.length)
+  }, [onPendingPaidChange, pendingPaid.length])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, busy, summaries])
 
@@ -58,12 +74,13 @@ export function ProducerPanel({
       const res = await fetch(`/api/clips/clips/${clipId}/producer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify(dryRun ? { message: text, dryRun: true } : { message: text }),
       })
       if (!res.ok) throw new Error(await res.text())
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
       let buf = ''
+      let lastSummaries: string[] = []
       while (reader) {
         const { done, value } = await reader.read()
         if (done) break
@@ -89,12 +106,14 @@ export function ProducerPanel({
             })
           }
           if (event === 'tools') {
+            lastSummaries = payload.summaries || []
             setSummaries(payload.summaries || [])
             setPendingPaid(payload.pendingPaid || [])
           }
           if (event === 'edits' && payload.edits) {
             const n = Number(payload.changeCount ?? 0)
-            onApplyEdits(payload.edits as ClipEditsV2, n, editsBeforeSend.current)
+            if (onProposal) onProposal(payload.edits as ClipEditsV2, n, editsBeforeSend.current, lastSummaries)
+            else onApplyEdits(payload.edits as ClipEditsV2, n, editsBeforeSend.current)
           }
         }
       }
@@ -170,6 +189,11 @@ export function ProducerPanel({
                 <Coins className="size-3.5" aria-hidden />
                 Uses credits — {t.name}
               </p>
+              {costLabel ? (
+                <p className="mt-1 text-[11px] text-muted-foreground" data-testid="producer-paid-cost">
+                  {costLabel(t)}
+                </p>
+              ) : null}
               <div className="mt-2 flex gap-2">
                 <PrimaryButton size="sm" onClick={() => void confirmPaid(t)}>Generate</PrimaryButton>
                 <Button size="sm" variant="ghost" onClick={() => setPendingPaid((p) => p.filter((x) => x.name !== t.name))}>

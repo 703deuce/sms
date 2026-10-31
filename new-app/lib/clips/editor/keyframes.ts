@@ -73,7 +73,7 @@ export function targetForItem(lane: string, id: string): KeyframeTarget | null {
   if (lane === 'video') return 'video'
   if (lane === 'voice') return 'voice'
   if (lane === 'music') return 'music'
-  if (lane === 'text') return 'text'
+  if (lane === 'text') return id === 'hook' ? 'text' : `text:${id}`
   if (lane === 'broll') return `broll:${id}`
   return null
 }
@@ -82,10 +82,17 @@ export function brollIdOf(target: KeyframeTarget): string | null {
   return target.startsWith('broll:') ? target.slice(6) : null
 }
 
+/** E4 text item id of a `text:<id>` target. */
+export function textItemIdOf(target: KeyframeTarget): string | null {
+  return target.startsWith('text:') ? target.slice(5) : null
+}
+
 /** Output ms of the target's local time 0. */
 export function targetOriginMs(edits: ClipEditsV2, target: KeyframeTarget): number {
   const bid = brollIdOf(target)
   if (bid) return edits.broll?.find((b) => b.id === bid)?.startMs ?? 0
+  const tid = textItemIdOf(target)
+  if (tid) return edits.textItems?.find((t) => t.id === tid)?.startMs ?? 0
   if (target === 'music') return edits.audio?.music?.startMs ?? 0
   return 0
 }
@@ -285,6 +292,22 @@ export function reconcileItemMotion(prev: ClipEditsV2, next: ClipEditsV2): ClipE
       out.push(by ? shiftTrack(t, by) : t)
       continue
     }
+    const tid = textItemIdOf(t.target)
+    if (tid) {
+      // E4: text keyframes are anchored to the frame content: a left-trim keeps them in place
+      // (local shifts by −d); a move (start and end by the same delta) carries them along.
+      const n = (next.textItems ?? []).find((x) => x.id === tid)
+      if (!n) {
+        changed = true
+        continue
+      }
+      const p = (prev.textItems ?? []).find((x) => x.id === tid)
+      const moved = p && p.endMs - p.startMs === n.endMs - n.startMs
+      const by = p && !moved ? p.startMs - n.startMs : 0
+      if (by) changed = true
+      out.push(by ? shiftTrack(t, by) : t)
+      continue
+    }
     if (t.target === 'music') {
       const pm = prev.audio?.music
       const nm = next.audio?.music
@@ -323,6 +346,19 @@ export function reconcileItemMotion(prev: ClipEditsV2, next: ClipEditsV2): ClipE
       }
       return b
     })
+  }
+  // E4 text split children (`<id>~<atMs>`): inherit the parent's tracks shifted to the new start.
+  const prevText = new Map((prev.textItems ?? []).map((x) => [x.id, x]))
+  for (const child of next.textItems ?? []) {
+    if (prevText.has(child.id) || !child.id.includes('~')) continue
+    const origin = child.id.split('~')[0]!
+    const parent = (prev.textItems ?? []).find(
+      (x) => x.id.split('~')[0] === origin && x.startMs < child.startMs && child.startMs < x.endMs,
+    )
+    if (!parent) continue
+    const kids = tracks.filter((k) => k.target === `text:${parent.id}`)
+    if (kids.length) changed = true
+    for (const t of kids) out.push(shiftTrack(t, parent.startMs - child.startMs, `text:${child.id}`))
   }
   if (!changed) return next
   return { ...next, broll, keyframes: out.length ? out : undefined }

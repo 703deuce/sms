@@ -1,0 +1,1253 @@
+{
+ "cases": [
+  {
+   "id": "ludwig_bold_pop_montserrat",
+   "captions": {
+    "case": "sentence",
+    "size": 6.5,
+    "enabled": true,
+    "position": "bottom",
+    "presetId": "bold_pop",
+    "animation": "pop",
+    "marginVPct": 14,
+    "wordsPerLine": 3,
+    "emphasis": [
+     0,
+     2,
+     7
+    ],
+    "presetConfig": {
+     "font": "Montserrat Black",
+     "active": "#FFD93D",
+     "weight": 900,
+     "primary": "#FFFFFF",
+     "outlineW": 8,
+     "emphasisScale": 1.12
+    }
+   },
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "expected": [
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "font_Poppins",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Poppins",
+    "size": 7.5,
+    "wordsPerLine": 4
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 85
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "font_Anton",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Anton",
+    "size": 7.5,
+    "wordsPerLine": 4
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "font_Montserrat Black",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Montserrat Black",
+    "size": 7.5,
+    "wordsPerLine": 4
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 66
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 68
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "font_Bangers",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Bangers",
+    "size": 7.5,
+    "wordsPerLine": 4
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "font_Inter",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Inter",
+    "size": 7.5,
+    "wordsPerLine": 4
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 67
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 69
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "font_Lato",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Lato",
+    "size": 7.5,
+    "wordsPerLine": 4
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 68
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 68
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "font_Bebas Neue",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Bebas Neue",
+    "size": 7.5,
+    "wordsPerLine": 4
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "font_Luckiest Guy",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Luckiest Guy",
+    "size": 7.5,
+    "wordsPerLine": 4
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 68
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 67
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "font_Archivo Black",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Archivo Black",
+    "size": 7.5,
+    "wordsPerLine": 4
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 56
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 57
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "font_Oswald",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Oswald",
+    "size": 7.5,
+    "wordsPerLine": 4
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "preset_bold_pop",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "bold_pop",
+    "wordsPerLine": 4,
+    "size": 8,
+    "emphasis": [
+     1,
+     5
+    ]
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "preset_clean_white",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "clean_white",
+    "wordsPerLine": 4,
+    "size": 8,
+    "emphasis": [
+     1,
+     5
+    ]
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "preset_boxed",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "boxed",
+    "wordsPerLine": 4,
+    "size": 8,
+    "emphasis": [
+     1,
+     5
+    ]
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "preset_karaoke",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "karaoke",
+    "wordsPerLine": 4,
+    "size": 8,
+    "emphasis": [
+     1,
+     5
+    ]
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "preset_minimal",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "minimal",
+    "wordsPerLine": 4,
+    "size": 8,
+    "emphasis": [
+     1,
+     5
+    ]
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "preset_neon",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "neon",
+    "wordsPerLine": 4,
+    "size": 8,
+    "emphasis": [
+     1,
+     5
+    ]
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "preset_bounce",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "bounce",
+    "wordsPerLine": 4,
+    "size": 8,
+    "emphasis": [
+     1,
+     5
+    ]
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "preset_slide_up",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "slide_up",
+    "wordsPerLine": 4,
+    "size": 8,
+    "emphasis": [
+     1,
+     5
+    ]
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "preset_highlighter",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "highlighter",
+    "wordsPerLine": 4,
+    "size": 8,
+    "emphasis": [
+     1,
+     5
+    ]
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      3
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "aspect_1:1",
+   "aspect": "1:1",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "case": "sentence",
+    "size": 9,
+    "enabled": true,
+    "position": "bottom",
+    "presetId": "bold_pop",
+    "animation": "pop",
+    "marginVPct": 14,
+    "wordsPerLine": 4,
+    "emphasis": [
+     0,
+     2,
+     7
+    ],
+    "presetConfig": {
+     "font": "Montserrat Black",
+     "active": "#FFD93D",
+     "weight": 900,
+     "primary": "#FFFFFF",
+     "outlineW": 8,
+     "emphasisScale": 1.12
+    }
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "aspect_4:5",
+   "aspect": "4:5",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "case": "sentence",
+    "size": 9,
+    "enabled": true,
+    "position": "bottom",
+    "presetId": "bold_pop",
+    "animation": "pop",
+    "marginVPct": 14,
+    "wordsPerLine": 4,
+    "emphasis": [
+     0,
+     2,
+     7
+    ],
+    "presetConfig": {
+     "font": "Montserrat Black",
+     "active": "#FFD93D",
+     "weight": 900,
+     "primary": "#FFFFFF",
+     "outlineW": 8,
+     "emphasisScale": 1.12
+    }
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [
+      1
+     ],
+     "pct": 92
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "aspect_16:9",
+   "aspect": "16:9",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "case": "sentence",
+    "size": 9,
+    "enabled": true,
+    "position": "bottom",
+    "presetId": "bold_pop",
+    "animation": "pop",
+    "marginVPct": 14,
+    "wordsPerLine": 4,
+    "emphasis": [
+     0,
+     2,
+     7
+    ],
+    "presetConfig": {
+     "font": "Montserrat Black",
+     "active": "#FFD93D",
+     "weight": 900,
+     "primary": "#FFFFFF",
+     "outlineW": 8,
+     "emphasisScale": 1.12
+    }
+   },
+   "expected": [
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 4,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "shrink_single_word",
+   "aspect": "9:16",
+   "text": "SUPERCALIFRAGILISTICEXPIALIDOCIOUS wow incomprehensibilities internationalization ok",
+   "captions": {
+    "presetId": "bold_pop",
+    "font": "Montserrat Black",
+    "size": 10,
+    "wordsPerLine": 1
+   },
+   "expected": [
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 40
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 50
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 51
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "highlight_box",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "bold_pop",
+    "activeStyle": "highlight",
+    "wordsPerLine": 3,
+    "size": 9
+   },
+   "expected": [
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "size_tie_7_25",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "bold_pop",
+    "size": 7.25,
+    "wordsPerLine": 3
+   },
+   "expected": [
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [
+      2
+     ],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "size_clamped_12",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "bold_pop",
+    "size": 12,
+    "wordsPerLine": 2
+   },
+   "expected": [
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [
+      1
+     ],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "cp1",
+   "aspect": "9:16",
+   "text": "I just think that we should dip, Valorant isn't worth it at all anymore guys",
+   "captions": {
+    "presetId": "cp1",
+    "wordsPerLine": 9,
+    "size": 3
+   },
+   "expected": [
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "cp2",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "cp2"
+   },
+   "expected": [
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 2,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  },
+  {
+   "id": "cp11",
+   "aspect": "9:16",
+   "text": "Energy, capital, whatever. Of forming a company is basically impossible right now honestly",
+   "captions": {
+    "presetId": "cp11"
+   },
+   "expected": [
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 3,
+     "breaks": [],
+     "pct": 100
+    },
+    {
+     "n": 1,
+     "breaks": [],
+     "pct": 100
+    }
+   ]
+  }
+ ]
+}

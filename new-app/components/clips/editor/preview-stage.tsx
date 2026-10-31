@@ -36,6 +36,11 @@ import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { brollTransitionWindows, brollVisibleRange } from '@/lib/clips/editor/transitions'
 import { applyMotionFrame } from '@/components/clips/editor/motion-preview'
 import { HookOverlayPreview } from '@/components/clips/editor/hook-overlay-preview'
+import { TextItemsPreview } from '@/components/clips/editor/text-items-preview'
+import { ColorLookDefs, lookFilterCss, usedSpecs } from '@/components/clips/editor/color-look-defs'
+import { videoSpecAtSource } from '@/lib/clips/editor/color'
+import { speedAtSource } from '@/lib/clips/editor/speed'
+import { textItemFrame } from '@/lib/clips/editor/text-frame'
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
@@ -93,6 +98,7 @@ export function PreviewStage({
   testBoxSize,
   composeSpecPreview = false,
   aiMeta = null,
+  selectedTextId = null,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -115,6 +121,8 @@ export function PreviewStage({
   testBoxSize?: { w: number; h: number }
   composeSpecPreview?: boolean
   aiMeta?: Record<string, unknown> | null
+  /** E4: outline the text item being edited in the Text panel. */
+  selectedTextId?: string | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -204,6 +212,9 @@ export function PreviewStage({
   const brollBoxRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const brollDipRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const hookRef = useRef<HTMLDivElement | null>(null)
+  // E4: text item layers, last applied playback rate (per-item speed) and main-layer look.
+  const textRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const lastRateRef = useRef<number | null>(null)
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
   const captionTimeRef = useRef(0)
@@ -213,6 +224,8 @@ export function PreviewStage({
   auditionRef.current = audition
   onTickRef.current = onTick
   boxSizeRef.current = box
+  const lookEdits = (audition?.edits ?? edits) as ClipEditsV2
+  const lookSpecs = useMemo(() => usedSpecs(lookEdits), [lookEdits])
 
   useEffect(() => {
     const el = videoRefInner.current
@@ -410,6 +423,33 @@ export function PreviewStage({
         setCaptionTimeSec(outSec)
       }
       const outMs = out
+      // E4: per-item speed — every element plays at global × segment speed (pitch preserved), so
+      // the edit-time clock (captions, overlays, B-roll, music) advances exactly like the export warp.
+      const rate = (normalizeEditSpeed(e.speed) ?? 1) * speedAtSource(e.segmentSpeeds, src)
+      if (e.segmentSpeeds?.length || lastRateRef.current !== null) {
+        // Compared per element each tick (cheap), so B-roll / remounted videos pick it up too.
+        lastRateRef.current = e.segmentSpeeds?.length ? rate : null
+        const setRate = (el: HTMLVideoElement | null) => {
+          if (el && el.playbackRate !== rate) el.playbackRate = rate
+        }
+        setRate(v)
+        setRate(blur)
+        mainLayerRef.current?.querySelectorAll('video').forEach((el) => setRate(el))
+        Object.values(brollRefs.current).forEach((el) => setRate(el))
+      }
+      // E4: color looks — main layer by source position, B-roll per item (SVG filters, ColorLookDefs).
+      const mainLook = lookFilterCss(videoSpecAtSource(e.color, src))
+      if (mainLayerRef.current && mainLayerRef.current.style.filter !== mainLook) mainLayerRef.current.style.filter = mainLook
+      for (const it of e.textItems ?? []) {
+        const el = textRefs.current[it.id]
+        if (!el) continue
+        const f = textItemFrame(e, it, outMs)
+        const vis = f.visible ? 'visible' : 'hidden'
+        if (el.style.visibility !== vis) el.style.visibility = vis
+        const op = String(f.visible ? f.opacity : 0)
+        if (el.style.opacity !== op) el.style.opacity = op
+        if (el.style.transform !== f.transform) el.style.transform = f.transform
+      }
       const bWins = brollTransitionWindows(e.broll)
       for (const item of e.broll || []) {
         // E1fix: live media rows via ref (the tick is mounted once).
@@ -423,6 +463,8 @@ export function PreviewStage({
         // animates its box; keyframed opacity lives on the box, not here).
         const op = active ? '1' : '0'
         if (el.style.opacity !== op) el.style.opacity = op
+        const bLook = lookFilterCss(e.color?.broll?.[item.id])
+        if (el.style.filter !== bLook) el.style.filter = bLook
         if (active) {
           // E2: inMs = media in-point (split / left-trim). Export loops short B-roll (-stream_loop -1).
           const relRaw = (outMs - item.startMs + (item.inMs ?? 0)) / 1000
@@ -451,8 +493,9 @@ export function PreviewStage({
         {
           boxW: boxSizeRef.current.w,
           playing: v ? !v.paused : false,
-          rate: normalizeEditSpeed(e.speed) ?? 1,
+          rate,
           mediaOffsetMs,
+          lookAt: e.color ? (ms: number) => lookFilterCss(videoSpecAtSource(e.color, ms)) : undefined,
         },
       )
       onTickRef.current({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
@@ -959,6 +1002,15 @@ export function PreviewStage({
                 </div>
               )
             })}
+        <ColorLookDefs specs={lookSpecs} />
+        <TextItemsPreview
+          edits={(audition?.edits ?? edits) as ClipEditsV2}
+          boxH={box.h}
+          selectedId={selectedTextId}
+          elRef={(id, el) => {
+            textRefs.current[id] = el
+          }}
+        />
         {!compositePreview && !(templatePreview && edits.exportTemplate?.headlineBar?.enabled) ? (
           <HookOverlayPreview
             edits={edits as ClipEditsV2}

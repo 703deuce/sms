@@ -47,6 +47,7 @@ import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-
 import { TimelineRuler } from '@/components/clips/editor/timeline/timeline-ruler'
 import { TimelineWaveform } from '@/components/clips/editor/timeline/timeline-waveform'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
+import { ItemSpeedControl, itemSpeed, speedLabel } from '@/components/clips/editor/timeline/item-speed-control'
 import { TransitionPopover } from '@/components/clips/editor/timeline/transition-popover'
 import {
   deleteKeyframesAt,
@@ -62,6 +63,7 @@ import {
   applyCutTransitionToAll,
   brollTransitionWindows,
   cutTransitionWindows,
+  transitionAtCut,
   setBrollTransition,
   setCutTransition,
   type TransitionSpec,
@@ -141,6 +143,7 @@ export function Timeline({
   musicUrl = null,
   sfxDurationsMs,
   onOpenCover,
+  onSelectionChange,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -173,6 +176,8 @@ export function Timeline({
   musicUrl?: string | null
   sfxDurationsMs?: Record<string, number>
   onOpenCover?: () => void
+  /** E4: the single selected item (Color / Text panels follow it); null when 0 or 2+ selected. */
+  onSelectionChange?: (item: TimelineItem | null) => void
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -378,6 +383,16 @@ export function Timeline({
     [lanes, selected],
   )
   const selectedKeys = useMemo(() => new Set(liveSelected.map(refKey)), [liveSelected])
+  // E4: report the single selection (by key + source range so re-renders don't spam the shell).
+  const singleSel = liveSelected.length === 1 ? lanes[liveSelected[0]!.lane].find((i) => i.id === liveSelected[0]!.id) ?? null : null
+  const singleSelKey = singleSel ? `${refKey(singleSel)}:${singleSel.srcInMs ?? ''}:${singleSel.srcOutMs ?? ''}` : ''
+  const onSelRef = useRef(onSelectionChange)
+  onSelRef.current = onSelectionChange
+  const singleSelRef = useRef(singleSel)
+  singleSelRef.current = singleSel
+  useEffect(() => {
+    onSelRef.current?.(singleSelRef.current)
+  }, [singleSelKey])
 
   const opCtx = (): OpCtx => ({ edits, previewEdits, clampTrim })
   const commit = (next: ClipEditsV2 | null) => {
@@ -477,7 +492,7 @@ export function Timeline({
   const trValue: TransitionSpec | null = (() => {
     if (!trPop) return null
     if (trPop.kind === 'cut') {
-      const t = edits.transitions?.find((x) => Math.abs(x.srcMs - trPop.srcMs) <= 1)
+      const t = transitionAtCut(tb.segs, edits.transitions, trPop.srcMs)
       return t ? { type: t.type, durMs: t.durMs } : null
     }
     const b = edits.broll?.find((x) => x.id === trPop.id)
@@ -768,6 +783,19 @@ export function Timeline({
         {item.lane === 'video' && w > 40 ? (
           <span className="pointer-events-none absolute left-1 top-0 text-[9px] text-white/80">{item.label}</span>
         ) : null}
+        {item.lane === 'video' && item.srcInMs != null && item.srcOutMs != null && edits.segmentSpeeds?.length
+          ? (() => {
+              const s = itemSpeed(edits, item.srcInMs, item.srcOutMs)
+              return s !== 1 ? (
+                <span
+                  className="pointer-events-none absolute right-1 top-0 rounded bg-black/60 px-1 text-[9px] font-semibold tabular-nums text-amber-300"
+                  data-testid={`timeline-speed-badge-${item.id}`}
+                >
+                  {speedLabel(s)}
+                </span>
+              ) : null
+            })()
+          : null}
         {kfs.map((t) => {
           const shownT = kfDrag && kfDrag.target === kfTarget && kfDrag.fromMs === t ? kfDrag.toMs : t
           const isSelKf = selKf?.target === kfTarget && selKf.tMs === t
@@ -969,6 +997,15 @@ export function Timeline({
           readOnly={!editable || laneState(edits, inspected.item.lane).locked}
         />
       ) : null}
+      {singleSel && singleSel.lane === 'video' && singleSel.srcInMs != null && singleSel.srcOutMs != null && editable ? (
+        <ItemSpeedControl
+          edits={edits}
+          srcInMs={singleSel.srcInMs}
+          srcOutMs={singleSel.srcOutMs}
+          onCommit={(next) => commit(next)}
+          readOnly={laneState(edits, 'video').locked}
+        />
+      ) : null}
       <div className="flex min-w-0 rounded-lg border border-border bg-card/30">
         <div className="w-[92px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
@@ -1056,7 +1093,7 @@ export function Timeline({
                         return cutKs.map((k, ci) => {
                         const slot = slots[ci]!
                         const srcMs = tb.segs[k]![0]
-                        const tr = edits.transitions?.find((t) => Math.abs(t.srcMs - srcMs) <= 1)
+                        const tr = transitionAtCut(tb.segs, edits.transitions, srcMs)
                         return (
                           <button
                             key={`cut${srcMs}`}
