@@ -168,6 +168,8 @@ export const TEMPLATE_SEED = [
   {
     id: 'C1',
     lane: 'just_chatting',
+    families: ['podcast'],
+    familyRequires: { podcast: { maxPersons: 1 } },
     name: 'Face Tight',
     fallbackMode: 'center_crop',
     requires: { noBackgroundAction: true },
@@ -177,6 +179,7 @@ export const TEMPLATE_SEED = [
   {
     id: 'C2',
     lane: 'just_chatting',
+    families: ['podcast'],
     name: 'Active Speaker',
     fallbackMode: 'speaker_follow',
     panels: [panel('speaker', 0, 1, 'active_speaker', 'cover')],
@@ -185,6 +188,7 @@ export const TEMPLATE_SEED = [
   {
     id: 'C3',
     lane: 'just_chatting',
+    families: ['podcast'],
     name: 'Content + Face',
     fallbackMode: 'facecam_stack',
     requires: { contentBox: true },
@@ -197,6 +201,8 @@ export const TEMPLATE_SEED = [
   {
     id: 'C4',
     lane: 'just_chatting',
+    families: ['podcast'],
+    familyRequires: { podcast: { maxPersons: 1 } },
     name: 'Push In Face',
     fallbackMode: 'center_crop',
     requires: { noBackgroundAction: true, maxDurationSec: 20 },
@@ -207,6 +213,8 @@ export const TEMPLATE_SEED = [
   {
     id: 'C5',
     lane: 'just_chatting',
+    families: ['podcast'],
+    familyRequires: { podcast: { maxPersons: 2 } },
     name: 'Dual Cam',
     fallbackMode: 'split',
     requires: { personCountMin: 2 },
@@ -216,6 +224,7 @@ export const TEMPLATE_SEED = [
   {
     id: 'C6',
     lane: 'just_chatting',
+    families: ['podcast'],
     name: 'Blur Frame',
     fallbackMode: 'fit_blur',
     bands: [band(0, 0.33, 'blur'), band(0.65, 0.35, 'blur')],

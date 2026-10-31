@@ -5,7 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { T6_TEMPLATES, T6_TEMPLATES_BY_ID, type TemplateLane } from '@/lib/clips/templates/registry'
+import {
+  T6_TEMPLATES_BY_ID,
+  templateInFamily,
+  templatesForFamily,
+  type TemplateLane,
+} from '@/lib/clips/templates/registry'
 import { pickTemplate } from '@/lib/clips/templates/pick'
 import { signalsOrDefaults } from '@/lib/clips/templates/signals'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
@@ -33,16 +38,20 @@ export function TemplateLayoutPanel({
   if (!t6TemplatesEnabled()) return null
   const signals = signalsOrDefaults(aiMeta)
   const activeTpl = edits.layout.template?.id ? T6_TEMPLATES_BY_ID[edits.layout.template.id] : undefined
+  const storedLane = edits.layout.template?.lane as TemplateLane | undefined
+  // T6.4: a shared template (e.g. C2 picked from Podcast) keeps the family it was picked from.
   const currentLane: TemplateLane =
-    activeTpl?.lane ??
-    (edits.layout.template?.lane as TemplateLane | undefined) ??
+    (activeTpl && storedLane && templateInFamily(activeTpl, storedLane) ? storedLane : activeTpl?.lane) ??
+    storedLane ??
     ((LANES as string[]).includes(signals.clip_type) ? (signals.clip_type as TemplateLane) : 'irl')
   const lane: TemplateLane = browseLane ?? currentLane
-  const laneTemplates = T6_TEMPLATES.filter((t) => t.lane === lane)
+  // T6.4: families share face layouts (Podcast lists C7-C9 plus the shared C1-C6).
+  const laneTemplates = templatesForFamily(lane)
 
-  const applyTemplate = (id: string, auto: boolean, reason?: string) => {
+  const applyTemplate = (id: string, auto: boolean, reason?: string, family?: string) => {
     const t = T6_TEMPLATES_BY_ID[id]
     if (!t) return
+    const famLane = (family && templateInFamily(t, family) ? family : t.lane) as TemplateLane
     const usesTrim = t.panels.some((p) => p.src === 'trim_sides' || p.src === 'action_box')
     const fallback =
       t.lane === 'irl' && /^I[1-4]$/.test(t.id) ? 'fit_blur' : (t.fallbackMode as ClipEditsV2['layout']['mode'])
@@ -54,7 +63,7 @@ export function TemplateLayoutPanel({
         cropBox: usesTrim ? edits.layout.cropBox : undefined,
         layoutSegments: undefined,
         userPicked: !auto,
-        template: { id, auto, reason, lane: t.lane, boxes: edits.layout.template?.boxes },
+        template: { id, auto, reason, lane: famLane, boxes: edits.layout.template?.boxes },
       },
     })
   }
@@ -88,7 +97,7 @@ export function TemplateLayoutPanel({
               data-active={active ? 'true' : 'false'}
               className={`relative overflow-hidden rounded-md border ${active ? 'ring-2 ring-primary' : 'opacity-90'}`}
               onClick={() => {
-                applyTemplate(t.id, false, 'user_pick')
+                applyTemplate(t.id, false, 'user_pick', lane)
                 setBrowseLane(null)
               }}
             >
@@ -110,7 +119,7 @@ export function TemplateLayoutPanel({
         className="w-full"
         onClick={() => {
           const [id, reason] = pickTemplate(signals, {}, [], {}, 1, edits.layout.template?.id ?? 'clip')
-          applyTemplate(id, true, reason)
+          applyTemplate(id, true, reason, signals.clip_type)
           setBrowseLane(null)
         }}
       >

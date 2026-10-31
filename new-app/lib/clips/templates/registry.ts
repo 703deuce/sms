@@ -37,12 +37,36 @@ export type TemplateDef = {
   pip?: Record<string, unknown> | null
   motion?: Record<string, unknown> | null
   pickWeights?: Record<string, number>
+  /** T6.4: extra families (lanes) whose picker lists this template (shared face layouts). */
+  families?: TemplateLane[]
+  /** T6.4: extra requirements when the template is used via a shared family. */
+  familyRequires?: Partial<Record<TemplateLane, TemplateDef['requires']>>
 }
 
 export const T6_TEMPLATES: TemplateDef[] = templatesJson as TemplateDef[]
 export const T6_TEMPLATES_BY_ID: Record<string, TemplateDef> = Object.fromEntries(
   T6_TEMPLATES.map((t) => [t.id, t]),
 )
+
+/** T6.4 (parity with t6_pick.in_family): native lane or a shared family. */
+export function templateInFamily(t: TemplateDef, lane: string): boolean {
+  return t.lane === lane || (t.families ?? []).includes(lane as TemplateLane)
+}
+
+/** T6.4: the family's templates — native ones first, then shared ones (registry order). */
+export function templatesForFamily(lane: string): TemplateDef[] {
+  return [
+    ...T6_TEMPLATES.filter((t) => t.lane === lane),
+    ...T6_TEMPLATES.filter((t) => t.lane !== lane && templateInFamily(t, lane)),
+  ]
+}
+
+/** T6.4 (parity with t6_pick.requires_for_family): native requires + the shared family's extras. */
+export function requiresForFamily(t: TemplateDef, lane: string): TemplateDef['requires'] {
+  const base = t.requires ?? {}
+  if (t.lane === lane) return base
+  return { ...base, ...(t.familyRequires?.[lane as TemplateLane] ?? {}) }
+}
 
 export const CAPTION_PRESETS_V2 = captionV2 as Record<string, Record<string, unknown>>
 export const TITLE_STYLES = titleStyles as Record<string, Record<string, unknown>>

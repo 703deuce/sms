@@ -24,6 +24,8 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useState } from 'react'
 
+export const T6_TITLE_PLACEMENT_NOTE = 'Shown as the title above the video. Pick its style below.'
+
 export function EditorHeadlineField({
   clipId,
   edits,
@@ -101,7 +103,11 @@ export function EditorHeadlineField({
     <div className="space-y-3 rounded-lg border border-border p-3">
       <div>
         <p className="text-xs font-medium">Headline</p>
-        <p className="text-xs text-muted-foreground">{headlinePlacementNote(layoutMode)}</p>
+        <p className="text-xs text-muted-foreground" data-testid="headline-placement-note">
+          {/* T6.4: with T6 titles the headline is burned as the title above the video, not the
+              legacy export bar. */}
+          {t6TitleAutoEnabled() ? T6_TITLE_PLACEMENT_NOTE : headlinePlacementNote(layoutMode)}
+        </p>
       </div>
       <div className="flex items-center justify-between gap-2">
         <Label className="text-xs font-medium">Show headline</Label>
