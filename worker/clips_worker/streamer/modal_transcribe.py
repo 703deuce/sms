@@ -31,11 +31,17 @@ class StreamModalTranscribeError(Exception):
         self.reason = reason
 
 
+# E6: Modal L4 = $0.80/h = 0.000222 USD/s (same as clips_worker.gpu.usage.L4_USD_PER_S). The old default
+# 0.000542 is the L40S rate ($1.95/h); the transcribe/render functions run on gpu="L4" (modal_app.images).
+MODAL_L4_USD_PER_S_DEFAULT = 0.000222
+
+
 def stream_modal_usd_per_gpu_second() -> float:
+    raw = os.environ.get("MODAL_L4_USD_PER_GPU_S") or os.environ.get("MODAL_L4_USD_PER_S")
     try:
-        return float(os.environ.get("MODAL_L4_USD_PER_GPU_S", "0.000542"))
+        return float(raw) if raw else MODAL_L4_USD_PER_S_DEFAULT
     except ValueError:
-        return 0.000542
+        return MODAL_L4_USD_PER_S_DEFAULT
 
 
 def estimate_modal_cost_usd(gpu_seconds: float) -> float:

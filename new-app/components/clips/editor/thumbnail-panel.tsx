@@ -5,7 +5,15 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { clipsFetch } from '@/lib/clips-api'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { coverJobActive, coverJobNotice, coverPollMs, type CoverJobRow } from '@/lib/clips/editor/cover-jobs'
+import {
+  coverImageClass,
+  coverJobActive,
+  coverJobNotice,
+  coverPollMs,
+  stableCoverItems,
+  type CoverJobRow,
+  type CoverUrlCache,
+} from '@/lib/clips/editor/cover-jobs'
 import { toast } from 'sonner'
 
 type ThumbRow = {
@@ -37,11 +45,15 @@ export function ThumbnailPanel({
   // E1fix: the job this panel started; cleared once it finishes (success or failure toast).
   const [trackedJobId, setTrackedJobId] = useState<string | null>(null)
   const pollErrorShown = useRef(false)
+  // E6: stable signed URLs per cover (see stableCoverItems) + one re-sign retry per broken image.
+  const urlCache = useRef<CoverUrlCache>(new Map())
+  const imgRetried = useRef<Set<string>>(new Set())
+  const [imgFailed, setImgFailed] = useState<Set<string>>(() => new Set())
 
   const refresh = useCallback(async () => {
     try {
       const data = await clipsFetch<{ items: ThumbRow[]; jobs?: CoverJobRow[] }>(`/api/clips/clips/${clipId}/thumbnail`)
-      setItems(data.items ?? [])
+      setItems(stableCoverItems(data.items ?? [], urlCache.current))
       setJobs(data.jobs ?? [])
       pollErrorShown.current = false
     } catch (e) {
@@ -162,8 +174,29 @@ export function ThumbnailPanel({
         ) : null}
         {items.map((t) => (
           <div key={t.id} className="rounded border border-border p-2">
-            {t.downloadUrl ? (
-              <img src={t.downloadUrl} alt="" className="mb-2 aspect-video w-full rounded object-cover" />
+            {t.downloadUrl && !imgFailed.has(t.id) ? (
+              <img
+                key={t.downloadUrl}
+                src={t.downloadUrl}
+                alt={t.titleText || 'Cover'}
+                loading="lazy"
+                decoding="async"
+                className={coverImageClass(t.aspect)}
+                data-testid="cover-img"
+                onError={() => {
+                  if (!imgRetried.current.has(t.id)) {
+                    imgRetried.current.add(t.id)
+                    urlCache.current.delete(t.id)
+                    void refresh()
+                  } else {
+                    setImgFailed((prev) => new Set(prev).add(t.id))
+                  }
+                }}
+              />
+            ) : t.downloadUrl ? (
+              <div className="mb-2 flex h-24 items-center justify-center rounded bg-muted text-xs" data-testid="cover-img-failed">
+                Image failed to load
+              </div>
             ) : (
               <div className="mb-2 flex h-24 items-center justify-center rounded bg-muted text-xs" title={t.error ?? undefined}>
                 {t.status === 'FAILED' ? 'Failed' : t.status === 'READY' ? 'Loading…' : 'Rendering…'}

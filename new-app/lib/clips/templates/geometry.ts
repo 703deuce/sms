@@ -30,6 +30,20 @@ export type TemplateSpecV2 = {
 
 const DEFAULT_FACECAM: FacecamBox = { x: 0.02, y: 0.02, w: 0.32, h: 0.28 }
 const DEFAULT_FULL: FacecamBox = { x: 0, y: 0, w: 1, h: 1 }
+
+/** E6: full-height column owned by face ``idx`` (midpoints to neighbouring face centres). */
+export function personCell(faces: { x: number; y: number; w: number; h: number }[], idx: number): FacecamBox {
+  const cx = (f: { x: number; w: number }) => Number(f.x || 0) + Number(f.w || 0) / 2
+  const me = cx(faces[idx]!)
+  const others = faces.filter((_, j) => j !== idx).map(cx)
+  const lefts = others.filter((c) => c < me)
+  const rights = others.filter((c) => c >= me)
+  const x0 = lefts.length ? (Math.max(...lefts) + me) / 2 : 0
+  const x1 = rights.length ? (Math.min(...rights) + me) / 2 : 1
+  if (x1 - x0 < 0.05) return { ...DEFAULT_FULL }
+  const r4 = (v: number) => Math.round(v * 10000) / 10000
+  return { x: r4(x0), y: 0, w: r4(x1 - x0), h: 1 }
+}
 const SRC_ASPECT = 16 / 9
 
 function even(n: number): number {
@@ -242,7 +256,9 @@ function resolveSrc(
     const idx = Number.parseInt(name.split(':')[1] ?? '0', 10) || 0
     const pb = (signals as unknown as Record<string, FacecamBox | undefined>)[name]
     if (pb && typeof pb === 'object') return { src: pb }
-    if (idx < faces.length) return { src: faceCrop(faces[idx], panelAspect, DEFAULT_FULL, 0.2, topInset) }
+    // E6: crop inside this person's own cell (mirror of worker t6_geometry.person_cell) — the
+    // whole-frame region bled a side-by-side cam into the other person's panel.
+    if (idx < faces.length) return { src: faceCrop(faces[idx], panelAspect, personCell(faces, idx), 0.2, topInset) }
     return { src: { ...DEFAULT_FULL }, fit: 'contain_blur' }
   }
   if (name === 'facecam_box' && (role === 'face' || role === '')) {

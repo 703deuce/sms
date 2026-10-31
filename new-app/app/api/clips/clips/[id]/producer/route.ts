@@ -3,6 +3,7 @@ import type { ProducerToolCall } from '@/lib/clips/edits-reducer'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { openAiJsonResponse } from '@/lib/server/ai/openai-json'
+import { recordOpenAiJsonUsage } from '@/lib/server/clips/ai-usage'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { loadClipWords, PRODUCER_SYSTEM_CLIP, runProducerOnClip } from '@/lib/server/clips/producer-run'
 import { getPrisma } from '@/lib/server/db'
@@ -60,6 +61,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         const llm = await openAiJsonResponse<{ reply: string; tools: ProducerToolCall[] }>(
           PRODUCER_SYSTEM_CLIP,
           JSON.stringify({ userMessage, edits }),
+          {
+            // E6: Producer spend goes to ai_usage like every other AI call.
+            onUsage: (u) =>
+              recordOpenAiJsonUsage({ workspaceId, projectId: clip.projectId, clipId, ...u }),
+          },
         )
 
         const tools = llm.tools || []

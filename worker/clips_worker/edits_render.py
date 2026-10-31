@@ -748,6 +748,18 @@ def _legacy_compose(
         # reads as a broken caption.
         print("[t6:hook_skip] reason=title_on", flush=True)
         ho = None
+    from clips_worker.hook_duplicate import hook_text_duplicates_captions as _hook_dup
+
+    if (
+        ho
+        and ho.get("enabled")
+        and int(cap_edits.get("enabled", True))
+        and _hook_dup(str(ho.get("text") or ""), caption_words, int(ho.get("durationMs") or 2500))
+    ):
+        # E6: the auto hook is often the clip's first spoken line; with captions on it burned the
+        # same words twice (most visible on stacked/split templates, where the title is off).
+        print("[clipper:hook_skip] reason=duplicates_captions", flush=True)
+        ho = None
     if ho and ho.get("enabled") and str(ho.get("text") or "").strip():
         from clips_worker.hook_overlay import apply_hook_overlay
 
@@ -1195,6 +1207,13 @@ def _apply_facecam_or_pip_layout(
                 scene_parts = _t6_scene_parts(
                     tmpl, signals, edits, play_w=play_w, play_h=play_h, clip_start_ms=clip_start_ms
                 )
+                # E6: editor blur strength for blurred bands / contain_blur panels (render-only key).
+                from clips_worker.filtergraph import fit_blur_strength
+
+                spec = {**spec, "blurStrength": fit_blur_strength(edits)}
+                for _part in scene_parts or []:
+                    if isinstance(_part[2], dict):
+                        _part[2]["blurStrength"] = spec["blurStrength"]
                 if scene_parts:
                     # T6.7: one template per scene of the close look's scene map.
                     from clips_worker.t6_render import render_template_segments
@@ -1407,11 +1426,16 @@ def render_edited_clip(
             "compose_spec": compose_spec if use_spec else None,
         }
         compositor_off = __import__("os").environ.get("COMPOSITOR_V3", "1") == "0"
+        # E6: compose writes its result over out_mp4. Its input was out_mp4 too, so when the v3
+        # sprite stage failed after captions were burned, the legacy fallback re-read the already
+        # captioned file and burned captions a second time. Compose from an untouched copy.
+        compose_in = work_dir / "preview_fast_compose_in.mp4"
+        shutil.copy(out_mp4, compose_in)
         if compositor_off:
-            out_mp4, remapped = _legacy_compose(out_mp4, remapped, out_mp4, edits, ctx)
+            out_mp4, remapped = _legacy_compose(compose_in, remapped, out_mp4, edits, ctx)
         else:
             try:
-                out_mp4, remapped = compose_export(out_mp4, remapped, out_mp4, edits, ctx)
+                out_mp4, remapped = compose_export(compose_in, remapped, out_mp4, edits, ctx)
             except Exception as e:
                 print(
                     f"[clipper:compositor] preview_fast_fallback err={type(e).__name__}:{str(e)[:160]}",
@@ -1420,7 +1444,7 @@ def render_edited_clip(
                 lw = work_dir / "legacy_preview_fast"
                 lw.mkdir(exist_ok=True)
                 legacy_ctx = {**ctx, "work_dir": lw}
-                out_mp4, remapped = _legacy_compose(out_mp4, remapped, out_mp4, edits, legacy_ctx)
+                out_mp4, remapped = _legacy_compose(compose_in, remapped, out_mp4, edits, legacy_ctx)
         stage("preview_fast_compose_done")
         return out_mp4, remapped, build_srt(remapped)
 

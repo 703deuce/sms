@@ -74,6 +74,11 @@ async function recordS3Part(uploadId: string, partNumber: number, etag: string, 
   })
 }
 
+/** E6: per-part PUT deadline: min 2 min, else bytes at 64 KB/s. */
+export function partTimeoutMs(bytes: number): number {
+  return Math.max(120_000, Math.ceil(bytes / (64 * 1024)) * 1000)
+}
+
 async function uploadS3Multipart(
   file: File,
   storage: NonNullable<Awaited<ReturnType<typeof startUpload>>['storage']['s3Multipart']>,
@@ -99,7 +104,13 @@ async function uploadS3Multipart(
     let lastErr: unknown
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
-        const res = await fetch(part.url, { method: 'PUT', body: blob })
+        // E6: a hung PUT used to stall the upload forever at its last part (PENDING, 0 parts, no
+        // error). Abort and retry after a generous, size-scaled deadline (>= 64 KB/s, min 2 min).
+        const ctrl = new AbortController()
+        const timer = setTimeout(() => ctrl.abort(), partTimeoutMs(blob.size))
+        const res = await fetch(part.url, { method: 'PUT', body: blob, signal: ctrl.signal }).finally(() =>
+          clearTimeout(timer),
+        )
         if (!res.ok) {
           throw Object.assign(new Error(`Part ${part.partNumber} failed (${res.status})`), { status: res.status })
         }

@@ -642,6 +642,8 @@ export function useEditorState(
           }
           if (err instanceof FetchJsonError && err.status === 409 && err.conflictData) {
             conflicts += 1
+            // E6: bounded — a server that keeps answering 409 must not spin this loop forever.
+            if (conflicts > 4) throw err
             const data = err.conflictData as {
               edits?: ClipEditsV2
               updatedAt?: string
@@ -658,7 +660,12 @@ export function useEditorState(
               const { merged, externalChange } = mergeEditsThreeWay(base, local, server, bounds)
               dispatch({ type: 'serverSync', edits: merged })
               editsRef.current = merged
-              savedRevisionRef.current = revisionAtSend
+              // E6: the server now holds `server`, not `merged`. Previously the revision was marked
+              // saved here, so the loop exited without PATCHing the merge and the user's edit (e.g. the
+              // headline toggle racing the export-headline prefetch write) was lost on reload. Treat the
+              // server copy as the new base and let the loop send the merged edits.
+              lastSavedEditsRef.current = server
+              if (editsEqual(merged, server)) savedRevisionRef.current = revisionAtSend
               if (externalChange) {
                 toast.error('Edits were updated elsewhere — kept your changes where possible')
               }

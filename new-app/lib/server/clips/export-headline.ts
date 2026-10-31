@@ -165,7 +165,7 @@ export async function generateExportHeadline(opts: {
   const headline = formatHeadlineForExport(String(llm.data.headline || '').trim())
   if (!headline) throw new Error('Model returned empty headline')
 
-  const costUsdMicros = clipsEditorLlmCostMicros(llm.provider, llm.promptTokens, llm.completionTokens)
+  const costUsdMicros = clipsEditorLlmCostMicros(llm.provider, llm.promptTokens, llm.completionTokens, llm.model)
   await recordAiUsage({
     workspaceId: opts.workspaceId,
     clipId: opts.clipId,

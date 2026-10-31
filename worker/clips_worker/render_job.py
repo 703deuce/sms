@@ -716,6 +716,8 @@ def _run_render_clip_job_body(
         srt_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.srt"
         upload_file(out_key, out_mp4, "video/mp4")
         upload_text(srt_key, srt_body, "text/plain; charset=utf-8")
+        # E6: upload finished — show movement past 82% (stage stays render_clip: it is also the project stage).
+        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 95, "etaSeconds": 5})
         size = out_mp4.stat().st_size
         from clips_worker.edits_render import output_duration_ms
 

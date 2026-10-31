@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from clips_worker.filtergraph import fit_blur_overlay_filter
+from clips_worker.filtergraph import fit_blur_bg_chain, fit_blur_overlay_filter
 
 
 def probe_video_size(path: Path) -> tuple[int, int]:
@@ -68,6 +68,7 @@ def _panel_src_filter(
     *,
     src_w: int,
     src_h: int,
+    blur_strength: str | None = None,
 ) -> tuple[str, str]:
     x, y, w, h = _norm_box(src)
     crop = f"[{in_label}]crop=iw*{w}:ih*{h}:iw*{x}:ih*{y}[{tag}raw]"
@@ -83,8 +84,13 @@ def _panel_src_filter(
         )
         return f"{crop};{scale}", tag
     if fit == "contain_blur":
-        inner = fit_blur_overlay_filter(f"{tag}raw", tag, dest_w, dest_h)
-        inner = inner.replace(f"scale={dest_w}:{dest_h}", f"scale={dest_w}:{dest_h}:flags=lanczos{sharp}", 1)
+        inner = fit_blur_overlay_filter(f"{tag}raw", tag, dest_w, dest_h, blur_strength)
+        # E6: per-panel label scope (hygiene) so the lanczos/unsharp edit below targets this panel's
+        # foreground scale; the old first-"scale=WxH" replace hit the bg chain, which the strong chain changes.
+        for lab in ("a", "b", "bg", "fg"):
+            inner = inner.replace(f"[{lab}]", f"[{tag}_{lab}]")
+        fg_scale = f"[{tag}_b]scale={dest_w}:{dest_h}:force_original_aspect_ratio=decrease"
+        inner = inner.replace(fg_scale, f"{fg_scale}:flags=lanczos{sharp}", 1)
         return f"{crop};{inner}", tag
     scale = (
         f"[{tag}raw]scale={dest_w}:{dest_h}:force_original_aspect_ratio=increase:flags=lanczos{sharp},"
@@ -118,10 +124,7 @@ def build_template_filtergraph(
         if fill == "black" or fill == "dark_gradient":
             parts.append(f"color=c=black:s={bw}x{bh}:d={duration_s}[{tag}]")
         else:
-            parts.append(
-                f"[0:v]scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh},"
-                f"boxblur=20:2,eq=brightness=-0.08[{tag}]"
-            )
+            parts.append(f"[0:v]{fit_blur_bg_chain(bw, bh, spec.get('blurStrength'))}[{tag}]")
         parts.append(f"[{over}][{tag}]overlay={bx}:{by}[o{idx}]")
         over = f"o{idx}"
         idx += 1
@@ -133,7 +136,9 @@ def build_template_filtergraph(
         dh = max(2, int(dest.get("h") or play_h))
         src = panel.get("src") or {"x": 0, "y": 0, "w": 1, "h": 1}
         fit = str(panel.get("fit") or "cover")
-        chain, ptag = _panel_src_filter("0:v", f"p{pi}", src, dw, dh, fit, src_w=src_w, src_h=src_h)
+        chain, ptag = _panel_src_filter(
+            "0:v", f"p{pi}", src, dw, dh, fit, src_w=src_w, src_h=src_h, blur_strength=spec.get("blurStrength")
+        )
         parts.append(chain)
         parts.append(f"[{over}][{ptag}]overlay={dx}:{dy}[o{idx}]")
         over = f"o{idx}"

@@ -42,7 +42,17 @@ async function callOnce(model: string, system: string, user: string): Promise<Re
   })
 }
 
-export async function openAiJsonResponse<T>(system: string, user: string): Promise<T> {
+export type OpenAiJsonUsage = { model: string; promptTokens: number; completionTokens: number }
+
+/**
+ * ``opts.onUsage`` (E6): called once with the token usage of the successful call, so callers (Producer)
+ * can write ai_usage. Before, the usage block was dropped and Producer spend was never logged.
+ */
+export async function openAiJsonResponse<T>(
+  system: string,
+  user: string,
+  opts?: { onUsage?: (usage: OpenAiJsonUsage) => void | Promise<void> },
+): Promise<T> {
   const primary = getClipsLlmModelId()
   const models = [primary, FALLBACK_MODEL].filter((m, i, a) => a.indexOf(m) === i)
   let lastErr = ''
@@ -60,10 +70,25 @@ export async function openAiJsonResponse<T>(system: string, user: string): Promi
         }
         break
       }
-      const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
+      const json = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>
+        usage?: { prompt_tokens?: number; completion_tokens?: number }
+      }
       const content = json.choices?.[0]?.message?.content
       if (!content) throw new Error('AI returned an empty response')
-      return JSON.parse(content) as T
+      const parsed = JSON.parse(content) as T
+      if (opts?.onUsage) {
+        try {
+          await opts.onUsage({
+            model,
+            promptTokens: json.usage?.prompt_tokens ?? 0,
+            completionTokens: json.usage?.completion_tokens ?? 0,
+          })
+        } catch (e) {
+          console.warn('[clipper:editor-llm] openai_json usage_log_failed', e instanceof Error ? e.message : e)
+        }
+      }
+      return parsed
     }
   }
   throw new Error(lastErr || 'AI request failed')

@@ -29,7 +29,8 @@ import { ProjectRowMenu } from '@/components/drive/project-row-menu'
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 import { attachMediaToProject, clipsFetch, createProject, createProjectFromPrompt } from '@/lib/clips-api'
 import { defaultClipSettings, TOOL_PRESET_MAP } from '@/lib/clips/settings'
-import { uploadClipFile } from '@/lib/clips/upload'
+import { uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
+import { UploadProgressItem } from '@/components/clips/upload-progress-item'
 import { cn } from '@/lib/utils'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { t2vProjectHref } from '@/lib/t2v/project-link'
@@ -76,6 +77,20 @@ export function DriveHome({
   const [dragOver, setDragOver] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [heroBusy, setHeroBusy] = useState(false)
+  // E6: real upload progress on the home hero (was a "Transcribing… Done" dialog during the upload).
+  const [heroUpload, setHeroUpload] = useState<UploadProgress | null>(null)
+  const heroUploadIdRef = useRef<string | null>(null)
+  const heroUploadActive = heroUpload != null && heroUpload.state !== 'error' && heroUpload.state !== 'complete'
+  useEffect(() => {
+    if (!heroUploadActive) return
+    // E6: leaving mid-upload used to drop the file silently; ask first.
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [heroUploadActive])
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
 
   const projects = initialProjects
@@ -134,14 +149,24 @@ export function DriveHome({
     router.refresh()
   }
 
-  const startFromFile = async (file: File) => {
+  const startFromFile = async (file: File, opts?: { extraFiles?: number }) => {
+    if (heroBusy) {
+      // E6: a second drop used to start a parallel upload that the first one's navigation orphaned.
+      toast.message('An upload is already in progress — wait for it to finish')
+      return
+    }
+    if (opts?.extraFiles) {
+      toast.message(`Uploading “${file.name}” — one file at a time (${opts.extraFiles} not started)`)
+    }
     setHeroBusy(true)
-    drive?.setTranscribingTitle(file.name)
-    drive?.setTranscribingOpen(true)
     drive?.setSyncing(true)
+    heroUploadIdRef.current = null
+    setHeroUpload({ filename: file.name, bytes: file.size, loaded: 0, percent: 0, state: 'uploading' })
     try {
       const uploadId = await new Promise<string>((resolve, reject) => {
         void uploadClipFile(file, (p) => {
+          setHeroUpload(p)
+          if (p.uploadId) heroUploadIdRef.current = p.uploadId
           if (p.state === 'complete' && p.uploadId) resolve(p.uploadId)
           if (p.state === 'error') reject(new Error(p.error ?? 'Upload failed'))
         }).catch(reject)
@@ -150,9 +175,15 @@ export function DriveHome({
         prompt.trim() ? { prompt: prompt.trim() } : undefined,
       )
       const project = await createProject({ uploadId, settings, title: prompt.trim() || undefined })
+      // The file is on the server and the project exists — now it really is transcribing.
+      drive?.setTranscribingTitle(file.name)
+      drive?.setTranscribingOpen(true)
+      setHeroUpload(null)
       router.push(`/app/clips/${project.id}`)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not start project')
+      const msg = e instanceof Error ? e.message : 'Could not start project'
+      setHeroUpload((prev) => (prev ? { ...prev, state: 'error', error: msg } : prev))
+      toast.error(msg)
       drive?.setTranscribingOpen(false)
     } finally {
       setHeroBusy(false)
@@ -208,8 +239,9 @@ export function DriveHome({
       onDrop={(e) => {
         e.preventDefault()
         setDragOver(false)
-        const file = e.dataTransfer.files?.[0]
-        if (file) void startFromFile(file)
+        const files = e.dataTransfer.files
+        const file = files?.[0]
+        if (file) void startFromFile(file, { extraFiles: Math.max(0, (files?.length ?? 1) - 1) })
       }}
     >
       {dragOver && (
@@ -268,6 +300,8 @@ export function DriveHome({
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (file) void startFromFile(file)
+                // E6: picking the same file again (retry) must fire onChange.
+                e.target.value = ''
               }}
             />
             <Button
@@ -283,6 +317,14 @@ export function DriveHome({
               {heroBusy ? 'Starting…' : 'Get started'}
             </PrimaryButton>
           </div>
+          {heroUpload ? (
+            <div className="mt-3" data-testid="drive-hero-upload">
+              <UploadProgressItem
+                progress={heroUpload}
+                onChooseFile={heroUpload.state === 'error' ? () => fileInputRef.current?.click() : undefined}
+              />
+            </div>
+          ) : null}
         </div>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           {TEMPLATE_CHIPS.map((chip) => (

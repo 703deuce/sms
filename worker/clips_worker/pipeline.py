@@ -457,6 +457,9 @@ def _regular_clip_type_and_layout(
         clip_id=inp.clip_id,
         clip_start_ms=inp.clip_start_ms,
     )
+    from clips_worker.clip_layout_policy import apply_headline_layout_default
+
+    edits = apply_headline_layout_default(edits, str(type_info.get("clipType") or ""))
     return edits, type_info, fc_layout
 
 

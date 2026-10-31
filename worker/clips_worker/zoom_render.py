@@ -113,6 +113,17 @@ def _scale_factor_expr(keyframes: list[tuple[float, float]]) -> str:
     return expr
 
 
+def _centre_offset_expr(z_expr: str, size: int) -> str:
+    """E6: crop offset that keeps the zoom centred.
+
+    ``scale ... eval=frame`` changes the frame size per frame, but crop's ``iw``/``ih`` are fixed when the
+    filter is configured (at zoom 1.0), so ``(iw-w)/2`` stayed 0 and every punch zoomed toward the
+    top-left corner (measured: centre 360,640 -> 413,736 at 1.15x). Recompute the scaled size from ``t``
+    with the same expression the scale filter uses, so the offset is exact per frame.
+    """
+    return f"(trunc({size}*({z_expr})/2)*2-{size})/2"
+
+
 def apply_zoom(
     video: Path,
     out: Path,
@@ -145,14 +156,15 @@ def apply_zoom(
             f"split[full][full2];"
             f"[full]crop={w}:{band_h}:0:0,"
             f"scale=w='trunc(iw*({z_expr})/2)*2':h='trunc(ih*({z_expr})/2)*2':eval=frame,"
-            f"crop={w}:{band_h}:(iw-{w})/2:(ih-{band_h})/2[topz];"
+            f"crop=w={w}:h={band_h}:x='{_centre_offset_expr(z_expr, w)}':y='{_centre_offset_expr(z_expr, band_h)}'"
+            f":exact=1[topz];"
             f"[full2]crop={w}:{rest_h}:0:{band_h}[bot];"
             f"[topz][bot]vstack=inputs=2"
         )
     else:
         vf = (
             f"scale=w='trunc(iw*({z_expr})/2)*2':h='trunc(ih*({z_expr})/2)*2':eval=frame,"
-            f"crop={w}:{h}:(iw-{w})/2:(ih-{h})/2"
+            f"crop=w={w}:h={h}:x='{_centre_offset_expr(z_expr, w)}':y='{_centre_offset_expr(z_expr, h)}':exact=1"
         )
     subprocess.check_call(
         [

@@ -62,3 +62,36 @@ export function coverPollMs(jobs: CoverJobRow[], items: CoverItemRow[]): number 
   const rendering = items.some((i) => !i.downloadUrl && (i.status === 'RUNNING' || i.status === 'PENDING'))
   return running || rendering ? 3000 : 15000
 }
+
+/**
+ * E6: the GET route re-signs every image URL on each poll (3 s while running, 15 s idle), so the
+ * <img> src changed every poll and each 5–9 MB PNG cover re-downloaded forever (covers that never
+ * finished loading / flickered = "broken"). Keep the first signed URL per thumbnail until it nears
+ * its 1 h expiry, or until the <img> reports an error.
+ */
+export const COVER_URL_REUSE_MS = 45 * 60 * 1000
+export type CoverUrlCache = Map<string, { url: string; at: number }>
+
+export function stableCoverItems<T extends CoverItemRow>(items: T[], cache: CoverUrlCache, now = Date.now()): T[] {
+  const seen = new Set<string>()
+  const out = items.map((it) => {
+    seen.add(it.id)
+    if (!it.downloadUrl) {
+      cache.delete(it.id)
+      return it
+    }
+    const hit = cache.get(it.id)
+    if (hit && now - hit.at < COVER_URL_REUSE_MS) return hit.url === it.downloadUrl ? it : { ...it, downloadUrl: hit.url }
+    cache.set(it.id, { url: it.downloadUrl, at: now })
+    return it
+  })
+  for (const id of [...cache.keys()]) if (!seen.has(id)) cache.delete(id)
+  return out
+}
+
+/** Tailwind classes so a 9:16 cover is shown whole instead of a centre strip of a 16:9 box. */
+export function coverImageClass(aspect: string | null | undefined): string {
+  return aspect === '9:16'
+    ? 'mx-auto mb-2 aspect-[9/16] max-h-72 w-auto rounded bg-muted object-contain'
+    : 'mb-2 aspect-video w-full rounded bg-muted object-cover'
+}

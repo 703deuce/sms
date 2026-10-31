@@ -96,6 +96,35 @@ def apply_channel_clip_type_layout(
     return {**edits, "layout": layout}
 
 
+# E6: a headline bar over a full-bleed crop covers the subject's face, and podcast clips are
+# multi-speaker talk where the burned title reads as clutter. These layouts start with NO
+# headline (text/suggestion is kept, so the editor's "Show headline" switch can turn it on).
+HEADLINE_OFF_CROP_MODES = frozenset({"center_crop", "speaker_follow", "subject_follow", "fill"})
+HEADLINE_OFF_SPLIT_MODES = frozenset(
+    {"split", "grid3", "grid4", "dynamic", "screen_pip", "split_debate", "grid", "two_up"}
+)
+
+
+def headline_default_off(edits: dict, clip_type: str | None = None) -> bool:
+    layout = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+    mode = str(layout.get("mode") or "speaker_follow")
+    tpl = layout.get("template") if isinstance(layout.get("template"), dict) else {}
+    if (clip_type or "").strip().lower() == "podcast" or str(tpl.get("lane") or "").lower() == "podcast":
+        return True
+    return mode in HEADLINE_OFF_CROP_MODES or mode in HEADLINE_OFF_SPLIT_MODES
+
+
+def apply_headline_layout_default(edits: dict, clip_type: str | None = None) -> dict:
+    """Creation-time only (pipeline finalize): podcast + crop layouts default to no headline."""
+    tpl = edits.get("exportTemplate")
+    if not isinstance(tpl, dict) or not headline_default_off(edits, clip_type):
+        return edits
+    hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
+    if not hb.get("enabled"):
+        return edits
+    return {**edits, "exportTemplate": {**tpl, "headlineBar": {**hb, "enabled": False}}}
+
+
 def apply_clip_type_layout_to_edits(
     edits: dict,
     *,
