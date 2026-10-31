@@ -15,12 +15,15 @@ export function ExportHeadlinePreview({
   platform,
   channelUrl,
   exportPlatformId = 'tiktok',
+  videoLabel = '16:9 + blur fill',
 }: {
   headline: string
   showBadge: boolean
   platform?: 'twitch' | 'kick'
   channelUrl?: string
   exportPlatformId?: ExportPlatformId
+  /** E4fix: what the video area shows for the saved layout (default keeps the old label). */
+  videoLabel?: string
 }) {
   const badgeColor = platform === 'kick' ? '#53FC18' : '#9146FF'
   const previewW = 140
@@ -73,8 +76,9 @@ export function ExportHeadlinePreview({
         <div
           className="absolute inset-x-1 rounded-sm bg-zinc-900/90 text-center text-[8px] text-zinc-500"
           style={{ top: videoTop, height: videoH }}
+          data-testid="export-mini-video-label"
         >
-          16:9 + blur fill
+          {videoLabel}
         </div>
         <div
           className="absolute inset-x-0 bg-black"

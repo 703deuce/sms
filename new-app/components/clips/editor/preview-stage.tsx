@@ -1043,6 +1043,11 @@ export function PreviewStage({
             edits={edits as ClipEditsV2}
             boxHeightPx={box.h}
             outputDurationSec={outputDurationFromEdits(previewEdits) / 1000}
+            templateCaptionRect={
+              templatePreview?.captionRect
+                ? { y: templatePreview.captionRect.y, h: templatePreview.captionRect.h, playH: templatePreview.playH }
+                : null
+            }
           />
         )}
         {safeZoneVisible && box.w > 0 ? (

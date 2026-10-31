@@ -39,13 +39,25 @@ export function TextItemsPreview({
             data-text-id={it.id}
             aria-hidden
           >
-            <div className="absolute" style={css.anchor as CSSProperties}>
-              <span
-                style={{ ...(css.text as CSSProperties), fontFamily, ...(css.box as CSSProperties | null) }}
-                className={selectedId === it.id ? 'outline outline-1 outline-dashed outline-white/70' : undefined}
-              >
-                {textDisplay(it)}
-              </span>
+            <div
+              className="absolute"
+              style={css.anchor as CSSProperties}
+              data-testid="preview-text-block"
+              data-align={it.style.align}
+            >
+              {textDisplay(it)
+                .split('\n')
+                .map((line, i) => (
+                  <div key={i} style={{ height: css.linePx, lineHeight: `${css.linePx}px`, whiteSpace: 'pre' }}>
+                    <span
+                      style={{ ...(css.text as CSSProperties), fontFamily, ...(css.box as CSSProperties | null) }}
+                      className={selectedId === it.id ? 'outline outline-1 outline-dashed outline-white/70' : undefined}
+                      data-testid="preview-text-line"
+                    >
+                      {line || ' '}
+                    </span>
+                  </div>
+                ))}
             </div>
           </div>
         )

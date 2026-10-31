@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ProducerPanel } from '@/components/clips/producer/producer-panel'
 import type { ClipBounds, ClipEditsV2 } from '@/lib/clips/edits'
 import { formatToolCost, producerToolCost } from '@/lib/clips/producer-cost'
+import { appliedProducerSummaries } from '@/lib/clips/producer-honesty'
 
 export type ProducerProposal = { edits: ClipEditsV2; changeCount: number; before: ClipEditsV2; summaries: string[] }
 
@@ -147,7 +148,7 @@ export function ProducerPopover({
           onUndo={onUndo}
           onProposal={(e, n, before, summaries) => {
             if (n <= 0) return
-            setProposal({ edits: e, changeCount: n, before, summaries })
+            setProposal({ edits: e, changeCount: n, before, summaries: appliedProducerSummaries(summaries) })
             setPreviewing(false)
             onAudition(null)
           }}

@@ -123,7 +123,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
               id: createId('pmsg'),
               threadId: thread.id,
               role: 'assistant',
-              content: llm.reply,
+              content: applied.reply ?? llm.reply,
               toolCalls: (llm.tools ?? []) as object,
             },
           ],

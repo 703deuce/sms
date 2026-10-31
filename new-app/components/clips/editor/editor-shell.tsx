@@ -1,6 +1,7 @@
 'use client'
 
 import { Anton, Montserrat, Poppins } from 'next/font/google'
+import { addFontVarsToBody, clipDisplayFontVars } from '@/components/clips/editor/clip-editor-fonts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorRail, EDITOR_RAIL_ITEMS, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
@@ -19,7 +20,7 @@ import { patchClip } from '@/lib/clips-api'
 import { editorPreviewDurationMs, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { seedEditorExportTemplate } from '@/lib/clips/editor-export-template-seed'
 import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-log'
-import { keepSegments, outputDurationMs, displayDurationMs } from '@/lib/clips/edits'
+import { keepSegments, outputDurationMs, displayDurationMs, displayPositionMs } from '@/lib/clips/edits'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
@@ -188,6 +189,14 @@ export function EditorShell({
   // E4: Text / Color panels follow the timeline selection; ✨ Producer pop-over.
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null)
   const [colorTarget, setColorTarget] = useState<ColorTarget>({ kind: 'video' })
+  // E4fix: font pickers / dialogs are portaled to <body>; give them the clip font variables too.
+  useEffect(
+    () =>
+      addFontVarsToBody(
+        cn(clipEditorAnton.variable, clipEditorMontserrat.variable, clipEditorPoppins.variable, clipDisplayFontVars),
+      ),
+    [],
+  )
   const [producerOpen, setProducerOpen] = useState(false)
   const [producerPendingPaid, setProducerPendingPaid] = useState(0)
   const [pendingDerivedClipId, setPendingDerivedClipId] = useState<string | null>(null)
@@ -691,10 +700,10 @@ export function EditorShell({
     }[]
   >([])
   const outDur = editorPreviewDurationMs(edits, editorWords)
-  const displayDur = useMemo(
-    () => displayDurationMs({ ...editorPreviewEdits(edits, editorWords), speed: edits.speed }),
-    [edits, editorWords],
-  )
+  const displayEdits = useMemo(() => ({ ...editorPreviewEdits(edits, editorWords), speed: edits.speed }), [edits, editorWords])
+  const displayDur = useMemo(() => displayDurationMs(displayEdits), [displayEdits])
+  // E4fix: the clock shows output (exported) time on both sides — position warped like the duration.
+  const displayPos = useMemo(() => Math.min(displayDur, displayPositionMs(displayEdits, outputMs)), [displayDur, displayEdits, outputMs])
 
   useEffect(() => {
     void clipsFetch<{ items: { id: string; name: string; settings: unknown }[] }>('/api/clips/brand/templates')
@@ -1256,6 +1265,7 @@ export function EditorShell({
             durationMs={outDur}
             selectedId={selectedTextId}
             onSelect={setSelectedTextId}
+            onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)}
           />
           </EditorPanelErrorBoundary>
         </div>
@@ -1310,6 +1320,7 @@ export function EditorShell({
         clipEditorAnton.variable,
         clipEditorMontserrat.variable,
         clipEditorPoppins.variable,
+        clipDisplayFontVars,
       )}
     >
       <EditorTopBar
@@ -1524,7 +1535,7 @@ export function EditorShell({
           />
           <PlayerControls
             playing={playing}
-            outputMs={outputMs}
+            outputMs={displayPos}
             outputDurationMs={displayDur}
             onToggle={() => void togglePlay()}
             onScrub={seekOutput}
@@ -1607,6 +1618,7 @@ export function EditorShell({
           clipEditorAnton.variable,
           clipEditorMontserrat.variable,
           clipEditorPoppins.variable,
+          clipDisplayFontVars,
         )}
         platform={
           (aiMeta as { streamer?: { platform?: string } } | null)?.streamer?.platform === 'kick'

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -22,6 +22,7 @@ import {
   type ColorSpec,
 } from '@/lib/clips/editor/color'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
+import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 
 /** What the Color panel edits: the whole video, one Video-lane item (source range) or one B-roll item. */
 export type ColorTarget =
@@ -45,6 +46,38 @@ function withSpec(edits: ClipEditsV2, t: ColorTarget, spec: ColorSpec | null): C
   else if (t.kind === 'segment') color = setSegmentLook(color, t.fromMs, t.toMs, clean ?? {})
   else color = setBrollLook(color, t.id, clean)
   return { ...edits, color }
+}
+
+/**
+ * E4fix: Reset only touches the scope being edited. Whole video → the global look (per-item and
+ * B-roll looks stay); a Video item → drops its own override (it follows the whole-video look again);
+ * a B-roll item → its look. "Reset all" (explicit) clears every look.
+ */
+export function resetScope(edits: ClipEditsV2, t: ColorTarget): ClipEditsV2 {
+  let color = edits.color
+  if (t.kind === 'video') color = setVideoLook(color, null)
+  else if (t.kind === 'segment') color = setSegmentLook(color, t.fromMs, t.toMs, null)
+  else color = setBrollLook(color, t.id, null)
+  return { ...edits, color }
+}
+
+function hasOtherLooks(edits: ClipEditsV2, t: ColorTarget): boolean {
+  const c = edits.color
+  if (!c) return false
+  const n = (c.video ? 1 : 0) + (c.segments?.length ?? 0) + Object.keys(c.broll ?? {}).length
+  const own =
+    t.kind === 'video'
+      ? c.video
+        ? 1
+        : 0
+      : t.kind === 'segment'
+        ? c.segments?.some((s) => s.fromMs === t.fromMs && s.toMs === t.toMs)
+          ? 1
+          : 0
+        : c.broll?.[t.id]
+          ? 1
+          : 0
+  return n - own > 0
 }
 
 /** Swatch: the look applied to a fixed 4-colour strip (same math as preview + export). */
@@ -78,13 +111,27 @@ export function ColorPanel({
 }: {
   edits: ClipEditsV2
   target: ColorTarget
-  onEdits: (e: ClipEditsV2) => void
+  /** pushHistory=false folds the change into the current undo step (E4fix: slider key bursts). */
+  onEdits: (e: ClipEditsV2, pushHistory?: boolean) => void
   onLive?: (e: ClipEditsV2 | null) => void
 }) {
   const spec = specFor(edits, target)
-  const commit = (s: ColorSpec | null) => {
+  const burst = useRef<CoalesceBurst | null>(null)
+  const scopeKey = target.kind === 'video' ? 'video' : target.kind === 'segment' ? `seg:${target.fromMs}-${target.toMs}` : `broll:${target.id}`
+  /** `key` = the slider; a burst of keyboard steps / releases on one slider is one undo step. */
+  const commit = (s: ColorSpec | null, key?: string) => {
     onLive?.(null)
-    onEdits(withSpec(edits, target, s))
+    const next = withSpec(edits, target, s)
+    if (!key) {
+      burst.current = null
+      onEdits(next)
+      return
+    }
+    const now = Date.now()
+    const k = `${scopeKey}:${key}`
+    const push = coalescePush(burst.current, k, now, JSON.stringify(spec))
+    burst.current = { key: k, at: now, sig: JSON.stringify(specFor(next, target)) }
+    onEdits(next, push)
   }
   const live = (s: ColorSpec) => onLive?.(withSpec(edits, target, s))
   const setAdj = (k: ColorAdjustKey, v: number) => ({ ...spec, adjust: { ...(spec.adjust ?? {}), [k]: v } })
@@ -108,9 +155,35 @@ export function ColorPanel({
               Apply to all
             </Button>
           ) : null}
-          <Button size="xs" variant="ghost" data-testid="color-reset" onClick={() => commit(null)}>
+          <Button
+            size="xs"
+            variant="ghost"
+            data-testid="color-reset"
+            title={target.kind === 'video' ? 'Reset the whole-video look (item looks stay)' : 'Reset this item to the whole-video look'}
+            onClick={() => {
+              onLive?.(null)
+              burst.current = null
+              onEdits(resetScope(edits, target))
+            }}
+          >
             Reset
           </Button>
+          {hasOtherLooks(edits, target) ? (
+            <Button
+              size="xs"
+              variant="ghost"
+              className="text-destructive"
+              data-testid="color-reset-all"
+              title="Clear every color look (whole video, clips and B-roll)"
+              onClick={() => {
+                onLive?.(null)
+                burst.current = null
+                onEdits({ ...edits, color: undefined })
+              }}
+            >
+              Reset all
+            </Button>
+          ) : null}
         </div>
       </div>
       {target.kind === 'video' ? (
@@ -156,7 +229,7 @@ export function ColorPanel({
             unit="%"
             testId="color-intensity"
             onLive={(v) => live({ ...spec, intensity: v })}
-            onCommit={(v) => commit({ ...spec, intensity: v })}
+            onCommit={(v) => commit({ ...spec, intensity: v }, 'intensity')}
           />
         ) : null}
       </section>
@@ -172,7 +245,7 @@ export function ColorPanel({
             max={ADJUST_MAX}
             testId={`color-adjust-${k}`}
             onLive={(v) => live(setAdj(k, v))}
-            onCommit={(v) => commit(setAdj(k, v))}
+            onCommit={(v) => commit(setAdj(k, v), k)}
           />
         ))}
       </section>

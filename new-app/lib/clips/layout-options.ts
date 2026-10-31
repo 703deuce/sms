@@ -65,6 +65,35 @@ export const LAYOUT_OPTIONS: LayoutOption[] = [
 
 export const EXPORT_LAYOUT_OPTIONS = LAYOUT_OPTIONS.filter((o) => o.exportPicker)
 
+/** E4fix: helper line under "Layout for this export" — describes the layout actually selected. */
+export function exportLayoutHint(mode: LayoutOptionId | undefined): string {
+  const opt = LAYOUT_OPTIONS.find((o) => o.id === mode)
+  return opt ? `${opt.title}: ${opt.hint}` : 'Pick how the stream shot is framed in the 9:16 export.'
+}
+
+/** E4fix: label of the video area in the export mini preview, per saved layout mode. */
+export function layoutMiniPreviewLabel(mode: LayoutOptionId | undefined): string {
+  switch (mode) {
+    case 'facecam_stack':
+      return 'Facecam over gameplay'
+    case 'facecam_pip':
+      return 'Gameplay + facecam PiP'
+    case 'split':
+      return 'Two-speaker split'
+    case 'center_crop':
+      return '9:16 crop fill'
+    case 'speaker_follow':
+      return 'Speaker follow crop'
+    case 'fit_top':
+    case 'fit_blur':
+    case 'full_frame':
+    case undefined:
+      return '16:9 + blur fill'
+    default:
+      return LAYOUT_OPTIONS.find((o) => o.id === mode)?.title ?? '16:9 + blur fill'
+  }
+}
+
 export function layoutOptionDisabled(
   opt: LayoutOption,
   ctx: { facecamLayout: FacecamLayoutState | null; reframeV2Enabled: boolean; aiExtras: boolean },

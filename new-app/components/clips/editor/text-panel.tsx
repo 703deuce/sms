@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -26,6 +26,7 @@ import {
   type TextStyle,
 } from '@/lib/clips/editor/text-items'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
+import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 
 const ALIGNS: TextAlign[] = ['left', 'center', 'right']
 
@@ -81,22 +82,53 @@ export function TextPanel({
   durationMs,
   selectedId,
   onSelect,
+  onLive,
 }: {
   edits: ClipEditsV2
-  onEdits: (e: ClipEditsV2) => void
+  /** pushHistory=false folds the change into the current undo step (E4fix coalescing). */
+  onEdits: (e: ClipEditsV2, pushHistory?: boolean) => void
   playheadMs: number
   durationMs: number
   selectedId: string | null
   onSelect: (id: string | null) => void
+  /** E4fix: slider drags preview live (audition) and commit once on release, like the Color panel. */
+  onLive?: (e: ClipEditsV2 | null) => void
 }) {
   const items = edits.textItems ?? []
   const sel = items.find((t) => t.id === selectedId) ?? null
+  const burst = useRef<CoalesceBurst | null>(null)
 
   // reconcileItemMotion: a moved item carries its text:<id> keyframes, a deleted one drops them.
-  const write = (list: TextItem[]) =>
-    onEdits(reconcileItemMotion(edits, { ...edits, textItems: normalizeTextItems(list, durationMs) }))
-  const patch = (p: Partial<TextItem>) => sel && write(items.map((t) => (t.id === sel.id ? { ...t, ...p } : t)))
-  const patchStyle = (p: Partial<TextStyle>) => sel && patch({ style: { ...sel.style, ...p } })
+  const build = (list: TextItem[]) =>
+    reconcileItemMotion(edits, { ...edits, textItems: normalizeTextItems(list, durationMs) })
+  /** `key` = the control; a burst on one control (typing, slider keys, color drag) is one undo step. */
+  const write = (list: TextItem[], key?: string) => {
+    const next = build(list)
+    if (!key || !sel) {
+      burst.current = null
+      onEdits(next)
+      return
+    }
+    const now = Date.now()
+    const push = coalescePush(burst.current, `${sel.id}:${key}`, now, JSON.stringify(sel))
+    const after = next.textItems?.find((t) => t.id === sel.id)
+    burst.current = { key: `${sel.id}:${key}`, at: now, sig: JSON.stringify(after ?? null) }
+    onEdits(next, push)
+  }
+  const patch = (p: Partial<TextItem>, key?: string) =>
+    sel && write(items.map((t) => (t.id === sel.id ? { ...t, ...p } : t)), key)
+  const patchStyle = (p: Partial<TextStyle>, key?: string) => sel && patch({ style: { ...sel.style, ...p } }, key)
+  const livePatch = (p: Partial<TextItem>) =>
+    sel && onLive?.(build(items.map((t) => (t.id === sel.id ? { ...t, ...p } : t))))
+  const liveStyle = (p: Partial<TextStyle>) => sel && livePatch({ style: { ...sel.style, ...p } })
+  const commitPatch = (p: Partial<TextItem>, key: string) => {
+    onLive?.(null)
+    patch(p, key)
+  }
+  const commitStyle = (p: Partial<TextStyle>, key: string) => {
+    onLive?.(null)
+    patchStyle(p, key)
+  }
 
   const add = (presetId = 'basic') => {
     if (items.length >= TEXT_MAX_ITEMS) return
@@ -174,7 +206,7 @@ export function TextPanel({
 
       {sel ? (
         <section className="space-y-3 border-t pt-3" data-testid="text-inspector">
-          <TextContent key={sel.id} value={sel.text} onCommit={(text) => patch({ text })} />
+          <TextContent key={sel.id} value={sel.text} onCommit={(text) => patch({ text }, 'text')} />
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-[11px] text-muted-foreground">Font</Label>
@@ -210,9 +242,9 @@ export function TextPanel({
               </div>
             </div>
           </div>
-          <SliderRow label="Size" value={sel.style.size} min={TEXT_SIZE_MIN} max={TEXT_SIZE_MAX} testId="text-size" onCommit={(v) => patchStyle({ size: v })} />
+          <SliderRow label="Size" value={sel.style.size} min={TEXT_SIZE_MIN} max={TEXT_SIZE_MAX} testId="text-size" onLive={(v) => liveStyle({ size: v })} onCommit={(v) => commitStyle({ size: v }, 'size')} />
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            <ColorField label="Color" value={sel.style.color} onChange={(c) => patchStyle({ color: c })} testId="text-color" />
+            <ColorField label="Color" value={sel.style.color} onChange={(c) => patchStyle({ color: c }, 'color')} testId="text-color" />
             <label className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
               UPPERCASE
               <Switch checked={sel.style.case === 'upper'} onCheckedChange={(c) => patchStyle({ case: c ? 'upper' : 'none' })} data-testid="text-upper" />
@@ -230,8 +262,8 @@ export function TextPanel({
             </label>
             {sel.style.stroke ? (
               <>
-                <ColorField label="Stroke color" value={sel.style.stroke.color} onChange={(c) => patchStyle({ stroke: { ...sel.style.stroke!, color: c } })} testId="text-stroke-color" />
-                <SliderRow label="Width" value={sel.style.stroke.width} min={1} max={24} testId="text-stroke-width" onCommit={(v) => patchStyle({ stroke: { ...sel.style.stroke!, width: v } })} />
+                <ColorField label="Stroke color" value={sel.style.stroke.color} onChange={(c) => patchStyle({ stroke: { ...sel.style.stroke!, color: c } }, 'stroke-color')} testId="text-stroke-color" />
+                <SliderRow label="Width" value={sel.style.stroke.width} min={1} max={24} testId="text-stroke-width" onLive={(v) => liveStyle({ stroke: { ...sel.style.stroke!, width: v } })} onCommit={(v) => commitStyle({ stroke: { ...sel.style.stroke!, width: v } }, 'stroke-width')} />
               </>
             ) : null}
           </div>
@@ -247,9 +279,9 @@ export function TextPanel({
             </label>
             {sel.style.shadow ? (
               <>
-                <ColorField label="Shadow color" value={sel.style.shadow.color} onChange={(c) => patchStyle({ shadow: { ...sel.style.shadow!, color: c } })} testId="text-shadow-color" />
-                <SliderRow label="Distance" value={sel.style.shadow.dist} min={1} max={24} testId="text-shadow-dist" onCommit={(v) => patchStyle({ shadow: { ...sel.style.shadow!, dist: v } })} />
-                <SliderRow label="Opacity" value={sel.style.shadow.opacity} min={0} max={100} unit="%" testId="text-shadow-opacity" onCommit={(v) => patchStyle({ shadow: { ...sel.style.shadow!, opacity: v } })} />
+                <ColorField label="Shadow color" value={sel.style.shadow.color} onChange={(c) => patchStyle({ shadow: { ...sel.style.shadow!, color: c } }, 'shadow-color')} testId="text-shadow-color" />
+                <SliderRow label="Distance" value={sel.style.shadow.dist} min={1} max={24} testId="text-shadow-dist" onLive={(v) => liveStyle({ shadow: { ...sel.style.shadow!, dist: v } })} onCommit={(v) => commitStyle({ shadow: { ...sel.style.shadow!, dist: v } }, 'shadow-dist')} />
+                <SliderRow label="Opacity" value={sel.style.shadow.opacity} min={0} max={100} unit="%" testId="text-shadow-opacity" onLive={(v) => liveStyle({ shadow: { ...sel.style.shadow!, opacity: v } })} onCommit={(v) => commitStyle({ shadow: { ...sel.style.shadow!, opacity: v } }, 'shadow-opacity')} />
               </>
             ) : null}
           </div>
@@ -265,15 +297,15 @@ export function TextPanel({
             </label>
             {sel.style.box ? (
               <>
-                <ColorField label="Box color" value={sel.style.box.color} onChange={(c) => patchStyle({ box: { ...sel.style.box!, color: c } })} testId="text-box-color" />
-                <SliderRow label="Opacity" value={sel.style.box.opacity} min={0} max={100} unit="%" testId="text-box-opacity" onCommit={(v) => patchStyle({ box: { ...sel.style.box!, opacity: v } })} />
-                <SliderRow label="Padding" value={sel.style.box.pad} min={0} max={80} testId="text-box-pad" onCommit={(v) => patchStyle({ box: { ...sel.style.box!, pad: v } })} />
+                <ColorField label="Box color" value={sel.style.box.color} onChange={(c) => patchStyle({ box: { ...sel.style.box!, color: c } }, 'box-color')} testId="text-box-color" />
+                <SliderRow label="Opacity" value={sel.style.box.opacity} min={0} max={100} unit="%" testId="text-box-opacity" onLive={(v) => liveStyle({ box: { ...sel.style.box!, opacity: v } })} onCommit={(v) => commitStyle({ box: { ...sel.style.box!, opacity: v } }, 'box-opacity')} />
+                <SliderRow label="Padding" value={sel.style.box.pad} min={0} max={80} testId="text-box-pad" onLive={(v) => liveStyle({ box: { ...sel.style.box!, pad: v } })} onCommit={(v) => commitStyle({ box: { ...sel.style.box!, pad: v } }, 'box-pad')} />
               </>
             ) : null}
           </div>
 
-          <SliderRow label="Position X" value={sel.x} min={0} max={100} unit="%" testId="text-x" onCommit={(v) => patch({ x: v })} />
-          <SliderRow label="Position Y" value={sel.y} min={0} max={100} unit="%" testId="text-y" onCommit={(v) => patch({ y: v })} />
+          <SliderRow label="Position X" value={sel.x} min={0} max={100} unit="%" testId="text-x" onLive={(v) => livePatch({ x: v })} onCommit={(v) => commitPatch({ x: v }, 'x')} />
+          <SliderRow label="Position Y" value={sel.y} min={0} max={100} unit="%" testId="text-y" onLive={(v) => livePatch({ y: v })} onCommit={(v) => commitPatch({ y: v }, 'y')} />
           <p className="text-[11px] text-muted-foreground">
             Timing: drag / trim it on the Text lane. Animate: select it on the timeline and add keyframes.
           </p>
