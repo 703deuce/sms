@@ -13,8 +13,10 @@ import { normalizeTimelineLanes, type TimelineLanesState } from '@/lib/clips/edi
 import {
   normalizeCutTransitions,
   normalizeKeyframeTracks,
+  normalizeLayerProps,
   type CutTransition,
   type KeyframeTrack,
+  type LayerProp,
 } from '@/lib/clips/editor/motion-schema'
 import { hasColor, normalizeColorEdits, type ClipColorEdits } from '@/lib/clips/editor/color'
 import { normalizeSegmentSpeeds, speedWarpPieces, warpedDurationMs, warpMs, type SegmentSpeed } from '@/lib/clips/editor/speed'
@@ -175,6 +177,8 @@ export type ClipEditsV2 = {
   keyframes?: KeyframeTrack[]
   /** E3 Video-lane cut transitions, keyed by the source start of the segment after the cut. */
   transitions?: CutTransition[]
+  /** G1a: per-layer flip (video / B-roll) and stacking order (B-roll, text items). */
+  layerProps?: LayerProp[]
   /** E4 text items on the Text lane (output ms; keyframe target `text:<id>`). */
   textItems?: TextItem[]
   /** E4 color looks (Adjust + Filters): whole video, per Video item (source range), per B-roll id. */
@@ -454,6 +458,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.videoSplits?.length) payload.videoSplits = null
   if (!edits.keyframes?.length) payload.keyframes = null
   if (!edits.transitions?.length) payload.transitions = null
+  if (!edits.layerProps?.length) payload.layerProps = null
   if (!edits.textItems?.length) payload.textItems = null
   if (!edits.color) payload.color = null
   if (!edits.segmentSpeeds?.length) payload.segmentSpeeds = null
@@ -567,6 +572,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     videoSplits: normalizeVideoSplits(o.videoSplits, trim.in, trim.out),
     keyframes: normalizeKeyframeTracks(o.keyframes),
     transitions: normalizeCutTransitions(o.transitions),
+    layerProps: normalizeLayerProps(o.layerProps),
     textItems: normalizeTextItems(o.textItems),
     color: normalizeColorEdits(o.color),
     segmentSpeeds: normalizeSegmentSpeeds(o.segmentSpeeds),
@@ -651,6 +657,8 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     // E3: keyframes / cut transitions are export-only changes to the frames.
     !edits.keyframes?.length &&
     !edits.transitions?.length &&
+    // G1a: flip / stacking order change the frames.
+    !edits.layerProps?.length &&
     // E4: text / color / per-item speed change the frames or the length.
     !edits.textItems?.length &&
     !hasColor(edits.color) &&

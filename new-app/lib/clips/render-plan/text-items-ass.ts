@@ -6,6 +6,7 @@
 import { textWidthPx } from '@/lib/clips/caption-fit'
 import { hasMotionPy, layerTransformAtPy, MOTION_FPS, normalizeKeyframes } from '@/lib/clips/render-plan/motion'
 import { hex2, pyFloatStr, pyRound, pyRoundN } from '@/lib/clips/render-plan/py'
+import { normalizeLayerProps, stackOrder } from '@/lib/clips/editor/motion-schema'
 
 type Dict = Record<string, unknown>
 export const TEXT_FONTS: Record<string, string> = {
@@ -101,8 +102,13 @@ function stylesFor(i: number, it: TextItemRow, h: number): [string, string | nul
 }
 
 export function buildTextItemsAss(edits: Dict, w: number, h: number, fps = MOTION_FPS): string | null {
-  const items = textItemsPy(edits)
+  let items = textItemsPy(edits)
   if (!items.length) return null
+  // G1a: mirror of text_items.py — stacking order (bottom → top) + one layer pair per item when set.
+  const zRows = normalizeLayerProps(edits.layerProps) ?? []
+  const zOf = (id: string) => zRows.find((r) => r.target === `text:${id}`)?.z ?? 0
+  const zOn = items.some((it) => zOf(String(it.id)) !== 0)
+  if (zOn) items = stackOrder(items.map((it) => ({ ...it, id: String(it.id) }) as TextItemRow), zOf)
   const tracks = normalizeKeyframes(edits.keyframes)
   const styles: string[] = []
   const events: string[] = []
@@ -122,7 +128,8 @@ export function buildTextItemsAss(edits: Dict, w: number, h: number, fps = MOTIO
     fontId = fontId in TEXT_FONTS ? fontId : 'Montserrat'
     const fsize = Math.max(1, pyRound((Number(or(st.size, 96)) * h) / REF_H))
     const blockW = an !== 5 ? textBlockWidthPx(txt, fontId, fsize) : 0.0
-    const layers: [number, string][] = [[1, `T${i}`], ...(bs ? ([[0, `B${i}`]] as [number, string][]) : [])]
+    const [lt, lb] = zOn ? [2 * i + 1, 2 * i] : [1, 0]
+    const layers: [number, string][] = [[lt, `T${i}`], ...(bs ? ([[lb, `B${i}`]] as [number, string][]) : [])]
     const target = `text:${it.id}`
     const start = it.startMs
     const end = it.endMs

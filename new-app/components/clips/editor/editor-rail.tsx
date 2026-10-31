@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Captions, Clapperboard, Eraser, Image as ImageIcon, Languages, LayoutPanelTop, Layers, Music2, Palette, Sparkles, FileText, Type, LayoutTemplate, SwatchBook, FolderOpen } from 'lucide-react'
+import { Captions, Clapperboard, Eraser, Image as ImageIcon, Languages, LayoutPanelTop, Layers, Music2, Palette, Sparkles, FileText, Type, LayoutTemplate, SwatchBook, FolderOpen, SlidersHorizontal } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
@@ -23,6 +23,7 @@ export type EditorPanelId =
   | 'templates'
   | 'color'
   | 'media'
+  | 'inspector'
 
 /**
  * Clip editor rail, top to bottom. The launch items keep their positions; re-hooked tools are appended
@@ -46,6 +47,8 @@ export function clipEditorRailIds(aiExtras: boolean = clipEditorAiExtrasEnabled(
     'templates',
     'color',
     'media',
+    // G1a: selection-driven Properties inspector (canvas / timeline selection opens it).
+    'inspector',
   ]
 }
 
@@ -72,6 +75,7 @@ const ALL_EDITOR_RAIL_ITEMS: {
   { id: 'templates', label: 'Templates', icon: LayoutTemplate, tone: 'text-lane-brand' },
   { id: 'color', label: 'Color', icon: SwatchBook, tone: 'text-lane-broll' },
   { id: 'media', label: 'Media', icon: FolderOpen, tone: 'text-lane-broll' },
+  { id: 'inspector', label: 'Properties', icon: SlidersHorizontal },
 ]
 
 /** Ordered by CLIP_EDITOR_RAIL_IDS (not ALL_EDITOR_RAIL_ITEMS) so existing items never move. */

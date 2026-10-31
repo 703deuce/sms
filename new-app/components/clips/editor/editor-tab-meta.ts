@@ -19,4 +19,5 @@ export const TAB_META: Record<
   templates: { label: 'Templates', hint: 'Layouts, caption & text styles, brand kits' },
   color: { label: 'Color', hint: 'Filters & adjustments' },
   media: { label: 'Media', hint: 'Your uploads, camera angles & multicam' },
+  inspector: { label: 'Properties', hint: 'Position, size, crop, flip, order, keyframes of the selection' },
 }

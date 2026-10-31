@@ -19,6 +19,7 @@ import {
   type KeyProp,
   type KeyframeTarget,
 } from '@/lib/clips/editor/keyframes'
+import { CROP_PROPS } from '@/lib/clips/editor/motion-schema'
 
 const EASE_SHORT: Record<Ease, string> = { linear: 'Lin', in: 'In', out: 'Out', inOut: 'In-Out' }
 
@@ -36,6 +37,7 @@ export function KeyframeInspector({
   onCommit,
   onSeekLocal,
   readOnly = false,
+  props: only,
 }: {
   edits: ClipEditsV2
   target: KeyframeTarget
@@ -45,8 +47,10 @@ export function KeyframeInspector({
   onCommit: (next: ClipEditsV2) => void
   onSeekLocal: (localMs: number) => void
   readOnly?: boolean
+  /** G1a: rows to show (default: the E3 transform / volume rows — crop lives in Properties). */
+  props?: readonly KeyProp[]
 }) {
-  const props = propsForTarget(target)
+  const props = only ?? propsForTarget(target).filter((p) => !(CROP_PROPS as readonly string[]).includes(p))
   return (
     <div
       className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/60 bg-card/40 px-2 py-1"

@@ -137,6 +137,8 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         # E3: keyframes / cut transitions change the frames — never reuse preview.mp4.
         and not edits.get("keyframes")
         and not edits.get("transitions")
+        # G1a: flip / stacking order change the frames.
+        and not edits.get("layerProps")
         # E4: text items / color looks / per-item speed change the frames or the length.
         and not edits.get("textItems")
         and not _e4_color(edits)
@@ -1564,7 +1566,7 @@ def render_edited_clip(
     else:
         ffmpeg_concat_segments(full_render, cut_mp4, segs_sec)
 
-    if edits.get("transitions") or edits.get("keyframes"):
+    if edits.get("transitions") or edits.get("keyframes") or edits.get("layerProps"):
         # E3: cut transitions (centred on the cut, video only → length / audio unchanged) and
         # Video-lane keyframes, on the same segments that were just concatenated.
         from clips_worker.motion_render import apply_motion_after_cut

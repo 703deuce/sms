@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from clips_worker.motion import MOTION_FPS, has_motion, layer_transform_at
+from clips_worker.motion import MOTION_FPS, has_motion, layer_transform_at, layer_z, stack_order
 
 # EP1: canonical libass family names (name ID 1 of the bundled faces). fontconfig matched the
 # typographic family "Montserrat" / "Poppins" too, but libass-wasm (editor preview) only matches
@@ -136,6 +136,12 @@ def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str
     items = text_items(edits)
     if not items:
         return None
+    # G1a: with any stacking order set, events go bottom → top and each item gets its own pair of
+    # layers (box 2k, text 2k+1) so a box never covers text above it. Without z: E4 bytes unchanged.
+    z_of = lambda tid: layer_z(edits, f"text:{tid}")  # noqa: E731
+    z_on = any(z_of(it["id"]) for it in items)
+    if z_on:
+        items = stack_order(items, z_of)
     styles: list[str] = []
     events: list[str] = []
     for i, it in enumerate(items):
@@ -155,7 +161,8 @@ def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str
         font_id = font_id if font_id in TEXT_FONTS else "Montserrat"
         fsize = max(1, round(float(st.get("size") or 96) * h / REF_H))
         block_w = text_block_width_px(txt, font_id, fsize) if an != 5 else 0.0
-        layers = [(1, f"T{i}")] + ([(0, f"B{i}")] if bs else [])
+        lt, lb = (2 * i + 1, 2 * i) if z_on else (1, 0)
+        layers = [(lt, f"T{i}")] + ([(lb, f"B{i}")] if bs else [])
         target = f"text:{it['id']}"
         start, end = it["startMs"], it["endMs"]
         if not has_motion(edits, target):

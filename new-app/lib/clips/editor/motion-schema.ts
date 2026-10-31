@@ -13,8 +13,11 @@ export type Ease = 'linear' | 'in' | 'out' | 'inOut'
 export const EASES: readonly Ease[] = ['linear', 'in', 'out', 'inOut'] as const
 export const EASE_LABELS: Record<Ease, string> = { linear: 'Linear', in: 'Ease in', out: 'Ease out', inOut: 'Ease in-out' }
 
-export type KeyProp = 'x' | 'y' | 'scale' | 'rotation' | 'opacity' | 'volume'
-export const KEY_PROPS: readonly KeyProp[] = ['x', 'y', 'scale', 'rotation', 'opacity', 'volume'] as const
+export type KeyProp = 'x' | 'y' | 'scale' | 'rotation' | 'opacity' | 'volume' | 'cropL' | 'cropT' | 'cropR' | 'cropB'
+export const KEY_PROPS: readonly KeyProp[] = ['x', 'y', 'scale', 'rotation', 'opacity', 'volume', 'cropL', 'cropT', 'cropR', 'cropB'] as const
+/** G1a: crop edges (% of the layer, measured in the un-flipped media) — video + B-roll layers only. */
+export const CROP_PROPS = ['cropL', 'cropT', 'cropR', 'cropB'] as const
+export type CropProp = (typeof CROP_PROPS)[number]
 
 export type KeyframeTarget = 'video' | 'voice' | 'music' | 'text' | `broll:${string}` | `text:${string}`
 
@@ -37,7 +40,14 @@ export const PROP_SPECS: Record<KeyProp, PropSpec> = {
   rotation: { label: 'Rotation', unit: '°', min: -360, max: 360, def: 0, step: 1 },
   opacity: { label: 'Opacity', unit: '%', min: 0, max: 100, def: 100, step: 1 },
   volume: { label: 'Volume', unit: '%', min: 0, max: 100, def: 100, step: 1 },
+  cropL: { label: 'Crop left', unit: '%', min: 0, max: 90, def: 0, step: 1 },
+  cropT: { label: 'Crop top', unit: '%', min: 0, max: 90, def: 0, step: 1 },
+  cropR: { label: 'Crop right', unit: '%', min: 0, max: 90, def: 0, step: 1 },
+  cropB: { label: 'Crop bottom', unit: '%', min: 0, max: 90, def: 0, step: 1 },
 }
+
+/** G1a: at least this much of the layer stays visible per axis (L + R and T + B are clamped). */
+export const CROP_MIN_VISIBLE = 5
 
 export type TransitionType =
   | 'crossfade'
@@ -100,7 +110,79 @@ function isTarget(t: unknown): t is KeyframeTarget {
 /** Which properties a target can animate (CapCut: visual layers vs audio). */
 export function propsForTarget(target: KeyframeTarget): readonly KeyProp[] {
   if (target === 'voice' || target === 'music') return ['volume']
+  if (isMediaLayerTarget(target)) return ['x', 'y', 'scale', 'rotation', 'opacity', ...CROP_PROPS]
   return ['x', 'y', 'scale', 'rotation', 'opacity']
+}
+
+/** G1a: picture layers (main video, B-roll) — crop + flip apply to these, not to text. */
+export function isMediaLayerTarget(target: string): boolean {
+  return target === 'video' || (target.startsWith('broll:') && target.length > 6)
+}
+
+// ---------------------------------------------------------------------------
+// G1a layer properties: flip (static) + stacking order (z) — additive edits.layerProps
+// ---------------------------------------------------------------------------
+
+/**
+ * One row per layer. flipH / flipV: media layers only (mirror after the crop, before scale /
+ * rotate). z: stacking order among layers of the same kind that overlap in time (B-roll among
+ * B-roll, text items among text items); default 0; higher = in front.
+ */
+/** Layers overlapping by less than one 30 fps frame (B-roll 'between' adjacency) do not stack. */
+export const STACK_OVERLAP_TOL_MS = 34
+
+export type LayerProp = { target: KeyframeTarget; flipH?: true; flipV?: true; z?: number }
+
+export function normalizeLayerProps(raw: unknown): LayerProp[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const byT = new Map<string, LayerProp>()
+  for (const r of raw) {
+    if (!r || typeof r !== 'object') continue
+    const o = r as Record<string, unknown>
+    if (!isTarget(o.target)) continue
+    const target = o.target
+    const media = isMediaLayerTarget(target)
+    const zable = (target.startsWith('broll:') && target.length > 6) || (target.startsWith('text:') && target.length > 5)
+    const row: LayerProp = { target }
+    if (media && o.flipH === true) row.flipH = true
+    if (media && o.flipV === true) row.flipV = true
+    const z = finite(o.z)
+    if (zable && z != null && Math.round(z) !== 0) row.z = Math.round(clampN(z, -1000, 1000))
+    if (row.flipH || row.flipV || row.z != null) byT.set(target, row)
+  }
+  const out = [...byT.values()].sort((a, b) => (a.target < b.target ? -1 : a.target > b.target ? 1 : 0))
+  return out.length ? out : undefined
+}
+
+/**
+ * Stacking order (bottom → top) of time-ranged layers of one kind. Mirrored by
+ * clips_worker/motion.py stack_order. Items are grouped into clusters of time-overlapping items
+ * (strict overlap); clusters keep time order (so adjacent items and their 'between' transitions are
+ * untouched), inside a cluster the order is (z, startMs, original index).
+ */
+export function stackOrder<T extends { id: string; startMs: number; endMs: number }>(
+  items: readonly T[],
+  zOf: (id: string) => number,
+): T[] {
+  const idx = items.map((it, i) => ({ it, i })).sort((a, b) => a.it.startMs - b.it.startMs || a.i - b.i)
+  const out: T[] = []
+  let cluster: { it: T; i: number }[] = []
+  let clusterEnd = -Infinity
+  const flush = () => {
+    cluster.sort((a, b) => zOf(a.it.id) - zOf(b.it.id) || a.it.startMs - b.it.startMs || a.i - b.i)
+    for (const c of cluster) out.push(c.it)
+    cluster = []
+  }
+  for (const c of idx) {
+    if (cluster.length && c.it.startMs >= clusterEnd - STACK_OVERLAP_TOL_MS) {
+      flush()
+      clusterEnd = -Infinity
+    }
+    cluster.push(c)
+    clusterEnd = Math.max(clusterEnd, c.it.endMs)
+  }
+  flush()
+  return out
 }
 
 export function normalizeTransitionSpec(raw: unknown): TransitionSpec | undefined {
