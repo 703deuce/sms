@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { createExportToast } from '@/lib/clips/editor/export-toast'
 import { EXPORT_POLL_MAX_ERRORS, startExportStatusPoll } from '@/lib/clips/editor/export-poll'
 import {
+  activeRenderToResume,
   formatExportProgressLine,
   isRenderInFlight,
   monotonicPct,
@@ -124,6 +125,9 @@ export function ExportDialog({
   )
   const [busy, setBusy] = useState(false)
   const [renderId, setRenderId] = useState<string | null>(null)
+  // FV4c: set once Export MP4 was clicked in this open session, so a late active-render lookup
+  // never overwrites the render the user just started.
+  const exportClickedRef = useRef(false)
   // E2fix: one toast per export, settled on READY / FAILED / poll error, dismissed on close.
   const exportToast = useMemo(() => createExportToast(toast), [])
   useEffect(() => () => exportToast.dismiss(), [exportToast])
@@ -220,6 +224,33 @@ export function ExportDialog({
     }
   }, [open, exportToast])
 
+  // FV4c: on open (incl. after a page reload) re-attach to this clip's in-flight export, if any —
+  // show "Rendering…" (Export disabled) and resume its % / ETA instead of a fresh Export MP4.
+  useEffect(() => {
+    if (!open) {
+      exportClickedRef.current = false
+      return
+    }
+    let cancelled = false
+    void Promise.resolve()
+      .then(() => clipsFetch<unknown>(`/api/clips/clips/${clipId}/active-render`))
+      .then((data) => {
+        const resume = activeRenderToResume(data)
+        if (cancelled || !resume || exportClickedRef.current) return
+        setRenderId(resume.renderId)
+        setStatus(resume.status)
+        setDownloadUrl(null)
+        setErrorDetail(null)
+        logEditorDecision('export_progress', { clipId, renderId: resume.renderId, status: resume.status, resumed: true })
+      })
+      .catch(() => {
+        /* lookup is best-effort; Export MP4 still dedupes server-side by edits hash */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, clipId])
+
   useEffect(() => {
     if (!open || !edits.thumbnailId) {
       setThumbnailUrl(null)
@@ -298,6 +329,7 @@ export function ExportDialog({
   const renderInFlight = isRenderInFlight(renderId, status)
   const startExport = async () => {
     if (busy || renderInFlight) return
+    exportClickedRef.current = true
     setBusy(true)
     setErrorDetail(null)
     exportToast.start()
@@ -349,6 +381,10 @@ export function ExportDialog({
         exportSfx,
         edits: exportEdits,
       })
+      if (data.inFlight) {
+        // FV4c: the server handed back the render already in flight for these edits — attach to it.
+        toast.info('This export is already rendering — showing its progress.')
+      }
       if (data.renderId !== renderId) {
         // FV4b: a new render starts its % / ETA from scratch (the server may also hand back the
         // render already in flight for the same edits — then progress continues).

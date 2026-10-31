@@ -71,3 +71,17 @@ export function readRenderDetail(raw: unknown): ExportRenderDetail | null {
     stepPct: typeof r.stepPct === 'number' ? r.stepPct : null,
   }
 }
+
+/** FV4c: an in-flight render the export dialog should re-attach to (from GET …/active-render). */
+export type ActiveRenderResume = { renderId: string; status: 'QUEUED' | 'RENDERING' }
+
+/** FV4c: parse the active-render response defensively; anything unexpected means "nothing to resume". */
+export function activeRenderToResume(data: unknown): ActiveRenderResume | null {
+  if (!data || typeof data !== 'object') return null
+  const render = (data as { render?: unknown }).render
+  if (!render || typeof render !== 'object') return null
+  const { id, status } = render as { id?: unknown; status?: unknown }
+  if (typeof id !== 'string' || !id) return null
+  if (status !== 'QUEUED' && status !== 'RENDERING') return null
+  return { renderId: id, status }
+}

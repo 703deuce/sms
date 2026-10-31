@@ -269,6 +269,8 @@ export function exportClipWithOptions(
     status: string
     jobId?: string
     durationMs?: number
+    /** FV4b/FV4c: true when the server returned the render already in flight for the same edits. */
+    inFlight?: boolean
   }>(`/api/clips/clips/${clipId}/export`, { method: 'POST', body: JSON.stringify(body) })
 }
 
