@@ -22,6 +22,9 @@ export type TimelineCommand =
   | 'prevEdit'
   | 'nextEdit'
   | 'help'
+  | 'nextTake'
+  | 'prevTake'
+  | 'matchFrame'
 
 export type KeyLike = { key: string; code?: string; metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean }
 
@@ -52,6 +55,9 @@ export function timelineCommandFor(e: KeyLike): TimelineCommand | null {
   if (k === 'ArrowUp') return 'prevEdit'
   if (k === 'ArrowDown') return 'nextEdit'
   if (k === '?') return 'help'
+  // G1c: T / Shift+T cycle takes, F = match frame.
+  if (k === 't') return e.shiftKey ? 'prevTake' : 'nextTake'
+  if (k === 'f' && !e.shiftKey) return 'matchFrame'
   return null
 }
 
@@ -100,6 +106,8 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
         { keys: ['Drag'], label: 'Move · up/down to another track · main clips reorder' },
         { keys: ['V', 'R', 'U'], label: 'Tool: select / roll edit / slide (Esc: select)' },
         { keys: ['Alt+drag edge'], label: 'J / L cut: Voice edge = sound only · Video edge = picture only' },
+        { keys: ['T', 'Shift+T'], label: 'Next / previous take (selected item or Video at the playhead)' },
+        { keys: ['F'], label: 'Match frame: open the source media at this moment' },
       ],
     },
     {

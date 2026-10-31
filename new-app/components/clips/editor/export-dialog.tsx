@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { createExportToast } from '@/lib/clips/editor/export-toast'
 import { EXPORT_POLL_MAX_ERRORS, startExportStatusPoll } from '@/lib/clips/editor/export-poll'
+import {
+  formatExportProgressLine,
+  type ExportRenderDetail,
+} from '@/lib/clips/editor/export-progress-text'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -130,6 +134,7 @@ export function ExportDialog({
   const [renderProgress, setRenderProgress] = useState<number | null>(null)
   const [renderPhase, setRenderPhase] = useState<string | null>(null)
   const [renderEtaSec, setRenderEtaSec] = useState<number | null>(null)
+  const [renderDetail, setRenderDetail] = useState<ExportRenderDetail | null>(null)
   const [exportPlatform, setExportPlatform] = useState<ExportPlatformId | 'none'>('none')
   const [exportTemplate, setExportTemplate] = useState<ClipExportTemplate | undefined>(edits.exportTemplate)
   const [exportSfx, setExportSfx] = useState<ExportSfxMode>('off')
@@ -209,6 +214,7 @@ export function ExportDialog({
       setRenderProgress(null)
       setRenderPhase(null)
       setRenderEtaSec(null)
+      setRenderDetail(null)
     }
   }, [open, exportToast])
 
@@ -238,7 +244,8 @@ export function ExportDialog({
         if (typeof r.durationMs === 'number') setDurationMs(r.durationMs)
         if (typeof r.progress === 'number') setRenderProgress(r.progress)
         if (r.phase) setRenderPhase(r.phase)
-        if (typeof r.etaSec === 'number') setRenderEtaSec(r.etaSec)
+        setRenderEtaSec(typeof r.etaSec === 'number' ? r.etaSec : null)
+        setRenderDetail(r.detail ?? null)
         logEditorDecision('export_progress', {
           clipId,
           renderId,
@@ -678,11 +685,13 @@ export function ExportDialog({
         ) : null}
         {status && status !== 'READY' && status !== 'FAILED' && (
           <p className="mt-3 text-sm" role="status" aria-live="polite">
-            {status === 'QUEUED'
-              ? 'Queued for rendering…'
-              : `Rendering export…${renderProgress != null ? ` ${renderProgress}%` : ''}${
-                  renderPhase ? ` (${renderPhase.replace(/_/g, ' ')})` : ''
-                }${renderEtaSec != null && renderEtaSec > 0 ? ` · ~${renderEtaSec}s left` : ''}`}
+            {formatExportProgressLine({
+              status,
+              progress: renderProgress,
+              phase: renderPhase,
+              etaSec: renderEtaSec,
+              detail: renderDetail,
+            })}
           </p>
         )}
         {renderId && durationMs != null && durationMs > 0 && (

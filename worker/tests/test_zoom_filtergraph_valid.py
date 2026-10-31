@@ -43,7 +43,7 @@ def test_polish_punch_zoom_vf_full_frame():
     words = [{"s": 0.5, "e": 1.0, "w": "hook", "i": 0}]
     kf = build_zoom_keyframes(words, [0], 5.0, 1.15)
     expr = _scale_factor_expr(kf)
-    assert "if(between" in expr
+    assert "if(lt(t," in expr  # FV4a: balanced if(lt()) tree (was a linear if(between()) chain)
     w, h = 1080, 1920
     vf = (
         f"scale=w='trunc(iw*({expr}))':h='trunc(ih*({expr}))':eval=frame,"

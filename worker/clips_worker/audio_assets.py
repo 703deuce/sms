@@ -62,6 +62,7 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
     sfx_paths: list[tuple[Path, int, float]] = []
     sfx_ids: list[str] = []  # G1b3: parallel to sfx_paths (generationId → `sfx:<id>` envelope)
     sfx_trims: list[tuple[int, int | None]] = []  # G1b3: (inMs, durMs) — detached clip audio
+    sfx_channels: list[str | None] = []  # G1c: 'L' / 'R' (split stereo) or None
     for i, item in enumerate(sfx_list):
         if item.get("uploadId"):
             up = (media or {}).get(str(item["uploadId"]))
@@ -69,6 +70,7 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
                 sfx_paths.append((up, int(item.get("atMs", 0)), float(item.get("volume", 0.8))))
                 sfx_ids.append(str(item.get("generationId") or ""))
                 sfx_trims.append(_sfx_trim(item))
+                sfx_channels.append(item.get("channel") if item.get("channel") in ("L", "R") else None)
             continue
         gid = item.get("generationId")
         if not gid:
@@ -83,6 +85,7 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
         sfx_paths.append((local, int(item.get("atMs", 0)), float(item.get("volume", 0.8))))
         sfx_ids.append(str(gid))
         sfx_trims.append(_sfx_trim(item))
+        sfx_channels.append(item.get("channel") if item.get("channel") in ("L", "R") else None)
 
     studio_path = None
     studio_mix = None
@@ -116,6 +119,7 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
         "sfx_paths": sfx_paths,
         "sfx_ids": sfx_ids,
         "sfx_trims": sfx_trims,
+        "sfx_channels": sfx_channels,
         "studio_path": studio_path,
         "studio_mix": studio_mix,
         "studio_source_offset_ms": studio_source_offset_ms,

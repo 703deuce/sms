@@ -27,6 +27,9 @@ _INTERNAL_MARKERS = (
 )
 
 
+USER_FACING_JOB_ERROR_MAX = 1500
+
+
 def user_facing_job_error(message: str) -> str:
     raw = (message or "").strip()
     if not raw:
@@ -34,4 +37,7 @@ def user_facing_job_error(message: str) -> str:
     lower = raw.lower()
     if any(m in lower for m in _INTERNAL_MARKERS):
         return "Processing failed. Retry processing."
-    return raw[:500]
+    if len(raw) <= USER_FACING_JOB_ERROR_MAX:
+        return raw
+    # FV4a: ffmpeg failures embed the useful line at the end; head truncation hid EINVAL, etc.
+    return raw[-USER_FACING_JOB_ERROR_MAX:]

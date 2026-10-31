@@ -143,6 +143,10 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         and not edits.get("tracks")
         # G1b3: J / L cuts change the sound.
         and not edits.get("splitEdits")
+        # G1c: track effects / takes change the sound or the frames.
+        and not edits.get("trackFx")
+        and not edits.get("takes")
+        and not edits.get("trackMotion")
         # E4: text items / color looks / per-item speed change the frames or the length.
         and not edits.get("textItems")
         and not _e4_color(edits)
@@ -1748,6 +1752,39 @@ def render_edited_clip(
         vol_out = work_dir / "voice_volume.mp4"
         if apply_voice_volume(caption_src, vol_out, edits):
             caption_src = vol_out
+    # G1c: track FX — the Voice chain on the main sound, music / audio-track chains in the mix.
+    from clips_worker.track_fx import apply_voice_fx, mix_track_fx, track_fx_for
+
+    voice_fx = track_fx_for(edits, "voice")
+    if voice_fx and not _voice_muted(edits) and not (dub_assets and dub_assets.get("dub_audio_path")):
+        vfx_out = work_dir / "voice_fx.mp4"
+        try:
+            if apply_voice_fx(caption_src, vfx_out, voice_fx):
+                caption_src = vfx_out
+                stage("voice_fx_done")
+        except Exception as e:  # never fail an export on a track effect
+            print(f"[clipper:track_fx] voice skipped reason={type(e).__name__}", flush=True)
+    track_fx = None
+    try:
+        track_fx = mix_track_fx(
+            edits,
+            sfx_paths=sfx_paths,
+            sfx_ids=sfx_ids,
+            sfx_trims=sfx_trims,
+            sfx_envs=sfx_envs,
+            sfx_channels=(audio_assets or {}).get("sfx_channels") if audio_assets else None,
+            music_path=music_path if music_path is not None and Path(music_path).is_file() else None,
+            music_args=(
+                length_s,
+                float(meta.get("volume", 0.25)),
+                int(meta.get("fadeInMs", 500)) / 1000.0,
+                int(meta.get("fadeOutMs", 1000)) / 1000.0,
+                music_win,
+                music_env,
+            ),
+        )
+    except Exception as e:
+        print(f"[clipper:track_fx] mix skipped reason={type(e).__name__}", flush=True)
     if dub_assets and dub_assets.get("dub_audio_path"):
         from clips_worker.audio_render import apply_dub_speech_mix
 
@@ -1768,6 +1805,7 @@ def render_edited_clip(
             speech_volume_expr=voice_env,
             sfx_volume_exprs=sfx_envs,
             sfx_trims=sfx_trims,
+            track_fx=track_fx,
         )
         caption_src = mixed
     elif audio_assets and (music_path or sfx_paths):
@@ -1788,6 +1826,7 @@ def render_edited_clip(
             music_volume_expr=music_env,
             sfx_volume_exprs=sfx_envs,
             sfx_trims=sfx_trims,
+            track_fx=track_fx,
         )
         caption_src = mixed
 

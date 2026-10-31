@@ -1,0 +1,857 @@
+{
+ "take_cases": [
+  {
+   "edits": {
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b4",
+      "source": "stock",
+      "assetId": "ab4",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b5",
+      "source": "stock",
+      "assetId": "ab5",
+      "startMs": 6000,
+      "endMs": 8000
+     }
+    ],
+    "takes": [
+     {
+      "id": "tk1",
+      "kind": "broll",
+      "items": [
+       "b1",
+       "b2"
+      ],
+      "active": "b2"
+     },
+     {
+      "id": "tk2",
+      "kind": "broll",
+      "items": [
+       "b3",
+       "b4"
+      ],
+      "active": "b3"
+     }
+    ]
+   },
+   "inactive": [
+    "b1",
+    "b4"
+   ],
+   "rendered": [
+    "b2",
+    "b3",
+    "b5"
+   ]
+  },
+  {
+   "edits": {
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b4",
+      "source": "stock",
+      "assetId": "ab4",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b5",
+      "source": "stock",
+      "assetId": "ab5",
+      "startMs": 6000,
+      "endMs": 8000
+     }
+    ],
+    "takes": [
+     {
+      "id": "tk1",
+      "kind": "broll",
+      "items": [
+       "b1",
+       "b2"
+      ],
+      "active": "b1"
+     }
+    ]
+   },
+   "inactive": [
+    "b2"
+   ],
+   "rendered": [
+    "b1",
+    "b3",
+    "b4",
+    "b5"
+   ]
+  },
+  {
+   "edits": {
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b4",
+      "source": "stock",
+      "assetId": "ab4",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b5",
+      "source": "stock",
+      "assetId": "ab5",
+      "startMs": 6000,
+      "endMs": 8000
+     }
+    ],
+    "takes": [
+     {
+      "id": "mt1",
+      "kind": "main",
+      "ranges": [
+       [
+        1000,
+        2000
+       ],
+       [
+        2500,
+        3500
+       ]
+      ],
+      "active": 1
+     }
+    ]
+   },
+   "inactive": [],
+   "rendered": [
+    "b1",
+    "b2",
+    "b3",
+    "b4",
+    "b5"
+   ]
+  }
+ ],
+ "motion_cases": [
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b3",
+       "b5"
+      ]
+     },
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b5",
+      "source": "stock",
+      "assetId": "ab5",
+      "startMs": 6000,
+      "endMs": 8000
+     }
+    ],
+    "keyframes": [],
+    "trackMotion": [
+     {
+      "track": "ov2",
+      "keys": [
+       {
+        "prop": "x",
+        "value": 25,
+        "points": []
+       },
+       {
+        "prop": "cropL",
+        "value": 25,
+        "points": []
+       },
+       {
+        "prop": "cropR",
+        "value": 25,
+        "points": []
+       }
+      ]
+     }
+    ]
+   },
+   "baked": [
+    {
+     "target": "broll:b3",
+     "prop": "cropL",
+     "value": 25,
+     "points": []
+    },
+    {
+     "target": "broll:b3",
+     "prop": "cropR",
+     "value": 25,
+     "points": []
+    },
+    {
+     "target": "broll:b3",
+     "prop": "x",
+     "value": 25,
+     "points": []
+    },
+    {
+     "target": "broll:b5",
+     "prop": "cropL",
+     "value": 25,
+     "points": []
+    },
+    {
+     "target": "broll:b5",
+     "prop": "cropR",
+     "value": 25,
+     "points": []
+    },
+    {
+     "target": "broll:b5",
+     "prop": "x",
+     "value": 25,
+     "points": []
+    }
+   ],
+   "has_track_motion_after": false
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b3",
+       "b5"
+      ]
+     },
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b5",
+      "source": "stock",
+      "assetId": "ab5",
+      "startMs": 6000,
+      "endMs": 8000
+     }
+    ],
+    "keyframes": [
+     {
+      "target": "broll:b3",
+      "prop": "x",
+      "value": 10,
+      "points": []
+     },
+     {
+      "target": "broll:b3",
+      "prop": "scale",
+      "value": 50,
+      "points": []
+     }
+    ],
+    "trackMotion": [
+     {
+      "track": "ov2",
+      "keys": [
+       {
+        "prop": "x",
+        "value": 32,
+        "points": []
+       },
+       {
+        "prop": "y",
+        "value": 32,
+        "points": []
+       },
+       {
+        "prop": "scale",
+        "value": 30,
+        "points": []
+       }
+      ]
+     }
+    ]
+   },
+   "baked": [
+    {
+     "target": "broll:b3",
+     "prop": "scale",
+     "value": 15,
+     "points": []
+    },
+    {
+     "target": "broll:b3",
+     "prop": "x",
+     "value": 35,
+     "points": []
+    },
+    {
+     "target": "broll:b3",
+     "prop": "y",
+     "value": 32,
+     "points": []
+    },
+    {
+     "target": "broll:b5",
+     "prop": "scale",
+     "value": 30,
+     "points": []
+    },
+    {
+     "target": "broll:b5",
+     "prop": "x",
+     "value": 32,
+     "points": []
+    },
+    {
+     "target": "broll:b5",
+     "prop": "y",
+     "value": 32,
+     "points": []
+    }
+   ],
+   "has_track_motion_after": false
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b3",
+       "b5"
+      ]
+     },
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b5",
+      "source": "stock",
+      "assetId": "ab5",
+      "startMs": 6000,
+      "endMs": 8000
+     }
+    ],
+    "keyframes": [],
+    "trackMotion": [
+     {
+      "track": "ov2",
+      "keys": [
+       {
+        "prop": "x",
+        "points": [
+         {
+          "tMs": 2000,
+          "v": -40,
+          "ease": "inOut"
+         },
+         {
+          "tMs": 4000,
+          "v": 40
+         },
+         {
+          "tMs": 7000,
+          "v": 0
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "baked": [
+    {
+     "target": "broll:b3",
+     "prop": "x",
+     "points": [
+      {
+       "tMs": -1000,
+       "v": -40,
+       "ease": "inOut"
+      },
+      {
+       "tMs": 1000,
+       "v": 40
+      },
+      {
+       "tMs": 4000,
+       "v": 0
+      }
+     ]
+    },
+    {
+     "target": "broll:b5",
+     "prop": "x",
+     "points": [
+      {
+       "tMs": -2000,
+       "v": 40
+      },
+      {
+       "tMs": 1000,
+       "v": 0
+      }
+     ]
+    }
+   ],
+   "has_track_motion_after": false
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b3",
+       "b5"
+      ]
+     },
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b5",
+      "source": "stock",
+      "assetId": "ab5",
+      "startMs": 6000,
+      "endMs": 8000
+     }
+    ],
+    "keyframes": [
+     {
+      "target": "broll:b3",
+      "prop": "x",
+      "points": [
+       {
+        "tMs": 0,
+        "v": -20
+       },
+       {
+        "tMs": 2000,
+        "v": 20
+       }
+      ]
+     }
+    ],
+    "trackMotion": [
+     {
+      "track": "ov2",
+      "keys": [
+       {
+        "prop": "x",
+        "points": [
+         {
+          "tMs": 3000,
+          "v": 0,
+          "ease": "in"
+         },
+         {
+          "tMs": 5000,
+          "v": 30
+         }
+        ]
+       },
+       {
+        "prop": "scale",
+        "points": [
+         {
+          "tMs": 3500,
+          "v": 100
+         },
+         {
+          "tMs": 4500,
+          "v": 50
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "baked": [
+    {
+     "target": "broll:b3",
+     "prop": "scale",
+     "points": [
+      {
+       "tMs": 500,
+       "v": 100
+      },
+      {
+       "tMs": 1500,
+       "v": 50
+      }
+     ]
+    },
+    {
+     "target": "broll:b3",
+     "prop": "x",
+     "points": [
+      {
+       "tMs": 0,
+       "v": -20
+      },
+      {
+       "tMs": 500,
+       "v": -8.12
+      },
+      {
+       "tMs": 1000,
+       "v": 7.5
+      },
+      {
+       "tMs": 1500,
+       "v": 21.88
+      },
+      {
+       "tMs": 2000,
+       "v": 40
+      }
+     ]
+    },
+    {
+     "target": "broll:b5",
+     "prop": "scale",
+     "points": [
+      {
+       "tMs": -1500,
+       "v": 50
+      }
+     ]
+    },
+    {
+     "target": "broll:b5",
+     "prop": "x",
+     "points": [
+      {
+       "tMs": 0,
+       "v": 30
+      },
+      {
+       "tMs": 2000,
+       "v": 30
+      }
+     ]
+    }
+   ],
+   "has_track_motion_after": false
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b3",
+       "b5"
+      ]
+     },
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b5",
+      "source": "stock",
+      "assetId": "ab5",
+      "startMs": 6000,
+      "endMs": 8000
+     }
+    ],
+    "keyframes": [
+     {
+      "target": "broll:b1",
+      "prop": "cropL",
+      "value": 10,
+      "points": []
+     }
+    ],
+    "trackMotion": [
+     {
+      "track": "ov1",
+      "keys": [
+       {
+        "prop": "cropL",
+        "value": 60,
+        "points": []
+       },
+       {
+        "prop": "cropR",
+        "value": 60,
+        "points": []
+       }
+      ]
+     }
+    ]
+   },
+   "baked": [
+    {
+     "target": "broll:b1",
+     "prop": "cropL",
+     "value": 51.53,
+     "points": []
+    },
+    {
+     "target": "broll:b1",
+     "prop": "cropR",
+     "value": 43.47,
+     "points": []
+    }
+   ],
+   "has_track_motion_after": false
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b3",
+       "b5"
+      ]
+     },
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 3000,
+      "endMs": 5000
+     },
+     {
+      "id": "b5",
+      "source": "stock",
+      "assetId": "ab5",
+      "startMs": 6000,
+      "endMs": 8000
+     }
+    ],
+    "keyframes": [],
+    "trackMotion": []
+   },
+   "baked": [],
+   "has_track_motion_after": false
+  }
+ ]
+}

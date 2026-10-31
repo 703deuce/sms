@@ -23,6 +23,8 @@ export type ClipAudioSfx = {
   /** G1b3: media in-point / play length (detached audio of a B-roll clip). */
   inMs?: number
   durMs?: number
+  /** G1c split stereo: play only this channel of the media, as mono. */
+  channel?: 'L' | 'R'
 }
 
 export type ClipStudioSound = {
@@ -129,6 +131,7 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
         volume: clamp01(s.volume, DEFAULT_SFX_VOLUME),
         ...(num(s.inMs, 0) > 0 ? { inMs: Math.round(num(s.inMs, 0)) } : {}),
         ...(num(s.durMs, 0) >= 100 ? { durMs: Math.round(num(s.durMs, 0)) } : {}),
+        ...(s.channel === 'L' || s.channel === 'R' ? { channel: s.channel } : {}),
       }
     })
     .filter(Boolean) as ClipAudioSfx[]

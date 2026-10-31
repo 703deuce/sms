@@ -22,20 +22,33 @@ def readable_job_error(exc: BaseException) -> str:
     try:
         return format_subprocess_error(exc)
     except BaseException:
-        return f"{type(exc).__name__}: {str(exc)[:500]}"
+        return f"{type(exc).__name__}: {str(exc)[-500:]}"
 
 
-def release_job_lock(conn, job_id: str) -> None:
+def release_job_lock(conn, job_id: str, instance_id: str | None = None) -> None:
+    """Clear the lock of a still-RUNNING job. With ``instance_id`` only when this slot still holds it
+    (FV4a: a stopped orphan must not unlock the retry that another slot is running)."""
     with conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE clip_jobs
-            SET "lockedBy" = NULL,
-                "lockedAt" = NULL
-            WHERE id = %s AND status = 'RUNNING'
-            """,
-            (job_id,),
-        )
+        if instance_id:
+            cur.execute(
+                """
+                UPDATE clip_jobs
+                SET "lockedBy" = NULL,
+                    "lockedAt" = NULL
+                WHERE id = %s AND status = 'RUNNING' AND "lockedBy" = %s
+                """,
+                (job_id, instance_id),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE clip_jobs
+                SET "lockedBy" = NULL,
+                    "lockedAt" = NULL
+                WHERE id = %s AND status = 'RUNNING'
+                """,
+                (job_id,),
+            )
     conn.commit()
 
 
@@ -216,9 +229,21 @@ def run_job(
         if isinstance(exc, RetryableError):
             requeue_job_retryable(conn, job, exc, post_progress_fn=post_progress_fn)
             return
-        fail_job(conn, job, readable_job_error(exc), post_progress_fn=post_progress_fn)
+        from clips_worker.export_progress import RenderCanceled, cancel_message
+        from clips_worker.job_lock import job_still_owned
+
+        reason = exc.reason if isinstance(exc, RenderCanceled) else None
+        if reason == "claim_lost" or not job_still_owned(conn, job_id):
+            # FV4a: the job was requeued and belongs to a newer attempt now — do not overwrite its
+            # status / render row with this (stopped or failed) copy's result.
+            _log(f"[clipper:job] not owned anymore job={job_id}; skip fail ({type(exc).__name__}: {str(exc)[:160]})")
+            return
+        message = cancel_message(reason) if reason else readable_job_error(exc)
+        fail_job(conn, job, message, post_progress_fn=post_progress_fn)
     finally:
-        release_job_lock(conn, job_id)
+        from clips_worker.worker_identity import worker_instance_id
+
+        release_job_lock(conn, job_id, worker_instance_id())
 
 
 def dry_poll_iteration(conn) -> None:

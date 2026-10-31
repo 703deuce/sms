@@ -165,6 +165,11 @@ def _progress_retryable(exc: BaseException) -> bool:
 def post_progress(job_id: str, payload: dict, *, must_succeed: bool = False) -> None:
     terminal = payload.get("jobStatus") in ("DONE", "FAILED")
     must = must_succeed or terminal
+    if "workerId" not in payload:
+        # FV4a: lets the web ignore heartbeats from a copy whose job was requeued / re-claimed.
+        from clips_worker.worker_identity import worker_instance_id
+
+        payload = {**payload, "workerId": worker_instance_id()}
     default_attempts = 60 if must else 4
     max_attempts = int(os.environ.get("WORKER_PROGRESS_MAX_ATTEMPTS", str(default_attempts)))
     urls = progress_base_urls()

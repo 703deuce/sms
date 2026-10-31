@@ -52,6 +52,20 @@ def _clip_src_duration_s(src_path: Path) -> float:
         return 0.0
 
 
+def gpu_render_modal_max_clip_s() -> float:
+    """FV4a: Modal render_batch has a MODAL_RENDER_TIMEOUT_SEC (120 s) budget and needs the whole source
+    uploaded to scratch first. A full-length video can't finish in it: the upload and the timeout were
+    pure waste before the local fallback (and the remote GPU kept working). 0 disables the cap."""
+    return max(0.0, float(os.environ.get("GPU_RENDER_MODAL_MAX_CLIP_S", "300")))
+
+
+def _too_long_for_modal(prep: PreparedGpuRender) -> bool:
+    limit = gpu_render_modal_max_clip_s()
+    if limit <= 0:
+        return False
+    return _clip_src_duration_s(prep.src_path) > limit
+
+
 def _prefer_local_for_short_clip(prep: PreparedGpuRender) -> bool:
     limit = gpu_render_local_max_clip_s()
     if limit <= 0:
@@ -269,6 +283,19 @@ def render_one_via_provider(
                 "provider": "local",
                 "reason": "short_clip",
                 "maxModalClipS": gpu_render_local_max_clip_s(),
+                "clipDurationS": round(_clip_src_duration_s(prep.src_path), 2),
+            }
+        )
+        return _render_local_ffmpeg(prep)
+
+    if _too_long_for_modal(prep):
+        _gpu_render_print(
+            {
+                "clipId": prep.clip_id,
+                "projectId": prep.project_id,
+                "provider": "local",
+                "reason": "long_clip",
+                "maxModalClipS": gpu_render_modal_max_clip_s(),
                 "clipDurationS": round(_clip_src_duration_s(prep.src_path), 2),
             }
         )

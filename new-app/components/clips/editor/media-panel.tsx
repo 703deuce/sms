@@ -28,6 +28,8 @@ import {
 import { insertMediaAt, sourceFromItem, type InsertMode } from '@/lib/clips/editor/media-add'
 import { MediaTranscribeControl } from '@/components/clips/editor/media-transcribe-control'
 import { InsertsSection } from '@/components/clips/editor/media-inserts-section'
+import { SourceMonitor, type MonitorRequest } from '@/components/clips/editor/source-monitor'
+import type { Timebase } from '@/lib/clips/editor/clip-timeline'
 
 const LANE_LABEL: Record<MediaDropLane, string> = { video: 'Video', broll: 'B-roll', music: 'Music', sfx: 'SFX' }
 /** 'visual' = video + images (B-roll Upload tab). */
@@ -229,6 +231,9 @@ export function MediaPanel({
   onReplaceSelected,
   onEdits,
   playheadSourceMs,
+  monitorRequest = null,
+  timebase,
+  playheadOutMs = 0,
 }: {
   media: ProjectMediaApi
   edits: ClipEditsV2
@@ -240,6 +245,11 @@ export function MediaPanel({
   onReplaceSelected: (item: ProjectMediaItem) => void
   onEdits: (next: ClipEditsV2) => void
   playheadSourceMs: number
+  /** G1c: match frame / open request for the source monitor. */
+  monitorRequest?: MonitorRequest | null
+  /** G1c: the timeline's time base + playhead (output ms) for Insert / Overwrite. */
+  timebase?: Timebase
+  playheadOutMs?: number
 }) {
   const [filter, setFilter] = useState<Filter>('all')
   const seg = edits.sourceSegments?.find((s) => s.id === selectedSegmentId) ?? null
@@ -354,6 +364,17 @@ export function MediaPanel({
           </Button>
         ))}
       </div>
+      {timebase ? (
+        <SourceMonitor
+          items={media.items}
+          transcripts={media.transcripts}
+          request={monitorRequest}
+          edits={edits}
+          tb={timebase}
+          playheadOutMs={playheadOutMs}
+          onEdits={onEdits}
+        />
+      ) : null}
       <MediaLibraryGrid media={media} filter={filter} onAdd={onAdd} onReplaceSelected={onReplaceSelected} canReplace={Boolean(selectedVideo)} onInsert={onInsert} />
       <InsertsSection edits={edits} media={media} onEdits={onEdits} />
       <p className="text-[11px] text-muted-foreground">

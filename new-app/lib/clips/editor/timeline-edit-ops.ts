@@ -32,7 +32,7 @@ import { rippleGlobalKeyframes } from '@/lib/clips/editor/keyframes'
 import { remapCutTransitions } from '@/lib/clips/editor/transitions'
 import { remapSplitEdits } from '@/lib/clips/editor/split-edits'
 import { TEXT_MIN_MS, type TextItem } from '@/lib/clips/editor/text-items'
-import { DEFAULT_TRACK_ID, LANE_TRACK_KIND, setItemsTrack, trackById, trackState, type TrackKind } from '@/lib/clips/editor/tracks'
+import { addTrack, DEFAULT_TRACK_ID, LANE_TRACK_KIND, setItemsTrack, trackById, trackState, type TrackKind } from '@/lib/clips/editor/tracks'
 
 // ---------------------------------------------------------------------------
 // Clipboard
@@ -556,4 +556,82 @@ export function detachBrollAudio(edits: ClipEditsV2, brollId: string): { edits: 
   }
   const audio: ClipEditsAudio = edits.audio ?? { music: null, sfx: [] }
   return { edits: { ...edits, audio: { ...audio, sfx: [...sfx, cue] } }, id }
+}
+
+// ---------------------------------------------------------------------------
+// G1c: split stereo into two mono tracks (Premiere "Breakout to mono", Descript "Separate into mono")
+// ---------------------------------------------------------------------------
+
+/** Uploaded sound on the SFX lane, or an uploaded video B-roll clip (its sound). */
+export function canSplitStereo(edits: ClipEditsV2, lane: string, id: string): boolean {
+  if (refLocked(edits, { lane: 'sfx', id: '' })) return false
+  if (lane === 'sfx') {
+    const c = (edits.audio?.sfx ?? []).find((x) => x.generationId === id)
+    return Boolean(c?.uploadId && !c.channel)
+  }
+  if (lane === 'broll') return canDetachAudio(edits, id)
+  return false
+}
+
+/**
+ * Two new audio tracks ("<name> L" / "<name> R"), each with a mono copy of one channel (same time,
+ * in-point, length, volume and envelope). An SFX source item is replaced; a B-roll clip keeps its
+ * (silent) picture. Each track then takes its own FX, mute and envelope — e.g. host / guest mics.
+ */
+export function splitStereoToTracks(
+  edits: ClipEditsV2,
+  lane: string,
+  id: string,
+): { edits: ClipEditsV2; ids: [string, string]; trackIds: [string, string] } | null {
+  if (!canSplitStereo(edits, lane, id)) return null
+  const sfx = edits.audio?.sfx ?? []
+  let base: ClipAudioSfx
+  let name = 'Mic'
+  if (lane === 'sfx') {
+    base = sfx.find((x) => x.generationId === id)!
+    name = trackLabelOf(edits, refTrack(edits, { lane: 'sfx', id })) || 'Mic'
+  } else {
+    const b = (edits.broll ?? []).find((x) => x.id === id)
+    if (!b || b.source !== 'upload') return null
+    base = { generationId: b.uploadId, uploadId: b.uploadId, atMs: b.startMs, volume: DEFAULT_SFX_VOLUME, ...(b.inMs ? { inMs: b.inMs } : {}), durMs: b.endMs - b.startMs }
+    name = 'Clip audio'
+  }
+  const up = base.uploadId!
+  const used = new Set(sfx.filter((c) => !(lane === 'sfx' && c.generationId === id)).map((c) => c.generationId))
+  const nextId = () => {
+    let n = 1
+    while (used.has(`${up}~${n}`)) n++
+    const v = `${up}~${n}`
+    used.add(v)
+    return v
+  }
+  const idL = nextId()
+  const idR = nextId()
+  const kept = lane === 'sfx' ? sfx.filter((c) => c.generationId !== id) : sfx
+  const cueL: ClipAudioSfx = { ...base, generationId: idL, channel: 'L' }
+  const cueR: ClipAudioSfx = { ...base, generationId: idR, channel: 'R' }
+  const audio: ClipEditsAudio = { ...(edits.audio ?? { music: null, sfx: [] }), sfx: [...kept, cueL, cueR] }
+  let next: ClipEditsV2 = { ...edits, audio }
+  // The source envelope follows both halves.
+  const env = lane === 'sfx' ? (edits.keyframes ?? []).filter((k) => k.target === `sfx:${id}`) : []
+  if (env.length || lane === 'sfx') {
+    const others = (next.keyframes ?? []).filter((k) => k.target !== `sfx:${id}`)
+    const copy = (to: string) => env.map((k) => ({ ...k, target: `sfx:${to}` as KeyframeTarget, points: k.points.map((p) => ({ ...p })) }))
+    const kf = [...others, ...copy(idL), ...copy(idR)]
+    next = { ...next, keyframes: kf.length ? kf : undefined }
+  }
+  const tL = addTrack(next, 'audio', { name: `${name} L`.slice(0, 40) })
+  if (!tL) return null
+  const tR = addTrack(tL.edits, 'audio', { name: `${name} R`.slice(0, 40), above: tL.trackId })
+  if (!tR) return null
+  next = setItemsTrack(tR.edits, 'audio', [idL], tL.trackId) ?? tR.edits
+  next = setItemsTrack(next, 'audio', [idR], tR.trackId) ?? next
+  return { edits: next, ids: [idL, idR], trackIds: [tL.trackId, tR.trackId] }
+}
+
+function trackLabelOf(edits: ClipEditsV2, trackId: string | null | undefined): string {
+  if (!trackId) return ''
+  const t = trackById(edits, trackId)
+  if (!t) return ''
+  return t.name ?? ''
 }
