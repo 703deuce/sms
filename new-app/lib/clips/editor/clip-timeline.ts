@@ -644,6 +644,55 @@ export function splitNoopMessage(edits: ClipEditsV2, refs: ItemRef[]): string {
     : 'Nothing to split here — move the playhead inside a clip'
 }
 
+/**
+ * E3fix: Join — undo a Video split. Two Video-lane segments are joinable when the first ends
+ * exactly where the second starts in SOURCE ms (same keep segment, no cut between them); joining
+ * removes that point from `edits.videoSplits`. Keep-segment boundaries (real cuts) never join.
+ */
+export type VideoJoinOptions = { prev: number | null; next: number | null; between: number[] }
+
+function videoSplitPointsAt(splits: readonly number[] | undefined, srcMs: number): number[] {
+  return (splits ?? []).filter((p) => Math.abs(p - srcMs) <= 0.5)
+}
+
+export function videoJoinOptions(ctx: Pick<OpCtx, 'edits' | 'previewEdits'>, refs: ItemRef[]): VideoJoinOptions {
+  const none: VideoJoinOptions = { prev: null, next: null, between: [] }
+  if (lockedLanes(ctx.edits).has('video')) return none
+  const tb = timebaseFor(ctx.previewEdits)
+  const vsegs = videoLaneSegments(tb, ctx.edits.videoSplits)
+  const joinable = (i: number) =>
+    i > 0 &&
+    i < vsegs.length &&
+    vsegs[i - 1]!.b === vsegs[i]!.a &&
+    videoSplitPointsAt(ctx.edits.videoSplits, vsegs[i]!.a).length > 0
+  const idxs = refs
+    .filter((r) => r.lane === 'video')
+    .map((r) => vsegs.findIndex((v) => `seg:${v.a}` === r.id))
+    .filter((i) => i >= 0)
+    .sort((a, b) => a - b)
+  if (!idxs.length) return none
+  const between: number[] = []
+  for (let j = 1; j < idxs.length; j++) {
+    if (idxs[j] === idxs[j - 1]! + 1 && joinable(idxs[j]!)) between.push(vsegs[idxs[j]!]!.a)
+  }
+  if (idxs.length > 1) return { prev: null, next: null, between }
+  const i = idxs[0]!
+  return {
+    prev: joinable(i) ? vsegs[i]!.a : null,
+    next: joinable(i + 1) ? vsegs[i + 1]!.a : null,
+    between,
+  }
+}
+
+/** E3fix: remove the given split points (source ms) from `edits.videoSplits`. */
+export function joinVideoSplits(ctx: Pick<OpCtx, 'edits'>, splitSrcMs: readonly number[]): ClipEditsV2 | null {
+  if (!splitSrcMs.length || lockedLanes(ctx.edits).has('video')) return null
+  const cur = ctx.edits.videoSplits ?? []
+  const kept = cur.filter((p) => !splitSrcMs.some((q) => Math.abs(p - q) <= 0.5))
+  if (kept.length === cur.length) return null
+  return { ...ctx.edits, videoSplits: kept }
+}
+
 /** Delete items. Video segments become cut ranges (never deletes the last segment). */
 export function deleteItems(ctx: OpCtx, refs: ItemRef[]): ClipEditsV2 | null {
   const locked = lockedLanes(ctx.edits)

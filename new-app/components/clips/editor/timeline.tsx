@@ -20,6 +20,7 @@ import {
   arrowStepMs,
   buildTimelineItems,
   deleteItems,
+  joinVideoSplits,
   laneState,
   moveItems,
   outputToSource,
@@ -38,7 +39,9 @@ import {
   type LaneId,
   type OpCtx,
   type TimelineItem,
+  videoJoinOptions,
 } from '@/lib/clips/editor/clip-timeline'
+import { CUT_HANDLE_ROW_TOP_PX, layoutCutHandles } from '@/lib/clips/editor/cut-handle-layout'
 import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
 import { TimelineRuler } from '@/components/clips/editor/timeline/timeline-ruler'
@@ -385,6 +388,17 @@ export function Timeline({
     const next = splitAt(opCtx(), liveSelected, playheadMs)
     if (next) commit(next)
     else toast.message(splitNoopMessage(edits, liveSelected))
+  }
+  // E3fix: Join — remove a Video split (prev / next of one selected half, or between selected halves).
+  const joinOpts = videoJoinOptions({ edits, previewEdits }, liveSelected)
+  const join = (points: number[]) => {
+    if (!editable) return
+    const next = joinVideoSplits({ edits }, points)
+    if (!next) return
+    commit(next)
+    // Select the joined clip: it keeps the id of the half that ended at the first joined point.
+    const keep = lanes.video.find((v) => v.srcOutMs === Math.min(...points))
+    setSelected(keep ? [{ lane: 'video', id: keep.id }] : [])
   }
   /** E2fix: the last item click landed on a locked lane — arrows then do nothing (not playhead). */
   const lockedClickRef = useRef<LaneId | null>(null)
@@ -872,6 +886,18 @@ export function Timeline({
             <Magnet className="size-3.5" />
             Snap
           </button>
+          {editable && joinOpts.between.length ? (
+            <button
+              type="button"
+              className={tbtn}
+              onClick={() => join(joinOpts.between)}
+              aria-label="Join selected clips"
+              title="Join the selected split clips back into one"
+              data-testid="timeline-join"
+            >
+              Join
+            </button>
+          ) : null}
           {liveSelected.length > 1 ? (
             <span className="ml-1 text-[10px] text-muted-foreground" data-testid="timeline-selection-count">
               {liveSelected.length} selected
@@ -1023,18 +1049,22 @@ export function Timeline({
                     : null}
                   {lanes[lane].map(renderItem)}
                   {lane === 'video' && editable && !laneState(edits, 'video').locked
-                    ? realCutIndices(tb).map((k) => {
-                        const startMs = tb.starts[k]!
+                    ? (() => {
+                        const cutKs = realCutIndices(tb)
+                        // E3fix: min hit area + two rows when cuts are closer than the min gap.
+                        const slots = layoutCutHandles(cutKs.map((k) => tb.starts[k]! * pxPerMs))
+                        return cutKs.map((k, ci) => {
+                        const slot = slots[ci]!
                         const srcMs = tb.segs[k]![0]
                         const tr = edits.transitions?.find((t) => Math.abs(t.srcMs - srcMs) <= 1)
                         return (
                           <button
                             key={`cut${srcMs}`}
                             type="button"
-                            className={`absolute top-1 z-20 inline-flex size-4 -translate-x-1/2 items-center justify-center rounded-sm border shadow ${
-                              tr ? 'border-white bg-primary text-primary-foreground' : 'border-white/70 bg-background/90 text-foreground hover:bg-muted'
-                            }`}
-                            style={{ left: startMs * pxPerMs }}
+                            className="group absolute z-20 inline-flex h-5 -translate-x-1/2 items-center justify-center rounded-sm focus-visible:outline-none"
+                            style={{ left: slot.x, top: CUT_HANDLE_ROW_TOP_PX[slot.row], width: slot.hitW }}
+                            data-row={slot.row}
+                            data-hit-w={slot.hitW}
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => openCutTransition(e, k)}
                             aria-label={tr ? `Transition: ${TRANSITION_INFO[tr.type].label}` : 'Add transition at this cut'}
@@ -1043,10 +1073,18 @@ export function Timeline({
                             data-src-ms={srcMs}
                             data-type={tr?.type}
                           >
-                            <Blend className="size-3" />
+                            <span
+                              className={`inline-flex size-4 items-center justify-center rounded-sm border shadow transition-transform group-hover:scale-125 group-focus-visible:scale-125 group-focus-visible:ring-2 group-focus-visible:ring-ring ${
+                                tr ? 'border-white bg-primary text-primary-foreground' : 'border-white/70 bg-background/90 text-foreground group-hover:bg-muted'
+                              }`}
+                              aria-hidden
+                            >
+                              <Blend className="size-3" />
+                            </span>
                           </button>
                         )
-                      })
+                        })
+                      })()
                     : null}
                   {lane === 'video' ? (
                     <>
@@ -1176,6 +1214,48 @@ export function Timeline({
               >
                 Split at playhead (S)
               </button>
+              {joinOpts.prev !== null ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-join-prev"
+                  onClick={() => {
+                    join([joinOpts.prev!])
+                    setCtxMenu(null)
+                  }}
+                >
+                  Join with previous
+                </button>
+              ) : null}
+              {joinOpts.next !== null ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-join-next"
+                  onClick={() => {
+                    join([joinOpts.next!])
+                    setCtxMenu(null)
+                  }}
+                >
+                  Join with next
+                </button>
+              ) : null}
+              {joinOpts.between.length ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-join-selected"
+                  onClick={() => {
+                    join(joinOpts.between)
+                    setCtxMenu(null)
+                  }}
+                >
+                  Join selected clips
+                </button>
+              ) : null}
               {liveSelected.length ? (
                 <button
                   type="button"

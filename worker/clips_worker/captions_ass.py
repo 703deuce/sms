@@ -6,6 +6,7 @@ import os
 import re
 from pathlib import Path
 
+from clips_worker.caption_fit import apply_line_scale, fit_caption_line, join_caption_parts
 from clips_worker.caption_presets import resolve_preset
 from clips_worker.caption_safe_area import clamp_caption_export_style
 
@@ -177,7 +178,9 @@ def _contrast_ass_text(highlight_hex: str) -> str:
     return hex_to_ass("#000000" if _luminance_hex(highlight_hex) > 0.5 else "#FFFFFF")
 
 
-def _full_line_box_layer_text(cased: list[str], active_ki: int, fill_hex: str, *, border: int = 22) -> str:
+def _full_line_box_layer_text(
+    cased: list[str], active_ki: int, fill_hex: str, *, border: int = 22, breaks: list[int] | None = None
+) -> str:
     bc = hex_to_ass(ass_safe_highlight_hex(fill_hex))
     parts: list[str] = []
     for xi, word in enumerate(cased):
@@ -185,7 +188,7 @@ def _full_line_box_layer_text(cased: list[str], active_ki: int, fill_hex: str, *
             parts.append(f"{{\\1c&H000000&\\3c{bc}\\3a&H00&\\bord{border}}}{word}")
         else:
             parts.append(f"{{\\1c&H000000&\\3c&H00000000&\\3a&HFF&\\bord0}}{word}")
-    return " ".join(parts)
+    return join_caption_parts(parts, breaks or [])
 
 
 CP_STALE_KEYS = (
@@ -213,7 +216,7 @@ def cp_effective_captions(edits_captions: dict) -> dict:
     return {k: v for k, v in edits_captions.items() if k not in CP_STALE_KEYS}
 
 
-def _cp_line_bg_text(cased: list[str], box: dict) -> str:
+def _cp_line_bg_text(cased: list[str], box: dict, breaks: list[int] | None = None) -> str:
     """Whole-line opaque box (BorderStyle 3 outline) in the CP box colour/opacity; text invisible."""
     h = str(box.get("color") or "#000000").lstrip("#")
     h = h if len(h) == 6 else "000000"
@@ -221,7 +224,7 @@ def _cp_line_bg_text(cased: list[str], box: dict) -> str:
     opacity = float(box.get("opacity") if box.get("opacity") is not None else 0.6)
     alpha = max(0, min(255, int(round((1.0 - opacity) * 255))))
     pad = int(box.get("padX") or 14)
-    return f"{{\\1a&HFF&\\3c{color}\\3a&H{alpha:02X}&\\bord{pad}\\shad0}}" + " ".join(cased)
+    return f"{{\\1a&HFF&\\3c{color}\\3a&H{alpha:02X}&\\bord{pad}\\shad0}}" + join_caption_parts(cased, breaks or [])
 
 
 def _append_caption_events(
@@ -241,6 +244,7 @@ def _append_caption_events(
     play_h: int,
     position: str,
     highlight_mode: str = "color",
+    fit: dict | None = None,
 ) -> None:
     active_style = str(edits_captions.get("activeStyle") or "").lower()
     if active_style not in ("color", "highlight", "fill"):
@@ -262,6 +266,8 @@ def _append_caption_events(
     for chunk_idx, chunk in enumerate(chunks):
         if not chunk:
             continue
+        # E3fix: WrapStyle 2 never wraps — break / shrink chunks wider than the safe width.
+        breaks, line_scale = _chunk_fit(chunk, case, fit, emphasis=emphasis, anim=anim, active_style=active_style)
         chunk_end = float(chunk[-1]["e"])
         if chunk_idx + 1 < len(chunks):
             chunk_end = min(chunk_end, float(chunks[chunk_idx + 1][0]["s"]))
@@ -273,7 +279,7 @@ def _append_caption_events(
                 position, int(play_h * 0.88)
             )
             move = f"{{\\move({cx},{y + int(0.03 * play_h)},{cx},{y},0,150)\\fad(150,0)}}"
-            line = " ".join(disp_words(chunk, case))
+            line = apply_line_scale(join_caption_parts(disp_words(chunk, case), breaks), line_scale)
             events.append(f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,{move}{line}")
             continue
 
@@ -292,8 +298,7 @@ def _append_caption_events(
                 pri = active_color(preset, spk, colors)
             events.append(
                 f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,"
-                f"{{\\1c{pri}\\3c{cap_out}\\2c{sec}}}"
-                + " ".join(parts)
+                + apply_line_scale(f"{{\\1c{pri}\\3c{cap_out}\\2c{sec}}}" + join_caption_parts(parts, breaks), line_scale)
             )
             continue
 
@@ -308,8 +313,9 @@ def _append_caption_events(
             pri = active_color(preset, spk, colors)
             events.append(
                 f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,"
-                f"{{\\1c{pri}\\3c{cap_out}\\2c{dim}\\alpha&H40&}}"
-                + " ".join(parts)
+                + apply_line_scale(
+                    f"{{\\1c{pri}\\3c{cap_out}\\2c{dim}\\alpha&H40&}}" + join_caption_parts(parts, breaks), line_scale
+                )
             )
             continue
 
@@ -385,21 +391,52 @@ def _append_caption_events(
                         inactive = f"{{\\alpha&H60&}}{inactive}"
                     parts.append(inactive + word)
 
-            line = " ".join(parts)
+            line = apply_line_scale(join_caption_parts(parts, breaks), line_scale)
             # T6.2: CP line background (Boxed Bold, Stage, Light BG) on its own bottom layer.
             # Separate layers do not collide in libass, so bg / active box / text stay aligned.
             cp_bg = bool(box) and str(preset.get("slug") or "").startswith("cp")
             if cp_bg:
                 events.append(
                     f"Dialogue: 0,{ts(w_start)},{ts(w_end)},Box,,0,0,0,,"
-                    + _cp_line_bg_text(cased, box)
+                    + apply_line_scale(_cp_line_bg_text(cased, box, breaks), line_scale)
                 )
             if use_full_line_box:
                 events.append(
                     f"Dialogue: {1 if cp_bg else 0},{ts(w_start)},{ts(w_end)},Box,,0,0,0,,"
-                    + _full_line_box_layer_text(cased, ki, box_fill)
+                    + apply_line_scale(_full_line_box_layer_text(cased, ki, box_fill, breaks=breaks), line_scale)
                 )
             events.append(f"Dialogue: {2 if cp_bg else 1},{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{line}")
+
+
+def _chunk_fit(
+    chunk: list[dict],
+    case: str,
+    fit: dict | None,
+    *,
+    emphasis: set,
+    anim: str,
+    active_style: str,
+) -> tuple[list[int], float]:
+    if not fit:
+        return [], 1.0
+    peak = 1.0
+    if anim in ("pop", "bounce"):
+        peak = max(peak, 1.12)
+    if any(int(w.get("i", -1)) in emphasis for w in chunk):
+        peak = max(peak, float(fit.get("emph_scale") or 1.0))
+    if str(fit.get("highlight_mode") or "") == "supersize":
+        peak = max(peak, 1.25)
+    pad = max(float(fit.get("outline_px") or 0), float(fit.get("box_pad_px") or 0))
+    if active_style == "highlight":
+        pad = max(pad, 22.0)
+    return fit_caption_line(
+        disp_words(chunk, case),
+        font=fit.get("font"),
+        fontsize=float(fit.get("fontsize") or 0),
+        max_width_px=float(fit.get("max_width_px") or 0),
+        peak_scale=peak,
+        pad_px=pad,
+    )
 
 
 def build_ass(
@@ -466,6 +503,15 @@ def build_ass(
     box_pad = int(box.get("padX", 8)) if box else cap_ow
 
     font_name = resolve_ass_font_name(edits_captions, preset)
+    fit = {
+        "font": font_name,
+        "fontsize": fontsize,
+        "max_width_px": int(max_line_w) if max_line_w is not None else max(1, play_w - 2 * margin_lr),
+        "outline_px": int(cap_ow or 0),
+        "box_pad_px": int(box_pad or 0) if box else 0,
+        "emph_scale": emph_scale,
+        "highlight_mode": highlight_mode,
+    }
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {play_w}
@@ -500,6 +546,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             play_h=play_h,
             position=position,
             highlight_mode=highlight_mode,
+            fit=fit,
         )
     except Exception as e:
         print(f"[clipper:captions] active_style_fallback reason={type(e).__name__}")
@@ -523,6 +570,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             play_h=play_h,
             position=position,
             highlight_mode=highlight_mode,
+            fit=fit,
         )
 
     ass_path.write_text(header + "\n".join(events) + "\n")
