@@ -324,8 +324,11 @@ export function TemplateTitleOverlay({
       ? { backgroundColor: st.bg?.color ?? '#000000' }
       : kind === 'blur'
         ? {
-            backdropFilter: `blur(16px) brightness(${dark ? 1.25 : 0.72})`,
-            WebkitBackdropFilter: `blur(16px) brightness(${dark ? 1.25 : 0.72})`,
+            // T6.3: parity with clip_export_template._t6_title_burn — the blur is tinted so
+            // black text always sits on a light backdrop (and white text on a dark one).
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            backgroundColor: dark ? 'rgba(255,255,255,0.62)' : 'rgba(0,0,0,0.45)',
           }
         : {}
   return (

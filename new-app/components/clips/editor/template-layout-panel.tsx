@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -26,12 +27,17 @@ export function TemplateLayoutPanel({
   videoUrl?: string | null
   posterUrl?: string | null
 }) {
+  // T6.3: the family dropdown only browses; it used to call applyTemplate(<current id>) and
+  // ignore the chosen value, so the lane (derived from the current template) never changed.
+  const [browseLane, setBrowseLane] = useState<TemplateLane | null>(null)
   if (!t6TemplatesEnabled()) return null
   const signals = signalsOrDefaults(aiMeta)
-  const lane =
+  const activeTpl = edits.layout.template?.id ? T6_TEMPLATES_BY_ID[edits.layout.template.id] : undefined
+  const currentLane: TemplateLane =
+    activeTpl?.lane ??
     (edits.layout.template?.lane as TemplateLane | undefined) ??
-    (signals.clip_type as TemplateLane) ??
-    'irl'
+    ((LANES as string[]).includes(signals.clip_type) ? (signals.clip_type as TemplateLane) : 'irl')
+  const lane: TemplateLane = browseLane ?? currentLane
   const laneTemplates = T6_TEMPLATES.filter((t) => t.lane === lane)
 
   const applyTemplate = (id: string, auto: boolean, reason?: string) => {
@@ -57,13 +63,13 @@ export function TemplateLayoutPanel({
     <div className="space-y-3 border-t pt-3">
       <div className="flex items-center justify-between gap-2">
         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Template</Label>
-        <Select value={lane} onValueChange={(v) => applyTemplate(edits.layout.template?.id ?? laneTemplates[0]?.id ?? 'I3', false, 'lane_change')}>
-          <SelectTrigger className="h-8 w-[140px] text-xs">
+        <Select value={lane} onValueChange={(v) => setBrowseLane((LANES as string[]).includes(v) ? (v as TemplateLane) : null)}>
+          <SelectTrigger className="h-8 w-[140px] text-xs" data-testid="template-family">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {LANES.map((l) => (
-              <SelectItem key={l} value={l}>
+              <SelectItem key={l} value={l} data-testid={`template-family-${l}`}>
                 {l.replace('_', ' ')}
               </SelectItem>
             ))}
@@ -78,8 +84,13 @@ export function TemplateLayoutPanel({
             <button
               key={t.id}
               type="button"
+              data-testid={`template-tile-${t.id}`}
+              data-active={active ? 'true' : 'false'}
               className={`relative overflow-hidden rounded-md border ${active ? 'ring-2 ring-primary' : 'opacity-90'}`}
-              onClick={() => applyTemplate(t.id, false, 'user_pick')}
+              onClick={() => {
+                applyTemplate(t.id, false, 'user_pick')
+                setBrowseLane(null)
+              }}
             >
               <div className="h-[72px] w-full bg-black">
                 {/* T6.2: static poster thumbnails — N live <video>s starved the main preview. */}
@@ -100,6 +111,7 @@ export function TemplateLayoutPanel({
         onClick={() => {
           const [id, reason] = pickTemplate(signals, {}, [], {}, 1, edits.layout.template?.id ?? 'clip')
           applyTemplate(id, true, reason)
+          setBrowseLane(null)
         }}
       >
         Auto template

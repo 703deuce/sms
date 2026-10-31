@@ -113,12 +113,23 @@ export function FacecamLayoutStudio({
   const t6Tpl = edits.layout.template?.id ? T6_TEMPLATES_BY_ID[edits.layout.template.id] : undefined
   const t6Srcs = t6Tpl ? t6Tpl.panels.map((p) => String(p.src)) : []
   const t6UsesCrop = t6Srcs.some((s) => s === 'action_box' || s === 'action_box_widened' || s === 'trim_sides')
-  const t6UsesFacecam = Boolean(t6Tpl?.pip) || t6Srcs.some((s) => s === 'facecam_box' || s === 'gameplay_box')
+  // T6.3: under a template, each box is shown only when the template's geometry reads it
+  // (G6/C1 face_tight centres on the face inside the Facecam box; G3 reads the Gameplay box).
+  // Before, the boxes followed layout.mode (facecam_stack for G6) so dragging them changed
+  // nothing in the preview.
+  const t6UsesFaceBox =
+    Boolean(t6Tpl?.pip) ||
+    t6Srcs.some((s) => s === 'facecam_box' || s === 'face_tight' || s === 'active_speaker')
+  const t6UsesGameBox = t6Srcs.includes('gameplay_box')
+  const t6UsesFacecam = t6UsesFaceBox || t6UsesGameBox
+  const showFaceBox = t6Tpl ? t6UsesFaceBox : mode === 'facecam_stack' || mode === 'facecam_pip'
+  const showGameBox = t6Tpl ? t6UsesGameBox : mode === 'facecam_stack' || mode === 'facecam_pip'
   const showCropBox = t6Tpl
     ? t6UsesCrop
     : mode === 'center_crop' || mode === 'fill' || mode === 'speaker_follow' || mode === 'auto'
+  const t6PersonFraming = Boolean(t6Tpl) && t6Srcs.some((s) => s.startsWith('person:'))
   const wholeFrameHint = t6Tpl
-    ? t6Srcs.length > 0 && t6Srcs.every((s) => s === 'full')
+    ? !t6UsesCrop && !t6UsesFacecam
     : mode === 'fit_blur' || mode === 'fit_top' || mode === 'full_frame'
   const clipTypeLabel = clipTypeBadge(clipType ? { clipType } : null)
 
@@ -214,7 +225,7 @@ export function FacecamLayoutStudio({
     dragRef.current = null
   }
 
-  const stackPreview = mode === 'facecam_stack' ? stackPanelStyles(split, position) : null
+  const stackPreview = mode === 'facecam_stack' && !t6Tpl ? stackPanelStyles(split, position) : null
 
   const saveChannelDefault = async () => {
     if (!projectId || !channelId) {
@@ -280,31 +291,33 @@ export function FacecamLayoutStudio({
           )}
           {wholeFrameHint ? (
             <p className="pointer-events-none absolute bottom-2 inset-x-2 z-10 text-center text-[10px] text-white/90 drop-shadow">
-              Whole frame is used.
+              {t6PersonFraming
+                ? 'Framing follows the detected person (whole frame when nobody is detected).'
+                : 'Whole frame is used.'}
             </p>
           ) : null}
-          {(mode === 'facecam_stack' || mode === 'facecam_pip' || t6UsesFacecam) && (
-            <>
-              <BoxOverlay
-                label="Gameplay"
-                box={gameBox}
-                color="border-sky-400/80"
-                zClass="z-10"
-                onMove={(e) => onPointerDown(e, 'game', 'move')}
-                onResizeCorner={(e, corner) => onPointerDown(e, 'game', 'resize', corner)}
-                onPointerUp={onPointerUp}
-              />
-              <BoxOverlay
-                label="Facecam"
-                box={faceBox}
-                color="border-amber-400/80"
-                zClass="z-20"
-                onMove={(e) => onPointerDown(e, 'face', 'move')}
-                onResizeCorner={(e, corner) => onPointerDown(e, 'face', 'resize', corner)}
-                onPointerUp={onPointerUp}
-              />
-            </>
-          )}
+          {showGameBox ? (
+            <BoxOverlay
+              label="Gameplay"
+              box={gameBox}
+              color="border-sky-400/80"
+              zClass="z-10"
+              onMove={(e) => onPointerDown(e, 'game', 'move')}
+              onResizeCorner={(e, corner) => onPointerDown(e, 'game', 'resize', corner)}
+              onPointerUp={onPointerUp}
+            />
+          ) : null}
+          {showFaceBox ? (
+            <BoxOverlay
+              label="Facecam"
+              box={faceBox}
+              color="border-amber-400/80"
+              zClass="z-20"
+              onMove={(e) => onPointerDown(e, 'face', 'move')}
+              onResizeCorner={(e, corner) => onPointerDown(e, 'face', 'resize', corner)}
+              onPointerUp={onPointerUp}
+            />
+          ) : null}
           {showCropBox ? (
             <BoxOverlay
               label="Crop"
@@ -364,8 +377,10 @@ export function FacecamLayoutStudio({
           ) : null}
         </div>
       </div>
-      {(mode === 'facecam_stack' || mode === 'facecam_pip' || t6UsesFacecam) && (
+      {(t6Tpl ? t6UsesFacecam : mode === 'facecam_stack' || mode === 'facecam_pip') && (
         <>
+          {/* T6.3: templates have fixed panel proportions — split/swap only drive legacy stacks. */}
+          {!t6Tpl ? (
           <div className="space-y-1">
             <Label className="text-xs">Stack split — top panel {Math.round(split * 100)}% (20–50%)</Label>
             <Slider
@@ -378,6 +393,7 @@ export function FacecamLayoutStudio({
               }}
             />
           </div>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -396,6 +412,7 @@ export function FacecamLayoutStudio({
             >
               Snap to detected
             </Button>
+            {!t6Tpl ? (
             <Button
               type="button"
               size="sm"
@@ -404,6 +421,7 @@ export function FacecamLayoutStudio({
             >
               Swap stack (face bottom)
             </Button>
+            ) : null}
             {projectId && channelId ? (
               <Button type="button" size="sm" variant="secondary" onClick={() => void saveChannelDefault()}>
                 Save as default for channel
@@ -454,6 +472,7 @@ function BoxOverlay({
         type="button"
         className="absolute inset-0 z-0 cursor-move"
         aria-label={`Move ${label} region`}
+        data-testid={`studio-box-${label.toLowerCase()}`}
         onPointerDown={onMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}

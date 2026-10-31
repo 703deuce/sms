@@ -14,8 +14,24 @@ LANE_FALLBACK = {
 }
 
 
+FACE_PANEL_SRCS = ("face_tight", "active_speaker")
+
+
+def _needs_detected_face(t: dict) -> bool:
+    for p in t.get("panels") or []:
+        src = str(p.get("src") or "")
+        if src in FACE_PANEL_SRCS or src.startswith("person:"):
+            return True
+    return False
+
+
 def eligible(t: dict, s: dict, clip: dict) -> bool:
     req = t.get("requires") or {}
+    faces = s.get("faces")
+    if isinstance(faces, list) and not faces and _needs_detected_face(t):
+        # T6.3: no recurring real face/person -> never auto-pick a face/person zoom template
+        # (I5 framed an empty wall). The lane fallback keeps the whole frame.
+        return False
     conf = float(s.get("facecam_conf") or 0.0)
     if req.get("facecam") and (conf < 0.85 or not s.get("facecam_box")):
         return False
@@ -47,6 +63,10 @@ def fit_score(t: dict, s: dict) -> float:
     ab = s.get("action_box")
     if isinstance(ab, dict):
         score += float(w.get("action_wide", 0)) * float(ab.get("w") or 0.0)
+    faces = s.get("faces")
+    if isinstance(faces, list) and faces and _needs_detected_face(t):
+        # T6.3: a detected real face prefers the face-crop template (talking clips -> C1/C2/C4).
+        score += 1.0
     return score
 
 
@@ -88,6 +108,7 @@ def apply_t6_template_to_edits(
     batch_counts: dict[str, int],
     batch_size: int,
     seed: str,
+    title_auto: bool = False,
 ) -> dict:
     tid, reason = pick_template(signals, clip, history, batch_counts, batch_size, seed)
     t = TEMPLATES[tid]
@@ -104,4 +125,26 @@ def apply_t6_template_to_edits(
         f"[t6:pick] template={tid} lane={t.get('lane')!r} reason={reason!r} conf={float(signals.get('type_conf') or 0):.2f}",
         flush=True,
     )
-    return {**edits, "layout": layout}
+    out = {**edits, "layout": layout}
+    if title_auto:
+        out = _apply_auto_title_style(out, t, signals)
+    return out
+
+
+def _apply_auto_title_style(edits: dict, t: dict, signals: dict) -> dict:
+    """T6.3: T6_TITLE_AUTO was never wired (pick_title_style had no caller). Seed the chip
+    from the luminance behind the title; a user's t6Id is never overwritten."""
+    if not isinstance(edits.get("exportTemplate"), dict):
+        return edits
+    tpl = dict(edits["exportTemplate"])
+    hs = tpl.get("headlineStyle") if isinstance(tpl.get("headlineStyle"), dict) else {}
+    if hs.get("t6Id"):
+        return edits
+    from clips_worker.t6_geometry import resolve_template_geometry
+    from clips_worker.t6_titles import pick_title_style
+
+    spec = resolve_template_geometry(t, signals, edits)
+    sid, why = pick_title_style(spec, signals, [])
+    tpl["headlineStyle"] = {**hs, "t6Id": sid, "auto": True}
+    print(f"[t6:title_pick] t6Id={sid} reason={why}", flush=True)
+    return {**edits, "exportTemplate": tpl}

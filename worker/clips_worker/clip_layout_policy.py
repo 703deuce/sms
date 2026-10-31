@@ -113,7 +113,7 @@ def apply_clip_type_layout_to_edits(
     batch_counts: dict[str, int] | None = None,
     batch_size: int = 1,
 ) -> dict:
-    from clips_worker.t6_flags import t6_log_fallback, t6_templates_enabled
+    from clips_worker.t6_flags import t6_log_fallback, t6_templates_enabled, t6_title_auto_enabled
 
     if t6_templates_enabled(settings) and isinstance(signals, dict):
         try:
@@ -127,6 +127,7 @@ def apply_clip_type_layout_to_edits(
                 batch_counts=dict(batch_counts or {}),
                 batch_size=batch_size,
                 seed=str(clip_id or "clip"),
+                title_auto=t6_title_auto_enabled(settings),
             )
         except Exception as exc:
             t6_log_fallback("pick", exc)

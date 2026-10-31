@@ -82,6 +82,14 @@ def signals_or_defaults(ai_meta: dict | None) -> dict:
             base["real_camera_footage"] = True
         elif main == "video_game":
             base["real_camera_footage"] = False
+        if (
+            cls.get("seated_talking_to_camera")
+            and not cls.get("sport_or_physical_activity")
+            and str(meta.get("clipType") or "") in ("just_chatting", "podcast")
+        ):
+            # T6.3: a person sitting and talking to camera (car, table, desk) is a talking clip:
+            # nothing behind them matters, so face-crop C templates become eligible.
+            base["background_action"] = False
         base["sources"] = {"ai": "classify", "cv": "local"}
     base.setdefault("clip_type", str(meta.get("clipType") or base.get("clip_type") or "irl"))
     base.setdefault("type_conf", float(base.get("type_conf") or 0.0))
@@ -92,6 +100,11 @@ def signals_or_defaults(ai_meta: dict | None) -> dict:
     if isinstance(layout.get("facecam"), dict):
         fc = _norm_box(layout.get("facecam"))
     base.setdefault("facecam_box", fc)
+    if isinstance(layout.get("gameplay"), dict) and fc is not None:
+        # T6.3: detected game region (excludes the cam/HUD strip) for action/gameplay panels.
+        gp = _norm_box(layout.get("gameplay"))
+        if gp:
+            base.setdefault("gameplay_box", gp)
     base.setdefault("facecam_conf", float(meta.get("facecamConfidence") or base.get("facecam_conf") or 0.0))
     base.setdefault("person_count", int(base.get("person_count") or 1))
     base.setdefault("background_action", bool(base.get("background_action", True)))

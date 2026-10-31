@@ -1,0 +1,5 @@
+facecam_stack: IDENTICAL
+facecam_pip: IDENTICAL
+center_crop: IDENTICAL
+fit_blur: IDENTICAL
+speaker_follow: IDENTICAL

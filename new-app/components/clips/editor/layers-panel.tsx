@@ -10,6 +10,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { HeadlineLayer, BadgeLayer, Layer, StickerLayer } from '@/lib/clips/layers'
 import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
 import { EditorHeadlineField } from '@/components/clips/editor/editor-headline-field'
+import { t6TitleAutoEnabled } from '@/lib/clips/t6-feature-flags'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
 import { Slider } from '@/components/ui/slider'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -187,20 +188,27 @@ export function LayersPanel({
 
       {headline ? (
         <div className="space-y-2 rounded-lg border border-border p-3">
-          <Label className="text-xs font-medium">Headline style</Label>
-          <div className="flex flex-wrap gap-2">
-            {HEADLINE_PRESETS.map((preset) => (
-              <Button
-                key={preset}
-                type="button"
-                size="sm"
-                variant={headline.style.preset === preset ? 'default' : 'outline'}
-                onClick={() => setHeadlineStyle(preset)}
-              >
-                {preset.replace(/_/g, ' ')}
-              </Button>
-            ))}
-          </div>
+          {/* T6.3: with T6 titles the chips in EditorHeadlineField are the only title style;
+              the legacy layer presets here (P7 hid only the copy inside the headline field)
+              were a second, conflicting style row. */}
+          {t6TitleAutoEnabled() ? null : (
+            <>
+              <Label className="text-xs font-medium">Headline style</Label>
+              <div className="flex flex-wrap gap-2" data-testid="legacy-headline-style-row">
+                {HEADLINE_PRESETS.map((preset) => (
+                  <Button
+                    key={preset}
+                    type="button"
+                    size="sm"
+                    variant={headline.style.preset === preset ? 'default' : 'outline'}
+                    onClick={() => setHeadlineStyle(preset)}
+                  >
+                    {preset.replace(/_/g, ' ')}
+                  </Button>
+                ))}
+              </div>
+            </>
+          )}
           <label className="block space-y-1 text-xs">
             Corner radius ({radiusDraft ?? headline.style.radiusPx ?? 0}px)
             <Slider

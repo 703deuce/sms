@@ -1,0 +1,5 @@
+OUT /tmp/regress_patched_facecam_stack.mp4 True t6_spec False
+OUT /tmp/regress_patched_facecam_pip.mp4 True t6_spec False
+OUT /tmp/regress_patched_center_crop.mp4 True t6_spec False
+OUT /tmp/regress_patched_fit_blur.mp4 True t6_spec False
+OUT /tmp/regress_patched_speaker_follow.mp4 True t6_spec False

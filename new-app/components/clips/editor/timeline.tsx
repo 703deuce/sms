@@ -157,6 +157,7 @@ export function Timeline({
           className="relative h-[9.5rem] shrink-0 cursor-pointer"
           style={{ width: widthPx }}
           role="presentation"
+          data-testid="timeline-track"
           onClick={(e) => {
             if ((e.target as HTMLElement).closest('button')) return
             seekTimelineAtClientX(e.clientX, e.currentTarget)

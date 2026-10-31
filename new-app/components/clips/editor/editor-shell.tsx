@@ -87,6 +87,23 @@ function isEditableTarget(t: EventTarget | null) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable
 }
 
+
+/**
+ * T6.3: a timeline seek must keep the prior play state (E2E round 9: playing, seek to ~5 s ->
+ * paused). Capture `paused` before the seek; if the element was playing and is paused once
+ * the seek settles (the template stage / follower videos re-buffer), resume it.
+ */
+function keepPlayStateAcrossSeek(v: HTMLVideoElement): () => void {
+  const wasPlaying = !v.paused && !v.ended
+  return () => {
+    if (!wasPlaying) return
+    const resume = () => {
+      if (v.paused) void v.play().catch(() => {})
+    }
+    v.addEventListener('seeked', resume, { once: true })
+  }
+}
+
 export function EditorShell({
   projectId,
   projectTitle,
@@ -766,7 +783,10 @@ export function EditorShell({
   const seekSource = useCallback(
     (sourceMs: number) => {
       const v = videoRef.current
-      if (v) v.currentTime = videoTimeFromSourceMs(sourceMs, mediaOffsetMs)
+      if (!v) return
+      const resume = keepPlayStateAcrossSeek(v)
+      v.currentTime = videoTimeFromSourceMs(sourceMs, mediaOffsetMs)
+      resume()
     },
     [mediaOffsetMs],
   )
@@ -774,7 +794,10 @@ export function EditorShell({
   const seekOutput = useCallback(
     (ms: number) => {
       const v = videoRef.current
-      if (v) seekToOutputMs(v, editorPreviewEdits(edits, editorWords), ms, mediaOffsetMs)
+      if (!v) return
+      const resume = keepPlayStateAcrossSeek(v)
+      seekToOutputMs(v, editorPreviewEdits(edits, editorWords), ms, mediaOffsetMs)
+      resume()
     },
     [edits, editorWords, mediaOffsetMs],
   )

@@ -1,6 +1,6 @@
 import type { FacecamBox } from '@/lib/clips/facecam-geometry'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import type { T6Signals } from '@/lib/clips/templates/signals'
+import type { T6Face, T6Signals } from '@/lib/clips/templates/signals'
 import { T6_TEMPLATES_BY_ID, type TemplateDef } from '@/lib/clips/templates/registry'
 
 export type TemplateBandSpec = {
@@ -83,6 +83,169 @@ function trimSidesBox(signals: T6Signals, edits: ClipEditsV2): FacecamBox {
   return { x, y: 0, w, h: 1 }
 }
 
+// ---- T6.3: face/person-aware sources (parity with t6_geometry._resolve_src) ----
+const FACE_SRCS = new Set(['face_tight', 'active_speaker'])
+
+function r4(v: number): number {
+  return Math.round(v * 10000) / 10000
+}
+
+function centerIn(f: T6Face, r: FacecamBox): boolean {
+  const cx = f.x + f.w / 2
+  const cy = f.y + f.h / 2
+  return r.x <= cx && cx <= r.x + r.w && r.y <= cy && cy <= r.y + r.h
+}
+
+function cropAt(cx: number, cy: number, h0: number, panelAspect: number, region: FacecamBox): FacecamBox {
+  let h = h0
+  let w = (h * panelAspect) / SRC_ASPECT
+  const k = Math.min(1, w > 0 ? region.w / w : 1, h > 0 ? region.h / h : 1)
+  w *= k
+  h *= k
+  const x = Math.min(Math.max(cx - w / 2, region.x), region.x + region.w - w)
+  const y = Math.min(Math.max(cy - h / 2, region.y), region.y + region.h - h)
+  return { x: r4(clamp01(x)), y: r4(clamp01(y)), w: r4(clamp01(w)), h: r4(clamp01(h)) }
+}
+
+function faceCrop(
+  face: T6Face,
+  panelAspect: number,
+  region: FacecamBox,
+  faceFrac: number,
+  topInset = 0,
+): FacecamBox {
+  const cx = face.x + face.w / 2
+  const fcy = face.y + face.h / 2
+  const t = Math.max(0, Math.min(0.8, topInset))
+  if (t <= 0) {
+    const h = Math.min(region.h, face.h / Math.max(0.05, faceFrac))
+    return cropAt(cx, fcy + h * 0.08, h, panelAspect, region)
+  }
+  const h0 = Math.min(region.h, face.h / Math.max(0.05, faceFrac * (1 - t)))
+  return cropUnderTitle(face, face.h, h0, panelAspect, region, t)
+}
+
+/** T6.3 parity with t6_geometry._crop_under_title. */
+function cropUnderTitle(
+  face: T6Face,
+  fh: number,
+  h0: number,
+  panelAspect: number,
+  region: FacecamBox,
+  t: number,
+  cxOverride?: number,
+  fcyOverride?: number,
+): FacecamBox {
+  const cx = cxOverride ?? face.x + face.w / 2
+  const fcy = fcyOverride ?? face.y + face.h / 2
+  const h = Math.min(1, Math.max(h0, fh / (0.9 * (1 - t))))
+  const ft = t + (1 - t) * 0.45
+  const ny = Math.max(0, region.y - t * h)
+  const ext = { x: region.x, y: ny, w: region.w, h: Math.min(1 - ny, region.h + (region.y - ny)) }
+  return cropAt(cx, fcy - ft * h + h / 2, h, panelAspect, ext)
+}
+
+export function widenToAspectWithin(region: FacecamBox, panelAspect: number): FacecamBox {
+  const rw = Math.max(0.01, region.w)
+  const rh = Math.max(0.01, region.h)
+  return cropAt(region.x + rw / 2, region.y + rh / 2, rh, panelAspect, region)
+}
+
+function coverOnFaces(box: FacecamBox, faces: T6Face[], panelAspect: number, topInset = 0): FacecamBox {
+  const full = widenToAspectWithin(box, panelAspect)
+  const t = Math.max(0, Math.min(0.8, topInset))
+  if (t > 0) {
+    const fh = Math.max(...faces.map((f) => f.h))
+    const x0 = Math.min(...faces.map((f) => f.x - 0.5 * f.w))
+    const x1 = Math.max(...faces.map((f) => f.x + 1.5 * f.w))
+    const y0 = Math.min(...faces.map((f) => f.y))
+    const y1 = Math.max(...faces.map((f) => f.y + f.h))
+    let cx: number
+    let cy: number
+    if (x1 - x0 <= full.w) {
+      cx = (x0 + x1) / 2
+      cy = (y0 + y1) / 2
+    } else {
+      const p = faces[0]
+      cx = p.x + p.w / 2
+      cy = p.y + p.h / 2
+    }
+    return cropUnderTitle(faces[0], fh, full.h, panelAspect, box, t, cx, cy)
+  }
+  if (full.w >= box.w - 1e-3 && full.h >= box.h - 1e-3) return box
+  const x0 = Math.min(...faces.map((f) => f.x - 0.5 * f.w))
+  const x1 = Math.max(...faces.map((f) => f.x + 1.5 * f.w))
+  const y0 = Math.min(...faces.map((f) => f.y))
+  const y1 = Math.max(...faces.map((f) => f.y + f.h))
+  let cx: number
+  let cy: number
+  if (x1 - x0 <= full.w) {
+    cx = (x0 + x1) / 2
+    cy = (y0 + y1) / 2
+  } else {
+    const p = faces[0]
+    cx = p.x + p.w / 2
+    cy = p.y + p.h / 2
+  }
+  return cropAt(cx, cy + full.h * 0.08, full.h, panelAspect, box)
+}
+
+function facecamRegion(signals: T6Signals, edits: ClipEditsV2): FacecamBox | null {
+  const boxes = edits.layout.template?.boxes as Record<string, FacecamBox | undefined> | undefined
+  const b = boxes?.facecam_box ?? boxes?.facecam
+  if (b) return b
+  if (edits.layout.facecam?.box) return edits.layout.facecam.box
+  return signals.facecam_box ?? null
+}
+
+function resolveSrc(
+  name: string,
+  signals: T6Signals,
+  edits: ClipEditsV2,
+  panelAspect: number,
+  role: string,
+  topInset = 0,
+  panelHFrac = 0.55,
+): { src: FacecamBox; fit?: string } {
+  const boxes = edits.layout.template?.boxes as Record<string, FacecamBox | undefined> | undefined
+  const faces = signals.faces ?? []
+  if (boxes?.[name] && (FACE_SRCS.has(name) || name.startsWith('person:'))) return { src: boxes[name]! }
+  if (FACE_SRCS.has(name)) {
+    const region = facecamRegion(signals, edits)
+    const cands = faces.filter((f) => !region || centerIn(f, region))
+    if (cands.length) {
+      // Face ~34% of a half-height panel; a taller panel (C1 full screen) shows head+shoulders.
+      const ff = 0.34 * Math.min(1, 0.55 / Math.max(0.2, panelHFrac))
+      return { src: faceCrop(cands[0], panelAspect, region ?? DEFAULT_FULL, ff, topInset) }
+    }
+    if (region) return { src: widenToAspectWithin(region, panelAspect) }
+    return { src: { ...DEFAULT_FULL }, fit: 'contain_blur' }
+  }
+  if (name.startsWith('person:')) {
+    const idx = Number.parseInt(name.split(':')[1] ?? '0', 10) || 0
+    const pb = (signals as unknown as Record<string, FacecamBox | undefined>)[name]
+    if (pb && typeof pb === 'object') return { src: pb }
+    if (idx < faces.length) return { src: faceCrop(faces[idx], panelAspect, DEFAULT_FULL, 0.2, topInset) }
+    return { src: { ...DEFAULT_FULL }, fit: 'contain_blur' }
+  }
+  if (name === 'facecam_box' && (role === 'face' || role === '')) {
+    if (!facecamRegion(signals, edits)) return resolveSrc('face_tight', signals, edits, panelAspect, role, topInset, panelHFrac)
+    const box = srcBox(name, signals, edits, panelAspect)
+    const inside = faces.filter((f) => centerIn(f, box))
+    if (!inside.length) return { src: box }
+    return { src: coverOnFaces(box, inside, panelAspect, topInset) }
+  }
+  return { src: srcBox(name, signals, edits, panelAspect) }
+}
+
+function gameplayRegion(signals: T6Signals, edits: ClipEditsV2): FacecamBox | null {
+  const boxes = edits.layout.template?.boxes as Record<string, FacecamBox | undefined> | undefined
+  for (const b of [boxes?.gameplay, edits.layout.facecam?.gameplay, signals.gameplay_box ?? undefined]) {
+    if (b && b.w > 0 && b.h > 0) return b
+  }
+  return null
+}
+
 function srcBox(
   name: string,
   signals: T6Signals,
@@ -105,13 +268,13 @@ function srcBox(
     return signals.facecam_box ?? DEFAULT_FACECAM
   }
   if (name === 'action_box' || name === 'action_box_widened') {
-    const base = edits.layout.cropBox ?? signals.action_box ?? DEFAULT_FULL
+    // T6.3 parity: no action box -> detected/user game region (excludes the cam/HUD strip).
+    const base = edits.layout.cropBox ?? signals.action_box ?? gameplayRegion(signals, edits) ?? DEFAULT_FULL
     return name === 'action_box_widened' ? widenToAspect(base, panelAspect) : base
   }
   if (name === 'gameplay_box') {
     // T6.2 parity with t6_geometry._src_box: whole game region, never a zoomed crop.
-    const g = (boxes as Record<string, FacecamBox | undefined> | undefined)?.gameplay
-    return g ?? edits.layout.facecam?.gameplay ?? DEFAULT_FULL
+    return gameplayRegion(signals, edits) ?? DEFAULT_FULL
   }
   if (name === 'trim_sides') return trimSidesBox(signals, edits)
   if (name === 'content_box') {
@@ -181,6 +344,21 @@ function titleRect(
   return null
 }
 
+/** T6.3 parity with t6_geometry._title_band (fallback bar = exportBar.barFrac 0.20). */
+function titleBandSpan(
+  t: TemplateDef,
+  bandsOut: TemplateBandSpec[],
+  edits: ClipEditsV2,
+  playW: number,
+  playH: number,
+): [number, number] | null {
+  const hb = edits.exportTemplate?.headlineBar
+  if (!(hb?.enabled && String(hb?.text ?? '').trim())) return null
+  const r = titleRect(t, bandsOut, playW, playH)
+  if (r && r.h >= 8) return [r.y, r.y + r.h]
+  return [0, Math.round(playH * 0.2)]
+}
+
 export function resolveTemplateGeometry(
   t: TemplateDef,
   s: T6Signals,
@@ -188,6 +366,11 @@ export function resolveTemplateGeometry(
   playW = 1080,
   playH = 1920,
 ): TemplateSpecV2 {
+  const bandsPre: TemplateBandSpec[] = (t.bands ?? []).map((b) => ({
+    dest: { x: 0, y: even(playH * b.y), w: playW, h: even(playH * b.h) },
+    fill: b.fill,
+  }))
+  const titleBand = titleBandSpan(t, bandsPre, edits, playW, playH)
   const panels = t.panels.map((p, idx) => {
     const destY = even(playH * p.y)
     let destH = even(playH * p.h)
@@ -197,10 +380,17 @@ export function resolveTemplateGeometry(
     const destW = even(playW * (p.w ?? 1))
     const destX = even(playW * (p.x ?? 0))
     const panelAspect = destH > 0 ? destW / destH : 9 / 16
+    let inset = 0
+    if (titleBand && destH > 0) {
+      const [ty0, ty1] = titleBand
+      const ov = Math.min(ty1, destY + destH) - Math.max(ty0, destY)
+      if (ov > 0 && ty0 <= destY + 1) inset = ov / destH
+    }
+    const r = resolveSrc(p.src, s, edits, panelAspect, p.role ?? '', inset, playH ? destH / playH : 0.55)
     return {
       dest: { x: destX, y: destY, w: destW, h: destH },
-      src: srcBox(p.src, s, edits, panelAspect),
-      fit: p.fit,
+      src: r.src,
+      fit: r.fit ?? p.fit,
     }
   })
   const bands: TemplateBandSpec[] = (t.bands ?? []).map((b) => ({

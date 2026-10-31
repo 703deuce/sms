@@ -37,6 +37,7 @@ import type { ClipUserStreamerChannelRow } from '@/lib/clips/clip-export-user-ty
 import { exportPolishLint, exportPolishLintWarnings } from '@/lib/clips/export-polish-lint'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { cn } from '@/lib/utils'
+import { t6TitleAutoEnabled } from '@/lib/clips/t6-feature-flags'
 import {
   exportSfxBundledAssetsAvailable,
   normalizeExportSfxMode,
@@ -46,6 +47,15 @@ import { ExportLayoutPicker } from '@/components/clips/editor/export-layout-pick
 import { resolveLayers } from '@/lib/clips/layers'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
+
+
+/** T6.3: labels for the T6 title chips (title-styles.json ids). */
+const T6_TITLE_LABELS: Record<string, string> = {
+  white_on_black: 'white on black',
+  white_on_dark_blur: 'white on dark blur',
+  black_on_light_blur: 'black on light blur',
+  white_box_black: 'white box, black text',
+}
 
 export function ExportDialog({
   clipId,
@@ -588,11 +598,15 @@ export function ExportDialog({
         <div className="mt-3 rounded-md border border-border bg-muted/20 p-3 text-xs">
           <p className="font-medium text-foreground">Layers (v3)</p>
           <ul className="mt-1 space-y-0.5 text-muted-foreground">
-            <li>
-              Headline style:{' '}
-              {headlineLayer && headlineLayer.type === 'headline' && headlineLayer.style?.preset
-                ? headlineLayer.style.preset.replace(/_/g, ' ')
-                : 'default'}
+            <li data-testid="export-title-style">
+              {t6TitleAutoEnabled() ? 'Title style' : 'Headline style'}:{' '}
+              {t6TitleAutoEnabled()
+                ? // T6.3: the export burns exportTemplate.headlineStyle.t6Id (worker _t6_title_burn).
+                  T6_TITLE_LABELS[(exportTemplate ?? edits.exportTemplate)?.headlineStyle?.t6Id ?? ''] ??
+                  T6_TITLE_LABELS.white_on_black
+                : headlineLayer && headlineLayer.type === 'headline' && headlineLayer.style?.preset
+                  ? headlineLayer.style.preset.replace(/_/g, ' ')
+                  : 'default'}
             </li>
             {stickerLayer && stickerLayer.type === 'sticker' ? (
               <li>Follow sticker: {stickerLayer.enabled ? stickerLayer.text : 'off'}</li>
