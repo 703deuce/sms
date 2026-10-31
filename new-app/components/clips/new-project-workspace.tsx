@@ -45,6 +45,10 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   const [tab, setTab] = useState<'upload' | 'link' | 'streamer'>(
     tabParam === 'streamer' ? 'streamer' : tabParam === 'link' ? 'link' : 'upload',
   )
+  // Links elsewhere (Home chips, ?tab=…) can change the tab while this page stays mounted.
+  useEffect(() => {
+    if (tabParam === 'streamer' || tabParam === 'link' || tabParam === 'upload') setTab(tabParam)
+  }, [tabParam])
   const [projectIntent, setProjectIntent] = useState<'find' | 'byo' | 'full'>(fullIntentParam ? 'full' : 'find')
   const [sourceAspect, setSourceAspect] = useState<ReturnType<typeof sourceAspectRatio> | null>(null)
   const [settings, setSettings] = useState<ClipProjectSettings>(initial)
@@ -259,68 +263,55 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           ))}
         </fieldset>
       ) : null}
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* FVfix: ONE source row (was shown twice: link cards + "Import source" radios). */}
+      <fieldset className="mb-6 grid gap-3 border-0 p-0 sm:grid-cols-2 lg:grid-cols-4" data-testid="new-project-source">
+        <legend className="sr-only">Import source</legend>
         {(
           [
-            { href: '/app/clips/new?tab=upload', label: 'Upload file', hint: 'MP4, MOV, WebM', icon: UploadCloud, active: tab === 'upload' },
-            { href: '/app/clips/new?tab=link', label: 'Paste link', hint: 'Drive or Dropbox', icon: Link2, active: tab === 'link' },
-            { href: '/app/clips/new?tab=streamer', label: 'Streamer', hint: 'Twitch or Kick', icon: Radio, active: tab === 'streamer' },
-            ...(isT2vFeatureEnabled()
-              ? [{ href: '/app/clips/video/new', label: 'AI Video', hint: 'Idea, script, or link → video', icon: Clapperboard, active: false as boolean }]
-              : []),
+            { id: 'upload' as const, label: 'Upload file', hint: 'MP4, MOV, WebM', icon: UploadCloud },
+            { id: 'link' as const, label: 'Paste link', hint: 'Drive or Dropbox', icon: Link2 },
+            { id: 'streamer' as const, label: 'Streamer', hint: 'Twitch or Kick', icon: Radio },
           ] as const
-        ).map((card) => (
-            <Link
-              key={card.href}
-              href={card.href}
-              className={cn(
-                'flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:border-primary/40',
-                card.active && 'border-primary bg-primary/8 ring-1 ring-primary/40',
-              )}
-              data-testid={card.label === 'AI Video' ? 'new-project-t2v-card' : undefined}
-            >
-              <span className="grid size-10 place-items-center rounded-lg bg-muted">
-                <card.icon className="size-5 text-primary" aria-hidden />
-              </span>
-              <span className="text-sm font-semibold">{card.label}</span>
-              <span className="text-xs text-muted-foreground">{card.hint}</span>
-            </Link>
-          ))}
-      </div>
+        ).map((opt) => (
+          <label
+            key={opt.id}
+            className={cn(
+              'flex cursor-pointer flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:border-primary/40',
+              tab === opt.id && 'border-primary bg-primary/8 ring-1 ring-primary/40',
+            )}
+            data-testid={`new-project-source-${opt.id}`}
+          >
+            <input
+              type="radio"
+              name="import-source"
+              value={opt.id}
+              checked={tab === opt.id}
+              onChange={() => setTab(opt.id)}
+              className="sr-only"
+            />
+            <span className="grid size-10 place-items-center rounded-lg bg-muted">
+              <opt.icon className="size-5 text-primary" aria-hidden />
+            </span>
+            <span className="text-sm font-semibold">{opt.label}</span>
+            <span className="text-xs text-muted-foreground">{opt.hint}</span>
+          </label>
+        ))}
+        {isT2vFeatureEnabled() ? (
+          <Link
+            href="/app/clips/video/new"
+            className="flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:border-primary/40"
+            data-testid="new-project-t2v-card"
+          >
+            <span className="grid size-10 place-items-center rounded-lg bg-muted">
+              <Clapperboard className="size-5 text-primary" aria-hidden />
+            </span>
+            <span className="text-sm font-semibold">AI Video</span>
+            <span className="text-xs text-muted-foreground">Idea, script, or link → video</span>
+          </Link>
+        ) : null}
+      </fieldset>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-4">
-          <fieldset className="grid grid-cols-1 gap-2 border-0 p-0 sm:grid-cols-3">
-            <legend className="sr-only">Import source</legend>
-            {(
-              [
-                { id: 'upload' as const, label: 'Upload file', hint: 'MP4, MOV, WebM', icon: UploadCloud },
-                { id: 'link' as const, label: 'Paste link', hint: 'Drive or Dropbox', icon: Link2 },
-                { id: 'streamer' as const, label: 'Streamer', hint: 'Twitch or Kick', icon: Radio },
-              ] as const
-            ).map((opt) => (
-              <label
-                key={opt.id}
-                className={cn(
-                  'flex cursor-pointer flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:border-primary/40',
-                  tab === opt.id && 'border-primary bg-primary/8 ring-1 ring-primary/40',
-                )}
-              >
-                <input
-                  type="radio"
-                  name="import-source"
-                  value={opt.id}
-                  checked={tab === opt.id}
-                  onChange={() => setTab(opt.id)}
-                  className="sr-only"
-                />
-                <span className="grid size-10 place-items-center rounded-lg bg-muted">
-                  <opt.icon className="size-5 text-primary" aria-hidden />
-                </span>
-                <span className="text-sm font-semibold">{opt.label}</span>
-                <span className="text-xs text-muted-foreground">{opt.hint}</span>
-              </label>
-            ))}
-          </fieldset>
           {tab === 'streamer' ? (
             <StreamerImportPanel />
           ) : tab === 'upload' ? (

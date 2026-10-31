@@ -31,6 +31,6 @@ export function mediaTranscribeCredits(durationMs: number): number {
 }
 
 export function formatMediaDuration(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000))
+  const s = Math.max(0, Math.floor(ms / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }

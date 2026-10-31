@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 const THUMB_H = 72
 const MAX_FRAMES = 600
 const SEEK_TIMEOUT_MS = 4000
+const INIT_TIMEOUT_MS = 12_000
 
 type Listener = () => void
 
@@ -29,6 +30,7 @@ export class FrameExtractor {
   private notifyTimer: ReturnType<typeof setTimeout> | null = null
   private ready: Promise<boolean> | null = null
   refs = 0
+  private seekFails = 0
 
   constructor(url: string) {
     this.url = url
@@ -90,17 +92,28 @@ export class FrameExtractor {
   private init(): Promise<boolean> {
     if (this.ready) return this.ready
     this.ready = new Promise<boolean>((resolve) => {
+      // The grabber's OWN hidden element: crossOrigin is set here only — never on the preview
+      // <video>, which must keep playing even when the bucket sends no CORS headers.
       const v = document.createElement('video')
       v.crossOrigin = 'anonymous'
       v.muted = true
       v.preload = 'auto'
       v.playsInline = true
+      let settled = false
       const done = (ok: boolean) => {
+        if (settled) return
+        settled = true
+        clearTimeout(stall)
         v.onloadedmetadata = null
         v.onerror = null
-        if (!ok) this.failed = true
+        if (!ok) {
+          // CORS-blocked / unreadable media: tell the strips so they switch to the poster fallback.
+          this.failed = true
+          this.notify()
+        }
         resolve(ok)
       }
+      const stall = setTimeout(() => done(false), INIT_TIMEOUT_MS)
       v.onloadedmetadata = () => {
         this.aspect = v.videoWidth > 0 && v.videoHeight > 0 ? v.videoWidth / v.videoHeight : null
         done(true)
@@ -139,7 +152,15 @@ export class FrameExtractor {
         const k = this.wanted.shift()!
         if (!this.wantedSet.has(k) || this.cache.has(k)) continue
         const ms = Number(k.split(':')[1])
-        if (!(await this.seek(ms / 1000))) continue
+        if (!(await this.seek(ms / 1000))) {
+          if (++this.seekFails >= 3) {
+            this.failed = true
+            this.notify()
+            break
+          }
+          continue
+        }
+        this.seekFails = 0
         const v = this.video
         const c = this.canvas
         if (!v || !c) break

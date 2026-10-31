@@ -80,3 +80,28 @@ def test_pre_ready_assets_upload_keys(tmp_path: Path) -> None:
     assert meta["filmstrip"]["keys"] == ["ws/ws1/projects/proj1/editor/filmstrip_001.jpg"]
     assert "files" not in meta["filmstrip"]
     assert uploaded == ["ws/ws1/projects/proj1/editor/peaks.json", "ws/ws1/projects/proj1/editor/filmstrip_001.jpg"]
+
+
+def test_fvfix_peaks_rate_budget_and_full_coverage(tmp_path):
+    assert fva.peaks_rate_for(715_740) == 100
+    assert fva.peaks_rate_for(3_600_000) == 100
+    assert fva.peaks_rate_for(7_200_000) == 50
+    assert fva.peaks_rate_for(10_800_000) == 25
+    for d in (60_000, 715_740, 3_600_000, 10_800_000):
+        assert fva.peaks_rate_for(d) * d / 1000 <= fva.PEAKS_MAX_SAMPLES
+    # every second of audio is covered (no truncated tail): 6 s tone at 100/s -> ~600 values,
+    # and the last half second is not silent.
+    import base64
+    import subprocess
+
+    src = tmp_path / "tone.mp4"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+         "-c:a", "aac", str(src)],
+        check=True,
+    )
+    p = fva.compute_peaks(src, 6000, 100)
+    data = base64.b64decode(p["data"])
+    assert p["peaksPerSec"] == 100
+    assert 595 <= len(data) <= 610
+    assert min(data[-60:-10]) > 50

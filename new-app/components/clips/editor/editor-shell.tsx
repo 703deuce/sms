@@ -1631,6 +1631,7 @@ export function EditorShell({
             editorAssets={editorAssets}
             brollMedia={previewBrollMedia}
             sourceUrls={sourceUrls}
+            posterUrl={posterUrl}
             onSeekOutput={seekOutput}
             onTrimChange={setTrim}
             clipStartMs={bounds.clipStartMs}
