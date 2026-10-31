@@ -33,6 +33,7 @@ import { remapCutTransitions } from '@/lib/clips/editor/transitions'
 import { remapSplitEdits } from '@/lib/clips/editor/split-edits'
 import { TEXT_MIN_MS, type TextItem } from '@/lib/clips/editor/text-items'
 import { addTrack, DEFAULT_TRACK_ID, LANE_TRACK_KIND, setItemsTrack, trackById, trackState, type TrackKind } from '@/lib/clips/editor/tracks'
+import { audioClipKind } from '@/lib/clips/editor/audio-kind'
 
 // ---------------------------------------------------------------------------
 // Clipboard
@@ -553,6 +554,7 @@ export function detachBrollAudio(edits: ClipEditsV2, brollId: string): { edits: 
     volume: DEFAULT_SFX_VOLUME,
     ...(b.inMs ? { inMs: b.inMs } : {}),
     durMs: b.endMs - b.startMs,
+    kind: 'audio', // G2fix: labelled "Audio", not "SFX"
   }
   const audio: ClipEditsAudio = edits.audio ?? { music: null, sfx: [] }
   return { edits: { ...edits, audio: { ...audio, sfx: [...sfx, cue] } }, id }
@@ -608,8 +610,10 @@ export function splitStereoToTracks(
   const idL = nextId()
   const idR = nextId()
   const kept = lane === 'sfx' ? sfx.filter((c) => c.generationId !== id) : sfx
-  const cueL: ClipAudioSfx = { ...base, generationId: idL, channel: 'L' }
-  const cueR: ClipAudioSfx = { ...base, generationId: idR, channel: 'R' }
+  // G2fix: the halves of a song stay music (on "Music 2 L / R"); anything else is "Audio".
+  const kind = lane === 'sfx' && audioClipKind(edits, base) === 'music' ? 'music' : 'audio'
+  const cueL: ClipAudioSfx = { ...base, generationId: idL, channel: 'L', kind }
+  const cueR: ClipAudioSfx = { ...base, generationId: idR, channel: 'R', kind }
   const audio: ClipEditsAudio = { ...(edits.audio ?? { music: null, sfx: [] }), sfx: [...kept, cueL, cueR] }
   let next: ClipEditsV2 = { ...edits, audio }
   // The source envelope follows both halves.

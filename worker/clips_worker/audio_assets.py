@@ -39,9 +39,15 @@ def _sfx_fx(item: dict) -> dict | None:
             duck = max(0.0, min(1.0, float(item.get("duckDepth"))))
         except (TypeError, ValueError):
             duck = None
-    if not fi and not fo and duck is None:
+    # G2fix: a looping music clip (TS ClipAudioSfx.loop) — only with an explicit play length,
+    # which bounds the `-stream_loop -1` input (atrim duration=durMs).
+    loop = item.get("loop") is True and _sfx_trim(item)[1] is not None
+    if not fi and not fo and duck is None and not loop:
         return None
-    return {"fade_in_ms": fi, "fade_out_ms": fo, "duck_depth": duck}
+    out = {"fade_in_ms": fi, "fade_out_ms": fo, "duck_depth": duck}
+    if loop:
+        out["loop"] = True
+    return out
 
 
 def _media_len_ms(path: Path) -> int | None:
@@ -62,8 +68,11 @@ def _media_len_ms(path: Path) -> int | None:
 def _with_play_len(fx: dict | None, path: Path, trim: tuple[int, int | None]) -> dict | None:
     if not fx or not (fx.get("fade_in_ms") or fx.get("fade_out_ms")):
         return fx
-    # Same as the preview: the play length is durMs capped by the media after the in-point.
     in_ms, dur = trim
+    if fx.get("loop") and dur is not None:
+        # G2fix: a looping clip plays its whole durMs (TS clipPlayLenMs).
+        return {**fx, "play_ms": dur}
+    # Same as the preview: the play length is durMs capped by the media after the in-point.
     full = _media_len_ms(path)
     rest = None if full is None else max(0, full - in_ms)
     if dur is None:

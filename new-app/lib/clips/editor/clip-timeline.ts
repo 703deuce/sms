@@ -40,6 +40,7 @@ import {
 } from '@/lib/clips/editor/timeline-lane-state'
 import { applyTrackRender } from '@/lib/clips/editor/track-render'
 import { inactiveBrollTakeIds, mainTakeLabel, takeLabel } from '@/lib/clips/editor/takes'
+import { AUDIO_KIND_LABEL, audioClipKind } from '@/lib/clips/editor/audio-kind'
 import {
   applyAudioSolo,
   applyTrackState,
@@ -392,13 +393,15 @@ export function buildTimelineItems(input: {
     // G1b3: a detached clip sound plays [inMs, inMs + durMs] of its media.
     const media = input.sfxDurationsMs?.[s.generationId]
     const full = media != null ? media - (s.inMs ?? 0) : SFX_DEFAULT_MS
-    const len = Math.max(100, Math.round(s.durMs != null ? Math.min(s.durMs, full) : full))
+    // G2fix: a looping music clip plays its whole durMs.
+    const len = Math.max(100, Math.round(s.durMs != null ? (s.loop ? s.durMs : Math.min(s.durMs, full)) : full))
     lanes.sfx.push({
       lane: 'sfx',
       id: s.generationId,
       startMs: s.atMs,
       endMs: s.atMs + len,
-      label: 'SFX',
+      // G2fix: songs read "Music", detached / split clip audio "Audio", the rest "SFX".
+      label: AUDIO_KIND_LABEL[audioClipKind(edits, s, tracks)],
       // G2: audio clips trim (in-point / length) like the music bed.
       caps: { ...NO_CAPS, move: true, del: true, trimStart: true, trimEnd: true },
       track: trackIdOf(edits, 'audio', s.generationId, tracks),
@@ -629,7 +632,8 @@ export function trimItem(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: 
       return patchSfx(ctx.edits, it.id, { atMs: s, inMs: inMs + (s - it.startMs), durMs: it.endMs - s })
     }
     const media = ctx.sfxDurationsMs?.[it.id]
-    const hi = media != null ? it.startMs + Math.max(SFX_MIN_MS, media - inMs) : Math.max(it.endMs, dur)
+    // G2fix: a looping music clip extends past its media (up to the video end).
+    const hi = media != null && !cue.loop ? it.startMs + Math.max(SFX_MIN_MS, media - inMs) : Math.max(it.endMs, dur)
     const e = clamp(to, it.startMs + SFX_MIN_MS, hi)
     if (e === it.endMs) return null
     return patchSfx(ctx.edits, it.id, { durMs: e - it.startMs })

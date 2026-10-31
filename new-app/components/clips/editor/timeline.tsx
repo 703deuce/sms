@@ -97,7 +97,8 @@ import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, switchAngleA
 import { CUT_HANDLE_ROW_TOP_PX, layoutCutHandles } from '@/lib/clips/editor/cut-handle-layout'
 import { useAudioPeaks, type AudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { AudioClipInspector } from '@/components/clips/editor/timeline/audio-clip-inspector'
-import { fadeFromDrag, patchAudioClip } from '@/lib/clips/editor/audio-clip'
+import { fadeDragMsPerPx, fadeFromDrag, patchAudioClip } from '@/lib/clips/editor/audio-clip'
+import { audioClipKindOf } from '@/lib/clips/editor/audio-kind'
 import { beatsToOutput } from '@/lib/clips/editor/beats'
 import { DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS } from '@/lib/clips/audio'
 import { useDismiss } from '@/components/clips/editor/use-dismiss'
@@ -263,6 +264,7 @@ export function Timeline({
   sfxDurationsMs,
   sfxPeaks,
   sfxBeatsMs,
+  sfxBpm,
   onOpenCover,
   onSelectionChange,
   editorAssets = null,
@@ -310,6 +312,8 @@ export function Timeline({
   sfxPeaks?: Record<string, AudioPeaks>
   /** G2: media-ms beats of music-length audio clips, by lane id. */
   sfxBeatsMs?: Record<string, number[]>
+  /** G2fix: detected tempo of music-length audio clips, by lane id. */
+  sfxBpm?: Record<string, number>
   onOpenCover?: () => void
   /** E4: the single selected item (Color / Text panels follow it); null when 0 or 2+ selected. */
   onSelectionChange?: (item: TimelineItem | null) => void
@@ -606,10 +610,11 @@ export function Timeline({
       const b = sfxBeatsMs?.[it.id]
       if (!b?.length) continue
       const cue = edits.audio?.sfx.find((x) => x.generationId === it.id)
-      out[refKey(it)] = beatsToOutput(b, { startMs: it.startMs, endMs: it.endMs, inMs: cue?.inMs ?? 0 }, null)
+      // G2fix: a looping music clip repeats its beat grid.
+      out[refKey(it)] = beatsToOutput(b, { startMs: it.startMs, endMs: it.endMs, inMs: cue?.inMs ?? 0 }, sfxDurationsMs?.[it.id] ?? null, Boolean(cue?.loop))
     }
     return out
-  }, [edits.audio, lanes, musicPeaks.beatsMs, musicPeaks.durationMs, sfxBeatsMs])
+  }, [edits.audio, lanes, musicPeaks.beatsMs, musicPeaks.durationMs, sfxBeatsMs, sfxDurationsMs])
   const hasBeats = Object.keys(beatMarks).length > 0
   // G2: solo — items of audio tracks silenced by another track's solo draw faded.
   const soloEdits = useMemo(() => applyAudioSolo(edits), [edits])
@@ -1444,7 +1449,8 @@ export function Timeline({
     const key = refKey(item)
     const x0 = e.clientX
     const calc = (ev: PointerEvent) =>
-      fadeFromDrag(edge, lenMs, edge === 'in' ? fi : fo, edge === 'in' ? fo : fi, (ev.clientX - x0) / Math.max(1e-6, pxPerMs))
+      // G2fix: time per px follows the zoom, capped when zoomed far out (Shift / Alt = fine).
+      fadeFromDrag(edge, lenMs, edge === 'in' ? fi : fo, edge === 'in' ? fo : fi, (ev.clientX - x0) * fadeDragMsPerPx(pxPerMs, ev.shiftKey || ev.altKey))
     let last = edge === 'in' ? fi : fo
     setFadeDrag({ key, edge, ms: last })
     const onMove = (ev: PointerEvent) => {
@@ -1470,8 +1476,9 @@ export function Timeline({
       if (fadeDrag.edge === 'in') fi = fadeDrag.ms
       else fo = fadeDrag.ms
     }
-    fi = Math.min(fi, lenMs)
-    fo = Math.min(fo, lenMs)
+    // G2fix: draw what plays — each fade at most half the clip (export clamps the same way).
+    fi = Math.min(fi, lenMs / 2)
+    fo = Math.min(fo, lenMs / 2)
     const fiPx = fi * pxPerMs
     const foPx = fo * pxPerMs
     const hh = h - 4
@@ -1610,7 +1617,7 @@ export function Timeline({
               />
             ))
           : null}
-        {item.lane === 'music' && edits.audio?.music?.loop ? (
+        {(item.lane === 'music' && edits.audio?.music?.loop) || (item.lane === 'sfx' && edits.audio?.sfx.find((x) => x.generationId === item.id)?.loop) ? (
           <span className="pointer-events-none absolute right-1 top-0 z-[1] rounded bg-black/50 px-0.5 text-[9px]" data-testid="timeline-music-loop" title="Loops to fill its window">
             ↻
           </span>
@@ -2053,8 +2060,10 @@ export function Timeline({
           lane={singleSel.lane}
           id={singleSel.id}
           durationMs={tb.durationMs}
-          mediaMs={singleSel.lane === 'music' ? musicPeaks.durationMs || null : null}
-          bpm={singleSel.lane === 'music' ? musicPeaks.bpm ?? null : null}
+          kind={singleSel.lane === 'music' ? 'music' : audioClipKindOf(edits, singleSel.id) ?? 'sfx'}
+          lenMs={singleSel.endMs - singleSel.startMs}
+          mediaMs={singleSel.lane === 'music' ? musicPeaks.durationMs || null : sfxDurationsMs?.[singleSel.id] ?? null}
+          bpm={singleSel.lane === 'music' ? musicPeaks.bpm ?? null : sfxBpm?.[singleSel.id] ?? null}
           readOnly={Boolean(itemState(singleSel).locked)}
           onCommit={(next) => commit(next)}
         />

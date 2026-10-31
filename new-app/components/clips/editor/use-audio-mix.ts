@@ -29,6 +29,8 @@ type SfxCue = {
   fadeInMs?: number
   fadeOutMs?: number
   duckDepth?: number
+  /** G2fix: loop the buffer to fill durMs (music clips). */
+  loop?: boolean
 }
 
 export function useAudioMix({
@@ -270,7 +272,7 @@ export function useAudioMix({
   const anyDuck = sfxCues.some((c) => c.duckDepth != null)
   const sfxKey =
     sfxCues
-      .map((c) => `${c.generationId}:${c.atMs}:${c.volume}:${c.inMs ?? 0}:${c.durMs ?? ''}:${c.channel ?? ''}:${c.fadeInMs ?? 0}:${c.fadeOutMs ?? 0}:${c.duckDepth ?? ''}`)
+      .map((c) => `${c.generationId}:${c.atMs}:${c.volume}:${c.inMs ?? 0}:${c.durMs ?? ''}:${c.channel ?? ''}:${c.fadeInMs ?? 0}:${c.fadeOutMs ?? 0}:${c.duckDepth ?? ''}:${c.loop ? 1 : 0}`)
       .join('|') +
     sfxEnvKey +
     fxKey +
@@ -297,7 +299,11 @@ export function useAudioMix({
     for (const cue of sfxCues) {
       // G1b3: in-point / length (detached audio).
       const inS = (cue.inMs ?? 0) / 1000
-      const playS = Math.max(0, Math.min(cue.buffer.duration - inS, cue.durMs != null ? cue.durMs / 1000 : Infinity))
+      // G2fix: a looping clip plays its whole durMs (the buffer repeats from 0, like `-stream_loop`).
+      const looping = Boolean(cue.loop && cue.durMs != null && cue.buffer.duration > 0)
+      const playS = looping
+        ? Math.max(0, cue.durMs! / 1000)
+        : Math.max(0, Math.min(cue.buffer.duration - inS, cue.durMs != null ? cue.durMs / 1000 : Infinity))
       const endMs = cue.atMs + playS * 1000
       if (endMs <= fromMs || playS <= 0) continue
       const src = ctx.createBufferSource()
@@ -326,8 +332,10 @@ export function useAudioMix({
       // G1c: split-stereo channel pick, then the cue's audio-track chain (bus).
       connectChannel(ctx, src, cue.buffer, cue.channel, g)
       g.connect(fxInput(ctx, trackIdOf(edits, 'audio', cue.generationId)))
-      if (cue.atMs >= fromMs) src.start(ctx.currentTime + (cue.atMs - fromMs) / 1000 / rate, inS, playS)
-      else src.start(ctx.currentTime, inS + (fromMs - cue.atMs) / 1000, playS - (fromMs - cue.atMs) / 1000)
+      if (looping) src.loop = true
+      const offS = (s: number) => (looping ? s % cue.buffer.duration : s)
+      if (cue.atMs >= fromMs) src.start(ctx.currentTime + (cue.atMs - fromMs) / 1000 / rate, offS(inS), playS)
+      else src.start(ctx.currentTime, offS(inS + (fromMs - cue.atMs) / 1000), playS - (fromMs - cue.atMs) / 1000)
       sfxNodesRef.current.push(src)
     }
     sfxAnchorRef.current = { ctxT: ctx.currentTime, outMs: fromMs }

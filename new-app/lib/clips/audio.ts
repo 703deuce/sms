@@ -32,6 +32,14 @@ export type ClipAudioSfx = {
   fadeOutMs?: number
   /** G2: duck this clip under the voice (music-style); absent = not ducked. */
   duckDepth?: number
+  /**
+   * G2fix: what the clip is. 'music' = a song (full music controls: Loop, Fit to length, BPM),
+   * 'audio' = clip / mic audio (detached, split L/R). Absent (older saves) = derived: a clip on a
+   * "Music…" audio track is music (lib/clips/editor/audio-kind.ts), else SFX.
+   */
+  kind?: 'music' | 'audio'
+  /** G2fix: loop the media to fill `durMs` (music clips; export `-stream_loop -1`). Needs durMs. */
+  loop?: boolean
 }
 
 export type ClipStudioSound = {
@@ -145,6 +153,8 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
         ...fadeMs('fadeInMs', s.fadeInMs),
         ...fadeMs('fadeOutMs', s.fadeOutMs),
         ...(s.duckDepth != null && Number.isFinite(Number(s.duckDepth)) ? { duckDepth: clamp01(s.duckDepth, DEFAULT_DUCK_DEPTH) } : {}),
+        ...(s.kind === 'music' || s.kind === 'audio' ? { kind: s.kind } : {}),
+        ...(s.loop === true && num(s.durMs, 0) >= 100 ? { loop: true } : {}),
       }
     })
     .filter(Boolean) as ClipAudioSfx[]
