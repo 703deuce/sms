@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { createExportToast } from '@/lib/clips/editor/export-toast'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -114,6 +115,9 @@ export function ExportDialog({
   )
   const [busy, setBusy] = useState(false)
   const [renderId, setRenderId] = useState<string | null>(null)
+  // E2fix: one toast per export, settled on READY / FAILED / poll error, dismissed on close.
+  const exportToast = useMemo(() => createExportToast(toast), [])
+  useEffect(() => () => exportToast.dismiss(), [exportToast])
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [filename, setFilename] = useState('clip.mp4')
   const [status, setStatus] = useState<string | null>(null)
@@ -184,6 +188,7 @@ export function ExportDialog({
 
   useEffect(() => {
     if (!open) {
+      exportToast.dismiss()
       setRenderId(null)
       setDownloadUrl(null)
       setStatus(null)
@@ -195,7 +200,7 @@ export function ExportDialog({
       setRenderPhase(null)
       setRenderEtaSec(null)
     }
-  }, [open])
+  }, [open, exportToast])
 
   useEffect(() => {
     if (!open || !edits.thumbnailId) {
@@ -234,7 +239,7 @@ export function ExportDialog({
             const msg = r.error || 'Export failed'
             setErrorDetail(msg)
             setBusy(false)
-            toast.error(msg)
+            exportToast.failed(msg)
             return
           }
           if (r.status === 'READY' && r.downloadUrl) {
@@ -242,13 +247,14 @@ export function ExportDialog({
             setFilename(r.filename || 'clip.mp4')
             setErrorDetail(null)
             setBusy(false)
-            toast.success('Export ready — download below')
+            exportToast.ready()
           }
         })
         .catch((e) => {
           const msg = e instanceof Error ? e.message : 'Could not check export status'
           setErrorDetail(msg)
           setBusy(false)
+          exportToast.failed(msg)
         })
     }
     poll()
@@ -264,13 +270,13 @@ export function ExportDialog({
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onFocus)
     }
-  }, [renderId, status, clipId])
+  }, [renderId, status, clipId, exportToast])
 
   const startExport = async () => {
     if (busy) return
     setBusy(true)
     setErrorDetail(null)
-    const toastId = toast.loading('Starting export…')
+    exportToast.start()
     try {
       await onBeforeExport?.()
       const tpl = exportTemplate ?? edits.exportTemplate
@@ -325,16 +331,16 @@ export function ExportDialog({
       if (data.downloadUrl) {
         setDownloadUrl(data.downloadUrl)
         setFilename(data.filename || 'clip.mp4')
-        toast.success('Export ready', { id: toastId })
+        exportToast.ready('Export ready')
       } else {
         setStatus(data.status === 'READY' ? 'READY' : 'RUNNING')
-        toast.loading('Rendering export…', { id: toastId })
+        exportToast.rendering()
       }
       if (alsoSrt) window.open(`/api/clips/clips/${clipId}/srt`, '_blank')
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Export failed'
       setErrorDetail(msg)
-      toast.error(msg, { id: toastId })
+      exportToast.failed(msg)
     } finally {
       setBusy(false)
     }

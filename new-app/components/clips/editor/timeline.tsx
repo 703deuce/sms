@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Magnet, Maximize2, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
+import { toast } from 'sonner'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { wordDisplayText } from '@/lib/clips/edits'
@@ -14,8 +15,9 @@ import { shotIndexAt } from '@/lib/clips/crop-shots'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 import { groupWordbarItems, type TimelineWordChip } from '@/lib/clips/script-editor/timeline-model'
 import {
+  LANE_LABELS,
   LANE_ORDER,
-  NUDGE_MS,
+  arrowStepMs,
   buildTimelineItems,
   deleteItems,
   laneState,
@@ -28,6 +30,7 @@ import {
   snapValue,
   sourceToOutput,
   splitAt,
+  splitNoopMessage,
   timebaseFor,
   trimItem,
   type ItemRef,
@@ -251,11 +254,25 @@ export function Timeline({
   // E1fix: +/-/0 work whenever focus is not in a text field (before: only after clicking the
   // timeline). When the timeline itself is focused its onKeyDown handles the key first and calls
   // preventDefault, so this window listener skips it (no double zoom).
-  const zoomKeysRef = useRef({ zoomIn, zoomOut, zoomFit })
-  zoomKeysRef.current = { zoomIn, zoomOut, zoomFit }
+  const zoomKeysRef = useRef({ zoomIn, zoomOut, zoomFit, split: () => {}, canSplit: false })
+  zoomKeysRef.current = { zoomIn, zoomOut, zoomFit, split: () => split(), canSplit: Boolean(onCommitEdits) }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return
+      // E2fix: S splits at the playhead from anywhere in the editor (e.g. right after a ruler click),
+      // not only when the timeline has focus. Text fields keep their S.
+      if (
+        (e.key === 's' || e.key === 'S') &&
+        zoomKeysRef.current.canSplit &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !isTextEntryTarget(e.target)
+      ) {
+        e.preventDefault()
+        zoomKeysRef.current.split()
+        return
+      }
       const action = timelineZoomKeyAction(e)
       if (!action || isTextEntryTarget(e.target)) return
       e.preventDefault()
@@ -334,7 +351,14 @@ export function Timeline({
   const commit = (next: ClipEditsV2 | null) => {
     if (next && onCommitEdits) onCommitEdits(next)
   }
-  const split = () => commit(splitAt(opCtx(), liveSelected, playheadMs))
+  const split = () => {
+    if (!editable) return
+    const next = splitAt(opCtx(), liveSelected, playheadMs)
+    if (next) commit(next)
+    else toast.message(splitNoopMessage(edits, liveSelected))
+  }
+  /** E2fix: the last item click landed on a locked lane — arrows then do nothing (not playhead). */
+  const lockedClickRef = useRef<LaneId | null>(null)
   const del = () => {
     if (!liveSelected.length) return false
     commit(deleteItems(opCtx(), liveSelected))
@@ -344,7 +368,7 @@ export function Timeline({
   const nudge = (dir: -1 | 1, big: boolean) => {
     const movable = liveSelected.filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
     if (!movable.length) return false
-    commit(moveItems(opCtx(), movable, dir * NUDGE_MS * (big ? 10 : 1)))
+    commit(moveItems(opCtx(), movable, dir * arrowStepMs(big)))
     return true
   }
   const toggleLane = (lane: LaneId, patch: { muted?: boolean; hidden?: boolean; locked?: boolean }) => {
@@ -363,7 +387,11 @@ export function Timeline({
     rootRef.current?.focus({ preventScroll: true })
     const key = refKey(item)
     const multi = e.shiftKey || e.metaKey || e.ctrlKey
-    if (laneState(edits, item.lane).locked) return
+    if (laneState(edits, item.lane).locked) {
+      lockedClickRef.current = item.lane
+      return
+    }
+    lockedClickRef.current = null
     if (multi) {
       setSelected((s) =>
         s.some((r) => refKey(r) === key) ? s.filter((r) => refKey(r) !== key) : [...s, { lane: item.lane, id: item.id }],
@@ -462,12 +490,19 @@ export function Timeline({
       e.preventDefault()
       e.stopPropagation()
       del()
-    } else if ((k === 'ArrowLeft' || k === 'ArrowRight') && editable && liveSelected.length) {
-      if (nudge(k === 'ArrowLeft' ? -1 : 1, e.shiftKey)) {
+    } else if ((k === 'ArrowLeft' || k === 'ArrowRight') && !mod) {
+      // E2fix: movable selection → nudge it. Clicked a locked item → nothing (it must not fall
+      // through to the editor's playhead step). Otherwise the editor steps the playhead.
+      if (editable && liveSelected.length && nudge(k === 'ArrowLeft' ? -1 : 1, e.shiftKey)) {
         e.preventDefault()
         e.stopPropagation()
+      } else if (lockedClickRef.current && !liveSelected.length) {
+        e.preventDefault()
+        e.stopPropagation()
+        toast.message(`${LANE_LABELS[lockedClickRef.current]} lane is locked`, { id: 'timeline-locked' })
       }
     } else if (k === 'Escape') {
+      lockedClickRef.current = null
       setSelected([])
       setCtxMenu(null)
     } else if (mod && (k === 'a' || k === 'A')) {

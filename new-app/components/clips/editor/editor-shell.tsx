@@ -40,7 +40,7 @@ import { HookOverlayPanel } from '@/components/clips/editor/hook-overlay-panel'
 import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
 import { useSfxCues } from '@/components/clips/editor/use-sfx-cues'
-import { applyTimelineLaneState, brollMediaForItems, voiceMuted } from '@/lib/clips/editor/clip-timeline'
+import { applyTimelineLaneState, arrowStepMs, brollMediaForItems, voiceMuted } from '@/lib/clips/editor/clip-timeline'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { useStudioSoundPreview } from '@/components/clips/editor/use-studio-sound-preview'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
@@ -904,8 +904,14 @@ export function EditorShell({
         togglePlay()
       }
       const playbackEdits = editorPreviewEdits(edits, editorWords)
-      if (e.code === 'ArrowLeft' && v) seekToOutputMs(v, playbackEdits, Math.max(0, outputMs - 1000))
-      if (e.code === 'ArrowRight' && v) seekToOutputMs(v, playbackEdits, Math.min(outDur, outputMs + 1000))
+      // E2fix: same step as the timeline's item nudge — 1 frame, Shift = 10 frames. Skipped when
+      // the timeline already handled the arrow (nudged a selection / locked item).
+      const arrow = e.code === 'ArrowLeft' || e.code === 'ArrowRight'
+      if (arrow && v && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        const step = arrowStepMs(e.shiftKey) * (e.code === 'ArrowLeft' ? -1 : 1)
+        seekToOutputMs(v, playbackEdits, Math.max(0, Math.min(outDur, outputMs + step)))
+      }
       if (e.code === 'Backspace' || e.code === 'Delete') {
         e.preventDefault()
         deleteSelection()
