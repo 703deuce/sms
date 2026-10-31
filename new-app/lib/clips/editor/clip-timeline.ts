@@ -31,6 +31,7 @@ import { reconcileItemMotion, rippleGlobalKeyframes } from '@/lib/clips/editor/k
 import { remapCutTransitions } from '@/lib/clips/editor/transitions'
 import { remapSplitEdits, splitOffsets } from '@/lib/clips/editor/split-edits'
 import { TEXT_MIN_MS, textItemLabel, type TextItem } from '@/lib/clips/editor/text-items'
+import { ADJUST_MIN_MS, adjustLabel } from '@/lib/clips/editor/adjust-layers'
 import {
   LANE_ORDER,
   LANE_TOGGLES,
@@ -62,6 +63,7 @@ export type { LaneId, LaneState, TimelineLanesState }
 export const LANE_LABELS: Record<LaneId, string> = {
   captions: 'Captions',
   text: 'Text',
+  adjust: 'Adjustment',
   video: 'Video',
   broll: 'B-roll',
   voice: 'Voice',
@@ -214,6 +216,8 @@ export function applyTimelineLaneState(edits: ClipEditsV2): ClipEditsV2 {
   let next: ClipEditsV2 = base
   // The E2 lane toggles are the DEFAULT track's state: with extra tracks they leave those alone.
   const onDef = (kind: TrackKind, id: string) => onDefaultTrack(base, kind, id)
+  // G4a: a hidden Adjustment row renders (preview + export) without its layers.
+  if (lanes.adjust?.hidden && (base.adjustLayers?.length ?? 0) > 0) next = { ...next, adjustLayers: undefined }
   if (lanes.broll?.hidden && (base.broll?.length ?? 0) > 0) next = { ...next, broll: base.broll!.filter((b) => !onDef('overlay', b.id)) }
   if (lanes.text?.hidden && base.hookOverlay?.enabled) {
     next = { ...next, hookOverlay: { ...base.hookOverlay, enabled: false } }
@@ -301,7 +305,7 @@ export function buildTimelineItems(input: {
   const { edits, previewEdits } = input
   const tb = timebaseFor(previewEdits)
   const dur = tb.durationMs
-  const lanes: Record<LaneId, TimelineItem[]> = { captions: [], text: [], video: [], broll: [], voice: [], music: [], sfx: [] }
+  const lanes: Record<LaneId, TimelineItem[]> = { captions: [], text: [], adjust: [], video: [], broll: [], voice: [], music: [], sfx: [] }
   const tracks = effectiveTracks(edits)
 
   const ho = edits.hookOverlay
@@ -327,6 +331,17 @@ export function buildTimelineItems(input: {
       caps: { move: true, trimStart: true, trimEnd: true, split: true, del: true },
     })
   }
+  // G4a: adjustment layers (output ms) — move / trim / split / delete on the Adjustment row.
+  ;(edits.adjustLayers ?? []).forEach((l, i) => {
+    lanes.adjust.push({
+      lane: 'adjust',
+      id: l.id,
+      startMs: l.startMs,
+      endMs: l.endMs,
+      label: adjustLabel(l, i),
+      caps: { move: true, trimStart: true, trimEnd: true, split: true, del: true },
+    })
+  })
   for (const t of edits.textItems ?? []) {
     lanes.text.push({
       lane: 'text',
@@ -539,6 +554,12 @@ export function timelineRows(edits: ClipEditsV2): TimelineRow[] {
   const visual = ts.filter((t) => t.kind !== 'audio').reverse().map(row)
   const fixed = (lane: LaneId): TimelineRow => ({ key: lane, lane, label: LANE_LABELS[lane], isDefault: true })
   const caps = edits.captionLines?.length ? [fixed('captions')] : []
+  // G4a: the Adjustment row sits under the text rows and above the overlay rows (it grades what is
+  // below it — overlays + main video — and never the text).
+  if (edits.adjustLayers?.length) {
+    const firstOverlay = visual.findIndex((r) => r.lane === 'broll')
+    visual.splice(firstOverlay < 0 ? visual.length : firstOverlay, 0, fixed('adjust'))
+  }
   return [...caps, ...visual, fixed('video'), fixed('voice'), fixed('music'), ...ts.filter((t) => t.kind === 'audio').map(row)]
 }
 
@@ -562,6 +583,10 @@ function patchBroll(edits: ClipEditsV2, id: string, patch: Partial<BrollItem>): 
 
 function patchText(edits: ClipEditsV2, id: string, patch: Partial<TextItem>): ClipEditsV2 {
   return { ...edits, textItems: (edits.textItems ?? []).map((t) => (t.id === id ? { ...t, ...patch } : t)) }
+}
+
+function patchAdjust(edits: ClipEditsV2, id: string, patch: { startMs?: number; endMs?: number }): ClipEditsV2 {
+  return { ...edits, adjustLayers: (edits.adjustLayers ?? []).map((l) => (l.id === id ? { ...l, ...patch } : l)) }
 }
 
 function patchCaption(edits: ClipEditsV2, id: string, patch: Partial<CaptionLine>): ClipEditsV2 {
@@ -628,6 +653,7 @@ export function moveItems(ctx: OpCtx, refs: ItemRef[], deltaMs: number): ClipEdi
     else if (it.lane === 'music') next = patchMusic(next, { startMs: it.startMs + d, endMs: it.endMs + d })
     else if (it.lane === 'sfx') next = patchSfx(next, it.id, { atMs: it.startMs + d })
     else if (it.lane === 'captions') next = patchCaption(next, it.id, { startMs: it.startMs + d, endMs: it.endMs + d })
+    else if (it.lane === 'adjust') next = patchAdjust(next, it.id, { startMs: it.startMs + d, endMs: it.endMs + d })
   }
   return next
 }
@@ -686,6 +712,16 @@ export function trimItem(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: 
     }
     const e = clamp(to, it.startMs + CAPTION_LINE_MIN_MS, hi)
     return e === it.endMs ? null : patchCaption(ctx.edits, it.id, { endMs: e })
+  }
+
+  if (it.lane === 'adjust') {
+    // G4a: an adjustment layer has no media — both edges trim freely inside the video.
+    if (edge === 'start') {
+      const s = clamp(to, 0, it.endMs - ADJUST_MIN_MS)
+      return s === it.startMs ? null : patchAdjust(ctx.edits, it.id, { startMs: s })
+    }
+    const e = clamp(to, it.startMs + ADJUST_MIN_MS, dur)
+    return e === it.endMs ? null : patchAdjust(ctx.edits, it.id, { endMs: e })
   }
 
   if (it.lane === 'text' && it.id !== 'hook') {
@@ -828,6 +864,27 @@ export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2
       next = { ...next, broll: [...list.slice(0, idx), left, right, ...list.slice(idx + 1)] }
       changed = true
     }
+    if (r.lane === 'adjust') {
+      if (t - it.startMs < ADJUST_MIN_MS || it.endMs - t < ADJUST_MIN_MS) continue
+      const list = next.adjustLayers ?? []
+      const idx = list.findIndex((x) => x.id === it.id)
+      if (idx < 0) continue
+      const src = list[idx]!
+      const rid = splitBrollId(src.id, t, list.map((x) => x.id))
+      next = {
+        ...next,
+        adjustLayers: [...list.slice(0, idx), { ...src, endMs: t }, { ...src, id: rid, startMs: t }, ...list.slice(idx + 1)],
+        // The right half keeps the layer's color keyframes at the same output times.
+        keyframes: [
+          ...(next.keyframes ?? []),
+          ...(next.keyframes ?? [])
+            .filter((k) => k.target === `adjust:${src.id}`)
+            .map((k) => ({ ...k, target: `adjust:${rid}` as const, points: k.points.map((p) => ({ ...p, tMs: p.tMs - (t - src.startMs) })) })),
+        ],
+      }
+      changed = true
+      continue
+    }
     if (r.lane === 'captions') {
       const lines = next.captionLines ?? []
       const after = splitCaptionLine(lines, it.id, { ms: t })
@@ -933,6 +990,10 @@ export function deleteItems(ctx: OpCtx, refs: ItemRef[]): ClipEditsV2 | null {
     else if (r.lane === 'captions') {
       const kept = (next.captionLines ?? []).filter((l) => l.id !== r.id)
       next = { ...next, captionLines: kept.length ? kept : undefined }
+    } else if (r.lane === 'adjust') {
+      const kept = (next.adjustLayers ?? []).filter((l) => l.id !== r.id)
+      const kf = (next.keyframes ?? []).filter((k) => k.target !== `adjust:${r.id}`)
+      next = { ...next, adjustLayers: kept.length ? kept : undefined, keyframes: kf.length ? kf : undefined }
     }
     else if (r.lane === 'text' && next.hookOverlay) next = { ...next, hookOverlay: { ...next.hookOverlay, enabled: false } }
     else if (r.lane === 'video') videoCuts.push([it.srcInMs!, it.srcOutMs!])
@@ -958,7 +1019,7 @@ function sameSegs(a: Timebase, b: Timebase): boolean {
 }
 
 function anchoredJson(e: ClipEditsV2): string {
-  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null, e.textItems ?? null, e.captionLines ?? null])
+  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null, e.textItems ?? null, e.captionLines ?? null, e.adjustLayers ?? null])
 }
 
 /** E3: anything that must follow the EDL or its items (ripple / reconcile). */
@@ -971,7 +1032,8 @@ export function hasAnchoredContent(e: ClipEditsV2): boolean {
       e.transitions?.length ||
       e.splitEdits?.length ||
       e.textItems?.length ||
-      e.captionLines?.length,
+      e.captionLines?.length ||
+      e.adjustLayers?.length,
   )
 }
 
@@ -1043,6 +1105,22 @@ export function rippleAnchoredItems(
           s = Math.max(0, Math.min(s, e - TEXT_MIN_MS))
         }
         return s === it.startMs && e === it.endMs ? it : { ...it, startMs: s, endMs: e }
+      }),
+    }
+  }
+  if (next.adjustLayers?.length) {
+    // G4a: adjustment layers follow the content under them like text items.
+    out = {
+      ...out,
+      adjustLayers: next.adjustLayers.map((l) => {
+        let s = mapStart(l.startMs)
+        let e = mapEnd(l.endMs)
+        if (e - s < ADJUST_MIN_MS) e = s + ADJUST_MIN_MS
+        if (e > dur) {
+          e = dur
+          s = Math.max(0, Math.min(s, e - ADJUST_MIN_MS))
+        }
+        return s === l.startMs && e === l.endMs ? l : { ...l, startMs: s, endMs: e }
       }),
     }
   }

@@ -770,6 +770,10 @@ export function EditorShell({
     }[]
   >([])
   const outDur = editorPreviewDurationMs(edits, editorWords)
+  // G4a: a deleted / undone adjustment layer drops the Color target back to the whole video.
+  useEffect(() => {
+    if (colorTarget.kind === 'adjust' && !edits.adjustLayers?.some((l) => l.id === colorTarget.id)) setColorTarget({ kind: 'video' })
+  }, [colorTarget, edits.adjustLayers])
   const displayEdits = useMemo(() => ({ ...editorPreviewEdits(edits, editorWords), speed: edits.speed }), [edits, editorWords])
   const displayDur = useMemo(() => displayDurationMs(displayEdits), [displayEdits])
   // E4fix: the clock shows output (exported) time on both sides — position warped like the duration.
@@ -866,6 +870,8 @@ export function EditorShell({
         setColorTarget({ kind: 'segment', fromMs: item.srcInMs, toMs: item.srcOutMs, label: item.label })
       } else if (item?.lane === 'broll') {
         setColorTarget({ kind: 'broll', id: item.id, label: item.label })
+      } else if (item?.lane === 'adjust') {
+        setColorTarget({ kind: 'adjust', id: item.id, label: item.label })
       } else {
         setColorTarget({ kind: 'video' })
       }
@@ -892,7 +898,9 @@ export function EditorShell({
                   ? 'music'
                   : item.lane === 'sfx'
                     ? `sfx:${item.id}`
-                    : null
+                    : item.lane === 'adjust'
+                      ? `adjust:${item.id}`
+                      : null
       setCanvasSel((prev) => {
         if (prev?.target !== t) setCropMode(false)
         return t ? { target: t, label: item?.label || t } : null
@@ -1612,7 +1620,9 @@ export function EditorShell({
                           ? 'music'
                           : canvasSel.target.startsWith('sfx:')
                             ? 'sfx'
-                            : 'text'
+                            : canvasSel.target.startsWith('adjust:')
+                              ? 'adjust'
+                              : 'text'
                 ]?.locked,
             )}
             speedSlot={
@@ -1627,7 +1637,16 @@ export function EditorShell({
               ) : null
             }
             colorSlot={
-              <ColorPanel edits={edits} target={colorTarget} onEdits={setEdits} onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)} />
+              <ColorPanel
+              edits={edits}
+              target={colorTarget}
+              onEdits={setEdits}
+              onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)}
+              outputMs={outputMs}
+              outputDurationMs={outDur}
+              onSeekOutput={seekOutput}
+              onTargetChange={setColorTarget}
+            />
             }
           />
           </EditorPanelErrorBoundary>
@@ -1636,7 +1655,16 @@ export function EditorShell({
       {panelMounted('color') ? (
         <div className={panel === 'color' ? undefined : 'hidden'} aria-hidden={panel !== 'color'} data-testid="editor-panel-color">
           <EditorPanelErrorBoundary label="Color">
-          <ColorPanel edits={edits} target={colorTarget} onEdits={setEdits} onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)} />
+          <ColorPanel
+              edits={edits}
+              target={colorTarget}
+              onEdits={setEdits}
+              onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)}
+              outputMs={outputMs}
+              outputDurationMs={outDur}
+              onSeekOutput={seekOutput}
+              onTargetChange={setColorTarget}
+            />
           </EditorPanelErrorBoundary>
         </div>
       ) : null}

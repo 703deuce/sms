@@ -152,6 +152,8 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         # G3a: manual caption lines replace the preview's transcript captions.
         and not edits.get("captionLines")
         and not _e4_color(edits)
+        # G4a: adjustment layers grade the frames.
+        and not edits.get("adjustLayers")
         and not edits.get("segmentSpeeds")
         # E5: source segments replace frames / sound.
         and not edits.get("sourceSegments")
@@ -1418,6 +1420,11 @@ def render_edited_clip(
         from clips_worker.user_fonts import prepare_user_fonts
 
         edits = prepare_user_fonts(conn, workspace_id, edits, work_dir)
+    if conn is not None and workspace_id and edits.get("color"):
+        # G4a: imported .cube LUTs the color looks use (parsed once; baked into each look's cube).
+        from clips_worker.user_luts import prepare_user_luts
+
+        edits = prepare_user_luts(conn, workspace_id, edits, work_dir)
 
     def stage(name: str, **extra: object) -> None:
         payload = {
@@ -1721,6 +1728,15 @@ def render_edited_clip(
         else:
             apply_broll_overlays(cut_mp4, broll_out, broll_specs, w, h, edits=edits)
         caption_src = broll_out
+    if edits.get("adjustLayers"):
+        # G4a: adjustment layers grade everything below them (main video + overlays), under the text.
+        from clips_worker.adjust_layers import apply_adjust_layers
+
+        aw, ah = probe_video_size(caption_src)
+        adj_out = work_dir / "with_adjust.mp4"
+        if apply_adjust_layers(caption_src, adj_out, edits, aw, ah, work_dir):
+            caption_src = adj_out
+            stage("adjust_layers_done")
 
     segs = ordered_keep_segments(edits)
     length_s = sum((b - a) for a, b in segs) / 1000.0

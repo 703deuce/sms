@@ -6,6 +6,7 @@ import type { BrollItem } from '@/lib/clips/broll'
 import { reconcileTracks } from '@/lib/clips/editor/tracks'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
+  isColorProp,
   PROP_SPECS,
   propsForTarget,
   type Ease,
@@ -77,6 +78,7 @@ export function targetForItem(lane: string, id: string): KeyframeTarget | null {
   if (lane === 'text') return id === 'hook' ? 'text' : `text:${id}`
   if (lane === 'broll') return `broll:${id}`
   if (lane === 'sfx') return `sfx:${id}` // G1b3: volume envelope
+  if (lane === 'adjust') return `adjust:${id}` // G4a: color keyframes
   return null
 }
 
@@ -95,6 +97,7 @@ export function targetOriginMs(edits: ClipEditsV2, target: KeyframeTarget): numb
   if (bid) return edits.broll?.find((b) => b.id === bid)?.startMs ?? 0
   const tid = textItemIdOf(target)
   if (tid) return edits.textItems?.find((t) => t.id === tid)?.startMs ?? 0
+  if (target.startsWith('adjust:')) return edits.adjustLayers?.find((a) => a.id === target.slice(7))?.startMs ?? 0
   if (target === 'music') return edits.audio?.music?.startMs ?? 0
   if (target.startsWith('sfx:')) return edits.audio?.sfx?.find((s) => s.generationId === target.slice(4))?.atMs ?? 0
   return 0
@@ -119,7 +122,8 @@ export function volumeAt(edits: ClipEditsV2, target: 'voice' | 'music', localMs:
 
 /** True when a target has any non-default animation or static value. */
 export function hasMotion(edits: ClipEditsV2, target: KeyframeTarget): boolean {
-  return tracksFor(edits, target).some((t) => t.points.length > 0 || (t.value != null && t.value !== PROP_SPECS[t.prop].def))
+  // G4a: color tracks are read by the color pass, never by the motion chain.
+  return tracksFor(edits, target).some((t) => !isColorProp(t.prop) && (t.points.length > 0 || (t.value != null && t.value !== PROP_SPECS[t.prop].def)))
 }
 
 /**
@@ -305,6 +309,22 @@ export function reconcileItemMotion(prev: ClipEditsV2, next: ClipEditsV2): ClipE
         continue
       }
       const p = (prev.textItems ?? []).find((x) => x.id === tid)
+      const moved = p && p.endMs - p.startMs === n.endMs - n.startMs
+      const by = p && !moved ? p.startMs - n.startMs : 0
+      if (by) changed = true
+      out.push(by ? shiftTrack(t, by) : t)
+      continue
+    }
+    if (t.target.startsWith('adjust:')) {
+      // G4a: adjustment-layer color keyframes behave like text: a left-trim keeps them on the
+      // timeline (local shifts by −d), a move carries them, a deleted layer drops them.
+      const aid = t.target.slice(7)
+      const n = (next.adjustLayers ?? []).find((x) => x.id === aid)
+      if (!n) {
+        changed = true
+        continue
+      }
+      const p = (prev.adjustLayers ?? []).find((x) => x.id === aid)
       const moved = p && p.endMs - p.startMs === n.endMs - n.startMs
       const by = p && !moved ? p.startMs - n.startMs : 0
       if (by) changed = true

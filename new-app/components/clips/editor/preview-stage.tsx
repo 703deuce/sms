@@ -47,7 +47,10 @@ import { CanvasSelectionOverlay, type CanvasLayerDom } from '@/components/clips/
 import { orderedStack } from '@/lib/clips/editor/layer-props'
 import type { KeyframeTarget } from '@/lib/clips/editor/keyframes'
 import { ColorLookDefs, lookFilterCss, usedSpecs } from '@/components/clips/editor/color-look-defs'
-import { videoSpecAtSource } from '@/lib/clips/editor/color'
+import { lookKey, videoSpecAtSource } from '@/lib/clips/editor/color'
+import { hasGradeFields } from '@/lib/clips/editor/color-grade'
+import { adjustGradesAt, brollGradeAt, videoGradeAt } from '@/lib/clips/editor/grade-runtime'
+import { GradePreview, layerMedia, stageFrame } from '@/components/clips/editor/g4/grade-preview'
 import { speedAtSource } from '@/lib/clips/editor/speed'
 import { textItemFrame } from '@/lib/clips/editor/text-frame'
 import { libassSupported, previewLibassEnabled } from '@/lib/clips/preview-libass-flag'
@@ -251,6 +254,11 @@ export function PreviewStage({
   const seekKeyRef = useRef<string | null>(null)
   // E3: layers driven per tick by motion-preview (keyframes + transitions).
   const underRef = useRef<HTMLDivElement>(null)
+  // G4a: adjustment layers grade the main video + B-roll (wrapper filter; text stays on top).
+  const adjustRef = useRef<HTMLDivElement>(null)
+  const gradeRef = useRef<GradePreview | null>(null)
+  const [gradeNotice, setGradeNotice] = useState<string | null>(null)
+  const gradeNoticeRef = useRef<string | null>(null)
   const mainKfRef = useRef<HTMLDivElement>(null)
   const mainLayerRef = useRef<HTMLDivElement>(null)
   const cloneARef = useRef<HTMLDivElement>(null)
@@ -277,6 +285,8 @@ export function PreviewStage({
   // G1a: output ms of the frame on screen (canvas gestures key at the playhead).
   const outMsRef = useRef(0)
   const [stageBoxEl, setStageBoxEl] = useState<HTMLDivElement | null>(null)
+  const stageBoxElRef = useRef<HTMLDivElement | null>(null)
+  stageBoxElRef.current = stageBoxEl
   const libassSubsRef = useRef(new Set<(ms: number) => void>())
   const libassClock = useMemo<LibassClock>(
     () => ({
@@ -298,6 +308,19 @@ export function PreviewStage({
   boxSizeRef.current = box
   const lookEdits = (audition?.edits ?? edits) as ClipEditsV2
   const lookSpecs = useMemo(() => usedSpecs(lookEdits), [lookEdits])
+  if (!gradeRef.current && typeof document !== 'undefined') gradeRef.current = new GradePreview()
+  // Legacy E4 looks keep their <ColorLookDefs> filter ids; everything else is built on demand.
+  if (gradeRef.current) gradeRef.current.bank.staticKeys = new Set(lookSpecs.filter((sp) => !hasGradeFields(sp)).map((sp) => lookKey(sp)))
+  useEffect(() => {
+    // StrictMode re-runs effects without a render: recreate after a dev cleanup.
+    if (!gradeRef.current) gradeRef.current = new GradePreview()
+    const gp = gradeRef.current
+    // (A LUT that finishes loading changes the grid key, so the rAF tick re-grades by itself.)
+    return () => {
+      gp.dispose()
+      if (gradeRef.current === gp) gradeRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     const el = videoRefInner.current
@@ -569,9 +592,25 @@ export function PreviewStage({
         v.muted = srcMutedMainRef.current.prev
         srcMutedMainRef.current = null
       }
-      // E4: color looks — main layer by source position, B-roll per item (SVG filters, ColorLookDefs).
-      const mainLook = lookFilterCss(videoSpecAtSource(e.color, src))
-      if (mainLayerRef.current && mainLayerRef.current.style.filter !== mainLook) mainLayerRef.current.style.filter = mainLook
+      // E4 / G4a: color — main layer by source position (+ color keyframes at output time), B-roll
+      // per item, adjustment layers on the wrapper. SVG chain (grade-filters) or WebGL mirror for
+      // the HSL / LUT stage (grade-gl), both from the same math as the export (color-grade.ts).
+      const gp = gradeRef.current
+      if (gp) {
+        gp.bank.attach(stageBoxElRef.current)
+        // Grain cells follow the export frame (1080p assumed; 720p has finer cells — G4_spec limits).
+        gp.bank.play = boxSizeRef.current.w > boxSizeRef.current.h ? { w: 1920, h: 1080 } : { w: 1080, h: 1920 }
+        gp.begin(Math.floor((outMs * 30) / 1000))
+        stageFrame.video = v ?? null
+        stageFrame.srcMs = src
+        stageFrame.outMs = outMs
+        gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current))
+        const adj = gp.chain(adjustGradesAt(e, outMs).map((g) => g.spec))
+        if (adjustRef.current && adjustRef.current.style.filter !== adj) adjustRef.current.style.filter = adj
+      } else {
+        const mainLook = lookFilterCss(videoSpecAtSource(e.color, src))
+        if (mainLayerRef.current && mainLayerRef.current.style.filter !== mainLook) mainLayerRef.current.style.filter = mainLook
+      }
       for (const it of e.textItems ?? []) {
         const el = textRefs.current[it.id]
         if (!el) continue
@@ -591,8 +630,11 @@ export function PreviewStage({
           const [iStart, iEnd] = brollVisibleRange(item, bWins)
           const iop = iStart <= outMs && outMs < iEnd ? '1' : '0'
           if (img.style.opacity !== iop) img.style.opacity = iop
-          const iLook = lookFilterCss(e.color?.broll?.[item.id])
-          if (img.style.filter !== iLook) img.style.filter = iLook
+          if (gp) gp.apply(img, brollGradeAt(e, item.id, outMs), [img])
+          else {
+            const iLook = lookFilterCss(e.color?.broll?.[item.id])
+            if (img.style.filter !== iLook) img.style.filter = iLook
+          }
           continue
         }
         const el = brollRefs.current[item.id]
@@ -604,8 +646,11 @@ export function PreviewStage({
         // animates its box; keyframed opacity lives on the box, not here).
         const op = active ? '1' : '0'
         if (el.style.opacity !== op) el.style.opacity = op
-        const bLook = lookFilterCss(e.color?.broll?.[item.id])
-        if (el.style.filter !== bLook) el.style.filter = bLook
+        if (gp) gp.apply(el, brollGradeAt(e, item.id, outMs), [el])
+        else {
+          const bLook = lookFilterCss(e.color?.broll?.[item.id])
+          if (el.style.filter !== bLook) el.style.filter = bLook
+        }
         if (active) {
           // E2: inMs = media in-point (split / left-trim). Export loops short B-roll (-stream_loop -1).
           const relRaw = (outMs - item.startMs + (item.inMs ?? 0)) / 1000
@@ -636,9 +681,17 @@ export function PreviewStage({
           playing: v ? !v.paused : false,
           rate,
           mediaOffsetMs,
-          lookAt: e.color ? (ms: number) => lookFilterCss(videoSpecAtSource(e.color, ms)) : undefined,
+          // Transition clones: SVG chain (no WebGL mirror / 3D stage on clones — G4_spec limits).
+          lookAt: e.color ? (ms: number) => (gp ? gp.bank.css(videoSpecAtSource(e.color, ms)) : lookFilterCss(videoSpecAtSource(e.color, ms))) : undefined,
         },
       )
+      if (gp) {
+        const notice = gp.end()
+        if (notice !== gradeNoticeRef.current) {
+          gradeNoticeRef.current = notice
+          setGradeNotice(notice)
+        }
+      }
       onTickRef.current({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
 
       const { w: boxW, h: boxH } = boxSizeRef.current
@@ -911,6 +964,8 @@ export function PreviewStage({
             aria-hidden
           />
         ) : null}
+        {/* G4a: no z-index here; with no filter it creates no stacking context, so G1b stacking is unchanged. */}
+        <div ref={adjustRef} className="absolute inset-0" data-testid="preview-adjust">
         <div ref={underRef} className="absolute inset-0" data-testid="preview-under">
         <div ref={mainKfRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }} data-testid="preview-main-kf">
         <div ref={mainLayerRef} className="absolute inset-0" data-testid="preview-main-layer">
@@ -1323,7 +1378,16 @@ export function PreviewStage({
                 </div>
               )
             })}
+        </div>
         <ColorLookDefs specs={lookSpecs} />
+        {gradeNotice ? (
+          <div
+            className="pointer-events-none absolute left-2 top-2 z-[60] max-w-[80%] rounded bg-black/70 px-2 py-0.5 text-[10px] text-white"
+            data-testid="preview-grade-notice"
+          >
+            {gradeNotice}
+          </div>
+        ) : null}
         <TextItemsPreview
           edits={(audition?.edits ?? edits) as ClipEditsV2}
           underZ={underZ}

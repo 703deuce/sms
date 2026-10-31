@@ -10389,3 +10389,21 @@ model ClipFont {
   @@index([workspaceId], map: "clip_fonts_workspace_idx")
   @@map("clip_fonts")
 }
+
+/// G4a imported .cube LUTs (clip storage luts/{workspaceId}/{id}.cube). Soft delete only.
+model ClipLut {
+  id            String    @id
+  workspaceId   String
+  name          String
+  filename      String
+  /// 3D grid size (2..65)
+  size          Int
+  storageKey    String
+  storageDriver String?
+  bytes         Int
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  @@index([workspaceId], map: "clip_luts_workspace_idx")
+  @@map("clip_luts")
+}
