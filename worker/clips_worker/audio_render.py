@@ -208,6 +208,13 @@ def music_chain(
     )
 
 
+def sfx_input_args(path: Path, sfx_fx: list | None, i: int) -> list[str]:
+    """G2fix: a looping music clip repeats its media (`-stream_loop -1`); its atrim duration=durMs
+    (sfx_trim — loop is only set with a durMs) bounds the infinite input."""
+    fx = sfx_fx[i] if sfx_fx and i < len(sfx_fx) else None
+    return (["-stream_loop", "-1"] if fx and fx.get("loop") else []) + ["-i", str(path)]
+
+
 def music_input_args(music_path: Path, loop: bool) -> list[str]:
     """G2 Fit to length: a looping bed repeats its media (`-stream_loop -1`); music_chain's atrim /
     the whole-clip atrim bounds the length, so the infinite input always ends."""
@@ -266,8 +273,8 @@ def apply_audio_mix(
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video)]
     if has_music:
         cmd.extend(music_input_args(music_path, music_loop))
-    for path, _, _ in sfx_paths:
-        cmd.extend(["-i", str(path)])
+    for i, (path, _, _) in enumerate(sfx_paths):
+        cmd.extend(sfx_input_args(path, sfx_fx, i))
 
     cmd.extend(
         [
@@ -512,8 +519,8 @@ def apply_dub_speech_mix(
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-i", str(dub_audio)]
     if has_music:
         cmd.extend(music_input_args(music_path, music_loop))
-    for path, _, _ in sfx_paths:
-        cmd.extend(["-i", str(path)])
+    for i, (path, _, _) in enumerate(sfx_paths):
+        cmd.extend(sfx_input_args(path, sfx_fx, i))
     cmd.extend(
         [
             "-filter_complex",

@@ -8,7 +8,8 @@ import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/lib/clips/audio'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { outputToSource, type Timebase } from '@/lib/clips/editor/clip-timeline'
 import { isDefaultTrackId, setItemsTrack } from '@/lib/clips/editor/tracks'
-import { addMusicClip } from '@/lib/clips/editor/audio-clip'
+import { addMusicClip, makeMusicClips } from '@/lib/clips/editor/audio-clip'
+import { isMusicTrack } from '@/lib/clips/editor/audio-kind'
 import {
   IMAGE_DEFAULT_MS,
   SOURCE_SEG_MIN_MS,
@@ -110,7 +111,9 @@ export function placeAddedOnTrack(prev: ClipEditsV2, next: ClipEditsV2, lane: Me
   if (lane === 'sfx') {
     const had = new Set((prev.audio?.sfx ?? []).map((c) => c.generationId))
     const ids = (next.audio?.sfx ?? []).filter((c) => !had.has(c.generationId)).map((c) => c.generationId)
-    return setItemsTrack(next, 'audio', ids, trackId) ?? next
+    const placed = setItemsTrack(next, 'audio', ids, trackId) ?? next
+    // G2fix: a song dropped on a "Music N" track is a music clip (same as the Music button).
+    return isMusicTrack(placed, trackId) ? makeMusicClips(placed, ids) : placed
   }
   return next
 }

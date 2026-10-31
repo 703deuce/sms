@@ -2,7 +2,8 @@
 
 import { AUDIO_FADE_MAX_MS, DEFAULT_DUCK_DEPTH, DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/lib/clips/audio'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { fitMusicToLength, patchAudioClip, type AudioClipPatch } from '@/lib/clips/editor/audio-clip'
+import { fitClipToLength, fitMusicToLength, maxFadeMs, patchAudioClip, type AudioClipPatch } from '@/lib/clips/editor/audio-clip'
+import { AUDIO_KIND_LABEL, type AudioClipKind } from '@/lib/clips/editor/audio-kind'
 
 const pct = (v: number) => `${Math.round(v * 100)}%`
 const sec = (ms: number) => (ms / 1000).toFixed(1)
@@ -16,6 +17,8 @@ export function AudioClipInspector({
   edits,
   lane,
   id,
+  kind,
+  lenMs,
   durationMs,
   mediaMs,
   bpm,
@@ -25,6 +28,10 @@ export function AudioClipInspector({
   edits: ClipEditsV2
   lane: 'music' | 'sfx'
   id: string
+  /** G2fix: what the clip is — 'music' (bed or a Music N clip) gets Loop / Fit to length / BPM. */
+  kind?: AudioClipKind
+  /** G2fix: the clip's timeline length (fade limits; the length a clip loops to). */
+  lenMs?: number
   /** Output length of the video (Fit to length). */
   durationMs: number
   /** Music media length when decoded (null = unknown). */
@@ -37,11 +44,17 @@ export function AudioClipInspector({
   const music = lane === 'music' ? edits.audio?.music : null
   const cue = lane === 'sfx' ? edits.audio?.sfx.find((s) => s.generationId === id) : null
   if (!music && !cue) return null
+  // G2fix: a song on a Music N track has the same controls as the music bed.
+  const isMusic = Boolean(music) || kind === 'music'
   const volume = music ? music.volume ?? DEFAULT_MUSIC_VOLUME : cue!.volume ?? DEFAULT_SFX_VOLUME
   const fadeIn = music ? music.fadeInMs ?? DEFAULT_MUSIC_FADE_IN_MS : cue!.fadeInMs ?? 0
   const fadeOut = music ? music.fadeOutMs ?? DEFAULT_MUSIC_FADE_OUT_MS : cue!.fadeOutMs ?? 0
+  // Ducking: the bed always has a depth (0 = off); a clip is ducked only when it stores one (music
+  // clips get it when placed, plain SFX / audio never by default).
   const duck = music ? music.duckDepth ?? DEFAULT_DUCK_DEPTH : cue!.duckDepth
-  const ducked = music ? (duck ?? 0) > 0 : duck != null
+  const ducked = music ? (duck ?? 0) > 0 : duck != null && duck > 0
+  const loop = Boolean(music ? music.loop : cue!.loop)
+  const fadeMaxS = (lenMs != null && lenMs > 0 ? maxFadeMs(lenMs) : AUDIO_FADE_MAX_MS) / 1000
   const patch = (p: AudioClipPatch) => {
     const next = patchAudioClip(edits, lane, id, p)
     if (next) onCommit(next)
@@ -54,8 +67,9 @@ export function AudioClipInspector({
       className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-card/60 px-2 py-1 text-[11px]"
       data-testid="audio-clip-inspector"
       data-lane={lane}
+      data-kind={isMusic ? 'music' : kind ?? 'sfx'}
     >
-      <span className="font-medium">{music ? 'Music' : 'Audio clip'}</span>
+      <span className="font-medium">{isMusic ? 'Music' : kind ? AUDIO_KIND_LABEL[kind] : 'Audio clip'}</span>
       <label className="flex items-center gap-1">
         <span className={label}>Volume</span>
         <input
@@ -76,7 +90,7 @@ export function AudioClipInspector({
         <input
           type="number"
           min={0}
-          max={AUDIO_FADE_MAX_MS / 1000}
+          max={fadeMaxS}
           step={0.1}
           value={sec(fadeIn)}
           disabled={readOnly}
@@ -91,7 +105,7 @@ export function AudioClipInspector({
         <input
           type="number"
           min={0}
-          max={AUDIO_FADE_MAX_MS / 1000}
+          max={fadeMaxS}
           step={0.1}
           value={sec(fadeOut)}
           disabled={readOnly}
@@ -128,16 +142,16 @@ export function AudioClipInspector({
           <span className="w-8 tabular-nums">{pct(duck ?? 0)}</span>
         </label>
       ) : null}
-      {music ? (
+      {isMusic ? (
         <>
           <label className="flex items-center gap-1" title="Repeat the song to fill its timeline window">
             <input
               type="checkbox"
-              checked={Boolean(music.loop)}
+              checked={loop}
               disabled={readOnly}
               aria-label="Loop music"
               data-testid="audio-clip-loop"
-              onChange={(e) => patch({ loop: e.target.checked })}
+              onChange={(e) => patch({ loop: e.target.checked, ...(lenMs != null ? { durMs: lenMs } : {}) })}
             />
             <span className={label}>Loop</span>
           </label>
@@ -148,7 +162,7 @@ export function AudioClipInspector({
             data-testid="audio-clip-fit"
             title="Music from 0 to the end of the video: trims a long song, loops a short one, fades out over the last 2 s"
             onClick={() => {
-              const next = fitMusicToLength(edits, durationMs, mediaMs ?? null)
+              const next = music ? fitMusicToLength(edits, durationMs, mediaMs ?? null) : fitClipToLength(edits, id, durationMs, mediaMs ?? null)
               if (next) onCommit(next)
             }}
           >

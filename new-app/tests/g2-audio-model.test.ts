@@ -102,7 +102,7 @@ describe('G2 fades / ducking math (preview = export)', () => {
     expect(fadeFromDrag('in', 4000, 0, 0, 600)).toBe(600)
     expect(fadeFromDrag('in', 4000, 0, 3000, 2000)).toBe(1000)
     expect(fadeFromDrag('out', 4000, 1000, 0, 400)).toBe(600) // dragging the out-handle right shortens it
-    expect(fadeFromDrag('out', 4000, 1000, 0, -99_999)).toBe(4000)
+    expect(fadeFromDrag('out', 4000, 1000, 0, -99_999)).toBe(2000) // G2fix: at most half the clip
     expect(fadeFromDrag('in', 4000, 500, 0, -2000)).toBe(0)
   })
 })

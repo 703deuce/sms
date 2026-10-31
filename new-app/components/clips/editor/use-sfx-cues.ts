@@ -10,13 +10,14 @@ import { detectBeats, monoSamples } from '@/lib/clips/editor/beats'
 /** G2: beat markers only for music-length clips (short SFX would just add noise). */
 const BEATS_MIN_MS = 8000
 /** G2: waveform + beats per decoded buffer, computed once (buffers are shared by placements). */
-const analysisCache = new WeakMap<AudioBuffer, { peaks: AudioPeaks; beatsMs: number[] }>()
-function analyse(b: AudioBuffer): { peaks: AudioPeaks; beatsMs: number[] } {
+const analysisCache = new WeakMap<AudioBuffer, { peaks: AudioPeaks; beatsMs: number[]; bpm: number | null }>()
+function analyse(b: AudioBuffer): { peaks: AudioPeaks; beatsMs: number[]; bpm: number | null } {
   const hit = analysisCache.get(b)
   if (hit) return hit
   const peaks = peaksFromSamples(b.getChannelData(0), b.duration, 40)
-  const beatsMs = b.duration * 1000 >= BEATS_MIN_MS ? detectBeats(monoSamples(b), b.sampleRate).beatsMs : []
-  const out = { peaks, beatsMs }
+  const grid = b.duration * 1000 >= BEATS_MIN_MS ? detectBeats(monoSamples(b), b.sampleRate) : null
+  const beatsMs = grid?.beatsMs ?? []
+  const out = { peaks, beatsMs, bpm: beatsMs.length && grid?.bpm ? grid.bpm : null }
   analysisCache.set(b, out)
   return out
 }
@@ -36,6 +37,8 @@ export function useSfxCues(
   peaks: Record<string, AudioPeaks>
   /** G2: media-ms beats of music-length clips (by lane id). */
   beatsMs: Record<string, number[]>
+  /** G2fix: detected tempo of music-length clips (by lane id) — the music-clip inspector shows it. */
+  bpm: Record<string, number>
 } {
   const [buffers, setBuffers] = useState<Record<string, AudioBuffer>>({})
   const ids = useMemo(() => [...new Set(sfx.map((s) => s.generationId))].sort(), [sfx])
@@ -107,6 +110,7 @@ export function useSfxCues(
     const durationsMs: Record<string, number> = {}
     const peaks: Record<string, AudioPeaks> = {}
     const beatsMs: Record<string, number[]> = {}
+    const bpm: Record<string, number> = {}
     for (const s of sfx) {
       const b = buffers[s.generationId]
       if (!b) continue
@@ -115,6 +119,7 @@ export function useSfxCues(
         const a = analyse(b)
         peaks[s.generationId] = a.peaks
         if (a.beatsMs.length) beatsMs[s.generationId] = a.beatsMs
+        if (a.bpm) bpm[s.generationId] = a.bpm
       } catch {
         /* display-only */
       }
@@ -130,8 +135,10 @@ export function useSfxCues(
         ...(s.fadeInMs ? { fadeInMs: s.fadeInMs } : {}),
         ...(s.fadeOutMs ? { fadeOutMs: s.fadeOutMs } : {}),
         ...(s.duckDepth != null ? { duckDepth: s.duckDepth } : {}),
+        // G2fix: a looping music clip (export: `-stream_loop -1` + atrim duration=durMs).
+        ...(s.loop && s.durMs != null ? { loop: true } : {}),
       })
     }
-    return { cues, durationsMs, peaks, beatsMs }
+    return { cues, durationsMs, peaks, beatsMs, bpm }
   }, [buffers, sfx])
 }
