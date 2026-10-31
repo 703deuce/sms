@@ -38,6 +38,7 @@ import {
   trimItem,
   type ItemRef,
   type LaneId,
+  type LaneState,
   type OpCtx,
   type TimelineItem,
   videoJoinOptions,
@@ -52,6 +53,7 @@ import { autoCrossfade } from '@/lib/clips/editor/auto-crossfade'
 import { addFreezeFrame } from '@/lib/clips/editor/inserts'
 import {
   addTrack,
+  applyAudioSolo,
   canAddTrack,
   moveTrack,
   removeTrack,
@@ -93,7 +95,11 @@ import { PROP_SPECS } from '@/lib/clips/editor/motion-schema'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
 import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
 import { CUT_HANDLE_ROW_TOP_PX, layoutCutHandles } from '@/lib/clips/editor/cut-handle-layout'
-import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
+import { useAudioPeaks, type AudioPeaks } from '@/components/clips/editor/use-audio-peaks'
+import { AudioClipInspector } from '@/components/clips/editor/timeline/audio-clip-inspector'
+import { fadeFromDrag, patchAudioClip } from '@/lib/clips/editor/audio-clip'
+import { beatsToOutput } from '@/lib/clips/editor/beats'
+import { DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS } from '@/lib/clips/audio'
 import { useDismiss } from '@/components/clips/editor/use-dismiss'
 import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
 import { TimelineRuler } from '@/components/clips/editor/timeline/timeline-ruler'
@@ -255,6 +261,8 @@ export function Timeline({
   mediaOffsetMs = 0,
   musicUrl = null,
   sfxDurationsMs,
+  sfxPeaks,
+  sfxBeatsMs,
   onOpenCover,
   onSelectionChange,
   editorAssets = null,
@@ -298,6 +306,10 @@ export function Timeline({
   mediaOffsetMs?: number
   musicUrl?: string | null
   sfxDurationsMs?: Record<string, number>
+  /** G2: waveform of each placed audio clip (SFX lane / audio tracks), by lane id. */
+  sfxPeaks?: Record<string, AudioPeaks>
+  /** G2: media-ms beats of music-length audio clips, by lane id. */
+  sfxBeatsMs?: Record<string, number[]>
   onOpenCover?: () => void
   /** E4: the single selected item (Color / Text panels follow it); null when 0 or 2+ selected. */
   onSelectionChange?: (item: TimelineItem | null) => void
@@ -577,7 +589,30 @@ export function Timeline({
   // Full videos: worker sprite first; client frames only refine visible tiles when zoomed in.
   const videoFrames = useFilmstripFrames(videoUrl)
   const filmstripSprite = editorAssets?.filmstrip ?? null
-  const musicPeaks = useAudioPeaks(edits.audio?.music ? musicUrl : null, 20)
+  // G2: the music decode also runs the local beat detector (markers + snapping).
+  const musicPeaks = useAudioPeaks(edits.audio?.music ? musicUrl : null, 20, 12_000, { beats: true })
+  // G2: beat markers on music / long audio clips (and snapping to them).
+  const [beatsOn, setBeatsOn] = useState(true)
+  const [fadeDrag, setFadeDrag] = useState<{ key: string; edge: 'in' | 'out'; ms: number } | null>(null)
+  // G2: OUTPUT-ms beat marks per audio item (music bed: looped grid when "Fit to length" loops it).
+  const beatMarks = useMemo(() => {
+    const out: Record<string, number[]> = {}
+    const m = edits.audio?.music
+    const mi = lanes.music[0]
+    if (m && mi && musicPeaks.beatsMs?.length) {
+      out[refKey(mi)] = beatsToOutput(musicPeaks.beatsMs, { startMs: mi.startMs, endMs: mi.endMs, inMs: mi.inMs ?? 0 }, musicPeaks.durationMs || null, Boolean(m.loop))
+    }
+    for (const it of lanes.sfx) {
+      const b = sfxBeatsMs?.[it.id]
+      if (!b?.length) continue
+      const cue = edits.audio?.sfx.find((x) => x.generationId === it.id)
+      out[refKey(it)] = beatsToOutput(b, { startMs: it.startMs, endMs: it.endMs, inMs: cue?.inMs ?? 0 }, null)
+    }
+    return out
+  }, [edits.audio, lanes, musicPeaks.beatsMs, musicPeaks.durationMs, sfxBeatsMs])
+  const hasBeats = Object.keys(beatMarks).length > 0
+  // G2: solo — items of audio tracks silenced by another track's solo draw faded.
+  const soloEdits = useMemo(() => applyAudioSolo(edits), [edits])
   const editable = Boolean(onCommitEdits)
 
   const [selected, setSelected] = useState<ItemRef[]>([])
@@ -637,7 +672,7 @@ export function Timeline({
     onSelRef.current?.(singleSelRef.current)
   }, [singleSelKey])
 
-  const opCtx = (): OpCtx => ({ edits, previewEdits, clampTrim })
+  const opCtx = (): OpCtx => ({ edits, previewEdits, clampTrim, sfxDurationsMs })
   // G1b2 manual multicam (angles = main + video sources; switches are E5 source segments).
   const angles = multicamAngles(edits, angleSources)
   const angleRef = useRef<(n: number) => boolean>(() => false)
@@ -702,19 +737,19 @@ export function Timeline({
     commit(moveItems(opCtx(), movable, dir * arrowStepMs(big)))
     return true
   }
-  const toggleLane = (lane: LaneId, patch: { muted?: boolean; hidden?: boolean; locked?: boolean }) => {
+  const toggleLane = (lane: LaneId, patch: LaneState) => {
     const next = setLaneState(edits, lane, patch)
     commit(next)
     if (patch.locked) setSelected((s) => s.filter((r) => !refLocked(next, r)))
   }
   // G1b: track rows (extra tracks) toggle their own flags; default rows keep the E2 lane toggles.
-  const toggleRow = (r: TimelineRow, patch: { muted?: boolean; hidden?: boolean; locked?: boolean }) => {
+  const toggleRow = (r: TimelineRow, patch: LaneState) => {
     if (r.isDefault || !r.trackId) return toggleLane(r.lane, patch)
     const next = setTrackFlags(edits, r.trackId, patch)
     commit(next)
     if (patch.locked && next) setSelected((s) => s.filter((x) => !refLocked(next, x)))
   }
-  const itemState = (item: TimelineItem) => (item.track ? trackState(edits, item.track) : laneState(edits, item.lane))
+  const itemState = (item: TimelineItem) => (item.track ? trackState(soloEdits, item.track) : laneState(soloEdits, item.lane))
 
   // ---- G1b commands (clipboard, ranges, jumps, tracks) -------------------------------------
   const copySel = (cut: boolean) => {
@@ -1176,7 +1211,9 @@ export function Timeline({
         : [{ lane: item.lane, id: item.id }]
     const moving = refs.map((r) => lanes[r.lane].find((i) => i.id === r.id)!).filter(Boolean)
     const exclude = new Set(refs.map(refKey))
-    const targets = snapTargets({ lanes, durationMs: span, playheadMs, wordEdgesMs: wordEdges, exclude })
+    // G2: beats of the items being dragged move with them — never snap to those.
+    const beatSnap = beatsOn ? Object.entries(beatMarks).flatMap(([k, v]) => (exclude.has(k) ? [] : v)) : []
+    const targets = snapTargets({ lanes, durationMs: span, playheadMs, wordEdgesMs: wordEdges, exclude, beatsMs: beatSnap })
     const thr = SNAP_PX / Math.max(1e-6, pxPerMs)
     const ctx = opCtx()
     const state: DragState = { mode, item, refs, originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, alt: e.altKey }
@@ -1390,6 +1427,82 @@ export function Timeline({
   const tbtn =
     'inline-flex h-7 items-center gap-1 rounded px-1.5 text-[11px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40'
 
+  /** G2: fade lengths of an audio item (music defaults 0.5 s / 1 s; clips 0). */
+  const fadesOf = (item: TimelineItem): { fi: number; fo: number } => {
+    if (item.lane === 'music') {
+      const m = edits.audio?.music
+      return { fi: m?.fadeInMs ?? DEFAULT_MUSIC_FADE_IN_MS, fo: m?.fadeOutMs ?? DEFAULT_MUSIC_FADE_OUT_MS }
+    }
+    const c = edits.audio?.sfx.find((x) => x.generationId === item.id)
+    return { fi: c?.fadeInMs ?? 0, fo: c?.fadeOutMs ?? 0 }
+  }
+  const startFadeDrag = (e: React.PointerEvent, item: TimelineItem, edge: 'in' | 'out') => {
+    e.stopPropagation()
+    e.preventDefault()
+    const { fi, fo } = fadesOf(item)
+    const lenMs = item.endMs - item.startMs
+    const key = refKey(item)
+    const x0 = e.clientX
+    const calc = (ev: PointerEvent) =>
+      fadeFromDrag(edge, lenMs, edge === 'in' ? fi : fo, edge === 'in' ? fo : fi, (ev.clientX - x0) / Math.max(1e-6, pxPerMs))
+    let last = edge === 'in' ? fi : fo
+    setFadeDrag({ key, edge, ms: last })
+    const onMove = (ev: PointerEvent) => {
+      last = calc(ev)
+      setFadeDrag({ key, edge, ms: last })
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      setFadeDrag(null)
+      if (last === (edge === 'in' ? fi : fo)) return
+      commit(patchAudioClip(edits, item.lane as 'music' | 'sfx', item.id, edge === 'in' ? { fadeInMs: last } : { fadeOutMs: last }))
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+  /** G2: fade ramps (shaded) + draggable fade handles on music / audio clips. */
+  const renderFades = (item: TimelineItem, geo: { startMs: number; endMs: number }, w: number, h: number, st: LaneState) => {
+    const key = refKey(item)
+    const lenMs = Math.max(1, geo.endMs - geo.startMs)
+    let { fi, fo } = fadesOf(item)
+    if (fadeDrag?.key === key) {
+      if (fadeDrag.edge === 'in') fi = fadeDrag.ms
+      else fo = fadeDrag.ms
+    }
+    fi = Math.min(fi, lenMs)
+    fo = Math.min(fo, lenMs)
+    const fiPx = fi * pxPerMs
+    const foPx = fo * pxPerMs
+    const hh = h - 4
+    const handles = editable && !st.locked && w > 24
+    return (
+      <>
+        {fiPx > 0.5 || foPx > 0.5 ? (
+          <svg className="pointer-events-none absolute inset-0" width={w} height={hh} aria-hidden data-testid="timeline-fade-shade">
+            {fiPx > 0.5 ? <polygon points={`0,0 ${fiPx},0 0,${hh}`} fill="rgba(0,0,0,0.35)" /> : null}
+            {foPx > 0.5 ? <polygon points={`${w - foPx},0 ${w},0 ${w},${hh}`} fill="rgba(0,0,0,0.35)" /> : null}
+          </svg>
+        ) : null}
+        {handles
+          ? (['in', 'out'] as const).map((edge) => (
+              <span
+                key={`fade-${edge}`}
+                role="slider"
+                aria-label={`Fade ${edge}`}
+                aria-valuenow={Math.round(edge === 'in' ? fi : fo)}
+                className="absolute top-0 z-10 size-2 -translate-x-1/2 cursor-ew-resize rounded-full border border-black/50 bg-white/90"
+                style={{ left: edge === 'in' ? Math.max(4, fiPx) : Math.min(w - 4, w - foPx) }}
+                title={`Fade ${edge}: ${((edge === 'in' ? fi : fo) / 1000).toFixed(2)} s — drag`}
+                data-testid={`timeline-fade-${edge}`}
+                onPointerDown={(e) => startFadeDrag(e, item, edge)}
+              />
+            ))
+          : null}
+      </>
+    )
+  }
+
   const renderItem = (item: TimelineItem) => {
     const geo = shown(item)
     const left = geo.startMs * pxPerMs
@@ -1475,6 +1588,34 @@ export function Timeline({
             className="absolute inset-0 size-full text-teal-200/80"
           />
         ) : null}
+        {item.lane === 'sfx' && sfxPeaks?.[item.id] ? (
+          <TimelineWaveform
+            peaks={sfxPeaks[item.id]!}
+            mediaFromMs={edits.audio?.sfx.find((x) => x.generationId === item.id)?.inMs ?? 0}
+            mediaToMs={(edits.audio?.sfx.find((x) => x.generationId === item.id)?.inMs ?? 0) + (item.endMs - item.startMs)}
+            widthPx={w}
+            visLeftPx={wavWin ? wavWin[0] - left : undefined}
+            visRightPx={wavWin ? wavWin[1] - left : undefined}
+            className="absolute inset-0 size-full text-orange-100/80"
+          />
+        ) : null}
+        {beatsOn && beatMarks[refKey(item)]?.length
+          ? beatMarks[refKey(item)]!.map((b) => (
+              <span
+                key={`bt${b}`}
+                className="pointer-events-none absolute bottom-0 w-px bg-yellow-200/70"
+                style={{ left: (b - geo.startMs) * pxPerMs, height: Math.max(4, (h - 4) / 3) }}
+                data-testid="timeline-beat"
+                data-ms={b}
+              />
+            ))
+          : null}
+        {item.lane === 'music' && edits.audio?.music?.loop ? (
+          <span className="pointer-events-none absolute right-1 top-0 z-[1] rounded bg-black/50 px-0.5 text-[9px]" data-testid="timeline-music-loop" title="Loops to fill its window">
+            ↻
+          </span>
+        ) : null}
+        {item.lane === 'music' || item.lane === 'sfx' ? renderFades(item, geo, w, h, st) : null}
         {item.lane !== 'voice' && item.lane !== 'video' && w > 28 ? (
           <span className="pointer-events-none relative truncate px-1">{item.label}</span>
         ) : null}
@@ -1671,6 +1812,19 @@ export function Timeline({
             <Magnet className="size-3.5" />
             Snap
           </button>
+          {hasBeats ? (
+            <button
+              type="button"
+              className={`${tbtn} ${beatsOn ? 'text-primary' : 'text-muted-foreground'}`}
+              onClick={() => setBeatsOn((v) => !v)}
+              aria-pressed={beatsOn}
+              aria-label="Beat markers"
+              title="Beat markers on music (detected on this device). With Snap on, clips snap to the beats."
+              data-testid="timeline-beats"
+            >
+              ♪ Beats
+            </button>
+          ) : null}
           {editable ? (
             <span className="inline-flex items-center" role="group" aria-label="Trim tool" data-testid="timeline-tools">
               {(
@@ -1893,6 +2047,18 @@ export function Timeline({
           onClose={() => setFxPanel(null)}
         />
       ) : null}
+      {singleSel && (singleSel.lane === 'music' || singleSel.lane === 'sfx') && editable ? (
+        <AudioClipInspector
+          edits={edits}
+          lane={singleSel.lane}
+          id={singleSel.id}
+          durationMs={tb.durationMs}
+          mediaMs={singleSel.lane === 'music' ? musicPeaks.durationMs || null : null}
+          bpm={singleSel.lane === 'music' ? musicPeaks.bpm ?? null : null}
+          readOnly={Boolean(itemState(singleSel).locked)}
+          onCommit={(next) => commit(next)}
+        />
+      ) : null}
       {singleSel && singleSel.lane === 'video' && singleSel.srcInMs != null && singleSel.srcOutMs != null && editable ? (
         <ItemSpeedControl
           edits={edits}
@@ -1903,7 +2069,7 @@ export function Timeline({
         />
       ) : null}
       <div className="flex min-w-0 rounded-lg border border-border bg-card/30">
-        <div className="w-[92px] shrink-0 border-r border-border/60" aria-label="Tracks">
+        <div className="w-[104px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
           {rows.map((r) => (
             <TimelineLaneHeader

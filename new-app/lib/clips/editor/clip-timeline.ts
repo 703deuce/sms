@@ -41,6 +41,7 @@ import {
 import { applyTrackRender } from '@/lib/clips/editor/track-render'
 import { inactiveBrollTakeIds, mainTakeLabel, takeLabel } from '@/lib/clips/editor/takes'
 import {
+  applyAudioSolo,
   applyTrackState,
   DEFAULT_TRACK_ID,
   effectiveTracks,
@@ -66,6 +67,8 @@ export const LANE_LABELS: Record<LaneId, string> = {
 
 export const MUSIC_MIN_MS = 500
 export const SFX_DEFAULT_MS = 1000
+/** G2: shortest audio clip after a trim (the normalizer keeps durMs >= 100). */
+export const SFX_MIN_MS = 100
 export const HOOK_MIN_MS = 1500
 export const HOOK_MAX_MS = 5000
 export const VIDEO_MIN_SEG_MS = 200
@@ -200,7 +203,8 @@ export function setLaneState(edits: ClipEditsV2, lane: LaneId, patch: LaneState)
 export function applyTimelineLaneState(edits: ClipEditsV2): ClipEditsV2 {
   // G1b: hidden overlay / text tracks and muted audio tracks (non-default tracks) first.
   // G1c: takes / track color / track motion (worker: track_render.apply_track_render).
-  const base = applyTrackRender(applyTrackState(edits))
+  // G2: solo first — it only sets mute flags, which the paths below honour.
+  const base = applyTrackRender(applyTrackState(applyAudioSolo(edits)))
   const lanes = normalizeTimelineLanes(base.timelineLanes)
   if (!lanes) return base
   let next: ClipEditsV2 = base
@@ -227,7 +231,7 @@ export function applyTimelineLaneState(edits: ClipEditsV2): ClipEditsV2 {
 }
 
 export function voiceMuted(edits: ClipEditsV2): boolean {
-  return Boolean(normalizeTimelineLanes(edits.timelineLanes)?.voice?.muted)
+  return Boolean(normalizeTimelineLanes(applyAudioSolo(edits).timelineLanes)?.voice?.muted)
 }
 
 // ---------------------------------------------------------------------------
@@ -395,7 +399,8 @@ export function buildTimelineItems(input: {
       startMs: s.atMs,
       endMs: s.atMs + len,
       label: 'SFX',
-      caps: { ...NO_CAPS, move: true, del: true },
+      // G2: audio clips trim (in-point / length) like the music bed.
+      caps: { ...NO_CAPS, move: true, del: true, trimStart: true, trimEnd: true },
       track: trackIdOf(edits, 'audio', s.generationId, tracks),
     })
   }
@@ -417,6 +422,8 @@ export function snapTargets(input: {
   playheadMs: number
   wordEdgesMs?: number[]
   exclude?: Set<string>
+  /** G2: beat markers (OUTPUT ms) of music / audio clips. */
+  beatsMs?: number[]
 }): number[] {
   const set = new Set<number>([0, Math.round(input.durationMs), Math.round(input.playheadMs)])
   for (const lane of LANE_ORDER) {
@@ -427,6 +434,7 @@ export function snapTargets(input: {
     }
   }
   for (const w of input.wordEdgesMs ?? []) set.add(Math.round(w))
+  for (const b of input.beatsMs ?? []) set.add(Math.round(b))
   return [...set].sort((a, b) => a - b)
 }
 
@@ -473,6 +481,8 @@ export type OpCtx = {
   previewEdits: ClipEditsV2
   /** Clamp for trim.in/out (extended AI bounds + media bounds). */
   clampTrim?: (t: { in: number; out: number }) => { in: number; out: number }
+  /** G2: decoded audio clip lengths (trim an audio clip up to its media end). */
+  sfxDurationsMs?: Record<string, number>
 }
 
 function lockedLanes(edits: ClipEditsV2): Set<LaneId> {
@@ -583,7 +593,7 @@ export function moveItems(ctx: OpCtx, refs: ItemRef[], deltaMs: number): ClipEdi
 /** Trim one edge of an item to `toMs` (output ms). */
 export function trimItem(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: number): ClipEditsV2 | null {
   if (refLocked(ctx.edits, ref)) return null
-  const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits })
+  const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits, sfxDurationsMs: ctx.sfxDurationsMs })
   const it = findItem(lanes, ref)
   if (!it) return null
   if (edge === 'start' ? !it.caps.trimStart : !it.caps.trimEnd) return null
@@ -605,6 +615,24 @@ export function trimItem(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: 
     const e = clamp(to, it.startMs + minLen, dur)
     if (e === it.endMs) return null
     return it.lane === 'broll' ? patchBroll(ctx.edits, it.id, { endMs: e }) : patchMusic(ctx.edits, { endMs: e })
+  }
+
+  if (it.lane === 'sfx') {
+    // G2: audio clips trim like music — the left edge advances the media in-point, the right edge
+    // sets the play length (never past the media end when its length is known).
+    const cue = ctx.edits.audio?.sfx.find((s) => s.generationId === it.id)
+    if (!cue) return null
+    const inMs = cue.inMs ?? 0
+    if (edge === 'start') {
+      const s = clamp(to, Math.max(0, it.startMs - inMs), it.endMs - SFX_MIN_MS)
+      if (s === it.startMs) return null
+      return patchSfx(ctx.edits, it.id, { atMs: s, inMs: inMs + (s - it.startMs), durMs: it.endMs - s })
+    }
+    const media = ctx.sfxDurationsMs?.[it.id]
+    const hi = media != null ? it.startMs + Math.max(SFX_MIN_MS, media - inMs) : Math.max(it.endMs, dur)
+    const e = clamp(to, it.startMs + SFX_MIN_MS, hi)
+    if (e === it.endMs) return null
+    return patchSfx(ctx.edits, it.id, { durMs: e - it.startMs })
   }
 
   if (it.lane === 'text' && it.id !== 'hook') {

@@ -14,10 +14,11 @@ LANE_TOGGLES = {
     "text": {"mute": False, "hide": True},
     "video": {"mute": False, "hide": False},
     "broll": {"mute": False, "hide": True},
-    "voice": {"mute": True, "hide": False},
-    "music": {"mute": True, "hide": False},
-    "sfx": {"mute": True, "hide": False},
+    "voice": {"mute": True, "hide": False, "solo": True},
+    "music": {"mute": True, "hide": False, "solo": True},
+    "sfx": {"mute": True, "hide": False, "solo": True},
 }
+AUDIO_LANES = ("voice", "music", "sfx")
 MUSIC_MIN_MS = 500
 HOOK_MIN_MS = 1500
 HOOK_MAX_MS = 5000
@@ -38,13 +39,39 @@ def normalize_timeline_lanes(raw) -> dict | None:
             st["hidden"] = True
         if v.get("locked") is True:
             st["locked"] = True
+        if v.get("soloed") is True and LANE_TOGGLES[lane].get("solo"):
+            st["soloed"] = True
         if st:
             out[lane] = st
     return out or None
 
 
-def voice_muted(edits: dict) -> bool:
+def apply_audio_solo(edits: dict) -> dict:
+    """G2 solo (mirror of TS applyAudioSolo): while any audio lane / extra audio track is soloed,
+    every audio lane / extra audio track that is not soloed is muted."""
+    from clips_worker.tracks import REV_DEFAULT, normalize_tracks
+
     lanes = normalize_timeline_lanes(edits.get("timelineLanes")) or {}
+    ts = normalize_tracks(edits.get("tracks"))
+    lane_solo = [l for l in AUDIO_LANES if (lanes.get(l) or {}).get("soloed")]
+    track_solo = [t for t in (ts or []) if t["kind"] == "audio" and t["id"] not in REV_DEFAULT and t.get("soloed")]
+    if not lane_solo and not track_solo:
+        return edits
+    tl = dict(lanes)
+    for l in AUDIO_LANES:
+        if not (tl.get(l) or {}).get("soloed"):
+            tl[l] = {**(tl.get(l) or {}), "muted": True}
+    out = {**edits, "timelineLanes": tl}
+    if ts:
+        out["tracks"] = [
+            {**t, "muted": True} if t["kind"] == "audio" and t["id"] not in REV_DEFAULT and not t.get("soloed") else t
+            for t in ts
+        ]
+    return out
+
+
+def voice_muted(edits: dict) -> bool:
+    lanes = normalize_timeline_lanes(apply_audio_solo(edits).get("timelineLanes")) or {}
     return bool((lanes.get("voice") or {}).get("muted"))
 
 
@@ -52,6 +79,8 @@ def apply_timeline_lane_state(edits: dict) -> dict:
     """Drop hidden / muted lanes so export renders exactly what the editor preview plays."""
     from clips_worker.tracks import apply_track_state, on_default_track
 
+    # G2: solo first — it only sets mute flags, which the paths below honour.
+    edits = apply_audio_solo(edits)
     # G1b: hidden overlay / text tracks and muted audio tracks first (non-default tracks).
     edits = apply_track_state(edits)
     # G1c: takes / track color / track motion (preview applies the same in applyTimelineLaneState).

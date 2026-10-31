@@ -1726,6 +1726,11 @@ def render_edited_clip(
     sfx_trims = (audio_assets or {}).get("sfx_trims") if audio_assets else None
     if sfx_trims is not None and len(sfx_trims) != len(sfx_paths):
         sfx_trims = None
+    # G2: per-clip fades / ducking (parallel to sfx_paths) and the looping music bed.
+    sfx_fx = (audio_assets or {}).get("sfx_fx") if audio_assets else None
+    if sfx_fx is not None and len(sfx_fx) != len(sfx_paths):
+        sfx_fx = None
+    music_loop = bool(meta.get("loop"))
     studio_path = (audio_assets or {}).get("studio_path") if audio_assets else None
     studio_mix = (audio_assets or {}).get("studio_mix") if audio_assets else None
     if studio_path and studio_path.is_file() and studio_mix is not None:
@@ -1806,6 +1811,8 @@ def render_edited_clip(
             sfx_volume_exprs=sfx_envs,
             sfx_trims=sfx_trims,
             track_fx=track_fx,
+            sfx_fx=sfx_fx,
+            music_loop=music_loop,
         )
         caption_src = mixed
     elif audio_assets and (music_path or sfx_paths):
@@ -1827,6 +1834,8 @@ def render_edited_clip(
             sfx_volume_exprs=sfx_envs,
             sfx_trims=sfx_trims,
             track_fx=track_fx,
+            sfx_fx=sfx_fx,
+            music_loop=music_loop,
         )
         caption_src = mixed
 

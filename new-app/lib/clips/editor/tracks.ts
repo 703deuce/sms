@@ -27,6 +27,8 @@ export type Track = {
   locked?: true
   hidden?: true
   muted?: true
+  /** G2: solo (audio tracks): while any audio track / lane is soloed, the others are silent. */
+  soloed?: true
   items?: string[]
 }
 
@@ -77,6 +79,7 @@ export function normalizeTracks(raw: unknown): Track[] | undefined {
       if (o.locked === true) t.locked = true
       if (o.hidden === true && isVisual(kind)) t.hidden = true
       if (o.muted === true && kind === 'audio') t.muted = true
+      if (o.soloed === true && kind === 'audio') t.soloed = true
     }
     if (Array.isArray(o.items)) {
       const items: string[] = []
@@ -130,7 +133,7 @@ const REV_DEFAULT: Record<string, TrackKind> = { ov1: 'overlay', tx1: 'text', au
 
 function isDefaultTracks(ts: readonly Track[]): boolean {
   if (ts.length !== 3) return false
-  return ts.every((t, i) => t.id === DEFAULT_TRACKS[i]!.id && !t.name && !t.items && !t.locked && !t.hidden && !t.muted)
+  return ts.every((t, i) => t.id === DEFAULT_TRACKS[i]!.id && !t.name && !t.items && !t.locked && !t.hidden && !t.muted && !t.soloed)
 }
 
 export function effectiveTracks(edits: Pick<ClipEditsV2, 'tracks'>): Track[] {
@@ -165,7 +168,12 @@ export function trackState(edits: Pick<ClipEditsV2, 'tracks' | 'timelineLanes'>,
   const t = trackById(edits, trackId)
   if (!t) return {}
   if (isDefaultTrackId(t.id)) return normalizeTimelineLanes(edits.timelineLanes)?.[TRACK_LANE[t.kind]] ?? {}
-  return { ...(t.locked ? { locked: true } : {}), ...(t.hidden ? { hidden: true } : {}), ...(t.muted ? { muted: true } : {}) }
+  return {
+    ...(t.locked ? { locked: true } : {}),
+    ...(t.hidden ? { hidden: true } : {}),
+    ...(t.muted ? { muted: true } : {}),
+    ...(t.soloed ? { soloed: true } : {}),
+  }
 }
 
 /**
@@ -191,6 +199,24 @@ export function applyTrackState(edits: ClipEditsV2): ClipEditsV2 {
   if (off.audio.size && next.audio?.sfx.some((s) => off.audio.has(s.generationId))) {
     next = { ...next, audio: { ...next.audio, sfx: next.audio.sfx.filter((s) => !off.audio.has(s.generationId)) } }
   }
+  return next
+}
+
+/**
+ * G2 solo: while any audio unit is soloed (the Voice / Music / SFX lanes, or an extra audio track),
+ * every audio unit that is not soloed is treated as muted. Returns edits with those mute flags set,
+ * so the existing mute paths (preview + export) do the rest. Same in `timeline_lanes.py`.
+ */
+export function applyAudioSolo(edits: ClipEditsV2): ClipEditsV2 {
+  const lanes = normalizeTimelineLanes(edits.timelineLanes) ?? {}
+  const ts = normalizeTracks(edits.tracks)
+  const laneSolo = (['voice', 'music', 'sfx'] as const).filter((l) => lanes[l]?.soloed)
+  const trackSolo = (ts ?? []).filter((t) => t.kind === 'audio' && !isDefaultTrackId(t.id) && t.soloed)
+  if (!laneSolo.length && !trackSolo.length) return edits
+  const tl = { ...lanes }
+  for (const l of ['voice', 'music', 'sfx'] as const) if (!tl[l]?.soloed) tl[l] = { ...(tl[l] ?? {}), muted: true }
+  let next: ClipEditsV2 = { ...edits, timelineLanes: tl }
+  if (ts) next = { ...next, tracks: ts.map((t) => (t.kind === 'audio' && !isDefaultTrackId(t.id) && !t.soloed ? { ...t, muted: true as const } : t)) }
   return next
 }
 
@@ -373,7 +399,7 @@ export function setTrackFlags(edits: ClipEditsV2, trackId: string, patch: LaneSt
   const i = ts.findIndex((x) => x.id === trackId)
   if (i < 0) return null
   const t: Track = { ...ts[i]! }
-  for (const k of ['locked', 'hidden', 'muted'] as const) {
+  for (const k of ['locked', 'hidden', 'muted', 'soloed'] as const) {
     if (!(k in patch)) continue
     if (patch[k]) t[k] = true
     else delete t[k]

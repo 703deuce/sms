@@ -4,6 +4,22 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ClipAudioSfx } from '@/lib/clips/audio'
 import { clipsFetch } from '@/lib/clips-api'
 import type { SfxCue } from '@/components/clips/editor/use-audio-mix'
+import { peaksFromSamples, type AudioPeaks } from '@/components/clips/editor/use-audio-peaks'
+import { detectBeats, monoSamples } from '@/lib/clips/editor/beats'
+
+/** G2: beat markers only for music-length clips (short SFX would just add noise). */
+const BEATS_MIN_MS = 8000
+/** G2: waveform + beats per decoded buffer, computed once (buffers are shared by placements). */
+const analysisCache = new WeakMap<AudioBuffer, { peaks: AudioPeaks; beatsMs: number[] }>()
+function analyse(b: AudioBuffer): { peaks: AudioPeaks; beatsMs: number[] } {
+  const hit = analysisCache.get(b)
+  if (hit) return hit
+  const peaks = peaksFromSamples(b.getChannelData(0), b.duration, 40)
+  const beatsMs = b.duration * 1000 >= BEATS_MIN_MS ? detectBeats(monoSamples(b), b.sampleRate).beatsMs : []
+  const out = { peaks, beatsMs }
+  analysisCache.set(b, out)
+  return out
+}
 
 /**
  * E2: decode placed SFX so the preview plays them at `atMs` (export already did) and the
@@ -13,7 +29,14 @@ export function useSfxCues(
   sfx: ClipAudioSfx[],
   /** E5: signed URL of an uploaded sound (project media library); null until the library loads. */
   uploadUrl?: (uploadId: string) => string | null,
-): { cues: SfxCue[]; durationsMs: Record<string, number> } {
+): {
+  cues: SfxCue[]
+  durationsMs: Record<string, number>
+  /** G2: waveform of every placed audio clip (by lane id). */
+  peaks: Record<string, AudioPeaks>
+  /** G2: media-ms beats of music-length clips (by lane id). */
+  beatsMs: Record<string, number[]>
+} {
   const [buffers, setBuffers] = useState<Record<string, AudioBuffer>>({})
   const ids = useMemo(() => [...new Set(sfx.map((s) => s.generationId))].sort(), [sfx])
   const uploadUrls = useMemo(() => {
@@ -82,12 +105,33 @@ export function useSfxCues(
   return useMemo(() => {
     const cues: SfxCue[] = []
     const durationsMs: Record<string, number> = {}
+    const peaks: Record<string, AudioPeaks> = {}
+    const beatsMs: Record<string, number[]> = {}
     for (const s of sfx) {
       const b = buffers[s.generationId]
       if (!b) continue
       durationsMs[s.generationId] = Math.round(b.duration * 1000)
-      cues.push({ buffer: b, atMs: s.atMs, volume: s.volume ?? 0.8, generationId: s.generationId, inMs: s.inMs, durMs: s.durMs, ...(s.channel ? { channel: s.channel } : {}) })
+      try {
+        const a = analyse(b)
+        peaks[s.generationId] = a.peaks
+        if (a.beatsMs.length) beatsMs[s.generationId] = a.beatsMs
+      } catch {
+        /* display-only */
+      }
+      cues.push({
+        buffer: b,
+        atMs: s.atMs,
+        volume: s.volume ?? 0.8,
+        generationId: s.generationId,
+        inMs: s.inMs,
+        durMs: s.durMs,
+        ...(s.channel ? { channel: s.channel } : {}),
+        // G2: fades / ducking (export: audio_render clip_fade + per-clip sidechaincompress).
+        ...(s.fadeInMs ? { fadeInMs: s.fadeInMs } : {}),
+        ...(s.fadeOutMs ? { fadeOutMs: s.fadeOutMs } : {}),
+        ...(s.duckDepth != null ? { duckDepth: s.duckDepth } : {}),
+      })
     }
-    return { cues, durationsMs }
+    return { cues, durationsMs, peaks, beatsMs }
   }, [buffers, sfx])
 }

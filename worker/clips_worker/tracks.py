@@ -29,7 +29,7 @@ def _is_default_tracks(ts: list[dict]) -> bool:
     if len(ts) != 3:
         return False
     for t, d in zip(ts, DEFAULT_TRACKS):
-        if t["id"] != d["id"] or any(k in t for k in ("name", "items", "locked", "hidden", "muted")):
+        if t["id"] != d["id"] or any(k in t for k in ("name", "items", "locked", "hidden", "muted", "soloed")):
             return False
     return True
 
@@ -69,6 +69,8 @@ def normalize_tracks(raw) -> list[dict] | None:
                 t["hidden"] = True
             if r.get("muted") is True and kind == "audio":
                 t["muted"] = True
+            if r.get("soloed") is True and kind == "audio":  # G2 solo
+                t["soloed"] = True
         if isinstance(r.get("items"), list):
             items: list[str] = []
             for x in r["items"]:

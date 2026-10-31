@@ -4,17 +4,17 @@ export type LaneId = 'text' | 'video' | 'broll' | 'voice' | 'music' | 'sfx'
 /** Top → bottom, CapCut order: overlays above the main track, audio below. */
 export const LANE_ORDER: LaneId[] = ['text', 'video', 'broll', 'voice', 'music', 'sfx']
 
-/** Which header toggles a lane offers (lock is always available). */
-export const LANE_TOGGLES: Record<LaneId, { mute: boolean; hide: boolean }> = {
+/** Which header toggles a lane offers (lock is always available). G2: solo on the audio lanes. */
+export const LANE_TOGGLES: Record<LaneId, { mute: boolean; hide: boolean; solo?: boolean }> = {
   text: { mute: false, hide: true },
   video: { mute: false, hide: false },
   broll: { mute: false, hide: true },
-  voice: { mute: true, hide: false },
-  music: { mute: true, hide: false },
-  sfx: { mute: true, hide: false },
+  voice: { mute: true, hide: false, solo: true },
+  music: { mute: true, hide: false, solo: true },
+  sfx: { mute: true, hide: false, solo: true },
 }
 
-export type LaneState = { muted?: boolean; hidden?: boolean; locked?: boolean }
+export type LaneState = { muted?: boolean; hidden?: boolean; locked?: boolean; soloed?: boolean }
 export type TimelineLanesState = Partial<Record<LaneId, LaneState>>
 
 export function normalizeTimelineLanes(raw: unknown): TimelineLanesState | undefined {
@@ -29,6 +29,7 @@ export function normalizeTimelineLanes(raw: unknown): TimelineLanesState | undef
     if (s.muted === true && LANE_TOGGLES[lane].mute) st.muted = true
     if (s.hidden === true && LANE_TOGGLES[lane].hide) st.hidden = true
     if (s.locked === true) st.locked = true
+    if (s.soloed === true && LANE_TOGGLES[lane].solo) st.soloed = true
     if (Object.keys(st).length) out[lane] = st
   }
   return Object.keys(out).length ? out : undefined
