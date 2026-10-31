@@ -647,16 +647,30 @@ def main() -> None:
         scratch_path = ensure_streamer_scratch_dir()
         log(f"streamer scratch ready path={scratch_path}")
     try:
-        with psycopg2.connect(dsn) as conn:
-            from clips_worker.boot_recovery import requeue_running_lane_jobs_on_boot
+        boot_conn = psycopg2.connect(dsn)
+        try:
+            with boot_conn as conn:
+                from clips_worker.boot_recovery import requeue_running_lane_jobs_on_boot
 
-            requeue_running_lane_jobs_on_boot(conn)
-            queued = count_queued_jobs(conn)
-            log(f"connected to db host={host} queued_jobs={queued}")
+                requeue_running_lane_jobs_on_boot(conn)
+                queued = count_queued_jobs(conn)
+                log(f"connected to db host={host} queued_jobs={queued}")
+        finally:
+            # E6: never hand an open libpq socket to forked job slots.
+            boot_conn.close()
     except Exception as exc:
         log(f"FATAL database startup failed: {exc}")
         traceback.print_exc()
         sys.exit(1)
+
+    from clips_worker.worker_slots import maybe_run_slots
+
+    # E6: boot recovery ran once above (parent instance); each slot polls with its own instance id.
+    maybe_run_slots(lambda: _poll_loop(dsn), worker_instance_id())
+
+
+def _poll_loop(dsn: str) -> None:
+    from clips_worker.worker_drain import drain_requested
 
     idle_polls = 0
     poll_error_streak = 0

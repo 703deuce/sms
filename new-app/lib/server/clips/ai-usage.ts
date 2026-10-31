@@ -33,3 +33,33 @@ export async function recordAiUsage(input: {
     },
   })
 }
+
+/**
+ * E6: ai_usage row for an OpenAI JSON call (Producer). Best-effort — never fails the caller.
+ */
+export async function recordOpenAiJsonUsage(input: {
+  workspaceId: string
+  projectId?: string | null
+  clipId?: string | null
+  model: string
+  promptTokens: number
+  completionTokens: number
+}): Promise<void> {
+  try {
+    const { clipsEditorLlmCostMicros } = await import('@/lib/server/ai/clips-editor-llm')
+    await recordAiUsage({
+      workspaceId: input.workspaceId,
+      projectId: input.projectId ?? null,
+      clipId: input.clipId ?? null,
+      usage: {
+        provider: 'openai',
+        model: input.model,
+        units: input.promptTokens + input.completionTokens,
+        unitType: 'tokens',
+        costUsdMicros: clipsEditorLlmCostMicros('openai', input.promptTokens, input.completionTokens, input.model),
+      },
+    })
+  } catch (e) {
+    console.warn('[clipper:ai-usage] openai_json record_failed', e instanceof Error ? e.message : e)
+  }
+}

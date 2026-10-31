@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { normalizeEditSpeed, orderedKeepSegments } from '@/lib/clips/edits'
+import { fitBlurCssFilter, fitBlurStrength } from '@/lib/clips/fit-blur'
 import { editorPreviewCaptionClipWords, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
@@ -30,6 +31,7 @@ import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTim
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { coverBoxStyle, stackPanelStyles } from '@/lib/clips/facecam-geometry'
+import { hookTextDuplicatesCaptions } from '@/lib/clips/hook-duplicate'
 import { fitTopHeadlineLines } from '@/lib/clips/fit-top-headline-lines'
 import { overlayLayout } from '@/lib/clips/stream-overlay-layout'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
@@ -151,6 +153,7 @@ export function PreviewStage({
   const headlineOn = usesStreamHeadlineBandOverlay(edits as ClipEditsV2)
   const HEADLINE_FITTOP_MODES = new Set(['fit_top', 'speaker_follow', 'auto'])
   const letterboxPreview = !compositePreview && layoutUsesLetterboxBlurPreview(layoutMode)
+  const blurStrength = fitBlurStrength(edits)
   const fitTopPreview = Boolean(
     !compositePreview &&
       videoUrl &&
@@ -523,7 +526,7 @@ export function PreviewStage({
             blur.style.height = '100%'
             blur.style.width = '100%'
             blur.style.transform = 'scale(1.2)'
-            blur.style.filter = 'blur(24px)'
+            blur.style.filter = fitBlurCssFilter(fitBlurStrength(e), boxW)
           }
         } else {
           if (blur) blur.style.display = 'none'
@@ -566,6 +569,12 @@ export function PreviewStage({
     }))
     return editorPreviewCaptionClipWords(words, edits)
   }, [previewWords, words, edits])
+  // E6: same rule as the export (worker hook_duplicate.py) — a hook that is the opening spoken
+  // line is not drawn over captions showing those words.
+  const hookDupesCaptions =
+    edits.captions?.enabled !== false &&
+    Boolean(edits.hookOverlay?.enabled) &&
+    hookTextDuplicatesCaptions(edits.hookOverlay?.text ?? '', captionWords, edits.hookOverlay?.durationMs ?? 2500)
 
   useEffect(() => {
     logEditorDecision('caption_timeline', {
@@ -663,6 +672,7 @@ export function PreviewStage({
         {templatePreview ? (
           <TemplateStage
             spec={templatePreview}
+            blurStrength={blurStrength}
             videoUrl={videoUrl}
             posterUrl={posterUrl}
             primaryVideoRef={videoRefInner}
@@ -681,7 +691,7 @@ export function PreviewStage({
               ref={blurRef}
               src={videoUrl ?? undefined}
               className="absolute inset-0 size-full max-w-none scale-110 object-cover blur-2xl"
-              style={{ filter: 'blur(20px) brightness(0.92)' }}
+              style={{ filter: fitBlurCssFilter(blurStrength, box.w) }}
               muted
               playsInline
               aria-hidden
@@ -715,7 +725,7 @@ export function PreviewStage({
                   ref={blurRef}
                   src={videoUrl ?? undefined}
                   className="absolute inset-0 size-full max-w-none object-cover"
-                  style={{ filter: 'blur(20px) brightness(0.92)' }}
+                  style={{ filter: fitBlurCssFilter(blurStrength, box.w) }}
                   muted
                   playsInline
                   aria-hidden
@@ -1011,7 +1021,7 @@ export function PreviewStage({
             textRefs.current[id] = el
           }}
         />
-        {!compositePreview && !(templatePreview && edits.exportTemplate?.headlineBar?.enabled) ? (
+        {!compositePreview && !(templatePreview && edits.exportTemplate?.headlineBar?.enabled) && !hookDupesCaptions ? (
           <HookOverlayPreview
             edits={edits as ClipEditsV2}
             boxW={box.w}

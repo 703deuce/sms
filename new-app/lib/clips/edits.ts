@@ -8,6 +8,7 @@ import type { SilenceTrimSettings } from '@/lib/clips/silence-trim'
 import { normalizeLayoutSegments, type LayoutSegment } from '@/lib/clips/layout-segments'
 import { normalizeExportTemplate, type ClipExportTemplate } from '@/lib/clips/export-template'
 import { isSpeechLevelingEnabled } from '@/lib/clips/speech-leveling'
+import { normalizeFitBlurStrength, type FitBlurStrength } from '@/lib/clips/fit-blur'
 import { normalizeTimelineLanes, type TimelineLanesState } from '@/lib/clips/editor/timeline-lane-state'
 import {
   normalizeCutTransitions,
@@ -97,6 +98,8 @@ export type ClipEditsV2 = {
     cropBox?: FacecamBox
     /** User chose layout in editor — skip auto IRL headline ↔ layout sync. */
     userPicked?: boolean
+    /** E6: blurred-background strength for fit/blur fills (default strong; lib/clips/fit-blur.ts). */
+    blurStrength?: FitBlurStrength
     template?: {
       id?: string
       auto?: boolean
@@ -507,6 +510,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       facecam: normalizeFacecam(layoutRaw.facecam) ?? base.layout.facecam,
       cropBox: normalizeNormBox((layoutRaw as { cropBox?: unknown }).cropBox),
       userPicked: (layoutRaw as { userPicked?: boolean }).userPicked === true ? true : undefined,
+      blurStrength: normalizeFitBlurStrength((layoutRaw as { blurStrength?: unknown }).blurStrength),
       template: normalizeLayoutTemplate((layoutRaw as { template?: unknown }).template),
     },
     aspectRatio,

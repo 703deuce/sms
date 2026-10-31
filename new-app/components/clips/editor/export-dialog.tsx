@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { createExportToast } from '@/lib/clips/editor/export-toast'
+import { EXPORT_POLL_MAX_ERRORS, startExportStatusPoll } from '@/lib/clips/editor/export-poll'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -218,59 +219,61 @@ export function ExportDialog({
   }, [open, clipId, edits.thumbnailId])
 
   useEffect(() => {
-    if (!renderId || status === 'READY' || status === 'FAILED') return
-    const poll = () => {
-      void getRenderStatus(renderId)
-        .then((r) => {
-          setStatus(r.status)
-          if (typeof r.durationMs === 'number') setDurationMs(r.durationMs)
-          if (typeof r.progress === 'number') setRenderProgress(r.progress)
-          if (r.phase) setRenderPhase(r.phase)
-          if (typeof r.etaSec === 'number') setRenderEtaSec(r.etaSec)
-          logEditorDecision('export_progress', {
-            clipId,
-            renderId,
-            status: r.status,
-            progress: r.progress ?? null,
-            phase: r.phase ?? null,
-            etaSec: r.etaSec ?? null,
-          })
-          if (r.status === 'FAILED') {
-            const msg = r.error || 'Export failed'
-            setErrorDetail(msg)
-            setBusy(false)
-            exportToast.failed(msg)
-            return
-          }
-          if (r.status === 'READY' && r.downloadUrl) {
-            setDownloadUrl(r.downloadUrl)
-            setFilename(r.filename || 'clip.mp4')
-            setErrorDetail(null)
-            setBusy(false)
-            exportToast.ready()
-          }
+    // E6: READY without a signed URL yet keeps polling (it used to stop there).
+    if (!renderId || (status === 'READY' && downloadUrl) || status === 'FAILED') return
+    const poller = startExportStatusPoll({
+      fetchStatus: () => getRenderStatus(renderId),
+      onResult: (r) => {
+        if (r.status !== 'FAILED') setErrorDetail(null)
+        setStatus(r.status)
+        if (typeof r.durationMs === 'number') setDurationMs(r.durationMs)
+        if (typeof r.progress === 'number') setRenderProgress(r.progress)
+        if (r.phase) setRenderPhase(r.phase)
+        if (typeof r.etaSec === 'number') setRenderEtaSec(r.etaSec)
+        logEditorDecision('export_progress', {
+          clipId,
+          renderId,
+          status: r.status,
+          progress: r.progress ?? null,
+          phase: r.phase ?? null,
+          etaSec: r.etaSec ?? null,
         })
-        .catch((e) => {
-          const msg = e instanceof Error ? e.message : 'Could not check export status'
+        if (r.status === 'FAILED') {
+          const msg = r.error || 'Export failed'
           setErrorDetail(msg)
           setBusy(false)
           exportToast.failed(msg)
-        })
-    }
-    poll()
-    const t = setInterval(poll, 2000)
+          return
+        }
+        if (r.status === 'READY' && r.downloadUrl) {
+          setDownloadUrl(r.downloadUrl)
+          setFilename(r.filename || 'clip.mp4')
+          setErrorDetail(null)
+          setBusy(false)
+          exportToast.ready()
+        }
+      },
+      onError: (msg, streak) => {
+        setErrorDetail(msg)
+        // E6: transient poll errors keep polling; only a sustained outage settles the toast.
+        if (streak >= EXPORT_POLL_MAX_ERRORS) {
+          setBusy(false)
+          exportToast.failed(msg)
+        }
+      },
+    })
     const onVisible = () => {
-      if (document.visibilityState === 'visible') poll()
+      if (document.visibilityState === 'visible') poller.pollNow()
     }
-    const onFocus = () => poll()
+    const onFocus = () => poller.pollNow()
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onFocus)
     return () => {
-      clearInterval(t)
+      poller.stop()
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onFocus)
     }
-  }, [renderId, status, clipId, exportToast])
+  }, [renderId, status, downloadUrl, clipId, exportToast])
 
   const startExport = async () => {
     if (busy) return
@@ -654,6 +657,16 @@ export function ExportDialog({
           onChannelsRefresh={refreshChannels}
         />
         <MediaCredits clipId={clipId} edits={edits} />
+        {status === 'READY' && !downloadUrl && (
+          <p className="mt-3 text-sm" role="status" aria-live="polite" data-testid="export-finalizing">
+            Finalizing download link…
+          </p>
+        )}
+        {status && status !== 'READY' && status !== 'FAILED' && errorDetail ? (
+          <p className="mt-1 text-xs text-muted-foreground" data-testid="export-poll-warning">
+            Still checking — {errorDetail}
+          </p>
+        ) : null}
         {status && status !== 'READY' && status !== 'FAILED' && (
           <p className="mt-3 text-sm" role="status" aria-live="polite">
             {status === 'QUEUED'

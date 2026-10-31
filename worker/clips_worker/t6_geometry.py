@@ -232,7 +232,14 @@ def _resolve_src(
         if isinstance(pb, dict):
             return dict(pb), None
         if idx < len(faces):
-            return _face_crop(faces[idx], panel_aspect, dict(DEFAULT_FULL), face_frac=0.2, top_inset=top_inset), None
+            # E6: crop inside this person's own cell. With the whole frame as the region, a
+            # side-by-side two-cam podcast (Castle Super Beast, C5) widened person 0's crop into
+            # person 1's camera, so the top panel showed the other cam's background. _crop_at
+            # shrinks (zooms in) to fit the cell instead of bleeding.
+            return (
+                _face_crop(faces[idx], panel_aspect, person_cell(faces, idx), face_frac=0.2, top_inset=top_inset),
+                None,
+            )
         return dict(DEFAULT_FULL), "contain_blur"
     if name == "facecam_box" and role in ("face", ""):
         if _facecam_region(signals, edits) is None:
@@ -244,6 +251,25 @@ def _resolve_src(
             return box, None
         return _cover_on_faces(box, inside, panel_aspect, top_inset), None
     return _src_box(name, signals, edits, panel_aspect=panel_aspect), None
+
+
+def person_cell(faces: list[dict], idx: int) -> dict:
+    """E6: the full-height column owned by face ``idx``: from the midpoint to its left neighbour's
+    centre to the midpoint to its right neighbour's centre (whole frame for a single face)."""
+    def cx(f: dict) -> float:
+        return float(f.get("x") or 0) + float(f.get("w") or 0) / 2
+
+    me = cx(faces[idx])
+    others = [cx(f) for j, f in enumerate(faces) if j != idx]
+    lefts = [c for c in others if c < me]
+    rights = [c for c in others if c >= me]
+    left = max(lefts) if lefts else None
+    right = min(rights) if rights else None
+    x0 = 0.0 if left is None else (left + me) / 2
+    x1 = 1.0 if right is None else (right + me) / 2
+    if x1 - x0 < 0.05:
+        return dict(DEFAULT_FULL)
+    return {"x": round(x0, 4), "y": 0.0, "w": round(x1 - x0, 4), "h": 1.0}
 
 
 def widen_to_aspect_within(region: dict, panel_aspect: float) -> dict:

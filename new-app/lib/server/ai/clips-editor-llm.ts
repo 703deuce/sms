@@ -127,11 +127,35 @@ export async function clipsEditorJsonWithGeminiFallback<T>(opts: {
   }
 }
 
+/**
+ * E6: OpenAI list prices in USD per 1M tokens. 1 USD per 1M tokens == 1 micro-USD per token, so
+ * micros = tokens × usdPer1M. The old formula multiplied by 100_000 / 500_000 (1e6× too high):
+ * 3 export-headline calls of ~200 tokens were booked as $97.60. Env overrides when list prices change.
+ */
+const OPENAI_USD_PER_1M: Record<string, { input: number; output: number }> = {
+  'gpt-4o-mini': { input: 0.15, output: 0.6 },
+}
+
+export function openAiUsdPer1M(model?: string | null): { input: number; output: number } {
+  const known = model ? OPENAI_USD_PER_1M[model] : undefined
+  if (known) return known
+  const num = (raw: string | undefined, d: number) => {
+    const n = Number(raw)
+    return Number.isFinite(n) && n >= 0 && raw?.trim() ? n : d
+  }
+  return {
+    input: num(process.env.CLIPS_LLM_USD_PER_1M_INPUT, 0.1),
+    output: num(process.env.CLIPS_LLM_USD_PER_1M_OUTPUT, 0.5),
+  }
+}
+
 export function clipsEditorLlmCostMicros(
   provider: 'openai' | 'gemini',
   promptTokens: number,
   completionTokens: number,
+  model?: string | null,
 ): number {
   if (provider === 'gemini') return geminiVisionTokenCostMicros(promptTokens, completionTokens)
-  return Math.round(promptTokens * 100_000 + completionTokens * 500_000)
+  const p = openAiUsdPer1M(model)
+  return Math.round(Math.max(0, promptTokens) * p.input + Math.max(0, completionTokens) * p.output)
 }

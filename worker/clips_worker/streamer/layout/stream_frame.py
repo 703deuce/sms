@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 from clips_worker.clip_export_template import _esc_drawtext, _platform_label, _headline_style_from_edits
-from clips_worker.filtergraph import fit_blur_overlay_filter
+from clips_worker.filtergraph import fit_blur_bg_chain, fit_blur_overlay_filter, fit_blur_strength
 from clips_worker.stream_headline_ass import burn_stream_headline, format_headline_for_export
 from clips_worker.streamer.layout.stream_overlay_layout import (
     PLAY_H,
@@ -52,9 +52,11 @@ def _headline_lines_from_edits(edits: dict) -> list[str]:
     return _wrap_headline_lines(body.split("  ")[0] if "  " in body else body)
 
 
-def render_fit_blur_stream(src: Path, dest: Path, *, play_w: int = PLAY_W, play_h: int = PLAY_H) -> None:
+def render_fit_blur_stream(
+    src: Path, dest: Path, *, play_w: int = PLAY_W, play_h: int = PLAY_H, blur_strength: str | None = None
+) -> None:
     dur = _probe_duration_s(src)
-    fc = fit_blur_overlay_filter("0:v", "vout", play_w, play_h)
+    fc = fit_blur_overlay_filter("0:v", "vout", play_w, play_h, blur_strength)
     subprocess.check_call(
         [
             "ffmpeg",
@@ -151,6 +153,7 @@ def _fit_top_base(
     h_box: int,
     box_color: str = "white",
     headline_style: dict | None = None,
+    blur_strength: str | None = None,
 ) -> None:
     band = fit_top_headline_band_filters(
         lay=lay,
@@ -161,8 +164,7 @@ def _fit_top_base(
         work_dir=stage.parent,
     )
     fc = (
-        f"[0:v]scale={play_w}:{play_h}:force_original_aspect_ratio=increase,"
-        f"crop={play_w}:{play_h},boxblur=20:2,eq=brightness=-0.08[bgfull];"
+        f"[0:v]{fit_blur_bg_chain(play_w, play_h, blur_strength)}[bgfull];"
         f"[0:v]scale={play_w}:{vid_h}:force_original_aspect_ratio=increase,"
         f"crop={play_w}:{vid_h}:(iw-{play_w})/2:(ih-{vid_h})/2[fg];"
         f"color=c=black:s={play_w}x{play_h}:d={dur:.3f}[base];"
@@ -367,6 +369,7 @@ def render_fit_top_stream(
         h_box=h_box,
         box_color=box_color,
         headline_style=style,
+        blur_strength=fit_blur_strength(edits),
     )
     current = stage
     _fit_top_band_layers(
@@ -405,4 +408,4 @@ def render_stream_clip_layout(
     if mode == "fit_blur" and export_headline_active(edits):
         render_fit_top_stream(src, dest, edits, play_w=play_w, play_h=play_h)
         return
-    render_fit_blur_stream(src, dest, play_w=play_w, play_h=play_h)
+    render_fit_blur_stream(src, dest, play_w=play_w, play_h=play_h, blur_strength=fit_blur_strength(edits))

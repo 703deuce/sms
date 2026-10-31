@@ -223,4 +223,7 @@ def finalize_clip_edits(inp: ClipInputs) -> tuple[dict, dict, dict | None]:
         from clips_worker.regular_auto_layout import apply_regular_auto_layout
 
         edits = apply_regular_auto_layout(edits, Path(inp.clip_file), inp.clip_words or [], streamer=False)
+    from clips_worker.clip_layout_policy import apply_headline_layout_default
+
+    edits = apply_headline_layout_default(edits, ct)
     return edits, type_info, fc_layout

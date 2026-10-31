@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TemplatePipSpec, TemplateSpecV2 } from '@/lib/clips/templates/geometry'
 import { TITLE_STYLES } from '@/lib/clips/templates/registry'
+import { DEFAULT_FIT_BLUR_STRENGTH, fitBlurCssFilter, type FitBlurStrength } from '@/lib/clips/fit-blur'
 
 /**
  * T6.2: observe the element itself (callback-ref state), not a RefObject captured once.
@@ -78,6 +79,7 @@ export function TemplateStage({
   primaryVideoRef,
   staticPoster = false,
   lowResWarning,
+  blurStrength = DEFAULT_FIT_BLUR_STRENGTH,
 }: {
   spec: TemplateSpecV2
   videoUrl?: string | null
@@ -92,6 +94,8 @@ export function TemplateStage({
   seekTime?: number
   staticPoster?: boolean
   lowResWarning?: boolean
+  /** E6: blurred band / contain_blur strength (matches the export, worker t6_render). */
+  blurStrength?: FitBlurStrength
 }) {
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null)
   const { w: cw } = useContainerSize(rootEl)
@@ -218,7 +222,7 @@ export function TemplateStage({
             style={{ left: d.x * k, top: d.y * k, width: d.w * k, height: d.h * k }}
           >
             {isBlur
-              ? media({ filter: 'blur(20px) brightness(0.92)' }, 'size-full scale-110 object-cover', false)
+              ? media({ filter: fitBlurCssFilter(blurStrength, d.w * k) }, 'size-full scale-110 object-cover', false)
               : <div className="size-full bg-black" />}
           </div>
         )
@@ -234,7 +238,7 @@ export function TemplateStage({
           >
             {p.fit === 'contain_blur'
               ? media(
-                  { filter: 'blur(16px) brightness(0.9)' },
+                  { filter: fitBlurCssFilter(blurStrength, width) },
                   'absolute inset-0 size-full scale-110 object-cover',
                   false,
                 )

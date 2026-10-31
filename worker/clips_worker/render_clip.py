@@ -203,11 +203,13 @@ def resolve_clip_layout(settings: dict, clip_index: int) -> str:
     return AUTO_LAYOUT_STYLES[clip_index % len(AUTO_LAYOUT_STYLES)]
 
 
-def ffmpeg_fit_export(clip_src: Path, out_mp4: Path, width: int, height: int) -> None:
+def ffmpeg_fit_export(
+    clip_src: Path, out_mp4: Path, width: int, height: int, blur_strength: str | None = None
+) -> None:
     """Fallback when speakercrop fails (short clips, missing faces, etc.)."""
     from clips_worker.filtergraph import fit_blur_overlay_filter
 
-    vf = fit_blur_overlay_filter("0:v", "vout", width, height)
+    vf = fit_blur_overlay_filter("0:v", "vout", width, height, blur_strength)
     threads = str(ffmpeg_threads_per_job())
     subprocess.check_call(
         [
@@ -290,6 +292,9 @@ def speakercrop_norender_crop_track(
             pass
     env = os.environ.copy()
     env["FFMPEG_THREADS"] = str(ffmpeg_threads_per_job())
+    from clips_worker.filtergraph import fit_blur_strength
+
+    env["FIT_BLUR_STRENGTH"] = fit_blur_strength(settings)  # E6: speakercrop wide/blur-fit frames
     from clips_worker.reframe_routing import apply_production_reframe_routing
     from clips_worker.screen_share_route import apply_screen_share_env
 
@@ -395,7 +400,9 @@ def prepare_speakercrop_gpu_render(
             # v1 dynamic speakercrop cannot be encoded as static fit_blur (T4.4 export/preview mismatch).
             return None
         else:
-            fg = fit_blur_overlay_filter("0:v", "vfinal", w, h)
+            from clips_worker.filtergraph import fit_blur_strength
+
+            fg = fit_blur_overlay_filter("0:v", "vfinal", w, h, fit_blur_strength(settings))
             use_fc = True
     except Exception:
         return None
@@ -483,6 +490,9 @@ def run_speakercrop(
             pass
     env = os.environ.copy()
     env["FFMPEG_THREADS"] = str(ffmpeg_threads_per_job())
+    from clips_worker.filtergraph import fit_blur_strength
+
+    env["FIT_BLUR_STRENGTH"] = fit_blur_strength(settings)  # E6: speakercrop wide/blur-fit frames
     from clips_worker.reframe_routing import apply_production_reframe_routing
     from clips_worker.screen_share_route import apply_screen_share_env
 
@@ -580,7 +590,9 @@ def run_speakercrop(
         if render_meta is not None:
             render_meta["fit_fallback"] = True
             render_meta["speakercrop_tail"] = tail[:2000]
-        ffmpeg_fit_export(clip_src, out_mp4, w, h)
+        from clips_worker.filtergraph import fit_blur_strength
+
+        ffmpeg_fit_export(clip_src, out_mp4, w, h, fit_blur_strength(settings))
     ass = Path(str(out_mp4).replace(".mp4", ".ass"))
     if ass.exists() and preset != "bold_pop":
         from clips_worker.caption_presets import apply_preset_to_ass

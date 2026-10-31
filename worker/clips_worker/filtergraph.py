@@ -32,12 +32,58 @@ def grid3_layout_filter_labels(l0: str, l1: str, l2: str, out: str) -> str:
     )
 
 
-def fit_blur_overlay_filter(in_label: str, out_label: str, width: int, height: int) -> str:
-    """Blurred background fill (no black bars)."""
+# E6: background blur strength for fit/blur fills. Gaussian sigma as a fraction of the OUTPUT width so the
+# look is resolution-independent and the editor preview (lib/clips/fit-blur.ts) uses the same table.
+# "soft" is the pre-E6 export look (boxblur=30:3 at full res ~= sigma 0.028·W); "strong" is the default.
+FIT_BLUR_STRENGTHS = ("soft", "strong", "max")
+DEFAULT_FIT_BLUR_STRENGTH = "strong"
+FIT_BLUR_SIGMA_FRAC = {"soft": 0.028, "strong": 0.075, "max": 0.13}
+FIT_BLUR_BRIGHTNESS = {"soft": -0.06, "strong": -0.08, "max": -0.1}
+
+
+def fit_blur_strength(src: object = None) -> str:
+    """Resolve strength from edits ({layout:{blurStrength}}), settings ({fitBlurStrength}), a str, or env."""
+    import os
+
+    val: object = None
+    if isinstance(src, str):
+        val = src
+    elif isinstance(src, dict):
+        val = src.get("fitBlurStrength")
+        lay = src.get("layout")
+        if val is None and isinstance(lay, dict):
+            val = lay.get("blurStrength")
+    if val is None:
+        val = os.environ.get("FIT_BLUR_STRENGTH")
+    s = str(val or "").strip().lower()
+    return s if s in FIT_BLUR_STRENGTHS else DEFAULT_FIT_BLUR_STRENGTH
+
+
+def fit_blur_bg_chain(width: int, height: int, strength: str | None = None) -> str:
+    """Filter chain (no labels) that turns one input into the blurred cover background."""
+    st = fit_blur_strength(strength)
+    if st == "soft":
+        return (
+            f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
+            f"boxblur=30:3,eq=brightness=-0.06:saturation=0.9"
+        )
+    # Blur at 1/4 size (cheap even for big sigma), then scale back up — the upscale only softens further.
+    bw, bh = max(2, (width // 4) // 2 * 2), max(2, (height // 4) // 2 * 2)
+    sigma = max(1.0, round(FIT_BLUR_SIGMA_FRAC[st] * width / 4, 2))
+    return (
+        f"scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh},"
+        f"gblur=sigma={sigma}:steps=3,scale={width}:{height}:flags=bicubic,"
+        f"eq=brightness={FIT_BLUR_BRIGHTNESS[st]}:saturation=0.85"
+    )
+
+
+def fit_blur_overlay_filter(
+    in_label: str, out_label: str, width: int, height: int, strength: str | None = None
+) -> str:
+    """Blurred background fill (no black bars). ``strength`` soft|strong|max (default strong / env)."""
     return (
         f"[{in_label}]split=2[a][b];"
-        f"[a]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
-        f"boxblur=30:3,eq=brightness=-0.06:saturation=0.9[bg];"
+        f"[a]{fit_blur_bg_chain(width, height, strength)}[bg];"
         f"[b]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];"
         f"[bg][fg]overlay=(W-w)/2:(H-h)/2[{out_label}]"
     )

@@ -707,6 +707,17 @@ def layout_slots(layout: str, out_w: int, out_h: int, n: int) -> list[tuple[int,
 
 
 # ---------------------------------------------------------------- Stage 8b: compositing (OpenCV pipe renderer)
+# E6: mirror of clips_worker.filtergraph.FIT_BLUR_SIGMA_FRAC (sigma as a fraction of output width);
+# the render_clip parent passes FIT_BLUR_STRENGTH into the speakercrop subprocess env.
+_FIT_BLUR_SIGMA_FRAC = {"soft": 0.028, "strong": 0.075, "max": 0.13}
+
+
+def _fit_blur_sigma_frac() -> float:
+    import os
+
+    return _FIT_BLUR_SIGMA_FRAC.get((os.environ.get("FIT_BLUR_STRENGTH") or "strong").strip().lower(), 0.075)
+
+
 def blur_fit(fr: np.ndarray, out_w: int, out_h: int, *, blur_px: int = 51, interp=cv2.INTER_LINEAR) -> np.ndarray:
     """Cover-crop background, blur hard, darken slightly; foreground letterboxed (wide layout)."""
     H, W = fr.shape[:2]
@@ -714,7 +725,7 @@ def blur_fit(fr: np.ndarray, out_w: int, out_h: int, *, blur_px: int = 51, inter
     cw, ch = int(round(out_w / s)), int(round(out_h / s))
     x0, y0 = max(0, (W - cw) // 2), max(0, (H - ch) // 2)
     small = cv2.resize(fr[y0 : y0 + ch, x0 : x0 + cw], (out_w // 8, out_h // 8), interpolation=cv2.INTER_AREA)
-    small = cv2.GaussianBlur(small, (0, 0), sigmaX=6)
+    small = cv2.GaussianBlur(small, (0, 0), sigmaX=max(1.0, _fit_blur_sigma_frac() * out_w / 8))
     bg = cv2.resize(small, (out_w, out_h), interpolation=cv2.INTER_LINEAR)
     bg = cv2.convertScaleAbs(bg, alpha=0.9, beta=0)
     nh = min(out_h, int(round(H * out_w / W)) // 2 * 2)
@@ -771,10 +782,13 @@ def segment_filter(layout: str, crops: list[tuple[int, int, int, int]], out_w: i
 
 
 def blur_fit_filter(out_w: int, out_h: int, src: str = "[0:v]", dst: str = "[v]", blur: int = 20) -> str:
-    """ffmpeg blurred-background fit (replaces the black-bar pad in render_clip.ffmpeg_fit_export)."""
+    """ffmpeg blurred-background fit (replaces the black-bar pad in render_clip.ffmpeg_fit_export).
+
+    E6: sigma follows FIT_BLUR_STRENGTH (default strong) like the wide OpenCV path; ``blur`` kept for callers."""
+    sigma = max(1.0, round(_fit_blur_sigma_frac() * out_w / 4, 2))
     return (f"{src}split=2[bg][fg];"
             f"[bg]scale={out_w // 4}:{out_h // 4}:force_original_aspect_ratio=increase,"
-            f"crop={out_w // 4}:{out_h // 4},boxblur={max(2, blur // 4)}:2,scale={out_w}:{out_h},setsar=1[bgb];"
+            f"crop={out_w // 4}:{out_h // 4},gblur=sigma={sigma}:steps=3,scale={out_w}:{out_h},setsar=1[bgb];"
             f"[fg]scale={out_w}:{out_h}:force_original_aspect_ratio=decrease,setsar=1[fgs];"
             f"[bgb][fgs]overlay=(W-w)/2:(H-h)/2{dst}")
 

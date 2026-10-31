@@ -145,6 +145,9 @@ def speakercrop_settings_from_edits(base_settings: dict, edits: dict) -> dict:
     mode = _dominant_layout_mode_from_edits(edits)
     if mode != "speaker_follow":
         out["layout"] = editor_layout_to_worker(str(mode))
+    lay = edits.get("layout") if isinstance(edits, dict) else None
+    if isinstance(lay, dict) and lay.get("blurStrength"):
+        out["fitBlurStrength"] = str(lay["blurStrength"])  # E6: editor blur strength -> render_clip
     return out
 
 
