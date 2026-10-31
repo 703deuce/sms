@@ -101,7 +101,9 @@ export function SourceMonitor({
   return (
     <section className="space-y-2 rounded-md border p-2" data-testid="source-monitor">
       <div className="flex items-center gap-2 text-xs">
-        <span className="font-semibold">Source monitor</span>
+        <span className="font-semibold" title="Source monitor: pick an uploaded file, select its words (or In / Out), then Insert or Overwrite at the playhead">
+          Build from transcript
+        </span>
         <select
           className="min-w-0 flex-1 rounded border border-border bg-background px-1 py-0.5 text-[11px]"
           value={itemId ?? ''}

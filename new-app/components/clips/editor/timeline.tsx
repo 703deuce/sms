@@ -94,6 +94,7 @@ import type { ClipMediaSource } from '@/lib/clips/editor/sources'
 import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
 import { CUT_HANDLE_ROW_TOP_PX, layoutCutHandles } from '@/lib/clips/editor/cut-handle-layout'
 import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
+import { useDismiss } from '@/components/clips/editor/use-dismiss'
 import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
 import { TimelineRuler } from '@/components/clips/editor/timeline/timeline-ruler'
 import { TimelineWaveform } from '@/components/clips/editor/timeline/timeline-waveform'
@@ -604,6 +605,10 @@ export function Timeline({
   const [takesMenu, setTakesMenu] = useState(false)
   const [takesSub, setTakesSub] = useState(false)
   const [addMenu, setAddMenu] = useState(false)
+  // FV4e: the + Track menu closes on an outside click or Escape.
+  const addMenuRef = useRef<HTMLDivElement>(null)
+  const closeAddMenu = useCallback(() => setAddMenu(false), [])
+  useDismiss(addMenuRef, addMenu, closeAddMenu)
   // G1b: Vegas-style envelopes (opacity on visual items, volume on Voice / Music) drawn on items.
   const [envOn, setEnvOn] = useState(false)
   const trackAreaRef = useRef<HTMLDivElement | null>(null)
@@ -1701,7 +1706,7 @@ export function Timeline({
             </span>
           ) : null}
           {editable ? (
-            <div className="relative">
+            <div className="relative" ref={addMenuRef}>
               <button
                 type="button"
                 className={tbtn}

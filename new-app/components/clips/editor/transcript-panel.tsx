@@ -62,6 +62,7 @@ export function TranscriptPanel({
   mediaKind,
   onSetEdits,
   angleSources,
+  onBuildFromTranscript,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -88,6 +89,8 @@ export function TranscriptPanel({
   /** G1b2: commit edits (camera angle per selected sentence / word range). */
   onSetEdits?: (next: ClipEditsV2) => void
   angleSources?: readonly ClipMediaSource[]
+  /** FV4e: open the Media panel's source monitor ("Build from transcript" of an uploaded file). */
+  onBuildFromTranscript?: () => void
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
@@ -501,6 +504,17 @@ export function TranscriptPanel({
       )}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={deleteSelection}>Delete selection</Button>
+        {onBuildFromTranscript ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onBuildFromTranscript}
+            title="Pick words from an uploaded video or audio file and add them to the timeline at the playhead (Media → source monitor)"
+            data-testid="transcript-build-from-transcript"
+          >
+            Build from transcript
+          </Button>
+        ) : null}
         {onPatchSectionOrder && mediaKind !== 'composite' ? (
           <>
             <Button

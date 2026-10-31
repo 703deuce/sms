@@ -57,6 +57,17 @@ export function mediaLanesFor(item: Pick<ProjectMediaItem, 'mediaType' | 'ref' |
   return ['video', 'broll']
 }
 
+/**
+ * FV4e: lanes a media item may be DROPPED on (timeline drag-and-drop). Same as the card buttons,
+ * plus an uploaded video on the Music / SFX lanes — its sound only (preview plays the file in an
+ * <audio>, the worker reads its audio stream like the G1b3 detached clip audio).
+ */
+export function mediaDropLanesFor(item: Pick<ProjectMediaItem, 'mediaType' | 'ref' | 'isMain'>): MediaDropLane[] {
+  const lanes = mediaLanesFor(item)
+  if (!item.isMain && item.ref === 'upload' && item.mediaType === 'video') return [...lanes, 'music', 'sfx']
+  return lanes
+}
+
 export function sourceFromItem(item: ProjectMediaItem): ClipMediaSource {
   return {
     id: item.refId,
@@ -111,7 +122,7 @@ export function addMediaToLane(
   atMs: number,
   newId: () => string,
 ): AddResult {
-  if (!mediaLanesFor(item).includes(lane)) {
+  if (!mediaDropLanesFor(item).includes(lane)) {
     return { edits: null, message: `${item.mediaType === 'audio' ? 'Audio' : 'This media'} can't go on the ${lane} lane` }
   }
   const outMs = Math.max(0, Math.min(tb.durationMs, toIntMs(atMs)))
