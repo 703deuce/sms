@@ -33,7 +33,7 @@ export function ProducerPanel({
   dryRun?: boolean
   /** E4: receives the proposed edits instead of onApplyEdits (Preview / Accept / Undo outside). */
   onProposal?: (edits: ClipEditsV2, changeCount: number, before: ClipEditsV2, summaries: string[]) => void
-  /** E4: cost line for a paid tool card (credits + USD estimate), shown before Generate. */
+  /** E4: cost line for a paid tool card (credits only — EP1g), shown before Generate. */
   costLabel?: (tool: { name: string; args: Record<string, unknown> }) => string
   /** E4: paid tools awaiting Generate / Skip (top-bar ✨ dot). */
   onPendingPaidChange?: (count: number) => void

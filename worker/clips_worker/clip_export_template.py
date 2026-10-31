@@ -285,24 +285,26 @@ def _t6_title_burn(
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    pad = int(w * 0.06)
-    burn_stream_headline(
-        stage,
-        out,
-        format_headline_for_export(headline),
-        play_w=play_w,
-        play_h=play_h,
-        bar_h=h,
-        bar_y=y,
-        duration_ms=_probe_duration_ms(video),
-        text_color=str(style.get("textColor") or "#FFFFFF"),
-        box_color=None,
-        headline_style=style,
-        fit_top=True,
-        scratch_dir=scratch,
-        text_box_x=x + pad,
-        text_box_w=w - 2 * pad,
+    # EP1: one measured line-breaking method shared with the editor preview (title_fit.py ==
+    # new-app render-plan/title-ass.ts, byte-identical ASS). Was the stream headline char-count wrap.
+    from clips_worker.t2v.titles_ass import burn_ass
+    from clips_worker.title_fit import clip_fonts_dir, title_ass_content, title_font_name
+
+    title_ass = scratch / "t6_title.ass"
+    title_ass.write_text(
+        title_ass_content(
+            format_headline_for_export(headline),
+            play_w=play_w,
+            play_h=play_h,
+            rect={"x": x, "y": y, "w": w, "h": h},
+            kind=kind,
+            text_color=str(style.get("textColor") or "#FFFFFF"),
+            font=title_font_name(style),
+            duration_ms=_probe_duration_ms(video),
+        ),
+        encoding="utf-8",
     )
+    burn_ass(stage, title_ass, out, fontsdir=clip_fonts_dir())
     print(f"[t6:title] t6Id={t6_id or '-'} kind={kind} rect={x},{y},{w},{h}", flush=True)
     return out
 

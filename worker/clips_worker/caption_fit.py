@@ -24,6 +24,7 @@ _FALLBACK_FONT = "Montserrat Black"
 _FONT_ALIASES = {
     "Montserrat": "Montserrat Black",
     "Poppins": "Poppins ExtraBold",
+    "Lato Black": "Lato",  # EP1 canonical ASS name → metrics row
 }
 # Kerning is ignored; keep a small slack so a measured "fits" really fits.
 _SLACK = 0.97

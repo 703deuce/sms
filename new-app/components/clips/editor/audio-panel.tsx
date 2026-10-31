@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
   DEFAULT_STUDIO_SOUND_MIX,
-  musicCostUsd,
   normalizeAudioEdits,
   SFX_PRESETS,
   type ClipStudioSound,
@@ -18,6 +17,7 @@ import { isSpeechLevelingEnabled, speechLevelingPatch } from '@/lib/clips/speech
 import { normalizeEditSpeed } from '@/lib/clips/edits'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
+import { creditsLabel, musicCredits } from '@/lib/clips/credit-cost'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import { toast } from 'sonner'
 
@@ -76,7 +76,7 @@ export function AudioPanel({
   const musicGen = useGeneration(music?.generationId ?? null)
   const aiExtras = clipEditorAiExtrasEnabled()
 
-  const cost = musicCostUsd(outputDurationMs)
+  const credits = musicCredits()
 
   const enqueueStudioSound = useCallback(async () => {
     const { generationId } = await clipsFetch<{ generationId: string }>(
@@ -281,7 +281,7 @@ export function AudioPanel({
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Music prompt…"
         />
-        <p className="text-xs text-muted-foreground">About ${cost.toFixed(2)} for this clip</p>
+        <p className="text-xs text-muted-foreground">Uses {creditsLabel(credits)}</p>
         <Button size="sm" disabled={busy || !prompt.trim()} onClick={() => void generateMusic()}>
           Generate
         </Button>

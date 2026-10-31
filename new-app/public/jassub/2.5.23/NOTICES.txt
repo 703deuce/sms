@@ -1,0 +1,38 @@
+Transovo clip editor - subtitle renderer third-party notices
+==========================================================
+
+The clip editor preview renders captions, titles, hooks, text items and badge text with
+JASSUB 2.5.23 (https://github.com/ThaUnknown/jassub, npm "jassub@2.5.23",
+integrity sha512-KvWvkZOQvLUZKDoJTfAZzbmxCN2Avs37d1VnZlscKvmfPIjcS+l2guou0WdGW6z/+Uxb8F7ha8Nrq5h5+k9cLw==).
+
+Files in this directory
+- jassub-worker.wasm, jassub-worker-modern.wasm : copied UNMODIFIED from the npm package
+  (dist/wasm/). They are separate files loaded at runtime and can be replaced by a user-built
+  copy of the same version (LGPL-2.1 section 6). Build scripts and sources: the published
+  package https://registry.npmjs.org/jassub/-/jassub-2.5.23.tgz and the project repository
+  https://github.com/ThaUnknown/jassub (Dockerfile / Makefile, lib/ submodules incl. FriBidi);
+  FriBidi 1.0.16 source: https://github.com/fribidi/fribidi/releases/tag/v1.0.16.
+  On request we provide the corresponding source for the LGPL component.
+- jassub.mjs, jassub-worker.js : the package's JavaScript (dist/jassub.js, dist/worker/*,
+  dist/wasm/jassub-worker.js) bundled with esbuild 0.25, otherwise unmodified, except that the
+  "rvfc-polyfill" import is replaced by an empty module (the editor never attaches a <video>).
+- default.woff2 : Liberation Sans fallback shipped by JASSUB (SIL OFL 1.1).
+
+Components and licences
+- JASSUB, JavascriptSubtitlesOctopus ............ MIT (LICENSE-JASSUB.txt)
+- libass 0.17.5-45-gfbe73bf (in the WASM) ....... ISC
+    Copyright (C) 2006 Evgeniy Stepanov and the libass contributors
+- GNU FriBidi 1.0.16 (in the WASM) .............. LGPL-2.1-or-later (LICENSE-LGPL-2.1.txt)
+    Copyright (C) 2004 Sharif FarsiWeb, Inc; 2001,2002 Behdad Esfahbod; 1999,2000 Dov Grobgeld
+    Source: https://github.com/fribidi/fribidi/releases/tag/v1.0.16
+- HarfBuzz (in the WASM) ........................ MIT ("Old MIT")
+- FreeType (in the WASM) ........................ FreeType License (FTL). Portions of this
+    software are copyright (C) The FreeType Project (www.freetype.org). All rights reserved.
+- Brotli (in the WASM, WOFF2 decoding) .......... MIT
+- zlib (in the WASM) ............................ Zlib
+- Emscripten runtime / musl libc ................ MIT / MIT-Modern-Variant / NTP / BSL-1.0 parts
+- abslink 1.3.1 ................................. Apache-2.0 (LICENSE-Apache-2.0.txt)
+- lfa-ponyfill 1.1.1, throughput 1.0.2 .......... MIT
+
+Fonts loaded by the renderer live in /fonts/clip/ (see README there: SIL OFL 1.1, Apache 2.0,
+Bitstream Vera / DejaVu licence).

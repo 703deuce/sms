@@ -112,20 +112,27 @@ def apply_hook_overlay(
     play_w: int,
     play_h: int,
 ) -> Path:
+    ass = hook_ass_for_edits(edits, play_w=play_w, play_h=play_h)
+    if ass is None:
+        return video
+    ass_path = out.parent / "hook.ass"
+    ass_path.write_text(ass, encoding="utf-8")
+    from clips_worker.title_fit import clip_fonts_dir
+
+    burn_ass(video, ass_path, out, fontsdir=clip_fonts_dir())
+    return out
+
+
+def hook_ass_for_edits(edits: dict, *, play_w: int, play_h: int) -> str | None:
+    """EP1: the hook .ass for ``edits`` (None when off). Mirror: new-app render-plan/hook-ass.ts."""
     ho = edits.get("hookOverlay") if isinstance(edits.get("hookOverlay"), dict) else None
     if not ho or not ho.get("enabled"):
-        return video
+        return None
     text = str(ho.get("text") or "").strip()
     if not text:
-        return video
+        return None
     duration_ms = int(ho.get("durationMs") or 2500)
     duration_ms = max(1500, min(5000, duration_ms))
     brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
     primary = str(brand.get("primaryColor") or "#FACC15")
-    ass_path = out.parent / "hook.ass"
-    ass_path.write_text(
-        _hook_ass(text, duration_ms, w=play_w, h=play_h, primary_color=primary, motion_edits=edits),
-        encoding="utf-8",
-    )
-    burn_ass(video, ass_path, out)
-    return out
+    return _hook_ass(text, duration_ms, w=play_w, h=play_h, primary_color=primary, motion_edits=edits)

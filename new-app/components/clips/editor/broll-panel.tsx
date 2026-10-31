@@ -10,7 +10,7 @@ import { toIntMs, type BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
-import { kieVideoCostUsd } from '@/lib/clips/kie-cost'
+import { aiBrollCredits } from '@/lib/clips/credit-cost'
 
 function msLabel(ms: number) {
   const s = Math.floor(ms / 1000)
@@ -282,7 +282,7 @@ export function BrollPanel({
               durationS={s.durationS}
               resolution="480p"
               atMs={s.atMs}
-              costUsd={kieVideoCostUsd(s.durationS, '480p')}
+              credits={aiBrollCredits()}
               onChange={(p) =>
                 setSuggestions((prev) => prev.map((row, j) => (j === i ? { ...row, ...p } : row)))
               }
@@ -295,7 +295,7 @@ export function BrollPanel({
             durationS={manualAi.durationS}
             resolution={manualAi.resolution}
             atMs={playheadMs}
-            costUsd={kieVideoCostUsd(manualAi.durationS, manualAi.resolution)}
+            credits={aiBrollCredits()}
             onChange={(p) => setManualAi((m) => ({ ...m, ...p }))}
             onGenerate={() => void startAi({ ...manualAi, atMs: playheadMs })}
             busy={busy || gen.status === 'RUNNING'}

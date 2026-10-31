@@ -1,0 +1,40 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Cap,Archivo Black,80,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,1,8,0,2,54,54,230,1
+Style: Box,Archivo Black,80,&H00000000&,&H00000000&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,3,16,0,2,54,54,230,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.48,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}ENERGY, CAPITAL,\NWHATEVER.
+Dialogue: 2,0:00:00.00,0:00:00.48,Cap,,0,0,0,,{\c&H003DD9FF&\u1}ENERGY, {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}CAPITAL,\N{\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}WHATEVER.
+Dialogue: 0,0:00:00.48,0:00:00.84,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}ENERGY, CAPITAL,\NWHATEVER.
+Dialogue: 2,0:00:00.48,0:00:00.84,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}ENERGY, {\c&H003DD9FF&\u1}CAPITAL,\N{\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}WHATEVER.
+Dialogue: 0,0:00:00.84,0:00:01.20,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}ENERGY, CAPITAL,\NWHATEVER.
+Dialogue: 2,0:00:00.84,0:00:01.20,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}ENERGY, {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}CAPITAL,\N{\c&H003DD9FF&\u1}WHATEVER.
+Dialogue: 0,0:00:01.24,0:00:01.64,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}I MEAN LIKE
+Dialogue: 2,0:00:01.24,0:00:01.64,Cap,,0,0,0,,{\c&H003DD9FF&\u1\fscx114\fscy114}I {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}MEAN {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}LIKE
+Dialogue: 0,0:00:01.64,0:00:02.00,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}I MEAN LIKE
+Dialogue: 2,0:00:01.64,0:00:02.00,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}I {\c&H003DD9FF&\u1}MEAN {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}LIKE
+Dialogue: 0,0:00:02.00,0:00:02.32,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}I MEAN LIKE
+Dialogue: 2,0:00:02.00,0:00:02.32,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}I {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}MEAN {\c&H003DD9FF&\u1}LIKE
+Dialogue: 0,0:00:02.36,0:00:02.84,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}THE WHOLE THING
+Dialogue: 2,0:00:02.36,0:00:02.84,Cap,,0,0,0,,{\c&H003DD9FF&\u1}THE {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}WHOLE {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}THING
+Dialogue: 0,0:00:02.84,0:00:03.24,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}THE WHOLE THING
+Dialogue: 2,0:00:02.84,0:00:03.24,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}THE {\c&H0014FF39&\u1}WHOLE {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}THING
+Dialogue: 0,0:00:03.24,0:00:03.60,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}THE WHOLE THING
+Dialogue: 2,0:00:03.24,0:00:03.60,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}THE {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}WHOLE {\c&H0014FF39&\u1}THING
+Dialogue: 0,0:00:03.64,0:00:04.08,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}IS JUST MOMENTUM
+Dialogue: 2,0:00:03.64,0:00:04.08,Cap,,0,0,0,,{\c&H0014FF39&\u1}IS {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}JUST {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}MOMENTUM
+Dialogue: 0,0:00:04.08,0:00:04.44,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}IS JUST MOMENTUM
+Dialogue: 2,0:00:04.08,0:00:04.44,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}IS {\c&H0014FF39&\u1}JUST {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}MOMENTUM
+Dialogue: 0,0:00:04.44,0:00:04.76,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}IS JUST MOMENTUM
+Dialogue: 2,0:00:04.44,0:00:04.76,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}IS {\1c&H00FFFFFF&\3c&H00000000&\bord8\shad0}JUST {\c&H0014FF39&\u1}MOMENTUM
+Dialogue: 0,0:00:04.80,0:00:05.12,Box,,0,0,0,,{\1a&HFF&\3c&H000000&\3a&H73&\bord16\shad0}HONESTLY
+Dialogue: 2,0:00:04.80,0:00:05.12,Cap,,0,0,0,,{\c&H0014FF39&\u1}HONESTLY

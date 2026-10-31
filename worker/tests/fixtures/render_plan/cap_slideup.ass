@@ -1,0 +1,21 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Cap,Poppins ExtraBold,125,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,1,4,0,5,54,54,230,1
+Style: Box,Poppins ExtraBold,125,&H00000000&,&H00000000&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,3,4,0,5,54,54,230,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:00.80,Cap,,0,0,0,,{\move(540,1017,540,960,0,150)\fad(150,0)}ENERGY, CAPITAL,
+Dialogue: 1,0:00:00.84,0:00:01.60,Cap,,0,0,0,,{\move(540,1017,540,960,0,150)\fad(150,0)}WHATEVER. I
+Dialogue: 1,0:00:01.64,0:00:02.32,Cap,,0,0,0,,{\move(540,1017,540,960,0,150)\fad(150,0)}MEAN LIKE
+Dialogue: 1,0:00:02.36,0:00:03.20,Cap,,0,0,0,,{\move(540,1017,540,960,0,150)\fad(150,0)}THE WHOLE
+Dialogue: 1,0:00:03.24,0:00:04.04,Cap,,0,0,0,,{\move(540,1017,540,960,0,150)\fad(150,0)}THING IS
+Dialogue: 1,0:00:04.08,0:00:04.76,Cap,,0,0,0,,{\move(540,1017,540,960,0,150)\fad(150,0)}JUST MOMENTUM
+Dialogue: 1,0:00:04.80,0:00:05.12,Cap,,0,0,0,,{\move(540,1017,540,960,0,150)\fad(150,0)}HONESTLY

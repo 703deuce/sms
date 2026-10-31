@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TemplatePipSpec, TemplateSpecV2 } from '@/lib/clips/templates/geometry'
 import { TITLE_STYLES } from '@/lib/clips/templates/registry'
 import { DEFAULT_FIT_BLUR_STRENGTH, fitBlurCssFilter, type FitBlurStrength } from '@/lib/clips/fit-blur'
+import { assEmPerFontsize } from '@/lib/clips/caption-fit'
+import { formatHeadlineForExport } from '@/lib/clips/export-template'
+import { fitTitle, templateTitleInput, titleTextBox } from '@/lib/clips/render-plan/title-ass'
 
 /**
  * T6.2: observe the element itself (callback-ref state), not a RefObject captured once.
@@ -295,6 +298,9 @@ type TitleStyleLite = {
 /**
  * T6.2: title preview for template mode — mirrors worker clip_export_template._t6_title_burn
  * (spec.titleRect, else a top bar of 384/1920) and the chip's TITLE_STYLES entry.
+ * EP1: lines + size come from the SAME measured fit as the export (render-plan/title-ass.ts ==
+ * worker title_fit.py); was one line with its own font-size formula (1 line here, 2 in the export).
+ * EP2 draws the text with libass-wasm from the same .ass; this DOM text is the fallback.
  */
 export function TemplateTitleOverlay({
   spec,
@@ -302,27 +308,33 @@ export function TemplateTitleOverlay({
   styleId,
   boxWidth,
   fontFamily,
+  headlineStyle,
+  hideText = false,
 }: {
   spec: TemplateSpecV2
   text: string
   styleId?: string | null
   boxWidth: number
   fontFamily?: string
+  headlineStyle?: { t6Id?: string | null; textColor?: string; font?: string } | null
+  /** EP2: libass-wasm draws the text; keep only the background here. */
+  hideText?: boolean
 }) {
   if (!text.trim() || boxWidth <= 0 || spec.playW <= 0) return null
   const k = boxWidth / spec.playW
-  const r = spec.titleRect && spec.titleRect.h >= 8
-    ? spec.titleRect
-    : { x: 0, y: 0, w: spec.playW, h: Math.round((384 / 1920) * spec.playH) }
-  const st = ((TITLE_STYLES as unknown as Record<string, TitleStyleLite>)[styleId ?? 'white_on_black'] ??
-    (TITLE_STYLES as unknown as Record<string, TitleStyleLite>).white_on_black ??
-    {}) as TitleStyleLite
+  const styles = TITLE_STYLES as unknown as Record<string, TitleStyleLite>
+  const input = templateTitleInput(spec, text, { t6Id: styleId, ...(headlineStyle ?? {}) }, styles, formatHeadlineForExport)
+  if (!input) return null
+  const r = input.rect
+  const st = (styles[styleId ?? 'white_on_black'] ?? styles.white_on_black ?? {}) as TitleStyleLite
   const kind = st.bg?.kind ?? 'band'
   const dark = (st.text ?? '#FFFFFF').toUpperCase() === '#111111' || (st.text ?? '').toUpperCase() === '#000000'
-  const display = st.case === 'upper' ? text.toUpperCase() : text
   const w = r.w * k
   const h = r.h * k
-  const fontPx = Math.max(10, Math.min(h * 0.38, (w * 0.88) / Math.max(6, display.length * 0.5)))
+  const tb = titleTextBox(r, input.kind)
+  const fit = fitTitle(input.text, input.font, tb.w, tb.h)
+  // libass: em = Fontsize · assEmPerFontsize, line height = Fontsize.
+  const emPx = fit.fontsize * assEmPerFontsize(input.font) * k
   const bgStyle: React.CSSProperties =
     kind === 'band'
       ? { backgroundColor: st.bg?.color ?? '#000000' }
@@ -335,26 +347,55 @@ export function TemplateTitleOverlay({
             backgroundColor: dark ? 'rgba(255,255,255,0.62)' : 'rgba(0,0,0,0.45)',
           }
         : {}
+  const boxBg =
+    kind === 'box' ? (
+      <div
+        className="absolute"
+        style={{
+          left: Math.floor((r.w - Math.trunc(r.w * 0.9)) / 2) * k,
+          top: Math.floor((r.h - Math.trunc(r.h * 0.72)) / 2) * k,
+          width: Math.trunc(r.w * 0.9) * k,
+          height: Math.trunc(r.h * 0.72) * k,
+          backgroundColor: st.bg?.color ?? '#FFFFFF',
+          borderRadius: (st.bg?.radiusPx ?? 0) * k,
+        }}
+      />
+    ) : null
   return (
     <div
-      className="pointer-events-none absolute z-[26] flex items-center justify-center"
+      className="pointer-events-none absolute z-[26]"
       data-testid="template-title"
       data-title-style={styleId ?? 'white_on_black'}
+      data-title-lines={fit.lines.length}
+      data-title-fontsize={fit.fontsize}
       style={{ left: r.x * k, top: r.y * k, width: w, height: h, ...bgStyle }}
     >
-      <span
-        className="text-center font-bold leading-[1.05]"
-        style={{
-          color: st.text ?? '#FFFFFF',
-          fontFamily,
-          fontSize: fontPx,
-          padding: kind === 'box' ? `${0.14 * h}px ${0.05 * w}px` : `0 ${0.06 * w}px`,
-          backgroundColor: kind === 'box' ? st.bg?.color ?? '#FFFFFF' : undefined,
-          borderRadius: kind === 'box' ? (st.bg?.radiusPx ?? 0) * k : undefined,
-        }}
-      >
-        {display}
-      </span>
+      {boxBg}
+      {hideText ? null : (
+        <div
+          className="absolute flex flex-col items-center justify-center text-center font-bold"
+          data-testid="template-title-text"
+          data-libass-for="top"
+          data-libass-ghost="all"
+          style={{
+            left: (tb.x - r.x) * k,
+            top: (tb.y - r.y) * k,
+            width: tb.w * k,
+            height: tb.h * k,
+            color: input.textColor,
+            fontFamily,
+            fontSize: emPx,
+            lineHeight: `${fit.fontsize * k}px`,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {fit.lines.map((ln, i) => (
+            <span key={i} className="block">
+              {ln}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

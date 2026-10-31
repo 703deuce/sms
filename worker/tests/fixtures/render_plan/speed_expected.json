@@ -1,0 +1,28 @@
+[
+ {
+  "name": "speed_mixed",
+  "pieces": [
+   {
+    "startMs": 0,
+    "endMs": 600,
+    "speed": 1.0
+   },
+   {
+    "startMs": 600,
+    "endMs": 2000,
+    "speed": 2.0
+   },
+   {
+    "startMs": 2000,
+    "endMs": 2200,
+    "speed": 1.0
+   },
+   {
+    "startMs": 2200,
+    "endMs": 2600,
+    "speed": 0.5
+   }
+  ],
+  "outputDurationMs": 2300.0
+ }
+]

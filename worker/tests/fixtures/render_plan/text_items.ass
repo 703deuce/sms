@@ -1,0 +1,22 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: T0,Bangers,140,&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,0,0,0,0,100,100,0,0,1,8.0,0,5,0,0,0,1
+Style: B0,Bangers,140,&HFF000000,&HFF000000,&H26ED3A7C,&HFF000000,0,0,0,0,100,100,0,0,3,24.0,0,5,0,0,0,1
+Style: T1,Montserrat Black,72,&H0047E0FD,&H0047E0FD,&H00000000,&H4D000000,0,0,0,0,100,100,0,0,1,0,6.0,4,0,0,0,1
+Style: T2,Poppins ExtraBold,60,&H005EC522,&H005EC522,&H00111111,&HFF000000,0,0,0,0,100,100,0,0,1,5.0,0,6,0,0,0,1
+Style: T3,Montserrat Black,96,&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:05.00,T0,,0,0,0,,{\an5\pos(540,576)}LUDWIG REACTS
+Dialogue: 0,0:00:00.00,0:00:05.00,B0,,0,0,0,,{\an5\pos(540,576)}LUDWIG REACTS
+Dialogue: 1,0:00:00.12,0:00:05.00,T1,,0,0,0,,{\an4\pos(396,1190)}left aligned\Nsecond line
+Dialogue: 1,0:00:00.50,0:00:02.50,T2,,0,0,0,,{\an6\pos(1080,1632)}RIGHT (BRACES) \\ SLASH
+Dialogue: 1,0:00:00.00,0:00:01.00,T3,,0,0,0,,{\an5\pos(540,960)}unknown font

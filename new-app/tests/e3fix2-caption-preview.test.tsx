@@ -32,7 +32,8 @@ describe('E3fix2: preview caption lines break like the export ASS', () => {
     const line = r.getByTestId('caption-line')
     expect(line.getAttribute('data-breaks')).toBe('2')
     const rows = r.getAllByTestId('caption-row')
-    expect(rows.map((x) => x.textContent)).toEqual(['Energy,capital,', 'whatever.'])
+    // EP1: words are separated by a real space (libass spacing), not CSS gaps.
+    expect(rows.map((x) => x.textContent)).toEqual(['Energy, capital,', 'whatever.'])
     expect(line.style.maxWidth).toBe('90%')
   })
 

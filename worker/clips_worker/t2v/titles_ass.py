@@ -106,12 +106,14 @@ def build_ass(
     return "\n".join(out) + "\n"
 
 
-def burn_ass(video: Path, ass_path: Path, out: Path) -> Path:
+def burn_ass(video: Path, ass_path: Path, out: Path, fontsdir: Path | None = None) -> Path:
+    # EP1: optional fontsdir = the pinned bundled fonts (fontconfig still resolves the rest).
+    vf = f"ass={ass_path}" + (f":fontsdir={fontsdir}" if fontsdir else "")
     subprocess.run(
         [
             "ffmpeg", "-y", "-v", "error",
             "-i", str(video),
-            "-vf", f"ass={ass_path}",
+            "-vf", vf,
             "-c:a", "copy",
             str(out),
         ],

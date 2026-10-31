@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { dubCostUsd, DUB_LANGUAGES } from '@/lib/clips/dub'
+import { DUB_LANGUAGES } from '@/lib/clips/dub'
+import { dubCredits } from '@/lib/clips/credit-cost'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
@@ -51,7 +52,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       data: {
         dubTrackId: trackId,
         status: 'QUEUED',
-        estimatedCostUsd: dubCostUsd(durationMs),
+        credits: dubCredits(durationMs),
       },
     })
   } catch (err) {

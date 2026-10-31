@@ -280,7 +280,9 @@ function mergeBadgeLayer(
     return {
       ...fresh,
       showLogo: stored?.showLogo ?? fresh.showLogo,
-      handle: fresh.handle ?? stored?.handle,
+      // EP1: a stored handle wins (worker layers_spec._merge_sync_layer) — the preview badge read
+      // "TWITCH" while the export burned the saved handle ("2XRAKAI").
+      handle: stored?.handle || fresh.handle,
     }
   }
 

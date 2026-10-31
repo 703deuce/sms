@@ -1,0 +1,133 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Hook,DejaVu Sans,78,&H0015CCFA,&H00FFFFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,4,2,8,86,86,40,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 3,0:00:00.00,0:00:00.03,Hook,,0,0,0,,{\an8\pos(540,19)\fscx80.0\fscy80.0\frz-0.0\1a&HFF&\3a&HFF&\4a&HFF&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.03,0:00:00.06,Hook,,0,0,0,,{\an8\pos(540,30)\fscx81.11\fscy81.11\frz-0.0\1a&HD0&\3a&HD0&\4a&HEC&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.06,0:00:00.10,Hook,,0,0,0,,{\an8\pos(540,40)\fscx82.22\fscy82.22\frz-0.0\1a&HA1&\3a&HA1&\4a&HD8&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.10,0:00:00.13,Hook,,0,0,0,,{\an8\pos(540,51)\fscx83.33\fscy83.33\frz-0.0\1a&H71&\3a&H71&\4a&HC5&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.13,0:00:00.16,Hook,,0,0,0,,{\an8\pos(540,62)\fscx84.44\fscy84.44\frz-0.0\1a&H42&\3a&H42&\4a&HB1&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.16,0:00:00.20,Hook,,0,0,0,,{\an8\pos(540,72)\fscx85.56\fscy85.56\frz-0.0\1a&H13&\3a&H13&\4a&H9E&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.20,0:00:00.23,Hook,,0,0,0,,{\an8\pos(540,83)\fscx86.67\fscy86.67\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.23,0:00:00.26,Hook,,0,0,0,,{\an8\pos(540,94)\fscx87.78\fscy87.78\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.26,0:00:00.30,Hook,,0,0,0,,{\an8\pos(540,104)\fscx88.89\fscy88.89\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.30,0:00:00.33,Hook,,0,0,0,,{\an8\pos(540,115)\fscx90.0\fscy90.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.33,0:00:00.36,Hook,,0,0,0,,{\an8\pos(540,126)\fscx91.11\fscy91.11\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.36,0:00:00.40,Hook,,0,0,0,,{\an8\pos(540,136)\fscx92.22\fscy92.22\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.40,0:00:00.43,Hook,,0,0,0,,{\an8\pos(540,147)\fscx93.33\fscy93.33\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.43,0:00:00.46,Hook,,0,0,0,,{\an8\pos(540,158)\fscx94.44\fscy94.44\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.46,0:00:00.50,Hook,,0,0,0,,{\an8\pos(540,168)\fscx95.56\fscy95.56\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.50,0:00:00.53,Hook,,0,0,0,,{\an8\pos(540,179)\fscx96.67\fscy96.67\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.53,0:00:00.56,Hook,,0,0,0,,{\an8\pos(540,190)\fscx97.78\fscy97.78\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.56,0:00:00.60,Hook,,0,0,0,,{\an8\pos(540,200)\fscx98.89\fscy98.89\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.60,0:00:00.63,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.63,0:00:00.66,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.66,0:00:00.70,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.70,0:00:00.73,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.73,0:00:00.76,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.76,0:00:00.80,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.80,0:00:00.83,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.83,0:00:00.86,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.86,0:00:00.90,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.90,0:00:00.93,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.93,0:00:00.96,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:00.96,0:00:01.00,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.00,0:00:01.03,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.03,0:00:01.06,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.06,0:00:01.10,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.10,0:00:01.13,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.13,0:00:01.16,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.16,0:00:01.20,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.20,0:00:01.23,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.23,0:00:01.26,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.26,0:00:01.30,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.30,0:00:01.33,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.33,0:00:01.36,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.36,0:00:01.40,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.40,0:00:01.43,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.43,0:00:01.46,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.46,0:00:01.50,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.50,0:00:01.53,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.53,0:00:01.56,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.56,0:00:01.60,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.60,0:00:01.63,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.63,0:00:01.66,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.66,0:00:01.70,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.70,0:00:01.73,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.73,0:00:01.76,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.76,0:00:01.80,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.80,0:00:01.83,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.83,0:00:01.86,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.86,0:00:01.90,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.90,0:00:01.93,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.93,0:00:01.96,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:01.96,0:00:02.00,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.00,0:00:02.03,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.03,0:00:02.06,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.06,0:00:02.10,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.10,0:00:02.13,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.13,0:00:02.16,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.16,0:00:02.20,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.20,0:00:02.23,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.23,0:00:02.26,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.26,0:00:02.30,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.30,0:00:02.33,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.33,0:00:02.36,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.36,0:00:02.40,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.40,0:00:02.43,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.43,0:00:02.46,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.46,0:00:02.50,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.50,0:00:02.53,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.53,0:00:02.56,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.56,0:00:02.60,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.60,0:00:02.63,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.63,0:00:02.66,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.66,0:00:02.70,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.70,0:00:02.73,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.73,0:00:02.76,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.76,0:00:02.80,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.80,0:00:02.83,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.83,0:00:02.86,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.86,0:00:02.90,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.90,0:00:02.93,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.93,0:00:02.96,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:02.96,0:00:03.00,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.00,0:00:03.03,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.03,0:00:03.06,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.06,0:00:03.10,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.10,0:00:03.13,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.13,0:00:03.16,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.16,0:00:03.20,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.20,0:00:03.23,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.23,0:00:03.26,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.26,0:00:03.30,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.30,0:00:03.33,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.33,0:00:03.36,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.36,0:00:03.40,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.40,0:00:03.43,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.43,0:00:03.46,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.46,0:00:03.50,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.50,0:00:03.53,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.53,0:00:03.56,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.56,0:00:03.60,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.60,0:00:03.63,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.63,0:00:03.66,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.66,0:00:03.70,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.70,0:00:03.73,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.73,0:00:03.76,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.76,0:00:03.80,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&H96&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.80,0:00:03.83,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H17&\3a&H17&\4a&HA0&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.83,0:00:03.86,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H3E&\3a&H3E&\4a&HAF&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.86,0:00:03.90,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H64&\3a&H64&\4a&HBF&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.90,0:00:03.93,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&H8B&\3a&H8B&\4a&HCF&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.93,0:00:03.96,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&HB2&\3a&HB2&\4a&HDF&}Ludwig finally explains why he quit streaming on Twitch
+Dialogue: 3,0:00:03.96,0:00:04.00,Hook,,0,0,0,,{\an8\pos(540,211)\fscx100.0\fscy100.0\frz-0.0\1a&HD8&\3a&HD8&\4a&HEF&}Ludwig finally explains why he quit streaming on Twitch

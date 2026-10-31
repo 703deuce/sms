@@ -37,6 +37,8 @@ export function TextItemsPreview({
             style={{ transformOrigin: css.origin, visibility: 'hidden', opacity: 0 }}
             data-testid="preview-text-item"
             data-text-id={it.id}
+            data-libass-for="text"
+            data-libass-ghost="all"
             aria-hidden
           >
             <div

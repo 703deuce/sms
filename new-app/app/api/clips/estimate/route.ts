@@ -18,7 +18,8 @@ export async function POST(request: Request) {
     const rangeMs = Math.max(0, (body.rangeEndMs || body.durationMs) - body.rangeStartMs)
     const minutes = Math.max(1, Math.ceil(rangeMs / 60_000))
     const credits = minutes * costOf(workspaceId, 'process_minute')
-    return NextResponse.json({ data: { credits, providerCostUsd: minutes * 0.004 } })
+    // EP1g: credits only — never the provider $ estimate.
+    return NextResponse.json({ data: { credits } })
   } catch (err) {
     return jsonError(err, 400)
   }

@@ -42,7 +42,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   const [uploadId, setUploadId] = useState<string | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [durationMs, setDurationMs] = useState(0)
-  const [estimate, setEstimate] = useState<{ credits: number; providerCostUsd?: number } | null>(null)
+  const [estimate, setEstimate] = useState<{ credits: number } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
   const byoAutoStartedRef = useRef(false)
@@ -362,7 +362,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           {estimate && tab === 'upload' && projectIntent === 'find' && (
             <p className="text-xs text-muted-foreground">
               {testMode
-                ? `Test mode · est. provider cost $${(estimate.providerCostUsd ?? 0).toFixed(3)}`
+                ? `Test mode · est. ${estimate.credits} credits`
                 : `Est. ${estimate.credits} credits`}
             </p>
           )}

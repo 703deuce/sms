@@ -107,7 +107,7 @@ export function cancelProject(projectId: string) {
 }
 
 export function estimateCredits(body: { durationMs: number; rangeStartMs: number; rangeEndMs: number; settings: unknown }) {
-  return clipsFetch<{ credits: number; providerCostUsd?: number }>('/api/clips/estimate', {
+  return clipsFetch<{ credits: number }>('/api/clips/estimate', {
     method: 'POST',
     body: JSON.stringify(body),
   })

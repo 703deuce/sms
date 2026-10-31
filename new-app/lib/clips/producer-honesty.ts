@@ -35,6 +35,40 @@ export function promoteMusicMixWithoutMusic(edits: ClipEditsV2, tools: ProducerT
   return [...tools, { name: 'generate_music', args: { prompt }, requiresConfirm: true }]
 }
 
+/**
+ * EP1: the LLM often answers "add background music" with a text question ("Want me to generate
+ * music? It uses credits.") and NO tool call, so nothing reached the cost card. When the user's own
+ * message asks for music, the clip has none, and the model queued no music tool, queue
+ * generate_music ourselves — the card (credits + Generate / Skip) is the confirmation step.
+ */
+const MUSIC_ASK_RE =
+  /\b(add|put|give|generate|create|make|throw|lay|need|want|use)\b[^.?!]{0,40}\b(music|soundtrack|song|beat|track)\b|\b(background|bg)\s+(music|track|song)\b/i
+const MUSIC_NEGATION_RE = /\b(no|remove|without|delete|mute|kill|stop|turn off|drop)\b[^.?!]{0,20}\b(music|soundtrack|song|track)\b/i
+
+export function userAsksForMusic(message: string | undefined | null): boolean {
+  const m = (message ?? '').trim()
+  if (!m) return false
+  if (MUSIC_NEGATION_RE.test(m)) return false
+  return MUSIC_ASK_RE.test(m)
+}
+
+export function promoteMusicIntentFromMessage(
+  edits: ClipEditsV2,
+  tools: ProducerToolCall[],
+  userMessage: string | undefined | null,
+): ProducerToolCall[] {
+  if (edits.audio?.music) return tools
+  if (tools.some((t) => t.name === 'generate_music' || t.name === 'set_music_mix')) return tools
+  if (!userAsksForMusic(userMessage)) return tools
+  const m = (userMessage ?? '').trim()
+  const style = m.match(/\b(upbeat|chill|lo-?fi|calm|epic|cinematic|hype|dramatic|happy|sad|jazzy|electronic|ambient|energetic)\b/i)?.[0]
+  const prompt = style ? `${style.toLowerCase()} instrumental background music` : DEFAULT_MUSIC_PROMPT
+  return [...tools, { name: 'generate_music', args: { prompt }, requiresConfirm: true }]
+}
+
+/** A reply that asks the user to confirm in text ("Want me to…?", "Shall I…", "Confirm…"). */
+const ASKS_CONFIRM_RE = /\?\s*$|\b(would you like|do you want|want me to|shall i|should i|confirm|let me know if|ok to)\b/i
+
 const CLAIM_RE = /\b(added|adding|applied|updated|changed|set to|switched|inserted|removed|trimmed|generated|made)\b/i
 
 /** Replace a reply that claims a change when the patch changed nothing. "already …" replies are kept. */
@@ -46,6 +80,11 @@ export function honestProducerReply(
 ): string | undefined {
   if (changeCount > 0) return reply
   const text = (reply ?? '').trim()
+  // EP1: with a paid tool queued, the cost card IS the confirmation — never a text question.
+  if (pendingPaid.length && (!text || ASKS_CONFIRM_RE.test(text))) {
+    const names = pendingPaid.map((t) => t.name.replace(/^generate_/, '').replace(/_/g, ' ')).join(', ')
+    return `Nothing has been changed yet — ${names} uses credits. Review the cost below and press Generate to create it.`
+  }
   if (/\balready\b/i.test(text) && !/\badded\b/i.test(text)) return reply
   if (text && !CLAIM_RE.test(text)) return reply
   if (pendingPaid.length) {

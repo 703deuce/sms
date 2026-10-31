@@ -1,0 +1,19 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Cap,Poppins ExtraBold,125,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,1,4,0,2,54,54,230,1
+Style: Box,Poppins ExtraBold,125,&H00000000&,&H00000000&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,3,4,0,2,54,54,230,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:01.20,Cap,,0,0,0,,{\1c&H0000D4FF&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf44}ENERGY, {\kf32}CAPITAL,\N{\kf36}WHATEVER.
+Dialogue: 1,0:00:01.24,0:00:02.32,Cap,,0,0,0,,{\1c&H0000D4FF&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf36}I {\kf32}MEAN {\kf31}LIKE
+Dialogue: 1,0:00:02.36,0:00:03.60,Cap,,0,0,0,,{\1c&H0000D4FF&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf43}THE {\kf36}WHOLE {\kf35}THING
+Dialogue: 1,0:00:03.64,0:00:04.76,Cap,,0,0,0,,{\1c&H005EC522&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf39}IS {\kf32}JUST {\kf31}MOMENTUM
+Dialogue: 1,0:00:04.80,0:00:05.12,Cap,,0,0,0,,{\1c&H005EC522&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf32}HONESTLY

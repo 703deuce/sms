@@ -103,7 +103,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         const prismaWords = getPrisma()
         const project = await prismaWords.clipProject.findUnique({ where: { id: clip.projectId } })
         const words = await loadClipWords(workspaceId, clip.projectId, clipId, project?.transcriptWords)
-        const applied = runProducerOnClip(edits, bounds, enrichedTools, words, llm.reply)
+        const applied = runProducerOnClip(edits, bounds, enrichedTools, words, llm.reply, userMessage)
 
         send('message', { role: 'assistant', content: applied.reply ?? llm.reply })
         send('tools', { summaries: applied.summaries, pendingPaid: applied.pendingPaid })

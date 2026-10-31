@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { creditsLabel } from '@/lib/clips/credit-cost'
 
 function formatInsertAt(ms: number) {
   const s = Math.floor(ms / 1000)
@@ -15,7 +16,7 @@ export function AiBrollCard({
   durationS,
   resolution,
   atMs,
-  costUsd,
+  credits,
   onChange,
   onGenerate,
   busy,
@@ -24,7 +25,8 @@ export function AiBrollCard({
   durationS: number
   resolution: '480p' | '720p'
   atMs: number
-  costUsd: number
+  /** EP1g: credits only — never the provider $ estimate. */
+  credits: number
   onChange: (patch: { prompt?: string; durationS?: number; resolution?: '480p' | '720p' }) => void
   onGenerate: () => void
   busy?: boolean
@@ -69,7 +71,7 @@ export function AiBrollCard({
           </Select>
         </div>
         <span className="text-xs text-muted-foreground">
-          {durationS}s · {resolution} · about ${costUsd.toFixed(2)}
+          {durationS}s · {resolution} · {creditsLabel(credits)}
         </span>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">

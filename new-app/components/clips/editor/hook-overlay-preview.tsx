@@ -32,6 +32,8 @@ export function HookOverlayPreview({
       className="pointer-events-none absolute inset-0 z-[22]"
       style={{ transformOrigin: '50% 11%', opacity: 0, visibility: 'hidden' }}
       data-testid="preview-hook-overlay"
+      data-libass-for="hook"
+      data-libass-ghost="all"
       aria-hidden
     >
       <div
