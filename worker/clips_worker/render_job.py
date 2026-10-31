@@ -19,6 +19,7 @@ from clips_worker.preview_reuse import can_reuse_clip_preview_for_render
 from clips_worker.render_fit_fallback import merge_job_fit_fallback_payload
 from clips_worker.render_clip import ffmpeg_cut
 from clips_worker.storage import download_object, upload_file
+from clips_worker.export_progress import ETA_UPLOAD_S, overall_progress
 
 
 def _probe_duration_sec(path: Path) -> float:
@@ -434,7 +435,8 @@ def _run_render_clip_job_body(
     _export_stage_log(render_id, "load_context", t_job)
     _check_drain("load_context")
     mark_render(conn, render_id, "RENDERING")
-    post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 10, "etaSeconds": 180})
+    # FV4b: overall bands prep 0–10 / encode 10–90 / upload 90–100; no made-up ETA during prep.
+    post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": overall_progress("prep", 0.2)})
     from clips_worker.gpu.render_warmup import schedule_modal_warmup_background
 
     schedule_modal_warmup_background()
@@ -534,7 +536,7 @@ def _run_render_clip_job_body(
         src = td_path / "source.mp4"
         download_object(source_key, src)
         _export_stage_log(render_id, "download_source", t_job)
-        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 28, "etaSeconds": 120})
+        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": overall_progress("prep", 0.6)})
         clip_file = td_path / "clip.mp4"
         cut_start, cut_end, lo_ms, hi_ms = expanded_source_cut_ms(clip_start, clip_end, edits)
         print(
@@ -711,7 +713,7 @@ def _run_render_clip_job_body(
                 {
                     "jobStatus": "RUNNING",
                     "stage": "render_clip",
-                    "progress": 55,
+                    "progress": overall_progress("encode", 0.0),
                     "renderStep": 1,
                     "renderSteps": tracker.est_passes,
                     "activity": "start",
@@ -823,14 +825,17 @@ def _run_render_clip_job_body(
             active_tracker.check()
         progress_stack.close()  # FV4a: stop the progress reporter + PATH shim before the upload
         _assert_still_owned(conn, job)
-        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 82, "etaSeconds": 30})
+        post_progress(
+            job["id"],
+            {"jobStatus": "RUNNING", "stage": "render_clip", "progress": overall_progress("upload", 0.0), "etaSeconds": ETA_UPLOAD_S},
+        )
         _export_stage_log(render_id, "pre_upload", t_job)
         out_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.mp4"
         srt_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.srt"
         upload_file(out_key, out_mp4, "video/mp4")
         upload_text(srt_key, srt_body, "text/plain; charset=utf-8")
         # E6: upload finished — show movement past 82% (stage stays render_clip: it is also the project stage).
-        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 95, "etaSeconds": 5})
+        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": overall_progress("upload", 0.5), "etaSeconds": 5})
         size = out_mp4.stat().st_size
         from clips_worker.edits_render import output_duration_ms
 

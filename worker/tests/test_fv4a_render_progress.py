@@ -130,7 +130,7 @@ def test_shim_reports_ffmpeg_out_time_and_restores_path(tmp_path):
         p = next(iter(tr.passes.values()))
         assert p.ended is not None
         assert 3_500_000 <= p.out_us <= 4_200_000
-        assert 55 <= snap["progress"] <= 81
+        assert 10 <= snap["progress"] <= 89  # FV4b: encode band 10–89
     assert os.environ.get("PATH") == path_before
     assert "FV4A_PROGRESS_DIR" not in os.environ
 
@@ -204,7 +204,7 @@ def test_progress_is_monotonic_capped_and_has_eta(tmp_path):
         seen.append(tr.snapshot())
     progs = [s["progress"] for s in seen]
     assert progs == sorted(progs)
-    assert all(55 <= p <= PROGRESS_HI for p in progs)
+    assert all(10 <= p <= PROGRESS_HI for p in progs)  # FV4b: encode band
     assert seen[-1]["step"] == 2 and seen[-1]["steps"] == 3
     assert seen[-1]["eta_s"] is not None and seen[-1]["eta_s"] > 0
     assert len({s["activity"] for s in seen}) == len(seen)  # every tick moved

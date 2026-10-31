@@ -6,6 +6,8 @@ import { createExportToast } from '@/lib/clips/editor/export-toast'
 import { EXPORT_POLL_MAX_ERRORS, startExportStatusPoll } from '@/lib/clips/editor/export-poll'
 import {
   formatExportProgressLine,
+  isRenderInFlight,
+  monotonicPct,
   type ExportRenderDetail,
 } from '@/lib/clips/editor/export-progress-text'
 import { Download } from 'lucide-react'
@@ -173,7 +175,7 @@ export function ExportDialog({
           ...edits.exportTemplate,
           channelLink: {
             ...edits.exportTemplate.channelLink,
-            enabled: edits.exportTemplate.channelLink?.enabled,
+            enabled: edits.exportTemplate.channelLink?.enabled ?? false,
             url,
           },
         })
@@ -242,7 +244,8 @@ export function ExportDialog({
         if (r.status !== 'FAILED') setErrorDetail(null)
         setStatus(r.status)
         if (typeof r.durationMs === 'number') setDurationMs(r.durationMs)
-        if (typeof r.progress === 'number') setRenderProgress(r.progress)
+        // FV4b: never step backwards for the same render (polls can land out of order / on a retry).
+        if (typeof r.progress === 'number') setRenderProgress((p) => monotonicPct(p, r.progress))
         if (r.phase) setRenderPhase(r.phase)
         setRenderEtaSec(typeof r.etaSec === 'number' ? r.etaSec : null)
         setRenderDetail(r.detail ?? null)
@@ -291,8 +294,10 @@ export function ExportDialog({
     }
   }, [renderId, status, downloadUrl, clipId, exportToast])
 
+  // FV4b: a render of this clip is still QUEUED / RENDERING — no second Export MP4 click.
+  const renderInFlight = isRenderInFlight(renderId, status)
   const startExport = async () => {
-    if (busy) return
+    if (busy || renderInFlight) return
     setBusy(true)
     setErrorDetail(null)
     exportToast.start()
@@ -344,6 +349,13 @@ export function ExportDialog({
         exportSfx,
         edits: exportEdits,
       })
+      if (data.renderId !== renderId) {
+        // FV4b: a new render starts its % / ETA from scratch (the server may also hand back the
+        // render already in flight for the same edits — then progress continues).
+        setRenderProgress(null)
+        setRenderEtaSec(null)
+        setRenderDetail(null)
+      }
       setRenderId(data.renderId)
       setStatus(data.status)
       if (typeof data.durationMs === 'number') setDurationMs(data.durationMs)
@@ -720,7 +732,14 @@ export function ExportDialog({
         )}
         <div className="mt-4 flex flex-wrap gap-2">
           {!downloadUrl ? (
-            <Button onClick={() => void startExport()} disabled={busy}>{busy ? 'Exporting…' : 'Export MP4'}</Button>
+            <Button
+              onClick={() => void startExport()}
+              disabled={busy || renderInFlight}
+              data-testid="export-mp4-button"
+              title={renderInFlight ? 'This clip is already rendering — wait for it to finish' : undefined}
+            >
+              {renderInFlight ? 'Rendering…' : busy ? 'Exporting…' : 'Export MP4'}
+            </Button>
           ) : (
             <Button render={<a href={downloadUrl} download={filename} />}>Download MP4</Button>
           )}

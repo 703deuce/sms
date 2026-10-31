@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
-import { Activity, Blend, Keyboard, Magnet, Maximize2, Pause, Plus, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
+import { Activity, Blend, Keyboard, Layers, Magnet, Maximize2, Pause, Plus, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -225,6 +225,9 @@ function hasDomTextSelection(): boolean {
 const MEDIA_DROP_LANES = new Set<string>(['video', 'broll', 'music', 'sfx'])
 
 const NO_SOURCES: readonly ClipMediaSource[] = []
+
+/** FV4b: motion panel key for the main picture's slot (not a track id; never stored in trackMotion). */
+const MAIN_MOTION_KEY = '__main__'
 
 export function Timeline({
   edits,
@@ -597,6 +600,9 @@ export function Timeline({
   const [pacingOpen, setPacingOpen] = useState(false)
   // G1c: track motion inspector (overlay tracks).
   const [motionPanel, setMotionPanel] = useState<{ key: string; label: string } | null>(null)
+  // FV4b: the takes commands are findable from the toolbar too (T alone only showed a hint).
+  const [takesMenu, setTakesMenu] = useState(false)
+  const [takesSub, setTakesSub] = useState(false)
   const [addMenu, setAddMenu] = useState(false)
   // G1b: Vegas-style envelopes (opacity on visual items, volume on Voice / Music) drawn on items.
   const [envOn, setEnvOn] = useState(false)
@@ -862,6 +868,95 @@ export function Timeline({
     }
     return null
   })()
+  /** FV4b: Group as takes is eligible with 2+ B-roll or 2+ Video clips selected. */
+  const canGroupTakes =
+    editable &&
+    (liveSelected.filter((r) => r.lane === 'broll').length >= 2 || liveSelected.filter((r) => r.lane === 'video').length >= 2)
+  const menuItemCls = 'block w-full rounded px-2 py-1.5 text-left hover:bg-muted disabled:pointer-events-none disabled:opacity-50'
+  /** FV4b: one takes menu for the item context menu and the toolbar (G1c actions, unchanged). */
+  const renderTakesItems = (close: () => void, where: 'ctx' | 'toolbar') => (
+    <>
+      <button
+        type="button"
+        className={menuItemCls}
+        role="menuitem"
+        disabled={!canGroupTakes}
+        title={canGroupTakes ? 'Keep these clips as alternates in one slot; T cycles' : 'Shift-click 2+ B-roll clips, or 2+ Video clips, then group them'}
+        data-testid={where === 'ctx' ? 'timeline-group-takes' : 'timeline-toolbar-group-takes'}
+        onClick={() => {
+          // G1c: alternates in one slot; only the active take renders, T cycles.
+          const n = groupTakes()
+          if (n) commit(n)
+          else toast.message('Pick 2–8 B-roll clips, or 2–8 Video clips that don’t overlap', { id: 'timeline-takes' })
+          close()
+        }}
+      >
+        Group as takes
+        {!canGroupTakes ? <span className="block text-[10px] text-muted-foreground">Select 2+ clips first (Shift-click)</span> : null}
+      </button>
+      {editable && selTakeGroupId ? (
+        <div
+          className="group/takes relative"
+          onMouseEnter={() => setTakesSub(true)}
+          onMouseLeave={() => setTakesSub(false)}
+        >
+          <button
+            type="button"
+            className={menuItemCls}
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded={takesSub}
+            data-testid={where === 'ctx' ? 'timeline-takes-submenu' : 'timeline-toolbar-takes-submenu'}
+            onClick={() => setTakesSub((v) => !v)}
+          >
+            Takes ▸
+          </button>
+          <div
+            className={`${takesSub ? 'block' : 'hidden'} absolute left-full top-0 z-50 ml-0.5 min-w-[160px] rounded-md border border-border bg-popover p-1 shadow-lg group-focus-within/takes:block`}
+            role="menu"
+            aria-label="Takes"
+          >
+            <button
+              type="button"
+              className={menuItemCls}
+              role="menuitem"
+              data-testid={where === 'ctx' ? 'timeline-next-take' : 'timeline-toolbar-next-take'}
+              onClick={() => {
+                cycleTake(1)
+                close()
+              }}
+            >
+              Next take (T)
+            </button>
+            <button
+              type="button"
+              className={menuItemCls}
+              role="menuitem"
+              data-testid={where === 'ctx' ? 'timeline-prev-take' : 'timeline-toolbar-prev-take'}
+              onClick={() => {
+                cycleTake(-1)
+                close()
+              }}
+            >
+              Previous take (Shift+T)
+            </button>
+            <button
+              type="button"
+              className={menuItemCls}
+              role="menuitem"
+              data-testid={where === 'ctx' ? 'timeline-ungroup-takes' : 'timeline-toolbar-ungroup-takes'}
+              onClick={() => {
+                commit(ungroupTakes(edits, selTakeGroupId))
+                close()
+              }}
+            >
+              Ungroup takes
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
   const cmdRef = useRef(runCommand)
   cmdRef.current = runCommand
   const addTrackOf = (kind: TrackKind, above?: string) => {
@@ -886,6 +981,13 @@ export function Timeline({
   }
   const trackActions = (r: TimelineRow) => {
     if (!editable) return undefined
+    if (!r.trackId && r.lane === 'video') {
+      // FV4b: the main picture's slot (2-up / 3-up) from the Video header menu, same panel as overlays.
+      return {
+        onMotion: () => setMotionPanel({ key: MAIN_MOTION_KEY, label: 'Main video' }),
+        motionLabel: 'Main video slot…',
+      }
+    }
     if (!r.trackId) {
       const fx = fxActions(r)
       return fx.onFx ? fx : undefined
@@ -1530,6 +1632,27 @@ export function Timeline({
             <Trash2 className="size-3.5" />
             Delete
           </button>
+          {editable ? (
+            <div className="relative">
+              <button
+                type="button"
+                className={tbtn}
+                onClick={() => setTakesMenu((v) => !v)}
+                aria-expanded={takesMenu}
+                aria-haspopup="menu"
+                title="Takes: group alternates into one slot, then T / Shift+T to switch"
+                data-testid="timeline-takes-menu"
+              >
+                <Layers className="size-3.5" />
+                Takes
+              </button>
+              {takesMenu ? (
+                <div className="absolute left-0 top-7 z-50 min-w-[190px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg" role="menu">
+                  {renderTakesItems(() => { setTakesSub(false); setTakesMenu(false) }, 'toolbar')}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <span className="mx-1 h-4 w-px bg-border" aria-hidden />
           <button
             type="button"
@@ -1743,10 +1866,14 @@ export function Timeline({
         <TrackMotionPanel
           trackId={motionPanel.key}
           label={motionPanel.label}
+          mainOnly={motionPanel.key === MAIN_MOTION_KEY}
           keys={trackMotionFor(edits, motionPanel.key)?.keys ?? []}
           playheadMs={playheadMs}
           readOnly={!editable}
-          onChange={(keys) => commit({ ...edits, trackMotion: withTrackMotion(edits.trackMotion, motionPanel.key, keys) })}
+          onChange={(keys) => {
+            if (motionPanel.key === MAIN_MOTION_KEY) return
+            commit({ ...edits, trackMotion: withTrackMotion(edits.trackMotion, motionPanel.key, keys) })
+          }}
           onMainPreset={(p) => commit(applyMainPreset(edits, p))}
           onClose={() => setMotionPanel(null)}
         />
@@ -2194,51 +2321,8 @@ export function Timeline({
                   Split stereo to L/R tracks
                 </button>
               ) : null}
-              {editable && (liveSelected.filter((r) => r.lane === 'broll').length >= 2 || liveSelected.filter((r) => r.lane === 'video').length >= 2) ? (
-                <button
-                  type="button"
-                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                  role="menuitem"
-                  data-testid="timeline-group-takes"
-                  onClick={() => {
-                    // G1c: alternates in one slot; only the active take renders, T cycles.
-                    const n = groupTakes()
-                    if (n) commit(n)
-                    else toast.message('Pick 2–8 B-roll clips, or 2–8 Video clips that don’t overlap', { id: 'timeline-takes' })
-                    setCtxMenu(null)
-                  }}
-                >
-                  Group as takes
-                </button>
-              ) : null}
-              {editable && selTakeGroupId ? (
-                <>
-                  <button
-                    type="button"
-                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                    role="menuitem"
-                    data-testid="timeline-next-take"
-                    onClick={() => {
-                      cycleTake(1)
-                      setCtxMenu(null)
-                    }}
-                  >
-                    Next take (T)
-                  </button>
-                  <button
-                    type="button"
-                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                    role="menuitem"
-                    data-testid="timeline-ungroup-takes"
-                    onClick={() => {
-                      commit(ungroupTakes(edits, selTakeGroupId))
-                      setCtxMenu(null)
-                    }}
-                  >
-                    Ungroup takes
-                  </button>
-                </>
-              ) : null}
+              {/* FV4b: always listed (disabled + hint under 2 clips); Takes ▸ next / previous / ungroup. */}
+              {liveSelected.length ? renderTakesItems(() => { setTakesSub(false); setCtxMenu(null) }, 'ctx') : null}
               {liveSelected.length ? (
                 <button
                   type="button"
