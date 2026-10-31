@@ -305,7 +305,11 @@ def build_signals_for_clip(
             box = _norm_box(fc_layout.get("facecam"))
             if box:
                 base["facecam_box"] = box
-        base["facecam_conf"] = float(fc_layout.get("confidence") or base.get("facecam_conf") or 0.0)
+            base["facecam_conf"] = float(fc_layout.get("confidence") or base.get("facecam_conf") or 0.0)
+        else:
+            # T6.7: a "gameplay" result's confidence is the confidence that there is NO
+            # facecam (1 - persist); it was stored as facecam_conf (0.88 with no box).
+            base["facecam_conf"] = 0.0
     if base.get("sources", {}).get("ai") == "none" and clip_file is not None and work is not None:
         if ai_meta.get("typeSource") == "classify" or isinstance(ai_meta.get("classify"), dict):
             pass
@@ -319,5 +323,92 @@ def build_signals_for_clip(
         base = enrich_signals_cv(base, clip_file, words or [], crop_track)
     except Exception:
         pass
+    scenes = (ai_meta.get("classify") or {}).get("scenes") if isinstance(ai_meta.get("classify"), dict) else None
+    if isinstance(scenes, list) and scenes:
+        # T6.7: the close look's scene map is authoritative for layout; CV only refines.
+        base = apply_scene_map(base, scenes, clip_file, fc_layout)
+    else:
+        base = resolve_facecam_trust(base, fc_layout, ai_meta)
     base["v"] = SIGNALS_VERSION
     return base
+
+
+def apply_scene_map(base: dict, scenes: list[dict], clip_file, fc_layout: dict | None) -> dict:
+    """Clip-level signals = the dominant scene's (what the editor shows by default); all
+    scenes (refined) are kept in ``signals.scenes`` for the per-scene template pick/render."""
+    from clips_worker.t6_scenes import dominant_scene, refine_scenes, scene_signals
+
+    try:
+        refined = refine_scenes(scenes, clip_file, fc_layout)
+    except Exception:
+        refined = [dict(sc, faces=[]) for sc in scenes]
+    out = dict(base)
+    out["faces_cv"] = base.get("faces")
+    dom = dominant_scene(refined)
+    if dom is not None:
+        dom_sig = scene_signals(base, dom)
+        for k in ("faces", "facecam_box", "facecam_conf", "content_box", "person_count"):
+            out[k] = dom_sig.get(k)
+        if not dom_sig.get("facecam_box"):
+            out.pop("gameplay_box", None)
+    out["scenes"] = refined
+    out["facecam_source"] = "scene_map"
+    return out
+
+
+FACECAM_CONFIRMED = 0.85
+# A borderless gaming webcam (cut-out / chroma-key cam, cam bleeding into chat) has no
+# rectangle, so detect_facecam returns its face-sized fallback box capped at 0.5.
+GAMING_FACE_BOX_CONF = 0.86
+GAMING_FACE_BOX_MIN_PERSIST = 0.6
+
+
+def _face_center_in(face: dict, box: dict) -> bool:
+    cx = float(face.get("x") or 0) + float(face.get("w") or 0) / 2
+    cy = float(face.get("y") or 0) + float(face.get("h") or 0) / 2
+    bx, by = float(box.get("x") or 0), float(box.get("y") or 0)
+    return bx <= cx <= bx + float(box.get("w") or 0) and by <= cy <= by + float(box.get("h") or 0)
+
+
+def resolve_facecam_trust(signals: dict, fc_layout: dict | None, ai_meta: dict | None) -> dict:
+    """T6.7: only a confirmed facecam box reaches templates.
+
+    - Gaming clip, video-game main picture, person on camera, and detect_facecam's face_box
+      fallback seen in >= 60% of samples around a real (moving) face: it IS the webcam
+      (borderless cam). Promote to GAMING_FACE_BOX_CONF so G1/G2/G3/G6 become eligible.
+      (xQc / Cinna got G4 "Full Frame Blur" because the cap left them at 0.5.)
+    - Any other unconfirmed box (< 0.85) is the median-face box of whatever face recurred
+      most, often not a webcam (Hasan: the Halloween pumpkins). Face templates cropped inside
+      it, so it is dropped (kept as ``facecam_box_unconfirmed`` for debugging) and face
+      crops use the real faces on the whole frame.
+    """
+    out = dict(signals)
+    box = out.get("facecam_box") if isinstance(out.get("facecam_box"), dict) else None
+    conf = float(out.get("facecam_conf") or 0.0)
+    if box is None or conf >= FACECAM_CONFIRMED:
+        return out
+    meta = ai_meta if isinstance(ai_meta, dict) else {}
+    cls = meta.get("classify") if isinstance(meta.get("classify"), dict) else {}
+    fl = fc_layout if isinstance(fc_layout, dict) else {}
+    faces = [f for f in (out.get("faces") or []) if isinstance(f, dict)]
+    main = str(cls.get("main_picture") or "")
+    try:
+        people = int(cls.get("people_on_camera") or 0)
+    except (TypeError, ValueError):
+        people = 0
+    game_main = main == "video_game" or (not cls and bool(out.get("game_ui_visible")))
+    if (
+        str(out.get("clip_type") or "") == "gaming"
+        and game_main
+        and (people >= 1 or not cls)
+        and str(fl.get("method") or "") == "face_box"
+        and float(fl.get("persist") or 0.0) >= GAMING_FACE_BOX_MIN_PERSIST
+        and any(_face_center_in(f, box) for f in faces)
+    ):
+        out["facecam_conf"] = GAMING_FACE_BOX_CONF
+        out["facecam_source"] = "gaming_face_box"
+        return out
+    out["facecam_box_unconfirmed"] = box
+    out["facecam_box"] = None
+    out.pop("gameplay_box", None)
+    return out

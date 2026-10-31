@@ -584,12 +584,10 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
             genre = str(streamer_settings.get("genre") or "stream")
             from clips_worker.clip_type import (
                 content_type_from_picker_moment,
-                resolve_clip_type,
                 section_activity_for_moment,
                 stream_majority_clip_type,
-                video_moment_for_pick,
+                video_moment_match_for_pick,
             )
-            from clips_worker.clip_layout_policy import apply_clip_type_layout_to_edits
             from clips_worker.streamer.content_archetype import resolve_streamer_layout_archetype
 
             vp_sections = state.get("videoPickerSections") if isinstance(state.get("videoPickerSections"), list) else None
@@ -639,115 +637,50 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     clip_start_ms=clip_start,
                     clip_end_ms=clip_end,
                 )
-                headline_on = bool((init_edits.get("exportTemplate") or {}).get("headlineBar", {}).get("enabled"))
-                vm = video_moment_for_pick(video_moments, int(pick.start_ms), int(pick.end_ms))
+                vm, vm_iou = video_moment_match_for_pick(video_moments, int(pick.start_ms), int(pick.end_ms))
                 section_act = section_activity_for_moment(vm, vp_sections)
-                fc_conf = (
-                    float(stream_facecam_layout.get("confidence") or 0.0)
-                    if isinstance(stream_facecam_layout, dict)
-                    else 0.0
-                )
-                has_fc = bool(
-                    isinstance(stream_facecam_layout, dict)
-                    and isinstance(stream_facecam_layout.get("facecam"), dict)
-                )
-                clip_words = [
-                    w
-                    for w in words
-                    if float(w.get("s") or 0) * 1000 >= int(pick.start_ms)
-                    and float(w.get("e") or 0) * 1000 <= int(pick.end_ms)
-                ]
-                from clips_worker.clip_classify import (
-                    classify_clip,
-                    clip_classify_stream_enabled,
-                    resolve_type_from_classification,
-                )
+                # T6.7: the per-clip stage is clip_finalize.finalize_clip_edits, the SAME function
+                # regular uploads call (pipeline._finalize_regular_clip_edits). The stream only
+                # supplies what its ingest knows: the VOD facecam layout, channel presets, a
+                # sampled clip file and the dense look's layout signals.
+                from clips_worker.clip_classify import clip_classify_stream_enabled
+                from clips_worker.clip_finalize import ClipInputs, dense_candidate_from_meta, finalize_clip_edits
+                from clips_worker.render_clip import slice_words
 
-                cls = None
-                type_source = "picker"
-                cls_conf = 0.4
-                classify_file: Path | None = None
-                if clip_classify_stream_enabled() and probe_video is not None and probe_video.is_file():
+                clip_words = slice_words(words, int(pick.start_ms), int(pick.end_ms))
+                clip_file: Path | None = None
+                if probe_video is not None and probe_video.is_file():
                     try:
                         from clips_worker.streamer.collab_detect import _ffmpeg_sample_clip
 
-                        classify_file = scratch / f"classify_{clip_id}.mp4"
+                        clip_file = scratch / f"classify_{clip_id}.mp4"
                         rel_start_s = max(0.0, int(pick.start_ms) / 1000.0)
                         dur_s = max(0.5, (int(pick.end_ms) - int(pick.start_ms)) / 1000.0)
-                        _ffmpeg_sample_clip(probe_video, classify_file, rel_start_s, dur_s)
-                        cls = classify_clip(classify_file, clip_words, scratch)
+                        _ffmpeg_sample_clip(probe_video, clip_file, rel_start_s, dur_s)
                     except Exception:
-                        cls = None
-                    cls_type, cls_conf, type_source = resolve_type_from_classification(
-                        cls,
-                        facecam_conf=fc_conf,
-                        picker_moment=vm if isinstance(vm, dict) else None,
-                        fallback=stream_majority or "irl",
-                    )
-                type_info = resolve_clip_type(
-                    moment=vm,
-                    section_activity=section_act,
-                    stream_majority=stream_majority,
-                    has_facecam=has_fc,
-                    facecam_confidence=fc_conf,
-                )
-                if type_source == "classify":
-                    type_info["clipType"] = cls_type
-                type_info["typeSource"] = type_source
-                type_info["typeConf"] = round(float(cls_conf), 3)
-                if cls:
-                    type_info["classify"] = cls
-                channel_clip_type_layouts = None
+                        clip_file = None
                 proj_streamer = settings.get("streamer") if isinstance(settings.get("streamer"), dict) else {}
                 raw_ct_layouts = proj_streamer.get("clipTypeLayouts")
-                if isinstance(raw_ct_layouts, dict):
-                    channel_clip_type_layouts = raw_ct_layouts
-                from clips_worker.t6_flags import t6_log_fallback, t6_signals_enabled
-
-                sig = None
-                if t6_signals_enabled(settings):
-                    try:
-                        from clips_worker.t6_signals import build_signals_for_clip
-
-                        cf = pick.ai_meta.get("clipfind") if isinstance(pick.ai_meta.get("clipfind"), dict) else {}
-                        dense_cand = (
-                            {"layout_signals": cf["layout_signals"]}
-                            if isinstance(cf.get("layout_signals"), dict)
-                            else None
-                        )
-                        clip_words = [
-                            w
-                            for w in words
-                            if float(w.get("s") or 0) * 1000 >= int(pick.start_ms)
-                            and float(w.get("e") or 0) * 1000 <= int(pick.end_ms)
-                        ]
-                        sig = build_signals_for_clip(
-                            ai_meta={**type_info, "videoMoment": vm},
-                            fc_layout=stream_facecam_layout,
-                            words=clip_words,
-                            crop_track=None,
-                            clip_file=classify_file,
-                            work=Path(scratch) if scratch else None,
-                            dense_candidate=dense_cand,
-                        )
-                        type_info["signals"] = sig
-                        if type_info.get("typeSource") != "classify":
-                            if float(sig.get("type_conf") or 0) >= 0.6 and sig.get("clip_type"):
-                                type_info["clipType"] = str(sig["clip_type"])
-                    except Exception as exc:
-                        t6_log_fallback("signals", exc)
-                init_edits = apply_clip_type_layout_to_edits(
-                    init_edits,
-                    clip_type=str(type_info["clipType"]),
-                    has_facecam=bool(type_info["hasFacecam"]),
-                    facecam_confidence=float(type_info["facecamConfidence"]),
-                    stream_facecam_layout=stream_facecam_layout,
-                    headline_on=headline_on,
-                    fallback_archetype=layout_archetype,
-                    channel_clip_type_layouts=channel_clip_type_layouts,
-                    settings=settings,
-                    signals=sig,
-                    clip_id=clip_id,
+                init_edits, type_info, _fc_used = finalize_clip_edits(
+                    ClipInputs(
+                        edits=init_edits,
+                        clip_file=clip_file,
+                        clip_words=clip_words,
+                        settings=settings,
+                        work_dir=Path(scratch) / f"finalize_{clip_id}" if scratch else None,
+                        clip_id=clip_id,
+                        clip_start_ms=clip_start,
+                        moment=vm if isinstance(vm, dict) else None,
+                        section_activity=section_act,
+                        moment_iou=float(vm_iou or 0.0),
+                        majority=stream_majority or "irl",
+                        known_facecam_layout=stream_facecam_layout,
+                        fallback_archetype=layout_archetype,
+                        channel_clip_type_layouts=raw_ct_layouts if isinstance(raw_ct_layouts, dict) else None,
+                        dense_candidate=dense_candidate_from_meta(pick.ai_meta),
+                        extra_meta=dict(pick.ai_meta or {}),
+                        classify_allowed=clip_classify_stream_enabled(),
+                    )
                 )
                 layout_mode = str((init_edits.get("layout") or {}).get("mode") or "fit_top")
                 ai_meta = enrich_streamer_meta(

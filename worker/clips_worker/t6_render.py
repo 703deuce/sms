@@ -204,6 +204,74 @@ def render_template(
     subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def probe_fps(path: Path) -> float:
+    try:
+        out = subprocess.check_output(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate",
+             "-of", "default=nw=1:nk=1", str(path)],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        num, _, den = out.partition("/")
+        fps = float(num) / float(den or 1)
+        return fps if 1.0 <= fps <= 240.0 else 30.0
+    except Exception:
+        return 30.0
+
+
+def render_template_segments(
+    src: Path,
+    dest: Path,
+    parts: list[tuple[float, float, dict]],
+    work: Path,
+    duration_s: float | None = None,
+) -> None:
+    """T6.7: one template spec per scene ``(start_s, end_s, spec)``.
+
+    Each scene is rendered video-only from the same source (frame-accurate seek, boundaries
+    snapped to the source frame grid), the parts are concatenated without re-encoding, and the
+    ORIGINAL audio is muxed back in one piece -- so the audio (and caption timing) is exactly
+    the single-template render's; only the picture changes at scene boundaries."""
+    work.mkdir(parents=True, exist_ok=True)
+    src_w, src_h = probe_video_size(src)
+    dur = duration_s if duration_s is not None else probe_duration_s(src)
+    fps = probe_fps(src)
+    snapped: list[tuple[float, float, dict]] = []
+    for a, b, spec in parts:
+        a = round(round(max(0.0, a) * fps) / fps, 6)
+        b = dur if b >= dur - 1e-3 else round(round(min(dur, b) * fps) / fps, 6)
+        if b - a >= 1.0 / fps:
+            snapped.append((a, b, spec))
+    if not snapped:
+        raise ValueError("no scene parts")
+    seg_paths: list[Path] = []
+    for i, (a, b, spec) in enumerate(snapped):
+        seg_dur = b - a
+        fg = build_template_filtergraph(spec, src_w=src_w, src_h=src_h, duration_s=seg_dur)
+        out = work / f"t6_scene_{i}.mp4"
+        subprocess.check_call(
+            ["ffmpeg", "-y", "-v", "error", "-ss", f"{a:.6f}", "-t", f"{seg_dur:.6f}", "-i", str(src),
+             "-filter_complex", fg, "-map", "[vout]", "-an", "-t", f"{seg_dur:.6f}", "-r", f"{fps:.6f}",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", str(out)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        seg_paths.append(out)
+    lst = work / "t6_scenes.txt"
+    lst.write_text("".join(f"file '{p.resolve()}'\n" for p in seg_paths))
+    video_only = work / "t6_scenes_video.mp4"
+    subprocess.check_call(
+        ["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(video_only)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.check_call(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(video_only), "-i", str(src), "-map", "0:v:0", "-map", "1:a?",
+         "-t", f"{dur:.6f}", "-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart", str(dest)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def extract_frame_png(src: Path, dest: Path, *, t_s: float = 2.0) -> None:
     subprocess.check_call(
         [

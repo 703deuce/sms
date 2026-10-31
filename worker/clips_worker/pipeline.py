@@ -29,9 +29,9 @@ from clips_worker.storage import download_object, put_json, upload_file
 
 def extract_wav_for_picker(src: Path, audio_wav: Path) -> None:
     """16 kHz mono WAV for picker / energy analysis (shared by PROCESS_PROJECT and REPLACE_CLIP)."""
-    subprocess.check_call(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-ac", "1", "-ar", "16000", str(audio_wav)],
-    )
+    from clips_worker.audio_extract import audio_extract_cmd
+
+    subprocess.check_call(audio_extract_cmd(src, audio_wav))
 
 
 def clip_keys(workspace_id: str, project_id: str, clip_id: str) -> dict[str, str]:
@@ -391,6 +391,40 @@ def streamer_initial_clip_edits(
     return edits
 
 
+def _upload_clip_inputs(
+    edits: dict,
+    clip_file: Path,
+    pick: dict | None,
+    settings: dict,
+    work_dir: Path,
+    clip_words: list[dict] | None = None,
+    clip_id: str | None = None,
+):
+    """T6.7: what an *upload* knows about a clip, as shared ``ClipInputs``."""
+    from clips_worker.clip_finalize import ClipInputs, dense_candidate_from_meta
+
+    meta = (pick or {}).get("aiMeta") or {}
+    stream_majority = meta.get("streamMajorityType")
+    return ClipInputs(
+        edits=edits,
+        clip_file=clip_file,
+        clip_words=list(clip_words or []),
+        settings=settings,
+        work_dir=work_dir,
+        clip_id=str(clip_id or meta.get("clipId") or (pick or {}).get("id") or ""),
+        clip_start_ms=int((pick or {}).get("start_ms") or 0),
+        moment=meta.get("videoMoment") if isinstance(meta.get("videoMoment"), dict) else None,
+        section_activity=meta.get("sectionActivity"),
+        moment_iou=float(meta.get("videoMomentMatchIou") or 0.0),
+        majority=str(meta.get("uploadProjectMajorityType") or stream_majority or "irl"),
+        known_facecam_layout=None,
+        fallback_archetype=str(meta.get("archetype") or ""),
+        channel_clip_type_layouts=None,
+        dense_candidate=dense_candidate_from_meta(meta),
+        extra_meta=dict(meta),
+    )
+
+
 def _regular_clip_type_and_layout(
     edits: dict,
     clip_file: Path,
@@ -398,136 +432,30 @@ def _regular_clip_type_and_layout(
     settings: dict,
     work_dir: Path,
     clip_words: list[dict] | None = None,
+    clip_id: str | None = None,
 ) -> tuple[dict, dict, dict | None]:
+    """Upload entry point of the shared per-clip stage (``clip_finalize``), type + layout only."""
+    from clips_worker.clip_finalize import FACECAM_CONFIRMED, resolve_type_and_signals
     from clips_worker.clip_layout_policy import apply_clip_type_layout_to_edits
-    from clips_worker.clip_type import (
-        content_type_from_picker_moment,
-        resolve_upload_clip_type,
-        upload_should_run_facecam_detect,
-    )
 
-    meta = (pick or {}).get("aiMeta") or {}
-    vm = meta.get("videoMoment")
-    section_activity = meta.get("sectionActivity")
-    stream_majority = meta.get("streamMajorityType")
-    project_majority = str(meta.get("uploadProjectMajorityType") or stream_majority or "irl")
-    if project_majority == "other":
-        project_majority = "irl"
-    picker_ct = content_type_from_picker_moment(vm, section_activity)
-    moment_iou = float(meta.get("videoMomentMatchIou") or 0.0)
-
-    fc_layout = None
-    if upload_should_run_facecam_detect(
-        picker_ct=picker_ct,
-        project_majority=project_majority,
-        stream_majority=stream_majority,
-        moment=vm,
-    ):
-        from clips_worker.streamer.layout.detect_facecam import detect_facecam_layout
-
-        try:
-            fc_layout = detect_facecam_layout(clip_file, work_dir, n_samples=24)
-        except Exception:
-            fc_layout = None
-
-    has_fc = bool(isinstance(fc_layout, dict) and isinstance(fc_layout.get("facecam"), dict))
-    fc_conf = float((fc_layout or {}).get("confidence") or 0.0)
-    has_fc_layout = has_fc and fc_conf >= 0.85
-
-    from clips_worker.clip_classify import (
-        classify_clip,
-        clip_classify_enabled,
-        resolve_type_from_classification,
-    )
-
-    cls = None
-    cls_type = picker_ct
-    cls_conf = 0.4
-    type_source = "picker"
-    if clip_classify_enabled():
-        cls = classify_clip(clip_file, clip_words or [], work_dir)
-        cls_type, cls_conf, type_source = resolve_type_from_classification(
-            cls,
-            facecam_conf=fc_conf,
-            picker_moment=vm if isinstance(vm, dict) else None,
-            fallback=project_majority,
-        )
-
-    type_info = resolve_upload_clip_type(
-        moment=vm,
-        section_activity=section_activity,
-        upload_project_majority=project_majority,
-        stream_majority=stream_majority,
-        moment_match_iou=moment_iou,
-        has_facecam=has_fc,
-        facecam_confidence=fc_conf,
-    )
-    if type_source == "classify":
-        type_info["clipType"] = cls_type
-    type_info["typeSource"] = type_source
-    type_info["typeConf"] = round(float(cls_conf), 3)
-    if cls:
-        type_info["classify"] = cls
-    if has_fc and isinstance(fc_layout, dict):
-        type_info["facecamLayout"] = {
-            k: fc_layout.get(k)
-            for k in ("layout", "facecam", "gameplay", "split", "facecamPosition", "confidence", "method")
-            if fc_layout.get(k) is not None
-        }
-    from clips_worker.t6_flags import t6_log_fallback, t6_signals_enabled
-
-    if t6_signals_enabled(settings):
-        try:
-            from clips_worker.t6_signals import build_signals_for_clip
-
-            sig = build_signals_for_clip(
-                ai_meta={**meta, **type_info},
-                fc_layout=fc_layout,
-                words=clip_words or [],
-                crop_track=None,
-                clip_file=clip_file,
-                work=work_dir,
-            )
-            type_info["signals"] = sig
-            if type_info.get("typeSource") != "classify":
-                if float(sig.get("type_conf") or 0) >= 0.6 and sig.get("clip_type"):
-                    type_info["clipType"] = str(sig["clip_type"])
-            print(
-                "[t6:signals] "
-                f"type={type_info.get('clipType')!r} conf={float(sig.get('type_conf') or 0):.2f} "
-                f"facecam={float(sig.get('facecam_conf') or 0):.2f} "
-                f"bg_action={bool(sig.get('background_action'))} "
-                f"src_ai={(sig.get('sources') or {}).get('ai')!r}",
-                flush=True,
-            )
-        except Exception as exc:
-            t6_log_fallback("signals", exc)
-    gui = vm.get("game_ui_visible") if isinstance(vm, dict) else None
-    cam = vm.get("real_camera_footage") if isinstance(vm, dict) else None
-    print(
-        "[clipper:upload_type] "
-        f"picker_ct={picker_ct!r} stream_majority={stream_majority!r} "
-        f"project_majority={project_majority!r} moment_iou={moment_iou:.3f} "
-        f"facecam={has_fc} facecam_conf={fc_conf:.3f} "
-        f"gui={gui} cam={cam} "
-        f"cls={type_info.get('clipType')!r} cls_conf={type_info.get('typeConf')} src={type_info.get('typeSource')!r} "
-        f"final={type_info.get('clipType')!r}",
-        flush=True,
-    )
+    inp = _upload_clip_inputs(edits, clip_file, pick, settings, work_dir, clip_words, clip_id)
+    type_info, fc_layout = resolve_type_and_signals(inp)
+    fc_conf = float(type_info.get("facecamConfidence") or 0.0)
     headline_on = bool(((edits.get("exportTemplate") or {}).get("headlineBar") or {}).get("enabled"))
     sig = type_info.get("signals") if isinstance(type_info.get("signals"), dict) else None
     edits = apply_clip_type_layout_to_edits(
         edits,
         clip_type=type_info["clipType"],
-        has_facecam=has_fc_layout,
+        has_facecam=bool(type_info.get("hasFacecam")) and fc_conf >= FACECAM_CONFIRMED,
         facecam_confidence=fc_conf,
         stream_facecam_layout=fc_layout,
         headline_on=headline_on,
-        fallback_archetype=str(meta.get("archetype") or ""),
+        fallback_archetype=inp.fallback_archetype,
         channel_clip_type_layouts=None,
         settings=settings,
         signals=sig,
-        clip_id=str(meta.get("clipId") or pick.get("id") or ""),
+        clip_id=inp.clip_id,
+        clip_start_ms=inp.clip_start_ms,
     )
     return edits, type_info, fc_layout
 
@@ -541,73 +469,15 @@ def _finalize_regular_clip_edits(
     *,
     pick: dict | None = None,
     work_dir: Path | None = None,
+    clip_id: str | None = None,
 ) -> tuple[dict, dict, dict | None]:
+    """Upload entry point: the same ``clip_finalize.finalize_clip_edits`` streams use."""
     if mode == "anything" or settings.get("streamer"):
         return edits, {}, None
+    from clips_worker.clip_finalize import finalize_clip_edits
+
     wd = work_dir or clip_file.parent
-    edits, type_info, _fc = _regular_clip_type_and_layout(
-        edits, clip_file, pick, settings, wd, clip_words=clip_words
-    )
-    ct = str(type_info.get("clipType") or "irl")
-    st = dict(edits.get("silenceTrim") or {})
-    st["enabled"] = ct in ("just_chatting", "podcast")
-    edits = {**edits, "silenceTrim": st}
-    from clips_worker.t6_flags import t6_caption_presets_enabled
-
-    if t6_caption_presets_enabled(settings):
-        try:
-            from clips_worker.t6_captions import pick_caption_preset
-
-            signals = type_info.get("signals") if isinstance(type_info.get("signals"), dict) else {}
-            meta = (pick or {}).get("aiMeta") or {}
-            cap_settings = settings.get("captions") if isinstance(settings.get("captions"), dict) else {}
-            user_default = cap_settings.get("presetId")
-            if user_default == "bold_pop" and not cap_settings.get("userChosen"):
-                # T6.2: every project is created with settings.captions.presetId="bold_pop" (the
-                # legacy default), which made the CP auto-pick dead code. Only an explicit choice wins.
-                user_default = None
-            cap = dict(edits.get("captions") or {})
-            if user_default:
-                cap["presetId"] = user_default
-            else:
-                from clips_worker.t6_render import probe_duration_s
-
-                dur = probe_duration_s(clip_file) if clip_file.is_file() else 30.0
-                clip_id = str(meta.get("clipId") or (pick or {}).get("id") or "")
-                history: list[str] = []
-                pid, reason = pick_caption_preset(
-                    signals,
-                    {"duration_s": dur, "id": clip_id},
-                    history,
-                    seed=clip_id or "clip",
-                )
-                strip_keys = (
-                    "presetConfig",
-                    "animation",
-                    "case",
-                    "colors",
-                    "wordsPerLine",
-                    "keywordHighlight",
-                    "activeStyle",
-                    "highlightColor",
-                )
-                cap = {k: v for k, v in cap.items() if k not in strip_keys}
-                cap.update({"presetId": pid, "t6": {"auto": True, "reason": reason}})
-            edits = {**edits, "captions": cap}
-        except Exception as exc:
-            from clips_worker.t6_flags import t6_log_fallback
-
-            t6_log_fallback("captions", exc)
-    if ct in ("just_chatting", "podcast"):
-        from clips_worker.regular_auto_layout import apply_regular_auto_layout
-
-        edits = apply_regular_auto_layout(
-            edits,
-            clip_file,
-            clip_words,
-            streamer=bool(settings.get("streamer")),
-        )
-    return edits, type_info, _fc
+    return finalize_clip_edits(_upload_clip_inputs(edits, clip_file, pick, settings, wd, clip_words, clip_id))
 
 
 def mark_project_ready(conn, project_id: str, error: str | None = None) -> None:
@@ -916,6 +786,7 @@ def run_m4_pipeline(
                         mode,
                         pick=pick,
                         work_dir=td_path / f"reframe_work_{idx}",
+                        clip_id=clip_id,
                     )
                     layout_ed = edits_final.get("layout") if isinstance(edits_final.get("layout"), dict) else {}
                     final_mode = str(layout_ed.get("mode") or resolved_layout)
@@ -1347,6 +1218,7 @@ def run_m4_pipeline(
                         mode,
                         pick=pick,
                         work_dir=td_path / f"reframe_work_{idx}",
+                        clip_id=clip_id,
                     )
                     layout_ed = edits_final.get("layout") if isinstance(edits_final.get("layout"), dict) else {}
                     final_mode = str(layout_ed.get("mode") or resolved_layout)

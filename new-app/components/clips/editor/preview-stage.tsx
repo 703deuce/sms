@@ -7,7 +7,7 @@ import { normalizeEditSpeed, orderedKeepSegments } from '@/lib/clips/edits'
 import { editorPreviewCaptionClipWords, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
-import { editorTemplateSpec } from '@/lib/clips/templates/editor-spec'
+import { editorTemplateSegmentIndex, editorTemplateSpec } from '@/lib/clips/templates/editor-spec'
 import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
 import { TemplateStage, TemplateTitleOverlay } from '@/components/clips/editor/template-stage'
 import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
@@ -116,6 +116,8 @@ export function PreviewStage({
   const videoRefInner = useRef<HTMLVideoElement>(null)
   const blurRef = useRef<HTMLVideoElement>(null)
   const editsRef = useRef(edits)
+  const aiMetaRef = useRef(aiMeta)
+  aiMetaRef.current = aiMeta
   const trackRef = useRef(cropTrack)
   const aspect = edits.aspectRatio ?? '9:16'
   const layoutMode = edits.layout?.mode ?? 'speaker_follow'
@@ -173,6 +175,10 @@ export function PreviewStage({
   const [playing, setPlaying] = useState(false)
   const [canPlay, setCanPlay] = useState(false)
   const [captionTimeSec, setCaptionTimeSec] = useState(0)
+  // T6.7: scene segment under the playhead (-1 = one template). Only changes at a boundary.
+  const [sceneSeg, setSceneSeg] = useState(-1)
+  const sceneSrcMsRef = useRef<number | null>(null)
+  const sceneSegRef = useRef(-1)
   const brollRefs = useRef<Record<string, HTMLVideoElement | null>>({})
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
@@ -344,6 +350,12 @@ export function PreviewStage({
           }
         }
       }
+      const segIdx = editorTemplateSegmentIndex(editsRef.current, aiMetaRef.current, src)
+      if (segIdx !== sceneSegRef.current) {
+        sceneSegRef.current = segIdx
+        sceneSrcMsRef.current = src
+        setSceneSeg(segIdx)
+      }
       const out = applyPlaybackTime(src, playbackEdits).outputMs
       const outSec = out / 1000
       if (Math.abs(captionTimeRef.current - outSec) >= 0.02) {
@@ -480,8 +492,9 @@ export function PreviewStage({
   const templatePreview = useMemo(() => {
     if (!videoUrl || compositePreview) return null
     // T6.5: same spec helper as the layout studio's 9:16 preview.
-    return editorTemplateSpec(edits, aiMeta)
-  }, [videoUrl, compositePreview, edits, aiMeta])
+    // T6.7: with per-scene segments, the spec of the segment under the playhead.
+    return editorTemplateSpec(edits, aiMeta, sceneSeg >= 0 ? (sceneSrcMsRef.current ?? undefined) : undefined)
+  }, [videoUrl, compositePreview, edits, aiMeta, sceneSeg])
 
   const brand = (edits.brand || {}) as ClipBrandEdits
   const pos = brand.logoPosition ?? 'TR'

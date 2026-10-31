@@ -35,6 +35,7 @@ def title_backdrop_stats(spec: dict, signals: dict) -> dict:
             if str(p.get("fit") or "cover").startswith("contain") and sh > 0.6:
                 # Letterboxed full frame: the title sits on the blur/black fill around it.
                 break
+            # (title over a cover panel: live video, not blurred)
             # Top of the panel ~ top of its source box.
             y_src = sy + sh * 0.2
             if y_src < 0.4:
@@ -47,22 +48,45 @@ def title_backdrop_stats(spec: dict, signals: dict) -> dict:
     return {
         "luma": min(top["luma"], cap["luma"], bot["luma"]),
         "busy": max(top["busy"], cap["busy"], bot["busy"]),
+        "blurred": True,
     }
 
 
-def pick_title_style(spec: dict, signals: dict, history: list[str]) -> tuple[str, str]:
+BUSY_VIDEO = 0.75
+
+
+def pick_title_style(
+    spec: dict,
+    signals: dict,
+    history: list[str],
+    *,
+    allowed: list[str] | None = None,
+) -> tuple[str, str]:
+    """T6.7: the style follows what is actually behind the title.
+
+    - Template fixes the style (``title.allowed`` has one entry, e.g. I2 "Blur Title Box").
+    - Light backdrop -> dark text on light blur.
+    - Blurred band behind the title (G4/C6/I1-I4 bands): the blur removes the texture, so
+      ``busy`` is irrelevant; white text on the dark blur. (The old ``busy > 0.55`` rule fired
+      on every stream frame: busy was saturated, see t6_cv.BUSY_ANALYSIS_W.)
+    - Title over live video (cover panel): a white box only when that video is really busy,
+      otherwise the solid black bar.
+    """
     _ = history
+    allowed = [a for a in (allowed or []) if a in TITLE_STYLES]
     st = title_backdrop_stats(spec if isinstance(spec, dict) else {}, signals if isinstance(signals, dict) else {})
     luma, busy = st["luma"], st["busy"]
     if luma >= LIGHT_BG_LUMA:
-        return "black_on_light_blur", "light_backdrop"
-    if isinstance(spec, dict) and spec.get("bands"):
-        if busy > 0.55:
-            return "white_box_black", "busy_blur"
-        return "white_on_dark_blur", "blur_band"
-    if busy > 0.75:
-        return "white_box_black", "busy"
-    return "white_on_black", "dark"
+        sid, why = "black_on_light_blur", "light_backdrop"
+    elif st.get("blurred"):
+        sid, why = "white_on_dark_blur", "blur_band"
+    elif busy > BUSY_VIDEO:
+        sid, why = "white_box_black", "busy_video"
+    else:
+        sid, why = "white_on_black", "dark_video"
+    if allowed and sid not in allowed:
+        return allowed[0], "template_allowed"
+    return sid, why
 
 
 def title_style(style_id: str) -> dict:

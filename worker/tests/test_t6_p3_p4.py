@@ -11,8 +11,10 @@ def test_chunk_timing_matches():
 
 
 def test_pick_title_style_blur():
+    # T6.7: a title over a blurred band is on blur, not on busy video -> white on dark blur
+    # (the old busy>0.55 -> white_box_black rule made every title the same white box).
     style, _reason = pick_title_style({"bands": [{"fill": "blur"}]}, {"bands": {"top": {"luma": 0.3, "busy": 0.6}}}, [])
-    assert style == "white_box_black"
+    assert style == "white_on_dark_blur"
     assert title_style(style)["font"] == "Anton"
 
 

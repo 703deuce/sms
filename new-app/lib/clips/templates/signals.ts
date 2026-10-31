@@ -20,6 +20,28 @@ export type T6Signals = {
   faces?: T6Face[]
   /** T6.3: detected game region (aiMeta.facecamLayout.gameplay) — excludes the cam/HUD strip. */
   gameplay_box?: FacecamBox | null
+  content_box?: FacecamBox | null
+  /** T6.7: the close look's scene map (t6_scenes.py), refined faces per scene. */
+  scenes?: T6Scene[]
+}
+
+export type T6SceneLayout =
+  | 'webcam_game'
+  | 'webcam_screen'
+  | 'full_cam_person'
+  | 'multi_cam'
+  | 'irl_world'
+  | 'no_person'
+
+export type T6Scene = {
+  start_s: number
+  end_s: number
+  layout: T6SceneLayout
+  n_cams?: number
+  real_person_boxes?: FacecamBox[]
+  facecam_box?: FacecamBox | null
+  content_box?: FacecamBox | null
+  faces?: T6Face[]
 }
 
 export type T6Face = { x: number; y: number; w: number; h: number; persist?: number; score?: number }
@@ -86,5 +108,9 @@ export function signalsOrDefaults(aiMeta: Record<string, unknown> | null | undef
     cost_usd: Number(stored?.cost_usd ?? 0),
     faces: validFaces((stored as { faces?: unknown } | undefined)?.faces),
     gameplay_box: gameplayBox(stored, meta.facecamLayout),
+    content_box: normBox((stored as { content_box?: unknown } | undefined)?.content_box),
+    scenes: Array.isArray((stored as { scenes?: unknown } | undefined)?.scenes)
+      ? ((stored as { scenes: T6Scene[] }).scenes)
+      : undefined,
   }
 }

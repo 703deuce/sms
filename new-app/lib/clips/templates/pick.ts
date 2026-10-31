@@ -7,6 +7,22 @@ import {
 } from '@/lib/clips/templates/registry'
 
 export const SHARED_FAMILY_PENALTY = 10
+/** T6.7 parity with t6_pick.STABLE_FACE_PERSIST / STRUCTURE_BONUS. */
+export const STABLE_FACE_PERSIST = 0.8
+export const STRUCTURE_BONUS = 5
+
+/** T6.7 parity with t6_pick.faces_stable: primary face on screen >= 80% (no persist = stable). */
+export function facesStable(s: T6Signals): boolean {
+  const f = Array.isArray(s.faces) ? s.faces[0] : undefined
+  if (!f) return true
+  return Number(f.persist ?? 1) >= STABLE_FACE_PERSIST
+}
+
+function usesStructure(t: TemplateDef, s: T6Signals, lane: string): boolean {
+  const req = requiresForFamily(t, lane)
+  if (req.facecam || req.contentBox) return true
+  return Array.isArray(s.faces) && s.faces.length > 0 && templateNeedsDetectedFace(t)
+}
 
 const LANE_FALLBACK: Record<string, string> = {
   gaming: 'G4',
@@ -26,6 +42,7 @@ export function eligibleTemplate(t: TemplateDef, s: T6Signals, durationMs: numbe
   // T6.4: a shared-family template (e.g. C1 in podcast) adds that family's requirements.
   const req = requiresForFamily(t, lane ?? t.lane)
   if (Array.isArray(s.faces) && s.faces.length === 0 && templateNeedsDetectedFace(t)) return false
+  if (templateNeedsDetectedFace(t) && !facesStable(s)) return false
   if (req.facecam && (Number(s.facecam_conf) < 0.85 || !s.facecam_box)) return false
   if (req.noBackgroundAction && s.background_action) return false
   if (req.contentBox && !(s as { content_box?: unknown }).content_box) return false
@@ -42,6 +59,7 @@ export function pickTemplate(
   batchCounts: Record<string, number>,
   batchSize: number,
   seed: string,
+  only?: Set<string>,
 ): [string, string] {
   if (Number(s.type_conf) < 0.6) {
     return [LANE_FALLBACK[s.clip_type] ?? 'I3', 'low_conf']
@@ -49,7 +67,7 @@ export function pickTemplate(
   const lane = s.clip_type
   const durationMs = clip.durationMs ?? 0
   const cands = Object.values(T6_TEMPLATES_BY_ID).filter(
-    (t) => templateInFamily(t, lane) && eligibleTemplate(t, s, durationMs, lane),
+    (t) => (!only || only.has(t.id)) && templateInFamily(t, lane) && eligibleTemplate(t, s, durationMs, lane),
   )
   if (!cands.length) return [LANE_FALLBACK[lane] ?? 'I3', 'no_eligible']
   const cap = Math.max(1, Math.ceil(batchSize * 0.4))
@@ -59,6 +77,7 @@ export function pickTemplate(
   for (const t of cands) {
     let score = Number(t.pickWeights?.facecam_conf ?? 0) * Number(s.facecam_conf ?? 0)
     if (Array.isArray(s.faces) && s.faces.length > 0 && templateNeedsDetectedFace(t)) score += 1
+    if (usesStructure(t, s, lane)) score += STRUCTURE_BONUS
     // T6.4 parity with t6_pick.SHARED_FAMILY_PENALTY: shared templates rank below native ones.
     if (t.lane !== lane) score -= SHARED_FAMILY_PENALTY
     if (history.slice(-2).includes(t.id)) score -= 3

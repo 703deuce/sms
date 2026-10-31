@@ -82,6 +82,7 @@ def ffmpeg_cut(
     *,
     clip_index: int | None = None,
 ) -> None:
+    from clips_worker.audio_extract import PTS_ALIGN_AF
     from clips_worker.stage_log import ffmpeg_run
 
     threads = str(ffmpeg_threads_per_job())
@@ -99,6 +100,10 @@ def ffmpeg_cut(
             f"{end_ms / 1000:.3f}",
             "-i",
             str(src),
+            # T6.7: same pts-aligned audio as the transcript (audio_extract_cmd) so an
+            # audio gap INSIDE the clip stays a gap instead of pulling later audio early.
+            "-af",
+            PTS_ALIGN_AF,
             "-c:v",
             "libx264",
             "-preset",

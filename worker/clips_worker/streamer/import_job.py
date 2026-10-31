@@ -49,17 +49,24 @@ def _extract_upload_audio(
     range_start_ms: int = 0,
     range_end_ms: int = 0,
 ) -> None:
-    args = ["ffmpeg", "-y", "-v", "error"]
-    if range_start_ms > 0:
-        args.extend(["-ss", f"{range_start_ms / 1000.0:.3f}"])
-    args.extend(["-i", str(src), "-vn", "-c:a", "libopus"])
+    from clips_worker.audio_extract import audio_extract_cmd
+
+    # T6.7: same timestamp-aligned recipe as regular uploads (audio_extract.PTS_ALIGN_AF).
+    t_s = None
     if range_end_ms > range_start_ms > 0:
-        args.extend(["-t", f"{(range_end_ms - range_start_ms) / 1000.0:.3f}"])
+        t_s = (range_end_ms - range_start_ms) / 1000.0
     elif range_end_ms > 0:
-        args.extend(["-t", f"{range_end_ms / 1000.0:.3f}"])
-    if long_form:
-        args.extend(["-b:a", "64k"])
-    args.append(str(audio_out))
+        t_s = range_end_ms / 1000.0
+    args = audio_extract_cmd(
+        src,
+        audio_out,
+        rate=None,
+        mono=False,
+        codec="libopus",
+        bitrate="64k" if long_form else None,
+        ss_s=range_start_ms / 1000.0 if range_start_ms > 0 else None,
+        t_s=t_s,
+    )
     subprocess.check_call(args)
 
 
@@ -562,23 +569,10 @@ def _ingest_twitch_hls_window(
     dest = cache_dir / "window.ts"
     wm = fetch_window(playlist_url, window_start_ms, window_end_ms, dest)
     audio_path = cache_dir / "window.opus"
+    from clips_worker.audio_extract import audio_extract_cmd
+
     subprocess.check_call(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(wm.path),
-            "-vn",
-            "-ac",
-            "1",
-            "-ar",
-            "16000",
-            "-c:a",
-            "libopus",
-            "-b:a",
-            "24k",
-            str(audio_path),
-        ],
+        audio_extract_cmd(wm.path, audio_path, codec="libopus", bitrate="24k", quiet=False),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -1304,20 +1298,9 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
         upload_file(key, path, "video/mp4")
 
         audio_out = cache_dir / "audio.opus"
-        subprocess.check_call(
-            [
-                "ffmpeg",
-                "-y",
-                "-v",
-                "error",
-                "-i",
-                str(path),
-                "-vn",
-                "-c:a",
-                "libopus",
-                str(audio_out),
-            ]
-        )
+        from clips_worker.audio_extract import audio_extract_cmd
+
+        subprocess.check_call(audio_extract_cmd(path, audio_out, rate=None, mono=False, codec="libopus"))
         audio_key = stream_audio_key(workspace_id, vod_id)
         upload_file(audio_key, audio_out, "audio/opus")
         state = {
