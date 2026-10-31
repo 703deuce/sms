@@ -1,0 +1,188 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 720
+PlayResY: 1280
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: T0,Montserrat Black,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
+Style: T1,Montserrat Black,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
+Style: T2,Montserrat Black,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:01.00,T0,,0,0,0,,{\an5\pos(360,512)}junk anim
+Dialogue: 1,0:00:00.10,0:00:00.13,T1,,0,0,0,,{\an5\pos(288,768)\org(288,768)\fscx100.0\fscy100.0\frz-0.0\1a&HFF&\3a&HFF&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.13,0:00:00.16,T1,,0,0,0,,{\an5\pos(305,768)\org(305,768)\fscx100.0\fscy100.0\frz-0.0\1a&HC2&\3a&HC2&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.16,0:00:00.20,T1,,0,0,0,,{\an5\pos(319,768)\org(319,768)\fscx100.0\fscy100.0\frz-0.0\1a&H90&\3a&H90&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.20,0:00:00.23,T1,,0,0,0,,{\an5\pos(331,768)\org(331,768)\fscx100.0\fscy100.0\frz-0.0\1a&H67&\3a&H67&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.23,0:00:00.26,T1,,0,0,0,,{\an5\pos(340,768)\org(340,768)\fscx100.0\fscy100.0\frz-0.0\1a&H47&\3a&H47&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.26,0:00:00.30,T1,,0,0,0,,{\an5\pos(347,768)\org(347,768)\fscx100.0\fscy100.0\frz-0.0\1a&H2F&\3a&H2F&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.30,0:00:00.33,T1,,0,0,0,,{\an5\pos(352,768)\org(352,768)\fscx100.0\fscy100.0\frz-0.0\1a&H1C&\3a&H1C&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.33,0:00:00.36,T1,,0,0,0,,{\an5\pos(356,768)\org(356,768)\fscx100.0\fscy100.0\frz-0.0\1a&H10&\3a&H10&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.36,0:00:00.40,T1,,0,0,0,,{\an5\pos(358,768)\org(358,768)\fscx100.0\fscy100.0\frz-0.0\1a&H07&\3a&H07&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.40,0:00:00.43,T1,,0,0,0,,{\an5\pos(359,768)\org(359,768)\fscx100.0\fscy100.0\frz-0.0\1a&H03&\3a&H03&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.43,0:00:00.46,T1,,0,0,0,,{\an5\pos(360,768)\org(360,768)\fscx100.0\fscy100.0\frz-0.0\1a&H01&\3a&H01&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.46,0:00:00.50,T1,,0,0,0,,{\an5\pos(360,768)\org(360,768)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}too long for item
+Dialogue: 1,0:00:00.50,0:00:00.53,T1,,0,0,0,,{\an5\pos(360,768)\org(360,768)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&\fscy105.52}t{\1a&H00&\3a&H00&\4a&HFF&\fscy100.06}o{\1a&H00&\3a&H00&\4a&HFF&}o {\1a&H00&\3a&H00&\4a&HFF&}l{\1a&H00&\3a&H00&\4a&HFF&}o{\1a&H00&\3a&H00&\4a&HFF&}n{\1a&H00&\3a&H00&\4a&HFF&}g {\1a&H00&\3a&H00&\4a&HFF&}f{\1a&H00&\3a&H00&\4a&HFF&}o{\1a&H00&\3a&H00&\4a&HFF&}r {\1a&H00&\3a&H00&\4a&HFF&}i{\1a&H00&\3a&H00&\4a&HFF&}t{\1a&H00&\3a&H00&\4a&HFF&}e{\1a&H00&\3a&H00&\4a&HFF&}m
+Dialogue: 1,0:00:00.53,0:00:00.56,T1,,0,0,0,,{\an5\pos(360,768)\org(360,768)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}t{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o{\1a&H0F&\3a&H0F&\4a&HFF&\fscy95.0}o {\1a&H00&\3a&H00&\4a&HFF&\fscy102.9}l{\1a&H00&\3a&H00&\4a&HFF&}o{\1a&H00&\3a&H00&\4a&HFF&}n{\1a&H00&\3a&H00&\4a&HFF&}g {\1a&H00&\3a&H00&\4a&HFF&}f{\1a&H00&\3a&H00&\4a&HFF&}o{\1a&H00&\3a&H00&\4a&HFF&}r {\1a&H00&\3a&H00&\4a&HFF&}i{\1a&H00&\3a&H00&\4a&HFF&}t{\1a&H00&\3a&H00&\4a&HFF&}e{\1a&H00&\3a&H00&\4a&HFF&}m
+Dialogue: 1,0:00:00.56,0:00:00.60,T1,,0,0,0,,{\an5\pos(360,768)\org(360,768)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}t{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o {\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}l{\1a&H8B&\3a&H8B&\4a&HFF&\fscy70.16}o{\1a&H00&\3a&H00&\4a&HFF&\fscy106.47}n{\1a&H00&\3a&H00&\4a&HFF&}g {\1a&H00&\3a&H00&\4a&HFF&}f{\1a&H00&\3a&H00&\4a&HFF&}o{\1a&H00&\3a&H00&\4a&HFF&}r {\1a&H00&\3a&H00&\4a&HFF&}i{\1a&H00&\3a&H00&\4a&HFF&}t{\1a&H00&\3a&H00&\4a&HFF&}e{\1a&H00&\3a&H00&\4a&HFF&}m
+Dialogue: 1,0:00:00.60,0:00:00.63,T1,,0,0,0,,{\an5\pos(360,768)\org(360,768)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}t{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o {\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}l{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}n{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}g {\1a&H00&\3a&H00&\4a&HFF&\fscy105.85}f{\1a&H00&\3a&H00&\4a&HFF&\fscy100.02}o{\1a&H00&\3a&H00&\4a&HFF&}r {\1a&H00&\3a&H00&\4a&HFF&}i{\1a&H00&\3a&H00&\4a&HFF&}t{\1a&H00&\3a&H00&\4a&HFF&}e{\1a&H00&\3a&H00&\4a&HFF&}m
+Dialogue: 1,0:00:00.63,0:00:00.66,T1,,0,0,0,,{\an5\pos(360,768)\org(360,768)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}t{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o {\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}l{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}n{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}g {\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}f{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o{\1a&H06&\3a&H06&\4a&HFF&\fscy96.17}r {\1a&H00&\3a&H00&\4a&HFF&\fscy102.62}i{\1a&H00&\3a&H00&\4a&HFF&}t{\1a&H00&\3a&H00&\4a&HFF&}e{\1a&H00&\3a&H00&\4a&HFF&}m
+Dialogue: 1,0:00:00.66,0:00:00.70,T1,,0,0,0,,{\an5\pos(360,768)\org(360,768)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}t{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o {\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}l{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}n{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}g {\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}f{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}o{\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}r {\1a&HFF&\3a&HFF&\4a&HFF&\fscy30.0}i{\1a&H82&\3a&H82&\4a&HFF&\fscy72.51}t{\1a&H00&\3a&H00&\4a&HFF&\fscy106.29}e{\1a&H00&\3a&H00&\4a&HFF&}m
+Dialogue: 1,0:00:01.00,0:00:01.03,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HFF&\3a&HFF&\4a&HFF&}c{\1a&HFF&\3a&HFF&\4a&HFF&}l{\1a&HFF&\3a&HFF&\4a&HFF&}a{\1a&HFF&\3a&HFF&\4a&HFF&}m{\1a&HFF&\3a&HFF&\4a&HFF&}p{\1a&HFF&\3a&HFF&\4a&HFF&}e{\1a&HFF&\3a&HFF&\4a&HFF&}d
+Dialogue: 1,0:00:01.03,0:00:01.06,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}c{\1a&H01&\3a&H01&\4a&HFF&}l{\1a&H4C&\3a&H4C&\4a&HFF&}a{\1a&HFF&\3a&HFF&\4a&HFF&}m{\1a&HFF&\3a&HFF&\4a&HFF&}p{\1a&HFF&\3a&HFF&\4a&HFF&}e{\1a&HFF&\3a&HFF&\4a&HFF&}d
+Dialogue: 1,0:00:01.06,0:00:01.10,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}c{\1a&H00&\3a&H00&\4a&HFF&}l{\1a&H00&\3a&H00&\4a&HFF&}a{\1a&H00&\3a&H00&\4a&HFF&}m{\1a&H09&\3a&H09&\4a&HFF&}p{\1a&H94&\3a&H94&\4a&HFF&}e{\1a&HFF&\3a&HFF&\4a&HFF&}d
+Dialogue: 1,0:00:01.10,0:00:04.00,T2,,0,0,0,,{\an5\pos(360,1024)}clamped
+Dialogue: 1,0:00:04.00,0:00:04.03,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.03,0:00:04.06,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.06,0:00:04.10,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.10,0:00:04.13,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.13,0:00:04.16,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.16,0:00:04.20,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.20,0:00:04.23,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.23,0:00:04.26,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.26,0:00:04.30,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.30,0:00:04.33,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.33,0:00:04.36,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.36,0:00:04.40,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.40,0:00:04.43,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.43,0:00:04.46,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.46,0:00:04.50,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.50,0:00:04.53,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.53,0:00:04.56,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.56,0:00:04.60,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.60,0:00:04.63,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H00&\3a&H00&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.63,0:00:04.66,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H01&\3a&H01&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.66,0:00:04.70,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H01&\3a&H01&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.70,0:00:04.73,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H01&\3a&H01&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.73,0:00:04.76,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H01&\3a&H01&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.76,0:00:04.80,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H01&\3a&H01&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.80,0:00:04.83,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H01&\3a&H01&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.83,0:00:04.86,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H01&\3a&H01&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.86,0:00:04.90,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H01&\3a&H01&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.90,0:00:04.93,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H01&\3a&H01&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.93,0:00:04.96,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H02&\3a&H02&\4a&HFF&}clamped
+Dialogue: 1,0:00:04.96,0:00:05.00,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H02&\3a&H02&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.00,0:00:05.03,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H02&\3a&H02&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.03,0:00:05.06,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H02&\3a&H02&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.06,0:00:05.10,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H02&\3a&H02&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.10,0:00:05.13,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H03&\3a&H03&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.13,0:00:05.16,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H03&\3a&H03&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.16,0:00:05.20,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H03&\3a&H03&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.20,0:00:05.23,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H04&\3a&H04&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.23,0:00:05.26,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H04&\3a&H04&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.26,0:00:05.30,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H04&\3a&H04&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.30,0:00:05.33,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H04&\3a&H04&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.33,0:00:05.36,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H05&\3a&H05&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.36,0:00:05.40,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H05&\3a&H05&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.40,0:00:05.43,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H06&\3a&H06&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.43,0:00:05.46,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H06&\3a&H06&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.46,0:00:05.50,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H06&\3a&H06&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.50,0:00:05.53,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H07&\3a&H07&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.53,0:00:05.56,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H07&\3a&H07&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.56,0:00:05.60,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H08&\3a&H08&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.60,0:00:05.63,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H08&\3a&H08&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.63,0:00:05.66,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H09&\3a&H09&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.66,0:00:05.70,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H09&\3a&H09&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.70,0:00:05.73,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H0A&\3a&H0A&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.73,0:00:05.76,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H0B&\3a&H0B&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.76,0:00:05.80,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H0B&\3a&H0B&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.80,0:00:05.83,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H0C&\3a&H0C&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.83,0:00:05.86,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H0D&\3a&H0D&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.86,0:00:05.90,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H0D&\3a&H0D&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.90,0:00:05.93,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H0E&\3a&H0E&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.93,0:00:05.96,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H0F&\3a&H0F&\4a&HFF&}clamped
+Dialogue: 1,0:00:05.96,0:00:06.00,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H10&\3a&H10&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.00,0:00:06.03,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H10&\3a&H10&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.03,0:00:06.06,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H11&\3a&H11&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.06,0:00:06.10,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H12&\3a&H12&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.10,0:00:06.13,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H13&\3a&H13&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.13,0:00:06.16,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H14&\3a&H14&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.16,0:00:06.20,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H15&\3a&H15&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.20,0:00:06.23,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H16&\3a&H16&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.23,0:00:06.26,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H17&\3a&H17&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.26,0:00:06.30,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H18&\3a&H18&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.30,0:00:06.33,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H19&\3a&H19&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.33,0:00:06.36,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H1A&\3a&H1A&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.36,0:00:06.40,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H1B&\3a&H1B&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.40,0:00:06.43,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H1C&\3a&H1C&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.43,0:00:06.46,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H1D&\3a&H1D&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.46,0:00:06.50,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H1F&\3a&H1F&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.50,0:00:06.53,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H20&\3a&H20&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.53,0:00:06.56,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H21&\3a&H21&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.56,0:00:06.60,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H22&\3a&H22&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.60,0:00:06.63,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H24&\3a&H24&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.63,0:00:06.66,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H25&\3a&H25&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.66,0:00:06.70,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H27&\3a&H27&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.70,0:00:06.73,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H28&\3a&H28&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.73,0:00:06.76,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H2A&\3a&H2A&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.76,0:00:06.80,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H2B&\3a&H2B&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.80,0:00:06.83,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H2D&\3a&H2D&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.83,0:00:06.86,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H2E&\3a&H2E&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.86,0:00:06.90,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H30&\3a&H30&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.90,0:00:06.93,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H32&\3a&H32&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.93,0:00:06.96,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H33&\3a&H33&\4a&HFF&}clamped
+Dialogue: 1,0:00:06.96,0:00:07.00,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H35&\3a&H35&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.00,0:00:07.03,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H37&\3a&H37&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.03,0:00:07.06,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H39&\3a&H39&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.06,0:00:07.10,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H3B&\3a&H3B&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.10,0:00:07.13,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H3D&\3a&H3D&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.13,0:00:07.16,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H3F&\3a&H3F&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.16,0:00:07.20,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H41&\3a&H41&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.20,0:00:07.23,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H43&\3a&H43&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.23,0:00:07.26,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H45&\3a&H45&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.26,0:00:07.30,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H47&\3a&H47&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.30,0:00:07.33,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H49&\3a&H49&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.33,0:00:07.36,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H4C&\3a&H4C&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.36,0:00:07.40,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H4E&\3a&H4E&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.40,0:00:07.43,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H50&\3a&H50&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.43,0:00:07.46,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H53&\3a&H53&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.46,0:00:07.50,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H55&\3a&H55&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.50,0:00:07.53,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H57&\3a&H57&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.53,0:00:07.56,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H5A&\3a&H5A&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.56,0:00:07.60,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H5D&\3a&H5D&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.60,0:00:07.63,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H5F&\3a&H5F&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.63,0:00:07.66,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H62&\3a&H62&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.66,0:00:07.70,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H65&\3a&H65&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.70,0:00:07.73,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H67&\3a&H67&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.73,0:00:07.76,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H6A&\3a&H6A&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.76,0:00:07.80,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H6D&\3a&H6D&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.80,0:00:07.83,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H70&\3a&H70&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.83,0:00:07.86,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H73&\3a&H73&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.86,0:00:07.90,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H76&\3a&H76&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.90,0:00:07.93,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H79&\3a&H79&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.93,0:00:07.96,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H7C&\3a&H7C&\4a&HFF&}clamped
+Dialogue: 1,0:00:07.96,0:00:08.00,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H7F&\3a&H7F&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.00,0:00:08.03,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H83&\3a&H83&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.03,0:00:08.06,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H86&\3a&H86&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.06,0:00:08.10,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H89&\3a&H89&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.10,0:00:08.13,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H8D&\3a&H8D&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.13,0:00:08.16,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H90&\3a&H90&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.16,0:00:08.20,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H94&\3a&H94&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.20,0:00:08.23,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H97&\3a&H97&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.23,0:00:08.26,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H9B&\3a&H9B&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.26,0:00:08.30,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&H9E&\3a&H9E&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.30,0:00:08.33,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HA2&\3a&HA2&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.33,0:00:08.36,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HA6&\3a&HA6&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.36,0:00:08.40,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HAA&\3a&HAA&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.40,0:00:08.43,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HAE&\3a&HAE&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.43,0:00:08.46,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HB2&\3a&HB2&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.46,0:00:08.50,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HB6&\3a&HB6&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.50,0:00:08.53,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HBA&\3a&HBA&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.53,0:00:08.56,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HBE&\3a&HBE&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.56,0:00:08.60,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HC2&\3a&HC2&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.60,0:00:08.63,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HC7&\3a&HC7&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.63,0:00:08.66,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HCB&\3a&HCB&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.66,0:00:08.70,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HCF&\3a&HCF&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.70,0:00:08.73,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HD4&\3a&HD4&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.73,0:00:08.76,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HD8&\3a&HD8&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.76,0:00:08.80,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HDD&\3a&HDD&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.80,0:00:08.83,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HE2&\3a&HE2&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.83,0:00:08.86,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HE6&\3a&HE6&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.86,0:00:08.90,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HEB&\3a&HEB&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.90,0:00:08.93,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HF0&\3a&HF0&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.93,0:00:08.96,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HF5&\3a&HF5&\4a&HFF&}clamped
+Dialogue: 1,0:00:08.96,0:00:09.00,T2,,0,0,0,,{\an5\pos(360,1024)\org(360,1024)\fscx100.0\fscy100.0\frz-0.0\1a&H00&\3a&H00&\4a&HFF&}{\1a&HFA&\3a&HFA&\4a&HFF&}clamped

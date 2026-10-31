@@ -15,6 +15,7 @@ import math
 from pathlib import Path
 
 from clips_worker.motion import MOTION_FPS, has_motion, layer_transform_at, layer_z
+from clips_worker.text_anim import fit_durations, frame_anim, norm_anim, split_units, unit_state
 from clips_worker.tracks import layer_order, spans_tracks
 
 # EP1: canonical libass family names (name ID 1 of the bundled faces). fontconfig matched the
@@ -133,6 +134,32 @@ def _anchor(it: dict, w: int, h: int) -> tuple[float, float]:
     return float(it.get("x", 50)) * w / 100, float(it.get("y", 50)) * h / 100
 
 
+_IDENT = {"x": 0.0, "y": 0.0, "scale": 100.0, "rotation": 0.0, "opacity": 100.0}
+
+
+def _unit_body(txt: str, unit: dict, op: float, shadow_a: int, scale: float) -> str:
+    """G3a: per line / word / character alpha (+ pop height) inline overrides on the text layer."""
+    pieces = split_units(txt, unit["unit"])
+    n = sum(1 for _, u in pieces if u)
+    parts: list[str] = []
+    k = 0
+    for piece, is_unit in pieces:
+        if not is_unit:
+            parts.append(_esc(piece))
+            continue
+        kk = n - 1 - k if unit["rev"] else k
+        uo, us = unit_state(unit["type"], kk, n, unit["t"], unit["d"])
+        o = op * uo
+        a = round(255 * (1 - o))
+        a_sh = round(255 - (255 - shadow_a) * o)
+        tag = rf"\1a&H{a:02X}&\3a&H{a:02X}&\4a&H{a_sh:02X}&"
+        if us != 1.0:
+            tag += rf"\fscy{round(scale * us, 2)}"
+        parts.append("{" + tag + "}" + _esc(piece))
+        k += 1
+    return "".join(parts)
+
+
 def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str | None:
     items = text_items(edits)
     if not items:
@@ -167,10 +194,12 @@ def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str
         layers = [(lt, f"T{i}")] + ([(lb, f"B{i}")] if bs else [])
         target = f"text:{it['id']}"
         start, end = it["startMs"], it["endMs"]
-        if not has_motion(edits, target):
-            tag = rf"{{\an{an}\pos({round(ax + _align_dx(align, block_w))},{round(ay)})}}"
+        motion = has_motion(edits, target)
+        anim = norm_anim(it.get("anim"))
+        static_tag = rf"{{\an{an}\pos({round(ax + _align_dx(align, block_w))},{round(ay)})}}"
+        if not motion and not anim:
             for layer, style in layers:
-                events.append(f"Dialogue: {layer},{_ts(start // 10)},{_ts(end // 10)},{style},,0,0,0,,{tag}{esc}")
+                events.append(f"Dialogue: {layer},{_ts(start // 10)},{_ts(end // 10)},{style},,0,0,0,,{static_tag}{esc}")
             continue
         shadow = st.get("shadow") if isinstance(st.get("shadow"), dict) else None
         shadow_a = _alpha_for_opacity(shadow.get("opacity", 100)) if shadow else 255
@@ -178,30 +207,56 @@ def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str
         box_a = _alpha_for_opacity(box.get("opacity", 100)) if box else 255
         f0 = int(math.ceil(start * fps / 1000 - 1e-9))
         f1 = int(math.ceil(end * fps / 1000 - 1e-9))
-        for f in range(f0, f1):
-            t_ms = f * 1000 / fps
-            s_cs = int(math.floor(f * 100 / fps + 1e-9))
-            e_cs = int(math.floor((f + 1) * 100 / fps + 1e-9))
-            if e_cs <= s_cs:
-                continue
-            tf = layer_transform_at(edits, target, t_ms - start)
-            op = max(0.0, min(1.0, tf["opacity"] / 100))
-            a_txt = round(255 * (1 - op))
-            a_sh = round(255 - (255 - shadow_a) * op)
-            a_box = round(255 - (255 - box_a) * op)
-            px = round(ax + tf["x"] * w / 100)
-            py = round(ay + tf["y"] * h / 100)
-            sc = round(tf["scale"], 2)
-            rot = round(-tf["rotation"], 2)
-            # Scale about the block centre (the anchor): the \\an4/6 point moves with the scaled width.
-            pxa = round(ax + tf["x"] * w / 100 + _align_dx(align, block_w * tf["scale"] / 100))
-            base = rf"\an{an}\pos({pxa},{py})\org({px},{py})\fscx{sc}\fscy{sc}\frz{rot}"
-            for layer, style in layers:
-                if style.startswith("T"):
-                    tag = rf"{{{base}\1a&H{a_txt:02X}&\3a&H{a_txt:02X}&\4a&H{a_sh:02X}&}}"
-                else:
-                    tag = rf"{{{base}\1a&HFF&\3a&H{a_box:02X}&\4a&HFF&}}"
-                events.append(f"Dialogue: {layer},{_ts(s_cs)},{_ts(e_cs)},{style},,0,0,0,,{tag}{esc}")
+        d_in, d_out = fit_durations(anim, end - start) if anim else (0, 0)
+        # G3a: without keyframes / loop only the in + out windows go per frame; the rest is one
+        # static event (same \an\pos as an un-animated item) so files stay small.
+        if motion or (anim and "loop" in anim):
+            spans = [(f0, f1)]
+            mid = None
+        else:
+            fi = int(math.ceil((start + d_in) * fps / 1000 - 1e-9)) if d_in else f0
+            fo = int(math.ceil((end - d_out) * fps / 1000 - 1e-9)) if d_out else f1
+            fo = max(fo, fi)
+            spans = [(f0, fi), (fo, f1)]
+            cs_a = int(math.floor(fi * 100 / fps + 1e-9)) if d_in else start // 10
+            cs_b = int(math.floor(fo * 100 / fps + 1e-9)) if d_out else end // 10
+            mid = (cs_a, cs_b) if cs_b > cs_a else None
+        for si, (fa_, fb_) in enumerate(spans):
+            if si == 1 and mid:
+                for layer, style in layers:
+                    events.append(f"Dialogue: {layer},{_ts(mid[0])},{_ts(mid[1])},{style},,0,0,0,,{static_tag}{esc}")
+            for f in range(fa_, fb_):
+                t_ms = f * 1000 / fps
+                s_cs = int(math.floor(f * 100 / fps + 1e-9))
+                e_cs = int(math.floor((f + 1) * 100 / fps + 1e-9))
+                if e_cs <= s_cs:
+                    continue
+                tf = layer_transform_at(edits, target, t_ms - start) if motion else dict(_IDENT)
+                unit = None
+                if anim:
+                    fa = frame_anim(anim, t_ms, start, end, d_in, d_out)
+                    tf = {"x": tf["x"] + fa["dx"], "y": tf["y"] + fa["dy"], "scale": tf["scale"] * fa["sc"],
+                          "rotation": tf["rotation"] + fa["rot"], "opacity": tf["opacity"] * fa["op"]}
+                    unit = fa["unit"]
+                op = max(0.0, min(1.0, tf["opacity"] / 100))
+                a_txt = round(255 * (1 - op))
+                a_sh = round(255 - (255 - shadow_a) * op)
+                a_box = round(255 - (255 - box_a) * op)
+                px = round(ax + tf["x"] * w / 100)
+                py = round(ay + tf["y"] * h / 100)
+                sc = round(tf["scale"], 2)
+                rot = round(-tf["rotation"], 2)
+                # Scale about the block centre (the anchor): the \\an4/6 point moves with the scaled width.
+                pxa = round(ax + tf["x"] * w / 100 + _align_dx(align, block_w * tf["scale"] / 100))
+                base = rf"\an{an}\pos({pxa},{py})\org({px},{py})\fscx{sc}\fscy{sc}\frz{rot}"
+                body = _unit_body(txt, unit, op, shadow_a, tf["scale"]) if unit else esc
+                for layer, style in layers:
+                    if style.startswith("T"):
+                        tag = rf"{{{base}\1a&H{a_txt:02X}&\3a&H{a_txt:02X}&\4a&H{a_sh:02X}&}}"
+                        events.append(f"Dialogue: {layer},{_ts(s_cs)},{_ts(e_cs)},{style},,0,0,0,,{tag}{body}")
+                    else:
+                        tag = rf"{{{base}\1a&HFF&\3a&H{a_box:02X}&\4a&HFF&}}"
+                        events.append(f"Dialogue: {layer},{_ts(s_cs)},{_ts(e_cs)},{style},,0,0,0,,{tag}{esc}")
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {w}

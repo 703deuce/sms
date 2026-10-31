@@ -671,10 +671,10 @@ def _run_render_clip_job_body(
                 clip_end=clip_end,
                 cut_start=cut_start,
             )
-            from clips_worker.edits_render import build_srt, ensure_word_i, words_after_edits
+            from clips_worker.edits_render import ensure_word_i, export_srt, words_after_edits
 
             remapped, _ = words_after_edits(ensure_word_i(source_words), edits)
-            srt_body = build_srt(remapped)
+            srt_body = export_srt(edits, remapped)
             _export_stage_log(render_id, "preview_composite_cut", t_job, {"resolution": resolution})
         elif preview_key and export_edits_allow_preview_reuse(aspect, edits, clip_start, clip_end):
             post_progress(
@@ -685,10 +685,10 @@ def _run_render_clip_job_body(
 
             scaled = resolution not in (CLIP_PREVIEW_RESOLUTION, 720, "720")
             materialize_export_from_preview(preview_key, resolution, out_mp4, td_path)
-            from clips_worker.edits_render import build_srt, ensure_word_i, words_after_edits
+            from clips_worker.edits_render import ensure_word_i, export_srt, words_after_edits
 
             remapped, _ = words_after_edits(ensure_word_i(source_words), edits)
-            srt_body = build_srt(remapped)
+            srt_body = export_srt(edits, remapped)
             post_progress(
                 job["id"],
                 {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 72, "etaSeconds": 20},

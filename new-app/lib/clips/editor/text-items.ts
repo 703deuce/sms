@@ -11,6 +11,7 @@
  *
  * No React imports, so lib/clips/edits.ts can use it.
  */
+import { normAnim, type TextAnim } from '@/lib/clips/render-plan/text-anim'
 
 export type TextAlign = 'left' | 'center' | 'right'
 export type TextCase = 'none' | 'upper'
@@ -41,6 +42,8 @@ export type TextItem = {
   y: number
   style: TextStyle
   presetId?: string
+  /** G3a: in / out / loop animation (render-plan/text-anim.ts == worker text_anim.py). */
+  anim?: TextAnim
 }
 
 /**
@@ -158,6 +161,8 @@ export function normalizeTextItems(raw: unknown, clipEndMs?: number): TextItem[]
       style: normalizeTextStyle(o.style),
     }
     if (typeof o.presetId === 'string' && o.presetId.length <= 64) item.presetId = o.presetId
+    const anim = normAnim(o.anim)
+    if (anim) item.anim = anim
     out.push(item)
     if (out.length >= TEXT_MAX_ITEMS) break
   }

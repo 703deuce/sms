@@ -10,7 +10,8 @@ import { CAPTION_PRESETS_V2 } from '@/lib/clips/templates/registry'
 import { captionSafeWidthPx, fitCaptionLine, fitReferenceFrame, roundHalfUp } from '@/lib/clips/caption-fit'
 import { hex2, pyFixedPad, pyFloat, pyInt, pyRound, pyRoundN } from '@/lib/clips/render-plan/py'
 
-export type AssWord = { w: string; s: number; e: number; i?: number; spk?: number }
+/** G3a: `ln` = manual caption line index (captionLines) — one caption per line. */
+export type AssWord = { w: string; s: number; e: number; i?: number; spk?: number; ln?: number }
 type Dict = Record<string, unknown>
 type Preset = Dict & {
   slug?: string
@@ -105,6 +106,18 @@ function alignmentFor(position: string): number {
 function chunkWords(words: readonly AssWord[], wpl: number): AssWord[][] {
   const out: AssWord[][] = []
   let cur: AssWord[] = []
+  if (words.length && words.every((w) => w.ln !== undefined)) {
+    // G3a: manual caption lines (py chunk_words) — wordsPerLine ignored.
+    for (const w of words) {
+      if (cur.length && cur[cur.length - 1]!.ln !== w.ln) {
+        out.push(cur)
+        cur = []
+      }
+      cur.push(w)
+    }
+    if (cur.length) out.push(cur)
+    return out
+  }
   for (const w of words) {
     if (cur.length && cur.length >= wpl) {
       out.push(cur)
@@ -219,18 +232,29 @@ function mapV2ToLegacy(p: Dict): Preset {
   } as Preset
 }
 
+/** caption_safe_area.caption_min_margin_v_pct (G3a: by frame shape; 9:16 keeps 12 %). */
+export function captionMinMarginVPct(playW: number | undefined, playH: number): number {
+  if (!playW || !playH) return 12.0
+  const r = playW / playH
+  if (r >= 1.5) return 6.0
+  if (r >= 0.95) return 8.0
+  if (r >= 0.75) return 10.0
+  return 12.0
+}
+
 /** caption_safe_area.clamp_caption_export_style. */
-export function clampCaptionExportStyle(cap0: Dict, playH = 1280): Dict {
+export function clampCaptionExportStyle(cap0: Dict, playH = 1280, playW?: number): Dict {
   const cap: Dict = { ...cap0 }
   const preset = resolveLegacyPreset(or(cap.presetId, cap.preset))
+  const minM = captionMinMarginVPct(playW, playH)
   let marginV = pyFloat(or(cap.marginVPct, preset.marginVPct, 12.0))
-  marginV = Math.max(12.0, marginV)
+  marginV = Math.max(minM, marginV)
   let sizePct = pyFloat(or(cap.size, cap.sizePct, preset.sizePct, 6.5))
   sizePct = Math.min(10.5, Math.max(3.0, sizePct))
   const fontsize = (sizePct / 100.0) * playH
   const marginPx = (marginV / 100.0) * playH
   const maxMarginPx = playH * 0.82 - fontsize * 1.45
-  if (marginPx > maxMarginPx && maxMarginPx > 0) marginV = Math.max(12.0, (maxMarginPx / playH) * 100.0)
+  if (marginPx > maxMarginPx && maxMarginPx > 0) marginV = Math.max(minM, (maxMarginPx / playH) * 100.0)
   cap.marginVPct = pyRoundN(marginV, 1)
   cap.size = pyRoundN(sizePct, 1)
   cap.position = or(cap.position, preset.position, 'bottom')
@@ -382,7 +406,7 @@ function appendCaptionEvents(
 
 /** captions_ass.build_ass → the .ass text (Python writes header + "\n".join(events) + "\n"). */
 export function buildCaptionsAss(words: readonly AssWord[], editsCaptions: Dict | null | undefined, playW = 720, playH = 1280): string {
-  let cap = clampCaptionExportStyle(isDict(editsCaptions) ? editsCaptions : {}, playH)
+  let cap = clampCaptionExportStyle(isDict(editsCaptions) ? editsCaptions : {}, playH, playW)
   const presetId = String(or(cap.presetId, cap.preset, 'bold_pop'))
   const isCp = presetId.startsWith('cp')
   if (isCp) cap = Object.fromEntries(Object.entries(cap).filter(([k]) => !CP_STALE_KEYS.includes(k)))

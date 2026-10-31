@@ -3321,7 +3321,7 @@
    "kind": "title",
    "w": 1080,
    "h": 1920,
-   "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT",
+   "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT",
    "rect": {
     "x": 0,
     "y": 0,
@@ -3403,7 +3403,7 @@
   },
   {
    "name": "hl_fit_top_ludwig",
-   "headline": "Let's just dip—Valorant isn't worth it",
+   "headline": "Let's just dip\u2014Valorant isn't worth it",
    "w": 1080,
    "h": 1920,
    "barH": 320,
@@ -3440,7 +3440,7 @@
   },
   {
    "name": "hl_emoji",
-   "headline": "Big win today 🔥🔥🔥",
+   "headline": "Big win today \ud83d\udd25\ud83d\udd25\ud83d\udd25",
    "w": 1080,
    "h": 1920,
    "barH": 384,
@@ -3491,6 +3491,1105 @@
    },
    "durationMs": 5000,
    "kind": "headline"
+  },
+  {
+   "name": "text_anim_block",
+   "kind": "text_items",
+   "w": 1080,
+   "h": 1920,
+   "edits": {
+    "textItems": [
+     {
+      "id": "a1",
+      "text": "FADE ME",
+      "startMs": 0,
+      "endMs": 2000,
+      "x": 50,
+      "y": 30,
+      "style": {
+       "font": "Montserrat",
+       "size": 120,
+       "color": "#FFFFFF",
+       "align": "center",
+       "stroke": {
+        "color": "#000000",
+        "width": 6
+       },
+       "shadow": {
+        "color": "#000000",
+        "opacity": 60,
+        "dist": 4
+       }
+      },
+      "anim": {
+       "in": {
+        "type": "fade",
+        "unit": "block",
+        "durMs": 400
+       },
+       "out": {
+        "type": "fade",
+        "durMs": 300
+       }
+      }
+     },
+     {
+      "id": "a2",
+      "text": "POP!",
+      "startMs": 500,
+      "endMs": 2500,
+      "x": 50,
+      "y": 50,
+      "style": {
+       "font": "Anton",
+       "size": 180,
+       "color": "#FFD400",
+       "align": "center"
+      },
+      "anim": {
+       "in": {
+        "type": "pop",
+        "durMs": 450
+       },
+       "out": {
+        "type": "zoom",
+        "unit": "word",
+        "durMs": 350
+       }
+      }
+     },
+     {
+      "id": "a3",
+      "text": "Slide in\nfrom below",
+      "startMs": 1000,
+      "endMs": 3200,
+      "x": 20,
+      "y": 75,
+      "style": {
+       "font": "Luckiest Guy",
+       "size": 90,
+       "color": "#FFFFFF",
+       "align": "left",
+       "case": "upper",
+       "box": {
+        "color": "#000000",
+        "opacity": 70,
+        "pad": 18
+       }
+      },
+      "anim": {
+       "in": {
+        "type": "slide_up",
+        "durMs": 600
+       },
+       "out": {
+        "type": "slide_left",
+        "durMs": 500
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "text_anim_units",
+   "kind": "text_items",
+   "w": 1080,
+   "h": 1920,
+   "edits": {
+    "textItems": [
+     {
+      "id": "u1",
+      "text": "Typed out {live}",
+      "startMs": 0,
+      "endMs": 3000,
+      "x": 50,
+      "y": 25,
+      "style": {
+       "font": "Poppins",
+       "size": 100,
+       "color": "#FFFFFF",
+       "align": "center",
+       "shadow": {
+        "color": "#000000",
+        "opacity": 80,
+        "dist": 3
+       }
+      },
+      "anim": {
+       "in": {
+        "type": "typewriter",
+        "unit": "block",
+        "durMs": 1200
+       }
+      }
+     },
+     {
+      "id": "u2",
+      "text": "one two three four",
+      "startMs": 400,
+      "endMs": 2600,
+      "x": 50,
+      "y": 50,
+      "style": {
+       "font": "Montserrat",
+       "size": 110,
+       "color": "#FFFFFF",
+       "align": "center",
+       "box": {
+        "color": "#2B2B2B",
+        "opacity": 90,
+        "pad": 12
+       }
+      },
+      "anim": {
+       "in": {
+        "type": "pop",
+        "unit": "word",
+        "durMs": 800
+       },
+       "out": {
+        "type": "fade",
+        "unit": "word",
+        "durMs": 600
+       }
+      }
+     },
+     {
+      "id": "u3",
+      "text": "first line\nsecond line\nthird",
+      "startMs": 800,
+      "endMs": 3400,
+      "x": 75,
+      "y": 80,
+      "style": {
+       "font": "Bebas Neue",
+       "size": 90,
+       "color": "#FFFFFF",
+       "align": "right"
+      },
+      "anim": {
+       "in": {
+        "type": "fade",
+        "unit": "line",
+        "durMs": 900
+       },
+       "out": {
+        "type": "typewriter",
+        "unit": "word",
+        "durMs": 500
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "text_anim_loop_16x9",
+   "kind": "text_items",
+   "w": 1920,
+   "h": 1080,
+   "edits": {
+    "textItems": [
+     {
+      "id": "l1",
+      "text": "PULSE",
+      "startMs": 0,
+      "endMs": 1800,
+      "x": 50,
+      "y": 40,
+      "style": {
+       "font": "Montserrat",
+       "size": 150,
+       "color": "#22C55E",
+       "align": "center"
+      },
+      "anim": {
+       "in": {
+        "type": "zoom",
+        "durMs": 300
+       },
+       "loop": {
+        "type": "pulse",
+        "periodMs": 600
+       }
+      }
+     },
+     {
+      "id": "l2",
+      "text": "Wiggle",
+      "startMs": 200,
+      "endMs": 1600,
+      "x": 25,
+      "y": 70,
+      "style": {
+       "font": "Bangers",
+       "size": 110,
+       "color": "#FFFFFF",
+       "align": "left"
+      },
+      "anim": {
+       "loop": {
+        "type": "wiggle",
+        "periodMs": 450
+       }
+      }
+     },
+     {
+      "id": "l3",
+      "text": "Bounce + keys",
+      "startMs": 300,
+      "endMs": 1900,
+      "x": 70,
+      "y": 85,
+      "style": {
+       "font": "Archivo Black",
+       "size": 80,
+       "color": "#FFFFFF",
+       "align": "center",
+       "box": {
+        "color": "#000000",
+        "opacity": 50,
+        "pad": 10
+       }
+      },
+      "anim": {
+       "out": {
+        "type": "slide_down",
+        "durMs": 400
+       },
+       "loop": {
+        "type": "bounce",
+        "periodMs": 500
+       }
+      }
+     },
+     {
+      "id": "l4",
+      "text": "flicker",
+      "startMs": 0,
+      "endMs": 900,
+      "x": 50,
+      "y": 15,
+      "style": {
+       "font": "Montserrat",
+       "size": 70,
+       "color": "#FFFFFF",
+       "align": "center"
+      },
+      "anim": {
+       "loop": {
+        "type": "flicker"
+       }
+      }
+     }
+    ],
+    "keyframes": [
+     {
+      "target": "text:l3",
+      "prop": "x",
+      "points": [
+       {
+        "tMs": 0,
+        "v": -20
+       },
+       {
+        "tMs": 600,
+        "v": 0,
+        "ease": "out"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "text_anim_edge",
+   "kind": "text_items",
+   "w": 720,
+   "h": 1280,
+   "edits": {
+    "textItems": [
+     {
+      "id": "e1",
+      "text": "junk anim",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 40,
+      "style": {
+       "font": "Montserrat",
+       "size": 120,
+       "color": "#FFFFFF",
+       "align": "center"
+      },
+      "anim": {
+       "in": {
+        "type": "spin",
+        "durMs": 300
+       },
+       "loop": {
+        "type": "nope"
+       }
+      }
+     },
+     {
+      "id": "e2",
+      "text": "too long for item",
+      "startMs": 100,
+      "endMs": 700,
+      "x": 50,
+      "y": 60,
+      "style": {
+       "font": "Montserrat",
+       "size": 120,
+       "color": "#FFFFFF",
+       "align": "center"
+      },
+      "anim": {
+       "in": {
+        "type": "slide_right",
+        "unit": "char",
+        "durMs": 900
+       },
+       "out": {
+        "type": "pop",
+        "unit": "char",
+        "durMs": "300"
+       }
+      }
+     },
+     {
+      "id": "e3",
+      "text": "clamped",
+      "startMs": 1000,
+      "endMs": 9000,
+      "x": 50,
+      "y": 80,
+      "style": {
+       "font": "Montserrat",
+       "size": 120,
+       "color": "#FFFFFF",
+       "align": "center"
+      },
+      "anim": {
+       "in": {
+        "type": "fade",
+        "unit": "char",
+        "durMs": 20
+       },
+       "out": {
+        "type": "fade",
+        "unit": "line",
+        "durMs": 99999
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "cap_lines_9x16",
+   "kind": "captions",
+   "w": 1080,
+   "h": 1920,
+   "captions": {
+    "presetId": "bold_pop",
+    "wordsPerLine": 2
+   },
+   "words": [
+    {
+     "w": "Welcome",
+     "s": 0.0,
+     "e": 0.514,
+     "idx": 1000000,
+     "ln": 0
+    },
+    {
+     "w": "back",
+     "s": 0.514,
+     "e": 0.835,
+     "idx": 1000001,
+     "ln": 0
+    },
+    {
+     "w": "to",
+     "s": 0.835,
+     "e": 1.028,
+     "idx": 1000002,
+     "ln": 0
+    },
+    {
+     "w": "the",
+     "s": 1.028,
+     "e": 1.285,
+     "idx": 1000003,
+     "ln": 0
+    },
+    {
+     "w": "channel",
+     "s": 1.285,
+     "e": 1.8,
+     "idx": 1000004,
+     "ln": 0
+    },
+    {
+     "w": "today",
+     "s": 1.8,
+     "e": 2.16,
+     "idx": 1001000,
+     "ln": 1
+    },
+    {
+     "w": "we",
+     "s": 2.16,
+     "e": 2.34,
+     "idx": 1001001,
+     "ln": 1
+    },
+    {
+     "w": "test",
+     "s": 2.34,
+     "e": 2.64,
+     "idx": 1001002,
+     "ln": 1
+    },
+    {
+     "w": "manual",
+     "s": 2.64,
+     "e": 3.06,
+     "idx": 1001003,
+     "ln": 1
+    },
+    {
+     "w": "captions",
+     "s": 3.06,
+     "e": 3.6,
+     "idx": 1001004,
+     "ln": 1
+    },
+    {
+     "w": "A",
+     "s": 4.0,
+     "e": 4.088,
+     "idx": 1002000,
+     "ln": 2
+    },
+    {
+     "w": "much",
+     "s": 4.088,
+     "e": 4.308,
+     "idx": 1002001,
+     "ln": 2
+    },
+    {
+     "w": "longer",
+     "s": 4.308,
+     "e": 4.617,
+     "idx": 1002002,
+     "ln": 2
+    },
+    {
+     "w": "imported",
+     "s": 4.617,
+     "e": 5.014,
+     "idx": 1002003,
+     "ln": 2
+    },
+    {
+     "w": "subtitle",
+     "s": 5.014,
+     "e": 5.411,
+     "idx": 1002004,
+     "ln": 2
+    },
+    {
+     "w": "line",
+     "s": 5.411,
+     "e": 5.632,
+     "idx": 1002005,
+     "ln": 2
+    },
+    {
+     "w": "that",
+     "s": 5.632,
+     "e": 5.852,
+     "idx": 1002006,
+     "ln": 2
+    },
+    {
+     "w": "has",
+     "s": 5.852,
+     "e": 6.029,
+     "idx": 1002007,
+     "ln": 2
+    },
+    {
+     "w": "to",
+     "s": 6.029,
+     "e": 6.161,
+     "idx": 1002008,
+     "ln": 2
+    },
+    {
+     "w": "wrap",
+     "s": 6.161,
+     "e": 6.382,
+     "idx": 1002009,
+     "ln": 2
+    },
+    {
+     "w": "onto",
+     "s": 6.382,
+     "e": 6.602,
+     "idx": 1002010,
+     "ln": 2
+    },
+    {
+     "w": "two",
+     "s": 6.602,
+     "e": 6.779,
+     "idx": 1002011,
+     "ln": 2
+    },
+    {
+     "w": "rows",
+     "s": 6.779,
+     "e": 7.0,
+     "idx": 1002012,
+     "ln": 2
+    },
+    {
+     "w": "\u00dcn\u00efcode",
+     "s": 8.0,
+     "e": 8.75,
+     "idx": 1003000,
+     "ln": 3
+    },
+    {
+     "w": "\ud83c\udf89",
+     "s": 8.75,
+     "e": 8.937,
+     "idx": 1003001,
+     "ln": 3
+    },
+    {
+     "w": "works",
+     "s": 8.937,
+     "e": 9.5,
+     "idx": 1003002,
+     "ln": 3
+    }
+   ]
+  },
+  {
+   "name": "cap_lines_16x9_lower",
+   "kind": "captions",
+   "w": 1920,
+   "h": 1080,
+   "captions": {
+    "presetId": "clean_white",
+    "position": "bottom",
+    "marginVPct": 7,
+    "size": 5.5,
+    "wordsPerLine": 6
+   },
+   "words": [
+    {
+     "w": "Welcome",
+     "s": 0.0,
+     "e": 0.514,
+     "idx": 1000000,
+     "ln": 0
+    },
+    {
+     "w": "back",
+     "s": 0.514,
+     "e": 0.835,
+     "idx": 1000001,
+     "ln": 0
+    },
+    {
+     "w": "to",
+     "s": 0.835,
+     "e": 1.028,
+     "idx": 1000002,
+     "ln": 0
+    },
+    {
+     "w": "the",
+     "s": 1.028,
+     "e": 1.285,
+     "idx": 1000003,
+     "ln": 0
+    },
+    {
+     "w": "channel",
+     "s": 1.285,
+     "e": 1.8,
+     "idx": 1000004,
+     "ln": 0
+    },
+    {
+     "w": "today",
+     "s": 1.8,
+     "e": 2.16,
+     "idx": 1001000,
+     "ln": 1
+    },
+    {
+     "w": "we",
+     "s": 2.16,
+     "e": 2.34,
+     "idx": 1001001,
+     "ln": 1
+    },
+    {
+     "w": "test",
+     "s": 2.34,
+     "e": 2.64,
+     "idx": 1001002,
+     "ln": 1
+    },
+    {
+     "w": "manual",
+     "s": 2.64,
+     "e": 3.06,
+     "idx": 1001003,
+     "ln": 1
+    },
+    {
+     "w": "captions",
+     "s": 3.06,
+     "e": 3.6,
+     "idx": 1001004,
+     "ln": 1
+    },
+    {
+     "w": "A",
+     "s": 4.0,
+     "e": 4.088,
+     "idx": 1002000,
+     "ln": 2
+    },
+    {
+     "w": "much",
+     "s": 4.088,
+     "e": 4.308,
+     "idx": 1002001,
+     "ln": 2
+    },
+    {
+     "w": "longer",
+     "s": 4.308,
+     "e": 4.617,
+     "idx": 1002002,
+     "ln": 2
+    },
+    {
+     "w": "imported",
+     "s": 4.617,
+     "e": 5.014,
+     "idx": 1002003,
+     "ln": 2
+    },
+    {
+     "w": "subtitle",
+     "s": 5.014,
+     "e": 5.411,
+     "idx": 1002004,
+     "ln": 2
+    },
+    {
+     "w": "line",
+     "s": 5.411,
+     "e": 5.632,
+     "idx": 1002005,
+     "ln": 2
+    },
+    {
+     "w": "that",
+     "s": 5.632,
+     "e": 5.852,
+     "idx": 1002006,
+     "ln": 2
+    },
+    {
+     "w": "has",
+     "s": 5.852,
+     "e": 6.029,
+     "idx": 1002007,
+     "ln": 2
+    },
+    {
+     "w": "to",
+     "s": 6.029,
+     "e": 6.161,
+     "idx": 1002008,
+     "ln": 2
+    },
+    {
+     "w": "wrap",
+     "s": 6.161,
+     "e": 6.382,
+     "idx": 1002009,
+     "ln": 2
+    },
+    {
+     "w": "onto",
+     "s": 6.382,
+     "e": 6.602,
+     "idx": 1002010,
+     "ln": 2
+    },
+    {
+     "w": "two",
+     "s": 6.602,
+     "e": 6.779,
+     "idx": 1002011,
+     "ln": 2
+    },
+    {
+     "w": "rows",
+     "s": 6.779,
+     "e": 7.0,
+     "idx": 1002012,
+     "ln": 2
+    },
+    {
+     "w": "\u00dcn\u00efcode",
+     "s": 8.0,
+     "e": 8.75,
+     "idx": 1003000,
+     "ln": 3
+    },
+    {
+     "w": "\ud83c\udf89",
+     "s": 8.75,
+     "e": 8.937,
+     "idx": 1003001,
+     "ln": 3
+    },
+    {
+     "w": "works",
+     "s": 8.937,
+     "e": 9.5,
+     "idx": 1003002,
+     "ln": 3
+    }
+   ]
+  },
+  {
+   "name": "cap_16x9_margin_aspect",
+   "kind": "captions",
+   "w": 1920,
+   "h": 1080,
+   "captions": {
+    "presetId": "clean_white",
+    "marginVPct": 4,
+    "wordsPerLine": 5
+   },
+   "words": [
+    {
+     "w": "Energy,",
+     "s": 0.0,
+     "e": 0.44,
+     "i": 0,
+     "spk": 0
+    },
+    {
+     "w": "capital,",
+     "s": 0.48,
+     "e": 0.8,
+     "i": 1,
+     "spk": 0
+    },
+    {
+     "w": "whatever.",
+     "s": 0.84,
+     "e": 1.2,
+     "i": 2,
+     "spk": 0
+    },
+    {
+     "w": "I",
+     "s": 1.24,
+     "e": 1.6,
+     "i": 3,
+     "spk": 0
+    },
+    {
+     "w": "mean",
+     "s": 1.64,
+     "e": 1.96,
+     "i": 4,
+     "spk": 0
+    },
+    {
+     "w": "like",
+     "s": 2.0,
+     "e": 2.32,
+     "i": 5,
+     "spk": 0
+    },
+    {
+     "w": "the",
+     "s": 2.36,
+     "e": 2.8,
+     "i": 6,
+     "spk": 0
+    },
+    {
+     "w": "whole",
+     "s": 2.84,
+     "e": 3.2,
+     "i": 7,
+     "spk": 1
+    },
+    {
+     "w": "thing",
+     "s": 3.24,
+     "e": 3.6,
+     "i": 8,
+     "spk": 1
+    },
+    {
+     "w": "is",
+     "s": 3.64,
+     "e": 4.04,
+     "i": 9,
+     "spk": 1
+    },
+    {
+     "w": "just",
+     "s": 4.08,
+     "e": 4.4,
+     "i": 10,
+     "spk": 1
+    },
+    {
+     "w": "momentum",
+     "s": 4.44,
+     "e": 4.76,
+     "i": 11,
+     "spk": 1
+    },
+    {
+     "w": "honestly",
+     "s": 4.8,
+     "e": 5.12,
+     "i": 12,
+     "spk": 1
+    }
+   ]
+  },
+  {
+   "name": "cap_1x1_margin_aspect",
+   "kind": "captions",
+   "w": 1080,
+   "h": 1080,
+   "captions": {
+    "presetId": "clean_white",
+    "marginVPct": 4,
+    "wordsPerLine": 4
+   },
+   "words": [
+    {
+     "w": "Energy,",
+     "s": 0.0,
+     "e": 0.44,
+     "i": 0,
+     "spk": 0
+    },
+    {
+     "w": "capital,",
+     "s": 0.48,
+     "e": 0.8,
+     "i": 1,
+     "spk": 0
+    },
+    {
+     "w": "whatever.",
+     "s": 0.84,
+     "e": 1.2,
+     "i": 2,
+     "spk": 0
+    },
+    {
+     "w": "I",
+     "s": 1.24,
+     "e": 1.6,
+     "i": 3,
+     "spk": 0
+    },
+    {
+     "w": "mean",
+     "s": 1.64,
+     "e": 1.96,
+     "i": 4,
+     "spk": 0
+    },
+    {
+     "w": "like",
+     "s": 2.0,
+     "e": 2.32,
+     "i": 5,
+     "spk": 0
+    },
+    {
+     "w": "the",
+     "s": 2.36,
+     "e": 2.8,
+     "i": 6,
+     "spk": 0
+    },
+    {
+     "w": "whole",
+     "s": 2.84,
+     "e": 3.2,
+     "i": 7,
+     "spk": 1
+    },
+    {
+     "w": "thing",
+     "s": 3.24,
+     "e": 3.6,
+     "i": 8,
+     "spk": 1
+    },
+    {
+     "w": "is",
+     "s": 3.64,
+     "e": 4.04,
+     "i": 9,
+     "spk": 1
+    },
+    {
+     "w": "just",
+     "s": 4.08,
+     "e": 4.4,
+     "i": 10,
+     "spk": 1
+    },
+    {
+     "w": "momentum",
+     "s": 4.44,
+     "e": 4.76,
+     "i": 11,
+     "spk": 1
+    },
+    {
+     "w": "honestly",
+     "s": 4.8,
+     "e": 5.12,
+     "i": 12,
+     "spk": 1
+    }
+   ]
+  },
+  {
+   "name": "cap_4x5_margin_aspect",
+   "kind": "captions",
+   "w": 1080,
+   "h": 1350,
+   "captions": {
+    "presetId": "clean_white",
+    "marginVPct": 4,
+    "wordsPerLine": 4
+   },
+   "words": [
+    {
+     "w": "Energy,",
+     "s": 0.0,
+     "e": 0.44,
+     "i": 0,
+     "spk": 0
+    },
+    {
+     "w": "capital,",
+     "s": 0.48,
+     "e": 0.8,
+     "i": 1,
+     "spk": 0
+    },
+    {
+     "w": "whatever.",
+     "s": 0.84,
+     "e": 1.2,
+     "i": 2,
+     "spk": 0
+    },
+    {
+     "w": "I",
+     "s": 1.24,
+     "e": 1.6,
+     "i": 3,
+     "spk": 0
+    },
+    {
+     "w": "mean",
+     "s": 1.64,
+     "e": 1.96,
+     "i": 4,
+     "spk": 0
+    },
+    {
+     "w": "like",
+     "s": 2.0,
+     "e": 2.32,
+     "i": 5,
+     "spk": 0
+    },
+    {
+     "w": "the",
+     "s": 2.36,
+     "e": 2.8,
+     "i": 6,
+     "spk": 0
+    },
+    {
+     "w": "whole",
+     "s": 2.84,
+     "e": 3.2,
+     "i": 7,
+     "spk": 1
+    },
+    {
+     "w": "thing",
+     "s": 3.24,
+     "e": 3.6,
+     "i": 8,
+     "spk": 1
+    },
+    {
+     "w": "is",
+     "s": 3.64,
+     "e": 4.04,
+     "i": 9,
+     "spk": 1
+    },
+    {
+     "w": "just",
+     "s": 4.08,
+     "e": 4.4,
+     "i": 10,
+     "spk": 1
+    },
+    {
+     "w": "momentum",
+     "s": 4.44,
+     "e": 4.76,
+     "i": 11,
+     "spk": 1
+    },
+    {
+     "w": "honestly",
+     "s": 4.8,
+     "e": 5.12,
+     "i": 12,
+     "spk": 1
+    }
+   ]
   }
  ],
  "badge": [
@@ -3545,7 +4644,7 @@
      },
      "headlineBar": {
       "enabled": true,
-      "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT"
+      "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT"
      },
      "headlineStyle": {
       "auto": true,
@@ -3566,7 +4665,7 @@
       "type": "headline",
       "enabled": true,
       "z": 70,
-      "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT",
+      "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT",
       "placement": "fit_top_band",
       "style": {
        "preset": "export_bar",
@@ -3611,7 +4710,7 @@
      },
      "headlineBar": {
       "enabled": true,
-      "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT"
+      "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT"
      },
      "headlineStyle": {
       "auto": true,
@@ -3632,7 +4731,7 @@
       "type": "headline",
       "enabled": true,
       "z": 70,
-      "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT",
+      "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT",
       "placement": "fit_top_band",
       "style": {
        "preset": "export_bar",
@@ -3676,7 +4775,7 @@
      },
      "headlineBar": {
       "enabled": true,
-      "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT"
+      "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT"
      },
      "headlineStyle": {
       "auto": true,
@@ -3697,7 +4796,7 @@
       "type": "headline",
       "enabled": true,
       "z": 70,
-      "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT",
+      "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT",
       "placement": "fit_top_band",
       "style": {
        "preset": "export_bar",
@@ -3741,7 +4840,7 @@
      },
      "headlineBar": {
       "enabled": true,
-      "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT"
+      "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT"
      },
      "headlineStyle": {
       "auto": true,
@@ -3762,7 +4861,7 @@
       "type": "headline",
       "enabled": true,
       "z": 70,
-      "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT",
+      "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT",
       "placement": "fit_top_band",
       "style": {
        "preset": "export_bar",
@@ -3806,7 +4905,7 @@
      },
      "headlineBar": {
       "enabled": true,
-      "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT"
+      "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT"
      },
      "headlineStyle": {
       "auto": true,
@@ -3827,7 +4926,7 @@
       "type": "headline",
       "enabled": true,
       "z": 70,
-      "text": "LET'S JUST DIP—VALORANT ISN'T WORTH IT",
+      "text": "LET'S JUST DIP\u2014VALORANT ISN'T WORTH IT",
       "placement": "fit_top_band",
       "style": {
        "preset": "export_bar",

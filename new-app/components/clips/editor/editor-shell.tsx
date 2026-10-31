@@ -24,6 +24,7 @@ import { keepSegments, outputDurationMs, displayDurationMs, displayPositionMs } 
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
+import { CaptionLinesPanel } from '@/components/clips/editor/caption-lines-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { FindClipsInVideoButton } from '@/components/clips/editor/find-clips-in-video-button'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
@@ -209,6 +210,7 @@ export function EditorShell({
   const [auditionEdits, setAuditionEdits] = useState<ClipEditsV2 | null>(null)
   // E4: Text / Color panels follow the timeline selection; ✨ Producer pop-over.
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null)
+  const [selectedCaptionLineId, setSelectedCaptionLineId] = useState<string | null>(null)
   const [colorTarget, setColorTarget] = useState<ColorTarget>({ kind: 'video' })
   // G1a: one selection shared by the canvas, the timeline and the Properties inspector.
   const [canvasSel, setCanvasSel] = useState<{ target: KeyframeTarget; label: string } | null>(null)
@@ -868,6 +870,8 @@ export function EditorShell({
         setColorTarget({ kind: 'video' })
       }
       if (item?.lane === 'text' && item.id !== 'hook') setSelectedTextId(item.id)
+      // G3a: a caption line selected on the Captions row is highlighted in Captions → Manual captions.
+      if (item?.lane === 'captions') setSelectedCaptionLineId(item.id)
       // G1a: the timeline selection drives the canvas box + Properties too.
       setSelVideoSeg(
         item?.lane === 'video' && item.srcInMs != null && item.srcOutMs != null ? { srcInMs: item.srcInMs, srcOutMs: item.srcOutMs } : null,
@@ -1444,6 +1448,16 @@ export function EditorShell({
           onChange={setCaptions}
           onApplyBrand={() => void applyBrand()}
           onSaveClipTemplate={() => void saveClipTemplate()}
+        />
+        <CaptionLinesPanel
+          edits={edits}
+          words={editorWords}
+          playheadMs={outputMs}
+          durationMs={outDur}
+          selectedId={selectedCaptionLineId}
+          onSelect={setSelectedCaptionLineId}
+          onEdits={(e) => setEdits(e)}
+          onSeekOutput={seekOutput}
         />
         </EditorPanelErrorBoundary>
       </div>

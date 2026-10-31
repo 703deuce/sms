@@ -699,7 +699,8 @@ export function PreviewStage({
     !cropPreview &&
     !letterboxPreview
   const captionWords = useMemo(() => {
-    if (previewWords?.length) return previewWords.map((w) => ({
+    // G3a: manual caption lines win over any preview word list (export: edits_render burn_words).
+    if (previewWords?.length && !edits.captionLines?.length) return previewWords.map((w) => ({
       ...w,
       w: typeof w.w === 'string' ? w.w : String(w.w ?? ''),
     }))

@@ -1,5 +1,6 @@
 import type { CaptionSourceWord } from '@/lib/clips/caption-words'
 import { buildCaptionWords, captionWordsToClipWords } from '@/lib/clips/caption-words'
+import { captionLineClipWords } from '@/lib/clips/editor/caption-lines'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { normalizeSectionOrder, outputDurationMs } from '@/lib/clips/edits'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
@@ -36,5 +37,7 @@ export function editorPreviewCaptionClipWords(
   edits: ClipEditsV2,
 ): ReturnType<typeof captionWordsToClipWords> {
   const previewEdits = editorPreviewEdits(edits, words)
+  // G3a: manual caption lines replace the transcript words in the captions (export: edits_render).
+  if (previewEdits.captionLines?.length) return captionLineClipWords(previewEdits.captionLines)
   return captionWordsToClipWords(buildCaptionWords(words, previewEdits))
 }

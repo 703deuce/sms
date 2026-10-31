@@ -22,6 +22,7 @@ import {
 import { hasColor, normalizeColorEdits, type ClipColorEdits } from '@/lib/clips/editor/color'
 import { normalizeSegmentSpeeds, speedWarpPieces, warpedDurationMs, warpMs, type SegmentSpeed } from '@/lib/clips/editor/speed'
 import { normalizeTextItems, type TextItem } from '@/lib/clips/editor/text-items'
+import { normalizeCaptionLinesEdits, type CaptionLine } from '@/lib/clips/editor/caption-lines'
 import {
   normalizeMediaSources,
   normalizeMulticam,
@@ -188,6 +189,8 @@ export type ClipEditsV2 = {
   tracks?: Track[]
   /** E4 text items on the Text lane (output ms; keyframe target `text:<id>`). */
   textItems?: TextItem[]
+  /** G3a manual caption lines (typed / SRT-VTT import), output ms; replace transcript words in the burned captions. */
+  captionLines?: CaptionLine[]
   /** E4 color looks (Adjust + Filters): whole video, per Video item (source range), per B-roll id. */
   color?: ClipColorEdits
   /** E4 per-item speed 0.25–4× over SOURCE ranges (pitch-preserved; export post-step warp). */
@@ -476,6 +479,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.layerProps?.length) payload.layerProps = null
   if (!edits.tracks?.length) payload.tracks = null
   if (!edits.textItems?.length) payload.textItems = null
+  if (!edits.captionLines?.length) payload.captionLines = null
   if (!edits.color) payload.color = null
   if (!edits.segmentSpeeds?.length) payload.segmentSpeeds = null
   if (!edits.sources?.length) payload.sources = null
@@ -595,6 +599,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     layerProps: normalizeLayerProps(o.layerProps),
     tracks: normalizeTracks(o.tracks),
     textItems: normalizeTextItems(o.textItems),
+    captionLines: normalizeCaptionLinesEdits(o.captionLines),
     color: normalizeColorEdits(o.color),
     segmentSpeeds: normalizeSegmentSpeeds(o.segmentSpeeds),
     ...normalizeSourceFields(o),
@@ -689,6 +694,8 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     !edits.tracks?.length && // G1b: track order / hidden tracks change the frames.
     // E4: text / color / per-item speed change the frames or the length.
     !edits.textItems?.length &&
+    // G3a: manual caption lines replace the preview's transcript captions.
+    !edits.captionLines?.length &&
     !hasColor(edits.color) &&
     !edits.segmentSpeeds?.length &&
     // E5: other sources replace frames / sound.

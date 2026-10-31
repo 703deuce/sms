@@ -71,7 +71,8 @@ export function CaptionOverlay({
   const fitCfg = useMemo(() => captionFitConfigForEdits(edits.captions ?? {}, t6Caps, aspect), [edits.captions, t6Caps, aspect])
   const wpl = Math.max(1, fitCfg.wordsPerLine)
   const caseMode = (cap.case || preset.case) as string
-  const exportPlayH = exportPixelSize(edits.aspectRatio ?? '9:16', '720p').height
+  const exportPlay = exportPixelSize(edits.aspectRatio ?? '9:16', '720p')
+  const exportPlayH = exportPlay.height
   const assScale = boxHeightPx > 0 ? boxHeightPx / exportPlayH : 1
   const emRatio = assEmPerFontsize(fitCfg.font)
   const fontSize = Math.max(12, ((boxHeightPx * fitCfg.fontsize) / fitCfg.refH) * emRatio)
@@ -90,10 +91,20 @@ export function CaptionOverlay({
     lastMissLog.current = now
     logEditorDecision('caption_active_miss', { timeMs: tMs, wordCount: words.length })
   }, [activeIdx, currentTimeSec, words])
-  const lineStart = activeIdx >= 0 ? Math.floor(activeIdx / wpl) * wpl : 0
+  // G3a: manual caption lines (`ln`) show one caption per line, like the export chunk_words.
+  const byLine = words.length > 0 && words.every((w) => (w as { ln?: number }).ln !== undefined)
+  const lnOf = (i: number) => (words[i] as { ln?: number } | undefined)?.ln
+  let lineStart = activeIdx >= 0 ? Math.floor(activeIdx / wpl) * wpl : 0
+  let lineEnd = lineStart + wpl
+  if (byLine && activeIdx >= 0) {
+    lineStart = activeIdx
+    while (lineStart > 0 && lnOf(lineStart - 1) === lnOf(activeIdx)) lineStart--
+    lineEnd = activeIdx + 1
+    while (lineEnd < words.length && lnOf(lineEnd) === lnOf(activeIdx)) lineEnd++
+  }
   const lineWords = useMemo(
-    () => words.slice(lineStart, lineStart + wpl),
-    [lineStart, wpl, words],
+    () => words.slice(lineStart, lineEnd),
+    [lineStart, lineEnd, words],
   )
   const lineFit = useMemo(
     () =>
@@ -118,8 +129,8 @@ export function CaptionOverlay({
   const marginVPct = templateCaptionRect
     ? templateCaptionBottomPct(templateCaptionRect)
     : position === 'top'
-      ? previewCaptionTopPct(cap, exportPlayH)
-      : previewCaptionBottomPct(cap, exportPlayH)
+      ? previewCaptionTopPct(cap, exportPlayH, exportPlay.width)
+      : previewCaptionBottomPct(cap, exportPlayH, exportPlay.width)
   const posStyle = positionStyle(position, marginVPct)
   const captionPosClass = positionClass(position)
   const emojiPosClass =

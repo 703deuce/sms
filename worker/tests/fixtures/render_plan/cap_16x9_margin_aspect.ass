@@ -1,0 +1,27 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Cap,Poppins ExtraBold,65,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,1,4,0,2,96,96,65,1
+Style: Box,Poppins ExtraBold,65,&H00000000&,&H00000000&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,3,4,0,2,96,96,65,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:00.48,Cap,,0,0,0,,{\c&H00EB6325&}Energy, {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}capital, {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}whatever. {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}I {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}mean
+Dialogue: 1,0:00:00.48,0:00:00.84,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}Energy, {\c&H00EB6325&}capital, {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}whatever. {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}I {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}mean
+Dialogue: 1,0:00:00.84,0:00:01.24,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}Energy, {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}capital, {\c&H00EB6325&}whatever. {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}I {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}mean
+Dialogue: 1,0:00:01.24,0:00:01.64,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}Energy, {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}capital, {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}whatever. {\c&H00EB6325&}I {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}mean
+Dialogue: 1,0:00:01.64,0:00:01.96,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}Energy, {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}capital, {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}whatever. {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}I {\c&H00EB6325&}mean
+Dialogue: 1,0:00:02.00,0:00:02.36,Cap,,0,0,0,,{\c&H00EB6325&}Like {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}the {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}whole {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}thing {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}is
+Dialogue: 1,0:00:02.36,0:00:02.84,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}Like {\c&H00EB6325&}the {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}whole {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}thing {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}is
+Dialogue: 1,0:00:02.84,0:00:03.24,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}Like {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}the {\c&H00EB6325&}whole {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}thing {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}is
+Dialogue: 1,0:00:03.24,0:00:03.64,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}Like {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}the {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}whole {\c&H00EB6325&}thing {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}is
+Dialogue: 1,0:00:03.64,0:00:04.04,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}Like {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}the {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}whole {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}thing {\c&H00EB6325&}is
+Dialogue: 1,0:00:04.08,0:00:04.44,Cap,,0,0,0,,{\c&H00EB6325&}Just {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}momentum {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}honestly
+Dialogue: 1,0:00:04.44,0:00:04.80,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}Just {\c&H00EB6325&}momentum {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}honestly
+Dialogue: 1,0:00:04.80,0:00:05.12,Cap,,0,0,0,,{\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}Just {\1c&H00FFFFFF&\3c&H00000000&\bord4\shad0}momentum {\c&H00EB6325&}honestly

@@ -143,6 +143,16 @@ def margin_lr_px(play_w: int) -> int:
 def chunk_words(words: list[dict], wpl: int) -> list[list[dict]]:
     out: list[list[dict]] = []
     cur: list[dict] = []
+    if words and all("ln" in w for w in words):
+        # G3a: manual caption lines — one caption per typed / imported line (wordsPerLine ignored).
+        for w in words:
+            if cur and cur[-1]["ln"] != w["ln"]:
+                out.append(cur)
+                cur = []
+            cur.append(w)
+        if cur:
+            out.append(cur)
+        return out
     for w in words:
         if cur and len(cur) >= wpl:
             out.append(cur)
@@ -457,7 +467,7 @@ def build_ass(
     play_w: int = 720,
     play_h: int = 1280,
 ) -> None:
-    edits_captions = clamp_caption_export_style(edits_captions if isinstance(edits_captions, dict) else {}, play_h)
+    edits_captions = clamp_caption_export_style(edits_captions if isinstance(edits_captions, dict) else {}, play_h, play_w)
     preset_id = str(edits_captions.get("presetId") or edits_captions.get("preset") or "bold_pop")
     if preset_id.startswith("cp"):
         edits_captions = cp_effective_captions(edits_captions)
