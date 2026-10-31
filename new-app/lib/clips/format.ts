@@ -8,7 +8,7 @@ export function formatTimecode(ms: number) {
 }
 
 export function formatDur(ms: number) {
-  const s = Math.round(ms / 1000)
+  const s = Math.floor(ms / 1000)
   return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`
 }
 

@@ -108,6 +108,15 @@ type Drag =
 
 const SKIP = 'button, a, input, textarea, select, [role="button"], [role="slider"], [data-canvas-skip]'
 
+/** Keep corner handles inside the stage (main video fills the frame; handles were clipped). */
+export function insetCanvasHandle(p: Pt, boxW: number, boxH: number, inset = 10): Pt {
+  if (boxW <= inset * 2 || boxH <= inset * 2) return p
+  return {
+    x: Math.min(boxW - inset, Math.max(inset, p.x)),
+    y: Math.min(boxH - inset, Math.max(inset, p.y)),
+  }
+}
+
 export function CanvasSelectionOverlay({
   edits,
   baseEdits,
@@ -375,16 +384,22 @@ export function CanvasSelectionOverlay({
         {quad && rot && canEdit && !showCrop ? <line x1={rot.stem.x} y1={rot.stem.y} x2={rot.at.x} y2={rot.at.y} stroke="#fff" strokeWidth={1} /> : null}
       </svg>
       {quad && canEdit && !showCrop
-        ? quad.map((p, i) => (
+        ? quad.map((p, i) => {
+            const at =
+              selected === 'video' && box
+                ? insetCanvasHandle(p, box.clientWidth, box.clientHeight)
+                : p
+            return (
             <div
               key={i}
               role="presentation"
               className="pointer-events-auto absolute size-3 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize rounded-sm border border-black/60 bg-white"
-              style={{ left: p.x, top: p.y }}
+              style={{ left: at.x, top: at.y }}
               onPointerDown={startHandle('scale')}
               data-testid="canvas-handle-scale"
             />
-          ))
+            )
+          })
         : null}
       {quad && rot && canEdit && !showCrop ? (
         <div

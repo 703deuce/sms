@@ -12,7 +12,6 @@ import { previewExportMatchesDefault } from '@/lib/clips/export-edits-match'
 import { CLIP_PREVIEW_EXPORT_ASPECT, CLIP_PREVIEW_EXPORT_RESOLUTION } from '@/lib/clips/export-preview-reuse'
 import { normalizeEdits, outputDurationMs, sanitizeCutRangesForTrim } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
-import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { mergeEditsPatch, getClipEditorWords } from '@/lib/server/clips/clip-detail'
 import { logClipEvent } from '@/lib/server/clips/events'
 import { recordStreamClipFeedback } from '@/lib/server/clips/stream-feedback'
@@ -24,6 +23,8 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
+import { clipExportMediaReady } from '@/lib/clips/clip-export-media'
+import { isFullVideoSettings } from '@/lib/clips/full-video'
 
 const resolutionSchema = z.preprocess((v) => {
   if (v === 720 || v === '720') return '720p'
@@ -49,9 +50,21 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   try {
     const { id: clipId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
-    const clip = await getClipForWorkspace(workspaceId, clipId)
-    if (!clip?.previewKey) {
-      console.warn('[clipper:export] blocked missing preview', { clipId, workspaceId })
+    const prisma = getPrisma()
+    const clip = await prisma.clip.findFirst({
+      where: { id: clipId, workspaceId, deletedAt: null },
+      include: {
+        project: {
+          select: { settings: true, proxyKey: true, upload: { select: { key: true } } },
+        },
+      },
+    })
+    if (!clip || !clipExportMediaReady(clip, clip.project)) {
+      console.warn('[clipper:export] blocked missing preview', {
+        clipId,
+        workspaceId,
+        fullVideo: isFullVideoSettings(clip?.project?.settings),
+      })
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
@@ -143,7 +156,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       skipPolishForPreviewReuse,
     })
 
-    const prisma = getPrisma()
     if (!skipPolishForPreviewReuse) {
       edits = {
         ...edits,
@@ -156,6 +168,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
 
     if (
+      clip.previewKey &&
       exportSfx === 'off' &&
       canReuseClipPreviewForExport({
         aspect,
