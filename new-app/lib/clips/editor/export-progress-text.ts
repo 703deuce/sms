@@ -73,7 +73,16 @@ export function readRenderDetail(raw: unknown): ExportRenderDetail | null {
 }
 
 /** FV4c: an in-flight render the export dialog should re-attach to (from GET …/active-render). */
-export type ActiveRenderResume = { renderId: string; status: 'QUEUED' | 'RENDERING' }
+export type ActiveRenderResume = {
+  renderId: string
+  status: 'QUEUED' | 'RENDERING'
+  /** FV4d: the render's settings, so the dialog can switch its selection to match. */
+  resolution: '720p' | '1080p' | null
+  aspectRatio: '9:16' | '4:5' | '1:1' | '16:9' | null
+}
+
+const RESUME_RESOLUTIONS = new Set(['720p', '1080p'])
+const RESUME_ASPECTS = new Set(['9:16', '4:5', '1:1', '16:9'])
 
 /** FV4c: parse the active-render response defensively; anything unexpected means "nothing to resume". */
 export function activeRenderToResume(data: unknown): ActiveRenderResume | null {
@@ -83,5 +92,53 @@ export function activeRenderToResume(data: unknown): ActiveRenderResume | null {
   const { id, status } = render as { id?: unknown; status?: unknown }
   if (typeof id !== 'string' || !id) return null
   if (status !== 'QUEUED' && status !== 'RENDERING') return null
-  return { renderId: id, status }
+  const { resolution, aspectRatio } = render as { resolution?: unknown; aspectRatio?: unknown }
+  return {
+    renderId: id,
+    status,
+    resolution: typeof resolution === 'string' && RESUME_RESOLUTIONS.has(resolution) ? (resolution as '720p' | '1080p') : null,
+    aspectRatio:
+      typeof aspectRatio === 'string' && RESUME_ASPECTS.has(aspectRatio)
+        ? (aspectRatio as ActiveRenderResume['aspectRatio'])
+        : null,
+  }
+}
+
+/** FV4d: max time the Export button shows "Checking…" while the active-render lookup is pending. */
+export const RESUME_LOOKUP_MAX_WAIT_MS = 2000
+
+export type ExportButtonState = {
+  label: 'Checking…' | 'Rendering…' | 'Exporting…' | 'Export MP4'
+  disabled: boolean
+  /** Shown under the button when another resolution may be started next to the running render. */
+  note: string | null
+  /** True when Export MP4 is blocked by the render already in flight (same resolution). */
+  blockedByInFlight: boolean
+}
+
+/**
+ * FV4d: Export button state. A render in flight blocks Export for its own resolution only (the
+ * server still dedupes same-hash renders); another resolution may be started, with a note.
+ */
+export function exportButtonState(input: {
+  lookupPending: boolean
+  busy: boolean
+  renderInFlight: boolean
+  inFlightResolution: string | null
+  selectedResolution: string
+}): ExportButtonState {
+  const otherResolution =
+    input.renderInFlight &&
+    input.inFlightResolution != null &&
+    input.inFlightResolution !== input.selectedResolution
+  const blockedByInFlight = input.renderInFlight && !otherResolution
+  const note = otherResolution
+    ? `A ${input.inFlightResolution} export is rendering — you can start another resolution.`
+    : null
+  if (blockedByInFlight) return { label: 'Rendering…', disabled: true, note, blockedByInFlight }
+  if (input.lookupPending && !input.renderInFlight) {
+    return { label: 'Checking…', disabled: true, note, blockedByInFlight }
+  }
+  if (input.busy) return { label: 'Exporting…', disabled: true, note, blockedByInFlight }
+  return { label: 'Export MP4', disabled: false, note, blockedByInFlight }
 }

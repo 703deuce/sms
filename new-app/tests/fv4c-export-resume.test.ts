@@ -49,6 +49,8 @@ describe('FV4c activeRenderToResume', () => {
     expect(activeRenderToResume({ render: { id: 'rnd_1', status: 'RENDERING' } })).toEqual({
       renderId: 'rnd_1',
       status: 'RENDERING',
+      resolution: null,
+      aspectRatio: null,
     })
     expect(activeRenderToResume({ render: { id: 'rnd_2', status: 'QUEUED' } })?.status).toBe('QUEUED')
     expect(isRenderInFlight('rnd_1', 'RENDERING')).toBe(true)
