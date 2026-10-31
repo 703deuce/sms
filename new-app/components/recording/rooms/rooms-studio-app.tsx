@@ -698,7 +698,8 @@ export function RoomsStudioApp({
                       method: 'POST',
                     })
                     const json = await res.json()
-                    if (json.data?.scriptUrl) router.push(json.data.scriptUrl)
+                    const nextUrl = json.data?.editorUrl ?? json.data?.clipsUrl ?? json.data?.scriptUrl
+                    if (nextUrl) router.push(nextUrl)
                     else if (json.error) setNetworkBanner(json.error)
                   } else router.push(`/app/rooms/${sessionId}/upload`)
                 }}
@@ -871,7 +872,8 @@ export function RoomsStudioApp({
                     body: JSON.stringify({ preferCloudBackup: chooseCloudBackup }),
                   })
                   const json = await res.json()
-                  if (json.data?.scriptUrl) router.push(json.data.scriptUrl)
+                  const nextUrl = json.data?.editorUrl ?? json.data?.clipsUrl ?? json.data?.scriptUrl
+                  if (nextUrl) router.push(nextUrl)
                   else setNetworkBanner(json.error ?? 'Import failed')
                 }}
               >

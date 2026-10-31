@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react'
 import type { BrollItem } from '@/lib/clips/broll'
 import { BROLL_MIN_MS } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { keepSegments, normalizeSectionOrder, outputDurationMs, wordDisplayText } from '@/lib/clips/edits'
+import { keepSegments, normalizeSectionOrder, wordDisplayText } from '@/lib/clips/edits'
 import { clampTrimToExtendedBounds, clampTrimWithMediaBounds, extendedTrimLimits } from '@/lib/clips/trim-bounds'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
@@ -14,6 +15,26 @@ import { layoutModeAtSourceMs } from '@/lib/clips/layout-segments'
 import { shotIndexAt } from '@/lib/clips/crop-shots'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 import { AudioWaveformLane } from '@/components/clips/editor/audio-waveform-lane'
+import {
+  TIMELINE_DEFAULT_PX_PER_SEC,
+  TIMELINE_MIN_LABEL_PX,
+  anchoredScrollLeft,
+  autoscrollLeftForPlayhead,
+  fitPxPerSec,
+  initialPxPerSec,
+  outputMsToSourceMs,
+  pxPerSecToSlider,
+  sliderToPxPerSec,
+  sourceMsToTrackPct,
+  trackWidthPx,
+  zoomBy,
+  zoomPercent,
+} from '@/lib/clips/editor/timeline-zoom'
+
+/** Lane label column (w-14 = 56px) + container left padding (p-2 = 8px). */
+const TRACK_OFFSET_PX = 64
+/** Label column + left and right padding. */
+const TRACK_EXTRA_PX = 72
 
 export function Timeline({
   edits,
@@ -67,20 +88,112 @@ export function Timeline({
     clampTrimWithMediaBounds(clipStartMs, clipEndMs, next, mediaMinMs, mediaMaxMs, trimLimits)
   const aiInPct = ((clipStartMs - previewEdits.trim.in) / span) * 100
   const aiOutPct = ((clipEndMs - previewEdits.trim.in) / span) * 100
-  const outDur = outputDurationMs(previewEdits)
-  const widthPx = Math.max(640, Math.round(span / 20))
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [viewportPx, setViewportPx] = useState(0)
+  const [pxPerSec, setPxPerSec] = useState<number | null>(null)
+  const pendingScrollRef = useRef<number | null>(null)
+  const trackViewportPx = Math.max(0, viewportPx - TRACK_EXTRA_PX)
+  const effectivePxPerSec = pxPerSec ?? TIMELINE_DEFAULT_PX_PER_SEC
+  const widthPx = trackWidthPx(span, effectivePxPerSec, trackViewportPx)
+  const widthRef = useRef(widthPx)
+  widthRef.current = widthPx
   const captionByI = new Map(buildCaptionWords(words, previewEdits).map((c) => [c.i, c]))
 
-  const outputToSource = (outMs: number) => {
-    const segs = keepSegments(previewEdits.trim.in, previewEdits.trim.out, previewEdits.cutRanges)
-    let acc = 0
-    for (const [a, b] of segs) {
-      const len = b - a
-      if (acc + len >= outMs) return a + (outMs - acc)
-      acc += len
-    }
-    return previewEdits.trim.out
+  const outputToSource = (outMs: number) =>
+    outputMsToSourceMs(
+      outMs,
+      keepSegments(previewEdits.trim.in, previewEdits.trim.out, previewEdits.cutRanges),
+      previewEdits.trim.out,
+    )
+  // Playhead is drawn on the SOURCE-span track (same space as word chips), not output %.
+  const playheadPct = sourceMsToTrackPct(outputToSource(outputMs), previewEdits.trim.in, span)
+  const playheadPx = (playheadPct / 100) * widthPx
+  const playheadPxRef = useRef(playheadPx)
+  playheadPxRef.current = playheadPx
+  const pxPerSecRef = useRef(effectivePxPerSec)
+  pxPerSecRef.current = effectivePxPerSec
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const measure = () => setViewportPx(el.clientWidth)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (pxPerSec == null && trackViewportPx > 0) setPxPerSec(initialPxPerSec(span, trackViewportPx))
+  }, [pxPerSec, span, trackViewportPx])
+
+  const applyZoom = useCallback(
+    (nextPxPerSec: number, anchorX?: number) => {
+      const el = scrollRef.current
+      const prevW = widthRef.current
+      const nextW = trackWidthPx(span, nextPxPerSec, trackViewportPx)
+      if (el) {
+        const playheadAnchor = TRACK_OFFSET_PX + playheadPxRef.current - el.scrollLeft
+        const anchor =
+          anchorX ??
+          (playheadAnchor >= 0 && playheadAnchor <= el.clientWidth ? playheadAnchor : el.clientWidth / 2)
+        pendingScrollRef.current = anchoredScrollLeft({
+          scrollLeft: el.scrollLeft,
+          anchorX: anchor,
+          prevWidthPx: prevW,
+          nextWidthPx: nextW,
+          viewportPx: el.clientWidth,
+          offsetPx: TRACK_OFFSET_PX,
+          extraPx: TRACK_EXTRA_PX,
+        })
+      }
+      setPxPerSec(nextPxPerSec)
+    },
+    [span, trackViewportPx],
+  )
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el || pendingScrollRef.current == null) return
+    el.scrollLeft = pendingScrollRef.current
+    pendingScrollRef.current = null
+  }, [widthPx])
+
+  const zoomIn = () => applyZoom(zoomBy(effectivePxPerSec, 'in'))
+  const zoomOut = () => applyZoom(zoomBy(effectivePxPerSec, 'out'))
+  const zoomFit = () => {
+    pendingScrollRef.current = 0
+    setPxPerSec(fitPxPerSec(span, trackViewportPx))
   }
+  const zoomDefault = () => applyZoom(TIMELINE_DEFAULT_PX_PER_SEC)
+
+  // Ctrl/Cmd + wheel zooms around the cursor (non-passive so the page does not zoom).
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      applyZoom(zoomBy(pxPerSecRef.current, e.deltaY < 0 ? 'in' : 'out', 1.12), e.clientX - rect.left)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [applyZoom])
+
+  // Keep the playhead in view while playing / after seeks (page-style jump).
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const next = autoscrollLeftForPlayhead({
+      playheadPx: TRACK_OFFSET_PX + playheadPx,
+      scrollLeft: el.scrollLeft,
+      viewportPx: el.clientWidth,
+      trackWidthPx: widthPx + TRACK_EXTRA_PX,
+    })
+    if (next != null) el.scrollLeft = next
+  }, [playheadPx, widthPx])
 
   const seekTimelineAtClientX = (clientX: number, el: HTMLElement) => {
     const rect = el.getBoundingClientRect()
@@ -140,7 +253,80 @@ export function Timeline({
           Section reorder is active — B-roll clips stay at their output times and may not match moved speech.
         </p>
       ) : null}
-    <div className="min-w-0 overflow-x-auto rounded-lg border border-border bg-card/30 p-2">
+      <div className="flex items-center justify-end gap-1" data-testid="timeline-zoom-controls">
+        <button
+          type="button"
+          className="inline-flex size-7 items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={zoomOut}
+          aria-label="Zoom out timeline"
+          title="Zoom out (-)"
+          data-testid="timeline-zoom-out"
+        >
+          <ZoomOut className="size-4" />
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={pxPerSecToSlider(effectivePxPerSec)}
+          onChange={(e) => applyZoom(sliderToPxPerSec(Number(e.target.value)))}
+          className="h-1 w-24 cursor-pointer accent-primary"
+          aria-label="Timeline zoom"
+          data-testid="timeline-zoom-slider"
+        />
+        <button
+          type="button"
+          className="inline-flex size-7 items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={zoomIn}
+          aria-label="Zoom in timeline"
+          title="Zoom in (+ or Ctrl/Cmd + scroll)"
+          data-testid="timeline-zoom-in"
+        >
+          <ZoomIn className="size-4" />
+        </button>
+        <button
+          type="button"
+          className="min-w-[3rem] rounded px-1.5 py-1 text-[11px] tabular-nums text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={zoomDefault}
+          title="Reset zoom to 100%"
+          data-testid="timeline-zoom-label"
+        >
+          {zoomPercent(effectivePxPerSec)}%
+        </button>
+        <button
+          type="button"
+          className="inline-flex h-7 items-center gap-1 rounded px-1.5 text-[11px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={zoomFit}
+          aria-label="Fit timeline to view"
+          title="Fit to view (0)"
+          data-testid="timeline-zoom-fit"
+        >
+          <Maximize2 className="size-3.5" />
+          Fit
+        </button>
+      </div>
+    <div
+      ref={scrollRef}
+      className="min-w-0 overflow-x-auto rounded-lg border border-border bg-card/30 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      tabIndex={0}
+      aria-label="Timeline (+/- to zoom, 0 to fit)"
+      data-testid="timeline-scroll"
+      data-px-per-sec={Math.round(effectivePxPerSec)}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault()
+          zoomIn()
+        } else if (e.key === '-' || e.key === '_') {
+          e.preventDefault()
+          zoomOut()
+        } else if (e.key === '0') {
+          e.preventDefault()
+          zoomFit()
+        }
+      }}
+    >
       <div className="flex" style={{ width: widthPx + 56 }}>
         <div className="relative w-14 shrink-0 text-[10px] font-medium text-muted-foreground">
           {lanes.map((lane) => (
@@ -185,11 +371,14 @@ export function Timeline({
             const wPct = ((endMs - startMs) / span) * 100
             const shotI = shotIndexAt(shots, (startMs + endMs) / 2)
             const bg = shotI % 2 === 0 ? 'bg-sky-500/70' : 'bg-violet-500/70'
+            const chipPx = ((endMs - startMs) / span) * widthPx
+            const label = captionByI.get(w.i)?.text ?? wordDisplayText(w, edits.wordFixes)
             return (
               <button
                 key={w.i}
                 type="button"
-                className={`absolute top-1 h-6 truncate rounded px-0.5 text-[9px] text-white ${bg}`}
+                data-testid="timeline-word"
+                className={`absolute top-1 h-6 overflow-hidden whitespace-nowrap rounded px-0.5 text-left text-[11px] leading-6 text-white ${bg}`}
                 style={{ left: `${left}%`, width: `${Math.max(wPct, 0.4)}%` }}
                 onClick={(ev) => {
                   ev.stopPropagation()
@@ -197,7 +386,7 @@ export function Timeline({
                 }}
                 title={wordDisplayText(w, edits.wordFixes)}
               >
-                {captionByI.get(w.i)?.text ?? wordDisplayText(w, edits.wordFixes)}
+                {chipPx >= TIMELINE_MIN_LABEL_PX ? label : null}
               </button>
             )
           })}
@@ -225,8 +414,10 @@ export function Timeline({
           })}
         </div>
         <div
-          className="absolute top-0 bottom-0 w-0.5 bg-red-500"
-          style={{ left: `${(outputMs / Math.max(outDur, 1)) * 100}%` }}
+          className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-red-500"
+          style={{ left: `${playheadPct}%` }}
+          data-testid="timeline-playhead"
+          aria-hidden
         />
         <TrimHandle
           label="In"
