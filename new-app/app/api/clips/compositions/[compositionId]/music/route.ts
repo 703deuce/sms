@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { musicCostUsd } from '@/lib/clips/audio'
+import { musicCredits } from '@/lib/clips/credit-cost'
 import { jsonError } from '@/lib/server/api-error'
 import { getCompositionAudioContext } from '@/lib/server/clips/composition-audio'
 import { getPrisma } from '@/lib/server/db'
@@ -57,7 +57,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
       data: {
         generationId: gen.id,
         status: 'PENDING',
-        estimatedCostUsd: musicCostUsd(lengthMs),
+        credits: musicCredits(),
       },
     })
   } catch (err) {

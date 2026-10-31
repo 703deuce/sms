@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import './libass-preview.css'
+
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { normalizeEditSpeed, orderedKeepSegments } from '@/lib/clips/edits'
@@ -43,6 +45,18 @@ import { ColorLookDefs, lookFilterCss, usedSpecs } from '@/components/clips/edit
 import { videoSpecAtSource } from '@/lib/clips/editor/color'
 import { speedAtSource } from '@/lib/clips/editor/speed'
 import { textItemFrame } from '@/lib/clips/editor/text-frame'
+import { libassSupported, previewLibassEnabled } from '@/lib/clips/preview-libass-flag'
+import { buildPreviewScripts, PREVIEW_SCRIPT_ORDER, type PreviewScriptKey } from '@/lib/clips/render-plan/preview-scripts'
+import { exportPixelSize } from '@/lib/clips/export-aspect'
+import { formatHeadlineForExport } from '@/lib/clips/export-template'
+import { TITLE_STYLES } from '@/lib/clips/templates/registry'
+import { LibassSinkContext, type LibassSink } from '@/components/clips/editor/libass-context'
+import type { LibassClock, LibassStatusFn } from '@/components/clips/editor/libass-overlay'
+
+// EP2: libass-wasm layers load only when the editor preview mounts them (own chunk + /jassub/*).
+const LibassPreviewLayers = lazy(() =>
+  import('@/components/clips/editor/libass-overlay').then((m) => ({ default: m.LibassPreviewLayers })),
+)
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
@@ -221,6 +235,21 @@ export function PreviewStage({
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
   const captionTimeRef = useRef(0)
+  // EP2: output-time clock for the libass-wasm layers, fed by the rAF tick below.
+  const libassOutMsRef = useRef(0)
+  const libassSubsRef = useRef(new Set<(ms: number) => void>())
+  const libassClock = useMemo<LibassClock>(
+    () => ({
+      now: () => libassOutMsRef.current,
+      subscribe: (fn) => {
+        libassSubsRef.current.add(fn)
+        return () => {
+          libassSubsRef.current.delete(fn)
+        }
+      },
+    }),
+    [],
+  )
   const wordsRef = useRef(words)
   const auditionRef = useRef(audition)
   wordsRef.current = words
@@ -421,6 +450,10 @@ export function PreviewStage({
       }
       const out = applyPlaybackTime(src, playbackEdits).outputMs
       const outSec = out / 1000
+      if (out !== libassOutMsRef.current) {
+        libassOutMsRef.current = out
+        libassSubsRef.current.forEach((fn) => fn(out))
+      }
       if (Math.abs(captionTimeRef.current - outSec) >= 0.02) {
         captionTimeRef.current = outSec
         setCaptionTimeSec(outSec)
@@ -634,6 +667,57 @@ export function PreviewStage({
   // layouts: the whole 9:16 frame (the T6 title band is burned on top after B-roll; its preview
   // band is z-[26]). fit_top / stream headline: the video area under the band, because the worker
   // overlays B-roll on the cut and then composes that into the band layout.
+  // EP2: every text overlay through libass-wasm from the export's own .ass (render-plan builders).
+  const libassWanted = !compositePreview && box.w > 0 && previewLibassEnabled() && libassSupported()
+  const [libassStatus, setLibassStatus] = useState<Partial<Record<PreviewScriptKey, 'ready' | 'failed'>>>({})
+  const [libassFailed, setLibassFailed] = useState<string | null>(null)
+  const [libassHeadline, setLibassHeadline] = useState<Parameters<LibassSink['headline']>[0]>(null)
+  const [libassBadge, setLibassBadge] = useState<Parameters<LibassSink['badge']>[0]>(null)
+  const libassSink = useMemo<LibassSink>(() => ({ headline: setLibassHeadline, badge: setLibassBadge }), [])
+  const libassPlay = useMemo(() => exportPixelSize((edits.aspectRatio ?? '9:16') as ExportAspect, '1080p'), [edits.aspectRatio])
+  const libassScripts = useMemo(() => {
+    if (!libassWanted || libassFailed) return null
+    try {
+      const mode = edits.layout?.mode ?? 'speaker_follow'
+      return buildPreviewScripts({
+        edits: edits as unknown as Record<string, unknown>,
+        words: edits.captions?.enabled === false ? [] : captionWords,
+        playW: templatePreview?.playW ?? libassPlay.width,
+        playH: templatePreview?.playH ?? libassPlay.height,
+        durationMs: Math.max(1, previewOutDurMs),
+        t6Spec: templatePreview ?? null,
+        titleStyles: TITLE_STYLES as unknown as Record<string, { text?: string; font?: string; bg?: { kind?: string } }>,
+        formatHeadline: formatHeadlineForExport,
+        composeCaptions: composeSpec?.captions ?? null,
+        streamFrame: !templatePreview && ['fit_top', 'fit_blur', 'full_frame'].includes(mode),
+        headline: templatePreview ? null : libassHeadline,
+        badge: libassBadge,
+        hookDuplicatesCaptions: hookDupesCaptions,
+      })
+    } catch (err) {
+      console.warn('[clipper:preview] libass_scripts_fail', err)
+      return null
+    }
+  }, [libassWanted, libassFailed, edits, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions])
+  const onLibassStatus = useCallback<LibassStatusFn>((key, status, info) => {
+    setLibassStatus((prev) => (prev[key] === status ? prev : { ...prev, [key]: status }))
+    logEditorDecision('preview_ready', { renderer: 'libass', layer: key, status, ...info })
+    if (status === 'failed') setLibassFailed(String(info.reason ?? 'unknown'))
+  }, [])
+  // A layer whose script went away forgets its status (a new one starts as DOM until ready).
+  useEffect(() => {
+    if (!libassScripts) return
+    setLibassStatus((prev) => {
+      const next = { ...prev }
+      let changed = false
+      for (const k of PREVIEW_SCRIPT_ORDER) if (!libassScripts[k] && next[k]) { delete next[k]; changed = true }
+      return changed ? next : prev
+    })
+  }, [libassScripts])
+  const libassClass = libassScripts
+    ? PREVIEW_SCRIPT_ORDER.filter((k) => libassScripts[k] && libassStatus[k] === 'ready').map((k) => `libass-${k}`).join(' ')
+    : ''
+
   const brollRegionStyle = useMemo((): React.CSSProperties => {
     if (!templatePreview && fitTopPreview && fitTopLayout && box.h > 0) {
       const sy = box.h / fitTopLayout.playH
@@ -652,7 +736,12 @@ export function PreviewStage({
           This older clip&apos;s preview has captions and headline baked in. Edits apply on export.
         </p>
       ) : null}
-      <div style={{ width: box.w || undefined, height: box.h || undefined }} className="relative overflow-hidden rounded-xl bg-black">
+      <LibassSinkContext.Provider value={libassWanted ? libassSink : null}>
+      <div
+        style={{ width: box.w || undefined, height: box.h || undefined }}
+        className={`relative overflow-hidden rounded-xl bg-black ${libassClass}`}
+        data-preview-renderer={libassClass ? 'libass' : 'dom'}
+      >
         {posterUrl && !canPlay ? (
           <img
             src={posterUrl}
@@ -1072,6 +1161,7 @@ export function PreviewStage({
             spec={templatePreview}
             text={edits.exportTemplate.headlineBar.text?.trim() || edits.exportTemplate.suggestedHeadline?.trim() || ''}
             styleId={edits.exportTemplate.headlineStyle?.t6Id}
+            headlineStyle={edits.exportTemplate.headlineStyle as { t6Id?: string; textColor?: string; font?: string } | undefined}
             boxWidth={box.w}
             fontFamily={headlinePreviewFontFamily('Anton')}
           />
@@ -1090,7 +1180,28 @@ export function PreviewStage({
           composeSpec={composeSpec}
         />
         ) : null}
+        {libassScripts ? (
+          <Suspense fallback={null}>
+            <LibassPreviewLayers
+              scripts={libassScripts}
+              playW={templatePreview?.playW ?? libassPlay.width}
+              playH={templatePreview?.playH ?? libassPlay.height}
+              clock={libassClock}
+              onStatus={onLibassStatus}
+            />
+          </Suspense>
+        ) : null}
+        {libassFailed ? (
+          <p
+            className="pointer-events-none absolute left-2 top-2 z-[30] rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white/85"
+            data-testid="libass-fallback-chip"
+            title={`Text preview fell back to the approximate renderer (${libassFailed})`}
+          >
+            Approximate text preview
+          </p>
+        ) : null}
       </div>
+      </LibassSinkContext.Provider>
     </div>
   )
 }

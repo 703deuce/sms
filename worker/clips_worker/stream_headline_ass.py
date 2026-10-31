@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 _EMOJI_RE = re.compile(r"([\U0001F300-\U0001FAFF\U00002700-\U000027BF]+)\s*$")
-_HEADLINE_FONT = "Montserrat"
+_HEADLINE_FONT = "Montserrat Black"
 _HEADLINE_FONT_FIT_TOP = "Anton"
 _EMOJI_FONT = "Noto Color Emoji"
 _MAX_LINES = 4
@@ -117,10 +117,12 @@ def _headline_font_from_style(style: dict | None, *, fit_top: bool) -> str:
         low = raw.lower()
         if "anton" in low:
             return "Anton"
+        # EP2: canonical libass family names (name ID 1) — fontconfig resolves "Montserrat" to the
+        # same Montserrat-Black.ttf, but libass-wasm in the editor preview matches ID 1/4 only.
         if "montserrat" in low:
-            return "Montserrat"
+            return "Montserrat Black"
         if "poppins" in low:
-            return "Poppins"
+            return "Poppins ExtraBold"
     if fit_top:
         for d in _font_dirs():
             if list(d.glob("*nton*.ttf")) or list(d.glob("*Anton*.ttf")):
@@ -182,17 +184,15 @@ def headline_ass_content(
     else:
         text_center_x = play_w // 2
 
-    fonts_lines = ""
-    for d in _font_dirs():
-        fonts_lines += f"FontsDir: {d}\n"
-
+    # EP2: no "FontsDir:" lines — libass ignores that key (the ass= filter's fontsdir is what
+    # loads fonts) and it made the script depend on the host, so the preview could not match it.
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {play_w}
 PlayResY: {play_h}
 WrapStyle: 2
 ScaledBorderAndShadow: yes
-{fonts_lines}
+
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Headline,{font},{fontsize},{primary},{primary},&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,0,0,5,20,20,{max(8, bar_h // 12)},1

@@ -72,7 +72,6 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
         status: fresh?.status,
         error: fresh?.error,
         downloadUrl,
-        costUsd: fresh?.costUsd ? Number(fresh.costUsd) : null,
         params: fresh?.params,
       },
     })

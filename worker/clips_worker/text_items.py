@@ -16,10 +16,13 @@ from pathlib import Path
 
 from clips_worker.motion import MOTION_FPS, has_motion, layer_transform_at
 
+# EP1: canonical libass family names (name ID 1 of the bundled faces). fontconfig matched the
+# typographic family "Montserrat" / "Poppins" too, but libass-wasm (editor preview) only matches
+# these, so the export and the preview now name the same face.
 TEXT_FONTS = {
-    "Montserrat": "Montserrat",
+    "Montserrat": "Montserrat Black",
     "Anton": "Anton",
-    "Poppins": "Poppins",
+    "Poppins": "Poppins ExtraBold",
     "Bangers": "Bangers",
     "Bebas Neue": "Bebas Neue",
     "Archivo Black": "Archivo Black",
@@ -103,7 +106,7 @@ def _px(v, h: int) -> float:
 
 def _styles_for(i: int, it: dict, h: int) -> tuple[str, str | None]:
     st = it["style"]
-    font = TEXT_FONTS.get(str(st.get("font") or ""), "Montserrat")
+    font = TEXT_FONTS.get(str(st.get("font") or ""), "Montserrat Black")
     size = max(1, round(float(st.get("size") or 96) * h / REF_H))
     an = _AN.get(str(st.get("align") or "center"), 5)
     primary = _ass_color(st.get("color") or "#FFFFFF")
@@ -211,6 +214,8 @@ def apply_text_items(video: Path, out: Path, edits: dict, *, play_w: int, play_h
 
     ass_path = out.parent / "text_items.ass"
     ass_path.write_text(ass, encoding="utf-8")
-    burn_ass(video, ass_path, out)
+    from clips_worker.title_fit import clip_fonts_dir
+
+    burn_ass(video, ass_path, out, fontsdir=clip_fonts_dir())
     print(f"[clipper:text_items] n={len(text_items(edits))}", flush=True)
     return out

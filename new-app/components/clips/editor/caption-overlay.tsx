@@ -2,7 +2,7 @@
 
 import './caption-anim.css'
 
-import { useMemo, useRef, useEffect } from 'react'
+import { Fragment, useMemo, useRef, useEffect } from 'react'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { wordKey } from '@/lib/clips/edits'
 import { activeCaptionWordIndex, captionEmojiForWord, previewCaptionWordIndex } from '@/lib/clips/caption-overlay-active'
@@ -186,14 +186,18 @@ export function CaptionOverlay({
         ...posStyle,
       }}
       data-testid="caption-line"
+      data-libass-for="captions"
+      data-libass-ghost="all"
       data-breaks={lineFit.breaks.join(',')}
       data-fit-scale={lineFit.scale}
     >
       {lineRows.map((row) => (
       <div
         key={`row${row.from}`}
-        className="flex max-w-full flex-wrap justify-center gap-x-1"
-        style={{ columnGap: cpBoxBg ? 0 : undefined }}
+        // EP1 (interim M3): words are separated by a real space at the caption font size, like
+        // libass (Poppins ExtraBold space = 0.19 em). Was `gap-x-1` + `px-1` = 12 CSS px per gap.
+        className="max-w-full text-center"
+        style={{ fontSize: fontSize * lineFit.scale, lineHeight: 'normal' }}
         data-testid="caption-row"
       >
       {lineWords.slice(row.from, row.to).map((w, ri) => {
@@ -272,15 +276,20 @@ export function CaptionOverlay({
           content = text.slice(0, n)
         }
 
+        const rowLen = row.to - row.from
         return (
-          <span
-            key={`${w.idx ?? globalIdx}-${w.s}`}
-            className={`inline-block px-1 ${active ? animClass(animation) : ''}`}
-            style={style}
-            data-testid={emoji ? 'caption-word-emoji' : undefined}
-          >
-            {content}
-          </span>
+          <Fragment key={`${w.idx ?? globalIdx}-${w.s}`}>
+            {ri > 0 && !cpBoxBg ? ' ' : null}
+            <span
+              className={`inline-block ${active ? animClass(animation) : ''}`}
+              style={style}
+              data-testid={emoji ? 'caption-word-emoji' : undefined}
+            >
+              {content}
+              {/* CP line background: the export's box spans the spaces too. */}
+              {cpBoxBg && ri < rowLen - 1 ? '\u00a0' : null}
+            </span>
+          </Fragment>
         )
       })}
       </div>

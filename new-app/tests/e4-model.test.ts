@@ -279,6 +279,8 @@ describe('E4 producer cost', () => {
     expect(m).toMatchObject({ paid: true, credits: 2 })
     expect(producerToolCost({ name: 'generate_thumbnail' }, 1)).toMatchObject({ credits: 3, usd: 0.18 })
     expect(producerToolCost({ name: 'dub' }, 90_000).credits).toBe(12)
-    expect(formatToolCost(m)).toMatch(/^2 credits · ~\$\d+\.\d\d$/)
+    // EP1g: credits only — the provider $ estimate is never shown to users.
+    expect(formatToolCost(m)).toBe('2 credits')
+    expect(formatToolCost(producerToolCost({ name: 'dub' }, 90_000))).toBe('12 credits')
   })
 })

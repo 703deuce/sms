@@ -22,16 +22,13 @@ RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small.en',
 COPY worker/assets /app/assets
 COPY worker/v3/fonts/t6 /app/v3/fonts/t6
 COPY worker/prototype/v3 /app/v3
-# Bookworm has no fonts-montserrat apt package — fetch static Black for ASS + fontconfig.
+# EP1: fonts are PINNED to the repo copies (worker/prototype/v3/fonts → /app/v3/fonts), byte-identical
+# to new-app/public/fonts/clip (the editor preview's libass-wasm fonts). Was curl from GitHub master,
+# which could change the export without a commit. Bookworm has no fonts-montserrat apt package.
 RUN set -eux; \
-    mkdir -p /usr/share/fonts/truetype/montserrat /app/v3/fonts; \
-    curl -fsSL -o /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf \
-      'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Black.ttf'; \
-    cp /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf /app/v3/fonts/Montserrat-Black.ttf; \
-    mkdir -p /usr/share/fonts/truetype/anton; \
-    curl -fsSL -o /usr/share/fonts/truetype/anton/Anton-Regular.ttf \
-      'https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf'; \
-    cp /usr/share/fonts/truetype/anton/Anton-Regular.ttf /app/v3/fonts/Anton-Regular.ttf; \
+    mkdir -p /usr/share/fonts/truetype/montserrat /usr/share/fonts/truetype/anton; \
+    cp /app/v3/fonts/Montserrat-Black.ttf /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf; \
+    cp /app/v3/fonts/Anton-Regular.ttf /usr/share/fonts/truetype/anton/Anton-Regular.ttf; \
     mkdir -p /usr/share/fonts/truetype/poppins; \
     cp /app/v3/fonts/Poppins-ExtraBold.ttf /usr/share/fonts/truetype/poppins/; \
     test -s /usr/share/fonts/truetype/poppins/Poppins-ExtraBold.ttf; \
@@ -39,6 +36,9 @@ RUN set -eux; \
     cp /app/v3/fonts/t6/*.ttf /usr/share/fonts/truetype/t6/; \
     fc-cache -f; \
     fc-list | grep -i montserrat | head -3; \
+    fc-match -f '%{file}\n' 'Montserrat Black' | grep -q Montserrat-Black.ttf; \
+    fc-match -f '%{file}\n' 'Poppins ExtraBold' | grep -q Poppins-ExtraBold.ttf; \
+    fc-match -f '%{file}\n' 'DejaVu Sans:bold' | grep -q DejaVuSans-Bold.ttf; \
     test -s /app/v3/fonts/Montserrat-Black.ttf; \
     test -s /app/v3/fonts/t6/Bangers.ttf
 COPY worker/prototype /app/prototype

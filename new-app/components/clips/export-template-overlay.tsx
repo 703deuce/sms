@@ -8,6 +8,7 @@ import {
   wrapHeadlineDisplayLines,
 } from '@/lib/clips/export-template'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { badgeRenderState } from '@/lib/clips/render-plan/badge'
 import { resolveLayers, type BadgeLayer, type HeadlineLayer, type StickerLayer } from '@/lib/clips/layers'
 import { headlineStyleForPreset, badgePlacementForLayout } from '@/lib/clips/overlay-geometry'
 import { usesStreamHeadlineBandOverlay } from '@/lib/clips/stream-compose-layout'
@@ -21,6 +22,55 @@ import { headlinePreviewBoxMetrics,
 } from '@/lib/clips/headline-preview-style'
 import { fitTopHeadlineLines } from '@/lib/clips/fit-top-headline-lines'
 import { fitHeadlineDisplayForBox } from '@/lib/clips/headline-fit'
+import { badgeRect } from '@/lib/clips/overlay-geometry'
+import geom from '@/lib/clips/overlay-geometry.json'
+import { LibassPublish } from '@/components/clips/editor/libass-context'
+import type { HeadlineAssInput } from '@/lib/clips/render-plan/headline-ass'
+
+const PLAY_W = 1080
+const PLAY_H = 1920
+const scalePx = (px: number, base: number) => Math.max(1, Math.floor((px * base) / 1920 + 0.5))
+
+/**
+ * EP2: the stream headline's headline_ass_content inputs, in play px, for libass-wasm — the same
+ * band the worker burns into (stream_frame._fit_top_band_layers / apply_export_template).
+ */
+function streamHeadlineAssInput(o: {
+  fitTopBand: boolean
+  text: string
+  lay: { headlineTop: number; headlineH: number }
+  style: { textColor?: string } & Record<string, unknown>
+  legacyBadgeText: string | null
+}): Omit<HeadlineAssInput, 'durationMs'> {
+  let textBoxX: number | null = null
+  let textBoxW: number | null = null
+  if (o.legacyBadgeText !== null) {
+    if (o.fitTopBand) {
+      const r = badgeRect('fit_top_band', PLAY_W, PLAY_H, { text: o.legacyBadgeText.slice(0, 24), showLogo: false, anchorTopGap: true })
+      textBoxX = r.x + r.w + Math.max(8, scalePx(12, PLAY_W))
+    } else {
+      const bw = scalePx(Number((geom as { exportBar: { badgeW: number } }).exportBar.badgeW), PLAY_W)
+      textBoxX = scalePx(24, PLAY_W) + bw + scalePx(12, PLAY_W)
+    }
+    textBoxW = Math.max(2, PLAY_W - textBoxX - scalePx(16, PLAY_W))
+  }
+  // clip_export_template._headline_style_from_edits: on the fit_top band a Montserrat/empty font
+  // is drawn in Anton.
+  const style: Record<string, unknown> = { ...o.style }
+  if (o.fitTopBand && (!style.font || String(style.font).startsWith('Montserrat'))) style.font = 'Anton'
+  return {
+    headline: o.text,
+    playW: PLAY_W,
+    playH: PLAY_H,
+    barH: o.fitTopBand ? o.lay.headlineH : Math.round(PLAY_H * Number((geom as { exportBar: { barFrac: number } }).exportBar.barFrac)),
+    barY: o.fitTopBand ? o.lay.headlineTop : 0,
+    fitTop: true,
+    textColor: String(style.textColor || '#000000'),
+    headlineStyle: style,
+    textBoxX,
+    textBoxW,
+  }
+}
 
 function ChatPreviewBox({
   lay,
@@ -111,8 +161,12 @@ export function ExportTemplateOverlay({
     tpl?.headlineBar?.text?.trim() || tpl?.suggestedHeadline?.trim() || '',
   )
   const lines = useFitTop ? fitTopHeadlineLines(edits) : headline ? wrapHeadlineDisplayLines(headline) : []
-  const badgeOn = Boolean(tpl?.platformBadge?.enabled || badgeLayer?.showLabel)
-  const badgeLogo = Boolean(badgeLayer?.showLogo)
+  // EP1: the ONE badge rule shared with the worker (render-plan/badge.ts == layers_spec.badge_render_state).
+  // Was `platformBadge.enabled || layer.showLabel`, which differed from the export in both directions.
+  const badgeState = badgeRenderState(edits, { templateMode: hideHeadline })
+  const badgeOn = badgeState.on && badgeState.showLabel
+  const badgeLogo = badgeState.on && badgeState.showLogo
+  const badgeHandle = badgeState.on && badgeState.source === 'sprite' ? badgeState.text : undefined
   const channelOn = Boolean(
     tpl?.channelLink?.enabled && (channelDisplay?.trim() || tpl?.channelLink.url?.trim()),
   )
@@ -130,13 +184,29 @@ export function ExportTemplateOverlay({
   const chatOpacity = edits.chatOverlay?.opacity ?? 0.6
   const scaleY = boxHeight / 1920
   const composeSpec = composeSpecProp ?? null
+  // stream_frame._fit_top_band_layers reserves the text box from `channel or label`, where channel is
+  // the channel-link URL's last segment (upper, ≤32) when the link is on.
+  const linkUrl = tpl?.channelLink?.enabled ? String(tpl.channelLink.url || '') : ''
+  const linkChannel = linkUrl ? (linkUrl.replace(/\/+$/, '').split('/').pop() || '').toUpperCase().slice(0, 32) : ''
+  const legacyBadgeText = badgeState.on && badgeState.source === 'legacy' ? linkChannel || badgeState.text : null
+  const headlineRaw = tpl?.headlineBar?.text?.trim() || tpl?.suggestedHeadline?.trim() || ''
+  const libassHeadline =
+    headlineOn && headlineRaw && !(useFitTop && composeSpec)
+      ? streamHeadlineAssInput({
+          fitTopBand: useFitTop,
+          text: headlineRaw,
+          lay: overlayLayout(Math.max(2, lines.length || 2)),
+          style: headlineStyle as { textColor?: string } & Record<string, unknown>,
+          legacyBadgeText,
+        })
+      : null
 
   if (useFitTop && composeSpec && (headlineOn || chatOn || badgeOn || badgeLogo || channelOn || composeSpec.stickers.length)) {
     const sy = scaleY
     const sx = boxWidth / 1080
     const hl = composeSpec.headline
     return (
-      <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
+      <div className={`pointer-events-none absolute inset-0 ${hideHeadline ? 'z-[27]' : 'z-[25]'} overflow-hidden`}>
         {hl ? (
           <div
             data-testid="compose-headline"
@@ -217,7 +287,8 @@ export function ExportTemplateOverlay({
     const displayLines = headlineOn ? fit.lines : []
     const fontPx = headlineOn ? fit.fontPx : Math.max(10, Math.round(84 * sy))
     return (
-      <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
+      <div className={`pointer-events-none absolute inset-0 ${hideHeadline ? 'z-[27]' : 'z-[25]'} overflow-hidden`}>
+        <LibassPublish kind="headline" value={libassHeadline} />
         {headlineOn ? (
           <div
             className="absolute px-1 text-center font-black leading-[0.95]"
@@ -234,7 +305,7 @@ export function ExportTemplateOverlay({
               borderRadius: boxMetrics.borderRadius,
             }}
           >
-            <div className="flex h-full flex-col items-center justify-center gap-0">
+            <div className="flex h-full flex-col items-center justify-center gap-0" data-libass-for="top" data-libass-ghost="text">
               {displayLines.map((line) => (
                 <span key={line} className="block w-full break-words px-1">
                   {line}
@@ -248,7 +319,7 @@ export function ExportTemplateOverlay({
             platform={(badgeLayer?.platform ?? platform) as 'twitch' | 'kick' | 'none'}
             showLabel={badgeOn}
             showLogo={badgeLogo}
-            handle={channelLabel || badgeLayer?.handle}
+            handle={badgeHandle || channelLabel || badgeLayer?.handle}
             placement={badgePlacementForLayout(layoutMode, edits)}
             layoutMode={layoutMode}
             boxWidth={boxWidth}
@@ -296,7 +367,10 @@ export function ExportTemplateOverlay({
   const barLines = fit?.lines ?? lines
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
+    // EP1: in template mode the title band (TemplateTitleOverlay) is z-26 and the export burns the
+    // badge sprite after the title → the badge must stack above it (it was hidden under the band).
+    <div className={`pointer-events-none absolute inset-0 ${hideHeadline ? 'z-[27]' : 'z-[25]'} overflow-hidden`}>
+      <LibassPublish kind="headline" value={libassHeadline} />
       {headlineOn ? (
         <div
           className="absolute px-2 text-center font-bold leading-tight"
@@ -313,7 +387,7 @@ export function ExportTemplateOverlay({
             borderRadius: barMetrics.borderRadius,
           }}
         >
-          <div className="flex h-full flex-col items-center justify-center gap-0 leading-[1.05]">
+          <div className="flex h-full flex-col items-center justify-center gap-0 leading-[1.05]" data-libass-for="top" data-libass-ghost="text">
             {barLines.map((line) => (
               <span key={line} className="block w-full break-words px-1">
                 {line}
@@ -327,7 +401,7 @@ export function ExportTemplateOverlay({
           platform={(badgeLayer?.platform ?? platform) as 'twitch' | 'kick' | 'none'}
           showLabel={badgeOn}
           showLogo={badgeLogo}
-          handle={channelLabel || badgeLayer?.handle}
+          handle={badgeHandle || channelLabel || badgeLayer?.handle}
           placement="export_bar"
           boxWidth={boxWidth}
           boxHeight={boxHeight}

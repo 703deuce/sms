@@ -1,0 +1,27 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Cap,Poppins ExtraBold,115,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,1,4,0,2,54,54,230,1
+Style: Box,Poppins ExtraBold,115,&H00000000&,&H00000000&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,3,4,0,2,54,54,230,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:00.48,Cap,,0,0,0,,{\c&H0000D4FF&}{\alpha&HFF&\t(0,62,\alpha&H00&)}E{\alpha&HFF&\t(62,124,\alpha&H00&)}n{\alpha&HFF&\t(124,186,\alpha&H00&)}e{\alpha&HFF&\t(186,248,\alpha&H00&)}r{\alpha&HFF&\t(248,310,\alpha&H00&)}g{\alpha&HFF&\t(310,372,\alpha&H00&)}y{\alpha&HFF&\t(372,434,\alpha&H00&)},
+Dialogue: 1,0:00:00.48,0:00:00.84,Cap,,0,0,0,,{\c&H0000D4FF&}{\alpha&HFF&\t(0,40,\alpha&H00&)}c{\alpha&HFF&\t(40,80,\alpha&H00&)}a{\alpha&HFF&\t(80,120,\alpha&H00&)}p{\alpha&HFF&\t(120,160,\alpha&H00&)}i{\alpha&HFF&\t(160,200,\alpha&H00&)}t{\alpha&HFF&\t(200,240,\alpha&H00&)}a{\alpha&HFF&\t(240,280,\alpha&H00&)}l{\alpha&HFF&\t(280,320,\alpha&H00&)},
+Dialogue: 1,0:00:00.84,0:00:01.20,Cap,,0,0,0,,{\c&H0000D4FF&}{\alpha&HFF&\t(0,40,\alpha&H00&)}w{\alpha&HFF&\t(40,80,\alpha&H00&)}h{\alpha&HFF&\t(80,120,\alpha&H00&)}a{\alpha&HFF&\t(120,160,\alpha&H00&)}t{\alpha&HFF&\t(160,200,\alpha&H00&)}e{\alpha&HFF&\t(200,240,\alpha&H00&)}v{\alpha&HFF&\t(240,280,\alpha&H00&)}e{\alpha&HFF&\t(280,320,\alpha&H00&)}r{\alpha&HFF&\t(320,360,\alpha&H00&)}.
+Dialogue: 1,0:00:01.24,0:00:01.64,Cap,,0,0,0,,{\c&H0000D4FF&}{\alpha&HFF&\t(0,360,\alpha&H00&)}I
+Dialogue: 1,0:00:01.64,0:00:02.00,Cap,,0,0,0,,{\c&H0000D4FF&}{\alpha&HFF&\t(0,80,\alpha&H00&)}m{\alpha&HFF&\t(80,160,\alpha&H00&)}e{\alpha&HFF&\t(160,240,\alpha&H00&)}a{\alpha&HFF&\t(240,320,\alpha&H00&)}n
+Dialogue: 1,0:00:02.00,0:00:02.32,Cap,,0,0,0,,{\c&H0000D4FF&}{\alpha&HFF&\t(0,79,\alpha&H00&)}l{\alpha&HFF&\t(79,158,\alpha&H00&)}i{\alpha&HFF&\t(158,237,\alpha&H00&)}k{\alpha&HFF&\t(237,316,\alpha&H00&)}e
+Dialogue: 1,0:00:02.36,0:00:02.84,Cap,,0,0,0,,{\c&H0000D4FF&}{\alpha&HFF&\t(0,146,\alpha&H00&)}T{\alpha&HFF&\t(146,292,\alpha&H00&)}h{\alpha&HFF&\t(292,438,\alpha&H00&)}e
+Dialogue: 1,0:00:02.84,0:00:03.24,Cap,,0,0,0,,{\c&H005EC522&}{\alpha&HFF&\t(0,72,\alpha&H00&)}w{\alpha&HFF&\t(72,144,\alpha&H00&)}h{\alpha&HFF&\t(144,216,\alpha&H00&)}o{\alpha&HFF&\t(216,288,\alpha&H00&)}l{\alpha&HFF&\t(288,360,\alpha&H00&)}e
+Dialogue: 1,0:00:03.24,0:00:03.60,Cap,,0,0,0,,{\c&H005EC522&}{\alpha&HFF&\t(0,71,\alpha&H00&)}t{\alpha&HFF&\t(71,142,\alpha&H00&)}h{\alpha&HFF&\t(142,213,\alpha&H00&)}i{\alpha&HFF&\t(213,284,\alpha&H00&)}n{\alpha&HFF&\t(284,355,\alpha&H00&)}g
+Dialogue: 1,0:00:03.64,0:00:04.08,Cap,,0,0,0,,{\c&H005EC522&}{\alpha&HFF&\t(0,199,\alpha&H00&)}I{\alpha&HFF&\t(199,398,\alpha&H00&)}s
+Dialogue: 1,0:00:04.08,0:00:04.44,Cap,,0,0,0,,{\c&H005EC522&}{\alpha&HFF&\t(0,80,\alpha&H00&)}j{\alpha&HFF&\t(80,160,\alpha&H00&)}u{\alpha&HFF&\t(160,240,\alpha&H00&)}s{\alpha&HFF&\t(240,320,\alpha&H00&)}t
+Dialogue: 1,0:00:04.44,0:00:04.76,Cap,,0,0,0,,{\c&H005EC522&}{\alpha&HFF&\t(0,39,\alpha&H00&)}m{\alpha&HFF&\t(39,78,\alpha&H00&)}o{\alpha&HFF&\t(78,117,\alpha&H00&)}m{\alpha&HFF&\t(117,156,\alpha&H00&)}e{\alpha&HFF&\t(156,195,\alpha&H00&)}n{\alpha&HFF&\t(195,234,\alpha&H00&)}t{\alpha&HFF&\t(234,273,\alpha&H00&)}u{\alpha&HFF&\t(273,312,\alpha&H00&)}m
+Dialogue: 1,0:00:04.80,0:00:05.12,Cap,,0,0,0,,{\c&H005EC522&}{\alpha&HFF&\t(0,40,\alpha&H00&)}H{\alpha&HFF&\t(40,80,\alpha&H00&)}o{\alpha&HFF&\t(80,120,\alpha&H00&)}n{\alpha&HFF&\t(120,160,\alpha&H00&)}e{\alpha&HFF&\t(160,200,\alpha&H00&)}s{\alpha&HFF&\t(200,240,\alpha&H00&)}t{\alpha&HFF&\t(240,280,\alpha&H00&)}l{\alpha&HFF&\t(280,320,\alpha&H00&)}y

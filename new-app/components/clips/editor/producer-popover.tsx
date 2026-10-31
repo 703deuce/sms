@@ -14,7 +14,7 @@ export type ProducerProposal = { edits: ClipEditsV2; changeCount: number; before
  * E4: the existing AI Producer chat (components/clips/producer/producer-panel.tsx, unchanged
  * behaviour) as a small ✨ pop-over under the top bar. Requests run with dryRun so nothing is saved
  * until Accept; Preview plays the proposal through PreviewStage `audition`; Accept is ONE undo step
- * (applyProducerPatch) and lights the existing top-bar undo strip. Paid tools show credits + USD
+ * (applyProducerPatch) and lights the existing top-bar undo strip. Paid tools show credits (never $)
  * before Generate (the existing confirm route creates the job).
  */
 export function ProducerPopover({

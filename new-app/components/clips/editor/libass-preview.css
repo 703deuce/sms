@@ -1,0 +1,32 @@
+/*
+ * EP2: when a libass-wasm layer is live (.libass-<layer> on the preview box), the DOM overlays it
+ * replaces stay mounted at the same boxes — selection outlines, refs and pointer targets keep
+ * working — but paint nothing. Mark an element with data-libass-for="<layer>" and
+ * data-libass-ghost="text" (glyphs only: the DOM keeps a background the export draws outside ASS,
+ * e.g. the headline box or the badge sprite) or "all" (glyphs + boxes: libass draws both).
+ */
+.libass-captions [data-libass-for='captions'],
+.libass-captions [data-libass-for='captions'] *,
+.libass-hook [data-libass-for='hook'],
+.libass-hook [data-libass-for='hook'] *,
+.libass-text [data-libass-for='text'],
+.libass-text [data-libass-for='text'] *,
+.libass-top [data-libass-for='top'],
+.libass-top [data-libass-for='top'] * {
+  color: transparent !important;
+  -webkit-text-stroke-color: transparent !important;
+  text-shadow: none !important;
+  text-decoration-color: transparent !important;
+}
+.libass-captions [data-libass-for='captions'][data-libass-ghost='all'],
+.libass-captions [data-libass-for='captions'][data-libass-ghost='all'] *,
+.libass-hook [data-libass-for='hook'][data-libass-ghost='all'],
+.libass-hook [data-libass-for='hook'][data-libass-ghost='all'] *,
+.libass-text [data-libass-for='text'][data-libass-ghost='all'],
+.libass-text [data-libass-for='text'][data-libass-ghost='all'] *,
+.libass-top [data-libass-for='top'][data-libass-ghost='all'],
+.libass-top [data-libass-for='top'][data-libass-ghost='all'] * {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}

@@ -1,0 +1,90 @@
+[
+ {
+  "name": "legacy_on",
+  "state": {
+   "on": true,
+   "source": "sprite",
+   "platform": "kick",
+   "showLabel": true,
+   "showLogo": false,
+   "text": "KICK"
+  }
+ },
+ {
+  "name": "legacy_on_template",
+  "state": {
+   "on": true,
+   "source": "sprite",
+   "platform": "kick",
+   "showLabel": true,
+   "showLogo": false,
+   "text": "KICK"
+  }
+ },
+ {
+  "name": "off",
+  "state": {
+   "on": false,
+   "source": null,
+   "platform": null,
+   "showLabel": false,
+   "showLogo": false,
+   "text": ""
+  }
+ },
+ {
+  "name": "ludwig_clip_fc4ac0ba",
+  "state": {
+   "on": true,
+   "source": "sprite",
+   "platform": "twitch",
+   "showLabel": true,
+   "showLogo": false,
+   "text": "2XRAKAI"
+  }
+ },
+ {
+  "name": "v3_logo_only",
+  "state": {
+   "on": false,
+   "source": null,
+   "platform": null,
+   "showLabel": false,
+   "showLogo": false,
+   "text": ""
+  }
+ },
+ {
+  "name": "v3_link_only",
+  "state": {
+   "on": false,
+   "source": null,
+   "platform": null,
+   "showLabel": false,
+   "showLogo": false,
+   "text": ""
+  }
+ },
+ {
+  "name": "v3_disabled_tpl_off",
+  "state": {
+   "on": false,
+   "source": null,
+   "platform": null,
+   "showLabel": false,
+   "showLogo": false,
+   "text": ""
+  }
+ },
+ {
+  "name": "v3_disabled_tpl_off_template",
+  "state": {
+   "on": false,
+   "source": null,
+   "platform": null,
+   "showLabel": false,
+   "showLogo": false,
+   "text": ""
+  }
+ }
+]

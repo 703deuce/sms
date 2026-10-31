@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { thumbnailCredits } from '@/lib/clips/credit-cost'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
@@ -41,7 +42,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         data: {
           jobId: inflight.id,
           alreadyRunning: true,
-          estimatedCostUsd: 0,
+          credits: 0,
           message: 'Cover generation already running',
         },
       })
@@ -65,7 +66,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({
       data: {
         jobId,
-        estimatedCostUsd: 0.18,
+        credits: thumbnailCredits(),
         message: 'Generating 3 thumbnail variants',
       },
     })

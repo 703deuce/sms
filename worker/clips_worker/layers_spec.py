@@ -315,6 +315,39 @@ def badge_sprite_active(layer: dict) -> bool:
     return bool(layer.get("showLabel") or layer.get("showLink") or layer.get("showLogo"))
 
 
+def badge_render_state(edits: dict, *, template_mode: bool = False) -> dict:
+    """EP1: the ONE badge-visibility rule (mirror: new-app/lib/clips/render-plan/badge.ts).
+
+    v3 sprite (build_v3_extras): badge layer enabled and showLabel / showLink / showLogo; the text is
+    the handle (or platform label) only when showLabel. Otherwise the legacy export bar draws the
+    platform badge when exportTemplate.platformBadge.enabled — never in T6 template mode
+    (apply_export_template returns after the title). Fixture: tests/fixtures/render_plan/badge_cases.json.
+    """
+    from clips_worker.clip_export_template import _platform_label
+
+    layer = _layer_by_id(resolve_layers(edits), "badge")
+    if layer and layer.get("enabled") and badge_sprite_active(layer):
+        platform = str(layer.get("platform") or "twitch")
+        label, _ = _platform_label(platform)
+        show_label = bool(layer.get("showLabel"))
+        handle = str(layer.get("handle") or layer.get("url") or "").split("/")[-1][:24]
+        text = handle.upper() if handle else label
+        return {
+            "on": True,
+            "source": "sprite",
+            "platform": platform,
+            "showLabel": show_label,
+            "showLogo": bool(layer.get("showLogo")),
+            "text": text if show_label else "",
+        }
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
+    if not template_mode and bool((tpl.get("platformBadge") or {}).get("enabled")):
+        platform = str(tpl.get("platform") or "twitch")
+        label, _ = _platform_label(platform)
+        return {"on": True, "source": "legacy", "platform": platform, "showLabel": True, "showLogo": False, "text": label}
+    return {"on": False, "source": None, "platform": None, "showLabel": False, "showLogo": False, "text": ""}
+
+
 def _merge_sync_layer(stored: dict | None, fresh: dict) -> dict:
     out = copy.deepcopy(fresh)
     if not stored:

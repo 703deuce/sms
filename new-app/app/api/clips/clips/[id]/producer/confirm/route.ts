@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { musicCostUsd } from '@/lib/clips/audio'
-import { dubCostUsd, DUB_LANGUAGES } from '@/lib/clips/dub'
-import { kieVideoCostUsd } from '@/lib/clips/kie-cost'
+import { aiBrollCredits, dubCredits, musicCredits, thumbnailCredits } from '@/lib/clips/credit-cost'
+import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import type { ProducerToolCall } from '@/lib/clips/edits-reducer'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
@@ -56,7 +55,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         },
       })
       return NextResponse.json({
-        data: { generationId: gen.id, estimatedCostUsd: musicCostUsd(lengthMs) },
+        data: { generationId: gen.id, credits: musicCredits() },
       })
     }
 
@@ -77,7 +76,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       return NextResponse.json({
         data: {
           generationId: gen.id,
-          estimatedCostUsd: kieVideoCostUsd(durationS, resolution),
+          credits: aiBrollCredits(),
         },
       })
     }
@@ -105,7 +104,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         },
       })
       return NextResponse.json({
-        data: { dubTrackId: trackId, estimatedCostUsd: dubCostUsd(durationMs) },
+        data: { dubTrackId: trackId, credits: dubCredits(durationMs) },
       })
     }
 
@@ -132,7 +131,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           payload: { generationId: gen.id },
         },
       })
-      return NextResponse.json({ data: { generationId: gen.id, estimatedCostUsd: 0.18 } })
+      return NextResponse.json({ data: { generationId: gen.id, credits: thumbnailCredits() } })
     }
 
     return NextResponse.json({ error: 'Unsupported tool' }, { status: 400 })

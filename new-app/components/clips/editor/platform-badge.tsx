@@ -1,6 +1,8 @@
 'use client'
 
 import { badgePlacementForLayout, badgeRect } from '@/lib/clips/overlay-geometry'
+import { headlinePreviewFontFamily } from '@/lib/clips/headline-preview-style'
+import { LibassPublish } from '@/components/clips/editor/libass-context'
 
 export function PlatformBadgePreview({
   platform,
@@ -62,7 +64,12 @@ export function PlatformBadgePreview({
         fontSize: fontPx,
         paddingLeft: showLogo ? Math.round(22 * s * sx) : Math.round(12 * sx),
         paddingRight: Math.round(12 * sx),
-        borderRadius: (rect.h * sy) / 2,
+        // EP1: the export sprite (layer_sprites.render_badge_png) is a square-cornered rect with
+        // Montserrat Black text at fontPx — the preview drew a rounded pill in the UI font.
+        borderRadius: 0,
+        fontFamily: headlinePreviewFontFamily('Montserrat Black'),
+        fontWeight: 900,
+        lineHeight: 1,
         whiteSpace: 'nowrap',
       }}
     >
@@ -80,7 +87,16 @@ export function PlatformBadgePreview({
           aria-hidden
         />
       ) : null}
-      {showLabel && text ? <span>{text}</span> : null}
+      {showLabel && text ? (
+        <span data-libass-for="top" data-libass-ghost="text" data-testid="badge-text">
+          {text}
+        </span>
+      ) : null}
+      {/* EP2: libass-wasm draws the text over this sprite rect (badge-ass.ts mirrors drawtext). */}
+      <LibassPublish
+        kind="badge"
+        value={showLabel && text ? { rect, text, showLogo, playW, playH } : null}
+      />
     </div>
   )
 }

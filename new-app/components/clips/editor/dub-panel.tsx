@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DUB_LANGUAGES, dubCostUsd } from '@/lib/clips/dub'
+import { DUB_LANGUAGES } from '@/lib/clips/dub'
+import { creditsLabel, dubCredits } from '@/lib/clips/credit-cost'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import { toast } from 'sonner'
@@ -67,7 +68,7 @@ export function DubPanel({
     }
   }
 
-  const cost = dubCostUsd(durationMs)
+  const credits = dubCredits(durationMs)
 
   return (
     <div className="space-y-3 p-3 text-sm">
@@ -82,7 +83,7 @@ export function DubPanel({
           ))}
         </SelectContent>
       </Select>
-      <p className="text-xs text-muted-foreground">About ${cost.toFixed(2)} for this clip</p>
+      <p className="text-xs text-muted-foreground">Uses {creditsLabel(credits)}</p>
       <Button size="sm" disabled={busy} onClick={() => void generate()}>Generate dub</Button>
       <div className="space-y-2">
         {items.map((d) => (

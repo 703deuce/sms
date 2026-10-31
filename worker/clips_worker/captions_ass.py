@@ -34,6 +34,9 @@ _ASS_FONT_FILES: dict[str, Path] = {
     "Bangers": _T6_FONTS / "Bangers.ttf",
     "Inter": _T6_FONTS / "Inter.ttf",
     "Lato": _T6_FONTS / "Lato.ttf",
+    # EP1: Lato.ttf is the Black weight; its Windows name ID 1 is "Lato Black" (libass-wasm matches
+    # only that; fontconfig matches both) → canonical "Lato Black" so preview == export.
+    "Lato Black": _T6_FONTS / "Lato.ttf",
     "Bebas Neue": _T6_FONTS / "BebasNeue.ttf",
     "Luckiest Guy": _T6_FONTS / "LuckiestGuy.ttf",
     "Archivo Black": _T6_FONTS / "ArchivoBlack.ttf",
@@ -46,7 +49,8 @@ _ASS_FONT_ALIASES: dict[str, str] = {
     "Montserrat": "Montserrat Black",
     "Bangers": "Bangers",
     "Inter": "Inter",
-    "Lato": "Lato",
+    "Lato": "Lato Black",
+    "Lato Black": "Lato Black",
     "Bebas Neue": "Bebas Neue",
     "Luckiest Guy": "Luckiest Guy",
     "Archivo Black": "Archivo Black",

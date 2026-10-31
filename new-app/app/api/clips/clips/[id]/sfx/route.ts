@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { presetPrompt, sfxCostUsd } from '@/lib/clips/audio'
+import { presetPrompt } from '@/lib/clips/audio'
 import { generateSfx } from '@/lib/server/ai/elevenlabs'
 import { recordAiUsage } from '@/lib/server/clips/ai-usage'
 import { jsonError } from '@/lib/server/api-error'
@@ -50,7 +50,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           generationId: cached.generationId,
           status: gen?.status || 'READY',
           cached: true,
-          estimatedCostUsd: 0,
         },
       })
     }
@@ -112,7 +111,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         generationId: genId,
         status: 'READY',
         cached: false,
-        estimatedCostUsd: sfxCostUsd(body.durationSec),
         downloadUrl: await storage.createSignedDownloadUrl(storageKey, 3600),
       },
     })

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { musicCostUsd } from '@/lib/clips/audio'
+import { musicCredits } from '@/lib/clips/credit-cost'
 import { normalizeEdits, outputDurationMs } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
@@ -54,7 +54,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       data: {
         generationId: gen.id,
         status: 'PENDING',
-        estimatedCostUsd: musicCostUsd(lengthMs),
+        credits: musicCredits(),
       },
     })
   } catch (err) {

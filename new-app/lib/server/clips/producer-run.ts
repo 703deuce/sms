@@ -8,13 +8,18 @@ import {
   sanitizeProducerCaptionReply,
 } from '@/lib/clips/producer-captions'
 import { countProducerFieldChanges } from '@/lib/clips/producer-diff'
-import { appliedProducerSummaries, honestProducerReply, promoteMusicMixWithoutMusic } from '@/lib/clips/producer-honesty'
+import {
+  appliedProducerSummaries,
+  honestProducerReply,
+  promoteMusicIntentFromMessage,
+  promoteMusicMixWithoutMusic,
+} from '@/lib/clips/producer-honesty'
 import { normalizeEdits, type ClipBounds, type ClipEditsV2, type ClipWord } from '@/lib/clips/edits'
 import { getClipStorage } from '@/lib/storage'
 
 export const PRODUCER_SYSTEM_CLIP = `You are the Clips AI Producer. Return JSON: { "reply": string, "tools": [{ "name": string, "args": object }] }.
 Allowed tools: trim, set_captions, set_layout, set_title, set_music_mix, add_sfx, remove_broll, insert_stock_broll, generate_ai_broll, generate_music, generate_thumbnail, dub, apply_brand, set_zoom, set_silence_trim, apply_silence_trim.
-Paid tools (generate_*, dub) need user confirmation — only include them when the user clearly asks.
+Paid tools (generate_*, dub): when the user clearly asks for one, INCLUDE the tool call — the app shows a cost card with Generate / Skip, which is the confirmation. Never ask for confirmation in the reply text. "Add (background) music" on a clip without music = generate_music { prompt }.
 apply_brand applies the workspace brand template fields from args (logo/caption preset/intro/outro when present).
 For caption changes, prefer ONE set_captions call with all fields (presetId, animation, size, etc.) instead of multiple calls.
 Never claim a caption change in reply unless presetId or animation actually changes from the current edits. Pick a different presetId if the user asks for a new style.
@@ -50,9 +55,11 @@ export function runProducerOnClip(
   rawTools: ProducerToolCall[],
   words: ClipWord[],
   assistantReply?: string,
+  userMessage?: string,
 ) {
   // E4fix: "add music" on a clip without music → generate_music cost card (nothing generated yet).
-  const tools = promoteMusicMixWithoutMusic(edits, rawTools)
+  // EP1: also when the model returned no music tool at all (it asked in text instead).
+  const tools = promoteMusicIntentFromMessage(edits, promoteMusicMixWithoutMusic(edits, rawTools), userMessage)
   let applied = applyProducerToolsWithWords(edits, bounds, tools, words)
   const wantedCaptions = tools.some((t) => t.name === 'set_captions')
   if (wantedCaptions && captionStylesEqual(edits, applied.edits)) {

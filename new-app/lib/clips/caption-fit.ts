@@ -32,7 +32,9 @@ const ASS_FONT_ALIASES: Record<string, string> = {
   Montserrat: 'Montserrat Black',
   Bangers: 'Bangers',
   Inter: 'Inter',
-  Lato: 'Lato',
+  // EP1: Lato.ttf is the Black weight — libass-wasm only matches its name ID 1 "Lato Black".
+  Lato: 'Lato Black',
+  'Lato Black': 'Lato Black',
   'Bebas Neue': 'Bebas Neue',
   'Luckiest Guy': 'Luckiest Guy',
   'Archivo Black': 'Archivo Black',
@@ -50,7 +52,7 @@ export function assFontName(raw: string | undefined | null): string {
 
 function metricsFor(font: string | undefined | null): FontRow | undefined {
   const n = String(font ?? '')
-  const alias = n === 'Montserrat' ? 'Montserrat Black' : n === 'Poppins' ? 'Poppins ExtraBold' : n
+  const alias = n === 'Montserrat' ? 'Montserrat Black' : n === 'Poppins' ? 'Poppins ExtraBold' : n === 'Lato Black' ? 'Lato' : n
   return ALL[alias] ?? ALL[FALLBACK_FONT]
 }
 

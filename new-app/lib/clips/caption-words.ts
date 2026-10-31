@@ -71,12 +71,14 @@ export function buildCaptionWords(words: CaptionSourceWord[], edits: ClipEditsV2
 
 export function captionWordsToClipWords(
   caption: CaptionWord[],
-): { w: string; s: number; e: number; i?: number; idx?: number }[] {
+): { w: string; s: number; e: number; i?: number; idx?: number; spk?: number }[] {
   return caption.map((c) => ({
     w: typeof c.text === 'string' ? c.text : String(c.text ?? ''),
     s: c.s_ms / 1000,
     e: c.e_ms / 1000,
     i: c.i,
     idx: c.i,
+    // EP2: keep the speaker — the export's build_ass colours speaker 2's highlight differently.
+    ...(c.spk !== undefined ? { spk: c.spk } : {}),
   }))
 }

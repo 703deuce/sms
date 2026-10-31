@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
+import { aiBrollCredits } from '@/lib/clips/credit-cost'
 import { z } from 'zod'
 import { intMsSchema } from '@/lib/clips/broll-api-schema'
-import { createVideoTask, kieVideoCostUsd, signGenerationCallback } from '@/lib/server/ai/kie'
+import { createVideoTask, signGenerationCallback } from '@/lib/server/ai/kie'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
@@ -57,7 +58,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       data: {
         generationId: gen.id,
         status: 'RUNNING',
-        estimatedCostUsd: kieVideoCostUsd(body.durationS, body.resolution),
+        credits: aiBrollCredits(),
       },
     })
   } catch (err) {

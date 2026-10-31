@@ -10,10 +10,9 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useGeneration } from '@/components/clips/editor/use-generation'
-import { DEFAULT_MUSIC_VOLUME, musicCostUsd } from '@/lib/clips/audio'
+import { DEFAULT_MUSIC_VOLUME } from '@/lib/clips/audio'
 import { uploadClipFile } from '@/lib/clips/upload'
 import type { T2vProjectMusicRow } from '@/lib/t2v/music-types'
-import { estimateSceneMs } from '@/lib/t2v/estimate'
 
 const MOODS = ['Upbeat', 'Calm', 'Corporate', 'Cinematic', 'Inspiring', 'Playful', 'Dramatic', 'Lo-fi'] as const
 const STALE_REVISION_TOAST = 'Draft changed elsewhere — refresh and try again'
@@ -192,8 +191,6 @@ export function T2vPanelMusic({
     input.click()
   }
 
-  const lengthMs = doc.scenes.reduce((n, s) => n + estimateSceneMs(s), 0) || 60_000
-  const estCost = musicCostUsd(lengthMs)
 
   return (
     <div className="space-y-4 overflow-y-auto p-4">
@@ -237,7 +234,7 @@ export function T2vPanelMusic({
       <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
         <Label>Generate (ElevenLabs)</Label>
         <Input value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the bed…" />
-        <p className="text-xs text-muted-foreground">Est. length follows your storyboard · ~${estCost.toFixed(2)} tracked</p>
+        <p className="text-xs text-muted-foreground">Est. length follows your storyboard</p>
         <Button type="button" size="sm" disabled={genBusy || musicGen.running} onClick={() => void generate()}>
           {genBusy || musicGen.running ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
           Generate

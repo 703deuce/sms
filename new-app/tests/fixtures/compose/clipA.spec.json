@@ -34,8 +34,8 @@
     "preset": "bold_news"
   },
   "badge": {
-    "x": 508,
-    "y": 120,
+    "x": 14,
+    "y": 24,
     "w": 64,
     "h": 64,
     "platform": "twitch",
