@@ -401,7 +401,10 @@ export function PreviewStage({
         const active = item.startMs <= outMs && outMs < item.endMs
         el.style.opacity = active ? '1' : '0'
         if (active) {
-          const rel = (outMs - item.startMs) / 1000
+          // E2: inMs = media in-point (split / left-trim). Export loops short B-roll (-stream_loop -1).
+          const relRaw = (outMs - item.startMs + (item.inMs ?? 0)) / 1000
+          const d = el.duration
+          const rel = Number.isFinite(d) && d > 0.1 ? relRaw % d : relRaw
           if (Math.abs(el.currentTime - rel) > 0.15) el.currentTime = rel
           if (v && !v.paused && el.paused) void el.play()
           if (v && v.paused && !el.paused) el.pause()

@@ -68,7 +68,7 @@ describe('Timeline zoom controls (E1)', () => {
     expect(chips[0].textContent?.toLowerCase()).toContain('word0')
   })
 
-  it('draws the playhead in source space', () => {
+  it('draws the playhead on the output time base (E2)', () => {
     const { getByTestId } = renderTimeline(15000)
     const left = parseFloat(getByTestId('timeline-playhead').style.left)
     expect(left).toBeGreaterThan(40)

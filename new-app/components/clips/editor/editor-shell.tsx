@@ -39,6 +39,8 @@ import { DubPanel } from '@/components/clips/editor/dub-panel'
 import { HookOverlayPanel } from '@/components/clips/editor/hook-overlay-panel'
 import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
+import { useSfxCues } from '@/components/clips/editor/use-sfx-cues'
+import { applyTimelineLaneState, brollMediaForItems, voiceMuted } from '@/lib/clips/editor/clip-timeline'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { useStudioSoundPreview } from '@/components/clips/editor/use-studio-sound-preview'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
@@ -543,9 +545,13 @@ export function EditorShell({
   const musicGenId = edits.audio?.music?.generationId ?? null
   const musicGen = useGeneration(musicGenId)
   const aiExtras = clipEditorAiExtrasEnabled()
+  // E2: hidden / muted timeline lanes apply to preview exactly as the worker applies them to export
+  // (a muted Voice lane also drops the dub track, as export does).
+  const renderEdits = useMemo(() => applyTimelineLaneState(edits), [edits])
+  const laneVoiceMuted = voiceMuted(edits)
   const { dubs, refreshDubs, dubAudioUrl, useDubAudio, previewWords, duckWords } = useDubPreview(
     clipId,
-    edits,
+    renderEdits,
     editorWords,
     { enabled: aiExtras },
   )
@@ -680,16 +686,23 @@ export function EditorShell({
       .then((data) => setBrandTemplates(data.items ?? []))
       .catch(() => setBrandTemplates([]))
   }, [])
+  const sfxPreview = useSfxCues(edits.audio?.sfx ?? [])
+  const previewBrollMedia = useMemo(
+    () => brollMediaForItems(edits.broll ?? [], brollMedia),
+    [brollMedia, edits.broll],
+  )
   useAudioMix({
     videoRef,
-    edits,
+    edits: renderEdits,
     words: duckWords,
     musicUrl: musicGen.downloadUrl,
     dubUrl: dubAudioUrl,
     useDubAudio,
-    sfxCues: [],
+    sfxCues: renderEdits.audio?.sfx?.length ? sfxPreview.cues : [],
     outputMs,
     playing,
+    outputDurationMs: outDur,
+    voiceMuted: laneVoiceMuted,
   })
 
   useEffect(() => {
@@ -861,9 +874,9 @@ export function EditorShell({
   useEffect(() => {
     const v = videoRef.current
     if (!v || useDubAudio) return
-    v.muted = playerMuted
+    v.muted = playerMuted || laneVoiceMuted
     v.volume = playerVolume / 100
-  }, [playerMuted, playerVolume, useDubAudio, videoUrl])
+  }, [laneVoiceMuted, playerMuted, playerVolume, useDubAudio, videoUrl])
 
   const deleteSelection = useCallback(() => {
     const sel = selectionRef.current
@@ -897,7 +910,7 @@ export function EditorShell({
         e.preventDefault()
         deleteSelection()
       }
-      if (e.metaKey && e.key === 'z') {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault()
         if (e.shiftKey) redo()
         else undo()
@@ -1306,12 +1319,12 @@ export function EditorShell({
             <PreviewStage
               videoUrl={videoUrl}
               posterUrl={posterUrl}
-              edits={edits}
+              edits={renderEdits}
               words={editorWords}
               previewWords={previewWords}
               brandLogoUrl={brandLogoUrl}
               cropTrack={cropTrack}
-              brollMedia={brollMedia}
+              brollMedia={previewBrollMedia}
               videoRef={videoRef}
               onTick={onTick}
               channelDisplay={streamChannelDisplay}
@@ -1386,6 +1399,15 @@ export function EditorShell({
               setLayoutModeAtSource(playheadSourceMs, mode)
             }}
             onBrollChange={(id, patch) => updateBrollItem(id, patch)}
+            onCommitEdits={setEdits}
+            onUndo={undo}
+            onRedo={redo}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            mediaOffsetMs={mediaOffsetMs}
+            musicUrl={musicGen.downloadUrl}
+            sfxDurationsMs={sfxPreview.durationsMs}
+            onOpenCover={() => selectPanel('thumbnail')}
           />
           <PlayerControls
             playing={playing}

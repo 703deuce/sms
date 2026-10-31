@@ -15,10 +15,12 @@ def build_audio_filter(
     has_music: bool,
     sfx_specs: list[dict],
     music_input_index: int = 1,
+    music_window: dict | None = None,
 ) -> tuple[str, str]:
     """
     Returns (filter_complex, audio_map_label).
     Input 0 must have an audio stream. Music at music_input_index when has_music.
+    music_window (E2): {startMs, endMs, inMs} in output ms; None/full = legacy whole-clip bed.
     """
     L = max(0.1, float(length_s))
     V = max(0.0, min(1.0, float(volume)))
@@ -31,11 +33,7 @@ def build_audio_filter(
     mix_inputs: list[str] = ["[sp]"]
 
     if has_music:
-        parts.append(
-            f"[{music_input_index}:a]volume={V:.4f},"
-            f"afade=t=in:d={FI:.3f},afade=t=out:st={max(0, L - FO):.3f}:d={FO:.3f},"
-            f"atrim=0:{L:.3f},asetpts=PTS-STARTPTS[mv]"
-        )
+        parts.append(music_chain(music_input_index, L, V, FI, FO, music_window, "mv"))
         parts.append(
             f"[mv][sc]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[md]"
         )
@@ -57,6 +55,50 @@ def build_audio_filter(
     return ";".join(parts), "[aout]"
 
 
+def _windowed(window: dict | None, L: float) -> tuple[float, float, float] | None:
+    """(start_s, len_s, in_s) when the window differs from the legacy whole-clip bed."""
+    if not window:
+        return None
+    start = max(0.0, int(window.get("startMs") or 0) / 1000.0)
+    end_raw = window.get("endMs")
+    end = L if end_raw is None else min(L, int(end_raw) / 1000.0)
+    in_s = max(0.0, int(window.get("inMs") or 0) / 1000.0)
+    if start <= 0.0005 and in_s <= 0.0005 and end >= L - 0.0005:
+        return None
+    return start, max(0.1, end - start), in_s
+
+
+def music_chain(idx: int, L: float, V: float, FI: float, FO: float, window: dict | None, label: str) -> str:
+    """Music bed filter: legacy (0..L) or E2 windowed (atrim in-point, fades on the window, adelay)."""
+    w = _windowed(window, L)
+    if w is None:
+        return (
+            f"[{idx}:a]volume={V:.4f},"
+            f"afade=t=in:d={FI:.3f},afade=t=out:st={max(0, L - FO):.3f}:d={FO:.3f},"
+            f"atrim=0:{L:.3f},asetpts=PTS-STARTPTS[{label}]"
+        )
+    start, ln, in_s = w
+    fi = min(FI, ln / 2)
+    fo = min(FO, ln / 2)
+    delay_ms = int(round(start * 1000))
+    return (
+        f"[{idx}:a]atrim=start={in_s:.3f}:end={in_s + ln:.3f},asetpts=PTS-STARTPTS,volume={V:.4f},"
+        f"afade=t=in:d={fi:.3f},afade=t=out:st={max(0, ln - fo):.3f}:d={fo:.3f},"
+        f"adelay={delay_ms}|{delay_ms},apad=whole_dur={L:.3f}[{label}]"
+    )
+
+
+def apply_voice_mute(video: Path, out_video: Path) -> None:
+    """E2 Voice lane muted: silence the speech track (video copied)."""
+    subprocess.check_call(
+        [
+            "ffmpeg", "-y", "-v", "error", "-i", str(video),
+            "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "copy",
+            "-af", "volume=0", "-c:a", "aac", "-b:a", "128k", str(out_video),
+        ]
+    )
+
+
 def apply_audio_mix(
     video: Path,
     out_video: Path,
@@ -68,6 +110,7 @@ def apply_audio_mix(
     duck_depth: float,
     fade_in_s: float,
     fade_out_s: float,
+    music_window: dict | None = None,
 ) -> None:
     has_music = music_path is not None and music_path.is_file()
     sfx_specs = [{"at_ms": at, "volume": vol} for _, at, vol in sfx_paths]
@@ -80,6 +123,7 @@ def apply_audio_mix(
         has_music=has_music,
         sfx_specs=sfx_specs,
         music_input_index=1,
+        music_window=music_window,
     )
 
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video)]
@@ -284,6 +328,7 @@ def apply_dub_speech_mix(
     duck_depth: float,
     fade_in_s: float,
     fade_out_s: float,
+    music_window: dict | None = None,
 ) -> None:
     """Replace speech with dub audio; duck music against dub track."""
     has_music = music_path is not None and music_path.is_file()
@@ -297,10 +342,7 @@ def apply_dub_speech_mix(
     parts = ["[1:a]asplit=2[sp][sc]"]
     mix_inputs = ["[sp]"]
     if has_music:
-        parts.append(
-            f"[2:a]volume={V:.4f},afade=t=in:d={FI:.3f},afade=t=out:st={max(0, L - FO):.3f}:d={FO:.3f},"
-            f"atrim=0:{L:.3f},asetpts=PTS-STARTPTS[mv]"
-        )
+        parts.append(music_chain(2, L, V, FI, FO, music_window, "mv"))
         parts.append(
             f"[mv][sc]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[md]"
         )

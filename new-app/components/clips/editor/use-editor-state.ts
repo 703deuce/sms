@@ -45,6 +45,8 @@ import { mergeCleanupCutRanges } from '@/lib/clips/editor/cleanup-proposals'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { mergeEditsThreeWay } from '@/lib/clips/edits-merge'
+import { rippleAnchoredItems } from '@/lib/clips/editor/clip-timeline'
+import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import {
   legacyFromLayers,
   resolveLayers,
@@ -216,22 +218,35 @@ export function useEditorState(
     localRevisionRef.current += 1
   }, [])
 
-  const setEdits = useCallback((edits: ClipEditsV2, pushHistory = true) => {
+  /**
+   * E2: when the EDL changes (transcript cuts, trim, reorder, silence trim) keep B-roll,
+   * SFX and windowed music on the same source content, in the same undo step.
+   */
+  const rippleFrom = useCallback((prev: ClipEditsV2, next: ClipEditsV2): ClipEditsV2 => {
+    if (!(next.broll?.length || next.audio?.sfx?.length || next.audio?.music)) return next
+    const w = wordsRef.current
+    return rippleAnchoredItems(prev, next, editorPreviewEdits(prev, w), editorPreviewEdits(next, w))
+  }, [])
+
+  const setEdits = useCallback((input: ClipEditsV2, pushHistory = true) => {
+    const edits = rippleFrom(editsRef.current, input)
     if (editsEqual(editsRef.current, edits)) return
     editsRef.current = edits
     bumpLocalRevision()
     dispatch({ type: 'set', edits, pushHistory })
-  }, [bumpLocalRevision])
+  }, [bumpLocalRevision, rippleFrom])
 
   const setCutRanges = useCallback(
     (cutRanges: CutRange[]) => {
       const next = { ...editsRef.current, cutRanges }
       if (editsEqual(editsRef.current, next)) return
-      editsRef.current = next
+      const rippled = rippleFrom(editsRef.current, next)
+      editsRef.current = rippled
       bumpLocalRevision()
-      dispatch({ type: 'addCuts', cutRanges })
+      if (rippled !== next) dispatch({ type: 'set', edits: rippled })
+      else dispatch({ type: 'addCuts', cutRanges })
     },
-    [bumpLocalRevision],
+    [bumpLocalRevision, rippleFrom],
   )
 
   /** One undo step for a full producer patch (not per-field). */
@@ -268,11 +283,13 @@ export function useEditorState(
       const cuts = mergeCleanupCutRanges(editsRef.current.cutRanges, ranges, spans)
       const nextEdits = { ...editsRef.current, cutRanges: cuts }
       if (editsEqual(editsRef.current, nextEdits)) return
-      editsRef.current = nextEdits
+      const rippled = rippleFrom(editsRef.current, nextEdits)
+      editsRef.current = rippled
       bumpLocalRevision()
-      dispatch({ type: 'addCuts', cutRanges: cuts })
+      if (rippled !== nextEdits) dispatch({ type: 'set', edits: rippled })
+      else dispatch({ type: 'addCuts', cutRanges: cuts })
     },
-    [bumpLocalRevision, wordSpans],
+    [bumpLocalRevision, rippleFrom, wordSpans],
   )
 
   const applyCleanupCut = useCallback(

@@ -4,6 +4,8 @@ import { useEffect, useRef } from 'react'
 import type { ClipEditsAudio } from '@/lib/clips/audio'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { normalizeEditSpeed } from '@/lib/clips/edits'
+import { musicWindow } from '@/lib/clips/editor/clip-timeline'
 import type { SourceWord } from '@/lib/clips/source-words'
 
 type SfxCue = { buffer: AudioBuffer; atMs: number; volume: number; generationId: string }
@@ -18,6 +20,8 @@ export function useAudioMix({
   sfxCues,
   outputMs,
   playing,
+  outputDurationMs,
+  voiceMuted = false,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
   edits: ClipEditsV2
@@ -28,6 +32,10 @@ export function useAudioMix({
   sfxCues: SfxCue[]
   outputMs: number
   playing: boolean
+  /** E2: output length, for the music window default end. */
+  outputDurationMs?: number
+  /** E2: Voice lane muted (speech / dub silent; music + SFX still play). */
+  voiceMuted?: boolean
 }) {
   const ctxRef = useRef<AudioContext | null>(null)
   const dubRef = useRef<HTMLAudioElement | null>(null)
@@ -35,20 +43,24 @@ export function useAudioMix({
   const musicGainRef = useRef<GainNode | null>(null)
   const elementSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const scheduledRef = useRef(false)
-  const lastSfxKeyRef = useRef('')
+  const sfxNodesRef = useRef<AudioBufferSourceNode[]>([])
+  const sfxAnchorRef = useRef<{ ctxT: number; outMs: number } | null>(null)
+  const outputMsRef = useRef(outputMs)
+  outputMsRef.current = outputMs
+  const rate = normalizeEditSpeed(edits.speed) ?? 1
 
   const audio = edits.audio
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    if (useDubAudio) {
+    if (useDubAudio || voiceMuted) {
       video.muted = true
     } else {
       video.muted = false
       if (video.volume <= 0) video.volume = 1
     }
-  }, [useDubAudio, videoRef])
+  }, [useDubAudio, videoRef, voiceMuted])
 
   useEffect(() => {
     const video = videoRef.current
@@ -67,13 +79,14 @@ export function useAudioMix({
   useEffect(() => {
     const dub = dubRef.current
     if (!useDubAudio || !dub || !dubUrl) return
+    dub.muted = voiceMuted
     if (playing) {
-      dub.currentTime = outputMs / 1000
+      if (dub.paused || Math.abs(dub.currentTime - outputMs / 1000) > 0.3) dub.currentTime = outputMs / 1000
       void dub.play().catch(() => {})
     } else {
       dub.pause()
     }
-  }, [playing, outputMs, dubUrl, useDubAudio])
+  }, [playing, outputMs, dubUrl, useDubAudio, voiceMuted])
 
   useEffect(() => {
     const video = videoRef.current
@@ -130,36 +143,78 @@ export function useAudioMix({
     const video = videoRef.current
     const music = musicRef.current
     const ctx = ctxRef.current
-    if (!video || !music || !ctx || !audio?.music) return
-    if (playing) {
+    if (!video || !music || !ctx || !audio?.music) {
+      music?.pause()
+      return
+    }
+    // E2: the bed only plays inside its timeline window, from its media in-point.
+    const win = musicWindow(audio.music, outputDurationMs ?? Number.MAX_SAFE_INTEGER)
+    const inWin = Boolean(win && outputMs >= win.startMs && outputMs < win.endMs)
+    if (playing && win && inWin) {
       void ctx.resume()
-      music.currentTime = outputMs / 1000
-      void music.play().catch(() => {})
+      const target = (outputMs - win.startMs + win.inMs) / 1000
+      if (music.paused || Math.abs(music.currentTime - target) > 0.3) music.currentTime = target
+      if (music.paused) void music.play().catch(() => {})
     } else {
       music.pause()
     }
-  }, [playing, outputMs, audio?.music, videoRef])
+  }, [playing, outputMs, audio?.music, videoRef, outputDurationMs])
 
-  useEffect(() => {
+  // E2: SFX play in preview at atMs (previously never scheduled). Re-scheduled on play / seek.
+  const sfxKey = sfxCues.map((c) => `${c.generationId}:${c.atMs}:${c.volume}`).join('|')
+  const stopSfx = () => {
+    for (const n of sfxNodesRef.current) {
+      try {
+        n.stop()
+      } catch {
+        /* already stopped */
+      }
+    }
+    sfxNodesRef.current = []
+    sfxAnchorRef.current = null
+  }
+  const scheduleSfx = (fromMs: number) => {
+    stopSfx()
+    if (!sfxCues.length) return
+    if (!ctxRef.current) ctxRef.current = new AudioContext()
     const ctx = ctxRef.current
-    if (!ctx || !playing) return
-    const key = sfxCues.map((c) => `${c.generationId}:${c.atMs}`).join('|')
-    if (key === lastSfxKeyRef.current) return
-    lastSfxKeyRef.current = key
+    void ctx.resume()
     for (const cue of sfxCues) {
+      const endMs = cue.atMs + cue.buffer.duration * 1000
+      if (endMs <= fromMs) continue
       const src = ctx.createBufferSource()
       src.buffer = cue.buffer
       const g = ctx.createGain()
       g.gain.value = cue.volume
       src.connect(g)
       g.connect(ctx.destination)
-      const delay = Math.max(0, cue.atMs - outputMs) / 1000
-      src.start(ctx.currentTime + delay)
+      if (cue.atMs >= fromMs) src.start(ctx.currentTime + (cue.atMs - fromMs) / 1000 / rate)
+      else src.start(ctx.currentTime, (fromMs - cue.atMs) / 1000)
+      sfxNodesRef.current.push(src)
     }
-  }, [sfxCues, playing, outputMs])
+    sfxAnchorRef.current = { ctxT: ctx.currentTime, outMs: fromMs }
+  }
+  const scheduleRef = useRef(scheduleSfx)
+  scheduleRef.current = scheduleSfx
+  const stopRef = useRef(stopSfx)
+  stopRef.current = stopSfx
+
+  useEffect(() => {
+    if (playing) scheduleRef.current(outputMsRef.current)
+    else stopRef.current()
+  }, [playing, sfxKey])
+
+  useEffect(() => {
+    const ctx = ctxRef.current
+    const anchor = sfxAnchorRef.current
+    if (!playing || !ctx || !anchor) return
+    const expected = anchor.outMs + (ctx.currentTime - anchor.ctxT) * 1000 * rate
+    if (Math.abs(outputMs - expected) > 350) scheduleRef.current(outputMs)
+  }, [outputMs, playing, rate])
 
   useEffect(() => {
     return () => {
+      stopRef.current()
       void ctxRef.current?.close()
       ctxRef.current = null
       musicRef.current = null

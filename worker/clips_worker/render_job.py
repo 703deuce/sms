@@ -414,6 +414,10 @@ def _run_render_clip_job_body(
         hasSource=bool(source_key),
     )
     edits = normalize_edits(ctx["edits"], clip_start, clip_end)
+    # E2: hidden / muted timeline lanes are dropped before any asset load or render path.
+    from clips_worker.timeline_lanes import apply_timeline_lane_state
+
+    edits = apply_timeline_lane_state(edits)
     settings = ctx["settings"] or {}
     if isinstance(settings, str):
         settings = json.loads(settings)

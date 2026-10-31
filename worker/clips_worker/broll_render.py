@@ -75,7 +75,8 @@ def build_broll_filtergraph(
     height: int,
 ) -> tuple[str, list[str], str]:
     """
-    broll_specs: [{local_path, start_s, end_s, duration_s}]
+    broll_specs: [{local_path, start_s, end_s, duration_s, in_s?}]
+    start_s/end_s are OUTPUT seconds; in_s (E2) is the B-roll media in-point shown at start_s.
     Returns (filter_complex, extra_input_args, final_video_label)
     """
     if not broll_specs:
@@ -91,14 +92,16 @@ def build_broll_filtergraph(
         end = float(spec["end_s"])
         inp = f"{i + 1}:v"
         local = Path(spec["local_path"])
+        in_s = max(0.0, float(spec.get("in_s") or 0.0))
         probed = probe_video_duration_s(local)
-        if probed is not None:
-            clip_dur = min(clip_dur, probed)
+        if probed is not None and in_s < probed:
+            clip_dur = min(clip_dur, probed - in_s)
         clip_dur = max(0.1, clip_dur)
         bar_crop = detect_letterbox_crop(local)
         bar_vf = f"{bar_crop}," if bar_crop else ""
+        trim = f"trim=0:{clip_dur:.3f}" if in_s <= 0 else f"trim={in_s:.3f}:{in_s + clip_dur:.3f}"
         parts.append(
-            f"[{inp}]trim=0:{clip_dur:.3f},setpts=PTS-STARTPTS+{start:.3f}/TB,"
+            f"[{inp}]{trim},setpts=PTS-STARTPTS+{start:.3f}/TB,"
             f"{bar_vf}"
             f"scale={width}:{height}:force_original_aspect_ratio=increase,"
             f"crop={width}:{height},fps=30,format=yuv420p[b{i}]"
@@ -140,6 +143,7 @@ def load_broll_specs(conn, edits: dict, work_dir) -> list[dict]:
                 "start_s": start_s,
                 "end_s": end_s,
                 "duration_s": max(0.1, end_s - start_s),
+                "in_s": max(0, int(item.get("inMs") or 0)) / 1000.0,
             }
         )
     return specs

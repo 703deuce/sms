@@ -4,6 +4,11 @@ export type ClipAudioMusic = {
   duckDepth?: number
   fadeInMs?: number
   fadeOutMs?: number
+  /** E2 timeline window in OUTPUT ms (default 0 .. clip end). */
+  startMs?: number
+  endMs?: number
+  /** Music media in-point at startMs (left-trim keeps content anchored). */
+  inMs?: number
 }
 
 export type ClipAudioSfx = {
@@ -77,6 +82,9 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
         duckDepth: clamp01(m.duckDepth, DEFAULT_DUCK_DEPTH),
         fadeInMs: num(m.fadeInMs, DEFAULT_MUSIC_FADE_IN_MS),
         fadeOutMs: num(m.fadeOutMs, DEFAULT_MUSIC_FADE_OUT_MS),
+        ...optionalMs('startMs', m.startMs),
+        ...optionalMs('endMs', m.endMs),
+        ...optionalMs('inMs', m.inMs),
       }
     }
   }
@@ -109,6 +117,13 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
     })
     .filter(Boolean) as ClipAudioSfx[]
   return { music: musicOut, sfx, studioSound: studioOut }
+}
+
+function optionalMs<K extends 'startMs' | 'endMs' | 'inMs'>(key: K, v: unknown): Partial<Record<K, number>> {
+  if (v == null) return {}
+  const n = Number(v)
+  if (!Number.isFinite(n) || n < 0) return {}
+  return { [key]: Math.round(n) } as Partial<Record<K, number>>
 }
 
 function clamp01(v: unknown, fallback: number): number {
