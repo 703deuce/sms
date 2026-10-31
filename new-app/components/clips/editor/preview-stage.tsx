@@ -32,6 +32,10 @@ import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { coverBoxStyle, stackPanelStyles } from '@/lib/clips/facecam-geometry'
 import { fitTopHeadlineLines } from '@/lib/clips/fit-top-headline-lines'
 import { overlayLayout } from '@/lib/clips/stream-overlay-layout'
+import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
+import { brollTransitionWindows, brollVisibleRange } from '@/lib/clips/editor/transitions'
+import { applyMotionFrame } from '@/components/clips/editor/motion-preview'
+import { HookOverlayPreview } from '@/components/clips/editor/hook-overlay-preview'
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
@@ -190,6 +194,16 @@ export function PreviewStage({
   const lastSrcMsRef = useRef<number | null>(null)
   const boundVideoRef = useRef<HTMLVideoElement | null>(null)
   const seekKeyRef = useRef<string | null>(null)
+  // E3: layers driven per tick by motion-preview (keyframes + transitions).
+  const underRef = useRef<HTMLDivElement>(null)
+  const mainKfRef = useRef<HTMLDivElement>(null)
+  const mainLayerRef = useRef<HTMLDivElement>(null)
+  const cloneARef = useRef<HTMLDivElement>(null)
+  const cutDipRef = useRef<HTMLDivElement>(null)
+  const cloneBRef = useRef<HTMLDivElement>(null)
+  const brollBoxRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const brollDipRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const hookRef = useRef<HTMLDivElement | null>(null)
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
   const captionTimeRef = useRef(0)
@@ -361,7 +375,9 @@ export function PreviewStage({
         if (blur && Math.abs(blur.currentTime - v.currentTime) > 0.05) {
           blur.currentTime = v.currentTime
         }
-        wrapRef.current?.querySelectorAll('video').forEach((el) => {
+        // Only the main layer's videos follow the main clock (B-roll and E3 transition clones
+        // have their own media times).
+        mainLayerRef.current?.querySelectorAll('video').forEach((el) => {
           if (el !== v && el !== blur && Math.abs(el.currentTime - v.currentTime) > 0.05) {
             el.currentTime = v.currentTime
           }
@@ -394,12 +410,19 @@ export function PreviewStage({
         setCaptionTimeSec(outSec)
       }
       const outMs = out
-      for (const item of editsRef.current.broll || []) {
+      const bWins = brollTransitionWindows(e.broll)
+      for (const item of e.broll || []) {
+        // E1fix: live media rows via ref (the tick is mounted once).
         const media = brollMediaRef.current.find((m) => m.id === item.id)
         const el = brollRefs.current[item.id]
         if (!el || !media?.url) continue
-        const active = item.startMs <= outMs && outMs < item.endMs
-        el.style.opacity = active ? '1' : '0'
+        // E3: an outgoing item keeps playing through the next item's 'between' transition.
+        const [visStart, visEnd] = brollVisibleRange(item, bWins)
+        const active = visStart <= outMs && outMs < visEnd
+        // E1fix contract: the B-roll <video> itself is opacity 1 while active (E3 shows/hides and
+        // animates its box; keyframed opacity lives on the box, not here).
+        const op = active ? '1' : '0'
+        if (el.style.opacity !== op) el.style.opacity = op
         if (active) {
           // E2: inMs = media in-point (split / left-trim). Export loops short B-roll (-stream_loop -1).
           const relRaw = (outMs - item.startMs + (item.inMs ?? 0)) / 1000
@@ -410,6 +433,28 @@ export function PreviewStage({
           if (v && v.paused && !el.paused) el.pause()
         } else if (!el.paused) el.pause()
       }
+      applyMotionFrame(
+        {
+          under: underRef.current,
+          mainKf: mainKfRef.current,
+          mainLayer: mainLayerRef.current,
+          cloneA: cloneARef.current,
+          cutDip: cutDipRef.current,
+          cloneB: cloneBRef.current,
+          brollBox: brollBoxRefs.current,
+          brollDip: brollDipRefs.current,
+          hook: hookRef.current,
+        },
+        e,
+        timebaseFor(playbackEdits),
+        outMs,
+        {
+          boxW: boxSizeRef.current.w,
+          playing: v ? !v.paused : false,
+          rate: normalizeEditSpeed(e.speed) ?? 1,
+          mediaOffsetMs,
+        },
+      )
       onTickRef.current({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
 
       const { w: boxW, h: boxH } = boxSizeRef.current
@@ -569,6 +614,9 @@ export function PreviewStage({
             aria-hidden
           />
         ) : null}
+        <div ref={underRef} className="absolute inset-0" data-testid="preview-under">
+        <div ref={mainKfRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }} data-testid="preview-main-kf">
+        <div ref={mainLayerRef} className="absolute inset-0" data-testid="preview-main-layer">
         {templatePreview ? (
           <TemplateStage
             spec={templatePreview}
@@ -859,28 +907,68 @@ export function PreviewStage({
         ) : (
           <div className="flex size-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">No video</div>
         )}
-        {!compositePreview && (edits.broll || []).map((item) => {
-          const media = brollMedia.find((m) => m.id === item.id)
-          if (!media?.url) return null
-          return (
-            <div
-              key={`${item.id}:${media.url}`}
-              className="pointer-events-none absolute z-[15] overflow-hidden"
-              style={brollRegionStyle}
-              data-testid="preview-broll"
-              data-broll-id={item.id}
-            >
-              <BrollPreviewVideo
-                src={media.url}
-                videoRef={(el) => {
-                  brollRefs.current[item.id] = el
-                }}
-                className="pointer-events-none absolute overflow-hidden"
-                style={{ inset: 0, opacity: 0 }}
-              />
-            </div>
-          )
-        })}
+        </div>
+        {/* E3 cut transitions: clone A (outgoing, continued), dip colour, clone B (incoming, pre-rolled). */}
+        <div ref={cloneARef} className="pointer-events-none absolute inset-0" style={{ visibility: 'hidden' }} data-testid="preview-transition-a" aria-hidden />
+        <div ref={cutDipRef} className="pointer-events-none absolute inset-0" style={{ opacity: 0 }} data-testid="preview-transition-color" aria-hidden />
+        <div ref={cloneBRef} className="pointer-events-none absolute inset-0" style={{ visibility: 'hidden' }} data-testid="preview-transition-b" aria-hidden />
+        </div>
+        </div>
+        {!compositePreview &&
+          [...(edits.broll || [])]
+            .sort((a, b) => a.startMs - b.startMs)
+            .map((item) => {
+              const media = brollMedia.find((m) => m.id === item.id)
+              if (!media?.url) return null
+              // E1fix region (full frame / under the title band / fit-top video rect) wraps the
+              // E3 per-item dip + keyframed box.
+              return (
+                <div
+                  key={`${item.id}:${media.url}`}
+                  className="pointer-events-none absolute z-[15] overflow-hidden"
+                  style={brollRegionStyle}
+                  data-testid="preview-broll"
+                  data-broll-id={item.id}
+                >
+                  <div
+                    ref={(el) => {
+                      brollDipRefs.current[item.id] = el
+                    }}
+                    className="pointer-events-none absolute inset-0"
+                    style={{ opacity: 0 }}
+                    aria-hidden
+                  />
+                  <div
+                    ref={(el) => {
+                      brollBoxRefs.current[item.id] = el
+                    }}
+                    className="pointer-events-none absolute inset-0 overflow-hidden"
+                    style={{ visibility: 'hidden', transformOrigin: '50% 50%' }}
+                    data-testid="preview-broll-layer"
+                    data-broll-id={item.id}
+                  >
+                    <BrollPreviewVideo
+                      src={media.url}
+                      videoRef={(el) => {
+                        brollRefs.current[item.id] = el
+                      }}
+                      className="pointer-events-none absolute overflow-hidden"
+                      style={{ inset: 0, opacity: 0 }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+        {!compositePreview && !(templatePreview && edits.exportTemplate?.headlineBar?.enabled) ? (
+          <HookOverlayPreview
+            edits={edits as ClipEditsV2}
+            boxW={box.w}
+            boxH={box.h}
+            elRef={(el) => {
+              hookRef.current = el
+            }}
+          />
+        ) : null}
         {!compositePreview && brandLogoUrl && brand.logoKey && (
           <img
             src={brandLogoUrl}

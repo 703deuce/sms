@@ -6,6 +6,7 @@ import { buildCaptionWords } from '@/lib/clips/caption-words'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { normalizeEditSpeed } from '@/lib/clips/edits'
 import { musicWindow } from '@/lib/clips/editor/clip-timeline'
+import { findTrack, volumeAt } from '@/lib/clips/editor/keyframes'
 import type { SourceWord } from '@/lib/clips/source-words'
 
 type SfxCue = { buffer: AudioBuffer; atMs: number; volume: number; generationId: string }
@@ -42,6 +43,9 @@ export function useAudioMix({
   const musicRef = useRef<HTMLAudioElement | null>(null)
   const musicGainRef = useRef<GainNode | null>(null)
   const elementSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
+  // E3: volume keyframes (Voice / Music lanes) — gain envelopes in series with the existing mix.
+  const voiceGainRef = useRef<GainNode | null>(null)
+  const musicEnvRef = useRef<GainNode | null>(null)
   const scheduledRef = useRef(false)
   const sfxNodesRef = useRef<AudioBufferSourceNode[]>([])
   const sfxAnchorRef = useRef<{ ctxT: number; outMs: number } | null>(null)
@@ -97,7 +101,9 @@ export function useAudioMix({
       if (!ctxRef.current) {
         ctxRef.current = new AudioContext()
         elementSourceRef.current = ctxRef.current.createMediaElementSource(video)
-        elementSourceRef.current.connect(ctxRef.current.destination)
+        voiceGainRef.current = ctxRef.current.createGain()
+        elementSourceRef.current.connect(voiceGainRef.current)
+        voiceGainRef.current.connect(ctxRef.current.destination)
       }
       const ctx = ctxRef.current
       if (!musicRef.current) {
@@ -112,9 +118,11 @@ export function useAudioMix({
 
       if (!musicGainRef.current) {
         musicGainRef.current = ctx.createGain()
+        musicEnvRef.current = ctx.createGain()
         const track = ctx.createMediaElementSource(el)
         track.connect(musicGainRef.current)
-        musicGainRef.current.connect(ctx.destination)
+        musicGainRef.current.connect(musicEnvRef.current)
+        musicEnvRef.current.connect(ctx.destination)
       }
 
       const capWords = buildCaptionWords(words, edits)
@@ -159,6 +167,26 @@ export function useAudioMix({
       music.pause()
     }
   }, [playing, outputMs, audio?.music, videoRef, outputDurationMs])
+
+  // E3: volume envelopes, evaluated with the same math as the export's `volume` expressions.
+  const hasVoiceEnv = Boolean(findTrack(edits, 'voice', 'volume'))
+  const hasMusicEnv = Boolean(findTrack(edits, 'music', 'volume'))
+  useEffect(() => {
+    const video = videoRef.current
+    const voice = hasVoiceEnv ? volumeAt(edits, 'voice', outputMs) : 1
+    if (voiceGainRef.current) {
+      voiceGainRef.current.gain.value = voice
+      if (video && hasVoiceEnv && video.volume !== 1) video.volume = 1
+    } else if (video && (hasVoiceEnv || video.volume !== 1)) {
+      video.volume = Math.max(0, Math.min(1, voice))
+    }
+    if (dubRef.current) dubRef.current.volume = Math.max(0, Math.min(1, voice))
+    const env = musicEnvRef.current
+    if (env) {
+      const win = audio?.music ? musicWindow(audio.music, outputDurationMs ?? Number.MAX_SAFE_INTEGER) : null
+      env.gain.value = hasMusicEnv && win ? volumeAt(edits, 'music', outputMs - win.startMs) : 1
+    }
+  }, [audio?.music, edits, hasMusicEnv, hasVoiceEnv, outputDurationMs, outputMs, videoRef])
 
   // E2: SFX play in preview at atMs (previously never scheduled). Re-scheduled on play / seek.
   const sfxKey = sfxCues.map((c) => `${c.generationId}:${c.atMs}:${c.volume}`).join('|')
@@ -220,6 +248,8 @@ export function useAudioMix({
       musicRef.current = null
       dubRef.current = null
       musicGainRef.current = null
+      musicEnvRef.current = null
+      voiceGainRef.current = null
       elementSourceRef.current = null
     }
   }, [])

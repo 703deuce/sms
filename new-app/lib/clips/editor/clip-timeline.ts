@@ -26,6 +26,8 @@ import {
   type CutRange,
 } from '@/lib/clips/edits'
 import { splitLayoutSegmentAt } from '@/lib/clips/layout-segments'
+import { reconcileItemMotion, rippleGlobalKeyframes } from '@/lib/clips/editor/keyframes'
+import { remapCutTransitions } from '@/lib/clips/editor/transitions'
 import {
   LANE_ORDER,
   LANE_TOGGLES,
@@ -223,6 +225,17 @@ export function musicWindow(music: ClipAudioMusic | null | undefined, durationMs
 // ---------------------------------------------------------------------------
 
 const NO_CAPS: ItemCaps = { move: false, trimStart: false, trimEnd: false, split: false, del: false }
+
+/**
+ * E3 × E2fix: cut indices k (cut between segs[k-1] and segs[k]) where the SOURCE jumps — the only
+ * places a transition is offered / rendered. videoSplits never enter the time base (the worker never
+ * sees them), and touching keep segments (no source gap) are not cuts either.
+ */
+export function realCutIndices(tb: Timebase): number[] {
+  const out: number[] = []
+  for (let k = 1; k < tb.segs.length; k++) if (tb.segs[k]![0] - tb.segs[k - 1]![1] >= 1) out.push(k)
+  return out
+}
 
 /** One Video-lane segment: a keep segment, or part of one after a split. */
 export type VideoLaneSeg = { a: number; b: number; startMs: number }
@@ -671,7 +684,14 @@ function sameSegs(a: Timebase, b: Timebase): boolean {
 }
 
 function anchoredJson(e: ClipEditsV2): string {
-  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null])
+  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null])
+}
+
+/** E3: anything that must follow the EDL or its items (ripple / reconcile). */
+export function hasAnchoredContent(e: ClipEditsV2): boolean {
+  return Boolean(
+    e.broll?.length || e.audio?.sfx?.length || e.audio?.music || e.keyframes?.length || e.transitions?.length,
+  )
 }
 
 export function rippleAnchoredItems(
@@ -680,9 +700,11 @@ export function rippleAnchoredItems(
   prevPreview: ClipEditsV2,
   nextPreview: ClipEditsV2,
 ): ClipEditsV2 {
+  // E3: item edits keep their keyframes on the item's media (trim / split / delete).
+  next = reconcileItemMotion(prev, next)
   // Only ripple when the change was to the EDL, not to the anchored items themselves.
   if (anchoredJson(prev) !== anchoredJson(next)) return next
-  if (!(next.broll?.length || next.audio?.sfx?.length || next.audio?.music)) return next
+  if (!hasAnchoredContent(next)) return next
   const a = timebaseFor(prevPreview)
   const b = timebaseFor(nextPreview)
   if (sameSegs(a, b)) return next
@@ -690,6 +712,14 @@ export function rippleAnchoredItems(
   const mapEnd = (out: number) => sourceToOutputSnapped(b, outputToSourceEnd(a, out))
   const dur = b.durationMs
   let out = next
+  if (next.keyframes?.length) {
+    const kf = rippleGlobalKeyframes(next.keyframes, mapStart)
+    if (kf !== next.keyframes) out = { ...out, keyframes: kf }
+  }
+  if (next.transitions?.length) {
+    const tr = remapCutTransitions(next.transitions, a.segs, b.segs)
+    if (tr !== next.transitions) out = { ...out, transitions: tr }
+  }
   if (next.broll?.length) {
     out = {
       ...out,
