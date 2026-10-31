@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
@@ -11,6 +11,8 @@ import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import { clipsFetch } from '@/lib/clips-api'
 import { toast } from 'sonner'
 import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
+import { editorTemplateSpec } from '@/lib/clips/templates/editor-spec'
+import { TemplateStage } from '@/components/clips/editor/template-stage'
 
 type NormBox = { x: number; y: number; w: number; h: number }
 
@@ -78,6 +80,7 @@ export function FacecamLayoutStudio({
   channelId,
   clipType,
   sourceTimeSec = 0,
+  aiMeta = null,
 }: {
   edits: ClipEditsV2
   facecamLayout: FacecamLayoutState | null
@@ -88,6 +91,8 @@ export function FacecamLayoutStudio({
   channelId?: string | null
   clipType?: string | null
   sourceTimeSec?: number
+  /** T6.5: clip aiMeta (signals/faces) so the 9:16 preview resolves the same template spec. */
+  aiMeta?: Record<string, unknown> | null
 }) {
   const mode = edits.layout.mode
   const showStudio =
@@ -226,6 +231,12 @@ export function FacecamLayoutStudio({
   }
 
   const stackPreview = mode === 'facecam_stack' && !t6Tpl ? stackPanelStyles(split, position) : null
+  // T6.5: under a template the small 9:16 preview is the SAME TemplateStage + spec as the main
+  // preview (it used to show the whole frame object-cover'ed, i.e. a centre crop — the plush
+  // mascot instead of the geometry.ts face cover).
+  const t6Spec = useMemo(() => (t6Tpl ? editorTemplateSpec(edits, aiMeta) : null), [t6Tpl, edits, aiMeta])
+  const studioPrimaryRef = useRef<HTMLVideoElement | null>(null)
+  const studioSeekedRef = useRef(false)
 
   const saveChannelDefault = async () => {
     if (!projectId || !channelId) {
@@ -334,7 +345,23 @@ export function FacecamLayoutStudio({
           className="relative mx-auto aspect-[9/16] w-[120px] overflow-hidden rounded-md border border-border bg-black"
           aria-label="9:16 export preview"
         >
-          {videoUrl && stackPreview ? (
+          {videoUrl && t6Spec ? (
+            <div className="absolute inset-0" data-testid="studio-template-preview">
+              <TemplateStage
+                spec={t6Spec}
+                videoUrl={videoUrl}
+                posterUrl={posterUrl}
+                primaryVideoRef={studioPrimaryRef}
+                onReady={() => {
+                  const v = studioPrimaryRef.current
+                  if (!v || studioSeekedRef.current) return
+                  studioSeekedRef.current = true
+                  v.muted = true
+                  if (Number.isFinite(sourceTimeSec) && sourceTimeSec > 0) v.currentTime = sourceTimeSec
+                }}
+              />
+            </div>
+          ) : videoUrl && stackPreview ? (
             <>
               <div
                 className="absolute inset-x-0 overflow-hidden"
