@@ -76,6 +76,202 @@ def _trim_sides_box(signals: dict, edits: dict) -> dict:
     return {"x": x, "y": 0.0, "w": w, "h": 1.0}
 
 
+FACE_SRCS = ("face_tight", "active_speaker")
+
+
+def _faces(signals: dict) -> list[dict] | None:
+    """T6.3: recurring YuNet faces from signals (t6_cv.detect_faces). None = never measured."""
+    raw = signals.get("faces")
+    if not isinstance(raw, list):
+        return None
+    out = []
+    for f in raw:
+        if isinstance(f, dict) and float(f.get("w") or 0) > 0 and float(f.get("h") or 0) > 0:
+            out.append(f)
+    return out
+
+
+def _center_in(f: dict, r: dict) -> bool:
+    cx = float(f["x"]) + float(f["w"]) / 2
+    cy = float(f["y"]) + float(f["h"]) / 2
+    rx, ry = float(r.get("x") or 0), float(r.get("y") or 0)
+    return rx <= cx <= rx + float(r.get("w") or 1) and ry <= cy <= ry + float(r.get("h") or 1)
+
+
+def _crop_at(cx: float, cy: float, h: float, panel_aspect: float, region: dict) -> dict:
+    """Panel-aspect crop of height ``h`` centred on (cx, cy), shrunk/clamped inside ``region``."""
+    rx, ry = float(region.get("x") or 0), float(region.get("y") or 0)
+    rw, rh = float(region.get("w") or 1), float(region.get("h") or 1)
+    w = h * panel_aspect / SRC_ASPECT
+    k = min(1.0, rw / w if w > 0 else 1.0, rh / h if h > 0 else 1.0)
+    w, h = w * k, h * k
+    x = min(max(cx - w / 2, rx), rx + rw - w)
+    y = min(max(cy - h / 2, ry), ry + rh - h)
+    return {"x": round(_clamp01(x), 4), "y": round(_clamp01(y), 4), "w": round(_clamp01(w), 4), "h": round(_clamp01(h), 4)}
+
+
+def _face_crop(face: dict, panel_aspect: float, region: dict, *, face_frac: float, top_inset: float = 0.0) -> dict:
+    """Crop where the face is ``face_frac`` of the panel height, eyes a bit above centre.
+
+    ``top_inset`` = fraction of the panel hidden under the title bar: the face is then centred
+    in the visible part (zooming in if the region has no room above the face)."""
+    fh = float(face["h"])
+    cx = float(face["x"]) + float(face["w"]) / 2
+    fcy = float(face["y"]) + fh / 2
+    t = max(0.0, min(0.8, float(top_inset)))
+    if t <= 0:
+        h = min(float(region.get("h") or 1), fh / max(0.05, face_frac))
+        return _crop_at(cx, fcy + h * 0.08, h, panel_aspect, region)
+    h0 = min(float(region.get("h") or 1), fh / max(0.05, face_frac * (1 - t)))
+    return _crop_under_title(face, fh, h0, panel_aspect, region, t)
+
+
+def _crop_under_title(
+    face: dict,
+    fh: float,
+    h0: float,
+    panel_aspect: float,
+    region: dict,
+    t: float,
+    *,
+    cx: float | None = None,
+    fcy: float | None = None,
+) -> dict:
+    """T6.3: the top ``t`` of the panel is covered by the title bar. Size the crop so the face
+    fits in the visible part, centre it there, and let only the hidden (under-title) strip
+    spill above ``region`` (a facecam at the bottom of the frame has no room above the face)."""
+    cx = float(cx if cx is not None else float(face["x"]) + float(face["w"]) / 2)
+    fcy = float(fcy if fcy is not None else float(face["y"]) + float(face["h"]) / 2)
+    h = min(1.0, max(h0, fh / (0.9 * (1 - t))))
+    ft = t + (1 - t) * 0.45
+    rx, ry = float(region.get("x") or 0), float(region.get("y") or 0)
+    rw, rh = float(region.get("w") or 1), float(region.get("h") or 1)
+    ny = max(0.0, ry - t * h)
+    ext = {"x": rx, "y": ny, "w": rw, "h": min(1.0 - ny, rh + (ry - ny))}
+    return _crop_at(cx, fcy - ft * h + h / 2, h, panel_aspect, ext)
+
+
+def _facecam_region(signals: dict, edits: dict) -> dict | None:
+    layout = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+    tmpl = layout.get("template") if isinstance(layout.get("template"), dict) else {}
+    boxes = tmpl.get("boxes") if isinstance(tmpl.get("boxes"), dict) else {}
+    for b in (boxes.get("facecam_box"), boxes.get("facecam")):
+        if isinstance(b, dict):
+            return dict(b)
+    fc = layout.get("facecam") if isinstance(layout.get("facecam"), dict) else {}
+    if isinstance(fc.get("box"), dict):
+        return dict(fc["box"])
+    fb = signals.get("facecam_box")
+    return dict(fb) if isinstance(fb, dict) else None
+
+
+def _resolve_src(
+    name: str,
+    signals: dict,
+    edits: dict,
+    panel_aspect: float,
+    role: str = "",
+    top_inset: float = 0.0,
+    panel_hfrac: float = 0.55,
+) -> tuple[dict, str | None]:
+    """T6.3: face/person-aware sources. Returns (src box, fit override or None).
+
+    - face_tight / active_speaker: the real face (YuNet) inside the facecam box (else the frame);
+      no face -> facecam box at panel aspect; no facecam either -> whole frame, contain_blur.
+    - facecam_box (cover face panel): unchanged box, but a wide strip is centred on the faces
+      instead of the wall between them.
+    - person:N: user box, else face N's upper body; no person -> whole frame, contain_blur
+      (IRL never zooms onto an empty wall).
+    """
+    layout = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+    tmpl = layout.get("template") if isinstance(layout.get("template"), dict) else {}
+    boxes = tmpl.get("boxes") if isinstance(tmpl.get("boxes"), dict) else {}
+    faces = _faces(signals) or []
+    if name in boxes and isinstance(boxes[name], dict) and (name in FACE_SRCS or name.startswith("person:")):
+        return dict(boxes[name]), None
+    if name in FACE_SRCS:
+        region = _facecam_region(signals, edits)
+        cands = [f for f in faces if region is None or _center_in(f, region)]
+        if cands:
+            # Face ~34% of a half-height panel; a taller panel (C1 full screen) shows head+shoulders.
+            ff = 0.34 * min(1.0, 0.55 / max(0.2, panel_hfrac))
+            return _face_crop(cands[0], panel_aspect, region or dict(DEFAULT_FULL), face_frac=ff, top_inset=top_inset), None
+        if region is not None:
+            return widen_to_aspect_within(region, panel_aspect), None
+        return dict(DEFAULT_FULL), "contain_blur"
+    if name.startswith("person:"):
+        try:
+            idx = int(name.split(":", 1)[-1])
+        except ValueError:
+            idx = 0
+        pb = signals.get(name)
+        if isinstance(pb, dict):
+            return dict(pb), None
+        if idx < len(faces):
+            return _face_crop(faces[idx], panel_aspect, dict(DEFAULT_FULL), face_frac=0.2, top_inset=top_inset), None
+        return dict(DEFAULT_FULL), "contain_blur"
+    if name == "facecam_box" and role in ("face", ""):
+        if _facecam_region(signals, edits) is None:
+            # No detected or user facecam: never crop the fixed top-left default box.
+            return _resolve_src("face_tight", signals, edits, panel_aspect, role, top_inset, panel_hfrac)
+        box = _src_box(name, signals, edits, panel_aspect=panel_aspect)
+        inside = [f for f in faces if _center_in(f, box)]
+        if not inside:
+            return box, None
+        return _cover_on_faces(box, inside, panel_aspect, top_inset), None
+    return _src_box(name, signals, edits, panel_aspect=panel_aspect), None
+
+
+def widen_to_aspect_within(region: dict, panel_aspect: float) -> dict:
+    """Largest panel-aspect crop inside ``region`` (centred) — what `cover` would show."""
+    rx, ry = float(region.get("x") or 0), float(region.get("y") or 0)
+    rw, rh = max(0.01, float(region.get("w") or 1)), max(0.01, float(region.get("h") or 1))
+    return _crop_at(rx + rw / 2, ry + rh / 2, rh, panel_aspect, region)
+
+
+def _cover_on_faces(box: dict, faces: list[dict], panel_aspect: float, top_inset: float = 0.0) -> dict:
+    """Cover crop of ``box`` at panel aspect, centred on the faces (union if it fits, else the
+    primary face). Returns ``box`` unchanged when cover would not crop it (and no title)."""
+    full = widen_to_aspect_within(box, panel_aspect)
+    t = max(0.0, min(0.8, float(top_inset)))
+    if t > 0:
+        fh = max(float(f["h"]) for f in faces)
+        x0 = min(float(f["x"]) - 0.5 * float(f["w"]) for f in faces)
+        x1 = max(float(f["x"]) + 1.5 * float(f["w"]) for f in faces)
+        y0 = min(float(f["y"]) for f in faces)
+        y1 = max(float(f["y"]) + float(f["h"]) for f in faces)
+        if x1 - x0 <= float(full["w"]):
+            cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        else:
+            p = faces[0]
+            cx, cy = float(p["x"]) + float(p["w"]) / 2, float(p["y"]) + float(p["h"]) / 2
+        return _crop_under_title(faces[0], fh, float(full["h"]), panel_aspect, box, t, cx=cx, fcy=cy)
+    if float(full["w"]) >= float(box.get("w") or 1) - 1e-3 and float(full["h"]) >= float(box.get("h") or 1) - 1e-3:
+        return box
+    x0 = min(float(f["x"]) - 0.5 * float(f["w"]) for f in faces)
+    x1 = max(float(f["x"]) + 1.5 * float(f["w"]) for f in faces)
+    y0 = min(float(f["y"]) for f in faces)
+    y1 = max(float(f["y"]) + float(f["h"]) for f in faces)
+    if x1 - x0 <= float(full["w"]):
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    else:
+        p = faces[0]
+        cx, cy = float(p["x"]) + float(p["w"]) / 2, float(p["y"]) + float(p["h"]) / 2
+    return _crop_at(cx, cy + float(full["h"]) * 0.08, float(full["h"]), panel_aspect, box)
+
+
+def _gameplay_region(signals: dict, edits: dict) -> dict | None:
+    """User Gameplay box, else the detected one (facecamLayout.gameplay via signals)."""
+    layout = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+    tmpl = layout.get("template") if isinstance(layout.get("template"), dict) else {}
+    boxes = tmpl.get("boxes") if isinstance(tmpl.get("boxes"), dict) else {}
+    fc = layout.get("facecam") if isinstance(layout.get("facecam"), dict) else {}
+    for b in (boxes.get("gameplay"), fc.get("gameplay"), signals.get("gameplay_box")):
+        if isinstance(b, dict) and float(b.get("w") or 0) > 0 and float(b.get("h") or 0) > 0:
+            return dict(b)
+    return None
+
+
 def _src_box(name: str, signals: dict, edits: dict, *, panel_aspect: float = 9 / 16) -> dict:
     layout = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
     tmpl = layout.get("template") if isinstance(layout.get("template"), dict) else {}
@@ -101,17 +297,17 @@ def _src_box(name: str, signals: dict, edits: dict, *, panel_aspect: float = 9 /
             base = dict(crop)
         else:
             ab = signals.get("action_box")
-            base = dict(ab) if isinstance(ab, dict) else dict(DEFAULT_FULL)
+            gp = _gameplay_region(signals, edits)
+            # T6.3: no action box -> the game region (excludes the facecam/HUD strip), not the
+            # whole frame (the G1/G6 game panel repeated the cam + mascot + stream info).
+            base = dict(ab) if isinstance(ab, dict) else (gp if gp is not None else dict(DEFAULT_FULL))
         if name == "action_box_widened":
             return widen_to_aspect(base, panel_aspect)
         return base
     if name == "gameplay_box":
         # T6.2: whole game region (user-dragged Gameplay box, else full frame) — never a zoomed crop.
-        if isinstance(boxes.get("gameplay"), dict):
-            return dict(boxes["gameplay"])
-        if isinstance(fc.get("gameplay"), dict):
-            return dict(fc["gameplay"])
-        return dict(DEFAULT_FULL)
+        gp = _gameplay_region(signals, edits)
+        return gp if gp is not None else dict(DEFAULT_FULL)
     if name == "trim_sides":
         return _trim_sides_box(signals, edits)
     if name == "content_box":
@@ -203,6 +399,20 @@ def _title_rect(t: dict, bands_out: list[dict], play_w: int, play_h: int) -> dic
     return None
 
 
+TITLE_BAR_FRAC = 0.2  # clip_export_template stream_headline_frame_layout bar (384/1920)
+
+
+def _title_band(t: dict, bands_out: list[dict], edits: dict, play_w: int, play_h: int) -> tuple[int, int] | None:
+    """T6.3: vertical span of the burned title (titleRect, else the fallback top bar) when the
+    headline is on — face/person panels under it centre the face in the visible part."""
+    if not _headline_on(edits):
+        return None
+    rect = _title_rect(t, bands_out, play_w, play_h)
+    if rect and int(rect.get("h") or 0) >= 8:
+        return int(rect.get("y") or 0), int(rect.get("y") or 0) + int(rect.get("h") or 0)
+    return 0, int(round(play_h * TITLE_BAR_FRAC))
+
+
 def resolve_template_geometry(
     t: dict,
     s: dict,
@@ -212,6 +422,11 @@ def resolve_template_geometry(
 ) -> dict:
     panels_raw = list(t.get("panels") or [])
     panels_out: list[dict] = []
+    bands_pre = [
+        {"dest": {"x": 0, "y": _even(play_h * float(b.get("y") or 0)), "w": play_w, "h": _even(play_h * float(b.get("h") or 0))}}
+        for b in (t.get("bands") or [])
+    ]
+    title_band = _title_band(t, bands_pre, edits, play_w, play_h)
     for idx, p in enumerate(panels_raw):
         ph = float(p.get("h") or 0)
         py = float(p.get("y") if p.get("y") is not None else 0)
@@ -223,12 +438,20 @@ def resolve_template_geometry(
         dest_x = _even(play_w * float(p.get("x") or 0.0))
         panel_aspect = (dest_w / dest_h) if dest_h > 0 else 9 / 16
         src_name = str(p.get("src") or "full")
-        src = _src_box(src_name, s, edits, panel_aspect=panel_aspect)
+        inset = 0.0
+        if title_band is not None and dest_h > 0:
+            ty0, ty1 = title_band
+            ov = min(ty1, dest_y + dest_h) - max(ty0, dest_y)
+            if ov > 0 and ty0 <= dest_y + 1:
+                inset = ov / dest_h
+        src, fit_override = _resolve_src(
+            src_name, s, edits, panel_aspect, str(p.get("role") or ""), inset, (dest_h / play_h) if play_h else 0.55
+        )
         panels_out.append(
             {
                 "dest": {"x": dest_x, "y": dest_y, "w": dest_w, "h": dest_h},
                 "src": src,
-                "fit": p.get("fit") or "cover",
+                "fit": fit_override or p.get("fit") or "cover",
                 "track": p.get("track"),
             }
         )

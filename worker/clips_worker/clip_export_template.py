@@ -253,9 +253,14 @@ def _t6_title_burn(
     kind = str(bg.get("kind") or ("band" if style.get("boxColor") else "none"))
     stage = scratch / "t6_title_bg.mp4"
     if kind == "blur":
-        bright = "0.22" if str(style.get("textColor") or "").upper() in ("#111111", "#000000") else "-0.28"
+        dark_text = str(style.get("textColor") or "").upper() in ("#111111", "#000000")
+        # T6.3: a brightness nudge alone left black text unreadable over dark video (luma .07 ->
+        # .29). Tint the blur so the backdrop is light (>= ~.62 luma) / dark (<= ~.5) whatever
+        # the video is; mirrored in TemplateTitleOverlay.
+        tint = "white@0.62" if dark_text else "black@0.45"
         fc = (
-            f"[0:v]split=2[a][b];[b]crop={w}:{h}:{x}:{y},boxblur=20:2,eq=brightness={bright}[bl];"
+            f"[0:v]split=2[a][b];[b]crop={w}:{h}:{x}:{y},boxblur=20:2,"
+            f"drawbox=x=0:y=0:w=iw:h=ih:color={tint}:t=fill[bl];"
             f"[a][bl]overlay={x}:{y}[vout]"
         )
     elif kind == "box":

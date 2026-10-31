@@ -8,6 +8,7 @@ import { editorPreviewCaptionClipWords, editorPreviewEdits } from '@/lib/clips/e
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import { resolveTemplateGeometryById } from '@/lib/clips/templates/geometry'
+import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
 import { signalsOrDefaults } from '@/lib/clips/templates/signals'
 import { TemplateStage, TemplateTitleOverlay } from '@/components/clips/editor/template-stage'
 import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
@@ -121,6 +122,19 @@ export function PreviewStage({
   const layoutMode = edits.layout?.mode ?? 'speaker_follow'
   const mediaOffsetMs = media?.offsetMs ?? 0
   const compositePreview = media?.kind === 'composite'
+  // T6.3: in template mode the primary <video> belongs to TemplateStage (panel 0). The legacy
+  // layout-mode code below (speaker-crop rAF transform, style resets) must not touch it: with
+  // I5 (fallbackMode speaker_follow) the crop-track tick overwrote panel 0's geometry, so the
+  // preview showed the speaker-track crop instead of the template (empty wall on B).
+  const t6TemplateActive = Boolean(
+    !compositePreview &&
+      videoUrl &&
+      t6TemplatesEnabled() &&
+      edits.layout?.template?.id &&
+      T6_TEMPLATES_BY_ID[edits.layout.template.id],
+  )
+  const t6TemplateActiveRef = useRef(t6TemplateActive)
+  t6TemplateActiveRef.current = t6TemplateActive
   const headlineOn = usesStreamHeadlineBandOverlay(edits as ClipEditsV2)
   const HEADLINE_FITTOP_MODES = new Set(['fit_top', 'speaker_follow', 'auto'])
   const letterboxPreview = !compositePreview && layoutUsesLetterboxBlurPreview(layoutMode)
@@ -180,7 +194,7 @@ export function PreviewStage({
   useLayoutEffect(() => {
     const v = videoRefInner.current
     const b = blurRef.current
-    if (!v) return
+    if (!v || t6TemplateActive) return
     if (centerCropPreview || letterboxPreview || fitTopPreview || speakerApproxPreview) {
       if (!cropPreview) {
         v.style.width = ''
@@ -215,6 +229,7 @@ export function PreviewStage({
     fitTopPreview,
     speakerApproxPreview,
     videoUrl,
+    t6TemplateActive,
   ])
 
   useLayoutEffect(() => {
@@ -353,7 +368,7 @@ export function PreviewStage({
       onTickRef.current({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
 
       const { w: boxW, h: boxH } = boxSizeRef.current
-      if (v && track && usesSpeakerCropPreview(e, track) && boxH > 0 && Array.isArray(track.shots) && track.shots.length > 0) {
+      if (v && !t6TemplateActiveRef.current && track && usesSpeakerCropPreview(e, track) && boxH > 0 && Array.isArray(track.shots) && track.shots.length > 0) {
         const s = boxH / track.H
         const fi = Math.round(((src - track.t0_ms) / 1000) * track.fps)
         const { i: shotI } = shotAt(track, src)

@@ -8,8 +8,16 @@ const LANE_FALLBACK: Record<string, string> = {
   podcast: 'C6',
 }
 
+/** T6.3 parity with t6_pick._needs_detected_face. */
+export function templateNeedsDetectedFace(t: TemplateDef): boolean {
+  return t.panels.some(
+    (p) => p.src === 'face_tight' || p.src === 'active_speaker' || String(p.src).startsWith('person:'),
+  )
+}
+
 export function eligibleTemplate(t: TemplateDef, s: T6Signals, durationMs: number): boolean {
   const req = t.requires ?? {}
+  if (Array.isArray(s.faces) && s.faces.length === 0 && templateNeedsDetectedFace(t)) return false
   if (req.facecam && (Number(s.facecam_conf) < 0.85 || !s.facecam_box)) return false
   if (req.noBackgroundAction && s.background_action) return false
   if (req.contentBox && !(s as { content_box?: unknown }).content_box) return false
@@ -42,6 +50,7 @@ export function pickTemplate(
   let reason = 'scored'
   for (const t of cands) {
     let score = Number(t.pickWeights?.facecam_conf ?? 0) * Number(s.facecam_conf ?? 0)
+    if (Array.isArray(s.faces) && s.faces.length > 0 && templateNeedsDetectedFace(t)) score += 1
     if (history.slice(-2).includes(t.id)) score -= 3
     if ((batchCounts[t.id] ?? 0) + 1 > cap) score -= 100
     const tie = parseInt(

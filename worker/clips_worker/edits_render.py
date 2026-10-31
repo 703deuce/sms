@@ -735,6 +735,11 @@ def _legacy_compose(
         shutil.copy(hooked, out_mp4)
 
     zoom_cfg = edits.get("zoom") if isinstance(edits.get("zoom"), dict) else {}
+    if zoom_cfg.get("enabled") and not zoom_done and isinstance(ctx.get("t6_spec"), dict):
+        # T6.3: a whole-frame zoom over a finished T6 composite scales the captions out of
+        # captionRect, pushes the PiP / title off-frame and shifts panel seams. Skip it.
+        print("[t6:zoom_skip] reason=t6_composite", flush=True)
+        zoom_done = True
     if zoom_cfg.get("enabled") and not zoom_done:
         from clips_worker.zoom_render import (
             apply_zoom,
@@ -1062,6 +1067,42 @@ def _facecam_layout_for_render(edits: dict, stream_layout: dict | None = None) -
     return facecam_layout_for_render(edits)
 
 
+def _t6_backfill_faces(clip_src: Path, signals: dict, *, conn=None, clip_id: str | None = None) -> dict:
+    """T6.3: clips created before T6.3 have no ``signals.faces``. Detect them once on the clip
+    source (YuNet, ~10 frames) so face/person panels centre on the real face, and persist them
+    (additive jsonb_set on "aiMeta".signals.faces) so the editor preview uses the same faces."""
+    try:
+        from clips_worker.t6_cv import detect_faces
+
+        faces = detect_faces(clip_src)
+    except Exception as exc:  # pragma: no cover - detector failure keeps legacy geometry
+        print(f"[t6:faces] detect_failed err={type(exc).__name__}", flush=True)
+        return signals
+    if faces is None:
+        return signals
+    out = {**signals, "faces": faces}
+    print(f"[t6:faces] backfill n={len(faces)} clip={clip_id or '-'}", flush=True)
+    if conn is not None and clip_id:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE clips
+                    SET "aiMeta" = jsonb_set("aiMeta", '{signals,faces}', %s::jsonb, true)
+                    WHERE id = %s AND jsonb_typeof("aiMeta"->'signals') = 'object'
+                    """,
+                    (json.dumps(faces), clip_id),
+                )
+            conn.commit()
+        except Exception as exc:
+            print(f"[t6:faces] persist_failed err={type(exc).__name__}", flush=True)
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+    return out
+
+
 def _apply_facecam_or_pip_layout(
     clip_src: Path,
     work_dir: Path,
@@ -1070,6 +1111,8 @@ def _apply_facecam_or_pip_layout(
     *,
     play_w: int,
     play_h: int,
+    conn=None,
+    clip_id: str | None = None,
 ) -> tuple[Path, bool, dict]:
     from clips_worker.t6_flags import t6_log_fallback, t6_templates_enabled
 
@@ -1086,6 +1129,8 @@ def _apply_facecam_or_pip_layout(
             ai_meta = settings.get("aiMeta") if isinstance(settings.get("aiMeta"), dict) else {}
             signals = signals_or_defaults({**ai_meta, "signals": ai_meta.get("signals")})
             tdef = TEMPLATES.get(tmpl_id)
+            if tdef and not isinstance(signals.get("faces"), list):
+                signals = _t6_backfill_faces(clip_src, signals, conn=conn, clip_id=clip_id)
             if tdef:
                 spec = resolve_template_geometry(tdef, signals, edits, play_w=play_w, play_h=play_h)
                 out = work_dir / f"t6_{tmpl_id}.mp4"
@@ -1332,6 +1377,8 @@ def render_edited_clip(
         settings,
         play_w=play_w,
         play_h=play_h,
+        conn=conn,
+        clip_id=clip_id,
     )
 
     full_render = work_dir / "full_render.mp4"

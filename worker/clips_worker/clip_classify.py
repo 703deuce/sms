@@ -51,7 +51,7 @@ IGNORE streaming overlays: chat boxes, subscriber/sub-goal bars, alerts, donatio
 - main_picture=real_camera: filmed by a real camera: people, rooms, streets, gyms, courts, events. REAL SPORTS (basketball, football, boxing…) are real_camera, never video_game.
 - main_picture=desktop_or_browser: websites, videos being watched, documents, code.
 - game_graphics_visible: true only if video-game graphics are the main picture (a small webcam overlay does not change this).
-- seated_talking_to_camera: one or more people seated at a desk/mic talking to the camera.
+- seated_talking_to_camera: one or more people sitting and talking to the camera as the main subject (desk/mic, but also a car seat, couch or table), framed as a talking head, with nothing important happening around or behind them. false when they walk or move around, are at an event/venue/street scene, play a sport, or the action around them matters.
 clip_type rules (apply in order):
 1. main_picture=video_game -> gaming.
 2. main_picture=real_camera and seated_talking_to_camera -> podcast if people_on_camera>=2 else just_chatting.
@@ -256,7 +256,7 @@ def resolve_type_from_classification(
     if main == "real_camera":
         if sport:
             return "irl", conf, "classify"
-        if seated:
+        if seated and people >= 1:
             return ("podcast" if people >= 2 else "just_chatting"), conf, "classify"
         return "irl", conf, "classify"
     if main == "desktop_or_browser":
