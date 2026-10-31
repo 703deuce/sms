@@ -233,7 +233,7 @@ def _shift_target(edits: dict, target: str, by_s: float) -> dict:
     return {**edits, "keyframes": out}
 
 
-def load_broll_specs(conn, edits: dict, work_dir) -> list[dict]:
+def load_broll_specs(conn, edits: dict, work_dir, media: dict | None = None) -> list[dict]:
     from pathlib import Path
 
     from clips_worker.storage import download_object
@@ -241,6 +241,27 @@ def load_broll_specs(conn, edits: dict, work_dir) -> list[dict]:
     items = edits.get("broll") or []
     specs: list[dict] = []
     for pos, item in enumerate(items):
+        if item.get("source") == "upload":
+            # E5: the user's own upload (media library); stills become a clip of the item's length.
+            from clips_worker.media_sources import upload_broll_spec_path
+
+            local_up = upload_broll_spec_path(item, media or {}, Path(work_dir), pos)
+            if local_up is None:
+                continue
+            start_s = int(item["startMs"]) / 1000.0
+            end_s = int(item["endMs"]) / 1000.0
+            specs.append(
+                {
+                    "local_path": local_up,
+                    "start_s": start_s,
+                    "end_s": end_s,
+                    "duration_s": max(0.1, end_s - start_s),
+                    "in_s": 0.0 if item.get("still") else max(0, int(item.get("inMs") or 0)) / 1000.0,
+                    "id": str(item.get("id") or ""),
+                    **({k: item[k] for k in ("transitionIn", "transitionOut") if isinstance(item.get(k), dict)}),
+                }
+            )
+            continue
         with conn.cursor() as cur:
             if item.get("source") == "ai":
                 cur.execute('SELECT "storageKey" FROM ai_generations WHERE id=%s', (item.get("generationId"),))

@@ -3,8 +3,8 @@ import { EDITOR_RAIL_ITEMS, clipEditorRailIds } from '@/components/clips/editor/
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 
 const LAUNCH = ['transcript', 'cleanup', 'layout', 'layers', 'captions', 'audio']
-// E4: appended after every existing item so nothing moves.
-const E4 = ['text', 'templates', 'color']
+// E4: appended after every existing item so nothing moves; E5 appends Media after them.
+const E4 = ['text', 'templates', 'color', 'media']
 
 describe('clip editor rail', () => {
   it('keeps the launch items first and in place, then appends re-hooked tools', () => {

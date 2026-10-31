@@ -1,0 +1,355 @@
+{
+  "cases": [
+    {
+      "input": {
+        "sources": [
+          {
+            "id": "trk_b",
+            "ref": "take",
+            "refId": "trk_b",
+            "mediaType": "video",
+            "label": "Guest cam",
+            "syncMs": -1500
+          },
+          {
+            "id": "upl_v",
+            "ref": "upload",
+            "refId": "upl_v",
+            "mediaType": "video",
+            "label": "drone.mp4",
+            "durationMs": 8000
+          },
+          {
+            "id": "upl_i",
+            "ref": "upload",
+            "refId": "upl_i",
+            "mediaType": "image",
+            "label": "logo.png"
+          }
+        ],
+        "sourceSegments": [
+          {
+            "id": "a",
+            "sourceId": "trk_b",
+            "startMs": 12000,
+            "endMs": 16000
+          }
+        ],
+        "win": [
+          10000,
+          40000
+        ]
+      },
+      "sources": [
+        {
+          "id": "trk_b",
+          "ref": "take",
+          "refId": "trk_b",
+          "mediaType": "video",
+          "label": "Guest cam",
+          "syncMs": -1500
+        },
+        {
+          "id": "upl_v",
+          "ref": "upload",
+          "refId": "upl_v",
+          "mediaType": "video",
+          "label": "drone.mp4",
+          "durationMs": 8000
+        },
+        {
+          "id": "upl_i",
+          "ref": "upload",
+          "refId": "upl_i",
+          "mediaType": "image",
+          "label": "logo.png"
+        }
+      ],
+      "sourceSegments": [
+        {
+          "id": "a",
+          "sourceId": "trk_b",
+          "startMs": 12000,
+          "endMs": 16000
+        }
+      ],
+      "windows": [
+        {
+          "id": "a",
+          "sourceId": "trk_b",
+          "t0Ms": 2000,
+          "t1Ms": 6000,
+          "mediaInMs": 10500,
+          "audio": "main",
+          "fit": "cover",
+          "mediaType": "video"
+        }
+      ]
+    },
+    {
+      "input": {
+        "sources": [
+          {
+            "id": "trk_b",
+            "ref": "take",
+            "refId": "trk_b",
+            "mediaType": "video",
+            "label": "Guest cam",
+            "syncMs": -1500
+          },
+          {
+            "id": "upl_v",
+            "ref": "upload",
+            "refId": "upl_v",
+            "mediaType": "video",
+            "label": "drone.mp4",
+            "durationMs": 8000
+          },
+          {
+            "id": "upl_i",
+            "ref": "upload",
+            "refId": "upl_i",
+            "mediaType": "image",
+            "label": "logo.png"
+          }
+        ],
+        "sourceSegments": [
+          {
+            "id": "a",
+            "sourceId": "trk_b",
+            "startMs": 12000,
+            "endMs": 16000,
+            "inMs": 700,
+            "audio": "mix"
+          }
+        ],
+        "win": [
+          13000,
+          30000
+        ]
+      },
+      "sources": [
+        {
+          "id": "trk_b",
+          "ref": "take",
+          "refId": "trk_b",
+          "mediaType": "video",
+          "label": "Guest cam",
+          "syncMs": -1500
+        },
+        {
+          "id": "upl_v",
+          "ref": "upload",
+          "refId": "upl_v",
+          "mediaType": "video",
+          "label": "drone.mp4",
+          "durationMs": 8000
+        },
+        {
+          "id": "upl_i",
+          "ref": "upload",
+          "refId": "upl_i",
+          "mediaType": "image",
+          "label": "logo.png"
+        }
+      ],
+      "sourceSegments": [
+        {
+          "id": "a",
+          "sourceId": "trk_b",
+          "startMs": 12000,
+          "endMs": 16000,
+          "inMs": 700,
+          "audio": "mix"
+        }
+      ],
+      "windows": [
+        {
+          "id": "a",
+          "sourceId": "trk_b",
+          "t0Ms": 0,
+          "t1Ms": 3000,
+          "mediaInMs": 1700,
+          "audio": "mix",
+          "fit": "cover",
+          "mediaType": "video"
+        }
+      ]
+    },
+    {
+      "input": {
+        "sources": [
+          {
+            "id": "trk_b",
+            "ref": "take",
+            "refId": "trk_b",
+            "mediaType": "video",
+            "label": "Guest cam",
+            "syncMs": -1500
+          },
+          {
+            "id": "upl_v",
+            "ref": "upload",
+            "refId": "upl_v",
+            "mediaType": "video",
+            "label": "drone.mp4",
+            "durationMs": 8000
+          },
+          {
+            "id": "upl_i",
+            "ref": "upload",
+            "refId": "upl_i",
+            "mediaType": "image",
+            "label": "logo.png"
+          }
+        ],
+        "sourceSegments": [
+          {
+            "id": "u",
+            "sourceId": "upl_v",
+            "startMs": 20000,
+            "endMs": 26000,
+            "inMs": 250,
+            "fit": "contain"
+          },
+          {
+            "id": "i",
+            "sourceId": "upl_i",
+            "startMs": 22000,
+            "endMs": 23000,
+            "audio": "source"
+          },
+          {
+            "id": "z",
+            "sourceId": "gone",
+            "startMs": 30000,
+            "endMs": 31000
+          }
+        ],
+        "win": [
+          10000,
+          40000
+        ]
+      },
+      "sources": [
+        {
+          "id": "trk_b",
+          "ref": "take",
+          "refId": "trk_b",
+          "mediaType": "video",
+          "label": "Guest cam",
+          "syncMs": -1500
+        },
+        {
+          "id": "upl_v",
+          "ref": "upload",
+          "refId": "upl_v",
+          "mediaType": "video",
+          "label": "drone.mp4",
+          "durationMs": 8000
+        },
+        {
+          "id": "upl_i",
+          "ref": "upload",
+          "refId": "upl_i",
+          "mediaType": "image",
+          "label": "logo.png"
+        }
+      ],
+      "sourceSegments": [
+        {
+          "id": "u",
+          "sourceId": "upl_v",
+          "startMs": 20000,
+          "endMs": 22000,
+          "inMs": 250,
+          "fit": "contain"
+        },
+        {
+          "id": "i",
+          "sourceId": "upl_i",
+          "startMs": 22000,
+          "endMs": 23000
+        }
+      ],
+      "windows": [
+        {
+          "id": "u",
+          "sourceId": "upl_v",
+          "t0Ms": 10000,
+          "t1Ms": 12000,
+          "mediaInMs": 250,
+          "audio": "source",
+          "fit": "contain",
+          "mediaType": "video"
+        },
+        {
+          "id": "i",
+          "sourceId": "upl_i",
+          "t0Ms": 12000,
+          "t1Ms": 13000,
+          "mediaInMs": 0,
+          "audio": "main",
+          "fit": "cover",
+          "mediaType": "image"
+        }
+      ]
+    },
+    {
+      "input": {
+        "sources": [
+          {
+            "id": "trk_b",
+            "ref": "take",
+            "refId": "trk_b",
+            "mediaType": "video",
+            "label": "Guest cam",
+            "syncMs": 900
+          }
+        ],
+        "sourceSegments": [
+          {
+            "id": "a",
+            "sourceId": "trk_b",
+            "startMs": 5000,
+            "endMs": 50000
+          }
+        ],
+        "win": [
+          10000,
+          40000
+        ]
+      },
+      "sources": [
+        {
+          "id": "trk_b",
+          "ref": "take",
+          "refId": "trk_b",
+          "mediaType": "video",
+          "label": "Guest cam",
+          "syncMs": 900
+        }
+      ],
+      "sourceSegments": [
+        {
+          "id": "a",
+          "sourceId": "trk_b",
+          "startMs": 5000,
+          "endMs": 50000
+        }
+      ],
+      "windows": [
+        {
+          "id": "a",
+          "sourceId": "trk_b",
+          "t0Ms": 0,
+          "t1Ms": 30000,
+          "mediaInMs": 10900,
+          "audio": "main",
+          "fit": "cover",
+          "mediaType": "video"
+        }
+      ]
+    }
+  ]
+}

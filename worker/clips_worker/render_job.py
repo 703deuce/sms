@@ -500,15 +500,33 @@ def _run_render_clip_job_body(
             edits = {**edits, "_wordsFallback": True}
         _export_stage_log(render_id, "load_words", t_job, {"wordCount": len(source_words), "wordsFallback": words_fallback})
 
+        # E5: user uploads / Rooms angles referenced by the edits (scoped to this workspace + project).
+        from clips_worker.media_sources import load_media_assets, referenced_media
+
+        media_paths = load_media_assets(conn, edits, td_path, workspace_id, project_id) if referenced_media(edits) else {}
+
+        # E5b: words of transcribed media join the captions over 'source'-sound segments / inserts.
+        media_transcripts: dict = {}
+        if edits.get("sourceSegments") or edits.get("inserts"):
+            from clips_worker.media_sources import normalize_media_sources
+            from clips_worker.media_words import load_media_transcripts, merge_media_words
+
+            ref_ids = [s["refId"] for s in normalize_media_sources(edits.get("sources")) or []]
+            media_transcripts = load_media_transcripts(conn, project_id, workspace_id, ref_ids)
+            if media_transcripts:
+                source_words = merge_media_words(source_words, edits, media_transcripts)
+
         from clips_worker.broll_render import load_broll_specs
 
-        broll_specs = load_broll_specs(conn, edits, td_path)
+        broll_specs = load_broll_specs(conn, edits, td_path, media=media_paths)
 
         from clips_worker.audio_assets import load_audio_assets
 
-        audio_assets = load_audio_assets(conn, edits, td_path)
+        audio_assets = load_audio_assets(conn, edits, td_path, media=media_paths)
         if audio_assets is None:
             audio_assets = {}
+        if media_paths:
+            audio_assets["media_paths"] = media_paths
         if audio_assets.get("studio_source_offset_ms") is None:
             audio_assets["studio_source_offset_ms"] = source_offset_ms
         if not audio_assets.get("studio_source_key") and source_key:
@@ -682,6 +700,26 @@ def _run_render_clip_job_body(
         out_mp4, srt_body = apply_export_post(
             out_mp4, td_path, edits, render_meta, srt_body=srt_body
         )
+
+        from clips_worker.media_inserts import edits_insert_windows, has_inserts, splice_inserts
+
+        if has_inserts(edits):
+            # E5b: splice inserted clips into the finished file (ripple), shift the SRT, add their words.
+            from clips_worker.media_words import insert_words
+
+            ins_words = insert_words(
+                edits_insert_windows(edits, render_meta.get("keep_segs_src")), edits, media_transcripts
+            )
+            out_mp4, srt_body, added_ms = splice_inserts(
+                out_mp4, td_path, edits, render_meta, media_paths, srt_body, ins_words
+            )
+            if added_ms:
+                from clips_worker.edits_render import output_duration_ms as _odm
+
+                base_eff = int(render_meta.get("effective_edits_ms") or _odm(edits))
+                base_exp = int(render_meta.get("expected_editor_ms") or base_eff)
+                render_meta["effective_edits_ms"] = base_eff + added_ms
+                render_meta["expected_editor_ms"] = base_exp + added_ms
 
         brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
         if not render_meta.get("effective_edits_ms"):

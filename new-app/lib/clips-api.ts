@@ -24,7 +24,7 @@ export type ClipUploadStart = {
   }
 }
 
-export function startUpload(body: { filename: string; bytes: number; mime: string }) {
+export function startUpload(body: { filename: string; bytes: number; mime: string; kind?: 'media' }) {
   return clipsFetch<ClipUploadStart>('/api/clips/uploads', { method: 'POST', body: JSON.stringify(body) })
 }
 

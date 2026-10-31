@@ -7,7 +7,7 @@ import { createReadableSignedUrl, getClipStorage } from '@/lib/storage'
 
 export type BrollMediaRow = {
   id: string
-  source: 'stock' | 'ai'
+  source: 'stock' | 'ai' | 'upload'
   startMs: number
   endMs: number
   url: string | null
@@ -16,6 +16,9 @@ export type BrollMediaRow = {
   pageUrl?: string
   generationId?: string
   assetId?: string
+  /** E5 upload B-roll (filled client-side from the project media library). */
+  uploadId?: string
+  mediaType?: 'video' | 'image'
 }
 
 export async function resolveBrollMedia(items: BrollItem[]): Promise<BrollMediaRow[]> {
@@ -24,6 +27,8 @@ export async function resolveBrollMedia(items: BrollItem[]): Promise<BrollMediaR
   const out: BrollMediaRow[] = []
 
   for (const item of items) {
+    // E5: upload B-roll URLs come from the project media library (signed per project, client-side).
+    if (item.source === 'upload') continue
     if (item.source === 'stock') {
       const asset = await prisma.stockAsset.findUnique({ where: { id: item.assetId } })
       if (!asset) continue

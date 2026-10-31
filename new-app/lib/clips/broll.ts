@@ -10,6 +10,8 @@ type BrollTransitions = { transitionIn?: TransitionSpec; transitionOut?: Transit
 export type BrollItem =
   | ({ id: string; source: 'stock'; assetId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions)
   | ({ id: string; source: 'ai'; generationId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions)
+  /** E5: the user's own upload from the project media library (`still` = image, held for the span). */
+  | ({ id: string; source: 'upload'; uploadId: string; still?: true; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions)
 
 export const BROLL_MIN_MS = 1000
 export const BROLL_DEFAULT_SHOT_MS = 3000
@@ -54,7 +56,7 @@ export function normalizeBrollItems(raw: unknown, clipDurationMs: number): Broll
     if (!row || typeof row !== 'object') continue
     const o = row as Record<string, unknown>
     const id = String(o.id ?? '')
-    const source = o.source === 'ai' ? 'ai' : 'stock'
+    const source = o.source === 'ai' ? 'ai' : o.source === 'upload' ? 'upload' : 'stock'
     const startMs = Number(o.startMs)
     const endMs = Number(o.endMs)
     if (!id || !Number.isFinite(startMs) || !Number.isFinite(endMs)) continue
@@ -68,6 +70,11 @@ export function normalizeBrollItems(raw: unknown, clipDurationMs: number): Broll
       const generationId = String(o.generationId ?? '')
       if (!generationId) continue
       out.push(clampBrollItem({ id, source: 'ai', generationId, startMs, endMs, placement, ...extra }, clipDurationMs))
+    } else if (source === 'upload') {
+      const uploadId = String(o.uploadId ?? '')
+      if (!/^[A-Za-z0-9_-]{1,120}$/.test(uploadId)) continue
+      const still = o.still === true ? { still: true as const } : {}
+      out.push(clampBrollItem({ id, source: 'upload', uploadId, ...still, startMs, endMs, placement, ...extra }, clipDurationMs))
     } else {
       const assetId = String(o.assetId ?? '')
       if (!assetId) continue

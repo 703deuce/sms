@@ -14,7 +14,8 @@ export type MediaLibraryUploadRow = {
 export async function listMediaLibraryUploads(workspaceId: string, limit = 80): Promise<MediaLibraryUploadRow[]> {
   const prisma = getPrisma()
   const rows = await prisma.clipUpload.findMany({
-    where: { workspaceId, status: 'COMPLETE' },
+    // E5: Media-panel images / audio live in their project's library, not in the source-video drive.
+    where: { workspaceId, status: 'COMPLETE', OR: [{ kind: { not: 'media' } }, { mime: { startsWith: 'video/' } }] },
     orderBy: { createdAt: 'desc' },
     take: limit,
     select: {

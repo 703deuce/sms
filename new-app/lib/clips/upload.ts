@@ -195,7 +195,7 @@ async function uploadTus(
 export async function uploadClipFile(
   file: File,
   onProgress: (p: UploadProgress) => void,
-  opts?: { resumeUploadId?: string },
+  opts?: { resumeUploadId?: string; kind?: 'media' },
 ): Promise<{ uploadId: string }> {
   const limits = await fetchUploadLimits()
   const effectiveMax = limits.effectiveMaxBytes ?? limits.maxBytes
@@ -261,7 +261,12 @@ export async function uploadClipFile(
         state: 'uploading',
       })
     } else {
-      const started = await startUpload({ filename: file.name, bytes: file.size, mime: file.type || 'video/mp4' })
+      const started = await startUpload({
+        filename: file.name,
+        bytes: file.size,
+        mime: file.type || 'video/mp4',
+        ...(opts?.kind ? { kind: opts.kind } : {}),
+      })
       uploadId = started.uploadId
       storage = started.storage
     }

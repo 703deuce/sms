@@ -30,6 +30,7 @@ import { STREAM_HEADLINE_BAR_FRAC } from '@/lib/clips/headline-band-layout'
 import { headlinePreviewFontFamily, nearestPipCorner, pipCornerSlotStyle } from '@/lib/clips/headline-preview-style'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
+import { InsertPlayback } from '@/components/clips/editor/insert-playback'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { coverBoxStyle, stackPanelStyles } from '@/lib/clips/facecam-geometry'
@@ -57,6 +58,7 @@ import type { LibassClock, LibassStatusFn } from '@/components/clips/editor/liba
 const LibassPreviewLayers = lazy(() =>
   import('@/components/clips/editor/libass-overlay').then((m) => ({ default: m.LibassPreviewLayers })),
 )
+import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt } from '@/lib/clips/editor/sources'
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
@@ -115,6 +117,7 @@ export function PreviewStage({
   composeSpecPreview = false,
   aiMeta = null,
   selectedTextId = null,
+  sourceUrls = null,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -139,6 +142,8 @@ export function PreviewStage({
   aiMeta?: Record<string, unknown> | null
   /** E4: outline the text item being edited in the Text panel. */
   selectedTextId?: string | null
+  /** E5: signed URLs of other sources (refId → url) from the project media library. */
+  sourceUrls?: Record<string, string> | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -209,6 +214,8 @@ export function PreviewStage({
   const sceneSrcMsRef = useRef<number | null>(null)
   const sceneSegRef = useRef(-1)
   const brollRefs = useRef<Record<string, HTMLVideoElement | null>>({})
+  // E5: uploaded image B-roll (stills) — opacity / look only, no media clock.
+  const brollImgRefs = useRef<Record<string, HTMLImageElement | null>>({})
   // E1fix: the rAF tick below is mounted once ([] deps). Reading the `brollMedia` prop there froze
   // it at the first render, so B-roll inserted after load (new media rows) stayed at opacity 0 in
   // the preview while export showed it. Read the live list through a ref instead.
@@ -231,6 +238,10 @@ export function PreviewStage({
   const hookRef = useRef<HTMLDivElement | null>(null)
   // E4: text item layers, last applied playback rate (per-item speed) and main-layer look.
   const textRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  // E5: other-source layers (inside the main layer, so keyframes / color looks apply like export).
+  const srcBoxRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const srcElRefs = useRef<Record<string, HTMLVideoElement | HTMLImageElement | null>>({})
+  const srcMutedMainRef = useRef<{ prev: boolean } | null>(null)
   const lastRateRef = useRef<number | null>(null)
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
@@ -423,6 +434,8 @@ export function PreviewStage({
         // Only the main layer's videos follow the main clock (B-roll and E3 transition clones
         // have their own media times).
         mainLayerRef.current?.querySelectorAll('video').forEach((el) => {
+          // E5: other-source videos keep their own media time (set below).
+          if (el.dataset.ownClock) return
           if (el !== v && el !== blur && Math.abs(el.currentTime - v.currentTime) > 0.05) {
             el.currentTime = v.currentTime
           }
@@ -473,6 +486,44 @@ export function PreviewStage({
         mainLayerRef.current?.querySelectorAll('video').forEach((el) => setRate(el))
         Object.values(brollRefs.current).forEach((el) => setRate(el))
       }
+      // E5: Video-lane segments from another source — show its layer at the mapped media time; the
+      // segment's sound mode mutes / unmutes the main and the source element (export: media_sources).
+      const sseg = sourceSegmentAt(e.sourceSegments, src)
+      const ssrc = sseg ? sourceById(e.sources, sseg.sourceId) : undefined
+      for (const s of e.sources ?? []) {
+        const box = srcBoxRefs.current[s.id]
+        const el = srcElRefs.current[s.id]
+        if (!box) continue
+        const on = Boolean(sseg && sseg.sourceId === s.id)
+        const vis = on ? 'visible' : 'hidden'
+        if (box.style.visibility !== vis) box.style.visibility = vis
+        if (el && on && sseg) {
+          const fit = sseg.fit === 'contain' ? 'contain' : 'cover'
+          if (el.style.objectFit !== fit) el.style.objectFit = fit
+        }
+        if (el instanceof HTMLVideoElement) {
+          if (on && sseg) {
+            const t = segmentMediaMs(sseg, s, src) / 1000
+            if (Math.abs(el.currentTime - t) > 0.15) el.currentTime = t
+            const muted = segmentAudio(sseg, s) === 'main'
+            if (el.muted !== muted) el.muted = muted
+            if (v && el.playbackRate !== v.playbackRate) el.playbackRate = v.playbackRate
+            if (v && !v.paused && el.paused) void el.play().catch(() => {})
+            if (v && v.paused && !el.paused) el.pause()
+          } else {
+            if (!el.paused) el.pause()
+            if (!el.muted) el.muted = true
+          }
+        }
+      }
+      const muteMain = Boolean(sseg && segmentAudio(sseg, ssrc) === 'source')
+      if (v && muteMain && !srcMutedMainRef.current) {
+        srcMutedMainRef.current = { prev: v.muted }
+        v.muted = true
+      } else if (v && !muteMain && srcMutedMainRef.current) {
+        v.muted = srcMutedMainRef.current.prev
+        srcMutedMainRef.current = null
+      }
       // E4: color looks — main layer by source position, B-roll per item (SVG filters, ColorLookDefs).
       const mainLook = lookFilterCss(videoSpecAtSource(e.color, src))
       if (mainLayerRef.current && mainLayerRef.current.style.filter !== mainLook) mainLayerRef.current.style.filter = mainLook
@@ -490,6 +541,15 @@ export function PreviewStage({
       for (const item of e.broll || []) {
         // E1fix: live media rows via ref (the tick is mounted once).
         const media = brollMediaRef.current.find((m) => m.id === item.id)
+        const img = brollImgRefs.current[item.id]
+        if (img && media?.url) {
+          const [iStart, iEnd] = brollVisibleRange(item, bWins)
+          const iop = iStart <= outMs && outMs < iEnd ? '1' : '0'
+          if (img.style.opacity !== iop) img.style.opacity = iop
+          const iLook = lookFilterCss(e.color?.broll?.[item.id])
+          if (img.style.filter !== iLook) img.style.filter = iLook
+          continue
+        }
         const el = brollRefs.current[item.id]
         if (!el || !media?.url) continue
         // E3: an outgoing item keeps playing through the next item's 'between' transition.
@@ -1049,6 +1109,47 @@ export function PreviewStage({
         ) : (
           <div className="flex size-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">No video</div>
         )}
+        {(edits.sources ?? []).map((s) => {
+          const url = s.mediaType !== 'audio' ? sourceUrls?.[s.refId] : undefined
+          if (!url) return null
+          return (
+            <div
+              key={`${s.id}:${url}`}
+              ref={(el) => {
+                srcBoxRefs.current[s.id] = el
+              }}
+              className="pointer-events-none absolute inset-0 overflow-hidden bg-black"
+              style={{ visibility: 'hidden' }}
+              data-testid="preview-source"
+              data-source-id={s.id}
+            >
+              {s.mediaType === 'image' ? (
+                <img
+                  ref={(el) => {
+                    srcElRefs.current[s.id] = el
+                  }}
+                  src={url}
+                  alt=""
+                  className="size-full object-cover"
+                  draggable={false}
+                />
+              ) : (
+                <video
+                  ref={(el) => {
+                    srcElRefs.current[s.id] = el
+                  }}
+                  src={url}
+                  data-own-clock="1"
+                  className="size-full object-cover"
+                  muted
+                  playsInline
+                  preload="auto"
+                />
+              )}
+            </div>
+          )
+        })}
+        <InsertPlayback videoRef={videoRefInner} edits={edits} words={words} sourceUrls={sourceUrls} mediaOffsetMs={mediaOffsetMs} />
         </div>
         {/* E3 cut transitions: clone A (outgoing, continued), dip colour, clone B (incoming, pre-rolled). */}
         <div ref={cloneARef} className="pointer-events-none absolute inset-0" style={{ visibility: 'hidden' }} data-testid="preview-transition-a" aria-hidden />
@@ -1089,14 +1190,27 @@ export function PreviewStage({
                     data-testid="preview-broll-layer"
                     data-broll-id={item.id}
                   >
-                    <BrollPreviewVideo
-                      src={media.url}
-                      videoRef={(el) => {
-                        brollRefs.current[item.id] = el
-                      }}
-                      className="pointer-events-none absolute overflow-hidden"
-                      style={{ inset: 0, opacity: 0 }}
-                    />
+                    {media.mediaType === 'image' ? (
+                      <img
+                        ref={(el) => {
+                          brollImgRefs.current[item.id] = el
+                        }}
+                        src={media.url}
+                        alt=""
+                        draggable={false}
+                        className="pointer-events-none absolute size-full object-cover"
+                        style={{ inset: 0, opacity: 0 }}
+                      />
+                    ) : (
+                      <BrollPreviewVideo
+                        src={media.url}
+                        videoRef={(el) => {
+                          brollRefs.current[item.id] = el
+                        }}
+                        className="pointer-events-none absolute overflow-hidden"
+                        style={{ inset: 0, opacity: 0 }}
+                      />
+                    )}
                   </div>
                 </div>
               )

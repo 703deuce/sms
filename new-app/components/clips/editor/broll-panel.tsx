@@ -30,6 +30,7 @@ export function BrollPanel({
   onRemoveBroll,
   onBrollMedia,
   onFlushEdits,
+  uploadSlot,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -42,8 +43,10 @@ export function BrollPanel({
   onRemoveBroll: (id: string) => void
   onBrollMedia: (rows: BrollMediaRow[]) => void
   onFlushEdits?: () => void
+  /** E5: "Upload" tab — the project media library (same uploads as the Media panel). */
+  uploadSlot?: React.ReactNode
 }) {
-  const [mode, setMode] = useState<'stock' | 'ai'>('stock')
+  const [mode, setMode] = useState<'stock' | 'ai' | 'upload'>('stock')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [suggestions, setSuggestions] = useState<{ atMs: number; durationS: number; prompt: string }[]>([])
   const [manualAi, setManualAi] = useState({
@@ -227,9 +230,14 @@ export function BrollPanel({
       <div className="flex gap-1 rounded-md border border-border p-1">
         <Button variant={mode === 'stock' ? 'default' : 'ghost'} size="sm" onClick={() => setMode('stock')}>Stock</Button>
         <Button variant={mode === 'ai' ? 'default' : 'ghost'} size="sm" onClick={() => setMode('ai')}>AI</Button>
+        {uploadSlot ? (
+          <Button variant={mode === 'upload' ? 'default' : 'ghost'} size="sm" onClick={() => setMode('upload')} data-testid="broll-tab-upload">Upload</Button>
+        ) : null}
       </div>
 
-      {mode === 'stock' ? (
+      {mode === 'upload' && uploadSlot ? (
+        <div data-testid="broll-upload-tab">{uploadSlot}</div>
+      ) : mode === 'stock' ? (
         <>
           <Button size="sm" onClick={() => void autoBroll()} disabled={busy}>
             {busy ? 'Placing B-roll…' : 'Auto B-roll'}

@@ -19,6 +19,15 @@ import {
 import { hasColor, normalizeColorEdits, type ClipColorEdits } from '@/lib/clips/editor/color'
 import { normalizeSegmentSpeeds, speedWarpPieces, warpedDurationMs, warpMs, type SegmentSpeed } from '@/lib/clips/editor/speed'
 import { normalizeTextItems, type TextItem } from '@/lib/clips/editor/text-items'
+import {
+  normalizeMediaSources,
+  normalizeMulticam,
+  normalizeSourceSegments,
+  type ClipMediaSource,
+  type ClipMulticam,
+  type SourceSegment,
+} from '@/lib/clips/editor/sources'
+import { normalizeInserts, type ClipInsert } from '@/lib/clips/editor/inserts'
 
 export type CutRange = [number, number]
 
@@ -172,6 +181,14 @@ export type ClipEditsV2 = {
   color?: ClipColorEdits
   /** E4 per-item speed 0.25–4× over SOURCE ranges (pitch-preserved; export post-step warp). */
   segmentSpeeds?: SegmentSpeed[]
+  /** E5 media this clip uses besides the main source (uploads, Rooms angles). */
+  sources?: ClipMediaSource[]
+  /** E5 Video-lane segments from another source (MAIN SOURCE ms spans; transcript stays main). */
+  sourceSegments?: SourceSegment[]
+  /** E5 multicam auto-switch settings (speaker → source, D8 rhythm). */
+  multicam?: ClipMulticam
+  /** E5b footage inserted between frames (lengthens the video; anchored to main source ms). */
+  inserts?: ClipInsert[]
 }
 
 export type ClipBounds = {
@@ -440,6 +457,10 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.textItems?.length) payload.textItems = null
   if (!edits.color) payload.color = null
   if (!edits.segmentSpeeds?.length) payload.segmentSpeeds = null
+  if (!edits.sources?.length) payload.sources = null
+  if (!edits.sourceSegments?.length) payload.sourceSegments = null
+  if (!edits.multicam) payload.multicam = null
+  if (!edits.inserts?.length) payload.inserts = null
   return payload
 }
 
@@ -549,6 +570,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     textItems: normalizeTextItems(o.textItems),
     color: normalizeColorEdits(o.color),
     segmentSpeeds: normalizeSegmentSpeeds(o.segmentSpeeds),
+    ...normalizeSourceFields(o),
     vocabApplied:
       typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
     loudnessLufs:
@@ -632,8 +654,28 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     // E4: text / color / per-item speed change the frames or the length.
     !edits.textItems?.length &&
     !hasColor(edits.color) &&
-    !edits.segmentSpeeds?.length
+    !edits.segmentSpeeds?.length &&
+    // E5: other sources replace frames / sound.
+    !edits.sourceSegments?.length &&
+    // E5b: inserts lengthen the video.
+    !edits.inserts?.length
   )
+}
+
+/** E5: sources first (segments drop unknown sources); keys omitted when empty. */
+function normalizeSourceFields(
+  o: Record<string, unknown>,
+): Pick<ClipEditsV2, 'sources' | 'sourceSegments' | 'multicam' | 'inserts'> {
+  const sources = normalizeMediaSources(o.sources)
+  const sourceSegments = normalizeSourceSegments(o.sourceSegments, sources)
+  const multicam = normalizeMulticam(o.multicam)
+  const inserts = normalizeInserts(o.inserts, sources)
+  return {
+    ...(sources ? { sources } : {}),
+    ...(sourceSegments ? { sourceSegments } : {}),
+    ...(multicam ? { multicam } : {}),
+    ...(inserts ? { inserts } : {}),
+  }
 }
 
 const SPEED_WHITELIST = new Set([1.1, 1.25, 1.5])

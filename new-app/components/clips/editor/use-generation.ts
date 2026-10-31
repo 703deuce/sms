@@ -44,6 +44,13 @@ export function useGeneration(generationId: string | null, pollIntervalMs = 2000
       setError(null)
       return
     }
+    if (isUploadMediaId(generationId)) {
+      // E5: music / SFX from the project media library — no generation to poll (URL comes from the library).
+      setStatus('READY')
+      setDownloadUrl(null)
+      setError(null)
+      return
+    }
     failedToastRef.current = null
     const tick = () => {
       void poll()
@@ -67,4 +74,9 @@ export function useGeneration(generationId: string | null, pollIntervalMs = 2000
   const running = status === 'PENDING' || status === 'RUNNING'
 
   return { status, downloadUrl, error, refresh: poll, running, failed: status === 'FAILED' }
+}
+
+/** E5: ClipUpload ids (createId('upl')) used as music / SFX ids for user uploads. */
+export function isUploadMediaId(id: string | null | undefined): boolean {
+  return typeof id === 'string' && id.startsWith('upl_')
 }

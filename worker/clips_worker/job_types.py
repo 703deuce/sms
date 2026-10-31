@@ -24,6 +24,8 @@ JOB_TYPES: tuple[str, ...] = (
     "T2V_VOICE_CLONE",
     "T2V_SCENE_AI_IMAGE",
     "T2V_SCENE_AI_VIDEO",
+    "MEDIA_SYNC",
+    "MEDIA_TRANSCRIBE",
 )
 
 

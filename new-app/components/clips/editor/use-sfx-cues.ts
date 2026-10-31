@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ClipAudioSfx } from '@/lib/clips/audio'
 import { clipsFetch } from '@/lib/clips-api'
 import type { SfxCue } from '@/components/clips/editor/use-audio-mix'
@@ -9,16 +9,53 @@ import type { SfxCue } from '@/components/clips/editor/use-audio-mix'
  * E2: decode placed SFX so the preview plays them at `atMs` (export already did) and the
  * timeline can draw their real length. Generations that are still rendering are retried.
  */
-export function useSfxCues(sfx: ClipAudioSfx[]): { cues: SfxCue[]; durationsMs: Record<string, number> } {
+export function useSfxCues(
+  sfx: ClipAudioSfx[],
+  /** E5: signed URL of an uploaded sound (project media library); null until the library loads. */
+  uploadUrl?: (uploadId: string) => string | null,
+): { cues: SfxCue[]; durationsMs: Record<string, number> } {
   const [buffers, setBuffers] = useState<Record<string, AudioBuffer>>({})
   const ids = useMemo(() => [...new Set(sfx.map((s) => s.generationId))].sort(), [sfx])
-  const idsKey = ids.join('|')
+  const uploadUrls = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const s of sfx) {
+      const u = s.uploadId && uploadUrl ? uploadUrl(s.uploadId) : null
+      if (s.uploadId && u) m[s.generationId] = u
+    }
+    return m
+  }, [sfx, uploadUrl])
+  const uploadUrlsRef = useRef(uploadUrls)
+  uploadUrlsRef.current = uploadUrls
+  // E5b: one upload placed N times is fetched + decoded once.
+  const decodedByUrl = useRef(new Map<string, Promise<AudioBuffer | null>>())
+  const idsKey = `${ids.join('|')}#${Object.keys(uploadUrls).sort().join('|')}`
 
   useEffect(() => {
     let cancelled = false
     const timers: ReturnType<typeof setTimeout>[] = []
     const load = async (id: string, attempt: number) => {
       try {
+        if (sfx.some((s) => s.generationId === id && s.uploadId)) {
+          const direct = uploadUrlsRef.current[id]
+          if (!direct) return
+          let pending = decodedByUrl.current.get(direct)
+          if (!pending) {
+            pending = (async () => {
+              const ab0 = await (await fetch(direct)).arrayBuffer()
+              const Ctx0 = typeof OfflineAudioContext !== 'undefined' ? OfflineAudioContext : null
+              if (!Ctx0) return null
+              return new Ctx0(1, 1, 44_100).decodeAudioData(ab0)
+            })().catch(() => null)
+            decodedByUrl.current.set(direct, pending)
+          }
+          const dec = await pending
+          if (!dec) {
+            decodedByUrl.current.delete(direct)
+            return
+          }
+          if (!cancelled) setBuffers((prev) => ({ ...prev, [id]: dec }))
+          return
+        }
         const res = await clipsFetch<{ status: string; downloadUrl: string | null }>(`/api/clips/generations/${id}`)
         if (cancelled) return
         if (res.status !== 'READY' || !res.downloadUrl) {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
 import { Blend, Magnet, Maximize2, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BrollItem } from '@/lib/clips/broll'
@@ -46,12 +47,14 @@ import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
 import { TimelineRuler } from '@/components/clips/editor/timeline/timeline-ruler'
 import { TimelineWaveform } from '@/components/clips/editor/timeline/timeline-waveform'
-import { TimelineFilmstrip } from '@/components/clips/editor/timeline/timeline-filmstrip'
+import { SourceSegmentFilmstrip, TimelineFilmstrip } from '@/components/clips/editor/timeline/timeline-filmstrip'
 import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-filmstrip-frames'
 import type { EditorAssets } from '@/lib/clips/editor/editor-assets'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
 import { ItemSpeedControl, itemSpeed, speedLabel } from '@/components/clips/editor/timeline/item-speed-control'
 import { TransitionPopover } from '@/components/clips/editor/timeline/transition-popover'
+import { MEDIA_DND_TYPE, type MediaDropLane } from '@/lib/clips/editor/media-add'
+import { segmentMediaMs, sourceById, sourceSegmentWindows } from '@/lib/clips/editor/sources'
 import {
   deleteKeyframesAt,
   keyframeTimes,
@@ -128,6 +131,9 @@ type DragState = {
   moved: boolean
 }
 
+/** E5: lanes that accept a Media-panel drop. */
+const MEDIA_DROP_LANES = new Set<string>(['video', 'broll', 'music', 'sfx'])
+
 export function Timeline({
   edits,
   words,
@@ -157,6 +163,10 @@ export function Timeline({
   onSelectionChange,
   editorAssets = null,
   brollMedia,
+  sourceUrls = null,
+  onDropMedia,
+  onSelectSourceSegment,
+  selectedSourceSegmentId = null,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -195,6 +205,13 @@ export function Timeline({
   editorAssets?: EditorAssets | null
   /** FV2: B-roll media rows (filmstrip on B-roll items). */
   brollMedia?: TimelineBrollMedia[]
+  /** E5×FV2: media URL by refId, so other-source Video-lane spans show their own frames. */
+  sourceUrls?: Record<string, string> | null
+  /** E5: a Media-panel card dropped on a lane at OUTPUT ms. */
+  onDropMedia?: (lane: MediaDropLane, outMs: number, mediaId: string) => void
+  /** E5: click on a source segment chip (Video lane) → Media panel segment editor. */
+  onSelectSourceSegment?: (id: string) => void
+  selectedSourceSegmentId?: string | null
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -537,6 +554,15 @@ export function Timeline({
   }
 
   const cutWindows = useMemo(() => cutTransitionWindows(tb.segs, tb.starts, edits.transitions), [edits.transitions, tb])
+  // E5: Video-lane segments from another source (uploads / angles / multicam), drawn over the clip.
+  const sourceChips = useMemo(
+    () =>
+      sourceSegmentWindows(tb, edits.sourceSegments).map((w) => ({
+        ...w,
+        label: sourceById(edits.sources, w.sourceId)?.label ?? 'Source',
+      })),
+    [edits.sourceSegments, edits.sources, tb],
+  )
   const brollWindows = useMemo(() => brollTransitionWindows(edits.broll), [edits.broll])
   const openCutTransition = (e: React.MouseEvent, k: number) => {
     e.stopPropagation()
@@ -1148,6 +1174,25 @@ export function Timeline({
                   style={{ top: laneTop(lane), height: LANE_H[lane] }}
                   data-testid={`timeline-lane-${lane}`}
                   aria-label={`${lane} lane`}
+                  onDragOver={
+                    onDropMedia && MEDIA_DROP_LANES.has(lane)
+                      ? (e) => {
+                          if (!e.dataTransfer.types.includes(MEDIA_DND_TYPE)) return
+                          e.preventDefault()
+                          e.dataTransfer.dropEffect = 'copy'
+                        }
+                      : undefined
+                  }
+                  onDrop={
+                    onDropMedia && MEDIA_DROP_LANES.has(lane)
+                      ? (e) => {
+                          const id = e.dataTransfer.getData(MEDIA_DND_TYPE)
+                          if (!id) return
+                          e.preventDefault()
+                          onDropMedia(lane as MediaDropLane, msAtClientX(e.clientX, e.currentTarget), id)
+                        }
+                      : undefined
+                  }
                 >
                   {lane === 'video'
                     ? cutWindows.map((w) => (
@@ -1176,6 +1221,53 @@ export function Timeline({
                       ))
                     : null}
                   {(virtualize ? lanes[lane].filter((i) => inView(shown(i).startMs, shown(i).endMs)) : lanes[lane]).map(renderItem)}
+                  {lane === 'video'
+                    ? sourceChips.map((c) => {
+                        const seg = edits.sourceSegments?.find((x) => x.id === c.id)
+                        const src = sourceById(edits.sources, c.sourceId)
+                        if (!seg || !src || !inView(c.startMs, c.endMs)) return null
+                        const left = c.startMs * pxPerMs
+                        return (
+                          <SourceSegmentFilmstrip
+                            key={`srcfs${c.id}:${c.startMs}`}
+                            url={sourceUrls?.[src.refId] ?? null}
+                            mediaType={src.mediaType}
+                            fromMs={segmentMediaMs(seg, src, c.srcStartMs)}
+                            toMs={segmentMediaMs(seg, src, c.srcEndMs)}
+                            leftPx={left}
+                            topPx={2}
+                            widthPx={Math.max(2, (c.endMs - c.startMs) * pxPerMs)}
+                            heightPx={LANE_H.video - 4 - VIDEO_WORDBAR_H}
+                            pxPerMs={pxPerMs}
+                            visLeftPx={virtualize ? visFromPx - left : undefined}
+                            visRightPx={virtualize ? visToPx - left : undefined}
+                          />
+                        )
+                      })
+                    : null}
+                  {lane === 'video'
+                    ? sourceChips.map((c) => (
+                        <button
+                          key={`src${c.id}:${c.startMs}`}
+                          type="button"
+                          className={`absolute top-[5px] z-[16] h-[14px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm border px-1 text-left text-[9px] leading-[12px] text-white shadow ${
+                            c.id === selectedSourceSegmentId ? 'border-white bg-amber-500' : 'border-amber-200/70 bg-amber-600/85 hover:bg-amber-500'
+                          }`}
+                          style={{ left: c.startMs * pxPerMs, width: Math.max(4, (c.endMs - c.startMs) * pxPerMs) }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onSelectSourceSegment?.(c.id)
+                          }}
+                          title={`${c.label} (other source)`}
+                          data-testid="timeline-source-segment"
+                          data-source-id={c.sourceId}
+                        >
+                          {(c.endMs - c.startMs) * pxPerMs >= TIMELINE_MIN_LABEL_PX ? c.label : null}
+                        </button>
+                      ))
+                    : null}
+                  {lane === 'video' ? <TimelineInsertMarkers tb={tb} inserts={edits.inserts} sources={edits.sources} pxPerMs={pxPerMs} /> : null}
                   {lane === 'video' && editable && !laneState(edits, 'video').locked
                     ? (() => {
                         const cutKs = realCutIndices(tb)

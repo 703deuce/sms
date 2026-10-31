@@ -577,6 +577,28 @@ def handle_t2v_assemble(conn, job: dict) -> None:
 DISPATCH["T2V_ASSEMBLE"] = handle_t2v_assemble
 
 
+def handle_media_sync(conn, job: dict) -> None:
+    """E5: audio-sync an uploaded angle to the project's main source."""
+    from clips_worker.media_sync_job import run_media_sync_job
+
+    run_media_sync_job(conn, job)
+    _mark_job_done(conn, job["id"])
+
+
+DISPATCH["MEDIA_SYNC"] = handle_media_sync
+
+
+def handle_media_transcribe(conn, job: dict) -> None:
+    """E5b: on-demand transcript of an uploaded clip / Rooms take (cost accepted in the editor)."""
+    from clips_worker.media_transcribe_job import run_media_transcribe_job
+
+    run_media_transcribe_job(conn, job)
+    _mark_job_done(conn, job["id"])
+
+
+DISPATCH["MEDIA_TRANSCRIBE"] = handle_media_transcribe
+
+
 def _t2v_m9_progress_wrapper(run_fn):
     def handler(conn, job: dict) -> None:
         def progress(job_id: str, payload: dict) -> None:
