@@ -84,6 +84,30 @@ function addFade(edits: ClipEditsV2, f: Fade): ClipEditsV2 {
  * Apply auto-crossfades after `refs` were moved / trimmed from `prev` to `next`. `sfxDurationsMs`
  * gives SFX lengths (the timeline knows them from the decoded cues).
  */
+export type AutoCrossfadeOverlap = { lane: XLane; track: string; startMs: number; endMs: number }
+
+/** Partial overlaps on overlay / text / SFX tracks (same rules as auto-crossfade pairs). */
+export function autoCrossfadeOverlaps(
+  edits: ClipEditsV2,
+  previewEdits: ClipEditsV2,
+  sfxDurationsMs?: Record<string, number>,
+  crossTrack = false,
+): AutoCrossfadeOverlap[] {
+  const lanes = buildTimelineItems({ edits, previewEdits, sfxDurationsMs })
+  const ids = new Set<string>()
+  for (const lane of LANES) {
+    for (const it of lanes[lane] ?? []) {
+      if (it.id !== 'hook') ids.add(`${lane}:${it.id}`)
+    }
+  }
+  return pairsOf(edits, lanes, ids, crossTrack).map((p) => ({
+    lane: p.lane,
+    track: p.a.track ?? '',
+    startMs: p.b.startMs,
+    endMs: Math.min(p.a.endMs, p.b.endMs),
+  }))
+}
+
 export function autoCrossfade(
   prev: ClipEditsV2,
   next: ClipEditsV2,

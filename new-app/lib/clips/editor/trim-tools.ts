@@ -53,21 +53,25 @@ export function slipEdit(edits: ClipEditsV2, id: string, deltaMs: number): ClipE
 /** Overlay items closer than this (≈ one frame) count as touching for roll / slide. */
 export const TOUCH_MS = 40
 
-type Pair = { edits: ClipEditsV2; pv: ClipEditsV2 }
-
 function moveGap(cuts: CutRange[], from: [number, number], to: [number, number]): CutRange[] {
   let c = subtractRangeFromCuts(cuts, from)
   if (to[1] - to[0] >= 1) c = mergeCutRanges([...c, [to[0], to[1]] as CutRange])
   return c
 }
 
-function applyCuts(p: Pair, f: (c: CutRange[]) => CutRange[]): Pair {
-  return { edits: { ...p.edits, cutRanges: f(p.edits.cutRanges) }, pv: { ...p.pv, cutRanges: f(p.pv.cutRanges) } }
+function applyCutsEdits(edits: ClipEditsV2, f: (c: CutRange[]) => CutRange[]): ClipEditsV2 {
+  return { ...edits, cutRanges: f(edits.cutRanges) }
+}
+
+/** Committed keep structure (preview silence-trim must not fragment main-track roll / slide). */
+function mainVideoCtx(ctx: OpCtx) {
+  const tb = timebaseFor(ctx.edits)
+  return { tb, vs: videoLaneSegments(tb, ctx.edits.videoSplits) }
 }
 
 /** Video-lane neighbours at the boundary whose RIGHT item starts at source `rightA`. */
-function boundaryAt(pv: ClipEditsV2, edits: ClipEditsV2, rightA: number) {
-  const tb = timebaseFor(pv)
+function boundaryAt(edits: ClipEditsV2, rightA: number) {
+  const tb = timebaseFor(edits)
   const vs = videoLaneSegments(tb, edits.videoSplits)
   const i = vs.findIndex((v) => v.a === rightA)
   if (i < 1) return null
@@ -80,7 +84,7 @@ function boundaryAt(pv: ClipEditsV2, edits: ClipEditsV2, rightA: number) {
  */
 export function rollMainEdit(ctx: OpCtx, rightA: number, deltaMs: number, opts: { pictureOnly?: boolean } = {}): ClipEditsV2 | null {
   if (refLocked(ctx.edits, { lane: 'video', id: `seg:${rightA}` })) return null
-  const at = boundaryAt(ctx.previewEdits, ctx.edits, rightA)
+  const at = boundaryAt(ctx.edits, rightA)
   if (!at) return null
   const { tb, left, right } = at
   let d = Math.round(deltaMs)
@@ -96,12 +100,12 @@ export function rollMainEdit(ctx: OpCtx, rightA: number, deltaMs: number, opts: 
     return { ...ctx.edits, videoSplits: splits.sort((x, y) => x - y) }
   }
   if (q0 < p1) return null // section reorder boundary (blocks are not source-adjacent)
-  const next = applyCuts({ edits: ctx.edits, pv: ctx.previewEdits }, (c) => moveGap(c, [p1, q0], [p1 + d, q0 + d]))
+  const nextEdits = applyCutsEdits(ctx.edits, (c) => moveGap(c, [p1, q0], [p1 + d, q0 + d]))
   // Validate: same number of keep segments, same length, and the cut actually moved.
-  const nt = timebaseFor(next.pv)
+  const nt = timebaseFor(nextEdits)
   if (nt.segs.length !== tb.segs.length || Math.abs(nt.durationMs - tb.durationMs) > 1) return null
   if (!nt.segs.some(([a]) => a === q0 + d)) return null
-  let out = moveSplitKey(next.edits, q0, q0 + d, opts.pictureOnly ? -d : 0)
+  let out = moveSplitKey(nextEdits, q0, q0 + d, opts.pictureOnly ? -d : 0)
   if (!opts.pictureOnly && !out.splitEdits?.length) out = { ...out, splitEdits: undefined }
   return out
 }
@@ -109,8 +113,7 @@ export function rollMainEdit(ctx: OpCtx, rightA: number, deltaMs: number, opts: 
 /** Slide the main-track Video item that starts at source `a` by `deltaMs` between its neighbours. */
 export function slideMainClip(ctx: OpCtx, a: number, deltaMs: number): ClipEditsV2 | null {
   if (refLocked(ctx.edits, { lane: 'video', id: `seg:${a}` })) return null
-  const tb = timebaseFor(ctx.previewEdits)
-  const vs = videoLaneSegments(tb, ctx.edits.videoSplits)
+  const { tb, vs } = mainVideoCtx(ctx)
   const i = vs.findIndex((v) => v.a === a)
   if (i < 1 || i >= vs.length - 1) return null
   const prev = vs[i - 1]!
@@ -123,15 +126,25 @@ export function slideMainClip(ctx: OpCtx, a: number, deltaMs: number): ClipEdits
   d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - prev.b)
   d = Math.min(d, nxt.b - VIDEO_MIN_SEG_MS - nxt.a)
   if (!d) return null
-  const p = applyCuts({ edits: ctx.edits, pv: ctx.previewEdits }, (c) =>
+  const nextEdits = applyCutsEdits(ctx.edits, (c) =>
     moveGap(moveGap(c, [prev.b, cur.a], [prev.b + d, cur.a]), [cur.b, nxt.a], [cur.b, nxt.a + d]),
   )
-  const nt = timebaseFor(p.pv)
+  const nt = timebaseFor(nextEdits)
   if (Math.abs(nt.durationMs - tb.durationMs) > 1) return null
   // The clip's content keeps its source range and lands d later (a closed gap merges segments).
   const ns = nt.segs.findIndex(([x, y]) => x <= cur.a && cur.b <= y)
   if (ns < 0 || Math.abs(nt.starts[ns]! + (cur.a - nt.segs[ns]![0]) - (cur.startMs + d)) > 1) return null
-  return moveSplitKey(p.edits, nxt.a, nxt.a + d)
+  return moveSplitKey(nextEdits, nxt.a, nxt.a + d)
+}
+
+/** True when slide on main video needs a middle segment with neighbours on both sides. */
+export function slideMainNeedsMiddleSegment(ctx: OpCtx, ref: ItemRef): boolean {
+  if (ref.lane !== 'video') return false
+  const a = Number(ref.id.replace(/^seg:/, ''))
+  if (!Number.isFinite(a)) return false
+  const { vs } = mainVideoCtx(ctx)
+  const i = vs.findIndex((v) => v.a === a)
+  return i <= 0 || i >= vs.length - 1
 }
 
 // ---------------------------------------------------------------------------
@@ -236,8 +249,7 @@ export function slideEdit(ctx: OpCtx, ref: ItemRef, deltaMs: number): ClipEditsV
 }
 
 function rightAOf(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end'): number | null {
-  const tb = timebaseFor(ctx.previewEdits)
-  const vs = videoLaneSegments(tb, ctx.edits.videoSplits)
+  const { vs } = mainVideoCtx(ctx)
   const i = vs.findIndex((v) => `seg:${v.a}` === ref.id)
   if (i < 0) return null
   const j = edge === 'start' ? i : i + 1
