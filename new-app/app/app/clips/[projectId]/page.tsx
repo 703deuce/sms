@@ -3,6 +3,7 @@ import { StreamHeader } from '@/components/streamer/stream-header'
 import { StreamerProjectChrome } from '@/components/streamer/streamer-project-chrome'
 import { ProjectClipsView } from '@/components/clips/project-clips-view'
 import { listProjectClips } from '@/lib/server/clips/clips'
+import { resolveViewOnFullVideoUrl } from '@/lib/server/clips/view-on-full-video'
 import { parseSettings } from '@/lib/server/clips/projects'
 import { getProjectStatus } from '@/lib/server/clips/jobs'
 import { getPrisma } from '@/lib/server/db'
@@ -44,6 +45,12 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
   }
   const initialClips =
     project.status === 'READY' ? await listProjectClips(workspaceId, project.id, 'score') : null
+  const viewOnFullVideoUrl = await resolveViewOnFullVideoUrl(
+    workspaceId,
+    project.id,
+    project.settings,
+    project.uploadId,
+  )
   const liveStatus =
     project.status !== 'READY' ? await getProjectStatus(workspaceId, project.id) : null
   const vodState =
@@ -110,6 +117,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         exportAspect={projectSettings.aspectRatio}
         scriptEditorEnabled={isScriptEditorFeatureEnabled()}
         byoProject={Boolean(projectSettings.byo)}
+        viewOnFullVideoUrl={viewOnFullVideoUrl}
       />
     </Page>
   )

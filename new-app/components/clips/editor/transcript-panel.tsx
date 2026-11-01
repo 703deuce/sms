@@ -33,6 +33,7 @@ import {
 import { clipsFetch } from '@/lib/clips-api'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
+import type { VisualMomentRow } from '@/lib/clips/editor/highlights'
 
 export type TranscriptSelection = {
   startMs: number
@@ -78,6 +79,9 @@ export function TranscriptPanel({
   playheadSourceMs,
   showSurrounding = false,
   onShowSurroundingChange,
+  highlightWordIdx,
+  momentRows,
+  onSelectRange,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -110,6 +114,9 @@ export function TranscriptPanel({
   playheadSourceMs?: number
   showSurrounding?: boolean
   onShowSurroundingChange?: (on: boolean) => void
+  highlightWordIdx?: Set<number>
+  momentRows?: VisualMomentRow[]
+  onSelectRange?: (startMs: number, endMs: number) => void
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
@@ -407,10 +414,11 @@ export function TranscriptPanel({
     const ignored = isWordIgnored(w.i, edits.wordFixes)
     const active = activeI === w.i
     const isFiller = FILLER_RE.test(display.trim())
+    const pickHighlight = highlightWordIdx?.has(w.i) ?? false
     const inPhraseMatch =
       activeMatch?.wordIdx.includes(w.i) &&
       phraseMatches.some((m) => m.wordIdx.includes(w.i))
-    const highlight = inPhraseMatch && search.trim().length > 0
+    const searchHighlight = inPhraseMatch && search.trim().length > 0
     const muted = !inTrim(w)
     const surrounding = showSurrounding && muted && !cut
     const selected =
@@ -452,6 +460,7 @@ export function TranscriptPanel({
           data-active={active ? '1' : undefined}
           data-ignored={ignored && !cut ? '1' : undefined}
           data-surrounding={surrounding ? '1' : undefined}
+          data-highlight={pickHighlight ? '1' : undefined}
           className={`rounded px-0.5 transition hover:bg-accent cursor-text ${
             active ? 'bg-[#FFD400]/35' : ''
           } ${
@@ -460,7 +469,7 @@ export function TranscriptPanel({
                   isFiller ? 'decoration-muted-foreground/80' : ''
                 }`
               : ''
-          } ${surrounding ? 'line-through decoration-muted-foreground/70' : ''} ${ignored && !cut ? 'text-muted-foreground/50 line-through decoration-dashed decoration-muted-foreground/70' : ''} ${selected ? 'bg-primary/30 ring-1 ring-primary/50' : ''} ${
+          } ${surrounding ? 'line-through decoration-muted-foreground/70' : ''} ${pickHighlight ? 'bg-primary/15 ring-1 ring-primary/25' : ''} ${ignored && !cut ? 'text-muted-foreground/50 line-through decoration-dashed decoration-muted-foreground/70' : ''} ${selected ? 'bg-primary/30 ring-1 ring-primary/50' : ''} ${
             edits.captions?.emphasis?.includes(w.i) ? 'underline decoration-dotted decoration-lane-ai' : ''
           }`}
           onClick={(e) => {
@@ -495,7 +504,7 @@ export function TranscriptPanel({
         >
           {ignored ? (
             <span title="Ignored: kept in the video, hidden from captions (double-click to unignore)">{w.w}</span>
-          ) : highlight ? (
+          ) : searchHighlight ? (
             <mark className="rounded bg-lane-caption/30 text-foreground">{display}</mark>
           ) : (
             display
@@ -844,6 +853,26 @@ export function TranscriptPanel({
                 continue
               }
               const w = run.w
+              const wi = visible.findIndex((x) => x.i === w.i)
+              if (wi >= 0 && momentRows?.length) {
+                for (const row of momentRows) {
+                  if (row.beforeWordIndex !== wi) continue
+                  nodes.push(
+                    <button
+                      key={`vm-${row.pick.clipId}-${wi}`}
+                      type="button"
+                      data-testid="transcript-visual-moment"
+                      className="my-1 block w-full rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-left text-[11px] text-foreground hover:bg-primary/15"
+                      onClick={() => {
+                        onSelectRange?.(row.pick.startMs, row.pick.endMs)
+                        onSeek(row.pick.startMs)
+                      }}
+                    >
+                      {row.label}
+                    </button>,
+                  )
+                }
+              }
               if (paras.has(w.i)) {
                 nodes.push(
                   <span key={`p-${w.i}`} className="block h-1.5" data-testid="transcript-para-break" aria-hidden />,

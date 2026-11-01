@@ -11,6 +11,12 @@ import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { wordDisplayText } from '@/lib/clips/edits'
 import { clampTrimWithMediaBounds } from '@/lib/clips/trim-bounds'
+import { HighlightsLane } from '@/components/clips/editor/timeline/highlights-lane'
+import {
+  picksToLaneRanges,
+  type HighlightPick,
+  type HighlightRange,
+} from '@/lib/clips/editor/highlights'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { wordSourceMs, type SourceWord } from '@/lib/clips/source-words'
@@ -329,6 +335,7 @@ export function Timeline({
   inOut: controlledInOut,
   onInOutChange,
   onArmVoiceover,
+  highlights,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -397,6 +404,16 @@ export function Timeline({
   selectedSourceSegmentId?: string | null
   /** G1a: select an item from outside (canvas click); a new `seq` re-applies. `atMs` = output ms. */
   selectRequest?: { lane: LaneId; id?: string; atMs?: number; seq: number } | null
+  highlights?: {
+    picks: HighlightPick[]
+    ranges: HighlightRange[]
+    selectedClipId: string | null
+    durationMs: number
+    onSelect: (clipId: string) => void
+    onRangeChange: (clipId: string, range: { startMs: number; endMs: number }) => void
+    onMakeClip: (pick: HighlightPick, range: HighlightRange) => void
+    onOpenCard: (pick: HighlightPick) => void
+  }
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -433,6 +450,10 @@ export function Timeline({
   const effectivePxPerSec = pxPerSec ?? (longMedia ? minPx : TIMELINE_DEFAULT_PX_PER_SEC)
   const widthPx = trackWidthPx(dspan, effectivePxPerSec, trackViewportPx, minPx)
   const pxPerMs = widthPx / dspan
+  const highlightLaneRanges = useMemo(
+    () => (highlights ? picksToLaneRanges(highlights.picks, highlights.ranges, tb) : []),
+    [highlights, tb],
+  )
   /** Base ms → lane px: `xs` for starts / seek points (after an insert there), `xe` for ends. */
   const xs = (ms: number) => toExportMs(tmap, ms, 'start') * pxPerMs
   const xe = (ms: number) => toExportMs(tmap, ms, 'end') * pxPerMs
@@ -2993,6 +3014,23 @@ export function Timeline({
           data-px-per-sec={Math.round(effectivePxPerSec)}
         >
           <div style={{ width: widthPx + TRACK_EXTRA_PX, paddingLeft: TRACK_OFFSET_PX, paddingRight: TRACK_EXTRA_PX - TRACK_OFFSET_PX }}>
+            {highlights && highlightLaneRanges.length ? (
+              <HighlightsLane
+                durationMs={highlights.durationMs}
+                pxPerMs={pxPerMs}
+                offsetPx={TRACK_OFFSET_PX}
+                ranges={highlightLaneRanges.map((lr) => ({
+                  pick: lr.pick,
+                  startMs: lr.startMs,
+                  endMs: lr.endMs,
+                }))}
+                selectedClipId={highlights.selectedClipId}
+                onSelect={highlights.onSelect}
+                onRangeChange={highlights.onRangeChange}
+                onMakeClip={highlights.onMakeClip}
+                onOpenCard={highlights.onOpenCard}
+              />
+            ) : null}
             <div
               ref={trackAreaRef}
               className="relative shrink-0"
