@@ -56,7 +56,7 @@ import { adjustGradesAt, brollGradeAt, videoGradeAt } from '@/lib/clips/editor/g
 import { GradePreview, layerMedia, stageFrame } from '@/components/clips/editor/g4/grade-preview'
 import { corsMediaProps, prepareAll, setMediaSrc, watchMediaCors } from '@/components/clips/editor/g4/media-cors'
 import { reversedSourceMs } from '@/lib/clips/editor/video-reverse'
-import { applyBlurRegion, applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
+import { applyBlurRegion, applyLayerFx, applyTextFxLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
 import { exportOnlyNote } from '@/lib/clips/editor/export-processing'
 import { brollFxOf, chromaParams, layerFxOf, textItemHasFx, adjustLayerHasFx } from '@/lib/clips/editor/layer-fx'
 import { mainFxOf, mainKeyAllowed } from '@/lib/clips/editor/main-fx'
@@ -678,7 +678,7 @@ export function PreviewStage({
         const lfx = e.layerFx?.length ? layerFxOf(e, `text:${it.id}`) : undefined
         const fxHost = textFxRefs.current[it.id]
         if (fxHost && lfx && (lfx.mask || lfx.blend)) {
-          applyLayerFx(fxHost, fxHost, lfx, outMs - it.startMs, tickFxFrame.W, tickFxFrame.H)
+          applyTextFxLayerFx(fxHost, lfx, outMs - it.startMs, tickFxFrame.W, tickFxFrame.H)
         }
         const el = textRefs.current[it.id]
         if (!el) continue
