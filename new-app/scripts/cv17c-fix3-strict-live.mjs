@@ -1,12 +1,10 @@
 #!/usr/bin/env node
 /**
  * CV17c-fix3 STRICT pixel check (do not weaken):
- * Circle mask center 50/50, w=15%, h=10% of export frame → ellipse in preview stage coords
- * (text libass canvases are full stage-sized → same coordinate map).
- * Bright: alpha>30 && r+g+b>600 on text libass canvas pixels only.
- * BEFORE mask: outsideBright >= 200.
- * AFTER mask: outsideBright <= 10% of beforeOutside.
- * INVERT: insideBright <= 10% of afterInside (non-invert baseline on fx canvas).
+ * Circle mask center 50/50, w=15%, h=10% → ellipse in preview stage coords.
+ * Bright: alpha>30 && r+g+b>600.
+ * Runs twice: item SELECTED on timeline, then deselected (click video).
+ * Each run: beforeOutside >= 200; afterOutside <= 10% of beforeOutside; invert inside <= 10% of afterInside.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -16,9 +14,6 @@ const CLIP_ID = 'clip_2287e76553ab473e8b824e5337fee29d'
 const URL = `https://transovo.ai/app/clips/proj_238c916d00774f0a9a024efbcfd7beea/edit/${CLIP_ID}`
 const ART = '/opt/cursor/artifacts/cv17c-fix3'
 const MASK = { x: 50, y: 50, w: 15, h: 10, feather: 0 }
-
-const MAIN_TEXT_CANVAS = '[data-preview-renderer] [data-testid="libass-canvas"]:not([data-testid="preview-text-fx"] *)'
-const FX_TEXT_CANVAS = '[data-testid="preview-text-fx"] [data-testid="libass-canvas"]'
 
 async function pausePreview(page) {
   await page.evaluate(() => {
@@ -32,10 +27,8 @@ async function pausePreview(page) {
   })
 }
 
-async function countBrightCanvas(page, canvasSel, geom) {
-  const loc = page.locator(canvasSel).first()
-  await loc.waitFor({ state: 'visible', timeout: 20000 })
-  const buf = await loc.screenshot()
+async function countBrightStage(page, geom) {
+  const buf = await page.locator('[data-preview-renderer]').screenshot()
   return page.evaluate(
     async ({ b64, geom }) => {
       const img = new Image()
@@ -50,7 +43,7 @@ async function countBrightCanvas(page, canvasSel, geom) {
       c.width = w
       c.height = h
       const ctx = c.getContext('2d')
-      if (!ctx) return { outside: 0, inside: 0, totalBright: 0 }
+      if (!ctx) return { outside: 0, inside: 0 }
       ctx.drawImage(img, 0, 0)
       const d = ctx.getImageData(0, 0, w, h).data
       const inside = (px, py) => {
@@ -65,17 +58,15 @@ async function countBrightCanvas(page, canvasSel, geom) {
       }
       let outside = 0
       let insideN = 0
-      let totalBright = 0
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const i = (y * w + x) * 4
           if (d[i + 3] <= 30 || d[i] + d[i + 1] + d[i + 2] <= 600) continue
-          totalBright++
           if (inside(x + 0.5, y + 0.5)) insideN++
           else outside++
         }
       }
-      return { outside, inside: insideN, totalBright }
+      return { outside, inside: insideN }
     },
     { b64: buf.toString('base64'), geom },
   )
@@ -95,23 +86,46 @@ async function setMaskGeom(page) {
   }
 }
 
+async function runStrictPhase(page, tag, out) {
+  await pausePreview(page)
+  const beforePath = join(ART, `stage-${tag}-before-mask.png`)
+  await page.locator('[data-preview-renderer]').screenshot({ path: beforePath })
+  out.screenshots[`${tag}Before`] = beforePath
+  const before = await countBrightStage(page, MASK)
+  await setMaskGeom(page)
+  await page.waitForTimeout(4000)
+  await pausePreview(page)
+  const afterPath = join(ART, `stage-${tag}-after-mask.png`)
+  await page.locator('[data-preview-renderer]').screenshot({ path: afterPath })
+  out.screenshots[`${tag}After`] = afterPath
+  const after = await countBrightStage(page, MASK)
+  await page.getByTestId('layer-fx-mask-invert').click()
+  await page.waitForTimeout(4000)
+  await pausePreview(page)
+  const invertPath = join(ART, `stage-${tag}-invert-mask.png`)
+  await page.locator('[data-preview-renderer]').screenshot({ path: invertPath })
+  out.screenshots[`${tag}Invert`] = invertPath
+  const inv = await countBrightStage(page, MASK)
+  await page.getByTestId('layer-fx-mask-invert').click()
+  await page.waitForTimeout(800)
+  const phase = {
+    beforeOutside: before.outside,
+    afterOutside: after.outside,
+    afterInside: after.inside,
+    invertInside: inv.inside,
+    passBeforeMin: before.outside >= 200,
+    passOutsideClip: after.outside <= before.outside * 0.1,
+    passInvert: inv.inside <= after.inside * 0.1,
+  }
+  out[tag] = phase
+  return phase.passBeforeMin && phase.passOutsideClip && phase.passInvert
+}
+
 async function main() {
   await mkdir(ART, { recursive: true })
   const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } })
-  const out = {
-    strict: {
-      beforeOutside: null,
-      afterOutside: null,
-      afterInside: null,
-      invertInside: null,
-      passBeforeMin: false,
-      passOutsideClip: false,
-      passInvert: false,
-    },
-    screenshots: {},
-    pass: 'FAIL',
-  }
+  const out = { selected: null, deselected: null, screenshots: {}, pass: 'FAIL' }
   try {
     await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 })
     await page.locator('[data-testid="timeline-root"]').waitFor({ timeout: 120000 })
@@ -120,48 +134,30 @@ async function main() {
     await page.getByRole('button', { name: 'Text', exact: true }).click()
     await page.getByTestId('text-add').click()
     await page.waitForTimeout(3500)
-    await pausePreview(page)
     const textId = await page.evaluate(() => [...document.querySelectorAll('[data-testid="timeline-item-text"]')].pop()?.getAttribute('data-item-id'))
     await page.locator(`[data-testid="timeline-item-text"][data-item-id="${textId}"]`).click({ force: true })
     await page.getByRole('button', { name: 'Properties', exact: true }).click()
     await page.locator('[data-testid="properties-panel"][data-target^="text:"]').waitFor({ timeout: 20000 })
-    await page.waitForTimeout(2500)
-    await pausePreview(page)
+    await page.waitForTimeout(2000)
 
-    const beforePath = join(ART, 'stage-before-mask.png')
-    await page.locator('[data-preview-renderer]').screenshot({ path: beforePath })
-    out.screenshots.before = beforePath
-    const before = await countBrightCanvas(page, MAIN_TEXT_CANVAS, MASK)
-    out.strict.beforeOutside = before.outside
+    const selectedOk = await runStrictPhase(page, 'selected', out)
 
-    await setMaskGeom(page)
-    await page.waitForTimeout(4000)
-    await pausePreview(page)
-    const afterPath = join(ART, 'stage-after-mask.png')
-    await page.locator('[data-preview-renderer]').screenshot({ path: afterPath })
-    out.screenshots.after = afterPath
-    const after = await countBrightCanvas(page, FX_TEXT_CANVAS, MASK)
-    out.strict.afterOutside = after.outside
-    out.strict.afterInside = after.inside
+    await page.locator('[data-testid="timeline-item-video"]').first().click({ force: true })
+    await page.waitForTimeout(1200)
+    await page.locator(`[data-testid="timeline-item-text"][data-item-id="${textId}"]`).click({ force: true })
+    await page.getByRole('button', { name: 'Properties', exact: true }).click()
+    await page.locator('[data-testid="properties-panel"][data-target^="text:"]').waitFor({ timeout: 20000 })
+    await page.locator('[data-preview-renderer]').click({ position: { x: 12, y: 12 } })
+    await page.waitForTimeout(800)
+    out.deselectedShellCount = await page.locator('[data-text-fx-shell="1"]').count()
+    await page.getByTestId('layer-fx-mask-none').click()
+    await page.waitForTimeout(1200)
+    const deselectedOk = await runStrictPhase(page, 'deselected', out)
 
-    await page.getByTestId('layer-fx-mask-invert').click()
-    await page.waitForTimeout(4000)
-    await pausePreview(page)
-    const invertPath = join(ART, 'stage-invert-mask.png')
-    await page.locator('[data-preview-renderer]').screenshot({ path: invertPath })
-    out.screenshots.invert = invertPath
-    const inv = await countBrightCanvas(page, FX_TEXT_CANVAS, MASK)
-    out.strict.invertInside = inv.inside
-
-    out.strict.passBeforeMin = before.outside >= 200
-    out.strict.passOutsideClip = after.outside <= before.outside * 0.1
-    out.strict.passInvert = inv.inside <= after.inside * 0.1
-
-    if (out.strict.passBeforeMin && out.strict.passOutsideClip && out.strict.passInvert) out.pass = 'PASS'
+    if (selectedOk && deselectedOk) out.pass = 'PASS'
 
     await page.getByRole('button', { name: 'Text', exact: true }).click().catch(() => {})
     await page.getByTestId('text-delete').click({ timeout: 10000 }).catch(() => {})
-    await page.waitForTimeout(1500)
   } finally {
     await browser.close()
   }

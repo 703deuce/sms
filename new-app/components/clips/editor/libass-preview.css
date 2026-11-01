@@ -30,3 +30,15 @@
   box-shadow: none !important;
   border-color: transparent !important;
 }
+/* CV17c: selection hit-test shell for libass text fx — never paint duplicate glyphs. */
+[data-text-fx-shell='1'] [data-testid='preview-text-line'],
+[data-text-fx-shell='1'] [data-testid='preview-text-line'] *,
+[data-text-fx-shell='1'] [data-testid='preview-shape'],
+[data-text-fx-shell='1'] [data-testid='preview-shape'] * {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  -webkit-text-stroke-color: transparent !important;
+  text-shadow: none !important;
+  fill: transparent !important;
+  stroke: transparent !important;
+}
