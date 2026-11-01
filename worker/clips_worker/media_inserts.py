@@ -42,6 +42,8 @@ def _safe_id(v) -> str:
 
 
 FREEZE_SOURCE_ID = "freeze"  # G1b3: freeze frame — holds the finished frame at its point, silent.
+GAP_SOURCE_ID = "gap"  # TC1: gap clip — black picture + silence (lavfi color / anullsrc).
+RESERVED_SOURCE_IDS = (FREEZE_SOURCE_ID, GAP_SOURCE_ID)
 
 
 def normalize_inserts(raw, sources: list[dict] | None) -> list[dict] | None:
@@ -57,11 +59,12 @@ def normalize_inserts(raw, sources: list[dict] | None) -> list[dict] | None:
         src = by_id.get(_safe_id(r.get("sourceId")))
         at = _int(r.get("atSrcMs"))
         dur = _int(r.get("durMs"))
-        if _safe_id(r.get("sourceId")) == FREEZE_SOURCE_ID:
+        reserved = _safe_id(r.get("sourceId"))
+        if reserved in RESERVED_SOURCE_IDS:
             if not iid or iid in seen or at is None or dur is None or dur < INSERT_MIN_MS:
                 continue
             seen.add(iid)
-            item = {"id": iid, "sourceId": FREEZE_SOURCE_ID, "atSrcMs": max(0, at)}
+            item = {"id": iid, "sourceId": reserved, "atSrcMs": max(0, at)}
             if r.get("append") is True:
                 item["append"] = True
             item.update({"inMs": 0, "durMs": min(dur, INSERT_MAX_MS), "audio": "mute"})
@@ -130,6 +133,7 @@ def insert_windows(segs, inserts: list[dict] | None) -> list[dict]:
                 "audio": "mute" if ins.get("audio") == "mute" else "source",
                 "fit": ins.get("fit") or "cover",
                 **({"freeze": True} if ins["sourceId"] == FREEZE_SOURCE_ID else {}),
+                **({"gap": True} if ins["sourceId"] == GAP_SOURCE_ID else {}),
             }
         )
         shift += ins["durMs"]
@@ -251,7 +255,13 @@ def build_splice_graph(
         else:
             i, d = p["input"], p["durS"]
             vf = fit_filter(p["fit"], w, h)
-            if p.get("freeze"):
+            if p.get("gap"):
+                # TC1: gap clip — black frames at the output size / rate (no input).
+                parts.append(
+                    f"color=c=black:s={w}x{h}:r={fps_s},format=yuv420p,setsar=1,"
+                    f"trim=duration={d:.6f},setpts=PTS-STARTPTS[{v}]"
+                )
+            elif p.get("freeze"):
                 # G1b3: first frame of the seeked finished file, repeated for d. `loop` (not tpad: after
                 # trim=end_frame=1 ffmpeg 7 stops tpad's clone) — same frame count on ffmpeg 5.1 and 7.
                 n_rep = int(d * fps) + 1
@@ -291,7 +301,7 @@ def splice_inserts(
     sources = {s["id"]: s for s in (normalize_media_sources(edits.get("sources")) or [])}
     usable = []
     for win in windows:
-        if win.get("freeze"):
+        if win.get("freeze") or win.get("gap"):
             usable.append((win, Path(out_mp4)))
             continue
         path = media_path_for(edits, win["sourceId"], media_paths or {})
@@ -317,7 +327,8 @@ def splice_inserts(
     pieces: list[dict] = []
     t = 0.0
     points: list[tuple[float, float]] = []
-    for idx, (win, path) in enumerate(usable, start=1):
+    for win, path in usable:
+        idx = inputs.count("-i")  # TC1: gaps add no input, so count the real ones
         at_s = min(total_s, max(0.0, _final_ms(edits, render_meta, win["baseMs"]) / 1000.0))
         if at_s - t > 0.02:
             pieces.append({"kind": "main", "t0": t, "t1": at_s})
@@ -325,6 +336,12 @@ def splice_inserts(
         src = sources.get(win["sourceId"]) or {}
         still = src.get("mediaType") == "image"
         d = win["durMs"] / 1000.0
+        if win.get("gap"):
+            # No input file: the input index is unused (lavfi color in the graph).
+            pieces.append({"kind": "insert", "input": None, "still": False, "gap": True, "durS": d,
+                           "audio": "mute", "fit": "cover", "hasAudio": False})
+            points.append((at_s * 1000.0, float(win["durMs"])))
+            continue
         if win.get("freeze"):
             # The finished frame at the point (the last one when it is the very end).
             fz = max(0.0, min(at_s, total_s - 1.5 / fps))

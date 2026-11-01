@@ -13,8 +13,11 @@ from clips_worker.motion import stack_order
 
 DEFAULT_TRACK_ID = {"overlay": "ov1", "text": "tx1", "audio": "au1"}
 REV_DEFAULT = {v: k for k, v in DEFAULT_TRACK_ID.items()}
-MAX_TRACKS = 16
-MAX_VISUAL_TRACKS = 10
+# TC1 (TL-03): sanity bounds only (web tracks.ts has the same numbers); the visual-track limit that
+# mattered was the number of text-under-overlay passes, now bounded by MAX_UNDER_PASSES.
+MAX_TRACKS = 64
+MAX_VISUAL_TRACKS = 48
+MAX_UNDER_PASSES = 9
 TRACK_NAME_MAX = 40
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,24}$")
 _ITEM_RE = re.compile(r"^[A-Za-z0-9_~.:-]{1,128}$")
@@ -226,4 +229,22 @@ def under_passes(edits: dict, overlay_ids: list[str]) -> list[dict]:
             out[-1]["ids"].extend(ids)
         else:
             out.append({"kind": t["kind"], "trackId": t["id"], "ids": list(ids)})
-    return out
+    return cap_under_passes(out)
+
+
+def cap_under_passes(passes: list[dict]) -> list[dict]:
+    """TC1 (mirror of TS capUnderPasses): keep the bottom MAX_UNDER_PASSES - 1 passes, fold the rest
+    into one overlay pass; text from the folded part burns on top of all B-roll."""
+    if len(passes) <= MAX_UNDER_PASSES:
+        return passes
+    head = [{**p, "ids": list(p["ids"])} for p in passes[: MAX_UNDER_PASSES - 1]]
+    ov = [p for p in passes[MAX_UNDER_PASSES - 1 :] if p["kind"] == "overlay"]
+    ids = [i for p in ov for i in p["ids"]]
+    if not ids:
+        return head
+    if head and head[-1]["kind"] == "overlay":
+        head[-1]["ids"].extend(ids)
+    else:
+        head.append({"kind": "overlay", "trackId": ov[0]["trackId"], "ids": ids})
+    print(f"[tc1:tracks] under passes capped {len(passes)} -> {len(head)}", flush=True)
+    return head

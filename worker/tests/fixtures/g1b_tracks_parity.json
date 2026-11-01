@@ -240,6 +240,22 @@
      "kind": "overlay"
     },
     {
+     "id": "ov10",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov11",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov12",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov13",
+     "kind": "overlay"
+    },
+    {
      "id": "tx1",
      "kind": "text"
     },
@@ -391,6 +407,26 @@
     },
     {
      "id": "au14",
+     "kind": "audio"
+    },
+    {
+     "id": "au15",
+     "kind": "audio"
+    },
+    {
+     "id": "au16",
+     "kind": "audio"
+    },
+    {
+     "id": "au17",
+     "kind": "audio"
+    },
+    {
+     "id": "au18",
+     "kind": "audio"
+    },
+    {
+     "id": "au19",
      "kind": "audio"
     }
    ]

@@ -48,6 +48,9 @@ import { normalizeTrackFx, type TrackFx } from '@/lib/clips/editor/track-fx'
 import { normalizeTakes, type TakeGroup } from '@/lib/clips/editor/takes'
 import { normalizeTrackMotion, type TrackMotion } from '@/lib/clips/editor/track-motion'
 import { normalizeLayerFx, type LayerFx } from '@/lib/clips/editor/layer-fx'
+import { normalizeMarkers, type Marker } from '@/lib/clips/editor/markers'
+import { normalizeDisabledItems, normalizeGroups, type ItemGroup } from '@/lib/clips/editor/item-flags'
+import { normalizeTimelineOpts, type TimelineOpts } from '@/lib/clips/editor/timeline-opts'
 
 export type CutRange = [number, number]
 
@@ -233,6 +236,14 @@ export type ClipEditsV2 = {
   takes?: TakeGroup[]
   /** G1c: per-overlay-track transform (position / scale / crop, keyframable) — track-motion.ts. */
   trackMotion?: TrackMotion[]
+  /** TC1: timeline markers / chapters (output ms; editor-only) — lib/clips/editor/markers.ts. */
+  markers?: Marker[]
+  /** TC1: deactivated items (`broll:<id>` …; not rendered in preview or export) — item-flags.ts. */
+  disabledItems?: string[]
+  /** TC1: item groups (select / move together; editor-only) — item-flags.ts. */
+  groups?: ItemGroup[]
+  /** TC1: magnet / overlay-ripple switches (editor behaviour only) — timeline-opts.ts. */
+  timelineOpts?: TimelineOpts
 }
 
 export type ClipBounds = {
@@ -517,6 +528,10 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.trackFx?.length) payload.trackFx = null
   if (!edits.takes?.length) payload.takes = null
   if (!edits.trackMotion?.length) payload.trackMotion = null
+  if (!edits.markers?.length) payload.markers = null
+  if (!edits.disabledItems?.length) payload.disabledItems = null
+  if (!edits.groups?.length) payload.groups = null
+  if (!edits.timelineOpts) payload.timelineOpts = null
   return payload
 }
 
@@ -651,6 +666,10 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     splitEdits: normalizeSplitEdits(o.splitEdits),
     trackFx: normalizeTrackFx(o.trackFx, new Set((normalizeTracks(o.tracks) ?? []).map((t) => t.id).concat(['ov1', 'au1']))),
     trackMotion: normalizeTrackMotion(o.trackMotion, new Set((normalizeTracks(o.tracks) ?? []).map((t) => t.id).concat(['ov1']))),
+    markers: normalizeMarkers(o.markers),
+    disabledItems: normalizeDisabledItems(o.disabledItems),
+    groups: normalizeGroups(o.groups),
+    timelineOpts: normalizeTimelineOpts(o.timelineOpts),
   }
   // G1c: take groups reference the normalized B-roll ids.
   const takes = normalizeTakes(o.takes, new Set((out.broll ?? []).map((b) => b.id)))
@@ -745,7 +764,8 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     // G1c: track effects change the sound / frames; takes hide items.
     !edits.trackFx?.length &&
     !edits.takes?.length &&
-    !edits.trackMotion?.length
+    !edits.trackMotion?.length &&
+    !edits.disabledItems?.length // TC1: deactivated items are not rendered.
   )
 }
 

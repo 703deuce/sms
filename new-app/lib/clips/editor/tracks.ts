@@ -37,8 +37,16 @@ export const DEFAULT_TRACK_ID: Record<TrackKind, string> = { overlay: 'ov1', tex
 export const TRACK_LANE: Record<TrackKind, 'broll' | 'text' | 'sfx'> = { overlay: 'broll', text: 'text', audio: 'sfx' }
 export const LANE_TRACK_KIND: Partial<Record<LaneId, TrackKind>> = { broll: 'overlay', text: 'text', sfx: 'audio' }
 export const TRACK_ID_PREFIX: Record<TrackKind, string> = { overlay: 'ov', text: 'tx', audio: 'au' }
-export const MAX_TRACKS = 16
-export const MAX_VISUAL_TRACKS = 10
+/**
+ * TC1 (TL-03, "unlimited tracks"): the old 16 / 10 caps are gone; these are only sanity bounds
+ * for the saved JSON (worker tracks.py has the same numbers). What actually limited visual tracks
+ * was the preview's stacking range for text-under-overlay passes (z 10–19): that is now bounded by
+ * MAX_UNDER_PASSES (capUnderPasses), not by the number of tracks.
+ */
+export const MAX_TRACKS = 64
+export const MAX_VISUAL_TRACKS = 48
+/** TC1: at most this many B-roll stage passes (preview z 10–18; worker one encode per pass). */
+export const MAX_UNDER_PASSES = 9
 export const TRACK_NAME_MAX = 40
 const ID_RE = /^[A-Za-z0-9_-]{1,24}$/
 const ITEM_RE = /^[A-Za-z0-9_~.:-]{1,128}$/
@@ -306,7 +314,24 @@ export function underPasses(
     if (last && last.kind === t.kind) last.ids.push(...ids)
     else out.push({ kind: t.kind as 'overlay' | 'text', trackId: t.id, ids: [...ids] })
   }
-  return out
+  return capUnderPasses(out)
+}
+
+/**
+ * TC1: with many interleaved overlay / text tracks, keep the bottom MAX_UNDER_PASSES − 1 passes and
+ * fold everything above into ONE overlay pass; text from the folded part draws on top of all
+ * B-roll (the long-standing fallback). Worker tracks.cap_under_passes is the same rule.
+ */
+export function capUnderPasses(passes: VisualGroup[]): VisualGroup[] {
+  if (passes.length <= MAX_UNDER_PASSES) return passes
+  const head = passes.slice(0, MAX_UNDER_PASSES - 1).map((p) => ({ ...p, ids: [...p.ids] }))
+  const ov = passes.slice(MAX_UNDER_PASSES - 1).filter((p) => p.kind === 'overlay')
+  const ids = ov.flatMap((p) => p.ids)
+  if (!ids.length) return head
+  const last = head[head.length - 1]
+  if (last && last.kind === 'overlay') last.ids.push(...ids)
+  else head.push({ kind: 'overlay', trackId: ov[0]!.trackId, ids })
+  return head
 }
 
 // ---------------------------------------------------------------------------

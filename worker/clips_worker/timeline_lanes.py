@@ -7,6 +7,9 @@ vitest (tests/clip-timeline-parity.test.ts) and pytest (tests/test_timeline_lane
 """
 from __future__ import annotations
 
+import logging
+import re
+
 from clips_worker.clip_keep_segments import ordered_keep_segments
 
 LANE_ORDER = ("text", "adjust", "video", "broll", "voice", "music", "sfx")
@@ -77,9 +80,51 @@ def voice_muted(edits: dict) -> bool:
     return bool((lanes.get("voice") or {}).get("muted"))
 
 
+MAX_DISABLED = 500
+_DISABLED_KEY_RE = re.compile(r"^(broll|text|sfx|adjust):[A-Za-z0-9_~.:-]{1,128}$")
+
+
+def disabled_item_keys(raw) -> set:
+    """TC1 (TL-29): edits.disabledItems -> key set (TS normalizeDisabledItems, same rule)."""
+    out: list = []
+    if not isinstance(raw, list):
+        return set()
+    for k in raw:
+        if not isinstance(k, str) or not _DISABLED_KEY_RE.match(k) or k in out:
+            continue
+        out.append(k)
+        if len(out) >= MAX_DISABLED:
+            break
+    return set(out)
+
+
+def apply_item_enable(edits: dict) -> dict:
+    """TC1: deactivated items are not rendered (TS applyItemEnable)."""
+    off = disabled_item_keys(edits.get("disabledItems"))
+    if not off:
+        return edits
+    out = dict(edits)
+    if isinstance(out.get("broll"), list):
+        out["broll"] = [b for b in out["broll"] if not (isinstance(b, dict) and f"broll:{b.get('id')}" in off)]
+    if isinstance(out.get("textItems"), list):
+        kept = [t for t in out["textItems"] if not (isinstance(t, dict) and f"text:{t.get('id')}" in off)]
+        out["textItems"] = kept or None
+    if isinstance(out.get("adjustLayers"), list):
+        kept = [x for x in out["adjustLayers"] if not (isinstance(x, dict) and f"adjust:{x.get('id')}" in off)]
+        out["adjustLayers"] = kept or None
+    audio = out.get("audio")
+    if isinstance(audio, dict) and isinstance(audio.get("sfx"), list):
+        out["audio"] = {**audio, "sfx": [s for s in audio["sfx"] if not (isinstance(s, dict) and f"sfx:{s.get('generationId')}" in off)]}
+    logging.getLogger(__name__).info("[tc1:enable] %d item(s) deactivated", len(off))
+    return out
+
+
 def apply_timeline_lane_state(edits: dict) -> dict:
     """Drop hidden / muted lanes so export renders exactly what the editor preview plays."""
     from clips_worker.tracks import apply_track_state, on_default_track
+
+    # TC1: deactivated items first (preview: applyItemEnable).
+    edits = apply_item_enable(edits)
 
     # G2: solo first — it only sets mute flags, which the paths below honour.
     edits = apply_audio_solo(edits)

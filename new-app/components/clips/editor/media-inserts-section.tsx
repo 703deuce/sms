@@ -60,7 +60,7 @@ export function InsertsSection({
         return (
           <div key={w.id} className="space-y-1 rounded border p-1.5 text-[11px]" data-testid="media-insert-row">
             <div className="flex items-center gap-1">
-              <span className="min-w-0 flex-1 truncate font-medium" title={src?.label}>{w.freeze ? 'Freeze frame' : src?.label ?? 'Clip'}</span>
+              <span className="min-w-0 flex-1 truncate font-medium" title={src?.label}>{w.freeze ? 'Freeze frame' : w.gap ? 'Gap' : src?.label ?? 'Clip'}</span>
               <span className="tabular-nums text-muted-foreground">
                 {ins.append ? 'end' : `at ${formatMediaDuration(w.startMs)}`} · {(w.durMs / 1000).toFixed(1)} s
               </span>
@@ -78,6 +78,7 @@ export function InsertsSection({
                 ))}
               </div>
             ) : null}
+            {w.gap ? null : (
             <div className="flex items-center gap-1" role="group" aria-label="Framing">
               <Label className="w-12 text-[11px]">Frame</Label>
               {(['cover', 'contain'] as const).map((f) => (
@@ -86,7 +87,8 @@ export function InsertsSection({
                 </Button>
               ))}
             </div>
-            {src?.mediaType === 'video' && !w.freeze ? (
+            )}
+            {src?.mediaType === 'video' && !w.freeze && !w.gap ? (
               // G4cfix: scene split on inserted media (splits this insert into consecutive inserts).
               <MediaSceneSplit
                 edits={edits}
