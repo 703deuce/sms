@@ -117,6 +117,11 @@ const clipEditorAnton = Anton({ subsets: ['latin'], weight: '400', variable: '--
 const clipEditorMontserrat = Montserrat({ subsets: ['latin'], weight: ['900'], variable: '--font-clip-montserrat' })
 const clipEditorPoppins = Poppins({ subsets: ['latin'], weight: ['800'], variable: '--font-poppins' })
 
+/** TC3 (c): a slider thumb / range input (not a text field). */
+function isSliderTarget(t: EventTarget | null): boolean {
+  return t instanceof Element && Boolean(t.closest('[role="slider"], input[type="range"]'))
+}
+
 function isEditableTarget(t: EventTarget | null) {
   // G4c: sliders (role="slider" thumbs), selects and every input keep their keys.
   return isFormControlTarget(t)
@@ -1228,6 +1233,14 @@ export function EditorShell({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // TC3 (c): Ctrl/⌘+Z (Shift = redo) and Ctrl+Y stay global on a focused slider — a slider has
+      // no undo of its own (text inputs keep their native undo).
+      if (isSliderTarget(e.target) && (e.metaKey || e.ctrlKey) && !e.altKey && /^[zy]$/i.test(e.key)) {
+        e.preventDefault()
+        if (e.shiftKey || e.key.toLowerCase() === 'y') redo()
+        else undo()
+        return
+      }
       if (isEditableTarget(e.target)) return
       const v = videoRef.current
       if (e.code === 'Space' && v) {
@@ -1869,6 +1882,20 @@ export function EditorShell({
               onClick={toggleLoopFriendly}
             >
               Loop trim {edits.loopFriendlyEnd === false ? 'off' : 'on'}
+            </button>
+            <button
+              type="button"
+              className="absolute bottom-2 right-24 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15"
+              onClick={(e) => {
+                // TC3 (CV-12): full-screen preview (browser Fullscreen API; Esc leaves).
+                const box = e.currentTarget.parentElement
+                if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+                else void box?.requestFullscreen?.().catch(() => {})
+              }}
+              title="Full-screen preview (Esc to leave)"
+              data-testid="preview-fullscreen"
+            >
+              ⛶ Full screen
             </button>
             <EditorPanelErrorBoundary label="Preview">
             <PreviewStage

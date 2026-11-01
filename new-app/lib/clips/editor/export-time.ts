@@ -54,3 +54,12 @@ export function toBaseMs(map: ExportTimeMap, d: number): number {
   }
   return Math.max(0, d - shift)
 }
+
+/**
+ * TC3 (a): export ms → the base ms to SEEK to. A point on an insert seeks to the insert's start:
+ * 1 ms before its base point (the base point itself shows after the insert, i.e. at its end).
+ */
+export function seekBaseMs(map: ExportTimeMap, d: number, spanMs: number): number {
+  const w = map.wins.find((x) => d >= x.startMs && d < x.endMs)
+  return Math.max(0, Math.min(spanMs, w ? w.baseMs - 1 : toBaseMs(map, d)))
+}

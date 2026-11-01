@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { exportTimeMap, toBaseMs, toExportMs } from '@/lib/clips/editor/export-time'
+import { exportTimeMap, seekBaseMs, toBaseMs, toExportMs } from '@/lib/clips/editor/export-time'
 import { parseNudge } from '@/lib/clips/editor/timecode-nudge'
 import { readTimelineHeight, TIMELINE_MIN_H, writeTimelineHeight } from '@/lib/clips/editor/timeline-opts'
 import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
@@ -407,7 +407,8 @@ export function Timeline({
   const xs = (ms: number) => toExportMs(tmap, ms, 'start') * pxPerMs
   const xe = (ms: number) => toExportMs(tmap, ms, 'end') * pxPerMs
   /** Lane px → base ms (a point inside an insert → its base point). */
-  const msAtPx = (px: number) => Math.max(0, Math.min(span, toBaseMs(tmap, px / Math.max(1e-6, pxPerMs))))
+  const msAtPx = (px: number) => seekBaseMs(tmap, px / Math.max(1e-6, pxPerMs), span)
+
   const widthRef = useRef(widthPx)
   widthRef.current = widthPx
 
@@ -2689,7 +2690,8 @@ export function Timeline({
       {tlCollapsed ? null : (
       <div
         className="flex min-w-0 rounded-lg border border-border bg-card/30"
-        style={tlHeight ? { maxHeight: tlHeight, overflowY: 'auto' } : undefined}
+        // TC3 (d): a set height is the height — taller than all tracks leaves empty space below.
+        style={tlHeight ? { height: tlHeight, overflowY: 'auto' } : undefined}
         data-testid="timeline-body"
       >
         <div className="w-[104px] shrink-0 border-r border-border/60" aria-label="Tracks">
