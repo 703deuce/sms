@@ -65,7 +65,7 @@ async function loadProjectTranscript(
 export async function getClipEditorWords(
   workspaceId: string,
   clipId: string,
-  opts?: { trimInMs?: number; trimOutMs?: number },
+  opts?: { trimInMs?: number; trimOutMs?: number; contextMs?: number },
 ) {
   const clip = await getClipForWorkspace(workspaceId, clipId)
   if (!clip) return null
@@ -80,11 +80,26 @@ export async function getClipEditorWords(
     ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
     : getClipStorage(driverHint)
   const projectTranscript = await loadProjectTranscript(storage, project)
+  const bounds = await clipBoundsForPatch({
+    startMs: clip.startMs,
+    endMs: clip.endMs,
+    projectId: clip.projectId,
+    sourceSegKey: clip.sourceSegKey,
+    sourceSegStartMs: clip.sourceSegStartMs,
+    sourceSegEndMs: clip.sourceSegEndMs,
+    previewKey: clip.previewKey,
+  })
+  const trimLimits =
+    bounds.trimMinMs != null && bounds.trimMaxMs != null
+      ? { minMs: bounds.trimMinMs, maxMs: bounds.trimMaxMs }
+      : undefined
   const words = await resolveEditorWords(storage, workspaceId, clip, projectTranscript, {
     trimInMs: opts?.trimInMs,
     trimOutMs: opts?.trimOutMs,
+    contextMs: opts?.contextMs,
+    trimLimits,
   })
-  return { words, bounds: { clipStartMs: clip.startMs, clipEndMs: clip.endMs } }
+  return { words, bounds: { clipStartMs: clip.startMs, clipEndMs: clip.endMs, ...bounds } }
 }
 
 export async function getClipEditorPayload(workspaceId: string, clipId: string) {

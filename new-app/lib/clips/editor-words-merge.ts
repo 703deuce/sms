@@ -12,12 +12,17 @@ export function mergeClipWordsWithProjectTranscript(
   clipEndMs: number,
   extendMs = MAX_TRIM_EXTEND_MS,
   range?: { startMs: number; endMs: number },
+  trimLimits?: { minMs: number; maxMs: number },
 ): SourceWord[] {
   if (!projectWords.length) return clipWords
   const padLo = range ? Math.min(clipStartMs, range.startMs) : clipStartMs
   const padHi = range ? Math.max(clipEndMs, range.endMs) : clipEndMs
-  const lo = Math.max(0, padLo - extendMs)
-  const hi = padHi + extendMs
+  let lo = Math.max(0, padLo - extendMs)
+  let hi = padHi + extendMs
+  if (trimLimits) {
+    lo = Math.max(trimLimits.minMs, lo)
+    hi = Math.min(trimLimits.maxMs, hi)
+  }
   const fromProject = wordsInRange(projectWords, lo, hi)
   if (!clipWords.length) return fromProject
   const byIndex = new Map<number, SourceWord>()
@@ -45,6 +50,7 @@ export function trimNeedsEditorWordsRefetch(
   trim: { in: number; out: number },
   bounds: ClipBounds,
   slackMs = 250,
+  extendMs = MAX_TRIM_EXTEND_MS,
 ): boolean {
   const limits =
     bounds.trimMinMs != null && bounds.trimMaxMs != null

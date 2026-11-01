@@ -23,6 +23,8 @@ from clips_worker.render_clip import ffmpeg_cut, poster_jpg, resolve_clip_layout
 from clips_worker.render_concurrency import clips_render_concurrency
 from clips_worker.clip_ai_meta import finalize_clip_ai_meta
 from clips_worker.clip_polish import apply_clip_polish_initial
+from clips_worker.light_auto_edit import light_auto_edit
+from clips_worker.reason_tag import clip_reason_ai_meta
 from clips_worker.probe import probe_duration
 from clips_worker.storage import download_object, put_json, upload_file
 
@@ -781,6 +783,8 @@ def run_m4_pipeline(
                         clip_words,
                         settings,
                     )
+                    polish_edits = light_auto_edit(polish_edits, settings)
+                    ai_meta = {**ai_meta, **clip_reason_ai_meta(pick, clip_words, mode)}
                     edits_final, type_info, _fc = _finalize_regular_clip_edits(
                         polish_edits,
                         clip_file,
@@ -1213,6 +1217,8 @@ def run_m4_pipeline(
                         clip_words,
                         settings,
                     )
+                    polish_edits = light_auto_edit(polish_edits, settings)
+                    ai_meta = {**ai_meta, **clip_reason_ai_meta(pick, clip_words, mode)}
                     edits_final, type_info, _fc = _finalize_regular_clip_edits(
                         polish_edits,
                         clip_file,

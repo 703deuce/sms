@@ -1,4 +1,4 @@
-/** Result grid chips and tooltips from clip picker / render metadata. */
+import { clipReasonTag, reasonTagLabel, type ReasonTag } from '@/lib/clips/reason-tag'
 
 export type ClipAiMeta = {
   hook?: string
@@ -16,6 +16,10 @@ export type ClipAiMeta = {
   userHidden?: boolean
   userFeedback?: 'dislike' | null
   signals?: { sentence?: number }[]
+  reasonTag?: 'speech' | 'visual' | 'both'
+  videoWhy?: string
+  wordsPerSec?: number
+  videoMomentMatchIou?: number
 }
 
 const FALLBACK_REASON_RE =
@@ -138,6 +142,10 @@ export function clipDisplayTitle(clip: {
 
 export function clipWhySummary(meta: ClipAiMeta | null | undefined): string | null {
   if (!meta) return null
+  if (typeof meta.videoWhy === 'string' && meta.videoWhy.trim()) {
+    const v = stripInternalSentenceRefs(meta.videoWhy.trim())
+    if (v && !isHedgeOrDebugSummary(v) && !isInternalClipReasoningText(v)) return v
+  }
   const candidates = [meta.hook, meta.score_detail]
   for (const c of candidates) {
     if (typeof c !== 'string') continue
@@ -147,6 +155,42 @@ export function clipWhySummary(meta: ClipAiMeta | null | undefined): string | nu
   }
   return null
 }
+
+export function clipScoreTooltipLines(clip: {
+  score: number
+  scores?: unknown
+  reason?: string | null
+  aiMeta?: unknown
+  startMs?: number
+  endMs?: number
+}): string[] {
+  const meta = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as ClipAiMeta
+  const scores = (clip.scores && typeof clip.scores === 'object' ? clip.scores : {}) as Record<string, string>
+  const tag = clipReasonTag(meta, {
+    wps: 0,
+    startMs: clip.startMs ?? 0,
+    endMs: clip.endMs ?? 0,
+  })
+  const lines: string[] = [`Score ${clip.score}`, reasonTagLabel(tag)]
+  const why = clipWhySummary(meta)
+  if (!why && clip.reason && !isInternalClipReasoningText(clip.reason)) {
+    const r = clip.reason.trim()
+    if (r) lines.push(r)
+  } else if (why) {
+    lines.push(why)
+  }
+  for (const [k, v] of [
+    ['Hook', scores.hook],
+    ['Flow', scores.flow],
+    ['Value', scores.value],
+    ['Trend', scores.trend],
+  ] as const) {
+    if (v) lines.push(`${k}: ${v}`)
+  }
+  return lines
+}
+
+export { reasonTagLabel, type ReasonTag }
 
 const CLIP_TYPE_LABELS: Record<string, string> = {
   gaming: 'Gaming',

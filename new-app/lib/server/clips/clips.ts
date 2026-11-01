@@ -1,7 +1,9 @@
 import { isClipUserHidden } from '@/lib/clips/clip-results-chips'
+import { attachReasonTagsToClips, projectTranscriptToSourceWords } from '@/lib/server/clips/clip-reason-tags'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorage } from '@/lib/storage'
+import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
+import { normalizeTranscriptJson } from '@/lib/server/clips/editor-words'
 
 export async function listProjectClips(
   workspaceId: string,
@@ -21,7 +23,7 @@ export async function listProjectClips(
     ? clips
     : clips.filter((c) => !isClipUserHidden(c.aiMeta))
 
-  return Promise.all(
+  let rows = await Promise.all(
     visible.map(async (c) => ({
       id: c.id,
       projectId: c.projectId,
@@ -39,6 +41,23 @@ export async function listProjectClips(
       edits: c.edits,
     })),
   )
+
+  const needsTag = rows.some((c) => {
+    const m = c.aiMeta as { reasonTag?: string } | null
+    return m?.reasonTag !== 'speech' && m?.reasonTag !== 'visual' && m?.reasonTag !== 'both'
+  })
+  if (needsTag && project.transcriptKey) {
+    try {
+      const tStorage = await getClipStorageForObjectKey(project.transcriptKey, project.storageDriver)
+      const raw = await tStorage.getJson<unknown>(project.transcriptKey)
+      const words = projectTranscriptToSourceWords(normalizeTranscriptJson(raw))
+      if (words.length) rows = attachReasonTagsToClips(rows, words, project.settings)
+    } catch {
+      /* optional enrichment */
+    }
+  }
+
+  return rows
 }
 
 export async function getClipForWorkspace(workspaceId: string, clipId: string) {

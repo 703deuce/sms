@@ -13,7 +13,7 @@ _log = logging.getLogger(__name__)
 from psycopg2.extras import RealDictCursor
 
 from clips_worker.edits_render import normalize_edits, render_edited_clip
-from clips_worker.trim_bounds import expanded_source_cut_ms
+from clips_worker.trim_bounds import expanded_source_cut_ms, export_trim_limits_ms
 from clips_worker.render_settings import settings_with_clip_ai_meta
 from clips_worker.preview_reuse import can_reuse_clip_preview_for_render
 from clips_worker.render_fit_fallback import merge_job_fit_fallback_payload
@@ -550,8 +550,12 @@ def _run_render_clip_job_body(
         download_object(source_key, src)
         _export_stage_log(render_id, "download_source", t_job)
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": overall_progress("prep", 0.6)})
+        upload_dur_ms = int(_probe_duration_sec(src) * 1000)
+        trim_limits = export_trim_limits_ms(ctx, clip_start, clip_end, source_reason, upload_dur_ms)
         clip_file = td_path / "clip.mp4"
-        cut_start, cut_end, lo_ms, hi_ms = expanded_source_cut_ms(clip_start, clip_end, edits)
+        cut_start, cut_end, lo_ms, hi_ms = expanded_source_cut_ms(
+            clip_start, clip_end, edits, limits=trim_limits,
+        )
         print(
             f"[clipper:trim_window] {json.dumps({'renderId': render_id, 'lo_ms': lo_ms, 'hi_ms': hi_ms, 'cut_start_ms': cut_start, 'cut_end_ms': cut_end})}",
             flush=True,

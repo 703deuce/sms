@@ -2037,6 +2037,8 @@ export function Timeline({
     return out
   }, [edits.layout.layoutSegments, tb])
   const aiInOut = [sourceToOutput(tb, clipStartMs), sourceToOutput(tb, clipEndMs)]
+  const showAiCutTicks =
+    previewEdits.trim.in !== clipStartMs || previewEdits.trim.out !== clipEndMs
 
   const rowTop = (key: string) => {
     let y = RULER_H
@@ -3296,17 +3298,20 @@ export function Timeline({
                           />
                         ))}
                       </div>
-                      {aiInOut.map((ms, i) =>
-                        ms == null ? null : (
-                          <div
-                            key={i}
-                            className="pointer-events-none absolute inset-y-0 border-l border-dashed border-primary/60"
-                            style={{ left: xs(ms) }}
-                            title={i === 0 ? 'Original AI clip start' : 'Original AI clip end'}
-                            aria-hidden
-                          />
-                        ),
-                      )}
+                      {showAiCutTicks
+                        ? aiInOut.map((ms, i) =>
+                            ms == null ? null : (
+                              <div
+                                key={i}
+                                data-testid="ai-cut-tick"
+                                className="pointer-events-none absolute inset-y-0 border-l border-dashed border-primary/60"
+                                style={{ left: xs(ms) }}
+                                title={i === 0 ? 'Original AI clip start' : 'Original AI clip end'}
+                                aria-hidden
+                              />
+                            ),
+                          )
+                        : null}
                     </>
                   ) : null}
                 </div>

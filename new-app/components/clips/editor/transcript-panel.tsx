@@ -11,6 +11,7 @@ import { moveSelection, sectionBlocksForEdits } from '@/lib/clips/editor/reorder
 import { multicamAngles, setAngleForRange } from '@/lib/clips/editor/multicam-manual'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
+import { SHOW_SURROUNDING_CONTEXT_MS } from '@/lib/clips/trim-bounds'
 import { toast } from 'sonner'
 import { gapCutBetweenSourceWords } from '@/lib/clips/gap-shorten'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -75,6 +76,8 @@ export function TranscriptPanel({
   angleSources,
   onBuildFromTranscript,
   playheadSourceMs,
+  showSurrounding = false,
+  onShowSurroundingChange,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -105,6 +108,8 @@ export function TranscriptPanel({
   onBuildFromTranscript?: () => void
   /** TB-15: source-ms playhead for the active word. */
   playheadSourceMs?: number
+  showSurrounding?: boolean
+  onShowSurroundingChange?: (on: boolean) => void
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
@@ -142,7 +147,7 @@ export function TranscriptPanel({
     const bounds =
       clipStartMs != null && clipEndMs != null ? { clipStartMs, clipEndMs } : undefined
     const core = sourceWordsForClipEditing(words, edits, bounds)
-    const pad = 2000
+    const pad = showSurrounding ? SHOW_SURROUNDING_CONTEXT_MS : 2000
     const viewMin = edits.trim.in - pad
     const viewMax = edits.trim.out + pad
     const extended = words.filter((w) => w.e * 1000 >= viewMin && w.s * 1000 <= viewMax)
@@ -154,7 +159,7 @@ export function TranscriptPanel({
     }
     merged.sort((a, b) => a.s - b.s || a.i - b.i)
     return merged
-  }, [words, edits.trim.in, edits.trim.out, clipStartMs, clipEndMs])
+  }, [words, edits.trim.in, edits.trim.out, clipStartMs, clipEndMs, showSurrounding])
   const spkOrder = useMemo(() => speakerOrder(visible, shots), [visible, shots])
   const maxPlausibleGapMs = useMemo(() => maxPlausibleGapMsForTrim(edits.trim), [edits.trim.in, edits.trim.out])
   const reorderActive = Boolean(
@@ -327,6 +332,29 @@ export function TranscriptPanel({
     return endMs >= edits.trim.in && startMs <= edits.trim.out
   }
 
+  const surroundingRunRestoreMs = useMemo(() => {
+    const edges = new Map<number, number>()
+    if (!showSurrounding) return edges
+    let run: SourceWord[] = []
+    const flush = () => {
+      if (run.length < 1) return
+      const last = run[run.length - 1]!
+      const beforeTrim = wordSourceMs(run[0]!).startMs < edits.trim.in
+      const edgeMs = beforeTrim
+        ? Math.min(...run.map((x) => wordSourceMs(x).startMs))
+        : Math.max(...run.map((x) => wordSourceMs(x).endMs))
+      edges.set(last.i, Math.round(edgeMs))
+      run = []
+    }
+    for (const w of visible) {
+      const cut = isWordCut(w, edits.cutRanges)
+      if (!inTrim(w) && !cut) run.push(w)
+      else flush()
+    }
+    flush()
+    return edges
+  }, [visible, showSurrounding, edits.trim.in, edits.trim.out, edits.cutRanges])
+
   // FV2: full-length transcripts (thousands of words) render lazily in chunks; clips render as before.
   const longTranscript = visible.length > TRANSCRIPT_LAZY_MIN_WORDS && !reorderActive
 
@@ -384,6 +412,7 @@ export function TranscriptPanel({
       phraseMatches.some((m) => m.wordIdx.includes(w.i))
     const highlight = inPhraseMatch && search.trim().length > 0
     const muted = !inTrim(w)
+    const surrounding = showSurrounding && muted && !cut
     const selected =
       selStart !== null && selEnd !== null && startMs >= Math.min(selStart, selEnd) && endMs <= Math.max(selStart, selEnd)
 
@@ -412,13 +441,17 @@ export function TranscriptPanel({
     }
 
     return (
-      <span key={w.i} className={`mr-1 inline ${muted ? 'text-muted-foreground/50' : ''}`}>
+      <span
+        key={w.i}
+        className={`mr-1 inline ${muted && !surrounding ? 'text-muted-foreground/50' : ''} ${surrounding ? 'text-muted-foreground/50' : ''}`}
+      >
         <button
           type="button"
-          disabled={muted}
+          disabled={muted && !surrounding}
           data-word-i={w.i}
           data-active={active ? '1' : undefined}
           data-ignored={ignored && !cut ? '1' : undefined}
+          data-surrounding={surrounding ? '1' : undefined}
           className={`rounded px-0.5 transition hover:bg-accent cursor-text ${
             active ? 'bg-[#FFD400]/35' : ''
           } ${
@@ -427,10 +460,14 @@ export function TranscriptPanel({
                   isFiller ? 'decoration-muted-foreground/80' : ''
                 }`
               : ''
-          } ${ignored && !cut ? 'text-muted-foreground/50 line-through decoration-dashed decoration-muted-foreground/70' : ''} ${selected ? 'bg-primary/30 ring-1 ring-primary/50' : ''} ${
+          } ${surrounding ? 'line-through decoration-muted-foreground/70' : ''} ${ignored && !cut ? 'text-muted-foreground/50 line-through decoration-dashed decoration-muted-foreground/70' : ''} ${selected ? 'bg-primary/30 ring-1 ring-primary/50' : ''} ${
             edits.captions?.emphasis?.includes(w.i) ? 'underline decoration-dotted decoration-lane-ai' : ''
           }`}
           onClick={(e) => {
+            if (surrounding) {
+              onExtendTrim(Math.round(midMs))
+              return
+            }
             if (muted) {
               if (window.confirm('Extend clip to here?')) onExtendTrim(Math.round(midMs))
               return
@@ -472,6 +509,14 @@ export function TranscriptPanel({
               if (cutRange && onRestoreCutRange) onRestoreCutRange(cutRange)
               else onRestoreWord(w)
             }}
+          >
+            Restore
+          </button>
+        ) : surroundingRunRestoreMs.has(w.i) ? (
+          <button
+            type="button"
+            className="ml-0.5 text-[10px] font-medium text-primary"
+            onClick={() => onExtendTrim(surroundingRunRestoreMs.get(w.i)!)}
           >
             Restore
           </button>
@@ -570,6 +615,17 @@ export function TranscriptPanel({
                 <RotateCcw className="size-3.5" /> Restore all
               </Button>
             ) : null}
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={showSurrounding}
+                data-testid="transcript-show-surrounding"
+                onChange={(e) => {
+                  onShowSurroundingChange?.(e.target.checked)
+                }}
+              />
+              Show surrounding
+            </label>
             <label className="flex items-center gap-1.5">
               <input
                 type="checkbox"

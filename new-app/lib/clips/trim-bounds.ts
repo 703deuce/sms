@@ -2,6 +2,8 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 /** Match worker `MAX_TRIM_EXTEND_MS` — export may include extra source beyond AI clip bounds. */
 export const MAX_TRIM_EXTEND_MS = 8000
+export const SHOW_SURROUNDING_CONTEXT_MS = 60_000
+export const MAX_EDITOR_WORDS_CONTEXT_MS = 120_000
 
 export function extendedTrimLimits(
   clipStartMs: number,
