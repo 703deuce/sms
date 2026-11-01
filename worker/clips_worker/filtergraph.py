@@ -1,6 +1,9 @@
 """ffmpeg filtergraph builders for multiperson crop v2 (unit-tested strings)."""
 from __future__ import annotations
 
+import os
+import re
+
 from clips_worker.compose_layout import layout_slots
 
 OUT_W = 1080
@@ -43,13 +46,14 @@ FIT_BLUR_BRIGHTNESS = {"soft": -0.06, "strong": -0.08, "max": -0.1}
 
 def fit_blur_strength(src: object = None) -> str:
     """Resolve strength from edits ({layout:{blurStrength}}), settings ({fitBlurStrength}), a str, or env."""
-    import os
-
     val: object = None
     if isinstance(src, str):
         val = src
     elif isinstance(src, dict):
         val = src.get("fitBlurStrength")
+        cb = src.get("canvasBg")
+        if isinstance(cb, dict) and cb.get("type") == "blur" and cb.get("blur") in FIT_BLUR_STRENGTHS:
+            val = cb.get("blur")
         lay = src.get("layout")
         if val is None and isinstance(lay, dict):
             val = lay.get("blurStrength")
@@ -78,15 +82,145 @@ def fit_blur_bg_chain(width: int, height: int, strength: str | None = None) -> s
 
 
 def fit_blur_overlay_filter(
-    in_label: str, out_label: str, width: int, height: int, strength: str | None = None
+    in_label: str, out_label: str, width: int, height: int, strength: str | None = None, *, bg: dict | None = None
 ) -> str:
     """Blurred background fill (no black bars). ``strength`` soft|strong|max (default strong / env)."""
+    flat = canvas_bg_flat(bg)
+    if flat and bg and bg.get("type") == "color":
+        hexv = bg.get("color") or "000000"
+        return (
+            f"[{in_label}]scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=0x{hexv},setsar=1[{out_label}]"
+        )
+    if flat and bg and bg.get("type") == "image" and bg.get("path"):
+        return _canvas_bg_image_overlay_filter(in_label, out_label, width, height, str(bg["path"]), tag="fit")
     return (
         f"[{in_label}]split=2[a][b];"
         f"[a]{fit_blur_bg_chain(width, height, strength)}[bg];"
         f"[b]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];"
         f"[bg][fg]overlay=(W-w)/2:(H-h)/2[{out_label}]"
     )
+
+
+CANVAS_BG_TYPES = ("none", "color", "blur", "image")
+_HEX_RE = re.compile(r"^#?([0-9a-fA-F]{6})$")
+_SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")
+
+
+def _ffmpeg_hex(raw: str) -> str:
+    m = _HEX_RE.match(str(raw or "").strip())
+    return m.group(1).upper() if m else "000000"
+
+
+def _escape_movie_path(path: str) -> str:
+    return path.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+
+
+def _canvas_bg_image_overlay_filter(
+    in_label: str, out_label: str, width: int, height: int, path: str, *, tag: str = "cbg"
+) -> str:
+    p = _escape_movie_path(path)
+    return (
+        f"[{in_label}]split=2[{tag}a][{tag}b];"
+        f"[{tag}a]scale={width}:{height},setsar=1[{tag}gc];"
+        f"movie='{p}',scale={width}:{height}:force_original_aspect_ratio=increase,"
+        f"crop={width}:{height},setsar=1,format=yuv420p[{tag}gi];"
+        f"[{tag}gc][{tag}gi]overlay=0:0:eof_action=repeat[{tag}bg];"
+        f"[{tag}b]scale={width}:{height}:force_original_aspect_ratio=decrease[{tag}fg];"
+        f"[{tag}bg][{tag}fg]overlay=(W-w)/2:(H-h)/2[{out_label}]"
+    )
+
+
+def canvas_bg(src: object = None) -> dict | None:
+    """CV-09. None = legacy. Else {type, color?, path?}."""
+    raw: dict | None = None
+    path: str | None = None
+    if isinstance(src, dict):
+        if isinstance(src.get("canvasBg"), dict):
+            raw = src["canvasBg"]
+        elif src.get("type") in CANVAS_BG_TYPES:
+            raw = src
+        path = src.get("_canvasBgPath") if isinstance(src.get("_canvasBgPath"), str) else None
+        settings_bg = src.get("canvasBg")
+        if isinstance(settings_bg, dict) and settings_bg.get("path"):
+            path = str(settings_bg["path"])
+    if not raw:
+        t = os.environ.get("CANVAS_BG_TYPE", "").strip().lower()
+        if t in ("color", "image", "none"):
+            raw = {"type": t}
+            if t == "color":
+                raw["color"] = os.environ.get("CANVAS_BG_COLOR", "#000000")
+            if t == "image":
+                path = os.environ.get("CANVAS_BG_IMAGE") or path
+        else:
+            return None
+    typ = str(raw.get("type") or "").strip().lower()
+    if typ == "none":
+        return {"type": "color", "color": "000000"}
+    if typ == "color":
+        return {"type": "color", "color": _ffmpeg_hex(str(raw.get("color") or "#000000"))}
+    if typ == "blur":
+        return {"type": "blur"}
+    if typ == "image":
+        if path and _SAFE_PATH_RE.match(path):
+            return {"type": "image", "path": path}
+        return {"type": "color", "color": "000000"}
+    return None
+
+
+def canvas_bg_flat(bg: dict | None) -> bool:
+    return bool(bg and bg.get("type") in ("color", "image"))
+
+
+def canvas_bg_env(bg: dict | None) -> dict[str, str]:
+    if not bg or bg.get("type") == "blur":
+        return {}
+    if bg.get("type") == "color":
+        return {"CANVAS_BG_TYPE": "color", "CANVAS_BG_COLOR": f"#{bg.get('color', '000000')}"}
+    if bg.get("type") == "image" and bg.get("path"):
+        return {"CANVAS_BG_TYPE": "image", "CANVAS_BG_IMAGE": str(bg["path"])}
+    return {"CANVAS_BG_TYPE": "color", "CANVAS_BG_COLOR": "#000000"}
+
+
+def canvas_bg_color_source(width: int, height: int, dur_s: float, bg: dict) -> str:
+    hexv = bg.get("color") or "000000"
+    return f"color=c=0x{hexv}:s={width}x{height}:d={dur_s}"
+
+
+def canvas_bg_from_input(
+    in_label: str,
+    out_label: str,
+    width: int,
+    height: int,
+    bg: dict | None,
+    strength: str | None = None,
+    tag: str = "cbg",
+) -> str:
+    """Graph segment in_label → out_label WxH background."""
+    if not canvas_bg_flat(bg):
+        return f"[{in_label}]{fit_blur_bg_chain(width, height, strength)}[{out_label}]"
+    if bg and bg.get("type") == "color":
+        hexv = bg.get("color") or "000000"
+        return f"color=c=0x{hexv}:s={width}x{height}[{out_label}]"
+    if bg and bg.get("type") == "image" and bg.get("path"):
+        p = _escape_movie_path(str(bg["path"]))
+        return (
+            f"[{in_label}]scale={width}:{height},setsar=1[{tag}gc];"
+            f"movie='{p}',scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},setsar=1,format=yuv420p[{tag}gi];"
+            f"[{tag}gc][{tag}gi]overlay=0:0:eof_action=repeat[{out_label}]"
+        )
+    return f"color=c=black:s={width}x{height}[{out_label}]"
+
+
+def canvas_bg_changes_frames(edits: dict) -> bool:
+    bg = canvas_bg(edits)
+    if bg is None:
+        st = fit_blur_strength(edits)
+        return st != DEFAULT_FIT_BLUR_STRENGTH
+    if bg.get("type") == "blur":
+        return fit_blur_strength(edits) != DEFAULT_FIT_BLUR_STRENGTH
+    return True
 
 
 def slot_crop_filter(

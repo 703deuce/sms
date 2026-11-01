@@ -712,6 +712,40 @@ def layout_slots(layout: str, out_w: int, out_h: int, n: int) -> list[tuple[int,
 _FIT_BLUR_SIGMA_FRAC = {"soft": 0.028, "strong": 0.075, "max": 0.13}
 
 
+def _canvas_bg_env() -> tuple[str, tuple[int, int, int] | None, str | None]:
+    import os
+
+    t = (os.environ.get("CANVAS_BG_TYPE") or "").strip().lower()
+    if t == "color":
+        hx = (os.environ.get("CANVAS_BG_COLOR") or "#000000").lstrip("#")
+        if len(hx) >= 6:
+            r, g, b = int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16)
+            return "color", (b, g, r), None
+    if t == "image":
+        p = os.environ.get("CANVAS_BG_IMAGE")
+        if p:
+            return "image", None, p
+    return "blur", None, None
+
+
+def _flat_bg(out_w: int, out_h: int) -> np.ndarray:
+    typ, bgr, path = _canvas_bg_env()
+    if typ == "color" and bgr:
+        out = np.full((out_h, out_w, 3), bgr, np.uint8)
+        return out
+    if typ == "image" and path:
+        img = cv2.imread(path, cv2.IMREAD_COLOR)
+        if img is not None and img.size:
+            ih, iw = img.shape[:2]
+            s = max(out_w / max(iw, 1), out_h / max(ih, 1))
+            cw, ch = int(round(iw * s)), int(round(ih * s))
+            scaled = cv2.resize(img, (cw, ch), interpolation=cv2.INTER_AREA)
+            x0 = max(0, (cw - out_w) // 2)
+            y0 = max(0, (ch - out_h) // 2)
+            return scaled[y0 : y0 + out_h, x0 : x0 + out_w]
+    return np.zeros((out_h, out_w, 3), np.uint8)
+
+
 def _fit_blur_sigma_frac() -> float:
     import os
 
@@ -721,16 +755,24 @@ def _fit_blur_sigma_frac() -> float:
 def blur_fit(fr: np.ndarray, out_w: int, out_h: int, *, blur_px: int = 51, interp=cv2.INTER_LINEAR) -> np.ndarray:
     """Cover-crop background, blur hard, darken slightly; foreground letterboxed (wide layout)."""
     H, W = fr.shape[:2]
-    s = max(out_w / max(W, 1), out_h / max(H, 1))
-    cw, ch = int(round(out_w / s)), int(round(out_h / s))
-    x0, y0 = max(0, (W - cw) // 2), max(0, (H - ch) // 2)
-    small = cv2.resize(fr[y0 : y0 + ch, x0 : x0 + cw], (out_w // 8, out_h // 8), interpolation=cv2.INTER_AREA)
-    small = cv2.GaussianBlur(small, (0, 0), sigmaX=max(1.0, _fit_blur_sigma_frac() * out_w / 8))
-    bg = cv2.resize(small, (out_w, out_h), interpolation=cv2.INTER_LINEAR)
-    bg = cv2.convertScaleAbs(bg, alpha=0.9, beta=0)
-    nh = min(out_h, int(round(H * out_w / W)) // 2 * 2)
-    fg_y0 = (out_h - nh) // 2
-    bg[fg_y0 : fg_y0 + nh] = cv2.resize(fr, (out_w, nh), interpolation=interp)
+    typ, _, _ = _canvas_bg_env()
+    if typ in ("color", "image"):
+        bg = _flat_bg(out_w, out_h)
+    else:
+        s = max(out_w / max(W, 1), out_h / max(H, 1))
+        cw, ch = int(round(out_w / s)), int(round(out_h / s))
+        x0, y0 = max(0, (W - cw) // 2), max(0, (H - ch) // 2)
+        small = cv2.resize(fr[y0 : y0 + ch, x0 : x0 + cw], (out_w // 8, out_h // 8), interpolation=cv2.INTER_AREA)
+        small = cv2.GaussianBlur(small, (0, 0), sigmaX=max(1.0, _fit_blur_sigma_frac() * out_w / 8))
+        bg = cv2.resize(small, (out_w, out_h), interpolation=cv2.INTER_LINEAR)
+        bg = cv2.convertScaleAbs(bg, alpha=0.9, beta=0)
+    s_fg = min(out_w / max(W, 1), out_h / max(H, 1))
+    nw = max(2, int(round(W * s_fg)) // 2 * 2)
+    nh = max(2, int(round(H * s_fg)) // 2 * 2)
+    fg = cv2.resize(fr, (nw, nh), interpolation=interp)
+    y0 = (out_h - nh) // 2
+    x0 = (out_w - nw) // 2
+    bg[y0 : y0 + nh, x0 : x0 + nw] = fg
     return bg
 
 
@@ -782,9 +824,13 @@ def segment_filter(layout: str, crops: list[tuple[int, int, int, int]], out_w: i
 
 
 def blur_fit_filter(out_w: int, out_h: int, src: str = "[0:v]", dst: str = "[v]", blur: int = 20) -> str:
-    """ffmpeg blurred-background fit (replaces the black-bar pad in render_clip.ffmpeg_fit_export).
+    """ffmpeg blurred-background fit (replaces the black-bar pad in render_clip.ffmpeg_fit_export)."""
+    typ, bgr, path = _canvas_bg_env()
+    if typ in ("color", "image"):
+        from clips_worker.filtergraph import fit_blur_overlay_filter
 
-    E6: sigma follows FIT_BLUR_STRENGTH (default strong) like the wide OpenCV path; ``blur`` kept for callers."""
+        bg = {"type": typ, "color": f"{bgr[2]:02X}{bgr[1]:02X}{bgr[0]:02X}"} if typ == "color" and bgr else {"type": "image", "path": path}
+        return fit_blur_overlay_filter(src.strip("[]"), dst.strip("[]"), out_w, out_h, None, bg=bg)
     sigma = max(1.0, round(_fit_blur_sigma_frac() * out_w / 4, 2))
     return (f"{src}split=2[bg][fg];"
             f"[bg]scale={out_w // 4}:{out_h // 4}:force_original_aspect_ratio=increase,"

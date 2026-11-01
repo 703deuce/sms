@@ -559,6 +559,9 @@ def _run_render_clip_job_body(
         from clips_worker.media_sources import load_media_assets, referenced_media
 
         media_paths = load_media_assets(conn, edits, td_path, workspace_id, project_id) if referenced_media(edits) else {}
+        from clips_worker.media_sources import prepare_canvas_bg_image
+
+        edits = prepare_canvas_bg_image(edits, media_paths, td_path)
 
         # E5b: words of transcribed media join the captions over 'source'-sound segments / inserts.
         media_transcripts: dict = {}

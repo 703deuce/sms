@@ -8,6 +8,8 @@ import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { normalizeEditSpeed, orderedKeepSegments } from '@/lib/clips/edits'
 import { fitBlurCssFilter, fitBlurStrength } from '@/lib/clips/fit-blur'
+import { resolveCanvasBg } from '@/lib/clips/canvas-bg'
+import { CanvasBgFill } from '@/components/clips/editor/canvas-bg-fill'
 import { editorPreviewCaptionClipWords, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
@@ -139,6 +141,8 @@ export function PreviewStage({
   selectedTextId = null,
   sourceUrls = null,
   canvas = null,
+  canvasBgImageUrl = null,
+  mainVideoSize = null,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -175,6 +179,8 @@ export function PreviewStage({
     cropMode: boolean
     onCropModeChange: (on: boolean) => void
   } | null
+  canvasBgImageUrl?: string | null
+  mainVideoSize?: { width: number; height: number } | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -204,6 +210,13 @@ export function PreviewStage({
   const HEADLINE_FITTOP_MODES = new Set(['fit_top', 'speaker_follow', 'auto'])
   const letterboxPreview = !compositePreview && layoutUsesLetterboxBlurPreview(layoutMode)
   const blurStrength = fitBlurStrength(edits)
+  const canvasBg = resolveCanvasBg(edits)
+  const flatCanvasBg = canvasBg.kind === 'color' || canvasBg.kind === 'image'
+  const pillarboxMain = useMemo(() => {
+    if (!mainVideoSize?.width || !mainVideoSize?.height) return false
+    const { aw, ah } = aspectRatioParts(aspect)
+    return mainVideoSize.width / mainVideoSize.height < aw / ah - 0.001
+  }, [aspect, mainVideoSize?.height, mainVideoSize?.width])
   const fitTopPreview = Boolean(
     !compositePreview &&
       videoUrl &&
@@ -761,11 +774,17 @@ export function PreviewStage({
           v.style.top = '0'
           v.style.transform = 'translate3d(0,0,0)'
           if (blur) {
-            blur.style.display = 'block'
-            blur.style.height = '100%'
-            blur.style.width = '100%'
-            blur.style.transform = 'scale(1.2)'
-            blur.style.filter = fitBlurCssFilter(fitBlurStrength(e), boxW)
+            const cb = resolveCanvasBg(e)
+            const flat = cb.kind === 'color' || cb.kind === 'image'
+            if (flat) {
+              blur.style.display = 'none'
+            } else {
+              blur.style.display = 'block'
+              blur.style.height = '100%'
+              blur.style.width = '100%'
+              blur.style.transform = 'scale(1.2)'
+              blur.style.filter = fitBlurCssFilter(fitBlurStrength(e), boxW)
+            }
           }
         } else {
           if (blur) blur.style.display = 'none'
@@ -1032,6 +1051,8 @@ export function PreviewStage({
           <TemplateStage
             spec={templatePreview}
             blurStrength={blurStrength}
+            canvasBg={canvasBg}
+            canvasBgImageUrl={canvasBgImageUrl}
             videoUrl={videoUrl}
             posterUrl={posterUrl}
             primaryVideoRef={videoRefInner}
@@ -1048,20 +1069,25 @@ export function PreviewStage({
             <video
               key={`preview-blur-${layoutMode}`}
               ref={blurRef}
-              {...corsMediaProps(videoUrl)}
-                src={videoUrl ?? undefined}
-              className="absolute inset-0 size-full max-w-none scale-110 object-cover blur-2xl"
-              style={{ filter: fitBlurCssFilter(blurStrength, box.w) }}
+              {...corsMediaProps(flatCanvasBg ? null : videoUrl)}
+              src={flatCanvasBg ? undefined : (videoUrl ?? undefined)}
+              className={`absolute inset-0 size-full max-w-none scale-110 object-cover blur-2xl ${flatCanvasBg ? 'invisible' : ''}`}
+              style={flatCanvasBg ? undefined : { filter: fitBlurCssFilter(blurStrength, box.w) }}
               muted
               playsInline
               aria-hidden
             />
+            {flatCanvasBg ? <CanvasBgFill bg={canvasBg} imageUrl={canvasBgImageUrl} /> : null}
             <video
               key={`preview-main-${layoutMode}`}
               ref={videoRefInner}
               {...corsMediaProps(videoUrl)}
                 src={videoUrl ?? undefined}
-              className={`absolute inset-x-0 top-1/2 z-[1] w-full -translate-y-1/2 object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+              className={
+                pillarboxMain
+                  ? `absolute inset-0 z-[1] size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`
+                  : `absolute inset-x-0 top-1/2 z-[1] w-full -translate-y-1/2 object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`
+              }
               playsInline
               onLoadedMetadata={() => {
                 const v = videoRefInner.current
@@ -1083,14 +1109,15 @@ export function PreviewStage({
               <>
                 <video
                   ref={blurRef}
-                  {...corsMediaProps(videoUrl)}
-                src={videoUrl ?? undefined}
-                  className="absolute inset-0 size-full max-w-none object-cover"
-                  style={{ filter: fitBlurCssFilter(blurStrength, box.w) }}
+                  {...corsMediaProps(flatCanvasBg ? null : videoUrl)}
+                  src={flatCanvasBg ? undefined : (videoUrl ?? undefined)}
+                  className={`absolute inset-0 size-full max-w-none object-cover ${flatCanvasBg ? 'invisible' : ''}`}
+                  style={flatCanvasBg ? undefined : { filter: fitBlurCssFilter(blurStrength, box.w) }}
                   muted
                   playsInline
                   aria-hidden
                 />
+                {flatCanvasBg ? <CanvasBgFill bg={canvasBg} imageUrl={canvasBgImageUrl} /> : null}
                 <video
                   key={`preview-main-${layoutMode}`}
                   ref={videoRefInner}
@@ -1227,12 +1254,13 @@ export function PreviewStage({
           (() => {
             const cropBody = (
               <>
+                {flatCanvasBg ? <CanvasBgFill bg={canvasBg} imageUrl={canvasBgImageUrl} /> : null}
                 <video
                   key={`preview-blur-${layoutMode}`}
                   ref={blurRef}
-                  {...corsMediaProps(videoUrl)}
-                src={videoUrl ?? undefined}
-                  className="absolute inset-0 size-full max-w-none object-cover"
+                  {...corsMediaProps(flatCanvasBg ? null : videoUrl)}
+                  src={flatCanvasBg ? undefined : (videoUrl ?? undefined)}
+                  className={`absolute inset-0 size-full max-w-none object-cover ${flatCanvasBg ? 'invisible' : ''}`}
                   muted
                   playsInline
                   aria-hidden

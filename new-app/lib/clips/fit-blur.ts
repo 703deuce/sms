@@ -17,7 +17,13 @@ export function normalizeFitBlurStrength(raw: unknown): FitBlurStrength | undefi
     : undefined
 }
 
-export function fitBlurStrength(edits: { layout?: { blurStrength?: unknown } } | null | undefined): FitBlurStrength {
+export function fitBlurStrength(
+  edits: { layout?: { blurStrength?: unknown }; canvasBg?: { type?: string; blur?: unknown } } | null | undefined,
+): FitBlurStrength {
+  const cb = edits?.canvasBg
+  if (cb && cb.type === 'blur') {
+    return normalizeFitBlurStrength(cb.blur) ?? DEFAULT_FIT_BLUR_STRENGTH
+  }
   return normalizeFitBlurStrength(edits?.layout?.blurStrength) ?? DEFAULT_FIT_BLUR_STRENGTH
 }
 

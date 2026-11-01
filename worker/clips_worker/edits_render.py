@@ -120,6 +120,8 @@ def normalize_edits(raw, clip_start_ms: int, clip_end_ms: int) -> dict:
 
 
 def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
+    from clips_worker.filtergraph import canvas_bg_changes_frames
+
     d = default_edits(clip_start_ms, clip_end_ms)
     trim_in = int(edits["trim"]["in"])
     trim_out = int(edits["trim"]["out"])
@@ -163,6 +165,7 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         and not edits.get("sourceSegments")
         # E5b: inserts lengthen the export.
         and not edits.get("inserts")
+        and not canvas_bg_changes_frames(edits)
     )
 
 
@@ -1255,9 +1258,9 @@ def _apply_facecam_or_pip_layout(
                     tmpl, signals, edits, play_w=play_w, play_h=play_h, clip_start_ms=clip_start_ms
                 )
                 # E6: editor blur strength for blurred bands / contain_blur panels (render-only key).
-                from clips_worker.filtergraph import fit_blur_strength
+                from clips_worker.filtergraph import canvas_bg, fit_blur_strength
 
-                spec = {**spec, "blurStrength": fit_blur_strength(edits)}
+                spec = {**spec, "blurStrength": fit_blur_strength(edits), "canvasBg": canvas_bg(edits)}
                 for _part in scene_parts or []:
                     if isinstance(_part[2], dict):
                         _part[2]["blurStrength"] = spec["blurStrength"]

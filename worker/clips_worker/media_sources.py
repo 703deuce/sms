@@ -219,6 +219,9 @@ def referenced_media(edits: dict) -> list[tuple[str, str]]:
         src = by_id.get(ins["sourceId"])
         if src:
             refs.append((src["ref"], src["refId"]))
+    cb = edits.get("canvasBg") if isinstance(edits.get("canvasBg"), dict) else {}
+    if cb.get("type") == "image" and _UPLOAD_RE.match(str(cb.get("imageId") or "")):
+        refs.append(("upload", str(cb["imageId"])))
     seen: set[tuple[str, str]] = set()
     return [r for r in refs if not (r in seen or seen.add(r))]
 
@@ -440,3 +443,49 @@ def upload_broll_spec_path(item: dict, media: dict[str, Path], work_dir: Path, p
         dur = max(0.1, (int(item["endMs"]) - int(item["startMs"])) / 1000.0)
         return still_to_video(p, Path(work_dir) / f"broll_still_{pos}.mp4", dur + 0.2)
     return p
+
+
+def prepare_canvas_bg_image(edits: dict, media_paths: dict[str, Path], work_dir: Path) -> dict:
+    """CV-09: flatten canvas background image to work_dir/canvas_bg.png for ffmpeg movie=."""
+    cb = edits.get("canvasBg") if isinstance(edits.get("canvasBg"), dict) else {}
+    if cb.get("type") != "image":
+        return edits
+    image_id = str(cb.get("imageId") or "")
+    src = media_paths.get(image_id)
+    out_png = Path(work_dir) / "canvas_bg.png"
+    if not src or not src.is_file():
+        print(
+            json.dumps({"decision": "editor", "event": "canvas_bg_image_missing", "imageId": image_id}),
+            flush=True,
+        )
+        return {**edits, "canvasBg": {"type": "none"}}
+    try:
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-y",
+                "-i",
+                str(src),
+                "-frames:v",
+                "1",
+                "-vf",
+                "scale='min(2160,iw)':-2,format=rgba,premultiply=inplace=1,format=rgb24",
+                str(out_png),
+            ],
+        )
+    except (subprocess.CalledProcessError, OSError) as err:
+        print(
+            json.dumps(
+                {
+                    "decision": "editor",
+                    "event": "canvas_bg_image_missing",
+                    "imageId": image_id,
+                    "error": str(err),
+                }
+            ),
+            flush=True,
+        )
+        return {**edits, "canvasBg": {"type": "none"}}
+    return {**edits, "_canvasBgPath": str(out_png)}
