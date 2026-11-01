@@ -12,7 +12,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import type { ExportRenderRow } from '@/lib/clips-api'
 import { ExportErrorMessage } from '@/components/clips/export-error-message'
 import { retryFailedExportRender } from '@/lib/clips-api'
-import { Download, RotateCcw } from 'lucide-react'
+import { Download, RotateCcw, Share2 } from 'lucide-react'
+import { ExportRenderShareDialog } from '@/components/clips/export-render-share-dialog'
 
 type Filter = 'all' | 'ready' | 'failed'
 
@@ -99,6 +100,8 @@ export function ExportsList({
   const [rows, setRows] = useState(initialRows)
   const [retryingId, setRetryingId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [shareRenderId, setShareRenderId] = useState<string | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
 
   useEffect(() => {
     setRows(initialRows)
@@ -167,6 +170,11 @@ export function ExportsList({
     }
   }
 
+  const openShare = (renderId: string) => {
+    setShareRenderId(renderId)
+    setShareOpen(true)
+  }
+
   if (!rows.length) {
     return (
       <EmptyState
@@ -179,6 +187,14 @@ export function ExportsList({
 
   return (
     <Panel title="Exports" description="Rendered downloads for your workspace.">
+      <ExportRenderShareDialog
+        renderId={shareRenderId}
+        open={shareOpen}
+        onOpenChange={(next) => {
+          setShareOpen(next)
+          if (!next) setShareRenderId(null)
+        }}
+      />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {(['all', 'ready', 'failed'] as const).map((f) => (
           <Button
@@ -240,14 +256,20 @@ export function ExportsList({
                     {r.status}
                   </StatusBadge>
                   {r.downloadUrl ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      nativeButton={false}
-                      render={<a href={r.downloadUrl} download={r.filename} />}
-                    >
-                      Download
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        nativeButton={false}
+                        render={<a href={r.downloadUrl} download={r.filename} />}
+                      >
+                        Download
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openShare(r.id)}>
+                        <Share2 className="size-3.5" aria-hidden />
+                        Share
+                      </Button>
+                    </>
                   ) : null}
                   {r.status === 'FAILED' ? (
                     <Button
@@ -343,14 +365,20 @@ export function ExportsList({
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap gap-1">
                     {r.downloadUrl ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        nativeButton={false}
-                        render={<a href={r.downloadUrl} download={r.filename} />}
-                      >
-                        Download
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          nativeButton={false}
+                          render={<a href={r.downloadUrl} download={r.filename} />}
+                        >
+                          Download
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openShare(r.id)}>
+                          <Share2 className="size-3.5" aria-hidden />
+                          Share
+                        </Button>
+                      </>
                     ) : r.status === 'FAILED' ? (
                       <Button
                         size="sm"

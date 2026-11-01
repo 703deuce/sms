@@ -257,6 +257,33 @@ export function retryFailedExportRender(renderId: string) {
   )
 }
 
+export type RenderShareLinkResponse = {
+  id: string
+  renderId: string
+  slug: string
+  allowDownload: boolean
+  shareUrl: string
+  pageUrl: string
+  accessToken?: string
+}
+
+export function createRenderShareLink(
+  renderId: string,
+  body: { allowDownload?: boolean; expiresAt?: string | null } = {},
+) {
+  return clipsFetch<RenderShareLinkResponse>(`/api/clips/renders/${renderId}/share`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function revokeRenderShareLink(renderId: string) {
+  return clipsFetch<{ ok: boolean }>(`/api/clips/renders/${renderId}/share`, {
+    method: 'DELETE',
+    body: '{}',
+  })
+}
+
 export function retryProject(projectId: string) {
   return clipsFetch<{ ok: boolean; jobId: string; status: string }>(
     `/api/clips/projects/${projectId}/retry`,
