@@ -13,10 +13,26 @@ import { trackIdOf } from '@/lib/clips/editor/tracks'
 import { connectChannel, useTrackFxLufs } from '@/components/clips/editor/use-track-fx-lufs'
 import { audioGraphSafe } from '@/components/clips/editor/g4/media-cors'
 import { clipGainAt, clipHasGainCurve, musicFadeAt, musicMediaMsAt } from '@/lib/clips/editor/audio-clip'
+import { panGains } from '@/lib/clips/audio'
 
 /** G2: densest gain-curve step and most ramp points per scheduled clip. */
 const CURVE_STEP_MS = 20
 const CURVE_MAX_POINTS = 3000
+
+function balancePan(ctx: AudioContext, pan: number): { input: AudioNode; output: AudioNode; nodes: AudioNode[] } {
+  const [gl, gr] = panGains(pan)
+  const split = ctx.createChannelSplitter(2)
+  const merge = ctx.createChannelMerger(2)
+  const gL = ctx.createGain()
+  const gR = ctx.createGain()
+  gL.gain.value = gl
+  gR.gain.value = gr
+  split.connect(gL, 0)
+  split.connect(gR, 0)
+  gL.connect(merge, 0, 0)
+  gR.connect(merge, 0, 1)
+  return { input: split, output: merge, nodes: [split, gL, gR, merge] }
+}
 
 type SfxCue = {
   buffer: AudioBuffer
@@ -32,6 +48,7 @@ type SfxCue = {
   duckDepth?: number
   /** G2fix: loop the buffer to fill durMs (music clips). */
   loop?: boolean
+  pan?: number
 }
 
 export function useAudioMix({
@@ -68,6 +85,7 @@ export function useAudioMix({
   const dubRef = useRef<HTMLAudioElement | null>(null)
   const musicRef = useRef<HTMLAudioElement | null>(null)
   const musicGainRef = useRef<GainNode | null>(null)
+  const musicPanRef = useRef<{ input: AudioNode; output: AudioNode; nodes: AudioNode[]; pan: number } | null>(null)
   const elementSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   // E3: volume keyframes (Voice / Music lanes) — gain envelopes in series with the existing mix.
   const voiceGainRef = useRef<GainNode | null>(null)
@@ -104,6 +122,20 @@ export function useAudioMix({
     const tail = which === 'voice' ? voiceGainRef.current : musicEnvRef.current
     if (!ctx || !tail) return
     tail.disconnect()
+    if (which === 'music') {
+      if (musicPanRef.current) {
+        for (const n of musicPanRef.current.nodes) n.disconnect()
+        musicPanRef.current = null
+      }
+      const mp = audio?.music?.pan
+      if (mp) {
+        const pan = balancePan(ctx, mp)
+        musicPanRef.current = { ...pan, pan: mp }
+        tail.connect(pan.input)
+        pan.output.connect(fxInput(ctx, 'music'))
+        return
+      }
+    }
     tail.connect(fxInput(ctx, which))
   }
   const routeRef = useRef(route)
@@ -140,7 +172,7 @@ export function useAudioMix({
     routeRef.current('voice')
     routeRef.current('music')
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fxKey captures the chains
-  }, [fxKey, voiceFxOn])
+  }, [fxKey, voiceFxOn, audio?.music?.pan])
 
   useEffect(() => {
     const video = videoRef.current
@@ -287,7 +319,7 @@ export function useAudioMix({
   const anyDuck = sfxCues.some((c) => c.duckDepth != null)
   const sfxKey =
     sfxCues
-      .map((c) => `${c.generationId}:${c.atMs}:${c.volume}:${c.inMs ?? 0}:${c.durMs ?? ''}:${c.channel ?? ''}:${c.fadeInMs ?? 0}:${c.fadeOutMs ?? 0}:${c.duckDepth ?? ''}:${c.loop ? 1 : 0}`)
+      .map((c) => `${c.generationId}:${c.atMs}:${c.volume}:${c.inMs ?? 0}:${c.durMs ?? ''}:${c.channel ?? ''}:${c.fadeInMs ?? 0}:${c.fadeOutMs ?? 0}:${c.duckDepth ?? ''}:${c.loop ? 1 : 0}:${c.pan ?? 0}`)
       .join('|') +
     sfxEnvKey +
     fxKey +
@@ -346,7 +378,13 @@ export function useAudioMix({
       }
       // G1c: split-stereo channel pick, then the cue's audio-track chain (bus).
       connectChannel(ctx, src, cue.buffer, cue.channel, g)
-      g.connect(fxInput(ctx, trackIdOf(edits, 'audio', cue.generationId)))
+      let tail: AudioNode = g
+      if (cue.pan) {
+        const pan = balancePan(ctx, cue.pan)
+        g.connect(pan.input)
+        tail = pan.output
+      }
+      tail.connect(fxInput(ctx, trackIdOf(edits, 'audio', cue.generationId)))
       if (looping) src.loop = true
       const offS = (s: number) => (looping ? s % cue.buffer.duration : s)
       if (cue.atMs >= fromMs) src.start(ctx.currentTime + (cue.atMs - fromMs) / 1000 / rate, offS(inS), playS)
@@ -387,6 +425,27 @@ export function useAudioMix({
       chainsRef.current.clear()
     }
   }, [])
+}
+
+/** Test helper: SFX reschedule key (pan changes must invalidate). */
+export function sfxMixKey(
+  cues: Pick<SfxCue, 'generationId' | 'atMs' | 'volume' | 'inMs' | 'durMs' | 'channel' | 'fadeInMs' | 'fadeOutMs' | 'duckDepth' | 'loop' | 'pan'>[],
+  sfxEnvKey: string,
+  fxKey: string,
+  anyDuck: boolean,
+  wordsLen: number,
+): string {
+  return (
+    cues
+      .map(
+        (c) =>
+          `${c.generationId}:${c.atMs}:${c.volume}:${c.inMs ?? 0}:${c.durMs ?? ''}:${c.channel ?? ''}:${c.fadeInMs ?? 0}:${c.fadeOutMs ?? 0}:${c.duckDepth ?? ''}:${c.loop ? 1 : 0}:${c.pan ?? 0}`,
+      )
+      .join('|') +
+    sfxEnvKey +
+    fxKey +
+    (anyDuck ? `#w${wordsLen}` : '')
+  )
 }
 
 export type { SfxCue, ClipEditsAudio }

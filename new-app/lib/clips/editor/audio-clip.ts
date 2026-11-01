@@ -100,6 +100,8 @@ export function clipHasGainCurve(cue: Pick<ClipAudioSfx, 'fadeInMs' | 'fadeOutMs
 
 export type AudioClipPatch = {
   volume?: number
+  /** AU-12: 0 clears pan (centre). */
+  pan?: number
   fadeInMs?: number
   fadeOutMs?: number
   /** null = stop ducking this clip (SFX); music always ducks (depth 0 = off). */
@@ -120,6 +122,11 @@ export function patchAudioClip(edits: ClipEditsV2, lane: 'music' | 'sfx', id: st
     if (!m || m.generationId !== id) return null
     const next: ClipAudioMusic = { ...m }
     if (patch.volume != null) next.volume = Math.max(0, Math.min(1, patch.volume))
+    if (patch.pan !== undefined) {
+      const p = Math.round(patch.pan)
+      if (p === 0 || !Number.isFinite(p)) delete next.pan
+      else next.pan = Math.max(-100, Math.min(100, p))
+    }
     if (patch.fadeInMs != null) next.fadeInMs = fadeVal(patch.fadeInMs)
     if (patch.fadeOutMs != null) next.fadeOutMs = fadeVal(patch.fadeOutMs)
     if (patch.duckDepth !== undefined) next.duckDepth = Math.max(0, Math.min(1, patch.duckDepth ?? 0))
@@ -133,6 +140,11 @@ export function patchAudioClip(edits: ClipEditsV2, lane: 'music' | 'sfx', id: st
   if (i < 0) return null
   const s: ClipAudioSfx = { ...audio.sfx[i]! }
   if (patch.volume != null) s.volume = Math.max(0, Math.min(1, patch.volume))
+  if (patch.pan !== undefined) {
+    const p = Math.round(patch.pan)
+    if (p === 0 || !Number.isFinite(p)) delete s.pan
+    else s.pan = Math.max(-100, Math.min(100, p))
+  }
   for (const k of ['fadeInMs', 'fadeOutMs'] as const) {
     if (patch[k] == null) continue
     const v = fadeVal(patch[k]!)

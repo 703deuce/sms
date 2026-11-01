@@ -166,6 +166,146 @@
   {
    "raw": "nope",
    "out": []
+  },
+  {
+   "raw": [
+    {
+     "track": "voice",
+     "pan": -40
+    }
+   ],
+   "out": [
+    {
+     "track": "voice",
+     "pan": -40
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "voice",
+     "pan": 70
+    }
+   ],
+   "out": [
+    {
+     "track": "voice",
+     "pan": 70
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "voice",
+     "deess": 60
+    }
+   ],
+   "out": [
+    {
+     "track": "voice",
+     "deess": 60
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "voice",
+     "vfx": {
+      "type": "echo",
+      "amount": 0
+     }
+    }
+   ],
+   "out": [
+    {
+     "track": "voice",
+     "vfx": {
+      "type": "echo",
+      "amount": 0
+     }
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "voice",
+     "vfx": {
+      "type": "echo",
+      "amount": 50
+     }
+    }
+   ],
+   "out": [
+    {
+     "track": "voice",
+     "vfx": {
+      "type": "echo",
+      "amount": 50
+     }
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "voice",
+     "vfx": {
+      "type": "reverb",
+      "amount": 100
+     }
+    }
+   ],
+   "out": [
+    {
+     "track": "voice",
+     "vfx": {
+      "type": "reverb",
+      "amount": 100
+     }
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "voice",
+     "vfx": {
+      "type": "robot",
+      "amount": 50
+     }
+    }
+   ],
+   "out": [
+    {
+     "track": "voice",
+     "vfx": {
+      "type": "robot",
+      "amount": 50
+     }
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "voice",
+     "vfx": {
+      "type": "telephone"
+     }
+    }
+   ],
+   "out": [
+    {
+     "track": "voice",
+     "vfx": {
+      "type": "telephone"
+     }
+    }
+   ]
   }
  ],
  "gain_cases": [
@@ -353,6 +493,71 @@
      "preset": "bw"
     }
    }
+  }
+ ],
+ "chain_cases_start_index": 6,
+ "chain_cases": [
+  {
+   "fx": {
+    "track": "voice",
+    "deess": 60
+   },
+   "lufs_gain": null,
+   "chain": "deesser=i=0.6:m=0.5:f=0.5:s=o"
+  },
+  {
+   "fx": {
+    "track": "voice",
+    "vfx": {
+     "type": "echo",
+     "amount": 0
+    }
+   },
+   "lufs_gain": null,
+   "chain": "aecho=1:1:300|600:0|0"
+  },
+  {
+   "fx": {
+    "track": "voice",
+    "vfx": {
+     "type": "echo",
+     "amount": 50
+    }
+   },
+   "lufs_gain": null,
+   "chain": "aecho=1:1:300|600:0.3|0.15"
+  },
+  {
+   "fx": {
+    "track": "voice",
+    "vfx": {
+     "type": "reverb",
+     "amount": 100
+    }
+   },
+   "lufs_gain": null,
+   "chain": "aecho=1:1:23|37|53|71|97|131:0.5|0.4|0.32|0.256|0.2048|0.1638"
+  },
+  {
+   "fx": {
+    "track": "voice",
+    "vfx": {
+     "type": "robot",
+     "amount": 50
+    }
+   },
+   "lufs_gain": null,
+   "chain": "aeval=val(ch)*(0.5+0.5*sin(2*PI*60*t)):c=same"
+  },
+  {
+   "fx": {
+    "track": "voice",
+    "vfx": {
+     "type": "telephone"
+    }
+   },
+   "lufs_gain": null,
+   "chain": "highpass=f=300:p=2:t=q:w=0.7071,lowpass=f=3400:p=2:t=q:w=0.7071"
   }
  ]
 }

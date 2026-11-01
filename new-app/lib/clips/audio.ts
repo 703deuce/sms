@@ -14,6 +14,7 @@ export type ClipAudioMusic = {
   inMs?: number
   /** G2: loop the media to fill the window ("Fit to length"). Export: `-stream_loop -1`. */
   loop?: boolean
+  pan?: number
 }
 
 export type ClipAudioSfx = {
@@ -40,6 +41,8 @@ export type ClipAudioSfx = {
   kind?: 'music' | 'audio'
   /** G2fix: loop the media to fill `durMs` (music clips; export `-stream_loop -1`). Needs durMs. */
   loop?: boolean
+  /** AU-12: balance pan −100 (L) … 100 (R); absent = centre. */
+  pan?: number
 }
 
 export type ClipStudioSound = {
@@ -63,6 +66,21 @@ export const DEFAULT_SFX_VOLUME = 0.8
 export const AUDIO_FADE_MAX_MS = 10_000
 /** Default Studio Sound mix for clip editor (low; user can raise). */
 export const DEFAULT_STUDIO_SOUND_MIX = 0.35
+
+const pan4 = (v: number) => Math.round(v * 10000) / 10000
+
+/** AU-12 linear balance law (centre = unity). */
+export function panGains(pan?: number): [number, number] {
+  const p = Math.max(-1, Math.min(1, (pan ?? 0) / 100))
+  if (p <= 0) return [1, pan4(1 + p)]
+  return [pan4(1 - p), 1]
+}
+
+function normalizePan(v: unknown): number | undefined {
+  const n = Math.round(Number(v))
+  if (!Number.isFinite(n) || n === 0) return undefined
+  return Math.max(-100, Math.min(100, n))
+}
 
 export const SFX_PRESETS: { id: string; label: string; prompt: string }[] = [
   { id: 'whoosh', label: 'Whoosh', prompt: 'Quick cinematic whoosh transition sound' },
@@ -115,6 +133,7 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
         ...optionalMs('endMs', m.endMs),
         ...optionalMs('inMs', m.inMs),
         ...(m.loop === true ? { loop: true } : {}),
+        ...(normalizePan(m.pan) != null ? { pan: normalizePan(m.pan) } : {}),
       }
     }
   }
@@ -155,6 +174,7 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
         ...(s.duckDepth != null && Number.isFinite(Number(s.duckDepth)) ? { duckDepth: clamp01(s.duckDepth, DEFAULT_DUCK_DEPTH) } : {}),
         ...(s.kind === 'music' || s.kind === 'audio' ? { kind: s.kind } : {}),
         ...(s.loop === true && num(s.durMs, 0) >= 100 ? { loop: true } : {}),
+        ...(normalizePan(s.pan) != null ? { pan: normalizePan(s.pan) } : {}),
       }
     })
     .filter(Boolean) as ClipAudioSfx[]

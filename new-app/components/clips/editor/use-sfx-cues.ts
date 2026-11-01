@@ -137,6 +137,7 @@ export function useSfxCues(
         ...(s.duckDepth != null ? { duckDepth: s.duckDepth } : {}),
         // G2fix: a looping music clip (export: `-stream_loop -1` + atrim duration=durMs).
         ...(s.loop && s.durMs != null ? { loop: true } : {}),
+        ...(s.pan ? { pan: s.pan } : {}),
       })
     }
     return { cues, durationsMs, peaks, beatsMs, bpm }

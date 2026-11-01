@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 import { ADJUST_KEYS, ADJUST_LABELS, COLOR_PRESET_IDS, COLOR_PRESETS, type ColorSpec } from '@/lib/clips/editor/color'
-import { FX_LIMITS, isOverlayFxKey, type TrackComp, type TrackFx } from '@/lib/clips/editor/track-fx'
+import { FX_LIMITS, isOverlayFxKey, type TrackComp, type TrackFx, type TrackVfxType } from '@/lib/clips/editor/track-fx'
 
 type FxBody = Omit<TrackFx, 'track'>
 const LUFS_CHOICES = [-14, -16, -18, -20, -23, -24] as const
@@ -52,6 +52,9 @@ export function TrackFxPanel({
   }
   const eq = cur.eq ?? {}
   const overlay = isOverlayFxKey(fxKey)
+  const voiceTrack = fxKey === 'voice'
+  const vfx = cur.vfx
+  const vfxType = vfx?.type
   return (
     <div className="space-y-2 rounded-lg border border-border bg-card p-2 text-xs" data-testid={`track-fx-panel-${fxKey}`} role="dialog" aria-label={`${label} track FX`}>
       <div className="flex items-center gap-2">
@@ -76,6 +79,58 @@ export function TrackFxPanel({
                   <SliderRow label="Amount" value={cur.nr} min={FX_LIMITS.nr[0]} max={FX_LIMITS.nr[1]} unit=" dB" onCommit={(v) => set({ nr: v })} testId="track-fx-nr-amount" />
                   <p className="text-[10px] text-muted-foreground">Applied on export (the preview can't denoise live).</p>
                 </>
+              ) : null}
+              <Toggle on={cur.deess != null} label="De-ess" onChange={(v) => set({ deess: v ? FX_LIMITS.deess[2] : undefined })} testId="track-fx-deess" />
+              {cur.deess != null ? (
+                <>
+                  <SliderRow label="Intensity" value={cur.deess} min={0} max={100} unit="%" onCommit={(v) => set({ deess: v })} testId="track-fx-deess-amount" />
+                  <p className="text-[10px] text-muted-foreground">De-ess and Noise reduction apply on export only.</p>
+                </>
+              ) : null}
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium" htmlFor="track-fx-vfx-select">
+                  Voice effect
+                </label>
+                <select
+                  id="track-fx-vfx-select"
+                  className="h-7 w-full rounded border border-border bg-background px-1 text-[11px]"
+                  value={vfxType ?? ''}
+                  data-testid="track-fx-vfx"
+                  onChange={(e) => {
+                    const t = e.target.value as TrackVfxType | ''
+                    if (!t) set({ vfx: undefined })
+                    else set({ vfx: { type: t, amount: t === 'telephone' ? undefined : FX_LIMITS.vfxAmount[2] } })
+                  }}
+                >
+                  <option value="">Off</option>
+                  <option value="echo">Echo</option>
+                  <option value="reverb">Reverb</option>
+                  <option value="robot">Robot</option>
+                  <option value="telephone">Telephone</option>
+                </select>
+                {vfxType && vfxType !== 'telephone' ? (
+                  <SliderRow
+                    label="Amount"
+                    value={vfx?.amount ?? FX_LIMITS.vfxAmount[2]}
+                    min={0}
+                    max={100}
+                    unit="%"
+                    onCommit={(v) => set({ vfx: { type: vfxType, amount: v } })}
+                    testId="track-fx-vfx-amount"
+                  />
+                ) : null}
+              </div>
+              {voiceTrack ? (
+                <SliderRow
+                  label="Pan"
+                  value={cur.pan ?? 0}
+                  min={-100}
+                  max={100}
+                  step={1}
+                  format={(v) => (v === 0 ? 'C' : v < 0 ? `L${Math.abs(v)}` : `R${v}`)}
+                  onCommit={(v) => set({ pan: v || undefined })}
+                  testId="track-fx-pan"
+                />
               ) : null}
               <Toggle on={eq.hp != null} label="High-pass" onChange={(v) => set({ eq: { ...eq, hp: v ? FX_LIMITS.hp[2] : undefined } })} testId="track-fx-hp" />
               {eq.hp != null ? <SliderRow label="Cutoff" value={eq.hp} min={FX_LIMITS.hp[0]} max={FX_LIMITS.hp[1]} unit=" Hz" onCommit={(v) => set({ eq: { ...eq, hp: v } })} testId="track-fx-hp-hz" /> : null}

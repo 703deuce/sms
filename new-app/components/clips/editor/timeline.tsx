@@ -120,6 +120,7 @@ import { CUT_HANDLE_ROW_TOP_PX, layoutCutHandles } from '@/lib/clips/editor/cut-
 import { useAudioPeaks, type AudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { AudioClipInspector } from '@/components/clips/editor/timeline/audio-clip-inspector'
 import { fadeDragMsPerPx, fadeFromDrag, patchAudioClip } from '@/lib/clips/editor/audio-clip'
+import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 import { audioClipKindOf } from '@/lib/clips/editor/audio-kind'
 import { beatsToOutput } from '@/lib/clips/editor/beats'
 import { DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS } from '@/lib/clips/audio'
@@ -347,7 +348,7 @@ export function Timeline({
   onCutSection?: () => void
   onSetLayoutMode?: (mode: ClipEditsV2['layout']['mode']) => void
   /** E2: every timeline edit is ONE call (= one undo step in useEditorState). Omit for read-only. */
-  onCommitEdits?: (next: ClipEditsV2) => void
+  onCommitEdits?: (next: ClipEditsV2, pushHistory?: boolean) => void
   onUndo?: () => void
   onRedo?: () => void
   canUndo?: boolean
@@ -660,6 +661,7 @@ export function Timeline({
   // G2: beat markers on music / long audio clips (and snapping to them).
   const [beatsOn, setBeatsOn] = useState(true)
   const [fadeDrag, setFadeDrag] = useState<{ key: string; edge: 'in' | 'out'; ms: number } | null>(null)
+  const fadeBurstRef = useRef<CoalesceBurst | null>(null)
   // G2: OUTPUT-ms beat marks per audio item (music bed: looped grid when "Fit to length" loops it).
   const beatMarks = useMemo(() => {
     const out: Record<string, number[]> = {}
@@ -829,8 +831,8 @@ export function Timeline({
     commit(next)
     return true
   }
-  const commit = (next: ClipEditsV2 | null) => {
-    if (next && onCommitEdits) onCommitEdits(next)
+  const commit = (next: ClipEditsV2 | null, pushHistory = true) => {
+    if (next && onCommitEdits) onCommitEdits(next, pushHistory)
   }
   // G1b3: freeze frame at the playhead (an E5b insert with no media: holds the composed frame).
   const freezeFrame = () => {
@@ -2053,16 +2055,27 @@ export function Timeline({
       fadeFromDrag(edge, lenMs, edge === 'in' ? fi : fo, edge === 'in' ? fo : fi, (ev.clientX - x0) * fadeDragMsPerPx(pxPerMs, ev.shiftKey || ev.altKey))
     let last = edge === 'in' ? fi : fo
     setFadeDrag({ key, edge, ms: last })
+    const burstKey = `${key}:${edge}`
+    const commitFade = (ms: number) => {
+      const next = patchAudioClip(edits, item.lane as 'music' | 'sfx', item.id, edge === 'in' ? { fadeInMs: ms } : { fadeOutMs: ms })
+      if (!next) return
+      const now = Date.now()
+      const push = coalescePush(fadeBurstRef.current, burstKey, now, String(ms))
+      fadeBurstRef.current = { key: burstKey, at: now, sig: String(ms) }
+      commit(next, push)
+    }
     const onMove = (ev: PointerEvent) => {
       last = calc(ev)
       setFadeDrag({ key, edge, ms: last })
+      commitFade(last)
     }
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       setFadeDrag(null)
+      fadeBurstRef.current = null
       if (last === (edge === 'in' ? fi : fo)) return
-      commit(patchAudioClip(edits, item.lane as 'music' | 'sfx', item.id, edge === 'in' ? { fadeInMs: last } : { fadeOutMs: last }))
+      commitFade(last)
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)

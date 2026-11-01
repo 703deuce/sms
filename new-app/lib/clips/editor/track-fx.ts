@@ -19,9 +19,12 @@
  * Parity fixture: worker/tests/fixtures/g1c_trackfx_parity.json (vitest + pytest).
  */
 import { isIdentitySpec, normalizeColorSpec, type ColorSpec } from '@/lib/clips/editor/color'
+import { panGains } from '@/lib/clips/audio'
 
 export type TrackEq = { hp?: number; low?: number; mid?: number; midHz?: number; high?: number }
 export type TrackComp = { threshold: number; ratio: number; attack: number; release: number; makeup: number }
+export type TrackVfxType = 'echo' | 'reverb' | 'robot' | 'telephone'
+export type TrackVfx = { type: TrackVfxType; amount?: number }
 export type TrackFx = {
   track: string
   bypass?: true
@@ -33,6 +36,12 @@ export type TrackFx = {
   limit?: number
   /** Integrated loudness target, LUFS (−36…−8). */
   lufs?: number
+  /** AU-11 de-esser intensity 0–100 (export-only). */
+  deess?: number
+  /** AU-31 voice effect (export-only for telephone uses preview biquads). */
+  vfx?: TrackVfx
+  /** AU-12 voice-track balance pan only. */
+  pan?: number
   /** Overlay tracks: color look. */
   color?: ColorSpec
 }
@@ -49,6 +58,9 @@ export const FX_LIMITS = {
   makeup: [0, 24, 0],
   limit: [-24, 0, -1],
   lufs: [-36, -8, -16],
+  deess: [0, 100, 50],
+  vfxAmount: [0, 100, 50],
+  pan: [-100, 100, 0],
 } as const
 export const EQ_LOW_HZ = 120
 export const EQ_HIGH_HZ = 8000
@@ -107,6 +119,24 @@ export function normalizeTrackFxOne(raw: unknown): TrackFx | null {
     if (lim != null) out.limit = lim
     const lufs = clampLim(o.lufs, FX_LIMITS.lufs)
     if (lufs != null) out.lufs = Math.round(lufs)
+    const deess = clampLim(o.deess, FX_LIMITS.deess)
+    if (deess != null) out.deess = deess
+    const vfxRaw = o.vfx
+    if (vfxRaw && typeof vfxRaw === 'object') {
+      const t = (vfxRaw as { type?: unknown }).type
+      if (t === 'echo' || t === 'reverb' || t === 'robot' || t === 'telephone') {
+        const entry: TrackVfx = { type: t }
+        if (t !== 'telephone') {
+          const amt = clampLim((vfxRaw as { amount?: unknown }).amount, FX_LIMITS.vfxAmount)
+          entry.amount = amt ?? FX_LIMITS.vfxAmount[2]
+        }
+        out.vfx = entry
+      }
+    }
+    if (track === 'voice') {
+      const pan = clampLim(o.pan, FX_LIMITS.pan)
+      if (pan != null && pan !== 0) out.pan = Math.round(pan)
+    }
   } else {
     const color = normalizeColorSpec(o.color)
     if (color && !isIdentitySpec(color)) out.color = color
@@ -130,7 +160,17 @@ export function normalizeTrackFx(raw: unknown, trackIds?: ReadonlySet<string>): 
 
 export function hasFx(fx: TrackFx | null | undefined): boolean {
   if (!fx) return false
-  return fx.nr != null || fx.eq != null || fx.comp != null || fx.limit != null || fx.lufs != null || fx.color != null
+  return (
+    fx.nr != null ||
+    fx.eq != null ||
+    fx.comp != null ||
+    fx.limit != null ||
+    fx.lufs != null ||
+    fx.color != null ||
+    fx.deess != null ||
+    fx.vfx != null ||
+    fx.pan != null
+  )
 }
 
 /** Active (not bypassed) audio processing on this key. */
@@ -154,9 +194,12 @@ export function withTrackFx(list: TrackFx[] | undefined, key: string, fx: Omit<T
 // ---------------------------------------------------------------------------
 
 export type FxNode =
-  | { type: 'biquad'; kind: 'highpass' | 'lowshelf' | 'peaking' | 'highshelf'; f: number; q: number; gain: number }
+  | { type: 'biquad'; kind: 'highpass' | 'lowshelf' | 'peaking' | 'highshelf' | 'lowpass'; f: number; q: number; gain: number }
   | { type: 'comp'; threshold: number; knee: number; ratio: number; attack: number; release: number }
   | { type: 'gain'; db: number }
+  | { type: 'pan'; gl: number; gr: number }
+  | { type: 'delays'; taps: { s: number; g: number }[]; dry: number }
+  | { type: 'ring'; hz: number; m: number }
 
 /** Web Audio Q for a 2nd-order high-pass is in dB: 20·log10(0.7071) gives the Butterworth Q. */
 export const WEB_HP_Q_DB = Math.round(20 * Math.log10(Math.SQRT1_2) * 1e4) / 1e4
@@ -186,11 +229,28 @@ export function webAudioPlan(fx: TrackFx, lufsGainDb: number | null = null, stag
     out.push({ type: 'comp', threshold: t, knee: COMP_KNEE_DB, ratio: c.ratio, attack: c.attack / 1000, release: c.release / 1000 })
     out.push({ type: 'gain', db: r2(c.makeup - webAutoMakeupDb(c.threshold, c.ratio)) })
   }
+  const vfx = fx.vfx
+  if (vfx) {
+    const m = (vfx.amount ?? FX_LIMITS.vfxAmount[2]) / 100
+    if (vfx.type === 'echo') out.push({ type: 'delays', dry: 1, taps: [{ s: 0.3, g: 0.6 * m }, { s: 0.6, g: 0.3 * m }] })
+    else if (vfx.type === 'reverb') {
+      const taps = [23, 37, 53, 71, 97, 131].map((ms, i) => ({ s: ms / 1000, g: m * 0.5 * 0.8 ** i }))
+      out.push({ type: 'delays', dry: 1, taps })
+    } else if (vfx.type === 'robot') out.push({ type: 'ring', hz: 60, m })
+    else if (vfx.type === 'telephone') {
+      out.push({ type: 'biquad', kind: 'highpass', f: 300, q: WEB_HP_Q_DB, gain: 0 })
+      out.push({ type: 'biquad', kind: 'lowpass', f: 3400, q: WEB_HP_Q_DB, gain: 0 })
+    }
+  }
   if (stage === 'pre') return out
   if (fx.lufs != null && lufsGainDb != null && Number.isFinite(lufsGainDb)) out.push({ type: 'gain', db: r2(lufsGainDb) })
   if (fx.limit != null) {
     out.push({ type: 'comp', threshold: fx.limit, knee: 0, ratio: 20, attack: 0.003, release: 0.05 })
     out.push({ type: 'gain', db: r2(-webAutoMakeupDb(fx.limit, 20)) })
+  }
+  if (fx.track === 'voice' && fx.pan != null && fx.pan !== 0) {
+    const [gl, gr] = panGains(fx.pan)
+    out.push({ type: 'pan', gl, gr })
   }
   return out
 }
@@ -201,18 +261,29 @@ export function lufsGainDb(measured: number | null, target: number | undefined):
   return r2(Math.max(-LUFS_GAIN_MAX_DB, Math.min(LUFS_GAIN_MAX_DB, target - measured)))
 }
 
-type Ctx = Pick<BaseAudioContext, 'createBiquadFilter' | 'createDynamicsCompressor' | 'createGain'>
+type Ctx = Pick<
+  BaseAudioContext,
+  'createBiquadFilter' | 'createDynamicsCompressor' | 'createGain' | 'createDelay' | 'createChannelSplitter' | 'createChannelMerger' | 'createOscillator'
+>
 /** Build the nodes in series. Returns input / output (same node when the plan is empty). */
 export function buildFxChain(ctx: Ctx, plan: FxNode[]): { input: AudioNode; output: AudioNode; nodes: AudioNode[] } {
   const nodes: AudioNode[] = []
+  let input: AudioNode | null = null
+  let output: AudioNode | null = null
+  const link = (n: AudioNode) => {
+    if (!input) input = n
+    if (output) output.connect(n)
+    output = n
+    nodes.push(n)
+  }
   for (const n of plan) {
     if (n.type === 'biquad') {
       const b = ctx.createBiquadFilter()
-      b.type = n.kind
+      b.type = n.kind === 'lowpass' ? 'lowpass' : n.kind
       b.frequency.value = n.f
       b.Q.value = n.q
       b.gain.value = n.gain
-      nodes.push(b)
+      link(b)
     } else if (n.type === 'comp') {
       const c = ctx.createDynamicsCompressor()
       c.threshold.value = n.threshold
@@ -220,19 +291,75 @@ export function buildFxChain(ctx: Ctx, plan: FxNode[]): { input: AudioNode; outp
       c.ratio.value = n.ratio
       c.attack.value = n.attack
       c.release.value = n.release
-      nodes.push(c)
-    } else {
+      link(c)
+    } else if (n.type === 'gain') {
       const g = ctx.createGain()
       g.gain.value = Math.pow(10, n.db / 20)
-      nodes.push(g)
+      link(g)
+    } else if (n.type === 'pan') {
+      const split = ctx.createChannelSplitter(2)
+      const merge = ctx.createChannelMerger(2)
+      const gL = ctx.createGain()
+      const gR = ctx.createGain()
+      gL.gain.value = n.gl
+      gR.gain.value = n.gr
+      split.connect(gL, 0)
+      split.connect(gR, 0)
+      gL.connect(merge, 0, 0)
+      gR.connect(merge, 0, 1)
+      link(split)
+      nodes.push(gL, gR, merge)
+      output = merge
+    } else if (n.type === 'delays') {
+      const dry = ctx.createGain()
+      dry.gain.value = n.dry
+      const sum = ctx.createGain()
+      sum.gain.value = 1
+      link(dry)
+      dry.connect(sum)
+      for (const tap of n.taps) {
+        const d = ctx.createDelay(2)
+        d.delayTime.value = tap.s
+        const g = ctx.createGain()
+        g.gain.value = tap.g
+        dry.connect(d)
+        d.connect(g)
+        g.connect(sum)
+        nodes.push(d, g)
+      }
+      nodes.push(sum)
+      output = sum
+    } else if (n.type === 'ring') {
+      const inG = ctx.createGain()
+      inG.gain.value = 1
+      link(inG)
+      const dryG = ctx.createGain()
+      dryG.gain.value = 1 - n.m
+      const wetG = ctx.createGain()
+      wetG.gain.value = 0
+      const osc = ctx.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.value = n.hz
+      const mod = ctx.createGain()
+      mod.gain.value = n.m
+      osc.connect(mod)
+      mod.connect(wetG.gain)
+      osc.start()
+      const sum = ctx.createGain()
+      sum.gain.value = 1
+      inG.connect(dryG)
+      inG.connect(wetG)
+      dryG.connect(sum)
+      wetG.connect(sum)
+      nodes.push(dryG, wetG, sum, osc, mod)
+      output = sum
     }
   }
-  if (!nodes.length) {
+  if (!input || !output) {
     const g = ctx.createGain()
     return { input: g, output: g, nodes: [g] }
   }
-  for (let i = 0; i < nodes.length - 1; i++) nodes[i]!.connect(nodes[i + 1]!)
-  return { input: nodes[0]!, output: nodes[nodes.length - 1]!, nodes }
+  return { input, output, nodes }
 }
 
 export function fxPlanKey(fx: TrackFx | undefined, gain: number | null): string {
