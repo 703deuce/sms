@@ -307,6 +307,7 @@ export function Timeline({
   angleSources = NO_SOURCES,
   onMatchFrame,
   onOpenExport,
+  onReplaceBrollMedia,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -366,6 +367,8 @@ export function Timeline({
   onMatchFrame?: (outMs: number) => boolean
   /** TC1: Ctrl/Cmd+E and the command palette open the export dialog. */
   onOpenExport?: () => void
+  /** FV-19: open replace-media dialog for a B-roll item id. */
+  onReplaceBrollMedia?: (brollId: string) => void
   selectedSourceSegmentId?: string | null
   /** G1a: select an item from outside (canvas click); a new `seq` re-applies. `atMs` = output ms. */
   selectRequest?: { lane: LaneId; id?: string; atMs?: number; seq: number } | null
@@ -3216,6 +3219,20 @@ export function Timeline({
                   }}
                 >
                   Join selected clips
+                </button>
+              ) : null}
+              {editable && onReplaceBrollMedia && liveSelected.length === 1 && liveSelected[0]!.lane === 'broll' ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-replace-media"
+                  onClick={() => {
+                    onReplaceBrollMedia(liveSelected[0]!.id)
+                    setCtxMenu(null)
+                  }}
+                >
+                  Replace media…
                 </button>
               ) : null}
               {liveSelected.length === 1 && liveSelected[0]!.lane === 'broll' && canDetachAudio(edits, liveSelected[0]!.id) ? (
