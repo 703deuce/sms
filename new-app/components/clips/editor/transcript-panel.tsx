@@ -10,7 +10,7 @@ import { FILLER_RE, isWordCut, normalizeSectionOrder, wordDisplayText } from '@/
 import { moveSelection, sectionBlocksForEdits } from '@/lib/clips/editor/reorder'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
-import { multicamAngles, setAngleForSourceSpan } from '@/lib/clips/editor/multicam-manual'
+import { multicamAngles, setAngleForSourceSpan, sourceSpanFromTranscriptSelection } from '@/lib/clips/editor/multicam-manual'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { SHOW_SURROUNDING_CONTEXT_MS } from '@/lib/clips/trim-bounds'
@@ -251,15 +251,29 @@ export function TranscriptPanel({
   }
 
   useEffect(() => {
+    const sw = (() => {
+      if (selStart === null || selEnd === null) return [] as SourceWord[]
+      const a = Math.min(selStart, selEnd)
+      const b = Math.max(selStart, selEnd)
+      return visible.filter((w) => {
+        const { startMs, endMs } = wordSourceMs(w)
+        return endMs > a && startMs < b
+      })
+    })()
+    const span = sw.length
+      ? ([Math.round(wordSourceMs(sw[0]!).startMs), Math.round(wordSourceMs(sw[sw.length - 1]!).endMs)] as [number, number])
+      : selStart != null && selEnd != null
+        ? sourceSpanFromTranscriptSelection({ startMs: selStart, endMs: selEnd }, visible)
+        : null
     selectionRef.current = {
-      startMs: selStart ?? 0,
-      endMs: selEnd ?? 0,
+      startMs: span?.[0] ?? selStart ?? 0,
+      endMs: span?.[1] ?? selEnd ?? 0,
       clear: () => {
         setSelStart(null)
         setSelEnd(null)
       },
     }
-  }, [selEnd, selStart, selectionRef])
+  }, [selEnd, selStart, selectionRef, visible, edits])
 
   useEffect(() => {
     if (!follow || !panelActive || activeI == null || Date.now() < pauseFollowUntil.current) return
@@ -276,11 +290,9 @@ export function TranscriptPanel({
   const angleTb = useMemo(() => timebaseFor(editorPreviewEdits(edits, visible)), [edits, visible])
   const angleSelection = (sourceId: string) => {
     if (selStart === null || selEnd === null || !onSetEdits) return
-    const sw = selectionWords()
-    if (!sw.length) return
-    const srcA = wordSourceMs(sw[0]!).startMs
-    const srcB = wordSourceMs(sw[sw.length - 1]!).endMs
-    onSetEdits(setAngleForSourceSpan(edits, angleTb, srcA, srcB, sourceId, angleSources))
+    const span = sourceSpanFromTranscriptSelection({ startMs: selStart, endMs: selEnd }, visible)
+    if (!span) return
+    onSetEdits(setAngleForSourceSpan(edits, angleTb, span[0], span[1], sourceId, angleSources))
   }
   const deleteSelection = () => {
     if (selStart === null || selEnd === null) return
@@ -503,7 +515,10 @@ export function TranscriptPanel({
               onToggleEmphasis(w.i)
             }
             if (e.shiftKey && selStart !== null) {
-              setSelEnd(Math.round(endMs))
+              const ns = Math.min(selStart, Math.round(startMs))
+              const ne = Math.max(selEnd ?? selStart, Math.round(endMs))
+              setSelStart(ns)
+              setSelEnd(ne)
             } else {
               setSelStart(Math.round(startMs))
               setSelEnd(Math.round(endMs))

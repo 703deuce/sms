@@ -122,7 +122,7 @@ import { EnvelopeLine } from '@/components/clips/editor/timeline/envelope-line'
 import { addEnvelopePoint, deleteEnvelopePoint, envelopeFor, envelopePoints, moveEnvelopePoint } from '@/lib/clips/editor/envelopes'
 import { PROP_SPECS } from '@/lib/clips/editor/motion-schema'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
-import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, setAngleForSourceSpan, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
+import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, setAngleForSourceSpan, sourceSpanFromTranscriptSelection, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
 import type { TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import { CUT_HANDLE_ROW_TOP_PX, layoutCutHandles } from '@/lib/clips/editor/cut-handle-layout'
 import { useAudioPeaks, type AudioPeaks } from '@/components/clips/editor/use-audio-peaks'
@@ -945,10 +945,10 @@ export function Timeline({
     const a = angles[n - 1]
     if (!editable || angles.length < 2 || !a) return false
     const sel = transcriptSelectionRef?.current
-    const spanSel = sel && sel.startMs !== sel.endMs
+    const span = sel ? sourceSpanFromTranscriptSelection(sel, words) : null
     let next: ClipEditsV2
-    if (spanSel) {
-      next = setAngleForSourceSpan(edits, tb, sel.startMs, sel.endMs, a.sourceId, angleSources)
+    if (span) {
+      next = setAngleForSourceSpan(edits, tb, span[0], span[1], a.sourceId, angleSources)
     } else {
       const srcMs = outputToSource(tb, liveOutMs)
       if (angleAt(edits, srcMs) === a.sourceId) return true
@@ -964,7 +964,8 @@ export function Timeline({
   // G1b3: freeze frame at the playhead (an E5b insert with no media: holds the composed frame).
   const freezeFrame = () => {
     if (!editable || refLocked(edits, { lane: 'video', id: '' })) return
-    const ins = addFreezeFrame(edits.inserts, timebaseFor(previewEdits).segs, playheadMs, `frz-${crypto.randomUUID().slice(0, 8)}`)
+    const atMs = liveOutMs
+    const ins = addFreezeFrame(edits.inserts, timebaseFor(previewEdits).segs, atMs, `frz-${crypto.randomUUID().slice(0, 8)}`)
     if (!ins) {
       toast.message('Too many inserted clips')
       return
