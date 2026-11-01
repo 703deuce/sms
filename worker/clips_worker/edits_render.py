@@ -573,6 +573,7 @@ def burn_captions(
     edits_captions: dict | None = None,
     play_w: int | None = None,
     play_h: int | None = None,
+    edits: dict | None = None,
 ) -> None:
     from clips_worker.captions_ass import build_ass, resolve_preset, margin_v_px
 
@@ -771,7 +772,7 @@ def _legacy_compose(
 
         burn_words = caption_line_render_words(edits) or caption_words
     if int(cap_edits.get("enabled", True)):
-        burn_captions(caption_src, burn_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h)
+        burn_captions(caption_src, burn_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h, edits=edits)
         caption_src = final
     branded = work_dir / "branded.mp4"
     brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else None
