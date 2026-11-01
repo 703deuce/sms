@@ -88,10 +88,30 @@ describe('G1c2 takes', () => {
     // Overlapping / tiny ranges are refused.
     expect(groupMainTakes(e0, [[1000, 2000], [1500, 2500]])).toBeNull()
   })
+  it('main take cycle restores per-take source segments', () => {
+    const e0: ClipEditsV2 = {
+      ...base(),
+      trim: { in: 0, out: 30000 },
+      sources: [{ id: 'cam', ref: 'upload', refId: 'up1', mediaType: 'video', label: 'Gameplay' }],
+      sourceSegments: [
+        { id: 's1', sourceId: 'cam', startMs: 5000, endMs: 20000, inMs: 0 },
+        { id: 's2', sourceId: 'main', startMs: 0, endMs: 5000 },
+      ],
+    }
+    const g = groupMainTakes(e0, [
+      [0, 5000],
+      [5000, 20000],
+    ], 0)!
+    expect((g.sourceSegments ?? []).some((s) => s.sourceId === 'cam')).toBe(false)
+    const take2 = cycleMainTake(g, g.takes![0]!.id, 1)!
+    expect((take2.sourceSegments ?? []).some((s) => s.sourceId === 'cam' && s.startMs >= 5000)).toBe(true)
+    const take1 = cycleMainTake(take2, g.takes![0]!.id, 1)!
+    expect((take1.sourceSegments ?? []).some((s) => s.sourceId === 'cam')).toBe(false)
+  })
   it('retake finder hook: each flagged reading + the next one become a take group (later active)', () => {
     const words = [0, 1, 2, 3, 4, 5].map((i) => ({ s: 1 + i * 0.5, e: 1.4 + i * 0.5 }))
     const g = takesFromRetakes(base(), [{ startMs: 1000, endMs: 2400 }], words)
-    expect(g.takes).toEqual([{ id: 'mt1', kind: 'main', ranges: [[1000, 2400], [2400, 3900]], active: 1 }])
+    expect(g.takes![0]).toMatchObject({ id: 'mt1', kind: 'main', ranges: [[1000, 2400], [2400, 3900]], active: 1 })
     expect(g.cutRanges).toEqual([[1000, 2400]])
   })
   it('T / Shift+T / F shortcuts', () => {

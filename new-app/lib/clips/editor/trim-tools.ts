@@ -125,17 +125,18 @@ export function slideMainClip(ctx: OpCtx, a: number, deltaMs: number): ClipEdits
   // Contiguous videoSplits (no cut gaps): move both split points together — same middle length, neighbours adjust.
   if (gapBefore === 0 && gapAfter === 0) {
     const splitSet = new Set(ctx.edits.videoSplits ?? [])
-    if (!splitSet.has(cur.a) || !splitSet.has(cur.b)) return null
+    const rightSplit = splitSet.has(cur.b) ? cur.b : nxt.a
+    if (!splitSet.has(cur.a) || (!splitSet.has(cur.b) && !splitSet.has(nxt.a))) return null
     let d = Math.round(deltaMs)
     d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - prev.b)
     d = Math.min(d, prev.b - prev.a - VIDEO_MIN_SEG_MS)
     d = Math.max(d, cur.a + VIDEO_MIN_SEG_MS - prev.b)
     d = Math.min(d, nxt.b - VIDEO_MIN_SEG_MS - cur.b)
     if (!d) return null
-    const moved = [...splitSet].map((s) => (s === cur.a ? cur.a + d : s === cur.b ? cur.b + d : s)).sort((x, y) => x - y)
+    const moved = [...splitSet].map((s) => (s === cur.a ? cur.a + d : s === rightSplit ? rightSplit + d : s)).sort((x, y) => x - y)
     let nextEdits: ClipEditsV2 = { ...ctx.edits, videoSplits: moved }
     nextEdits = moveSplitKey(nextEdits, cur.a, cur.a + d)
-    nextEdits = moveSplitKey(nextEdits, cur.b, cur.b + d)
+    nextEdits = moveSplitKey(nextEdits, rightSplit, rightSplit + d)
     const nt = timebaseFor(nextEdits)
     if (Math.abs(nt.durationMs - tb.durationMs) > 1) return null
     return nextEdits
@@ -322,10 +323,6 @@ function clampJlAudioMs(ctx: OpCtx, atMs: number, audioMs: number): number {
   return Math.max(-lim, Math.min(lim, Math.round(audioMs)))
 }
 
-/**
- * J / L (Alt-drag): a Voice edge at a real cut moves only the SOUND boundary; a Video edge at a real
- * cut moves only the PICTURE (picture-only roll). `toMs` = where the dragged edge was dropped.
- */
 export function splitEdgeTrim(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: number): ClipEditsV2 | null {
   if (refLocked(ctx.edits, ref)) return null
   const tb = timebaseFor(ctx.edits)
@@ -349,4 +346,25 @@ export function splitEdgeTrim(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', t
     return rollMainEdit(ctx, right, toMs - (edge === 'start' ? it.startMs : it.endMs), { pictureOnly: true })
   }
   return null
+}
+
+export const DEFAULT_JL_CUT_MS = 500
+
+/**
+ * Apply a J- or L-cut at a main-track boundary (source ms where the right segment starts).
+ * Uses the same model as Alt-drag on Voice edges at the cut.
+ */
+export function applyJLCutAt(ctx: OpCtx, atSrcMs: number, kind: 'j' | 'l', ms = DEFAULT_JL_CUT_MS): ClipEditsV2 | null {
+  const tb = timebaseFor(ctx.edits)
+  const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits })
+  const vsegs = videoLaneSegments(tb, ctx.edits.videoSplits)
+  const k = vsegs.findIndex((v) => Math.abs(v.a - atSrcMs) <= 1)
+  if (k < 1) return null
+  const voiceLeft = lanes.voice[k - 1]
+  const voiceRight = lanes.voice[k]
+  if (!voiceLeft || !voiceRight) return null
+  if (kind === 'l') {
+    return splitEdgeTrim(ctx, { lane: 'voice', id: voiceLeft.id }, 'end', voiceLeft.endMs + ms)
+  }
+  return splitEdgeTrim(ctx, { lane: 'voice', id: voiceRight.id }, 'start', voiceRight.startMs - ms)
 }

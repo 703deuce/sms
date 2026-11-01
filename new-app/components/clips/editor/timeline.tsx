@@ -61,7 +61,7 @@ import {
   type TimelineRow,
   videoLaneSegments,
 } from '@/lib/clips/editor/clip-timeline'
-import { rollEdit, slideEdit, splitEdgeTrim, TRIM_TOOL_KEYS, type TrimTool, slipEdit, slideMainNeedsMiddleSegment } from '@/lib/clips/editor/trim-tools'
+import { rollEdit, slideEdit, splitEdgeTrim, TRIM_TOOL_KEYS, type TrimTool, slipEdit, slideMainNeedsMiddleSegment, applyJLCutAt, DEFAULT_JL_CUT_MS } from '@/lib/clips/editor/trim-tools'
 import { autoCrossfade, autoCrossfadeOverlaps } from '@/lib/clips/editor/auto-crossfade'
 import { addFreezeFrame, addGapAt } from '@/lib/clips/editor/inserts'
 import { adjacentMarker, patchMarker, toggleMarkerAt, type Marker } from '@/lib/clips/editor/markers'
@@ -971,6 +971,36 @@ export function Timeline({
   }
   const commit = (next: ClipEditsV2 | null, pushHistory = true) => {
     if (next && onCommitEdits) onCommitEdits(next, pushHistory)
+  }
+  /** Source ms of a cut near the playhead or the selected video clip's start boundary. */
+  const cutSrcForJl = (): number | null => {
+    const tb = timebaseFor(edits)
+    let best: { at: number; d: number } | null = null
+    for (const k of realCutIndices(tb)) {
+      const d = Math.abs(tb.starts[k]! - playheadMs)
+      if (d <= 120 && (!best || d < best.d)) best = { at: tb.segs[k]![0], d }
+    }
+    for (const s of edits.videoSplits ?? []) {
+      const seg = lanes.video.find((v) => v.srcInMs === s)
+      const d = seg ? Math.abs(seg.startMs - playheadMs) : Infinity
+      if (d <= 120 && (!best || d < best.d)) best = { at: s, d }
+    }
+    if (liveSelected.length === 1 && liveSelected[0]!.lane === 'video') {
+      const it = lanes.video.find((i) => i.id === liveSelected[0]!.id)
+      if (it?.srcInMs != null && it.srcInMs > 0) return it.srcInMs
+    }
+    return best?.at ?? null
+  }
+  const applyJLCut = (kind: 'j' | 'l') => {
+    if (!editable) return
+    const at = cutSrcForJl()
+    if (at == null) {
+      toast.message('Move the playhead to a cut (or select a video clip) for J/L-cut', { id: 'timeline-jl' })
+      return
+    }
+    const next = applyJLCutAt(opCtx(), at, kind, DEFAULT_JL_CUT_MS)
+    if (next) commit(next)
+    else toast.message('Could not apply J/L-cut at this edit', { id: 'timeline-jl' })
   }
   // G1b3: freeze frame at the playhead (an E5b insert with no media: holds the composed frame).
   const freezeFrame = () => {
@@ -2021,6 +2051,12 @@ export function Timeline({
     const ctx = opCtx()
     const state: DragState = { mode: dragMode, item, refs, originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, alt: e.altKey }
     setDrag(state)
+    const captureEl = e.currentTarget as HTMLElement
+    try {
+      captureEl.setPointerCapture(e.pointerId)
+    } catch {
+      /* ignore */
+    }
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - state.originX
       if (!state.moved && Math.abs(dx) < DRAG_SLOP_PX) return
@@ -2051,10 +2087,17 @@ export function Timeline({
     const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      try {
+        captureEl.releasePointerCapture(ev.pointerId)
+      } catch {
+        /* ignore */
+      }
       setDrag(null)
       const alt = state.alt || ev.altKey
       const fromRow = rowOfItem(item)?.key ?? null
       const toRow = dragMode === 'move' && state.targetRow && state.targetRow !== fromRow ? rows.find((r) => r.key === state.targetRow) : undefined
+      const delta = state.deltaMs
       if (toRow?.trackId && state.moved && !slideTool) {
         // G1b: dropped on another track (and maybe moved in time) — one undo step.
         const moved = state.deltaMs ? moveItems(ctx, state.refs, state.deltaMs) ?? ctx.edits : ctx.edits
@@ -2063,39 +2106,44 @@ export function Timeline({
         commit(onTrack && autoXfade ? autoCrossfade(ctx.edits, onTrack, ctx.previewEdits, ctx.previewEdits, state.refs, sfxDurationsMs, xfadeTracks) : onTrack)
         return
       }
-      if (!state.moved || !state.deltaMs) return
-      const ref = { lane: item.lane, id: item.id }
-      if (alt && dragMode !== 'move' && (item.lane === 'video' || item.lane === 'voice')) {
-        const edge = dragMode === 'start' ? item.startMs : item.endMs
-        const jl = splitEdgeTrim(ctx, ref, dragMode, edge + state.deltaMs)
-        if (jl) return commit(jl)
-      }
       if (slideTool) {
-        const next = slideEdit(ctx, ref, state.deltaMs)
+        if (!state.moved || Math.abs(delta) < 0.5) return
+        const ref = { lane: item.lane, id: item.id }
+        const next = slideEdit(ctx, ref, delta)
         if (next) return commit(next)
         if (item.lane === 'video' && slideMainNeedsMiddleSegment(ctx, ref)) {
           toast.message('Slide needs a middle main-video clip with neighbours on both sides', { id: 'timeline-slide' })
+        } else {
+          toast.message('Slide could not move this clip — try a smaller move or check neighbours', { id: 'timeline-slide' })
         }
         return
       }
+      if (!state.moved || Math.abs(delta) < 0.5) return
+      const ref = { lane: item.lane, id: item.id }
+      if (alt && dragMode !== 'move' && (item.lane === 'video' || item.lane === 'voice')) {
+        const edge = dragMode === 'start' ? item.startMs : item.endMs
+        const jl = splitEdgeTrim(ctx, ref, dragMode, edge + delta)
+        if (jl) return commit(jl)
+      }
       if (rollTool) {
-        const next = rollEdit(ctx, ref, dragMode as 'start' | 'end', state.deltaMs)
+        const next = rollEdit(ctx, ref, dragMode as 'start' | 'end', delta)
         if (next) return commit(next)
         toast.message('Roll needs the edit between two touching main-video clips', { id: 'timeline-roll' })
         return
       }
       if (dragMode === 'move') {
-        const moved = moveItems(ctx, state.refs, state.deltaMs)
+        const moved = moveItems(ctx, state.refs, delta)
         commit(moved && autoXfade ? autoCrossfade(ctx.edits, moved, ctx.previewEdits, ctx.previewEdits, state.refs, sfxDurationsMs, xfadeTracks) : moved)
       } else {
         const edge = dragMode === 'start' ? item.startMs : item.endMs
         const host = hostOf(item)
-        if (host) return commit(trimCompound(ctx, host.group, dragMode, edge + state.deltaMs))
-        commit(trimItem(ctx, { lane: item.lane, id: item.id }, dragMode, edge + state.deltaMs))
+        if (host) return commit(trimCompound(ctx, host.group, dragMode, edge + delta))
+        commit(trimItem(ctx, { lane: item.lane, id: item.id }, dragMode, edge + delta))
       }
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
   }
 
   /** Live (uncommitted) geometry while dragging. */
@@ -2831,6 +2879,24 @@ export function Timeline({
                   {label}
                 </button>
               ))}
+              <button
+                type="button"
+                className={`${tbtn} text-muted-foreground`}
+                title={`J-cut (${DEFAULT_JL_CUT_MS / 1000}s) — incoming audio before picture at playhead cut`}
+                data-testid="timeline-j-cut"
+                onClick={() => applyJLCut('j')}
+              >
+                J-cut
+              </button>
+              <button
+                type="button"
+                className={`${tbtn} text-muted-foreground`}
+                title={`L-cut (${DEFAULT_JL_CUT_MS / 1000}s) — outgoing audio after picture at playhead cut`}
+                data-testid="timeline-l-cut"
+                onClick={() => applyJLCut('l')}
+              >
+                L-cut
+              </button>
               <input
                 type="text"
                 inputMode="decimal"
@@ -3388,13 +3454,33 @@ export function Timeline({
                     ? cutWindows.map((w) => (
                         <div
                           key={`tr${w.srcMs}`}
-                          className="pointer-events-none absolute inset-y-0 z-[1] bg-gradient-to-r from-white/0 via-white/35 to-white/0"
-                          style={{ left: xs(w.w0Ms), width: Math.max(2, xe(w.w1Ms) - xs(w.w0Ms)) }}
+                          className="pointer-events-none absolute inset-y-0 z-[1] overflow-hidden"
+                          style={{
+                            left: xs(w.w0Ms),
+                            width: Math.max(10, xe(w.w1Ms) - xs(w.w0Ms)),
+                          }}
                           data-testid="timeline-transition-region"
                           data-src-ms={w.srcMs}
                           data-type={w.type}
                           aria-hidden
-                        />
+                        >
+                          <div
+                            className="absolute inset-0 opacity-90"
+                            style={{
+                              background:
+                                'linear-gradient(90deg, transparent 0%, rgb(251 191 36 / 0.15) 15%, rgb(251 191 36 / 0.45) 50%, rgb(251 191 36 / 0.15) 85%, transparent 100%)',
+                              clipPath: 'polygon(0 100%, 50% 0, 100% 100%)',
+                            }}
+                          />
+                          <div
+                            className="absolute inset-0 opacity-70"
+                            style={{
+                              background:
+                                'repeating-linear-gradient(135deg, rgb(255 255 255 / 0.35) 0 3px, transparent 3px 7px)',
+                              clipPath: 'polygon(8% 100%, 50% 8%, 92% 100%)',
+                            }}
+                          />
+                        </div>
                       ))
                     : null}
                   {lane === 'broll'
@@ -3758,6 +3844,34 @@ export function Timeline({
               >
                 Split at playhead (S)
               </button>
+              {cutSrcForJl() != null ? (
+                <>
+                  <button
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                    role="menuitem"
+                    data-testid="timeline-ctx-j-cut"
+                    onClick={() => {
+                      applyJLCut('j')
+                      setCtxMenu(null)
+                    }}
+                  >
+                    J-cut ({DEFAULT_JL_CUT_MS / 1000}s)
+                  </button>
+                  <button
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                    role="menuitem"
+                    data-testid="timeline-ctx-l-cut"
+                    onClick={() => {
+                      applyJLCut('l')
+                      setCtxMenu(null)
+                    }}
+                  >
+                    L-cut ({DEFAULT_JL_CUT_MS / 1000}s)
+                  </button>
+                </>
+              ) : null}
               {joinOpts.prev !== null ? (
                 <button
                   type="button"

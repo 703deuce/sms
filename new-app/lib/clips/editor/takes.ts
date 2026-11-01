@@ -11,8 +11,17 @@
  *           applyTrackRender (worker: track_render.py / takes.py) and hidden on the timeline.
  */
 import { mergeCutRanges, type ClipEditsV2, type CutRange } from '@/lib/clips/edits'
+import { normalizeSourceSegments, type SourceSegment } from '@/lib/clips/editor/sources'
 
-export type MainTakeGroup = { id: string; kind: 'main'; ranges: [number, number][]; active: number; saved?: [number, number][][] }
+export type MainTakeGroup = {
+  id: string
+  kind: 'main'
+  ranges: [number, number][]
+  active: number
+  saved?: [number, number][][]
+  /** Per-take source segments clipped to each range (restored when that take is active). */
+  savedSourceSegs?: SourceSegment[][]
+}
 export type BrollTakeGroup = { id: string; kind: 'broll'; items: string[]; active: string }
 export type TakeGroup = MainTakeGroup | BrollTakeGroup
 
@@ -61,10 +70,21 @@ export function normalizeTakes(raw: unknown, brollIds?: ReadonlySet<string>): Ta
       // Keep take order = as given (take 1, 2, …); active clamps.
       const act = int(o.active)
       const active = act != null && act >= 0 && act < ranges.length ? act : 0
+      const rawSavedSegs = Array.isArray(o.savedSourceSegs) ? o.savedSourceSegs : []
+      const savedSourceSegs = ranges.map((_, i) =>
+        normalizeSourceSegments(rawSavedSegs[i], undefined) ?? [],
+      )
       mainRanges.push(...ranges)
       usedIds.add(id)
       const anySaved = saved.some((s) => s.length)
-      out.push({ id, kind: 'main', ranges, active, ...(anySaved ? { saved } : {}) })
+      out.push({
+        id,
+        kind: 'main',
+        ranges,
+        active,
+        ...(anySaved ? { saved } : {}),
+        ...(savedSourceSegs.some((s) => s.length) ? { savedSourceSegs } : {}),
+      })
     } else if (o.kind === 'broll' && Array.isArray(o.items)) {
       const items: string[] = []
       for (const x of o.items) {
@@ -175,6 +195,48 @@ function clipCuts(cuts: readonly CutRange[], [a, b]: [number, number]): [number,
   return out
 }
 
+function takeUnion(ranges: readonly [number, number][]): [number, number] {
+  return [Math.min(...ranges.map((r) => r[0])), Math.max(...ranges.map((r) => r[1]))]
+}
+
+/** Clip source segments to a main-source take range (preserve inMs offset). */
+export function clipSourceSegmentsToRange(
+  segs: readonly SourceSegment[] | undefined,
+  [a, b]: [number, number],
+): SourceSegment[] {
+  if (!segs?.length) return []
+  const out: SourceSegment[] = []
+  for (const s of segs) {
+    if (s.endMs <= a || s.startMs >= b) continue
+    const startMs = Math.max(s.startMs, a)
+    const endMs = Math.min(s.endMs, b)
+    const lead = startMs - s.startMs
+    out.push({
+      ...s,
+      id: `${s.id}_${startMs}`,
+      startMs,
+      endMs,
+      ...(s.inMs != null ? { inMs: s.inMs + lead } : {}),
+    })
+  }
+  return out
+}
+
+function rememberTakeSourceSegs(g: MainTakeGroup, edits: ClipEditsV2): SourceSegment[][] {
+  const base = g.savedSourceSegs ?? g.ranges.map(() => [] as SourceSegment[])
+  return g.ranges.map((r, i) =>
+    i === g.active ? clipSourceSegmentsToRange(edits.sourceSegments, r) : (base[i] ?? []),
+  )
+}
+
+function applyActiveTakeSourceSegs(edits: ClipEditsV2, g: MainTakeGroup, savedSourceSegs: SourceSegment[][]): ClipEditsV2 {
+  const [ua, ub] = takeUnion(g.ranges)
+  const outside = (edits.sourceSegments ?? []).filter((s) => s.endMs <= ua || s.startMs >= ub)
+  const active = savedSourceSegs[g.active] ?? []
+  const merged = normalizeSourceSegments([...outside, ...active], edits.sources)
+  return { ...edits, sourceSegments: merged }
+}
+
 function without(cuts: readonly CutRange[], [a, b]: [number, number]): CutRange[] {
   const out: CutRange[] = []
   for (const [s, e] of cuts) {
@@ -188,17 +250,26 @@ function without(cuts: readonly CutRange[], [a, b]: [number, number]): CutRange[
 }
 
 /** cutRanges with take `j` active: the others cut whole, j restored with its remembered cuts. */
-function cutsForActive(cuts: readonly CutRange[], g: MainTakeGroup, j: number): { cuts: CutRange[]; saved: [number, number][][] } {
+function cutsForActive(
+  cuts: readonly CutRange[],
+  g: MainTakeGroup,
+  j: number,
+  sourceSegs: SourceSegment[][],
+): { cuts: CutRange[]; saved: [number, number][][]; savedSourceSegs: SourceSegment[][] } {
   const saved = g.ranges.map((_, i) => g.saved?.[i] ?? [])
-  // Remember the cuts inside the currently active take.
   saved[g.active] = clipCuts(cuts, g.ranges[g.active]!)
+  const savedSourceSegs = sourceSegs.map((row) => [...row])
   let next = [...cuts]
   g.ranges.forEach((r, i) => {
     if (i !== j) next.push(r)
   })
   next = without(mergeCutRanges(next), g.ranges[j]!)
   next.push(...saved[j]!)
-  return { cuts: mergeCutRanges(next), saved: saved.map((s, i) => (i === j ? [] : s)) }
+  return {
+    cuts: mergeCutRanges(next),
+    saved: saved.map((s, i) => (i === j ? [] : s)),
+    savedSourceSegs,
+  }
 }
 
 /** Group main-source ranges (≥ 2, non-overlapping) as takes; `active` plays. */
@@ -206,22 +277,43 @@ export function groupMainTakes(edits: ClipEditsV2, ranges: readonly [number, num
   const g0 = normalizeTakes([{ id: newGroupId(edits, 'mt'), kind: 'main', ranges, active }])?.[0] as MainTakeGroup | undefined
   if (!g0) return null
   const others = (edits.takes ?? []).filter((g) => g.kind !== 'main' || !g.ranges.some(([a, b]) => g0.ranges.some(([p, q]) => a < q && b > p)))
-  // Inactive takes remember the user's own cuts inside them.
+  const savedSourceSegs = g0.ranges.map((r) => clipSourceSegmentsToRange(edits.sourceSegments, r))
   const saved = g0.ranges.map((r, i) => (i === g0.active ? [] : clipCuts(edits.cutRanges ?? [], r)))
-  const g: MainTakeGroup = { ...g0, saved }
-  const { cuts, saved: sv } = cutsForActive(edits.cutRanges ?? [], g, g.active)
-  const grp: MainTakeGroup = { ...g, ...(sv.some((s) => s.length) ? { saved: sv } : { saved: undefined }) }
+  const g: MainTakeGroup = { ...g0, saved, savedSourceSegs }
+  const remembered = rememberTakeSourceSegs(g, edits)
+  const { cuts, saved: sv, savedSourceSegs: svSegs } = cutsForActive(edits.cutRanges ?? [], g, g.active, remembered)
+  const grp: MainTakeGroup = {
+    ...g,
+    active: g.active,
+    ...(sv.some((s) => s.length) ? { saved: sv } : {}),
+    ...(svSegs.some((s) => s.length) ? { savedSourceSegs: svSegs } : {}),
+  }
   if (!grp.saved) delete grp.saved
-  return { ...edits, cutRanges: cuts, takes: [...others, grp] }
+  if (!grp.savedSourceSegs) delete grp.savedSourceSegs
+  let out: ClipEditsV2 = { ...edits, cutRanges: cuts, takes: [...others, grp] }
+  out = applyActiveTakeSourceSegs(out, grp, svSegs)
+  return out
 }
 
 export function cycleMainTake(edits: ClipEditsV2, groupId: string, dir: 1 | -1 = 1): ClipEditsV2 | null {
   const g = (edits.takes ?? []).find((x): x is MainTakeGroup => x.id === groupId && x.kind === 'main')
   if (!g) return null
   const j = (g.active + dir + g.ranges.length) % g.ranges.length
-  const { cuts, saved } = cutsForActive(edits.cutRanges ?? [], g, j)
-  const ng: MainTakeGroup = { id: g.id, kind: 'main', ranges: g.ranges, active: j, ...(saved.some((s) => s.length) ? { saved } : {}) }
-  return { ...edits, cutRanges: cuts, takes: (edits.takes ?? []).map((x) => (x.id === g.id ? ng : x)) }
+  const remembered = rememberTakeSourceSegs(g, edits)
+  const { cuts, saved, savedSourceSegs } = cutsForActive(edits.cutRanges ?? [], g, j, remembered)
+  const ng: MainTakeGroup = {
+    id: g.id,
+    kind: 'main',
+    ranges: g.ranges,
+    active: j,
+    ...(saved.some((s) => s.length) ? { saved } : {}),
+    ...(savedSourceSegs.some((s) => s.length) ? { savedSourceSegs } : {}),
+  }
+  if (!ng.saved) delete ng.saved
+  if (!ng.savedSourceSegs) delete ng.savedSourceSegs
+  let out: ClipEditsV2 = { ...edits, cutRanges: cuts, takes: (edits.takes ?? []).map((x) => (x.id === g.id ? ng : x)) }
+  out = applyActiveTakeSourceSegs(out, ng, savedSourceSegs)
+  return out
 }
 
 /** Ungroup: B-roll keeps every item visible; main keeps the current cut state. */
