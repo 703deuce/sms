@@ -4,6 +4,53 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from clips_worker.track_fx import pan_gains
+
+
+def probe_audio_channels(path: Path) -> int:
+    try:
+        out = subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=channels",
+                "-of",
+                "default=nw=1:nk=1",
+                str(path),
+            ],
+            text=True,
+            timeout=30,
+        )
+        return max(1, int(out.strip()))
+    except Exception:
+        return 2
+
+
+def pan_filter(pan, ch: int) -> str:
+    if pan is None:
+        return ""
+    try:
+        p = int(round(float(pan)))
+    except (TypeError, ValueError):
+        return ""
+    if p == 0:
+        return ""
+    gL, gR = pan_gains(p)
+    gl, gr = f"{gL:.4f}".rstrip("0").rstrip("."), f"{gR:.4f}".rstrip("0").rstrip(".")
+
+    def _fmt(prefix: str) -> str:
+        if ch <= 1:
+            return f"{prefix}|c0={gl}*c0|c1={gr}*c0"
+        if ch == 2:
+            return f"{prefix}|c0={gl}*c0|c1={gr}*c1"
+        return f"aformat=channel_layouts=stereo,{prefix}|c0={gl}*c0|c1={gr}*c1"
+
+    return f",{_fmt('pan=stereo')}"
+
 
 def build_audio_filter(
     *,
@@ -21,6 +68,8 @@ def build_audio_filter(
     sfx_trims: list | None = None,
     track_fx: dict | None = None,
     sfx_fx: list | None = None,
+    music_pan: int | None = None,
+    music_pan_ch: int = 2,
 ) -> tuple[str, str]:
     """
     Returns (filter_complex, audio_map_label).
@@ -39,7 +88,7 @@ def build_audio_filter(
     mix_inputs: list[str] = ["[sp]"]
 
     if has_music:
-        parts.append(music_chain(music_input_index, L, V, FI, FO, music_window, "mv", music_volume_expr))
+        parts.append(music_chain(music_input_index, L, V, FI, FO, music_window, "mv", music_volume_expr, music_pan, music_pan_ch))
         music_fx(parts, track_fx)
         parts.append(
             f"[mv][sc]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[md]"
@@ -54,7 +103,11 @@ def build_audio_filter(
         at_ms = int(spec.get("at_ms", 0))
         vol = float(spec.get("volume", 0.8))
         label = f"s{i}"
-        parts.append(f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}{clip_fade(sfx_fx, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
+        fx_i = sfx_fx[i] if sfx_fx and i < len(sfx_fx) else None
+        pan_s = pan_filter(fx_i.get("pan") if fx_i else None, int(fx_i.get("pan_ch") or 2) if fx_i else 2)
+        parts.append(
+            f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}{clip_fade(sfx_fx, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}{pan_s}[{label}]"
+        )
         mix_inputs.append(clip_duck(parts, label, sfx_fx, i, ducks))
     mix_inputs = sfx_buses(parts, mix_inputs, len(sfx_specs), track_fx)
 
@@ -186,16 +239,19 @@ def _windowed(window: dict | None, L: float) -> tuple[float, float, float] | Non
 def music_chain(
     idx: int, L: float, V: float, FI: float, FO: float, window: dict | None, label: str,
     envelope: str | None = None,
+    pan: int | None = None,
+    pan_ch: int = 2,
 ) -> str:
     """Music bed filter: legacy (0..L) or E2 windowed (atrim in-point, fades on the window, adelay).
     envelope (E3): `volume` expression in OUTPUT seconds (motion.volume_expr with the window origin)."""
     w = _windowed(window, L)
     env = f",volume='{envelope}':eval=frame" if envelope else ""
+    pf = pan_filter(pan, pan_ch)
     if w is None:
         return (
             f"[{idx}:a]volume={V:.4f},"
             f"afade=t=in:d={FI:.3f},afade=t=out:st={max(0, L - FO):.3f}:d={FO:.3f},"
-            f"atrim=0:{L:.3f},asetpts=PTS-STARTPTS{env}[{label}]"
+            f"atrim=0:{L:.3f},asetpts=PTS-STARTPTS{env}{pf}[{label}]"
         )
     start, ln, in_s = w
     fi = min(FI, ln / 2)
@@ -204,7 +260,7 @@ def music_chain(
     return (
         f"[{idx}:a]atrim=start={in_s:.3f}:end={in_s + ln:.3f},asetpts=PTS-STARTPTS,volume={V:.4f},"
         f"afade=t=in:d={fi:.3f},afade=t=out:st={max(0, ln - fo):.3f}:d={fo:.3f},"
-        f"adelay={delay_ms}|{delay_ms},apad=whole_dur={L:.3f}{env}[{label}]"
+        f"adelay={delay_ms}|{delay_ms},apad=whole_dur={L:.3f}{env}{pf}[{label}]"
     )
 
 
@@ -250,6 +306,8 @@ def apply_audio_mix(
     track_fx: dict | None = None,
     sfx_fx: list | None = None,
     music_loop: bool = False,
+    music_pan: int | None = None,
+    music_pan_ch: int = 2,
 ) -> None:
     has_music = music_path is not None and music_path.is_file()
     sfx_specs = [{"at_ms": at, "volume": vol} for _, at, vol in sfx_paths]
@@ -268,6 +326,8 @@ def apply_audio_mix(
         sfx_specs=sfx_specs,
         music_input_index=1,
         music_window=music_window,
+        music_pan=music_pan,
+        music_pan_ch=music_pan_ch,
     )
 
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video)]
@@ -480,6 +540,8 @@ def apply_dub_speech_mix(
     track_fx: dict | None = None,
     sfx_fx: list | None = None,
     music_loop: bool = False,
+    music_pan: int | None = None,
+    music_pan_ch: int = 2,
 ) -> None:
     """Replace speech with dub audio; duck music against dub track.
     E3: speech_volume_expr = Voice-lane volume envelope (the dub is the voice)."""
@@ -496,7 +558,7 @@ def apply_dub_speech_mix(
     parts = [voice_split(f"[1:a]{voice_env}", ducks)]
     mix_inputs = ["[sp]"]
     if has_music:
-        parts.append(music_chain(2, L, V, FI, FO, music_window, "mv", music_volume_expr))
+        parts.append(music_chain(2, L, V, FI, FO, music_window, "mv", music_volume_expr, music_pan, music_pan_ch))
         music_fx(parts, track_fx)
         parts.append(
             f"[mv][sc]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[md]"
@@ -510,7 +572,11 @@ def apply_dub_speech_mix(
         at_ms = int(spec.get("at_ms", 0))
         vol = float(spec.get("volume", 0.8))
         label = f"s{i}"
-        parts.append(f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}{clip_fade(sfx_fx, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
+        fx_i = sfx_fx[i] if sfx_fx and i < len(sfx_fx) else None
+        pan_s = pan_filter(fx_i.get("pan") if fx_i else None, int(fx_i.get("pan_ch") or 2) if fx_i else 2)
+        parts.append(
+            f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}{clip_fade(sfx_fx, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}{pan_s}[{label}]"
+        )
         mix_inputs.append(clip_duck(parts, label, sfx_fx, i, ducks))
     mix_inputs = sfx_buses(parts, mix_inputs, len(sfx_specs), track_fx)
     n = len(mix_inputs)
@@ -591,8 +657,8 @@ def measure_segment_rms_db(video: Path, start_s: float, end_s: float) -> float:
     out = subprocess.check_output(
         [
             "ffmpeg",
-            "-v",
-            "error",
+            "-hide_banner",
+            "-nostats",
             "-ss",
             f"{start_s:.3f}",
             "-t",

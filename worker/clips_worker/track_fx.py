@@ -32,7 +32,10 @@ FX_LIMITS = {
     "makeup": (0, 24, 0),
     "limit": (-24, 0, -1),
     "lufs": (-36, -8, -16),
+    "deess": (0, 100, 50),
+    "vfxAmount": (0, 100, 50),
 }
+VFX_TYPES = frozenset({"echo", "reverb", "robot", "telephone"})
 EQ_LOW_HZ = 120
 EQ_HIGH_HZ = 8000
 EQ_MID_Q = 1
@@ -117,6 +120,27 @@ def normalize_track_fx_one(raw) -> dict | None:
         lufs = _clamp(raw.get("lufs"), FX_LIMITS["lufs"])
         if lufs is not None:
             out["lufs"] = _js_round(lufs)
+        deess = _clamp(raw.get("deess"), FX_LIMITS["deess"])
+        if deess is not None:
+            out["deess"] = _js_round(deess)
+        vfx = raw.get("vfx")
+        if isinstance(vfx, dict):
+            t = vfx.get("type")
+            if t in VFX_TYPES:
+                entry: dict = {"type": t}
+                if t != "telephone":
+                    amt = _clamp(vfx.get("amount"), FX_LIMITS["vfxAmount"])
+                    entry["amount"] = _js_round(amt if amt is not None else FX_LIMITS["vfxAmount"][2])
+                out["vfx"] = entry
+        if track == "voice":
+            pan = raw.get("pan")
+            if pan is not None:
+                try:
+                    p = int(round(float(pan)))
+                except (TypeError, ValueError):
+                    p = 0
+                if p != 0:
+                    out["pan"] = max(-100, min(100, p))
     else:
         col = raw.get("color")
         from clips_worker.color import is_identity_spec
@@ -129,7 +153,7 @@ def normalize_track_fx_one(raw) -> dict | None:
 
 
 def has_fx(fx) -> bool:
-    return bool(fx) and any(k in fx for k in ("nr", "eq", "comp", "limit", "lufs", "color"))
+    return bool(fx) and any(k in fx for k in ("nr", "eq", "comp", "limit", "lufs", "color", "deess", "vfx", "pan"))
 
 
 def normalize_track_fx(raw) -> list[dict]:
@@ -163,6 +187,34 @@ def _lin(db: float) -> float:
     return 10 ** (db / 20.0)
 
 
+def pan_gains(pan) -> tuple[float, float]:
+    p = max(-1.0, min(1.0, float(pan) / 100.0))
+    if p <= 0:
+        return 1.0, _r2(1.0 + p)
+    return _r2(1.0 - p), 1.0
+
+
+def _vfx_filters(vfx: dict) -> list[str]:
+    t = vfx.get("type")
+    if t not in VFX_TYPES:
+        return []
+    if t == "telephone":
+        return [
+            "highpass=f=300:p=2:t=q:w=0.7071",
+            "lowpass=f=3400:p=2:t=q:w=0.7071",
+        ]
+    amt = float(vfx.get("amount") if vfx.get("amount") is not None else FX_LIMITS["vfxAmount"][2])
+    m = max(0.0, min(1.0, amt / 100.0))
+    if t == "echo":
+        return [f"aecho=1:1:300|600:{_f(0.6 * m)}|{_f(0.3 * m)}"]
+    if t == "reverb":
+        ds = [_f(m * 0.5 * (0.8 ** (k - 1))) for k in range(1, 7)]
+        return [f"aecho=1:1:23|37|53|71|97|131:{'|'.join(ds)}"]
+    if t == "robot":
+        return [f"aeval=val(ch)*({_f(1 - m)}+{_f(m)}*sin(2*PI*60*t)):c=same"]
+    return []
+
+
 def pre_chain(fx: dict) -> list[str]:
     """Filters before the LUFS gain."""
     if not audio_fx_active(fx):
@@ -179,6 +231,8 @@ def pre_chain(fx: dict) -> list[str]:
         out.append(f"equalizer=f={int(eq.get('midHz') or FX_LIMITS['midHz'][2])}:t=q:w={EQ_MID_Q}:g={_f(eq['mid'], 2)}")
     if eq.get("high") is not None:
         out.append(f"treble=g={_f(eq['high'], 2)}:f={EQ_HIGH_HZ}:t=s:w=1")
+    if fx.get("deess") is not None:
+        out.append(f"deesser=i={_f(float(fx['deess']) / 100.0, 2)}:m=0.5:f=0.5:s=o")
     c = fx.get("comp")
     if c:
         out.append(
@@ -188,6 +242,9 @@ def pre_chain(fx: dict) -> list[str]:
             f":makeup={_f(min(64.0, _lin(float(c['makeup']))), 4)}:knee={_f(_lin(COMP_KNEE_DB), 4)}"
             ":detection=peak:link=maximum"
         )
+    vfx = fx.get("vfx")
+    if isinstance(vfx, dict):
+        out.extend(_vfx_filters(vfx))
     return out
 
 
@@ -247,12 +304,18 @@ def apply_voice_fx(video: Path, out: Path, fx: dict) -> bool:
     if fx.get("lufs") is not None:
         fc = f"[0:a]{','.join(pre) or 'anull'}[pre]"
         gain = lufs_gain_db(measure_lufs(["-i", str(video)], fc, "[pre]"), fx["lufs"])
-    chain = ",".join(pre + post_chain(fx, gain))
-    if not chain:
+    post = post_chain(fx, gain)
+    pan_tail = ""
+    if fx.get("pan"):
+        from clips_worker.audio_render import pan_filter, probe_audio_channels
+
+        pan_tail = pan_filter(int(fx["pan"]), probe_audio_channels(video))
+    chain = ",".join(pre + post) + pan_tail
+    if not chain.strip(","):
         return False
     subprocess.check_call(
         ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-map", "0:v:0", "-map", "0:a:0",
-         "-c:v", "copy", "-af", chain, "-c:a", "aac", "-b:a", "192k", str(out)]
+         "-c:v", "copy", "-af", chain, "-shortest", "-c:a", "aac", "-b:a", "192k", str(out)]
     )
     return True
 

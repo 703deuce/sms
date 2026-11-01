@@ -1,9 +1,12 @@
 'use client'
 
+import { useRef } from 'react'
 import { AUDIO_FADE_MAX_MS, DEFAULT_DUCK_DEPTH, DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/lib/clips/audio'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 import { fitClipToLength, fitMusicToLength, maxFadeMs, patchAudioClip, type AudioClipPatch } from '@/lib/clips/editor/audio-clip'
 import { AUDIO_KIND_LABEL, type AudioClipKind } from '@/lib/clips/editor/audio-kind'
+import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 
 const pct = (v: number) => `${Math.round(v * 100)}%`
 const sec = (ms: number) => (ms / 1000).toFixed(1)
@@ -39,8 +42,9 @@ export function AudioClipInspector({
   /** Detected tempo (display only). */
   bpm?: number | null
   readOnly?: boolean
-  onCommit: (next: ClipEditsV2) => void
+  onCommit: (next: ClipEditsV2, pushHistory?: boolean) => void
 }) {
+  const burst = useRef<CoalesceBurst | null>(null)
   const music = lane === 'music' ? edits.audio?.music : null
   const cue = lane === 'sfx' ? edits.audio?.sfx.find((s) => s.generationId === id) : null
   if (!music && !cue) return null
@@ -49,15 +53,29 @@ export function AudioClipInspector({
   const volume = music ? music.volume ?? DEFAULT_MUSIC_VOLUME : cue!.volume ?? DEFAULT_SFX_VOLUME
   const fadeIn = music ? music.fadeInMs ?? DEFAULT_MUSIC_FADE_IN_MS : cue!.fadeInMs ?? 0
   const fadeOut = music ? music.fadeOutMs ?? DEFAULT_MUSIC_FADE_OUT_MS : cue!.fadeOutMs ?? 0
+  const pan = music ? music.pan ?? 0 : cue!.pan ?? 0
   // Ducking: the bed always has a depth (0 = off); a clip is ducked only when it stores one (music
   // clips get it when placed, plain SFX / audio never by default).
   const duck = music ? music.duckDepth ?? DEFAULT_DUCK_DEPTH : cue!.duckDepth
   const ducked = music ? (duck ?? 0) > 0 : duck != null && duck > 0
   const loop = Boolean(music ? music.loop : cue!.loop)
   const fadeMaxS = (lenMs != null && lenMs > 0 ? maxFadeMs(lenMs) : AUDIO_FADE_MAX_MS) / 1000
-  const patch = (p: AudioClipPatch) => {
+  const scope = `${lane}:${id}`
+  const commitPatch = (p: AudioClipPatch, key: string) => {
+    const before = lane === 'music' ? JSON.stringify(edits.audio?.music) : JSON.stringify(cue)
     const next = patchAudioClip(edits, lane, id, p)
-    if (next) onCommit(next)
+    if (!next) return
+    const now = Date.now()
+    const k = `${scope}:${key}`
+    const push = coalescePush(burst.current, k, now, before)
+    burst.current = { key: k, at: now, sig: lane === 'music' ? JSON.stringify(next.audio?.music) : JSON.stringify(next.audio?.sfx.find((s) => s.generationId === id)) }
+    onCommit(next, push)
+  }
+  const patch = (p: AudioClipPatch) => commitPatch(p, Object.keys(p)[0] ?? 'patch')
+  const panLabel = (v: number) => {
+    if (v === 0) return 'C'
+    if (v < 0) return `L${Math.abs(v)}`
+    return `R${v}`
   }
   const label = 'text-[10px] text-muted-foreground'
   const num =
@@ -85,6 +103,19 @@ export function AudioClipInspector({
         />
         <span className="w-8 tabular-nums">{pct(volume)}</span>
       </label>
+      <div className="w-36">
+        <SliderRow
+          label="Pan"
+          value={pan}
+          min={-100}
+          max={100}
+          step={1}
+          disabled={readOnly}
+          format={panLabel}
+          onCommit={(v) => commitPatch({ pan: v }, 'pan')}
+          testId="audio-clip-pan"
+        />
+      </div>
       <label className="flex items-center gap-1">
         <span className={label}>Fade in (s)</span>
         <input
@@ -97,7 +128,7 @@ export function AudioClipInspector({
           aria-label="Fade in seconds"
           data-testid="audio-clip-fade-in"
           className={num}
-          onChange={(e) => patch({ fadeInMs: Number(e.target.value) * 1000 })}
+          onChange={(e) => commitPatch({ fadeInMs: Number(e.target.value) * 1000 }, 'fadeInMs')}
         />
       </label>
       <label className="flex items-center gap-1">
@@ -112,7 +143,7 @@ export function AudioClipInspector({
           aria-label="Fade out seconds"
           data-testid="audio-clip-fade-out"
           className={num}
-          onChange={(e) => patch({ fadeOutMs: Number(e.target.value) * 1000 })}
+          onChange={(e) => commitPatch({ fadeOutMs: Number(e.target.value) * 1000 }, 'fadeOutMs')}
         />
       </label>
       <label className="flex items-center gap-1" title="Lower this clip while someone is speaking (preview + export)">

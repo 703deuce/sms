@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from clips_worker.storage import download_object
+from clips_worker.media_sources import has_audio_stream
 
 AUDIO_FADE_MAX_MS = 10_000  # TS AUDIO_FADE_MAX_MS
 
@@ -21,6 +22,23 @@ def _sfx_trim(item: dict) -> tuple[int, int | None]:
     except (TypeError, ValueError):
         d = None
     return in_ms, (d if d is not None and d >= 100 else None)
+
+
+def _channels(path: Path) -> int:
+    from clips_worker.audio_render import probe_audio_channels
+
+    return probe_audio_channels(path)
+
+
+def _pan_meta(item: dict) -> dict:
+    try:
+        p = int(round(float(item.get("pan"))))
+    except (TypeError, ValueError):
+        return {}
+    if p == 0:
+        return {}
+    return {"pan": max(-100, min(100, p))}
+
 
 def _sfx_fx(item: dict) -> dict | None:
     """G2: per-clip fades / ducking (TS ClipAudioSfx.fadeInMs / fadeOutMs / duckDepth)."""
@@ -42,9 +60,10 @@ def _sfx_fx(item: dict) -> dict | None:
     # G2fix: a looping music clip (TS ClipAudioSfx.loop) — only with an explicit play length,
     # which bounds the `-stream_loop -1` input (atrim duration=durMs).
     loop = item.get("loop") is True and _sfx_trim(item)[1] is not None
-    if not fi and not fo and duck is None and not loop:
+    pan = _pan_meta(item)
+    if not fi and not fo and duck is None and not loop and not pan:
         return None
-    out = {"fade_in_ms": fi, "fade_out_ms": fo, "duck_depth": duck}
+    out = {"fade_in_ms": fi, "fade_out_ms": fo, "duck_depth": duck, **pan}
     if loop:
         out["loop"] = True
     return out
@@ -93,17 +112,23 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
         # E5: the user's own audio upload (media library), same mix / window / fades as AI music.
         up = (media or {}).get(str(music["uploadId"]))
         if up is not None:
-            music_path = up
-            music_meta = {
-                "volume": float(music.get("volume", 0.25)),
-                "duckDepth": float(music.get("duckDepth", 0.7)),
-                "fadeInMs": int(music.get("fadeInMs", 500)),
-                "fadeOutMs": int(music.get("fadeOutMs", 1000)),
-                "startMs": music.get("startMs"),
-                "endMs": music.get("endMs"),
-                "inMs": music.get("inMs"),
-                "loop": music.get("loop") is True,  # G2 Fit to length
-            }
+            if not has_audio_stream(up):
+                print(f"[audio] skip {music['uploadId']}: no audio stream", flush=True)
+            else:
+                music_path = up
+                music_meta = {
+                    "volume": float(music.get("volume", 0.25)),
+                    "duckDepth": float(music.get("duckDepth", 0.7)),
+                    "fadeInMs": int(music.get("fadeInMs", 500)),
+                    "fadeOutMs": int(music.get("fadeOutMs", 1000)),
+                    "startMs": music.get("startMs"),
+                    "endMs": music.get("endMs"),
+                    "inMs": music.get("inMs"),
+                    "loop": music.get("loop") is True,
+                    **_pan_meta(music),
+                }
+                if music_meta.get("pan") is not None:
+                    music_meta["pan_ch"] = _channels(up)
     elif music and music.get("generationId"):
         with conn.cursor() as cur:
             cur.execute('SELECT "storageKey" FROM ai_generations WHERE id=%s', (music["generationId"],))
@@ -121,7 +146,10 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
                 "endMs": music.get("endMs"),
                 "inMs": music.get("inMs"),
                 "loop": music.get("loop") is True,  # G2 Fit to length
+                **_pan_meta(music),
             }
+            if music_meta.get("pan") is not None:
+                music_meta["pan_ch"] = _channels(music_path)
 
     sfx_paths: list[tuple[Path, int, float]] = []
     sfx_ids: list[str] = []  # G1b3: parallel to sfx_paths (generationId → `sfx:<id>` envelope)
@@ -132,11 +160,18 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
         if item.get("uploadId"):
             up = (media or {}).get(str(item["uploadId"]))
             if up is not None:
+                if not has_audio_stream(up):
+                    print(f"[audio] skip {item.get('uploadId')}: no audio stream", flush=True)
+                    continue
+                ch = item.get("channel") if item.get("channel") in ("L", "R") else None
                 sfx_paths.append((up, int(item.get("atMs", 0)), float(item.get("volume", 0.8))))
                 sfx_ids.append(str(item.get("generationId") or ""))
                 sfx_trims.append(_sfx_trim(item))
-                sfx_channels.append(item.get("channel") if item.get("channel") in ("L", "R") else None)
-                sfx_fx.append(_with_play_len(_sfx_fx(item), up, sfx_trims[-1]))
+                sfx_channels.append(ch)
+                fx = _with_play_len(_sfx_fx(item), up, sfx_trims[-1])
+                if fx and fx.get("pan") is not None:
+                    fx["pan_ch"] = 1 if ch else _channels(up)
+                sfx_fx.append(fx)
             continue
         gid = item.get("generationId")
         if not gid:
@@ -153,6 +188,9 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
         sfx_trims.append(_sfx_trim(item))
         sfx_channels.append(item.get("channel") if item.get("channel") in ("L", "R") else None)
         sfx_fx.append(_with_play_len(_sfx_fx(item), local, sfx_trims[-1]))
+        if sfx_fx[-1] and sfx_fx[-1].get("pan") is not None:
+            ch = sfx_channels[-1]
+            sfx_fx[-1]["pan_ch"] = 1 if ch else _channels(local)
 
     studio_path = None
     studio_mix = None

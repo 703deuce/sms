@@ -1907,6 +1907,8 @@ def render_edited_clip(
             track_fx=track_fx,
             sfx_fx=sfx_fx,
             music_loop=music_loop,
+            music_pan=meta.get("pan"),
+            music_pan_ch=int(meta.get("pan_ch") or 2),
         )
         caption_src = mixed
     elif audio_assets and (music_path or sfx_paths):
@@ -1930,6 +1932,8 @@ def render_edited_clip(
             track_fx=track_fx,
             sfx_fx=sfx_fx,
             music_loop=music_loop,
+            music_pan=meta.get("pan"),
+            music_pan_ch=int(meta.get("pan_ch") or 2),
         )
         caption_src = mixed
 
