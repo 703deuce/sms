@@ -46,6 +46,7 @@ import type { LaneId } from '@/lib/clips/editor/timeline-lane-state'
 import { PropertiesPanel } from '@/components/clips/editor/properties-panel'
 import { ItemSpeedControl } from '@/components/clips/editor/timeline/item-speed-control'
 import { MainVideoTools, MediaSceneSplit } from '@/components/clips/editor/g4/video-tools'
+import { watchEditorMediaCors } from '@/components/clips/editor/g4/media-cors'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { sourceMsAtOutput, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
@@ -247,6 +248,8 @@ export function EditorShell({
   }, [])
   const openLayersTab = useCallback(() => selectPanel('layers'), [selectPanel])
 
+  // G4cfix2: every B2 medium on the editor route in CORS mode (+ recovery of pre-hydration failures).
+  useEffect(() => watchEditorMediaCors(typeof document === 'undefined' ? null : document.body), [])
   useEffect(() => {
     if (!EDITOR_RAIL_ITEMS.some((item) => item.id === panel)) {
       setPanel('transcript')

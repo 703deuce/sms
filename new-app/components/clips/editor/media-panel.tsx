@@ -44,11 +44,11 @@ function dur(ms: number | null | undefined): string {
 
 export function MediaThumb({ item, className = 'h-16 w-full' }: { item: ProjectMediaItem; className?: string }) {
   if (item.mediaType === 'image' && item.url) {
-    return <img src={item.url} {...corsMediaProps(item.url)} alt="" className={`${className} rounded object-cover`} draggable={false} />
+    return <img {...corsMediaProps(item.url)} src={item.url} alt="" className={`${className} rounded object-cover`} draggable={false} />
   }
   if (item.mediaType === 'video' && item.url) {
     // Poster frame straight from the signed URL (metadata + first frame only).
-    return <video src={`${item.url}#t=0.1`} {...corsMediaProps(item.url)} muted playsInline preload="metadata" className={`${className} rounded bg-black object-cover`} />
+    return <video {...corsMediaProps(item.url)} src={`${item.url}#t=0.1`} muted playsInline preload="metadata" className={`${className} rounded bg-black object-cover`} />
   }
   return (
     <div className={`${className} flex items-center justify-center rounded bg-muted text-muted-foreground`}>

@@ -15,6 +15,7 @@ import {
   type CoverUrlCache,
 } from '@/lib/clips/editor/cover-jobs'
 import { toast } from 'sonner'
+import { corsMediaProps, onMediaCorsError } from '@/components/clips/editor/g4/media-cors'
 
 type ThumbRow = {
   id: string
@@ -177,13 +178,16 @@ export function ThumbnailPanel({
             {t.downloadUrl && !imgFailed.has(t.id) ? (
               <img
                 key={t.downloadUrl}
+                {...corsMediaProps(t.downloadUrl)}
                 src={t.downloadUrl}
                 alt={t.titleText || 'Cover'}
                 loading="lazy"
                 decoding="async"
                 className={coverImageClass(t.aspect)}
                 data-testid="cover-img"
-                onError={() => {
+                onError={(e) => {
+                  // G4cfix2: a CORS failure first reloads the cover plain (same URL).
+                  if (onMediaCorsError(e.currentTarget)) return
                   if (!imgRetried.current.has(t.id)) {
                     imgRetried.current.add(t.id)
                     urlCache.current.delete(t.id)
