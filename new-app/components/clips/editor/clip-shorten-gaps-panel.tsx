@@ -87,8 +87,9 @@ export function ClipShortenGapsPanel({
         maxGapMs: settings.mode === 'between' ? Math.round(settings.maxGapSec * 1000) : undefined,
         targetGapMs,
         maxPlausibleGapMs,
+        rmsSamples,
       }),
-    [orderedWords, cutRanges, settings, targetGapMs, maxPlausibleGapMs],
+    [orderedWords, cutRanges, settings, targetGapMs, maxPlausibleGapMs, rmsSamples],
   )
 
   const activeHit = gapHits[cursor] ?? gapHits.find((h) => h.word.id === activeHitId) ?? null
@@ -153,6 +154,7 @@ export function ClipShortenGapsPanel({
           maxGapMs: settings.mode === 'between' ? Math.round(settings.maxGapSec * 1000) : undefined,
           targetGapMs,
           maxPlausibleGapMs,
+          rmsSamples,
         }).length
         toast.success(
           remaining === 0

@@ -31,12 +31,22 @@ export function TextVoiceoverSection({
   const [voiceStockId, setVoiceStockId] = useState(TTS_STOCK_VOICES[0]!.id)
   const [busy, setBusy] = useState<'preview' | 'place' | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const previewBlobRef = useRef<Blob | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const trimmed = text.trim().slice(0, TEXT_MAX_CHARS)
 
   useEffect(() => {
+    previewBlobRef.current = null
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+  }, [trimmed, voiceStockId])
+
+  useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
+      previewBlobRef.current = null
     }
   }, [previewUrl])
 
@@ -55,6 +65,7 @@ export function TextVoiceoverSection({
     setBusy('preview')
     try {
       const blob = await synthesize()
+      previewBlobRef.current = blob
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       const url = URL.createObjectURL(blob)
       setPreviewUrl(url)
@@ -73,7 +84,11 @@ export function TextVoiceoverSection({
     if (!trimmed) return
     setBusy('place')
     try {
-      const blob = previewUrl ? await fetch(previewUrl).then((r) => r.blob()) : await synthesize()
+      let blob = previewBlobRef.current
+      if (!blob) {
+        blob = await synthesize()
+        previewBlobRef.current = blob
+      }
       const snippet = trimmed.slice(0, 30).replace(/[^\w\s-]/g, '').trim() || 'clip'
       const file = new File([blob], `Voiceover – ${snippet}.mp3`, { type: 'audio/mpeg' })
       const uploaded = await uploadLibraryFiles([file])

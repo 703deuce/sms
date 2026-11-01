@@ -5,7 +5,7 @@ import { symmetricGapTrimMs } from '@/lib/clips/script-edl/word-adjust'
 import { snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 import { gapMsBetween, listGapHits, type GapFilterMode, type GapHit } from '@/lib/clips/script-editor/gap-hits'
-import { gapShortenCutRangeWithAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
+import { gapHitIsRmsQuiet, gapShortenCutRangeWithAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
 
 /** Source-ms cut range that shortens a pause between two word boundaries to targetGapMs. */
 export function gapShortenCutRange(
@@ -88,6 +88,7 @@ export function listClipGapHits(
     maxGapMs?: number
     targetGapMs: number
     maxPlausibleGapMs?: number
+    rmsSamples?: GapRmsSample[] | null
   },
 ): GapHit[] {
   const deleted = new Set<string>()
@@ -100,9 +101,11 @@ export function listClipGapHits(
     maxGapMs: opts.maxGapMs,
   })
   const plausible = opts.maxPlausibleGapMs ?? 15_000
-  return hits.filter(
-    (h) => h.gapMs <= plausible && !gapHitAlreadyCut(h, cutRanges, opts.targetGapMs),
-  )
+  return hits.filter((h) => {
+    if (h.gapMs > plausible) return false
+    if (gapHitAlreadyCut(h, cutRanges, opts.targetGapMs)) return false
+    return gapHitIsRmsQuiet(h.prevWord.t1Ms, h.word.t0Ms, opts.rmsSamples)
+  })
 }
 
 export function shortenAllClipGaps(
