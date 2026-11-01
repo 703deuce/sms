@@ -6,11 +6,13 @@ output length. It is centred on the cut, video only, and uses handle frames from
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import time
 from pathlib import Path
 
 from clips_worker.filtergraph import _escape_movie_path, canvas_bg, canvas_bg_flat
+from clips_worker.ffmpeg_util import probe_video_nb_frames, stderr_tail
 from clips_worker.motion import (
     MOTION_FPS,
     COVER_TRANSITIONS,
@@ -26,6 +28,27 @@ from clips_worker.motion import (
 )
 
 X264 = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
+
+_SHADER_WIN_RE = re.compile(r"win_shader_(\d+)\.mkv", re.I)
+
+
+def shader_rendered_window_filter(input_idx: int, n: int, w: int, h: int, w0: float, label: str) -> str:
+    fps = MOTION_FPS
+    return (
+        f"[{input_idx}:v]fps={fps},scale={w}:{h},setsar=1,format=gbrp,"
+        f"trim=end_frame={n},format=yuv420p,setpts=PTS-STARTPTS+{w0:.6f}/TB[{label}]"
+    )
+
+
+def _run_cut_transition_ffmpeg(cmd: list[str]) -> None:
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode == 0:
+        return
+    tail = stderr_tail(proc.stderr or proc.stdout or "", lines=25)
+    print(f"[clipper:transitions] ffmpeg_failed stderr_tail=\n{tail}", flush=True)
+    raise subprocess.CalledProcessError(
+        proc.returncode, cmd, output=proc.stdout, stderr=tail or f"ffmpeg exited {proc.returncode}",
+    )
 
 
 def probe_size_duration(video: Path) -> tuple[int, int, float]:
@@ -185,9 +208,7 @@ def build_cut_transition_cmd(
         lab = f"x{i}"
         if i in rendered:
             cmd += ["-i", str(rendered[i])]
-            parts.append(
-                f"[{idx}:v]format=gbrp,trim=end_frame={n},format=yuv420p,setpts=PTS-STARTPTS+{w0:.6f}/TB[{lab}]"
-            )
+            parts.append(shader_rendered_window_filter(idx, n, w, h, w0, lab))
             idx += 1
         else:
             a_s, b_s, a_pad, b_pad, span = _window_inputs(win, clip_start_ms, full_dur_s)
@@ -242,9 +263,53 @@ def apply_cut_transitions(
             f"renderer={renderer or 'none'} shader_ms={shader_ms}",
             flush=True,
         )
-    subprocess.check_call(
-        build_cut_transition_cmd(cut_mp4, full_render, out, windows, clip_start_ms, w, h, full_dur, rendered=rendered)
-    )
+    fb_meta: list[dict] = []
+    if render_meta is not None and render_meta.get("shader_fallback"):
+        fb_meta = list(render_meta["shader_fallback"])
+    for i in list(rendered.keys()):
+        need = int(windows[i]["frames"])
+        got = probe_video_nb_frames(rendered[i])
+        if got >= need:
+            continue
+        win = windows[i]
+        rendered.pop(i, None)
+        fallback_n += 1
+        entry = {"type": win["type"], "win": i, "reason": f"short_mkv:frames={got}<{need}"}
+        fb_meta.append(entry)
+        print(
+            f"[clipper:transitions] shader_fallback type={win['type']} win={i} reason={entry['reason']}",
+            flush=True,
+        )
+    if render_meta is not None and fb_meta:
+        render_meta["shader_fallback"] = fb_meta
+
+    while True:
+        cmd = build_cut_transition_cmd(
+            cut_mp4, full_render, out, windows, clip_start_ms, w, h, full_dur, rendered=rendered,
+        )
+        try:
+            _run_cut_transition_ffmpeg(cmd)
+            break
+        except subprocess.CalledProcessError as exc:
+            if not rendered:
+                raise
+            err = str(exc.stderr or "")
+            m = _SHADER_WIN_RE.search(err)
+            idx = int(m.group(1)) if m else min(rendered.keys())
+            if idx not in rendered:
+                idx = min(rendered.keys())
+            win = windows[idx]
+            rendered.pop(idx, None)
+            fallback_n += 1
+            entry = {"type": win["type"], "win": idx, "reason": "overlay_failed:crossfade_fallback"}
+            fb_meta.append(entry)
+            if render_meta is not None:
+                render_meta.setdefault("shader_fallback", []).extend([entry])
+            print(
+                f"[clipper:transitions] shader_fallback type={win['type']} win={idx} "
+                "reason=overlay_failed:crossfade_fallback",
+                flush=True,
+            )
     if not shader_n and not fallback_n:
         print(f"[clipper:transitions] cut windows={len(windows)}", flush=True)
     return True
