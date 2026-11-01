@@ -151,6 +151,11 @@ import {
   type KeyframeTarget,
 } from '@/lib/clips/editor/keyframes'
 import {
+  keyframeDiamondLeftPx,
+  keyframeLocalEditFromDiamondPx,
+  keyframeLocalEditFromPlayhead,
+} from '@/lib/clips/editor/keyframe-time'
+import {
   TRANSITION_INFO,
   applyBrollTransitionToAll,
   applyCutTransitionToAll,
@@ -1552,7 +1557,15 @@ export function Timeline({
 
 
   // ---- E3 keyframes / transitions -------------------------------------------
-  const startKfDrag = (e: React.PointerEvent, target: KeyframeTarget, tMs: number, origin: number) => {
+  const startKfDrag = (
+    e: React.PointerEvent,
+    target: KeyframeTarget,
+    tMs: number,
+    origin: number,
+    itemStartMs: number,
+    itemEndMs: number,
+    itemWidthPx: number,
+  ) => {
     if (e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
@@ -1565,15 +1578,16 @@ export function Timeline({
     if (additive) return
     if (!editable) return
     const originX = e.clientX
+    const x0 = keyframeDiamondLeftPx(edits, origin, itemStartMs, itemEndMs, itemWidthPx, tMs)
     const state = { toMs: tMs, moved: false }
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - originX
       if (!state.moved && Math.abs(dx) < DRAG_SLOP_PX) return
       state.moved = true
-      const raw = tMs + dx / Math.max(1e-6, pxPerMs)
-      // Snap to the playhead / whole frames.
-      const ph = playheadMs - origin
-      let t = Math.abs(raw - ph) * pxPerMs < SNAP_PX && snapOn ? ph : Math.round(raw / (1000 / 30)) * (1000 / 30)
+      let t = keyframeLocalEditFromDiamondPx(edits, origin, itemStartMs, itemEndMs, itemWidthPx, x0 + dx)
+      const ph = keyframeLocalEditFromPlayhead(edits, playheadMs, origin)
+      if (Math.abs(t - ph) * pxPerMs < SNAP_PX && snapOn) t = ph
+      else t = Math.round(t / (1000 / 30)) * (1000 / 30)
       t = Math.max(0, Math.round(t))
       state.toMs = t
       setKfDrag({ target, times: sel.times, delta: t - tMs })
@@ -2317,13 +2331,15 @@ export function Timeline({
                   className={`absolute top-1/2 z-10 size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-ew-resize border ${
                     isSelKf ? 'border-white bg-amber-300 ring-1 ring-amber-200' : 'border-black/60 bg-amber-400'
                   }`}
-                  style={{ left: (kfOrigin + shownT - geo.startMs) * pxPerMs }}
+                  style={{
+                    left: keyframeDiamondLeftPx(edits, kfOrigin, geo.startMs, geo.endMs, w, shownT),
+                  }}
                   data-testid="timeline-keyframe"
                   data-target={kfTarget ?? undefined}
                   data-t-ms={Math.round(t)}
                   data-selected={isSelKf ? 'true' : undefined}
                   title={`Keyframe ${((kfOrigin + t) / 1000).toFixed(2)} s — drag to move, Shift-click to add to the selection, Del to delete`}
-                  onPointerDown={(e) => startKfDrag(e, kfTarget!, t, kfOrigin)}
+                  onPointerDown={(e) => startKfDrag(e, kfTarget!, t, kfOrigin, geo.startMs, geo.endMs, w)}
                 />
               )
             })
@@ -2820,7 +2836,7 @@ export function Timeline({
           edits={edits}
           target={inspected.target}
           label={inspected.item.label}
-          localMs={Math.max(0, playheadMs - inspected.origin)}
+          localMs={keyframeLocalEditFromPlayhead(edits, playheadMs, inspected.origin)}
           onCommit={(next) => commit(next)}
           onSeekLocal={(t) => onSeekOutput(inspected.origin + t)}
           readOnly={!editable || refLocked(edits, inspected.item)}

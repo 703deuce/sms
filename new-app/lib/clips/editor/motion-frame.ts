@@ -5,6 +5,7 @@
  */
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { keyframeGlobalEditMs } from '@/lib/clips/editor/keyframe-time'
 import { LAYER_ANIM_IDENTITY, layerAnimAt } from '@/lib/clips/editor/layer-anim'
 import {
   IDENTITY_TRANSFORM,
@@ -48,6 +49,11 @@ export type FrameStyle = {
 
 const NONE: FrameStyle = { transform: '', opacity: 1, clipPath: '', filter: '', visibility: 'visible' }
 
+/** Edit ms to sample keyframes at (matches export when segment/global speed warps the clock). */
+function keyframeSampleOutMs(edits: ClipEditsV2, outMs: number): number {
+  return keyframeGlobalEditMs(edits, outMs)
+}
+
 /** CSS transform of a frame-sized layer, origin set by the caller (centre for video / B-roll). */
 export function keyframeTransform(t: LayerTransform): string {
   if (isIdentityTransform({ ...t, opacity: 100 })) return ''
@@ -83,14 +89,15 @@ export function mainFrame(
   boxW: number,
   preRollMs = 1500,
 ): MainFrame {
-  const t = tracksFor(edits, 'video').length ? layerTransformAt(edits, 'video', outMs) : IDENTITY_TRANSFORM
+  const kfMs = keyframeSampleOutMs(edits, outMs)
+  const t = tracksFor(edits, 'video').length ? layerTransformAt(edits, 'video', kfMs) : IDENTITY_TRANSFORM
   // G1a: crop (element-local clip) + flip (last transform function → applied first), as the export.
   const flip = layerFlip(edits, 'video')
   const kf: FrameStyle = {
     ...NONE,
     transform: join(keyframeTransform(t), flipCss(flip)),
     opacity: t.opacity / 100,
-    clipPath: cropClipPath(layerCropAt(edits, 'video', outMs)),
+    clipPath: cropClipPath(layerCropAt(edits, 'video', kfMs)),
   }
   const wins = cutTransitionWindows(tb.segs, tb.starts, edits.transitions)
   let cut: MainFrame['cut'] = null

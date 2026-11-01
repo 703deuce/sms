@@ -26,6 +26,7 @@ import {
   normalizeSegmentSpeeds,
   normalizeSmoothSlowmo,
   speedWarpPieces,
+  unwarpMs,
   warpedDurationMs,
   warpMs,
   type SegmentSpeed,
@@ -922,6 +923,25 @@ export function displayPositionMs(edits: ClipEditsV2, editMs: number): number {
   // TC1fix: + every insert / gap that plays before this point.
   const ins = edits.inserts?.length ? insertWindows(orderedKeepSegments(edits), edits.inserts) : []
   return Math.round(base / speed) + ins.reduce((s, w) => s + (w.baseMs <= editMs ? w.durMs : 0), 0)
+}
+
+/**
+ * Inverse of displayPositionMs (binary search on edit ms). Used when the transport scrubs in
+ * display/warped time while keyframes stay in edit ms.
+ */
+export function editMsAtDisplayMs(edits: ClipEditsV2, displayMs: number): number {
+  const target = Math.max(0, Math.round(displayMs))
+  if (!edits.segmentSpeeds?.length && (normalizeEditSpeed(edits.speed) ?? 1) === 1 && !(edits.inserts ?? []).length) {
+    return target
+  }
+  let lo = 0
+  let hi = outputDurationMs(edits)
+  for (let i = 0; i < 48; i++) {
+    const mid = (lo + hi) / 2
+    if (displayPositionMs(edits, mid) <= target) lo = mid
+    else hi = mid
+  }
+  return Math.round(lo)
 }
 
 const MIN_SEGMENT_MS = 80

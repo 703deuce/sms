@@ -21,7 +21,7 @@ import { patchClip } from '@/lib/clips-api'
 import { editorPreviewDurationMs, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { seedEditorExportTemplate } from '@/lib/clips/editor-export-template-seed'
 import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-log'
-import { keepSegments, outputDurationMs, displayDurationMs, displayPositionMs } from '@/lib/clips/edits'
+import { keepSegments, outputDurationMs, displayDurationMs, displayPositionMs, editMsAtDisplayMs } from '@/lib/clips/edits'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
@@ -1179,8 +1179,13 @@ export function EditorShell({
     (ms: number) => {
       const v = videoRef.current
       if (!v) return
+      const preview = editorPreviewEdits(edits, editorWords)
+      const editMs =
+        preview.segmentSpeeds?.length || preview.inserts?.length || (normalizeEditSpeed(preview.speed) ?? 1) !== 1
+          ? editMsAtDisplayMs({ ...preview, speed: edits.speed }, ms)
+          : ms
       const resume = keepPlayStateAcrossSeek(v)
-      seekToOutputMs(v, editorPreviewEdits(edits, editorWords), ms, mediaOffsetMs)
+      seekToOutputMs(v, preview, editMs, mediaOffsetMs)
       resume()
     },
     [edits, editorWords, mediaOffsetMs],
