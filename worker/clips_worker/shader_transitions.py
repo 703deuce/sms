@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import select
 import subprocess
 import struct
 import time
@@ -31,6 +32,56 @@ class ShaderUnavailable(Exception):
 
 class ShaderRenderError(Exception):
     pass
+
+
+def shader_window_timeout_sec() -> float:
+    raw = os.environ.get("SHADER_WINDOW_TIMEOUT_SEC", "120")
+    try:
+        return max(1.0, float(raw))
+    except ValueError:
+        return 120.0
+
+
+def _read_exact(stream, nbytes: int, deadline: float) -> bytes:
+    buf = bytearray()
+    fd = stream.fileno()
+    while len(buf) < nbytes:
+        if time.monotonic() >= deadline:
+            raise ShaderRenderError("wall_clock_timeout")
+        wait = min(1.0, max(0.0, deadline - time.monotonic()))
+        ready, _, _ = select.select([stream], [], [], wait)
+        if not ready:
+            continue
+        try:
+            chunk = os.read(fd, nbytes - len(buf))
+        except BlockingIOError:
+            continue
+        if not chunk:
+            raise ShaderRenderError("short_input")
+        buf.extend(chunk)
+    return bytes(buf)
+
+
+def _write_all(stream, data: bytes, deadline: float) -> None:
+    offset = 0
+    total = len(data)
+    fd = stream.fileno()
+    while offset < total:
+        if time.monotonic() >= deadline:
+            raise ShaderRenderError("wall_clock_timeout")
+        wait = min(1.0, max(0.0, deadline - time.monotonic()))
+        _, wready, _ = select.select([], [stream], [], wait)
+        if not wready:
+            continue
+        try:
+            n = os.write(fd, data[offset:])
+        except BlockingIOError:
+            continue
+        except BrokenPipeError as exc:
+            raise ShaderRenderError("encode_pipe_closed") from exc
+        if n == 0:
+            raise ShaderRenderError("encode_pipe_closed")
+        offset += n
 
 
 def _source(shader_type: str) -> str:
@@ -88,6 +139,10 @@ def render_window(
         stdin=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
     )
+    os.set_blocking(pa.stdout.fileno(), False)
+    os.set_blocking(pb.stdout.fileno(), False)
+    os.set_blocking(enc.stdin.fileno(), False)
+    deadline = time.monotonic() + shader_window_timeout_sec()
     prog = program(ctx, shader_type)
     ratio = w / h
     fbo = ctx.framebuffer(color_attachments=[ctx.texture((w, h), 3)])
@@ -100,10 +155,10 @@ def render_window(
     try:
         assert pa.stdout and pb.stdout and enc.stdin
         for k in range(n):
-            fa = pa.stdout.read(need)
-            fb = pb.stdout.read(need)
-            if not fa or not fb or len(fa) < need or len(fb) < need:
-                raise ShaderRenderError("short_input")
+            if time.monotonic() >= deadline:
+                raise ShaderRenderError("wall_clock_timeout")
+            fa = _read_exact(pa.stdout, need, deadline)
+            fb = _read_exact(pb.stdout, need, deadline)
             tex_a.write(fa)
             tex_b.write(fb)
             prog["uFrom"].value = 0
@@ -116,15 +171,26 @@ def render_window(
             fbo.use()
             vao.render()
             raw = fbo.read(components=3, alignment=1)
-            enc.stdin.write(bytes(raw[h - 1 :: -1]))
+            _write_all(enc.stdin, bytes(raw[h - 1 :: -1]), deadline)
         enc.stdin.close()
     finally:
-        for p in (pa, pb):
+        for p in (pa, pb, enc):
+            if p.stdin:
+                try:
+                    p.stdin.close()
+                except OSError:
+                    pass
             if p.stdout:
-                p.stdout.close()
+                try:
+                    p.stdout.close()
+                except OSError:
+                    pass
             p.kill()
-            p.wait()
-        enc.wait()
+            try:
+                p.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                p.wait(timeout=2)
         fbo.release()
         tex_a.release()
         tex_b.release()
