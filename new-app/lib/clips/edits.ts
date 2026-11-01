@@ -52,6 +52,7 @@ import { normalizeTrackMotion, type TrackMotion } from '@/lib/clips/editor/track
 import { normalizeLayerFx, type LayerFx } from '@/lib/clips/editor/layer-fx'
 import { normalizeMarkers, type Marker } from '@/lib/clips/editor/markers'
 import { normalizeDisabledItems, normalizeGroups, type ItemGroup } from '@/lib/clips/editor/item-flags'
+import { normalizeSpeakerNames } from '@/lib/clips/editor/transcript-edit'
 import { normalizeTimelineOpts, type TimelineOpts } from '@/lib/clips/editor/timeline-opts'
 
 export type CutRange = [number, number]
@@ -250,6 +251,8 @@ export type ClipEditsV2 = {
   timelineOpts?: TimelineOpts
   /** CV-09: fill behind fitted video (letterbox/pillarbox). Missing = legacy. */
   canvasBg?: CanvasBg
+  /** TBE (TB-08): Script speaker display names keyed by speaker label ('A','B'…). Editor-only; worker ignores. */
+  speakerNames?: Record<string, string>
 }
 
 export type ClipBounds = {
@@ -539,6 +542,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.groups?.length) payload.groups = null
   if (!edits.timelineOpts) payload.timelineOpts = null
   if (!edits.canvasBg) payload.canvasBg = null
+  if (!edits.speakerNames) payload.speakerNames = null
   return payload
 }
 
@@ -676,6 +680,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     disabledItems: normalizeDisabledItems(o.disabledItems),
     groups: normalizeGroups(o.groups),
     timelineOpts: normalizeTimelineOpts(o.timelineOpts),
+    speakerNames: normalizeSpeakerNames(o.speakerNames),
   }
   // G1c: take groups reference the normalized B-roll ids.
   const takes = normalizeTakes(o.takes, new Set((out.broll ?? []).map((b) => b.id)))

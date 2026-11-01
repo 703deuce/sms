@@ -1457,6 +1457,7 @@ export function EditorShell({
           onSetEdits={setEdits}
           angleSources={angleSources}
           onBuildFromTranscript={openBuildFromTranscript}
+          playheadSourceMs={playheadSourceMs}
         />
         </EditorPanelErrorBoundary>
       </div>
