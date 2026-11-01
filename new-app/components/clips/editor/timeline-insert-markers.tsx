@@ -1,47 +1,44 @@
 'use client'
 
-import { useMemo } from 'react'
-import { insertWindows, type ClipInsert } from '@/lib/clips/editor/inserts'
+import type { ExportTimeMap } from '@/lib/clips/editor/export-time'
 import { sourceById, type ClipMediaSource } from '@/lib/clips/editor/sources'
 
 /**
- * E5b: where inserted clips play, on the Video lane (edit timeline). Each marker shows the length
- * the insert adds (the video is that much longer; content to the right plays after it).
+ * E5b → TC2: inserted clips on the Video lane, drawn in EXPORT time. Each insert is a block as long
+ * as the time it adds (gap = black, freeze = hatched, clip = violet); items after it sit to its
+ * right, where they play in the export. The label names what was inserted and its length.
  */
 export function TimelineInsertMarkers({
-  tb,
-  inserts,
+  tmap,
   sources,
   pxPerMs,
 }: {
-  tb: { segs: [number, number][] }
-  inserts: ClipInsert[] | undefined
+  tmap: ExportTimeMap
   sources: ClipMediaSource[] | undefined
   pxPerMs: number
 }) {
-  const wins = useMemo(() => insertWindows(tb.segs, inserts), [tb, inserts])
-  if (!wins.length) return null
-  // Several inserts at one point share one marker.
-  const groups = new Map<number, typeof wins>()
-  for (const w of wins) groups.set(w.baseMs, [...(groups.get(w.baseMs) ?? []), w])
+  if (!tmap.wins.length) return null
   return (
     <>
-      {[...groups.entries()].map(([baseMs, ws]) => {
-        const addMs = ws.reduce((s, w) => s + w.durMs, 0)
-        const labels = ws.map((w) => (w.freeze ? 'Freeze frame' : w.gap ? 'Gap' : sourceById(sources, w.sourceId)?.label ?? 'Clip')).join(', ')
+      {tmap.wins.map((w) => {
+        const label = w.freeze ? 'Freeze frame' : w.gap ? 'Gap' : sourceById(sources, w.sourceId)?.label ?? 'Clip'
+        const width = Math.max(3, w.durMs * pxPerMs)
         return (
           <div
-            key={`ins${baseMs}`}
-            className="pointer-events-none absolute top-0 z-[17] flex h-full -translate-x-1/2 flex-col items-center"
-            style={{ left: baseMs * pxPerMs }}
-            title={`Inserted: ${labels} (+${(addMs / 1000).toFixed(1)} s)`}
+            key={`ins${w.id}`}
+            className={`pointer-events-none absolute inset-y-0 z-[17] flex items-start overflow-hidden rounded-sm border ${
+              w.gap ? 'border-zinc-500 bg-black' : w.freeze ? 'border-sky-400 bg-sky-900/80' : 'border-violet-400 bg-violet-700/80'
+            }`}
+            style={{ left: w.startMs * pxPerMs, width }}
+            title={`Inserted: ${label} (+${(w.durMs / 1000).toFixed(1)} s) — adjust under Media → Inserted clips`}
             data-testid="timeline-insert-marker"
+            data-gap={w.gap ? 'true' : undefined}
+            data-export-start-ms={w.startMs}
+            data-dur-ms={w.durMs}
           >
-            <span className="whitespace-nowrap rounded-sm bg-violet-600 px-1 text-[9px] leading-[12px] text-white shadow" data-testid="timeline-insert-label">
-              {/* TC1fix: name what was inserted (Gap / Freeze / clip) next to the length it adds. */}
-              {ws.length === 1 ? `${labels} ` : ''}+{(addMs / 1000).toFixed(1)}s
+            <span className="m-0.5 whitespace-nowrap rounded-sm bg-violet-600 px-1 text-[9px] leading-[12px] text-white shadow" data-testid="timeline-insert-label">
+              {label} +{(w.durMs / 1000).toFixed(1)}s
             </span>
-            <span className="w-0.5 flex-1 bg-violet-500" />
           </div>
         )
       })}

@@ -173,7 +173,10 @@ export function ColorPanel({
   const scopeKey =
     target.kind === 'video' ? 'video' : target.kind === 'segment' ? `seg:${target.fromMs}-${target.toMs}` : `${target.kind}:${target.id}`
   /** `key` = the slider; a burst of keyboard steps / releases on one slider is one undo step. */
+  /** TC2: the last committed spec — a slider's trailing value report after release is not a new audition. */
+  const committedSig = useRef<string | null>(null)
   const commit = (s: ColorSpec | null, key?: string) => {
+    committedSig.current = s ? JSON.stringify(s) : null
     onLive?.(null)
     const next = withSpec(edits, target, s)
     if (!key) {
@@ -187,7 +190,11 @@ export function ColorPanel({
     burst.current = { key: k, at: now, sig: JSON.stringify(specFor(next, target)) }
     onEdits(next, push)
   }
-  const live = (s: ColorSpec) => onLive?.(withSpec(edits, target, s))
+  const live = (s: ColorSpec) => {
+    if (committedSig.current !== null && JSON.stringify(s) === committedSig.current) return onLive?.(null)
+    committedSig.current = null
+    onLive?.(withSpec(edits, target, s))
+  }
   const setAdj = (k: ColorAdjustKey, v: number) => ({ ...spec, adjust: { ...(spec.adjust ?? {}), [k]: v } })
   const title =
     target.kind === 'video'
