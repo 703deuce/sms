@@ -36,7 +36,8 @@ import {
   type Pt,
   type Rect,
 } from '@/lib/clips/editor/canvas-geometry'
-import { layerCropAt, layerFlip, mediaToScreenCrop, screenToMediaCrop, setCropAt } from '@/lib/clips/editor/layer-props'
+import { layerCropAt, layerFlip, mediaToScreenCrop, screenToMediaCrop, setCropAt, setLayerFlip } from '@/lib/clips/editor/layer-props'
+import { rotateBy90 } from '@/lib/clips/editor/canvas-ops'
 
 export type CanvasLayerDom = {
   target: KeyframeTarget
@@ -429,16 +430,54 @@ export function CanvasSelectionOverlay({
             )
           })
         : null}
-      {quad && canEdit && media ? (
-        <button
-          type="button"
-          className="pointer-events-auto absolute rounded bg-black/70 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-black/90"
-          style={{ left: Math.max(4, Math.min(W - 60, quadBounds(quad).x)), top: Math.min(H - 22, quadBounds(quad).y + quadBounds(quad).h + 6) }}
-          onClick={() => onCropModeChange(!cropMode)}
-          data-testid="canvas-crop-toggle"
+      {quad && canEdit && selected ? (
+        // TC4a (CV-15): floating selection toolbar above the selected layer (crop, rotate, flip, reset).
+        <div
+          className="pointer-events-auto absolute flex items-center gap-0.5 rounded-md bg-black/80 p-0.5 text-[11px] font-medium text-white shadow-lg ring-1 ring-white/15"
+          style={{
+            left: Math.max(4, Math.min(W - 230, quadBounds(quad).x)),
+            top: quadBounds(quad).y > 34 ? quadBounds(quad).y - 30 : Math.min(H - 26, quadBounds(quad).y + quadBounds(quad).h + 6),
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          role="toolbar"
+          aria-label="Selected layer"
+          data-testid="canvas-float-toolbar"
         >
-          {showCrop ? 'Done' : 'Crop'}
-        </button>
+          {media ? (
+            <button type="button" className="rounded px-1.5 py-0.5 hover:bg-white/15" onClick={() => onCropModeChange(!cropMode)} data-testid="canvas-crop-toggle">
+              {showCrop ? 'Done' : 'Crop'}
+            </button>
+          ) : null}
+          <button type="button" className="rounded px-1.5 py-0.5 hover:bg-white/15" title="Rotate 90° left" onClick={() => onCommit(rotateBy90(baseRef.current, selected, -1), true)} data-testid="canvas-tb-rotate-left">
+            ↺
+          </button>
+          <button type="button" className="rounded px-1.5 py-0.5 hover:bg-white/15" title="Rotate 90° right" onClick={() => onCommit(rotateBy90(baseRef.current, selected, 1), true)} data-testid="canvas-tb-rotate-right">
+            ↻
+          </button>
+          {media ? (
+            <>
+              <button type="button" className="rounded px-1.5 py-0.5 hover:bg-white/15" title="Flip horizontal" onClick={() => onCommit(setLayerFlip(baseRef.current, selected, 'h', !layerFlip(baseRef.current, selected).h), true)} data-testid="canvas-tb-flip-h">
+                ⇋
+              </button>
+              <button type="button" className="rounded px-1.5 py-0.5 hover:bg-white/15" title="Flip vertical" onClick={() => onCommit(setLayerFlip(baseRef.current, selected, 'v', !layerFlip(baseRef.current, selected).v), true)} data-testid="canvas-tb-flip-v">
+                ⇵
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
+            className="rounded px-1.5 py-0.5 hover:bg-white/15"
+            title="Reset position, size, rotation and opacity"
+            onClick={() => {
+              const e = baseRef.current
+              const keep = (e.keyframes ?? []).filter((k) => !(k.target === selected && ['x', 'y', 'scale', 'rotation', 'opacity'].includes(k.prop)))
+              onCommit({ ...e, keyframes: keep.length ? keep : undefined }, true)
+            }}
+            data-testid="canvas-tb-reset"
+          >
+            Reset
+          </button>
+        </div>
       ) : null}
       {editing ? (
         <textarea
