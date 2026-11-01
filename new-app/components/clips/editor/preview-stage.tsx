@@ -970,8 +970,8 @@ export function PreviewStage({
   // when B-roll covers the whole frame (no template / fit_top / headline band); else text on top.
   const underPassList = useMemo(() => {
     if (compositePreview || templatePreview || fitTopPreview || headlineBandTopFrac > 0) return []
-    return underPasses(edits as ClipEditsV2, (edits.broll ?? []).map((b) => b.id))
-  }, [edits, compositePreview, templatePreview, fitTopPreview, headlineBandTopFrac])
+    return underPasses(lookEdits as ClipEditsV2, (lookEdits.broll ?? []).map((b) => b.id))
+  }, [lookEdits, compositePreview, templatePreview, fitTopPreview, headlineBandTopFrac])
   const underZ = useMemo(() => {
     const m: Record<string, number> = {}
     underPassList.forEach((p, i) => {
@@ -982,16 +982,16 @@ export function PreviewStage({
   const underZRef = useRef(underZ)
   underZRef.current = underZ
   // G3b: workspace fonts used by text items → metrics + JASSUB URLs registered before the build.
-  const usesUserFonts = (edits.textItems ?? []).some((t) => String(t.style?.font ?? '').startsWith('user:'))
+  const usesUserFonts = (lookEdits.textItems ?? []).some((t) => String(t.style?.font ?? '').startsWith('user:'))
   const userFonts = useWorkspaceFonts(usesUserFonts)
   const libassScripts = useMemo(() => {
     if (!libassWanted || libassFailed) return null
     try {
-      if (usesUserFonts) registerFontsFromItems(edits.textItems)
-      const mode = edits.layout?.mode ?? 'speaker_follow'
+      if (usesUserFonts) registerFontsFromItems(lookEdits.textItems)
+      const mode = lookEdits.layout?.mode ?? 'speaker_follow'
       return buildPreviewScripts({
-        edits: edits as unknown as Record<string, unknown>,
-        words: edits.captions?.enabled === false ? [] : captionWords,
+        edits: lookEdits as unknown as Record<string, unknown>,
+        words: lookEdits.captions?.enabled === false ? [] : captionWords,
         playW: templatePreview?.playW ?? libassPlay.width,
         playH: templatePreview?.playH ?? libassPlay.height,
         durationMs: Math.max(1, previewOutDurMs),
@@ -1009,7 +1009,7 @@ export function PreviewStage({
       console.warn('[clipper:preview] libass_scripts_fail', err)
       return null
     }
-  }, [libassWanted, libassFailed, edits, edits.layerFx, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions, underPassList, usesUserFonts, userFonts.version])
+  }, [libassWanted, libassFailed, lookEdits, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions, underPassList, usesUserFonts, userFonts.version])
   const onLibassStatus = useCallback<LibassStatusFn>((key, status, info) => {
     setLibassStatus((prev) => (prev[key] === status ? prev : { ...prev, [key]: status }))
     logEditorDecision('preview_ready', { renderer: 'libass', layer: key, status, ...info })

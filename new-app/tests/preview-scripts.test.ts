@@ -31,6 +31,30 @@ describe('CV-17c preview scripts (text fx partition)', () => {
     expect(scripts.fx![0]!.ass).toContain('Fx')
   })
 
+  it('audition lookEdits: layerFx only in live preview edits splits fx[] off main text', () => {
+    const item = newTextItem('t1', 0, 20_000, 'basic', 'Audition')
+    const committed = normalizeEdits({ ...defaultEdits(bounds), textItems: [item] }, bounds)
+    expect(committed.layerFx).toBeFalsy()
+    const lookEdits = normalizeEdits(
+      {
+        ...committed,
+        layerFx: [{ target: 'text:t1', mask: { shape: 'ellipse', x: 50, y: 50, w: 15, h: 10, rot: 0, feather: 0 } }],
+      },
+      bounds,
+    )
+    const scripts = buildPreviewScripts({
+      edits: lookEdits as unknown as Record<string, unknown>,
+      words: [],
+      playW: 1080,
+      playH: 1920,
+      durationMs: 20_000,
+    })
+    expect(scripts.fx).toHaveLength(1)
+    expect(scripts.fx![0]!.id).toBe('t1')
+    expect(scripts.fx![0]!.ass).toContain('Audition')
+    expect(scripts.text).toBeNull()
+  })
+
   it('keeps a single plain text script when no fx rows', () => {
     const edits = normalizeEdits({ ...defaultEdits(bounds), textItems: [newTextItem('a', 0, 20_000)] }, bounds)
     const scripts = buildPreviewScripts({
