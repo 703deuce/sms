@@ -146,7 +146,7 @@ import {
   autoscrollLeftForPlayhead,
   fitPxPerSec,
   initialPxPerSec,
-  isTextEntryTarget,
+  isFormControlTarget,
   pxPerSecToSlider,
   readablePxPerSec,
   sliderToPxPerSec,
@@ -471,7 +471,7 @@ export function Timeline({
         !e.metaKey &&
         !e.ctrlKey &&
         !e.altKey &&
-        !isTextEntryTarget(e.target)
+        !isFormControlTarget(e.target)
       ) {
         e.preventDefault()
         zoomKeysRef.current.split()
@@ -479,7 +479,7 @@ export function Timeline({
       }
       // G1b: Ctrl/Cmd+B, clipboard, in/out, jumps, help from anywhere (text fields keep their keys;
       // Ctrl+C / X with a text selection on the page stays a normal text copy).
-      const g1b = isTextEntryTarget(e.target) ? null : timelineCommandFor(e)
+      const g1b = isFormControlTarget(e.target) ? null : timelineCommandFor(e)
       if (
         g1b &&
         (GLOBAL_COMMANDS.has(g1b) || (g1b === 'split' && (e.metaKey || e.ctrlKey) && zoomKeysRef.current.canSplit)) &&
@@ -491,13 +491,13 @@ export function Timeline({
         }
       }
       // G1b2: live multicam switching — keys 1–9 pick an angle at the playhead (also while playing).
-      const ak = isTextEntryTarget(e.target) ? null : angleKey(e)
+      const ak = isFormControlTarget(e.target) ? null : angleKey(e)
       if (ak && angleRef.current(ak)) {
         e.preventDefault()
         return
       }
       const action = timelineZoomKeyAction(e)
-      if (!action || isTextEntryTarget(e.target)) return
+      if (!action || isFormControlTarget(e.target)) return
       e.preventDefault()
       if (action === 'in') zoomKeysRef.current.zoomIn()
       else if (action === 'out') zoomKeysRef.current.zoomOut()
@@ -1299,8 +1299,7 @@ export function Timeline({
 
   // ---- keyboard (focus inside the timeline) ---------------------------------
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const t = e.target as HTMLElement
-    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
+    if (isFormControlTarget(e.target)) return
     const mod = e.metaKey || e.ctrlKey
     const k = e.key
     // G1b: clipboard, Ctrl+B, in/out, Home/End, ↑/↓ edit points, shortcuts sheet.

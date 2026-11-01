@@ -128,4 +128,4 @@ export function layerMedia(layer: Element | null): Media[] {
 }
 
 /** The stage's main <video> (scopes / Auto / eyedropper read its frame at the playhead). */
-export const stageFrame: { video: HTMLVideoElement | null; srcMs: number; outMs: number } = { video: null, srcMs: 0, outMs: 0 }
+export const stageFrame: { video: HTMLVideoElement | null; srcMs: number; outMs: number; offsetMs?: number } = { video: null, srcMs: 0, outMs: 0 }

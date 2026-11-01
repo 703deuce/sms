@@ -21,7 +21,17 @@ import {
 } from '@/lib/clips/editor/motion-schema'
 import { hasColor, normalizeColorEdits, type ClipColorEdits } from '@/lib/clips/editor/color'
 import { normalizeAdjustLayers, type AdjustLayer } from '@/lib/clips/editor/adjust-layers'
-import { normalizeSegmentSpeeds, speedWarpPieces, warpedDurationMs, warpMs, type SegmentSpeed } from '@/lib/clips/editor/speed'
+import {
+  normalizeSegmentSpeeds,
+  normalizeSmoothSlowmo,
+  speedWarpPieces,
+  warpedDurationMs,
+  warpMs,
+  type SegmentSpeed,
+  type SmoothSlowmo,
+} from '@/lib/clips/editor/speed'
+import { normalizeStabilize, type StabilizeRange } from '@/lib/clips/editor/stabilize'
+import { normalizeBlurRegions, type BlurRegion } from '@/lib/clips/editor/blur-regions'
 import { normalizeTextItems, type TextItem } from '@/lib/clips/editor/text-items'
 import { normalizeCaptionLinesEdits, type CaptionLine } from '@/lib/clips/editor/caption-lines'
 import {
@@ -201,6 +211,12 @@ export type ClipEditsV2 = {
   layerFx?: LayerFx[]
   /** E4 per-item speed 0.25–4× over SOURCE ranges (pitch-preserved; export post-step warp). */
   segmentSpeeds?: SegmentSpeed[]
+  /** G4c: smooth slow-mo for slowed items (export: frame blending or optical flow, gated). */
+  smoothSlowmo?: SmoothSlowmo
+  /** G4c: stabilized SOURCE ranges (export: vidstab two-pass / deshake) — lib/clips/editor/stabilize.ts. */
+  stabilize?: StabilizeRange[]
+  /** G4c: blur regions on the main video (output ms; manual mask or auto faces) — blur-regions.ts. */
+  blurRegions?: BlurRegion[]
   /** E5 media this clip uses besides the main source (uploads, Rooms angles). */
   sources?: ClipMediaSource[]
   /** E5 Video-lane segments from another source (MAIN SOURCE ms spans; transcript stays main). */
@@ -490,6 +506,9 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.adjustLayers?.length) payload.adjustLayers = null
   if (!edits.layerFx?.length) payload.layerFx = null
   if (!edits.segmentSpeeds?.length) payload.segmentSpeeds = null
+  if (!edits.smoothSlowmo) payload.smoothSlowmo = null
+  if (!edits.stabilize?.length) payload.stabilize = null
+  if (!edits.blurRegions?.length) payload.blurRegions = null
   if (!edits.sources?.length) payload.sources = null
   if (!edits.sourceSegments?.length) payload.sourceSegments = null
   if (!edits.multicam) payload.multicam = null
@@ -612,6 +631,9 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     adjustLayers: normalizeAdjustLayers(o.adjustLayers),
     layerFx: normalizeLayerFx(o.layerFx),
     segmentSpeeds: normalizeSegmentSpeeds(o.segmentSpeeds),
+    smoothSlowmo: normalizeSmoothSlowmo(o.smoothSlowmo),
+    stabilize: normalizeStabilize(o.stabilize),
+    blurRegions: normalizeBlurRegions(o.blurRegions),
     ...normalizeSourceFields(o),
     vocabApplied:
       typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
@@ -711,6 +733,9 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     !edits.adjustLayers?.length &&
     !edits.layerFx?.length && // G4b: layer effects change the frames.
     !edits.segmentSpeeds?.length &&
+    // G4c: stabilize / blur regions change the frames (smooth slow-mo only acts with speeds).
+    !edits.stabilize?.length &&
+    !edits.blurRegions?.length &&
     // E5: other sources replace frames / sound.
     !edits.sourceSegments?.length &&
     // E5b: inserts lengthen the video.

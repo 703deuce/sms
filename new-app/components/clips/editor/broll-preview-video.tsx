@@ -1,5 +1,6 @@
 'use client'
 
+import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { brollCoverCropStyle } from '@/lib/clips/broll-cover-crop'
 
@@ -45,6 +46,9 @@ export function BrollPreviewVideo({
         elRef.current = el
         videoRef(el)
       }}
+      // G4c: CORS mode from the first fetch (the WebGL grade / color match read B-roll pixels);
+      // hosts known to send no Access-Control-Allow-Origin (stock CDNs) load plain.
+      {...corsMediaProps(src)}
       src={src}
       className={className}
       style={{ ...cropStyle, ...style }}

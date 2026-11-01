@@ -4,19 +4,19 @@ import { jsonError } from '@/lib/server/api-error'
 import { listLuts, LutUploadError, uploadLut } from '@/lib/server/clips/luts'
 import { LUT_MAX_BYTES } from '@/lib/clips/luts-shared'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { workspaceListResponse } from '@/lib/server/clips/list-route'
 
 /**
  * G4a workspace LUTs. Manual import only (no AI, no credits).
  * GET  → { luts: WorkspaceLut[] }
  * POST multipart `file` (.cube 3D, ≤ 12 MB) → { lut }
  */
+// G4c: always per request (never a build-time snapshot of this list).
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
-  try {
-    const workspaceId = await resolveWorkspaceId()
-    return NextResponse.json({ data: { luts: await listLuts(workspaceId) } })
-  } catch (err) {
-    return jsonError(err, 400)
-  }
+  // G4c: no 400 on editor load — see workspaceListResponse.
+  return workspaceListResponse('luts', 'luts', async () => listLuts(await resolveWorkspaceId()))
 }
 
 export async function POST(request: Request) {

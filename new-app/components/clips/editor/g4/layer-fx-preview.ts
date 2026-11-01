@@ -8,6 +8,7 @@
  *   key      WebGL mirror (grade-gl.ts) — wired by PreviewStage through GradePreview.apply.
  */
 import { BLEND_CSS, maskAlpha, maskGeomAt, MASK_STEP_MS, type LayerFx, type LayerMask } from '@/lib/clips/editor/layer-fx'
+import { BLUR_UNIT } from '@/lib/clips/editor/blur-regions'
 
 const MAX_MASKS = 64
 const masks = new Map<string, string>()
@@ -78,3 +79,33 @@ export function reversedMediaTime(inMs: number, ownMs: number, localMs: number):
 }
 
 export { MASK_STEP_MS }
+
+/**
+ * G4c blur region on the main video (export: blur_regions.py): a stage-sized div above the main
+ * layer with backdrop-filter blur (sigma = amount/100 × BLUR_UNIT × displayed short side, the
+ * export's unit on its own frame) masked by the same low-res grid as the export's alphamerge.
+ * `region` null hides it. Faces mode previews the manual mask (the detector runs on export).
+ */
+export function applyBlurRegion(
+  el: HTMLElement | null,
+  region: { amount: number; mask: LayerMask } | null,
+  localMs: number,
+  W: number,
+  H: number,
+  boxShortPx: number,
+) {
+  if (!el) return
+  if (!region) {
+    if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden'
+    return
+  }
+  if (el.style.visibility !== 'visible') el.style.visibility = 'visible'
+  const sigma = Math.round((region.amount / 100) * BLUR_UNIT * Math.max(1, boxShortPx) * 100) / 100
+  const bf = `blur(${sigma}px)`
+  const st = el.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }
+  if (st.backdropFilter !== bf) {
+    st.backdropFilter = bf
+    st.webkitBackdropFilter = bf
+  }
+  setMask(el, maskUrl(region.mask, localMs, W, H))
+}

@@ -549,5 +549,25 @@ export const COLOR_KEY_PROPS = {
 } as const
 export type ColorKeyProp = keyof typeof COLOR_KEY_PROPS
 export const COLOR_KEY_PROP_LIST = Object.keys(COLOR_KEY_PROPS) as ColorKeyProp[]
+/** G4c: keyframable effect amounts → spec.fx (color_grade.FX_KEY_PROPS). */
+export const FX_KEY_PROPS = {
+  fxSharpen: 'sharpen',
+  fxVignette: 'vignette',
+  fxGrain: 'grain',
+  fxBlur: 'blur',
+  fxGlow: 'glow',
+  fxRgbsplit: 'rgbsplit',
+  fxGlitch: 'glitch',
+  fxShake: 'shake',
+  fxFlicker: 'flicker',
+  fxScanlines: 'scanlines',
+} as const satisfies Record<string, FxAnyKey>
+export type FxKeyProp = keyof typeof FX_KEY_PROPS
+export const FX_KEY_QUANT = 5
+/** Keyframed effect amount → 0..100 in FX_KEY_QUANT steps (color_grade.quant_fx). */
+export function quantFx(v: number): number {
+  const n = Math.max(0, Math.min(100, v))
+  return Math.floor(n / FX_KEY_QUANT + 0.5) * FX_KEY_QUANT
+}
 
 export const stepOf = (localMs: number) => Math.floor(localMs / COLOR_STEP_MS)

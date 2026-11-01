@@ -40,8 +40,24 @@ export const COLOR_PROPS = [
   'cHighlights',
   'cShadows',
   'cVibrance',
+  // G4c: keyframable effect amounts (spec.fx, 0..100), quantized to FX_KEY_QUANT by the color pass.
+  'fxSharpen',
+  'fxVignette',
+  'fxGrain',
+  'fxBlur',
+  'fxGlow',
+  'fxRgbsplit',
+  'fxGlitch',
+  'fxShake',
+  'fxFlicker',
+  'fxScanlines',
 ] as const
 export type ColorKeyProp = (typeof COLOR_PROPS)[number]
+export const ADJUST_KEY_PROPS = COLOR_PROPS.slice(0, 9) as readonly ColorKeyProp[]
+export const FX_PROPS = COLOR_PROPS.slice(9) as readonly ColorKeyProp[]
+export function isFxProp(p: string): boolean {
+  return p.startsWith('fx') && (COLOR_PROPS as readonly string[]).includes(p)
+}
 export function isColorProp(p: string): p is ColorKeyProp {
   return (COLOR_PROPS as readonly string[]).includes(p)
 }
@@ -92,6 +108,16 @@ export const PROP_SPECS: Record<KeyProp, PropSpec> = {
   cHighlights: { label: 'Highlights', unit: '', min: -100, max: 100, def: 0, step: 1 },
   cShadows: { label: 'Shadows', unit: '', min: -100, max: 100, def: 0, step: 1 },
   cVibrance: { label: 'Vibrance', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  fxSharpen: { label: 'Sharpen', unit: '', min: 0, max: 100, def: 0, step: 1 },
+  fxVignette: { label: 'Vignette', unit: '', min: 0, max: 100, def: 0, step: 1 },
+  fxGrain: { label: 'Grain', unit: '', min: 0, max: 100, def: 0, step: 1 },
+  fxBlur: { label: 'Blur', unit: '', min: 0, max: 100, def: 0, step: 1 },
+  fxGlow: { label: 'Glow', unit: '', min: 0, max: 100, def: 0, step: 1 },
+  fxRgbsplit: { label: 'RGB split', unit: '', min: 0, max: 100, def: 0, step: 1 },
+  fxGlitch: { label: 'Glitch', unit: '', min: 0, max: 100, def: 0, step: 1 },
+  fxShake: { label: 'Shake', unit: '', min: 0, max: 100, def: 0, step: 1 },
+  fxFlicker: { label: 'Flicker', unit: '', min: 0, max: 100, def: 0, step: 1 },
+  fxScanlines: { label: 'Scanlines', unit: '', min: 0, max: 100, def: 0, step: 1 },
 }
 
 /** G1a: at least this much of the layer stays visible per axis (L + R and T + B are clamped). */

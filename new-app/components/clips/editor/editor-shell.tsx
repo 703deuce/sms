@@ -44,6 +44,7 @@ import type { KeyframeTarget } from '@/lib/clips/editor/keyframes'
 import type { LaneId } from '@/lib/clips/editor/timeline-lane-state'
 import { PropertiesPanel } from '@/components/clips/editor/properties-panel'
 import { ItemSpeedControl } from '@/components/clips/editor/timeline/item-speed-control'
+import { MainVideoTools } from '@/components/clips/editor/g4/video-tools'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { sourceMsAtOutput, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
@@ -77,6 +78,7 @@ import { clipStyleSettingsFromEdits, type BrandTemplateSettings } from '@/lib/cl
 import { saveClipBrandTemplate } from '@/lib/clips-api'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
+import { isFormControlTarget } from '@/lib/clips/editor/timeline-zoom'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
 import { EditorVersionsMenu, EditorLayoutMenu, type EditVersionRow } from '@/components/clips/editor/editor-versions-menu'
@@ -114,9 +116,8 @@ const clipEditorMontserrat = Montserrat({ subsets: ['latin'], weight: ['900'], v
 const clipEditorPoppins = Poppins({ subsets: ['latin'], weight: ['800'], variable: '--font-poppins' })
 
 function isEditableTarget(t: EventTarget | null) {
-  if (!t || !(t instanceof HTMLElement)) return false
-  const tag = t.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable
+  // G4c: sliders (role="slider" thumbs), selects and every input keep their keys.
+  return isFormControlTarget(t)
 }
 
 
@@ -1635,6 +1636,17 @@ export function EditorShell({
                   readOnly={Boolean(edits.timelineLanes?.video?.locked)}
                 />
               ) : null
+            }
+            videoSlot={
+              <MainVideoTools
+                edits={edits}
+                videoItem={selVideoSeg ? { srcInMs: selVideoSeg.srcInMs, srcOutMs: selVideoSeg.srcOutMs } : null}
+                outputMs={outputMs}
+                durationMs={outDur}
+                onCommit={(next) => setEdits(next)}
+                onSeekOutput={seekOutput}
+                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+              />
             }
             colorSlot={
               <ColorPanel

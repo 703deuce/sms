@@ -34,6 +34,13 @@ COLOR_PROPS = ("cExposure", "cBrightness", "cContrast", "cSaturation", "cTempera
                "cHighlights", "cShadows", "cVibrance")
 for _p in COLOR_PROPS:
     PROP_SPECS[_p] = (-100.0, 100.0, 0.0)
+# G4c: keyframable effect amounts (spec.fx, 0..100). Same color pass (stepped windows), so they
+# ride on COLOR_PROPS; values are quantized to FX_KEY_QUANT like the preview.
+FX_PROPS = ("fxSharpen", "fxVignette", "fxGrain", "fxBlur", "fxGlow", "fxRgbsplit", "fxGlitch",
+            "fxShake", "fxFlicker", "fxScanlines")
+for _p in FX_PROPS:
+    PROP_SPECS[_p] = (0.0, 100.0, 0.0)
+COLOR_PROPS = COLOR_PROPS + FX_PROPS
 KEY_PROPS = KEY_PROPS + COLOR_PROPS
 EASES = ("linear", "in", "out", "inOut")
 TRANSITION_TYPES = (

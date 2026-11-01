@@ -119,6 +119,22 @@ export function isTextEntryTarget(target: unknown): boolean {
   return Boolean(el.closest?.('[contenteditable="true"],[contenteditable=""]'))
 }
 
+/**
+ * G4c: true while a form control has focus — any <input> (sliders' range inputs included),
+ * select, textarea, contenteditable, or an ARIA slider / spinbutton / textbox thumb. Global editor
+ * shortcuts (Home / End, Ctrl+Home, edit-point jumps, clipboard, angle keys, zoom, S) must not fire
+ * then: Home on a focused color slider moves the slider, it must not seek / deselect the clip.
+ */
+export function isFormControlTarget(target: unknown): boolean {
+  if (isTextEntryTarget(target)) return true
+  if (!target || typeof target !== 'object') return false
+  const el = target as { tagName?: string; getAttribute?: (n: string) => string | null; closest?: (s: string) => unknown }
+  if ((el.tagName || '').toUpperCase() === 'INPUT') return true
+  const role = el.getAttribute?.('role')
+  if (role === 'slider' || role === 'spinbutton') return true
+  return Boolean(el.closest?.('[role="slider"]'))
+}
+
 /** Track width in px; never narrower than the viewport so short clips fill the panel. */
 export function trackWidthPx(
   spanMs: number,
