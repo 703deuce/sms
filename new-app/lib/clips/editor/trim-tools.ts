@@ -19,6 +19,7 @@ import { mergeCutRanges, subtractRangeFromCuts, type ClipEditsV2, type CutRange 
 import {
   buildTimelineItems,
   findItem,
+  outputToSource,
   realCutIndices,
   refLocked,
   timebaseFor,
@@ -120,6 +121,9 @@ export function slideMainClip(ctx: OpCtx, a: number, deltaMs: number): ClipEdits
   const cur = vs[i]!
   const nxt = vs[i + 1]!
   if (cur.a < prev.b || nxt.a < cur.b) return null
+  const deltaMsSrc =
+    Math.abs(deltaMs) < 1 ? 0 : Math.round(outputToSource(tb, cur.startMs + deltaMs) - outputToSource(tb, cur.startMs))
+  const slideDelta = Math.abs(deltaMsSrc) >= 1 ? deltaMsSrc : Math.round(deltaMs)
   const gapBefore = cur.a - prev.b
   const gapAfter = nxt.a - cur.b
   // Contiguous videoSplits (no cut gaps): move both split points together — same middle length, neighbours adjust.
@@ -127,11 +131,10 @@ export function slideMainClip(ctx: OpCtx, a: number, deltaMs: number): ClipEdits
     const splitSet = new Set(ctx.edits.videoSplits ?? [])
     const rightSplit = splitSet.has(cur.b) ? cur.b : nxt.a
     if (!splitSet.has(cur.a) || (!splitSet.has(cur.b) && !splitSet.has(nxt.a))) return null
-    let d = Math.round(deltaMs)
-    d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - prev.b)
-    d = Math.min(d, prev.b - prev.a - VIDEO_MIN_SEG_MS)
-    d = Math.max(d, cur.a + VIDEO_MIN_SEG_MS - prev.b)
-    d = Math.min(d, nxt.b - VIDEO_MIN_SEG_MS - cur.b)
+    let d = Math.round(slideDelta)
+    // Neighbour min lengths: clip1 ends at cur.a+d, clip3 starts at rightSplit+d.
+    d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - cur.a)
+    d = Math.min(d, nxt.b - VIDEO_MIN_SEG_MS - rightSplit)
     if (!d) return null
     const moved = [...splitSet].map((s) => (s === cur.a ? cur.a + d : s === rightSplit ? rightSplit + d : s)).sort((x, y) => x - y)
     let nextEdits: ClipEditsV2 = { ...ctx.edits, videoSplits: moved }
@@ -141,7 +144,7 @@ export function slideMainClip(ctx: OpCtx, a: number, deltaMs: number): ClipEdits
     if (Math.abs(nt.durationMs - tb.durationMs) > 1) return null
     return nextEdits
   }
-  let d = Math.round(deltaMs)
+  let d = Math.round(slideDelta)
   d = Math.min(d, cur.a - prev.b) // gap1 can't go negative
   d = Math.max(d, cur.b - nxt.a)
   d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - prev.b)
@@ -350,10 +353,39 @@ export function splitEdgeTrim(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', t
 
 export const DEFAULT_JL_CUT_MS = 500
 
-/**
- * Apply a J- or L-cut at a main-track boundary (source ms where the right segment starts).
- * Uses the same model as Alt-drag on Voice edges at the cut.
- */
+/** Source ms of the nearest main-track J/L boundary to output `outMs` (real cut or video split). */
+export function jlCutBoundarySrcMs(
+  tb: ReturnType<typeof timebaseFor>,
+  edits: ClipEditsV2,
+  lanes: Record<string, TimelineItem[]>,
+  outMs: number,
+  selected: readonly ItemRef[],
+  tolMs = 120,
+): number | null {
+  const vsegs = videoLaneSegments(tb, edits.videoSplits)
+  let best: { at: number; d: number } | null = null
+  const consider = (out: number, src: number) => {
+    const d = Math.abs(out - outMs)
+    if (d <= tolMs && (!best || d < best.d)) best = { at: src, d }
+  }
+  for (const k of realCutIndices(tb)) consider(tb.starts[k]!, tb.segs[k]![0])
+  for (const seg of vsegs.slice(1)) consider(seg.startMs, seg.a)
+  if (selected.length === 1 && selected[0]!.lane === 'video') {
+    const it = lanes.video?.find((i) => i.id === selected[0]!.id)
+    if (it?.srcInMs != null && it.srcOutMs != null) {
+      const edges: { at: number; out: number }[] = []
+      if (it.srcInMs > tb.segs[0]![0]) edges.push({ at: it.srcInMs, out: it.startMs })
+      if (it.srcOutMs < tb.segs[tb.segs.length - 1]![1]) edges.push({ at: it.srcOutMs, out: it.endMs })
+      if (edges.length) {
+        const pick = edges.reduce((a, b) => (Math.abs(a.out - outMs) <= Math.abs(b.out - outMs) ? a : b))
+        return pick.at
+      }
+    }
+  }
+  return best?.at ?? null
+}
+
+/** Apply a J- or L-cut at a main-track boundary (source ms where the right segment starts). */
 export function applyJLCutAt(ctx: OpCtx, atSrcMs: number, kind: 'j' | 'l', ms = DEFAULT_JL_CUT_MS): ClipEditsV2 | null {
   const tb = timebaseFor(ctx.edits)
   const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits })

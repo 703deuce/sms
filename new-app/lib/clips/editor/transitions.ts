@@ -12,6 +12,7 @@
  */
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { realCutIndices, videoLaneSegments, type Timebase } from '@/lib/clips/editor/clip-timeline'
 import {
   MOTION_FPS,
   TRANSITION_DEFAULT_MS,
@@ -614,6 +615,59 @@ export function cutTransitionWindows(
       frames: n,
       aEnd: a1,
       bStart: b0,
+    })
+  }
+  return out
+}
+
+/**
+ * Transition windows at Video-lane split points (videoSplits) when a transition is stored at that
+ * source ms but the boundary is not a real cut (cutTransitionWindows only covers source jumps).
+ */
+export function videoSplitTransitionWindows(
+  tb: Timebase,
+  videoSplits: readonly number[] | undefined,
+  transitions: readonly CutTransition[] | undefined,
+  fps = MOTION_FPS,
+): CutWindow[] {
+  if (!transitions?.length || !videoSplits?.length) return []
+  const vsegs = videoLaneSegments(tb, videoSplits)
+  if (vsegs.length < 2) return []
+  const real = new Set(realCutIndices(tb))
+  const tol = cutMatchToleranceMs(fps)
+  const out: CutWindow[] = []
+  let lastEndFrame = 0
+  for (let i = 1; i < vsegs.length; i++) {
+    const left = vsegs[i - 1]!
+    const right = vsegs[i]!
+    const srcMs = right.a
+    const cutK = tb.segs.findIndex(([a], k) => k >= 1 && a === srcMs && real.has(k))
+    if (cutK >= 1) continue
+    const tr = transitions.find((t) => Math.abs(t.srcMs - srcMs) <= tol)
+    if (!tr) continue
+    const d = Math.min(clampDur(tr.durMs), left.b - left.a, right.b - right.a)
+    if (d < TRANSITION_MIN_MS) continue
+    const cut = right.startMs
+    const frames = Math.max(2, Math.round((d * fps) / 1000))
+    let startFrame = Math.round(((cut - d / 2) * fps) / 1000)
+    startFrame = Math.max(startFrame, lastEndFrame, 0)
+    let n = frames
+    const maxEnd = Math.floor(((right.startMs + (right.b - right.a)) * fps) / 1000)
+    if (startFrame + n > maxEnd) n = maxEnd - startFrame
+    if (n < 2) continue
+    lastEndFrame = startFrame + n
+    out.push({
+      k: -(i + 1),
+      srcMs,
+      type: tr.type,
+      durMs: d,
+      cutMs: cut,
+      w0Ms: startFrame * frameMs(fps),
+      w1Ms: (startFrame + n) * frameMs(fps),
+      startFrame,
+      frames: n,
+      aEnd: left.b,
+      bStart: right.a,
     })
   }
   return out

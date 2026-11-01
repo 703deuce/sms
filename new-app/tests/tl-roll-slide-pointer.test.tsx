@@ -41,7 +41,10 @@ function setup(e: ClipEditsV2) {
       canUndo
     />,
   )
-  const pxPerMs = () => parseFloat(utils.getByTestId('timeline-track').style.width) / 40000
+  const pxPerMs = () => {
+    const track = utils.getByTestId('timeline-track')
+    return parseFloat(track.style.width) / Number(track.getAttribute('data-duration-ms'))
+  }
   return { ...utils, onCommitEdits, pxPerMs }
 }
 
@@ -94,16 +97,15 @@ describe('TL roll / slide pointer path', () => {
     expect(onCommitEdits.mock.calls.at(-1)![1]).toBe(true)
   })
 
-  it('slide on MC-style middle clip (4640–29210 ms) commits one undo step', () => {
-    const e = edits({ videoSplits: [4640, 29210], trim: { in: 0, out: 35000 } })
+  it('slide on MC-style middle clip (4640–29210 ms) commits exact split deltas', () => {
+    const e = edits({ videoSplits: [4640, 29210], trim: { in: 0, out: 31520 } })
     const { getByTestId, getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
     fireEvent.keyDown(getByTestId('timeline-scroll'), { key: 'u' })
     const mid = getAllByTestId('timeline-item-video')[1]!
-    drag(mid, 990 * pxPerMs())
+    drag(mid, 300 * pxPerMs())
     expect(onCommitEdits).toHaveBeenCalledTimes(1)
     const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
-    expect(next.videoSplits![0]! - 4640).toBeGreaterThan(800)
-    expect(next.videoSplits![1]! - 29210).toBeGreaterThan(800)
+    expect(next.videoSplits).toEqual([4940, 29510])
     expect(onCommitEdits.mock.calls[0]![1]).toBe(true)
   })
 
