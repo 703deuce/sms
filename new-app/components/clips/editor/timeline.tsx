@@ -340,6 +340,7 @@ export function Timeline({
   inOut: controlledInOut,
   onInOutChange,
   onArmVoiceover,
+  onOpenTextVoiceover,
   highlights,
   playheadOutMsRef,
   transcriptSelectionRef,
@@ -409,6 +410,8 @@ export function Timeline({
   inOut?: InOut
   onInOutChange?: (io: InOut) => void
   onArmVoiceover?: () => void
+  /** B2: open Text panel voiceover for a timeline text item. */
+  onOpenTextVoiceover?: (textId: string) => void
   selectedSourceSegmentId?: string | null
   /** G1a: select an item from outside (canvas click); a new `seq` re-applies. `atMs` = output ms. */
   selectRequest?: { lane: LaneId; id?: string; atMs?: number; seq: number } | null
@@ -3844,6 +3847,20 @@ export function Timeline({
               ) : null}
               {/* FV4b: always listed (disabled + hint under 2 clips); Takes ▸ next / previous / ungroup. */}
               {liveSelected.length ? renderTakesItems(() => { setTakesSub(false); setCtxMenu(null) }, 'ctx') : null}
+              {liveSelected.length === 1 && liveSelected[0]!.lane === 'text' && liveSelected[0]!.id !== 'hook' && onOpenTextVoiceover ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-ctx-voiceover"
+                  onClick={() => {
+                    onOpenTextVoiceover(liveSelected[0]!.id)
+                    setCtxMenu(null)
+                  }}
+                >
+                  Generate voiceover…
+                </button>
+              ) : null}
               {liveSelected.length ? (
                 <button
                   type="button"

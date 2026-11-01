@@ -41,6 +41,7 @@ import {
   mergedCutRemovalMs,
 } from '@/lib/clips/gap-audio-trim'
 import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
+import { AiCreditBadge } from '@/components/clips/ui/ai-credit-badge'
 
 export function CleanupPanel({
   clipId,
@@ -350,7 +351,8 @@ export function CleanupPanel({
         </div>
       </div>
 
-      {aiExtras ? (
+      <div className="space-y-2 rounded-md border border-border p-2" data-testid="cleanup-ai-tools">
+        <p className="text-xs font-medium">More cleanup</p>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
@@ -373,6 +375,9 @@ export function CleanupPanel({
           >
             {clarityLoading ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : null}
             Edit for clarity
+            <span className="ml-1.5 inline-flex">
+              <AiCreditBadge credits={2} />
+            </span>
           </Button>
           {clarityRows.length ? (
             <Button type="button" size="sm" onClick={applyAllClarity}>
@@ -381,7 +386,7 @@ export function CleanupPanel({
           ) : null}
           {clarityEmpty ? <span className="text-xs text-muted-foreground">{clarityEmpty}</span> : null}
         </div>
-      ) : null}
+      </div>
 
       {retakeGroups.length ? (
         <div className="space-y-2 rounded-md border border-border p-2" data-testid="retake-review">

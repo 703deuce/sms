@@ -121,6 +121,11 @@ export function SpeechSearchSection({
       {loading && debounced.length >= 2 ? (
         <p className="text-[11px] text-muted-foreground">Searching…</p>
       ) : null}
+      {!loading && debounced.length >= 2 && hits.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground" data-testid="speech-search-no-matches">
+          No matches
+        </p>
+      ) : null}
       {untranscribed > 0 ? (
         <p className="text-[11px] text-muted-foreground">
           {untranscribed} media not searchable yet

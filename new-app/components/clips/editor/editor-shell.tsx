@@ -779,6 +779,12 @@ export function EditorShell({
   const musicGen = useGeneration(musicGenId)
   const musicUrl = musicUploadId ? mediaUrlFor(mediaItems, musicUploadId) : musicGen.downloadUrl
   const aiExtras = clipEditorAiExtrasEnabled()
+  const textVoiceoverTarget = useMemo(() => {
+    if (!selectedTextId) return null
+    const t = (edits.textItems ?? []).find((x) => x.id === selectedTextId)
+    if (!t || t.kind) return null
+    return { text: t.text, atMs: t.startMs }
+  }, [selectedTextId, edits.textItems])
   // E2: hidden / muted timeline lanes apply to preview exactly as the worker applies them to export
   // (a muted Voice lane also drops the dub track, as export does).
   const renderEdits = useMemo(() => applyTimelineLaneState(edits), [edits])
@@ -1804,6 +1810,8 @@ export function EditorShell({
             }
             setEdits(next)
           }}
+          textVoiceover={textVoiceoverTarget}
+          addVoiceoverSfx={addSfx}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -1871,7 +1879,6 @@ export function EditorShell({
             clipId={clipId}
             uploadLibraryFiles={media.uploadFiles}
             addSfx={addSfx}
-            aiExtras={aiExtras}
           />
           </EditorPanelErrorBoundary>
         </div>
@@ -2467,6 +2474,10 @@ export function EditorShell({
             inOut={exportTimelineInOut}
             onInOutChange={setExportTimelineInOut}
             onArmVoiceover={() => clipRec.arm('voiceover')}
+            onOpenTextVoiceover={(id) => {
+              setSelectedTextId(id)
+              selectPanel('text')
+            }}
             playheadOutMsRef={outputMsRef}
             transcriptSelectionRef={selectionRef}
             highlights={
