@@ -22,9 +22,10 @@ import {
   type TransitionSpec,
   type TransitionType,
 } from '@/lib/clips/editor/motion-schema'
+import type { ShaderType } from '@/lib/clips/editor/g4/transition-shaders.gen'
 
-export type TransitionGroup = 'Basic' | 'Push' | 'Wipe' | 'Zoom & blur' | 'Soft wipe' | 'Shape' | 'Slice' | 'Slide' | 'Stylized'
-export type TransitionInfo = { type: TransitionType; label: string; group: TransitionGroup; xfade: string }
+export type TransitionGroup = 'Basic' | 'Push' | 'Wipe' | 'Zoom & blur' | 'Soft wipe' | 'Shape' | 'Slice' | 'Slide' | 'Stylized' | 'Effects'
+export type TransitionInfo = { type: TransitionType; label: string; group: TransitionGroup; xfade: string; shader?: ShaderType }
 
 /** xfade names verified present in ffmpeg 5.1 (`ffmpeg -h filter=xfade`). Zoom in/out = scale + fade. */
 export const TRANSITIONS: TransitionInfo[] = [
@@ -78,6 +79,12 @@ export const TRANSITIONS: TransitionInfo[] = [
   { type: 'reveal_right', label: 'Reveal →', group: 'Slide', xfade: 'overlay' },
   { type: 'reveal_up', label: 'Reveal ↑', group: 'Slide', xfade: 'overlay' },
   { type: 'reveal_down', label: 'Reveal ↓', group: 'Slide', xfade: 'overlay' },
+  { type: 'spin', label: 'Spin', group: 'Effects', xfade: 'fade', shader: 'spin' },
+  { type: 'glitch', label: 'Glitch', group: 'Effects', xfade: 'fade', shader: 'glitch' },
+  { type: 'light_leak', label: 'Light leak', group: 'Effects', xfade: 'fade', shader: 'light_leak' },
+  { type: 'zoom_blur', label: 'Zoom blur', group: 'Effects', xfade: 'fade', shader: 'zoom_blur' },
+  { type: 'whip_pan', label: 'Whip pan', group: 'Effects', xfade: 'fade', shader: 'whip_pan' },
+  { type: 'ripple', label: 'Ripple', group: 'Effects', xfade: 'fade', shader: 'ripple' },
 ]
 /** G4b: transitions drawn with a per-pixel mask on the top layer (explicit list — not index-based). */
 export const G4B_MASK_TRANSITION_TYPES = [
@@ -120,7 +127,26 @@ export const CUT_ONLY_TRANSITIONS: ReadonlySet<TransitionType> = new Set([
   'reveal_right',
   'reveal_up',
   'reveal_down',
+  'spin',
+  'glitch',
+  'light_leak',
+  'zoom_blur',
+  'whip_pan',
+  'ripple',
 ])
+export const SHADER_TRANSITIONS: ReadonlySet<TransitionType> = new Set([
+  'spin',
+  'glitch',
+  'light_leak',
+  'zoom_blur',
+  'whip_pan',
+  'ripple',
+])
+
+export function shaderProgress(k: number, n: number): number {
+  if (n <= 0) return 0
+  return Math.fround(Math.fround(k) / Math.fround(n))
+}
 /** Corner wipes are hard rectangles: drawn with an exact clip-path instead of a mask image. */
 const CORNER: Partial<Record<TransitionType, 'tl' | 'tr' | 'bl' | 'br'>> = { wipe_tl: 'tl', wipe_tr: 'tr', wipe_bl: 'bl', wipe_br: 'br' }
 export const TRANSITION_INFO = Object.fromEntries(TRANSITIONS.map((t) => [t.type, t])) as Record<TransitionType, TransitionInfo>
@@ -162,6 +188,8 @@ export type TransitionFrame = {
   satB?: number
   /** pixelize: block size as fraction of min(W,H); omitted when dist = 0 */
   pixel?: { blockFrac: number; P: number }
+  /** TR-SHADER: GL transition progress (CSS path is crossfade fallback) */
+  shader?: { type: ShaderType; progress: number }
 }
 
 function smoothstep(e0: number, e1: number, x: number): number {
@@ -175,6 +203,7 @@ export function transitionFrame(type: TransitionType, qIn: number): TransitionFr
   const q = Math.min(1, Math.max(0, qIn))
   const P = 1 - q
   const f: TransitionFrame = { wA: P, wB: q, wC: 0, color: null, geometric: false, a: G0(), b: G0(), blurFrac: 0 }
+  if (SHADER_TRANSITIONS.has(type)) return f
   if (MASK_TRANSITIONS.has(type)) return { ...f, wA: 1, wB: 1, geometric: true, mask: { xfade: TRANSITION_INFO[type].xfade, P: Math.fround(1 - Math.fround(q)) } }
   switch (type) {
     case 'crossfade':

@@ -220,6 +220,12 @@ export type TransitionType =
   | 'reveal_right'
   | 'reveal_up'
   | 'reveal_down'
+  | 'spin'
+  | 'glitch'
+  | 'light_leak'
+  | 'zoom_blur'
+  | 'whip_pan'
+  | 'ripple'
 
 export const TRANSITION_TYPES: readonly TransitionType[] = [
   'crossfade',
@@ -271,6 +277,12 @@ export const TRANSITION_TYPES: readonly TransitionType[] = [
   'reveal_right',
   'reveal_up',
   'reveal_down',
+  'spin',
+  'glitch',
+  'light_leak',
+  'zoom_blur',
+  'whip_pan',
+  'ripple',
 ] as const
 
 export type TransitionSpec = { type: TransitionType; durMs: number }
