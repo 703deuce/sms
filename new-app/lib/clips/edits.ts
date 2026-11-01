@@ -389,6 +389,7 @@ function normalizeCaptions(
       o.presetConfig && typeof o.presetConfig === 'object'
         ? (o.presetConfig as Record<string, unknown>)
         : base.presetConfig,
+    font: typeof o.font === 'string' && o.font.trim() ? o.font.trim() : base.font,
   }
 }
 

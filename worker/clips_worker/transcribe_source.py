@@ -34,13 +34,19 @@ def transcribe_video_file(
         _extract_opus_16k(src, opus)
 
         req: TranscribeReq
+        settings = project.get("settings") if isinstance(project.get("settings"), dict) else {}
+        asr_raw = settings.get("asrLanguage") if isinstance(settings, dict) else None
+        asr = str(asr_raw).strip().lower() if asr_raw else "en"
+        if asr in ("", None):
+            asr = "en"
+        lang = "auto" if asr == "auto" else asr
         if provider_name == "modal":
             audio_key = f"ws/{workspace_id}/projects/{project_id}/audio.opus"
             upload_file(audio_key, opus, "audio/opus")
             url = sign_url(audio_key)
-            req = TranscribeReq(audio_url=url, audio_path=str(opus), model=model, language=None)
+            req = TranscribeReq(audio_url=url, audio_path=str(opus), model=model, language=lang)
         else:
-            req = TranscribeReq(audio_path=str(opus), model=model, language=None)
+            req = TranscribeReq(audio_path=str(opus), model=model, language=lang)
 
         res, meta = transcribe_audio_request(conn, req, workspace_id, project_id)
     return res.words, meta

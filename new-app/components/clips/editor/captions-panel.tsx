@@ -25,6 +25,7 @@ import type { SourceWord } from '@/lib/clips/source-words'
 import { clipsFetch } from '@/lib/clips-api'
 import { cn } from '@/lib/utils'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
+import { useWorkspaceFonts } from '@/components/clips/editor/use-workspace-fonts'
 import {
   chunksForTranslation,
   linesFromTranslation,
@@ -121,6 +122,7 @@ export function CaptionsPanel({
   readOnly?: boolean
 }) {
   const cap = edits.captions ?? {}
+  const userFonts = useWorkspaceFonts()
   const [editingWordI, setEditingWordI] = useState<number | null>(null)
   const presetId = cap.presetId || 'bold_pop'
   const preset = resolveCaptionPreset(cap)
@@ -711,6 +713,16 @@ export function CaptionsPanel({
               {f}
             </SelectItem>
           ))}
+          {userFonts.fonts.length ? (
+            <>
+              <div className="px-2 py-1.5 text-[10px] font-semibold uppercase text-muted-foreground">Your fonts</div>
+              {userFonts.fonts.map((f) => (
+                <SelectItem key={f.id} value={`user:${f.id}`}>
+                  {f.family}
+                </SelectItem>
+              ))}
+            </>
+          ) : null}
         </SelectContent>
       </Select>
 

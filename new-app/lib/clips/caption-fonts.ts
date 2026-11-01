@@ -2,7 +2,17 @@ import metrics from '@/lib/clips/caption-font-metrics.json'
 
 const loggedMissing = new Set<string>()
 
-export function captionFontStack(font: string): string {
+export type UserFontMetrics = { family: string; cssEmPerAssFontsize?: number }
+
+export type UserFontResolver = (fontId: string) => UserFontMetrics | null
+
+export function captionFontStack(font: string, resolveUser?: UserFontResolver): string {
+  if (font.startsWith('user:') && resolveUser) {
+    const row = resolveUser(font.slice(5))
+    if (row?.family) return `"${row.family}", sans-serif`
+    return captionFontStack('Poppins')
+  }
+  if (font.startsWith('user:')) return captionFontStack('Poppins')
   if (font === 'Poppins') return 'var(--font-poppins), Poppins, sans-serif'
   if (font === 'Anton') return 'var(--font-clip-anton), Anton, Impact, sans-serif'
   if (font === 'Montserrat Black' || font === 'Montserrat')
@@ -22,7 +32,14 @@ export function captionFontWeight(font: string, presetWeight: number): number {
   return presetWeight
 }
 
-export function cssEmPerAssFontsize(font: string): number {
+export function cssEmPerAssFontsize(font: string, resolveUser?: UserFontResolver): number {
+  if (font.startsWith('user:') && resolveUser) {
+    const row = resolveUser(font.slice(5))
+    if (row?.cssEmPerAssFontsize) return row.cssEmPerAssFontsize
+    if (row?.family) return 1
+    return cssEmPerAssFontsize('Poppins')
+  }
+  if (font.startsWith('user:')) return cssEmPerAssFontsize('Poppins')
   const row = (metrics as Record<string, { cssEmPerAssFontsize?: number }>)[font]
   if (row?.cssEmPerAssFontsize) return row.cssEmPerAssFontsize
   if (!loggedMissing.has(font)) {

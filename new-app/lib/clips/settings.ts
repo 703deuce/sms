@@ -95,6 +95,10 @@ export const clipProjectSettingsSchema = z.object({
   blank: z.boolean().optional(),
   /** CL-05: found-clips project → source full-video project id. */
   fromFullVideoProjectId: z.string().optional(),
+  /** TX-30: transcription language for new uploads (unset = English). */
+  asrLanguage: z
+    .enum(['auto', 'en', 'es', 'fr', 'de', 'pt', 'it', 'nl'])
+    .optional(),
 })
 
 export type ClipProjectSettings = z.infer<typeof clipProjectSettingsSchema>

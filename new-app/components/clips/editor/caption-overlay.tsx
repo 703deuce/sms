@@ -14,6 +14,7 @@ import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
 import { captionHighlightContrastText } from '@/lib/clips/caption-active-style'
 import { previewCaptionBottomPct, previewCaptionTopPct } from '@/lib/clips/caption-safe-area'
 import { captionFontStack, captionFontWeight, previewCaptionStrokePx } from '@/lib/clips/caption-fonts'
+import { useWorkspaceFonts } from '@/components/clips/editor/use-workspace-fonts'
 import { exportPixelSize } from '@/lib/clips/export-aspect'
 import { assEmPerFontsize, captionChunkFit, captionFitConfigForEdits, captionSafeWidthPct } from '@/lib/clips/caption-fit'
 
@@ -65,6 +66,13 @@ export function CaptionOverlay({
   const cap = effectiveCaptionEdits(edits.captions ?? {}, t6Caps)
   const preset = resolveT6CaptionPreset(cap, t6Caps)
   const captionFont = cap.font?.trim() || preset.font
+  const userFonts = useWorkspaceFonts()
+  const resolveCaptionUser = (id: string) => {
+    const row = userFonts.fonts.find((f) => f.id === id)
+    if (!row) return null
+    const m = row.metrics as { cssEmPerAssFontsize?: number } | undefined
+    return { family: row.family, cssEmPerAssFontsize: m?.cssEmPerAssFontsize }
+  }
   const animation = (cap.animation || preset.animation) as string
   // E3fix2: chunking, font size, safe width and line breaks mirror the export ASS (caption-fit.ts).
   const aspect = edits.aspectRatio ?? '9:16'
@@ -190,7 +198,7 @@ export function CaptionOverlay({
     <div
       className={`pointer-events-none absolute inset-x-0 z-[25] flex max-w-full flex-col items-center gap-y-0.5 text-center ${captionPosClass}`}
       style={{
-        fontFamily: captionFontStack(captionFont),
+        fontFamily: captionFontStack(captionFont, resolveCaptionUser),
         fontWeight: captionFontWeight(captionFont, preset.weight),
         maxWidth: `${captionSafeWidthPct(aspect)}%`,
         marginInline: 'auto',

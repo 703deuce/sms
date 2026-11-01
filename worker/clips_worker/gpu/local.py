@@ -36,10 +36,10 @@ class LocalProvider:
         raw = json.loads(words_path.read_text())
         words = normalize_words(raw, offset_ms=req.offset_ms)
         duration_s = max((w["e"] for w in words), default=0.0)
-        lang = req.language or "en"
+        lang = req.language if req.language not in (None, "auto") else None
         return TranscribeRes(
             words=words,
-            language=lang,
+            language=str(lang or "en"),
             duration_s=float(duration_s),
             gpu_seconds=0.0,
             provider="local",
