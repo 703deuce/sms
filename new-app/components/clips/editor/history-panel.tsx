@@ -18,6 +18,7 @@ type Row =
 function buildRows(
   edits: ClipEditsV2,
   past: ClipEditsV2[],
+  pastLabels: (string | undefined)[],
   future: ClipEditsV2[],
 ): Row[] {
   const rows: Row[] = []
@@ -29,7 +30,8 @@ function buildRows(
     const steps = -(past.length - i)
     const prev = past[i]!
     const next = i < past.length - 1 ? past[i + 1]! : edits
-    rows.push({ kind: 'past', label: describeEditsChange(prev, next), steps })
+    const named = pastLabels[i]
+    rows.push({ kind: 'past', label: named?.trim() ? named : describeEditsChange(prev, next), steps })
   }
   return rows.slice(0, MAX_ROWS)
 }
@@ -37,19 +39,21 @@ function buildRows(
 export function EditorHistoryPanel({
   edits,
   historyPast,
+  historyPastLabels,
   historyFuture,
   jumpHistory,
   disabled,
 }: {
   edits: ClipEditsV2
   historyPast: ClipEditsV2[]
+  historyPastLabels?: (string | undefined)[]
   historyFuture: ClipEditsV2[]
   jumpHistory: (steps: number) => void
   disabled?: boolean
 }) {
   const rows = useMemo(
-    () => buildRows(edits, historyPast, historyFuture),
-    [edits, historyPast, historyFuture],
+    () => buildRows(edits, historyPast, historyPastLabels ?? [], historyFuture),
+    [edits, historyPast, historyPastLabels, historyFuture],
   )
 
   return (

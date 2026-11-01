@@ -68,6 +68,7 @@ export type ProducerStripState = { changeCount: number; expiresAt: number }
 type State = {
   edits: ClipEditsV2
   past: ClipEditsV2[]
+  pastLabels: (string | undefined)[]
   future: ClipEditsV2[]
   saveState: 'saved' | 'saving' | 'dirty' | 'error'
   producerStrip: ProducerStripState | null
@@ -77,8 +78,10 @@ type Action =
   | { type: 'set'; edits: ClipEditsV2; pushHistory?: boolean }
   | { type: 'addCuts'; cutRanges: CutRange[] }
   | { type: 'APPLY_PATCH'; edits: ClipEditsV2 }
+  /** Single undo step with a named label (PR-16 / AI_QUALITY Q2). */
+  | { type: 'pass'; edits: ClipEditsV2; label: string }
   /** Producer batch: always one undo step even when canonical edits match (e.g. no-op patch). */
-  | { type: 'BATCH'; edits: ClipEditsV2; before?: ClipEditsV2; producerChangeCount?: number }
+  | { type: 'BATCH'; edits: ClipEditsV2; before?: ClipEditsV2; producerChangeCount?: number; label?: string }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'clearProducerStrip' }
@@ -95,32 +98,47 @@ function editsEqual(a: ClipEditsV2, b: ClipEditsV2) {
   return canonicalEditsJson(a) === canonicalEditsJson(b)
 }
 
+function pushPast(state: State, snap: ClipEditsV2, label?: string): Pick<State, 'past' | 'pastLabels' | 'future'> {
+  return {
+    past: [...state.past, snap].slice(-MAX_UNDO),
+    pastLabels: [...state.pastLabels, label].slice(-MAX_UNDO),
+    future: [],
+  }
+}
+
 export function editorEditsReducer(state: State, action: Action): State {
   switch (action.type) {
     case 'set': {
       if (editsEqual(state.edits, action.edits)) return state
       const push = action.pushHistory !== false
-      const past = push ? [...state.past, state.edits].slice(-MAX_UNDO) : state.past
-      return { ...state, edits: action.edits, past, future: push ? [] : state.future, saveState: 'dirty' }
+      const pastBlock = push ? pushPast(state, state.edits) : { past: state.past, pastLabels: state.pastLabels, future: state.future }
+      return { ...state, edits: action.edits, ...pastBlock, future: push ? [] : state.future, saveState: 'dirty' }
     }
     case 'addCuts': {
       const next = { ...state.edits, cutRanges: action.cutRanges }
       if (editsEqual(state.edits, next)) return state
-      const past = [...state.past, state.edits].slice(-MAX_UNDO)
-      return { ...state, edits: next, past, future: [], saveState: 'dirty' }
+      return { ...state, edits: next, ...pushPast(state, state.edits), saveState: 'dirty' }
     }
     case 'APPLY_PATCH': {
       if (editsEqual(state.edits, action.edits)) return state
-      const past = [...state.past, state.edits].slice(-MAX_UNDO)
-      return { ...state, edits: action.edits, past, future: [], saveState: 'dirty' }
+      return { ...state, edits: action.edits, ...pushPast(state, state.edits), saveState: 'dirty' }
+    }
+    case 'pass': {
+      if (editsEqual(state.edits, action.edits)) return state
+      return { ...state, edits: action.edits, ...pushPast(state, state.edits, action.label), saveState: 'dirty' }
     }
     case 'BATCH': {
       const snap = action.before ?? state.edits
-      const past = [...state.past, snap].slice(-MAX_UNDO)
       const n = action.producerChangeCount ?? 0
       const producerStrip =
         n > 0 ? { changeCount: n, expiresAt: Date.now() + 15_000 } : state.producerStrip
-      return { ...state, edits: action.edits, past, future: [], saveState: 'dirty', producerStrip }
+      return {
+        ...state,
+        edits: action.edits,
+        ...pushPast(state, snap, action.label ?? (n > 0 ? `Producer · ${n} change(s)` : 'Producer')),
+        saveState: 'dirty',
+        producerStrip,
+      }
     }
     case 'clearProducerStrip':
       return { ...state, producerStrip: null }
@@ -131,6 +149,7 @@ export function editorEditsReducer(state: State, action: Action): State {
         ...state,
         edits: prev,
         past: state.past.slice(0, -1),
+        pastLabels: state.pastLabels.slice(0, -1),
         future: [state.edits, ...state.future].slice(0, MAX_UNDO),
         saveState: 'dirty',
         producerStrip: state.producerStrip ? null : state.producerStrip,
@@ -143,6 +162,7 @@ export function editorEditsReducer(state: State, action: Action): State {
         ...state,
         edits: next,
         past: [...state.past, state.edits].slice(-MAX_UNDO),
+        pastLabels: [...state.pastLabels, undefined].slice(-MAX_UNDO),
         future: state.future.slice(1),
         saveState: 'dirty',
       }
@@ -163,22 +183,22 @@ export function editorEditsReducer(state: State, action: Action): State {
     case 'replaceRestore': {
       if (editsEqual(state.edits, action.edits)) return { ...state, saveState: 'dirty' }
       const record = action.recordUndo !== false
-      const past = record ? [...state.past, state.edits].slice(-MAX_UNDO) : state.past
+      const pastBlock = record ? pushPast(state, state.edits) : { past: state.past, pastLabels: state.pastLabels, future: state.future }
       return {
         ...state,
         edits: action.edits,
-        past,
+        ...pastBlock,
         future: record ? [] : state.future,
         saveState: 'dirty',
       }
     }
     case 'hydrate': {
-      if (editsEqual(state.edits, action.edits)) return { ...state, saveState: 'saved', past: [], future: [] }
-      return { ...state, edits: action.edits, saveState: 'saved', past: [], future: [] }
+      if (editsEqual(state.edits, action.edits)) return { ...state, saveState: 'saved', past: [], pastLabels: [], future: [] }
+      return { ...state, edits: action.edits, saveState: 'saved', past: [], pastLabels: [], future: [] }
     }
     case 'resetHistory':
       if (!state.past.length && !state.future.length) return state
-      return { ...state, past: [], future: [] }
+      return { ...state, past: [], pastLabels: [], future: [] }
     default:
       return state
   }
@@ -216,6 +236,7 @@ export function useEditorState(
   const [state, dispatch] = useReducer(editorEditsReducer, {
     edits: restored,
     past: [],
+    pastLabels: [],
     future: [],
     saveState: draftDiffers ? 'dirty' : 'saved',
     producerStrip: null,
@@ -304,12 +325,25 @@ export function useEditorState(
     [bumpLocalRevision, rippleFrom],
   )
 
+  const setEditsPass = useCallback(
+    (input: ClipEditsV2, label: string) => {
+      const edits = rippleFrom(editsRef.current, input)
+      if (editsEqual(editsRef.current, edits)) return
+      editsRef.current = edits
+      setHistoryReady(true)
+      bumpLocalRevision()
+      dispatch({ type: 'pass', edits, label })
+    },
+    [bumpLocalRevision, rippleFrom],
+  )
+
   /** One undo step for a full producer patch (not per-field). */
   const applyProducerPatch = useCallback(
-    (edits: ClipEditsV2, before?: ClipEditsV2, producerChangeCount?: number) => {
+    (edits: ClipEditsV2, before?: ClipEditsV2, producerChangeCount?: number, label?: string) => {
       if (editsEqual(editsRef.current, edits)) return
+      setHistoryReady(true)
       bumpLocalRevision()
-      dispatch({ type: 'BATCH', edits, before, producerChangeCount })
+      dispatch({ type: 'BATCH', edits, before, producerChangeCount, label })
     },
     [bumpLocalRevision],
   )
@@ -375,7 +409,7 @@ export function useEditorState(
   }, [])
 
   const addCleanupCuts = useCallback(
-    (ranges: CutRange[]) => {
+    (ranges: CutRange[], passLabel?: string) => {
       if (!ranges.length) return
       const spans = wordSpans()
       const cuts = mergeCleanupCutRanges(editsRef.current.cutRanges, ranges, spans)
@@ -384,6 +418,11 @@ export function useEditorState(
       const rippled = rippleFrom(editsRef.current, nextEdits)
       editsRef.current = rippled
       bumpLocalRevision()
+      setHistoryReady(true)
+      if (passLabel) {
+        dispatch({ type: 'pass', edits: rippled, label: passLabel })
+        return
+      }
       if (rippled !== nextEdits) dispatch({ type: 'set', edits: rippled })
       else dispatch({ type: 'addCuts', cutRanges: cuts })
     },
@@ -959,11 +998,13 @@ export function useEditorState(
     layers: resolveLayers(state.edits),
     setLayers,
     setEdits,
+    setEditsPass,
     hydrateEdits,
     undo,
     redo,
     jumpHistory,
     historyPast: state.past,
+    historyPastLabels: state.pastLabels,
     historyFuture: state.future,
     canUndo: historyReady && state.past.length > 0,
     canRedo: historyReady && state.future.length > 0,

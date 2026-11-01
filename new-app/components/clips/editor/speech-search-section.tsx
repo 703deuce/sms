@@ -106,7 +106,10 @@ export function SpeechSearchSection({
 
   return (
     <section className="space-y-2 rounded-md border p-2" data-testid="speech-search-section">
-      <div className="text-xs font-semibold">Search what was said</div>
+      <div className="flex items-center gap-2 text-xs font-semibold">
+        <span>Search what was said</span>
+        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">Free</span>
+      </div>
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
