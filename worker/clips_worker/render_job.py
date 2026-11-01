@@ -228,6 +228,7 @@ def mark_render(
     size_bytes: int | None = None,
     error: str | None = None,
     srt_key: str | None = None,
+    stems_key: str | None = None,
 ) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -238,10 +239,11 @@ def mark_render(
                 "sizeBytes" = COALESCE(%s, "sizeBytes"),
                 error = %s,
                 "srtKey" = COALESCE(%s, "srtKey"),
+                "stemsKey" = COALESCE(%s, "stemsKey"),
                 "updatedAt" = NOW()
             WHERE id = %s
             """,
-            (status, output_key, size_bytes, error, srt_key, render_id),
+            (status, output_key, size_bytes, error, srt_key, stems_key, render_id),
         )
     conn.commit()
 
@@ -616,6 +618,8 @@ def _run_render_clip_job_body(
         from clips_worker.preview_reuse import export_edits_allow_preview_reuse, materialize_export_from_preview
 
         render_meta: dict = {}
+        if deliver_spec and deliver_spec.get("stems"):
+            render_meta["export_stems"] = True
         preview_crop_track: Path | None = None
         crop_key = ctx.get("cropKey")
         if crop_key:
@@ -870,6 +874,18 @@ def _run_render_clip_job_body(
             if upload_srt and rin is not None and rout is not None and not deliver_spec.get("softSubs"):
                 upload_srt = srt_slice(upload_srt, rin, rout)
             final_out, out_ext, content_type = run_deliver(pre_deliver, td_path, deliver_spec, srt_body if deliver_spec.get("softSubs") else None)
+        stems_key = None
+        if deliver_spec and deliver_spec.get("stems"):
+            stems_ctx = render_meta.get("stems_ctx")
+            if isinstance(stems_ctx, dict) and stems_ctx.get("video"):
+                from clips_worker.export_stems import pack_stems_zip
+
+                stems_zip = td_path / "stems.zip"
+                pack_stems_zip(stems_ctx, td_path, stems_zip)
+                stems_key = (
+                    f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.stems.zip"
+                )
+                upload_file(stems_key, stems_zip, "application/zip")
         out_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.{out_ext}"
         srt_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.srt"
         upload_file(out_key, final_out, content_type)
@@ -906,7 +922,7 @@ def _run_render_clip_job_body(
             length_mismatch=length_mismatch,
         )
         _assert_still_owned(conn, job)
-        mark_render(conn, render_id, "READY", out_key, size, None, srt_key)
+        mark_render(conn, render_id, "READY", out_key, size, None, srt_key, stems_key)
         _clear_stale_project_render_error(conn, str(ctx.get("projectId") or ""))
         if render_meta.get("fit_fallback"):
             merge_job_fit_fallback_payload(conn, job["id"], str(render_meta.get("speakercrop_tail") or ""))

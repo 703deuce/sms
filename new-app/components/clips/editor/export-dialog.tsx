@@ -149,6 +149,7 @@ export function ExportDialog({
   const [quality, setQuality] = useState<DeliverQuality>('standard')
   const [deliverFps, setDeliverFps] = useState<DeliverFps>('source')
   const [softSubs, setSoftSubs] = useState(false)
+  const [includeStems, setIncludeStems] = useState(false)
   const [exportRange, setExportRange] = useState<'whole' | 'inOut'>('whole')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -476,6 +477,7 @@ export function ExportDialog({
         ...(exportPlatform === 'none' && quality !== 'standard' ? { quality } : {}),
         ...(exportPlatform === 'none' && deliverFps !== 'source' ? { fps: deliverFps } : {}),
         ...(exportPlatform === 'none' && softSubs ? { softSubs: true } : {}),
+        ...(exportPlatform === 'none' && includeStems && canExportStems ? { stems: true } : {}),
         ...(exportPlatform === 'none' &&
         exportRange === 'inOut' &&
         timelineInOut?.inMs != null &&
@@ -530,6 +532,7 @@ export function ExportDialog({
   const platformWarn =
     exportPlatform !== 'none' ? exportPlatformDurationWarning(exportPlatform, editedDurationMs) : null
   const showWatermarkOn = !can('', 'no_watermark')
+  const canExportStems = can('', 'producer')
   const polishLintWarnings = useMemo(() => {
     const items = exportPolishLint(edits, {
       exportPlatform: exportPlatform === 'none' ? null : exportPlatform,
@@ -749,6 +752,20 @@ export function ExportDialog({
                     data-testid="export-soft-subs"
                     checked={softSubs}
                     onCheckedChange={(c) => setSoftSubs(Boolean(c))}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <Label className="text-sm">Stems (voice, music, SFX)</Label>
+                    {!canExportStems ? (
+                      <p className="text-xs text-muted-foreground">Producer plan required</p>
+                    ) : null}
+                  </div>
+                  <Switch
+                    data-testid="export-stems"
+                    checked={includeStems}
+                    disabled={!canExportStems}
+                    onCheckedChange={(c) => setIncludeStems(Boolean(c))}
                   />
                 </div>
               </>

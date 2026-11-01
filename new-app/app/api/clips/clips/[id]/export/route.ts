@@ -64,6 +64,7 @@ const bodySchema = z.object({
   rangeOutMs: z.number().optional(),
   stillAtMs: z.number().optional(),
   softSubs: z.boolean().optional(),
+  stems: z.boolean().optional(),
   /** Optional client snapshot — used when PATCH save is still in flight. */
   edits: z.record(z.unknown()).optional(),
 })
@@ -171,9 +172,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         rangeOutMs: body.rangeOutMs,
         stillAtMs: body.stillAtMs,
         softSubs: body.softSubs,
+        stems: body.stems,
       },
       {
         canHigh: can(workspaceId, 'export_1080p'),
+        canPro: can(workspaceId, 'producer'),
         lengthMs: editedDurationMs,
         hasInOut,
         platform: Boolean(exportPlatform),
