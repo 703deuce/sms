@@ -59,6 +59,10 @@ _ASS_FONT_ALIASES: dict[str, str] = {
 
 
 def resolve_ass_font_name(edits_captions: dict, preset: dict) -> str:
+    if edits_captions.get("_userFont"):
+        raw = str(edits_captions.get("font") or "").strip()
+        if raw:
+            return raw
     raw = str(edits_captions.get("font") or preset.get("font") or "Poppins").strip()
     canonical = _ASS_FONT_ALIASES.get(raw, raw)
     path = _ASS_FONT_FILES.get(canonical)

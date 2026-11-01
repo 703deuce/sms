@@ -89,18 +89,24 @@ def _extract_words_from_payload(payload: dict[str, Any]) -> list[dict]:
     raise DeepgramTranscribeError("malformed_transcript_no_words")
 
 
-def _listen_params(model: str | None = None) -> str:
+def _listen_params(model: str | None = None, language: str | None = "en") -> str:
     from urllib.parse import urlencode
 
-    params = {
+    lang = (language or "en").strip().lower() if language is not None else "en"
+    params: dict[str, str] = {
         "model": (model or deepgram_model()).strip() or DEFAULT_MODEL,
         "smart_format": "true",
         "punctuate": "true",
-        "language": "en",
         "diarize": "true",
         "utterances": "true",
         "diarize_version": "latest",
     }
+    if lang in ("", "en"):
+        params["language"] = "en"
+    elif lang == "auto":
+        params["detect_language"] = "true"
+    else:
+        params["language"] = lang
     return urlencode(params)
 
 
@@ -110,12 +116,13 @@ def _http_listen(
     audio_url: str | None = None,
     content_type: str = "audio/opus",
     model: str | None = None,
+    language: str | None = "en",
 ) -> dict[str, Any]:
     api_key = deepgram_api_key()
     if not api_key:
         raise DeepgramTranscribeError("no_api_key")
 
-    url = f"{DEEPGRAM_LISTEN_URL}?{_listen_params(model=model)}"
+    url = f"{DEEPGRAM_LISTEN_URL}?{_listen_params(model=model, language=language)}"
     if audio_url:
         body = json.dumps({"url": audio_url}).encode("utf-8")
         headers = {
@@ -165,13 +172,19 @@ def _http_listen(
 
 def transcribe_deepgram(req: TranscribeReq, *, model: str | None = None) -> TranscribeRes:
     payload: dict[str, Any]
+    lang_req = req.language if req.language is not None else "en"
     if req.audio_url:
-        payload = _http_listen(audio_url=req.audio_url, model=model)
+        payload = _http_listen(audio_url=req.audio_url, model=model, language=lang_req)
     elif req.audio_path:
         path = Path(req.audio_path)
         suffix = path.suffix.lower()
         mime = "audio/wav" if suffix == ".wav" else "audio/opus"
-        payload = _http_listen(audio_bytes=path.read_bytes(), content_type=mime, model=model)
+        payload = _http_listen(
+            audio_bytes=path.read_bytes(),
+            content_type=mime,
+            model=model,
+            language=lang_req,
+        )
     else:
         raise DeepgramTranscribeError("no_audio_source")
 
@@ -182,7 +195,12 @@ def transcribe_deepgram(req: TranscribeReq, *, model: str | None = None) -> Tran
 
     duration_s = max((w["e"] for w in words), default=0.0)
     meta = payload.get("metadata") or {}
-    lang = (meta.get("detected_language") or req.language or "en") if isinstance(meta, dict) else "en"
+    detected = meta.get("detected_language") if isinstance(meta, dict) else None
+    lang = (detected or req.language or "en") if isinstance(meta, dict) else "en"
+    code = lang_req if lang_req not in ("", "en") else "en"
+    if lang_req == "auto":
+        code = "auto"
+    print(f"[asr] lang={code} detected={detected or lang}", flush=True)
     return TranscribeRes(
         words=words,
         language=str(lang),

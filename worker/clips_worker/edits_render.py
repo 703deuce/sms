@@ -585,7 +585,11 @@ def burn_captions(
     if not cap.get("presetId") and not cap.get("preset"):
         cap = {**cap, "presetId": "bold_pop", "animation": "pop"}
     build_ass(words, cap, ass, play_w=play_w, play_h=play_h, edits=edits)
-    fontsdir = V3 / "fonts"
+    from clips_worker.user_fonts import fonts_dir_for
+
+    fontsdir = fonts_dir_for(edits) if edits else None
+    if fontsdir is None or not Path(fontsdir).is_dir():
+        fontsdir = V3 / "fonts"
     emoji_by_word = cap.get("emojiByWord") if isinstance(cap.get("emojiByWord"), dict) else {}
     emoji_events: list = []
     if emoji_by_word:
@@ -1424,11 +1428,12 @@ def render_edited_clip(
 ) -> tuple[Path, list[dict], str]:
     t0 = time.perf_counter()
     rid = render_id or "unknown"
-    if conn is not None and workspace_id and edits.get("textItems"):
-        # G3b: workspace fonts used by text items (downloaded once; merged fontsdir for the burn).
-        from clips_worker.user_fonts import prepare_user_fonts
+    if conn is not None and workspace_id:
+        from clips_worker.user_fonts import prepare_user_fonts, used_font_ids
 
-        edits = prepare_user_fonts(conn, workspace_id, edits, work_dir)
+        if edits.get("textItems") or used_font_ids(edits):
+            # G3b: workspace fonts for text items or captions (merged fontsdir for burns).
+            edits = prepare_user_fonts(conn, workspace_id, edits, work_dir)
     if conn is not None and workspace_id and (edits.get("color") or edits.get("adjustLayers")):
         # G4a: imported .cube LUTs the color looks use (parsed once; baked into each look's cube).
         from clips_worker.user_luts import prepare_user_luts
