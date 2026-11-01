@@ -107,6 +107,8 @@ export function ensureClone(host: HTMLElement | null, main: HTMLElement | null):
     copy.querySelectorAll('[data-testid]').forEach((n) => n.removeAttribute('data-testid'))
     copy.style.visibility = 'visible'
     copy.style.transform = ''
+    copy.querySelectorAll('canvas[data-g4-mirror]').forEach((n) => n.remove())
+    copy.querySelectorAll('[data-g4-src="1"]').forEach((n) => n.removeAttribute('data-g4-src'))
     host.replaceChildren(copy)
     host.dataset.sig = sig
     host.querySelectorAll('video').forEach((v) => {
@@ -126,8 +128,11 @@ export function syncClone(
   playing: boolean,
   rate: number,
   look = '',
+  gradeClone?: (layer: HTMLElement, vids: HTMLVideoElement[], srcMs: number) => boolean,
 ) {
   const vids = ensureClone(host, main)
+  const layerRoot = host?.firstElementChild instanceof HTMLElement ? host.firstElementChild : null
+  const graded = gradeClone && layerRoot ? gradeClone(layerRoot, vids, srcMs) : false
   const mains = main ? Array.from(main.querySelectorAll('video')) : []
   const t = videoTimeFromSourceMs(srcMs, mediaOffsetMs)
   vids.forEach((v, i) => {
@@ -139,8 +144,10 @@ export function syncClone(
       v.dataset.baseCss = m.style.cssText
       v.dataset.look = ''
     }
-    if ((v.dataset.look ?? '') !== look) {
+    if (!graded && (v.dataset.look ?? '') !== look) {
       v.style.filter = look
+      v.dataset.look = look
+    } else if (graded) {
       v.dataset.look = look
     }
     if (m && v.className !== m.className) v.className = m.className
@@ -164,6 +171,71 @@ function pauseClone(host: HTMLElement | null) {
   })
 }
 
+function exportFrameSize(boxW: number, boxH: number): { W: number; H: number } {
+  const w = boxW || 9
+  const h = boxH || 16
+  const W = w <= h ? 1080 : Math.round((1080 * w) / h)
+  const H = w <= h ? Math.round((1080 * h) / w) : 1080
+  return { W, H }
+}
+
+function pixelCanvas(host: HTMLElement | null): HTMLCanvasElement | null {
+  if (!host) return null
+  let c = host.querySelector('canvas[data-testid="transition-pixel"]') as HTMLCanvasElement | null
+  if (!c) {
+    c = document.createElement('canvas')
+    c.dataset.testid = 'transition-pixel'
+    c.className = 'pointer-events-none absolute inset-0 h-full w-full'
+    c.style.imageRendering = 'pixelated'
+    host.appendChild(c)
+  }
+  return c
+}
+
+function drawPixelTransition(
+  host: HTMLElement | null,
+  aHost: HTMLElement | null,
+  bHost: HTMLElement | null,
+  pixel: { blockFrac: number; P: number },
+  boxW: number,
+  boxH: number,
+  lookA: string,
+  lookB: string,
+) {
+  const canvas = pixelCanvas(host)
+  if (!canvas || !aHost || !bHost) return
+  const { W, H } = exportFrameSize(boxW, boxH)
+  const sq = Math.max(1, pixel.blockFrac * Math.min(W, H))
+  const cw = Math.max(1, Math.ceil(W / sq))
+  const ch = Math.max(1, Math.ceil(H / sq))
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width = cw
+    canvas.height = ch
+  }
+  canvas.style.visibility = 'visible'
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.imageSmoothingEnabled = false
+  const va = aHost.querySelector('video') as HTMLVideoElement | null
+  const vb = bHost.querySelector('video') as HTMLVideoElement | null
+  const drawLayer = (v: HTMLVideoElement | null, alpha: number, filter: string) => {
+    if (!v || v.readyState < 2) return
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.filter = filter || 'none'
+    ctx.drawImage(v, 0, 0, cw, ch)
+    ctx.restore()
+  }
+  ctx.clearRect(0, 0, cw, ch)
+  drawLayer(vb, 1, lookB)
+  drawLayer(va, pixel.P, lookA)
+}
+
+function hidePixelCanvas(host: HTMLElement | null) {
+  const c = host?.querySelector('canvas[data-testid="transition-pixel"]') as HTMLCanvasElement | null
+  if (c && c.style.visibility !== 'hidden') c.style.visibility = 'hidden'
+}
+
 export function applyMotionFrame(
   dom: MotionDom,
   edits: ClipEditsV2,
@@ -171,22 +243,40 @@ export function applyMotionFrame(
   outMs: number,
   opts: {
     boxW: number
+    boxH?: number
     playing: boolean
     rate: number
     mediaOffsetMs: number
     /** E4: CSS filter of the colour look at a source ms (clone A / B keep their own segment's look). */
     lookAt?: (srcMs: number) => string
+    /** TR-06: grade clones through WebGL mirror; when true, syncClone skips style.filter. */
+    gradeClone?: (layer: HTMLElement, vids: HTMLVideoElement[], srcMs: number) => boolean
   },
 ) {
   const look = (ms: number) => opts.lookAt?.(ms) ?? ''
+  const gradeClone = opts.gradeClone
+  const boxH = opts.boxH ?? Math.round((opts.boxW * 9) / 16)
   const main = mainFrame(edits, tb, outMs, opts.boxW)
   setStyle(dom.mainKf, main.kf)
+  const cutHost = dom.cloneA?.parentElement ?? null
   if (main.cut) {
     const c = main.cut
-    syncClone(dom.cloneA, dom.mainLayer, c.aSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.aSrcMs))
-    syncClone(dom.cloneB, dom.mainLayer, c.bSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.bSrcMs))
-    setStyle(dom.cloneA, c.a)
-    setStyle(dom.cloneB, c.b)
+    syncClone(dom.cloneA, dom.mainLayer, c.aSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.aSrcMs), gradeClone)
+    syncClone(dom.cloneB, dom.mainLayer, c.bSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.bSrcMs), gradeClone)
+    if (c.pixel) {
+      drawPixelTransition(cutHost, dom.cloneA, dom.cloneB, c.pixel, opts.boxW, boxH, look(c.aSrcMs), look(c.bSrcMs))
+      setStyle(dom.cloneA, { ...c.a, visibility: 'hidden' })
+      setStyle(dom.cloneB, { ...c.b, visibility: 'hidden' })
+    } else {
+      hidePixelCanvas(cutHost)
+      setStyle(dom.cloneA, c.a)
+      setStyle(dom.cloneB, c.b)
+    }
+    if (dom.cloneA && dom.cloneB) {
+      const topA = c.top === 'a'
+      dom.cloneA.style.zIndex = topA ? '2' : '0'
+      dom.cloneB.style.zIndex = topA ? '0' : '2'
+    }
     if (dom.cutDip) {
       dom.cutDip.style.background = c.color.background
       dom.cutDip.style.opacity = String(c.color.opacity)
@@ -196,12 +286,13 @@ export function applyMotionFrame(
   } else {
     if (main.upcoming) {
       // Pre-seek both clones to the window start so they are decoded when it begins.
-      syncClone(dom.cloneA, dom.mainLayer, main.upcoming.aSrcMs, opts.mediaOffsetMs, false, opts.rate, look(main.upcoming.aSrcMs))
-      syncClone(dom.cloneB, dom.mainLayer, main.upcoming.bSrcMs, opts.mediaOffsetMs, false, opts.rate, look(main.upcoming.bSrcMs))
+      syncClone(dom.cloneA, dom.mainLayer, main.upcoming.aSrcMs, opts.mediaOffsetMs, false, opts.rate, look(main.upcoming.aSrcMs), gradeClone)
+      syncClone(dom.cloneB, dom.mainLayer, main.upcoming.bSrcMs, opts.mediaOffsetMs, false, opts.rate, look(main.upcoming.bSrcMs), gradeClone)
     } else {
       pauseClone(dom.cloneA)
       pauseClone(dom.cloneB)
     }
+    hidePixelCanvas(cutHost)
     setStyle(dom.cloneA, null)
     setStyle(dom.cloneB, null)
     if (dom.cutDip && dom.cutDip.style.opacity !== '0') dom.cutDip.style.opacity = '0'

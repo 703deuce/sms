@@ -58,6 +58,9 @@ TRANSITION_TYPES = (
     "radial", "diag_tl", "diag_tr", "diag_bl", "diag_br",
     "slice_left", "slice_right", "slice_up", "slice_down",
     "wipe_tl", "wipe_tr", "wipe_bl", "wipe_br",
+    "pixelize", "fade_grays", "squeeze_h", "squeeze_v",
+    "cover_left", "cover_right", "cover_up", "cover_down",
+    "reveal_left", "reveal_right", "reveal_up", "reveal_down",
 )
 TRANSITION_DEFAULT_MS = 400
 TRANSITION_MIN_MS = 100
@@ -102,9 +105,35 @@ XFADE_NAME = {
     "wipe_tr": "wipetr",
     "wipe_bl": "wipebl",
     "wipe_br": "wipebr",
+    "pixelize": "pixelize",
+    "fade_grays": "fadegrays",
+    "squeeze_h": "squeezeh",
+    "squeeze_v": "squeezev",
 }
+COVER_TRANSITIONS = frozenset(
+    ("cover_left", "cover_right", "cover_up", "cover_down"),
+)
+REVEAL_TRANSITIONS = frozenset(
+    ("reveal_left", "reveal_right", "reveal_up", "reveal_down"),
+)
+CUT_ONLY_TRANSITIONS = frozenset(
+    (
+        "pixelize", "fade_grays", "squeeze_h", "squeeze_v",
+        "cover_left", "cover_right", "cover_up", "cover_down",
+        "reveal_left", "reveal_right", "reveal_up", "reveal_down",
+    ),
+)
 # G4b: transitions drawn by a per-pixel mask (no geometry / global weights).
-MASK_TRANSITIONS = frozenset(TRANSITION_TYPES[14:])
+MASK_TRANSITIONS = frozenset(
+    (
+        "smooth_left", "smooth_right", "smooth_up", "smooth_down",
+        "circle_open", "circle_close", "vert_open", "vert_close", "horz_open", "horz_close",
+        "radial",
+        "diag_tl", "diag_tr", "diag_bl", "diag_br",
+        "slice_left", "slice_right", "slice_up", "slice_down",
+        "wipe_tl", "wipe_tr", "wipe_bl", "wipe_br",
+    ),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -604,6 +633,45 @@ def transition_frame(ttype: str, q_in: float) -> dict:
     elif ttype == "blur":
         prog = P * 2 if P <= 0.5 else (1 - P) * 2
         f["blurFrac"] = prog / 2
+    elif ttype == "squeeze_h":
+        f.update(wA=1.0, wB=1.0, geometric=True, top="a")
+        f["a"]["sy"] = P
+    elif ttype == "squeeze_v":
+        f.update(wA=1.0, wB=1.0, geometric=True, top="a")
+        f["a"]["sx"] = P
+    elif ttype == "cover_left":
+        f.update(wA=1.0, wB=1.0, geometric=True, top="b")
+        f["b"]["tx"] = P
+    elif ttype == "cover_right":
+        f.update(wA=1.0, wB=1.0, geometric=True, top="b")
+        f["b"]["tx"] = -P
+    elif ttype == "cover_up":
+        f.update(wA=1.0, wB=1.0, geometric=True, top="b")
+        f["b"]["ty"] = P
+    elif ttype == "cover_down":
+        f.update(wA=1.0, wB=1.0, geometric=True, top="b")
+        f["b"]["ty"] = -P
+    elif ttype == "reveal_left":
+        f.update(wA=1.0, wB=1.0, geometric=True, top="a")
+        f["a"]["tx"] = -q
+    elif ttype == "reveal_right":
+        f.update(wA=1.0, wB=1.0, geometric=True, top="a")
+        f["a"]["tx"] = q
+    elif ttype == "reveal_up":
+        f.update(wA=1.0, wB=1.0, geometric=True, top="a")
+        f["a"]["ty"] = -q
+    elif ttype == "reveal_down":
+        f.update(wA=1.0, wB=1.0, geometric=True, top="a")
+        f["a"]["ty"] = q
+    elif ttype == "fade_grays":
+        s1, s2 = _smoothstep(0.8, 1, P), _smoothstep(0.2, 1, P)
+        f["satA"] = s1
+        f["satB"] = 1 - s2
+    elif ttype == "pixelize":
+        d = min(P, 1 - P)
+        dist = math.ceil(d * 50) / 50
+        if dist > 0:
+            f["pixel"] = {"blockFrac": (2 * dist) / 20, "P": P}
     return f
 
 
@@ -723,6 +791,8 @@ def broll_transition_windows(broll, fps: int = MOTION_FPS) -> list[dict]:
         nxt = items[i + 1] if i < len(items) - 1 else None
 
         def mk(spec: dict, kind: str, at_start: bool, from_id):
+            if spec["type"] in CUT_ONLY_TRANSITIONS:
+                return
             d = min(_clamp_dur(spec["durMs"]), ln / 2)
             if d < TRANSITION_MIN_MS:
                 return

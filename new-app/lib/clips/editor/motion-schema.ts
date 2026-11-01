@@ -200,6 +200,18 @@ export type TransitionType =
   | 'wipe_tr'
   | 'wipe_bl'
   | 'wipe_br'
+  | 'pixelize'
+  | 'fade_grays'
+  | 'squeeze_h'
+  | 'squeeze_v'
+  | 'cover_left'
+  | 'cover_right'
+  | 'cover_up'
+  | 'cover_down'
+  | 'reveal_left'
+  | 'reveal_right'
+  | 'reveal_up'
+  | 'reveal_down'
 
 export const TRANSITION_TYPES: readonly TransitionType[] = [
   'crossfade',
@@ -239,6 +251,18 @@ export const TRANSITION_TYPES: readonly TransitionType[] = [
   'wipe_tr',
   'wipe_bl',
   'wipe_br',
+  'pixelize',
+  'fade_grays',
+  'squeeze_h',
+  'squeeze_v',
+  'cover_left',
+  'cover_right',
+  'cover_up',
+  'cover_down',
+  'reveal_left',
+  'reveal_right',
+  'reveal_up',
+  'reveal_down',
 ] as const
 
 export type TransitionSpec = { type: TransitionType; durMs: number }

@@ -877,15 +877,20 @@ export function PreviewStage({
         outMs,
         {
           boxW: boxSizeRef.current.w,
+          boxH: boxSizeRef.current.h,
           playing: v ? !v.paused : false,
           rate,
           mediaOffsetMs,
-          // Transition clones: SVG chain (no WebGL mirror / 3D stage on clones — G4_spec limits).
-          // G4cfix: clones carry the keyframed grade / effects too (videoGradeAt at output time).
           lookAt:
             e.color || e.keyframes?.length
               ? (ms: number) => (gp ? gp.bank.css(videoGradeAt(e, ms, outMs)) : lookFilterCss(videoSpecAtSource(e.color, ms)))
               : undefined,
+          gradeClone: gp
+            ? (layer, vids, ms) => {
+                gp.apply(layer, videoGradeAt(e, ms, outMs), vids, mainChroma)
+                return true
+              }
+            : undefined,
         },
       )
       const rs = e.videoReverse?.length ? reversedSourceMs(e, src) : null
