@@ -1,0 +1,32 @@
+[
+  {
+    "id": 0,
+    "type": "multi",
+    "windows": 0,
+    "cmd": [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "/tmp/cut.mp4",
+      "-filter_complex",
+      "[0:v]format=yuv420p,setsar=1[base]",
+      "-map",
+      "[base]",
+      "-map",
+      "0:a?",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "20",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "copy",
+      "/tmp/out.mp4"
+    ]
+  }
+]
