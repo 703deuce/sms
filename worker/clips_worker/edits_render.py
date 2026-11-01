@@ -159,6 +159,7 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         and not edits.get("segmentSpeeds")
         # G4c: stabilize / blur regions change the frames; G4b layer effects too.
         and not edits.get("stabilize")
+        and not edits.get("videoReverse")
         and not edits.get("blurRegions")
         and not edits.get("layerFx")
         # E5: source segments replace frames / sound.
@@ -1677,6 +1678,12 @@ def render_edited_clip(
         full_render = apply_full_render_stabilize(full_render, edits, clip_start_ms, clip_end_ms, work_dir)
         stage("stabilize_done")
 
+    if edits.get("videoReverse"):
+        from clips_worker.video_reverse import apply_full_render_reverse
+
+        full_render = apply_full_render_reverse(full_render, edits, clip_start_ms, clip_end_ms, work_dir)
+        stage("reverse_done")
+
     from clips_worker.color import apply_full_render_color
 
     # E4: source-anchored color looks on full_render (source time) → cut.mp4 and the E3 transition
@@ -1732,7 +1739,9 @@ def render_edited_clip(
         ]
         render_meta["speed_warp"] = speed_warp_pieces(concat_src, normalize_segment_speeds(edits.get("segmentSpeeds")))
 
-    remapped, _ = words_after_edits(src_words, edits)
+    from clips_worker.video_reverse import drop_reversed_words
+
+    remapped, _ = words_after_edits(drop_reversed_words(ensure_word_i(src_words), edits), edits)
     caption_words = remapped
     dub_assets = (audio_assets or {}).get("dub_assets") if audio_assets else None
     if dub_assets and dub_assets.get("dub_words"):

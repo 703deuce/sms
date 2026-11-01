@@ -98,7 +98,7 @@ function setTransitionMask(el: HTMLElement, key: string) {
 }
 
 /** Deep-clone the main layer once per layout (muted, no test ids, no autoplay). */
-function ensureClone(host: HTMLElement | null, main: HTMLElement | null): HTMLVideoElement[] {
+export function ensureClone(host: HTMLElement | null, main: HTMLElement | null): HTMLVideoElement[] {
   if (!host || !main) return []
   const sig = `${main.childElementCount}:${main.querySelector('video')?.getAttribute('src') ?? ''}:${main.firstElementChild?.className ?? ''}`
   if (host.dataset.sig !== sig) {
@@ -118,7 +118,7 @@ function ensureClone(host: HTMLElement | null, main: HTMLElement | null): HTMLVi
   return Array.from(host.querySelectorAll('video'))
 }
 
-function syncClone(
+export function syncClone(
   host: HTMLElement | null,
   main: HTMLElement | null,
   srcMs: number,

@@ -9,6 +9,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Diamond, Scissors, Trash2 } from 'lucide-react'
 import { normalizeVideoSplits, orderedKeepSegments, type ClipEditsV2 } from '@/lib/clips/edits'
 import { setStabilize, stabilizeFor, STAB_DEFAULT } from '@/lib/clips/editor/stabilize'
+import { itemReversed, toggleItemReverse } from '@/lib/clips/editor/video-reverse'
+import { REVERSE_MAX_MS } from '@/lib/clips/editor/layer-fx'
 import {
   addBlurRegion,
   BLUR_MAX_REGIONS,
@@ -87,6 +89,39 @@ export function StabilizeControl({
         Smooths camera shake of this Video item on export (the preview shows the original). Stronger settings zoom in
         slightly to hide the moving edges.
       </p>
+    </div>
+  )
+}
+
+export function ReverseControl({
+  edits,
+  srcInMs,
+  srcOutMs,
+  onCommit,
+  readOnly,
+}: {
+  edits: ClipEditsV2
+  srcInMs: number
+  srcOutMs: number
+  onCommit: (next: ClipEditsV2) => void
+  readOnly?: boolean
+}) {
+  const tooLong = srcOutMs - srcInMs > REVERSE_MAX_MS
+  const reversed = itemReversed(edits, srcInMs, srcOutMs)
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        className={`${btn} ${reversed ? on : ''}`}
+        aria-pressed={reversed}
+        disabled={readOnly || tooLong}
+        data-testid="video-reverse-toggle"
+        onClick={() => onCommit(toggleItemReverse(edits, srcInMs, srcOutMs))}
+      >
+        {reversed ? 'Reversed' : 'Play backwards'}
+      </button>
+      <p className="text-[10px] text-muted-foreground">Sound is muted while reversed.</p>
+      {tooLong ? <p className="text-[10px] text-muted-foreground">Split it under 60 s to reverse.</p> : null}
     </div>
   )
 }
@@ -414,6 +449,13 @@ export function MainVideoTools({
           <StabilizeControl edits={edits} srcInMs={videoItem.srcInMs} srcOutMs={videoItem.srcOutMs} onCommit={onCommit} readOnly={readOnly} />
         ) : (
           <p className="text-[10px] text-muted-foreground">Select a Video item on the timeline to stabilize it.</p>
+        )}
+      </Section>
+      <Section title="Reverse" testId="video-reverse-section">
+        {videoItem ? (
+          <ReverseControl edits={edits} srcInMs={videoItem.srcInMs} srcOutMs={videoItem.srcOutMs} onCommit={onCommit} readOnly={readOnly} />
+        ) : (
+          <p className="text-[10px] text-muted-foreground">Select a Video item on the timeline to reverse it.</p>
         )}
       </Section>
       <SceneSplitSection edits={edits} onCommit={onCommit} onSeekOutput={onSeekOutput} readOnly={readOnly} videoItem={videoItem} />

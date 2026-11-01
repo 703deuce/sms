@@ -43,7 +43,7 @@ import { overlayLayout } from '@/lib/clips/stream-overlay-layout'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { splitAudioSrcAt, splitPlanFor } from '@/lib/clips/editor/split-edits'
 import { brollTransitionWindows, brollVisibleRange } from '@/lib/clips/editor/transitions'
-import { applyMotionFrame } from '@/components/clips/editor/motion-preview'
+import { applyMotionFrame, ensureClone, syncClone } from '@/components/clips/editor/motion-preview'
 import { HookOverlayPreview } from '@/components/clips/editor/hook-overlay-preview'
 import { TextItemsPreview } from '@/components/clips/editor/text-items-preview'
 import { CanvasSelectionOverlay, type CanvasLayerDom } from '@/components/clips/editor/canvas-selection-overlay'
@@ -55,6 +55,7 @@ import { hasGradeFields } from '@/lib/clips/editor/color-grade'
 import { adjustGradesAt, brollGradeAt, videoGradeAt } from '@/lib/clips/editor/grade-runtime'
 import { GradePreview, layerMedia, stageFrame } from '@/components/clips/editor/g4/grade-preview'
 import { corsMediaProps, prepareAll, setMediaSrc, watchMediaCors } from '@/components/clips/editor/g4/media-cors'
+import { reversedSourceMs } from '@/lib/clips/editor/video-reverse'
 import { applyBlurRegion, applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
 import { exportOnlyNote } from '@/lib/clips/editor/export-processing'
 import { brollFxOf, chromaParams } from '@/lib/clips/editor/layer-fx'
@@ -286,6 +287,7 @@ export function PreviewStage({
   const cloneARef = useRef<HTMLDivElement>(null)
   const cutDipRef = useRef<HTMLDivElement>(null)
   const cloneBRef = useRef<HTMLDivElement>(null)
+  const cloneRRef = useRef<HTMLDivElement>(null)
   const brollBoxRefs = useRef<Record<string, HTMLDivElement | null>>({})
   // G4b: per-item layer-fx wrapper (mask) inside the keyframed box.
   const brollFxRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -611,7 +613,10 @@ export function PreviewStage({
           if (v.paused && !sa.paused) sa.pause()
         } else if (!sa.paused) sa.pause()
       }
-      const muteMain = Boolean(sseg && segmentAudio(sseg, ssrc) === 'source') || (Boolean(v) && splitSrc != null)
+      const muteMain =
+        Boolean(sseg && segmentAudio(sseg, ssrc) === 'source') ||
+        (Boolean(v) && splitSrc != null) ||
+        (Boolean(v) && (e.videoReverse?.length ? reversedSourceMs(e, src) != null : false))
       if (v && muteMain && !srcMutedMainRef.current) {
         srcMutedMainRef.current = { prev: v.muted }
         v.muted = true
@@ -752,6 +757,23 @@ export function PreviewStage({
               : undefined,
         },
       )
+      const rs = e.videoReverse?.length ? reversedSourceMs(e, src) : null
+      const revHost = cloneRRef.current
+      if (rs != null && revHost) {
+        const look =
+          e.color || e.keyframes?.length
+            ? gp
+              ? gp.bank.css(videoGradeAt(e, rs, outMs))
+              : lookFilterCss(videoSpecAtSource(e.color, rs))
+            : ''
+        syncClone(revHost, mainLayerRef.current, rs, mediaOffsetMs, false, rate, look)
+        if (revHost.style.visibility !== 'visible') revHost.style.visibility = 'visible'
+      } else if (revHost) {
+        if (revHost.style.visibility !== 'hidden') revHost.style.visibility = 'hidden'
+        revHost.querySelectorAll('video').forEach((el) => {
+          if (!el.paused) el.pause()
+        })
+      }
       if (gp) {
         const notice = gp.end()
         if (notice !== gradeNoticeRef.current) {
@@ -1427,6 +1449,7 @@ export function PreviewStage({
           />
         ) : null}
         </div>
+        <div ref={cloneRRef} className="pointer-events-none absolute inset-0" style={{ visibility: 'hidden' }} data-testid="preview-reverse" aria-hidden />
         {/* E3 cut transitions: clone A (outgoing, continued), dip colour, clone B (incoming, pre-rolled). */}
         <div ref={cloneARef} className="pointer-events-none absolute inset-0" style={{ visibility: 'hidden' }} data-testid="preview-transition-a" aria-hidden />
         <div ref={cutDipRef} className="pointer-events-none absolute inset-0" style={{ opacity: 0 }} data-testid="preview-transition-color" aria-hidden />
