@@ -63,7 +63,7 @@ describe('render share routes', () => {
 
   it('POST creates share link for ready render', async () => {
     mockFindFirst.mockResolvedValue(null)
-    const { POST } = await import('@/app/api/clips/renders/[renderId]/share/route')
+    const { POST } = await import('@/app/api/clips/renders/[id]/share/route')
     const res = await POST(
       new Request('http://localhost/api/clips/renders/rend_1/share', {
         method: 'POST',
@@ -80,7 +80,7 @@ describe('render share routes', () => {
 
   it('POST returns 404 when render is not ready', async () => {
     mockGetRender.mockResolvedValue(null)
-    const { POST } = await import('@/app/api/clips/renders/[renderId]/share/route')
+    const { POST } = await import('@/app/api/clips/renders/[id]/share/route')
     const res = await POST(
       new Request('http://localhost/api/clips/renders/rend_1/share', {
         method: 'POST',
@@ -93,7 +93,7 @@ describe('render share routes', () => {
 
   it('DELETE revokes active link', async () => {
     mockUpdateMany.mockResolvedValue({ count: 1 })
-    const { DELETE } = await import('@/app/api/clips/renders/[renderId]/share/route')
+    const { DELETE } = await import('@/app/api/clips/renders/[id]/share/route')
     const res = await DELETE(new Request('http://localhost'), {
       params: Promise.resolve({ renderId: 'rend_1' }),
     })
