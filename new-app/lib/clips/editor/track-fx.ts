@@ -30,6 +30,8 @@ export type TrackFx = {
   bypass?: true
   /** afftdn noise reduction, dB (6–40). */
   nr?: number
+  /** Q3.4: dry/wet mix for noise reduction on export (0–1). */
+  nrMix?: number
   eq?: TrackEq
   comp?: TrackComp
   /** Limiter ceiling, dBFS (−24…0). */
@@ -97,6 +99,8 @@ export function normalizeTrackFxOne(raw: unknown): TrackFx | null {
   if (isAudioFxKey(track)) {
     const nr = clampLim(o.nr, FX_LIMITS.nr)
     if (nr != null) out.nr = nr
+    const nrMix = num(o.nrMix)
+    if (nr != null && nrMix != null) out.nrMix = Math.min(1, Math.max(0, r2(nrMix)))
     if (o.eq && typeof o.eq === 'object') {
       const e = o.eq as Record<string, unknown>
       const eq: TrackEq = {}

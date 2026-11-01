@@ -1781,6 +1781,7 @@ export function EditorShell({
           edits={edits}
           outputDurationMs={outDur}
           playheadMs={outputMs}
+          playheadSourceMs={playheadSourceMs}
           uploadLibraryFiles={media.uploadFiles}
           onSuggestMusic={() => {}}
           onAttachMusic={attachMusicGeneration}

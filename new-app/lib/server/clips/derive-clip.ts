@@ -5,7 +5,10 @@ import { defaultEdits, normalizeEdits, type ClipBounds } from '@/lib/clips/edits
 import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
 import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
+import { snapClipBoundsMs, clipWordsToSnapWords } from '@/lib/clips/editor/snap-clip-bounds'
 import { getPrisma } from '@/lib/server/db'
+import { getClipStorageForObjectKey } from '@/lib/storage'
+import { normalizeTranscriptJson } from '@/lib/server/clips/editor-words'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 
 export type DeriveClipInput = {
@@ -30,10 +33,35 @@ export async function deriveClipFromSelection(
   }
 
   const bounds = await clipBoundsForPatch(parent)
+  let trimIn = input.trimIn
+  let trimOut = input.trimOut
+  const prisma = getPrisma()
+  const project = await prisma.clipProject.findFirst({
+    where: { id: parent.projectId, workspaceId },
+    select: { transcriptKey: true, storageDriver: true, transcriptWords: true },
+  })
+  if (project?.transcriptKey || project?.transcriptWords) {
+    try {
+      let raw = project.transcriptWords
+      if (project.transcriptKey) {
+        const storage = await getClipStorageForObjectKey(project.transcriptKey, project.storageDriver)
+        raw = (await storage.getJson(project.transcriptKey)) as unknown
+      }
+      const words = clipWordsToSnapWords(normalizeTranscriptJson(raw as never))
+      const rangeStart = bounds.trimMinMs ?? bounds.clipStartMs
+      const rangeEnd = bounds.trimMaxMs ?? bounds.clipEndMs
+      const snapped = snapClipBoundsMs({ startMs: trimIn, endMs: trimOut }, words, rangeStart, rangeEnd)
+      trimIn = snapped.startMs
+      trimOut = snapped.endMs
+    } catch {
+      /* optional snap */
+    }
+  }
+
   const trim = clampTrimToExtendedBounds(
     bounds.clipStartMs,
     bounds.clipEndMs,
-    { in: input.trimIn, out: input.trimOut },
+    { in: trimIn, out: trimOut },
     bounds.trimMinMs != null && bounds.trimMaxMs != null
       ? { minMs: bounds.trimMinMs, maxMs: bounds.trimMaxMs }
       : undefined,
@@ -56,7 +84,6 @@ export async function deriveClipFromSelection(
     newBounds,
   )
 
-  const prisma = getPrisma()
   const childId = createId('clip')
   const title =
     input.title?.trim().slice(0, 120) ||

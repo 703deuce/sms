@@ -4,6 +4,7 @@ import { MAIN_ANGLE, SYNC_NUDGE_MS, multicamAngles, nudgeSync, resetSync } from 
 import { useMemo, useRef, useState } from 'react'
 import { AudioLines, Film, Image as ImageIcon, Plus, RefreshCw, Upload, Video, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatTimecode } from '@/lib/clips/format'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -441,7 +442,7 @@ export function MediaPanel({
           ) : (
             <p className="text-[11px] text-muted-foreground">No speaker labels in this transcript — switch angles per segment with “Use for selected”.</p>
           )}
-          <SliderRow label="Min shot" value={(mc.minHoldMs ?? 2000) / 1000} min={0.5} max={10} step={0.5} unit=" s" testId="multicam-hold"
+          <SliderRow label="Min shot" value={(mc.minHoldMs ?? 2000) / 1000} min={2} max={10} step={0.5} unit=" s" testId="multicam-hold"
             onCommit={(v) => onEdits({ ...edits, multicam: { ...mc, minHoldMs: Math.round(v * 1000) } })} />
           <SliderRow label="Wide shot every" value={(mc.wideEveryMs ?? 45_000) / 1000} min={5} max={120} step={5} unit=" s" testId="multicam-wide"
             onCommit={(v) => onEdits({ ...edits, multicam: { ...mc, wideEveryMs: Math.round(v * 1000) } })} />
@@ -456,6 +457,39 @@ export function MediaPanel({
               </Button>
             ) : null}
           </div>
+          {autoCount ? (
+            <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-dashed p-1.5 text-[11px]" data-testid="multicam-switch-markers">
+              {(edits.sourceSegments ?? [])
+                .filter((s) => s.auto)
+                .map((s) => {
+                  const src = sourceById(edits.sources, s.sourceId)
+                  return (
+                    <li key={s.id} className="flex flex-wrap items-center gap-1">
+                      <span className="tabular-nums">{formatTimecode(s.startMs)}</span>
+                      <span className="text-muted-foreground">→ {src?.label ?? s.sourceId}</span>
+                      <Button size="xs" variant="outline" className="h-6" onClick={() => onSeekSource(s.startMs)}>
+                        Jump
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        className="h-6 text-destructive"
+                        onClick={() => {
+                          const sourceSegments = (edits.sourceSegments ?? []).filter((x) => x.id !== s.id)
+                          onEdits({
+                            ...edits,
+                            sourceSegments: sourceSegments.length ? sourceSegments : undefined,
+                            sources: pruneSources(edits.sources, sourceSegments, edits.multicam, edits.inserts),
+                          })
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </li>
+                  )
+                })}
+            </ul>
+          ) : null}
         </section>
       ) : null}
     </div>

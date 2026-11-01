@@ -1,5 +1,6 @@
 import { isClipUserHidden } from '@/lib/clips/clip-results-chips'
 import { attachReasonTagsToClips, projectTranscriptToSourceWords } from '@/lib/server/clips/clip-reason-tags'
+import { clipSpokenFirstLine } from '@/lib/clips/clip-spoken-line'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
@@ -46,15 +47,31 @@ export async function listProjectClips(
     const m = c.aiMeta as { reasonTag?: string } | null
     return m?.reasonTag !== 'speech' && m?.reasonTag !== 'visual' && m?.reasonTag !== 'both'
   })
-  if (needsTag && project.transcriptKey) {
+  let projectWords: ReturnType<typeof projectTranscriptToSourceWords> | null = null
+  const loadProjectWords = async () => {
+    if (projectWords) return projectWords
+    if (!project.transcriptKey) return null
     try {
       const tStorage = await getClipStorageForObjectKey(project.transcriptKey, project.storageDriver)
       const raw = await tStorage.getJson<unknown>(project.transcriptKey)
-      const words = projectTranscriptToSourceWords(normalizeTranscriptJson(raw))
-      if (words.length) rows = attachReasonTagsToClips(rows, words, project.settings)
+      projectWords = projectTranscriptToSourceWords(normalizeTranscriptJson(raw))
+      return projectWords
     } catch {
-      /* optional enrichment */
+      return null
     }
+  }
+
+  if (needsTag) {
+    const words = await loadProjectWords()
+    if (words?.length) rows = attachReasonTagsToClips(rows, words, project.settings)
+  }
+
+  const wordsForLines = projectWords ?? (await loadProjectWords())
+  if (wordsForLines?.length) {
+    rows = rows.map((c) => ({
+      ...c,
+      spokenFirstLine: clipSpokenFirstLine(wordsForLines, c.startMs, c.endMs) ?? undefined,
+    }))
   }
 
   return rows

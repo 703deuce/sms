@@ -106,6 +106,20 @@ def text_width_px(text: str, font: str | None, fontsize: float) -> float:
     return units / upm * float(fontsize) * float(m["assEmPerFontsize"])
 
 
+def _rebalance_caption_breaks(word_count: int, breaks: list[int]) -> list[int]:
+    if word_count < 3 or not breaks:
+        return breaks
+    br = list(breaks)
+    while br:
+        last = br[-1]
+        if word_count - last != 1 or last <= 1:
+            break
+        br[-1] = last - 1
+    if br and br[0] == 1:
+        return []
+    return br
+
+
 def fit_caption_line(
     words: list[str],
     *,
@@ -152,6 +166,23 @@ def fit_caption_line(
         else:
             line_w = trial
     widths.append(line_w)
+    balanced = _rebalance_caption_breaks(len(words), breaks)
+    if balanced != breaks:
+        breaks = balanced
+        widths = []
+        lw = 0.0
+        brk = set(breaks)
+        for i in range(len(words)):
+            wi = w(i)
+            if i == 0:
+                lw = wi
+                continue
+            if i in brk:
+                widths.append(lw)
+                lw = wi
+            else:
+                lw += space * peak + wi
+        widths.append(lw)
     widest = max(widths)
     scale = 1.0 if widest <= budget else max(0.4, budget / widest)
     return breaks, math.floor(scale * 1000 + 0.5) / 1000

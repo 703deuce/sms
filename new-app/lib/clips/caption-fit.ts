@@ -95,6 +95,22 @@ export function textWidthPx(text: string, font: string | undefined | null, fonts
 
 export type LineFit = { breaks: number[]; scale: number }
 
+/** Q3.1: avoid a single-word orphan on the last caption line (max 2 lines). */
+export function rebalanceCaptionBreaks(wordCount: number, breaks: number[]): number[] {
+  if (wordCount < 3 || !breaks.length) return breaks
+  const br = [...breaks]
+  while (br.length) {
+    const lastBreak = br[br.length - 1]!
+    const lastLineWords = wordCount - lastBreak
+    const firstLineWords = lastBreak
+    if (lastLineWords !== 1 || firstLineWords <= 1) break
+    if (lastBreak <= 1) break
+    br[br.length - 1] = lastBreak - 1
+  }
+  if (br.length && br[0]! === 1) return []
+  return br
+}
+
 export function fitCaptionLine(
   words: readonly string[],
   o: { font: string; fontsize: number; maxWidthPx: number; peakScale?: number; padPx?: number; maxLines?: number },
@@ -126,6 +142,25 @@ export function fitCaptionLine(
     } else lineW = trial
   }
   widths.push(lineW)
+  const balanced = rebalanceCaptionBreaks(words.length, breaks)
+  if (balanced.length !== breaks.length || balanced.some((b, i) => b !== breaks[i])) {
+    breaks.length = 0
+    breaks.push(...balanced)
+    widths.length = 0
+    let lw = 0
+    for (let i = 0; i < words.length; i++) {
+      const wi = w(i)
+      if (i === 0) {
+        lw = wi
+        continue
+      }
+      if (breaks.includes(i)) {
+        widths.push(lw)
+        lw = wi
+      } else lw += space * peak + wi
+    }
+    widths.push(lw)
+  }
   const widest = Math.max(...widths)
   const scale = widest <= budget ? 1 : Math.max(0.4, budget / widest)
   return { breaks, scale: Math.floor(scale * 1000 + 0.5) / 1000 }

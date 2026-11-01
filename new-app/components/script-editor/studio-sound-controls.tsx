@@ -19,12 +19,16 @@ export function StudioSoundControls({
   defaultMix,
   onChange,
   onRetryEnqueue,
+  onPreview10s,
+  previewBusy,
 }: {
   studio: StudioSoundUiState | null
   studioGen: ReturnType<typeof useGeneration>
   defaultMix: number
   onChange: (next: StudioSoundUiState) => void
   onRetryEnqueue?: () => void
+  onPreview10s?: () => void
+  previewBusy?: boolean
 }) {
   const mix = studio?.mix ?? defaultMix
   const studioBusy = studioGen.running
@@ -80,6 +84,19 @@ export function StudioSoundControls({
               })
             }}
           />
+          {onPreview10s ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7"
+              disabled={previewBusy}
+              onClick={onPreview10s}
+              data-testid="studio-sound-preview-10s"
+            >
+              {previewBusy ? 'Processing 10s…' : 'Preview 10s'}
+            </Button>
+          ) : null}
         </div>
       )}
     </div>

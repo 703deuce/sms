@@ -242,6 +242,11 @@ export function ClipCard({
             {displayTitle}
           </Link>
         </h3>
+        {clip.spokenFirstLine ? (
+          <p className="line-clamp-2 text-xs text-muted-foreground" data-testid="clip-spoken-first-line">
+            {clip.spokenFirstLine}
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground tabular-nums">
           <span className="font-medium text-foreground">{formatDur(clip.durationMs)} clip</span>
           {' · '}
