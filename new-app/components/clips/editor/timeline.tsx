@@ -1828,6 +1828,7 @@ export function Timeline({
       setSelKf(null)
       setCtxMenu(null)
       setTrPop(null)
+      onSelRef.current?.(null)
     } else if (mod && (k === 'a' || k === 'A')) {
       e.preventDefault()
       e.stopPropagation()
@@ -2797,7 +2798,10 @@ export function Timeline({
                 if ((e.target as HTMLElement).closest('[data-testid^="timeline-item-"],[data-testid="timeline-word"],button')) return
                 rootRef.current?.focus({ preventScroll: true })
                 const additive = e.shiftKey || e.metaKey || e.ctrlKey
-                if (!additive) setSelected([])
+                if (!additive) {
+                  setSelected([])
+                  onSelRef.current?.(null)
+                }
                 const y = e.clientY - e.currentTarget.getBoundingClientRect().top
                 if (y > RULER_H) {
                   onSeekOutput(msAtClientX(e.clientX, e.currentTarget))

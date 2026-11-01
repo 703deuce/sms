@@ -1255,6 +1255,13 @@ export function EditorShell({
         return
       }
       if (isEditableTarget(e.target)) return
+      if (e.key === 'Escape') {
+        if (!document.fullscreenElement) {
+          onCanvasSelect(null)
+          e.preventDefault()
+        }
+        return
+      }
       const v = videoRef.current
       if (e.code === 'Space' && v) {
         e.preventDefault()
@@ -1288,7 +1295,7 @@ export function EditorShell({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [deleteSelection, edits, outDur, outputMs, redo, undo, shuttle, stopShuttle])
+  }, [deleteSelection, edits, onCanvasSelect, outDur, outputMs, redo, undo, shuttle, stopShuttle])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -1921,17 +1928,11 @@ export function EditorShell({
               </Badge>
             ) : null}
             <PreviewChipRow>
-              <CanvasBackgroundChip
-                edits={edits}
-                media={media}
-                projectId={projectId}
-                clipId={clipId}
-                visible={canvasBgChipVisible}
-                compositeLocked={compositePreviewClip}
-                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
-                onCommit={(next) => setEdits(next)}
-                narrow={previewFrameW < 260}
-              />
+              <button type="button" className={previewChipButtonClass()} onClick={toggleLoopFriendly}>
+                {previewFrameW < 320
+                  ? `Loop ${edits.loopFriendlyEnd === false ? 'off' : 'on'}`
+                  : `Loop trim ${edits.loopFriendlyEnd === false ? 'off' : 'on'}`}
+              </button>
               <button
                 type="button"
                 className={previewChipButtonClass()}
@@ -1941,13 +1942,22 @@ export function EditorShell({
                   else void box?.requestFullscreen?.().catch(() => {})
                 }}
                 title="Full-screen preview (Esc to leave)"
+                aria-label="Full screen"
                 data-testid="preview-fullscreen"
               >
-                ⛶ Full screen
+                {previewFrameW < 320 ? '⛶' : '⛶ Full screen'}
               </button>
-              <button type="button" className={previewChipButtonClass()} onClick={toggleLoopFriendly}>
-                Loop trim {edits.loopFriendlyEnd === false ? 'off' : 'on'}
-              </button>
+              <CanvasBackgroundChip
+                edits={edits}
+                media={media}
+                projectId={projectId}
+                clipId={clipId}
+                visible={canvasBgChipVisible}
+                compositeLocked={compositePreviewClip}
+                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+                onCommit={(next) => setEdits(next)}
+                narrow={previewFrameW < 320}
+              />
             </PreviewChipRow>
             <EditorPanelErrorBoundary label="Preview">
             <PreviewStage
