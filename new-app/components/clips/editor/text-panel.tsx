@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { Bold, Italic, Plus, Trash2, Upload } from 'lucide-react'
+import { Bold, Italic, Loader2, Plus, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -48,7 +48,11 @@ import { assPathToSvg } from '@/components/clips/editor/text-items-preview'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 import { TextAnimSection } from '@/components/clips/editor/text-anim-section'
 import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
+import { toast } from 'sonner'
 import { placeOnFreeTrack } from '@/lib/clips/editor/tracks'
+import type { ClipAudioSfx } from '@/lib/clips/audio'
+import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
+import { TTS_STOCK_VOICES } from '@/lib/clips/tts-voices'
 
 const ALIGNS: TextAlign[] = ['left', 'center', 'right']
 
@@ -120,6 +124,10 @@ export function TextPanel({
   selectedId,
   onSelect,
   onLive,
+  clipId,
+  uploadLibraryFiles,
+  addSfx,
+  aiExtras = false,
 }: {
   edits: ClipEditsV2
   /** pushHistory=false folds the change into the current undo step (E4fix coalescing). */
@@ -130,10 +138,16 @@ export function TextPanel({
   onSelect: (id: string | null) => void
   /** E4fix: slider drags preview live (audition) and commit once on release, like the Color panel. */
   onLive?: (e: ClipEditsV2 | null) => void
+  clipId?: string
+  uploadLibraryFiles?: (files: File[]) => Promise<ProjectMediaItem[]>
+  addSfx?: (item: ClipAudioSfx) => void
+  aiExtras?: boolean
 }) {
   const items = edits.textItems ?? []
   const sel = items.find((t) => t.id === selectedId) ?? null
   const burst = useRef<CoalesceBurst | null>(null)
+  const [voiceStockId, setVoiceStockId] = useState(TTS_STOCK_VOICES[0]!.id)
+  const [voiceBusy, setVoiceBusy] = useState(false)
 
   // reconcileItemMotion: a moved item carries its text:<id> keyframes, a deleted one drops them.
   const build = (list: TextItem[]) =>
@@ -165,6 +179,33 @@ export function TextPanel({
   const commitStyle = (p: Partial<TextStyle>, key: string) => {
     onLive?.(null)
     patchStyle(p, key)
+  }
+
+  const runVoiceover = async () => {
+    if (!clipId || !sel || sel.kind || !uploadLibraryFiles || !addSfx) return
+    const text = sel.text.trim().slice(0, TEXT_MAX_CHARS)
+    if (!text) return
+    setVoiceBusy(true)
+    try {
+      const res = await fetch(`/api/clips/clips/${clipId}/voiceover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voiceId: voiceStockId }),
+      })
+      if (!res.ok) throw new Error('Voiceover failed')
+      const blob = await res.blob()
+      const snippet = text.slice(0, 30).replace(/[^\w\s-]/g, '').trim() || 'clip'
+      const file = new File([blob], `Voiceover – ${snippet}.mp3`, { type: 'audio/mpeg' })
+      const uploaded = await uploadLibraryFiles([file])
+      const uploadId = uploaded[0]?.refId
+      if (!uploadId) throw new Error('Upload failed')
+      addSfx({ generationId: uploadId, uploadId, atMs: sel.startMs, kind: 'audio', volume: 1 })
+      toast.success('Voiceover placed on timeline')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Voiceover failed')
+    } finally {
+      setVoiceBusy(false)
+    }
   }
 
   const add = (presetId = 'basic') => {
@@ -399,6 +440,39 @@ export function TextPanel({
                 inputRef={textRef}
                 onCommit={(text) => patch({ text, marks: remapMarks(sel.text, text, sel.marks) }, 'text')}
               />
+              {aiExtras && clipId && uploadLibraryFiles && addSfx && sel.text.trim() ? (
+                <div className="flex flex-wrap items-end gap-2" data-testid="text-voiceover">
+                  <div className="min-w-[120px] flex-1 space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">Voiceover voice</Label>
+                    <Select
+                      items={TTS_STOCK_VOICES.map((v) => ({ value: v.id, label: v.label }))}
+                      value={voiceStockId}
+                      onValueChange={(v) => v && setVoiceStockId(v)}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TTS_STOCK_VOICES.map((v) => (
+                          <SelectItem key={v.id} value={v.id}>
+                            {v.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={voiceBusy}
+                    onClick={() => void runVoiceover()}
+                  >
+                    {voiceBusy ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : null}
+                    Voiceover
+                  </Button>
+                </div>
+              ) : null}
             </>
           )}
           {!isShape ? (
