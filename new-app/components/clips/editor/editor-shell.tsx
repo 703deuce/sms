@@ -488,11 +488,11 @@ export function EditorShell({
         if (!shouldApplyVocabulary(res.data?.vocabAutoApply, edits.vocabApplied, fp)) return
         const batch = vocabularyBatchFixes(editorWords, edits, vocabulary)
         if (!batch.count) {
-          applyWordFixesBatch({}, {}, { vocabApplied: fp })
+          applyWordFixesBatch({}, {}, { vocabApplied: fp, pushHistory: false })
           return
         }
         const prevEdits = edits
-        applyWordFixesBatch(batch.fixes, batch.meta, { vocabApplied: fp })
+        applyWordFixesBatch(batch.fixes, batch.meta, { vocabApplied: fp, pushHistory: false })
         logEditorDecision('vocab_apply', { n: batch.count })
         toast.success(`Applied ${batch.count} vocabulary fix${batch.count === 1 ? '' : 'es'}`, {
           action: { label: 'Undo', onClick: () => setEdits(prevEdits) },

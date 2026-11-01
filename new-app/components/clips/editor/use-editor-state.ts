@@ -354,19 +354,22 @@ export function useEditorState(
     (
       fixes: Record<string, string>,
       meta: Record<string, { s: number; w: string }>,
-      opts?: { vocabApplied?: string },
+      opts?: { vocabApplied?: string; pushHistory?: boolean },
     ) => {
       const mergedFixes = { ...state.edits.wordFixes, ...fixes }
       const mergedMeta = { ...(state.edits.wordFixMeta ?? {}), ...meta }
       for (const k of Object.keys(mergedMeta)) {
         if (!(k in mergedFixes)) delete mergedMeta[k]
       }
-      setEdits({
-        ...state.edits,
-        wordFixes: mergedFixes,
-        wordFixMeta: Object.keys(mergedMeta).length ? mergedMeta : undefined,
-        ...(opts?.vocabApplied ? { vocabApplied: opts.vocabApplied } : {}),
-      })
+      setEdits(
+        {
+          ...state.edits,
+          wordFixes: mergedFixes,
+          wordFixMeta: Object.keys(mergedMeta).length ? mergedMeta : undefined,
+          ...(opts?.vocabApplied ? { vocabApplied: opts.vocabApplied } : {}),
+        },
+        opts?.pushHistory ?? true,
+      )
     },
     [setEdits, state.edits],
   )
