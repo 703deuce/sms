@@ -162,7 +162,7 @@ export function TemplatesPanel({
               </span>
               <span className="block truncate text-[10px] text-muted-foreground">
                 {t6Templates ? l.layoutTemplate : l.layoutMode.replace('_', ' ')} · {t6Captions ? l.caption : l.captionFallback}
-                {l.color ? ` · ${COLOR_PRESETS[l.color].label}` : ''}
+                {l.color ? ` · ${COLOR_PRESETS[l.color]?.label ?? l.color}` : ''}
               </span>
             </button>
           ))}

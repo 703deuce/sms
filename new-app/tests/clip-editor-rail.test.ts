@@ -6,7 +6,7 @@ const LAUNCH = ['transcript', 'cleanup', 'layout', 'layers', 'captions', 'audio'
 // E4: appended after every existing item so nothing moves; E5 appends Media after them.
 const E4 = ['text', 'templates', 'color', 'media']
 // G1a: Properties inspector appended last.
-const G1A = ['inspector']
+const G1A = ['repurpose', 'inspector']
 
 describe('clip editor rail', () => {
   it('keeps the launch items first and in place, then appends re-hooked tools', () => {

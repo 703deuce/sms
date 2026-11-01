@@ -326,7 +326,6 @@ export function AudioPanel({
           />
         </section>
       ) : null}
-      {aiExtras ? (
       <section className="space-y-2 rounded-md border border-border p-2" data-testid="audio-library">
         <h3 className="font-medium">Library</h3>
         <StockAudioPicker
@@ -335,6 +334,10 @@ export function AudioPanel({
           hasMusicBed={Boolean(music)}
           uploadLibraryFiles={uploadLibraryFiles}
           onGeneratePreset={(p) => {
+            if (!aiExtras) {
+              toast.message('AI music generation requires workspace AI extras')
+              return
+            }
             setPrompt(p)
             setBusy(true)
             void clipsFetch<{ generationId: string }>(`/api/clips/clips/${clipId}/music`, {
@@ -360,7 +363,6 @@ export function AudioPanel({
           onSfxUploaded={(uploadId, atMs) => onAddSfx(uploadId, atMs)}
         />
       </section>
-      ) : null}
       {aiExtras ? (
       <section className="space-y-2">
         <h3 className="font-medium">Music</h3>
