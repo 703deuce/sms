@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ClipEditsAudio } from '@/lib/clips/audio'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -64,6 +64,7 @@ export function useAudioMix({
   outputDurationMs,
   voiceMuted = false,
   musicRate,
+  meterOn = false,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
   edits: ClipEditsV2
@@ -80,6 +81,8 @@ export function useAudioMix({
   voiceMuted?: boolean
   /** E4: music element rate while per-item speeds play (global × item speed). Omitted = unchanged. */
   musicRate?: number
+  /** AU-30: route preview audio through master analysers when on. */
+  meterOn?: boolean
 }) {
   const ctxRef = useRef<AudioContext | null>(null)
   const dubRef = useRef<HTMLAudioElement | null>(null)
@@ -90,6 +93,12 @@ export function useAudioMix({
   // E3: volume keyframes (Voice / Music lanes) — gain envelopes in series with the existing mix.
   const voiceGainRef = useRef<GainNode | null>(null)
   const musicEnvRef = useRef<GainNode | null>(null)
+  const masterRef = useRef<GainNode | null>(null)
+  const meterAnalysersRef = useRef<[AnalyserNode, AnalyserNode] | null>(null)
+  const [meterState, setMeterState] = useState<{ analysers: [AnalyserNode, AnalyserNode] | null; voiceMetered: boolean }>({
+    analysers: null,
+    voiceMetered: true,
+  })
   const scheduledRef = useRef(false)
   const sfxNodesRef = useRef<AudioBufferSourceNode[]>([])
   const sfxAnchorRef = useRef<{ ctxT: number; outMs: number } | null>(null)
@@ -103,17 +112,36 @@ export function useAudioMix({
   const lufsGains = useTrackFxLufs({ edits, sfxCues, musicUrl, outputDurationMs })
   const chainsRef = useRef(new Map<string, { key: string; input: AudioNode; nodes: AudioNode[] }>())
   const fxKeyRef = useRef('')
+  const mixDest = (ctx: AudioContext): AudioNode => {
+    if (!masterRef.current) {
+      const m = ctx.createGain()
+      m.gain.value = 1
+      m.connect(ctx.destination)
+      masterRef.current = m
+      const split = ctx.createChannelSplitter(2)
+      m.connect(split)
+      const aL = ctx.createAnalyser()
+      const aR = ctx.createAnalyser()
+      aL.fftSize = 1024
+      aR.fftSize = 1024
+      split.connect(aL, 0)
+      split.connect(aR, 1)
+      meterAnalysersRef.current = [aL, aR]
+      setMeterState((s) => ({ ...s, analysers: [aL, aR] }))
+    }
+    return masterRef.current
+  }
   /** Input node for a track key: its chain when active, else the destination. */
   const fxInput = (ctx: AudioContext, key: string): AudioNode => {
     const fx = trackFxFor(edits, key)
-    if (!audioFxActive(fx)) return ctx.destination
+    if (!audioFxActive(fx)) return mixDest(ctx)
     const gain = lufsGains[key] ?? null
     const k = fxPlanKey(fx, gain)
     const cur = chainsRef.current.get(key)
     if (cur && cur.key === k) return cur.input
     if (cur) for (const n of cur.nodes) n.disconnect()
     const chain = buildFxChain(ctx, webAudioPlan(fx, gain))
-    chain.output.connect(ctx.destination)
+    chain.output.connect(mixDest(ctx))
     chainsRef.current.set(key, { key: k, input: chain.input, nodes: chain.nodes })
     return chain.input
   }
@@ -152,9 +180,12 @@ export function useAudioMix({
     }
     if (!audioGraphSafe(video)) {
       video.dataset.g4audioPlain = '1'
+      if (meterOn) setMeterState((s) => ({ ...s, voiceMetered: false }))
       return
     }
+    if (meterOn) setMeterState((s) => ({ ...s, voiceMetered: true }))
     if (!ctxRef.current) ctxRef.current = new AudioContext()
+    mixDest(ctxRef.current)
     elementSourceRef.current = ctxRef.current.createMediaElementSource(video)
     voiceGainRef.current = ctxRef.current.createGain()
     elementSourceRef.current.connect(voiceGainRef.current)
@@ -163,16 +194,17 @@ export function useAudioMix({
   const ensureVoiceGraphRef = useRef(ensureVoiceGraph)
   ensureVoiceGraphRef.current = ensureVoiceGraph
   const voiceFxOn = audioFxActive(trackFxFor(edits, 'voice'))
+  const needVoiceGraph = voiceFxOn || meterOn
   const fxKey = JSON.stringify(edits.trackFx ?? []) + JSON.stringify(lufsGains)
   useEffect(() => {
-    // The main sound only goes through Web Audio when it needs to (music bed or a Voice chain).
-    if (voiceFxOn) ensureVoiceGraph()
+    // The main sound only goes through Web Audio when it needs to (music bed, Voice chain, or AU-30 meter).
+    if (needVoiceGraph) ensureVoiceGraph()
     if (fxKeyRef.current === fxKey) return
     fxKeyRef.current = fxKey
     routeRef.current('voice')
     routeRef.current('music')
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fxKey captures the chains
-  }, [fxKey, voiceFxOn, audio?.music?.pan])
+  }, [fxKey, needVoiceGraph, meterOn, audio?.music?.pan])
 
   useEffect(() => {
     const video = videoRef.current
@@ -221,6 +253,7 @@ export function useAudioMix({
       // G4cfix: the music bed still mixes when the voice plays plain (no-CORS source).
       if (!ctxRef.current) ctxRef.current = new AudioContext()
       const ctx = ctxRef.current
+      mixDest(ctx)
       if (!musicRef.current) {
         musicRef.current = new Audio()
         musicRef.current.crossOrigin = 'anonymous'
@@ -342,6 +375,7 @@ export function useAudioMix({
     if (!sfxCues.length) return
     if (!ctxRef.current) ctxRef.current = new AudioContext()
     const ctx = ctxRef.current
+    mixDest(ctx)
     void ctx.resume()
     for (const cue of sfxCues) {
       // G1b3: in-point / length (detached audio).
@@ -423,8 +457,13 @@ export function useAudioMix({
       voiceGainRef.current = null
       elementSourceRef.current = null
       chainsRef.current.clear()
+      masterRef.current = null
+      meterAnalysersRef.current = null
+      setMeterState({ analysers: null, voiceMetered: true })
     }
   }, [])
+
+  return meterOn ? meterState : { analysers: null, voiceMetered: true }
 }
 
 /** Test helper: SFX reschedule key (pan changes must invalidate). */

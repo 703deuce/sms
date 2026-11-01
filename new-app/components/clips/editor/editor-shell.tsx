@@ -58,6 +58,7 @@ import { DubPanel } from '@/components/clips/editor/dub-panel'
 import { HookOverlayPanel } from '@/components/clips/editor/hook-overlay-panel'
 import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
+import { AudioMeter, usePeakLevels } from '@/components/clips/editor/audio-meter'
 import { useSfxCues } from '@/components/clips/editor/use-sfx-cues'
 import type { EditorAssets } from '@/lib/clips/editor/editor-assets'
 import { applyTimelineLaneState, arrowStepMs, brollMediaForItems, voiceMuted } from '@/lib/clips/editor/clip-timeline'
@@ -285,6 +286,21 @@ export function EditorShell({
   const [playing, setPlaying] = useState(false)
   const [playerMuted, setPlayerMuted] = useState(false)
   const [playerVolume, setPlayerVolume] = useState(100)
+  const [meterOn, setMeterOn] = useState(false)
+  useEffect(() => {
+    try {
+      setMeterOn(localStorage.getItem('clips.editor.vu') === '1')
+    } catch {
+      /* private mode */
+    }
+  }, [])
+  useEffect(() => {
+    try {
+      localStorage.setItem('clips.editor.vu', meterOn ? '1' : '0')
+    } catch {
+      /* private mode */
+    }
+  }, [meterOn])
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const previewFrameRef = useRef<HTMLDivElement | null>(null)
   const [previewFrameW, setPreviewFrameW] = useState(999)
@@ -1021,7 +1037,7 @@ export function EditorShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   )
-  useAudioMix({
+  const audioMeter = useAudioMix({
     musicRate,
     videoRef,
     edits: renderEdits,
@@ -1034,7 +1050,9 @@ export function EditorShell({
     playing,
     outputDurationMs: outDur,
     voiceMuted: laneVoiceMuted,
+    meterOn,
   })
+  const peakLevels = usePeakLevels(meterOn ? audioMeter.analysers : null)
 
   useEffect(() => {
     const key = (edits.brand as { logoKey?: string } | undefined)?.logoKey
@@ -2256,6 +2274,11 @@ export function EditorShell({
             showScrubber={false}
             muted={playerMuted}
             volume={playerVolume}
+            meterOn={meterOn}
+            onMeterToggle={() => setMeterOn((v) => !v)}
+            meterSlot={
+              meterOn ? <AudioMeter levels={peakLevels} voiceMetered={audioMeter.voiceMetered} /> : null
+            }
             onMuteToggle={() => {
               const v = videoRef.current
               if (!v) return
