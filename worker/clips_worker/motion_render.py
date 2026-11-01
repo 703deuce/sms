@@ -132,22 +132,33 @@ def xfade_window_filters(win: dict, ia: int, ib: int, w: int, h: int, label: str
 
 def _window_inputs(win: dict, clip_start_ms: int, full_dur_s: float) -> tuple[float, float, float, float, float]:
     n = int(win["frames"])
-    off_s = (win["startFrame"] / MOTION_FPS) - win["cutMs"] / 1000.0
-    a_s = (win["aEnd"] - clip_start_ms) / 1000.0 + off_s
-    b_s = (win["bStart"] - clip_start_ms) / 1000.0 + off_s
+    w0_ms = win.get("w0Ms")
+    if w0_ms is None:
+        w0_ms = win["startFrame"] * 1000.0 / MOTION_FPS
+    # Same handle mapping as preview mainFrame (motion-frame.ts): source ms at window start.
+    a_src_ms = win["aEnd"] + (w0_ms - win["cutMs"])
+    b_src_ms = win["bStart"] + (w0_ms - win["cutMs"])
+    a_s = (a_src_ms - clip_start_ms) / 1000.0
+    b_s = (b_src_ms - clip_start_ms) / 1000.0
     a_pad = max(0.0, -a_s)
     b_pad = max(0.0, -b_s)
+    a_s = max(0.0, a_s)
+    b_s = max(0.0, b_s)
     span = n / MOTION_FPS + 0.5
-    a_s = min(max(0.0, a_s), max(0.0, full_dur_s - 1.0 / MOTION_FPS))
-    b_s = min(max(0.0, b_s), max(0.0, full_dur_s - 1.0 / MOTION_FPS))
+    runway = max(span, (n + 2) / MOTION_FPS + max(a_pad, b_pad) + 1.0) + 0.05
+    if full_dur_s > 0:
+        a_s = min(a_s, max(0.0, full_dur_s - runway))
+        b_s = min(b_s, max(0.0, full_dur_s - runway))
     return a_s, b_s, a_pad, b_pad, span
 
 
 def window_decode_cmd(full_render: Path, seek_s: float, span_s: float, pad: float, n: int, w: int, h: int) -> list[str]:
-    chain = _window_src_chain(0, pad, "v", None, w, h, n)
+    chain = _window_src_chain(0, pad, "windec", None, w, h, n)
+    decode_t = max(span_s, (n + 2) / MOTION_FPS + max(0.0, pad) + 2.0)
     return [
-        "ffmpeg", "-v", "error", "-ss", f"{seek_s:.4f}", "-t", f"{span_s:.4f}", "-i", str(full_render),
-        "-filter_complex", f"{chain},format=rgb24[v]", "-map", "[v]", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:",
+        "ffmpeg", "-v", "error", "-ss", f"{seek_s:.4f}", "-t", f"{decode_t:.4f}", "-i", str(full_render),
+        "-filter_complex", f"{chain};[windec]scale=out_color_matrix=bt709:out_range=full,format=rgb24[vout]",
+        "-map", "[vout]", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:",
     ]
 
 

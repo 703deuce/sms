@@ -150,6 +150,117 @@ def test_pan_hard_left(tmp_path):
 
 
 @needs_ff
+def test_apply_voice_fx_pan_hard_left(tmp_path):
+    from clips_worker.track_fx import apply_voice_fx
+
+    st = tmp_path / "st.wav"
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=f=440:d=2:sample_rate=48000",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=f=440:d=2:sample_rate=48000",
+            "-filter_complex",
+            "[0:a][1:a]join=inputs=2:channel_layout=stereo[a]",
+            "-map",
+            "[a]",
+            str(st),
+        ],
+    )
+    vid = tmp_path / "v.mp4"
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=s=160x90:d=2:r=10",
+            "-i",
+            str(st),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+            str(vid),
+        ],
+    )
+    out = tmp_path / "panned.mp4"
+    assert apply_voice_fx(vid, out, {"track": "voice", "pan": -100})
+    rms_l = subprocess.check_output(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            str(out),
+            "-af",
+            "pan=mono|c0=c0,astats=metadata=1:reset=1",
+            "-f",
+            "null",
+            "-",
+        ],
+        text=True,
+        stderr=subprocess.STDOUT,
+    )
+    rms_r = subprocess.check_output(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            str(out),
+            "-af",
+            "pan=mono|c0=c1,astats=metadata=1:reset=1",
+            "-f",
+            "null",
+            "-",
+        ],
+        text=True,
+        stderr=subprocess.STDOUT,
+    )
+    fl = next(float(line.split("RMS level dB:")[-1].strip()) for line in rms_l.splitlines() if "RMS level dB:" in line)
+    fr = next(float(line.split("RMS level dB:")[-1].strip()) for line in rms_r.splitlines() if "RMS level dB:" in line)
+    assert fl > fr + 6
+
+
+def test_apply_voice_fx_pan_only_af_chain(monkeypatch, tmp_path):
+    from clips_worker import track_fx
+
+    captured: list[list[str]] = []
+
+    def fake_check_call(cmd, *args, **kwargs):
+        captured.append(cmd)
+
+    monkeypatch.setattr(subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(track_fx, "probe_audio_channels", lambda _p: 2, raising=False)
+    monkeypatch.setattr(
+        "clips_worker.audio_render.probe_audio_channels",
+        lambda _p: 2,
+    )
+    vid = tmp_path / "v.mp4"
+    vid.write_bytes(b"\x00")
+    out = tmp_path / "o.mp4"
+    assert track_fx.apply_voice_fx(vid, out, {"track": "voice", "pan": -100})
+    af = captured[0][captured[0].index("-af") + 1]
+    assert not af.startswith(",")
+    assert af.startswith("pan=stereo")
+
+
+@needs_ff
 def test_au33_mix_levels(tmp_path):
     v = tmp_path / "v.mp4"
     subprocess.check_call(
