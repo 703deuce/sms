@@ -417,7 +417,12 @@ export function reconcileLayerProps(prev: ClipEditsV2, next: ClipEditsV2): ClipE
 export function reconcileLayerFx(prev: ClipEditsV2, next: ClipEditsV2): ClipEditsV2 {
   const rows = next.layerFx
   if (!rows?.length) return next
-  const live = new Set((next.broll ?? []).map((b) => `broll:${b.id}`))
+  const live = new Set<string>([
+    'video',
+    ...(next.broll ?? []).map((b) => `broll:${b.id}`),
+    ...(next.textItems ?? []).map((t) => `text:${t.id}`),
+    ...(next.adjustLayers ?? []).map((l) => `adjust:${l.id}`),
+  ])
   let changed = false
   const out: LayerFx[] = rows.filter((r) => {
     const keep = live.has(r.target)

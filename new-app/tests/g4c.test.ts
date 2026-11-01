@@ -113,6 +113,30 @@ describe('G4c layerFx follows split / duplicate / reverse', () => {
     const p = pasteItems({ edits: e, previewEdits: e }, clip, 6000)!
     expect(p.edits.layerFx!.filter((r) => r.blend === 'multiply').length).toBe(2)
   })
+  it('keeps video and live text/adjust layerFx rows; drops deleted text', () => {
+    const prev = {
+      ...base(),
+      broll: [br('b1', 1000, 3000)],
+      textItems: [{ id: 't1', text: 'hi', startMs: 0, endMs: 1000, x: 50, y: 50, w: 40, h: 20, rot: 0, opacity: 1 }],
+      adjustLayers: [{ id: 'a1', startMs: 0, endMs: 1000, spec: { adjust: { exposure: 5 } } }],
+    }
+    const videoMask = { shape: 'ellipse' as const, x: 50, y: 50, w: 60, h: 40, rot: 0, feather: 10 }
+    const next = {
+      ...prev,
+      layerFx: [
+        { target: 'video', mask: videoMask },
+        { target: 'text:t1', mask: { shape: 'rect' as const, x: 10, y: 10, w: 20, h: 20, rot: 0, feather: 0 } },
+        { target: 'adjust:a1', blend: 'multiply' as const },
+        { target: 'text:gone', mask: videoMask },
+      ],
+    }
+    const out = reconcileLayerFx(prev, next)
+    expect(out.layerFx!.map((r) => r.target)).toEqual(['video', 'text:t1', 'adjust:a1'])
+    expect(out.layerFx!.find((r) => r.target === 'video')?.mask).toMatchObject({ shape: 'ellipse' })
+    const droppedText = { ...next, textItems: [] }
+    const out2 = reconcileLayerFx(prev, droppedText)
+    expect(out2.layerFx!.map((r) => r.target)).toEqual(['video', 'adjust:a1'])
+  })
 })
 
 describe('G4c normalizers (worker parity)', () => {
