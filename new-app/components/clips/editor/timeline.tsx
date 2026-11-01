@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { exportTimeMap, toBaseMs, toExportMs } from '@/lib/clips/editor/export-time'
 import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
 import { Activity, Blend, Bookmark, Command, Keyboard, Layers, Link2, Magnet, Maximize2, Pause, Plus, Redo2, Repeat, Scissors, Square, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
 import { toast } from 'sonner'
@@ -389,19 +390,28 @@ export function Timeline({
   const pendingScrollRef = useRef<number | null>(null)
   const trackViewportPx = Math.max(0, viewportPx - TRACK_EXTRA_PX)
   // FV2: long media can zoom out until the whole hour fits; clips keep the 4 px/s floor.
-  const minPx = timelineMinPxPerSec(span, trackViewportPx)
+  // TC2: lanes are drawn in EXPORT time — inserts (gaps, freeze frames, inserted clips) take their
+  // length on the lane and push later items right. Edits stay in base time; identity without inserts.
+  const tmap = useMemo(() => exportTimeMap(tb.segs, edits.inserts), [tb.segs, edits.inserts])
+  const dspan = span + tmap.totalMs
+  const minPx = timelineMinPxPerSec(dspan, trackViewportPx)
   const minPxRef = useRef(minPx)
   minPxRef.current = minPx
-  const longMedia = span > LONG_MEDIA_MS
+  const longMedia = dspan > LONG_MEDIA_MS
   const effectivePxPerSec = pxPerSec ?? (longMedia ? minPx : TIMELINE_DEFAULT_PX_PER_SEC)
-  const widthPx = trackWidthPx(span, effectivePxPerSec, trackViewportPx, minPx)
-  const pxPerMs = widthPx / span
+  const widthPx = trackWidthPx(dspan, effectivePxPerSec, trackViewportPx, minPx)
+  const pxPerMs = widthPx / dspan
+  /** Base ms → lane px: `xs` for starts / seek points (after an insert there), `xe` for ends. */
+  const xs = (ms: number) => toExportMs(tmap, ms, 'start') * pxPerMs
+  const xe = (ms: number) => toExportMs(tmap, ms, 'end') * pxPerMs
+  /** Lane px → base ms (a point inside an insert → its base point). */
+  const msAtPx = (px: number) => Math.max(0, Math.min(span, toBaseMs(tmap, px / Math.max(1e-6, pxPerMs))))
   const widthRef = useRef(widthPx)
   widthRef.current = widthPx
 
   const playheadMs = Math.max(0, Math.min(span, outputMs))
-  const playheadPct = (playheadMs / span) * 100
-  const playheadPx = (playheadPct / 100) * widthPx
+  const playheadPx = xe(playheadMs)
+  const playheadPct = (playheadPx / Math.max(1, widthPx)) * 100
   const playheadPxRef = useRef(playheadPx)
   playheadPxRef.current = playheadPx
   const pxPerSecRef = useRef(effectivePxPerSec)
@@ -435,16 +445,16 @@ export function Timeline({
     if (pxPerSec == null && trackViewportPx > 0)
       setPxPerSec(
         longMedia
-          ? fitPxPerSec(span, trackViewportPx, minPx)
-          : initialPxPerSec(span, trackViewportPx, readableScale, minPx),
+          ? fitPxPerSec(dspan, trackViewportPx, minPx)
+          : initialPxPerSec(dspan, trackViewportPx, readableScale, minPx),
       )
-  }, [pxPerSec, span, trackViewportPx, readableScale, longMedia, minPx])
+  }, [pxPerSec, dspan, trackViewportPx, readableScale, longMedia, minPx])
 
   const applyZoom = useCallback(
     (nextPxPerSec: number, anchorX?: number) => {
       const el = scrollRef.current
       const prevW = widthRef.current
-      const nextW = trackWidthPx(span, nextPxPerSec, trackViewportPx, minPxRef.current)
+      const nextW = trackWidthPx(dspan, nextPxPerSec, trackViewportPx, minPxRef.current)
       if (el) {
         const playheadAnchor = TRACK_OFFSET_PX + playheadPxRef.current - el.scrollLeft
         const anchor =
@@ -462,7 +472,7 @@ export function Timeline({
       }
       setPxPerSec(nextPxPerSec)
     },
-    [span, trackViewportPx],
+    [dspan, trackViewportPx],
   )
 
   useLayoutEffect(() => {
@@ -476,7 +486,7 @@ export function Timeline({
   const zoomOut = () => applyZoom(zoomBy(effectivePxPerSec, 'out', undefined, minPx))
   const zoomFit = () => {
     pendingScrollRef.current = 0
-    setPxPerSec(fitPxPerSec(span, trackViewportPx, minPx))
+    setPxPerSec(fitPxPerSec(dspan, trackViewportPx, minPx))
   }
   const zoomDefault = () => applyZoom(TIMELINE_DEFAULT_PX_PER_SEC)
 
@@ -577,7 +587,7 @@ export function Timeline({
   // FVfix: waveforms always draw just the area around the viewport (clips zoomed in get wide too).
   const wavWin: [number, number] | null =
     viewportPx > 0 ? [scrollX - TRACK_OFFSET_PX - viewportPx, scrollX - TRACK_OFFSET_PX + 2 * viewportPx] : null
-  const inView = (startMs: number, endMs: number) => !virtualize || (endMs * pxPerMs >= visFromPx && startMs * pxPerMs <= visToPx)
+  const inView = (startMs: number, endMs: number) => !virtualize || (xe(endMs) >= visFromPx && xs(startMs) <= visToPx)
 
   useEffect(() => {
     const el = scrollRef.current
@@ -934,8 +944,10 @@ export function Timeline({
       toast.message('Too many inserted clips')
       return true
     }
-    commit({ ...edits, inserts: ins })
-    toast.message('Gap inserted (1 s) — set its length under Media → Inserted clips', { id: 'timeline-gap' })
+    // TC2: a gap inside a main clip splits it there (the gap block then sits between two pieces).
+    const base = splitAt(opCtx(), [{ lane: 'video', id: '' }], playheadMs) ?? edits
+    commit({ ...base, inserts: ins })
+    toast.message('Gap inserted (1 s) — the black block on the Video lane; set its length under Media → Inserted clips', { id: 'timeline-gap' })
     return true
   }
   const replaceSelWithGap = (): boolean => {
@@ -1463,7 +1475,7 @@ export function Timeline({
 
   const msAtClientX = (clientX: number, el: HTMLElement) => {
     const r = el.getBoundingClientRect()
-    return Math.max(0, Math.min(span, ((clientX - r.left) / Math.max(1, r.width)) * span))
+    return msAtPx(((clientX - r.left) / Math.max(1, r.width)) * widthPx)
   }
 
   const rowOfItem = (item: TimelineItem) => rows.find((r) => r.lane === item.lane && (!r.trackId || r.trackId === item.track))
@@ -1841,8 +1853,8 @@ export function Timeline({
 
   const renderItem = (item: TimelineItem) => {
     const geo = shown(item)
-    const left = geo.startMs * pxPerMs
-    const w = Math.max(2, (geo.endMs - geo.startMs) * pxPerMs)
+    const left = xs(geo.startMs)
+    const w = Math.max(2, xe(geo.endMs) - left)
     const st = itemState(item)
     const isSel = selectedKeys.has(refKey(item))
     // TC1: deactivated items stay on the timeline, dimmed + striped.
@@ -2616,17 +2628,18 @@ export function Timeline({
               }}
             >
               <TimelineRuler
-                durationMs={span}
+                durationMs={dspan}
                 pxPerMs={pxPerMs}
                 widthPx={widthPx}
                 height={RULER_H}
-                onScrub={onSeekOutput}
+                onScrub={(d) => onSeekOutput(msAtPx(d * pxPerMs))}
                 visFromPx={virtualize ? visFromPx : undefined}
                 visToPx={virtualize ? visToPx : undefined}
               />
               <TimelineMarkers
                 markers={edits.markers}
                 pxPerMs={pxPerMs}
+                xOf={xs}
                 height={totalH}
                 onSeek={onSeekOutput}
                 onEdit={(id) => setMarkerPanel({ focusId: id })}
@@ -2646,7 +2659,7 @@ export function Timeline({
               {range ? (
                 <div
                   className="pointer-events-none absolute inset-y-0 z-[5] border-x-2 border-primary/80 bg-primary/10"
-                  style={{ left: range[0] * pxPerMs, width: Math.max(2, (range[1] - range[0]) * pxPerMs) }}
+                  style={{ left: xs(range[0]), width: Math.max(2, xe(range[1]) - xs(range[0])) }}
                   data-testid="timeline-inout-range"
                   data-in-ms={range[0]}
                   data-out-ms={range[1]}
@@ -2686,7 +2699,7 @@ export function Timeline({
                         <div
                           key={`tr${w.srcMs}`}
                           className="pointer-events-none absolute inset-y-0 z-[1] bg-gradient-to-r from-white/0 via-white/35 to-white/0"
-                          style={{ left: w.w0Ms * pxPerMs, width: Math.max(2, (w.w1Ms - w.w0Ms) * pxPerMs) }}
+                          style={{ left: xs(w.w0Ms), width: Math.max(2, xe(w.w1Ms) - xs(w.w0Ms)) }}
                           data-testid="timeline-transition-region"
                           data-src-ms={w.srcMs}
                           data-type={w.type}
@@ -2699,7 +2712,7 @@ export function Timeline({
                         <div
                           key={`btr${w.itemId}${w.kind}`}
                           className="pointer-events-none absolute inset-y-0 z-[1] bg-white/30"
-                          style={{ left: w.w0Ms * pxPerMs, width: Math.max(2, (w.w1Ms - w.w0Ms) * pxPerMs) }}
+                          style={{ left: xs(w.w0Ms), width: Math.max(2, xe(w.w1Ms) - xs(w.w0Ms)) }}
                           data-testid="timeline-broll-transition-region"
                           data-kind={w.kind}
                           data-type={w.type}
@@ -2711,7 +2724,7 @@ export function Timeline({
                   {lane === 'video' && drag?.reorder && drag.moved && drag.insertBefore !== undefined ? (
                     <div
                       className="pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-primary"
-                      style={{ left: (drag.insertBefore == null ? span : lanes.video.find((v) => v.id === drag.insertBefore)?.startMs ?? span) * pxPerMs - 1 }}
+                      style={{ left: (() => { const st = drag.insertBefore == null ? undefined : lanes.video.find((v) => v.id === drag.insertBefore)?.startMs; return st == null ? xe(span) - 1 : xs(st) - 1 })() }}
                       data-testid="timeline-reorder-marker"
                       aria-hidden
                     />
@@ -2721,7 +2734,7 @@ export function Timeline({
                         const seg = edits.sourceSegments?.find((x) => x.id === c.id)
                         const src = sourceById(edits.sources, c.sourceId)
                         if (!seg || !src || !inView(c.startMs, c.endMs)) return null
-                        const left = c.startMs * pxPerMs
+                        const left = xs(c.startMs)
                         return (
                           <SourceSegmentFilmstrip
                             key={`srcfs${c.id}:${c.startMs}`}
@@ -2731,7 +2744,7 @@ export function Timeline({
                             toMs={segmentMediaMs(seg, src, c.srcEndMs)}
                             leftPx={left}
                             topPx={2}
-                            widthPx={Math.max(2, (c.endMs - c.startMs) * pxPerMs)}
+                            widthPx={Math.max(2, xe(c.endMs) - left)}
                             heightPx={LANE_H.video - 4 - VIDEO_WORDBAR_H}
                             pxPerMs={pxPerMs}
                             visLeftPx={virtualize ? visFromPx - left : undefined}
@@ -2748,7 +2761,7 @@ export function Timeline({
                           className={`absolute top-[5px] z-[16] h-[14px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm border px-1 text-left text-[9px] leading-[12px] text-white shadow ${
                             c.id === selectedSourceSegmentId ? 'border-white bg-amber-500' : 'border-amber-200/70 bg-amber-600/85 hover:bg-amber-500'
                           }`}
-                          style={{ left: c.startMs * pxPerMs, width: Math.max(4, (c.endMs - c.startMs) * pxPerMs) }}
+                          style={{ left: xs(c.startMs), width: Math.max(4, xe(c.endMs) - xs(c.startMs)) }}
                           onPointerDown={(e) => e.stopPropagation()}
                           onClick={(e) => {
                             e.stopPropagation()
@@ -2762,12 +2775,12 @@ export function Timeline({
                         </button>
                       ))
                     : null}
-                  {lane === 'video' ? <TimelineInsertMarkers tb={tb} inserts={edits.inserts} sources={edits.sources} pxPerMs={pxPerMs} /> : null}
+                  {lane === 'video' ? <TimelineInsertMarkers tmap={tmap} sources={edits.sources} pxPerMs={pxPerMs} /> : null}
                   {lane === 'video' && editable && !laneState(edits, 'video').locked
                     ? (() => {
                         const cutKs = realCutIndices(tb)
                         // E3fix: min hit area + two rows when cuts are closer than the min gap.
-                        const slots = layoutCutHandles(cutKs.map((k) => tb.starts[k]! * pxPerMs))
+                        const slots = layoutCutHandles(cutKs.map((k) => xs(tb.starts[k]!)))
                         return cutKs.map((k, ci) => {
                         const slot = slots[ci]!
                         const srcMs = tb.segs[k]![0]
@@ -2805,8 +2818,8 @@ export function Timeline({
                     <>
                       <div className="pointer-events-none absolute inset-x-0 bottom-0.5 h-[18px]" role="group" aria-label="Transcript timeline">
                         {(virtualize ? wordItems.filter((wi) => inView(wi.outStartMs, wi.outEndMs)) : wordItems).map((wi) => {
-                          const left = wi.outStartMs * pxPerMs
-                          const w = Math.max(1, (wi.outEndMs - wi.outStartMs) * pxPerMs)
+                          const left = xs(wi.outStartMs)
+                          const w = Math.max(1, xe(wi.outEndMs) - left)
                           const id = wi.kind === 'word' ? wi.wordId : `g${wi.outStartMs}`
                           const src = wi.kind === 'word' ? wordByI.get(wi.wordId) : undefined
                           const shotI = shotIndexAt(shots, outputToSource(tb, (wi.outStartMs + wi.outEndMs) / 2))
@@ -2836,7 +2849,7 @@ export function Timeline({
                           <div
                             key={p.key}
                             className={`absolute h-[3px] ${p.mode === 'split' ? 'bg-violet-400' : p.mode === 'fit_blur' ? 'bg-amber-400' : 'bg-sky-300'}`}
-                            style={{ left: p.startMs * pxPerMs, width: Math.max(1, (p.endMs - p.startMs) * pxPerMs) }}
+                            style={{ left: xs(p.startMs), width: Math.max(1, xe(p.endMs) - xs(p.startMs)) }}
                             title={p.mode}
                           />
                         ))}
@@ -2846,7 +2859,7 @@ export function Timeline({
                           <div
                             key={i}
                             className="pointer-events-none absolute inset-y-0 border-l border-dashed border-primary/60"
-                            style={{ left: ms * pxPerMs }}
+                            style={{ left: xs(ms) }}
                             title={i === 0 ? 'Original AI clip start' : 'Original AI clip end'}
                             aria-hidden
                           />
@@ -2859,7 +2872,7 @@ export function Timeline({
               {drag?.moved && drag.snappedTo != null ? (
                 <div
                   className="pointer-events-none absolute top-0 bottom-0 w-px bg-yellow-300"
-                  style={{ left: drag.snappedTo * pxPerMs }}
+                  style={{ left: xs(drag.snappedTo) }}
                   data-testid="timeline-snap-guide"
                   aria-hidden
                 />
@@ -2867,7 +2880,7 @@ export function Timeline({
               {drag?.moved ? (
                 <div
                   className="pointer-events-none absolute -top-0.5 rounded bg-popover px-1 text-[10px] tabular-nums shadow"
-                  style={{ left: Math.max(0, (shown(drag.item).startMs) * pxPerMs) }}
+                  style={{ left: Math.max(0, xs(shown(drag.item).startMs)) }}
                   aria-live="polite"
                 >
                   {drag.deltaMs >= 0 ? '+' : ''}

@@ -270,8 +270,8 @@ export function EditorShell({
   const seededExportTemplateRef = useRef(false)
   const {
     edits,
-    undo,
-    redo,
+    undo: undoEdits,
+    redo: redoEdits,
     canUndo,
     canRedo,
     saveState,
@@ -312,6 +312,18 @@ export function EditorShell({
     applyProducerPatch,
     producerStrip,
   } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, editsSaveVersion, words })
+  // TC2: an audition (a slider's live preview, e.g. Color > HSL) can outlive its commit when the
+  // slider reports one more value after release; it then masked Undo / Redo in the preview (Undo
+  // reverted the edit, the preview kept the slider look until Color > Reset cleared it). Undo /
+  // Redo always drop the audition so the preview shows exactly the restored edits.
+  const undo = useCallback(() => {
+    setAuditionEdits(null)
+    undoEdits()
+  }, [undoEdits])
+  const redo = useCallback(() => {
+    setAuditionEdits(null)
+    redoEdits()
+  }, [redoEdits])
 
   const onApplyCleanupProposal = useCallback(
     (proposal: CleanupProposal) => {

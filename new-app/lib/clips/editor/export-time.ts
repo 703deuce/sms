@@ -1,0 +1,56 @@
+/**
+ * TC2: the timeline draws in EXPORT time. Inserts (gaps, freeze frames, inserted clips) are
+ * spliced into the export at a base-timeline point and push everything after them right; the
+ * lanes now show that: a visible block where the insert plays, later items moved right by its
+ * length. Edits stay in base time — this is a pure view mapping (identity with no inserts).
+ */
+import { insertWindows, type ClipInsert } from './inserts'
+
+export type ExportTimeMap = {
+  /** Sorted by base point; `startMs` / `endMs` are the insert's export (display) window. */
+  wins: { id: string; baseMs: number; startMs: number; endMs: number; durMs: number; gap: boolean; freeze: boolean; sourceId: string }[]
+  /** Total inserted length (ms). */
+  totalMs: number
+}
+
+export const IDENTITY_TIME_MAP: ExportTimeMap = { wins: [], totalMs: 0 }
+
+export function exportTimeMap(segs: readonly [number, number][], inserts: readonly ClipInsert[] | undefined): ExportTimeMap {
+  const ws = insertWindows(segs, inserts)
+  if (!ws.length) return IDENTITY_TIME_MAP
+  const wins = ws.map((w) => ({
+    id: w.id,
+    baseMs: w.baseMs,
+    startMs: w.startMs,
+    endMs: w.endMs,
+    durMs: w.durMs,
+    gap: Boolean(w.gap),
+    freeze: Boolean(w.freeze),
+    sourceId: w.sourceId,
+  }))
+  return { wins, totalMs: wins.reduce((s, w) => s + w.durMs, 0) }
+}
+
+/**
+ * Base ms → export ms. `edge: 'start'` (item starts, seeks after an insert) counts inserts AT the
+ * point (the item plays after them); `'end'` (item ends, the playhead) does not.
+ */
+export function toExportMs(map: ExportTimeMap, ms: number, edge: 'start' | 'end' = 'start'): number {
+  let add = 0
+  for (const w of map.wins) {
+    if (edge === 'start' ? w.baseMs <= ms : w.baseMs < ms) add += w.durMs
+    else break
+  }
+  return ms + add
+}
+
+/** Export ms → base ms; a point inside an insert maps to the insert's base point. */
+export function toBaseMs(map: ExportTimeMap, d: number): number {
+  let shift = 0
+  for (const w of map.wins) {
+    if (d < w.startMs) break
+    if (d < w.endMs) return w.baseMs
+    shift += w.durMs
+  }
+  return Math.max(0, d - shift)
+}

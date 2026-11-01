@@ -9,12 +9,15 @@ import { MARKER_HEX, type Marker } from '@/lib/clips/editor/markers'
 export function TimelineMarkers({
   markers,
   pxPerMs,
+  xOf,
   height,
   onSeek,
   onEdit,
 }: {
   markers: readonly Marker[] | undefined
   pxPerMs: number
+  /** TC2: base ms → lane px (export-time lanes); default ms × pxPerMs. */
+  xOf?: (ms: number) => number
   height: number
   onSeek: (ms: number) => void
   onEdit: (id: string) => void
@@ -27,7 +30,7 @@ export function TimelineMarkers({
           key={m.id}
           type="button"
           className="absolute top-0 z-[18] flex -translate-x-1/2 flex-col items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          style={{ left: m.ms * pxPerMs, height }}
+          style={{ left: xOf ? xOf(m.ms) : m.ms * pxPerMs, height }}
           title={`${m.chapter ? 'Chapter' : 'Marker'}${m.label ? `: ${m.label}` : ''} · ${(m.ms / 1000).toFixed(2)} s — click to jump, double-click to edit`}
           aria-label={`Marker ${m.label ?? ''} at ${(m.ms / 1000).toFixed(2)} seconds`}
           data-testid="timeline-marker"
