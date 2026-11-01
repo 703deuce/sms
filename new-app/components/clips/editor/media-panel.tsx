@@ -1,6 +1,7 @@
 'use client'
 
 import { MAIN_ANGLE, SYNC_NUDGE_MS, multicamAngles, nudgeSync, resetSync } from '@/lib/clips/editor/multicam-manual'
+import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
 import { useMemo, useRef, useState } from 'react'
 import { AudioLines, Film, Image as ImageIcon, Plus, RefreshCw, Upload, Video, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -414,7 +415,10 @@ export function MediaPanel({
 
       {angles.length ? (
         <section className="space-y-2 rounded-md border p-2" data-testid="media-multicam">
-          <div className="text-xs font-semibold">Multicam</div>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+            <span>Auto camera cuts</span>
+            <FreeToolBadge />
+          </div>
           <p className="text-[11px] text-muted-foreground">
             Map speakers to angles, then auto-switch only in gaps — manual cuts (keys 1–9, timeline) stay.
           </p>

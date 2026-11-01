@@ -5,6 +5,7 @@ import { symmetricGapTrimMs } from '@/lib/clips/script-edl/word-adjust'
 import { snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 import { gapMsBetween, listGapHits, type GapFilterMode, type GapHit } from '@/lib/clips/script-editor/gap-hits'
+import { gapShortenCutRangeWithAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
 
 /** Source-ms cut range that shortens a pause between two word boundaries to targetGapMs. */
 export function gapShortenCutRange(
@@ -13,7 +14,11 @@ export function gapShortenCutRange(
   gapMs: number,
   targetGapMs: number,
   words?: { s: number; e: number }[],
+  rmsSamples?: GapRmsSample[] | null,
 ): CutRange | null {
+  if (rmsSamples !== undefined) {
+    return gapShortenCutRangeWithAudio(gapStartMs, gapEndMs, gapMs, targetGapMs, rmsSamples, words)
+  }
   const remove = symmetricGapTrimMs(gapMs, targetGapMs)
   if (remove <= 50) return null
   const mid = gapStartMs + gapMs / 2
@@ -110,6 +115,7 @@ export function shortenAllClipGaps(
     targetGapMs: number
     maxPlausibleGapMs?: number
     wordSpans?: { s: number; e: number }[]
+    rmsSamples?: GapRmsSample[] | null
   },
 ): { cutRanges: CutRange[]; count: number } {
   let ranges = [...cutRanges]
@@ -125,6 +131,7 @@ export function shortenAllClipGaps(
         hit.gapMs,
         opts.targetGapMs,
         opts.wordSpans,
+        opts.rmsSamples,
       )
       if (range) {
         ranges = mergeCutRanges([...ranges, range])

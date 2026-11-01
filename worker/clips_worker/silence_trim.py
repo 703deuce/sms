@@ -1,6 +1,8 @@
 """Silence gap cuts (source timeline ms). Mirrors new-app/lib/clips/silence-trim.ts."""
 import re
 
+from clips_worker.gap_audio_trim import gap_shorten_cut_range_with_audio, rms_samples_from_peaks
+
 FILLER_ONLY = re.compile(r"^(um|uh|erm|hmm|mm|mhm)$", re.I)
 MAX_SILENCE_GAP_MS = 1500
 MAX_SINGLE_CUT_MS = 3000
@@ -19,13 +21,19 @@ def filler_word_cuts(words: list[dict]) -> list[list[int]]:
     return cuts
 
 
-def silence_trim_cuts(words: list[dict], opts: dict) -> list[list[int]]:
+def silence_trim_cuts(words: list[dict], opts: dict, rms_samples: list[tuple[int, float]] | None = None) -> list[list[int]]:
     if not opts.get("enabled"):
         return []
     min_gap = int(opts.get("minGapMs") or 350)
     keep = int(opts.get("keepMs") or 120)
     max_gap = int(opts.get("maxGapMs") or MAX_SILENCE_GAP_MS)
     protect = bool(opts.get("protectReactionGaps"))
+    use_audio = rms_samples is not None or opts.get("rmsSamples") is not None
+    peaks = rms_samples
+    if peaks is None and isinstance(opts.get("rmsSamples"), list):
+        peaks = opts.get("rmsSamples")
+    if use_audio and peaks is None and isinstance(opts.get("peaks"), list) and opts.get("peaksPerSec"):
+        peaks = rms_samples_from_peaks(opts["peaks"], float(opts["peaksPerSec"]))
     cuts: list[list[int]] = []
     for i in range(len(words) - 1):
         gap_start = int(float(words[i]["e"]) * 1000)
@@ -35,12 +43,17 @@ def silence_trim_cuts(words: list[dict], opts: dict) -> list[list[int]]:
             continue
         if gap <= min_gap or gap > max_gap:
             continue
-        remove = gap - keep
-        if remove <= 50:
+        if use_audio:
+            raw = gap_shorten_cut_range_with_audio(gap_start, gap_end, gap, keep, peaks)
+        else:
+            remove = gap - keep
+            if remove <= 50:
+                continue
+            remove = min(remove, MAX_SINGLE_CUT_MS)
+            mid = gap_start + gap / 2
+            raw = [int(mid - remove / 2), int(mid + remove / 2)]
+        if not raw:
             continue
-        remove = min(remove, MAX_SINGLE_CUT_MS)
-        mid = gap_start + gap / 2
-        raw = [int(mid - remove / 2), int(mid + remove / 2)]
         from clips_worker.word_cut import snap_cut_range_to_word_gaps
 
         snapped = snap_cut_range_to_word_gaps(raw, words)

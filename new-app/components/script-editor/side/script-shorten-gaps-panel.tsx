@@ -42,8 +42,11 @@ export function ScriptShortenGapsPanel({
 }) {
   return (
     <div className="flex flex-col gap-3 p-3" data-testid="script-shorten-gaps-panel">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">Shorten word gaps</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-sm font-medium">
+          Shorten word gaps
+          <FreeToolBadge />
+        </p>
         <Button type="button" size="sm" variant="outline" onClick={onOpenReview}>
           Review bar
         </Button>

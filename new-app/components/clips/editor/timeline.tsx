@@ -6,6 +6,7 @@ import { parseNudge } from '@/lib/clips/editor/timecode-nudge'
 import { readTimelineHeight, TIMELINE_MIN_H, writeTimelineHeight } from '@/lib/clips/editor/timeline-opts'
 import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
 import { Activity, Blend, Bookmark, Command, Keyboard, Layers, Link2, Magnet, Maximize2, Pause, Plus, Redo2, Repeat, Scissors, Square, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
+import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
 import { toast } from 'sonner'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -2775,23 +2776,26 @@ export function Timeline({
             </button>
           ) : null}
           {hasBeats && editable ? (
-            <select
-              className="h-6 rounded border border-border bg-background px-1 text-[11px]"
-              data-testid="timeline-beat-cut"
-              defaultValue=""
-              onChange={(e) => {
-                const v = e.target.value
-                e.target.value = ''
-                if (v === '1' || v === '2' || v === '4') applyBeatCut(Number(v) as 1 | 2 | 4)
-              }}
-            >
-              <option value="" disabled>
-                Cut to beat
-              </option>
-              <option value="1">Every beat</option>
-              <option value="2">Every 2 beats</option>
-              <option value="4">Every 4 beats</option>
-            </select>
+            <div className="flex items-center gap-1">
+              <select
+                className="h-6 rounded border border-border bg-background px-1 text-[11px]"
+                data-testid="timeline-beat-cut"
+                defaultValue=""
+                onChange={(e) => {
+                  const v = e.target.value
+                  e.target.value = ''
+                  if (v === '1' || v === '2' || v === '4') applyBeatCut(Number(v) as 1 | 2 | 4)
+                }}
+              >
+                <option value="" disabled>
+                  Cut to beat
+                </option>
+                <option value="1">Every beat</option>
+                <option value="2">Every 2 beats</option>
+                <option value="4">Every 4 beats</option>
+              </select>
+              <FreeToolBadge />
+            </div>
           ) : null}
           {editable ? (
             <span className="inline-flex items-center" role="group" aria-label="Trim tool" data-testid="timeline-tools">

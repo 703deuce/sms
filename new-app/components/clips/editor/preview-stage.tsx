@@ -1160,11 +1160,8 @@ export function PreviewStage({
     })
   }, [libassScripts])
   const libassClass = libassScripts
-    ? [
-        ...PREVIEW_SCRIPT_ORDER.filter((k) => hasScript(libassScripts, k) && libassStatus[k] === 'ready').map((k) => `libass-${k}`),
-        (libassScripts.fx?.length ?? 0) > 0 ? 'libass-text' : '',
-      ]
-        .filter(Boolean)
+    ? PREVIEW_SCRIPT_ORDER.filter((k) => hasScript(libassScripts, k) && libassStatus[k] === 'ready')
+        .map((k) => `libass-${k}`)
         .join(' ')
     : ''
 
