@@ -299,6 +299,7 @@ export function PreviewStage({
   const gradeRef = useRef<GradePreview | null>(null)
   const [gradeNotice, setGradeNotice] = useState<string | null>(null)
   const gradeNoticeRef = useRef<string | null>(null)
+  const [shaderNotice, setShaderNotice] = useState<string | null>(null)
   const mainKfRef = useRef<HTMLDivElement>(null)
   const mainFxRef = useRef<HTMLDivElement>(null)
   const mainLayerRef = useRef<HTMLDivElement>(null)
@@ -908,6 +909,17 @@ export function PreviewStage({
                 return true
               }
             : undefined,
+          exportW: (() => {
+            const bw = boxSizeRef.current.w
+            const bh = boxSizeRef.current.h
+            return bw <= bh ? 1080 : Math.round((1080 * bw) / bh)
+          })(),
+          exportH: (() => {
+            const bw = boxSizeRef.current.w
+            const bh = boxSizeRef.current.h
+            return bw <= bh ? Math.round((1080 * bh) / bw) : 1080
+          })(),
+          onShaderNotice: setShaderNotice,
         },
       )
       const rs = e.videoReverse?.length ? reversedSourceMs(e, src) : null
@@ -1733,12 +1745,12 @@ export function PreviewStage({
             {exportOnlyNote(edits)}
           </div>
         ) : null}
-        {gradeNotice ? (
+        {gradeNotice || shaderNotice ? (
           <div
             className="pointer-events-none absolute left-2 top-2 z-[60] max-w-[80%] rounded bg-black/70 px-2 py-0.5 text-[10px] text-white"
             data-testid="preview-grade-notice"
           >
-            {gradeNotice}
+            {[gradeNotice, shaderNotice].filter(Boolean).join(' ')}
           </div>
         ) : null}
         <TextItemsPreview

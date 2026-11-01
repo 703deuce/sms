@@ -7,7 +7,9 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { brollFrame, hookFrame, mainFrame, type FrameStyle } from '@/lib/clips/editor/motion-frame'
-import { transitionMaskAlpha, type LayerCss } from '@/lib/clips/editor/transitions'
+import { SHADER_TRANSITIONS, TRANSITION_INFO, transitionMaskAlpha, type LayerCss } from '@/lib/clips/editor/transitions'
+import { TransitionGL } from '@/components/clips/editor/g4/transition-gl'
+import type { ShaderType } from '@/lib/clips/editor/g4/transition-shaders.gen'
 
 export type MotionDom = {
   under: HTMLElement | null
@@ -236,6 +238,130 @@ function hidePixelCanvas(host: HTMLElement | null) {
   if (c && c.style.visibility !== 'hidden') c.style.visibility = 'hidden'
 }
 
+const SNAP_MAX = 1280
+const snapPool = { a: null as HTMLCanvasElement | null, b: null as HTMLCanvasElement | null }
+
+function snapCanvas(which: 'a' | 'b'): HTMLCanvasElement {
+  const key = which === 'a' ? 'a' : 'b'
+  if (!snapPool[key]) snapPool[key] = document.createElement('canvas')
+  return snapPool[key]!
+}
+
+function snapshotClone(
+  layer: HTMLElement | null,
+  w: number,
+  h: number,
+  look: string,
+  graded: boolean,
+): HTMLCanvasElement | null {
+  if (!layer || w < 2 || h < 2) return null
+  const canvas = snapCanvas(layer.dataset.snapSide === 'b' ? 'b' : 'a')
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w
+    canvas.height = h
+  }
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.clearRect(0, 0, w, h)
+  const v = layer.querySelector('video') as HTMLVideoElement | null
+  const mirror = layer.querySelector('canvas[data-g4-mirror]') as HTMLCanvasElement | null
+  if (graded && mirror && mirror.width > 0) {
+    ctx.drawImage(mirror, 0, 0, w, h)
+    return canvas
+  }
+  if (!v || v.readyState < 2) return null
+  ctx.save()
+  ctx.filter = look || 'none'
+  ctx.drawImage(v, 0, 0, w, h)
+  ctx.restore()
+  return canvas
+}
+
+function shaderCanvas(host: HTMLElement | null): HTMLCanvasElement | null {
+  if (!host) return null
+  let c = host.querySelector('canvas[data-testid="transition-shader"]') as HTMLCanvasElement | null
+  if (!c) {
+    c = document.createElement('canvas')
+    c.dataset.testid = 'transition-shader'
+    c.className = 'pointer-events-none absolute inset-0 h-full w-full'
+    host.appendChild(c)
+  }
+  return c
+}
+
+function hideShaderCanvas(host: HTMLElement | null) {
+  const c = host?.querySelector('canvas[data-testid="transition-shader"]') as HTMLCanvasElement | null
+  if (c && c.style.visibility !== 'hidden') c.style.visibility = 'hidden'
+}
+
+function drawShaderTransition(
+  host: HTMLElement | null,
+  aHost: HTMLElement | null,
+  bHost: HTMLElement | null,
+  shader: { type: ShaderType; progress: number },
+  boxW: number,
+  boxH: number,
+  exportW: number,
+  exportH: number,
+  lookA: string,
+  lookB: string,
+  gradeClone?: (layer: HTMLElement, vids: HTMLVideoElement[], srcMs: number) => boolean,
+  aSrcMs: number,
+  bSrcMs: number,
+): string | null {
+  const canvas = shaderCanvas(host)
+  if (!canvas || !aHost || !bHost) return 'no host'
+  const vw = boxW || 9
+  const vh = boxH || 16
+  const sc = Math.min(1, SNAP_MAX / Math.max(vw, vh))
+  const w = Math.max(2, Math.round(vw * sc))
+  const h = Math.max(2, Math.round(vh * sc))
+  if (aHost.dataset.snapSide !== 'a') aHost.dataset.snapSide = 'a'
+  if (bHost.dataset.snapSide !== 'b') bHost.dataset.snapSide = 'b'
+  const gradedA = Boolean(gradeClone?.(aHost, Array.from(aHost.querySelectorAll('video')), aSrcMs))
+  const gradedB = Boolean(gradeClone?.(bHost, Array.from(bHost.querySelectorAll('video')), bSrcMs))
+  const va = aHost.querySelector('video')
+  const vb = bHost.querySelector('video')
+  const urlA = va instanceof HTMLVideoElement ? va.currentSrc || va.src : ''
+  const urlB = vb instanceof HTMLVideoElement ? vb.currentSrc || vb.src : ''
+  if (urlA && TransitionGL.corsOk(va!) === 'pending') return null
+  if (urlB && TransitionGL.corsOk(vb!) === 'pending') return null
+  if (urlA && TransitionGL.corsOk(va!) === 'no') return 'CORS'
+  if (urlB && TransitionGL.corsOk(vb!) === 'no') return 'CORS'
+  const snapA = snapshotClone(aHost, w, h, lookA, gradedA)
+  const snapB = snapshotClone(bHost, w, h, lookB, gradedB)
+  if (!snapA || !snapB) return 'not ready'
+  const gl = TransitionGL.get()
+  if (!gl || !TransitionGL.ok(shader.type)) {
+    return TransitionGL.status[shader.type]?.reason ?? 'WebGL2 unavailable'
+  }
+  try {
+    gl.draw(shader.type, shader.progress, snapA, snapB, w, h, exportW, exportH)
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'SecurityError') {
+      if (va) TransitionGL.onSecurityError(va)
+      if (vb) TransitionGL.onSecurityError(vb)
+      return 'CORS'
+    }
+    return e instanceof Error ? e.message : 'draw failed'
+  }
+  canvas.style.visibility = 'visible'
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return '2d context'
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w
+    canvas.height = h
+  }
+  ctx.clearRect(0, 0, w, h)
+  ctx.drawImage(gl.canvas, 0, 0, w, h)
+  return null
+}
+
+function shaderNoticeText(type: ShaderType, reason: string): string {
+  const label = TRANSITION_INFO[type]?.label ?? type
+  return `Preview shows a crossfade for ${label} (${reason}). The export renders the full effect.`
+}
+
 export function applyMotionFrame(
   dom: MotionDom,
   edits: ClipEditsV2,
@@ -251,11 +377,18 @@ export function applyMotionFrame(
     lookAt?: (srcMs: number) => string
     /** TR-06: grade clones through WebGL mirror; when true, syncClone skips style.filter. */
     gradeClone?: (layer: HTMLElement, vids: HTMLVideoElement[], srcMs: number) => boolean
+    exportW?: number
+    exportH?: number
+    onShaderNotice?: (msg: string | null) => void
   },
 ) {
   const look = (ms: number) => opts.lookAt?.(ms) ?? ''
   const gradeClone = opts.gradeClone
   const boxH = opts.boxH ?? Math.round((opts.boxW * 9) / 16)
+  const { W: exportW, H: exportH } = exportFrameSize(opts.boxW, boxH)
+  const exW = opts.exportW ?? exportW
+  const exH = opts.exportH ?? exportH
+  let shaderNotice: string | null = null
   const main = mainFrame(edits, tb, outMs, opts.boxW)
   setStyle(dom.mainKf, main.kf)
   const cutHost = dom.cloneA?.parentElement ?? null
@@ -264,11 +397,46 @@ export function applyMotionFrame(
     syncClone(dom.cloneA, dom.mainLayer, c.aSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.aSrcMs), gradeClone)
     syncClone(dom.cloneB, dom.mainLayer, c.bSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.bSrcMs), gradeClone)
     if (c.pixel) {
+      hideShaderCanvas(cutHost)
       drawPixelTransition(cutHost, dom.cloneA, dom.cloneB, c.pixel, opts.boxW, boxH, look(c.aSrcMs), look(c.bSrcMs))
       setStyle(dom.cloneA, { ...c.a, visibility: 'hidden' })
       setStyle(dom.cloneB, { ...c.b, visibility: 'hidden' })
+    } else if (c.shader) {
+      hidePixelCanvas(cutHost)
+      const fail = drawShaderTransition(
+        cutHost,
+        dom.cloneA,
+        dom.cloneB,
+        c.shader,
+        opts.boxW,
+        boxH,
+        exW,
+        exH,
+        look(c.aSrcMs),
+        look(c.bSrcMs),
+        gradeClone,
+        c.aSrcMs,
+        c.bSrcMs,
+      )
+      if (fail === null) {
+        setStyle(dom.cloneA, { ...c.a, visibility: 'hidden' })
+        setStyle(dom.cloneB, { ...c.b, visibility: 'hidden' })
+        if (dom.cutDip && dom.cutDip.style.opacity !== '0') dom.cutDip.style.opacity = '0'
+      } else if (fail !== null && fail !== 'not ready') {
+        hideShaderCanvas(cutHost)
+        setStyle(dom.cloneA, c.a)
+        setStyle(dom.cloneB, c.b)
+        if (fail !== 'CORS' || TransitionGL.corsOk(dom.cloneA?.querySelector('video') ?? document.createElement('video')) !== 'pending') {
+          shaderNotice = shaderNoticeText(c.shader.type, fail === 'CORS' ? 'CORS' : fail)
+        }
+      } else {
+        hideShaderCanvas(cutHost)
+        setStyle(dom.cloneA, c.a)
+        setStyle(dom.cloneB, c.b)
+      }
     } else {
       hidePixelCanvas(cutHost)
+      hideShaderCanvas(cutHost)
       setStyle(dom.cloneA, c.a)
       setStyle(dom.cloneB, c.b)
     }
@@ -293,6 +461,7 @@ export function applyMotionFrame(
       pauseClone(dom.cloneB)
     }
     hidePixelCanvas(cutHost)
+    hideShaderCanvas(cutHost)
     setStyle(dom.cloneA, null)
     setStyle(dom.cloneB, null)
     if (dom.cutDip && dom.cutDip.style.opacity !== '0') dom.cutDip.style.opacity = '0'
@@ -312,4 +481,5 @@ export function applyMotionFrame(
   }
   const hk = hookFrame(edits, outMs)
   setStyle(dom.hook, hk)
+  opts.onShaderNotice?.(shaderNotice)
 }

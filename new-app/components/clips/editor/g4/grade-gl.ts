@@ -13,9 +13,27 @@
  */
 import { tetra } from '@/lib/clips/editor/color-grade'
 
-const VS = `#version 300 es
+export const GRADE_GL_VERTEX_SHADER = `#version 300 es
 in vec2 aPos; out vec2 vUv;
 void main() { vUv = vec2((aPos.x + 1.0) * 0.5, (1.0 - aPos.y) * 0.5); gl_Position = vec4(aPos, 0.0, 1.0); }`
+
+const VS = GRADE_GL_VERTEX_SHADER
+
+export function compileGlProgram(gl: WebGL2RenderingContext, vertSrc: string, fragSrc: string): WebGLProgram {
+  const sh = (type: number, src: string) => {
+    const s = gl.createShader(type)!
+    gl.shaderSource(s, src)
+    gl.compileShader(s)
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) ?? 'shader')
+    return s
+  }
+  const prog = gl.createProgram()!
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, vertSrc))
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fragSrc))
+  gl.linkProgram(prog)
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) ?? 'link')
+  return prog
+}
 
 const FS = `#version 300 es
 precision highp float; precision highp int; precision highp sampler3D;
@@ -95,19 +113,9 @@ export class GradeGL {
     const gl = this.canvas.getContext('webgl2', { premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true })
     if (!gl) throw new Error('WebGL2 unavailable')
     this.gl = gl
-    const sh = (type: number, src: string) => {
-      const s = gl.createShader(type)!
-      gl.shaderSource(s, src)
-      gl.compileShader(s)
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) ?? 'shader')
-      return s
-    }
-    const prog = gl.createProgram()!
-    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS))
-    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS))
-    gl.linkProgram(prog)
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) ?? 'link')
-    this.prog = prog
+    this.prog = compileGlProgram(gl, VS, FS)
+    const prog = this.prog
+    gl.useProgram(prog)
     gl.useProgram(prog)
     const buf = gl.createBuffer()
     gl.bindBuffer(gl.ARRAY_BUFFER, buf)

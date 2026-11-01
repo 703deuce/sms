@@ -15,7 +15,7 @@ import {
 } from '@/lib/clips/editor/transitions'
 import { Slider } from '@/components/ui/slider'
 
-const GROUPS = ['Basic', 'Push', 'Wipe', 'Soft wipe', 'Shape', 'Slice', 'Zoom & blur', 'Slide', 'Stylized'] as const
+const GROUPS = ['Basic', 'Push', 'Wipe', 'Soft wipe', 'Shape', 'Slice', 'Zoom & blur', 'Slide', 'Stylized', 'Effects'] as const
 
 const thumbCache = new Map<string, string | null>()
 /** G4b: mask transitions draw their real xfade mask (mid-way) as the thumbnail. */

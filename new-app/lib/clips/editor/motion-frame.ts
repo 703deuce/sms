@@ -20,6 +20,8 @@ import {
   compositeCss,
   cutTransitionWindows,
   progressIn,
+  SHADER_TRANSITIONS,
+  shaderProgress,
   transitionFrame,
   type BrollWindow,
   type CutWindow,
@@ -76,6 +78,7 @@ export type MainFrame = {
     bSrcMs: number
     top: 'a' | 'b'
     pixel?: { blockFrac: number; P: number }
+    shader?: { type: import('@/lib/clips/editor/g4/transition-shaders.gen').ShaderType; progress: number }
     a: LayerCss
     b: LayerCss
     color: { opacity: number; background: string }
@@ -120,6 +123,10 @@ export function mainFrame(
         a: css.a,
         b: css.b,
         color: css.color,
+      }
+      if (SHADER_TRANSITIONS.has(w.type)) {
+        const k = Math.round(q * w.frames)
+        cut.shader = { type: w.type as import('@/lib/clips/editor/g4/transition-shaders.gen').ShaderType, progress: shaderProgress(k, w.frames) }
       }
       break
     }
