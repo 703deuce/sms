@@ -294,6 +294,7 @@ export function PreviewStage({
   const brollDipRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const hookRef = useRef<HTMLDivElement | null>(null)
   // E4: text item layers, last applied playback rate (per-item speed) and main-layer look.
+  const textRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const textFxRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const adjustFxRefs = useRef<Record<string, HTMLDivElement | null>>({})
   // E5: other-source layers (inside the main layer, so keyframes / color looks apply like export).
