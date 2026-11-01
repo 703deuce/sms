@@ -11,7 +11,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-BLANK_DEFAULT_MS = 10 * 60 * 1000
+BLANK_DEFAULT_MS = 10_000
 BLANK_MIN_MS = 10_000
 BLANK_MAX_MS = 60 * 60 * 1000
 BLANK_INITIAL_TRIM_MS = 10_000
@@ -39,7 +39,7 @@ def make_blank_video(dest: Path, aspect: str | None, dur_ms: int) -> tuple[int, 
             "-f", "lavfi", "-i", f"color=c=black:s={w}x{h}:r=30:d={d:.3f}",
             "-f", "lavfi", "-i", f"anullsrc=r=48000:cl=stereo:d={d:.3f}",
             "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-tune", "stillimage", "-crf", "35",
-            "-g", "300", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "32k", "-movflags", "+faststart", str(dest),
+            "-g", "30", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "32k", "-movflags", "+faststart", str(dest),
         ]
     )
     return w, h

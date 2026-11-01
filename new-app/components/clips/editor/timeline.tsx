@@ -122,7 +122,8 @@ import { EnvelopeLine } from '@/components/clips/editor/timeline/envelope-line'
 import { addEnvelopePoint, deleteEnvelopePoint, envelopeFor, envelopePoints, moveEnvelopePoint } from '@/lib/clips/editor/envelopes'
 import { PROP_SPECS } from '@/lib/clips/editor/motion-schema'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
-import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
+import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, setAngleForSourceSpan, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
+import type { TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import { CUT_HANDLE_ROW_TOP_PX, layoutCutHandles } from '@/lib/clips/editor/cut-handle-layout'
 import { useAudioPeaks, type AudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { AudioClipInspector } from '@/components/clips/editor/timeline/audio-clip-inspector'
@@ -337,6 +338,8 @@ export function Timeline({
   onInOutChange,
   onArmVoiceover,
   highlights,
+  playheadOutMsRef,
+  transcriptSelectionRef,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -415,6 +418,10 @@ export function Timeline({
     onMakeClip: (pick: HighlightPick, range: HighlightRange) => void
     onOpenCard: (pick: HighlightPick) => void
   }
+  /** Live timeline playhead (output ms); ref updates on scrub before React state. */
+  playheadOutMsRef?: React.MutableRefObject<number>
+  /** Script word selection — keys 1–9 apply camera to this span instead of the playhead cut. */
+  transcriptSelectionRef?: React.MutableRefObject<TranscriptSelection | null>
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -465,7 +472,8 @@ export function Timeline({
   widthRef.current = widthPx
 
   const playheadMs = Math.max(0, Math.min(span, outputMs))
-  const playheadPx = xe(playheadMs)
+  const liveOutMs = playheadOutMsRef?.current ?? playheadMs
+  const playheadPx = xe(liveOutMs)
   const playheadPct = (playheadPx / Math.max(1, widthPx)) * 100
   const playheadPxRef = useRef(playheadPx)
   playheadPxRef.current = playheadPx
@@ -867,9 +875,16 @@ export function Timeline({
   angleRef.current = (n: number) => {
     const a = angles[n - 1]
     if (!editable || angles.length < 2 || !a) return false
-    const srcMs = outputToSource(tb, playheadMs)
-    if (angleAt(edits, srcMs) === a.sourceId) return true
-    const next = switchAngleAt(edits, srcMs, a.sourceId, angleSources)
+    const sel = transcriptSelectionRef?.current
+    const spanSel = sel && sel.startMs !== sel.endMs
+    let next: ClipEditsV2
+    if (spanSel) {
+      next = setAngleForSourceSpan(edits, tb, sel.startMs, sel.endMs, a.sourceId, angleSources)
+    } else {
+      const srcMs = outputToSource(tb, liveOutMs)
+      if (angleAt(edits, srcMs) === a.sourceId) return true
+      next = switchAngleAt(edits, srcMs, a.sourceId, angleSources)
+    }
     if (next === edits) return false
     commit(next)
     return true
@@ -1283,10 +1298,10 @@ export function Timeline({
         split()
         return true
       case 'markIn':
-        setIo((v) => ({ inMs: Math.round(playheadMs), outMs: v.outMs != null && v.outMs > playheadMs ? v.outMs : null }))
+        setIo((v) => ({ inMs: Math.round(liveOutMs), outMs: v.outMs != null && v.outMs > liveOutMs ? v.outMs : null }))
         return true
       case 'markOut':
-        setIo((v) => ({ inMs: v.inMs != null && v.inMs < playheadMs ? v.inMs : null, outMs: Math.round(playheadMs) }))
+        setIo((v) => ({ inMs: v.inMs != null && v.inMs < liveOutMs ? v.inMs : null, outMs: Math.round(liveOutMs) }))
         return true
       case 'clearInOut':
         setIo({ inMs: null, outMs: null })
@@ -1311,7 +1326,7 @@ export function Timeline({
       case 'prevTake':
         return cycleTake(-1)
       case 'matchFrame':
-        return onMatchFrame ? onMatchFrame(playheadMs) : false
+        return onMatchFrame ? onMatchFrame(liveOutMs) : false
       default:
         return false
     }
@@ -3689,9 +3704,7 @@ export function Timeline({
               ) : null}
               {angles.length > 1 && editable && (range || liveSelected.some((r) => r.lane === 'video')) ? (
                 <>
-                  <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">
-                    Camera angle {range ? '(in–out range)' : '(selected clips)'}
-                  </p>
+                  <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">Camera ▸</p>
                   {angles.map((a) => (
                     <button
                       key={a.sourceId}

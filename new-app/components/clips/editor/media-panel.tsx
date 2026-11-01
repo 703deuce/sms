@@ -237,6 +237,7 @@ export function MediaPanel({
   monitorRequest = null,
   timebase,
   playheadOutMs = 0,
+  playheadOutMsRef,
 }: {
   media: ProjectMediaApi
   edits: ClipEditsV2
@@ -253,6 +254,7 @@ export function MediaPanel({
   /** G1c: the timeline's time base + playhead (output ms) for Insert / Overwrite. */
   timebase?: Timebase
   playheadOutMs?: number
+  playheadOutMsRef?: import('react').MutableRefObject<number>
 }) {
   const [filter, setFilter] = useState<Filter>('all')
   const seg = edits.sourceSegments?.find((s) => s.id === selectedSegmentId) ?? null
@@ -386,6 +388,7 @@ export function MediaPanel({
           edits={edits}
           tb={timebase}
           playheadOutMs={playheadOutMs}
+          playheadOutMsRef={playheadOutMsRef}
           onEdits={onEdits}
         />
       ) : null}

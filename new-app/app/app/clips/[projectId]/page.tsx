@@ -4,7 +4,7 @@ import { StreamerProjectChrome } from '@/components/streamer/streamer-project-ch
 import { ProjectClipsView } from '@/components/clips/project-clips-view'
 import { listProjectClips } from '@/lib/server/clips/clips'
 import { resolveViewOnFullVideoUrl } from '@/lib/server/clips/view-on-full-video'
-import { parseSettings } from '@/lib/server/clips/projects'
+import { blankProjectDisplayDurationMs, parseSettings } from '@/lib/server/clips/projects'
 import { getProjectStatus } from '@/lib/server/clips/jobs'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -36,6 +36,12 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
   }
 
   const projectSettings = parseSettings(project.settings)
+  const upload = project.uploadId
+    ? await prisma.clipUpload.findUnique({
+        where: { id: project.uploadId },
+        select: { durationMs: true },
+      })
+    : null
   const streamVod = await prisma.streamVod.findUnique({ where: { projectId: project.id } })
   if (projectSettings.byo && project.status === 'READY' && !streamVod) {
     const readyClips = await listProjectClips(workspaceId, project.id, 'score')
@@ -45,6 +51,9 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
   }
   const initialClips =
     project.status === 'READY' ? await listProjectClips(workspaceId, project.id, 'score') : null
+  const sourceDurationMs = projectSettings.blank
+    ? blankProjectDisplayDurationMs(project, upload?.durationMs ?? null, initialClips?.[0]?.edits)
+    : Math.max(0, project.rangeEndMs - project.rangeStartMs)
   const viewOnFullVideoUrl = await resolveViewOnFullVideoUrl(
     workspaceId,
     project.id,
@@ -109,7 +118,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         initialError={project.error}
         fromLink={Boolean(project.sourceUrl)}
         createdAt={project.createdAt.toISOString()}
-        sourceDurationMs={Math.max(0, project.rangeEndMs - project.rangeStartMs)}
+        sourceDurationMs={sourceDurationMs}
         isStreamer={Boolean(streamVod)}
         initialProgress={liveStatus?.progress ?? 0}
         initialStage={liveStatus?.stage ?? null}
