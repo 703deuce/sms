@@ -20,9 +20,9 @@ const postSchema = z.object({
   expiresAt: z.string().datetime().nullable().optional(),
 })
 
-export async function GET(_request: Request, ctx: { params: Promise<{ renderId: string }> }) {
+export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const { renderId } = await ctx.params
+    const { id: renderId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const link = await getRenderShareForWorkspace(workspaceId, renderId)
     if (!link) return NextResponse.json({ data: null })
@@ -32,9 +32,9 @@ export async function GET(_request: Request, ctx: { params: Promise<{ renderId: 
   }
 }
 
-export async function POST(request: Request, ctx: { params: Promise<{ renderId: string }> }) {
+export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const { renderId } = await ctx.params
+    const { id: renderId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const userId = await resolveClipsActorUserId(request)
     const raw = await request.text()
@@ -55,9 +55,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ renderId: 
   }
 }
 
-export async function PATCH(request: Request, ctx: { params: Promise<{ renderId: string }> }) {
+export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const { renderId } = await ctx.params
+    const { id: renderId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     await resolveClipsActorUserId(request)
     const body = patchSchema.parse(await request.json())
@@ -77,9 +77,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ renderId:
   }
 }
 
-export async function DELETE(request: Request, ctx: { params: Promise<{ renderId: string }> }) {
+export async function DELETE(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const { renderId } = await ctx.params
+    const { id: renderId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     await resolveClipsActorUserId(request)
     const ok = await revokeRenderShareLink(workspaceId, renderId)
