@@ -8,6 +8,7 @@
  */
 import { rotateBy90 } from '@/lib/clips/editor/canvas-ops'
 import { useEffect, useState, type ReactNode } from 'react'
+import { Button } from '@/components/ui/button'
 import { ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronUp, Crop, Diamond, MoveHorizontal, MoveVertical, RotateCcw, Trash2 } from 'lucide-react'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
@@ -117,6 +118,7 @@ export function PropertiesPanel({
   colorSlot,
   videoSlot,
   brollSceneSlot,
+  onReplaceBroll,
 }: {
   edits: ClipEditsV2
   target: KeyframeTarget | null
@@ -135,6 +137,8 @@ export function PropertiesPanel({
   videoSlot?: ReactNode
   /** G4cfix: scene split for the selected B-roll item (rendered under its layer effects). */
   brollSceneSlot?: (id: string) => ReactNode
+  /** FV-19: open replace-media dialog for the selected B-roll item. */
+  onReplaceBroll?: (brollId: string) => void
 }) {
   const avail = tabsFor(target)
   const [tab, setTab] = useState<PropertiesTab>('video')
@@ -193,6 +197,16 @@ export function PropertiesPanel({
             readOnly={readOnly}
           />
           {target === 'video' && videoSlot ? videoSlot : null}
+          {target.startsWith('broll:') && onReplaceBroll ? (
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="inspector-replace-media"
+              onClick={() => onReplaceBroll(target.slice('broll:'.length))}
+            >
+              Replace media…
+            </Button>
+          ) : null}
           {target.startsWith('broll:') && brollSceneSlot ? brollSceneSlot(target.slice('broll:'.length)) : null}
         </>
       ) : tab === 'audio' && avail.audio == null ? (

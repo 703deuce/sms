@@ -27,6 +27,7 @@ import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { CaptionLinesPanel } from '@/components/clips/editor/caption-lines-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FindClipsInVideoButton } from '@/components/clips/editor/find-clips-in-video-button'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
@@ -97,6 +98,7 @@ import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
+import type { ProjectMediaApi } from '@/components/clips/editor/use-project-media'
 import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
 import { buildFromTranscriptItem, matchFrameAt } from '@/lib/clips/editor/source-monitor'
 import { mediaUrlFor, useMediaTranscripts, useProjectMedia } from '@/components/clips/editor/use-project-media'
@@ -114,7 +116,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
-import { addMediaToLane, placeAddedOnTrack, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
+import { addMediaToLane, placeAddedOnTrack, replaceBrollMedia, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { nextShuttleRate, shuttleKey } from '@/lib/clips/editor/timeline-shortcuts'
@@ -225,6 +227,7 @@ export function EditorShell({
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
+  const [replaceBrollId, setReplaceBrollId] = useState<string | null>(null)
   const [fillerReviewOpen, setFillerReviewOpen] = useState(false)
   const [gapReviewOpen, setGapReviewOpen] = useState(false)
   const [auditionEdits, setAuditionEdits] = useState<ClipEditsV2 | null>(null)
@@ -849,7 +852,14 @@ export function EditorShell({
         mediaType: it.still || m?.mediaType === 'image' ? 'image' : 'video',
       } as BrollMediaRow)
     }
-    return brollMediaForItems(edits.broll ?? [], [...brollMedia, ...uploadRows])
+    const byId = new Map((edits.broll ?? []).map((b) => [b.id, b]))
+    const liveServer = brollMedia.filter((r) => {
+      const it = byId.get(r.id)
+      if (!it) return true
+      if (it.source === 'upload') return false
+      return it.source === 'stock' ? r.assetId === it.assetId : r.generationId === it.generationId
+    })
+    return brollMediaForItems(edits.broll ?? [], [...liveServer, ...uploadRows])
   }, [brollMedia, edits.broll, mediaItems])
   const sourceUrls = useMemo(() => {
     const m: Record<string, string> = {}
@@ -897,6 +907,23 @@ export function EditorShell({
     },
     [applyAdd, edits, selectedVideo],
   )
+  const onReplaceBrollMedia = useCallback(
+    (item: ProjectMediaItem) => {
+      if (!replaceBrollId) return
+      applyAdd(replaceBrollMedia(edits, replaceBrollId, item))
+      setReplaceBrollId(null)
+    },
+    [applyAdd, edits, replaceBrollId],
+  )
+  const replaceMediaApi = useMemo((): ProjectMediaApi => {
+    const uploadFiles = async (files: File[]) => {
+      const created = await media.uploadFiles(files)
+      const v = created.find((x) => x.mediaType !== 'audio')
+      if (v) onReplaceBrollMedia(v)
+      return created
+    }
+    return { ...media, uploadFiles }
+  }, [media, onReplaceBrollMedia])
   const onSelectSourceSegment = useCallback(
     (id: string) => {
       setSelectedSourceSegmentId(id)
@@ -1712,6 +1739,7 @@ export function EditorShell({
                               : 'text'
                 ]?.locked,
             )}
+            onReplaceBroll={setReplaceBrollId}
             speedSlot={
               selVideoSeg ? (
                 <ItemSpeedControl
@@ -2198,6 +2226,7 @@ export function EditorShell({
             selectRequest={timelineSelReq}
             onMatchFrame={matchFrame}
             onOpenExport={() => setExportOpen(true)}
+            onReplaceBrollMedia={setReplaceBrollId}
           />
           <PlayerControls
             playing={playing}
@@ -2329,6 +2358,21 @@ export function EditorShell({
         onClose={() => setExportOpen(false)}
       />
       </ClipperSurfaceErrorBoundary>
+      <Dialog open={!!replaceBrollId} onOpenChange={(o) => !o && setReplaceBrollId(null)}>
+        <DialogContent className="max-w-2xl" data-testid="replace-media-dialog">
+          <DialogHeader>
+            <DialogTitle>Replace media</DialogTitle>
+          </DialogHeader>
+          <MediaLibraryGrid
+            media={replaceMediaApi}
+            filter="visual"
+            lanes={['broll']}
+            onAdd={(item, lane) => {
+              if (lane === 'broll') onReplaceBrollMedia(item)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

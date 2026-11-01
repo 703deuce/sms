@@ -282,3 +282,50 @@ export function replaceVideoRange(
   }
   return { edits: { ...edits, sources, sourceSegments: setSourceSegment(edits.sourceSegments, seg, sources) } }
 }
+
+/** FV-19: swap a B-roll item's source for a library item; every other field (and the id) is kept. */
+export type ReplaceItemResult =
+  | { item: BrollItem; shortened: boolean; error?: undefined }
+  | { item?: undefined; shortened?: undefined; error: string }
+
+export function replaceItemMedia(b: BrollItem, m: ProjectMediaItem): ReplaceItemResult {
+  if (!mediaLanesFor(m).includes('broll')) return { error: "That media can't be used as an overlay" }
+  const { assetId: _a, generationId: _g, uploadId: _u, still: _s, inMs: oldIn, ...rest } = b as BrollItem & {
+    assetId?: string
+    generationId?: string
+    uploadId?: string
+    still?: true
+    inMs?: number
+  }
+  const base = { ...rest, source: 'upload' as const, uploadId: m.refId, placement: 'manual' as const }
+  if (m.mediaType === 'image') return { item: { ...base, still: true } as BrollItem, shortened: false }
+  const dur = b.endMs - b.startMs
+  let inMs = b.source === 'upload' && b.still ? 0 : Math.max(0, oldIn ?? 0)
+  let endMs = b.endMs
+  let shortened = false
+  const len = m.durationMs && m.durationMs > 0 ? Math.floor(m.durationMs) : null
+  if (len != null) {
+    if (len < BROLL_MIN_MS) return { error: 'That clip is too short (min 1 s)' }
+    if (inMs + dur > len) inMs = 0
+    if (dur > len) {
+      endMs = b.startMs + len
+      shortened = true
+    }
+  }
+  return { item: { ...base, endMs, ...(inMs > 0 ? { inMs } : {}) } as BrollItem, shortened }
+}
+
+/** Edits-level wrapper: returns AddResult so editor-shell can reuse applyAdd (toast + one setEdits). */
+export function replaceBrollMedia(edits: ClipEditsV2, brollId: string, m: ProjectMediaItem): AddResult {
+  const b = (edits.broll ?? []).find((x) => x.id === brollId)
+  if (!b) return { edits: null, message: 'Select a B-roll clip first' }
+  const r = replaceItemMedia(b, m)
+  if (r.error) return { edits: null, message: r.error }
+  const next = { ...edits, broll: (edits.broll ?? []).map((x) => (x.id === brollId ? r.item : x)) }
+  return r.shortened
+    ? {
+        edits: next,
+        message: `Shortened to ${((r.item.endMs - r.item.startMs) / 1000).toFixed(1)}s — the new media is shorter`,
+      }
+    : { edits: next, message: 'Media replaced' }
+}
