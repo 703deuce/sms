@@ -694,6 +694,20 @@ export function EditorShell({
     refreshMedia: () => media.refresh(),
   })
   const recordDevicesOk = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
+  const tpLsKey = `clip-rec:${projectId}:teleprompter`
+  const [teleprompterOpen, setTeleprompterOpen] = useState(false)
+  const [teleprompterScript, setTeleprompterScript] = useState('')
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setTeleprompterScript(localStorage.getItem(tpLsKey) ?? '')
+  }, [tpLsKey])
+  const saveTeleprompterScript = useCallback(
+    (t: string) => {
+      setTeleprompterScript(t)
+      localStorage.setItem(tpLsKey, t)
+    },
+    [tpLsKey],
+  )
   // G1b2: synced camera angles in the media library (manual multicam keys 1–9 / transcript / menu).
   const angleSources = useMemo(
     () => media.items.filter((i) => i.mediaType === 'video' && !i.isMain && (i.ref === 'take' || i.syncMs != null)).map(sourceFromItem),
@@ -2341,8 +2355,22 @@ export function EditorShell({
               onMutePreview={clipRec.setMutePreview}
               placeMode={clipRec.placeMode}
               onPlaceMode={clipRec.setPlaceMode}
+              bubbleOn={clipRec.bubbleOn}
+              onBubbleOn={clipRec.setBubbleOn}
+              bubbleCorner={clipRec.bubbleCorner}
+              onBubbleCorner={clipRec.setBubbleCorner}
+              bubbleSize={clipRec.bubbleSize}
+              onBubbleSize={clipRec.setBubbleSize}
               analysers={clipRec.analysers}
               previewStream={clipRec.previewStream}
+              teleprompterOpen={teleprompterOpen}
+              onTeleprompterOpen={setTeleprompterOpen}
+              scriptText={teleprompterScript}
+              onScriptText={saveTeleprompterScript}
+              onUseTranscript={() =>
+                saveTeleprompterScript(editorWords.map((w) => w.word).join(' '))
+              }
+              teleprompterPlaying={clipRec.teleprompterPlaying}
               onDisarm={clipRec.disarm}
               onStart={() => void beginClipRecording()}
               onStop={() => void clipRec.stopRecording()}

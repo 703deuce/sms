@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { listMediaDeviceOptions } from '@/lib/recording/livekit-devices'
+import type { BubbleCorner, BubbleSize } from '@/lib/clips/editor/recording-bubble'
+import { buildScreenRecordStream } from '@/components/clips/editor/recording/screen-compositor'
 import {
   AUDIO_BITS_PER_SECOND,
   RECORD_MAX_MS,
@@ -14,7 +16,7 @@ import {
   type VideoPlaceMode,
 } from '@/lib/clips/editor/recording'
 
-export type ClipRecorderMode = 'voiceover' | 'camera'
+export type ClipRecorderMode = 'voiceover' | 'camera' | 'screen'
 
 export type ClipRecorderFinished = {
   blob: Blob
@@ -31,6 +33,12 @@ function lsKey(projectId: string, key: string) {
   return `clip-rec:${projectId}:${key}`
 }
 
+function recorderKind(mode: ClipRecorderMode): RecorderKind {
+  if (mode === 'voiceover') return 'voiceover'
+  if (mode === 'screen') return 'screen'
+  return 'camera'
+}
+
 export function useClipRecorder(projectId: string) {
   const [armed, setArmed] = useState(false)
   const [mode, setMode] = useState<ClipRecorderMode>('voiceover')
@@ -44,6 +52,9 @@ export function useClipRecorder(projectId: string) {
   const [countdownEnabled, setCountdownEnabledState] = useState(true)
   const [mutePreview, setMutePreviewState] = useState(false)
   const [placeMode, setPlaceMode] = useState<VideoPlaceMode>('insert')
+  const [bubbleOn, setBubbleOnState] = useState(true)
+  const [bubbleCorner, setBubbleCornerState] = useState<BubbleCorner>('se')
+  const [bubbleSize, setBubbleSizeState] = useState<BubbleSize>('M')
   const [analysers, setAnalysers] = useState<[AnalyserNode | null, AnalyserNode | null] | null>(null)
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null)
   const [pendingTake, setPendingTake] = useState<ClipRecorderFinished | null>(null)
@@ -56,11 +67,20 @@ export function useClipRecorder(projectId: string) {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const cancelRef = useRef(false)
   const onFinishRef = useRef<((t: ClipRecorderFinished | null) => void) | null>(null)
+  const compositorStopRef = useRef<(() => void) | null>(null)
+  const canvasDimsRef = useRef<{ w: number; h: number } | null>(null)
+  const stopOnceRef = useRef(false)
+  const stopRecordingRef = useRef<(discard?: boolean) => Promise<ClipRecorderFinished | null>>(async () => null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     setCountdownEnabledState(localStorage.getItem(lsKey(projectId, 'countdown')) !== '0')
     setMutePreviewState(localStorage.getItem(lsKey(projectId, 'mutePreview')) === '1')
+    setBubbleOnState(localStorage.getItem(lsKey(projectId, 'bubble')) !== '0')
+    const corner = localStorage.getItem(lsKey(projectId, 'bubbleCorner'))
+    if (corner === 'se' || corner === 'sw' || corner === 'ne' || corner === 'nw') setBubbleCornerState(corner)
+    const sz = localStorage.getItem(lsKey(projectId, 'bubbleSize'))
+    if (sz === 'S' || sz === 'M' || sz === 'L') setBubbleSizeState(sz)
   }, [projectId])
 
   const setCountdownEnabled = useCallback(
@@ -75,6 +95,30 @@ export function useClipRecorder(projectId: string) {
     (on: boolean) => {
       setMutePreviewState(on)
       localStorage.setItem(lsKey(projectId, 'mutePreview'), on ? '1' : '0')
+    },
+    [projectId],
+  )
+
+  const setBubbleOn = useCallback(
+    (on: boolean) => {
+      setBubbleOnState(on)
+      localStorage.setItem(lsKey(projectId, 'bubble'), on ? '1' : '0')
+    },
+    [projectId],
+  )
+
+  const setBubbleCorner = useCallback(
+    (c: BubbleCorner) => {
+      setBubbleCornerState(c)
+      localStorage.setItem(lsKey(projectId, 'bubbleCorner'), c)
+    },
+    [projectId],
+  )
+
+  const setBubbleSize = useCallback(
+    (s: BubbleSize) => {
+      setBubbleSizeState(s)
+      localStorage.setItem(lsKey(projectId, 'bubbleSize'), s)
     },
     [projectId],
   )
@@ -94,6 +138,9 @@ export function useClipRecorder(projectId: string) {
   }, [recording])
 
   const stopTracks = useCallback(() => {
+    compositorStopRef.current?.()
+    compositorStopRef.current = null
+    canvasDimsRef.current = null
     streamRef.current?.getTracks?.().forEach((t) => t.stop())
     streamRef.current = null
     setPreviewStream(null)
@@ -123,17 +170,62 @@ export function useClipRecorder(projectId: string) {
     setAnalysers([aL, aR])
   }, [])
 
+  const micStream = useCallback(async () => {
+    return navigator.mediaDevices.getUserMedia({
+      audio: {
+        ...(micId ? { deviceId: micId } : {}),
+        echoCancellation: true,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
+    })
+  }, [micId])
+
   const buildStream = useCallback(
     async (m: ClipRecorderMode) => {
       if (m === 'voiceover') {
-        return navigator.mediaDevices.getUserMedia({
-          audio: {
-            ...(micId ? { deviceId: micId } : {}),
-            echoCancellation: true,
-            noiseSuppression: false,
-            autoGainControl: false,
+        return micStream()
+      }
+      if (m === 'screen') {
+        stopOnceRef.current = false
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: 30 },
+          audio: true,
+        })
+        const mic = await micStream()
+        let cameraStream: MediaStream | null = null
+        if (bubbleOn) {
+          cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              ...(cameraId ? { deviceId: cameraId } : {}),
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30 },
+            },
+            audio: false,
+          })
+        }
+        const comp = await buildScreenRecordStream({
+          displayStream,
+          cameraStream,
+          bubbleOn,
+          corner: bubbleCorner,
+          size: bubbleSize,
+          micStream: mic,
+          onDisplayEnded: () => {
+            if (stopOnceRef.current || cancelRef.current) return
+            stopOnceRef.current = true
+            void stopRecordingRef.current(false)
+          },
+          onDrawStall: () => {
+            import('sonner').then(({ toast }) =>
+              toast.message('Keep this tab visible while recording', { id: 'rec-stall' }),
+            )
           },
         })
+        compositorStopRef.current = comp.stop
+        canvasDimsRef.current = { w: comp.canvasW, h: comp.canvasH }
+        return comp.stream
       }
       return navigator.mediaDevices.getUserMedia({
         video: {
@@ -150,29 +242,27 @@ export function useClipRecorder(projectId: string) {
         },
       })
     },
-    [cameraId, micId],
+    [bubbleCorner, bubbleOn, bubbleSize, cameraId, micStream],
   )
 
-  const finalizeBlob = useCallback(
-    (kind: RecorderKind) => {
-      const mimeType = recorderRef.current?.mimeType || chunksRef.current[0]?.type || 'video/webm'
-      const blob = new Blob(chunksRef.current, { type: mimeType })
-      const measuredMs = recStartRef.current
-        ? Math.max(0, Math.round(Date.now() - recStartRef.current - pausedMsRef.current))
-        : 0
-      const vtrack = streamRef.current?.getVideoTracks()[0]
-      const settings = vtrack?.getSettings()
-      return {
-        blob,
-        mimeType,
-        measuredMs,
-        kind,
-        width: settings?.width,
-        height: settings?.height,
-      } satisfies ClipRecorderFinished
-    },
-    [],
-  )
+  const finalizeBlob = useCallback((kind: RecorderKind) => {
+    const mimeType = recorderRef.current?.mimeType || chunksRef.current[0]?.type || 'video/webm'
+    const blob = new Blob(chunksRef.current, { type: mimeType })
+    const measuredMs = recStartRef.current
+      ? Math.max(0, Math.round(Date.now() - recStartRef.current - pausedMsRef.current))
+      : 0
+    const dims = canvasDimsRef.current
+    const vtrack = streamRef.current?.getVideoTracks()[0]
+    const settings = vtrack?.getSettings()
+    return {
+      blob,
+      mimeType,
+      measuredMs,
+      kind,
+      width: dims?.w ?? settings?.width,
+      height: dims?.h ?? settings?.height,
+    } satisfies ClipRecorderFinished
+  }, [])
 
   const stopRecording = useCallback(
     async (discard?: boolean) => {
@@ -191,7 +281,7 @@ export function useClipRecorder(projectId: string) {
         rec.addEventListener('stop', () => resolve(), { once: true })
         rec.stop()
       })
-      const take = discard ? null : finalizeBlob(mode === 'voiceover' ? 'voiceover' : 'camera')
+      const take = discard ? null : finalizeBlob(recorderKind(mode))
       if (take) setPendingTake(take)
       stopTracks()
       onFinishRef.current?.(take)
@@ -200,10 +290,13 @@ export function useClipRecorder(projectId: string) {
     [finalizeBlob, mode, stopTracks],
   )
 
+  stopRecordingRef.current = stopRecording
+
   const startRecording = useCallback(
     async (opts?: { onFinish?: (t: ClipRecorderFinished | null) => void }) => {
       onFinishRef.current = opts?.onFinish ?? null
       cancelRef.current = false
+      stopOnceRef.current = false
       chunksRef.current = []
       pausedMsRef.current = 0
 
@@ -224,7 +317,7 @@ export function useClipRecorder(projectId: string) {
 
       const stream = await buildStream(mode)
       streamRef.current = stream
-      setPreviewStream(mode === 'camera' ? stream : null)
+      setPreviewStream(mode === 'camera' || mode === 'screen' ? stream : null)
       wireMeter(stream)
 
       const mimeKind = mode === 'voiceover' ? 'audio' : 'video'
@@ -233,7 +326,7 @@ export function useClipRecorder(projectId: string) {
 
       const rec = new MediaRecorder(stream, {
         mimeType,
-        ...(mode === 'camera' ? { videoBitsPerSecond: VIDEO_BITS_PER_SECOND } : {}),
+        ...(mode !== 'voiceover' ? { videoBitsPerSecond: VIDEO_BITS_PER_SECOND } : {}),
       })
       recorderRef.current = rec
       rec.ondataavailable = (e) => {
@@ -275,6 +368,7 @@ export function useClipRecorder(projectId: string) {
   )
 
   const cancelRecording = useCallback(async () => {
+    stopOnceRef.current = true
     await stopRecording(true)
     setPendingTake(null)
     setArmed(false)
@@ -310,6 +404,12 @@ export function useClipRecorder(projectId: string) {
     setMutePreview,
     placeMode,
     setPlaceMode,
+    bubbleOn,
+    setBubbleOn,
+    bubbleCorner,
+    setBubbleCorner,
+    bubbleSize,
+    setBubbleSize,
     analysers,
     previewStream,
     pendingTake,
@@ -317,6 +417,7 @@ export function useClipRecorder(projectId: string) {
     startRecording,
     stopRecording: () => stopRecording(false),
     cancelRecording,
+    teleprompterPlaying: recording && countdown == null,
     measuredDurationMs: () =>
       recStartRef.current ? Math.max(0, Date.now() - recStartRef.current - pausedMsRef.current) : 0,
     countdownLeadMs: () => (countdownEnabled ? COUNTDOWN_MS : 0),

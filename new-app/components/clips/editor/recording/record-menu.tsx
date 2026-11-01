@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, Mic, Video } from 'lucide-react'
+import { ChevronDown, Mic, Monitor, Video } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -54,6 +54,10 @@ export function ClipRecordMenu({
         <DropdownMenuItem onClick={() => onPick('camera')} data-testid="record-camera">
           <Video className="mr-2 size-4" />
           Camera
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onPick('screen')} data-testid="record-screen">
+          <Monitor className="mr-2 size-4" />
+          Screen
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
