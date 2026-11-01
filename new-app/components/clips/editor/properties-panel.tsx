@@ -87,9 +87,8 @@ export function tabsFor(target: KeyframeTarget | null): Record<PropertiesTab, st
   }
   if (target === 'video') return { video: null, audio: null, speed: null, animation: null, color: null }
   if (target.startsWith('adjust:')) {
-    // G4a: an adjustment layer is color / effects only.
     const why = 'Adjustment layers only grade what is below them'
-    return { video: off(why), audio: off(why), speed: off(why), animation: off(why), color: null }
+    return { video: null, audio: off(why), speed: off(why), animation: off(why), color: null }
   }
   if (target.startsWith('broll:')) {
     return { video: null, audio: off('B-roll is silent in the export'), speed: off('Speed is set per Video item'), animation: null, color: null }
@@ -255,6 +254,14 @@ function VideoTab({
   const flip = layerFlip(edits, target)
   const moves = stackMoves(edits, target)
   const kind = stackKindOf(target)
+  const fxKind = fxTargetOf(target)
+  if (target.startsWith('adjust:')) {
+    return (
+      <div className="space-y-4" data-testid="properties-video">
+        <LayerFxControls edits={edits} target={target} localMs={localMs} features={{ mask: true, blend: true }} onCommit={onCommit} readOnly={readOnly} />
+      </div>
+    )
+  }
   const resetProps = (props: readonly KeyProp[]) => {
     const keep = (edits.keyframes ?? []).filter((k) => !(k.target === target && props.includes(k.prop)))
     onCommit({ ...edits, keyframes: keep.length ? keep : undefined })
@@ -322,15 +329,25 @@ function VideoTab({
           </div>
         </Section>
       ) : null}
+      {fxKind === 'text' ? (
+        <LayerFxControls
+          edits={edits}
+          target={target}
+          localMs={localMs}
+          features={{ mask: true, blend: true }}
+          onCommit={onCommit}
+          readOnly={readOnly}
+        />
+      ) : null}
       {(() => {
-        const fxKind = fxTargetOf(target)
-        if (!fxKind || fxKind === 'text' || fxKind === 'adjust') return null
+        const k = fxTargetOf(target)
+        if (!k || k === 'text' || k === 'adjust') return null
         return (
           <LayerFxControls
             edits={edits}
             target={target}
             localMs={localMs}
-            features={FX_FEATURES[fxKind]}
+            features={FX_FEATURES[k]}
             keyDisabled={target === 'video' && !mainKeyAllowed(edits) ? 'Not available in this layout' : undefined}
             onCommit={onCommit}
             readOnly={readOnly}

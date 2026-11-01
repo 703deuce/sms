@@ -58,7 +58,7 @@ import { corsMediaProps, prepareAll, setMediaSrc, watchMediaCors } from '@/compo
 import { reversedSourceMs } from '@/lib/clips/editor/video-reverse'
 import { applyBlurRegion, applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
 import { exportOnlyNote } from '@/lib/clips/editor/export-processing'
-import { brollFxOf, chromaParams } from '@/lib/clips/editor/layer-fx'
+import { brollFxOf, chromaParams, layerFxOf, textItemHasFx, adjustLayerHasFx } from '@/lib/clips/editor/layer-fx'
 import { mainFxOf, mainKeyAllowed } from '@/lib/clips/editor/main-fx'
 import { speedAtSource } from '@/lib/clips/editor/speed'
 import { textItemFrame } from '@/lib/clips/editor/text-frame'
@@ -294,7 +294,8 @@ export function PreviewStage({
   const brollDipRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const hookRef = useRef<HTMLDivElement | null>(null)
   // E4: text item layers, last applied playback rate (per-item speed) and main-layer look.
-  const textRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const textFxRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const adjustFxRefs = useRef<Record<string, HTMLDivElement | null>>({})
   // E5: other-source layers (inside the main layer, so keyframes / color looks apply like export).
   const srcBoxRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const srcElRefs = useRef<Record<string, HTMLVideoElement | HTMLImageElement | null>>({})
@@ -627,6 +628,8 @@ export function PreviewStage({
       // E4 / G4a: color — main layer by source position (+ color keyframes at output time), B-roll
       // per item, adjustment layers on the wrapper. SVG chain (grade-filters) or WebGL mirror for
       // the HSL / LUT stage (grade-gl), both from the same math as the export (color-grade.ts).
+      const tickFxFrame = exportFrameFor(boxSizeRef.current.w, boxSizeRef.current.h)
+      const tickAdjGrades = adjustGradesAt(e, outMs)
       const gp = gradeRef.current
       if (gp) {
         gp.bank.attach(stageBoxElRef.current)
@@ -638,12 +641,14 @@ export function PreviewStage({
         stageFrame.outMs = outMs
         // G4c: media time = (source − offset) / 1000 (scene scan seeks its own CORS twin).
         stageFrame.offsetMs = mediaOffsetMs
-        const fxFrame = exportFrameFor(boxSizeRef.current.w, boxSizeRef.current.h)
         const mfx = e.layerFx?.length ? mainFxOf(e) : undefined
-        applyLayerFx(mainFxRef.current, null, mfx, outMs, fxFrame.W, fxFrame.H)
+        applyLayerFx(mainFxRef.current, null, mfx, outMs, tickFxFrame.W, tickFxFrame.H)
         const mainChroma = mfx?.key && mainKeyAllowed(e) ? chromaParams(mfx.key) : null
         gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current), mainChroma)
-        const adjSpecs = adjustGradesAt(e, outMs).map((g) => g.spec)
+        const adjGrades = tickAdjGrades
+        const adjSpecs = adjGrades
+          .filter(({ layer }) => !adjustLayerHasFx(e, layer.id))
+          .map((g) => g.spec)
         const adj = gp.chain(adjSpecs)
         if (adjustRef.current && adjustRef.current.style.filter !== adj) adjustRef.current.style.filter = adj
         gp.setShake(adjustRef.current, gp.shake(adjSpecs))
@@ -677,16 +682,44 @@ export function PreviewStage({
         const op = String(f.visible ? f.opacity : 0)
         if (el.style.opacity !== op) el.style.opacity = op
         if (el.style.transform !== f.transform) el.style.transform = f.transform
+        const lfx = e.layerFx?.length ? layerFxOf(e, `text:${it.id}`) : undefined
+        const fxHost = textFxRefs.current[it.id]
+        const host = fxHost ?? (libassWanted && textItemHasFx(e, it.id) ? null : el)
+        if (host && lfx && (lfx.mask || lfx.blend)) {
+          applyLayerFx(host, host, lfx, outMs - it.startMs, tickFxFrame.W, tickFxFrame.H)
+        }
+      }
+      for (const ly of e.adjustLayers ?? []) {
+        if (!adjustLayerHasFx(e, ly.id)) continue
+        const el = adjustFxRefs.current[ly.id]
+        if (!el) continue
+        const on = ly.startMs <= outMs && outMs < ly.endMs
+        if (!on) {
+          if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden'
+          continue
+        }
+        const lfx = layerFxOf(e, `adjust:${ly.id}`)
+        const spec = tickAdjGrades.find((g) => g.layer.id === ly.id)?.spec
+        const bf = gp ? gp.chain(spec ? [spec] : []) : lookFilterCss(spec ?? {})
+        if (el.style.backdropFilter !== bf) el.style.backdropFilter = bf
+        if (el.style.visibility !== 'visible') el.style.visibility = 'visible'
+        applyLayerFx(el, el, lfx, outMs - ly.startMs, tickFxFrame.W, tickFxFrame.H)
+        if (lfx?.mask && typeof CSS !== 'undefined' && CSS.supports && !CSS.supports('backdrop-filter', 'blur(1px)')) {
+          const msg = 'Masked adjustment preview needs Chrome (the export still applies it)'
+          if (gradeNoticeRef.current !== msg) {
+            gradeNoticeRef.current = msg
+            setGradeNotice(msg)
+          }
+        }
       }
       const bWins = brollTransitionWindows(e.broll)
-      const fxFrame = exportFrameFor(boxSizeRef.current.w, boxSizeRef.current.h)
       for (const item of e.broll || []) {
         // E1fix: live media rows via ref (the tick is mounted once).
         const media = brollMediaRef.current.find((m) => m.id === item.id)
         // G4b: mask / blend / chroma key / reverse (layer_fx.py) — nothing changes without a row.
         const lfx = e.layerFx?.length ? brollFxOf(e, item.id) : undefined
         const fxEl = brollFxRefs.current[item.id] ?? null
-        applyLayerFx(fxEl, fxEl?.closest<HTMLElement>('[data-testid="preview-broll"]') ?? null, lfx, outMs - item.startMs, fxFrame.W, fxFrame.H)
+        applyLayerFx(fxEl, fxEl?.closest<HTMLElement>('[data-testid="preview-broll"]') ?? null, lfx, outMs - item.startMs, tickFxFrame.W, tickFxFrame.H)
         const chroma = lfx?.key ? chromaParams(lfx.key) : null
         const img = brollImgRefs.current[item.id]
         if (img && media?.url) {
@@ -1542,6 +1575,21 @@ export function PreviewStage({
               )
             })}
         </div>
+        {(edits.adjustLayers ?? [])
+          .filter((ly) => adjustLayerHasFx(edits, ly.id))
+          .map((ly) => (
+            <div
+              key={`adjfx:${ly.id}`}
+              ref={(el) => {
+                adjustFxRefs.current[ly.id] = el
+              }}
+              className="pointer-events-none absolute inset-0"
+              style={{ visibility: 'hidden' }}
+              data-testid="preview-adjust-fx"
+              data-adjust-id={ly.id}
+              aria-hidden
+            />
+          ))}
         <ColorLookDefs specs={lookSpecs} />
         {exportOnlyNote(edits) ? (
           <div
@@ -1563,6 +1611,7 @@ export function PreviewStage({
           edits={(audition?.edits ?? edits) as ClipEditsV2}
           underZ={underZ}
           boxH={box.h}
+          libassTextFx={Boolean(libassScripts?.fx?.length)}
           selectedId={selectedTextId}
           elRef={(id, el) => {
             textRefs.current[id] = el
@@ -1647,6 +1696,9 @@ export function PreviewStage({
               playH={templatePreview?.playH ?? libassPlay.height}
               clock={libassClock}
               onStatus={onLibassStatus}
+              fxHostRef={(id, el) => {
+                textFxRefs.current[id] = el
+              }}
             />
           </Suspense>
         ) : null}

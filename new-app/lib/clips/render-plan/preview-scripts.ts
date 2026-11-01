@@ -7,6 +7,7 @@
 import { buildCaptionsAss, type AssWord } from '@/lib/clips/render-plan/captions-ass'
 import { hookAssForEdits } from '@/lib/clips/render-plan/hook-ass'
 import { buildTextItemsAss } from '@/lib/clips/render-plan/text-items-ass'
+import { layerFxOf } from '@/lib/clips/editor/layer-fx'
 import { buildTitleAss, templateTitleInput } from '@/lib/clips/render-plan/title-ass'
 import { headlineAssContent, type HeadlineAssInput } from '@/lib/clips/render-plan/headline-ass'
 import { badgeTextAss, type BadgeTextInput } from '@/lib/clips/render-plan/badge-ass'
@@ -17,7 +18,8 @@ type Rect = { x: number; y: number; w: number; h: number }
 export type PreviewScriptKey = 'captions' | 'hook' | 'text' | 'top'
 /** G1b: a text track under an overlay track — its own libass canvas between the B-roll layers. */
 export type UnderScript = { key: string; z: number; ass: string }
-export type PreviewScripts = Record<PreviewScriptKey, string | null> & { under?: UnderScript[] }
+export type FxTextScript = { key: string; id: string; z?: number; ass: string }
+export type PreviewScripts = Record<PreviewScriptKey, string | null> & { under?: UnderScript[]; fx?: FxTextScript[] }
 /** G1b: CSS z-index of B-roll stage pass i (B-roll wrappers + under-text canvases); < captions (25). */
 export const UNDER_Z_BASE = 10
 export const PREVIEW_SCRIPT_ORDER: PreviewScriptKey[] = ['captions', 'hook', 'text', 'top']
@@ -108,18 +110,39 @@ export function buildPreviewScripts(o: PreviewScriptInput): PreviewScripts {
   const passes = o.underPasses ?? []
   const underIds = new Set(passes.filter((p) => p.kind === 'text').flatMap((p) => p.ids))
   const items = Array.isArray(e.textItems) ? (e.textItems as Dict[]) : []
+  const fxIds = items
+    .map((t) => String(t.id))
+    .filter((id) => {
+      const fx = layerFxOf(e as never, `text:${id}`)
+      return Boolean(fx?.mask || fx?.blend)
+    })
+  const fxSet = new Set(fxIds)
   const pick = (keep: (id: string) => boolean): Dict => {
     const kept = items.filter((t) => keep(String(t.id)))
     return { ...e, textItems: kept.length ? kept : null }
   }
-  const text = buildTextItemsAss(underIds.size ? pick((id) => !underIds.has(id)) : e, o.playW, o.playH)
+  const text = buildTextItemsAss(
+    fxSet.size || underIds.size ? pick((id) => !underIds.has(id) && !fxSet.has(id)) : e,
+    o.playW,
+    o.playH,
+  )
   const under: UnderScript[] = []
   passes.forEach((p, i) => {
     if (p.kind !== 'text') return
     const ids = new Set(p.ids)
-    const ass = buildTextItemsAss(pick((id) => ids.has(id)), o.playW, o.playH)
+    const ass = buildTextItemsAss(pick((id) => ids.has(id) && !fxSet.has(id)), o.playW, o.playH)
     if (ass) under.push({ key: `under:${p.trackId}`, z: UNDER_Z_BASE + i, ass })
   })
+  const fx: FxTextScript[] = []
+  for (const id of fxIds) {
+    const ass = buildTextItemsAss(pick((x) => x === id), o.playW, o.playH)
+    if (!ass) continue
+    const uz =
+      passes.find((p) => p.kind === 'text' && p.ids.includes(id)) != null
+        ? UNDER_Z_BASE + passes.findIndex((p) => p.kind === 'text' && p.ids.includes(id))
+        : 25
+    fx.push({ key: `fx:${id}`, id, z: uz, ass })
+  }
 
   let top: string | null = null
   if (t6TitleOn && o.t6Spec && o.titleStyles && o.formatHeadline) {
@@ -139,7 +162,11 @@ export function buildPreviewScripts(o: PreviewScriptInput): PreviewScripts {
         : o.badge
     top = mergeAss(top, badgeTextAss(b, o.durationMs))
   }
-  return under.length ? { captions, hook, text, top, under } : { captions, hook, text, top }
+  const base = { captions, hook, text, top }
+  if (under.length && fx.length) return { ...base, under, fx }
+  if (under.length) return { ...base, under }
+  if (fx.length) return { ...base, fx }
+  return base
 }
 
 /** Family names (Style Fontname + \fn overrides) used by a script. */

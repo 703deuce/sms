@@ -26,6 +26,8 @@ import {
   type LayerFx,
   type LayerMask,
   type MaskGeom,
+  TEXT_FX_MAX,
+  textFxRowCount,
 } from '@/lib/clips/editor/layer-fx'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 
@@ -97,13 +99,21 @@ export function LayerFxControls({
   const item = brollId ? (edits.broll ?? []).find((b) => b.id === brollId) : undefined
   const tooLong = item ? item.endMs - item.startMs > REVERSE_MAX_MS : false
   const keyOff = Boolean(keyDisabled)
+  const textCap =
+    fxTargetOf(target) === 'text' &&
+    textFxRowCount(edits) >= TEXT_FX_MAX &&
+    !fx?.mask &&
+    !fx?.blend
   return (
     <div className="space-y-4" data-testid="layer-fx">
+      {fxTargetOf(target) === 'text' ? (
+        <p className="text-[10px] text-muted-foreground">Up to 6 text items can use masks or blends.</p>
+      ) : null}
       {features.mask ? (
       <section className="space-y-1.5" data-testid="layer-fx-mask">
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mask</h3>
         <div className="flex flex-wrap gap-1">
-          <button type="button" className={`${btn} ${!mask ? on : ''}`} disabled={readOnly} onClick={() => patch({ mask: undefined })} data-testid="layer-fx-mask-none">
+          <button type="button" className={`${btn} ${!mask ? on : ''}`} disabled={readOnly || textCap} onClick={() => patch({ mask: undefined })} data-testid="layer-fx-mask-none">
             None
           </button>
           {MASK_SHAPES.map((s) => (
