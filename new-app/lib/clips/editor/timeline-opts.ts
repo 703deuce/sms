@@ -50,3 +50,23 @@ export function writeMagnetPref(on: boolean) {
     /* private mode: session only */
   }
 }
+
+/** TC2b (TL-55): timeline body height (px) per user; absent = fit all tracks. */
+export const TIMELINE_HEIGHT_KEY = 'transovo.timeline.height'
+export const TIMELINE_MIN_H = 96
+export function readTimelineHeight(): number | null {
+  try {
+    const v = Number(globalThis.localStorage?.getItem(TIMELINE_HEIGHT_KEY))
+    return Number.isFinite(v) && v >= TIMELINE_MIN_H ? Math.round(v) : null
+  } catch {
+    return null
+  }
+}
+export function writeTimelineHeight(h: number | null) {
+  try {
+    if (h == null) globalThis.localStorage?.removeItem(TIMELINE_HEIGHT_KEY)
+    else globalThis.localStorage?.setItem(TIMELINE_HEIGHT_KEY, String(Math.round(h)))
+  } catch {
+    /* private mode */
+  }
+}

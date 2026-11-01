@@ -31,8 +31,25 @@ import {
 import { setSplitEdit, splitEditAt, splitOffsets, SPLIT_MAX_MS, moveSplitKey } from '@/lib/clips/editor/split-edits'
 import { TEXT_MIN_MS, type TextItem } from '@/lib/clips/editor/text-items'
 
-export type TrimTool = 'select' | 'roll' | 'slide'
-export const TRIM_TOOL_KEYS: Record<string, TrimTool> = { v: 'select', r: 'roll', u: 'slide' }
+export type TrimTool = 'select' | 'roll' | 'slide' | 'slip' | 'blade' | 'hand'
+/** TC2b (TL-18): Y slip, B blade (click splits), H hand (drag scrolls). */
+export const TRIM_TOOL_KEYS: Record<string, TrimTool> = { v: 'select', r: 'roll', u: 'slide', y: 'slip', b: 'blade', h: 'hand' }
+
+/**
+ * TC2b (TL-18): Slip — a B-roll clip keeps its place and length on the timeline; the media
+ * window inside it moves (dragging right shows earlier media). Never before the media start.
+ */
+export function slipEdit(edits: ClipEditsV2, id: string, deltaMs: number): ClipEditsV2 | null {
+  const list = edits.broll ?? []
+  const i = list.findIndex((b) => b.id === id)
+  if (i < 0) return null
+  const b = list[i]!
+  const inMs = Math.max(0, Math.round((b.inMs ?? 0) - deltaMs))
+  if (inMs === (b.inMs ?? 0)) return null
+  const next = [...list]
+  next[i] = { ...b, inMs } as BrollItem
+  return { ...edits, broll: next }
+}
 /** Overlay items closer than this (≈ one frame) count as touching for roll / slide. */
 export const TOUCH_MS = 40
 
