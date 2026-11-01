@@ -52,6 +52,44 @@ def test_render_window_spin_shader_ok(tmp_path: Path) -> None:
     assert got >= n, f"expected>={n} frames, got {got}"
 
 
+@needs_ff
+def test_render_window_spin_shader_ok_720p(tmp_path: Path) -> None:
+    """Regression: non-blocking ffv1 stdin must write full 1280x720 rgb24 frames (>> pipe buffer)."""
+    try:
+        ctx, renderer = gl_context()
+    except Exception as exc:
+        pytest.skip(str(exc))
+    assert "llvmpipe" in renderer.lower()
+
+    w, h = 1280, 720
+    full = tmp_path / "full_720.mp4"
+    subprocess.check_call(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", f"testsrc=s={w}x{h}:d=6:r=30",
+            "-f", "lavfi", "-i", "sine=f=440:d=6:sample_rate=48000",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(full),
+        ],
+        stdout=subprocess.DEVNULL,
+    )
+    segs = [(0, 4500), (4600, 6000)]
+    trs = [{"srcMs": 4600, "type": "spin", "durMs": 1000}]
+    wins = cut_transition_windows(segs, trs)
+    win = wins[0]
+    n = int(win["frames"])
+    a_s, b_s, a_pad, b_pad, span = _window_inputs(win, 0, 6.0)
+    a_cmd = window_decode_cmd(full, a_s, span, a_pad, n, w, h)
+    b_cmd = window_decode_cmd(full, b_s, span, b_pad, n, w, h)
+    out = tmp_path / "win_shader_720.mkv"
+    try:
+        render_window(ctx, "spin", a_cmd, b_cmd, n, w, h, out)
+    finally:
+        ctx.release()
+    got = probe_video_nb_frames(out)
+    assert got >= n, f"expected>={n} frames, got {got}"
+    assert out.stat().st_size > n * 10_000, "ffv1 output suspiciously small (truncated encode?)"
+
+
 def test_communicate_after_stdin_close_raises():
     """Document why render_window uses wait() instead of communicate() after stdin.close()."""
     enc = subprocess.Popen(

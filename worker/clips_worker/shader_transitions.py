@@ -1,10 +1,12 @@
 """Headless EGL shader cut transitions (TR-SHADER batch 1)."""
 from __future__ import annotations
 
+import errno
 import os
 import select
 import subprocess
 import struct
+import threading
 import time
 from pathlib import Path
 
@@ -43,18 +45,35 @@ def shader_window_timeout_sec() -> float:
         return 120.0
 
 
+def _pipe_wait_read(fd: int, deadline: float) -> None:
+    while time.monotonic() < deadline:
+        wait = min(1.0, max(0.0, deadline - time.monotonic()))
+        ready, _, _ = select.select([fd], [], [], wait)
+        if ready:
+            return
+    raise ShaderRenderError("wall_clock_timeout")
+
+
+def _pipe_wait_write(fd: int, deadline: float) -> None:
+    while time.monotonic() < deadline:
+        wait = min(1.0, max(0.0, deadline - time.monotonic()))
+        _, ready, _ = select.select([], [fd], [], wait)
+        if ready:
+            return
+    raise ShaderRenderError("wall_clock_timeout")
+
+
 def _read_exact(stream, nbytes: int, deadline: float) -> bytes:
     buf = bytearray()
     fd = stream.fileno()
     while len(buf) < nbytes:
-        if time.monotonic() >= deadline:
-            raise ShaderRenderError("wall_clock_timeout")
-        wait = min(1.0, max(0.0, deadline - time.monotonic()))
-        ready, _, _ = select.select([stream], [], [], wait)
-        if not ready:
-            continue
+        _pipe_wait_read(fd, deadline)
         try:
             chunk = os.read(fd, nbytes - len(buf))
+        except OSError as exc:
+            if exc.errno in (errno.EAGAIN, errno.EINTR):
+                continue
+            raise
         except BlockingIOError:
             continue
         if not chunk:
@@ -63,26 +82,30 @@ def _read_exact(stream, nbytes: int, deadline: float) -> bytes:
     return bytes(buf)
 
 
-def _write_all(stream, data: bytes, deadline: float) -> None:
+def _write_all(stream, data: bytes | memoryview, deadline: float) -> None:
+    mv = memoryview(data) if not isinstance(data, memoryview) else data
     offset = 0
-    total = len(data)
+    total = len(mv)
     fd = stream.fileno()
     while offset < total:
-        if time.monotonic() >= deadline:
-            raise ShaderRenderError("wall_clock_timeout")
-        wait = min(1.0, max(0.0, deadline - time.monotonic()))
-        _, wready, _ = select.select([], [stream], [], wait)
-        if not wready:
-            continue
+        _pipe_wait_write(fd, deadline)
         try:
-            n = os.write(fd, data[offset:])
+            n = os.write(fd, mv[offset:])
+        except OSError as exc:
+            if exc.errno in (errno.EAGAIN, errno.EINTR):
+                continue
+            if exc.errno == errno.EPIPE:
+                raise ShaderRenderError("encode_pipe_closed") from exc
+            raise
         except BlockingIOError:
             continue
         except BrokenPipeError as exc:
             raise ShaderRenderError("encode_pipe_closed") from exc
-        if n == 0:
+        if n <= 0:
             raise ShaderRenderError("encode_pipe_closed")
         offset += n
+    if offset != total:
+        raise ShaderRenderError("short_write")
 
 
 def _source(shader_type: str) -> str:
@@ -148,8 +171,8 @@ def render_window(
     if w % 2 or h % 2:
         raise ShaderRenderError("odd_size")
     need = w * h * 3
-    pa = subprocess.Popen(a_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    pb = subprocess.Popen(b_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    pa = subprocess.Popen(a_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
+    pb = subprocess.Popen(b_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
     enc = subprocess.Popen(
         [
             "ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
@@ -157,10 +180,22 @@ def render_window(
         ],
         stdin=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        bufsize=0,
     )
     os.set_blocking(pa.stdout.fileno(), False)
     os.set_blocking(pb.stdout.fileno(), False)
     os.set_blocking(enc.stdin.fileno(), False)
+    enc_stderr_tail: list[bytes] = []
+
+    def _drain_enc_stderr() -> None:
+        try:
+            if enc.stderr:
+                enc_stderr_tail.append(enc.stderr.read() or b"")
+        except OSError:
+            pass
+
+    stderr_thread = threading.Thread(target=_drain_enc_stderr, daemon=True)
+    stderr_thread.start()
     deadline = time.monotonic() + shader_window_timeout_sec()
     prog = program(ctx, shader_type)
     ratio = w / h
@@ -190,7 +225,10 @@ def render_window(
             fbo.use()
             vao.render()
             raw = fbo.read(components=3, alignment=1)
-            _write_all(enc.stdin, bytes(raw[h - 1 :: -1]), deadline)
+            frame = bytes(raw[h - 1 :: -1])
+            if len(frame) != need:
+                raise ShaderRenderError(f"short_gl_read:{len(frame)}<{need}")
+            _write_all(enc.stdin, frame, deadline)
         enc.stdin.close()
         enc.stdin = None
         try:
@@ -199,9 +237,8 @@ def render_window(
             enc.kill()
             enc.wait(timeout=5)
             raise ShaderRenderError("encode_timeout")
-        enc_err = b""
-        if enc.stderr:
-            enc_err = enc.stderr.read() or b""
+        stderr_thread.join(timeout=5)
+        enc_err = enc_stderr_tail[0] if enc_stderr_tail else b""
         if enc_rc != 0:
             tail = stderr_tail(enc_err.decode("utf-8", "replace"), lines=12)
             raise ShaderRenderError(f"encode_failed:{tail[:240] or enc_rc}")
