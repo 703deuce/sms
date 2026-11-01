@@ -6,6 +6,7 @@
  * is a plain manual edit (no AI, no credits); the ◇ rows are the same KeyframeInspector the
  * timeline shows (mirrored, not moved), so keyframes edited in either place are the same data.
  */
+import { rotateBy90 } from '@/lib/clips/editor/canvas-ops'
 import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronUp, Crop, Diamond, MoveHorizontal, MoveVertical, RotateCcw, Trash2 } from 'lucide-react'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -264,6 +265,14 @@ function VideoTab({
         <button type="button" className={btn} disabled={readOnly} onClick={() => resetProps(TRANSFORM)} data-testid="properties-reset-transform">
           <RotateCcw className="size-3" aria-hidden /> Reset transform
         </button>
+        <span className="ml-1 inline-flex gap-1">
+          <button type="button" className={btn} disabled={readOnly} onClick={() => onCommit(rotateBy90(edits, target, -1))} title="Rotate 90° left" data-testid="properties-rotate-left">
+            ↺ 90°
+          </button>
+          <button type="button" className={btn} disabled={readOnly} onClick={() => onCommit(rotateBy90(edits, target, 1))} title="Rotate 90° right" data-testid="properties-rotate-right">
+            ↻ 90°
+          </button>
+        </span>
       </Section>
       {media ? (
         <Section title="Crop" testId="properties-crop">
