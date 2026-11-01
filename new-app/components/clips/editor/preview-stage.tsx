@@ -56,7 +56,7 @@ import { adjustGradesAt, brollGradeAt, videoGradeAt } from '@/lib/clips/editor/g
 import { GradePreview, layerMedia, stageFrame } from '@/components/clips/editor/g4/grade-preview'
 import { corsMediaProps, prepareAll, setMediaSrc, watchMediaCors } from '@/components/clips/editor/g4/media-cors'
 import { reversedSourceMs } from '@/lib/clips/editor/video-reverse'
-import { applyBlurRegion, applyLayerFx, applyTextFxLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
+import { applyBlurRegion, applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
 import { exportOnlyNote } from '@/lib/clips/editor/export-processing'
 import { brollFxOf, chromaParams, layerFxOf, textItemHasFx, adjustLayerHasFx } from '@/lib/clips/editor/layer-fx'
 import { mainFxOf, mainKeyAllowed } from '@/lib/clips/editor/main-fx'
@@ -677,15 +677,16 @@ export function PreviewStage({
       for (const it of e.textItems ?? []) {
         const lfx = e.layerFx?.length ? layerFxOf(e, `text:${it.id}`) : undefined
         const fxHost = textFxRefs.current[it.id]
-        if (fxHost && lfx && (lfx.mask || lfx.blend)) {
-          applyTextFxLayerFx(fxHost, lfx, outMs - it.startMs, tickFxFrame.W, tickFxFrame.H)
-        }
         const el = textRefs.current[it.id]
+        const fxLibass = Boolean(fxHost && lfx && (lfx.mask || lfx.blend))
+        if (fxHost && lfx && (lfx.mask || lfx.blend)) {
+          applyLayerFx(fxHost, fxHost, lfx, outMs - it.startMs, tickFxFrame.W, tickFxFrame.H)
+        }
         if (!el) continue
         const f = textItemFrame(e, it, outMs)
         const vis = f.visible ? 'visible' : 'hidden'
         if (el.style.visibility !== vis) el.style.visibility = vis
-        const op = String(f.visible ? f.opacity : 0)
+        const op = fxLibass ? '0' : String(f.visible ? f.opacity : 0)
         if (el.style.opacity !== op) el.style.opacity = op
         if (el.style.transform !== f.transform) el.style.transform = f.transform
         if (!fxHost && lfx && (lfx.mask || lfx.blend)) {
@@ -1025,7 +1026,12 @@ export function PreviewStage({
     })
   }, [libassScripts])
   const libassClass = libassScripts
-    ? PREVIEW_SCRIPT_ORDER.filter((k) => hasScript(libassScripts, k) && libassStatus[k] === 'ready').map((k) => `libass-${k}`).join(' ')
+    ? [
+        ...PREVIEW_SCRIPT_ORDER.filter((k) => hasScript(libassScripts, k) && libassStatus[k] === 'ready').map((k) => `libass-${k}`),
+        (libassScripts.fx?.length ?? 0) > 0 ? 'libass-text' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
     : ''
 
   const brollRegionStyle = useMemo((): React.CSSProperties => {
@@ -1616,6 +1622,9 @@ export function PreviewStage({
           boxH={box.h}
           libassTextFx={Boolean(libassScripts?.fx?.length)}
           selectedId={selectedTextId}
+          canvasSelectedId={
+            canvas?.selected?.startsWith('text:') && canvas.selected !== 'text' ? canvas.selected.slice(5) : null
+          }
           elRef={(id, el) => {
             textRefs.current[id] = el
           }}
