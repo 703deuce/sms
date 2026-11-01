@@ -53,6 +53,7 @@ import {
 } from '@/lib/clips/export-preferences-sync'
 import type { ClipUserStreamerChannelRow } from '@/lib/clips/clip-export-user-types'
 import { exportPolishLint, exportPolishLintWarnings } from '@/lib/clips/export-polish-lint'
+import { resolveLayers } from '@/lib/clips/layers'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { cn } from '@/lib/utils'
 import { t6TitleAutoEnabled } from '@/lib/clips/t6-feature-flags'
