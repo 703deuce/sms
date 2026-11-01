@@ -32,6 +32,7 @@ import {
   type SmoothSlowmo,
 } from '@/lib/clips/editor/speed'
 import { normalizeStabilize, type StabilizeRange } from '@/lib/clips/editor/stabilize'
+import { normalizeVideoReverse, type VideoReverseRange } from '@/lib/clips/editor/video-reverse'
 import { normalizeBlurRegions, type BlurRegion } from '@/lib/clips/editor/blur-regions'
 import { normalizeTextItems, type TextItem } from '@/lib/clips/editor/text-items'
 import { normalizeCaptionLinesEdits, type CaptionLine } from '@/lib/clips/editor/caption-lines'
@@ -219,6 +220,8 @@ export type ClipEditsV2 = {
   smoothSlowmo?: SmoothSlowmo
   /** G4c: stabilized SOURCE ranges (export: vidstab two-pass / deshake) — lib/clips/editor/stabilize.ts. */
   stabilize?: StabilizeRange[]
+  /** CV-17b: main video reverse spans in SOURCE ms (per Video item; lib/clips/editor/video-reverse.ts). */
+  videoReverse?: VideoReverseRange[]
   /** G4c: blur regions on the main video (output ms; manual mask or auto faces) — blur-regions.ts. */
   blurRegions?: BlurRegion[]
   /** E5 media this clip uses besides the main source (uploads, Rooms angles). */
@@ -522,6 +525,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.segmentSpeeds?.length) payload.segmentSpeeds = null
   if (!edits.smoothSlowmo) payload.smoothSlowmo = null
   if (!edits.stabilize?.length) payload.stabilize = null
+  if (!edits.videoReverse?.length) payload.videoReverse = null
   if (!edits.blurRegions?.length) payload.blurRegions = null
   if (!edits.sources?.length) payload.sources = null
   if (!edits.sourceSegments?.length) payload.sourceSegments = null
@@ -652,6 +656,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     segmentSpeeds: normalizeSegmentSpeeds(o.segmentSpeeds),
     smoothSlowmo: normalizeSmoothSlowmo(o.smoothSlowmo),
     stabilize: normalizeStabilize(o.stabilize),
+    videoReverse: normalizeVideoReverse(o.videoReverse),
     blurRegions: normalizeBlurRegions(o.blurRegions),
     canvasBg: normalizeCanvasBg(o.canvasBg),
     ...normalizeSourceFields(o),
@@ -759,6 +764,7 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     !edits.segmentSpeeds?.length &&
     // G4c: stabilize / blur regions change the frames (smooth slow-mo only acts with speeds).
     !edits.stabilize?.length &&
+    !edits.videoReverse?.length &&
     !edits.blurRegions?.length &&
     // E5: other sources replace frames / sound.
     !edits.sourceSegments?.length &&

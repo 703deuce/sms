@@ -290,7 +290,7 @@ def write_mask_frames(mask: dict, dur_s: float, w: int, h: int, path: Path) -> t
 # ── reverse ────────────────────────────────────────────────────────────────
 
 def reversed_media(src: Path, in_s: float, dur_s: float, w: int, h: int, out: Path, chunk_s: float = 2.0,
-                   pre_vf: str | None = None) -> Path:
+                   pre_vf: str | None = None, fps: int = 30) -> Path:
     """Reversed copy of src[in_s, in_s + dur_s) scaled to cover w × h (30 fps, no audio).
 
     Output frame k = source time in_s + dur_s − (k + 1)/30 (the item plays its range backwards).
@@ -299,7 +299,7 @@ def reversed_media(src: Path, in_s: float, dur_s: float, w: int, h: int, out: Pa
     dur_s = max(0.1, min(dur_s, REVERSE_MAX_MS / 1000))
     parts: list[Path] = []
     n = math.ceil(dur_s / chunk_s - 1e-9)
-    vf = (f"{pre_vf + ',' if pre_vf else ''}fps=30,scale={w}:{h}:force_original_aspect_ratio=increase,"
+    vf = (f"{pre_vf + ',' if pre_vf else ''}fps={fps},scale={w}:{h}:force_original_aspect_ratio=increase,"
           f"crop={w}:{h},reverse,setsar=1")
     for i in range(n):
         a = in_s + i * chunk_s
