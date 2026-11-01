@@ -7,6 +7,10 @@ export type EditorAutosaveDraft = {
   edits: ClipEditsV2
   savedAt: string
   serverUpdatedAt?: string
+  /** Monotonic client edit revision (undo/split/etc.). */
+  localRevision?: number
+  /** Monotonic save generation for LWW vs stale in-flight PATCH. */
+  saveSeq?: number
 }
 
 export function editorDraftKey(clipId: string) {

@@ -1,8 +1,12 @@
-/** TC4fix: autosave ordering after rapid undo (no false "already saved" sync). */
+/** TC4fix / TC4fix2: autosave ordering + pagehide newest revision. */
 import { describe, expect, it } from 'vitest'
 import {
+  nextStoredClientSaveSeq,
   saveSyncRequired,
   shouldApplySaveResponse,
+  shouldDiscardDraftForServerStamp,
+  shouldRejectStaleClientSave,
+  shouldSendPagehideKeepalive,
   wouldFalsePositiveSavedSync,
 } from '@/lib/clips/editor-save-order'
 
@@ -22,5 +26,27 @@ describe('TC4fix save ordering', () => {
     expect(shouldApplySaveResponse(2, 2, 4, 4)).toBe(true)
     expect(shouldApplySaveResponse(1, 2, 4, 4)).toBe(false)
     expect(shouldApplySaveResponse(2, 2, 3, 4)).toBe(false)
+  })
+})
+
+describe('TC4fix2 pagehide + draft', () => {
+  it('always keepalives when local revision is ahead of last ack', () => {
+    expect(shouldSendPagehideKeepalive(2, 5)).toBe(true)
+    expect(shouldSendPagehideKeepalive(5, 5)).toBe(false)
+  })
+
+  it('keeps draft when server stamp moved but draft carries a local revision', () => {
+    expect(
+      shouldDiscardDraftForServerStamp('2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z', 3, true),
+    ).toBe(false)
+    expect(
+      shouldDiscardDraftForServerStamp('2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z', 0, true),
+    ).toBe(true)
+  })
+
+  it('rejects stale client save seq on the server', () => {
+    expect(shouldRejectStaleClientSave(2, 5)).toBe(true)
+    expect(shouldRejectStaleClientSave(6, 5)).toBe(false)
+    expect(nextStoredClientSaveSeq(6, 5)).toBe(6)
   })
 })

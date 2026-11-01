@@ -32,7 +32,8 @@ describe('TC4b', () => {
     expect(s).toContain("window.addEventListener('pagehide', onLeave)")
     expect(s).toContain("window.addEventListener('beforeunload', onLeave)")
     expect(s).toMatch(/keepalive: true/)
-    expect(s).toMatch(/writeEditorAutosaveDraft\(clipId, \{\s*edits: editsRef\.current/)
+    expect(s).toMatch(/clientSaveSeq: leaveSeq/)
+    expect(s).not.toMatch(/if \(inFlight\) return/)
   })
   it('(3) reorder drag blocks native image drag and ends on pointercancel', () => {
     const s = src('components/clips/editor/timeline.tsx')

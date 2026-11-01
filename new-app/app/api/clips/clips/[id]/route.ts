@@ -13,6 +13,7 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { nextStoredClientSaveSeq, shouldRejectStaleClientSave } from '@/lib/clips/editor-save-order'
 
 const patchSchema = z.object({
   title: z.string().min(1).max(120).optional(),
@@ -22,6 +23,8 @@ const patchSchema = z.object({
   disliked: z.boolean().optional(),
   baseVersion: z.number().int().min(0).optional(),
   expectedUpdatedAt: z.string().min(8).optional(),
+  clientSaveSeq: z.number().int().min(0).optional(),
+  clientLocalRevision: z.number().int().min(0).optional(),
 })
 
 type PatchRow = {
@@ -150,10 +153,37 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       edits: unknown
       updatedAt: string
       editsSaveVersion: number
+      applied?: boolean
     } | null = null
 
     if (body.edits !== undefined) {
       const mergedEdits = mergeEditsPatch(serverEdits, body.edits, bounds)
+      const meta = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as Record<string, unknown>
+      const storedSeq = typeof meta.__editorSaveSeq === 'number' ? meta.__editorSaveSeq : 0
+      const incomingSeq = body.clientSaveSeq ?? 0
+
+      if (incomingSeq > 0 && shouldRejectStaleClientSave(incomingSeq, storedSeq)) {
+        console.info('[clipper:autosave] stale_client_seq', { clipId: id, incomingSeq, storedSeq })
+        return NextResponse.json({
+          data: {
+            id: clip.id,
+            title: clip.title,
+            edits: serverEdits,
+            updatedAt: clip.updatedAt.toISOString(),
+            editsSaveVersion: clip.editsSaveVersion,
+            applied: false,
+          },
+        })
+      }
+
+      const nextMeta: Record<string, unknown> = { ...meta }
+      if (incomingSeq > 0) {
+        nextMeta.__editorSaveSeq = nextStoredClientSaveSeq(incomingSeq, storedSeq)
+        if (typeof body.clientLocalRevision === 'number') {
+          nextMeta.__editorLocalRevision = body.clientLocalRevision
+        }
+      }
+
       const versionForCas = baseVersion ?? clip.editsSaveVersion
       if (clip.editsSaveVersion === 0) {
         const orig0 = Date.now()
@@ -161,6 +191,28 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         stageLog.orig = Date.now() - orig0
       }
       const write0 = Date.now()
+
+      if (incomingSeq > 0 && incomingSeq >= storedSeq) {
+        const updated = await prisma.clip.update({
+          where: { id },
+          data: {
+            edits: toPrismaJson(mergedEdits),
+            editsSaveVersion: { increment: 1 },
+            aiMeta: toPrismaJson(nextMeta),
+          },
+          select: { id: true, title: true, updatedAt: true, editsSaveVersion: true },
+        })
+        stageLog.write = Date.now() - write0
+        stageLog.cas = 1
+        editsResponse = {
+          id: updated.id,
+          title: updated.title,
+          edits: mergedEdits,
+          updatedAt: updated.updatedAt.toISOString(),
+          editsSaveVersion: updated.editsSaveVersion,
+          applied: true,
+        }
+      } else {
       const result = await casUpdateEdits(prisma, id, mergedEdits, versionForCas)
       stageLog.write = Date.now() - write0
       stageLog.cas = result.ok ? 1 : 0
@@ -201,7 +253,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
           edits: mergedEdits,
           updatedAt: result.row.updatedAt.toISOString(),
           editsSaveVersion: result.row.editsSaveVersion,
+          applied: true,
         }
+      }
       }
     }
 

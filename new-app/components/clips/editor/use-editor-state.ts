@@ -56,6 +56,7 @@ import {
 import {
   saveSyncRequired,
   shouldApplySaveResponse,
+  shouldDiscardDraftForServerStamp,
 } from '@/lib/clips/editor-save-order'
 import { toast } from 'sonner'
 
@@ -192,15 +193,20 @@ export function useEditorState(
   let draft = readEditorAutosaveDraft(clipId)
   if (
     draft &&
-    opts?.serverUpdatedAt &&
-    draft.serverUpdatedAt &&
-    draft.serverUpdatedAt !== opts.serverUpdatedAt
+    shouldDiscardDraftForServerStamp(
+      draft.serverUpdatedAt,
+      opts?.serverUpdatedAt,
+      draft.localRevision,
+      draftDiffersFromServer(draft, safeInitial),
+    )
   ) {
     clearEditorAutosaveDraft(clipId)
     draft = null
   }
   const draftDiffers = Boolean(draft && draftDiffersFromServer(draft, safeInitial))
   const restored = draftDiffers ? normalizeEdits(draft!.edits, bounds) : safeInitial
+  const restoredLocalRevision = draftDiffers ? Math.max(1, draft!.localRevision ?? 1) : 0
+  const restoredSaveSeq = draftDiffers ? Math.max(0, draft!.saveSeq ?? 0) : 0
   const [state, dispatch] = useReducer(editorEditsReducer, {
     edits: restored,
     past: [],
@@ -211,11 +217,11 @@ export function useEditorState(
   /** TC4fix: undo is user-session only — nothing before first editor gesture counts (load seeds, draft). */
   const [historyReady, setHistoryReady] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const localRevisionRef = useRef(draftDiffers ? 1 : 0)
+  const localRevisionRef = useRef(restoredLocalRevision)
   const savedRevisionRef = useRef(0)
   const saveInFlightRef = useRef(false)
   const savePendingRef = useRef(false)
-  const saveSeqRef = useRef(0)
+  const saveSeqRef = useRef(restoredSaveSeq)
   const serverConfirmedEditsRef = useRef<ClipEditsV2>(restored)
   const serverUpdatedAtRef = useRef(opts?.serverUpdatedAt)
   const serverVersionRef = useRef(opts?.editsSaveVersion ?? 0)
@@ -658,6 +664,8 @@ export function useEditorState(
         writeEditorAutosaveDraft(clipId, {
           edits: editsRef.current,
           savedAt: new Date().toISOString(),
+          localRevision: localRevisionRef.current,
+          saveSeq: saveSeqAtSend,
           serverUpdatedAt: serverUpdatedAtRef.current,
         })
         try {
@@ -665,7 +673,12 @@ export function useEditorState(
             edits: editsPayloadForSave(editsRef.current),
             baseVersion: serverVersionRef.current,
             expectedUpdatedAt: serverUpdatedAtRef.current,
+            clientSaveSeq: saveSeqAtSend,
+            clientLocalRevision: revisionAtSend,
           })
+          if (res.applied === false) {
+            continue
+          }
           if (
             !shouldApplySaveResponse(
               saveSeqAtSend,
@@ -767,19 +780,21 @@ export function useEditorState(
     }
   }, [clipId, processSaveQueue, state.edits, state.saveState])
 
-  // TC4b + TC4fix: leaving with unsaved edits must persist the latest snapshot without racing an
-  // in-flight PATCH (keepalive only when the serialized queue is idle; draft always has latest).
+  // TC4b + TC4fix2: always persist the newest revision on leave (draft + keepalive), even behind an in-flight save.
   useEffect(() => {
     const onLeave = () => {
       if (!saveSyncRequired(savedRevisionRef.current, localRevisionRef.current)) return
       if (debounceRef.current) clearTimeout(debounceRef.current)
+      saveSeqRef.current += 1
+      const leaveSeq = saveSeqRef.current
       const inFlight = saveInFlightRef.current
       writeEditorAutosaveDraft(clipId, {
         edits: editsRef.current,
         savedAt: new Date().toISOString(),
+        localRevision: localRevisionRef.current,
+        saveSeq: leaveSeq,
         ...(inFlight ? {} : { serverUpdatedAt: serverUpdatedAtRef.current }),
       })
-      if (inFlight) return
       try {
         void fetch(`/api/clips/clips/${clipId}`, {
           method: 'PATCH',
@@ -788,8 +803,9 @@ export function useEditorState(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             edits: editsPayloadForSave(editsRef.current),
-            baseVersion: serverVersionRef.current,
-            expectedUpdatedAt: serverUpdatedAtRef.current,
+            clientSaveSeq: leaveSeq,
+            clientLocalRevision: localRevisionRef.current,
+            ...(inFlight ? {} : { baseVersion: serverVersionRef.current, expectedUpdatedAt: serverUpdatedAtRef.current }),
           }),
         }).catch(() => {})
       } catch {
