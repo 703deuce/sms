@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TemplatePipSpec, TemplateSpecV2 } from '@/lib/clips/templates/geometry'
 import { TITLE_STYLES } from '@/lib/clips/templates/registry'
 import { DEFAULT_FIT_BLUR_STRENGTH, fitBlurCssFilter, type FitBlurStrength } from '@/lib/clips/fit-blur'
+import type { ResolvedCanvasBg } from '@/lib/clips/canvas-bg'
+import { CanvasBgFill } from '@/components/clips/editor/canvas-bg-fill'
 import { assEmPerFontsize } from '@/lib/clips/caption-fit'
 import { formatHeadlineForExport } from '@/lib/clips/export-template'
 import { fitTitle, templateTitleInput, titleTextBox } from '@/lib/clips/render-plan/title-ass'
@@ -84,6 +86,8 @@ export function TemplateStage({
   staticPoster = false,
   lowResWarning,
   blurStrength = DEFAULT_FIT_BLUR_STRENGTH,
+  canvasBg,
+  canvasBgImageUrl = null,
 }: {
   spec: TemplateSpecV2
   videoUrl?: string | null
@@ -100,7 +104,10 @@ export function TemplateStage({
   lowResWarning?: boolean
   /** E6: blurred band / contain_blur strength (matches the export, worker t6_render). */
   blurStrength?: FitBlurStrength
+  canvasBg?: ResolvedCanvasBg
+  canvasBgImageUrl?: string | null
 }) {
+  const flatCanvas = canvasBg && (canvasBg.kind === 'color' || canvasBg.kind === 'image')
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null)
   const { w: cw } = useContainerSize(rootEl)
   const [dims, setDims] = useState({ w: 1920, h: 1080 })
@@ -214,6 +221,9 @@ export function TemplateStage({
       data-template-id={spec.templateId}
       style={{ aspectRatio: `${spec.playW}/${spec.playH}` }}
     >
+      {canvasBg && (canvasBg.kind === 'color' || canvasBg.kind === 'image') ? (
+        <CanvasBgFill bg={canvasBg} imageUrl={canvasBgImageUrl} />
+      ) : null}
       {lowResWarning ? (
         <div className="absolute left-1 top-1 z-20 rounded bg-black/70 px-2 py-0.5 text-[10px] text-amber-200">
           Low-res source (480p): facecam will be soft
@@ -221,16 +231,20 @@ export function TemplateStage({
       ) : null}
       {spec.bands.map((band, i) => {
         const d = band.dest
-        const isBlur = band.fill === 'blur' || band.fill === 'dark_gradient'
+        const isBlurBand = band.fill === 'blur'
         return (
           <div
             key={`band-${i}`}
             className="absolute overflow-hidden"
             style={{ left: d.x * k, top: d.y * k, width: d.w * k, height: d.h * k }}
           >
-            {isBlur
-              ? media({ filter: fitBlurCssFilter(blurStrength, d.w * k) }, 'size-full scale-110 object-cover', false)
-              : <div className="size-full bg-black" />}
+            {isBlurBand && flatCanvas ? (
+              <CanvasBgFill bg={canvasBg!} imageUrl={canvasBgImageUrl} />
+            ) : isBlurBand ? (
+              media({ filter: fitBlurCssFilter(blurStrength, d.w * k) }, 'size-full scale-110 object-cover', false)
+            ) : (
+              <div className="size-full bg-black" />
+            )}
           </div>
         )
       })}
@@ -244,7 +258,9 @@ export function TemplateStage({
             style={{ left: p.dest.x * k, top: p.dest.y * k, width, height }}
           >
             {p.fit === 'contain_blur'
-              ? media(
+              ? flatCanvas
+                ? <CanvasBgFill bg={canvasBg!} imageUrl={canvasBgImageUrl} />
+                : media(
                   { filter: fitBlurCssFilter(blurStrength, width) },
                   'absolute inset-0 size-full scale-110 object-cover',
                   false,

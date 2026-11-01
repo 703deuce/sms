@@ -100,6 +100,8 @@ import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-pa
 import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
 import { buildFromTranscriptItem, matchFrameAt } from '@/lib/clips/editor/source-monitor'
 import { mediaUrlFor, useMediaTranscripts, useProjectMedia } from '@/components/clips/editor/use-project-media'
+import { CanvasBackgroundChip, CanvasBackgroundSection } from '@/components/clips/editor/canvas-background'
+import { canvasBgRelevant } from '@/lib/clips/canvas-bg'
 import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
 import { addMediaToLane, placeAddedOnTrack, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
@@ -1299,6 +1301,17 @@ export function EditorShell({
   const TabIcon = editorRailIcon(panel)
   const meta = TAB_META[panel]
   const previewAspect = edits.aspectRatio ?? '9:16'
+  const mainVideoSize = useMemo(() => {
+    const m = mediaItems.find((i) => i.isMain)
+    return m?.width && m?.height ? { width: m.width, height: m.height } : null
+  }, [mediaItems])
+  const canvasBgChipVisible = canvasBgRelevant(
+    edits,
+    previewAspect,
+    mainVideoSize?.width,
+    mainVideoSize?.height,
+  )
+  const compositePreviewClip = editorMedia?.kind === 'composite'
   const aspectStyle =
     previewAspect === '16:9'
       ? '16 / 9'
@@ -1696,15 +1709,26 @@ export function EditorShell({
               )
             }}
             videoSlot={
-              <MainVideoTools
-                edits={edits}
-                videoItem={selVideoSeg ? { srcInMs: selVideoSeg.srcInMs, srcOutMs: selVideoSeg.srcOutMs } : null}
-                outputMs={outputMs}
-                durationMs={outDur}
-                onCommit={(next) => setEdits(next)}
-                onSeekOutput={seekOutput}
-                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
-              />
+              <>
+                <MainVideoTools
+                  edits={edits}
+                  videoItem={selVideoSeg ? { srcInMs: selVideoSeg.srcInMs, srcOutMs: selVideoSeg.srcOutMs } : null}
+                  outputMs={outputMs}
+                  durationMs={outDur}
+                  onCommit={(next) => setEdits(next)}
+                  onSeekOutput={seekOutput}
+                  readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+                />
+                <CanvasBackgroundSection
+                  edits={edits}
+                  media={media}
+                  projectId={projectId}
+                  clipId={clipId}
+                  compositeLocked={compositePreviewClip}
+                  readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+                  onCommit={(next) => setEdits(next)}
+                />
+              </>
             }
             colorSlot={
               <ColorPanel
@@ -1905,11 +1929,27 @@ export function EditorShell({
             >
               ⛶ Full screen
             </button>
+            <CanvasBackgroundChip
+              edits={edits}
+              media={media}
+              projectId={projectId}
+              clipId={clipId}
+              visible={canvasBgChipVisible}
+              compositeLocked={compositePreviewClip}
+              readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+              onCommit={(next) => setEdits(next)}
+            />
             <EditorPanelErrorBoundary label="Preview">
             <PreviewStage
               videoUrl={videoUrl}
               posterUrl={posterUrl}
               edits={renderEdits}
+              canvasBgImageUrl={
+                edits.canvasBg?.type === 'image' && edits.canvasBg.imageId
+                  ? uploadUrlFor(edits.canvasBg.imageId)
+                  : null
+              }
+              mainVideoSize={mainVideoSize}
               words={editorWords}
               previewWords={previewWords}
               brandLogoUrl={brandLogoUrl}

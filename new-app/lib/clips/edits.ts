@@ -9,6 +9,7 @@ import { normalizeLayoutSegments, type LayoutSegment } from '@/lib/clips/layout-
 import { normalizeExportTemplate, type ClipExportTemplate } from '@/lib/clips/export-template'
 import { isSpeechLevelingEnabled } from '@/lib/clips/speech-leveling'
 import { normalizeFitBlurStrength, type FitBlurStrength } from '@/lib/clips/fit-blur'
+import { canvasBgChangesFrames, normalizeCanvasBg, type CanvasBg } from '@/lib/clips/canvas-bg'
 import { normalizeTimelineLanes, type TimelineLanesState } from '@/lib/clips/editor/timeline-lane-state'
 import { normalizeTracks, type Track } from '@/lib/clips/editor/tracks'
 import {
@@ -244,6 +245,8 @@ export type ClipEditsV2 = {
   groups?: ItemGroup[]
   /** TC1: magnet / overlay-ripple switches (editor behaviour only) — timeline-opts.ts. */
   timelineOpts?: TimelineOpts
+  /** CV-09: fill behind fitted video (letterbox/pillarbox). Missing = legacy. */
+  canvasBg?: CanvasBg
 }
 
 export type ClipBounds = {
@@ -532,6 +535,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.disabledItems?.length) payload.disabledItems = null
   if (!edits.groups?.length) payload.groups = null
   if (!edits.timelineOpts) payload.timelineOpts = null
+  if (!edits.canvasBg) payload.canvasBg = null
   return payload
 }
 
@@ -649,6 +653,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     smoothSlowmo: normalizeSmoothSlowmo(o.smoothSlowmo),
     stabilize: normalizeStabilize(o.stabilize),
     blurRegions: normalizeBlurRegions(o.blurRegions),
+    canvasBg: normalizeCanvasBg(o.canvasBg),
     ...normalizeSourceFields(o),
     vocabApplied:
       typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
@@ -765,7 +770,8 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     !edits.trackFx?.length &&
     !edits.takes?.length &&
     !edits.trackMotion?.length &&
-    !edits.disabledItems?.length // TC1: deactivated items are not rendered.
+    !edits.disabledItems?.length && // TC1: deactivated items are not rendered.
+    !canvasBgChangesFrames(edits)
   )
 }
 

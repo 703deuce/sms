@@ -85,8 +85,9 @@ export function useProjectMedia(projectId: string | null, transcriptsApi?: Media
   }, [syncing, refresh])
 
   const uploadFiles = useCallback(
-    async (files: File[]) => {
-      if (!projectId) return
+    async (files: File[]): Promise<ProjectMediaItem[]> => {
+      if (!projectId) return []
+      const created: ProjectMediaItem[] = []
       for (const file of files) {
         const key = `${file.name}:${file.size}:${Date.now()}`
         const set = (p: UploadProgress) =>
@@ -101,6 +102,7 @@ export function useProjectMedia(projectId: string | null, transcriptsApi?: Media
           if (alive.current) {
             setItems((prev) => [data.item, ...prev.filter((i) => i.id !== data.item.id)])
             setUploads((prev) => prev.filter((u) => u.key !== key))
+            created.push(data.item)
           }
         } catch (e) {
           set({
@@ -113,6 +115,7 @@ export function useProjectMedia(projectId: string | null, transcriptsApi?: Media
           })
         }
       }
+      return created
     },
     [projectId],
   )

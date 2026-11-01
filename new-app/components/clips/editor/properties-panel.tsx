@@ -216,7 +216,7 @@ export function PropertiesPanel({
   )
 }
 
-function Section({ title, children, testId }: { title: string; children: ReactNode; testId?: string }) {
+export function Section({ title, children, testId }: { title: string; children: ReactNode; testId?: string }) {
   return (
     <section className="space-y-1.5" data-testid={testId}>
       <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>

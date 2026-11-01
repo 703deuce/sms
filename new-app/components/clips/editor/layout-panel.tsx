@@ -16,6 +16,7 @@ import {
 } from '@/lib/clips/layout-options'
 import { clipAspectRatios } from '@/lib/clips/settings'
 import { FIT_BLUR_LABELS, FIT_BLUR_STRENGTHS, fitBlurStrength } from '@/lib/clips/fit-blur'
+import { withCanvasBg } from '@/lib/clips/canvas-bg'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import type { CropShot, FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import {
@@ -142,6 +143,11 @@ export function LayoutPanel({
       {onEdits && (
         <div className="space-y-2 rounded-lg border border-border p-3" data-testid="layout-blur-strength">
           <Label className="text-xs font-medium">Background blur</Label>
+          {edits.canvasBg && edits.canvasBg.type !== 'blur' ? (
+            <p className="text-xs text-muted-foreground">
+              Background is set to Color/Image. Choose a blur strength to switch back to Blur.
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             {FIT_BLUR_STRENGTHS.map((st) => (
               <Button
@@ -150,7 +156,13 @@ export function LayoutPanel({
                 size="sm"
                 variant={fitBlurStrength(edits) === st ? 'default' : 'outline'}
                 aria-pressed={fitBlurStrength(edits) === st}
-                onClick={() => onEdits({ ...edits, layout: { ...edits.layout, blurStrength: st } })}
+                onClick={() =>
+                  onEdits(
+                    edits.canvasBg
+                      ? withCanvasBg(edits, { type: 'blur', blur: st })
+                      : { ...edits, layout: { ...edits.layout, blurStrength: st } },
+                  )
+                }
               >
                 {FIT_BLUR_LABELS[st]}
               </Button>

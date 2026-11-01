@@ -148,6 +148,11 @@ def speakercrop_settings_from_edits(base_settings: dict, edits: dict) -> dict:
     lay = edits.get("layout") if isinstance(edits, dict) else None
     if isinstance(lay, dict) and lay.get("blurStrength"):
         out["fitBlurStrength"] = str(lay["blurStrength"])  # E6: editor blur strength -> render_clip
+    from clips_worker.filtergraph import canvas_bg
+
+    bg = canvas_bg(edits)
+    if bg is not None:
+        out["canvasBg"] = bg
     return out
 
 
