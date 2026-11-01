@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { exportTimeMap, toBaseMs, toExportMs } from '@/lib/clips/editor/export-time'
+import { parseNudge } from '@/lib/clips/editor/timecode-nudge'
+import { readTimelineHeight, TIMELINE_MIN_H, writeTimelineHeight } from '@/lib/clips/editor/timeline-opts'
 import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
 import { Activity, Blend, Bookmark, Command, Keyboard, Layers, Link2, Magnet, Maximize2, Pause, Plus, Redo2, Repeat, Scissors, Square, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
 import { toast } from 'sonner'
@@ -51,7 +53,7 @@ import {
   timelineRows,
   type TimelineRow,
 } from '@/lib/clips/editor/clip-timeline'
-import { rollEdit, slideEdit, splitEdgeTrim, TRIM_TOOL_KEYS, type TrimTool } from '@/lib/clips/editor/trim-tools'
+import { rollEdit, slideEdit, splitEdgeTrim, TRIM_TOOL_KEYS, type TrimTool, slipEdit } from '@/lib/clips/editor/trim-tools'
 import { autoCrossfade } from '@/lib/clips/editor/auto-crossfade'
 import { addFreezeFrame, addGapAt } from '@/lib/clips/editor/inserts'
 import { adjacentMarker, patchMarker, toggleMarkerAt, type Marker } from '@/lib/clips/editor/markers'
@@ -661,6 +663,15 @@ export function Timeline({
   const [snapOn, setSnapOn] = useState(true)
   // G1b3: trim tools (V select · R roll · U slide) and Vegas-style auto-crossfade on overlap.
   const [tool, setTool] = useState<TrimTool>('select')
+  // TC2b (TL-55): resizable / collapsible timeline (per-user, localStorage; null = fit all tracks).
+  const [tlHeight, setTlHeight] = useState<number | null>(null)
+  const [tlCollapsed, setTlCollapsed] = useState(false)
+  useEffect(() => setTlHeight(readTimelineHeight()), [])
+  const setTimelineHeight = (h: number | null) => {
+    const v = h == null ? null : Math.round(Math.min(1600, Math.max(TIMELINE_MIN_H, h)))
+    setTlHeight(v)
+    writeTimelineHeight(v)
+  }
   const [autoXfade, setAutoXfade] = useState(true)
   const [drag, setDrag] = useState<DragState | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
@@ -793,6 +804,29 @@ export function Timeline({
     const movable = liveSelected.filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
     if (!movable.length) return false
     commit(moveItems(opCtx(), movable, dir * arrowStepMs(big)))
+    return true
+  }
+  /** TC2b (TL-56): typed nudge ("+10" frames, "-0.5s", "+1:02"). */
+  const applyNudgeText = (text: string): boolean => {
+    const d = parseNudge(text)
+    if (d == null) {
+      toast.message('Type a signed amount: +10 (frames), -0.5s, +1:02', { id: 'timeline-nudge' })
+      return false
+    }
+    if (!editable) return false
+    if (selKf) {
+      const to = Math.max(0, selKf.tMs + d)
+      commit(moveKeyframesAt(edits, selKf.target, selKf.tMs, to))
+      setSelKf({ target: selKf.target, tMs: to })
+      return true
+    }
+    const movable = liveSelected.filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
+    const next = movable.length ? moveItems(opCtx(), movable, d) : null
+    if (!next) {
+      toast.message('Select movable items (B-roll, text, audio) to nudge', { id: 'timeline-nudge' })
+      return false
+    }
+    commit(next)
     return true
   }
   const toggleLane = (lane: LaneId, patch: LaneState) => {
@@ -1521,7 +1555,19 @@ export function Timeline({
 
   const startDrag = (e: React.PointerEvent, item: TimelineItem, mode: DragState['mode']) => {
     if (e.button !== 0) return
+    // TC2b: the Hand tool scrolls from anywhere (the track area handles it).
+    if (tool === 'hand') return
     e.stopPropagation()
+    if (tool === 'blade' && editable && !refLocked(edits, item)) {
+      // TC2b (TL-18): Blade — split the clicked clip at the click point.
+      rootRef.current?.focus({ preventScroll: true })
+      const area = trackAreaRef.current
+      const at = area ? msAtClientX(e.clientX, area) : playheadMs
+      const next = splitAt(opCtx(), [{ lane: item.lane, id: item.id }], at)
+      if (next) commit(next)
+      else toast.message('Can’t split here (too close to an edge)', { id: 'timeline-blade' })
+      return
+    }
     rootRef.current?.focus({ preventScroll: true })
     const key = refKey(item)
     const multi = e.shiftKey || e.metaKey || e.ctrlKey
@@ -1545,6 +1591,31 @@ export function Timeline({
     if (!editable) return
     const slideTool = tool === 'slide' && mode === 'move' && (item.lane === 'video' || item.lane === 'broll' || item.lane === 'text')
     const rollTool = tool === 'roll' && mode !== 'move'
+    const slipTool = tool === 'slip' && mode === 'move' && item.lane === 'broll'
+    if (slipTool) {
+      const x0 = e.clientX
+      const st: DragState = { mode, item, refs: [{ lane: item.lane, id: item.id }], originX: x0, deltaMs: 0, snappedTo: null, moved: false, alt: false }
+      setDrag(st)
+      const mv = (ev: PointerEvent) => {
+        const dx = ev.clientX - x0
+        if (!st.moved && Math.abs(dx) < DRAG_SLOP_PX) return
+        st.moved = true
+        st.deltaMs = dx / Math.max(1e-6, pxPerMs)
+        setDrag({ ...st })
+      }
+      const up = () => {
+        window.removeEventListener('pointermove', mv)
+        window.removeEventListener('pointerup', up)
+        setDrag(null)
+        if (st.moved && st.deltaMs) {
+          const next = slipEdit(edits, item.id, st.deltaMs)
+          if (next) commit(next)
+        }
+      }
+      window.addEventListener('pointermove', mv)
+      window.addEventListener('pointerup', up)
+      return
+    }
     if (!slideTool && mode === 'move' && item.lane === 'video' && lanes.video.length > 1) {
       startVideoReorder(e, item)
       return
@@ -1569,7 +1640,13 @@ export function Timeline({
       const dx = ev.clientX - state.originX
       if (!state.moved && Math.abs(dx) < DRAG_SLOP_PX) return
       state.moved = true
-      const raw = dx / Math.max(1e-6, pxPerMs)
+      // TC2b: lanes are in export time — a drag across an insert lands where the pointer is
+      // (display delta → base delta at the dragged edge), not off by the insert's length.
+      const anchor = mode === 'end' ? item.endMs : item.startMs
+      const rule = mode === 'end' ? 'end' : 'start'
+      const raw = tmap.totalMs
+        ? toBaseMs(tmap, Math.max(0, toExportMs(tmap, anchor, rule) + dx / Math.max(1e-6, pxPerMs))) - anchor
+        : dx / Math.max(1e-6, pxPerMs)
       const snapping = snapOn && !ev.altKey
       if (ev.altKey) state.alt = true
       if (mode === 'move') {
@@ -2253,6 +2330,9 @@ export function Timeline({
                   ['select', 'Select', 'V', 'Select / trim (V)'],
                   ['roll', 'Roll', 'R', 'Roll edit (R): drag the cut between two touching clips — one gets longer, the other shorter'],
                   ['slide', 'Slide', 'U', 'Slide (U): move a clip between its neighbours — they give / take the time'],
+                  ['slip', 'Slip', 'Y', 'Slip (Y): drag a B-roll clip to change which part of its media plays; it stays in place'],
+                  ['blade', 'Blade', 'B', 'Blade (B): click a clip to split it there'],
+                  ['hand', 'Hand', 'H', 'Hand (H): drag to scroll the timeline'],
                 ] as const
               ).map(([id, label, , title]) => (
                 <button
@@ -2267,6 +2347,22 @@ export function Timeline({
                   {label}
                 </button>
               ))}
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="±nudge"
+                className="ml-1 h-6 w-16 rounded border border-border bg-background px-1 text-[11px] tabular-nums"
+                title="Nudge the selection: +10 / -3 = frames, +1.5s / -0.25s = seconds, +1:02 = m:ss — Enter applies"
+                aria-label="Nudge selection by timecode"
+                data-testid="timeline-nudge"
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const el = e.currentTarget
+                  if (applyNudgeText(el.value)) el.value = ''
+                }}
+              />
               <button
                 type="button"
                 className={`${tbtn} ${autoXfade ? 'text-primary' : 'text-muted-foreground'}`}
@@ -2575,7 +2671,12 @@ export function Timeline({
         </div>
       ) : null}
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
-      <div className="flex min-w-0 rounded-lg border border-border bg-card/30">
+      {tlCollapsed ? null : (
+      <div
+        className="flex min-w-0 rounded-lg border border-border bg-card/30"
+        style={tlHeight ? { maxHeight: tlHeight, overflowY: 'auto' } : undefined}
+        data-testid="timeline-body"
+      >
         <div className="w-[104px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
           {rows.map((r) => (
@@ -2605,12 +2706,29 @@ export function Timeline({
             <div
               ref={trackAreaRef}
               className="relative shrink-0"
-              style={{ width: widthPx, height: totalH }}
               role="presentation"
               data-testid="timeline-track"
               data-duration-ms={Math.round(span)}
+              data-tool={tool}
+              style={{ width: widthPx, height: totalH, cursor: tool === 'hand' ? 'grab' : tool === 'blade' ? 'crosshair' : undefined }}
               onPointerDown={(e) => {
                 if (e.button !== 0) return
+                if (tool === 'hand') {
+                  // TC2b (TL-18): Hand — drag scrolls the timeline (no seek, no selection).
+                  const sc = scrollRef.current
+                  if (!sc) return
+                  e.preventDefault()
+                  const x0 = e.clientX
+                  const l0 = sc.scrollLeft
+                  const mv = (ev: PointerEvent) => void (sc.scrollLeft = l0 - (ev.clientX - x0))
+                  const up = () => {
+                    window.removeEventListener('pointermove', mv)
+                    window.removeEventListener('pointerup', up)
+                  }
+                  window.addEventListener('pointermove', mv)
+                  window.addEventListener('pointerup', up)
+                  return
+                }
                 if ((e.target as HTMLElement).closest('[data-testid^="timeline-item-"],[data-testid="timeline-word"],button')) return
                 rootRef.current?.focus({ preventScroll: true })
                 const additive = e.shiftKey || e.metaKey || e.ctrlKey
@@ -2636,6 +2754,16 @@ export function Timeline({
                 visFromPx={virtualize ? visFromPx : undefined}
                 visToPx={virtualize ? visToPx : undefined}
               />
+              {tmap.wins.map((w) => (
+                <div
+                  key={`insshade${w.id}`}
+                  className="pointer-events-none absolute bottom-0 z-[18] bg-[repeating-linear-gradient(135deg,rgba(0,0,0,0.55)_0_4px,rgba(0,0,0,0.25)_4px_8px)]"
+                  style={{ left: w.startMs * pxPerMs, width: Math.max(2, w.durMs * pxPerMs), top: RULER_H }}
+                  title="Inserted time: overlays pause here in the export"
+                  data-testid="timeline-insert-shade"
+                  aria-hidden
+                />
+              ))}
               <TimelineMarkers
                 markers={edits.markers}
                 pxPerMs={pxPerMs}
@@ -2896,6 +3024,42 @@ export function Timeline({
             </div>
           </div>
         </div>
+      </div>
+      )}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize timeline (drag; double-click = fit all tracks)"
+        title="Drag to resize the timeline · double-click: show all tracks"
+        className="group flex h-3 cursor-row-resize items-center justify-center gap-2"
+        data-testid="timeline-resize"
+        onPointerDown={(e) => {
+          if (e.button !== 0 || tlCollapsed) return
+          e.preventDefault()
+          const body = (e.currentTarget.previousElementSibling as HTMLElement | null)
+          const y0 = e.clientY
+          const h0 = tlHeight ?? body?.getBoundingClientRect().height ?? 240
+          const mv = (ev: PointerEvent) => setTimelineHeight(h0 + (ev.clientY - y0))
+          const up = () => {
+            window.removeEventListener('pointermove', mv)
+            window.removeEventListener('pointerup', up)
+          }
+          window.addEventListener('pointermove', mv)
+          window.addEventListener('pointerup', up)
+        }}
+        onDoubleClick={() => setTimelineHeight(null)}
+      >
+        <span className="h-1 w-10 rounded bg-border group-hover:bg-primary/60" />
+        <button
+          type="button"
+          className="rounded px-1 text-[10px] text-muted-foreground hover:text-foreground"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setTlCollapsed((c) => !c)}
+          aria-pressed={tlCollapsed}
+          data-testid="timeline-collapse"
+        >
+          {tlCollapsed ? 'Show timeline' : 'Collapse'}
+        </button>
       </div>
       <p className="text-[10px] text-muted-foreground">
         Click to select (Shift-click for more), drag to move (up / down: another track; main clips reorder), drag edges
