@@ -673,6 +673,8 @@ export function Timeline({
     writeTimelineHeight(v)
   }
   const [autoXfade, setAutoXfade] = useState(true)
+  // TC2c (TL-49): cross-track crossfades (opt-in; overlap across tracks is often picture-in-picture).
+  const [xfadeTracks, setXfadeTracks] = useState(false)
   const [drag, setDrag] = useState<DragState | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -1672,7 +1674,9 @@ export function Timeline({
       if (toRow?.trackId && state.moved && !slideTool) {
         // G1b: dropped on another track (and maybe moved in time) — one undo step.
         const moved = state.deltaMs ? moveItems(ctx, state.refs, state.deltaMs) ?? ctx.edits : ctx.edits
-        commit(moveItemsToTrack(moved, state.refs, toRow.trackId) ?? (moved !== ctx.edits ? moved : null))
+        const onTrack = moveItemsToTrack(moved, state.refs, toRow.trackId) ?? (moved !== ctx.edits ? moved : null)
+        // TC2c (TL-49): a drop onto another track can crossfade with what it overlaps there.
+        commit(onTrack && autoXfade && xfadeTracks ? autoCrossfade(ctx.edits, onTrack, ctx.previewEdits, ctx.previewEdits, state.refs, sfxDurationsMs, true) : onTrack)
         return
       }
       if (!state.moved || !state.deltaMs) return
@@ -1688,7 +1692,7 @@ export function Timeline({
       }
       if (mode === 'move') {
         const moved = moveItems(ctx, state.refs, state.deltaMs)
-        commit(moved && autoXfade ? autoCrossfade(ctx.edits, moved, ctx.previewEdits, ctx.previewEdits, state.refs, sfxDurationsMs) : moved)
+        commit(moved && autoXfade ? autoCrossfade(ctx.edits, moved, ctx.previewEdits, ctx.previewEdits, state.refs, sfxDurationsMs, xfadeTracks) : moved)
       } else {
         const edge = mode === 'start' ? item.startMs : item.endMs
         commit(trimItem(ctx, { lane: item.lane, id: item.id }, mode, edge + state.deltaMs))
@@ -2373,6 +2377,17 @@ export function Timeline({
               >
                 <Blend className="size-3.5" />
                 Xfade
+              </button>
+              <button
+                type="button"
+                className={`${tbtn} ${xfadeTracks ? 'text-primary' : 'text-muted-foreground'}`}
+                onClick={() => setXfadeTracks((v) => !v)}
+                aria-pressed={xfadeTracks}
+                disabled={!autoXfade}
+                title="Cross-track crossfade: with Xfade on, an overlap with a clip of the same kind on ANOTHER track (B-roll, text, SFX) also fades across it — off keeps picture-in-picture overlaps as they are"
+                data-testid="timeline-xfade-tracks"
+              >
+                ⇅ Tracks
               </button>
             </span>
           ) : null}

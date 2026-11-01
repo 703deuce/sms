@@ -21,13 +21,13 @@ type XLane = (typeof LANES)[number]
 
 type Pair = { lane: XLane; a: TimelineItem; b: TimelineItem; ov: number }
 
-function pairsOf(edits: ClipEditsV2, lanes: Record<string, TimelineItem[]>, ids: Set<string>): Pair[] {
+function pairsOf(edits: ClipEditsV2, lanes: Record<string, TimelineItem[]>, ids: Set<string>, crossTrack = false): Pair[] {
   const out: Pair[] = []
   for (const lane of LANES) {
     const items = (lanes[lane] ?? []).filter((x) => x.id !== 'hook')
     for (const a of items) {
       for (const b of items) {
-        if (a === b || (a.track ?? '') !== (b.track ?? '')) continue
+        if (a === b || (!crossTrack && (a.track ?? '') !== (b.track ?? ''))) continue
         if (!ids.has(`${lane}:${a.id}`) && !ids.has(`${lane}:${b.id}`)) continue
         // a outgoing, b incoming: partial overlap only (containment is a layering choice, not a fade).
         if (!(a.startMs < b.startMs && b.startMs < a.endMs && a.endMs < b.endMs)) continue
@@ -91,11 +91,17 @@ export function autoCrossfade(
   previewNext: ClipEditsV2,
   refs: readonly ItemRef[],
   sfxDurationsMs?: Record<string, number>,
+  /**
+   * TC2c (TL-49): also crossfade items of the same kind on DIFFERENT tracks (B-roll ↔ B-roll on
+   * another overlay track, text ↔ text, SFX ↔ SFX). Opt-in, because an overlap across tracks is
+   * often a deliberate picture-in-picture. Same envelope keyframes → preview = export.
+   */
+  crossTrack = false,
 ): ClipEditsV2 {
   const ids = new Set(refs.filter((r) => (LANES as readonly string[]).includes(r.lane)).map((r) => `${r.lane}:${r.id}`))
   if (!ids.size) return next
-  const before = pairsOf(prev, buildTimelineItems({ edits: prev, previewEdits: previewPrev, sfxDurationsMs }), ids)
-  const after = pairsOf(next, buildTimelineItems({ edits: next, previewEdits: previewNext, sfxDurationsMs }), ids)
+  const before = pairsOf(prev, buildTimelineItems({ edits: prev, previewEdits: previewPrev, sfxDurationsMs }), ids, crossTrack)
+  const after = pairsOf(next, buildTimelineItems({ edits: next, previewEdits: previewNext, sfxDurationsMs }), ids, crossTrack)
   const key = (p: Pair) => `${p.lane}:${p.a.id}|${p.b.id}|${p.ov}`
   const afterKeys = new Set(after.map(key))
   let out = next

@@ -1120,6 +1120,12 @@ export function rippleAnchoredItems(
   const linked = rippleOverlaysOn(next.timelineOpts)
   const ovStart = linked ? mapStart : (x: number) => x
   const ovEnd = linked ? mapEnd : (x: number) => x
+  // TC2c (TL-15): a main-track REORDER (same length, new section order) carries each linked overlay
+  // with the main clip under its start, keeping its length — before, an overlay spanning a moved
+  // cut had its start and end mapped into different blocks and was squashed / flipped.
+  const reorder =
+    linked && a.durationMs === b.durationMs && JSON.stringify(prev.sectionOrder ?? null) !== JSON.stringify(next.sectionOrder ?? null)
+  const ovEndOf = (s0: number, e0: number, s1: number) => (reorder ? s1 + (e0 - s0) : ovEnd(e0))
   let out = next
   if (next.markers?.length) {
     const mk = rippleMarkers(next.markers, mapStart, dur)
@@ -1143,7 +1149,7 @@ export function rippleAnchoredItems(
       ...out,
       broll: next.broll.map((it) => {
         let s = ovStart(it.startMs)
-        let e = ovEnd(it.endMs)
+        let e = ovEndOf(it.startMs, it.endMs, s)
         if (e - s < BROLL_MIN_MS) e = s + BROLL_MIN_MS
         if (e > dur) {
           e = dur
@@ -1175,7 +1181,7 @@ export function rippleAnchoredItems(
       ...out,
       textItems: next.textItems.map((it) => {
         let s = ovStart(it.startMs)
-        let e = ovEnd(it.endMs)
+        let e = ovEndOf(it.startMs, it.endMs, s)
         if (e - s < TEXT_MIN_MS) e = s + TEXT_MIN_MS
         if (e > dur) {
           e = dur
@@ -1191,7 +1197,7 @@ export function rippleAnchoredItems(
       ...out,
       adjustLayers: next.adjustLayers.map((l) => {
         let s = ovStart(l.startMs)
-        let e = ovEnd(l.endMs)
+        let e = ovEndOf(l.startMs, l.endMs, s)
         if (e - s < ADJUST_MIN_MS) e = s + ADJUST_MIN_MS
         if (e > dur) {
           e = dur
