@@ -24,6 +24,13 @@ import { TrimRangeBar } from '@/components/clips/editor/trim-range-bar'
 import { nudgeTrimIn, nudgeTrimOut } from '@/lib/clips/editor/nudge'
 import type { ClipBounds } from '@/lib/clips/edits'
 import { findRetakes } from '@/lib/clips/editor/retakes'
+import {
+  DEFAULT_CLEANUP_STRENGTH,
+  OPT_IN_FILLER_WORDS,
+  type CleanupStrength,
+} from '@/lib/clips/editor/cleanup-strength'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 
 export function CleanupPanel({
@@ -57,6 +64,9 @@ export function CleanupPanel({
   const [clarityRows, setClarityRows] = useState<CleanupProposal[]>([])
   const [clarityLoading, setClarityLoading] = useState(false)
   const [clarityEmpty, setClarityEmpty] = useState<string | null>(null)
+  const [strength, setStrength] = useState<CleanupStrength>(DEFAULT_CLEANUP_STRENGTH)
+  const [enabledOptIn, setEnabledOptIn] = useState<Set<string>>(new Set())
+  const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set())
 
   const clipBounds = useMemo(
     () => ({ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }),
@@ -84,7 +94,10 @@ export function CleanupPanel({
   )
   const maxPlausibleGapMs = useMemo(() => maxPlausibleGapMsForTrim(edits.trim), [edits.trim.in, edits.trim.out])
 
-  const filler = useMemo(() => fillerProposals(orderedWords, deletedSet), [orderedWords, deletedSet])
+  const filler = useMemo(
+    () => fillerProposals(orderedWords, deletedSet, { strength, enabledOptInFillers: enabledOptIn }),
+    [orderedWords, deletedSet, strength, enabledOptIn],
+  )
   const gaps = useMemo(
     () =>
       gapProposals(orderedWords, edits.cutRanges ?? [], {
@@ -94,17 +107,33 @@ export function CleanupPanel({
         targetGapMs: Math.round(gapSettings.targetGapSec * 1000),
         maxPlausibleGapMs,
         wordSpans,
+        strength,
       }),
-    [orderedWords, edits.cutRanges, gapSettings, maxPlausibleGapMs, wordSpans],
+    [orderedWords, edits.cutRanges, gapSettings, maxPlausibleGapMs, wordSpans, strength],
   )
   const applied = useMemo(
     () => appliedCutProposals(edits, orderedWords, deletedSet),
     [edits, orderedWords, deletedSet],
   )
   const proposed = useMemo(
-    () => [...filler, ...gaps, ...retakeExtras, ...clarityRows],
-    [filler, gaps, retakeExtras, clarityRows],
+    () => [...filler, ...gaps, ...retakeExtras, ...clarityRows].filter((p) => !skippedIds.has(p.id)),
+    [filler, gaps, retakeExtras, clarityRows, skippedIds],
   )
+
+  const previewCutAudition = (p: CleanupProposal) => {
+    onSeek(Math.max(bounds.clipStartMs, p.range[0] - 1000))
+    onAuditionChange(auditionEditsForProposals(edits, [p], wordSpans))
+  }
+
+  const applyAllOfKind = (kind: CleanupProposal['kind']) => {
+    for (const p of proposed.filter((row) => row.kind === kind)) onApplyProposal(p)
+    setSkippedIds(new Set())
+    onAuditionChange(null)
+  }
+
+  const restoreAllOfKind = (kind: CleanupProposal['kind']) => {
+    for (const p of applied.filter((row) => row.kind === kind)) onRestoreProposal(p)
+  }
 
   const runRetakes = async () => {
     setRetakeBusy(true)
@@ -228,6 +257,51 @@ export function CleanupPanel({
         </Button>
       </div>
 
+      <div className="space-y-2 rounded-md border border-border p-2">
+        <Label className="text-xs">Cleanup strength</Label>
+        <div className="flex flex-wrap gap-2">
+          {(['light', 'normal', 'aggressive'] as const).map((level) => (
+            <Button
+              key={level}
+              type="button"
+              size="sm"
+              variant={strength === level ? 'default' : 'outline'}
+              data-testid={`cleanup-strength-${level}`}
+              onClick={() => setStrength(level)}
+            >
+              {level[0].toUpperCase() + level.slice(1)}
+            </Button>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground">Opt-in fillers (never cut unless checked):</p>
+        <div className="flex flex-wrap gap-3">
+          {OPT_IN_FILLER_WORDS.map((word) => (
+            <label key={word} className="flex items-center gap-1 text-[10px]">
+              <Checkbox
+                checked={enabledOptIn.has(word)}
+                onCheckedChange={(on) => {
+                  setEnabledOptIn((prev) => {
+                    const next = new Set(prev)
+                    if (on) next.add(word)
+                    else next.delete(word)
+                    return next
+                  })
+                }}
+              />
+              {word}
+            </label>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button type="button" size="sm" variant="secondary" onClick={() => applyAllOfKind('filler')}>
+            Accept all fillers
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={() => applyAllOfKind('gap')}>
+            Accept all gaps
+          </Button>
+        </div>
+      </div>
+
       {aiExtras ? (
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -275,6 +349,8 @@ export function CleanupPanel({
                 proposal={p}
                 auditioning={auditionIds.has(p.id)}
                 onAudition={() => toggleAudition(p)}
+                onPreview={() => previewCutAudition(p)}
+                onSkip={() => setSkippedIds((s) => new Set(s).add(p.id))}
                 onApply={() => {
                   onApplyProposal(p)
                   setRetakeExtras((rows) => rows.filter((r) => r.id !== p.id))
@@ -300,12 +376,30 @@ export function CleanupPanel({
                 <span>
                   {p.label} · {p.kind}
                 </span>
-                <Button type="button" size="sm" variant="ghost" onClick={() => onRestoreProposal(p)}>
-                  Restore
-                </Button>
+                <div className="flex gap-1">
+                  <Button type="button" size="sm" variant="ghost" onClick={() => onRestoreProposal(p)}>
+                    Restore
+                  </Button>
+                </div>
               </div>
             ))
           )}
+          {applied.some((p) => p.kind === 'filler' || p.kind === 'gap') ? (
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('filler')}>
+                Restore all fillers
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('gap')}>
+                Restore all gaps
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('retake')}>
+                Restore all retakes
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('clarity')}>
+                Restore all clarity
+              </Button>
+            </div>
+          ) : null}
         </TabsContent>
       </Tabs>
     </div>
@@ -316,12 +410,16 @@ function ProposalRow({
   proposal,
   auditioning,
   onAudition,
+  onPreview,
+  onSkip,
   onApply,
   testId,
 }: {
   proposal: CleanupProposal
   auditioning: boolean
   onAudition: () => void
+  onPreview: () => void
+  onSkip: () => void
   onApply: () => void
   testId?: string
 }) {
@@ -333,9 +431,15 @@ function ProposalRow({
       <span>
         {proposal.label} · {proposal.kind}
       </span>
-      <div className="flex gap-1">
+      <div className="flex flex-wrap gap-1">
+        <Button type="button" size="sm" variant="outline" onClick={onPreview} data-testid="cleanup-preview-cut">
+          Preview 2s
+        </Button>
         <Button type="button" size="sm" variant={auditioning ? 'default' : 'outline'} onClick={onAudition}>
           Audition
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onSkip}>
+          Skip
         </Button>
         <Button type="button" size="sm" onClick={onApply}>
           Apply
