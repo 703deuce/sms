@@ -1,25 +1,15 @@
 'use client'
 
+import {
+  CHUNK_RELOAD_COOLDOWN_MS,
+  shouldReloadForChunkError,
+  shouldReloadForChunkFailure,
+} from '@/lib/clips/editor/editor-reload-paths'
 import { useEffect } from 'react'
 
 const RELOAD_KEY = 'transovo-chunk-reload'
-/** Do not reload again within this window (prevents a reload loop on a real outage). */
-export const CHUNK_RELOAD_COOLDOWN_MS = 60_000
 
-/**
- * E2fix: the guard used to be a bare '1' that was never cleared, so a tab (or a duplicated tab,
- * which copies sessionStorage) that had recovered once could never recover from a later stale
- * chunk — it stayed on the half-hydrated page. Store a timestamp and allow one reload per
- * cooldown window instead. Also recover on a 404'd /_next/static/chunks <script> (resource errors
- * only reach the capture listener).
- */
-export function shouldReloadForChunkError(stored: string | null, nowMs: number): boolean {
-  if (!stored) return true
-  const at = Number(stored)
-  // Legacy '1' (or garbage) carries no time: allow one reload, the new stamp guards the loop.
-  if (!Number.isFinite(at) || at < 1e12) return true
-  return nowMs - at > CHUNK_RELOAD_COOLDOWN_MS
-}
+export { CHUNK_RELOAD_COOLDOWN_MS, shouldReloadForChunkError }
 
 /** Reload once when a stale Next chunk 404s after deploy (avoids unstyled editor). */
 export function ChunkLoadRecovery() {
@@ -46,8 +36,7 @@ export function ChunkLoadRecovery() {
 
     const onError = (event: ErrorEvent) => {
       const msg = String(event.message || '')
-      const src = shouldReloadForAsset(event.filename || '')
-      if (!src && !msg.includes('ChunkLoadError') && !msg.includes('Loading chunk')) return
+      if (!shouldReloadForChunkFailure(event.filename || '', msg)) return
       reloadOnce()
     }
 

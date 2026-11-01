@@ -4,7 +4,7 @@
  * `edits.adjustLayers = [{id, startMs, endMs, spec}]` in OUTPUT ms. A layer grades everything below
  * it — the main video and the overlay (B-roll) tracks — for its span; text, captions and the export
  * template stay on top (CapCut "Adjustment" layer). Layers stack in list order (later = applied
- * last). Spec = a ColorSpec without HSL ranges / user LUT (those are per-clip in G4a). Keyframes:
+ * Spec = ColorSpec (incl. HSL / user LUT per EF-12). Keyframes:
  * target `adjust:<id>` (color props only, ms from the layer start).
  *
  * Imports only color.ts, so lib/clips/edits.ts can use it.
@@ -17,11 +17,10 @@ export const ADJUST_MAX = 20
 export const ADJUST_MIN_MS = 100
 export const ADJUST_DEFAULT_MS = 3000
 
-/** HSL ranges and user LUTs are per-clip only in G4a (export pass + preview chain are SVG-exact). */
+/** EF-12: adjustment layers may carry HSL / user LUT (export bakes into layer lut3d). */
 export function adjustSpec(raw: unknown): ColorSpec {
   if (!raw || typeof raw !== 'object') return {}
-  const { hsl: _h, lut: _l, ...rest } = raw as Record<string, unknown>
-  return normalizeColorSpec(rest) ?? {}
+  return normalizeColorSpec(raw) ?? {}
 }
 
 export function normalizeAdjustLayers(raw: unknown): AdjustLayer[] | undefined {

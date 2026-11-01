@@ -19,6 +19,9 @@
 import { FX2_KEYS, type Fx2Key } from '@/lib/clips/editor/fx-library'
 export const V2_ADJUST = ['exposure', 'highlights', 'shadows'] as const
 export type V2AdjustKey = (typeof V2_ADJUST)[number]
+/** EF-05: tone extras (not in canon `a` part — separate `t` lookKey segment). */
+export const V2_TONE = ['whites', 'blacks', 'fade'] as const
+export type V2ToneKey = (typeof V2_TONE)[number]
 export const HSL_RANGES = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'magenta'] as const
 export type HslRange = (typeof HSL_RANGES)[number]
 export const HSL_CENTERS = [0, 30, 60, 120, 180, 240, 280, 320] as const
@@ -165,12 +168,14 @@ export function normalizeGradeFields(raw: Record<string, unknown>): GradeFields 
 export function hasGradeFields(spec: GradeSpecLike | null | undefined): boolean {
   if (!spec) return false
   if (V2_ADJUST.some((k) => num(spec.adjust?.[k]) !== 0)) return true
+  if (V2_TONE.some((k) => num(spec.adjust?.[k]) !== 0)) return true
   return Boolean(spec.curves || spec.wheels || spec.hsl || spec.lut || spec.fx)
 }
 
 export function hasPointwiseV2(spec: GradeSpecLike | null | undefined): boolean {
   if (!spec) return false
   if (V2_ADJUST.some((k) => num(spec.adjust?.[k]) !== 0)) return true
+  if (V2_TONE.some((k) => num(spec.adjust?.[k]) !== 0)) return true
   return Boolean(spec.curves || spec.wheels || spec.hsl || spec.lut)
 }
 
@@ -198,6 +203,9 @@ function fmt(v: number): string {
 export function canonGrade(spec: GradeSpecLike | null | undefined): string {
   if (!spec) return ''
   const parts = ['a' + V2_ADJUST.map((k) => String(ri(num(spec.adjust?.[k])))).join(',')]
+  if (V2_TONE.some((k) => num(spec.adjust?.[k]) !== 0)) {
+    parts.push('t' + V2_TONE.map((k) => String(ri(num(spec.adjust?.[k])))).join(','))
+  }
   for (const k of CURVE_CHANNELS) {
     const c = spec.curves?.[k]
     if (c?.length) parts.push(`c${k}` + c.map((p) => `${fmt(p[0])},${fmt(p[1])}`).join(';'))
@@ -290,6 +298,19 @@ export function toneHs(y0: number, hi: number, sh: number): number {
   return clamp(y, 0, 1)
 }
 
+function smoothstep(e0: number, e1: number, x: number): number {
+  const t = clamp((x - e0) / (e1 - e0), 0, 1)
+  return t * t * (3 - 2 * t)
+}
+
+/** EF-05: whites / blacks / fade after highlights & shadows. */
+export function toneExtras(y0: number, wt: number, bk: number, fd: number): number {
+  if (wt === 0 && bk === 0 && fd === 0) return y0
+  let y = y0 + 0.25 * wt * smoothstep(0.5, 1, y0) + 0.25 * bk * (1 - smoothstep(0, 0.5, y0))
+  y = clamp(y, 0, 1)
+  return 0.2 * fd + y * (1 - 0.3 * fd)
+}
+
 export function preTable(spec: GradeSpecLike): number[] | null {
   const ev = (clamp(num(spec.adjust?.exposure), -100, 100) / 100) * 2
   if (ev === 0) return null
@@ -307,9 +328,12 @@ export function postTables(
 ): [number[], number[], number[]] | null {
   const hi = clamp(num(spec.adjust?.highlights), -100, 100) / 100
   const sh = clamp(num(spec.adjust?.shadows), -100, 100) / 100
+  const wt = clamp(num(spec.adjust?.whites), -100, 100) / 100
+  const bk = clamp(num(spec.adjust?.blacks), -100, 100) / 100
+  const fd = clamp(num(spec.adjust?.fade), 0, 100) / 100
   const wh = spec.wheels ?? {}
   const cv = spec.curves ?? {}
-  if (!presetCurve && hi === 0 && sh === 0 && !spec.wheels && !spec.curves) return null
+  if (!presetCurve && hi === 0 && sh === 0 && wt === 0 && bk === 0 && fd === 0 && !spec.wheels && !spec.curves) return null
   const mpts = cv.m
   const mm = mpts ? curveSlopes(mpts) : null
   const out: number[][] = []
@@ -324,6 +348,7 @@ export function postTables(
       let y = i / TABLE_N
       if (presetCurve) y = curveAt(presetCurve[c]!, y)
       y = toneHs(y, hi, sh)
+      y = toneExtras(y, wt, bk, fd)
       y = clamp(gain * (y + lift * (1 - y)), 0, 1)
       y = y ** gexp
       if (mpts) y = curveEval(mpts, mm!, y)
@@ -546,6 +571,9 @@ export const COLOR_KEY_PROPS = {
   cHighlights: 'highlights',
   cShadows: 'shadows',
   cVibrance: 'vibrance',
+  cWhites: 'whites',
+  cBlacks: 'blacks',
+  cFade: 'fade',
 } as const
 export type ColorKeyProp = keyof typeof COLOR_KEY_PROPS
 export const COLOR_KEY_PROP_LIST = Object.keys(COLOR_KEY_PROPS) as ColorKeyProp[]
@@ -561,6 +589,7 @@ export const FX_KEY_PROPS = {
   fxShake: 'shake',
   fxFlicker: 'flicker',
   fxScanlines: 'scanlines',
+  fxPixelate: 'pixelate',
 } as const satisfies Record<string, FxAnyKey>
 export type FxKeyProp = keyof typeof FX_KEY_PROPS
 export const FX_KEY_QUANT = 5

@@ -188,7 +188,7 @@ def test_adjust_layer_pass(tmp_path):
     spec = {"adjust": {"exposure": 30, "contrast": 20}, "hsl": {"red": {"h": 10, "s": 0, "l": 0}}}
     edits = {"adjustLayers": [{"id": "a1", "startMs": 300, "endMs": 700, "spec": spec}]}
     ly = normalize_adjust_layers(edits["adjustLayers"])
-    assert "hsl" not in ly[0]["spec"]  # HSL / LUT are not adjustment-layer fields in G4a
+    assert "hsl" in ly[0]["spec"]  # EF-12: adjustment layers may carry HSL / LUT
     out = tmp_path / "adj.mp4"
     assert apply_adjust_layers(src, out, edits, W, H, tmp_path)
     _check(src, out, {}, 0.1)

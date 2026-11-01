@@ -40,6 +40,7 @@ import {
   glitchBands,
   glitchState,
   glowOpacity,
+  pixelateBlock,
   rgbsplitPx,
   scanlineRows,
   unit,
@@ -223,7 +224,28 @@ export class GradeFilterBank {
     }
     const fx = specFx(spec)
     const { w: W, h: H } = this.play
-    // G4b (fx-library.ts): blur → glow → RGB split → glitch, before sharpen.
+    // EF-16 pixelate (before blur), then G4b blur → glow → …
+    if (fx.pixelate) {
+      const b = pixelateBlock(fx.pixelate, W, H)
+      if (b > 0) {
+        const bs = b / W
+        const bh = b / H
+        const flood = el('feFlood', { x: bs / 2, y: bh / 2, width: 0, height: 0, floodColor: '#808080' })
+        step(flood, 'fxpxf')
+        const comp = el('feComposite', { in2: 'fxpxf', operator: 'out', x: 0, y: 0, width: bs, height: bh })
+        comp.setAttribute('in', last)
+        step(comp, 'fxpxc')
+        const tile = el('feTile', {})
+        tile.setAttribute('in', 'fxpxc')
+        step(tile, 'fxpxt')
+        const clip = el('feComposite', { operator: 'in', in2: 'SourceGraphic' })
+        clip.setAttribute('in', 'fxpxt')
+        step(clip, 'fxpxi')
+        const dil = el('feMorphology', { operator: 'dilate', radius: `${b / 2 / W} ${b / 2 / H}` })
+        dil.setAttribute('in', 'fxpxi')
+        step(dil, 'fxpx')
+      }
+    }
     /** Gaussian blur renormalised at the frame edge (≈ ffmpeg gblur's edge handling). */
     const blur = (sigma: number, name: string) => {
       step(el('feGaussianBlur', { stdDeviation: `${sigma / W} ${sigma / H}` }), `${name}0`)

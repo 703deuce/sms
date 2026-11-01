@@ -16,7 +16,7 @@ import re
 import subprocess
 from pathlib import Path
 
-MASK_SHAPES = ("rect", "ellipse", "linear", "mirror")
+MASK_SHAPES = ("rect", "ellipse", "linear", "mirror", "heart", "star")
 BLEND_MODES = ("normal", "multiply", "screen", "overlay", "darken", "lighten", "difference", "exclusion",
                "hardlight", "addition")
 MASK_SHORT = 160
@@ -245,6 +245,41 @@ def mask_alpha(shape: str, g: dict, invert: bool, w: int, h: int):
         d = (np.hypot(u / hw, v / hh) - 1) * min(hw, hh)
     elif shape == "linear":
         d = v + 0 * u
+    elif shape == "heart":
+        m = min(hw, hh)
+        px = 0.604 * np.abs(u) / hw
+        py = 0.552 * (1 - v / hh)
+        t = 0.5 * np.maximum(px + py, 0)
+        d1 = np.hypot(px, py - 1)
+        d2 = np.hypot(px - t, py - t)
+        inner = np.sqrt(np.minimum(d1 * d1, d2 * d2)) * np.sign(px - py)
+        outer = np.hypot(px - 0.25, py - 0.75) - math.sqrt(2) / 4
+        d0 = np.where(px + py > 1, outer, inner)
+        d = d0 * m / 0.552
+    elif shape == "star":
+        m = min(hw, hh)
+        px = u / hw
+        py = -v / hh
+        k1x, k1y = 0.809016994375, -0.587785252292
+        k2x, k2y = -k1x, k1y
+        px = np.abs(px)
+        dot1 = k1x * px + k1y * py
+        mask1 = dot1 > 0
+        px = np.where(mask1, px - 2 * dot1 * k1x, px)
+        py = np.where(mask1, py - 2 * dot1 * k1y, py)
+        dot2 = k2x * px + k2y * py
+        mask2 = dot2 > 0
+        px = np.where(mask2, px - 2 * dot2 * k2x, px)
+        py = np.where(mask2, py - 2 * dot2 * k2y, py)
+        px = np.abs(px)
+        py = py - 1
+        bax = 0.45 * -k1y
+        bay = 0.45 * k1x - 1
+        ba_len2 = bax * bax + bay * bay
+        h = np.clip((px * bax + py * bay) / ba_len2, 0, 1)
+        qx = px - bax * h
+        qy = py - bay * h
+        d = np.hypot(qx, qy) * np.sign(py * bax - px * bay) * m
     else:
         d = np.abs(v) - hh + 0 * u
     if f > 0:

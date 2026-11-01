@@ -369,7 +369,7 @@ export function FxControls({ spec, onLive, onCommit, disabled }: Edit) {
           min={0}
           max={100}
           disabled={disabled}
-          testId={`color-fx-${k}`}
+          testId={k === 'pixelate' ? 'fx-pixelate' : `color-fx-${k}`}
           onLive={(v) => onLive(withFx(spec, k, v))}
           onCommit={(v) => onCommit(withFx(spec, k, v), `fx-${k}`)}
         />

@@ -10,10 +10,11 @@
  * grain → shake. No imports (shared by lib/clips/edits.ts normalizers).
  */
 
-export const FX2_KEYS = ['blur', 'glow', 'rgbsplit', 'glitch', 'shake', 'flicker', 'scanlines'] as const
+export const FX2_KEYS = ['pixelate', 'blur', 'glow', 'rgbsplit', 'glitch', 'shake', 'flicker', 'scanlines'] as const
 export type Fx2Key = (typeof FX2_KEYS)[number]
 
 export const FX2_LABELS: Record<Fx2Key, string> = {
+  pixelate: 'Pixelate',
   blur: 'Blur',
   glow: 'Glow',
   rgbsplit: 'RGB split',
@@ -29,6 +30,12 @@ const HASH_M = 997
 
 export const unit = (w: number, h: number) => Math.min(w, h) / 1080
 export const jround = (x: number) => Math.floor(x + 0.5)
+
+/** EF-16: even block size in export px; v=0 → 0 (off). */
+export function pixelateBlock(v: number, w: number, h: number): number {
+  if (!v) return 0
+  return 2 * Math.max(1, jround((v / 100) * 24 * unit(w, h)))
+}
 export function fxHash(k: number, salt: number): number {
   return ((((k * HASH_A + salt * HASH_B) % HASH_M) + HASH_M) % HASH_M) / HASH_M
 }

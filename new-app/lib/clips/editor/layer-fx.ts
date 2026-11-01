@@ -13,9 +13,16 @@
  *  reverse  B-roll video plays backwards (export pre-renders a reversed copy in chunks).
  */
 
-export type MaskShape = 'rect' | 'ellipse' | 'linear' | 'mirror'
-export const MASK_SHAPES: readonly MaskShape[] = ['rect', 'ellipse', 'linear', 'mirror'] as const
-export const MASK_LABELS: Record<MaskShape, string> = { rect: 'Rectangle', ellipse: 'Circle', linear: 'Linear', mirror: 'Mirror' }
+export type MaskShape = 'rect' | 'ellipse' | 'linear' | 'mirror' | 'heart' | 'star'
+export const MASK_SHAPES: readonly MaskShape[] = ['rect', 'ellipse', 'linear', 'mirror', 'heart', 'star'] as const
+export const MASK_LABELS: Record<MaskShape, string> = {
+  rect: 'Rectangle',
+  ellipse: 'Circle',
+  linear: 'Linear',
+  mirror: 'Mirror',
+  heart: 'Heart',
+  star: 'Star',
+}
 export type MaskGeom = { x: number; y: number; w: number; h: number; rot: number; feather: number }
 export type MaskKey = MaskGeom & { ms: number }
 export type LayerMask = MaskGeom & { shape: MaskShape; invert?: true; keys?: MaskKey[] }
@@ -279,6 +286,44 @@ export function maskAlpha(shape: MaskShape, g: MaskGeom, invert: boolean, W: num
         d = (Math.hypot(u / hw, v / hh) - 1) * Math.min(hw, hh)
       } else if (shape === 'linear') {
         d = v
+      } else if (shape === 'heart') {
+        const m = Math.min(hw, hh)
+        const px = (0.604 * Math.abs(u)) / hw
+        const py = (0.552 * (1 - v / hh))
+        const t = 0.5 * Math.max(px + py, 0)
+        const d1 = Math.hypot(px, py - 1)
+        const d2 = Math.hypot(px - t, py - t)
+        const inner = Math.sqrt(Math.min(d1 * d1, d2 * d2)) * Math.sign(px - py)
+        const outer = Math.hypot(px - 0.25, py - 0.75) - Math.SQRT2 / 4
+        d = (px + py > 1 ? outer : inner) * (m / 0.552)
+      } else if (shape === 'star') {
+        const m = Math.min(hw, hh)
+        let px = u / hw
+        let py = -v / hh
+        const k1x = 0.809016994375
+        const k1y = -0.587785252292
+        const k2x = -k1x
+        const k2y = k1y
+        px = Math.abs(px)
+        let dot1 = k1x * px + k1y * py
+        if (dot1 > 0) {
+          px -= 2 * dot1 * k1x
+          py -= 2 * dot1 * k1y
+        }
+        let dot2 = k2x * px + k2y * py
+        if (dot2 > 0) {
+          px -= 2 * dot2 * k2x
+          py -= 2 * dot2 * k2y
+        }
+        px = Math.abs(px)
+        py -= 1
+        const bax = 0.45 * -k1y - 0
+        const bay = 0.45 * k1x - 1
+        const baLen2 = bax * bax + bay * bay
+        const h = Math.min(1, Math.max(0, (px * bax + py * bay) / baLen2))
+        const qx = px - bax * h
+        const qy = py - bay * h
+        d = Math.hypot(qx, qy) * Math.sign(py * bax - px * bay) * m
       } else {
         d = Math.abs(v) - hh
       }

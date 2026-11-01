@@ -168,7 +168,7 @@ def write_cube(spec, path: Path, size: int = LUT_SIZE, lut: dict | None = None) 
 
 # ── resolution ──────────────────────────────────────────────────────────────
 
-ADJUST_KEYS_ALL = ADJUST_KEYS + ("exposure", "highlights", "shadows")
+ADJUST_KEYS_ALL = ADJUST_KEYS + ("exposure", "highlights", "shadows", "whites", "blacks", "fade")
 
 
 def normalize_spec(raw) -> dict | None:
@@ -194,8 +194,11 @@ def normalize_spec(raw) -> dict | None:
                 n = float(a.get(k))
             except (TypeError, ValueError):
                 continue
-            if math.isfinite(n) and _ri(n) != 0:
-                adj[k] = _ri(_clamp(n, ADJUST_MIN, ADJUST_MAX))
+            if not math.isfinite(n) or _ri(n) == 0:
+                continue
+            lo = 0 if k == "fade" else ADJUST_MIN
+            hi = 100 if k == "fade" else ADJUST_MAX
+            adj[k] = _ri(_clamp(n, lo, hi))
         if adj:
             out["adjust"] = adj
     out.update(normalize_grade_fields(raw))

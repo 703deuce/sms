@@ -59,8 +59,12 @@ export const COLOR_PROPS = [
   'cTint',
   'cHighlights',
   'cShadows',
+  'cWhites',
+  'cBlacks',
+  'cFade',
   'cVibrance',
   // G4c: keyframable effect amounts (spec.fx, 0..100), quantized to FX_KEY_QUANT by the color pass.
+  'fxPixelate',
   'fxSharpen',
   'fxVignette',
   'fxGrain',
@@ -73,8 +77,8 @@ export const COLOR_PROPS = [
   'fxScanlines',
 ] as const
 export type ColorKeyProp = (typeof COLOR_PROPS)[number]
-export const ADJUST_KEY_PROPS = COLOR_PROPS.slice(0, 9) as readonly ColorKeyProp[]
-export const FX_PROPS = COLOR_PROPS.slice(9) as readonly ColorKeyProp[]
+export const ADJUST_KEY_PROPS = COLOR_PROPS.slice(0, 12) as readonly ColorKeyProp[]
+export const FX_PROPS = COLOR_PROPS.slice(12) as readonly ColorKeyProp[]
 export function isFxProp(p: string): boolean {
   return p.startsWith('fx') && (COLOR_PROPS as readonly string[]).includes(p)
 }
@@ -145,7 +149,11 @@ export const PROP_SPECS: Record<KeyProp, PropSpec> = {
   cTint: { label: 'Tint', unit: '', min: -100, max: 100, def: 0, step: 1 },
   cHighlights: { label: 'Highlights', unit: '', min: -100, max: 100, def: 0, step: 1 },
   cShadows: { label: 'Shadows', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cWhites: { label: 'Whites', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cBlacks: { label: 'Blacks', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cFade: { label: 'Fade', unit: '', min: 0, max: 100, def: 0, step: 1 },
   cVibrance: { label: 'Vibrance', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  fxPixelate: { label: 'Pixelate', unit: '', min: 0, max: 100, def: 0, step: 5 },
   fxSharpen: { label: 'Sharpen', unit: '', min: 0, max: 100, def: 0, step: 1 },
   fxVignette: { label: 'Vignette', unit: '', min: 0, max: 100, def: 0, step: 1 },
   fxGrain: { label: 'Grain', unit: '', min: 0, max: 100, def: 0, step: 1 },
