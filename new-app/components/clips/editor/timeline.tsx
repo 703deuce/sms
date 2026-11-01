@@ -1356,10 +1356,18 @@ export function Timeline({
     }
     return null
   })()
-  /** FV4b: Group as takes is eligible with 2+ B-roll or 2+ Video clips selected. */
-  const canGroupTakes =
-    editable &&
-    (liveSelected.filter((r) => r.lane === 'broll').length >= 2 || liveSelected.filter((r) => r.lane === 'video').length >= 2)
+  /** FV4b: Group as takes is eligible with 2+ B-roll or 2+ Video clips selected (not text / audio). */
+  const selBroll = liveSelected.filter((r) => r.lane === 'broll').length
+  const selVideo = liveSelected.filter((r) => r.lane === 'video').length
+  const canGroupTakes = editable && (selBroll >= 2 || selVideo >= 2)
+  const takesDisabledHint = (() => {
+    if (canGroupTakes) return null
+    if (!editable || liveSelected.length < 2) return 'Select 2+ clips first (Shift-click)'
+    if (liveSelected.some((r) => r.lane === 'text' || r.lane === 'captions' || r.lane === 'adjust')) {
+      return 'Takes work on video or B-roll clips'
+    }
+    return 'Select 2+ clips first (Shift-click)'
+  })()
   const menuItemCls = 'block w-full rounded px-2 py-1.5 text-left hover:bg-muted disabled:pointer-events-none disabled:opacity-50'
   /** FV4b: one takes menu for the item context menu and the toolbar (G1c actions, unchanged). */
   const renderTakesItems = (close: () => void, where: 'ctx' | 'toolbar') => (
@@ -1380,7 +1388,7 @@ export function Timeline({
         }}
       >
         Group as takes
-        {!canGroupTakes ? <span className="block text-[10px] text-muted-foreground">Select 2+ clips first (Shift-click)</span> : null}
+        {takesDisabledHint ? <span className="block text-[10px] text-muted-foreground">{takesDisabledHint}</span> : null}
       </button>
       {editable && selTakeGroupId ? (
         <div
@@ -1876,10 +1884,11 @@ export function Timeline({
       if (mode === 'move') state.targetRow = trackRowAt(ev.clientY, item.lane)
       setDrag({ ...state })
     }
-    const onUp = () => {
+    const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       setDrag(null)
+      const alt = state.alt || ev.altKey
       const fromRow = rowOfItem(item)?.key ?? null
       const toRow = mode === 'move' && state.targetRow && state.targetRow !== fromRow ? rows.find((r) => r.key === state.targetRow) : undefined
       if (toRow?.trackId && state.moved && !slideTool) {
@@ -1892,6 +1901,11 @@ export function Timeline({
       }
       if (!state.moved || !state.deltaMs) return
       const ref = { lane: item.lane, id: item.id }
+      if (alt && mode !== 'move' && (item.lane === 'video' || item.lane === 'voice')) {
+        const edge = mode === 'start' ? item.startMs : item.endMs
+        const jl = splitEdgeTrim(ctx, ref, mode, edge + state.deltaMs)
+        if (jl) return commit(jl)
+      }
       if (slideTool) {
         const next = slideEdit(ctx, ref, state.deltaMs)
         if (next) return commit(next)
@@ -1905,13 +1919,6 @@ export function Timeline({
         if (next) return commit(next)
         toast.message('Roll needs the edit between two touching main-video clips', { id: 'timeline-roll' })
         return
-      }
-      if (state.alt && mode !== 'move' && (item.lane === 'video' || item.lane === 'voice')) {
-        // G1b3: Alt-drag = J / L — only the sound (Voice edge) or only the picture (Video edge) moves.
-        // Not at a real cut (clip in / out point): Alt keeps its old meaning (no snapping trim).
-        const edge = mode === 'start' ? item.startMs : item.endMs
-        const jl = splitEdgeTrim(ctx, ref, mode, edge + state.deltaMs)
-        if (jl) return commit(jl)
       }
       if (mode === 'move') {
         const moved = moveItems(ctx, state.refs, state.deltaMs)
@@ -2227,6 +2234,7 @@ export function Timeline({
         data-testid={host ? 'timeline-compound' : `timeline-item-${item.lane}`}
         data-lane={item.lane}
         data-item-id={item.id}
+        data-jl-split={item.lane === 'voice' && item.label.includes('split') ? 'true' : undefined}
         data-start-ms={Math.round(item.startMs)}
         data-end-ms={Math.round(item.endMs)}
         data-selected={isSel ? 'true' : undefined}
