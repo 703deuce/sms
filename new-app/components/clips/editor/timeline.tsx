@@ -314,6 +314,7 @@ export function Timeline({
   onRedo,
   canUndo = false,
   canRedo = false,
+  historySlot,
   mediaOffsetMs = 0,
   musicUrl = null,
   sfxDurationsMs,
@@ -367,6 +368,7 @@ export function Timeline({
   onRedo?: () => void
   canUndo?: boolean
   canRedo?: boolean
+  historySlot?: React.ReactNode
   /** Source ms at media time 0 of `videoUrl` (waveform slicing). */
   mediaOffsetMs?: number
   musicUrl?: string | null
@@ -2498,6 +2500,7 @@ export function Timeline({
               <Redo2 className="size-3.5" />
             </button>
           ) : null}
+          {historySlot}
           <span className="mx-1 h-4 w-px bg-border" aria-hidden />
           <button
             type="button"

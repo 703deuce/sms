@@ -330,6 +330,41 @@ export function useEditorState(
     bumpLocalRevision()
     dispatch({ type: 'redo' })
   }, [bumpLocalRevision])
+
+  const jumpHistory = useCallback(
+    (steps: number) => {
+      if (!steps) return
+      setHistoryReady(true)
+      let past = historyRef.current.past
+      let future = historyRef.current.future
+      let edits = editsRef.current
+      if (steps < 0) {
+        const k = Math.min(-steps, past.length)
+        for (let i = 0; i < k; i++) {
+          const prev = past[past.length - 1]!
+          future = [edits, ...future].slice(0, MAX_UNDO)
+          edits = prev
+          past = past.slice(0, -1)
+        }
+      } else {
+        const k = Math.min(steps, future.length)
+        for (let i = 0; i < k; i++) {
+          const next = future[0]!
+          past = [...past, edits].slice(-MAX_UNDO)
+          edits = next
+          future = future.slice(1)
+        }
+      }
+      editsRef.current = edits
+      bumpLocalRevision()
+      const n = Math.abs(steps)
+      for (let i = 0; i < n; i++) {
+        dispatch({ type: steps < 0 ? 'undo' : 'redo' })
+      }
+    },
+    [bumpLocalRevision],
+  )
+
   const clearProducerStrip = useCallback(() => dispatch({ type: 'clearProducerStrip' }), [])
 
   const wordSpans = useCallback(() => {
@@ -927,6 +962,9 @@ export function useEditorState(
     hydrateEdits,
     undo,
     redo,
+    jumpHistory,
+    historyPast: state.past,
+    historyFuture: state.future,
     canUndo: historyReady && state.past.length > 0,
     canRedo: historyReady && state.future.length > 0,
     saveState: state.saveState,

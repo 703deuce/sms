@@ -30,6 +30,7 @@ export function EditorTopBar({
   canRedo,
   onUndo,
   onRedo,
+  historySlot,
   onExport,
   onOpenProducer,
   onRetrySave,
@@ -48,6 +49,7 @@ export function EditorTopBar({
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
+  historySlot?: React.ReactNode
   onExport: () => void
   onRetrySave?: () => void
   onOpenProducer?: () => void
@@ -156,6 +158,7 @@ export function EditorTopBar({
             Redo <Kbd>⇧⌘Z</Kbd>
           </TooltipContent>
         </Tooltip>
+        {historySlot}
         <Separator orientation="vertical" className="mx-1 h-6" />
         {onOpenProducer ? (
           <Button

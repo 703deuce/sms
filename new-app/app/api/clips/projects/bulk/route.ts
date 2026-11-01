@@ -24,7 +24,8 @@ export async function POST(request: Request) {
     } else if (body.action === 'trash') {
       await softDeleteProjects(workspaceId, body.projectIds)
     } else if (body.action === 'duplicate') {
-      await duplicateClipProjects(workspaceId, body.projectIds)
+      const projectIds = await duplicateClipProjects(workspaceId, body.projectIds)
+      return NextResponse.json({ data: { ok: true, projectIds } })
     } else {
       await restoreProjects(workspaceId, body.projectIds)
     }
