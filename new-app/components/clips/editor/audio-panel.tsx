@@ -22,6 +22,8 @@ import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags
 import { toast } from 'sonner'
 import { StockAudioPicker } from '@/components/clips/editor/stock-audio-picker'
 import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
+import { TextVoiceoverSection } from '@/components/clips/editor/text-voiceover-section'
+import type { ClipAudioSfx } from '@/lib/clips/edits'
 
 export function AudioPanel({
   clipId,
@@ -42,6 +44,8 @@ export function AudioPanel({
   onRetryStudioPoll,
   onPatchExportAudio,
   uploadLibraryFiles,
+  textVoiceover,
+  addVoiceoverSfx,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -65,6 +69,9 @@ export function AudioPanel({
     },
   ) => void
   uploadLibraryFiles?: (files: File[]) => Promise<ProjectMediaItem[]>
+  /** Selected plain text item — stock TTS (same as Text panel). */
+  textVoiceover?: { text: string; atMs: number } | null
+  addVoiceoverSfx?: (item: ClipAudioSfx) => void
 }) {
   const [prompt, setPrompt] = useState('')
   const [instrumental, setInstrumental] = useState(true)
@@ -307,6 +314,17 @@ export function AudioPanel({
             </Button>
           ) : null}
         </div>
+      ) : null}
+      {textVoiceover && uploadLibraryFiles && addVoiceoverSfx ? (
+        <section data-testid="audio-panel-voiceover">
+          <TextVoiceoverSection
+            clipId={clipId}
+            text={textVoiceover.text}
+            atMs={textVoiceover.atMs}
+            uploadLibraryFiles={uploadLibraryFiles}
+            addSfx={addVoiceoverSfx}
+          />
+        </section>
       ) : null}
       {aiExtras ? (
       <section className="space-y-2 rounded-md border border-border p-2" data-testid="audio-library">
