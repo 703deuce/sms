@@ -516,6 +516,7 @@ model Workspace {
   clipBrandTemplates                     ClipBrandTemplate[]
   captionPresets                         CaptionPreset[]
   clipRenders                            ClipRender[]
+  clipRenderShareLinks                   ClipRenderShareLink[]
   clipEvents                             ClipEvent[]
   forwardingUsageMonthly                 ForwardingUsageMonthly[]
   softphonePresence                      SoftphonePresence[]
@@ -9823,12 +9824,35 @@ model ClipRender {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  clip      Clip      @relation(fields: [clipId], references: [id], onDelete: Cascade)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  clip       Clip                 @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  workspace  Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  shareLinks ClipRenderShareLink[]
 
   @@index([workspaceId, createdAt])
   @@index([batchId])
   @@map("clip_renders")
+}
+
+model ClipRenderShareLink {
+  id            String    @id
+  renderId      String
+  workspaceId   String
+  slug          String    @unique
+  tokenHash     String
+  allowDownload Boolean   @default(true)
+  expiresAt     DateTime?
+  revokedAt     DateTime?
+  viewCount     Int       @default(0)
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  render    ClipRender @relation(fields: [renderId], references: [id], onDelete: Cascade)
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([renderId])
+  @@index([workspaceId, createdAt])
+  @@map("clip_render_share_links")
 }
 
 model ClipExportUserPrefs {
