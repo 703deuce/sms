@@ -17,7 +17,7 @@ import { editorTemplateSegmentIndex, editorTemplateSpec } from '@/lib/clips/temp
 import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
 import { TemplateStage, TemplateTitleOverlay } from '@/components/clips/editor/template-stage'
 import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
-import { aspectRatioParts, exportPixelSize, type ExportAspect } from '@/lib/clips/export-aspect'
+import { aspectRatioParts, exportPixelSize, isLandscapeAspect, type ExportAspect } from '@/lib/clips/export-aspect'
 import {
   clampPan,
   fitPercent,
@@ -96,9 +96,14 @@ function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
 }
 
+/** Preview layout matches export: landscape aspects force fit (blur / letterbox). */
+export function previewLayoutMode(e: ClipEditsV2): string {
+  return isLandscapeAspect(e.aspectRatio) ? 'fit' : (e.layout?.mode ?? 'speaker_follow')
+}
+
 function usesSpeakerCropPreview(edits: ClipEditsV2, track: CropTrack | null): boolean {
   if (!track) return false
-  const mode = edits.layout?.mode ?? 'speaker_follow'
+  const mode = previewLayoutMode(edits)
   if (
     mode === 'center_crop' ||
     mode === 'fill' ||
@@ -199,7 +204,7 @@ export function PreviewStage({
   aiMetaRef.current = aiMeta
   const trackRef = useRef(cropTrack)
   const aspect = edits.aspectRatio ?? '9:16'
-  const layoutMode = edits.layout?.mode ?? 'speaker_follow'
+  const layoutMode = previewLayoutMode(edits)
   const mediaOffsetMs = media?.offsetMs ?? 0
   const compositePreview = media?.kind === 'composite'
   // T6.3: in template mode the primary <video> belongs to TemplateStage (panel 0). The legacy
@@ -593,7 +598,7 @@ export function PreviewStage({
       const e = auditionRef.current?.edits ?? editsRef.current
       const playbackEdits = editorPreviewEdits(e, wordsRef.current)
       const track = trackRef.current
-      const letterbox = layoutUsesLetterboxBlurPreview(e.layout?.mode ?? 'speaker_follow')
+      const letterbox = layoutUsesLetterboxBlurPreview(previewLayoutMode(e))
       let src = e.trim.in
       if (v) {
         src = sourceMsFromVideo(v.currentTime, mediaOffsetMs)
@@ -1075,7 +1080,7 @@ export function PreviewStage({
     if (!libassWanted || libassFailed) return null
     try {
       if (usesUserFonts) registerFontsFromItems(lookEdits.textItems)
-      const mode = lookEdits.layout?.mode ?? 'speaker_follow'
+      const mode = previewLayoutMode(lookEdits)
       return buildPreviewScripts({
         edits: lookEdits as unknown as Record<string, unknown>,
         words: lookEdits.captions?.enabled === false ? [] : captionWords,
