@@ -118,11 +118,17 @@ export function EditorTopBar({
       <div className="ml-auto flex items-center gap-1">
         <Tooltip>
           <TooltipTrigger
-            type="button"
-            disabled={!canUndo}
-            onClick={onUndo}
-            className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent disabled:opacity-40"
-            aria-label="Undo"
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                disabled={!canUndo}
+                onClick={onUndo}
+                aria-label="Undo"
+                className="text-muted-foreground"
+              />
+            }
           >
             <Undo2 className="size-4" />
           </TooltipTrigger>
@@ -132,11 +138,17 @@ export function EditorTopBar({
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
-            type="button"
-            disabled={!canRedo}
-            onClick={onRedo}
-            className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent disabled:opacity-40"
-            aria-label="Redo"
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                disabled={!canRedo}
+                onClick={onRedo}
+                aria-label="Redo"
+                className="text-muted-foreground"
+              />
+            }
           >
             <Redo2 className="size-4" />
           </TooltipTrigger>
