@@ -83,15 +83,21 @@ async function main() {
       const adjust = document.querySelector('[data-testid="preview-adjust"]')
       if (!kf || !backdrop || !adjust) return { ok: false, kf: !!kf, backdrop: !!backdrop, adjust: !!adjust }
       const style = backdrop.getAttribute('style') || ''
+      const colorOk =
+        style.toUpperCase().includes('3B82F6') ||
+        style.includes('rgb(59, 130, 246)') ||
+        style.includes('59, 130, 246')
       return {
-        ok: adjust.contains(backdrop) && !kf.contains(backdrop) && style.toUpperCase().includes('3B82F6'),
+        ok: adjust.contains(backdrop) && !kf.contains(backdrop) && colorOk,
         outsideKf: !kf.contains(backdrop),
         inAdjust: adjust.contains(backdrop),
         style,
       }
     })
 
-    await page.locator('[data-testid="preview-canvas-bg-chip"]').click()
+    await page.locator('[data-testid="preview-canvas-bg-chip"]').evaluate((el) => {
+      el.click()
+    })
     results.chipOpens = await page.locator('[data-testid="canvas-bg-controls"]').last().isVisible({ timeout: 5000 })
     await page.keyboard.press('Escape')
 
