@@ -8,7 +8,7 @@ import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/w
 import type { RetakeGroup } from '@/lib/clips/editor/retakes'
 import { retakeCutRange } from '@/lib/clips/editor/retakes'
 
-export type CleanupCutKind = 'filler' | 'gap' | 'manual' | 'unknown' | 'retake'
+export type CleanupCutKind = 'filler' | 'gap' | 'manual' | 'unknown' | 'retake' | 'clarity'
 
 export type CleanupProposal = {
   id: string
@@ -90,6 +90,17 @@ export function retakeProposals(
     })
   }
   return out
+}
+
+export function clarityProposals(
+  items: { range: CutRange; reason: string }[],
+): CleanupProposal[] {
+  return items.map(({ range, reason }) => ({
+    id: proposalId(range),
+    kind: 'clarity' as const,
+    range,
+    label: `Clarity · ${reason}`,
+  }))
 }
 
 export function gapProposals(
