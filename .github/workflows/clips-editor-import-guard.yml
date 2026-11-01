@@ -1,0 +1,36 @@
+name: Clips editor import guards
+
+on:
+  push:
+    branches: [master, "cursor/**"]
+    paths:
+      - "new-app/components/clips/editor/editor-shell.tsx"
+      - "new-app/scripts/verify-editor-shell-import.mjs"
+      - "new-app/tests/editor-shell-use-editor-words.test.ts"
+      - ".github/workflows/clips-editor-import-guard.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "new-app/components/clips/**"
+      - "new-app/lib/clips/**"
+
+jobs:
+  editor-shell-import-guard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: new-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run verify:editor-shell-import
+      - run: pnpm exec vitest run tests/editor-shell-use-editor-words.test.ts
+      - run: pnpm run typecheck:clips
