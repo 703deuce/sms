@@ -12,6 +12,7 @@ Mirror of new-app/lib/clips/editor/text-items.ts + components/clips/editor/text-
 from __future__ import annotations
 
 import math
+import subprocess
 from pathlib import Path
 
 from clips_worker.motion import MOTION_FPS, has_motion, layer_transform_at, layer_z
@@ -503,16 +504,85 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 
 
 def apply_text_items(video: Path, out: Path, edits: dict, *, play_w: int, play_h: int) -> Path:
-    ass = text_items_ass(edits, w=play_w, h=play_h)
-    if not ass:
-        return video
-    from clips_worker.t2v.titles_ass import burn_ass
+    from clips_worker.layer_fx import blend_composite, layer_fx_for, write_mask_frames
 
-    ass_path = out.parent / "text_items.ass"
-    ass_path.write_text(ass, encoding="utf-8")
+    items = text_items(edits)
+    if not items:
+        return video
+    fx_items = [
+        it
+        for it in items
+        if layer_fx_for(edits, f"text:{it['id']}").get("mask") or layer_fx_for(edits, f"text:{it['id']}").get("blend")
+    ]
+    if not fx_items:
+        ass = text_items_ass(edits, w=play_w, h=play_h)
+        if not ass:
+            return video
+        from clips_worker.t2v.titles_ass import burn_ass
+
+        ass_path = out.parent / "text_items.ass"
+        ass_path.write_text(ass, encoding="utf-8")
+        from clips_worker.user_fonts import fonts_dir_for
+
+        burn_ass(video, ass_path, out, fontsdir=fonts_dir_for(edits))
+        print(f"[clipper:text_items] n={len(text_items(edits))}", flush=True)
+        return out
+
+    fx_ids = {it["id"] for it in fx_items}
+    plain_edits = {**edits, "textItems": [it for it in items if it["id"] not in fx_ids] or None}
+    mid = out.parent / "text_plain.mp4"
+    cur = apply_text_items(video, mid, plain_edits, play_w=play_w, play_h=play_h) if len(fx_ids) < len(items) else video
+    from clips_worker.t2v.titles_ass import burn_ass
     from clips_worker.user_fonts import fonts_dir_for
 
-    # G3b: bundled fonts + the workspace fonts the items use (user_fonts.prepare_user_fonts).
-    burn_ass(video, ass_path, out, fontsdir=fonts_dir_for(edits))
-    print(f"[clipper:text_items] n={len(text_items(edits))}", flush=True)
+    fd = fonts_dir_for(edits)
+    w, h = play_w, play_h
+    parts: list[str] = []
+    extra: list = []
+    label = "0:v"
+    n_in = 1
+    for j, it in enumerate(fx_items):
+        lfx = layer_fx_for(edits, f"text:{it['id']}")
+        s0, s1 = it["startMs"] / 1000, it["endMs"] / 1000
+        ass = text_items_ass({**edits, "textItems": [it]}, w=w, h=h)
+        if not ass:
+            continue
+        ass_path = out.parent / f"text_fx_{j}.ass"
+        ass_path.write_text(ass, encoding="utf-8")
+        tag = f"t{j}"
+        parts.append(
+            f"color=c=black@0:s={w}x{h}:r=30:d={max(s1, s0 + 0.1):.3f},format=rgba,"
+            f"ass=filename='{ass_path.resolve()}'"
+            f":alpha=1:fontsdir='{fd}'[{tag}]"
+        )
+        layer = tag
+        if lfx.get("mask"):
+            dur = max(0.1, s1 - s0)
+            mpath, mw, mh, nfr = write_mask_frames(lfx["mask"], dur, w, h, out.parent / f"text_mask_{j}.gray")
+            extra.extend(["-f", "rawvideo", "-pix_fmt", "gray", "-video_size", f"{mw}x{mh}", "-framerate", "10", "-i", str(mpath)])
+            mi = n_in
+            n_in += 1
+            pad = max(0.0, dur - nfr / 10.0) + 1.0
+            parts.append(
+                f"[{mi}:v]setpts=PTS-STARTPTS+{s0:.3f}/TB,tpad=stop_mode=clone:stop_duration={pad:.3f},"
+                f"fps=30,scale={w}:{h}:flags=bilinear,format=gray[{tag}m]"
+            )
+            parts.append(f"[{tag}]split[{tag}c][{tag}x];[{tag}x]alphaextract[{tag}a];[{tag}a][{tag}m]blend=all_mode=multiply:shortest=1[{tag}al]")
+            parts.append(f"[{tag}c][{tag}al]alphamerge[{tag}L]")
+            layer = f"{tag}L"
+        mode = lfx.get("blend") or "normal"
+        if mode != "normal":
+            label = blend_composite(parts, label, layer, f"c{j}", mode, w, h, s0, s1)
+        else:
+            parts.append(
+                f"[{label}][{layer}]overlay=0:0:eof_action=pass:format=auto:enable='between(t,{s0:.3f},{s1:.3f})'[c{j}]"
+            )
+            label = f"c{j}"
+    if label == "0:v":
+        return cur
+    graph = ";".join(parts) + f";[{label}]format=yuv420p[tv]"
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(cur), *extra, "-filter_complex", graph, "-map", "[tv]", "-map", "0:a?",
+           "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "copy", str(out)]
+    subprocess.check_call(cmd)
+    print(f"[clipper:text_items] n={len(items)} fx={len(fx_items)}", flush=True)
     return out

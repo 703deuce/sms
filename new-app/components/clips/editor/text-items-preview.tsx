@@ -8,6 +8,7 @@ import { textItemCss } from '@/lib/clips/editor/text-frame'
 import { richChars } from '@/lib/clips/render-plan/text-items-ass'
 import { SHAPE_LIBRARY } from '@/lib/clips/render-plan/text-shapes'
 import { orderedStack } from '@/lib/clips/editor/layer-props'
+import { textItemHasFx } from '@/lib/clips/editor/layer-fx'
 
 /**
  * E4 Text-lane items over the preview (export: worker text_items.py ASS, burned with the hook).
@@ -20,6 +21,7 @@ export function TextItemsPreview({
   elRef,
   selectedId,
   underZ,
+  libassTextFx,
 }: {
   edits: ClipEditsV2
   /** G1b: z-index of text items burned under an overlay track (`text:<id>` → z). */
@@ -27,9 +29,13 @@ export function TextItemsPreview({
   boxH: number
   elRef: (id: string, el: HTMLDivElement | null) => void
   selectedId?: string | null
+  /** When libass renders text fx, skip DOM ghosts for those items. */
+  libassTextFx?: boolean
 }) {
   // G1a: DOM order = stacking order (export: text_items.py events / layers in the same order).
-  const items = orderedStack(edits, 'text', edits.textItems ?? [])
+  const items = orderedStack(edits, 'text', edits.textItems ?? []).filter(
+    (it) => !(libassTextFx && textItemHasFx(edits, it.id)),
+  )
   if (!items.length || boxH <= 0) return null
   return (
     <>

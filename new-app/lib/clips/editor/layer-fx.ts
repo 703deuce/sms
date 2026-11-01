@@ -187,6 +187,22 @@ export function setBrollFx(list: LayerFx[] | undefined, itemId: string, patch: P
   return setLayerFx(list, `broll:${itemId}`, patch)
 }
 
+export const TEXT_FX_MAX = 6
+
+export function textItemHasFx(edits: { layerFx?: LayerFx[] }, id: string): boolean {
+  const fx = layerFxOf(edits, `text:${id}`)
+  return Boolean(fx?.mask || fx?.blend)
+}
+
+export function adjustLayerHasFx(edits: { layerFx?: LayerFx[] }, id: string): boolean {
+  const fx = layerFxOf(edits, `adjust:${id}`)
+  return Boolean(fx?.mask || fx?.blend)
+}
+
+export function textFxRowCount(edits: { layerFx?: LayerFx[] }): number {
+  return (normalizeLayerFx(edits.layerFx) ?? []).filter((r) => r.target.startsWith('text:') && (r.mask || r.blend)).length
+}
+
 /** Mask geometry at item-local `localMs` (stepped to MASK_STEP_MS, linear between keys). */
 export function maskGeomAt(mask: LayerMask, localMs: number): MaskGeom {
   const keys = mask.keys

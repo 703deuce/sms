@@ -149,15 +149,30 @@ export function LibassPreviewLayers({
   playH,
   clock,
   onStatus,
+  fxHostRef,
 }: {
   scripts: PreviewScripts
   playW: number
   playH: number
   clock: LibassClock
   onStatus: LibassStatusFn
+  /** CV-17c: hosts for per-item text fx libass layers (mask / blend preview). */
+  fxHostRef?: (id: string, el: HTMLDivElement | null) => void
 }) {
   return (
     <>
+      {(scripts.fx ?? []).map((f) => (
+        <div
+          key={f.key}
+          ref={(el) => fxHostRef?.(f.id, el)}
+          className="pointer-events-none absolute inset-0 z-[25]"
+          data-testid="preview-text-fx"
+          data-fx-id={f.id}
+          aria-hidden
+        >
+          <LibassLayer layer="text" layerId={f.key} z={f.z} ass={f.ass} playW={playW} playH={playH} clock={clock} onStatus={onStatus} />
+        </div>
+      ))}
       {(scripts.under ?? []).map((u) => (
         <LibassLayer key={u.key} layer="text" layerId={u.key} z={u.z} ass={u.ass} playW={playW} playH={playH} clock={clock} onStatus={onStatus} />
       ))}
