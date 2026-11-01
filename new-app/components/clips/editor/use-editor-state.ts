@@ -53,6 +53,10 @@ import {
   syncLayersFromLegacy,
   type Layer,
 } from '@/lib/clips/layers'
+import {
+  saveSyncRequired,
+  shouldApplySaveResponse,
+} from '@/lib/clips/editor-save-order'
 import { toast } from 'sonner'
 
 const MAX_UNDO = 100
@@ -81,8 +85,9 @@ type Action =
   | { type: 'serverSync'; edits: ClipEditsV2 }
   | { type: 'needsSave' }
   | { type: 'saveFailed' }
-  | { type: 'replaceRestore'; edits: ClipEditsV2 }
+  | { type: 'replaceRestore'; edits: ClipEditsV2; recordUndo?: boolean }
   | { type: 'hydrate'; edits: ClipEditsV2 }
+  | { type: 'resetHistory' }
 
 function editsEqual(a: ClipEditsV2, b: ClipEditsV2) {
   return canonicalEditsJson(a) === canonicalEditsJson(b)
@@ -155,13 +160,23 @@ export function editorEditsReducer(state: State, action: Action): State {
       return { ...state, saveState: 'error' }
     case 'replaceRestore': {
       if (editsEqual(state.edits, action.edits)) return { ...state, saveState: 'dirty' }
-      const past = [...state.past, state.edits].slice(-MAX_UNDO)
-      return { ...state, edits: action.edits, past, future: [], saveState: 'dirty' }
+      const record = action.recordUndo !== false
+      const past = record ? [...state.past, state.edits].slice(-MAX_UNDO) : state.past
+      return {
+        ...state,
+        edits: action.edits,
+        past,
+        future: record ? [] : state.future,
+        saveState: 'dirty',
+      }
     }
     case 'hydrate': {
-      if (editsEqual(state.edits, action.edits)) return { ...state, saveState: 'saved' }
-      return { ...state, edits: action.edits, saveState: 'saved' }
+      if (editsEqual(state.edits, action.edits)) return { ...state, saveState: 'saved', past: [], future: [] }
+      return { ...state, edits: action.edits, saveState: 'saved', past: [], future: [] }
     }
+    case 'resetHistory':
+      if (!state.past.length && !state.future.length) return state
+      return { ...state, past: [], future: [] }
     default:
       return state
   }
@@ -198,6 +213,8 @@ export function useEditorState(
   const savedRevisionRef = useRef(0)
   const saveInFlightRef = useRef(false)
   const savePendingRef = useRef(false)
+  const saveSeqRef = useRef(0)
+  const serverConfirmedEditsRef = useRef<ClipEditsV2>(restored)
   const serverUpdatedAtRef = useRef(opts?.serverUpdatedAt)
   const serverVersionRef = useRef(opts?.editsSaveVersion ?? 0)
   const saveBaseEditsRef = useRef<ClipEditsV2>(restored)
@@ -213,6 +230,16 @@ export function useEditorState(
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
   }, [])
+
+  // TC4fix: fresh load / bfcache restore must not keep pre-reload undo stacks (draft restores content only).
+  useEffect(() => {
+    dispatch({ type: 'resetHistory' })
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) dispatch({ type: 'resetHistory' })
+    }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
+  }, [clipId])
 
   const bumpLocalRevision = useCallback(() => {
     localRevisionRef.current += 1
@@ -604,13 +631,11 @@ export function useEditorState(
     let conflicts = 0
     let failed = false
     try {
-      while (savedRevisionRef.current < localRevisionRef.current) {
+      while (saveSyncRequired(savedRevisionRef.current, localRevisionRef.current)) {
         attempts += 1
-        if (editsEqual(editsRef.current, lastSavedEditsRef.current)) {
-          savedRevisionRef.current = localRevisionRef.current
-          break
-        }
         const revisionAtSend = localRevisionRef.current
+        saveSeqRef.current += 1
+        const saveSeqAtSend = saveSeqRef.current
         saveBaseEditsRef.current = lastSavedEditsRef.current
         writeEditorAutosaveDraft(clipId, {
           edits: editsRef.current,
@@ -623,14 +648,22 @@ export function useEditorState(
             baseVersion: serverVersionRef.current,
             expectedUpdatedAt: serverUpdatedAtRef.current,
           })
-          if (res.updatedAt) serverUpdatedAtRef.current = res.updatedAt
-          if (typeof res.editsSaveVersion === 'number') serverVersionRef.current = res.editsSaveVersion
-          if (revisionAtSend !== localRevisionRef.current) {
+          if (
+            !shouldApplySaveResponse(
+              saveSeqAtSend,
+              saveSeqRef.current,
+              revisionAtSend,
+              localRevisionRef.current,
+            )
+          ) {
             continue
           }
+          if (res.updatedAt) serverUpdatedAtRef.current = res.updatedAt
+          if (typeof res.editsSaveVersion === 'number') serverVersionRef.current = res.editsSaveVersion
           clearEditorAutosaveDraft(clipId)
           savedRevisionRef.current = revisionAtSend
           lastSavedEditsRef.current = editsRef.current
+          serverConfirmedEditsRef.current = editsRef.current
           break
         } catch (err) {
           const transient =
@@ -665,6 +698,7 @@ export function useEditorState(
               // headline toggle racing the export-headline prefetch write) was lost on reload. Treat the
               // server copy as the new base and let the loop send the merged edits.
               lastSavedEditsRef.current = server
+              serverConfirmedEditsRef.current = server
               if (editsEqual(merged, server)) savedRevisionRef.current = revisionAtSend
               if (externalChange) {
                 toast.error('Edits were updated elsewhere — kept your changes where possible')
@@ -715,15 +749,11 @@ export function useEditorState(
     }
   }, [clipId, processSaveQueue, state.edits, state.saveState])
 
-  // TC4b: leaving / reloading with unsaved edits (a pending 200 ms debounce, or newer edits behind
-  // an in-flight save — e.g. undo, undo, reload) must not leave the server on an older state.
-  // pagehide / beforeunload: (1) keep the latest edits as the local draft — without a server stamp
-  // while a save is in flight, so the in-flight save cannot make the reload discard it; (2) send
-  // them with a keepalive PATCH (version guards dropped only while our own save is in flight).
+  // TC4b + TC4fix: leaving with unsaved edits must persist the latest snapshot without racing an
+  // in-flight PATCH (keepalive only when the serialized queue is idle; draft always has latest).
   useEffect(() => {
     const onLeave = () => {
-      if (savedRevisionRef.current >= localRevisionRef.current) return
-      if (editsEqual(editsRef.current, lastSavedEditsRef.current)) return
+      if (!saveSyncRequired(savedRevisionRef.current, localRevisionRef.current)) return
       if (debounceRef.current) clearTimeout(debounceRef.current)
       const inFlight = saveInFlightRef.current
       writeEditorAutosaveDraft(clipId, {
@@ -731,6 +761,7 @@ export function useEditorState(
         savedAt: new Date().toISOString(),
         ...(inFlight ? {} : { serverUpdatedAt: serverUpdatedAtRef.current }),
       })
+      if (inFlight) return
       try {
         void fetch(`/api/clips/clips/${clipId}`, {
           method: 'PATCH',
@@ -739,7 +770,8 @@ export function useEditorState(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             edits: editsPayloadForSave(editsRef.current),
-            ...(inFlight ? {} : { baseVersion: serverVersionRef.current, expectedUpdatedAt: serverUpdatedAtRef.current }),
+            baseVersion: serverVersionRef.current,
+            expectedUpdatedAt: serverUpdatedAtRef.current,
           }),
         }).catch(() => {})
       } catch {
@@ -796,7 +828,7 @@ export function useEditorState(
       const normalized = normalizeEdits(restored, bounds)
       editsRef.current = normalized
       saveBaseEditsRef.current = normalized
-      dispatch({ type: 'replaceRestore', edits: normalized })
+      dispatch({ type: 'replaceRestore', edits: normalized, recordUndo: true })
       void processSaveQueue()
     },
     [bounds, bumpLocalRevision, cancelPendingAutosave, processSaveQueue],
@@ -817,6 +849,7 @@ export function useEditorState(
       editsRef.current = normalized
       lastSavedEditsRef.current = normalized
       saveBaseEditsRef.current = normalized
+      serverConfirmedEditsRef.current = normalized
       dispatch({ type: 'hydrate', edits: normalized })
     },
     [bounds],
