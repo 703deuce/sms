@@ -19,11 +19,25 @@ import {
   upsertSource,
   SOURCE_SEG_MIN_MS,
   type ClipMediaSource,
+  type SourceSegment,
 } from '@/lib/clips/editor/sources'
 
 export const MAIN_ANGLE = 'main'
-export const MAX_ANGLES = 9
+/** MC-09: up to 18 angles in the UI; hotkeys stay 1–9 (CapCut-style). */
+export const MAX_ANGLES = 18
+export const HOTKEY_ANGLES = 9
 export const SYNC_NUDGE_MS = 1000 / 30
+
+function angleSourcesList(edits: ClipEditsV2, library: readonly ClipMediaSource[]): ClipMediaSource[] {
+  const own = edits.sources ?? []
+  const ids = new Set(own.map((s) => s.id))
+  const lib = library.filter((s) => {
+    if (ids.has(s.id)) return false
+    if (s.mediaType === 'video') return s.syncMs !== undefined
+    return s.mediaType === 'image' || s.mediaType === 'audio'
+  })
+  return [...own, ...lib].filter((s) => s.mediaType === 'video' || s.mediaType === 'image' || s.mediaType === 'audio')
+}
 
 export type Angle = { key: number; sourceId: string; label: string; synced: boolean }
 
@@ -33,12 +47,11 @@ export type Angle = { key: number; sourceId: string; label: string; synced: bool
  * copy wins (it carries the manual sync nudge).
  */
 export function multicamAngles(edits: ClipEditsV2, library: readonly ClipMediaSource[] = []): Angle[] {
-  const own = (edits.sources ?? []).filter((s) => s.mediaType === 'video')
-  const ids = new Set(own.map((s) => s.id))
-  const vids = [...own, ...library.filter((s) => s.mediaType === 'video' && s.syncMs !== undefined && !ids.has(s.id))]
+  const vids = angleSourcesList(edits, library)
   const out: Angle[] = [{ key: 1, sourceId: MAIN_ANGLE, label: 'Main', synced: true }]
   for (const s of vids.slice(0, MAX_ANGLES - 1)) {
-    out.push({ key: out.length + 1, sourceId: s.id, label: s.label || `Cam ${out.length + 1}`, synced: s.syncMs !== undefined })
+    const synced = s.mediaType === 'video' ? s.syncMs !== undefined : s.mediaType === 'image' || s.mediaType === 'audio'
+    out.push({ key: out.length + 1, sourceId: s.id, label: s.label || `Angle ${out.length + 1}`, synced })
   }
   return out
 }
@@ -76,9 +89,15 @@ export function setAngleForRange(
     return { ...edits, sourceSegments: setSourceSegment(edits.sourceSegments, { id: `mc-${s}`, sourceId: MAIN_ANGLE, startMs: s, endMs: e }, edits.sources) }
   }
   const src = findSource(edits, sourceId, library)
-  if (!src || src.mediaType !== 'video') return edits
-  const sources = ensureSynced(edits, src)
-  const seg = { id: `mc-${s}`, sourceId, startMs: s, endMs: e }
+  if (!src || (src.mediaType !== 'video' && src.mediaType !== 'image' && src.mediaType !== 'audio')) return edits
+  const sources = src.mediaType === 'video' ? ensureSynced(edits, src) : edits.sources
+  const seg: SourceSegment = {
+    id: `mc-${s}`,
+    sourceId,
+    startMs: s,
+    endMs: e,
+    ...(src.mediaType === 'audio' ? { audio: 'source' as const } : {}),
+  }
   return { ...edits, sources, sourceSegments: setSourceSegment(edits.sourceSegments, seg, sources) }
 }
 
@@ -115,7 +134,7 @@ export function nudgeSync(
   return { ...edits, sources: upsertSource(edits.sources, { ...src, syncMs }).sources }
 }
 
-/** Digit key → angle index (1–9), null for anything else / with modifiers. */
+/** Digit key → angle index (1–9 hotkeys; angles 10+ are menu-only), null with modifiers. */
 export function angleKey(e: { key: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean }): number | null {
   if (e.metaKey || e.ctrlKey || e.altKey) return null
   return /^[1-9]$/.test(e.key) ? Number(e.key) : null

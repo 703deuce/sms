@@ -18,6 +18,7 @@
  * Mirrored by worker clips_worker/media_sources.py.
  */
 import { buildAutoMulticamScenes } from '@/lib/clips/script-editor/multicam-scenes'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 
 export type MediaType = 'video' | 'image' | 'audio'
@@ -121,7 +122,7 @@ export function isMainPlaceholder(s: Pick<SourceSegment, 'sourceId'>): boolean {
   return s.sourceId === MAIN_SOURCE_ID
 }
 
-/** Sorted, non-overlapping (a later segment wins from its start), only known video / image sources. */
+/** Sorted, non-overlapping (a later segment wins from its start), known video / image / audio sources. */
 export function normalizeSourceSegments(
   raw: unknown,
   sources: readonly ClipMediaSource[] | undefined,
@@ -142,7 +143,8 @@ export function normalizeSourceSegments(
       continue
     }
     const src = byId.get(safeId(o.sourceId))
-    if (!id || !src || src.mediaType === 'audio' || a === undefined || b === undefined) continue
+    if (!id || !src || a === undefined || b === undefined) continue
+    if (src.mediaType === 'audio' && o.auto === true) continue
     if (b - a < SOURCE_SEG_MIN_MS || a < 0) continue
     const inMs = int(o.inMs)
     out.push({
@@ -150,8 +152,9 @@ export function normalizeSourceSegments(
       sourceId: src.id,
       startMs: a,
       endMs: b,
-      ...(inMs !== undefined && inMs >= 0 && src.mediaType === 'video' ? { inMs } : {}),
+      ...(inMs !== undefined && inMs >= 0 && (src.mediaType === 'video' || src.mediaType === 'audio') ? { inMs } : {}),
       ...(AUDIO_MODES.has(o.audio as SourceAudio) && src.mediaType === 'video' ? { audio: o.audio as SourceAudio } : {}),
+      ...(src.mediaType === 'audio' ? { audio: 'source' as const } : {}),
       ...(o.fit === 'contain' ? { fit: 'contain' as const } : {}),
       ...(o.auto === true ? { auto: true as const } : {}),
     })
@@ -216,7 +219,9 @@ export function segmentMediaMs(seg: SourceSegment, source: ClipMediaSource | und
 }
 
 export function segmentAudio(seg: SourceSegment, source: ClipMediaSource | undefined): SourceAudio {
-  if (!source || source.mediaType !== 'video') return 'main'
+  if (!source) return 'main'
+  if (source.mediaType === 'audio') return 'source'
+  if (source.mediaType !== 'video') return 'main'
   if (seg.audio) return seg.audio
   return isSynced(seg, source) ? 'main' : 'source'
 }
@@ -382,6 +387,20 @@ export function applyMulticamSegments(
   return normalizeSourceSegments([...manual, ...(next ?? [])], sources)
 }
 
+/** MC-08: active-speaker auto cuts in gaps only; manual `sourceSegments` (no `auto`) are kept. */
+export function fillActiveSpeakerGaps(
+  edits: ClipEditsV2,
+  words: readonly MulticamWord[],
+  rangeStartMs: number,
+  rangeEndMs: number,
+): { edits: ClipEditsV2; generated: SourceSegment[] } {
+  const multicam = edits.multicam
+  const sources = edits.sources
+  const generated = buildMulticamSegments(words, rangeStartMs, rangeEndMs, multicam, sources)
+  const sourceSegments = applyMulticamSegments(edits.sourceSegments, generated, rangeStartMs, rangeEndMs, sources)
+  return { edits: { ...edits, sourceSegments }, generated }
+}
+
 /** Speakers present in the words (for the speaker → camera map), most talkative first. */
 export function speakersInWords(words: readonly MulticamWord[], rangeStartMs: number, rangeEndMs: number): string[] {
   const talk = new Map<string, number>()
@@ -424,7 +443,7 @@ export function sourceRenderWindows(
   const out: { id: string; sourceId: string; t0Ms: number; t1Ms: number; mediaInMs: number; audio: SourceAudio; fit: SourceFit; mediaType: MediaType }[] = []
   for (const s of edits.sourceSegments ?? []) {
     const src = sourceById(edits.sources, s.sourceId)
-    if (!src || src.mediaType === 'audio') continue
+    if (!src) continue
     const lo = Math.max(windowStartMs, s.startMs)
     const hi = Math.min(windowEndMs, s.endMs)
     if (hi - lo < 1) continue
