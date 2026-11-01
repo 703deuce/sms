@@ -24,7 +24,6 @@ import { TrimRangeBar } from '@/components/clips/editor/trim-range-bar'
 import { nudgeTrimIn, nudgeTrimOut } from '@/lib/clips/editor/nudge'
 import type { ClipBounds } from '@/lib/clips/edits'
 import { findRetakes } from '@/lib/clips/editor/retakes'
-import { clipsFetch } from '@/lib/clips-api'
 import { toast } from 'sonner'
 
 export function CleanupPanel({
@@ -39,7 +38,6 @@ export function CleanupPanel({
   onCommitTrim,
   onAuditionChange,
   onSeek,
-  aiExtras = false,
 }: {
   clipId: string
   bounds: ClipBounds
@@ -52,17 +50,13 @@ export function CleanupPanel({
   onCommitTrim: (trim: { in: number; out: number }) => void
   onAuditionChange: (edits: ClipEditsV2 | null) => void
   onSeek: (sourceMs: number) => void
-  aiExtras?: boolean
 }) {
   const [auditionIds, setAuditionIds] = useState<Set<string>>(new Set())
-<<<<<<< HEAD
   const [retakeBusy, setRetakeBusy] = useState(false)
   const [retakeExtras, setRetakeExtras] = useState<CleanupProposal[]>([])
-=======
   const [clarityRows, setClarityRows] = useState<CleanupProposal[]>([])
   const [clarityLoading, setClarityLoading] = useState(false)
   const [clarityEmpty, setClarityEmpty] = useState<string | null>(null)
->>>>>>> 163ffcf21 (feat(clips): REMAINING batch 2 — clarity cuts, translate captions, voiceover)
 
   const clipBounds = useMemo(
     () => ({ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }),
@@ -107,9 +101,10 @@ export function CleanupPanel({
     () => appliedCutProposals(edits, orderedWords, deletedSet),
     [edits, orderedWords, deletedSet],
   )
-<<<<<<< HEAD
-  const fillerGap = useMemo(() => [...filler, ...gaps], [filler, gaps])
-  const proposed = useMemo(() => [...fillerGap, ...retakeExtras], [fillerGap, retakeExtras])
+  const proposed = useMemo(
+    () => [...filler, ...gaps, ...retakeExtras, ...clarityRows],
+    [filler, gaps, retakeExtras, clarityRows],
+  )
 
   const runRetakes = async () => {
     setRetakeBusy(true)
@@ -151,8 +146,6 @@ export function CleanupPanel({
       setRetakeBusy(false)
     }
   }
-=======
-  const proposed = useMemo(() => [...filler, ...gaps, ...clarityRows], [filler, gaps, clarityRows])
 
   const runClarity = async () => {
     setClarityLoading(true)
@@ -184,7 +177,6 @@ export function CleanupPanel({
     setAuditionIds(new Set())
     onAuditionChange(null)
   }
->>>>>>> 163ffcf21 (feat(clips): REMAINING batch 2 — clarity cuts, translate captions, voiceover)
 
   const toggleAudition = (p: CleanupProposal) => {
     setAuditionIds((prev) => {
@@ -237,19 +229,17 @@ export function CleanupPanel({
       </div>
 
       {aiExtras ? (
-<<<<<<< HEAD
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={retakeBusy}
-          data-testid="retake-run"
-          onClick={() => void runRetakes()}
-        >
-          Remove retakes
-        </Button>
-=======
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={retakeBusy}
+            data-testid="retake-run"
+            onClick={() => void runRetakes()}
+          >
+            Remove retakes
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -268,7 +258,6 @@ export function CleanupPanel({
           ) : null}
           {clarityEmpty ? <span className="text-xs text-muted-foreground">{clarityEmpty}</span> : null}
         </div>
->>>>>>> 163ffcf21 (feat(clips): REMAINING batch 2 — clarity cuts, translate captions, voiceover)
       ) : null}
 
       <Tabs defaultValue="proposed">
