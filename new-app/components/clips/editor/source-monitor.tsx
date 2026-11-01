@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -30,6 +30,7 @@ export function SourceMonitor({
   edits,
   tb,
   playheadOutMs,
+  playheadOutMsRef,
   onEdits,
   readOnly,
 }: {
@@ -39,6 +40,8 @@ export function SourceMonitor({
   edits: ClipEditsV2
   tb: Timebase
   playheadOutMs: number
+  /** When set, Insert / Overwrite read the live playhead (scrub may update ref before React re-renders). */
+  playheadOutMsRef?: MutableRefObject<number>
   onEdits: (next: ClipEditsV2) => void
   readOnly?: boolean
 }) {
@@ -88,7 +91,8 @@ export function SourceMonitor({
   const run = (kind: 'insert' | 'overwrite') => {
     if (!item || !range) return
     const f = kind === 'insert' ? insertFromSource : overwriteFromSource
-    const res = f(edits, item, tb, playheadOutMs, range, () => crypto.randomUUID())
+    const atOut = playheadOutMsRef?.current ?? playheadOutMs
+    const res = f(edits, item, tb, atOut, range, () => crypto.randomUUID())
     if (!res.edits) {
       toast.message(res.message)
       return

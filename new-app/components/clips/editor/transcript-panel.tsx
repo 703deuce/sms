@@ -8,7 +8,9 @@ import { Input } from '@/components/ui/input'
 import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
 import { FILLER_RE, isWordCut, normalizeSectionOrder, wordDisplayText } from '@/lib/clips/edits'
 import { moveSelection, sectionBlocksForEdits } from '@/lib/clips/editor/reorder'
-import { multicamAngles, setAngleForRange } from '@/lib/clips/editor/multicam-manual'
+import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
+import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
+import { multicamAngles, setAngleForSourceSpan } from '@/lib/clips/editor/multicam-manual'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { SHOW_SURROUNDING_CONTEXT_MS } from '@/lib/clips/trim-bounds'
@@ -131,6 +133,8 @@ export function TranscriptPanel({
   const [follow, setFollow] = useState(true)
   const [showDeleted, setShowDeleted] = useState(true)
   const [renamingSpk, setRenamingSpk] = useState<string | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const ctxRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     try {
       setFollow(localStorage.getItem('transovo.script.follow') !== '0')
@@ -269,16 +273,14 @@ export function TranscriptPanel({
 
   // G1b2: camera angle for the selected words (main-source span of the first..last word).
   const angles = onSetEdits ? multicamAngles(edits, angleSources) : []
+  const angleTb = useMemo(() => timebaseFor(editorPreviewEdits(edits, visible)), [edits, visible])
   const angleSelection = (sourceId: string) => {
     if (selStart === null || selEnd === null || !onSetEdits) return
-    const a = Math.min(selStart, selEnd)
-    const b = Math.max(selStart, selEnd)
-    const selected = visible.filter((w) => {
-      const { startMs, endMs } = wordSourceMs(w)
-      return endMs > a && startMs < b
-    })
-    if (!selected.length) return
-    onSetEdits(setAngleForRange(edits, Math.round(selected[0]!.s * 1000), Math.round(selected[selected.length - 1]!.e * 1000), sourceId, angleSources))
+    const sw = selectionWords()
+    if (!sw.length) return
+    const srcA = wordSourceMs(sw[0]!).startMs
+    const srcB = wordSourceMs(sw[sw.length - 1]!).endMs
+    onSetEdits(setAngleForSourceSpan(edits, angleTb, srcA, srcB, sourceId, angleSources))
   }
   const deleteSelection = () => {
     if (selStart === null || selEnd === null) return
@@ -311,6 +313,22 @@ export function TranscriptPanel({
     const sw = selectionWords()
     return sw.length ? [Math.round(sw[0]!.s * 1000), Math.round(sw[sw.length - 1]!.e * 1000)] : null
   }
+
+  useEffect(() => {
+    if (!ctxMenu) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setCtxMenu(null)
+    }
+    const onPointer = (e: MouseEvent) => {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) setCtxMenu(null)
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('mousedown', onPointer)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('mousedown', onPointer)
+    }
+  }, [ctxMenu])
   const ignoreTargets = () => selectionWords().filter((w) => !isWordCut(w, edits.cutRanges))
   const toggleIgnoreSelection = () => {
     const ws = ignoreTargets()
@@ -792,6 +810,12 @@ export function TranscriptPanel({
         onWheel={bumpFollowPause}
         onTouchStart={bumpFollowPause}
         onScroll={bumpFollowPause}
+        onContextMenu={(e) => {
+          if (selStart === null || selEnd === null || !onSetEdits || angles.length < 2) return
+          if (!selectionWords().length) return
+          e.preventDefault()
+          setCtxMenu({ x: e.clientX, y: e.clientY })
+        }}
       >
         {!visible.length ? (
           <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
@@ -949,6 +973,33 @@ export function TranscriptPanel({
         })
         )}
       </div>
+      {ctxMenu && angles.length > 1 && onSetEdits ? (
+        <div
+          ref={ctxRef}
+          className="fixed z-50 min-w-[200px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          role="menu"
+          aria-label="Script selection"
+          data-testid="transcript-ctx-menu"
+        >
+          <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">Camera ▸</p>
+          {angles.map((ang) => (
+            <button
+              key={ang.sourceId}
+              type="button"
+              className="block w-full rounded px-2 py-1.5 pl-4 text-left hover:bg-muted"
+              role="menuitem"
+              data-testid={`transcript-ctx-angle-${ang.sourceId}`}
+              onClick={() => {
+                angleSelection(ang.sourceId)
+                setCtxMenu(null)
+              }}
+            >
+              {ang.key}. {ang.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

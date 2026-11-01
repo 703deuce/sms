@@ -12,6 +12,7 @@
  * optional "auto-switch to active speaker" pass that fills only the remaining gaps.
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { sourceToOutputSnapped, type Timebase } from '@/lib/clips/editor/clip-timeline'
 import {
   setSourceSegment,
   sourceById,
@@ -144,9 +145,26 @@ export function angleKey(e: { key: string; metaKey?: boolean; ctrlKey?: boolean;
  * OUTPUT-ms range → angle, piece by piece over the keep segments in output order (cuts, reorder
  * and silence trim make one output range several source spans). `segs` / `starts` = Timebase.
  */
+/** Main-source span [srcStartMs, srcEndMs) → angle on the matching output range (cuts / reorder safe). */
+export function setAngleForSourceSpan(
+  edits: ClipEditsV2,
+  tb: Timebase,
+  srcStartMs: number,
+  srcEndMs: number,
+  sourceId: string,
+  library: readonly ClipMediaSource[] = [],
+): ClipEditsV2 {
+  const a = Math.min(srcStartMs, srcEndMs)
+  const b = Math.max(srcStartMs, srcEndMs)
+  const outA = sourceToOutputSnapped(tb, a)
+  const outB = sourceToOutputSnapped(tb, b)
+  const hi = outB > outA ? outB : outA + SOURCE_SEG_MIN_MS
+  return setAngleForOutputRange(edits, tb, outA, hi, sourceId, library)
+}
+
 export function setAngleForOutputRange(
   edits: ClipEditsV2,
-  tb: { segs: [number, number][]; starts: number[] },
+  tb: Timebase,
   outA: number,
   outB: number,
   sourceId: string,

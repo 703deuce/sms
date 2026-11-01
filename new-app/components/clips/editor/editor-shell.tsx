@@ -1995,6 +1995,7 @@ export function EditorShell({
             monitorRequest={monitorRequest}
             timebase={timelineTb}
             playheadOutMs={outputMs}
+            playheadOutMsRef={outputMsRef}
           />
           </EditorPanelErrorBoundary>
         </div>
@@ -2410,6 +2411,8 @@ export function EditorShell({
             inOut={exportTimelineInOut}
             onInOutChange={setExportTimelineInOut}
             onArmVoiceover={() => clipRec.arm('voiceover')}
+            playheadOutMsRef={outputMsRef}
+            transcriptSelectionRef={selectionRef}
             highlights={
               fullVideo && fvHighlights.highlightsOn && fvHighlights.ranges.length
                 ? {
