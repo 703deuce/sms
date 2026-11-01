@@ -88,16 +88,20 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
         sid = _safe_id(r.get("id"))
         src = by_id.get(_safe_id(r.get("sourceId")))
         a, b = _int(r.get("startMs")), _int(r.get("endMs"))
-        if not sid or not src or src["mediaType"] == "audio" or a is None or b is None:
+        if not sid or not src or a is None or b is None:
+            continue
+        if src["mediaType"] == "audio" and r.get("auto") is True:
             continue
         if b - a < SOURCE_SEG_MIN_MS or a < 0:
             continue
         seg: dict = {"id": sid, "sourceId": src["id"], "startMs": a, "endMs": b}
         in_ms = _int(r.get("inMs"))
-        if in_ms is not None and in_ms >= 0 and src["mediaType"] == "video":
+        if in_ms is not None and in_ms >= 0 and src["mediaType"] in ("video", "audio"):
             seg["inMs"] = in_ms
         if r.get("audio") in _AUDIO_MODES and src["mediaType"] == "video":
             seg["audio"] = r["audio"]
+        if src["mediaType"] == "audio":
+            seg["audio"] = "source"
         if r.get("fit") == "contain":
             seg["fit"] = "contain"
         if r.get("auto") is True:
@@ -129,7 +133,11 @@ def segment_media_ms(seg: dict, src: dict | None, src_ms: int) -> int:
 
 
 def segment_audio(seg: dict, src: dict | None) -> str:
-    if not src or src["mediaType"] != "video":
+    if not src:
+        return "main"
+    if src["mediaType"] == "audio":
+        return "source"
+    if src["mediaType"] != "video":
         return "main"
     if seg.get("audio"):
         return seg["audio"]
@@ -144,7 +152,7 @@ def source_windows(edits: dict, window_start_ms: int, window_end_ms: int) -> lis
     out: list[dict] = []
     for s in segs:
         src = by_id.get(s["sourceId"])
-        if not src or src["mediaType"] == "audio":
+        if not src:
             continue
         lo = max(window_start_ms, s["startMs"])
         hi = min(window_end_ms, s["endMs"])
@@ -335,18 +343,41 @@ def build_sources_filtergraph(
     audio_parts: list[str] = []
     mute: list[str] = []
     a_labels: list[str] = []
+    in_idx = 1
     for i, (w, p) in enumerate(zip(windows, paths)):
-        k = i + 1
         t0 = w["t0Ms"] / 1000.0
         t1 = w["t1Ms"] / 1000.0
         dur = max(0.04, t1 - t0)
         if w["mediaType"] == "image":
             inputs += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{dur + 0.1:.3f}", "-i", str(p)]
-            chain = f"[{k}:v]{fit_filter(w['fit'], width, height)},fps={fps:g},format=yuv420p"
+            chain = f"[{in_idx}:v]{fit_filter(w['fit'], width, height)},fps={fps:g},format=yuv420p"
+            in_idx += 1
+        elif w["mediaType"] == "audio":
+            inputs += ["-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps}:d={dur + 0.1:.3f}"]
+            v_in = in_idx
+            in_idx += 1
+            inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{dur + 0.25:.3f}", "-i", str(p)]
+            a_in = in_idx
+            in_idx += 1
+            chain = f"[{v_in}:v]fps={fps:g},format=yuv420p,setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]"
+            parts.append(chain)
+            nxt = f"vb{i + 1}"
+            parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
+            cur = nxt
+            ms = int(round(t0 * 1000))
+            audio_parts.append(
+                f"[{a_in}:a]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
+                f"aformat=sample_fmts=fltp:channel_layouts=stereo,adelay={ms}|{ms}[sa{i}]"
+            )
+            a_labels.append(f"[sa{i}]")
+            mute.append(f"between(t,{t0:.3f},{t1:.3f})")
+            continue
         else:
             inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{dur + 0.25:.3f}", "-i", str(p)]
-            chain = (f"[{k}:v]trim=0:{dur:.3f},setpts=PTS-STARTPTS,fps={fps:g},"
+            chain = (f"[{in_idx}:v]trim=0:{dur:.3f},setpts=PTS-STARTPTS,fps={fps:g},"
                      f"{fit_filter(w['fit'], width, height)},format=yuv420p")
+            v_in = in_idx
+            in_idx += 1
         parts.append(f"{chain},setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
         nxt = f"vb{i + 1}"
         parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
@@ -355,7 +386,7 @@ def build_sources_filtergraph(
         if mode in ("source", "mix") and w["mediaType"] == "video" and source_has_audio[i]:
             ms = int(round(t0 * 1000))
             audio_parts.append(
-                f"[{k}:a]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
+                f"[{v_in}:a]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
                 f"aformat=sample_fmts=fltp:channel_layouts=stereo,adelay={ms}|{ms}[sa{i}]"
             )
             a_labels.append(f"[sa{i}]")
@@ -416,7 +447,7 @@ def apply_full_render_sources(
         height,
         fps,
         main_has_audio=has_audio_stream(full_render),
-        source_has_audio=[w["mediaType"] == "video" and has_audio_stream(p) for w, p in zip(usable, paths)],
+        source_has_audio=[(w["mediaType"] == "audio" or has_audio_stream(p)) for w, p in zip(usable, paths)],
         base_duration_s=(clip_end_ms - clip_start_ms) / 1000.0,
     )
     out = Path(work_dir) / "full_render_sources.mp4"

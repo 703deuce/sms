@@ -14,7 +14,7 @@ import type { SourceWord } from '@/lib/clips/source-words'
 import { MEDIA_DND_TYPE, mediaLanesFor, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import {
   applyMulticamSegments,
-  buildMulticamSegments,
+  fillActiveSpeakerGaps,
   patchSourceSegment,
   pruneSources,
   removeSourceSegment,
@@ -26,6 +26,8 @@ import {
   type SourceAudio,
 } from '@/lib/clips/editor/sources'
 import { insertMediaAt, sourceFromItem, type InsertMode } from '@/lib/clips/editor/media-add'
+import { TimelineFilmstrip } from '@/components/clips/editor/timeline/timeline-filmstrip'
+import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-filmstrip-frames'
 import { MediaTranscribeControl } from '@/components/clips/editor/media-transcribe-control'
 import { InsertsSection } from '@/components/clips/editor/media-inserts-section'
 import { SourceMonitor, type MonitorRequest } from '@/components/clips/editor/source-monitor'
@@ -257,7 +259,12 @@ export function MediaPanel({
   const segSource = seg ? sourceById(edits.sources, seg.sourceId) : undefined
 
   const angles = useMemo(
-    () => media.items.filter((i) => i.mediaType === 'video' && !i.isMain && (i.ref === 'take' || i.syncMs != null)),
+    () =>
+      media.items.filter(
+        (i) =>
+          !i.isMain &&
+          ((i.mediaType === 'video' && (i.ref === 'take' || i.syncMs != null)) || i.mediaType === 'image' || i.mediaType === 'audio'),
+      ),
     [media.items],
   )
   const mainItem = media.items.find((i) => i.isMain)
@@ -279,26 +286,32 @@ export function MediaPanel({
   const setSpeaker = (spk: string, value: string) => {
     let sources = edits.sources
     if (value !== 'main') {
-      const it = angles.find((a) => a.refId === value)
+      const it = media.items.find((a) => a.refId === value && !a.isMain)
       if (it) sources = upsertSource(sources, sourceFromItem(it)).sources
     }
     const map = { ...(mc.speakerSources ?? {}), [spk]: value }
     onEdits({ ...edits, sources, multicam: { ...mc, speakerSources: map } })
   }
 
-  const generate = () => {
-    // Refresh angle sync values first (an audio re-sync may have landed since they were added).
+  const fillGaps = () => {
     let sources = edits.sources
-    // G1b2: keep a manual sync nudge (angle already on the clip with an offset) — Reset pulls the
-    // audio-sync value again.
     for (const a of angles) {
+      if (a.mediaType !== 'video') continue
       const own = sources?.find((s) => s.id === a.refId)
       if (own && own.syncMs === undefined) sources = upsertSource(sources, sourceFromItem(a)).sources
     }
-    const gen = buildMulticamSegments(words, edits.trim.in, edits.trim.out, mc, sources)
-    const sourceSegments = applyMulticamSegments(edits.sourceSegments, gen, edits.trim.in, edits.trim.out, sources)
-    onEdits({ ...edits, sources, sourceSegments })
-    toast.success(gen.length ? `${gen.length} camera cut${gen.length === 1 ? '' : 's'}` : 'No speaker turns long enough to cut to an angle')
+    const { edits: next, generated } = fillActiveSpeakerGaps(
+      { ...edits, sources },
+      words,
+      edits.trim.in,
+      edits.trim.out,
+    )
+    onEdits(next)
+    toast.success(
+      generated.length
+        ? `${generated.length} auto cut${generated.length === 1 ? '' : 's'} in open gaps`
+        : 'No speaker turns long enough — manual switches unchanged',
+    )
   }
   const onInsert = (item: ProjectMediaItem, mode: InsertMode) => {
     const res = insertMediaAt(edits, item, playheadSourceMs, mode, () => crypto.randomUUID())
@@ -386,7 +399,7 @@ export function MediaPanel({
         <section className="space-y-2 rounded-md border p-2" data-testid="media-multicam">
           <div className="text-xs font-semibold">Multicam</div>
           <p className="text-[11px] text-muted-foreground">
-            Cut to the active speaker’s camera (same rules as the script editor: hold ≥ min, wide shot on overlaps).
+            Map speakers to angles, then auto-switch only in gaps — manual cuts (keys 1–9, timeline) stay.
           </p>
           {speakers.length ? (
             speakers.map((spk) => (
@@ -417,9 +430,15 @@ export function MediaPanel({
           <SliderRow label="Wide shot every" value={(mc.wideEveryMs ?? 45_000) / 1000} min={5} max={120} step={5} unit=" s" testId="multicam-wide"
             onCommit={(v) => onEdits({ ...edits, multicam: { ...mc, wideEveryMs: Math.round(v * 1000) } })} />
           <ManualAngles edits={edits} angles={angles} mainLabel={mainItem?.label} onEdits={onEdits} />
-          <div className="flex gap-1">
-            <Button size="sm" onClick={generate} disabled={!speakers.length} data-testid="multicam-generate">Generate camera cuts</Button>
-            {autoCount ? <Button size="sm" variant="ghost" onClick={clearAuto}>Clear {autoCount} auto cut{autoCount === 1 ? '' : 's'}</Button> : null}
+          <div className="flex flex-wrap gap-1">
+            <Button size="sm" onClick={fillGaps} disabled={!speakers.length} data-testid="multicam-fill-gaps">
+              Auto-switch (fill gaps)
+            </Button>
+            {autoCount ? (
+              <Button size="sm" variant="ghost" onClick={clearAuto} data-testid="multicam-clear-auto">
+                Clear {autoCount} auto cut{autoCount === 1 ? '' : 's'}
+              </Button>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -431,6 +450,18 @@ export function MediaPanel({
  * G1b2: manual multicam — angle keys (1–9 on the timeline while playing), sync offset nudge on top
  * of the audio auto-sync, reset to the auto-sync value.
  */
+function AngleFilmstripPreview({ item }: { item: ProjectMediaItem | undefined }) {
+  const url = item?.mediaType === 'video' ? item.url : item?.mediaType === 'image' ? item.url : null
+  const frames = useFilmstripFrames(url)
+  if (!item || item.mediaType === 'audio') return null
+  if (!url) return <span className="h-8 w-20 shrink-0 rounded bg-muted/40" data-testid="multicam-angle-filmstrip-empty" />
+  return (
+    <div className="relative h-8 w-24 shrink-0 overflow-hidden rounded border border-border/60" data-testid="multicam-angle-filmstrip">
+      <TimelineFilmstrip fromMs={0} toMs={3000} widthPx={96} heightPx={32} pxPerMs={96 / 3000} frames={frames} stillUrl={item.mediaType === 'image' ? url : null} />
+    </div>
+  )
+}
+
 function ManualAngles({
   edits,
   angles,
@@ -444,19 +475,22 @@ function ManualAngles({
 }) {
   const library = angles.map(sourceFromItem)
   const list = multicamAngles(edits, library)
+  const byRef = new Map(angles.map((a) => [a.refId, a]))
   return (
     <div className="space-y-1 rounded border border-dashed p-1.5" data-testid="multicam-manual">
       <p className="text-[11px] text-muted-foreground">
-        Switch by hand: press 1–{Math.min(9, list.length)} on the timeline (also while playing), pick “Camera angle” on a clip or
-        in–out range, or select words in the transcript.
+        Switch by hand: press 1–9 on the timeline (first nine angles), or pick a camera on the clip / transcript.
+        {list.length > 9 ? ` Angles 10–${list.length} are menu-only.` : ''}
       </p>
       {list.map((a) => {
         const own = edits.sources?.find((s) => s.id === a.sourceId)
         const lib = library.find((s) => s.id === a.sourceId)
         const off = (own ?? lib)?.syncMs
+        const item = a.sourceId === MAIN_ANGLE ? undefined : byRef.get(a.sourceId) ?? byRef.get(own?.refId ?? '')
         return (
           <div key={a.sourceId} className="flex items-center gap-1 text-[11px]" data-testid={`multicam-angle-${a.key}`}>
             <span className="w-4 font-mono">{a.key}</span>
+            <AngleFilmstripPreview item={item} />
             <span className="min-w-0 flex-1 truncate">{a.sourceId === MAIN_ANGLE ? (mainLabel ? `${mainLabel} (main)` : 'Main camera') : a.label}</span>
             {a.sourceId !== MAIN_ANGLE ? (
               <>
