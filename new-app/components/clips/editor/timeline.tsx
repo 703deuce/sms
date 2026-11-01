@@ -328,6 +328,7 @@ export function Timeline({
   onReplaceBrollMedia,
   inOut: controlledInOut,
   onInOutChange,
+  onArmVoiceover,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -392,6 +393,7 @@ export function Timeline({
   /** Optional controlled in/out marks (output ms) for export range. */
   inOut?: InOut
   onInOutChange?: (io: InOut) => void
+  onArmVoiceover?: () => void
   selectedSourceSegmentId?: string | null
   /** G1a: select an item from outside (canvas click); a new `seq` re-applies. `atMs` = output ms. */
   selectRequest?: { lane: LaneId; id?: string; atMs?: number; seq: number } | null
@@ -2663,6 +2665,20 @@ export function Timeline({
                       {label}
                     </button>
                   ))}
+                  {onArmVoiceover ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                      onClick={() => {
+                        setAddMenu(false)
+                        onArmVoiceover()
+                      }}
+                      data-testid="timeline-add-track-voiceover"
+                    >
+                      Voiceover
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
