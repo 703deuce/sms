@@ -4,6 +4,12 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { BrollItem } from '@/lib/clips/broll'
+import { autoCrossfade } from '@/lib/clips/editor/auto-crossfade'
+import { moveItems } from '@/lib/clips/editor/clip-timeline'
+import { brollFrame } from '@/lib/clips/editor/motion-frame'
+import { orderedStack } from '@/lib/clips/editor/layer-props'
+import { addTrack } from '@/lib/clips/editor/tracks'
+import { defaultEdits, normalizeEdits } from '@/lib/clips/edits'
 import { layerTransformAt, trackValueAt, volumeAt, type KeyframeTrack } from '@/lib/clips/editor/keyframes'
 import {
   brollTransitionWindows,
@@ -49,6 +55,29 @@ const BROLL_CASE = [
   { id: 'd', source: 'stock', assetId: 'w', startMs: 4300, endMs: 6000, transitionOut: { type: 'push_up', durMs: 500 } },
 ] as unknown as BrollItem[]
 
+const bounds = { clipStartMs: 0, clipEndMs: 20000, trimMinMs: 0, trimMaxMs: 40000 }
+const br = (id: string, a: number, b: number): BrollItem => ({ id, source: 'stock', assetId: id, startMs: a, endMs: b, inMs: 0 })
+
+function crossTrackBlock() {
+  let e: ClipEditsV2 = { ...normalizeEdits(defaultEdits(bounds), bounds), broll: [br('a', 0, 4000), br('b', 5000, 7000)] }
+  const added = addTrack(e, 'overlay')!
+  e = {
+    ...added.edits,
+    tracks: added.edits.tracks!.map((t) => (t.id === added.trackId ? { ...t, items: ['b'] } : t)),
+  }
+  const m = moveItems({ edits: e, previewEdits: e }, [{ lane: 'broll', id: 'b' }], -1600)!
+  const edits = autoCrossfade(e, m, e, m, [{ lane: 'broll', id: 'b' }], undefined, true)
+  const topId = orderedStack(edits, 'broll', edits.broll ?? []).slice(-1)[0]!.id
+  const startMs = 3400
+  const endMs = 4000
+  const samples = [startMs, 3700, endMs].map((t) => ({
+    t,
+    topId,
+    opacity: brollFrame(edits, t, 360).items[topId]?.box?.opacity ?? 0,
+  }))
+  return { edits, topId, samples }
+}
+
 function generate() {
   const edits = { keyframes: TRACKS } as unknown as ClipEditsV2
   const keyframes = TRACKS.map((t) => ({
@@ -74,6 +103,7 @@ function generate() {
       return { ...c, expected: cutTransitionWindows(c.segs, starts, c.transitions as never) }
     }),
     broll: { items: BROLL_CASE, expected: brollTransitionWindows(BROLL_CASE) },
+    crossTrack: crossTrackBlock(),
   }
 }
 

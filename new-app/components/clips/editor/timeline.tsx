@@ -3354,6 +3354,7 @@ export function Timeline({
             commit(trPop.kind === 'cut' ? applyCutTransitionToAll(edits, [tb.segs[0]!, ...realCutIndices(tb).map((k) => tb.segs[k]!)], spec) : applyBrollTransitionToAll(edits, spec))
           }
           onClose={() => setTrPop(null)}
+          brollEdge={trPop.kind !== 'cut'}
         />
       ) : null}
       {ctxMenu ? (

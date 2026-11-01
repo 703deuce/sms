@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
+  CUT_ONLY_TRANSITIONS,
   MASK_TRANSITIONS,
   TRANSITION_INFO,
   TRANSITIONS,
@@ -14,7 +15,7 @@ import {
 } from '@/lib/clips/editor/transitions'
 import { Slider } from '@/components/ui/slider'
 
-const GROUPS = ['Basic', 'Push', 'Wipe', 'Soft wipe', 'Shape', 'Slice', 'Zoom & blur'] as const
+const GROUPS = ['Basic', 'Push', 'Wipe', 'Soft wipe', 'Shape', 'Slice', 'Zoom & blur', 'Slide', 'Stylized'] as const
 
 const thumbCache = new Map<string, string | null>()
 /** G4b: mask transitions draw their real xfade mask (mid-way) as the thumbnail. */
@@ -104,6 +105,7 @@ export function TransitionPopover({
   onApply,
   onApplyAll,
   onClose,
+  brollEdge = false,
 }: {
   title: string
   value: TransitionSpec | null
@@ -113,6 +115,8 @@ export function TransitionPopover({
   onApply: (spec: TransitionSpec | null) => void
   onApplyAll?: (spec: TransitionSpec | null) => void
   onClose: () => void
+  /** TR-04: B-roll in/out picker hides cut-only Slide / Stylized types. */
+  brollEdge?: boolean
 }) {
   const ref = useRef<HTMLDivElement | null>(null)
   const cap = Math.max(TRANSITION_MIN_MS, Math.min(TRANSITION_MAX_MS, maxMs))
@@ -142,6 +146,7 @@ export function TransitionPopover({
   const left = typeof window === 'undefined' ? anchor.x : Math.max(8, Math.min(anchor.x - 150, window.innerWidth - 316))
   const top = typeof window === 'undefined' ? anchor.y : Math.max(8, Math.min(anchor.y - 330, window.innerHeight - 340))
   const tile = 'flex flex-col items-center gap-0.5 rounded p-1 text-[9px] leading-tight hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  const pickerTransitions = brollEdge ? TRANSITIONS.filter((t) => !CUT_ONLY_TRANSITIONS.has(t.type)) : TRANSITIONS
   return (
     <div
       ref={ref}
@@ -170,11 +175,14 @@ export function TransitionPopover({
             Cut
           </button>
         </div>
-        {GROUPS.map((g) => (
+        {GROUPS.map((g) => {
+          const tiles = pickerTransitions.filter((t) => t.group === g)
+          if (!tiles.length) return null
+          return (
           <div key={g}>
             <p className="px-1 text-[9px] uppercase tracking-wide text-muted-foreground">{g}</p>
             <div className="grid grid-cols-5 gap-0.5">
-              {TRANSITIONS.filter((t) => t.group === g).map((t) => {
+              {tiles.map((t) => {
                 const active = value?.type === t.type
                 return (
                   <button
@@ -193,7 +201,8 @@ export function TransitionPopover({
               })}
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
       <div className="mt-2 flex items-center gap-2">
         <span className="text-[10px] text-muted-foreground">

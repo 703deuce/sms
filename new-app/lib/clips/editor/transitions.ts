@@ -23,7 +23,7 @@ import {
   type TransitionType,
 } from '@/lib/clips/editor/motion-schema'
 
-export type TransitionGroup = 'Basic' | 'Push' | 'Wipe' | 'Zoom & blur' | 'Soft wipe' | 'Shape' | 'Slice'
+export type TransitionGroup = 'Basic' | 'Push' | 'Wipe' | 'Zoom & blur' | 'Soft wipe' | 'Shape' | 'Slice' | 'Slide' | 'Stylized'
 export type TransitionInfo = { type: TransitionType; label: string; group: TransitionGroup; xfade: string }
 
 /** xfade names verified present in ffmpeg 5.1 (`ffmpeg -h filter=xfade`). Zoom in/out = scale + fade. */
@@ -66,11 +66,61 @@ export const TRANSITIONS: TransitionInfo[] = [
   { type: 'slice_right', label: 'Slices right', group: 'Slice', xfade: 'hrslice' },
   { type: 'slice_up', label: 'Slices up', group: 'Slice', xfade: 'vuslice' },
   { type: 'slice_down', label: 'Slices down', group: 'Slice', xfade: 'vdslice' },
+  { type: 'pixelize', label: 'Pixelize', group: 'Stylized', xfade: 'pixelize' },
+  { type: 'fade_grays', label: 'Fade to gray', group: 'Stylized', xfade: 'fadegrays' },
+  { type: 'squeeze_h', label: 'Squeeze vertical', group: 'Stylized', xfade: 'squeezeh' },
+  { type: 'squeeze_v', label: 'Squeeze horizontal', group: 'Stylized', xfade: 'squeezev' },
+  { type: 'cover_left', label: 'Cover ←', group: 'Slide', xfade: 'overlay' },
+  { type: 'cover_right', label: 'Cover →', group: 'Slide', xfade: 'overlay' },
+  { type: 'cover_up', label: 'Cover ↑', group: 'Slide', xfade: 'overlay' },
+  { type: 'cover_down', label: 'Cover ↓', group: 'Slide', xfade: 'overlay' },
+  { type: 'reveal_left', label: 'Reveal ←', group: 'Slide', xfade: 'overlay' },
+  { type: 'reveal_right', label: 'Reveal →', group: 'Slide', xfade: 'overlay' },
+  { type: 'reveal_up', label: 'Reveal ↑', group: 'Slide', xfade: 'overlay' },
+  { type: 'reveal_down', label: 'Reveal ↓', group: 'Slide', xfade: 'overlay' },
 ]
-/** G4b: transitions drawn with a per-pixel mask on the top layer. */
-export const MASK_TRANSITIONS: ReadonlySet<TransitionType> = new Set(
-  TRANSITIONS.filter((t) => TRANSITION_TYPES.indexOf(t.type) >= 14).map((t) => t.type),
-)
+/** G4b: transitions drawn with a per-pixel mask on the top layer (explicit list — not index-based). */
+export const G4B_MASK_TRANSITION_TYPES = [
+  'smooth_left',
+  'smooth_right',
+  'smooth_up',
+  'smooth_down',
+  'circle_open',
+  'circle_close',
+  'vert_open',
+  'vert_close',
+  'horz_open',
+  'horz_close',
+  'radial',
+  'diag_tl',
+  'diag_tr',
+  'diag_bl',
+  'diag_br',
+  'slice_left',
+  'slice_right',
+  'slice_up',
+  'slice_down',
+  'wipe_tl',
+  'wipe_tr',
+  'wipe_bl',
+  'wipe_br',
+] as const satisfies readonly TransitionType[]
+export const MASK_TRANSITIONS: ReadonlySet<TransitionType> = new Set(G4B_MASK_TRANSITION_TYPES)
+/** TR-04: cut-only transitions (no B-roll edges; stale data skipped in window builders). */
+export const CUT_ONLY_TRANSITIONS: ReadonlySet<TransitionType> = new Set([
+  'pixelize',
+  'fade_grays',
+  'squeeze_h',
+  'squeeze_v',
+  'cover_left',
+  'cover_right',
+  'cover_up',
+  'cover_down',
+  'reveal_left',
+  'reveal_right',
+  'reveal_up',
+  'reveal_down',
+])
 /** Corner wipes are hard rectangles: drawn with an exact clip-path instead of a mask image. */
 const CORNER: Partial<Record<TransitionType, 'tl' | 'tr' | 'bl' | 'br'>> = { wipe_tl: 'tl', wipe_tr: 'tr', wipe_bl: 'bl', wipe_br: 'br' }
 export const TRANSITION_INFO = Object.fromEntries(TRANSITIONS.map((t) => [t.type, t])) as Record<TransitionType, TransitionInfo>
@@ -86,6 +136,9 @@ export type LayerGeom = {
   tx: number
   ty: number
   scale: number
+  /** scale axes for squeeze transitions (default 1) */
+  sx?: number
+  sy?: number
   /** visible inset rect, fractions (top, right, bottom, left) — null = whole frame */
   clip: [number, number, number, number] | null
 }
@@ -102,6 +155,13 @@ export type TransitionFrame = {
   blurFrac: number
   /** G4b: per-pixel mask transition (xfade name + xfade progress P = 1 − q) */
   mask?: { xfade: string; P: number }
+  /** which layer is on top in the DOM stack (cover / reveal / squeeze) */
+  top?: 'a' | 'b'
+  /** fade_grays: Rec.709 luma mix via CSS saturate on each clone */
+  satA?: number
+  satB?: number
+  /** pixelize: block size as fraction of min(W,H); omitted when dist = 0 */
+  pixel?: { blockFrac: number; P: number }
 }
 
 function smoothstep(e0: number, e1: number, x: number): number {
@@ -150,6 +210,38 @@ export function transitionFrame(type: TransitionType, qIn: number): TransitionFr
     case 'blur': {
       const prog = P <= 0.5 ? P * 2 : (1 - P) * 2
       return { ...f, blurFrac: prog / 2 }
+    }
+    case 'squeeze_h':
+      return { ...f, wA: 1, wB: 1, geometric: true, a: { ...G0(), sy: P }, top: 'a' }
+    case 'squeeze_v':
+      return { ...f, wA: 1, wB: 1, geometric: true, a: { ...G0(), sx: P }, top: 'a' }
+    case 'cover_left':
+      return { ...f, wA: 1, wB: 1, geometric: true, b: { ...G0(), tx: P }, top: 'b' }
+    case 'cover_right':
+      return { ...f, wA: 1, wB: 1, geometric: true, b: { ...G0(), tx: -P }, top: 'b' }
+    case 'cover_up':
+      return { ...f, wA: 1, wB: 1, geometric: true, b: { ...G0(), ty: P }, top: 'b' }
+    case 'cover_down':
+      return { ...f, wA: 1, wB: 1, geometric: true, b: { ...G0(), ty: -P }, top: 'b' }
+    case 'reveal_left':
+      return { ...f, wA: 1, wB: 1, geometric: true, a: { ...G0(), tx: -q }, top: 'a' }
+    case 'reveal_right':
+      return { ...f, wA: 1, wB: 1, geometric: true, a: { ...G0(), tx: q }, top: 'a' }
+    case 'reveal_up':
+      return { ...f, wA: 1, wB: 1, geometric: true, a: { ...G0(), ty: -q }, top: 'a' }
+    case 'reveal_down':
+      return { ...f, wA: 1, wB: 1, geometric: true, a: { ...G0(), ty: q }, top: 'a' }
+    case 'fade_grays': {
+      const s1 = smoothstep(0.8, 1, P)
+      const s2 = smoothstep(0.2, 1, P)
+      return { ...f, satA: s1, satB: 1 - s2 }
+    }
+    case 'pixelize': {
+      const d = Math.min(P, 1 - P)
+      const dist = Math.ceil(d * 50) / 50
+      if (dist <= 0) return f
+      const blockFrac = (2 * dist) / 20
+      return { ...f, pixel: { blockFrac, P } }
     }
     default:
       return f
@@ -302,15 +394,19 @@ export type LayerCss = {
 
 const pct = (n: number) => `${Math.round(n * 1e5) / 1e3}%`
 
-function layerCss(g: LayerGeom, opacity: number, clip: [number, number, number, number] | null, blurPx: number): LayerCss {
+function layerCss(g: LayerGeom, opacity: number, clip: [number, number, number, number] | null, blurPx: number, extraFilter = ''): LayerCss {
   const tf = []
   if (g.tx || g.ty) tf.push(`translate(${pct(g.tx)}, ${pct(g.ty)})`)
-  if (g.scale !== 1) tf.push(`scale(${Math.round(g.scale * 1e5) / 1e5})`)
+  const sx = g.sx ?? 1
+  const sy = g.sy ?? 1
+  if (sx !== 1 || sy !== 1) tf.push(`scale(${Math.round(sx * 1e5) / 1e5}, ${Math.round(sy * 1e5) / 1e5})`)
+  else if (g.scale !== 1) tf.push(`scale(${Math.round(g.scale * 1e5) / 1e5})`)
+  const fl = [blurPx > 0.05 ? `blur(${Math.round(blurPx * 100) / 100}px)` : '', extraFilter].filter(Boolean).join(' ')
   return {
     opacity: Math.round(opacity * 1e5) / 1e5,
     transform: tf.join(' '),
     clipPath: clip ? `inset(${pct(clip[0])} ${pct(clip[1])} ${pct(clip[2])} ${pct(clip[3])})` : '',
-    filter: blurPx > 0.05 ? `blur(${Math.round(blurPx * 100) / 100}px)` : '',
+    filter: fl,
     visibility: opacity <= 0 ? 'hidden' : 'visible',
   }
 }
@@ -325,43 +421,51 @@ export function compositeCss(
   f: TransitionFrame,
   aTop: boolean,
   displayW: number,
-): { a: LayerCss; b: LayerCss; color: { opacity: number; background: string } } {
+): { a: LayerCss; b: LayerCss; color: { opacity: number; background: string }; top: 'a' | 'b' } {
+  const stackTop = f.top ?? (aTop ? 'a' : 'b')
+  const satA = f.satA != null ? `saturate(${Math.round(f.satA * 1e5) / 1e5})` : ''
+  const satB = f.satB != null ? `saturate(${Math.round(f.satB * 1e5) / 1e5})` : ''
   // Box blur of width s ≈ gaussian σ = s/√12.
   const blurPx = (f.blurFrac * displayW) / Math.sqrt(12)
   if (f.mask) {
     const { xfade, P } = f.mask
-    const a = layerCss(f.a, 1, null, 0)
-    const b = layerCss(f.b, 1, null, 0)
-    const top = aTop ? a : b
+    const a = layerCss(f.a, 1, null, 0, satA)
+    const b = layerCss(f.b, 1, null, 0, satB)
+    const top = stackTop === 'a' ? a : b
     const corner = CORNER[TRANSITIONS.find((t) => t.xfade === xfade)?.type as TransitionType]
     if (corner) {
       const [x0, y0, x1, y1] = cornerRectA(corner, P)
-      if (aTop) top.clipPath = `inset(${pct(y0)} ${pct(1 - x1)} ${pct(1 - y1)} ${pct(x0)})`
+      if (stackTop === 'a') top.clipPath = `inset(${pct(y0)} ${pct(1 - x1)} ${pct(1 - y1)} ${pct(x0)})`
       else
         top.clipPath = `polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ${pct(x0)} ${pct(y0)}, ${pct(x1)} ${pct(y0)}, ${pct(x1)} ${pct(y1)}, ${pct(x0)} ${pct(y1)}, ${pct(x0)} ${pct(y0)})`
-    } else top.mask = `${xfade}|${Math.round(P * 1e6) / 1e6}|${aTop ? 'A' : 'B'}`
-    return { a, b, color: { opacity: 0, background: 'transparent' } }
+    } else top.mask = `${xfade}|${Math.round(P * 1e6) / 1e6}|${stackTop === 'a' ? 'A' : 'B'}`
+    return { a, b, color: { opacity: 0, background: 'transparent' }, top: stackTop }
   }
   if (f.geometric) {
     let aClip = f.a.clip
     let bClip = f.b.clip
-    if (aTop && bClip) {
+    if (stackTop === 'a' && bClip) {
       aClip = complementClip(bClip)
       bClip = null
+    } else if (stackTop === 'b' && aClip) {
+      bClip = complementClip(aClip)
+      aClip = null
     }
     return {
-      a: layerCss(f.a, 1, aClip, 0),
-      b: layerCss(f.b, 1, bClip, 0),
+      a: layerCss(f.a, 1, aClip, 0, satA),
+      b: layerCss(f.b, 1, bClip, 0, satB),
       color: { opacity: 0, background: 'transparent' },
+      top: stackTop,
     }
   }
-  const wTop = aTop ? f.wA : f.wB
+  const wTop = stackTop === 'a' ? f.wA : f.wB
   const colorOp = f.wC > 0 && wTop < 1 - 1e-6 ? f.wC / (1 - wTop) : 0
   const topOp = wTop
   return {
-    a: layerCss(f.a, aTop ? topOp : 1, null, blurPx),
-    b: layerCss(f.b, aTop ? 1 : topOp, null, blurPx),
+    a: layerCss(f.a, stackTop === 'a' ? topOp : 1, null, blurPx, satA),
+    b: layerCss(f.b, stackTop === 'b' ? topOp : 1, null, blurPx, satB),
     color: { opacity: Math.round(colorOp * 1e5) / 1e5, background: f.color === 'white' ? '#fff' : '#000' },
+    top: stackTop,
   }
 }
 
@@ -515,6 +619,7 @@ export function brollTransitionWindows(broll: readonly BrollItem[] | undefined, 
     const prev = i > 0 ? items[i - 1]! : null
     const nxt = i < items.length - 1 ? items[i + 1]! : null
     const mk = (spec: TransitionSpec, kind: BrollWindow['kind'], atStart: boolean, fromId: string | null) => {
+      if (CUT_ONLY_TRANSITIONS.has(spec.type)) return
       const d = Math.min(clampDur(spec.durMs), len / 2)
       if (d < TRANSITION_MIN_MS) return
       const n = Math.max(2, Math.round((d * fps) / 1000))

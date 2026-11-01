@@ -12,6 +12,8 @@ from pathlib import Path
 from clips_worker.filtergraph import _escape_movie_path, canvas_bg, canvas_bg_flat
 from clips_worker.motion import (
     MOTION_FPS,
+    COVER_TRANSITIONS,
+    REVEAL_TRANSITIONS,
     XFADE_NAME,
     ZOOM_AMOUNT,
     cut_transition_windows,
@@ -39,11 +41,14 @@ def xfade_window_filters(win: dict, ia: int, ib: int, w: int, h: int, label: str
     """[ia]/[ib] are window inputs already seeked to the window start; output [label] = N frames at pts w0."""
     n = int(win["frames"])
     fps = MOTION_FPS
+    ttype = win["type"]
     # xfade runs in RGB (gbrp) so dip-to-black / white are true #000 / #fff, exactly the preview's CSS
     # colour layer (in limited-range YUV xfade's black / white are super-black / super-white).
     norm = f"fps={fps},scale={w}:{h},setsar=1,format=gbrp"
+    yuv_out = ",scale=out_color_matrix=bt709:out_range=full,format=yuv444p"
+    gbrp_back = ",scale=in_color_matrix=bt709:in_range=full,format=gbrp"
 
-    def src(i: int, pad: float, lab: str, zoom: str | None) -> str:
+    def src(i: int, pad: float, lab: str, zoom: str | None, *, yuv: bool = False) -> str:
         pre = f"tpad=start_mode=clone:start_duration={pad:.4f}," if pad > 0 else ""
         chain = f"[{i}:v]{norm},{pre}tpad=stop_mode=clone:stop_duration=5,trim=end_frame={n + 1},setpts=PTS-STARTPTS"
         if zoom:
@@ -54,22 +59,66 @@ def xfade_window_filters(win: dict, ia: int, ib: int, w: int, h: int, label: str
                 f"[{lab}z1]scale=w='trunc({w}*({zoom})/2)*2':h='trunc({h}*({zoom})/2)*2':eval=frame[{lab}z2];"
                 f"[{lab}z0][{lab}z2]overlay=x='(W-w)/2':y='(H-h)/2':eval=frame,format=gbrp,setsar=1"
             )
+        if yuv:
+            chain += yuv_out
         # tpad / trim drop the stream frame rate; xfade requires a constant one.
         return chain + f",fps={fps}[{lab}]"
 
     # Frame index from t (scale's `n` differs between ffmpeg 5.1 and 7.x after a size change).
-    za = f"1+{ZOOM_AMOUNT}*round(t*{fps})/{n}" if win["type"] == "zoom_in" else None
-    zb = f"1+{ZOOM_AMOUNT}*(1-round(t*{fps})/{n})" if win["type"] == "zoom_out" else None
+    za = f"1+{ZOOM_AMOUNT}*round(t*{fps})/{n}" if ttype == "zoom_in" else None
+    zb = f"1+{ZOOM_AMOUNT}*(1-round(t*{fps})/{n})" if ttype == "zoom_out" else None
     dur = n / fps
     w0 = win["startFrame"] / fps
-    return ";".join([
-        src(ia, a_pad_start, f"{label}a", za),
-        src(ib, b_pad_start, f"{label}b", zb),
-        # One spare input frame each: ffmpeg 5.1 ends the transition when input A hits EOF, which
-        # would turn the last window frame into plain B. The output is trimmed back to N frames.
-        f"[{label}a][{label}b]xfade=transition={XFADE_NAME[win['type']]}:duration={dur:.6f}:offset=0,"
-        f"trim=end_frame={n},format=yuv420p,setpts=PTS-STARTPTS+{w0:.6f}/TB[{label}]",
-    ])
+    k_expr = f"round(t*{fps})"
+    p_expr = f"1-{k_expr}/{n}"
+
+    if ttype in COVER_TRANSITIONS or ttype in REVEAL_TRANSITIONS:
+        base_lab = f"{label}a" if ttype in COVER_TRANSITIONS else f"{label}b"
+        top_lab = f"{label}b" if ttype in COVER_TRANSITIONS else f"{label}a"
+        if ttype == "cover_left":
+            ox = f"floor({w}*({p_expr})+0.5)"
+            oy = "0"
+        elif ttype == "cover_right":
+            ox = f"-floor({w}*({p_expr})+0.5)"
+            oy = "0"
+        elif ttype == "cover_up":
+            ox = "0"
+            oy = f"floor({h}*({p_expr})+0.5)"
+        elif ttype == "cover_down":
+            ox = "0"
+            oy = f"-floor({h}*({p_expr})+0.5)"
+        elif ttype == "reveal_left":
+            ox = f"-floor({w}*(1-({p_expr}))+0.5)"
+            oy = "0"
+        elif ttype == "reveal_right":
+            ox = f"floor({w}*(1-({p_expr}))+0.5)"
+            oy = "0"
+        elif ttype == "reveal_up":
+            ox = "0"
+            oy = f"-floor({h}*(1-({p_expr}))+0.5)"
+        else:  # reveal_down
+            ox = "0"
+            oy = f"floor({h}*(1-({p_expr}))+0.5)"
+        return ";".join([
+            src(ia, a_pad_start, f"{label}a", za),
+            src(ib, b_pad_start, f"{label}b", zb),
+            f"[{base_lab}][{top_lab}]overlay=x='{ox}':y='{oy}':eval=frame,"
+            f"trim=end_frame={n},format=yuv420p,setpts=PTS-STARTPTS+{w0:.6f}/TB[{label}]",
+        ])
+
+    yuv_xfade = ttype == "fade_grays"
+    parts = [
+        src(ia, a_pad_start, f"{label}a", za, yuv=yuv_xfade),
+        src(ib, b_pad_start, f"{label}b", zb, yuv=yuv_xfade),
+    ]
+    xfade_line = (
+        f"[{label}a][{label}b]xfade=transition={XFADE_NAME[ttype]}:duration={dur:.6f}:offset=0,"
+    )
+    if yuv_xfade:
+        xfade_line += gbrp_back + ","
+    xfade_line += f"trim=end_frame={n},format=yuv420p,setpts=PTS-STARTPTS+{w0:.6f}/TB[{label}]"
+    parts.append(xfade_line)
+    return ";".join(parts)
 
 
 def build_cut_transition_cmd(cut_mp4: Path, full_render: Path, out: Path, windows: list[dict],

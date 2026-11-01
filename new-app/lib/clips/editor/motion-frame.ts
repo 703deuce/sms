@@ -74,6 +74,8 @@ export type MainFrame = {
     /** source ms each clone must show at this output time */
     aSrcMs: number
     bSrcMs: number
+    top: 'a' | 'b'
+    pixel?: { blockFrac: number; P: number }
     a: LayerCss
     b: LayerCss
     color: { opacity: number; background: string }
@@ -113,7 +115,11 @@ export function mainFrame(
         q,
         aSrcMs: w.aEnd + (outMs - w.cutMs),
         bSrcMs: w.bStart + (outMs - w.cutMs),
-        ...css,
+        top: css.top,
+        pixel: f.pixel,
+        a: css.a,
+        b: css.b,
+        color: css.color,
       }
       break
     }
