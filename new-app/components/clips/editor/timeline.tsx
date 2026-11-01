@@ -131,6 +131,7 @@ import { fadeDragMsPerPx, fadeFromDrag, patchAudioClip } from '@/lib/clips/edito
 import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 import { audioClipKindOf } from '@/lib/clips/editor/audio-kind'
 import { beatsToOutput } from '@/lib/clips/editor/beats'
+import { autoCutOverlays, beatSplitsForSegment } from '@/lib/clips/editor/beat-autocut'
 import { DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS } from '@/lib/clips/audio'
 import { useDismiss } from '@/components/clips/editor/use-dismiss'
 import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
@@ -719,11 +720,59 @@ export function Timeline({
     return out
   }, [edits.audio, lanes, musicPeaks.beatsMs, musicPeaks.durationMs, sfxBeatsMs, sfxDurationsMs])
   const hasBeats = Object.keys(beatMarks).length > 0
+  const allBeatsMs = useMemo(
+    () => [...new Set(Object.values(beatMarks).flat())].sort((a, b) => a - b),
+    [beatMarks],
+  )
   // G2: solo — items of audio tracks silenced by another track's solo draw faded.
   const soloEdits = useMemo(() => applyAudioSolo(edits), [edits])
   const editable = Boolean(onCommitEdits)
 
   const [selected, setSelected] = useState<ItemRef[]>([])
+  const applyBeatCut = useCallback(
+    (every: 1 | 2 | 4) => {
+      if (!onCommitEdits || !allBeatsMs.length) return
+      let next = edits
+      let skipped = 0
+      const brollRefs = selected.filter((r) => r.lane === 'broll')
+      if (brollRefs.length) {
+        const picked = brollRefs
+          .map((r) => (next.broll ?? []).find((b) => b.id === r.id))
+          .filter(Boolean) as BrollItem[]
+        const { items, skipped: sk } = autoCutOverlays(picked, allBeatsMs, every, () => null)
+        skipped += sk.length
+        const byId = new Map(items.map((i) => [i.id, i]))
+        next = {
+          ...next,
+          broll: (next.broll ?? []).map((b) => (byId.has(b.id) ? { ...b, ...byId.get(b.id)! } : b)),
+        }
+      }
+      const videoSel = selected.some((r) => r.lane === 'video')
+      if (videoSel || (!brollRefs.length && selected.length === 0)) {
+        const vsegs = videoLaneSegments(tb, next.videoSplits)
+        const seg = vsegs.find((v) => outputMs > v.startMs && outputMs < v.startMs + (v.b - v.a))
+        if (seg) {
+          const splits = beatSplitsForSegment(
+            {
+              startMs: seg.startMs,
+              endMs: seg.startMs + (seg.b - seg.a),
+              srcIn: seg.a,
+              srcOut: seg.b,
+            },
+            allBeatsMs,
+            every,
+            (o) => outputToSource(tb, o),
+            next.videoSplits ?? [],
+          )
+          next = { ...next, videoSplits: splits }
+        }
+      }
+      onCommitEdits(next)
+      if (skipped) toast.message(`${skipped} overlay(s) past the last beat — unchanged`)
+      else toast.success('Cut to beat')
+    },
+    [allBeatsMs, edits, onCommitEdits, outputMs, selected, tb],
+  )
   const [openCompound, setOpenCompound] = useState<string | null>(null)
   const cview = useMemo(() => compoundView(edits, lanes, openCompound), [edits, lanes, openCompound])
   const hostOf = (it: TimelineItem) => cview.hosts.get(refKey(it))
@@ -2631,6 +2680,25 @@ export function Timeline({
             >
               ♪ Beats
             </button>
+          ) : null}
+          {hasBeats && editable ? (
+            <select
+              className="h-6 rounded border border-border bg-background px-1 text-[11px]"
+              data-testid="timeline-beat-cut"
+              defaultValue=""
+              onChange={(e) => {
+                const v = e.target.value
+                e.target.value = ''
+                if (v === '1' || v === '2' || v === '4') applyBeatCut(Number(v) as 1 | 2 | 4)
+              }}
+            >
+              <option value="" disabled>
+                Cut to beat
+              </option>
+              <option value="1">Every beat</option>
+              <option value="2">Every 2 beats</option>
+              <option value="4">Every 4 beats</option>
+            </select>
           ) : null}
           {editable ? (
             <span className="inline-flex items-center" role="group" aria-label="Trim tool" data-testid="timeline-tools">

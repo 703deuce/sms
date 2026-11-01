@@ -20,6 +20,8 @@ import { clipsFetch } from '@/lib/clips-api'
 import { creditsLabel, musicCredits } from '@/lib/clips/credit-cost'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import { toast } from 'sonner'
+import { StockAudioPicker } from '@/components/clips/editor/stock-audio-picker'
+import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
 
 export function AudioPanel({
   clipId,
@@ -38,6 +40,7 @@ export function AudioPanel({
   studioSlow,
   onRetryStudioPoll,
   onPatchExportAudio,
+  uploadLibraryFiles,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -59,6 +62,7 @@ export function AudioPanel({
       speed?: ClipEditsV2['speed'] | null
     },
   ) => void
+  uploadLibraryFiles?: (files: File[]) => Promise<ProjectMediaItem[]>
 }) {
   const [prompt, setPrompt] = useState('')
   const [instrumental, setInstrumental] = useState(true)
@@ -258,6 +262,41 @@ export function AudioPanel({
             </Button>
           ) : null}
         </div>
+      ) : null}
+      {aiExtras ? (
+      <section className="space-y-2 rounded-md border border-border p-2" data-testid="audio-library">
+        <h3 className="font-medium">Library</h3>
+        <StockAudioPicker
+          kind="music"
+          playheadMs={playheadMs}
+          hasMusicBed={Boolean(music)}
+          uploadLibraryFiles={uploadLibraryFiles}
+          onGeneratePreset={(p) => {
+            setPrompt(p)
+            setBusy(true)
+            void clipsFetch<{ generationId: string }>(`/api/clips/clips/${clipId}/music`, {
+              method: 'POST',
+              body: JSON.stringify({ prompt: p, instrumental: true }),
+            })
+              .then((data) => setActiveGen(data.generationId))
+              .finally(() => setBusy(false))
+          }}
+          onMusicUploaded={(uploadId) => {
+            if (!music) onAttachMusic(uploadId)
+            else onAddSfx(uploadId, playheadMs)
+          }}
+          onSfxUploaded={(uploadId, atMs) => onAddSfx(uploadId, atMs)}
+        />
+        <StockAudioPicker
+          kind="sfx"
+          playheadMs={playheadMs}
+          hasMusicBed={false}
+          uploadLibraryFiles={uploadLibraryFiles}
+          onGeneratePreset={() => {}}
+          onMusicUploaded={() => {}}
+          onSfxUploaded={(uploadId, atMs) => onAddSfx(uploadId, atMs)}
+        />
+      </section>
       ) : null}
       {aiExtras ? (
       <section className="space-y-2">
