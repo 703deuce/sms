@@ -5,6 +5,15 @@ import type { GapFilterMode } from '@/lib/clips/script-editor/gap-hits'
 import { listFillerHits, type FillerFilter } from '@/lib/clips/script-editor/filler-hits'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
+import { normalizeCleanupCutRange, sanitizeCleanupCutRanges } from '@/lib/clips/editor/cleanup-cut-boundaries'
+import {
+  DEFAULT_CLEANUP_STRENGTH,
+  fillerEligibleAtStrength,
+  gapHasSpeechEnergy,
+  gapPresetForStrength,
+  isProtectedFromCleanup,
+  type CleanupStrength,
+} from '@/lib/clips/editor/cleanup-strength'
 import type { RetakeGroup } from '@/lib/clips/editor/retakes'
 import { retakeCutRange } from '@/lib/clips/editor/retakes'
 
@@ -60,15 +69,29 @@ export function classifyCut(
 export function fillerProposals(
   orderedWords: EditorWord[],
   deletedSet: Set<string>,
-  opts?: { filter?: FillerFilter; avoidHarshCuts?: boolean },
+  opts?: {
+    filter?: FillerFilter
+    avoidHarshCuts?: boolean
+    strength?: CleanupStrength
+    enabledOptInFillers?: ReadonlySet<string>
+  },
 ): CleanupProposal[] {
+  const strength = opts?.strength ?? DEFAULT_CLEANUP_STRENGTH
+  const enabledOptIn = opts?.enabledOptInFillers ?? new Set<string>()
   const hits = listFillerHits(orderedWords, deletedSet, opts)
-  return hits.map((h) => ({
-    id: proposalId([h.word.t0Ms, h.word.t1Ms]),
-    kind: 'filler' as const,
-    range: [h.word.t0Ms, h.word.t1Ms] as CutRange,
-    label: h.word.text.trim() || 'filler',
-  }))
+  const out: CleanupProposal[] = []
+  for (const h of hits) {
+    if (isProtectedFromCleanup(h.word)) continue
+    if (!fillerEligibleAtStrength(h.word.text, h.word.fillerKind, strength, enabledOptIn)) continue
+    const raw: CutRange = [h.word.t0Ms, h.word.t1Ms]
+    out.push({
+      id: proposalId(raw),
+      kind: 'filler' as const,
+      range: raw,
+      label: h.word.text.trim() || 'filler',
+    })
+  }
+  return out
 }
 
 export function retakeProposals(
@@ -113,17 +136,31 @@ export function gapProposals(
     targetGapMs: number
     maxPlausibleGapMs?: number
     wordSpans?: { s: number; e: number }[]
+    strength?: CleanupStrength
+    rmsSamples?: { tMs: number; rms: number }[] | null
   },
 ): CleanupProposal[] {
-  const hits = listClipGapHits(orderedWords, cutRanges, opts)
-  return hits.map((hit) => {
+  const preset = opts.strength ? gapPresetForStrength(opts.strength) : null
+  const minGapMs = preset?.minGapMs ?? opts.minGapMs
+  const targetGapMs = preset?.targetGapMs ?? opts.targetGapMs
+  const hits = listClipGapHits(orderedWords, cutRanges, { ...opts, minGapMs, targetGapMs })
+  return hits
+    .filter((hit) => {
+      if (!opts.rmsSamples?.length) return true
+      return !gapHasSpeechEnergy(hit.prevWord.t1Ms, hit.word.t0Ms, opts.rmsSamples)
+    })
+    .map((hit) => {
     const range =
-      gapShortenCutRange(hit.prevWord.t1Ms, hit.word.t0Ms, hit.gapMs, opts.targetGapMs, opts.wordSpans) ??
+      gapShortenCutRange(hit.prevWord.t1Ms, hit.word.t0Ms, hit.gapMs, targetGapMs, opts.wordSpans) ??
       ([hit.prevWord.t1Ms, hit.word.t0Ms] as CutRange)
+    const normalized =
+      opts.wordSpans?.length != null && opts.wordSpans.length > 0
+        ? normalizeCleanupCutRange(range, opts.wordSpans) ?? range
+        : range
     return {
-      id: proposalId(range),
+      id: proposalId(normalized),
       kind: 'gap' as const,
-      range,
+      range: normalized,
       label: `${(hit.gapMs / 1000).toFixed(1)}s pause`,
     }
   })
@@ -154,10 +191,16 @@ export function mergeCleanupCutRanges(
 ): CutRange[] {
   let cuts = [...baseCuts]
   for (const range of ranges) {
-    const snapped = wordSpans.length ? snapCutRangeToWordGaps(range, wordSpans) ?? range : range
-    const nextRange = wordSpans.length
-      ? sanitizeCutRangesForWords([snapped], wordSpans)[0] ?? snapped
-      : snapped
+    const snapped =
+      wordSpans.length > 0
+        ? normalizeCleanupCutRange(range, wordSpans) ?? snapCutRangeToWordGaps(range, wordSpans) ?? range
+        : range
+    const nextRange =
+      wordSpans.length > 0
+        ? sanitizeCleanupCutRanges([snapped], wordSpans)[0] ??
+          sanitizeCutRangesForWords([snapped], wordSpans)[0] ??
+          snapped
+        : snapped
     cuts = mergeCutRanges([...cuts, nextRange])
   }
   return cuts
