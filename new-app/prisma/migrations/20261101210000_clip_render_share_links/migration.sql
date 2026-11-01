@@ -25,4 +25,4 @@ CREATE INDEX "clip_render_share_links_workspaceId_createdAt_idx" ON "clip_render
 
 ALTER TABLE "clip_render_share_links" ADD CONSTRAINT "clip_render_share_links_renderId_fkey" FOREIGN KEY ("renderId") REFERENCES "clip_renders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE "clip_render_share_links" ADD CONSTRAINT "clip_render_share_links_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "clip_render_share_links" ADD CONSTRAINT "clip_render_share_links_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;

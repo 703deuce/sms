@@ -1,0 +1,36 @@
+name: Prisma migration guards
+
+on:
+  push:
+    branches: [master, "cursor/**"]
+    paths:
+      - "new-app/prisma/**"
+      - "new-app/scripts/verify-migration-table-refs.mjs"
+      - "new-app/tests/migration-table-refs.test.ts"
+      - ".github/workflows/prisma-migration-guard.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "new-app/prisma/**"
+      - "new-app/scripts/verify-migration-table-refs.mjs"
+      - "new-app/tests/migration-table-refs.test.ts"
+
+jobs:
+  migration-table-refs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: new-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-migration-table-refs.mjs
+      - run: pnpm exec vitest run tests/migration-table-refs.test.ts
