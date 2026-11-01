@@ -11,6 +11,7 @@ import {
   auditionEditsForProposals,
   fillerProposals,
   gapProposals,
+  retakeProposals,
   type CleanupProposal,
 } from '@/lib/clips/editor/cleanup-proposals'
 import { deletedEditorWordIds, editorWordsForClipFillerReview } from '@/lib/clips/editor/filler-review-words'
@@ -19,6 +20,9 @@ import type { ClipGapToolSettings } from '@/components/clips/editor/clip-shorten
 import { TrimRangeBar } from '@/components/clips/editor/trim-range-bar'
 import { nudgeTrimIn, nudgeTrimOut } from '@/lib/clips/editor/nudge'
 import type { ClipBounds } from '@/lib/clips/edits'
+import { findRetakes } from '@/lib/clips/editor/retakes'
+import { clipsFetch } from '@/lib/clips-api'
+import { toast } from 'sonner'
 
 export function CleanupPanel({
   clipId,
@@ -26,6 +30,7 @@ export function CleanupPanel({
   edits,
   words,
   gapSettings,
+  aiExtras = false,
   onApplyProposal,
   onRestoreProposal,
   onCommitTrim,
@@ -37,6 +42,7 @@ export function CleanupPanel({
   edits: ClipEditsV2
   words: SourceWord[]
   gapSettings: ClipGapToolSettings
+  aiExtras?: boolean
   onApplyProposal: (proposal: CleanupProposal) => void
   onRestoreProposal: (proposal: CleanupProposal) => void
   onCommitTrim: (trim: { in: number; out: number }) => void
@@ -44,6 +50,8 @@ export function CleanupPanel({
   onSeek: (sourceMs: number) => void
 }) {
   const [auditionIds, setAuditionIds] = useState<Set<string>>(new Set())
+  const [retakeBusy, setRetakeBusy] = useState(false)
+  const [retakeExtras, setRetakeExtras] = useState<CleanupProposal[]>([])
 
   const clipBounds = useMemo(
     () => ({ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }),
@@ -88,7 +96,49 @@ export function CleanupPanel({
     () => appliedCutProposals(edits, orderedWords, deletedSet),
     [edits, orderedWords, deletedSet],
   )
-  const proposed = useMemo(() => [...filler, ...gaps], [filler, gaps])
+  const fillerGap = useMemo(() => [...filler, ...gaps], [filler, gaps])
+  const proposed = useMemo(() => [...fillerGap, ...retakeExtras], [fillerGap, retakeExtras])
+
+  const runRetakes = async () => {
+    setRetakeBusy(true)
+    try {
+      const retakeWords = scopedWords.map((w) => {
+        const { startMs, endMs } = wordSourceMs(w)
+        return { w: w.w, s: startMs / 1000, e: endMs / 1000 }
+      })
+      let groups = findRetakes(retakeWords)
+      if (!groups.length) {
+        toast.message('No repeated sentences found')
+        setRetakeExtras([])
+        return
+      }
+      if (aiExtras) {
+        try {
+          const res = await clipsFetch<{ confirmed: boolean[] | null }>(
+            `/api/clips/clips/${clipId}/retakes/verify`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                groups: groups.map((g) => ({ attempts: g.attempts.map((a) => a.text) })),
+              }),
+            },
+          )
+          if (res.confirmed?.length) {
+            groups = groups.filter((_, i) => res.confirmed![i] !== false)
+          }
+        } catch {
+          /* keep deterministic groups */
+        }
+      }
+      const props = retakeProposals(groups, edits.cutRanges ?? [])
+      setRetakeExtras(props)
+      if (!props.length) toast.message('Retakes already cut or none left')
+      else toast.success(`${props.length} retake cut(s) ready — review below`)
+    } finally {
+      setRetakeBusy(false)
+    }
+  }
 
   const toggleAudition = (p: CleanupProposal) => {
     setAuditionIds((prev) => {
@@ -140,6 +190,19 @@ export function CleanupPanel({
         </Button>
       </div>
 
+      {aiExtras ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={retakeBusy}
+          data-testid="retake-run"
+          onClick={() => void runRetakes()}
+        >
+          Remove retakes
+        </Button>
+      ) : null}
+
       <Tabs defaultValue="proposed">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="proposed">Proposed ({proposed.length})</TabsTrigger>
@@ -157,6 +220,7 @@ export function CleanupPanel({
                 onAudition={() => toggleAudition(p)}
                 onApply={() => {
                   onApplyProposal(p)
+                  setRetakeExtras((rows) => rows.filter((r) => r.id !== p.id))
                   setAuditionIds((s) => {
                     const n = new Set(s)
                     n.delete(p.id)

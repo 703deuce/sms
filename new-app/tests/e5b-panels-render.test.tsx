@@ -96,6 +96,7 @@ describe('E5b Media panel inserts', () => {
   const panel = (e: ClipEditsV2, onEdits: ReturnType<typeof vi.fn>, m = api()) =>
     render(
       <MediaPanel
+        projectId="proj_test"
         media={m}
         edits={e}
         words={[]}
@@ -106,6 +107,7 @@ describe('E5b Media panel inserts', () => {
         onReplaceSelected={vi.fn()}
         onEdits={onEdits}
         playheadSourceMs={5000}
+        onSeekSource={vi.fn()}
       />,
     )
 
