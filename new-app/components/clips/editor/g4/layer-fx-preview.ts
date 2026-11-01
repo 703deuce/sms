@@ -47,6 +47,7 @@ export function maskUrl(mask: LayerMask, localMs: number, W: number, H: number):
 
 function setMask(el: HTMLElement, url: string) {
   const v = url ? `url("${url}")` : ''
+  if (!v) delete el.dataset.g4bMask
   const st = el.style as CSSStyleDeclaration & { webkitMaskImage?: string; webkitMaskSize?: string; webkitMaskRepeat?: string }
   if (st.maskImage === v && (!v || st.maskSize)) return
   st.maskImage = v
@@ -57,6 +58,18 @@ function setMask(el: HTMLElement, url: string) {
   st.webkitMaskRepeat = v ? 'no-repeat' : ''
   if (v) el.dataset.g4bMask = '1'
   else delete el.dataset.g4bMask
+}
+
+/** CV17c: libass paints to an offscreen-transferred canvas; ancestor mask-image does not clip it — mask the canvas. */
+export function textFxMaskEl(host: HTMLElement): HTMLElement {
+  return host.querySelector<HTMLElement>('[data-testid="libass-canvas"]') ?? host
+}
+
+export function applyTextFxLayerFx(host: HTMLElement | null, fx: LayerFx | undefined, localMs: number, W: number, H: number) {
+  if (!host || !fx || (!fx.mask && !fx.blend)) return
+  const maskEl = textFxMaskEl(host)
+  applyLayerFx(maskEl, host, fx, localMs, W, H)
+  if (maskEl !== host && host.dataset.g4bMask) applyLayerFx(host, null, undefined, 0, W, H)
 }
 
 /** Mask + blend for one item at item-local ms (clears what is off). */
