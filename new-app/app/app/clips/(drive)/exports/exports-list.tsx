@@ -73,7 +73,7 @@ function ClientTime({ iso }: { iso: string | null }) {
   )
 }
 
-function AspectResolution({ aspect, resolution }: { aspect: string; resolution: string }) {
+function AspectResolution({ aspect, resolution, formatChip }: { aspect: string; resolution: string; formatChip?: string | null }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-foreground/75">
       <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
@@ -81,6 +81,9 @@ function AspectResolution({ aspect, resolution }: { aspect: string; resolution: 
         {aspect}
       </span>
       <span className="tabular-nums text-foreground/80">{resolution}</span>
+      {formatChip ? (
+        <span className="rounded-full bg-muted/80 px-2 py-0.5 text-[10px] font-medium">{formatChip}</span>
+      ) : null}
     </span>
   )
 }
@@ -226,7 +229,7 @@ export function ExportsList({
                   {r.title}
                 </Link>
                 <div className="mt-1">
-                  <AspectResolution aspect={r.aspectRatio} resolution={r.resolution} />
+                  <AspectResolution aspect={r.aspectRatio} resolution={r.resolution} formatChip={r.formatChip} />
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground tabular-nums">{formatSize(r.sizeBytes)}</p>
                 {r.status === 'FAILED' && r.error ? (
@@ -320,7 +323,7 @@ export function ExportsList({
                   </Link>
                 </td>
                 <td className="px-3 py-2">
-                  <AspectResolution aspect={r.aspectRatio} resolution={r.resolution} />
+                  <AspectResolution aspect={r.aspectRatio} resolution={r.resolution} formatChip={r.formatChip} />
                 </td>
                 <td className="px-3 py-2">{r.watermark ? 'Yes' : 'No'}</td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">

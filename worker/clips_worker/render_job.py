@@ -431,6 +431,8 @@ def _run_render_clip_job_body(
     t_job: float,
     _check_drain,
 ) -> None:
+    from clips_worker.export_deliver import normalize_deliver
+
     ctx = load_render_context(conn, render_id)
     _export_stage_log(render_id, "load_context", t_job)
     _check_drain("load_context")
@@ -514,7 +516,11 @@ def _run_render_clip_job_body(
 
     preview_key = ctx["previewKey"]
     compose_spec = payload.get("composeSpec") if isinstance(payload.get("composeSpec"), dict) else None
-    if preview_key and not compose_spec and can_reuse_clip_preview_for_render(aspect, resolution, edits, clip_start, clip_end):
+    deliver_spec = normalize_deliver(payload.get("deliver"))
+    if deliver_spec and deliver_spec.get("targetResolution") in ("1440p", "2160p"):
+        resolution = "1080p"
+        settings = {**settings, "exportResolution": resolution}
+    if preview_key and not compose_spec and not deliver_spec and can_reuse_clip_preview_for_render(aspect, resolution, edits, clip_start, clip_end):
         tmp = Path(tempfile.mkdtemp()) / "probe.mp4"
         try:
             download_object(preview_key, tmp)
@@ -837,20 +843,39 @@ def _run_render_clip_job_body(
             {"jobStatus": "RUNNING", "stage": "render_clip", "progress": overall_progress("upload", 0.0), "etaSeconds": ETA_UPLOAD_S},
         )
         _export_stage_log(render_id, "pre_upload", t_job)
-        out_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.mp4"
+        pre_deliver = out_mp4
+        from clips_worker.export_deliver import normalize_deliver, deliver as run_deliver, srt_slice
+
+        deliver_spec = normalize_deliver(payload.get("deliver"))
+        out_ext = "mp4"
+        content_type = "video/mp4"
+        upload_srt = srt_body
+        final_out = pre_deliver
+        if deliver_spec:
+            fmt = deliver_spec.get("format") or "mp4"
+            if fmt in ("gif", "mp3", "wav", "m4a", "flac", "png"):
+                upload_srt = None
+            rin, rout = deliver_spec.get("rangeInMs"), deliver_spec.get("rangeOutMs")
+            if upload_srt and rin is not None and rout is not None and not deliver_spec.get("softSubs"):
+                upload_srt = srt_slice(upload_srt, rin, rout)
+            final_out, out_ext, content_type = run_deliver(pre_deliver, td_path, deliver_spec, srt_body if deliver_spec.get("softSubs") else None)
+        out_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.{out_ext}"
         srt_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.srt"
-        upload_file(out_key, out_mp4, "video/mp4")
-        upload_text(srt_key, srt_body, "text/plain; charset=utf-8")
+        upload_file(out_key, final_out, content_type)
+        if upload_srt and out_ext in ("mp4", "mov"):
+            upload_text(srt_key, upload_srt, "text/plain; charset=utf-8")
+        else:
+            srt_key = None
         # E6: upload finished — show movement past 82% (stage stays render_clip: it is also the project stage).
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": overall_progress("upload", 0.5), "etaSeconds": 5})
-        size = out_mp4.stat().st_size
+        size = final_out.stat().st_size
         from clips_worker.edits_render import output_duration_ms
 
         expected_editor_ms = int(render_meta.get("expected_editor_ms") or output_duration_ms(edits))
         expected_effective_ms = int(render_meta.get("effective_edits_ms") or expected_editor_ms)
         expected_editor_s = expected_editor_ms / 1000.0
         expected_effective_s = expected_effective_ms / 1000.0
-        actual_s = _probe_duration_sec(out_mp4)
+        actual_s = _probe_duration_sec(pre_deliver)
         length_mismatch = (
             abs(actual_s - expected_effective_s) > 0.35
             or expected_effective_s < 0.6 * expected_editor_s

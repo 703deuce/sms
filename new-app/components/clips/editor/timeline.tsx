@@ -326,6 +326,8 @@ export function Timeline({
   onMatchFrame,
   onOpenExport,
   onReplaceBrollMedia,
+  inOut: controlledInOut,
+  onInOutChange,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -387,6 +389,9 @@ export function Timeline({
   onOpenExport?: () => void
   /** FV-19: open replace-media dialog for a B-roll item id. */
   onReplaceBrollMedia?: (brollId: string) => void
+  /** Optional controlled in/out marks (output ms) for export range. */
+  inOut?: InOut
+  onInOutChange?: (io: InOut) => void
   selectedSourceSegmentId?: string | null
   /** G1a: select an item from outside (canvas click); a new `seq` re-applies. `atMs` = output ms. */
   selectRequest?: { lane: LaneId; id?: string; atMs?: number; seq: number } | null
@@ -730,7 +735,17 @@ export function Timeline({
   const [kfDrag, setKfDrag] = useState<{ target: KeyframeTarget; times: number[]; delta: number } | null>(null)
   const [trPop, setTrPop] = useState<TransitionTarget | null>(null)
   // G1b: in / out marks (output ms), shortcuts sheet, add-track menu.
-  const [io, setIo] = useState<InOut>({ inMs: null, outMs: null })
+  const [ioInternal, setIoInternal] = useState<InOut>({ inMs: null, outMs: null })
+  const io = controlledInOut ?? ioInternal
+  const setIo = useCallback(
+    (update: InOut | ((prev: InOut) => InOut)) => {
+      const prev = controlledInOut ?? ioInternal
+      const next = typeof update === 'function' ? update(prev) : update
+      onInOutChange?.(next)
+      if (!onInOutChange) setIoInternal(next)
+    },
+    [controlledInOut, ioInternal, onInOutChange],
+  )
   const [helpOpen, setHelpOpen] = useState(false)
   // G1c: open track-FX inspector (key: voice | music | au<N> | ov<N>).
   const [fxPanel, setFxPanel] = useState<{ key: string; label: string } | null>(null)

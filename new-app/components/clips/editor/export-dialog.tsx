@@ -61,7 +61,14 @@ import {
   type ExportSfxMode,
 } from '@/lib/clips/export-sfx'
 import { ExportLayoutPicker } from '@/components/clips/editor/export-layout-picker'
-import { resolveLayers } from '@/lib/clips/layers'
+import {
+  DEFAULT_DELIVER,
+  type DeliverCodec,
+  type DeliverFormat,
+  type DeliverFps,
+  type DeliverQuality,
+} from '@/lib/clips/export-deliver'
+import type { InOut } from '@/lib/clips/editor/timeline-edit-ops'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
 
@@ -98,6 +105,8 @@ export function ExportDialog({
   onOpenLayersTab,
   onSilenceTrimChange,
   fullVideo = false,
+  timelineInOut = null,
+  playheadMs = 0,
 }: {
   clipId: string
   title: string
@@ -120,6 +129,10 @@ export function ExportDialog({
   onOpenLayersTab?: () => void
   onSilenceTrimChange?: (enabled: boolean) => void
   fullVideo?: boolean
+  /** Timeline in/out marks (output ms) for range export. */
+  timelineInOut?: InOut | null
+  /** Playhead output ms (still frame export). */
+  playheadMs?: number
   open: boolean
   onClose: () => void
 }) {
@@ -128,9 +141,16 @@ export function ExportDialog({
   const [aspect, setAspect] = useState<ExportAspect>(
     edits.aspectRatio ?? '9:16',
   )
-  const [resolution, setResolution] = useState<'720p' | '1080p'>(() =>
+  const [resolution, setResolution] = useState<'720p' | '1080p' | '1440p' | '2160p'>(() =>
     can('', 'export_1080p') ? '1080p' : '720p',
   )
+  const [deliverFormat, setDeliverFormat] = useState<DeliverFormat>('mp4')
+  const [codec, setCodec] = useState<DeliverCodec>('h264')
+  const [quality, setQuality] = useState<DeliverQuality>('standard')
+  const [deliverFps, setDeliverFps] = useState<DeliverFps>('source')
+  const [softSubs, setSoftSubs] = useState(false)
+  const [exportRange, setExportRange] = useState<'whole' | 'inOut'>('whole')
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [renderId, setRenderId] = useState<string | null>(null)
   // FV4c: set once Export MP4 was clicked in this open session, so a late active-render lookup
@@ -434,11 +454,26 @@ export function ExportDialog({
         resolution: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].resolution : resolution,
         aspect: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].aspect : aspect,
         exportPlatform: exportPlatform !== 'none' ? exportPlatform : undefined,
-        watermark: false,
         alsoSrt,
         removeDeadAir,
         exportSfx,
         edits: exportEdits,
+        ...(exportPlatform === 'none' && deliverFormat !== 'mp4' ? { format: deliverFormat } : {}),
+        ...(exportPlatform === 'none' &&
+        (deliverFormat === 'mp4' || deliverFormat === 'mov') &&
+        codec !== 'h264'
+          ? { codec }
+          : {}),
+        ...(exportPlatform === 'none' && quality !== 'standard' ? { quality } : {}),
+        ...(exportPlatform === 'none' && deliverFps !== 'source' ? { fps: deliverFps } : {}),
+        ...(exportPlatform === 'none' && softSubs ? { softSubs: true } : {}),
+        ...(exportPlatform === 'none' &&
+        exportRange === 'inOut' &&
+        timelineInOut?.inMs != null &&
+        timelineInOut.outMs != null
+          ? { rangeInMs: timelineInOut.inMs, rangeOutMs: timelineInOut.outMs }
+          : {}),
+        ...(exportPlatform === 'none' && deliverFormat === 'png' ? { stillAtMs: Math.round(playheadMs) } : {}),
       })
       if (data.inFlight) {
         // FV4c: the server handed back the render already in flight for these edits — attach to it.
@@ -478,8 +513,14 @@ export function ExportDialog({
     () => displayDurationMs(words.length ? { ...editorPreviewEdits(edits, words), speed: edits.speed } : edits),
     [edits, words],
   )
+  const platformLocked = exportPlatform !== 'none'
+  const gifDisabled = editedDurationMs > 30_000
+  const fourKDisabled = editedDurationMs > 10 * 60 * 1000
+  const hasTimelineInOut =
+    timelineInOut?.inMs != null && timelineInOut.outMs != null && timelineInOut.outMs > timelineInOut.inMs
   const platformWarn =
     exportPlatform !== 'none' ? exportPlatformDurationWarning(exportPlatform, editedDurationMs) : null
+  const showWatermarkOn = !can('', 'no_watermark')
   const polishLintWarnings = useMemo(() => {
     const items = exportPolishLint(edits, {
       exportPlatform: exportPlatform === 'none' ? null : exportPlatform,
@@ -567,27 +608,198 @@ export function ExportDialog({
           ) : null}
         </div>
         <div className="mt-3">
+          <p className="text-xs font-medium">Format</p>
+          <div className="mt-1 flex flex-wrap gap-2" data-testid="export-format">
+            {(['mp4', 'mov', 'gif', 'mp3', 'png'] as const).map((f) => {
+              const label =
+                f === 'mp3' ? 'Audio' : f === 'png' ? 'Still (PNG)' : f.toUpperCase()
+              const disabled =
+                platformLocked ||
+                (f === 'gif' && gifDisabled) ||
+                (f === 'mp3' && deliverFormat !== 'mp3' && false)
+              return (
+                <Button
+                  key={f}
+                  size="sm"
+                  variant={deliverFormat === f || (f === 'mp3' && ['mp3', 'wav', 'm4a', 'flac'].includes(deliverFormat)) ? 'default' : 'outline'}
+                  disabled={disabled}
+                  onClick={() => {
+                    if (f === 'mp3') setDeliverFormat('mp3')
+                    else setDeliverFormat(f)
+                    if (f === 'gif') setResolution('720p')
+                  }}
+                >
+                  {label}
+                </Button>
+              )
+            })}
+          </div>
+          {gifDisabled ? (
+            <p className="mt-1 text-xs text-muted-foreground">GIF is limited to 30 seconds.</p>
+          ) : null}
+        </div>
+        <div className="mt-3">
           <p className="text-xs font-medium">Resolution</p>
-          <div className="mt-1 flex gap-2">
-            {(['720p', '1080p'] as const).map((r) => {
-              const locked = r === '1080p' && !can('', 'export_1080p')
+          <div className="mt-1 flex flex-wrap gap-2">
+            {(['720p', '1080p', '1440p', '2160p'] as const).map((r) => {
+              const locked =
+                (r === '1080p' || r === '1440p' || r === '2160p') && !can('', 'export_1080p')
+              const disabled =
+                locked ||
+                platformLocked ||
+                deliverFormat === 'mp3' ||
+                deliverFormat === 'wav' ||
+                deliverFormat === 'm4a' ||
+                deliverFormat === 'flac' ||
+                deliverFormat === 'png' ||
+                (deliverFormat === 'gif' && r !== '720p') ||
+                (r === '2160p' && fourKDisabled)
               return (
                 <Button
                   key={r}
                   size="sm"
                   variant={resolution === r ? 'default' : 'outline'}
-                  disabled={locked}
+                  disabled={disabled}
+                  data-testid={r === '1440p' ? 'export-res-1440p' : r === '2160p' ? 'export-res-2160p' : undefined}
                   onClick={() => {
                     setResolution(r)
-                    persistExportDialogPreferences({ defaultResolution: r })
+                    if (r === '720p' || r === '1080p') persistExportDialogPreferences({ defaultResolution: r })
                   }}
                 >
-                  {r}
+                  {r === '2160p' ? '2160p (4K)' : r}
                 </Button>
               )
             })}
           </div>
+          {fourKDisabled ? (
+            <p className="mt-1 text-xs text-muted-foreground">4K is limited to 10 minutes.</p>
+          ) : resolution === '2160p' ? (
+            <p className="mt-1 text-xs text-muted-foreground">4K is upscaled from a 1080p render.</p>
+          ) : null}
+          {deliverFormat === 'gif' ? (
+            <p className="mt-1 text-xs text-muted-foreground">GIF is limited to 720p.</p>
+          ) : null}
         </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="mt-2 h-auto px-0 text-xs"
+          onClick={() => setAdvancedOpen((v) => !v)}
+        >
+          {advancedOpen ? 'Hide advanced' : 'Advanced…'}
+        </Button>
+        {advancedOpen && !platformLocked ? (
+          <div className="mt-2 space-y-3 rounded-md border border-border p-2">
+            {(deliverFormat === 'mp4' || deliverFormat === 'mov') && (
+              <>
+                <div>
+                  <p className="text-xs font-medium">Frame rate</p>
+                  <div className="mt-1 flex flex-wrap gap-1" data-testid="export-fps">
+                    {(['source', 24, 25, 30, 50, 60] as const).map((f) => (
+                      <Button
+                        key={String(f)}
+                        size="sm"
+                        variant={deliverFps === f ? 'default' : 'outline'}
+                        onClick={() => setDeliverFps(f)}
+                      >
+                        {f === 'source' ? 'Source' : f}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium">Codec</p>
+                  <div className="mt-1 flex gap-1" data-testid="export-codec">
+                    {(['h264', 'hevc'] as const).map((c) => (
+                      <Button
+                        key={c}
+                        size="sm"
+                        variant={codec === c ? 'default' : 'outline'}
+                        onClick={() => setCodec(c)}
+                      >
+                        {c === 'hevc' ? 'HEVC' : 'H.264'}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium">Quality</p>
+                  <div className="mt-1 flex gap-1" data-testid="export-quality">
+                    {(['standard', 'high', 'max'] as const).map((q) => (
+                      <Button key={q} size="sm" variant={quality === q ? 'default' : 'outline'} onClick={() => setQuality(q)}>
+                        {q[0].toUpperCase() + q.slice(1)}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-sm">Embed subtitles (soft)</Label>
+                  <Switch
+                    data-testid="export-soft-subs"
+                    checked={softSubs}
+                    onCheckedChange={(c) => setSoftSubs(Boolean(c))}
+                  />
+                </div>
+              </>
+            )}
+            {deliverFormat === 'gif' && (
+              <div>
+                <p className="text-xs font-medium">GIF fps</p>
+                <div className="mt-1 flex gap-1">
+                  {([10, 12, 15] as const).map((f) => (
+                    <Button key={f} size="sm" variant={deliverFps === f ? 'default' : 'outline'} onClick={() => setDeliverFps(f)}>
+                      {f}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {['mp3', 'wav', 'm4a', 'flac'].includes(deliverFormat) && (
+              <div>
+                <p className="text-xs font-medium">Audio format</p>
+                <div className="mt-1 flex flex-wrap gap-1" data-testid="export-audio-format">
+                  {(['mp3', 'wav', 'm4a', 'flac'] as const).map((f) => (
+                    <Button
+                      key={f}
+                      size="sm"
+                      variant={deliverFormat === f ? 'default' : 'outline'}
+                      onClick={() => setDeliverFormat(f)}
+                    >
+                      {f.toUpperCase()}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {deliverFormat !== 'png' && deliverFormat !== 'mp3' && deliverFormat !== 'wav' && deliverFormat !== 'm4a' && deliverFormat !== 'flac' && (
+              <div>
+                <p className="text-xs font-medium">Range</p>
+                <div className="mt-1 flex gap-1" data-testid="export-range">
+                  <Button size="sm" variant={exportRange === 'whole' ? 'default' : 'outline'} onClick={() => setExportRange('whole')}>
+                    Whole clip
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={exportRange === 'inOut' ? 'default' : 'outline'}
+                    disabled={!hasTimelineInOut}
+                    onClick={() => setExportRange('inOut')}
+                  >
+                    In/Out
+                    {hasTimelineInOut
+                      ? ` (${Math.round((timelineInOut!.outMs! - timelineInOut!.inMs!) / 1000)}s)`
+                      : ''}
+                  </Button>
+                </div>
+              </div>
+            )}
+            {deliverFormat === 'png' ? (
+              <p className="text-xs text-muted-foreground">
+                Frame at {(playheadMs / 1000).toFixed(2)}s (playhead)
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {onLayoutModeChange ? (
           <ExportLayoutPicker
             value={layoutMode}
@@ -727,7 +939,9 @@ export function ExportDialog({
             }}
           />
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">No watermark</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {showWatermarkOn ? 'Watermark: on (plan)' : 'No watermark'}
+        </p>
         {(edits.broll || []).some((b) => b.source === 'ai') && (
           <p className="mt-2 text-xs text-muted-foreground">
             Includes AI-generated B-roll. AI B-roll generated with Kie.ai (Wan 3.0).
