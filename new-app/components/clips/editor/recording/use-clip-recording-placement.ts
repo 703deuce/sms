@@ -24,13 +24,17 @@ export function useClipRecordingPlacement(opts: {
   refreshMedia: () => Promise<void>
 }) {
   const { projectId, getEdits, mediaLabels, onCommitEdits, refreshMedia } = opts
-  const placementRef = useRef<{ atMs: number; mode: VideoPlaceMode; kind: 'voiceover' | 'camera' } | null>(null)
+  const placementRef = useRef<{ atMs: number; mode: VideoPlaceMode; kind: 'voiceover' | 'video' } | null>(null)
 
   const uploadTake = useCallback(
     async (take: ClipRecorderFinished, atMs: number, placeMode: VideoPlaceMode) => {
       const ext = mimeExt(take.mimeType)
       const filename = takeFileName(take.kind, mediaLabels, ext)
-      placementRef.current = { atMs, mode: placeMode, kind: take.kind === 'voiceover' ? 'voiceover' : 'camera' }
+      placementRef.current = {
+        atMs,
+        mode: placeMode,
+        kind: take.kind === 'voiceover' ? 'voiceover' : 'video',
+      }
       const file = new File([take.blob], filename, { type: take.mimeType })
       let last: UploadProgress | null = null
       try {
