@@ -13,7 +13,7 @@ export function previewChipButtonClass(extra?: string) {
 export function PreviewChipRow({ children }: { children: ReactNode }) {
   return (
     <div
-      className="pointer-events-none absolute inset-x-2 bottom-2 z-[45] flex flex-nowrap items-end justify-end gap-1"
+      className="pointer-events-none absolute inset-x-2 bottom-2 z-[45] flex min-w-0 flex-nowrap items-end justify-end gap-1"
       data-testid="preview-chip-row"
       data-canvas-skip
     >
