@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MediaThumb } from '@/components/clips/editor/media-panel'
 import type { ProjectMediaApi } from '@/components/clips/editor/use-project-media'
 import { mediaUrlFor } from '@/components/clips/editor/use-project-media'
@@ -25,6 +25,16 @@ import { toast } from 'sonner'
 
 const chipClass =
   'rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15 disabled:cursor-not-allowed disabled:opacity-50'
+
+/** CV09fix2: preview chip label (full or compact). */
+export function canvasBgChipLabel(edits: ClipEditsV2, narrow?: boolean): string {
+  const t = displayCanvasBgType(edits)
+  return `${narrow ? 'BG' : 'Background'}: ${CANVAS_BG_LABELS[t]}`
+}
+
+export const canvasBgChipButtonClass = `${chipClass} pointer-events-auto min-w-0 max-w-full shrink truncate whitespace-nowrap`
+
+export const canvasBgChipLockedClass = canvasBgChipButtonClass
 
 function bgToApply(edits: ClipEditsV2): CanvasBg {
   if (edits.canvasBg) return edits.canvasBg
@@ -54,8 +64,10 @@ export function CanvasBackgroundControls({
   const [hexDraft, setHexDraft] = useState('')
   const [lastColor, setLastColor] = useState(DEFAULT_CANVAS_COLOR)
   const fileRef = useRef<HTMLInputElement>(null)
-  const displayType = displayCanvasBgType(edits)
-  const activeType: CanvasBgType = edits.canvasBg?.type ?? 'blur'
+  const [tabOverride, setTabOverride] = useState<CanvasBgType | null>(null)
+  const savedType: CanvasBgType = edits.canvasBg?.type ?? 'blur'
+  useEffect(() => setTabOverride(null), [savedType, clipId])
+  const activeType: CanvasBgType = tabOverride ?? savedType
   const images = useMemo(
     () => media.items.filter((i) => i.mediaType === 'image' && i.ref === 'upload'),
     [media.items],
@@ -71,14 +83,22 @@ export function CanvasBackgroundControls({
   const commitType = useCallback(
     (t: CanvasBgType) => {
       if (readOnly) return
-      if (t === 'none') onCommit(withCanvasBg(edits, { type: 'none' }))
-      else if (t === 'blur') onCommit(withCanvasBg(edits, { type: 'blur', blur: fitBlurStrength(edits) }))
-      else if (t === 'color') {
+      if (t === 'none') {
+        setTabOverride(null)
+        onCommit(withCanvasBg(edits, { type: 'none' }))
+      } else if (t === 'blur') {
+        setTabOverride(null)
+        onCommit(withCanvasBg(edits, { type: 'blur', blur: fitBlurStrength(edits) }))
+      } else if (t === 'color') {
+        setTabOverride(null)
         const c = lastColor || DEFAULT_CANVAS_COLOR
         setLastColor(c)
         onCommit(withCanvasBg(edits, { type: 'color', color: c }))
+      } else if (selectedImageId) {
+        setTabOverride(null)
+        onCommit(withCanvasBg(edits, { type: 'image', imageId: selectedImageId }))
       } else {
-        if (selectedImageId) onCommit(withCanvasBg(edits, { type: 'image', imageId: selectedImageId }))
+        setTabOverride('image')
       }
     },
     [edits, lastColor, onCommit, readOnly, selectedImageId],
@@ -115,8 +135,9 @@ export function CanvasBackgroundControls({
       setUploading(true)
       try {
         const created = await media.uploadFiles([files[0]!])
-        const img = created.find((i) => i.mediaType === 'image') ?? created[0]
+        const img = created.find((i) => i.mediaType === 'image')
         if (img?.refId) onCommit(withCanvasBg(edits, { type: 'image', imageId: img.refId }))
+        else toast.error('Upload did not return an image')
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Upload failed')
       } finally {
@@ -287,10 +308,8 @@ export function CanvasBackgroundControls({
   )
 }
 
-function chipLabel(edits: ClipEditsV2, media: ProjectMediaApi, narrow?: boolean): string {
-  const t = displayCanvasBgType(edits)
-  if (narrow && t === 'color') return 'BG: Color'
-  return `Background: ${CANVAS_BG_LABELS[t]}`
+function chipLabel(edits: ClipEditsV2, narrow?: boolean): string {
+  return canvasBgChipLabel(edits, narrow)
 }
 
 export function CanvasBackgroundChip({
@@ -333,11 +352,11 @@ export function CanvasBackgroundChip({
   if (compositeLocked) {
     return (
       <span
-        className={chipClass}
+        className={canvasBgChipLockedClass}
         data-testid="preview-canvas-bg-chip"
         title="Not available for this clip"
       >
-        {chipLabel(edits, media, narrow)}
+        {chipLabel(edits, narrow)}
       </span>
     )
   }
@@ -347,12 +366,12 @@ export function CanvasBackgroundChip({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`${chipClass} pointer-events-auto max-w-full shrink-0 truncate whitespace-nowrap`}
+          className={canvasBgChipButtonClass}
           data-testid="preview-canvas-bg-chip"
           disabled={readOnly}
-          aria-label={chipLabel(edits, media, false)}
+          aria-label={canvasBgChipLabel(edits, false)}
         >
-          {chipLabel(edits, media, narrow)}
+          {chipLabel(edits, narrow)}
           {colorDot}
         </button>
       </PopoverTrigger>
