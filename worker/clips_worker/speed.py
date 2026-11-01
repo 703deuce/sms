@@ -118,7 +118,43 @@ def atempo_chain(speed: float) -> list[float]:
     return out
 
 
-def warp_filtergraph(pieces: list[dict], fps: float, *, has_audio: bool = True) -> tuple[str, str, str | None]:
+SMOOTH_MODES = ("blend", "motion")
+# G4c: optical-flow slow-mo (minterpolate mci) is CPU-heavy, so it only runs when the slowed
+# output is short and not above 1080p; otherwise it degrades to frame blending.
+SMOOTH_MOTION_MAX_S = 30.0
+SMOOTH_MOTION_MAX_SHORT = 1080
+
+
+def normalize_smooth_slowmo(raw) -> str | None:
+    return raw if raw in SMOOTH_MODES else None
+
+
+def slow_output_s(pieces: list[dict]) -> float:
+    return sum((p["endMs"] - p["startMs"]) / p["speed"] for p in pieces if p["speed"] < 1) / 1000
+
+
+def smooth_mode(requested, pieces: list[dict], w: int, h: int) -> str | None:
+    """Effective smooth slow-mo mode: None without slowed pieces; 'motion' only when the slowed
+    output is ≤ SMOOTH_MOTION_MAX_S and the short side ≤ SMOOTH_MOTION_MAX_SHORT, else 'blend'."""
+    req = normalize_smooth_slowmo(requested)
+    if not req or not any(p["speed"] < 1 for p in pieces):
+        return None
+    if req == "motion" and (slow_output_s(pieces) > SMOOTH_MOTION_MAX_S or min(w, h) > SMOOTH_MOTION_MAX_SHORT
+                            or min(w, h) <= 0):
+        return "blend"
+    return req
+
+
+def smooth_filter(mode: str | None, fps: float) -> str:
+    if mode == "motion":
+        return f",minterpolate=fps={fps:.6f}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"
+    if mode == "blend":
+        return f",minterpolate=fps={fps:.6f}:mi_mode=blend"
+    return ""
+
+
+def warp_filtergraph(pieces: list[dict], fps: float, *, has_audio: bool = True,
+                     smooth: str | None = None) -> tuple[str, str, str | None]:
     """
     filter_complex that splits [0:v]/[0:a] at the piece edges (edit time), retimes each piece and
     concatenates. Returns (graph, video_label, audio_label|None). Pieces cover the whole input; the
@@ -134,7 +170,8 @@ def warp_filtergraph(pieces: list[dict], fps: float, *, has_audio: bool = True) 
         b = p["endMs"] / 1000
         rng = f"start={a:.6f}" + (f":end={b:.6f}" if i < n - 1 else "")
         s = p["speed"]
-        parts.append(f"[vs{i}]trim={rng},setpts=(PTS-STARTPTS)/{s:.6f}[vp{i}]")
+        sm = smooth_filter(smooth, fps) if s < 1 else ""
+        parts.append(f"[vs{i}]trim={rng},setpts=(PTS-STARTPTS)/{s:.6f}{sm}[vp{i}]")
         cat.append(f"[vp{i}]")
         if has_audio:
             tempo = ",".join(f"atempo={f:.6f}" for f in atempo_chain(s)) if s != 1 else "anull"

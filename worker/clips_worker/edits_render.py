@@ -155,6 +155,10 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         # G4a: adjustment layers grade the frames.
         and not edits.get("adjustLayers")
         and not edits.get("segmentSpeeds")
+        # G4c: stabilize / blur regions change the frames; G4b layer effects too.
+        and not edits.get("stabilize")
+        and not edits.get("blurRegions")
+        and not edits.get("layerFx")
         # E5: source segments replace frames / sound.
         and not edits.get("sourceSegments")
         # E5b: inserts lengthen the export.
@@ -1662,6 +1666,14 @@ def render_edited_clip(
         full_render, edits, clip_start_ms, clip_end_ms, work_dir, (audio_assets or {}).get("media_paths")
     )
 
+    if edits.get("stabilize"):
+        # G4c: stabilize source-time ranges first, so color, cuts, transitions and keyframes all
+        # work on the steadied picture (vidstab two-pass, else deshake — probed at runtime).
+        from clips_worker.stabilize import apply_full_render_stabilize
+
+        full_render = apply_full_render_stabilize(full_render, edits, clip_start_ms, clip_end_ms, work_dir)
+        stage("stabilize_done")
+
     from clips_worker.color import apply_full_render_color
 
     # E4: source-anchored color looks on full_render (source time) → cut.mp4 and the E3 transition
@@ -1713,6 +1725,16 @@ def render_edited_clip(
     dub_assets = (audio_assets or {}).get("dub_assets") if audio_assets else None
     if dub_assets and dub_assets.get("dub_words"):
         caption_words = dub_assets["dub_words"]
+    if edits.get("blurRegions"):
+        # G4c: blur regions (manual keyframed mask or auto faces) on the main video in output ms,
+        # after cut / motion and under B-roll, text and captions.
+        from clips_worker.blur_regions import apply_blur_regions
+
+        bw, bh = probe_video_size(cut_mp4)
+        blur_out = work_dir / "with_blur.mp4"
+        if apply_blur_regions(cut_mp4, blur_out, edits, bw, bh, work_dir):
+            cut_mp4 = blur_out
+            stage("blur_regions_done")
     caption_src = cut_mp4
     under_text_ids: list[str] = []
     if broll_specs:

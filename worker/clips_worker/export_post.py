@@ -160,17 +160,31 @@ def apply_export_post(
     out_path = td_path / "export_post.mp4"
     try:
         fps = _probe_fps(out_mp4)
+        smooth = None
+        al = None
         if pieces:
             # E4: piecewise warp (pitch-preserving atempo), then the existing global speed.
-            from clips_worker.speed import warp_filtergraph
+            from clips_worker.speed import smooth_mode, warp_filtergraph
 
             has_a = _has_audio(out_mp4)
-            graph, vl, al = warp_filtergraph(pieces, fps, has_audio=has_a)
-            vchain = f"{graph};[{vl}]setpts=PTS/{speed},fps={fps}[v]"
-            aparts = [f"atempo={speed}"] if speed != 1.0 else []
-            if need_loud:
-                aparts.append(f"loudnorm=I={int(loud_lufs)}:TP=-1.5:LRA=11")
-            fc = vchain + (f";[{al}]{','.join(aparts) or 'anull'}[a]" if al else "")
+            if edits.get("smoothSlowmo"):
+                try:
+                    from clips_worker.edits_render import probe_video_size
+
+                    pw, ph = probe_video_size(out_mp4)
+                except Exception:  # pragma: no cover - probe failure → no smoothing
+                    pw, ph = 0, 0
+                smooth = smooth_mode(edits.get("smoothSlowmo"), pieces, pw, ph)
+
+            def _fc(sm):
+                graph, vl, al_ = warp_filtergraph(pieces, fps, has_audio=has_a, smooth=sm)
+                vchain = f"{graph};[{vl}]setpts=PTS/{speed},fps={fps}[v]"
+                aparts = [f"atempo={speed}"] if speed != 1.0 else []
+                if need_loud:
+                    aparts.append(f"loudnorm=I={int(loud_lufs)}:TP=-1.5:LRA=11")
+                return vchain + (f";[{al_}]{','.join(aparts) or 'anull'}[a]" if al_ else ""), al_
+
+            fc, al = _fc(smooth)
         else:
             vchain = f"[0:v]setpts=PTS/{speed},fps={fps}[v]"
             achain = f"atempo={speed}"
@@ -178,8 +192,10 @@ def apply_export_post(
                 achain = f"atempo={speed},loudnorm=I={int(loud_lufs)}:TP=-1.5:LRA=11"
             fc = f"{vchain};[0:a]{achain}[a]"
         amap = ["-map", "[a]"] if (not pieces or al) else []
-        subprocess.check_call(
-            [
+
+        def _run(fc_: str, timeout: float | None = None) -> None:
+            subprocess.run(
+                [
                 "ffmpeg",
                 "-y",
                 "-v",
@@ -204,8 +220,30 @@ def apply_export_post(
                 "-movflags",
                 "+faststart",
                 str(out_path),
-            ],
-        )
+                ],
+                check=True,
+                timeout=timeout,
+            )
+
+        if smooth:
+            # G4c smooth slow-mo: optical flow / blend on slowed pieces; a timeout or failure
+            # degrades motion → blend → plain retime so the export never fails on it.
+            from clips_worker.speed import slow_output_s
+
+            tries = [smooth] + (["blend"] if smooth == "motion" else []) + [None]
+            for sm in tries:
+                fc_try, _ = _fc(sm)
+                limit = max(120.0, 40.0 * slow_output_s(pieces)) if sm == "motion" else None
+                try:
+                    _run(fc_try, limit)
+                    print(f"[g4c:slowmo] mode={sm or 'off'} requested={edits.get('smoothSlowmo')}", flush=True)
+                    break
+                except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as exc:
+                    print(f"[g4c:slowmo] mode={sm} failed err={type(exc).__name__} → fallback", flush=True)
+                    if sm is None:
+                        raise
+        else:
+            _run(fc)
         out_s = _probe_duration_sec(out_path)
         if speed != 1.0:
             print(

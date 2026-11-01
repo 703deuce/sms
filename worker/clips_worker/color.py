@@ -461,6 +461,24 @@ def broll_color_filter(edits: dict | None, item_id: str, work_dir: Path | None, 
         else:
             en = "+".join(f"gte(t,{a / 1000:.4f})*lt(t,{b / 1000:.4f})" for a, b in spans)
             out += f",lut3d=file='{cube}':enable='{en}'"
+    from clips_worker.color_grade import has_fx_tracks
+
+    if tracks and has_fx_tracks(tracks) and w > 0 and h > 0 and tag:
+        # G4c: keyframed effect amounts → one fx chain per distinct fx, enabled on its windows.
+        from clips_worker.color_fx import enable_expr, fx_groups
+
+        groups = fx_groups(windows)
+        if groups:
+            parts: list[str] = []
+            cur = f"{tag}i"
+            for gi, (fx, spans) in enumerate(groups):
+                en = enable_expr([(a / 1000, b / 1000) for a, b in spans])
+                gp = fx_parts(cur, f"{tag}o{gi}", fx, w, h, wd, f"{tag}g{gi}", en)
+                parts += gp
+                cur = f"{tag}o{gi}"
+            last = parts[-1][1:].split("]", 1)[0]
+            out += f"[{tag}i];" + ";".join(parts[:-1]) + f";[{last}]null"
+        return out
     if base and has_fx(base) and w > 0 and h > 0 and tag:
         # fx are static per item (not keyframed); the parts split the chain with labels.
         parts = fx_parts(f"{tag}i", f"{tag}o", base.get("fx") or {}, w, h, wd, tag)

@@ -621,12 +621,36 @@ COLOR_KEY_PROPS = {
     "cShadows": "shadows",
     "cVibrance": "vibrance",
 }
+# G4c: keyframable effect amounts → spec.fx[key] (quantized to FX_KEY_QUANT).
+FX_KEY_PROPS = {
+    "fxSharpen": "sharpen",
+    "fxVignette": "vignette",
+    "fxGrain": "grain",
+    "fxBlur": "blur",
+    "fxGlow": "glow",
+    "fxRgbsplit": "rgbsplit",
+    "fxGlitch": "glitch",
+    "fxShake": "shake",
+    "fxFlicker": "flicker",
+    "fxScanlines": "scanlines",
+}
+FX_KEY_QUANT = 5
+
+
+def quant_fx(v: float) -> int:
+    """Keyframed effect amount → 0..100 in FX_KEY_QUANT steps (bounds the distinct fx chains)."""
+    n = max(0.0, min(100.0, float(v)))
+    return int(math.floor(n / FX_KEY_QUANT + 0.5) * FX_KEY_QUANT)
+
+
+def has_fx_tracks(tracks: list[dict]) -> bool:
+    return any(t.get("prop") in FX_KEY_PROPS for t in tracks)
 
 
 def color_tracks(edits: dict, target: str) -> list[dict]:
     from clips_worker.motion import normalize_keyframes
 
-    return [k for k in normalize_keyframes(edits.get("keyframes")) if k["target"] == target and k["prop"] in COLOR_KEY_PROPS]
+    return [k for k in normalize_keyframes(edits.get("keyframes")) if k["target"] == target and (k["prop"] in COLOR_KEY_PROPS or k["prop"] in FX_KEY_PROPS)]
 
 
 def step_of(local_ms: float) -> int:
@@ -642,7 +666,16 @@ def spec_with_overrides(spec, tracks: list[dict], local_ms: float) -> dict | Non
     t = step_of(local_ms) * COLOR_STEP_MS
     base = dict(spec) if isinstance(spec, dict) else {}
     adj = dict(base.get("adjust") or {})
+    fx = dict(base.get("fx") or {}) if isinstance(base.get("fx"), dict) else {}
     for tr in tracks:
+        if tr["prop"] in FX_KEY_PROPS:
+            q = quant_fx(track_value_at(tr, tr["prop"], t))
+            fk = FX_KEY_PROPS[tr["prop"]]
+            if q:
+                fx[fk] = q
+            else:
+                fx.pop(fk, None)
+            continue
         v = _ri((track_value_at(tr, tr["prop"], t)))
         key = COLOR_KEY_PROPS[tr["prop"]]
         if v:
@@ -653,6 +686,11 @@ def spec_with_overrides(spec, tracks: list[dict], local_ms: float) -> dict | Non
         base["adjust"] = adj
     else:
         base.pop("adjust", None)
+    if has_fx_tracks(tracks):
+        if any(int(v or 0) for v in fx.values()):
+            base["fx"] = {k: int(v) for k, v in fx.items() if int(v or 0)}
+        else:
+            base.pop("fx", None)
     return base
 
 

@@ -3,6 +3,7 @@
  * Mirrored 1:1 by worker/clips_worker/motion.py (parity fixture: worker/tests/fixtures/motion_parity.json).
  */
 import type { BrollItem } from '@/lib/clips/broll'
+import { MASK_MAX_KEYS, maskGeomAt, type LayerFx } from '@/lib/clips/editor/layer-fx'
 import { reconcileTracks } from '@/lib/clips/editor/tracks'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
@@ -402,7 +403,64 @@ export function reconcileItemMotion(prev: ClipEditsV2, next: ClipEditsV2): ClipE
  */
 export function reconcileLayerProps(prev: ClipEditsV2, next: ClipEditsV2): ClipEditsV2 {
   // G1b: track membership follows the same rules (split children inherit, deleted items drop).
-  return reconcileTracks(prev, reconcileLayerRows(prev, next))
+  // G4c: G4b layer effects (mask / key / blend / reverse) follow the same rules.
+  return reconcileTracks(prev, reconcileLayerFx(prev, reconcileLayerRows(prev, next)))
+}
+
+/**
+ * G4c: `edits.layerFx` rows follow their B-roll item — rows of deleted items drop, split children
+ * (`<id>~…`) inherit the parent's row with mask keys re-based to the child's start (the geometry
+ * at the split point becomes the child's first key, so the mask does not jump). A reversed item
+ * plays its range backwards, so a split re-assigns the source ranges: the left half shows the END
+ * of the parent's range and the right half the start (inMs swap), keeping the picture continuous.
+ */
+export function reconcileLayerFx(prev: ClipEditsV2, next: ClipEditsV2): ClipEditsV2 {
+  const rows = next.layerFx
+  if (!rows?.length) return next
+  const live = new Set((next.broll ?? []).map((b) => `broll:${b.id}`))
+  let changed = false
+  const out: LayerFx[] = rows.filter((r) => {
+    const keep = live.has(r.target)
+    if (!keep) changed = true
+    return keep
+  })
+  const had = new Set(rows.map((r) => r.target))
+  const prevBroll = prev.broll ?? []
+  const prevIds = new Set(prevBroll.map((b) => b.id))
+  const inFix = new Map<string, number>()
+  for (const child of next.broll ?? []) {
+    const tgt = `broll:${child.id}`
+    if (prevIds.has(child.id) || !child.id.includes('~') || had.has(tgt)) continue
+    const origin = child.id.split('~')[0]!
+    const parent = prevBroll.find((x) => x.id.split('~')[0] === origin && x.startMs < child.startMs && child.startMs < x.endMs)
+    const row = parent && rows.find((r) => r.target === `broll:${parent.id}`)
+    if (!parent || !row) continue
+    const I = parent.inMs ?? 0
+    const c0 = Math.max(0, (child.inMs ?? 0) - I || child.startMs - parent.startMs)
+    const copy: LayerFx = { ...row, target: tgt }
+    if (row.mask) {
+      const { keys, ...m } = row.mask
+      if (keys?.length) {
+        const at = maskGeomAt(row.mask, c0)
+        const rest = keys.filter((k) => k.ms - c0 > 0).map((k) => ({ ...k, ms: k.ms - c0 }))
+        copy.mask = { ...m, ...at, keys: [{ ms: 0, ...at }, ...rest].slice(0, MASK_MAX_KEYS) }
+      } else copy.mask = { ...m }
+    }
+    out.push(copy)
+    changed = true
+    if (row.reverse) {
+      const L = parent.endMs - parent.startMs
+      const left = (next.broll ?? []).find((b) => b.id === parent.id)
+      const Lr = child.endMs - child.startMs
+      if (left) inFix.set(left.id, I + L - (left.endMs - left.startMs))
+      inFix.set(child.id, Math.max(I, I + L - c0 - Lr))
+    }
+  }
+  if (!changed) return next
+  const broll = inFix.size
+    ? (next.broll ?? []).map((b) => (inFix.has(b.id) ? ({ ...b, inMs: Math.round(inFix.get(b.id)!) } as BrollItem) : b))
+    : next.broll
+  return { ...next, broll, layerFx: out.length ? out : undefined }
 }
 
 function reconcileLayerRows(prev: ClipEditsV2, next: ClipEditsV2): ClipEditsV2 {

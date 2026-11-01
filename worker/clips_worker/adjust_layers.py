@@ -54,8 +54,8 @@ def adjust_hidden(edits: dict) -> bool:
 
 def adjust_graph(edits: dict, w: int, h: int, work_dir: Path) -> tuple[str, str] | None:
     from clips_worker.color import _lut_for, is_pointwise_identity, look_key, write_cube
-    from clips_worker.color_fx import enable_expr, fx_parts
-    from clips_worker.color_grade import color_tracks, has_fx, stepped_windows
+    from clips_worker.color_fx import enable_expr, fx_groups, fx_parts
+    from clips_worker.color_grade import color_tracks, has_fx, has_fx_tracks, stepped_windows
 
     if adjust_hidden(edits):
         return None
@@ -80,7 +80,14 @@ def adjust_graph(edits: dict, w: int, h: int, work_dir: Path) -> tuple[str, str]
             parts.append(f"[{label}]{','.join(chain)}[al{i}]")
             label = f"al{i}"
             n += 1
-        if has_fx(ly["spec"]):
+        if has_fx_tracks(tracks):
+            # G4c: keyframed effect amounts → one fx chain per distinct fx on its windows.
+            for gi, (fx, spans) in enumerate(fx_groups(wins)):
+                en = enable_expr([(a / 1000, b / 1000) for a, b in spans])
+                parts += fx_parts(label, f"af{i}_{gi}", fx, w, h, Path(work_dir), f"afx{i}_{gi}", en)
+                label = f"af{i}_{gi}"
+                n += 1
+        elif has_fx(ly["spec"]):
             en = enable_expr([(ly["startMs"] / 1000, ly["endMs"] / 1000)])
             parts += fx_parts(label, f"af{i}", ly["spec"].get("fx") or {}, w, h, Path(work_dir), f"afx{i}", en)
             label = f"af{i}"

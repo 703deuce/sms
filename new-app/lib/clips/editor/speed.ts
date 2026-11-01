@@ -150,3 +150,33 @@ export function atempoChain(speed: number): number[] {
   out.push(Math.round(s * 1e6) / 1e6)
   return out
 }
+
+// ── G4c smooth slow-mo (export-side; mirror of clips_worker/speed.smooth_mode) ──────────────
+
+export type SmoothSlowmo = 'blend' | 'motion'
+export const SMOOTH_MODES: readonly SmoothSlowmo[] = ['blend', 'motion']
+/** Optical flow only when the slowed output is short and not above 1080p (else frame blending). */
+export const SMOOTH_MOTION_MAX_S = 30
+export const SMOOTH_MOTION_MAX_SHORT = 1080
+
+export function normalizeSmoothSlowmo(raw: unknown): SmoothSlowmo | undefined {
+  return raw === 'blend' || raw === 'motion' ? raw : undefined
+}
+
+export function slowOutputS(pieces: { startMs: number; endMs: number; speed: number }[]): number {
+  return pieces.filter((p) => p.speed < 1).reduce((a, p) => a + (p.endMs - p.startMs) / p.speed, 0) / 1000
+}
+
+/** Effective mode the export will use (null = no slowed pieces / off). */
+export function smoothMode(
+  requested: SmoothSlowmo | undefined,
+  pieces: { startMs: number; endMs: number; speed: number }[],
+  w: number,
+  h: number,
+): SmoothSlowmo | null {
+  if (!requested || !pieces.some((p) => p.speed < 1)) return null
+  if (requested === 'motion' && (slowOutputS(pieces) > SMOOTH_MOTION_MAX_S || Math.min(w, h) > SMOOTH_MOTION_MAX_SHORT || Math.min(w, h) <= 0)) {
+    return 'blend'
+  }
+  return requested
+}

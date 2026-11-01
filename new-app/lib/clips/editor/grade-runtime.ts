@@ -5,7 +5,16 @@
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { videoSpecAtSource, type ColorAdjustKey, type ColorSpec } from '@/lib/clips/editor/color'
-import { COLOR_KEY_PROPS, COLOR_STEP_MS, stepOf, type ColorKeyProp } from '@/lib/clips/editor/color-grade'
+import {
+  COLOR_KEY_PROPS,
+  COLOR_STEP_MS,
+  FX_KEY_PROPS,
+  quantFx,
+  stepOf,
+  type ColorKeyProp,
+  type FxAnyKey,
+  type FxKeyProp,
+} from '@/lib/clips/editor/color-grade'
 import { adjustLayersAt, type AdjustLayer } from '@/lib/clips/editor/adjust-layers'
 import { isColorProp, PROP_SPECS, type KeyframeTrack } from '@/lib/clips/editor/motion-schema'
 import { valueAtPoints } from '@/lib/clips/editor/keyframes'
@@ -26,7 +35,18 @@ export function specWithOverrides(spec: ColorSpec | undefined, tracks: KeyframeT
   const t = stepOf(localMs) * COLOR_STEP_MS
   const base: ColorSpec = { ...(spec ?? {}) }
   const adj: Partial<Record<ColorAdjustKey, number>> = { ...(base.adjust ?? {}) }
+  const fx: Partial<Record<FxAnyKey, number>> = { ...(base.fx ?? {}) }
+  let fxKeyed = false
   for (const tr of tracks) {
+    if (tr.prop in FX_KEY_PROPS) {
+      // G4c: keyframed effect amount (quantized like color_grade.quant_fx)
+      const q = quantFx(trackValue(tr, t))
+      const fk = FX_KEY_PROPS[tr.prop as FxKeyProp]
+      if (q) fx[fk] = q
+      else delete fx[fk]
+      fxKeyed = true
+      continue
+    }
     const v = Math.floor(trackValue(tr, t) + 0.5)
     const key = COLOR_KEY_PROPS[tr.prop as ColorKeyProp] as ColorAdjustKey
     if (v) adj[key] = v
@@ -34,6 +54,11 @@ export function specWithOverrides(spec: ColorSpec | undefined, tracks: KeyframeT
   }
   if (Object.keys(adj).length) base.adjust = adj
   else delete base.adjust
+  if (fxKeyed) {
+    const clean = Object.fromEntries(Object.entries(fx).filter(([, v]) => Math.round(Number(v) || 0))) as typeof fx
+    if (Object.keys(clean).length) base.fx = clean
+    else delete base.fx
+  }
   return base
 }
 

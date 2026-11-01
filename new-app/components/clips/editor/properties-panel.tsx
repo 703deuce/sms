@@ -113,6 +113,7 @@ export function PropertiesPanel({
   readOnly = false,
   speedSlot,
   colorSlot,
+  videoSlot,
 }: {
   edits: ClipEditsV2
   target: KeyframeTarget | null
@@ -127,6 +128,8 @@ export function PropertiesPanel({
   speedSlot?: ReactNode
   /** Color panel bound to the selection (ColorPanel), or null. */
   colorSlot?: ReactNode
+  /** G4c main-video tools (stabilize / scene split / blur regions) under Video for the Video layer. */
+  videoSlot?: ReactNode
 }) {
   const avail = tabsFor(target)
   const [tab, setTab] = useState<PropertiesTab>('video')
@@ -172,17 +175,20 @@ export function PropertiesPanel({
           corner to resize, use the round handle to rotate; double-click text to edit it.
         </p>
       ) : tab === 'video' && avail.video == null ? (
-        <VideoTab
-          edits={edits}
-          target={target}
-          label={label}
-          localMs={localMs}
-          onCommit={onCommit}
-          onSeekLocal={seekLocal}
-          cropMode={cropMode}
-          onCropModeChange={onCropModeChange}
-          readOnly={readOnly}
-        />
+        <>
+          <VideoTab
+            edits={edits}
+            target={target}
+            label={label}
+            localMs={localMs}
+            onCommit={onCommit}
+            onSeekLocal={seekLocal}
+            cropMode={cropMode}
+            onCropModeChange={onCropModeChange}
+            readOnly={readOnly}
+          />
+          {target === 'video' && videoSlot ? videoSlot : null}
+        </>
       ) : tab === 'audio' && avail.audio == null ? (
         <KeyframeInspector
           edits={edits}

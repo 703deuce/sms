@@ -140,7 +140,9 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       select: { chatSource: true, chatMessages: true, sourceType: true, state: true, channelId: true },
     }),
     previewKey ? createCachedSignedDownloadUrl(storage, previewKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
-    clip.posterKey ? createCachedSignedDownloadUrl(storage, clip.posterKey).catch(() => null) : Promise.resolve(null),
+    // G4c: the poster gets the editor TTL as well — the project grid shows the same poster.jpg
+    // without CORS, and a cached no-CORS copy of that URL failed the editor's CORS-mode load.
+    clip.posterKey ? createCachedSignedDownloadUrl(storage, clip.posterKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
     proxyKey ? createCachedSignedDownloadUrl(storage, proxyKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
     sourceKey ? createCachedSignedDownloadUrl(storage, sourceKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
   ])

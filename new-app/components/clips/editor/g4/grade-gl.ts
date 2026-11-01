@@ -228,9 +228,29 @@ const cors = new Map<string, 'ok' | 'no' | 'pending'>()
 /** URLs whose pixels could not be read even though they loaded (draw threw). */
 const tainted = new Set<string>()
 
+/**
+ * G4c: hosts that never send Access-Control-Allow-Origin (checked live: cdn.pixabay.com answers a
+ * request carrying an Origin header without it). Their media load plain (no crossOrigin, no probe),
+ * so they no longer log a CORS error on every editor load; the grade preview says why it is 2D.
+ */
+const NO_CORS_HOSTS = [/(^|\.)pixabay\.com$/i]
+
+export function isNoCorsHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname
+    return NO_CORS_HOSTS.some((re) => re.test(host))
+  } catch {
+    return false
+  }
+}
+
 export function corsState(url: string): 'ok' | 'no' | 'pending' {
   const s = cors.get(url)
   if (s) return s
+  if (isNoCorsHost(url)) {
+    cors.set(url, 'no')
+    return 'no'
+  }
   if (url.startsWith('blob:') || url.startsWith('data:') || url.startsWith('/') || (typeof location !== 'undefined' && url.startsWith(location.origin))) {
     cors.set(url, 'ok')
     return 'ok'
@@ -256,7 +276,7 @@ export function markCorsOk(url: string, force = false) {
 
 /** Known state without starting a probe. */
 export function corsKnown(url: string): 'ok' | 'no' | 'pending' | undefined {
-  return cors.get(url)
+  return cors.get(url) ?? (isNoCorsHost(url) ? 'no' : undefined)
 }
 
 // ── mirrors ────────────────────────────────────────────────────────────────

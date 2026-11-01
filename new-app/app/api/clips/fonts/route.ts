@@ -4,19 +4,19 @@ import { jsonError } from '@/lib/server/api-error'
 import { FontUploadError, listFonts, uploadFont } from '@/lib/server/clips/fonts'
 import { FONT_MAX_BYTES } from '@/lib/clips/font-parse'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { workspaceListResponse } from '@/lib/server/clips/list-route'
 
 /**
  * G3b workspace fonts. Manual upload only (no AI, no credits).
  * GET  → { fonts: WorkspaceFont[] }
  * POST multipart `file` (.ttf / .otf ≤ 8 MB) → { font, existing }
  */
+// G4c: always per request (never a build-time snapshot of this list).
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
-  try {
-    const workspaceId = await resolveWorkspaceId()
-    return NextResponse.json({ data: { fonts: await listFonts(workspaceId) } })
-  } catch (err) {
-    return jsonError(err, 400)
-  }
+  // G4c: no 400 on editor load — see workspaceListResponse.
+  return workspaceListResponse('fonts', 'fonts', async () => listFonts(await resolveWorkspaceId()))
 }
 
 export async function POST(request: Request) {

@@ -1,5 +1,6 @@
 'use client'
 
+import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TemplatePipSpec, TemplateSpecV2 } from '@/lib/clips/templates/geometry'
 import { TITLE_STYLES } from '@/lib/clips/templates/registry'
@@ -156,7 +157,7 @@ export function TemplateStage({
   if (!videoUrl && !(staticPoster && posterUrl)) {
     return posterUrl ? (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={posterUrl} alt="" className="size-full object-cover" />
+      <img {...corsMediaProps(posterUrl)} src={posterUrl} alt="" className="size-full object-cover" />
     ) : null
   }
 
@@ -164,6 +165,7 @@ export function TemplateStage({
     staticPoster ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img
+        {...corsMediaProps(posterUrl)}
         src={posterUrl ?? undefined}
         alt=""
         className={className}
@@ -180,6 +182,7 @@ export function TemplateStage({
     ) : primary ? (
       <video
         ref={setPrimary}
+        {...corsMediaProps(videoUrl)}
         src={videoUrl ?? undefined}
         className={className}
         style={style}
@@ -193,6 +196,7 @@ export function TemplateStage({
     ) : (
       <video
         ref={registerFollower}
+        {...corsMediaProps(videoUrl)}
         src={videoUrl ?? undefined}
         className={className}
         style={style}

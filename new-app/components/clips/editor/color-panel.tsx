@@ -24,11 +24,13 @@ import {
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 import { addAdjustLayer, patchAdjustLayer, removeAdjustLayer } from '@/lib/clips/editor/adjust-layers'
-import { COLOR_PROPS, type KeyframeTarget } from '@/lib/clips/editor/motion-schema'
+import { FX_KEY_QUANT } from '@/lib/clips/editor/color-grade'
+import { ADJUST_KEY_PROPS, FX_PROPS, type KeyframeTarget } from '@/lib/clips/editor/motion-schema'
 import { targetOriginMs } from '@/lib/clips/editor/keyframes'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
 import { ColorWheels, CurvesEditor, FxControls, HslControls } from '@/components/clips/editor/g4/grade-controls'
 import { LutPicker } from '@/components/clips/editor/g4/lut-picker'
+import { ColorMatchSection } from '@/components/clips/editor/g4/color-match-section'
 import { ScopesPanel } from '@/components/clips/editor/g4/scopes-panel'
 
 /** What the Color panel edits: the whole video, one Video-lane item (source range) or one B-roll item. */
@@ -122,7 +124,7 @@ export function colorKeyTarget(t: ColorTarget): KeyframeTarget {
   return 'video'
 }
 
-type Section = 'basic' | 'curves' | 'wheels' | 'hsl' | 'lut' | 'fx' | 'scopes'
+type Section = 'basic' | 'curves' | 'wheels' | 'hsl' | 'lut' | 'fx' | 'scopes' | 'match'
 
 function Collapsible({ id, title, open, onToggle, children }: { id: Section; title: string; open: boolean; onToggle: (id: Section) => void; children: ReactNode }) {
   return (
@@ -164,7 +166,7 @@ export function ColorPanel({
   /** G4a: select the new adjustment layer after "Add adjustment layer". */
   onTargetChange?: (t: ColorTarget) => void
 }) {
-  const [open, setOpen] = useState<Record<Section, boolean>>({ basic: true, curves: false, wheels: false, hsl: false, lut: false, fx: false, scopes: false })
+  const [open, setOpen] = useState<Record<Section, boolean>>({ basic: true, curves: false, wheels: false, hsl: false, lut: false, fx: false, scopes: false, match: false })
   const toggle = (id: Section) => setOpen((o) => ({ ...o, [id]: !o[id] }))
   const spec = specFor(edits, target)
   const burst = useRef<CoalesceBurst | null>(null)
@@ -376,7 +378,7 @@ export function ColorPanel({
               onEdits(next)
             }}
             onSeekLocal={(t) => onSeekOutput(kfOrigin + t)}
-            props={COLOR_PROPS}
+            props={ADJUST_KEY_PROPS}
           />
         </section>
       ) : null}
@@ -399,6 +401,35 @@ export function ColorPanel({
       ) : null}
       <Collapsible id="fx" title="Effects" open={open.fx} onToggle={toggle}>
         <FxControls {...ctl} />
+        {outputMs != null && onSeekOutput ? (
+          <div className="mt-2 space-y-1" data-testid="fx-keyframes">
+            <p className="text-[10px] text-muted-foreground">
+              Keyframe effect amounts (steps of {FX_KEY_QUANT}); a keyframed amount replaces the slider while the track exists.
+            </p>
+            <KeyframeInspector
+              edits={edits}
+              target={kfTarget}
+              label="Effects"
+              localMs={kfLocal}
+              onCommit={(next) => {
+                onLive?.(null)
+                burst.current = null
+                onEdits(next)
+              }}
+              onSeekLocal={(t) => onSeekOutput(kfOrigin + t)}
+              props={FX_PROPS}
+            />
+          </div>
+        ) : null}
+      </Collapsible>
+      <Collapsible id="match" title="Match color" open={open.match} onToggle={toggle}>
+        <ColorMatchSection
+          edits={edits}
+          target={target.kind === 'adjust' ? { kind: 'adjust' } : target.kind === 'video' ? { kind: 'video' } : target}
+          spec={spec}
+          outputMs={outputMs ?? null}
+          onCommit={(s) => commit(s)}
+        />
       </Collapsible>
       <Collapsible id="scopes" title="Scopes · Auto · White balance" open={open.scopes} onToggle={toggle}>
         <ScopesPanel edits={edits} spec={spec} mode={target.kind === 'broll' ? 'none' : isAdjust ? 'adjust' : 'source'} onCommit={(s) => commit(s)} />

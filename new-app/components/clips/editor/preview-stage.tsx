@@ -51,8 +51,9 @@ import { lookKey, videoSpecAtSource } from '@/lib/clips/editor/color'
 import { hasGradeFields } from '@/lib/clips/editor/color-grade'
 import { adjustGradesAt, brollGradeAt, videoGradeAt } from '@/lib/clips/editor/grade-runtime'
 import { GradePreview, layerMedia, stageFrame } from '@/components/clips/editor/g4/grade-preview'
-import { prepareAll, setMediaSrc, watchMediaCors } from '@/components/clips/editor/g4/media-cors'
-import { applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
+import { corsMediaProps, prepareAll, setMediaSrc, watchMediaCors } from '@/components/clips/editor/g4/media-cors'
+import { applyBlurRegion, applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
+import { exportOnlyNote } from '@/lib/clips/editor/export-processing'
 import { chromaParams, layerFxOf } from '@/lib/clips/editor/layer-fx'
 import { speedAtSource } from '@/lib/clips/editor/speed'
 import { textItemFrame } from '@/lib/clips/editor/text-frame'
@@ -264,6 +265,7 @@ export function PreviewStage({
   const gradeNoticeRef = useRef<string | null>(null)
   const mainKfRef = useRef<HTMLDivElement>(null)
   const mainLayerRef = useRef<HTMLDivElement>(null)
+  const blurRegionRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const cloneARef = useRef<HTMLDivElement>(null)
   const cutDipRef = useRef<HTMLDivElement>(null)
   const cloneBRef = useRef<HTMLDivElement>(null)
@@ -609,6 +611,8 @@ export function PreviewStage({
         stageFrame.video = v ?? null
         stageFrame.srcMs = src
         stageFrame.outMs = outMs
+        // G4c: media time = (source − offset) / 1000 (scene scan seeks its own CORS twin).
+        stageFrame.offsetMs = mediaOffsetMs
         gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current))
         const adjSpecs = adjustGradesAt(e, outMs).map((g) => g.spec)
         const adj = gp.chain(adjSpecs)
@@ -617,6 +621,16 @@ export function PreviewStage({
       } else {
         const mainLook = lookFilterCss(videoSpecAtSource(e.color, src))
         if (mainLayerRef.current && mainLayerRef.current.style.filter !== mainLook) mainLayerRef.current.style.filter = mainLook
+      }
+      if (e.blurRegions?.length || Object.keys(blurRegionRefs.current).length) {
+        // G4c: blur regions (export: blur_regions.py) — same mask grid, CSS backdrop blur.
+        const bf = exportFrameFor(boxSizeRef.current.w, boxSizeRef.current.h)
+        const short = Math.min(boxSizeRef.current.w, boxSizeRef.current.h)
+        for (const [id, el] of Object.entries(blurRegionRefs.current)) {
+          const r = e.blurRegions?.find((x) => x.id === id)
+          const on = r && r.startMs <= outMs && outMs < r.endMs ? r : null
+          applyBlurRegion(el, on, on ? outMs - on.startMs : 0, bf.W, bf.H, short)
+        }
       }
       for (const it of e.textItems ?? []) {
         const el = textRefs.current[it.id]
@@ -977,7 +991,11 @@ export function PreviewStage({
         data-preview-renderer={libassClass ? 'libass' : 'dom'}
       >
         {posterUrl && !canPlay ? (
+          // G4c: CORS mode on the poster too (crossOrigin set before src), like every preview medium —
+          // and the preview <video>s no longer carry poster= (a no-CORS fetch of the same URL that
+          // the browser cached and then reused for this CORS request → "No Access-Control-Allow-Origin").
           <img
+            {...corsMediaProps(posterUrl)}
             src={posterUrl}
             alt=""
             className="absolute inset-0 z-0 size-full object-cover"
@@ -1027,7 +1045,6 @@ export function PreviewStage({
               src={videoUrl ?? undefined}
               className={`absolute inset-x-0 top-1/2 z-[1] w-full -translate-y-1/2 object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
               playsInline
-              poster={posterUrl ?? undefined}
               onLoadedMetadata={() => {
                 const v = videoRefInner.current
                 const b = blurRef.current
@@ -1063,7 +1080,6 @@ export function PreviewStage({
                   className={`absolute inset-x-0 z-[1] max-w-none object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                   style={{ top: videoTop, height: videoH, width: '100%' }}
                   playsInline
-                  poster={posterUrl ?? undefined}
                   onLoadedMetadata={() => {
                     const v = videoRefInner.current
                     const b = blurRef.current
@@ -1083,7 +1099,6 @@ export function PreviewStage({
             src={videoUrl ?? undefined}
             className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
             playsInline
-            poster={posterUrl ?? undefined}
             onCanPlay={() => setCanPlay(true)}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
@@ -1304,6 +1319,7 @@ export function PreviewStage({
                   ref={(el) => {
                     srcElRefs.current[s.id] = el
                   }}
+                  {...corsMediaProps(url)}
                   src={url}
                   alt=""
                   className="size-full object-cover"
@@ -1314,6 +1330,7 @@ export function PreviewStage({
                   ref={(el) => {
                     srcElRefs.current[s.id] = el
                   }}
+                  {...corsMediaProps(url)}
                   src={url}
                   data-own-clock="1"
                   className="size-full object-cover"
@@ -1329,6 +1346,7 @@ export function PreviewStage({
         {videoUrl && edits.splitEdits?.length ? (
           <video
             ref={splitAudioRef}
+            {...corsMediaProps(videoUrl)}
             src={videoUrl}
             className="hidden"
             data-testid="preview-split-audio"
@@ -1344,6 +1362,21 @@ export function PreviewStage({
         <div ref={cutDipRef} className="pointer-events-none absolute inset-0" style={{ opacity: 0 }} data-testid="preview-transition-color" aria-hidden />
         <div ref={cloneBRef} className="pointer-events-none absolute inset-0" style={{ visibility: 'hidden' }} data-testid="preview-transition-b" aria-hidden />
         </div>
+        {/* G4c blur regions: output-frame space (after keyframes), under B-roll / text (blur_regions.py). */}
+        {(edits.blurRegions ?? []).map((r) => (
+          <div
+            key={`blur:${r.id}`}
+            ref={(el) => {
+              blurRegionRefs.current[r.id] = el
+            }}
+            className="pointer-events-none absolute inset-0"
+            style={{ visibility: 'hidden' }}
+            data-testid="preview-blur-region"
+            data-blur-id={r.id}
+            data-blur-mode={r.mode}
+            aria-hidden
+          />
+        ))}
         </div>
         {!compositePreview &&
           // G1a: DOM order = stacking order (time order; bring forward / back among overlapping items).
@@ -1413,6 +1446,14 @@ export function PreviewStage({
             })}
         </div>
         <ColorLookDefs specs={lookSpecs} />
+        {exportOnlyNote(edits) ? (
+          <div
+            className="pointer-events-none absolute bottom-2 left-2 z-[60] max-w-[80%] rounded bg-black/70 px-2 py-0.5 text-[10px] text-white"
+            data-testid="preview-export-processing"
+          >
+            {exportOnlyNote(edits)}
+          </div>
+        ) : null}
         {gradeNotice ? (
           <div
             className="pointer-events-none absolute left-2 top-2 z-[60] max-w-[80%] rounded bg-black/70 px-2 py-0.5 text-[10px] text-white"

@@ -1019,7 +1019,7 @@ function sameSegs(a: Timebase, b: Timebase): boolean {
 }
 
 function anchoredJson(e: ClipEditsV2): string {
-  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null, e.textItems ?? null, e.captionLines ?? null, e.adjustLayers ?? null])
+  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null, e.textItems ?? null, e.captionLines ?? null, e.adjustLayers ?? null, e.blurRegions ?? null])
 }
 
 /** E3: anything that must follow the EDL or its items (ripple / reconcile). */
@@ -1033,7 +1033,8 @@ export function hasAnchoredContent(e: ClipEditsV2): boolean {
       e.splitEdits?.length ||
       e.textItems?.length ||
       e.captionLines?.length ||
-      e.adjustLayers?.length,
+      e.adjustLayers?.length ||
+      e.blurRegions?.length,
   )
 }
 
@@ -1089,6 +1090,22 @@ export function rippleAnchoredItems(
           s = Math.max(0, Math.min(s, e - BROLL_MIN_MS))
         }
         return s === it.startMs && e === it.endMs ? it : ({ ...it, startMs: s, endMs: e } as BrollItem)
+      }),
+    }
+  }
+  if (next.blurRegions?.length) {
+    // G4c: blur regions follow the footage they cover (mask keys stay region-local).
+    out = {
+      ...out,
+      blurRegions: next.blurRegions.map((r) => {
+        let s = mapStart(r.startMs)
+        let e = mapEnd(r.endMs)
+        if (e - s < 100) e = s + 100
+        if (e > dur) {
+          e = dur
+          s = Math.max(0, Math.min(s, e - 100))
+        }
+        return s === r.startMs && e === r.endMs ? r : { ...r, startMs: s, endMs: e }
       }),
     }
   }

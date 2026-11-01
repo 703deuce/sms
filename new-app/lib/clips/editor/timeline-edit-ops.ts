@@ -27,6 +27,7 @@ import {
   type TimelineItem,
 } from '@/lib/clips/editor/clip-timeline'
 import type { ColorSpec } from '@/lib/clips/editor/color'
+import { setLayerFx, type LayerFx } from '@/lib/clips/editor/layer-fx'
 import type { KeyframeTarget, KeyframeTrack, LayerProp } from '@/lib/clips/editor/motion-schema'
 import { rippleGlobalKeyframes } from '@/lib/clips/editor/keyframes'
 import { remapCutTransitions } from '@/lib/clips/editor/transitions'
@@ -39,7 +40,7 @@ import { audioClipKind } from '@/lib/clips/editor/audio-kind'
 // Clipboard
 // ---------------------------------------------------------------------------
 
-type Attach = { keyframes: KeyframeTrack[]; layer?: Omit<LayerProp, 'target'>; color?: ColorSpec }
+type Attach = { keyframes: KeyframeTrack[]; layer?: Omit<LayerProp, 'target'>; color?: ColorSpec; fx?: Omit<LayerFx, 'target'> }
 export type ClipboardEntry =
   | ({ kind: 'broll'; item: BrollItem; track: string } & Attach)
   | ({ kind: 'text'; item: TextItem; track: string } & Attach)
@@ -53,7 +54,19 @@ function attachOf(edits: ClipEditsV2, target: KeyframeTarget, colorKey?: string)
   const row = edits.layerProps?.find((r) => r.target === target)
   const layer = row ? (({ target: _t, ...rest }) => rest)(row) : undefined
   const color = colorKey ? edits.color?.broll?.[colorKey] : undefined
-  return { keyframes, ...(layer && Object.keys(layer).length ? { layer } : {}), ...(color ? { color } : {}) }
+  // G4c: B-roll layer effects (mask / key / blend / reverse) travel with copy / paste / duplicate.
+  const fxRow = colorKey ? edits.layerFx?.find((r) => r.target === `broll:${colorKey}`) : undefined
+  const fx = fxRow ? (({ target: _t, ...rest }) => structuredCloneSafe(rest))(fxRow) : undefined
+  return {
+    keyframes,
+    ...(layer && Object.keys(layer).length ? { layer } : {}),
+    ...(color ? { color } : {}),
+    ...(fx && Object.keys(fx).length ? { fx } : {}),
+  }
+}
+
+function structuredCloneSafe<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v)) as T
 }
 
 /** Copy the selected text / B-roll / SFX items (Video / Voice / Music / hook are not copyable). */
@@ -188,6 +201,8 @@ function withAttach(edits: ClipEditsV2, target: KeyframeTarget, a: Attach, color
     else delete broll[colorKey]
     const had = next.color?.broll?.[colorKey]
     if (a.color || had) next = { ...next, color: { ...(next.color ?? {}), broll: Object.keys(broll).length ? broll : undefined } }
+    const fxHad = next.layerFx?.some((r) => r.target === `broll:${colorKey}`)
+    if (a.fx || fxHad) next = { ...next, layerFx: setLayerFx(next.layerFx, colorKey, a.fx ? structuredCloneSafe(a.fx) : null) }
   }
   return next
 }
@@ -213,7 +228,8 @@ export function duplicateItems(ctx: OpCtx, refs: readonly ItemRef[]): PasteResul
 
 /**
  * Paste attributes (Descript ⇧⌘V): the first clipboard entry's look onto the selected items of the
- * same kind — text: style + preset + position + keyframes + z; B-roll: keyframes + flip + color.
+ * same kind — text: style + preset + position + keyframes + z; B-roll: keyframes + flip + color
+ * (+ G4c layer effects: mask / key / blend / reverse).
  * Timing and content stay.
  */
 export function pasteAttributes(ctx: OpCtx, clip: TimelineClipboard, refs: readonly ItemRef[]): ClipEditsV2 | null {
