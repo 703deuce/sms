@@ -82,6 +82,18 @@ describe('TL roll / slide pointer path', () => {
     expect(rollMainEdit(op, 5000, 300)!.videoSplits).toEqual([5300])
   })
 
+  it('slide on a middle main-video clip commits videoSplits (contiguous splits)', () => {
+    const e = edits({ videoSplits: [10000, 20000] })
+    const { getByTestId, getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
+    fireEvent.keyDown(getByTestId('timeline-scroll'), { key: 'u' })
+    const mid = getAllByTestId('timeline-item-video')[1]!
+    drag(mid, 500 * pxPerMs())
+    expect(onCommitEdits).toHaveBeenCalled()
+    const next = onCommitEdits.mock.calls.at(-1)![0] as ClipEditsV2
+    expect(next.videoSplits).toEqual([10500, 20500])
+    expect(onCommitEdits.mock.calls.at(-1)![1]).toBe(true)
+  })
+
   it('slide on a two-segment main track shows a toast instead of silent no-op', async () => {
     const { toast } = await import('sonner')
     const { getByTestId, getAllByTestId, pxPerMs } = setup(edits({ videoSplits: [29700] }))

@@ -843,6 +843,24 @@ export function Timeline({
   // FV4b: the takes commands are findable from the toolbar too (T alone only showed a hint).
   const [takesMenu, setTakesMenu] = useState(false)
   const [takesSub, setTakesSub] = useState(false)
+  /** G1b3: Alt held — show J/L edge affordances and hit-test cuts before track scrub. */
+  const [altHeld, setAltHeld] = useState(false)
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') setAltHeld(true)
+    }
+    const off = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') setAltHeld(false)
+    }
+    window.addEventListener('keydown', on)
+    window.addEventListener('keyup', off)
+    window.addEventListener('blur', off)
+    return () => {
+      window.removeEventListener('keydown', on)
+      window.removeEventListener('keyup', off)
+      window.removeEventListener('blur', off)
+    }
+  }, [])
   const [addMenu, setAddMenu] = useState(false)
   // FV4e: the + Track menu closes on an outside click or Escape.
   const addMenuRef = useRef<HTMLDivElement>(null)
@@ -1393,6 +1411,26 @@ export function Timeline({
       setSelected([{ lane: 'broll', id: r.active }])
       return true
     }
+    const videoGroups = new Set(
+      liveSelected
+        .filter((r) => r.lane === 'video')
+        .map((r) => lanes.video.find((i) => i.id === r.id)?.srcInMs)
+        .filter((src): src is number => src != null)
+        .map((src) => takeGroupAtSource(edits, src)?.id)
+        .filter((id): id is string => Boolean(id)),
+    )
+    if (videoGroups.size === 1) {
+      commit(cycleMainTake(edits, [...videoGroups][0]!, dir))
+      return true
+    }
+    if (sel?.lane === 'video') {
+      const it = lanes.video.find((i) => i.id === sel.id)
+      const g = it?.srcInMs != null ? takeGroupAtSource(edits, it.srcInMs) : undefined
+      if (g) {
+        commit(cycleMainTake(edits, g.id, dir))
+        return true
+      }
+    }
     const g = takeGroupAtSource(edits, outputToSource(tb, playheadMs))
     if (g) {
       commit(cycleMainTake(edits, g.id, dir))
@@ -1404,10 +1442,17 @@ export function Timeline({
   const groupTakes = () => {
     const br = liveSelected.filter((r) => r.lane === 'broll').map((r) => r.id)
     if (br.length >= 2) return groupBrollTakes(edits, br)
+    const seen = new Set<string>()
     const vids = liveSelected
       .filter((r) => r.lane === 'video')
       .map((r) => lanes.video.find((i) => i.id === r.id))
       .filter((i): i is NonNullable<typeof i> => Boolean(i && i.srcInMs != null && i.srcOutMs != null))
+      .filter((i) => {
+        const k = `${i.srcInMs}:${i.srcOutMs}`
+        if (seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
       .map((i) => [i.srcInMs!, i.srcOutMs!] as [number, number])
       .sort((a, b) => a[0] - b[0])
     return vids.length >= 2 ? groupMainTakes(edits, vids, 0) : null
@@ -1430,7 +1475,11 @@ export function Timeline({
     if (canGroupTakes) return null
     if (!editable || liveSelected.length < 2) return 'Select 2+ clips first (Shift-click)'
     if (liveSelected.some((r) => r.lane === 'text' || r.lane === 'captions' || r.lane === 'adjust')) {
-      return 'Takes work on video or B-roll clips'
+      return 'Takes work on video or B-roll clips — select matching main-video clips on the timeline'
+    }
+    const tx = transcriptSelectionRef?.current
+    if (tx && tx.startMs !== tx.endMs && !liveSelected.some((r) => r.lane === 'video' || r.lane === 'broll')) {
+      return 'Select 2+ main-video or B-roll clips on the timeline (transcript sentence picks don’t group yet)'
     }
     return 'Select 2+ clips first (Shift-click)'
   })()
@@ -1772,6 +1821,35 @@ export function Timeline({
     return msAtPx(((clientX - r.left) / Math.max(1, r.width)) * widthPx)
   }
 
+  const rowAtClientY = (clientY: number) => {
+    const el = trackAreaRef.current
+    if (!el) return null
+    const y = clientY - el.getBoundingClientRect().top
+    let top = RULER_H
+    for (const r of rows) {
+      const h = LANE_H[r.lane]
+      if (y >= top && y < top + h) return r
+      top += h
+    }
+    return null
+  }
+
+  /** Nearest J/L-trimmable edge on Voice / Video at `ms` (Alt-drag). */
+  const jlEdgeNearMs = (ms: number, lane: LaneId, tolMs: number): { item: TimelineItem; edge: 'start' | 'end' } | null => {
+    let best: { item: TimelineItem; edge: 'start' | 'end'; d: number } | null = null
+    for (const it of lanes[lane]) {
+      if (it.caps.trimStart) {
+        const d = Math.abs(it.startMs - ms)
+        if (d <= tolMs && (!best || d < best.d)) best = { item: it, edge: 'start', d }
+      }
+      if (it.caps.trimEnd) {
+        const d = Math.abs(it.endMs - ms)
+        if (d <= tolMs && (!best || d < best.d)) best = { item: it, edge: 'end', d }
+      }
+    }
+    return best ? { item: best.item, edge: best.edge } : null
+  }
+
   const rowOfItem = (item: TimelineItem) => rows.find((r) => r.lane === item.lane && (!r.trackId || r.trackId === item.track))
   /** Row (same lane kind, unlocked track) under a client Y, for drag between tracks. */
   const trackRowAt = (clientY: number, lane: LaneId): string | null => {
@@ -1876,9 +1954,17 @@ export function Timeline({
     )
     if (!already) setSelected(groupSel0)
     if (!editable) return
-    const slideTool = tool === 'slide' && mode === 'move' && (item.lane === 'video' || item.lane === 'broll' || item.lane === 'text')
-    const rollTool = tool === 'roll' && mode !== 'move'
-    const slipTool = tool === 'slip' && mode === 'move' && item.lane === 'broll'
+    let dragMode = mode
+    if (dragMode === 'move' && (e.altKey || altHeld) && (item.lane === 'voice' || item.lane === 'video')) {
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const localX = e.clientX - r.left
+      const tol = 14
+      if (item.caps.trimStart && localX <= tol) dragMode = 'start'
+      else if (item.caps.trimEnd && localX >= r.width - tol) dragMode = 'end'
+    }
+    const slideTool = tool === 'slide' && dragMode === 'move' && (item.lane === 'video' || item.lane === 'broll' || item.lane === 'text')
+    const rollTool = tool === 'roll' && dragMode !== 'move'
+    const slipTool = tool === 'slip' && dragMode === 'move' && item.lane === 'broll'
     if (slipTool) {
       const x0 = e.clientX
       const st: DragState = { mode, item, refs: [{ lane: item.lane, id: item.id }], originX: x0, deltaMs: 0, snappedTo: null, moved: false, alt: false }
@@ -1903,15 +1989,15 @@ export function Timeline({
       window.addEventListener('pointerup', up)
       return
     }
-    if (!slideTool && tool !== 'roll' && mode === 'move' && item.lane === 'video' && lanes.video.length > 1) {
+    if (!slideTool && tool !== 'roll' && dragMode === 'move' && item.lane === 'video' && lanes.video.length > 1) {
       startVideoReorder(e, item)
       return
     }
-    if (mode === 'move' && !item.caps.move && !slideTool) return
-    if (mode === 'start' && !item.caps.trimStart) return
-    if (mode === 'end' && !item.caps.trimEnd) return
+    if (dragMode === 'move' && !item.caps.move && !slideTool) return
+    if (dragMode === 'start' && !item.caps.trimStart) return
+    if (dragMode === 'end' && !item.caps.trimEnd) return
     const refs =
-      mode === 'move' && (already || groupSel0.length > 1)
+      dragMode === 'move' && (already || groupSel0.length > 1)
         ? (already ? liveSelected : groupSel0).filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
         : [{ lane: item.lane, id: item.id }]
     const moving = refs.map((r) => lanes[r.lane].find((i) => i.id === r.id)!).filter(Boolean)
@@ -1921,7 +2007,7 @@ export function Timeline({
     const targets = snapTargets({ lanes, durationMs: span, playheadMs, wordEdgesMs: wordEdges, exclude, beatsMs: beatSnap })
     const thr = SNAP_PX / Math.max(1e-6, pxPerMs)
     const ctx = opCtx()
-    const state: DragState = { mode, item, refs, originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, alt: e.altKey }
+    const state: DragState = { mode: dragMode, item, refs, originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, alt: e.altKey }
     setDrag(state)
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - state.originX
@@ -1929,25 +2015,25 @@ export function Timeline({
       state.moved = true
       // TC2b: lanes are in export time — a drag across an insert lands where the pointer is
       // (display delta → base delta at the dragged edge), not off by the insert's length.
-      const anchor = mode === 'end' ? item.endMs : item.startMs
-      const rule = mode === 'end' ? 'end' : 'start'
+      const anchor = dragMode === 'end' ? item.endMs : item.startMs
+      const rule = dragMode === 'end' ? 'end' : 'start'
       const raw = tmap.totalMs
         ? toBaseMs(tmap, Math.max(0, toExportMs(tmap, anchor, rule) + dx / Math.max(1e-6, pxPerMs))) - anchor
         : dx / Math.max(1e-6, pxPerMs)
       const snapping = snapOn && !ev.altKey
       if (ev.altKey) state.alt = true
-      if (mode === 'move') {
+      if (dragMode === 'move') {
         const edges = moving.flatMap((m) => [m.startMs, m.endMs])
         const s = snapping ? snapMoveDelta(edges, raw, targets, thr) : { deltaMs: raw, snappedTo: null }
         state.deltaMs = s.deltaMs
         state.snappedTo = s.snappedTo
       } else {
-        const edge = mode === 'start' ? item.startMs : item.endMs
+        const edge = dragMode === 'start' ? item.startMs : item.endMs
         const s = snapping ? snapValue(edge + raw, targets, thr) : { ms: edge + raw, snappedTo: null }
         state.deltaMs = s.ms - edge
         state.snappedTo = s.snappedTo
       }
-      if (mode === 'move') state.targetRow = trackRowAt(ev.clientY, item.lane)
+      if (dragMode === 'move') state.targetRow = trackRowAt(ev.clientY, item.lane)
       setDrag({ ...state })
     }
     const onUp = (ev: PointerEvent) => {
@@ -1956,7 +2042,7 @@ export function Timeline({
       setDrag(null)
       const alt = state.alt || ev.altKey
       const fromRow = rowOfItem(item)?.key ?? null
-      const toRow = mode === 'move' && state.targetRow && state.targetRow !== fromRow ? rows.find((r) => r.key === state.targetRow) : undefined
+      const toRow = dragMode === 'move' && state.targetRow && state.targetRow !== fromRow ? rows.find((r) => r.key === state.targetRow) : undefined
       if (toRow?.trackId && state.moved && !slideTool) {
         // G1b: dropped on another track (and maybe moved in time) — one undo step.
         const moved = state.deltaMs ? moveItems(ctx, state.refs, state.deltaMs) ?? ctx.edits : ctx.edits
@@ -1967,9 +2053,9 @@ export function Timeline({
       }
       if (!state.moved || !state.deltaMs) return
       const ref = { lane: item.lane, id: item.id }
-      if (alt && mode !== 'move' && (item.lane === 'video' || item.lane === 'voice')) {
-        const edge = mode === 'start' ? item.startMs : item.endMs
-        const jl = splitEdgeTrim(ctx, ref, mode, edge + state.deltaMs)
+      if (alt && dragMode !== 'move' && (item.lane === 'video' || item.lane === 'voice')) {
+        const edge = dragMode === 'start' ? item.startMs : item.endMs
+        const jl = splitEdgeTrim(ctx, ref, dragMode, edge + state.deltaMs)
         if (jl) return commit(jl)
       }
       if (slideTool) {
@@ -1981,19 +2067,19 @@ export function Timeline({
         return
       }
       if (rollTool) {
-        const next = rollEdit(ctx, ref, mode as 'start' | 'end', state.deltaMs)
+        const next = rollEdit(ctx, ref, dragMode as 'start' | 'end', state.deltaMs)
         if (next) return commit(next)
         toast.message('Roll needs the edit between two touching main-video clips', { id: 'timeline-roll' })
         return
       }
-      if (mode === 'move') {
+      if (dragMode === 'move') {
         const moved = moveItems(ctx, state.refs, state.deltaMs)
         commit(moved && autoXfade ? autoCrossfade(ctx.edits, moved, ctx.previewEdits, ctx.previewEdits, state.refs, sfxDurationsMs, xfadeTracks) : moved)
       } else {
-        const edge = mode === 'start' ? item.startMs : item.endMs
+        const edge = dragMode === 'start' ? item.startMs : item.endMs
         const host = hostOf(item)
-        if (host) return commit(trimCompound(ctx, host.group, mode, edge + state.deltaMs))
-        commit(trimItem(ctx, { lane: item.lane, id: item.id }, mode, edge + state.deltaMs))
+        if (host) return commit(trimCompound(ctx, host.group, dragMode, edge + state.deltaMs))
+        commit(trimItem(ctx, { lane: item.lane, id: item.id }, dragMode, edge + state.deltaMs))
       }
     }
     window.addEventListener('pointermove', onMove)
@@ -2513,15 +2599,21 @@ export function Timeline({
           : null}
         {editable && !st.locked && item.caps.trimStart ? (
           <span
-            className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-white/40 hover:bg-white/80"
+            className={`absolute inset-y-0 left-0 z-10 bg-white/40 hover:bg-white/80 ${
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'z-20 w-3 cursor-ew-resize bg-cyan-300/70' : 'w-1.5 cursor-ew-resize'
+            }`}
             data-testid="timeline-trim-start"
+            title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'J-cut: Alt-drag to offset audio from picture' : undefined}
             onPointerDown={(e) => startDrag(e, item, 'start')}
           />
         ) : null}
         {editable && !st.locked && item.caps.trimEnd ? (
           <span
-            className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-white/40 hover:bg-white/80"
+            className={`absolute inset-y-0 right-0 z-10 bg-white/40 hover:bg-white/80 ${
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'z-20 w-3 cursor-ew-resize bg-cyan-300/70' : 'w-1.5 cursor-ew-resize'
+            }`}
             data-testid="timeline-trim-end"
+            title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'L-cut: Alt-drag to offset audio from picture' : undefined}
             onPointerDown={(e) => startDrag(e, item, 'end')}
           />
         ) : null}
@@ -3177,7 +3269,20 @@ export function Timeline({
                 }
                 const y = e.clientY - e.currentTarget.getBoundingClientRect().top
                 if (y > RULER_H) {
-                  onSeekOutput(msAtClientX(e.clientX, e.currentTarget))
+                  const hitMs = msAtClientX(e.clientX, e.currentTarget)
+                  const tol = 12 / Math.max(1e-6, pxPerMs)
+                  if (e.altKey || altHeld) {
+                    const row = rowAtClientY(e.clientY)
+                    if (row && (row.lane === 'voice' || row.lane === 'video')) {
+                      const hit = jlEdgeNearMs(hitMs, row.lane, tol)
+                      if (hit) {
+                        e.preventDefault()
+                        startDrag(e, hit.item, hit.edge)
+                        return
+                      }
+                    }
+                  }
+                  onSeekOutput(hitMs)
                   startMarquee(e, additive)
                 }
               }}
@@ -3296,8 +3401,13 @@ export function Timeline({
                     .map((r, i) => (
                       <div
                         key={`axf${r.lane}${r.track}${r.startMs}${i}`}
-                        className="pointer-events-none absolute inset-y-0 z-[1] bg-gradient-to-r from-violet-500/0 via-violet-400/35 to-violet-500/0"
-                        style={{ left: xs(r.startMs), width: Math.max(2, xe(r.endMs) - xs(r.startMs)) }}
+                        className="pointer-events-none absolute inset-y-0 z-[2] border border-violet-400/70"
+                        style={{
+                          left: xs(r.startMs),
+                          width: Math.max(2, xe(r.endMs) - xs(r.startMs)),
+                          background:
+                            'repeating-linear-gradient(135deg, rgb(167 139 250 / 0.72) 0 4px, rgb(167 139 250 / 0.14) 4px 8px), repeating-linear-gradient(-135deg, rgb(139 92 246 / 0.55) 0 4px, transparent 4px 8px)',
+                        }}
                         data-testid="timeline-auto-xfade-region"
                         data-lane={r.lane}
                         aria-hidden
@@ -3471,6 +3581,28 @@ export function Timeline({
                             </button>
                           )
                         })}
+                        {altHeld && editable
+                          ? videoLaneSegments(tb, edits.videoSplits).slice(1).map((seg, idx) => {
+                              const voice = lanes.voice[idx + 1]
+                              if (!voice?.caps.trimStart) return null
+                              const x = xs(voice.startMs)
+                              return (
+                                <button
+                                  key={`jlw${seg.a}`}
+                                  type="button"
+                                  className="pointer-events-auto absolute top-0 z-30 h-4 w-2.5 -translate-x-1/2 cursor-ew-resize rounded-sm bg-cyan-300/80 shadow ring-1 ring-black/40"
+                                  style={{ left: x }}
+                                  data-testid="timeline-jl-word-edge"
+                                  data-src-a={seg.a}
+                                  title="J/L cut — Alt-drag to offset audio from picture"
+                                  onPointerDown={(ev) => {
+                                    ev.stopPropagation()
+                                    startDrag(ev, voice, 'start')
+                                  }}
+                                />
+                              )
+                            })
+                          : null}
                       </div>
                       <div className="pointer-events-none absolute inset-x-0 top-0 h-[3px]" aria-label="Layout segments">
                         {layoutPieces.map((p) => (

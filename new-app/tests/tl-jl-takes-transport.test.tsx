@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { Timeline } from '@/components/clips/editor/timeline'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { buildTimelineItems } from '@/lib/clips/editor/clip-timeline'
+import { groupMainTakes } from '@/lib/clips/editor/takes'
 import { splitEdgeTrim } from '@/lib/clips/editor/trim-tools'
 
 vi.mock('sonner', () => ({
@@ -74,6 +75,68 @@ describe('TL-41 J/L at a video split', () => {
     const next = onCommitEdits.mock.calls.at(-1)![0] as ClipEditsV2
     expect(next.splitEdits?.[0]?.atMs).toBe(29210)
     expect(onCommitEdits.mock.calls.at(-1)![1]).toBe(true)
+  })
+
+  it('Alt-drag near Voice waveform edge (body hit-test) commits splitEdits', () => {
+    const e = edits({ videoSplits: [29210] })
+    const { getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
+    const v0 = getAllByTestId('timeline-item-voice')[0]!
+    const rect = v0.getBoundingClientRect()
+    act(() => {
+      fireEvent.keyDown(window, { key: 'Alt', altKey: true })
+    })
+    act(() => {
+      fireEvent.pointerDown(v0, { button: 0, clientX: rect.right - 4, clientY: rect.top + 4, altKey: true, pointerId: 3 })
+    })
+    act(() => {
+      fireEvent.pointerMove(window, { clientX: rect.right - 4 + 200 * pxPerMs(), pointerId: 3, altKey: true })
+    })
+    act(() => {
+      fireEvent.pointerUp(window, { clientX: rect.right - 4 + 200 * pxPerMs(), pointerId: 3, altKey: true })
+    })
+    expect(onCommitEdits).toHaveBeenCalled()
+  })
+})
+
+describe('TL-45 Takes group / cycle', () => {
+  afterEach(() => cleanup())
+
+  it('groups two selected main-video clips from the toolbar', () => {
+    const e = edits({ videoSplits: [10000, 20000] })
+    const { getAllByTestId, getByTestId, onCommitEdits } = setup(e)
+    const vids = getAllByTestId('timeline-item-video')
+    act(() => {
+      fireEvent.pointerDown(vids[0]!, { button: 0, pointerId: 1 })
+      fireEvent.pointerUp(window, { pointerId: 1 })
+      fireEvent.pointerDown(vids[1]!, { button: 0, shiftKey: true, pointerId: 2 })
+      fireEvent.pointerUp(window, { pointerId: 2 })
+    })
+    fireEvent.click(getByTestId('timeline-takes-menu'))
+    fireEvent.click(getByTestId('timeline-toolbar-group-takes'))
+    expect(onCommitEdits).toHaveBeenCalled()
+    const next = onCommitEdits.mock.calls.at(-1)![0] as ClipEditsV2
+    expect(next.takes?.some((g) => g.kind === 'main')).toBe(true)
+  })
+
+  it('T cycles when a grouped main-video clip stays selected', async () => {
+    const { toast } = await import('sonner')
+    const e = edits({ videoSplits: [10000, 20000] })
+    const grouped = groupMainTakes(e, [
+      [0, 10000],
+      [10000, 20000],
+    ], 0)!
+    const { getAllByTestId, getByTestId, onCommitEdits } = setup(grouped)
+    const v0 = getAllByTestId('timeline-item-video')[0]!
+    act(() => {
+      fireEvent.pointerDown(v0, { button: 0, pointerId: 1 })
+      fireEvent.pointerUp(window, { pointerId: 1 })
+    })
+    fireEvent.keyDown(getByTestId('timeline-scroll'), { key: 't' })
+    expect(onCommitEdits).toHaveBeenCalled()
+    expect(toast.message).not.toHaveBeenCalledWith(
+      'No takes here — select clips and use “Group as takes”',
+      expect.objectContaining({ id: 'timeline-takes' }),
+    )
   })
 })
 
