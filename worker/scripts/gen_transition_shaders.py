@@ -7,10 +7,11 @@ import json
 import struct
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
-SHADER_DIR = REPO / "worker" / "clips_worker" / "shaders"
-FIXTURE = REPO / "worker" / "tests" / "fixtures" / "shader_selftest.json"
-OUT_TS = REPO / "new-app" / "lib" / "clips" / "editor" / "g4" / "transition-shaders.gen.ts"
+APP_ROOT = Path(__file__).resolve().parents[1]
+SHADER_DIR = APP_ROOT / "clips_worker" / "shaders"
+FIXTURE = APP_ROOT / "tests" / "fixtures" / "shader_selftest.json"
+WS_ROOT = APP_ROOT.parent if (APP_ROOT.parent / "new-app").is_dir() else APP_ROOT
+OUT_TS = WS_ROOT / "new-app" / "lib" / "clips" / "editor" / "g4" / "transition-shaders.gen.ts"
 NOTICE = (SHADER_DIR / "NOTICE.md").read_text(encoding="utf-8")
 PIN = "b28fce3eaeaa10d2cc09fe85b4615052da02e37b"
 TYPES = ("spin", "glitch", "light_leak", "zoom_blur", "whip_pan", "ripple")
