@@ -47,6 +47,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     const durationMs = clip ? outputDurationMs(normalizeEdits(clip.edits, { clipStartMs: clip.startMs, clipEndMs: clip.endMs })) : null
     let downloadUrl: string | null = null
     let downloadPending = false
+    let stemsDownloadUrl: string | null = null
+    let stemsFilename: string | null = null
     if (render.status === 'READY' && render.outputKey) {
       // E6: a signing hiccup used to 500 the whole poll, so the dialog never saw READY and sat at
       // the worker's last pre-upload 82% until reload. Report READY and let the client re-poll.
@@ -58,6 +60,20 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       } catch (signErr) {
         downloadPending = true
         console.warn('[clipper:export] render_sign_failed', {
+          renderId: render.id,
+          message: signErr instanceof Error ? signErr.message : String(signErr),
+        })
+      }
+    }
+    if (render.status === 'READY' && render.stemsKey) {
+      stemsFilename = `${filename.replace(/\.[^.]+$/, '') || 'clip'}.stems.zip`
+      try {
+        stemsDownloadUrl = await createCachedSignedDownloadUrl(storage, render.stemsKey, {
+          downloadFilename: stemsFilename,
+          versionHint: `render:${render.id}:stems:${render.sizeBytes != null ? String(render.sizeBytes) : ''}`,
+        })
+      } catch (signErr) {
+        console.warn('[clipper:export] stems_sign_failed', {
           renderId: render.id,
           message: signErr instanceof Error ? signErr.message : String(signErr),
         })
@@ -77,6 +93,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
         status: render.status,
         downloadUrl,
         filename,
+        stemsDownloadUrl,
+        stemsFilename,
         error: render.error,
         durationMs,
         sizeBytes: render.sizeBytes != null ? Number(render.sizeBytes) : null,

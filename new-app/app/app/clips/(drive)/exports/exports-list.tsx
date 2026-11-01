@@ -265,6 +265,22 @@ export function ExportsList({
                       >
                         Download
                       </Button>
+                      {r.stemsDownloadUrl ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          data-testid="export-history-stems"
+                          nativeButton={false}
+                          render={
+                            <a
+                              href={r.stemsDownloadUrl}
+                              download={r.stemsFilename ?? 'stems.zip'}
+                            />
+                          }
+                        >
+                          Stems
+                        </Button>
+                      ) : null}
                       <Button size="sm" variant="outline" onClick={() => openShare(r.id)}>
                         <Share2 className="size-3.5" aria-hidden />
                         Share
@@ -374,6 +390,22 @@ export function ExportsList({
                         >
                           Download
                         </Button>
+                        {r.stemsDownloadUrl ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            data-testid="export-history-stems"
+                            nativeButton={false}
+                            render={
+                              <a
+                                href={r.stemsDownloadUrl}
+                                download={r.stemsFilename ?? 'stems.zip'}
+                              />
+                            }
+                          >
+                            Stems (.zip)
+                          </Button>
+                        ) : null}
                         <Button size="sm" variant="outline" onClick={() => openShare(r.id)}>
                           <Share2 className="size-3.5" aria-hidden />
                           Share

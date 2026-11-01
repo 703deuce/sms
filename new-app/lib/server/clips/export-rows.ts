@@ -26,6 +26,8 @@ export type ClipExportRowDto = {
   posterUrl: string | null
   editorUrl: string
   downloadUrl: string | null
+  stemsDownloadUrl: string | null
+  stemsFilename: string | null
 }
 
 function toIso(value: Date | null | undefined): string | null {
@@ -87,6 +89,7 @@ type ClipRenderRowInput = {
   expiresAt: Date | null
   sizeBytes: bigint | null
   outputKey: string | null
+  stemsKey: string | null
   clip: { id: string; title: string; projectId: string; posterKey: string | null } | null
 }
 
@@ -98,6 +101,8 @@ async function enrichClipRenderRow(
   const fname = r.filename || exportFilename(r.clip.title)
   let posterUrl: string | null = null
   let downloadUrl: string | null = null
+  let stemsDownloadUrl: string | null = null
+  const stemsFilename = `${(r.filename || exportFilename(r.clip.title)).replace(/\.[^.]+$/, '') || 'clip'}.stems.zip`
   let sizeBytes: number | null = r.sizeBytes != null ? Number(r.sizeBytes) : null
   const versionHint = renderVersionHint(r.id, r.updatedAt, r.sizeBytes)
   try {
@@ -118,6 +123,12 @@ async function enrichClipRenderRow(
           backfillClipRenderSizeBytes(r.id, probed)
         }
       }
+    }
+    if (r.status === 'READY' && r.stemsKey) {
+      stemsDownloadUrl = await createCachedSignedDownloadUrl(storage, r.stemsKey, {
+        downloadFilename: stemsFilename,
+        versionHint: `${versionHint}:stems`,
+      })
     }
   } catch {
     /* signed URL failure should not break exports page */
@@ -141,6 +152,8 @@ async function enrichClipRenderRow(
     posterUrl,
     editorUrl: `/app/clips/${r.clip.projectId}/edit/${r.clipId}`,
     downloadUrl,
+    stemsDownloadUrl,
+    stemsFilename: r.stemsKey ? stemsFilename : null,
   }
 }
 
@@ -202,6 +215,8 @@ async function enrichCompositionExportRow(
     posterUrl: null,
     editorUrl: `/app/clips/${comp.projectId}/script`,
     downloadUrl,
+    stemsDownloadUrl: null,
+    stemsFilename: null,
   }
 }
 

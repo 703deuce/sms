@@ -173,6 +173,8 @@ export type ExportRenderRow = {
   posterUrl: string | null
   editorUrl: string
   downloadUrl: string | null
+  stemsDownloadUrl?: string | null
+  stemsFilename?: string | null
 }
 
 export function fetchClipEditorWords(
@@ -324,6 +326,8 @@ export function exportClipWithOptions(
     durationMs?: number
     /** FV4b/FV4c: true when the server returned the render already in flight for the same edits. */
     inFlight?: boolean
+    stemsDownloadUrl?: string | null
+    stemsFilename?: string | null
   }>(`/api/clips/clips/${clipId}/export`, { method: 'POST', body: JSON.stringify(body) })
 }
 
@@ -333,6 +337,8 @@ export function getRenderStatus(renderId: string) {
     status: string
     downloadUrl: string | null
     filename: string
+    stemsDownloadUrl?: string | null
+    stemsFilename?: string | null
     error: string | null
     durationMs?: number | null
     sizeBytes?: number | null
