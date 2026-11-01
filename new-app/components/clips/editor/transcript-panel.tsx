@@ -123,6 +123,7 @@ export function TranscriptPanel({
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
   const [editingI, setEditingI] = useState<number | null>(null)
+  const wordFixCommittedRef = useRef(false)
   const [search, setSearch] = useState('')
   const [replace, setReplace] = useState('')
   const [matchIndex, setMatchIndex] = useState(0)
@@ -464,12 +465,18 @@ export function TranscriptPanel({
             onFocus={(e) => e.currentTarget.select()}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
+                wordFixCommittedRef.current = true
                 onWordFix(w.i, e.currentTarget.value)
                 setEditingI(null)
               }
               if (e.key === 'Escape') setEditingI(null)
             }}
             onBlur={(e) => {
+              if (wordFixCommittedRef.current) {
+                wordFixCommittedRef.current = false
+                setEditingI(null)
+                return
+              }
               onWordFix(w.i, e.target.value)
               setEditingI(null)
             }}
@@ -533,6 +540,7 @@ export function TranscriptPanel({
               return
             }
             setEditingI(w.i)
+            wordFixCommittedRef.current = false
           }}
         >
           {ignored ? (

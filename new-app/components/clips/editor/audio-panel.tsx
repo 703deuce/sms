@@ -110,8 +110,8 @@ export function AudioPanel({
         },
       )
       setPreviewGenId(data.generationId)
-    } catch {
-      toast.error('Could not start Studio Sound preview')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not start Studio Sound preview')
       setPreviewBusy(false)
     }
   }, [clipId, playheadMs, playheadSourceMs])

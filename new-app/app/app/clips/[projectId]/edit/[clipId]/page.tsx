@@ -14,7 +14,17 @@ export default async function ClipEditorPage({
 }) {
   const { projectId, clipId } = await params
   const workspaceId = await resolveWorkspaceId()
-  const data = await getClipEditorPayload(workspaceId, clipId)
+  let data
+  try {
+    data = await getClipEditorPayload(workspaceId, clipId)
+  } catch (err) {
+    console.error('[clipper:editor-page] payload_failed', {
+      clipId,
+      projectId,
+      message: err instanceof Error ? err.message : String(err),
+    })
+    throw err
+  }
   if (!data || data.clip.projectId !== projectId) notFound()
 
   const videoUrl = data.media?.url ?? data.mediaUrls.proxy ?? data.mediaUrls.source ?? data.mediaUrls.preview

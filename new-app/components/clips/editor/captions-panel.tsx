@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { CaptionMiniPreview } from '@/components/clips/editor/caption-overlay'
 import { Button } from '@/components/ui/button'
@@ -124,6 +124,7 @@ export function CaptionsPanel({
   const cap = edits.captions ?? {}
   const userFonts = useWorkspaceFonts()
   const [editingWordI, setEditingWordI] = useState<number | null>(null)
+  const wordFixCommittedRef = useRef(false)
   const presetId = cap.presetId || 'bold_pop'
   const preset = resolveCaptionPreset(cap)
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>([])
@@ -249,6 +250,7 @@ export function CaptionsPanel({
                       onFocus={(e) => e.currentTarget.select()}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
+                          wordFixCommittedRef.current = true
                           onWordFix(w.i, e.currentTarget.value, {
                             s: Math.round(w.s * 1000),
                             w: w.w,
@@ -258,6 +260,11 @@ export function CaptionsPanel({
                         if (e.key === 'Escape') setEditingWordI(null)
                       }}
                       onBlur={(e) => {
+                        if (wordFixCommittedRef.current) {
+                          wordFixCommittedRef.current = false
+                          setEditingWordI(null)
+                          return
+                        }
                         onWordFix(w.i, e.target.value, { s: Math.round(w.s * 1000), w: w.w })
                         setEditingWordI(null)
                       }}
@@ -275,6 +282,7 @@ export function CaptionsPanel({
                     )}
                     onDoubleClick={(e) => {
                       e.preventDefault()
+                      wordFixCommittedRef.current = false
                       setEditingWordI(w.i)
                     }}
                     title={

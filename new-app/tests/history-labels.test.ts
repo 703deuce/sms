@@ -57,6 +57,15 @@ describe('describeEditsChange', () => {
     expect(describeEditsChange(a, b)).toBe('Color')
   })
 
+  it('labels wordFixes before captions when both change', () => {
+    const a = defaultEdits({ clipStartMs: 0, clipEndMs: 1000 })
+    const b = {
+      ...a,
+      wordFixes: { '1': 'x' },
+      captions: { ...a.captions, size: 7 },
+    }
+    expect(describeEditsChange(a, b)).toBe('Word fix')
+  })
   it('labels wordFixes', () => {
     const a = base()
     const b = { ...a, wordFixes: [{ wordIndex: 0, text: 'hello' }] }

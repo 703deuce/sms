@@ -187,13 +187,17 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   } else if (sourceKey && signedSource) {
     media = { url: signedSource, kind: 'source', offsetMs: 0 }
   } else if (segmentExists && sourceSegKey) {
-    const segUrl = await createCachedSignedDownloadUrl(storage, sourceSegKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC)
-    media = {
-      url: segUrl,
-      kind: 'segment',
-      offsetMs: sourceSegStartMs,
-      minMs: sourceSegStartMs,
-      maxMs: sourceSegEndMs ?? undefined,
+    const segUrl = await createCachedSignedDownloadUrl(storage, sourceSegKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(
+      () => null,
+    )
+    if (segUrl) {
+      media = {
+        url: segUrl,
+        kind: 'segment',
+        offsetMs: sourceSegStartMs,
+        minMs: sourceSegStartMs,
+        maxMs: sourceSegEndMs ?? undefined,
+      }
     }
   } else if (previewKey && signedPreview) {
     media = {

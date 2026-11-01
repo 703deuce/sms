@@ -61,6 +61,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     )
     if (!sourceKey) return NextResponse.json({ error: 'No source media for this clip' }, { status: 400 })
 
+    const sourceOffsetMs =
+      clip.sourceSegStartMs != null
+        ? clip.sourceSegStartMs
+        : clip.previewKey
+          ? clip.startMs
+          : 0
+
     console.info(
       `[editor:decision] ${JSON.stringify({
         event: 'studio_sound_enqueue',
@@ -80,6 +87,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         params: {
           clipId,
           sourceKey,
+          sourceOffsetMs,
           lengthMs,
           ...(previewOnly ? { previewOnly: true, windowStartMs, windowDurationMs } : {}),
         },
@@ -94,7 +102,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         clipId,
         type: 'STUDIO_SOUND',
         status: 'QUEUED',
-        payload: { generationId: gen.id, clipId, sourceKey },
+        payload: { generationId: gen.id, clipId, sourceKey, sourceOffsetMs },
       },
     })
 
