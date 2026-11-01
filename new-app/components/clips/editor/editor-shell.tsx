@@ -119,6 +119,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
+import { useEditorWords } from '@/components/clips/editor/use-editor-words'
+import { SHOW_SURROUNDING_CONTEXT_MS } from '@/lib/clips/trim-bounds'
 import { addMediaToLane, placeAddedOnTrack, replaceBrollMedia, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { ClipRecordMenu } from '@/components/clips/editor/recording/record-menu'
