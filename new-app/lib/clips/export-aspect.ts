@@ -2,7 +2,7 @@ export const EXPORT_ASPECT_PRESETS = ['9:16', '4:5', '1:1', '16:9', '4:3', '21:9
 export type PresetAspect = (typeof EXPORT_ASPECT_PRESETS)[number]
 export type CustomAspect = `custom:${number}x${number}`
 export type ExportAspect = PresetAspect | CustomAspect
-export type ExportResolution = '720p' | '1080p'
+export type ExportResolution = '720p' | '1080p' | '1440p' | '2160p'
 
 export const CUSTOM_ASPECT_MIN = 240
 export const CUSTOM_ASPECT_MAX = 3840
@@ -112,7 +112,8 @@ function pixelSizeFromParts(aw: number, ah: number, short: number): { width: num
 
 /** Output pixel size for export / ASS PlayRes. */
 export function exportPixelSize(aspect: ExportAspect, resolution: ExportResolution): { width: number; height: number } {
-  const short = resolution === '1080p' ? 1080 : 720
+  const short =
+    resolution === '2160p' || resolution === '1440p' ? 1080 : resolution === '1080p' ? 1080 : 720
   if (isCustomAspect(aspect)) {
     const { width, height } = customAspectDims(aspect)
     return pixelSizeFromParts(width, height, short)

@@ -1,5 +1,6 @@
 import { editsVersionHash, type ClipEditsV2 } from '@/lib/clips/edits'
 import { type ExportAspect, type ExportResolution, exportPixelSize, renderVersionHash } from '@/lib/clips/export-aspect'
+import { deliverExt, isDefaultDeliver, stableDeliverJson, type ExportDeliver } from '@/lib/clips/export-deliver'
 import { resolveComposeSpec } from '@/lib/clips/compose-spec'
 import { composeSpecV1Enabled } from '@/lib/clips/compose-spec-flags'
 import { exportFilename } from '@/lib/server/clips/clips'
@@ -166,6 +167,8 @@ export async function enqueueRenderClip(
   clipId: string,
   opts: {
     resolution: ExportResolution
+    /** Delivery target (may be 4K while compose renders at 1080p). */
+    targetResolution?: ExportResolution
     aspect: ExportAspect
     watermark: boolean
     edits: ClipEditsV2
@@ -174,17 +177,23 @@ export async function enqueueRenderClip(
     previewKey: string | null
     title: string
     batchId?: string
+    deliver?: ExportDeliver | null
   },
 ) {
   const prisma = getPrisma()
   const clipRow = await prisma.clip.findUniqueOrThrow({ where: { id: clipId }, select: { projectId: true } })
+  const targetRes = opts.targetResolution ?? opts.resolution
   const { width: playW, height: playH } = exportPixelSize(opts.aspect, opts.resolution)
   const composeSpec = composeSpecV1Enabled(workspaceId, clipRow.projectId)
     ? resolveComposeSpec(opts.edits, playW, playH)
     : null
   const editsHash = editsVersionHash(opts.edits)
-  const hashMaterial = composeSpec ? `${editsHash}:${JSON.stringify(composeSpec)}` : editsHash
-  const hash = renderVersionHash(hashMaterial, opts.aspect, opts.resolution)
+  let hashMaterial = composeSpec ? `${editsHash}:${JSON.stringify(composeSpec)}` : editsHash
+  if (opts.deliver && !isDefaultDeliver(opts.deliver)) {
+    hashMaterial += `:${stableDeliverJson(opts.deliver)}`
+  }
+  const hash = renderVersionHash(hashMaterial, opts.aspect, targetRes)
+  const fmt = opts.deliver && !isDefaultDeliver(opts.deliver) ? deliverExt(opts.deliver) : 'mp4'
   const existing = await prisma.clipRender.findFirst({
     where: { clipId, workspaceId, status: 'READY', editsVersionHash: hash },
     orderBy: { createdAt: 'desc' },
@@ -216,14 +225,16 @@ export async function enqueueRenderClip(
 
   const renderId = createId('rnd')
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-  const filename = exportFilename(opts.title)
+  const baseName = exportFilename(opts.title).replace(/\.[^.]+$/, '')
+  const filename = `${baseName}.${fmt}`
   const render = await prisma.clipRender.create({
     data: {
       id: renderId,
       clipId,
       workspaceId,
       status: 'QUEUED',
-      resolution: opts.resolution,
+      resolution: targetRes,
+      format: fmt,
       aspectRatio: opts.aspect,
       batchId: opts.batchId ?? null,
       watermark: opts.watermark,
@@ -246,6 +257,7 @@ export async function enqueueRenderClip(
         renderId,
         editsVersionHash: hash,
         ...(composeSpec ? { composeSpec } : {}),
+        ...(opts.deliver && !isDefaultDeliver(opts.deliver) ? { deliver: opts.deliver, targetResolution: targetRes } : {}),
       },
     },
   })
@@ -277,6 +289,22 @@ export async function retryFailedRender(workspaceId: string, renderId: string) {
     }
   }
 
+  const failedJob = await prisma.clipJob.findFirst({
+    where: {
+      clipId: clip.id,
+      type: 'RENDER_CLIP',
+      payload: { path: ['renderId'], equals: renderId },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { payload: true },
+  })
+  const failedPayload = failedJob?.payload as {
+    editsVersionHash?: string
+    composeSpec?: unknown
+    deliver?: ExportDeliver
+    targetResolution?: ExportResolution
+  } | null
+
   await prisma.clipRender.update({
     where: { id: renderId },
     data: {
@@ -296,7 +324,12 @@ export async function retryFailedRender(workspaceId: string, renderId: string) {
       clipId: clip.id,
       type: 'RENDER_CLIP',
       status: 'QUEUED',
-      payload: { renderId, editsVersionHash: render.editsVersionHash ?? '' },
+      payload: {
+        renderId,
+        editsVersionHash: render.editsVersionHash ?? failedPayload?.editsVersionHash ?? '',
+        ...(failedPayload?.composeSpec ? { composeSpec: failedPayload.composeSpec } : {}),
+        ...(failedPayload?.deliver ? { deliver: failedPayload.deliver, targetResolution: failedPayload.targetResolution } : {}),
+      },
     },
   })
 

@@ -228,6 +228,10 @@ export function EditorShell({
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
+  const [exportTimelineInOut, setExportTimelineInOut] = useState<import('@/lib/clips/editor/timeline-edit-ops').InOut>({
+    inMs: null,
+    outMs: null,
+  })
   const [replaceBrollId, setReplaceBrollId] = useState<string | null>(null)
   const [fillerReviewOpen, setFillerReviewOpen] = useState(false)
   const [gapReviewOpen, setGapReviewOpen] = useState(false)
@@ -2264,6 +2268,8 @@ export function EditorShell({
             onMatchFrame={matchFrame}
             onOpenExport={() => setExportOpen(true)}
             onReplaceBrollMedia={setReplaceBrollId}
+            inOut={exportTimelineInOut}
+            onInOutChange={setExportTimelineInOut}
           />
           <PlayerControls
             playing={playing}
@@ -2398,6 +2404,8 @@ export function EditorShell({
           })
         }
         onClose={() => setExportOpen(false)}
+        timelineInOut={exportTimelineInOut}
+        playheadMs={outputMs}
       />
       </ClipperSurfaceErrorBoundary>
       <Dialog open={!!replaceBrollId} onOpenChange={(o) => !o && setReplaceBrollId(null)}>

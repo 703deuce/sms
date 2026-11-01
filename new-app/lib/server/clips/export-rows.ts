@@ -14,6 +14,7 @@ export type ClipExportRowDto = {
   title: string
   resolution: string
   aspectRatio: string
+  formatChip: string | null
   batchId: string | null
   watermark: boolean
   status: string
@@ -52,6 +53,12 @@ function backfillClipRenderSizeBytes(renderId: string, sizeBytes: number): void 
     .catch(() => {})
 }
 
+function formatExportChip(format: string, resolution: string): string {
+  const f = (format || 'mp4').toUpperCase()
+  const res = resolution === '2160p' ? '4K' : resolution
+  return `${f} · ${res}`
+}
+
 export function parseExportStatusFilter(raw: string | undefined): 'all' | 'ready' | 'failed' {
   const q = (raw || 'all').toLowerCase()
   if (q === 'ready' || q === 'failed') return q
@@ -71,6 +78,7 @@ type ClipRenderRowInput = {
   error: string | null
   resolution: string
   aspectRatio: string
+  format: string
   batchId: string | null
   watermark: boolean
   filename: string | null
@@ -121,6 +129,7 @@ async function enrichClipRenderRow(
     title: r.clip.title,
     resolution: r.resolution,
     aspectRatio: r.aspectRatio,
+    formatChip: formatExportChip(r.format, r.resolution),
     batchId: r.batchId,
     watermark: r.watermark,
     status: r.status,
@@ -181,6 +190,7 @@ async function enrichCompositionExportRow(
     title: comp.title || 'Script export',
     resolution: r.resolution,
     aspectRatio: r.aspectRatio,
+    formatChip: null,
     batchId: null,
     watermark: false,
     status: r.status,

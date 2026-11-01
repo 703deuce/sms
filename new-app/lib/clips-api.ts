@@ -162,6 +162,7 @@ export type ExportRenderRow = {
   title: string
   resolution: string
   aspectRatio: string
+  formatChip?: string | null
   watermark: boolean
   status: string
   error: string | null
@@ -259,7 +260,7 @@ export function retryProject(projectId: string) {
 export function exportClipWithOptions(
   clipId: string,
   body: {
-    resolution?: 720 | '720p' | '1080p'
+    resolution?: 720 | '720p' | '1080p' | '1440p' | '2160p'
     aspect?: '9:16' | '4:5' | '1:1' | '16:9'
     exportPlatform?: 'tiktok' | 'youtube_shorts' | 'instagram_reels'
     watermark?: boolean
@@ -267,6 +268,14 @@ export function exportClipWithOptions(
     removeDeadAir?: boolean
     previewWysiwyg?: boolean
     exportSfx?: 'off' | 'subtle' | 'meme'
+    format?: 'mp4' | 'mov' | 'gif' | 'mp3' | 'wav' | 'm4a' | 'flac' | 'png'
+    codec?: 'h264' | 'hevc'
+    quality?: 'standard' | 'high' | 'max'
+    fps?: 'source' | number
+    rangeInMs?: number
+    rangeOutMs?: number
+    stillAtMs?: number
+    softSubs?: boolean
     edits?: unknown
   },
 ) {

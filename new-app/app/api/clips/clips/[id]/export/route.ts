@@ -6,6 +6,15 @@ import {
   EXPORT_PLATFORM_PRESETS,
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
+import {
+  composeResolutionForDeliver,
+  DEFAULT_DELIVER,
+  deliverExt,
+  isDefaultDeliver,
+  normalizeDeliver,
+  stableDeliverJson,
+  type ExportDeliver,
+} from '@/lib/clips/export-deliver'
 import { parseExportAspect } from '@/lib/clips/export-aspect'
 import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
 import { coerceEditsForPreviewExport } from '@/lib/clips/export-edits-coerce'
@@ -31,7 +40,7 @@ const resolutionSchema = z.preprocess((v) => {
   if (v === 720 || v === '720') return '720p'
   if (v === 1080 || v === '1080') return '1080p'
   return v
-}, z.enum(['720p', '1080p']))
+}, z.enum(['720p', '1080p', '1440p', '2160p']))
 
 const bodySchema = z.object({
   resolution: resolutionSchema.default('720p'),
@@ -47,6 +56,14 @@ const bodySchema = z.object({
   previewWysiwyg: z.boolean().optional(),
   exportSfx: z.enum(['off', 'subtle', 'meme']).optional(),
   exportPlatform: z.enum(['tiktok', 'youtube_shorts', 'instagram_reels']).optional(),
+  format: z.enum(['mp4', 'mov', 'gif', 'mp3', 'wav', 'm4a', 'flac', 'png']).optional(),
+  codec: z.enum(['h264', 'hevc']).optional(),
+  quality: z.enum(['standard', 'high', 'max']).optional(),
+  fps: z.union([z.literal('source'), z.number()]).optional(),
+  rangeInMs: z.number().optional(),
+  rangeOutMs: z.number().optional(),
+  stillAtMs: z.number().optional(),
+  softSubs: z.boolean().optional(),
   /** Optional client snapshot — used when PATCH save is still in flight. */
   edits: z.record(z.unknown()).optional(),
 })
@@ -112,7 +129,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         exportSfx,
       })
     }
-    const watermark = body.watermark ?? !can(workspaceId, 'no_watermark')
+    const watermark = can(workspaceId, 'no_watermark') ? (body.watermark ?? false) : true
     let resolution = body.resolution
     if (exportPlatform) {
       const platformPreset = EXPORT_PLATFORM_PRESETS[exportPlatform]
@@ -125,6 +142,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (resolution === '1080p' && !can(workspaceId, 'export_1080p')) {
       resolution = '720p'
     }
+    if ((resolution === '1440p' || resolution === '2160p') && !can(workspaceId, 'export_1080p')) {
+      resolution = '720p'
+    }
     const aspect = exportPlatform
       ? edits.aspectRatio ?? '9:16'
       : previewWysiwyg
@@ -134,6 +154,32 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       resolution = CLIP_PREVIEW_EXPORT_RESOLUTION
     }
     const editedDurationMs = outputDurationMs(edits)
+    const deliverTargetRes =
+      resolution === '1440p' || resolution === '2160p' ? resolution : undefined
+    const hasInOut =
+      body.rangeInMs != null &&
+      body.rangeOutMs != null &&
+      body.rangeOutMs > body.rangeInMs
+    const deliver = normalizeDeliver(
+      {
+        format: body.format,
+        codec: body.codec,
+        quality: body.quality,
+        fps: body.fps,
+        targetResolution: deliverTargetRes,
+        rangeInMs: body.rangeInMs,
+        rangeOutMs: body.rangeOutMs,
+        stillAtMs: body.stillAtMs,
+        softSubs: body.softSubs,
+      },
+      {
+        canHigh: can(workspaceId, 'export_1080p'),
+        lengthMs: editedDurationMs,
+        hasInOut,
+        platform: Boolean(exportPlatform),
+      },
+    )
+    const composeResolution = composeResolutionForDeliver(deliver?.targetResolution ?? resolution)
     logEditorDecision('export_request', {
       clipId,
       workspaceId,
@@ -173,11 +219,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
 
     if (
+      !deliver &&
       clip.previewKey &&
       exportSfx === 'off' &&
       canReuseClipPreviewForExport({
         aspect,
-        resolution,
+        resolution: composeResolution,
         edits,
         bounds,
       })
@@ -217,7 +264,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
 
     const result = await enqueueRenderClip(workspaceId, clipId, {
-      resolution,
+      resolution: composeResolution,
+      targetResolution: resolution,
       aspect,
       watermark,
       edits,
@@ -225,6 +273,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       clipEndMs: clip.endMs,
       previewKey: clip.previewKey,
       title: clip.title,
+      deliver,
     })
 
     if (result.reused && result.downloadUrl) {
