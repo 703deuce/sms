@@ -305,13 +305,15 @@ def apply_voice_fx(video: Path, out: Path, fx: dict) -> bool:
         fc = f"[0:a]{','.join(pre) or 'anull'}[pre]"
         gain = lufs_gain_db(measure_lufs(["-i", str(video)], fc, "[pre]"), fx["lufs"])
     post = post_chain(fx, gain)
-    pan_tail = ""
+    filters = list(pre + post)
     if fx.get("pan"):
         from clips_worker.audio_render import pan_filter, probe_audio_channels
 
-        pan_tail = pan_filter(int(fx["pan"]), probe_audio_channels(video))
-    chain = ",".join(pre + post) + pan_tail
-    if not chain.strip(","):
+        pf = pan_filter(int(fx["pan"]), probe_audio_channels(video))
+        if pf:
+            filters.append(pf.lstrip(","))
+    chain = ",".join(filters)
+    if not chain:
         return False
     subprocess.check_call(
         ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-map", "0:v:0", "-map", "0:a:0",
