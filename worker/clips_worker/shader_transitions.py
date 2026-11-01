@@ -192,15 +192,19 @@ def render_window(
             raw = fbo.read(components=3, alignment=1)
             _write_all(enc.stdin, bytes(raw[h - 1 :: -1]), deadline)
         enc.stdin.close()
+        enc.stdin = None
         try:
-            _, enc_err = enc.communicate(timeout=shader_window_timeout_sec())
+            enc_rc = enc.wait(timeout=shader_window_timeout_sec())
         except subprocess.TimeoutExpired:
             enc.kill()
-            enc.communicate(timeout=5)
+            enc.wait(timeout=5)
             raise ShaderRenderError("encode_timeout")
-        if enc.returncode != 0:
-            tail = stderr_tail(enc_err.decode("utf-8", "replace") if enc_err else "", lines=12)
-            raise ShaderRenderError(f"encode_failed:{tail[:240] or enc.returncode}")
+        enc_err = b""
+        if enc.stderr:
+            enc_err = enc.stderr.read() or b""
+        if enc_rc != 0:
+            tail = stderr_tail(enc_err.decode("utf-8", "replace"), lines=12)
+            raise ShaderRenderError(f"encode_failed:{tail[:240] or enc_rc}")
         got = probe_video_nb_frames(out_path)
         if got < n:
             raise ShaderRenderError(f"short_mkv:frames={got}<{n}")
