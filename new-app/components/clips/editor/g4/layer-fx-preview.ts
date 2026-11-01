@@ -7,7 +7,7 @@
  *   reverse  per-tick seek: local t → in + own − (floor(t·30) + 1)/30 (export's reversed copy);
  *   key      WebGL mirror (grade-gl.ts) — wired by PreviewStage through GradePreview.apply.
  */
-import { BLEND_CSS, maskAlpha, maskGeomAt, MASK_STEP_MS, type LayerFx, type LayerMask } from '@/lib/clips/editor/layer-fx'
+import { BLEND_CSS, maskAlpha, maskGeomAt, MASK_STEP_MS, type LayerFx, type LayerMask, type MaskGeom } from '@/lib/clips/editor/layer-fx'
 import { BLUR_UNIT } from '@/lib/clips/editor/blur-regions'
 
 const MAX_MASKS = 64
@@ -60,15 +60,65 @@ function setMask(el: HTMLElement, url: string) {
   else delete el.dataset.g4bMask
 }
 
-/** CV17c: libass paints to an offscreen-transferred canvas; ancestor mask-image does not clip it — mask the canvas. */
+function pct(n: number) {
+  return `${Math.round(n * 1000) / 1000}%`
+}
+
+/** Hard clip for JASSUB offscreen canvas (CSS mask-image does not clip its bitmap). */
+export function textFxClipPath(mask: LayerMask, localMs: number): string {
+  const g = maskGeomAt(mask, localMs)
+  if (g.feather > 0 || g.rot !== 0) return ''
+  if (mask.shape === 'ellipse') {
+    if (!mask.invert) return `ellipse(${pct(g.w / 2)} ${pct(g.h / 2)} at ${pct(g.x)} ${pct(g.y)})`
+    return ellipseHoleClip(g)
+  }
+  if (mask.shape === 'rect') {
+    const l = g.x - g.w / 2
+    const t = g.y - g.h / 2
+    const r = 100 - g.x - g.w / 2
+    const b = 100 - g.y - g.h / 2
+    if (!mask.invert) return `inset(${pct(t)} ${pct(r)} ${pct(b)} ${pct(l)})`
+    return `polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ${pct(l)} ${pct(t)}, ${pct(100 - r)} ${pct(t)}, ${pct(100 - r)} ${pct(100 - b)}, ${pct(l)} ${pct(100 - b)}, ${pct(l)} ${pct(t)})`
+  }
+  return ''
+}
+
+function ellipseHoleClip(g: MaskGeom): string {
+  const rx = g.w / 2
+  const ry = g.h / 2
+  const pts: string[] = []
+  for (let i = 0; i <= 48; i++) {
+    const t = (i / 48) * Math.PI * 2
+    pts.push(`${pct(g.x + rx * Math.cos(t))} ${pct(g.y + ry * Math.sin(t))}`)
+  }
+  return `polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ${pts.join(', ')})`
+}
+
+function setTextFxClip(el: HTMLElement, path: string) {
+  if (el.style.clipPath !== path) el.style.clipPath = path
+  const ov = path ? 'hidden' : ''
+  if (el.style.overflow !== ov) el.style.overflow = ov
+}
+
+/** CV17c: libass paints to an offscreen-transferred canvas; mask-image does not clip it — clip the libass layer box. */
 export function textFxMaskEl(host: HTMLElement): HTMLElement {
-  return host.querySelector<HTMLElement>('[data-testid="libass-canvas"]') ?? host
+  return host.querySelector<HTMLElement>('[data-testid="libass-layer"]') ?? host.querySelector<HTMLElement>('[data-testid="libass-canvas"]') ?? host
 }
 
 export function applyTextFxLayerFx(host: HTMLElement | null, fx: LayerFx | undefined, localMs: number, W: number, H: number) {
   if (!host || !fx || (!fx.mask && !fx.blend)) return
   const maskEl = textFxMaskEl(host)
-  applyLayerFx(maskEl, host, fx, localMs, W, H)
+  if (fx.mask) {
+    const clip = textFxClipPath(fx.mask, localMs)
+    setTextFxClip(maskEl, clip)
+    if (clip) setMask(maskEl, '')
+    else setMask(maskEl, maskUrl(fx.mask, localMs, W, H))
+  } else {
+    setTextFxClip(maskEl, '')
+    if (maskEl.dataset.g4bMask) setMask(maskEl, '')
+  }
+  const mode = fx.blend ? BLEND_CSS[fx.blend] : ''
+  if (host.style.mixBlendMode !== mode) host.style.mixBlendMode = mode
   if (maskEl !== host && host.dataset.g4bMask) applyLayerFx(host, null, undefined, 0, W, H)
 }
 

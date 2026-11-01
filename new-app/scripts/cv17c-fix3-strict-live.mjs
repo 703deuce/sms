@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
  * CV17c-fix3 STRICT pixel check (do not weaken):
- * Circle mask center 50/50, w=15%, h=10% of export frame → ellipse in preview stage coords.
- * Bright: alpha>30 && r+g+b>600.
+ * Circle mask center 50/50, w=15%, h=10% of export frame → ellipse in preview stage coords
+ * (text libass canvases are full stage-sized → same coordinate map).
+ * Bright: alpha>30 && r+g+b>600 on text libass canvas pixels only.
  * BEFORE mask: outsideBright >= 200.
  * AFTER mask: outsideBright <= 10% of beforeOutside.
- * INVERT: insideBright <= 10% of afterInside (baseline inside count from after-mask shot).
+ * INVERT: insideBright <= 10% of afterInside (non-invert baseline on fx canvas).
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -14,24 +15,29 @@ import { chromium } from '../node_modules/playwright/index.mjs'
 const CLIP_ID = 'clip_2287e76553ab473e8b824e5337fee29d'
 const URL = `https://transovo.ai/app/clips/proj_238c916d00774f0a9a024efbcfd7beea/edit/${CLIP_ID}`
 const ART = '/opt/cursor/artifacts/cv17c-fix3'
-const MASK = { x: 50, y: 50, w: 15, h: 10 }
+const MASK = { x: 50, y: 50, w: 15, h: 10, feather: 0 }
 
-function ellipseInside(px, py, w, h, g) {
-  const cx = (g.x / 100) * w
-  const cy = (g.y / 100) * h
-  const hw = (g.w / 100) * w * 0.5
-  const hh = (g.h / 100) * h * 0.5
-  if (hw <= 0 || hh <= 0) return false
-  const u = (px - cx) / hw
-  const v = (py - cy) / hh
-  return u * u + v * v <= 1
+const MAIN_TEXT_CANVAS = '[data-preview-renderer] [data-testid="libass-canvas"]:not([data-testid="preview-text-fx"] *)'
+const FX_TEXT_CANVAS = '[data-testid="preview-text-fx"] [data-testid="libass-canvas"]'
+
+async function pausePreview(page) {
+  await page.evaluate(() => {
+    for (const v of document.querySelectorAll('video')) {
+      try {
+        v.pause()
+      } catch {
+        /* ignore */
+      }
+    }
+  })
 }
 
-async function countBright(page, g, mode) {
-  const stage = page.locator('[data-preview-renderer]')
-  const buf = await stage.screenshot()
+async function countBrightCanvas(page, canvasSel, geom) {
+  const loc = page.locator(canvasSel).first()
+  await loc.waitFor({ state: 'visible', timeout: 20000 })
+  const buf = await loc.screenshot()
   return page.evaluate(
-    async ({ b64, geom, mode }) => {
+    async ({ b64, geom }) => {
       const img = new Image()
       await new Promise((res, rej) => {
         img.onload = () => res(undefined)
@@ -69,10 +75,9 @@ async function countBright(page, g, mode) {
           else outside++
         }
       }
-      if (mode === 'outside') return { outside, inside: insideN, totalBright }
       return { outside, inside: insideN, totalBright }
     },
-    { b64: buf.toString('base64'), geom: g, mode },
+    { b64: buf.toString('base64'), geom },
   )
 }
 
@@ -83,6 +88,7 @@ async function setMaskGeom(page) {
     ['layer-fx-mask-y', String(MASK.y)],
     ['layer-fx-mask-w', String(MASK.w)],
     ['layer-fx-mask-h', String(MASK.h)],
+    ['layer-fx-mask-feather', String(MASK.feather)],
   ]) {
     const input = page.getByTestId(id).locator('input').first()
     if (await input.count()) await input.fill(v)
@@ -110,36 +116,41 @@ async function main() {
     await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 })
     await page.locator('[data-testid="timeline-root"]').waitFor({ timeout: 120000 })
     await page.waitForTimeout(2000)
+    await pausePreview(page)
     await page.getByRole('button', { name: 'Text', exact: true }).click()
     await page.getByTestId('text-add').click()
     await page.waitForTimeout(3500)
+    await pausePreview(page)
     const textId = await page.evaluate(() => [...document.querySelectorAll('[data-testid="timeline-item-text"]')].pop()?.getAttribute('data-item-id'))
     await page.locator(`[data-testid="timeline-item-text"][data-item-id="${textId}"]`).click({ force: true })
     await page.getByRole('button', { name: 'Properties', exact: true }).click()
     await page.locator('[data-testid="properties-panel"][data-target^="text:"]').waitFor({ timeout: 20000 })
     await page.waitForTimeout(2500)
+    await pausePreview(page)
 
     const beforePath = join(ART, 'stage-before-mask.png')
     await page.locator('[data-preview-renderer]').screenshot({ path: beforePath })
     out.screenshots.before = beforePath
-    const before = await countBright(page, MASK, 'outside')
+    const before = await countBrightCanvas(page, MAIN_TEXT_CANVAS, MASK)
     out.strict.beforeOutside = before.outside
 
     await setMaskGeom(page)
     await page.waitForTimeout(4000)
+    await pausePreview(page)
     const afterPath = join(ART, 'stage-after-mask.png')
     await page.locator('[data-preview-renderer]').screenshot({ path: afterPath })
     out.screenshots.after = afterPath
-    const after = await countBright(page, MASK, 'outside')
+    const after = await countBrightCanvas(page, FX_TEXT_CANVAS, MASK)
     out.strict.afterOutside = after.outside
     out.strict.afterInside = after.inside
 
     await page.getByTestId('layer-fx-mask-invert').click()
     await page.waitForTimeout(4000)
+    await pausePreview(page)
     const invertPath = join(ART, 'stage-invert-mask.png')
     await page.locator('[data-preview-renderer]').screenshot({ path: invertPath })
     out.screenshots.invert = invertPath
-    const inv = await countBright(page, MASK, 'inside')
+    const inv = await countBrightCanvas(page, FX_TEXT_CANVAS, MASK)
     out.strict.invertInside = inv.inside
 
     out.strict.passBeforeMin = before.outside >= 200
