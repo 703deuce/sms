@@ -57,12 +57,11 @@ async function main() {
     results.selectionVisible = await page.locator('[data-testid="canvas-selection-box"]').isVisible()
 
     const chipBox = await page.locator('[data-testid="preview-canvas-bg-chip"]').boundingBox()
-    const frameBox = await page
-      .locator('[data-testid="preview-main-layer"]')
-      .evaluate((el) => {
-        const box = el.closest('[style*="aspect"]') ?? el.parentElement?.parentElement
-        return (box ?? el).getBoundingClientRect()
-      })
+    const frameBox = await page.evaluate(() => {
+      const row = document.querySelector('[data-testid="preview-chip-row"]')
+      const frame = row?.parentElement
+      return frame ? frame.getBoundingClientRect() : null
+    })
     results.chipInFrame =
       chipBox &&
       frameBox &&
