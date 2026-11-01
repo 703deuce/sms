@@ -128,7 +128,7 @@ def test_sfx_volume_envelope(tmp_path: Path):
 def test_blank_canvas(tmp_path: Path):
     from clips_worker.blank_project import blank_duration_ms, is_blank_job, make_blank_video
 
-    assert blank_duration_ms(5) == 10_000 and blank_duration_ms(None) == 600_000 and blank_duration_ms(10**9) == 3_600_000
+    assert blank_duration_ms(5) == 10_000 and blank_duration_ms(None) == 10_000 and blank_duration_ms(10**9) == 3_600_000
     assert is_blank_job({}, {"blank": True}) and is_blank_job({"blank": True}, {}) and not is_blank_job({}, {})
     p = tmp_path / "b.mp4"
     assert make_blank_video(p, "1:1", 10_000) == (720, 720)

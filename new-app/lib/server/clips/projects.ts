@@ -146,7 +146,9 @@ export async function createClipProject(
 /** G1b3: canvas lengths a blank project may ask for (worker clamps the same: blank_project.py). */
 export const BLANK_MIN_MS = 10_000
 export const BLANK_MAX_MS = 60 * 60 * 1000
-export const BLANK_DEFAULT_MS = 10 * 60 * 1000
+/** PR-01: default blank canvas = 10 s (matches initial trim); worker renders this quickly. */
+export const BLANK_DEFAULT_MS = 10_000
+export const BLANK_INITIAL_TRIM_MS = 10_000
 
 /**
  * G1b3: blank project (no source video). A PENDING upload row the worker fills with a black, silent
@@ -203,6 +205,20 @@ export async function createBlankClipProject(
     },
   })
   return project
+}
+
+/** PR-01: project header duration — blank projects use the clip trim span, not rangeEndMs (often 10 min legacy). */
+export function blankProjectDisplayDurationMs(
+  project: { rangeStartMs: number; rangeEndMs: number },
+  uploadDurationMs: number | null | undefined,
+  clipEdits: unknown,
+): number {
+  const trim = (clipEdits as { trim?: { in?: number; out?: number } } | null)?.trim
+  if (trim && typeof trim.out === 'number' && typeof trim.in === 'number') {
+    return Math.max(0, trim.out - trim.in)
+  }
+  if (uploadDurationMs && uploadDurationMs > 0) return uploadDurationMs
+  return Math.max(0, Math.min(BLANK_INITIAL_TRIM_MS, project.rangeEndMs - project.rangeStartMs))
 }
 
 export async function createClipProjectFromImportUrl(

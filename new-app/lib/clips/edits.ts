@@ -722,6 +722,16 @@ export function editsVersionHash(edits: ClipEditsV2): string {
 
 const VIDEO_SPLITS_MAX = 200
 
+/** Drop manual Video splits that fall inside newly added cut ranges (range delete / ripple). */
+export function pruneVideoSplitsInCutRanges(
+  splits: readonly number[] | undefined,
+  cuts: readonly CutRange[],
+): number[] | undefined {
+  if (!splits?.length || !cuts.length) return splits?.length ? [...splits] : undefined
+  const kept = splits.filter((s) => !cuts.some(([a, b]) => s >= a && s <= b))
+  return kept.length ? kept : undefined
+}
+
 /** E2fix: sorted, unique, integer split points strictly inside the trim (else undefined). */
 export function normalizeVideoSplits(raw: unknown, trimIn: number, trimOut: number): number[] | undefined {
   if (!Array.isArray(raw) || !raw.length) return undefined

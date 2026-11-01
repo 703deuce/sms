@@ -1087,7 +1087,6 @@ export function PreviewStage({
   // band is z-[26]). fit_top / stream headline: the video area under the band, because the worker
   // overlays B-roll on the cut and then composes that into the band layout.
   // EP2: every text overlay through libass-wasm from the export's own .ass (render-plan builders).
-  const libassWanted = !compositePreview && box.w > 0 && previewLibassEnabled() && libassSupported()
   const [libassStatus, setLibassStatus] = useState<Partial<Record<PreviewScriptKey, 'ready' | 'failed'>>>({})
   const [libassFailed, setLibassFailed] = useState<string | null>(null)
   const [libassHeadline, setLibassHeadline] = useState<Parameters<LibassSink['headline']>[0]>(null)
@@ -1100,6 +1099,13 @@ export function PreviewStage({
     if (compositePreview || templatePreview || fitTopPreview || headlineBandTopFrac > 0) return []
     return underPasses(lookEdits as ClipEditsV2, (lookEdits.broll ?? []).map((b) => b.id))
   }, [lookEdits, compositePreview, templatePreview, fitTopPreview, headlineBandTopFrac])
+  const libassNeedsPreview =
+    (lookEdits.captions?.enabled !== false && captionWords.length > 0) ||
+    Boolean(lookEdits.hookOverlay?.enabled) ||
+    (lookEdits.textItems?.length ?? 0) > 0 ||
+    underPassList.length > 0
+  const libassWanted =
+    libassNeedsPreview && !compositePreview && box.w > 0 && previewLibassEnabled() && libassSupported()
   const underZ = useMemo(() => {
     const m: Record<string, number> = {}
     underPassList.forEach((p, i) => {

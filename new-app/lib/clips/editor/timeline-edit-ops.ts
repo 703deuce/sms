@@ -11,7 +11,7 @@
  */
 import { DEFAULT_SFX_VOLUME, type ClipAudioSfx, type ClipEditsAudio } from '@/lib/clips/audio'
 import { BROLL_MIN_MS, type BrollItem } from '@/lib/clips/broll'
-import { mergeCutRanges, normalizeSectionOrder, type ClipEditsV2, type CutRange } from '@/lib/clips/edits'
+import { mergeCutRanges, normalizeSectionOrder, pruneVideoSplitsInCutRanges, type ClipEditsV2, type CutRange } from '@/lib/clips/edits'
 import {
   buildTimelineItems,
   deleteItems,
@@ -514,7 +514,12 @@ export function deleteRangeMain(ctx: OpCtx, range: [number, number]): ClipEditsV
   const total = tb.segs.reduce((n, [a, b]) => n + (b - a), 0)
   const removed = cuts.reduce((n, [a, b]) => n + (b - a), 0)
   if (total - removed < 200) return null
-  return { ...ctx.edits, cutRanges: mergeCutRanges([...ctx.edits.cutRanges, ...cuts]) }
+  const merged = mergeCutRanges([...ctx.edits.cutRanges, ...cuts])
+  const videoSplits = pruneVideoSplitsInCutRanges(ctx.edits.videoSplits, cuts)
+  const next: ClipEditsV2 = { ...ctx.edits, cutRanges: merged }
+  if (videoSplits?.length) next.videoSplits = videoSplits
+  else delete next.videoSplits
+  return next
 }
 
 /** Items fully or partly inside the range (I/O → select). */
