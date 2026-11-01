@@ -3,7 +3,7 @@ FROM python:3.11-slim-bookworm
 ARG GIT_COMMIT=unknown
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg libsm6 libxext6 libglib2.0-0 libegl1 libgl1 libgles2 curl build-essential \
+    ffmpeg libsm6 libxext6 libglib2.0-0 libegl1 libgl1 libgles2 libegl-mesa0 libgl1-mesa-dri curl build-essential \
     fontconfig ca-certificates fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
@@ -69,7 +69,9 @@ RUN pip install --no-cache-dir pytest \
         /app/tests/test_reframe_person_det.py /app/tests/test_polish_render_sync.py \
         /app/tests/test_zoom_filtergraph_valid.py /app/tests/test_worker_fonts.py \
         /app/tests/test_export_sfx.py /app/tests/test_loop_friendly_trim.py \
-        /app/tests/test_audio_first_ingest.py /app/tests/test_stream_render_segment_checkpoint.py
+        /app/tests/test_audio_first_ingest.py /app/tests/test_stream_render_segment_checkpoint.py \
+        && REQUIRE_GL=1 python /app/scripts/gen_transition_shaders.py \
+        && REQUIRE_GL=1 python -m pytest -q /app/tests/test_shader_transitions.py
 
 ENV PYTHONUNBUFFERED=1
 ENV ASR_MODEL=small.en

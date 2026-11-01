@@ -61,6 +61,7 @@ TRANSITION_TYPES = (
     "pixelize", "fade_grays", "squeeze_h", "squeeze_v",
     "cover_left", "cover_right", "cover_up", "cover_down",
     "reveal_left", "reveal_right", "reveal_up", "reveal_down",
+    "spin", "glitch", "light_leak", "zoom_blur", "whip_pan", "ripple",
 )
 TRANSITION_DEFAULT_MS = 400
 TRANSITION_MIN_MS = 100
@@ -110,6 +111,10 @@ XFADE_NAME = {
     "squeeze_h": "squeezeh",
     "squeeze_v": "squeezev",
 }
+SHADER_TRANSITIONS = frozenset(("spin", "glitch", "light_leak", "zoom_blur", "whip_pan", "ripple"))
+LIGHT_LEAK_MAX_MS = 1000
+for _st in SHADER_TRANSITIONS:
+    XFADE_NAME[_st] = "fade"
 COVER_TRANSITIONS = frozenset(
     ("cover_left", "cover_right", "cover_up", "cover_down"),
 )
@@ -121,6 +126,7 @@ CUT_ONLY_TRANSITIONS = frozenset(
         "pixelize", "fade_grays", "squeeze_h", "squeeze_v",
         "cover_left", "cover_right", "cover_up", "cover_down",
         "reveal_left", "reveal_right", "reveal_up", "reveal_down",
+        "spin", "glitch", "light_leak", "zoom_blur", "whip_pan", "ripple",
     ),
 )
 # G4b: transitions drawn by a per-pixel mask (no geometry / global weights).
@@ -675,6 +681,15 @@ def transition_frame(ttype: str, q_in: float) -> dict:
     return f
 
 
+def shader_progress(k: int, n: int) -> float:
+    """gl-transitions progress (0=A, 1=B); matches transitions.ts shaderProgress."""
+    import struct
+
+    if n <= 0:
+        return 0.0
+    return struct.unpack("f", struct.pack("f", float(k) / float(n)))[0]
+
+
 def normalize_transition_spec(raw) -> dict | None:
     if not isinstance(raw, dict) or raw.get("type") not in TRANSITION_TYPES:
         return None
@@ -754,6 +769,8 @@ def cut_transition_windows(segs: list[tuple[int, int]], transitions, fps: int = 
         if not tr:
             continue
         d = min(_clamp_dur(tr["durMs"]), a1 - a0, b1 - b0)
+        if tr["type"] == "light_leak":
+            d = min(d, LIGHT_LEAK_MAX_MS)
         if d < TRANSITION_MIN_MS:
             continue
         cut = starts[k]

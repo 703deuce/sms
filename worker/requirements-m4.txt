@@ -14,6 +14,7 @@ scipy>=1.11.0
 librosa>=0.10.0
 soundfile>=0.12.0
 onnxruntime>=1.17.0
+moderngl==5.13.0
 scenedetect==0.7.2
 supervision>=0.30.9,<0.31
 modal>=1.0.0,<2
