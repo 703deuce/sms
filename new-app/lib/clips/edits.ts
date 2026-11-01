@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { normalizeAudioEdits, type ClipEditsAudio } from '@/lib/clips/audio'
 import { normalizeBrollItems, type BrollItem } from '@/lib/clips/broll'
-import type { ExportAspect } from '@/lib/clips/export-aspect'
+import { parseExportAspect, type ExportAspect } from '@/lib/clips/export-aspect'
 import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
 import { clampZoomIntensity } from '@/lib/clips/zoom-keyframes'
 import type { SilenceTrimSettings } from '@/lib/clips/silence-trim'
@@ -168,7 +168,7 @@ export type ClipEditsV2 = {
   roomTone?: boolean
   /** Fingerprint of last auto-applied vocabulary (sha1 hex). */
   vocabApplied?: string
-  /** Editor / export preview aspect (defaults to 9:16). */
+  /** Editor / export preview aspect: preset or custom:WxH (even, 240–3840). Defaults to 9:16. */
   aspectRatio?: ExportAspect
   /** Export-only overlays (headline bar, badge, channel link) — not burned into preview.mp4. */
   exportTemplate?: ClipExportTemplate
@@ -316,7 +316,6 @@ const LAYOUT_MODES: ClipEditsV2['layout']['mode'][] = [
   'facecam_pip',
 ]
 
-const EXPORT_ASPECTS: ExportAspect[] = ['9:16', '4:5', '1:1', '16:9']
 
 function normalizeWordFixMeta(
   raw: unknown,
@@ -557,10 +556,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
   const mode = LAYOUT_MODES.includes(layoutRaw.mode as ClipEditsV2['layout']['mode'])
     ? (layoutRaw.mode as ClipEditsV2['layout']['mode'])
     : base.layout.mode
-  const aspectRaw = o.aspectRatio
-  const aspectRatio = EXPORT_ASPECTS.includes(aspectRaw as ExportAspect)
-    ? (aspectRaw as ExportAspect)
-    : undefined
+  const aspectRatio = parseExportAspect(o.aspectRatio)
   const shotOverrides = Array.isArray(layoutRaw.shotOverrides)
     ? layoutRaw.shotOverrides
         .map((row) => {

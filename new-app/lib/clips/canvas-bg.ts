@@ -1,4 +1,5 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { aspectRatioParts, type ExportAspect } from '@/lib/clips/export-aspect'
 import {
   DEFAULT_FIT_BLUR_STRENGTH,
   type FitBlurStrength,
@@ -106,7 +107,7 @@ export function canvasBgRelevant(
   if (mode === 'fit_blur' || mode === 'fit_top' || mode === 'full_frame') return true
   if (mainWidth && mainHeight && mainWidth > 0 && mainHeight > 0) {
     const src = mainWidth / mainHeight
-    const [aw, ah] = previewAspect.split(':').map(Number)
+    const { aw, ah } = aspectRatioParts(previewAspect as ExportAspect)
     if (aw > 0 && ah > 0) {
       const canvas = aw / ah
       if (Math.abs(src - canvas) / canvas > 0.02) return true

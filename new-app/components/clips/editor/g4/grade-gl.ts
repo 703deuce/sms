@@ -298,6 +298,8 @@ function injectStyle() {
 /** Live mirrors; `sync` per tick for each media element that needs the 3D stage. */
 export class GradeMirrors {
   private m = new Map<Media, Mirror>()
+  /** Preview quality scale for WebGL mirror resolution (1 = full). */
+  renderScale = 1
   /** Last reason a mirror could not run (shown by the stage). */
   blocked: string | null = null
 
@@ -366,7 +368,7 @@ export class GradeMirrors {
       mir = { canvas, ctx, key: '', t: -1 }
       this.m.set(el, mir)
     }
-    const sc = Math.min(1, MAX_SIDE / Math.max(vw, vh))
+    const sc = Math.min(1, MAX_SIDE / Math.max(vw, vh)) * this.renderScale
     const w = Math.max(2, Math.round(vw * sc))
     const h = Math.max(2, Math.round(vh * sc))
     const c = mir.canvas

@@ -32,7 +32,13 @@ import {
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
 import type { SourceWord } from '@/lib/clips/source-words'
-import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
+import {
+  EXPORT_ASPECT_PRESETS,
+  aspectLabel,
+  exportPixelSize,
+  isCustomAspect,
+  type ExportAspect,
+} from '@/lib/clips/export-aspect'
 import {
   defaultStreamHeadlineExportTemplate,
   formatHeadlineForExport,
@@ -98,7 +104,7 @@ export function ExportDialog({
   edits: ClipEditsV2
   dubs?: DubRow[]
   onAudioTrack?: (track: string) => void
-  onAspectChange?: (aspect: ClipProjectSettings['aspectRatio']) => void
+  onAspectChange?: (aspect: ExportAspect) => void
   onBeforeExport?: () => Promise<void>
   layoutMode?: ClipEditsV2['layout']['mode']
   onLayoutModeChange?: (mode: ClipEditsV2['layout']['mode'], facecam?: ClipEditsV2['layout']['facecam']) => void
@@ -119,7 +125,7 @@ export function ExportDialog({
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
   const [removeDeadAir, setRemoveDeadAir] = useState(false)
-  const [aspect, setAspect] = useState<ClipProjectSettings['aspectRatio']>(
+  const [aspect, setAspect] = useState<ExportAspect>(
     edits.aspectRatio ?? '9:16',
   )
   const [resolution, setResolution] = useState<'720p' | '1080p'>(() =>
@@ -131,7 +137,7 @@ export function ExportDialog({
   // never overwrites the render the user just started.
   const exportClickedRef = useRef(false)
   // FV4d: the in-flight render this dialog re-attached to (wins over saved export preferences).
-  const resumeRef = useRef<{ resolution: '720p' | '1080p' | null; aspectRatio: ClipProjectSettings['aspectRatio'] | null } | null>(null)
+  const resumeRef = useRef<{ resolution: '720p' | '1080p' | null; aspectRatio: ExportAspect | null } | null>(null)
   const [lookupPending, setLookupPending] = useState(false)
   // FV4d: resolution of the render currently in flight (attached or just started) — Export stays
   // blocked for that resolution only.
@@ -599,7 +605,7 @@ export function ExportDialog({
             </p>
           ) : null}
           <div className="mt-1 flex flex-wrap gap-2 [&_button]:min-h-10">
-            {clipAspectRatios.map((a) => (
+            {EXPORT_ASPECT_PRESETS.map((a) => (
               <Button
                 key={a}
                 size="sm"
@@ -613,7 +619,17 @@ export function ExportDialog({
                 {a}
               </Button>
             ))}
+            {isCustomAspect(edits.aspectRatio) ? (
+              <Button size="sm" variant={aspect === edits.aspectRatio ? 'default' : 'outline'} disabled>
+                {aspectLabel(edits.aspectRatio)} (current)
+              </Button>
+            ) : null}
           </div>
+          {aspect ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Output {exportPixelSize(aspect, resolution).width}×{exportPixelSize(aspect, resolution).height} @ {resolution}
+            </p>
+          ) : null}
         </div>
         <div className="mt-3 space-y-1 text-sm">
           <p className="text-xs font-medium">Audio track</p>

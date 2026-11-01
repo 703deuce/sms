@@ -111,7 +111,7 @@ describe('layer fx', () => {
     const fx = document.createElement('div')
     const region = document.createElement('div')
     const row = { target: 'broll:b1', mask: { shape: 'rect' as const, x: 50, y: 50, w: 50, h: 50, rot: 0, feather: 0 }, blend: 'screen' as const }
-    const { W, H } = exportFrameFor(360, 640)
+    const { W, H } = exportFrameFor('9:16')
     expect([W, H]).toEqual([1080, 1920])
     applyLayerFx(fx, region, row, 0, W, H)
     expect(region.style.mixBlendMode).toBe('screen')

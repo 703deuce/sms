@@ -1,5 +1,6 @@
 'use client'
 
+import { useCallback, useEffect, useState } from 'react'
 import { Scissors } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -14,10 +15,16 @@ import {
   layoutPickPayload,
   visibleLayoutOptions,
 } from '@/lib/clips/layout-options'
-import { clipAspectRatios } from '@/lib/clips/settings'
+import {
+  EXPORT_ASPECT_PRESETS,
+  aspectLabel,
+  customAspectDims,
+  customAspectToken,
+  exportPixelSize,
+  isCustomAspect,
+  type ExportAspect,
+} from '@/lib/clips/export-aspect'
 import { FIT_BLUR_LABELS, FIT_BLUR_STRENGTHS, fitBlurStrength } from '@/lib/clips/fit-blur'
-import { withCanvasBg } from '@/lib/clips/canvas-bg'
-import type { ExportAspect } from '@/lib/clips/export-aspect'
 import type { CropShot, FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import {
   ClipShortenGapsPanel,
@@ -98,6 +105,55 @@ export function LayoutPanel({
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
   const aiExtras = clipEditorAiExtrasEnabled()
   const layoutOptions = visibleLayoutOptions({ reframeV2Enabled, aiExtras })
+  const currentAspect = edits.aspectRatio ?? '9:16'
+  const customActive = isCustomAspect(currentAspect)
+  const presetForCustom = EXPORT_ASPECT_PRESETS.includes(currentAspect as (typeof EXPORT_ASPECT_PRESETS)[number])
+    ? (currentAspect as (typeof EXPORT_ASPECT_PRESETS)[number])
+    : '9:16'
+  const defaultCustom = exportPixelSize(
+    customActive ? currentAspect : presetForCustom,
+    '1080p',
+  )
+  const [customW, setCustomW] = useState(() =>
+    customActive ? customAspectDims(currentAspect).width : defaultCustom.width,
+  )
+  const [customH, setCustomH] = useState(() =>
+    customActive ? customAspectDims(currentAspect).height : defaultCustom.height,
+  )
+  const [customErr, setCustomErr] = useState<string | null>(null)
+  useEffect(() => {
+    if (customActive) {
+      const d = customAspectDims(currentAspect)
+      setCustomW(d.width)
+      setCustomH(d.height)
+      setCustomErr(null)
+    }
+  }, [currentAspect, customActive])
+  const commitCustom = useCallback(() => {
+    if (!onEdits) return
+    const token = customAspectToken(customW, customH)
+    if (!token) {
+      setCustomErr('Even numbers, 240–3840, ratio up to 4:1')
+      return
+    }
+    setCustomErr(null)
+    onEdits({ ...edits, aspectRatio: token })
+  }, [customH, customW, edits, onEdits])
+  const enterCustom = useCallback(() => {
+    if (!onEdits) return
+    const px = exportPixelSize(presetForCustom, '1080p')
+    setCustomW(px.width)
+    setCustomH(px.height)
+    setCustomErr(null)
+    const token = customAspectToken(px.width, px.height)
+    if (token) onEdits({ ...edits, aspectRatio: token })
+  }, [edits, onEdits, presetForCustom])
+  const export720 = customAspectToken(customW, customH)
+    ? exportPixelSize(customAspectToken(customW, customH)!, '720p')
+    : null
+  const export1080 = customAspectToken(customW, customH)
+    ? exportPixelSize(customAspectToken(customW, customH)!, '1080p')
+    : null
   return (
     <div className="flex flex-col gap-4">
       {appliedLayoutLabel ? (
@@ -125,18 +181,76 @@ export function LayoutPanel({
         <div className="space-y-2 rounded-lg border border-border p-3">
           <Label className="text-xs font-medium">Aspect ratio</Label>
           <div className="flex flex-wrap gap-2">
-            {clipAspectRatios.map((a) => (
+            {EXPORT_ASPECT_PRESETS.map((a) => (
               <Button
                 key={a}
                 type="button"
                 size="sm"
-                variant={(edits.aspectRatio ?? '9:16') === a ? 'default' : 'outline'}
-                onClick={() => onEdits({ ...edits, aspectRatio: a as ExportAspect })}
+                variant={currentAspect === a ? 'default' : 'outline'}
+                data-testid={`aspect-${a}`}
+                onClick={() => onEdits({ ...edits, aspectRatio: a })}
               >
                 {a}
               </Button>
             ))}
+            <Button
+              type="button"
+              size="sm"
+              variant={customActive ? 'default' : 'outline'}
+              data-testid="aspect-custom"
+              onClick={enterCustom}
+            >
+              Custom
+            </Button>
           </div>
+          {customActive ? (
+            <div className="space-y-2 pt-1">
+              <div className="flex flex-wrap items-end gap-2">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">W</Label>
+                  <input
+                    type="number"
+                    min={240}
+                    max={3840}
+                    step={2}
+                    className="block w-24 rounded border border-border bg-background px-2 py-1 text-sm"
+                    data-testid="aspect-custom-w"
+                    value={customW}
+                    onChange={(e) => setCustomW(Number(e.target.value))}
+                    onBlur={commitCustom}
+                    onKeyDown={(e) => e.key === 'Enter' && commitCustom()}
+                  />
+                </div>
+                <Button type="button" size="sm" variant="outline" data-testid="aspect-custom-swap" onClick={() => {
+                  setCustomW(customH)
+                  setCustomH(customW)
+                }}>
+                  ↔
+                </Button>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">H</Label>
+                  <input
+                    type="number"
+                    min={240}
+                    max={3840}
+                    step={2}
+                    className="block w-24 rounded border border-border bg-background px-2 py-1 text-sm"
+                    data-testid="aspect-custom-h"
+                    value={customH}
+                    onChange={(e) => setCustomH(Number(e.target.value))}
+                    onBlur={commitCustom}
+                    onKeyDown={(e) => e.key === 'Enter' && commitCustom()}
+                  />
+                </div>
+              </div>
+              {customErr ? <p className="text-xs text-destructive">{customErr}</p> : null}
+              {export1080 && export720 ? (
+                <p className="text-xs text-muted-foreground">
+                  Exports at {export1080.width}×{export1080.height} (1080p) / {export720.width}×{export720.height} (720p)
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <p className="text-xs text-muted-foreground">Updates the preview and export framing.</p>
         </div>
       )}

@@ -23,11 +23,13 @@ function LibassLayer({
   onStatus,
   z,
   layerId,
+  renderScale = 1,
 }: {
   layer: PreviewScriptKey
   ass: string
   playW: number
   playH: number
+  renderScale?: number
   clock: LibassClock
   onStatus: LibassStatusFn
   /** G1b: explicit z-index (under-text canvases between B-roll layers). */
@@ -49,7 +51,11 @@ function LibassLayer({
     const inst = instRef.current
     if (!inst || !readyRef.current) return Promise.resolve()
     const { playW: width, playH: height } = dimsRef.current
-    return inst.manualRender({ mediaTime: ms / 1000, width, height, expectedDisplayTime: performance.now() }, repaint)
+    const rs = renderScale
+    return inst.manualRender(
+      { mediaTime: ms / 1000, width: Math.max(2, Math.round(width * rs)), height: Math.max(2, Math.round(height * rs)), expectedDisplayTime: performance.now() },
+      repaint,
+    )
   }
 
   useEffect(() => {
@@ -150,6 +156,7 @@ export function LibassPreviewLayers({
   clock,
   onStatus,
   fxHostRef,
+  renderScale = 1,
 }: {
   scripts: PreviewScripts
   playW: number
@@ -158,6 +165,7 @@ export function LibassPreviewLayers({
   onStatus: LibassStatusFn
   /** CV-17c: hosts for per-item text fx libass layers (mask / blend preview). */
   fxHostRef?: (id: string, el: HTMLDivElement | null) => void
+  renderScale?: number
 }) {
   return (
     <>
@@ -170,15 +178,15 @@ export function LibassPreviewLayers({
           data-fx-id={f.id}
           aria-hidden
         >
-          <LibassLayer layer="text" layerId={f.key} z={f.z} ass={f.ass} playW={playW} playH={playH} clock={clock} onStatus={onStatus} />
+          <LibassLayer layer="text" layerId={f.key} z={f.z} ass={f.ass} playW={playW} playH={playH} renderScale={renderScale} clock={clock} onStatus={onStatus} />
         </div>
       ))}
       {(scripts.under ?? []).map((u) => (
-        <LibassLayer key={u.key} layer="text" layerId={u.key} z={u.z} ass={u.ass} playW={playW} playH={playH} clock={clock} onStatus={onStatus} />
+        <LibassLayer key={u.key} layer="text" layerId={u.key} z={u.z} ass={u.ass} playW={playW} playH={playH} renderScale={renderScale} clock={clock} onStatus={onStatus} />
       ))}
       {PREVIEW_SCRIPT_ORDER.map((k) =>
         scripts[k] ? (
-          <LibassLayer key={k} layer={k} ass={scripts[k]!} playW={playW} playH={playH} clock={clock} onStatus={onStatus} />
+          <LibassLayer key={k} layer={k} ass={scripts[k]!} playW={playW} playH={playH} renderScale={renderScale} clock={clock} onStatus={onStatus} />
         ) : null,
       )}
     </>
