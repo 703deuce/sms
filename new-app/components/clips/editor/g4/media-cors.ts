@@ -146,3 +146,16 @@ export function setMediaSrc(el: Media, url: string) {
   }
   el.src = url
 }
+
+/**
+ * G4cfix: may this element feed Web Audio (createMediaElementSource)? A cross-origin source that
+ * did not load in CORS mode makes the node output silence ("MediaElementAudioSource outputs zeroes
+ * due to CORS access restrictions") — so the voice graph is only built for same-origin media or a
+ * CORS-mode element whose URL is not known to lack CORS headers; otherwise it plays plain.
+ */
+export function audioGraphSafe(el: HTMLMediaElement): boolean {
+  const url = el.currentSrc || el.getAttribute('src') || ''
+  if (!url || !isCrossOriginUrl(url)) return true
+  if (el.crossOrigin !== 'anonymous' || el.dataset.g4corsOff === url) return false
+  return corsKnown(url) !== 'no'
+}

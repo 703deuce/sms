@@ -11,6 +11,7 @@ import type { SourceWord } from '@/lib/clips/source-words'
 import { audioFxActive, buildFxChain, fxPlanKey, trackFxFor, webAudioPlan } from '@/lib/clips/editor/track-fx'
 import { trackIdOf } from '@/lib/clips/editor/tracks'
 import { connectChannel, useTrackFxLufs } from '@/components/clips/editor/use-track-fx-lufs'
+import { audioGraphSafe } from '@/components/clips/editor/g4/media-cors'
 import { clipGainAt, clipHasGainCurve, musicFadeAt, musicMediaMsAt } from '@/lib/clips/editor/audio-clip'
 
 /** G2: densest gain-curve step and most ramp points per scheduled clip. */
@@ -111,12 +112,24 @@ export function useAudioMix({
     const video = videoRef.current
     if (ctxRef.current && elementSourceRef.current) return
     if (!video) return
+    // G4cfix: wait until the load mode is settled (CORS or the plain fallback), then only route a
+    // CORS-readable source through Web Audio — a no-CORS one would be silent; it plays plain instead.
+    if (video.readyState < 1) {
+      video.addEventListener('loadedmetadata', () => ensureVoiceGraphRef.current(), { once: true })
+      return
+    }
+    if (!audioGraphSafe(video)) {
+      video.dataset.g4audioPlain = '1'
+      return
+    }
     if (!ctxRef.current) ctxRef.current = new AudioContext()
     elementSourceRef.current = ctxRef.current.createMediaElementSource(video)
     voiceGainRef.current = ctxRef.current.createGain()
     elementSourceRef.current.connect(voiceGainRef.current)
     routeRef.current('voice')
   }
+  const ensureVoiceGraphRef = useRef(ensureVoiceGraph)
+  ensureVoiceGraphRef.current = ensureVoiceGraph
   const voiceFxOn = audioFxActive(trackFxFor(edits, 'voice'))
   const fxKey = JSON.stringify(edits.trackFx ?? []) + JSON.stringify(lufsGains)
   useEffect(() => {
@@ -173,7 +186,9 @@ export function useAudioMix({
     let cancelled = false
     const setup = async () => {
       ensureVoiceGraph()
-      const ctx = ctxRef.current!
+      // G4cfix: the music bed still mixes when the voice plays plain (no-CORS source).
+      if (!ctxRef.current) ctxRef.current = new AudioContext()
+      const ctx = ctxRef.current
       if (!musicRef.current) {
         musicRef.current = new Audio()
         musicRef.current.crossOrigin = 'anonymous'

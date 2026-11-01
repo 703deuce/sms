@@ -44,7 +44,7 @@ import type { KeyframeTarget } from '@/lib/clips/editor/keyframes'
 import type { LaneId } from '@/lib/clips/editor/timeline-lane-state'
 import { PropertiesPanel } from '@/components/clips/editor/properties-panel'
 import { ItemSpeedControl } from '@/components/clips/editor/timeline/item-speed-control'
-import { MainVideoTools } from '@/components/clips/editor/g4/video-tools'
+import { MainVideoTools, MediaSceneSplit } from '@/components/clips/editor/g4/video-tools'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { sourceMsAtOutput, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
@@ -1637,6 +1637,24 @@ export function EditorShell({
                 />
               ) : null
             }
+            brollSceneSlot={(id) => {
+              const b = (edits.broll ?? []).find((x) => x.id === id)
+              const m = previewBrollMedia.find((x) => x.id === id)
+              if (!b || !m?.url || m.mediaType === 'image' || ('still' in b && b.still)) return null
+              const inMs = b.inMs ?? 0
+              return (
+                <MediaSceneSplit
+                  edits={edits}
+                  kind="broll"
+                  id={id}
+                  url={m.url}
+                  inMs={inMs}
+                  outMs={inMs + (b.endMs - b.startMs)}
+                  onCommit={(next) => setEdits(next)}
+                  readOnly={Boolean(edits.timelineLanes?.broll?.locked)}
+                />
+              )
+            }}
             videoSlot={
               <MainVideoTools
                 edits={edits}

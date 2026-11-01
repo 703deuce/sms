@@ -128,3 +128,20 @@ export function usableCuts(cuts: readonly number[], segments: readonly (readonly
   }
   return out
 }
+
+/** G4cfix: coarse pass spacing / cap (a 12-min clip = 400 samples ≈ 1.8 s apart; refineCut bisects). */
+export const SCENE_FAST_STEP_MS = 250
+export const SCENE_FAST_MAX = 400
+/** G4cfix: scan frames this wide (the signature is a 4×4 grid + a 64-bin histogram). */
+export const SCENE_SCAN_W = 64
+
+/** G4cfix: keep segments clipped to [a, b) (scan only the selected item / range). */
+export function clipRanges(segments: readonly (readonly [number, number])[], a: number, b: number): [number, number][] {
+  const out: [number, number][] = []
+  for (const [x, y] of segments) {
+    const lo = Math.max(x, a)
+    const hi = Math.min(y, b)
+    if (hi > lo) out.push([lo, hi])
+  }
+  return out
+}
