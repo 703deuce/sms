@@ -34,3 +34,18 @@ export function describeEditsChange(prev: ClipEditsV2, next: ClipEditsV2): strin
   }
   return 'Edit'
 }
+
+export function cleanupPassLabel(kind: string, count: number): string {
+  const names: Record<string, string> = {
+    filler: 'Remove fillers',
+    gap: 'Shorten gaps',
+    retake: 'Remove retakes',
+    clarity: 'Edit for clarity',
+    beat: 'Cut to beat',
+    broll: 'Auto B-roll',
+    translate: 'Translate captions',
+    multicam: 'Auto camera cuts',
+  }
+  const head = names[kind] ?? 'Cleanup'
+  return `${head} · ${count} cut${count === 1 ? '' : 's'}`
+}

@@ -11,6 +11,7 @@ describe('editor undo', () => {
     const initial = {
       edits: { ...base, captions: { ...base.captions, presetId: 'bold_pop', size: 1 } },
       past: [] as typeof base[],
+      pastLabels: [] as (string | undefined)[],
       future: [] as typeof base[],
       saveState: 'saved' as const,
       producerStrip: null,
@@ -31,12 +32,12 @@ describe('editor undo', () => {
   it('saved action respects clean flag', () => {
     const base = defaultEdits(bounds)
     const dirty = editorEditsReducer(
-      { edits: base, past: [], future: [], saveState: 'dirty', producerStrip: null },
+      { edits: base, past: [], pastLabels: [], future: [], saveState: 'dirty', producerStrip: null },
       { type: 'saved', clean: false },
     )
     expect(dirty.saveState).toBe('dirty')
     const saved = editorEditsReducer(
-      { edits: base, past: [], future: [], saveState: 'saving', producerStrip: null },
+      { edits: base, past: [], pastLabels: [], future: [], saveState: 'saving', producerStrip: null },
       { type: 'saved', clean: true },
     )
     expect(saved.saveState).toBe('saved')
@@ -47,6 +48,7 @@ describe('editor undo', () => {
     const initial = {
       edits: base,
       past: [] as typeof base[],
+      pastLabels: [] as (string | undefined)[],
       future: [] as typeof base[],
       saveState: 'saved' as const,
       producerStrip: null,

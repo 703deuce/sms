@@ -23,7 +23,9 @@ import type { ClipGapToolSettings } from '@/components/clips/editor/clip-shorten
 import { TrimRangeBar } from '@/components/clips/editor/trim-range-bar'
 import { nudgeTrimIn, nudgeTrimOut } from '@/lib/clips/editor/nudge'
 import type { ClipBounds } from '@/lib/clips/edits'
-import { findRetakes } from '@/lib/clips/editor/retakes'
+import { findRetakes, retakeGroupWithKeepIndex, type RetakeGroup } from '@/lib/clips/editor/retakes'
+import { cleanupPassLabel } from '@/lib/clips/editor/history-labels'
+import { Badge } from '@/components/ui/badge'
 import {
   DEFAULT_CLEANUP_STRENGTH,
   OPT_IN_FILLER_WORDS,
@@ -41,6 +43,7 @@ export function CleanupPanel({
   gapSettings,
   aiExtras = false,
   onApplyProposal,
+  onApplyPass,
   onRestoreProposal,
   onCommitTrim,
   onAuditionChange,
@@ -53,6 +56,7 @@ export function CleanupPanel({
   gapSettings: ClipGapToolSettings
   aiExtras?: boolean
   onApplyProposal: (proposal: CleanupProposal) => void
+  onApplyPass?: (proposals: CleanupProposal[], label: string) => void
   onRestoreProposal: (proposal: CleanupProposal) => void
   onCommitTrim: (trim: { in: number; out: number }) => void
   onAuditionChange: (edits: ClipEditsV2 | null) => void
@@ -61,6 +65,7 @@ export function CleanupPanel({
   const [auditionIds, setAuditionIds] = useState<Set<string>>(new Set())
   const [retakeBusy, setRetakeBusy] = useState(false)
   const [retakeExtras, setRetakeExtras] = useState<CleanupProposal[]>([])
+  const [retakeGroups, setRetakeGroups] = useState<RetakeGroup[]>([])
   const [clarityRows, setClarityRows] = useState<CleanupProposal[]>([])
   const [clarityLoading, setClarityLoading] = useState(false)
   const [clarityEmpty, setClarityEmpty] = useState<string | null>(null)
@@ -126,8 +131,14 @@ export function CleanupPanel({
   }
 
   const applyAllOfKind = (kind: CleanupProposal['kind']) => {
-    for (const p of proposed.filter((row) => row.kind === kind)) onApplyProposal(p)
-    setSkippedIds(new Set())
+    const rows = proposed.filter((row) => row.kind === kind)
+    if (!rows.length) return
+    if (onApplyPass) onApplyPass(rows, cleanupPassLabel(kind, rows.length))
+    else for (const p of rows) onApplyProposal(p)
+    if (kind === 'filler' || kind === 'gap') setSkippedIds(new Set())
+    if (kind === 'clarity') setClarityRows([])
+    if (kind === 'retake') setRetakeExtras([])
+    setAuditionIds(new Set())
     onAuditionChange(null)
   }
 
@@ -146,6 +157,7 @@ export function CleanupPanel({
       if (!groups.length) {
         toast.message('No repeated sentences found')
         setRetakeExtras([])
+        setRetakeGroups([])
         return
       }
       if (aiExtras) {
@@ -168,6 +180,7 @@ export function CleanupPanel({
         }
       }
       const props = retakeProposals(groups, edits.cutRanges ?? [])
+      setRetakeGroups(groups)
       setRetakeExtras(props)
       if (!props.length) toast.message('Retakes already cut or none left')
       else toast.success(`${props.length} retake cut(s) ready — review below`)
@@ -230,6 +243,12 @@ export function CleanupPanel({
 
   return (
     <div className="flex flex-col gap-4 p-3">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-medium">Cleanup</h3>
+        <Badge variant="secondary" className="text-[10px] font-normal">
+          Free
+        </Badge>
+      </div>
       <TrimRangeBar bounds={bounds} trim={edits.trim} onCommitTrim={onCommitTrim} />
       {edits.trim.in !== bounds.clipStartMs || edits.trim.out !== bounds.clipEndMs ? (
         <Button
@@ -331,6 +350,44 @@ export function CleanupPanel({
             </Button>
           ) : null}
           {clarityEmpty ? <span className="text-xs text-muted-foreground">{clarityEmpty}</span> : null}
+        </div>
+      ) : null}
+
+      {retakeGroups.length ? (
+        <div className="space-y-2 rounded-md border border-border p-2" data-testid="retake-review">
+          <p className="text-xs font-medium">Retake groups</p>
+          {retakeGroups.map((group, gi) => (
+            <div key={gi} className="space-y-1 rounded bg-muted/40 p-2 text-xs">
+              {group.attempts.map((a, ai) => (
+                <div key={ai} className="flex items-center justify-between gap-2">
+                  <span className={ai === group.keepIndex ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
+                    {ai === group.keepIndex ? 'Keep · ' : ''}
+                    {a.text.slice(0, 80)}
+                    {a.text.length > 80 ? '…' : ''}
+                  </span>
+                  <div className="flex shrink-0 gap-1">
+                    <Button type="button" size="sm" variant="ghost" onClick={() => onSeek(a.startMs)}>
+                      Play
+                    </Button>
+                    {ai !== group.keepIndex ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const next = retakeGroupWithKeepIndex(group, ai)
+                          setRetakeGroups((rows) => rows.map((g, ix) => (ix === gi ? next : g)))
+                          setRetakeExtras(retakeProposals([next], edits.cutRanges ?? []))
+                        }}
+                      >
+                        Keep this take
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       ) : null}
 

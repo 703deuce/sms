@@ -338,6 +338,7 @@ export function EditorShell({
     redo: redoEdits,
     jumpHistory: jumpHistoryEdits,
     historyPast,
+    historyPastLabels,
     historyFuture,
     canUndo,
     canRedo,
@@ -410,10 +411,22 @@ export function EditorShell({
     <EditorHistoryPanel
       edits={edits}
       historyPast={historyPast}
+      historyPastLabels={historyPastLabels}
       historyFuture={historyFuture}
       jumpHistory={jumpHistory}
       disabled={!canUndo && !canRedo}
     />
+  )
+
+  const onApplyCleanupPass = useCallback(
+    (proposals: CleanupProposal[], label: string) => {
+      logEditorDecision('cleanup_pass', { clipId, label, count: proposals.length })
+      applyCleanupCuts(
+        proposals.map((p) => p.range),
+        label,
+      )
+    },
+    [applyCleanupCuts, clipId],
   )
 
   const onApplyCleanupProposal = useCallback(
@@ -1643,11 +1656,11 @@ export function EditorShell({
             gapSettings={gapToolSettings}
             aiExtras={aiExtras}
             onApplyProposal={onApplyCleanupProposal}
+            onApplyPass={onApplyCleanupPass}
             onRestoreProposal={onRestoreCleanupProposal}
             onCommitTrim={setTrim}
             onAuditionChange={setAuditionEdits}
             onSeek={seekSource}
-            aiExtras={aiExtras}
           />
         </EditorPanelErrorBoundary>
       </div>

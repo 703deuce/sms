@@ -82,9 +82,34 @@ function sentenceStartS(sentence: RetakeWord[]): number {
   return sentence[0]?.s ?? 0
 }
 
+function falseStartGroups(words: RetakeWord[]): RetakeGroup[] {
+  const sentences = splitSentences(words)
+  const out: RetakeGroup[] = []
+  for (const sentence of sentences) {
+    const tokens = sentenceTokens(sentence)
+    if (tokens.length < 6) continue
+    const head = tokens.slice(0, 3)
+    for (let i = 3; i <= tokens.length - 3; i++) {
+      const slice = tokens.slice(i, i + 3)
+      if (head.every((t, j) => t === slice[j])) {
+        const firstWords = sentence.slice(0, i)
+        const secondWords = sentence.slice(i)
+        if (sentenceTokens(firstWords).length >= 3 && sentenceTokens(secondWords).length >= 3) {
+          out.push({
+            attempts: [attemptFromSentence(firstWords), attemptFromSentence(secondWords)],
+            keepIndex: 1,
+          })
+        }
+        break
+      }
+    }
+  }
+  return out
+}
+
 export function findRetakes(words: RetakeWord[]): RetakeGroup[] {
   const sentences = splitSentences(words)
-  if (sentences.length < 2) return []
+  if (sentences.length < 2) return falseStartGroups(words)
 
   const parent = sentences.map((_, i) => i)
   const find = (i: number): number => {
@@ -121,7 +146,7 @@ export function findRetakes(words: RetakeWord[]): RetakeGroup[] {
     const attempts = idxs.map((ix) => attemptFromSentence(sentences[ix]!))
     groups.push({ attempts, keepIndex: attempts.length - 1 })
   }
-  return groups
+  return [...groups, ...falseStartGroups(words)]
 }
 
 function isRangeFullyCut(range: CutRange, cuts: CutRange[]): boolean {
@@ -150,4 +175,9 @@ export function retakeCutRange(group: RetakeGroup, existingCuts: CutRange[] = []
 export function retakeCutRanges(group: RetakeGroup, existingCuts: CutRange[] = []): CutRange[] {
   const one = retakeCutRange(group, existingCuts)
   return one ? [one] : []
+}
+
+export function retakeGroupWithKeepIndex(group: RetakeGroup, keepIndex: number): RetakeGroup {
+  const k = Math.max(0, Math.min(group.attempts.length - 1, keepIndex))
+  return { ...group, keepIndex: k }
 }
