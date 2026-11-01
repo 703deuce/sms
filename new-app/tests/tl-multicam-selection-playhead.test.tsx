@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Timeline } from '@/components/clips/editor/timeline'
 import { SourceMonitor } from '@/components/clips/editor/source-monitor'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
@@ -11,11 +11,12 @@ import { insertFromSource } from '@/lib/clips/editor/source-monitor'
 import {
   MAIN_ANGLE,
   setAngleForSourceSpan,
+  sourceSpanFromTranscriptSelection,
 } from '@/lib/clips/editor/multicam-manual'
 import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import type { SourceWord } from '@/lib/clips/source-words'
 
-const bounds = { clipStartMs: 0, clipEndMs: 20000, trimMinMs: 0, trimMaxMs: 40000 }
+const bounds = { clipStartMs: 0, clipEndMs: 40000, trimMinMs: 0, trimMaxMs: 40000 }
 const cam2: ClipMediaSource = { id: 'u2', ref: 'upload', refId: 'u2', mediaType: 'video', label: 'angle2_apex', syncMs: 0 }
 const lib = [cam2]
 const base = (patch: Partial<ClipEditsV2> = {}): ClipEditsV2 => ({ ...normalizeEdits(defaultEdits(bounds), bounds), ...patch })
@@ -33,6 +34,52 @@ describe('MC-05 / MC-06 multicam on script selection', () => {
     const e = setAngleForSourceSpan(base(), timebaseFor(base()), 1000, 3000, 'u2', lib)
     const back = setAngleForSourceSpan(e, timebaseFor(e), 1000, 3000, MAIN_ANGLE, lib)
     expect(back.sourceSegments).toEqual([{ id: 'mc-1000', sourceId: MAIN_ANGLE, startMs: 1000, endMs: 3000 }])
+  })
+
+  it('MC-05: multi-word selection spans first word start through last word end', () => {
+    const words: SourceWord[] = [
+      { i: 0, s: 19.2, e: 19.55, w: 'cracked' },
+      { i: 1, s: 19.6, e: 20.05, w: 'Does' },
+      { i: 2, s: 20.1, e: 22.0, w: 'care' },
+    ]
+    const onSetEdits = vi.fn()
+    render(
+      <TranscriptPanel
+        words={words}
+        shots={[]}
+        edits={base({ trim: { in: 0, out: 40000 } })}
+        onSeek={() => {}}
+        onAddCut={() => {}}
+        onWordFix={() => {}}
+        onRestoreWord={() => {}}
+        onExtendTrim={() => {}}
+        selectionRef={{ current: null }}
+        onSetEdits={onSetEdits}
+        angleSources={lib}
+      />,
+    )
+    act(() => {
+      fireEvent.click(screen.getByText('cracked'))
+    })
+    act(() => {
+      fireEvent.click(screen.getByText('Does'), { shiftKey: true })
+    })
+    act(() => {
+      fireEvent.click(screen.getByText('care'), { shiftKey: true })
+    })
+    fireEvent.click(screen.getByTestId('transcript-angle-u2'))
+    expect(onSetEdits).toHaveBeenCalled()
+    const seg = (onSetEdits.mock.calls[0]![0] as ClipEditsV2).sourceSegments?.[0]
+    expect(seg).toMatchObject({ sourceId: 'u2', startMs: 19200, endMs: 22000 })
+  })
+
+  it('sourceSpanFromTranscriptSelection spans overlapping words in the selection box', () => {
+    const words = [
+      { s: 19.2, e: 19.55, i: 0 },
+      { s: 19.6, e: 20.05, i: 1 },
+      { s: 20.1, e: 22.0, i: 2 },
+    ]
+    expect(sourceSpanFromTranscriptSelection({ startMs: 19200, endMs: 22000 }, words)).toEqual([19200, 22000])
   })
 
   it('timeline key 2 with script selection applies angle on the word span, not the parked playhead', () => {

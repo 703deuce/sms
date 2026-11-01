@@ -65,6 +65,13 @@ describe('G1b3 split edits (J / L)', () => {
 })
 
 describe('G1b3 roll / slide', () => {
+  it('slide on contiguous videoSplits moves both split points (middle clip)', () => {
+    const e = { ...base(), videoSplits: [3333, 6666] }
+    const s = slideEdit(ctx(e), { lane: 'video', id: 'seg:3333' }, 400)!
+    expect(s.videoSplits).toEqual([3733, 7066])
+    expect(timebaseFor(s).durationMs).toBe(timebaseFor(e).durationMs)
+  })
+
   it('main roll keeps the length; slide moves the clip content-unchanged', () => {
     const e = cut3()
     const r = rollMainEdit(ctx(e), 4000, 500)!

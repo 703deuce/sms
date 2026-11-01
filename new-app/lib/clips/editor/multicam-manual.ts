@@ -146,6 +146,22 @@ export function angleKey(e: { key: string; metaKey?: boolean; ctrlKey?: boolean;
  * and silence trim make one output range several source spans). `segs` / `starts` = Timebase.
  */
 /** Main-source span [srcStartMs, srcEndMs) → angle on the matching output range (cuts / reorder safe). */
+export function sourceSpanFromTranscriptSelection(
+  sel: { startMs: number; endMs: number },
+  words: readonly { s: number; e: number; i?: number }[],
+): [number, number] | null {
+  const a = Math.min(sel.startMs, sel.endMs)
+  const b = Math.max(sel.startMs, sel.endMs)
+  const hit = words
+    .filter((w) => w.e * 1000 > a && w.s * 1000 < b)
+    .sort((x, y) => x.s - y.s || (x.i ?? 0) - (y.i ?? 0))
+  if (!hit.length) {
+    if (b - a >= SOURCE_SEG_MIN_MS) return [Math.round(a), Math.round(b)]
+    return null
+  }
+  return [Math.round(hit[0]!.s * 1000), Math.round(hit[hit.length - 1]!.e * 1000)]
+}
+
 export function setAngleForSourceSpan(
   edits: ClipEditsV2,
   tb: Timebase,

@@ -95,4 +95,14 @@ describe('G1b3 timeline tools', () => {
     const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
     expect(next.inserts?.[0]).toMatchObject({ sourceId: 'freeze', atSrcMs: 11000, durMs: 3000 })
   })
+
+  it('TL-32: Freeze uses playheadOutMsRef when outputMs prop is stale', () => {
+    const playheadOutMsRef = { current: 3000 }
+    const { getByTestId, onCommitEdits } = setup(edits(), { outputMs: 22000, playheadOutMsRef })
+    fireEvent.click(getByTestId('timeline-freeze'))
+    const ins = (onCommitEdits.mock.calls[0]![0] as ClipEditsV2).inserts?.[0]
+    expect(ins?.sourceId).toBe('freeze')
+    // output 3000 → source ~4000 with default cut fixture; stale prop 22000 would land near ~23000 source.
+    expect(ins?.atSrcMs).toBeLessThan(10000)
+  })
 })
