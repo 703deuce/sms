@@ -21,6 +21,10 @@ _SQL = (
 
 def used_font_ids(edits: dict) -> list[str]:
     ids: list[str] = []
+    caps = edits.get("captions") if isinstance(edits.get("captions"), dict) else {}
+    cap_fid = user_font_id(caps.get("font"))
+    if cap_fid and cap_fid not in ids:
+        ids.append(cap_fid)
     for it in edits.get("textItems") or []:
         st = it.get("style") if isinstance(it, dict) and isinstance(it.get("style"), dict) else {}
         fid = user_font_id(st.get("font"))
@@ -92,7 +96,20 @@ def prepare_user_fonts(conn, workspace_id: str | None, edits: dict, work_dir: Pa
             it = {**it, "style": {**st, "fontFamily": fam[fid]}}
         items.append(it)
     print(f"[g3b:user_font] n={len(fam)} missing={len(ids) - len(fam)}", flush=True)
-    return {**edits, "textItems": items, "_fontsDir": str(fonts_dir)}
+    out = {**edits, "textItems": items, "_fontsDir": str(fonts_dir)}
+    caps = out.get("captions") if isinstance(out.get("captions"), dict) else None
+    if caps is not None:
+        cap_fid = user_font_id(caps.get("font"))
+        if cap_fid in fam:
+            out = {
+                **out,
+                "captions": {
+                    **caps,
+                    "font": fam[cap_fid],
+                    "_userFont": True,
+                },
+            }
+    return out
 
 
 def fonts_dir_for(edits: dict) -> Path | None:
