@@ -86,6 +86,7 @@ describe('Media panel', () => {
     const onSelect = vi.fn()
     const t = render(
       <MediaPanel
+        projectId="proj_test"
         media={api()}
         edits={e}
         words={[]}
@@ -96,6 +97,7 @@ describe('Media panel', () => {
         onReplaceSelected={vi.fn()}
         onEdits={onEdits}
         playheadSourceMs={3000}
+        onSeekSource={vi.fn()}
       />,
     )
     expect(t.getByTestId('media-segment-editor')).toBeTruthy()

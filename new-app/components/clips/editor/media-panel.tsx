@@ -30,6 +30,7 @@ import { TimelineFilmstrip } from '@/components/clips/editor/timeline/timeline-f
 import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-filmstrip-frames'
 import { MediaTranscribeControl } from '@/components/clips/editor/media-transcribe-control'
 import { InsertsSection } from '@/components/clips/editor/media-inserts-section'
+import { SpeechSearchSection } from '@/components/clips/editor/speech-search-section'
 import { SourceMonitor, type MonitorRequest } from '@/components/clips/editor/source-monitor'
 import type { Timebase } from '@/lib/clips/editor/clip-timeline'
 import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
@@ -224,6 +225,7 @@ export function MediaLibraryGrid({
 const AUDIO_LABEL: Record<SourceAudio, string> = { main: 'Main', source: 'Clip', mix: 'Both' }
 
 export function MediaPanel({
+  projectId,
   media,
   edits,
   words,
@@ -234,11 +236,13 @@ export function MediaPanel({
   onReplaceSelected,
   onEdits,
   playheadSourceMs,
+  onSeekSource,
   monitorRequest = null,
   timebase,
   playheadOutMs = 0,
   playheadOutMsRef,
 }: {
+  projectId: string
   media: ProjectMediaApi
   edits: ClipEditsV2
   words: SourceWord[]
@@ -249,6 +253,7 @@ export function MediaPanel({
   onReplaceSelected: (item: ProjectMediaItem) => void
   onEdits: (next: ClipEditsV2) => void
   playheadSourceMs: number
+  onSeekSource: (sourceMs: number) => void
   /** G1c: match frame / open request for the source monitor. */
   monitorRequest?: MonitorRequest | null
   /** G1c: the timeline's time base + playhead (output ms) for Insert / Overwrite. */
@@ -332,6 +337,14 @@ export function MediaPanel({
 
   return (
     <div className="flex flex-col gap-3 p-3" data-testid="media-panel">
+      <SpeechSearchSection
+        projectId={projectId}
+        edits={edits}
+        media={media}
+        playheadSourceMs={playheadSourceMs}
+        onSeekSource={onSeekSource}
+        onEdits={onEdits}
+      />
       {seg ? (
         <section className="space-y-2 rounded-md border p-2" data-testid="media-segment-editor">
           <div className="flex items-center justify-between text-xs">

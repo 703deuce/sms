@@ -1613,6 +1613,7 @@ export function EditorShell({
             edits={edits}
             words={editorWords}
             gapSettings={gapToolSettings}
+            aiExtras={aiExtras}
             onApplyProposal={onApplyCleanupProposal}
             onRestoreProposal={onRestoreCleanupProposal}
             onCommitTrim={setTrim}
@@ -1982,6 +1983,7 @@ export function EditorShell({
         <div className={panel === 'media' ? undefined : 'hidden'} aria-hidden={panel !== 'media'} data-testid="editor-panel-media">
           <EditorPanelErrorBoundary label="Media">
           <MediaPanel
+            projectId={projectId}
             media={media}
             edits={edits}
             words={editorWords}
@@ -1992,6 +1994,7 @@ export function EditorShell({
             onReplaceSelected={onReplaceSelected}
             onEdits={setEdits}
             playheadSourceMs={playheadSourceMs}
+            onSeekSource={seekSource}
             monitorRequest={monitorRequest}
             timebase={timelineTb}
             playheadOutMs={outputMs}

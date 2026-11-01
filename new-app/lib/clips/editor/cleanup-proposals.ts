@@ -5,8 +5,10 @@ import type { GapFilterMode } from '@/lib/clips/script-editor/gap-hits'
 import { listFillerHits, type FillerFilter } from '@/lib/clips/script-editor/filler-hits'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
+import type { RetakeGroup } from '@/lib/clips/editor/retakes'
+import { retakeCutRange } from '@/lib/clips/editor/retakes'
 
-export type CleanupCutKind = 'filler' | 'gap' | 'manual' | 'unknown'
+export type CleanupCutKind = 'filler' | 'gap' | 'manual' | 'unknown' | 'retake'
 
 export type CleanupProposal = {
   id: string
@@ -67,6 +69,27 @@ export function fillerProposals(
     range: [h.word.t0Ms, h.word.t1Ms] as CutRange,
     label: h.word.text.trim() || 'filler',
   }))
+}
+
+export function retakeProposals(
+  groups: RetakeGroup[],
+  existingCuts: CutRange[] = [],
+): CleanupProposal[] {
+  const out: CleanupProposal[] = []
+  for (const group of groups) {
+    const range = retakeCutRange(group, existingCuts)
+    if (!range) continue
+    const first = group.attempts[0]?.text ?? ''
+    const preview = first.split(/\s+/).slice(0, 6).join(' ')
+    const label = `Retake · "${preview}${first.split(/\s+/).length > 6 ? '…' : ''}"`
+    out.push({
+      id: proposalId(range),
+      kind: 'retake',
+      range,
+      label,
+    })
+  }
+  return out
 }
 
 export function gapProposals(
