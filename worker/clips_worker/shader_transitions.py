@@ -8,6 +8,7 @@ import struct
 import time
 from pathlib import Path
 
+from clips_worker.ffmpeg_util import probe_video_nb_frames, stderr_tail
 from clips_worker.motion import MOTION_FPS, SHADER_TRANSITIONS, shader_progress
 from clips_worker.motion_render import _window_inputs, window_decode_cmd
 
@@ -116,6 +117,24 @@ def program(ctx, shader_type: str):
     return prog
 
 
+def _stop_proc(p: subprocess.Popen | None, *, grace_s: float = 5.0) -> None:
+    if p is None or p.poll() is not None:
+        return
+    if p.stdin and not p.stdin.closed:
+        try:
+            p.stdin.close()
+        except OSError:
+            pass
+    try:
+        p.wait(timeout=grace_s)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        try:
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            p.kill()
+
+
 def render_window(
     ctx,
     shader_type: str,
@@ -137,7 +156,7 @@ def render_window(
             "-r", str(MOTION_FPS), "-i", "pipe:", "-c:v", "ffv1", "-level", "3", str(out_path),
         ],
         stdin=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
     os.set_blocking(pa.stdout.fileno(), False)
     os.set_blocking(pb.stdout.fileno(), False)
@@ -173,24 +192,27 @@ def render_window(
             raw = fbo.read(components=3, alignment=1)
             _write_all(enc.stdin, bytes(raw[h - 1 :: -1]), deadline)
         enc.stdin.close()
+        try:
+            _, enc_err = enc.communicate(timeout=shader_window_timeout_sec())
+        except subprocess.TimeoutExpired:
+            enc.kill()
+            enc.communicate(timeout=5)
+            raise ShaderRenderError("encode_timeout")
+        if enc.returncode != 0:
+            tail = stderr_tail(enc_err.decode("utf-8", "replace") if enc_err else "", lines=12)
+            raise ShaderRenderError(f"encode_failed:{tail[:240] or enc.returncode}")
+        got = probe_video_nb_frames(out_path)
+        if got < n:
+            raise ShaderRenderError(f"short_mkv:frames={got}<{n}")
     finally:
-        for p in (pa, pb, enc):
-            if p.stdin:
-                try:
-                    p.stdin.close()
-                except OSError:
-                    pass
+        for p in (pa, pb):
             if p.stdout:
                 try:
                     p.stdout.close()
                 except OSError:
                     pass
-            p.kill()
-            try:
-                p.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                p.kill()
-                p.wait(timeout=2)
+            _stop_proc(p)
+        _stop_proc(enc, grace_s=2.0)
         fbo.release()
         tex_a.release()
         tex_b.release()

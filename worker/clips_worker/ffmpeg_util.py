@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 
 def stderr_tail(text: str | bytes | None, lines: int = 20) -> str:
@@ -9,6 +10,21 @@ def stderr_tail(text: str | bytes | None, lines: int = 20) -> str:
         text = text.decode("utf-8", "replace")
     parts = [ln for ln in (text or "").strip().splitlines() if ln.strip()]
     return "\n".join(parts[-lines:])
+
+
+def probe_video_nb_frames(video: Path) -> int:
+    out = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0",
+            "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", str(video),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if out.returncode != 0:
+        return 0
+    s = (out.stdout or "").strip()
+    return int(s) if s.isdigit() else 0
 
 
 def run_ffmpeg(cmd: list[str]) -> None:
