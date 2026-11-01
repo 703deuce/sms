@@ -16,6 +16,9 @@ def used_lut_ids(edits: dict) -> list[str]:
     c = edits.get("color") if isinstance(edits.get("color"), dict) else {}
     specs = [c.get("video")] + [s.get("spec") for s in c.get("segments") or [] if isinstance(s, dict)]
     specs += list((c.get("broll") or {}).values()) if isinstance(c.get("broll"), dict) else []
+    for ly in edits.get("adjustLayers") or []:
+        if isinstance(ly, dict) and isinstance(ly.get("spec"), dict):
+            specs.append(ly["spec"])
     ids: list[str] = []
     for s in specs:
         lut = s.get("lut") if isinstance(s, dict) else None

@@ -39,7 +39,6 @@ def normalize_adjust_layers(raw) -> list[dict]:
         if a < 0 or b - a < ADJUST_MIN_MS:
             continue
         spec = r.get("spec") if isinstance(r.get("spec"), dict) else {}
-        spec = {k: v for k, v in spec.items() if k not in ("hsl", "lut")}
         seen.add(lid)
         out.append({"id": lid, "startMs": a, "endMs": b, "spec": normalize_spec(spec) or {}})
         if len(out) >= ADJUST_MAX:

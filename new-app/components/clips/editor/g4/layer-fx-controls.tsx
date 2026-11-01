@@ -151,7 +151,7 @@ export function LayerFxControls({
               className={`${btn} ${mask?.shape === s ? on : ''}`}
               disabled={readOnly}
               onClick={() => patch({ mask: { ...(mask ?? DEFAULT_MASK), shape: s } })}
-              data-testid={`layer-fx-mask-${s}`}
+              data-testid={s === 'heart' || s === 'star' ? `mask-shape-${s}` : `layer-fx-mask-${s}`}
             >
               {MASK_LABELS[s]}
             </button>

@@ -63,6 +63,7 @@ import { lookKey, videoSpecAtSource } from '@/lib/clips/editor/color'
 import { hasGradeFields } from '@/lib/clips/editor/color-grade'
 import { adjustGradesAt, brollGradeAt, videoGradeAt } from '@/lib/clips/editor/grade-runtime'
 import { GradePreview, layerMedia, stageFrame } from '@/components/clips/editor/g4/grade-preview'
+import { needs3d } from '@/lib/clips/editor/color-grade'
 import { corsMediaProps, prepareAll, setMediaSrc, watchMediaCors } from '@/components/clips/editor/g4/media-cors'
 import { reversedSourceMs } from '@/lib/clips/editor/video-reverse'
 import { applyBlurRegion, applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
@@ -739,8 +740,24 @@ export function PreviewStage({
         const mfx = e.layerFx?.length ? mainFxOf(e) : undefined
         applyLayerFx(mainFxRef.current, null, mfx, outMs, tickFxFrame.W, tickFxFrame.H)
         const mainChroma = mfx?.key && mainKeyAllowed(e) ? chromaParamsAt(mfx.key, keyframeLocalEditFromPlayhead(e, outMs, 0)) : null
-        gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current), mainChroma)
         const adjGrades = tickAdjGrades
+        const adjust3dStack = adjGrades
+          .filter(({ layer }) => !adjustLayerHasFx(e, layer.id))
+          .filter(({ spec }) => needs3d(spec))
+          .map(({ spec }) => spec)
+        for (const { layer, spec } of adjGrades) {
+          if (adjustLayerHasFx(e, layer.id) && needs3d(spec)) {
+            gp.note('Adjustment HSL / LUT preview off on masked layers (the export still applies it)')
+          }
+        }
+        if (adjust3dStack.length) {
+          const mainSpec = videoGradeAt(e, src, outMs)
+          if (mainSpec && (mainSpec.fx?.sharpen || mainSpec.fx?.vignette || mainSpec.fx?.grain)) {
+            gp.note('Adjustment HSL / LUT preview is approximate here (the export applies it exactly)')
+          }
+        }
+        gp.setAdjust3d(adjust3dStack.length ? adjust3dStack : null)
+        gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current), mainChroma)
         const adjSpecs = adjGrades
           .filter(({ layer }) => !adjustLayerHasFx(e, layer.id))
           .map((g) => g.spec)

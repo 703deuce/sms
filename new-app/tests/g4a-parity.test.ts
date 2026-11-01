@@ -51,6 +51,10 @@ const RAW_SPECS: unknown[] = [
   { preset: 'teal_orange', lut: { id: 'demo' }, hsl: { orange: { h: 10, s: 20, l: 5 } }, curves: { b: [[0, 0.1], [1, 0.9]] }, adjust: { exposure: 15, tint: -20 } },
   { fx: { sharpen: 40, vignette: 60, grain: 30 }, adjust: { brightness: 10 } },
   { adjust: { contrast: 25, temperature: 30 } },
+  { adjust: { whites: 100 } },
+  { adjust: { blacks: -100 } },
+  { adjust: { fade: 50 } },
+  { adjust: { fade: 100 } },
 ]
 
 function samples(): Rgb[] {

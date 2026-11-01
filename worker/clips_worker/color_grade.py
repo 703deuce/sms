@@ -25,13 +25,14 @@ from pathlib import Path
 import numpy as np
 
 V2_ADJUST = ("exposure", "highlights", "shadows")
+V2_TONE = ("whites", "blacks", "fade")
 HSL_RANGES = ("red", "orange", "yellow", "green", "cyan", "blue", "purple", "magenta")
 HSL_CENTERS = (0.0, 30.0, 60.0, 120.0, 180.0, 240.0, 280.0, 320.0)
 CURVE_CHANNELS = ("m", "r", "g", "b")
 WHEELS = ("lift", "gamma", "gain")
 FX_KEYS = ("sharpen", "vignette", "grain")
 # G4b effects library (fx_library.py); canonical string adds them as an "e" part only when set.
-FX2_KEYS = ("blur", "glow", "rgbsplit", "glitch", "shake", "flicker", "scanlines")
+FX2_KEYS = ("pixelate", "blur", "glow", "rgbsplit", "glitch", "shake", "flicker", "scanlines")
 FX_ALL = FX_KEYS + FX2_KEYS
 TABLE_N = 255  # 256-entry tables
 GRID = 33
@@ -150,6 +151,8 @@ def has_grade_fields(spec) -> bool:
     adj = spec.get("adjust") if isinstance(spec.get("adjust"), dict) else {}
     if any(_num(adj.get(k)) != 0 for k in V2_ADJUST):
         return True
+    if any(_num(adj.get(k)) != 0 for k in V2_TONE):
+        return True
     return any(spec.get(k) for k in ("curves", "wheels", "hsl", "lut", "fx"))
 
 
@@ -158,6 +161,8 @@ def has_pointwise_v2(spec) -> bool:
         return False
     adj = spec.get("adjust") if isinstance(spec.get("adjust"), dict) else {}
     if any(_num(adj.get(k)) != 0 for k in V2_ADJUST):
+        return True
+    if any(_num(adj.get(k)) != 0 for k in V2_TONE):
         return True
     return any(spec.get(k) for k in ("curves", "wheels", "hsl", "lut"))
 
@@ -186,6 +191,8 @@ def canon_grade(spec) -> str:
         return ""
     adj = spec.get("adjust") if isinstance(spec.get("adjust"), dict) else {}
     parts = ["a" + ",".join(str(_ri((_num(adj.get(k))))) for k in V2_ADJUST)]
+    if any(_num(adj.get(k)) != 0 for k in V2_TONE):
+        parts.append("t" + ",".join(str(_ri((_num(adj.get(k))))) for k in V2_TONE))
     cv = spec.get("curves") or {}
     for k in CURVE_CHANNELS:
         if cv.get(k):
@@ -285,6 +292,19 @@ def tone_hs(y: float, hi: float, sh: float) -> float:
     return _clamp(y, 0.0, 1.0)
 
 
+def _smoothstep(e0: float, e1: float, x: float) -> float:
+    t = _clamp((x - e0) / (e1 - e0), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def tone_extras(y0: float, wt: float, bk: float, fd: float) -> float:
+    if wt == 0 and bk == 0 and fd == 0:
+        return y0
+    y = y0 + 0.25 * wt * _smoothstep(0.5, 1.0, y0) + 0.25 * bk * (1 - _smoothstep(0.0, 0.5, y0))
+    y = _clamp(y, 0.0, 1.0)
+    return 0.2 * fd + y * (1 - 0.3 * fd)
+
+
 def pre_table(spec) -> list[float] | None:
     adj = spec.get("adjust") if isinstance(spec.get("adjust"), dict) else {}
     ev = _clamp(_num(adj.get("exposure")), -100, 100) / 100 * 2
@@ -301,9 +321,12 @@ def post_tables(spec, preset_curve) -> list[list[float]] | None:
     adj = spec.get("adjust") if isinstance(spec.get("adjust"), dict) else {}
     hi = _clamp(_num(adj.get("highlights")), -100, 100) / 100
     sh = _clamp(_num(adj.get("shadows")), -100, 100) / 100
+    wt = _clamp(_num(adj.get("whites")), -100, 100) / 100
+    bk = _clamp(_num(adj.get("blacks")), -100, 100) / 100
+    fd = _clamp(_num(adj.get("fade")), 0, 100) / 100
     wh = spec.get("wheels") or {}
     cv = spec.get("curves") or {}
-    if not preset_curve and hi == 0 and sh == 0 and not wh and not cv:
+    if not preset_curve and hi == 0 and sh == 0 and wt == 0 and bk == 0 and fd == 0 and not wh and not cv:
         return None
     mpts = cv.get("m")
     mm = curve_slopes(mpts) if mpts else None
@@ -320,6 +343,7 @@ def post_tables(spec, preset_curve) -> list[list[float]] | None:
             if preset_curve:
                 y = _curve_at(preset_curve[c], y)
             y = tone_hs(y, hi, sh)
+            y = tone_extras(y, wt, bk, fd)
             y = _clamp(gain * (y + lift * (1 - y)), 0.0, 1.0)
             y = y ** gexp
             if mpts:
@@ -619,10 +643,14 @@ COLOR_KEY_PROPS = {
     "cTint": "tint",
     "cHighlights": "highlights",
     "cShadows": "shadows",
+    "cWhites": "whites",
+    "cBlacks": "blacks",
+    "cFade": "fade",
     "cVibrance": "vibrance",
 }
 # G4c: keyframable effect amounts → spec.fx[key] (quantized to FX_KEY_QUANT).
 FX_KEY_PROPS = {
+    "fxPixelate": "pixelate",
     "fxSharpen": "sharpen",
     "fxVignette": "vignette",
     "fxGrain": "grain",

@@ -47,6 +47,11 @@ export type ColorAdjust = {
   exposure: number
   highlights: number
   shadows: number
+  /** EF-05 tone (postTables) */
+  whites: number
+  blacks: number
+  /** 0..100 lift / matte */
+  fade: number
 }
 export type ColorAdjustKey = keyof ColorAdjust
 /** E4 affine sliders (the matrix). */
@@ -58,6 +63,9 @@ export const ADJUST_KEYS_ALL: readonly ColorAdjustKey[] = [
   'contrast',
   'highlights',
   'shadows',
+  'whites',
+  'blacks',
+  'fade',
   'saturation',
   'vibrance',
   'temperature',
@@ -73,6 +81,9 @@ export const ADJUST_LABELS: Record<ColorAdjustKey, string> = {
   exposure: 'Exposure',
   highlights: 'Highlights',
   shadows: 'Shadows',
+  whites: 'Whites',
+  blacks: 'Blacks',
+  fade: 'Fade',
 }
 /** Every slider is −100..100, default 0 (CapCut Adjust). */
 export const ADJUST_MIN = -100
@@ -364,7 +375,9 @@ export function normalizeColorSpec(raw: unknown): ColorSpec | undefined {
     const adj: Partial<ColorAdjust> = {}
     for (const k of ADJUST_KEYS_ALL) {
       const n = Number(a[k])
-      if (Number.isFinite(n) && Math.round(n) !== 0) adj[k] = Math.round(clampN(n, ADJUST_MIN, ADJUST_MAX))
+      const lo = k === 'fade' ? 0 : ADJUST_MIN
+      const hi = k === 'fade' ? 100 : ADJUST_MAX
+      if (Number.isFinite(n) && Math.round(n) !== 0) adj[k] = Math.round(clampN(n, lo, hi))
     }
     if (Object.keys(adj).length) out.adjust = adj
   }

@@ -18,7 +18,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-FX2_KEYS = ("blur", "glow", "rgbsplit", "glitch", "shake", "flicker", "scanlines")
+FX2_KEYS = ("pixelate", "blur", "glow", "rgbsplit", "glitch", "shake", "flicker", "scanlines")
 HASH_A, HASH_B, HASH_M = 1103, 7919, 997
 
 
@@ -125,9 +125,23 @@ def _round(e: str) -> str:
     return f"floor(({e})+0.5)"
 
 
+def pixelate_block(v: int, w: int, h: int) -> int:
+    if not v:
+        return 0
+    return 2 * max(1, jround(v / 100 * 24 * unit(w, h)))
+
+
 def pre_parts(cur: str, fx: dict, w: int, h: int, tag: str, en: str) -> tuple[list[str], str]:
-    """blur → glow → rgbsplit → glitch (before sharpen). Returns (parts, label)."""
+    """pixelate → blur → glow → rgbsplit → glitch (before sharpen). Returns (parts, label)."""
     parts: list[str] = []
+    if fx.get("pixelate"):
+        b = pixelate_block(int(fx["pixelate"]), w, h)
+        if b:
+            parts.append(
+                f"[{cur}]scale=w='ceil(iw/{b})':h='ceil(ih/{b})':flags=neighbor,"
+                f"scale=w='iw*{b}':h='ih*{b}':flags=neighbor,crop={w}:{h}:0:0{en}[{tag}px]"
+            )
+            cur = f"{tag}px"
     if fx.get("blur"):
         s = blur_sigma(int(fx["blur"]), w, h)
         parts.append(f"[{cur}]gblur=sigma={s:.4f}:steps=3{en}[{tag}bl]")

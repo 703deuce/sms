@@ -364,9 +364,9 @@ export function ColorPanel({
             key={k}
             label={ADJUST_LABELS[k]}
             value={spec.adjust?.[k] ?? 0}
-            min={ADJUST_MIN}
-            max={ADJUST_MAX}
-            testId={`color-adjust-${k}`}
+            min={k === 'fade' ? 0 : ADJUST_MIN}
+            max={k === 'fade' ? 100 : ADJUST_MAX}
+            testId={k === 'whites' || k === 'blacks' || k === 'fade' ? `color-${k}` : `color-adjust-${k}`}
             onLive={(v) => live(setAdj(k, v))}
             onCommit={(v) => commit(setAdj(k, v), k)}
           />
@@ -403,16 +403,12 @@ export function ColorPanel({
       <Collapsible id="wheels" title="Color wheels" open={open.wheels} onToggle={toggle}>
         <ColorWheels {...ctl} />
       </Collapsible>
-      {!isAdjust ? (
-        <Collapsible id="hsl" title="HSL" open={open.hsl} onToggle={toggle}>
-          <HslControls {...ctl} />
-        </Collapsible>
-      ) : null}
-      {!isAdjust ? (
-        <Collapsible id="lut" title="LUT" open={open.lut} onToggle={toggle}>
-          <LutPicker {...ctl} />
-        </Collapsible>
-      ) : null}
+      <Collapsible id="hsl" title="HSL" open={open.hsl} onToggle={toggle}>
+        <HslControls {...ctl} />
+      </Collapsible>
+      <Collapsible id="lut" title="LUT" open={open.lut} onToggle={toggle}>
+        <LutPicker {...ctl} />
+      </Collapsible>
       <Collapsible id="fx" title="Effects" open={open.fx} onToggle={toggle}>
         <FxControls {...ctl} />
         {outputMs != null && onSeekOutput ? (

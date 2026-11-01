@@ -1429,7 +1429,7 @@ def render_edited_clip(
         from clips_worker.user_fonts import prepare_user_fonts
 
         edits = prepare_user_fonts(conn, workspace_id, edits, work_dir)
-    if conn is not None and workspace_id and edits.get("color"):
+    if conn is not None and workspace_id and (edits.get("color") or edits.get("adjustLayers")):
         # G4a: imported .cube LUTs the color looks use (parsed once; baked into each look's cube).
         from clips_worker.user_luts import prepare_user_luts
 
