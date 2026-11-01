@@ -1,0 +1,51 @@
+{
+  "playW": 1920,
+  "playH": 1080,
+  "crop": {
+    "x": 120,
+    "y": 40,
+    "w": 1680,
+    "h": 1000
+  },
+  "flip": {
+    "h": true,
+    "v": false
+  },
+  "text": {
+    "x": 0.1,
+    "y": 0.2,
+    "w": 0.3,
+    "h": 0.08,
+    "anchor": "center"
+  },
+  "captionPresets": [
+    "default_bottom",
+    "safe_margin",
+    "headline_clear"
+  ],
+  "colorSample": {
+    "channel": "r",
+    "samples": [
+      0,
+      64,
+      128,
+      192,
+      255
+    ]
+  },
+  "landscapeLayouts": {
+    "full_frame": "fit",
+    "fit_blur": "fit",
+    "fit_top": "fit",
+    "center_crop": "fill",
+    "screen_pip": "screen_pip",
+    "split": "split",
+    "speaker_follow": "fit",
+    "subject_follow": "fit",
+    "dynamic": "fit",
+    "auto": "fit",
+    "grid3": "fit",
+    "grid4": "fit",
+    "unknown_mode": "fit"
+  }
+}

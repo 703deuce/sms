@@ -1,0 +1,14 @@
+{
+  "full_frame": "fit",
+  "fit_blur": "fit",
+  "fit_top": "fit",
+  "center_crop": "fill",
+  "screen_pip": "screen_pip",
+  "split": "split",
+  "speaker_follow": "fit",
+  "subject_follow": "fit",
+  "dynamic": "fit",
+  "auto": "fit",
+  "grid3": "fit",
+  "grid4": "fit"
+}

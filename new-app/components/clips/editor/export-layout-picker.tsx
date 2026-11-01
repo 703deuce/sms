@@ -10,7 +10,8 @@ import {
   layoutPickPayload,
   type LayoutOptionId,
 } from '@/lib/clips/layout-options'
-import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
+import { isLandscapeAspect } from '@/lib/clips/export-aspect'
+import { landscapeLayoutVisible } from '@/lib/clips/editor/landscape-layouts'
 
 export function ExportLayoutPicker({
   value,
@@ -27,6 +28,8 @@ export function ExportLayoutPicker({
 }) {
   const aiExtras = clipEditorAiExtrasEnabled()
   const ctx = { facecamLayout, reframeV2Enabled, aiExtras }
+  const landscape = isLandscapeAspect(edits.aspectRatio ?? '9:16')
+  const options = EXPORT_LAYOUT_OPTIONS.filter((o) => !landscape || landscapeLayoutVisible(o.id))
   return (
     <div className="mt-3 space-y-1" data-testid="export-layout-picker">
       <p className="text-xs font-medium">Layout for this export</p>
@@ -37,7 +40,7 @@ export function ExportLayoutPicker({
         <p className="text-[10px] text-muted-foreground">No facecam detected for this clip</p>
       ) : null}
       <div className="mt-1 flex flex-wrap gap-2">
-        {EXPORT_LAYOUT_OPTIONS.map((opt) => {
+        {options.map((opt) => {
           const disabled = layoutOptionDisabled(opt, ctx)
           const selected = value === opt.id && !disabled
           return (

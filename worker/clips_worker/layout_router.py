@@ -117,6 +117,28 @@ def editor_layout_to_worker(mode: str) -> str:
     return "speaker_follow"
 
 
+LANDSCAPE_LAYOUTS: dict[str, str] = {
+    "full_frame": "fit",
+    "fit_blur": "fit",
+    "fit_top": "fit",
+    "center_crop": "fill",
+    "screen_pip": "screen_pip",
+    "split": "split",
+    "speaker_follow": "fit",
+    "subject_follow": "fit",
+    "dynamic": "fit",
+    "auto": "fit",
+    "grid3": "fit",
+    "grid4": "fit",
+}
+
+
+def landscape_layout(mode: str) -> str:
+    """EX-03: 16:9 export layout; unknown modes → fit (unchanged default path)."""
+    m = (mode or "speaker_follow").strip()
+    return LANDSCAPE_LAYOUTS.get(m, "fit")
+
+
 def _dominant_layout_mode_from_edits(edits: dict) -> str:
     layout = edits.get("layout") or {}
     segs = layout.get("layoutSegments") or []
