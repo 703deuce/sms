@@ -39,3 +39,15 @@ Source docs: `clipper-streamer-bic.md` §1, `clipper-streamer-ui-layouts.md` §1
 | Ops | Failed upload / transcribe / 0 clips / worker timeout UX | `project-failure-copy.ts`, `project-clips-view.tsx` | **Done** (typed copy + retry) |
 
 **Still in progress / follow-up:** XML/4K export (deferred). **Done this pass:** queue stall/slow states tied to `waitingForWorker` + `queuedElapsedSec`; per-segment layout export in worker (**WORKER DEPLOY**); timeline segment context-menu polish (playhead mode, a11y, dismiss).
+
+## CL-05 / AI-11 (Nov 2026 spec)
+
+| Row | Status | Notes |
+|-----|--------|-------|
+| CL-05 Open in full video | **Done** (web batch 1+2) | `resolveFullVideoLink`, `GET …/full-video-link`, editor + results card `open-in-full-video` |
+| AI-11 Repurpose panel | **Done** (web batch 1+2) | `POST …/repurpose`, `repurpose-panel.tsx`, markers + YouTube copy |
+| Per-segment layout override polish | Deferred (§10) | UX polish only |
+| Publishing / scheduler | Deferred (§10) | OAuth app reviews |
+| Approval queue | Deferred (§10) | No current users |
+| Multiple brand templates | Deferred (§10) | Low value |
+| 3+ speaker follow / 4-up | Deferred (§10) | Rare content |

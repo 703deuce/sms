@@ -25,6 +25,7 @@ import {
 import { clipCardAspectClass } from '@/lib/clips/card-aspect'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { ClipPostCopy } from '@/components/clips/clip-post-copy'
+import { OpenInFullVideoButton } from '@/components/clips/editor/open-in-full-video-button'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { CLIP_PREVIEW_EXPORT_ASPECT } from '@/lib/clips/export-preview-reuse'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
@@ -315,6 +316,7 @@ export function ClipCard({
           <Button size="sm" variant="outline" disabled={thumbBusy} onClick={() => void makeThumbnail()}>
             Make thumbnail
           </Button>
+          <OpenInFullVideoButton clipId={clip.id} />
           {onHidden ? (
             <Button size="sm" variant="ghost" disabled={hideBusy} onClick={() => void hideClip()}>
               <ThumbsDown className="mr-1 size-3.5" aria-hidden />

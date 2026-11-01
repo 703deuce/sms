@@ -27,6 +27,8 @@ import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { CaptionLinesPanel } from '@/components/clips/editor/caption-lines-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
+import { RepurposePanel } from '@/components/clips/editor/repurpose-panel'
+import { OpenInFullVideoButton } from '@/components/clips/editor/open-in-full-video-button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FindClipsInVideoButton } from '@/components/clips/editor/find-clips-in-video-button'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
@@ -1864,6 +1866,13 @@ export function EditorShell({
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
+      {panelMounted('repurpose') ? (
+        <div className={panel === 'repurpose' ? undefined : 'hidden'} aria-hidden={panel !== 'repurpose'}>
+          <EditorPanelErrorBoundary label="Repurpose">
+            <RepurposePanel clipId={clipId} edits={edits} aiMeta={aiMeta} onCommitEdits={setEdits} />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
       {panelMounted('media') ? (
         <div className={panel === 'media' ? undefined : 'hidden'} aria-hidden={panel !== 'media'} data-testid="editor-panel-media">
           <EditorPanelErrorBoundary label="Media">
@@ -1909,6 +1918,7 @@ export function EditorShell({
           onUndo={undo}
           onRedo={redo}
           onExport={() => setExportOpen(true)}
+          layoutSlot={<OpenInFullVideoButton clipId={clipId} />}
           onRetrySave={() => {
             void flushSave()
           }}
