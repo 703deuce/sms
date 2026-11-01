@@ -89,7 +89,15 @@ import { isFormControlTarget } from '@/lib/clips/editor/timeline-zoom'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
 import { EditorVersionsMenu, EditorLayoutMenu, type EditVersionRow } from '@/components/clips/editor/editor-versions-menu'
-import { normalizeEdits, normalizeEditSpeed, outputDurationMs, displayDurationMs, displayPositionMs, editMsAtDisplayMs } from '@/lib/clips/edits'
+import {
+  normalizeEdits,
+  normalizeEditSpeed,
+  outputDurationMs,
+  displayDurationMs,
+  displayPositionMs,
+  editMsAtDisplayMs,
+  keepSegments,
+} from '@/lib/clips/edits'
 import { LayoutQuickPicker } from '@/components/clips/editor/layout-quick-picker'
 import type { StickerLayer } from '@/lib/clips/layers'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
