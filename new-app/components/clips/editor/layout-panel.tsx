@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Scissors } from 'lucide-react'
+import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -65,6 +66,7 @@ export function LayoutPanel({
   clipType = null,
   mediaOffsetMs = 0,
   aiMeta = null,
+  peaksUrl = null,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -100,6 +102,7 @@ export function LayoutPanel({
   clipType?: string | null
   mediaOffsetMs?: number
   aiMeta?: Record<string, unknown> | null
+  peaksUrl?: string | null
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
@@ -301,6 +304,7 @@ export function LayoutPanel({
         <Button type="button" size="sm" variant="outline" className="w-full gap-1.5" onClick={onOpenFillerReview}>
           <Scissors className="size-3.5" aria-hidden />
           Remove filler words
+          <FreeToolBadge />
         </Button>
       ) : null}
       {clipId && words.length > 0 && gapToolSettings && onGapToolSettingsChange && onAddCut && onSeekSource && onOpenGapReview ? (
@@ -317,6 +321,8 @@ export function LayoutPanel({
             onSetCutRanges={onSetCutRanges}
             onSeek={onSeekSource}
             onOpenReview={onOpenGapReview}
+            videoUrl={videoUrl}
+            peaksUrl={peaksUrl}
           />
         </div>
       ) : null}

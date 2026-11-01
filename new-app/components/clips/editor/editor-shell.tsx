@@ -1655,6 +1655,8 @@ export function EditorShell({
             words={editorWords}
             gapSettings={gapToolSettings}
             aiExtras={aiExtras}
+            videoUrl={videoUrl}
+            peaksUrl={editorAssets?.peaksUrl ?? null}
             onApplyProposal={onApplyCleanupProposal}
             onApplyPass={onApplyCleanupPass}
             onRestoreProposal={onRestoreCleanupProposal}
@@ -1697,6 +1699,7 @@ export function EditorShell({
           facecamLayout={facecamLayout}
           onOpenLayersTab={openLayersTab}
           videoUrl={videoUrl}
+          peaksUrl={editorAssets?.peaksUrl ?? null}
           posterUrl={posterUrl}
           projectId={projectId}
           channelId={streamChannelId}

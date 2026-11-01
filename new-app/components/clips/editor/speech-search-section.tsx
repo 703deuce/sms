@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -108,7 +109,7 @@ export function SpeechSearchSection({
     <section className="space-y-2 rounded-md border p-2" data-testid="speech-search-section">
       <div className="flex items-center gap-2 text-xs font-semibold">
         <span>Search what was said</span>
-        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">Free</span>
+        <FreeToolBadge />
       </div>
       <Input
         value={query}

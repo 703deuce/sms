@@ -25,7 +25,6 @@ import { nudgeTrimIn, nudgeTrimOut } from '@/lib/clips/editor/nudge'
 import type { ClipBounds } from '@/lib/clips/edits'
 import { findRetakes, retakeGroupWithKeepIndex, type RetakeGroup } from '@/lib/clips/editor/retakes'
 import { cleanupPassLabel } from '@/lib/clips/editor/history-labels'
-import { Badge } from '@/components/ui/badge'
 import {
   DEFAULT_CLEANUP_STRENGTH,
   OPT_IN_FILLER_WORDS,
@@ -34,6 +33,14 @@ import {
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
+import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
+import { rmsSamplesFromPeaks } from '@/lib/clips/gap-audio-trim'
+import {
+  cleanupPassConfirmMessage,
+  cleanupPassNeedsConfirm,
+  mergedCutRemovalMs,
+} from '@/lib/clips/gap-audio-trim'
+import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
 
 export function CleanupPanel({
   clipId,
@@ -42,6 +49,8 @@ export function CleanupPanel({
   words,
   gapSettings,
   aiExtras = false,
+  videoUrl = null,
+  peaksUrl = null,
   onApplyProposal,
   onApplyPass,
   onRestoreProposal,
@@ -55,6 +64,8 @@ export function CleanupPanel({
   words: SourceWord[]
   gapSettings: ClipGapToolSettings
   aiExtras?: boolean
+  videoUrl?: string | null
+  peaksUrl?: string | null
   onApplyProposal: (proposal: CleanupProposal) => void
   onApplyPass?: (proposals: CleanupProposal[], label: string) => void
   onRestoreProposal: (proposal: CleanupProposal) => void
@@ -99,6 +110,12 @@ export function CleanupPanel({
   )
   const maxPlausibleGapMs = useMemo(() => maxPlausibleGapMsForTrim(edits.trim), [edits.trim.in, edits.trim.out])
 
+  const audioPeaks = useAudioPeaks(videoUrl, 40, 12_000, { peaksUrl, skipDecode: !videoUrl && !peaksUrl })
+  const rmsSamples = useMemo(
+    () => (audioPeaks.peaks.length ? rmsSamplesFromPeaks(audioPeaks.peaks, audioPeaks.peaksPerSec) : []),
+    [audioPeaks.peaks, audioPeaks.peaksPerSec],
+  )
+
   const filler = useMemo(
     () => fillerProposals(orderedWords, deletedSet, { strength, enabledOptInFillers: enabledOptIn }),
     [orderedWords, deletedSet, strength, enabledOptIn],
@@ -113,8 +130,9 @@ export function CleanupPanel({
         maxPlausibleGapMs,
         wordSpans,
         strength,
+        rmsSamples,
       }),
-    [orderedWords, edits.cutRanges, gapSettings, maxPlausibleGapMs, wordSpans, strength],
+    [orderedWords, edits.cutRanges, gapSettings, maxPlausibleGapMs, wordSpans, strength, rmsSamples],
   )
   const applied = useMemo(
     () => appliedCutProposals(edits, orderedWords, deletedSet),
@@ -133,6 +151,18 @@ export function CleanupPanel({
   const applyAllOfKind = (kind: CleanupProposal['kind']) => {
     const rows = proposed.filter((row) => row.kind === kind)
     if (!rows.length) return
+    if (kind === 'gap') {
+      const sourceDur = Math.max(1, bounds.trimMaxMs - bounds.trimMinMs)
+      const removed = mergedCutRemovalMs(
+        rows.map((r) => r.range),
+        bounds.trimMinMs,
+        bounds.trimMaxMs,
+      )
+      if (cleanupPassNeedsConfirm(removed, sourceDur)) {
+        const ok = window.confirm(cleanupPassConfirmMessage(removed, sourceDur))
+        if (!ok) return
+      }
+    }
     if (onApplyPass) onApplyPass(rows, cleanupPassLabel(kind, rows.length))
     else for (const p of rows) onApplyProposal(p)
     if (kind === 'filler' || kind === 'gap') setSkippedIds(new Set())
@@ -245,9 +275,6 @@ export function CleanupPanel({
     <div className="flex flex-col gap-4 p-3">
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-medium">Cleanup</h3>
-        <Badge variant="secondary" className="text-[10px] font-normal">
-          Free
-        </Badge>
       </div>
       <TrimRangeBar bounds={bounds} trim={edits.trim} onCommitTrim={onCommitTrim} />
       {edits.trim.in !== bounds.clipStartMs || edits.trim.out !== bounds.clipEndMs ? (
@@ -314,9 +341,11 @@ export function CleanupPanel({
         <div className="flex flex-wrap gap-2 pt-1">
           <Button type="button" size="sm" variant="secondary" onClick={() => applyAllOfKind('filler')}>
             Accept all fillers
+            <FreeToolBadge className="ml-1.5" />
           </Button>
           <Button type="button" size="sm" variant="secondary" onClick={() => applyAllOfKind('gap')}>
             Accept all gaps
+            <FreeToolBadge className="ml-1.5" />
           </Button>
         </div>
       </div>
@@ -332,6 +361,7 @@ export function CleanupPanel({
             onClick={() => void runRetakes()}
           >
             Remove retakes
+            <FreeToolBadge className="ml-1.5" />
           </Button>
           <Button
             type="button"

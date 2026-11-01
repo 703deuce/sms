@@ -1,3 +1,4 @@
+import { gapShortenCutRangeWithAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
 import { mergeCutRanges, sanitizeCutRangesForTrim, type ClipEditsV2, type ClipWord, type CutRange } from '@/lib/clips/edits'
 import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
 
@@ -10,6 +11,8 @@ export type SilenceTrimSettings = {
   fillerTrim?: boolean
   /** Stream: slightly longer gaps before cuts (keeps pre-reaction pauses). */
   protectReactionGaps?: boolean
+  maxGapMs?: number
+  rmsSamples?: GapRmsSample[] | null
 }
 
 export type SilenceTrimContext = {
@@ -98,7 +101,7 @@ export function fillerWordCutRanges(
 
 export function silenceTrimCutRanges(
   words: { s: number; e: number }[],
-  opts: SilenceTrimSettings,
+  opts: SilenceTrimSettings & { rmsSamples?: GapRmsSample[] | null },
   ctx?: SilenceTrimContext,
 ): CutRange[] {
   if (!opts.enabled) return []
@@ -107,7 +110,7 @@ export function silenceTrimCutRanges(
   const maxGapMs = opts.maxGapMs ?? 1500
   const minGap = opts.minGapMs ?? SILENCE_TRIM_NATURAL.minGapMs ?? 350
   const keep = opts.keepMs ?? SILENCE_TRIM_NATURAL.keepMs ?? 120
-  const maxSingleCutMs = 3000
+  const useAudio = opts.rmsSamples !== undefined
   const cuts: CutRange[] = []
   for (let i = 0; i < words.length - 1; i++) {
     const gapStart = words[i].e * 1000
@@ -117,11 +120,17 @@ export function silenceTrimCutRanges(
     if (gap > maxGapMs) continue
     if (opts.protectReactionGaps && gap < minGap + 200) continue
     if (gap <= minGap) continue
-    let remove = gap - keep
-    if (remove <= 50) continue
-    remove = Math.min(remove, maxSingleCutMs)
-    const mid = gapStart + gap / 2
-    const raw: CutRange = [Math.round(mid - remove / 2), Math.round(mid + remove / 2)]
+    let raw: CutRange | null
+    if (useAudio) {
+      raw = gapShortenCutRangeWithAudio(gapStart, gapEnd, gap, keep, opts.rmsSamples ?? null, words)
+    } else {
+      let remove = gap - keep
+      if (remove <= 50) continue
+      remove = Math.min(remove, 3000)
+      const mid = gapStart + gap / 2
+      raw = [Math.round(mid - remove / 2), Math.round(mid + remove / 2)]
+    }
+    if (!raw) continue
     if (cutOverlapsProtectedSpan(raw, ctx?.protectedSpans)) continue
     const snapped = snapCutRangeToWordGaps(raw, words, 60)
     if (snapped && !cutOverlapsProtectedSpan(snapped, ctx?.protectedSpans)) cuts.push(snapped)

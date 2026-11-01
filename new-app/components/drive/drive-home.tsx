@@ -93,8 +93,40 @@ export function DriveHome({
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [heroUploadActive])
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
+  const [projects, setProjects] = useState(initialProjects)
 
-  const projects = initialProjects
+  useEffect(() => {
+    setProjects(initialProjects)
+  }, [initialProjects])
+
+  const insertDuplicateCopies = useCallback((sourceIds: string[], newIds: string[]) => {
+    if (!newIds.length) return
+    setProjects((prev) => {
+      const added: ClipProjectListItem[] = []
+      sourceIds.forEach((srcId, i) => {
+        const src = prev.find((p) => p.id === srcId)
+        const newId = newIds[i]
+        if (!src || !newId) return
+        added.push({
+          ...src,
+          id: newId,
+          title: `${src.title.replace(/ \(copy\)$/i, '')} (copy)`,
+          updatedAt: new Date().toISOString(),
+        })
+      })
+      return added.length ? [...added, ...prev] : prev
+    })
+  }, [])
+
+  const duplicateProjects = async (projectIds: string[]) => {
+    const res = await clipsFetch<{ projectIds?: string[] }>('/api/clips/projects/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'duplicate', projectIds }),
+    })
+    insertDuplicateCopies(projectIds, res.projectIds ?? [])
+    router.refresh()
+    toast.success(projectIds.length === 1 ? 'Project duplicated' : `${projectIds.length} projects duplicated`)
+  }
 
   useEffect(() => {
     if (q != null && drive) drive.setSearch(q)
@@ -138,13 +170,17 @@ export function DriveHome({
       setBulkMoveOpen(true)
       return
     } else {
-      await clipsFetch('/api/clips/projects/bulk', {
+      const res = await clipsFetch<{ projectIds?: string[] }>('/api/clips/projects/bulk', {
         method: 'POST',
         body: JSON.stringify({
           action: pageView === 'trash' && action === 'trash' ? 'restore' : action,
           projectIds: [...selected],
         }),
       })
+      if (action === 'duplicate') {
+        insertDuplicateCopies([...selected], res.projectIds ?? [])
+        toast.success(`${selected.size} project${selected.size === 1 ? '' : 's'} duplicated`)
+      }
     }
     setSelected(new Set())
     router.refresh()
@@ -503,7 +539,12 @@ export function DriveHome({
                           : '—'}
                     </td>
                     <td className="px-2">
-                      <ProjectRowMenu projectId={p.id} title={p.title} folders={folders} />
+                      <ProjectRowMenu
+                        projectId={p.id}
+                        title={p.title}
+                        folders={folders}
+                        onDuplicate={(id) => duplicateProjects([id])}
+                      />
                     </td>
                   </tr>
                 ))}

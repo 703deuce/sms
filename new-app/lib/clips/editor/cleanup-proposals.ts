@@ -1,6 +1,7 @@
 import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
 import { mergeCutRanges, subtractRangeFromCuts } from '@/lib/clips/edits'
-import { gapShortenCutRange, listClipGapHits } from '@/lib/clips/gap-shorten'
+import { listClipGapHits } from '@/lib/clips/gap-shorten'
+import { gapHasLoudProgramAudio, gapShortenCutRangeWithAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
 import type { GapFilterMode } from '@/lib/clips/script-editor/gap-hits'
 import { listFillerHits, type FillerFilter } from '@/lib/clips/script-editor/filler-hits'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
@@ -9,7 +10,6 @@ import { normalizeCleanupCutRange, sanitizeCleanupCutRanges } from '@/lib/clips/
 import {
   DEFAULT_CLEANUP_STRENGTH,
   fillerEligibleAtStrength,
-  gapHasSpeechEnergy,
   gapPresetForStrength,
   isProtectedFromCleanup,
   type CleanupStrength,
@@ -137,7 +137,7 @@ export function gapProposals(
     maxPlausibleGapMs?: number
     wordSpans?: { s: number; e: number }[]
     strength?: CleanupStrength
-    rmsSamples?: { tMs: number; rms: number }[] | null
+    rmsSamples?: GapRmsSample[] | null
   },
 ): CleanupProposal[] {
   const preset = opts.strength ? gapPresetForStrength(opts.strength) : null
@@ -146,13 +146,21 @@ export function gapProposals(
   const hits = listClipGapHits(orderedWords, cutRanges, { ...opts, minGapMs, targetGapMs })
   return hits
     .filter((hit) => {
-      if (!opts.rmsSamples?.length) return true
-      return !gapHasSpeechEnergy(hit.prevWord.t1Ms, hit.word.t0Ms, opts.rmsSamples)
+      if (opts.rmsSamples === undefined) return true
+      if (!opts.rmsSamples?.length) return false
+      return !gapHasLoudProgramAudio(hit.prevWord.t1Ms, hit.word.t0Ms, opts.rmsSamples)
     })
     .map((hit) => {
     const range =
-      gapShortenCutRange(hit.prevWord.t1Ms, hit.word.t0Ms, hit.gapMs, targetGapMs, opts.wordSpans) ??
-      ([hit.prevWord.t1Ms, hit.word.t0Ms] as CutRange)
+      gapShortenCutRangeWithAudio(
+        hit.prevWord.t1Ms,
+        hit.word.t0Ms,
+        hit.gapMs,
+        targetGapMs,
+        opts.rmsSamples ?? null,
+        opts.wordSpans,
+      ) ?? null
+    if (!range) return null
     const normalized =
       opts.wordSpans?.length != null && opts.wordSpans.length > 0
         ? normalizeCleanupCutRange(range, opts.wordSpans) ?? range
@@ -164,6 +172,7 @@ export function gapProposals(
       label: `${(hit.gapMs / 1000).toFixed(1)}s pause`,
     }
   })
+    .filter((p): p is CleanupProposal => p != null)
 }
 
 export function appliedCutProposals(

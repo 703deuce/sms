@@ -65,17 +65,13 @@ export function isProtectedFromCleanup(word: {
   return false
 }
 
+import { gapHasLoudProgramAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
+
 export function gapHasSpeechEnergy(
   gapStartMs: number,
   gapEndMs: number,
-  rmsSamples: { tMs: number; rms: number }[] | null | undefined,
-  noiseFloor = 0.08,
+  rmsSamples: GapRmsSample[] | null | undefined,
+  _noiseFloor = 0.08,
 ): boolean {
-  if (!rmsSamples?.length || gapEndMs <= gapStartMs) return false
-  let speechMs = 0
-  for (const s of rmsSamples) {
-    if (s.tMs < gapStartMs || s.tMs > gapEndMs) continue
-    if (s.rms > noiseFloor) speechMs += 40
-  }
-  return speechMs > 150
+  return gapHasLoudProgramAudio(gapStartMs, gapEndMs, rmsSamples)
 }

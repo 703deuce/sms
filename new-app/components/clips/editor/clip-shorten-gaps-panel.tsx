@@ -10,6 +10,8 @@ import { gapShortenCutRange, listClipGapHits, shortenAllClipGaps } from '@/lib/c
 import type { GapFilterMode, GapHit } from '@/lib/clips/script-editor/gap-hits'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
+import { rmsSamplesFromPeaks } from '@/lib/clips/gap-audio-trim'
 
 export type ClipGapToolSettings = {
   mode: GapFilterMode
@@ -30,6 +32,8 @@ export function ClipShortenGapsPanel({
   onSetCutRanges,
   onSeek,
   onOpenReview,
+  videoUrl = null,
+  peaksUrl = null,
 }: {
   clipId: string
   words: SourceWord[]
@@ -42,6 +46,8 @@ export function ClipShortenGapsPanel({
   onSetCutRanges?: (ranges: [number, number][]) => void
   onSeek: (sourceMs: number) => void
   onOpenReview: () => void
+  videoUrl?: string | null
+  peaksUrl?: string | null
 }) {
   const [cursor, setCursor] = useState(0)
   const [activeHitId, setActiveHitId] = useState<string | null>(null)
@@ -67,6 +73,12 @@ export function ClipShortenGapsPanel({
   )
   const targetGapMs = Math.round(settings.targetGapSec * 1000)
 
+  const audioPeaks = useAudioPeaks(videoUrl, 40, 12_000, { peaksUrl, skipDecode: !videoUrl && !peaksUrl })
+  const rmsSamples = useMemo(
+    () => (audioPeaks.peaks.length ? rmsSamplesFromPeaks(audioPeaks.peaks, audioPeaks.peaksPerSec) : []),
+    [audioPeaks.peaks, audioPeaks.peaksPerSec],
+  )
+
   const gapHits = useMemo(
     () =>
       listClipGapHits(orderedWords, cutRanges, {
@@ -82,7 +94,7 @@ export function ClipShortenGapsPanel({
   const activeHit = gapHits[cursor] ?? gapHits.find((h) => h.word.id === activeHitId) ?? null
 
   const shortenHit = (hit: GapHit) => {
-    const range = gapShortenCutRange(hit.prevWord.t1Ms, hit.word.t0Ms, hit.gapMs, targetGapMs, wordSpans)
+    const range = gapShortenCutRange(hit.prevWord.t1Ms, hit.word.t0Ms, hit.gapMs, targetGapMs, wordSpans, rmsSamples)
     if (!range) {
       toast.message('Gap already short enough')
       return
@@ -125,6 +137,7 @@ export function ClipShortenGapsPanel({
           targetGapMs,
           maxPlausibleGapMs,
           wordSpans,
+          rmsSamples,
         })
         if (!count) {
           toast.message('No pauses match these settings')

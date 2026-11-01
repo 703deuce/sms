@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FolderInput, Link2, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { Copy, FolderInput, Link2, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { MoveToFolderDialog } from '@/components/drive/move-to-folder-dialog'
 import { toast } from 'sonner'
 import {
@@ -20,11 +20,13 @@ export function ProjectRowMenu({
   title,
   folders = [],
   onTrash,
+  onDuplicate,
 }: {
   projectId: string
   title: string
   folders?: { id: string; name: string }[]
   onTrash?: () => void
+  onDuplicate?: (projectId: string) => void | Promise<void>
 }) {
   const router = useRouter()
   const [moveOpen, setMoveOpen] = useState(false)
@@ -67,6 +69,16 @@ export function ProjectRowMenu({
           <Link2 className="mr-2 size-4" />
           Copy project link
         </DropdownMenuItem>
+        {onDuplicate ? (
+          <DropdownMenuItem
+            onClick={() => {
+              void onDuplicate(projectId)
+            }}
+          >
+            <Copy className="mr-2 size-4" />
+            Duplicate
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-destructive"
