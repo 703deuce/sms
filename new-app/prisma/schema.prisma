@@ -9818,6 +9818,7 @@ model ClipRender {
   filename          String?
   editsVersionHash  String?
   srtKey            String?
+  stemsKey          String?
   sizeBytes         BigInt?
   expiresAt         DateTime?
   error             String?

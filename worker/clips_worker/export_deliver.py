@@ -27,6 +27,7 @@ def normalize_deliver(raw) -> dict | None:
         and raw.get("rangeOutMs") is None
         and raw.get("stillAtMs") is None
         and not raw.get("softSubs")
+        and not raw.get("stems")
     ):
         return None
     out = dict(raw)

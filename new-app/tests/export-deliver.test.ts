@@ -7,7 +7,7 @@ import {
   normalizeDeliver,
 } from '@/lib/clips/export-deliver'
 
-const baseCtx = { canHigh: true, lengthMs: 60_000, hasInOut: true, platform: false }
+const baseCtx = { canHigh: true, canPro: true, lengthMs: 60_000, hasInOut: true, platform: false }
 
 describe('normalizeDeliver', () => {
   it('returns null for default mp4 path', () => {
@@ -49,6 +49,17 @@ describe('normalizeDeliver', () => {
   it('range needs valid in/out when hasInOut', () => {
     expect(normalizeDeliver({ rangeInMs: 1000, rangeOutMs: 2000 }, baseCtx)?.rangeInMs).toBe(1000)
     expect(normalizeDeliver({ rangeInMs: 1000, rangeOutMs: 2000 }, { ...baseCtx, hasInOut: false })).toBeNull()
+  })
+
+  it('stems requires producer entitlement', () => {
+    expect(normalizeDeliver({ stems: true }, { ...baseCtx, canPro: false })).toBeNull()
+  })
+
+  it('stems alone is a non-default deliver path', () => {
+    const d = normalizeDeliver({ stems: true }, baseCtx)
+    expect(d?.stems).toBe(true)
+    expect(isDefaultDeliver(d)).toBe(false)
+    expect(isDefaultDeliver(DEFAULT_DELIVER)).toBe(true)
   })
 })
 

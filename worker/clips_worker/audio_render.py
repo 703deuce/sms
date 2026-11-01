@@ -618,20 +618,68 @@ def export_ducked_music_stem(
     duck_depth: float,
     fade_in_s: float,
     fade_out_s: float,
+    music_window: dict | None = None,
+    music_volume_expr: str | None = None,
+    music_loop: bool = False,
+    music_pan: int | None = None,
+    music_pan_ch: int = 2,
+    track_fx: dict | None = None,
 ) -> None:
-    """Write the sidechain-compressed music bed ([md]) for tests."""
+    """Write the sidechain-compressed music bed ([md]) for tests and EX-16 export."""
     L = max(0.1, float(length_s))
     V = max(0.0, min(1.0, float(volume)))
     D = max(0.0, min(1.0, float(duck_depth)))
     FI = max(0.0, float(fade_in_s))
     FO = max(0.0, float(fade_out_s))
     ratio = 1.0 + 7.0 * D
-    fc = (
-        f"[0:a]asplit=2[sp][sc];[sp]anullsink;"
-        f"[1:a]volume={V:.4f},afade=t=in:d={FI:.3f},afade=t=out:st={max(0, L - FO):.3f}:d={FO:.3f},"
-        f"atrim=0:{L:.3f},asetpts=PTS-STARTPTS[mv];"
+    parts = ["[0:a]asplit=2[sp][sc]", "[sp]anullsink"]
+    parts.append(
+        music_chain(1, L, V, FI, FO, music_window, "mv", music_volume_expr, music_pan, music_pan_ch)
+    )
+    music_fx(parts, track_fx)
+    parts.append(
         f"[mv][sc]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[md]"
     )
+    fc = ";".join(parts)
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video)]
+    cmd.extend(music_input_args(music, music_loop))
+    cmd.extend(["-filter_complex", fc, "-map", "[md]", str(stem_out)])
+    subprocess.check_call(cmd)
+
+
+def export_voice_stem(
+    video: Path,
+    stem_out: Path,
+    *,
+    length_s: float,
+    speech_volume_expr: str | None = None,
+    dub_audio: Path | None = None,
+) -> None:
+    """Program voice lane ([sp]) aligned to export length."""
+    L = max(0.1, float(length_s))
+    if dub_audio and dub_audio.is_file():
+        env = f"volume='{speech_volume_expr}':eval=frame," if speech_volume_expr else ""
+        fc = f"[1:a]{env}atrim=0:{L:.3f},asetpts=PTS-STARTPTS[voice]"
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(video),
+                "-i",
+                str(dub_audio),
+                "-filter_complex",
+                fc,
+                "-map",
+                "[voice]",
+                str(stem_out),
+            ],
+        )
+        return
+    env = f"volume='{speech_volume_expr}':eval=frame," if speech_volume_expr else ""
+    fc = f"[0:a]{env}atrim=0:{L:.3f},asetpts=PTS-STARTPTS[voice]"
     subprocess.check_call(
         [
             "ffmpeg",
@@ -640,15 +688,128 @@ def export_ducked_music_stem(
             "error",
             "-i",
             str(video),
-            "-i",
-            str(music),
             "-filter_complex",
             fc,
             "-map",
-            "[md]",
+            "[voice]",
             str(stem_out),
         ],
     )
+
+
+def export_sfx_bed_stem(
+    video: Path,
+    stem_out: Path,
+    sfx_paths: list[tuple[Path, int, float]],
+    *,
+    length_s: float,
+    sfx_volume_exprs: list[str | None] | None = None,
+    sfx_trims: list | None = None,
+    track_fx: dict | None = None,
+    sfx_fx: list | None = None,
+) -> None:
+    """Sum SFX clips into one bed (no voice / music)."""
+    if not sfx_paths:
+        return
+    L = max(0.1, float(length_s))
+    sfx_specs = [{"at_ms": at, "volume": vol} for _, at, vol in sfx_paths]
+    ducks = duck_indices(sfx_fx, len(sfx_specs))
+    parts: list[str] = [voice_split("[0:a]", ducks), "[sp]anullsink"]
+    mix_inputs: list[str] = []
+    sfx_base = 1
+    for i, spec in enumerate(sfx_specs):
+        inp = sfx_base + i
+        at_ms = int(spec.get("at_ms", 0))
+        vol = float(spec.get("volume", 0.8))
+        label = f"s{i}"
+        fx_i = sfx_fx[i] if sfx_fx and i < len(sfx_fx) else None
+        pan_s = pan_filter(fx_i.get("pan") if fx_i else None, int(fx_i.get("pan_ch") or 2) if fx_i else 2)
+        parts.append(
+            f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}{clip_fade(sfx_fx, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}{pan_s}[{label}]"
+        )
+        mix_inputs.append(clip_duck(parts, label, sfx_fx, i, ducks))
+    mix_inputs = sfx_buses(parts, mix_inputs, len(sfx_specs), track_fx)
+    if not mix_inputs:
+        return
+    n = len(mix_inputs)
+    parts.append(f"{''.join(mix_inputs)}amix=inputs={n}:duration=first:normalize=0,alimiter=limit=0.95[aout]")
+    fc = ";".join(parts)
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video)]
+    for i, (path, _, _) in enumerate(sfx_paths):
+        cmd.extend(sfx_input_args(path, sfx_fx, i))
+    cmd.extend(["-filter_complex", fc, "-map", "[aout]", str(stem_out)])
+    subprocess.check_call(cmd)
+
+
+def export_mix_stems(
+    video: Path,
+    out_dir: Path,
+    music_path: Path | None,
+    sfx_paths: list[tuple[Path, int, float]],
+    *,
+    dub_audio: Path | None = None,
+    length_s: float,
+    volume: float,
+    duck_depth: float,
+    fade_in_s: float,
+    fade_out_s: float,
+    music_window: dict | None = None,
+    music_loop: bool = False,
+    music_pan: int | None = None,
+    music_pan_ch: int = 2,
+    speech_volume_expr: str | None = None,
+    music_volume_expr: str | None = None,
+    sfx_volume_exprs: list[str | None] | None = None,
+    sfx_trims: list | None = None,
+    track_fx: dict | None = None,
+    sfx_fx: list | None = None,
+) -> list[str]:
+    """Write voice.wav, optional music.wav and sfx.wav under out_dir."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[str] = []
+    voice_out = out_dir / "voice.wav"
+    export_voice_stem(
+        video,
+        voice_out,
+        length_s=length_s,
+        speech_volume_expr=speech_volume_expr,
+        dub_audio=dub_audio,
+    )
+    written.append(voice_out.name)
+    if music_path and music_path.is_file():
+        music_out = out_dir / "music.wav"
+        export_ducked_music_stem(
+            video,
+            music_path,
+            music_out,
+            length_s=length_s,
+            volume=volume,
+            duck_depth=duck_depth,
+            fade_in_s=fade_in_s,
+            fade_out_s=fade_out_s,
+            music_window=music_window,
+            music_volume_expr=music_volume_expr,
+            music_loop=music_loop,
+            music_pan=music_pan,
+            music_pan_ch=music_pan_ch,
+            track_fx=track_fx,
+        )
+        written.append(music_out.name)
+    if sfx_paths:
+        sfx_out = out_dir / "sfx.wav"
+        export_sfx_bed_stem(
+            video,
+            sfx_out,
+            sfx_paths,
+            length_s=length_s,
+            sfx_volume_exprs=sfx_volume_exprs,
+            sfx_trims=sfx_trims,
+            track_fx=track_fx,
+            sfx_fx=sfx_fx,
+        )
+        if sfx_out.is_file() and sfx_out.stat().st_size > 0:
+            written.append(sfx_out.name)
+    return written
 
 
 def measure_segment_rms_db(video: Path, start_s: float, end_s: float) -> float:

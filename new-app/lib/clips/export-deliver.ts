@@ -15,6 +15,8 @@ export type ExportDeliver = {
   rangeOutMs?: number
   stillAtMs?: number
   softSubs?: boolean
+  /** EX-16: include voice/music/sfx stem beds zip (Producer). */
+  stems?: boolean
 }
 
 export const DEFAULT_DELIVER: ExportDeliver = {
@@ -61,7 +63,8 @@ export function isDefaultDeliver(d: ExportDeliver | null | undefined): boolean {
     d.rangeInMs == null &&
     d.rangeOutMs == null &&
     d.stillAtMs == null &&
-    !d.softSubs
+    !d.softSubs &&
+    !d.stems
   )
 }
 
@@ -80,6 +83,7 @@ export function deliverChip(d: ExportDeliver): string {
 
 type NormCtx = {
   canHigh: boolean
+  canPro: boolean
   lengthMs: number
   hasInOut: boolean
   platform: boolean
@@ -151,6 +155,9 @@ export function normalizeDeliver(raw: unknown, ctx: NormCtx): ExportDeliver | nu
 
   const softSubs = o.softSubs === true && (format === 'mp4' || format === 'mov')
 
+  let stems = o.stems === true && (format === 'mp4' || format === 'mov')
+  if (stems && !ctx.canPro) stems = false
+
   const deliver: ExportDeliver = {
     format,
     codec,
@@ -159,6 +166,7 @@ export function normalizeDeliver(raw: unknown, ctx: NormCtx): ExportDeliver | nu
     ...(targetResolution ? { targetResolution } : {}),
     ...(rangeInMs != null ? { rangeInMs, rangeOutMs } : {}),
     ...(softSubs ? { softSubs: true } : {}),
+    ...(stems ? { stems: true } : {}),
   }
   return isDefaultDeliver(deliver) ? null : deliver
 }

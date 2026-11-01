@@ -310,6 +310,7 @@ export function exportClipWithOptions(
     rangeOutMs?: number
     stillAtMs?: number
     softSubs?: boolean
+    stems?: boolean
     edits?: unknown
   },
 ) {

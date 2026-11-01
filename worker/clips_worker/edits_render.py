@@ -1889,6 +1889,34 @@ def render_edited_clip(
         )
     except Exception as e:
         print(f"[clipper:track_fx] mix skipped reason={type(e).__name__}", flush=True)
+    if render_meta is not None and render_meta.get("export_stems"):
+        from clips_worker.export_stems import capture_stems_ctx
+
+        dub_path = None
+        if dub_assets and dub_assets.get("dub_audio_path"):
+            dub_path = Path(dub_assets["dub_audio_path"])
+        mp = music_path if music_path is not None and Path(music_path).is_file() else None
+        render_meta["stems_ctx"] = capture_stems_ctx(
+            video=caption_src,
+            music_path=mp,
+            sfx_paths=[(Path(p), at, vol) for p, at, vol in sfx_paths],
+            length_s=length_s,
+            volume=float(meta.get("volume", 0.25)),
+            duck_depth=float(meta.get("duckDepth", 0.7)),
+            fade_in_s=int(meta.get("fadeInMs", 500)) / 1000.0,
+            fade_out_s=int(meta.get("fadeOutMs", 1000)) / 1000.0,
+            music_window=music_win,
+            music_loop=music_loop,
+            music_pan=meta.get("pan"),
+            music_pan_ch=int(meta.get("pan_ch") or 2),
+            speech_volume_expr=voice_env,
+            music_volume_expr=music_env,
+            sfx_volume_exprs=sfx_envs,
+            sfx_trims=sfx_trims,
+            track_fx=track_fx,
+            sfx_fx=sfx_fx,
+            dub_audio=dub_path,
+        )
     if dub_assets and dub_assets.get("dub_audio_path"):
         from clips_worker.audio_render import apply_dub_speech_mix
 
