@@ -13,7 +13,7 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { nextStoredClientSaveSeq, shouldRejectStaleClientSave } from '@/lib/clips/editor-save-order'
+import { persistEditorSave } from '@/lib/server/clips/persist-editor-save'
 
 const patchSchema = z.object({
   title: z.string().min(1).max(120).optional(),
@@ -157,105 +157,103 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     } | null = null
 
     if (body.edits !== undefined) {
-      const mergedEdits = mergeEditsPatch(serverEdits, body.edits, bounds)
-      const meta = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as Record<string, unknown>
-      const storedSeq = typeof meta.__editorSaveSeq === 'number' ? meta.__editorSaveSeq : 0
       const incomingSeq = body.clientSaveSeq ?? 0
 
-      if (incomingSeq > 0 && shouldRejectStaleClientSave(incomingSeq, storedSeq)) {
-        console.info('[clipper:autosave] stale_client_seq', { clipId: id, incomingSeq, storedSeq })
-        return NextResponse.json({
-          data: {
-            id: clip.id,
-            title: clip.title,
-            edits: serverEdits,
-            updatedAt: clip.updatedAt.toISOString(),
-            editsSaveVersion: clip.editsSaveVersion,
-            applied: false,
-          },
-        })
-      }
-
-      const nextMeta: Record<string, unknown> = { ...meta }
       if (incomingSeq > 0) {
-        nextMeta.__editorSaveSeq = nextStoredClientSaveSeq(incomingSeq, storedSeq)
-        if (typeof body.clientLocalRevision === 'number') {
-          nextMeta.__editorLocalRevision = body.clientLocalRevision
-        }
-      }
-
-      const versionForCas = baseVersion ?? clip.editsSaveVersion
-      if (clip.editsSaveVersion === 0) {
-        const orig0 = Date.now()
-        await insertOriginalClipEditSnapshot(prisma, clip)
-        stageLog.orig = Date.now() - orig0
-      }
-      const write0 = Date.now()
-
-      if (incomingSeq > 0 && incomingSeq >= storedSeq) {
-        const updated = await prisma.clip.update({
-          where: { id },
-          data: {
-            edits: toPrismaJson(mergedEdits),
-            editsSaveVersion: { increment: 1 },
-            aiMeta: toPrismaJson(nextMeta),
+        const write0 = Date.now()
+        const persisted = await persistEditorSave(
+          prisma,
+          id,
+          {
+            editsPatch: body.edits as Record<string, unknown>,
+            clientSaveSeq: incomingSeq,
+            clientLocalRevision: body.clientLocalRevision,
           },
-          select: { id: true, title: true, updatedAt: true, editsSaveVersion: true },
-        })
+          bounds,
+          { workspaceId: clip.workspaceId },
+        )
         stageLog.write = Date.now() - write0
-        stageLog.cas = 1
-        editsResponse = {
-          id: updated.id,
-          title: updated.title,
-          edits: mergedEdits,
-          updatedAt: updated.updatedAt.toISOString(),
-          editsSaveVersion: updated.editsSaveVersion,
-          applied: true,
+        if (persisted && persisted.applied) {
+          stageLog.cas = 1
+          editsResponse = {
+            id: persisted.id,
+            title: persisted.title,
+            edits: persisted.mergedEdits,
+            updatedAt: persisted.updatedAt.toISOString(),
+            editsSaveVersion: persisted.editsSaveVersion,
+            applied: true,
+          }
+        } else if (persisted && !persisted.applied) {
+          stageLog.cas = 0
+          console.info('[clipper:autosave] stale_client_seq', {
+            clipId: id,
+            incomingSeq,
+            storedSeq: persisted.storedSeq,
+          })
+          return NextResponse.json({
+            data: {
+              id: persisted.id,
+              title: persisted.title,
+              edits: persisted.serverEdits,
+              updatedAt: persisted.updatedAt.toISOString(),
+              editsSaveVersion: persisted.editsSaveVersion,
+              applied: false,
+              storedSeq: persisted.storedSeq,
+            },
+          })
         }
       } else {
-      const result = await casUpdateEdits(prisma, id, mergedEdits, versionForCas)
-      stageLog.write = Date.now() - write0
-      stageLog.cas = result.ok ? 1 : 0
-      if (!result.ok && result.conflict) {
-        const fresh = await prisma.clip.findUniqueOrThrow({ where: { id } })
-        const freshEdits = normalizeEdits(fresh.edits, bounds)
-        const clientFull = normalizeEdits(mergeEditsPatch(serverEdits, body.edits, bounds), bounds)
-        const { merged, externalChange } = mergeEditsThreeWay(serverEdits, clientFull, freshEdits, bounds)
-        console.info('[clipper:autosave] conflict_merge', {
-          clipId: id,
-          baseVersion: versionForCas,
-          serverVersion: fresh.editsSaveVersion,
-          externalChange,
-        })
-        return NextResponse.json(
-          {
-            error: externalChange
-              ? 'Edits were updated elsewhere — merged latest changes.'
-              : 'Save conflict — merged and retry.',
-            code: 'EDITS_CONFLICT',
-            data: {
-              id: fresh.id,
-              title: fresh.title,
-              edits: merged,
-              updatedAt: fresh.updatedAt.toISOString(),
-              editsSaveVersion: fresh.editsSaveVersion,
-              merged: true,
-              externalChange,
-            },
-          },
-          { status: 409 },
-        )
-      }
-      if (result.ok) {
-        editsResponse = {
-          id: result.row.id,
-          title: result.row.title,
-          edits: mergedEdits,
-          updatedAt: result.row.updatedAt.toISOString(),
-          editsSaveVersion: result.row.editsSaveVersion,
-          applied: true,
+        const mergedEdits = mergeEditsPatch(serverEdits, body.edits, bounds)
+        const versionForCas = baseVersion ?? clip.editsSaveVersion
+        if (clip.editsSaveVersion === 0) {
+          const orig0 = Date.now()
+          await insertOriginalClipEditSnapshot(prisma, clip)
+          stageLog.orig = Date.now() - orig0
         }
-      }
+        const write0 = Date.now()
+        const result = await casUpdateEdits(prisma, id, mergedEdits, versionForCas)
+        stageLog.write = Date.now() - write0
+        stageLog.cas = result.ok ? 1 : 0
+        if (!result.ok && result.conflict) {
+          const fresh = await prisma.clip.findUniqueOrThrow({ where: { id } })
+          const freshEdits = normalizeEdits(fresh.edits, bounds)
+          const clientFull = normalizeEdits(mergeEditsPatch(serverEdits, body.edits, bounds), bounds)
+          const { merged, externalChange } = mergeEditsThreeWay(serverEdits, clientFull, freshEdits, bounds)
+          console.info('[clipper:autosave] conflict_merge', {
+            clipId: id,
+            baseVersion: versionForCas,
+            serverVersion: fresh.editsSaveVersion,
+            externalChange,
+          })
+          return NextResponse.json(
+            {
+              error: externalChange
+                ? 'Edits were updated elsewhere — merged latest changes.'
+                : 'Save conflict — merged and retry.',
+              code: 'EDITS_CONFLICT',
+              data: {
+                id: fresh.id,
+                title: fresh.title,
+                edits: merged,
+                updatedAt: fresh.updatedAt.toISOString(),
+                editsSaveVersion: fresh.editsSaveVersion,
+                merged: true,
+                externalChange,
+              },
+            },
+            { status: 409 },
+          )
+        }
+        if (result.ok) {
+          editsResponse = {
+            id: result.row.id,
+            title: result.row.title,
+            edits: mergedEdits,
+            updatedAt: result.row.updatedAt.toISOString(),
+            editsSaveVersion: result.row.editsSaveVersion,
+            applied: true,
+          }
+        }
       }
     }
 

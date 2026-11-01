@@ -53,3 +53,8 @@ export function nextStoredClientSaveSeq(incomingSeq: number, storedSeq: number):
   if (incomingSeq <= 0) return storedSeq
   return Math.max(storedSeq, incomingSeq)
 }
+
+/** TC4fix3: client save seq must stay monotonic across reloads / tabs (wall-clock floor). */
+export function nextClientSaveSeq(current: number): number {
+  return Math.max(current + 1, Date.now())
+}

@@ -54,6 +54,7 @@ import {
   type Layer,
 } from '@/lib/clips/layers'
 import {
+  nextClientSaveSeq,
   saveSyncRequired,
   shouldApplySaveResponse,
   shouldDiscardDraftForServerStamp,
@@ -187,10 +188,14 @@ export function useEditorState(
   clipId: string,
   bounds: ClipBounds,
   initialEdits: ClipEditsV2,
-  opts?: { serverUpdatedAt?: string; editsSaveVersion?: number; words?: SourceWord[] },
+  opts?: { serverUpdatedAt?: string; editsSaveVersion?: number; words?: SourceWord[]; editorSaveSeq?: number },
 ) {
   const safeInitial = normalizeEdits(initialEdits, bounds)
   let draft = readEditorAutosaveDraft(clipId)
+  if (draft && !draftDiffersFromServer(draft, safeInitial)) {
+    clearEditorAutosaveDraft(clipId)
+    draft = null
+  }
   if (
     draft &&
     shouldDiscardDraftForServerStamp(
@@ -207,6 +212,7 @@ export function useEditorState(
   const restored = draftDiffers ? normalizeEdits(draft!.edits, bounds) : safeInitial
   const restoredLocalRevision = draftDiffers ? Math.max(1, draft!.localRevision ?? 1) : 0
   const restoredSaveSeq = draftDiffers ? Math.max(0, draft!.saveSeq ?? 0) : 0
+  const serverSaveSeq = typeof opts?.editorSaveSeq === 'number' ? opts.editorSaveSeq : 0
   const [state, dispatch] = useReducer(editorEditsReducer, {
     edits: restored,
     past: [],
@@ -221,7 +227,7 @@ export function useEditorState(
   const savedRevisionRef = useRef(0)
   const saveInFlightRef = useRef(false)
   const savePendingRef = useRef(false)
-  const saveSeqRef = useRef(restoredSaveSeq)
+  const saveSeqRef = useRef(nextClientSaveSeq(Math.max(restoredSaveSeq, serverSaveSeq, 0) - 1))
   const serverConfirmedEditsRef = useRef<ClipEditsV2>(restored)
   const serverUpdatedAtRef = useRef(opts?.serverUpdatedAt)
   const serverVersionRef = useRef(opts?.editsSaveVersion ?? 0)
@@ -231,6 +237,8 @@ export function useEditorState(
   wordsRef.current = opts?.words ?? wordsRef.current
   const editsRef = useRef(state.edits)
   editsRef.current = state.edits
+  const historyRef = useRef({ past: state.past, future: state.future })
+  historyRef.current = { past: state.past, future: state.future }
 
   useEffect(() => {
     if (draftDiffers) {
@@ -307,12 +315,18 @@ export function useEditorState(
   )
 
   const undo = useCallback(() => {
+    if (!historyRef.current.past.length) return
     setHistoryReady(true)
+    const prev = historyRef.current.past[historyRef.current.past.length - 1]!
+    editsRef.current = prev
     bumpLocalRevision()
     dispatch({ type: 'undo' })
   }, [bumpLocalRevision])
   const redo = useCallback(() => {
+    if (!historyRef.current.future.length) return
     setHistoryReady(true)
+    const next = historyRef.current.future[0]!
+    editsRef.current = next
     bumpLocalRevision()
     dispatch({ type: 'redo' })
   }, [bumpLocalRevision])
@@ -654,11 +668,12 @@ export function useEditorState(
     let attempts = 0
     let conflicts = 0
     let failed = false
+    let staleRejections = 0
     try {
       while (saveSyncRequired(savedRevisionRef.current, localRevisionRef.current)) {
         attempts += 1
         const revisionAtSend = localRevisionRef.current
-        saveSeqRef.current += 1
+        saveSeqRef.current = nextClientSaveSeq(saveSeqRef.current)
         const saveSeqAtSend = saveSeqRef.current
         saveBaseEditsRef.current = lastSavedEditsRef.current
         writeEditorAutosaveDraft(clipId, {
@@ -677,6 +692,15 @@ export function useEditorState(
             clientLocalRevision: revisionAtSend,
           })
           if (res.applied === false) {
+            staleRejections += 1
+            if (typeof (res as { storedSeq?: number }).storedSeq === 'number') {
+              saveSeqRef.current = Math.max(saveSeqRef.current, (res as { storedSeq: number }).storedSeq)
+            }
+            saveSeqRef.current = nextClientSaveSeq(saveSeqRef.current)
+            if (staleRejections >= 2) {
+              failed = true
+              break
+            }
             continue
           }
           if (
@@ -782,10 +806,13 @@ export function useEditorState(
 
   // TC4b + TC4fix2: always persist the newest revision on leave (draft + keepalive), even behind an in-flight save.
   useEffect(() => {
+    const leaveRevisionSentRef = { current: null as number | null }
     const onLeave = () => {
       if (!saveSyncRequired(savedRevisionRef.current, localRevisionRef.current)) return
+      if (localRevisionRef.current === leaveRevisionSentRef.current) return
+      leaveRevisionSentRef.current = localRevisionRef.current
       if (debounceRef.current) clearTimeout(debounceRef.current)
-      saveSeqRef.current += 1
+      saveSeqRef.current = nextClientSaveSeq(saveSeqRef.current)
       const leaveSeq = saveSeqRef.current
       const inFlight = saveInFlightRef.current
       writeEditorAutosaveDraft(clipId, {
@@ -795,22 +822,24 @@ export function useEditorState(
         saveSeq: leaveSeq,
         ...(inFlight ? {} : { serverUpdatedAt: serverUpdatedAtRef.current }),
       })
-      try {
-        void fetch(`/api/clips/clips/${clipId}`, {
-          method: 'PATCH',
-          keepalive: true,
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            edits: editsPayloadForSave(editsRef.current),
-            clientSaveSeq: leaveSeq,
-            clientLocalRevision: localRevisionRef.current,
-            ...(inFlight ? {} : { baseVersion: serverVersionRef.current, expectedUpdatedAt: serverUpdatedAtRef.current }),
-          }),
-        }).catch(() => {})
-      } catch {
-        /* body over the keepalive limit — the local draft restores it on reload */
+      const payload = {
+        edits: editsPayloadForSave(editsRef.current),
+        clientSaveSeq: leaveSeq,
+        clientLocalRevision: localRevisionRef.current,
+        ...(inFlight ? {} : { baseVersion: serverVersionRef.current, expectedUpdatedAt: serverUpdatedAtRef.current }),
       }
+      const body = JSON.stringify(payload)
+      if (body.length > 60_000) {
+        console.warn('[clipper:editor] keepalive skipped: body exceeds keepalive limit')
+        return
+      }
+      void fetch(`/api/clips/clips/${clipId}`, {
+        method: 'PATCH',
+        keepalive: true,
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }).catch(() => {})
     }
     window.addEventListener('pagehide', onLeave)
     window.addEventListener('beforeunload', onLeave)

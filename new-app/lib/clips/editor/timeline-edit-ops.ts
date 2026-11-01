@@ -369,6 +369,21 @@ export function moveVideoSegment(ctx: OpCtx, segId: string, beforeId: string | n
   return next
 }
 
+/** Main-track reorder drop slot from the POINTER position (output ms). null = after last. */
+export function reorderInsertBefore(
+  video: { id: string; startMs: number; endMs: number }[],
+  dragId: string,
+  pointerMs: number,
+): string | null {
+  const others = video.filter((v) => v.id !== dragId)
+  return others.find((v) => pointerMs < (v.startMs + v.endMs) / 2)?.id ?? null
+}
+
+export function isNoopReorder(video: { id: string }[], dragId: string, before: string | null): boolean {
+  const i = video.findIndex((v) => v.id === dragId)
+  return before === (video[i + 1]?.id ?? null)
+}
+
 // ---------------------------------------------------------------------------
 // In / out range + cut points
 // ---------------------------------------------------------------------------

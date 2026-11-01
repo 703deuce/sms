@@ -232,6 +232,7 @@ export function patchClip(
     updatedAt?: string
     editsSaveVersion?: number
     applied?: boolean
+    storedSeq?: number
   }>(
     `/api/clips/clips/${clipId}`,
     {
