@@ -74,6 +74,14 @@ describe('G1b3 auto-crossfade', () => {
     expect(x.keyframes!.find((k) => k.target === 'sfx:b')!.points).toEqual([{ tMs: 0, v: 0 }, { tMs: 400, v: 100 }])
     expect(envelopeFor('sfx', 'a')).toEqual({ target: 'sfx:a', prop: 'volume' })
   })
+
+  it('text overlap on the same track gets opacity crossfade keyframes (not main video)', () => {
+    const e: ClipEditsV2 = { ...base(), textItems: [tx('a', 0, 3000), tx('b', 4000, 6000)] }
+    const m = moveItems(ctx(e), [{ lane: 'text', id: 'b' }], -1500)!
+    const x = autoCrossfade(e, m, e, m, [{ lane: 'text', id: 'b' }])
+    const kb = x.keyframes!.find((k) => k.target === 'text:b' && k.prop === 'opacity')!
+    expect(kb.points).toEqual([{ tMs: 0, v: 0 }, { tMs: 500, v: 100 }])
+  })
 })
 
 describe('G1b3 freeze frame / main angle / drop on track / detach', () => {

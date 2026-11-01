@@ -9,7 +9,8 @@ import {
   splitOffsets,
   splitPlanFor,
 } from '@/lib/clips/editor/split-edits'
-import { rollEdit, rollMainEdit, slideEdit, splitEdgeTrim } from '@/lib/clips/editor/trim-tools'
+import { rollEdit, rollMainEdit, slideEdit, slideMainNeedsMiddleSegment, splitEdgeTrim } from '@/lib/clips/editor/trim-tools'
+import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import type { BrollItem } from '@/lib/clips/broll'
 
 const bounds = { clipStartMs: 0, clipEndMs: 10000 }
@@ -80,6 +81,19 @@ describe('G1b3 roll / slide', () => {
   it('roll at a videoSplit moves the split point', () => {
     const e = { ...base(), videoSplits: [5000] }
     expect(rollMainEdit(ctx(e), 5000, 700)!.videoSplits).toEqual([5700])
+  })
+
+  it('main roll / slide use committed keeps (preview silence-trim must not block roll at a split)', () => {
+    const words = Array.from({ length: 40 }, (_, i) => ({ i, w: `w${i}`, s: i * 0.9, e: i * 0.9 + 0.3 }))
+    const e = {
+      ...base(),
+      videoSplits: [5000],
+      silenceTrim: { enabled: true, minGapMs: 350, keepMs: 120, fillerTrim: true, protectReactionGaps: false },
+    }
+    const preview = editorPreviewEdits(e, words)
+    const op = { edits: e, previewEdits: preview }
+    expect(rollMainEdit(op, 5000, 400)!.videoSplits).toEqual([5400])
+    expect(slideMainNeedsMiddleSegment(op, { lane: 'video', id: 'seg:0' })).toBe(true)
   })
 
   it('overlay roll / slide on one track', () => {

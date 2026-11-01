@@ -58,9 +58,10 @@ import {
   rowState,
   timelineRows,
   type TimelineRow,
+  videoLaneSegments,
 } from '@/lib/clips/editor/clip-timeline'
-import { rollEdit, slideEdit, splitEdgeTrim, TRIM_TOOL_KEYS, type TrimTool, slipEdit } from '@/lib/clips/editor/trim-tools'
-import { autoCrossfade } from '@/lib/clips/editor/auto-crossfade'
+import { rollEdit, slideEdit, splitEdgeTrim, TRIM_TOOL_KEYS, type TrimTool, slipEdit, slideMainNeedsMiddleSegment } from '@/lib/clips/editor/trim-tools'
+import { autoCrossfade, autoCrossfadeOverlaps } from '@/lib/clips/editor/auto-crossfade'
 import { addFreezeFrame, addGapAt } from '@/lib/clips/editor/inserts'
 import { adjacentMarker, patchMarker, toggleMarkerAt, type Marker } from '@/lib/clips/editor/markers'
 import { canToggleEnabled, expandToGroups, groupItems, groupOf, isDisabled, toggleItemsEnabled, ungroupItems } from '@/lib/clips/editor/item-flags'
@@ -750,6 +751,10 @@ export function Timeline({
       }
       return n
     })
+  const autoXfadeRegions = useMemo(
+    () => (autoXfade ? autoCrossfadeOverlaps(edits, previewEdits, sfxDurationsMs, xfadeTracks) : []),
+    [autoXfade, edits, previewEdits, sfxDurationsMs, xfadeTracks],
+  )
   const [drag, setDrag] = useState<DragState | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -1824,7 +1829,7 @@ export function Timeline({
       window.addEventListener('pointerup', up)
       return
     }
-    if (!slideTool && mode === 'move' && item.lane === 'video' && lanes.video.length > 1) {
+    if (!slideTool && tool !== 'roll' && mode === 'move' && item.lane === 'video' && lanes.video.length > 1) {
       startVideoReorder(e, item)
       return
     }
@@ -1887,8 +1892,20 @@ export function Timeline({
       }
       if (!state.moved || !state.deltaMs) return
       const ref = { lane: item.lane, id: item.id }
-      if (slideTool) return commit(slideEdit(ctx, ref, state.deltaMs))
-      if (rollTool) return commit(rollEdit(ctx, ref, mode as 'start' | 'end', state.deltaMs))
+      if (slideTool) {
+        const next = slideEdit(ctx, ref, state.deltaMs)
+        if (next) return commit(next)
+        if (item.lane === 'video' && slideMainNeedsMiddleSegment(ctx, ref)) {
+          toast.message('Slide needs a middle main-video clip with neighbours on both sides', { id: 'timeline-slide' })
+        }
+        return
+      }
+      if (rollTool) {
+        const next = rollEdit(ctx, ref, mode as 'start' | 'end', state.deltaMs)
+        if (next) return commit(next)
+        toast.message('Roll needs the edit between two touching main-video clips', { id: 'timeline-roll' })
+        return
+      }
       if (state.alt && mode !== 'move' && (item.lane === 'video' || item.lane === 'voice')) {
         // G1b3: Alt-drag = J / L — only the sound (Voice edge) or only the picture (Video edge) moves.
         // Not at a real cut (clip in / out point): Alt keeps its old meaning (no snapping trim).
@@ -3178,6 +3195,41 @@ export function Timeline({
                           aria-hidden
                         />
                       ))
+                    : null}
+                  {(lane === 'text' || lane === 'broll' || lane === 'sfx') &&
+                  autoXfadeRegions
+                    .filter((r) => r.lane === lane && (r.track ?? '') === (row.trackId ?? ''))
+                    .map((r, i) => (
+                      <div
+                        key={`axf${r.lane}${r.track}${r.startMs}${i}`}
+                        className="pointer-events-none absolute inset-y-0 z-[1] bg-gradient-to-r from-violet-500/0 via-violet-400/35 to-violet-500/0"
+                        style={{ left: xs(r.startMs), width: Math.max(2, xe(r.endMs) - xs(r.startMs)) }}
+                        data-testid="timeline-auto-xfade-region"
+                        data-lane={r.lane}
+                        aria-hidden
+                      />
+                    ))}
+                  {lane === 'video' && editable && tool === 'roll' && !laneState(edits, 'video').locked
+                    ? (() => {
+                        const tb = timebaseFor(edits)
+                        return videoLaneSegments(tb, edits.videoSplits)
+                          .slice(1)
+                          .map((seg) => {
+                            const item = lanes.video.find((v) => v.id === `seg:${seg.a}`)
+                            if (!item) return null
+                            return (
+                              <span
+                                key={`roll-boundary-${seg.a}`}
+                                className="absolute inset-y-0 z-30 w-2 -translate-x-1/2 cursor-ew-resize bg-amber-400/60 hover:bg-amber-300/90"
+                                style={{ left: xs(item.startMs) }}
+                                data-testid="timeline-video-roll-boundary"
+                                data-src-a={seg.a}
+                                title="Roll edit — drag to move the cut"
+                                onPointerDown={(e) => startDrag(e, item, 'start')}
+                              />
+                            )
+                          })
+                      })()
                     : null}
                   {(virtualize
                     ? (() => {
