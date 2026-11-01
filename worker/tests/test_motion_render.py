@@ -358,3 +358,12 @@ def test_hook_text_keyframes(tmp_path):
     assert c0 is not None and c1 is not None
     assert abs(c0 - (180 + 0.25 * 360 * 10 / 30)) < 6
     assert abs(c1 - 270) < 6
+
+
+def test_main_kf_bg_filter_strings():
+    from clips_worker.motion_render import main_kf_bg_filter
+
+    black = "[bgs]drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill[bg]"
+    assert main_kf_bg_filter({}, 1080, 1920) == black
+    assert "color=0x3B82F6" in main_kf_bg_filter({"canvasBg": {"type": "color", "color": "#3B82F6"}}, 1080, 1920)
+    assert "color=0x000000" in main_kf_bg_filter({"canvasBg": {"type": "none"}}, 1080, 1920)

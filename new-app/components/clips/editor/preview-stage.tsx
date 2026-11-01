@@ -1044,6 +1044,13 @@ export function PreviewStage({
         ) : null}
         {/* G4a: no z-index here; with no filter it creates no stacking context, so G1b stacking is unchanged. */}
         <div ref={adjustRef} className="absolute inset-0" data-testid="preview-adjust">
+        {flatCanvasBg ? (
+          <CanvasBgFill
+            bg={canvasBg}
+            imageUrl={canvasBgImageUrl}
+            testId="preview-canvas-backdrop"
+          />
+        ) : null}
         <div ref={underRef} className="absolute inset-0" data-testid="preview-under">
         <div ref={mainKfRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }} data-testid="preview-main-kf">
         <div ref={mainLayerRef} className="absolute inset-0" data-testid="preview-main-layer">

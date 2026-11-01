@@ -287,8 +287,9 @@ export function CanvasBackgroundControls({
   )
 }
 
-function chipLabel(edits: ClipEditsV2, media: ProjectMediaApi): string {
+function chipLabel(edits: ClipEditsV2, media: ProjectMediaApi, narrow?: boolean): string {
   const t = displayCanvasBgType(edits)
+  if (narrow && t === 'color') return 'BG: Color'
   return `Background: ${CANVAS_BG_LABELS[t]}`
 }
 
@@ -301,6 +302,7 @@ export function CanvasBackgroundChip({
   compositeLocked,
   projectId,
   clipId,
+  narrow,
 }: {
   edits: ClipEditsV2
   onCommit: (next: ClipEditsV2) => void
@@ -310,6 +312,7 @@ export function CanvasBackgroundChip({
   compositeLocked?: boolean
   projectId?: string
   clipId?: string
+  narrow?: boolean
 }) {
   const [open, setOpen] = useState(false)
   if (!visible && !compositeLocked) return null
@@ -330,11 +333,11 @@ export function CanvasBackgroundChip({
   if (compositeLocked) {
     return (
       <span
-        className={`absolute bottom-2 right-[11.5rem] z-10 ${chipClass}`}
+        className={chipClass}
         data-testid="preview-canvas-bg-chip"
         title="Not available for this clip"
       >
-        {chipLabel(edits, media)}
+        {chipLabel(edits, media, narrow)}
       </span>
     )
   }
@@ -344,11 +347,12 @@ export function CanvasBackgroundChip({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`absolute bottom-2 right-[11.5rem] z-10 ${chipClass}`}
+          className={`${chipClass} pointer-events-auto max-w-full shrink-0 truncate whitespace-nowrap`}
           data-testid="preview-canvas-bg-chip"
           disabled={readOnly}
+          aria-label={chipLabel(edits, media, false)}
         >
-          {chipLabel(edits, media)}
+          {chipLabel(edits, media, narrow)}
           {colorDot}
         </button>
       </PopoverTrigger>

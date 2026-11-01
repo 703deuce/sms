@@ -15,6 +15,7 @@ describe('TC4a floating toolbar', () => {
       expect(s).toContain(`data-testid="${id}"`)
     expect(s).toMatch(/onCommit\(rotateBy90\(baseRef\.current, selected, 1\), true\)/)
     expect(s).toMatch(/onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}\s*role="toolbar"/)
+    expect(s).toContain('floatToolbarTop')
   })
   it('the ops it uses: flip toggles, rotate composes', () => {
     const e = normalizeEdits(defaultEdits(bounds), bounds)
