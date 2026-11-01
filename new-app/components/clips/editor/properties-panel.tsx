@@ -28,6 +28,7 @@ import {
 } from '@/lib/clips/editor/keyframes'
 import { layerFlip, moveInStack, setLayerFlip, stackKindOf, stackMoves, type StackMove } from '@/lib/clips/editor/layer-props'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
+import { keyframeLocalEditFromPlayhead } from '@/lib/clips/editor/keyframe-time'
 import { TextAnimSection } from '@/components/clips/editor/text-anim-section'
 import { LayerFxControls } from '@/components/clips/editor/g4/layer-fx-controls'
 import { FX_FEATURES, fxTargetOf } from '@/lib/clips/editor/layer-fx'
@@ -149,7 +150,7 @@ export function PropertiesPanel({
     }
   }, [target]) // eslint-disable-line react-hooks/exhaustive-deps
   const origin = target ? targetOriginMs(edits, target) : 0
-  const localMs = Math.max(0, outputMs - origin)
+  const localMs = keyframeLocalEditFromPlayhead(edits, outputMs, origin)
   const seekLocal = (t: number) => onSeekOutput(origin + t)
 
   return (

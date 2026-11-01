@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { findTrack, moveTrackPoint, type KeyProp, type KeyframeTarget } from '@/lib/clips/editor/keyframes'
 import { PROP_SPECS } from '@/lib/clips/editor/motion-schema'
+import { keyframeLaneFraction, keyframeLocalEditFromLaneFraction } from '@/lib/clips/editor/keyframe-time'
 
 const DRAG_SLOP = 3
 const FRAME_MS = 1000 / 30
@@ -15,6 +16,7 @@ export function KeyframeLanes({
   props,
   span,
   localMs,
+  originMs,
   onCommit,
   onSeekLocal,
   readOnly,
@@ -24,13 +26,15 @@ export function KeyframeLanes({
   props: readonly KeyProp[]
   span: { fromMs: number; toMs: number }
   localMs: number
+  /** Target origin (absolute edit ms of local 0). */
+  originMs: number
   onCommit: (next: ClipEditsV2) => void
   onSeekLocal: (localMs: number) => void
   readOnly: boolean
 }) {
   const rows = props.filter((p) => (findTrack(edits, target, p)?.points.length ?? 0) > 0)
-  const len = Math.max(1, span.toMs - span.fromMs)
   const [drag, setDrag] = useState<{ prop: KeyProp; from: number; to: number } | null>(null)
+  const pct = (localEditMs: number) => `${keyframeLaneFraction(edits, originMs, span.fromMs, span.toMs, localEditMs) * 100}%`
 
   if (!rows.length) {
     return (
@@ -39,8 +43,6 @@ export function KeyframeLanes({
       </p>
     )
   }
-
-  const pct = (t: number) => `${((t - span.fromMs) / len) * 100}%`
 
   return (
     <div className="w-full space-y-0.5" data-testid="kf-lanes">
@@ -66,7 +68,7 @@ export function KeyframeLanes({
                 let moved = false
                 const snap = (clientX: number) => {
                   const frac = Math.min(1, Math.max(0, (clientX - r.left) / Math.max(1, r.width)))
-                  let t = span.fromMs + frac * len
+                  let t = keyframeLocalEditFromLaneFraction(edits, originMs, span.fromMs, span.toMs, frac)
                   t = Math.round(t / FRAME_MS) * FRAME_MS
                   return Math.min(span.toMs, Math.max(span.fromMs, Math.round(t)))
                 }

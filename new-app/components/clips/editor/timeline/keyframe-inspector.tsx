@@ -17,6 +17,7 @@ import {
   setPropertyAt,
   toggleKeyframeAt,
   trackValueAt,
+  targetOriginMs,
   type Ease,
   type KeyProp,
   type KeyframeTarget,
@@ -72,6 +73,7 @@ export function KeyframeInspector({
 }) {
   const props = only ?? propsForTarget(target).filter((p) => !(CROP_PROPS as readonly string[]).includes(p))
   const [lanesOpen, setLanesOpen] = useState(false)
+  const originMs = targetOriginMs(edits, target)
   return (
     <div
       className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/60 bg-card/40 px-2 py-1"
@@ -111,6 +113,7 @@ export function KeyframeInspector({
           props={props}
           span={span}
           localMs={localMs}
+          originMs={originMs}
           onCommit={onCommit}
           onSeekLocal={onSeekLocal}
           readOnly={readOnly}
