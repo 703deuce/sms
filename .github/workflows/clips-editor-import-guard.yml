@@ -6,7 +6,8 @@ on:
     paths:
       - "new-app/components/clips/editor/editor-shell.tsx"
       - "new-app/scripts/verify-editor-shell-import.mjs"
-      - "new-app/tests/editor-shell-use-editor-words.test.ts"
+      - "new-app/scripts/verify-editor-jsx-imports.mjs"
+      - "new-app/tests/layout-panel-mount.test.tsx"
       - ".github/workflows/clips-editor-import-guard.yml"
   pull_request:
     branches: [master]
@@ -32,5 +33,6 @@ jobs:
           cache-dependency-path: new-app/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm run verify:editor-shell-import
+      - run: pnpm run verify:editor-jsx-imports
       - run: pnpm exec vitest run tests/editor-shell-use-editor-words.test.ts
       - run: pnpm run typecheck:clips

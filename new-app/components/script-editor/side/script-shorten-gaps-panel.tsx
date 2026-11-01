@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { GapFilterMode, GapHit } from '@/lib/clips/script-editor/gap-hits'
 import { formatScriptTimecode } from '@/lib/clips/script-editor/sync-playhead'
 import { cn } from '@/lib/utils'
+import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
 
 export function ScriptShortenGapsPanel({
   gapHits,

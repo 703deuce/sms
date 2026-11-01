@@ -1521,7 +1521,7 @@ export function EditorShell({
   }, [clipId, initialTitle, syncServerUpdatedAt, title])
 
   const TabIcon = editorRailIcon(panel)
-  const meta = TAB_META[panel]
+  const meta = TAB_META[panel] ?? { label: panel, hint: '' }
   const previewAspect = edits.aspectRatio ?? '9:16'
   useEffect(() => {
     setPreviewZoom('fit')
