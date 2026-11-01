@@ -10,7 +10,12 @@ import { Timeline } from '@/components/clips/editor/timeline'
 import { clipsFetch } from '@/lib/clips-api'
 
 vi.mock('@/lib/clips-api', () => ({
-  clipsFetch: vi.fn(),
+  clipsFetch: vi.fn((url: string) => {
+    if (String(url).includes('stock-audio/search')) {
+      return Promise.resolve({ available: true, hits: [] })
+    }
+    return Promise.resolve({})
+  }),
 }))
 
 vi.mock('sonner', () => ({
@@ -51,6 +56,7 @@ describe('B2 editor tools mount (no AI_EXTRAS flag)', () => {
     vi.mocked(clipsFetch).mockResolvedValueOnce({
       proposals: [{ startMs: 1000, endMs: 2000, reason: 'tighten' }],
     })
+    const onApplyPass = vi.fn()
     const edits = normalizeEdits(defaultEdits(bounds), bounds)
     const { getByTestId, findByText } = render(
       <CleanupPanel
@@ -60,6 +66,7 @@ describe('B2 editor tools mount (no AI_EXTRAS flag)', () => {
         words={words}
         gapSettings={{ mode: 'more_than', minGapSec: 0.6, maxGapSec: 3, targetGapSec: 0.35 }}
         onApplyProposal={vi.fn()}
+        onApplyPass={onApplyPass}
         onRestoreProposal={vi.fn()}
         onCommitTrim={vi.fn()}
         onAuditionChange={vi.fn()}
@@ -68,7 +75,8 @@ describe('B2 editor tools mount (no AI_EXTRAS flag)', () => {
     )
     fireEvent.click(getByTestId('clarity-run'))
     await waitFor(() => expect(clipsFetch).toHaveBeenCalledWith('/api/clips/clips/clip1/clarity', expect.any(Object)))
-    expect(await findByText('Apply all clarity')).toBeTruthy()
+    fireEvent.click(await findByText('Apply all clarity'))
+    expect(onApplyPass).toHaveBeenCalledTimes(1)
   })
 
   it('Text panel voiceover preview calls voiceover API', async () => {

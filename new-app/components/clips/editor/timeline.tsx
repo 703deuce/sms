@@ -344,6 +344,7 @@ export function Timeline({
   highlights,
   playheadOutMsRef,
   transcriptSelectionRef,
+  registerBeatCut,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -429,6 +430,8 @@ export function Timeline({
   playheadOutMsRef?: React.MutableRefObject<number>
   /** Script word selection — keys 1–9 apply camera to this span instead of the playhead cut. */
   transcriptSelectionRef?: React.MutableRefObject<TranscriptSelection | null>
+  /** Lets Audio panel invoke the same Cut to beat handler as the timeline toolbar. */
+  registerBeatCut?: (api: { cut: (every: 1 | 2 | 4) => void; hasBeats: boolean } | null) => void
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -777,6 +780,10 @@ export function Timeline({
     },
     [allBeatsMs, edits, onCommitEdits, outputMs, selected, tb],
   )
+  useEffect(() => {
+    registerBeatCut?.({ cut: applyBeatCut, hasBeats })
+    return () => registerBeatCut?.(null)
+  }, [applyBeatCut, hasBeats, registerBeatCut])
   const [openCompound, setOpenCompound] = useState<string | null>(null)
   const cview = useMemo(() => compoundView(edits, lanes, openCompound), [edits, lanes, openCompound])
   const hostOf = (it: TimelineItem) => cview.hosts.get(refKey(it))

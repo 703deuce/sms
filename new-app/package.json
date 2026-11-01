@@ -20,6 +20,7 @@
     "typecheck": "NODE_OPTIONS=--max-old-space-size=8192 bash scripts/typecheck-from-git.sh",
     "typecheck:clips": "bash scripts/typecheck-clips.sh",
     "verify:editor-jsx-imports": "node scripts/verify-editor-jsx-imports.mjs",
+    "verify:clip-editor-feature-parity": "node scripts/verify-clip-editor-feature-parity.mjs",
     "test:phone": "node scripts/test-phone-runtime-logic.mjs && node scripts/test-phone-recording-resolve.mjs && node scripts/test-phone-complete.mjs",
     "test:power-dialer-engine": "npx tsx scripts/test-power-dialer-engine.ts",
     "test:power-dialer-phase3": "npx tsx scripts/test-power-dialer-phase3.ts",

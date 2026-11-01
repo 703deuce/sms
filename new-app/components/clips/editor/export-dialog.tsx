@@ -45,6 +45,7 @@ import {
   type ClipExportTemplate,
 } from '@/lib/clips/export-template'
 import { ExportTemplateSection } from '@/components/clips/editor/export-template-section'
+import { ExportRenderShareDialog } from '@/components/clips/export-render-share-dialog'
 import { applyExportPreferencesToTemplate } from '@/lib/clips/export-preferences'
 import {
   loadMergedExportDialogPreferences,
@@ -152,6 +153,7 @@ export function ExportDialog({
   const [includeStems, setIncludeStems] = useState(false)
   const [exportRange, setExportRange] = useState<'whole' | 'inOut'>('whole')
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [renderId, setRenderId] = useState<string | null>(null)
   // FV4c: set once Export MP4 was clicked in this open session, so a late active-render lookup
@@ -563,6 +565,7 @@ export function ExportDialog({
           'max-h-[min(90dvh,100%)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-xl border border-border bg-background p-4 shadow-lg focus:outline-none sm:max-h-[90dvh] sm:rounded-xl',
           exportSurfaceClassName,
         )}
+        data-testid="export-dialog"
       >
         <div className="flex items-start gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg tile-primary">
@@ -649,6 +652,42 @@ export function ExportDialog({
           {gifDisabled ? (
             <p className="mt-1 text-xs text-muted-foreground">GIF is limited to 30 seconds.</p>
           ) : null}
+        </div>
+        {(deliverFormat === 'mp4' || deliverFormat === 'mov') && !platformLocked ? (
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-border px-2 py-2">
+            <div>
+              <Label className="text-sm">Export with stems</Label>
+              <p className="text-xs text-muted-foreground">Voice, music, and SFX as separate files (Producer)</p>
+              {!canExportStems ? <p className="text-xs text-muted-foreground">Producer plan required</p> : null}
+            </div>
+            <Switch
+              data-testid="export-stems-main"
+              checked={includeStems}
+              disabled={!canExportStems}
+              onCheckedChange={(c) => setIncludeStems(Boolean(c))}
+            />
+          </div>
+        ) : null}
+        <div className="mt-3">
+          <p className="text-xs font-medium">Other formats</p>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="export-xml-download"
+              render={
+                <a
+                  href={`/api/clips/clips/${clipId}/export-xml`}
+                  download
+                />
+              }
+              nativeButton={false}
+            >
+              FCP XML
+            </Button>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">For Final Cut Pro / NLE round-trip (placeholder media path).</p>
         </div>
         <div className="mt-3">
           <p className="text-xs font-medium">Resolution</p>
@@ -1097,6 +1136,11 @@ export function ExportDialog({
           ) : (
             <Button render={<a href={downloadUrl} download={filename} />}>Download MP4</Button>
           )}
+          {renderId && status === 'READY' ? (
+            <Button type="button" variant="outline" data-testid="export-share-open-dialog" onClick={() => setShareOpen(true)}>
+              Share link
+            </Button>
+          ) : null}
           {edits.thumbnailId ? (
             <Button
               variant="outline"
@@ -1110,6 +1154,7 @@ export function ExportDialog({
           <Button variant="ghost" onClick={onClose}>Close</Button>
         </div>
       </div>
+      <ExportRenderShareDialog renderId={renderId} open={shareOpen} onOpenChange={setShareOpen} />
     </div>
   )
 }

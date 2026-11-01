@@ -245,10 +245,7 @@ export function CleanupPanel({
   }
 
   const applyAllClarity = () => {
-    for (const p of clarityRows) onApplyProposal(p)
-    setClarityRows([])
-    setAuditionIds(new Set())
-    onAuditionChange(null)
+    applyAllOfKind('clarity')
   }
 
   const toggleAudition = (p: CleanupProposal) => {
@@ -380,7 +377,7 @@ export function CleanupPanel({
             </span>
           </Button>
           {clarityRows.length ? (
-            <Button type="button" size="sm" onClick={applyAllClarity}>
+            <Button type="button" size="sm" data-testid="clarity-apply-all" onClick={applyAllClarity}>
               Apply all clarity
             </Button>
           ) : null}
@@ -390,7 +387,19 @@ export function CleanupPanel({
 
       {retakeGroups.length ? (
         <div className="space-y-2 rounded-md border border-border p-2" data-testid="retake-review">
-          <p className="text-xs font-medium">Retake groups</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-medium">Retake groups</p>
+            {retakeExtras.length ? (
+              <Button
+                type="button"
+                size="sm"
+                data-testid="retake-apply-all"
+                onClick={() => applyAllOfKind('retake')}
+              >
+                Apply all retakes
+              </Button>
+            ) : null}
+          </div>
           {retakeGroups.map((group, gi) => (
             <div key={gi} className="space-y-1 rounded bg-muted/40 p-2 text-xs">
               {group.attempts.map((a, ai) => (

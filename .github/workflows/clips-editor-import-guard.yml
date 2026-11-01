@@ -7,6 +7,7 @@ on:
       - "new-app/components/clips/editor/editor-shell.tsx"
       - "new-app/scripts/verify-editor-shell-import.mjs"
       - "new-app/scripts/verify-editor-jsx-imports.mjs"
+      - "new-app/scripts/verify-clip-editor-feature-parity.mjs"
       - "new-app/tests/layout-panel-mount.test.tsx"
       - ".github/workflows/clips-editor-import-guard.yml"
   pull_request:
@@ -34,5 +35,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run verify:editor-shell-import
       - run: pnpm run verify:editor-jsx-imports
-      - run: pnpm exec vitest run tests/editor-shell-use-editor-words.test.ts
+      - run: pnpm run verify:clip-editor-feature-parity
+      - run: pnpm exec vitest run tests/editor-shell-use-editor-words.test.ts tests/clip-editor-features-mount.test.tsx
       - run: pnpm run typecheck:clips
