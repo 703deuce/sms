@@ -121,6 +121,10 @@ import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
 import { addMediaToLane, placeAddedOnTrack, replaceBrollMedia, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
+import { ClipRecordMenu } from '@/components/clips/editor/recording/record-menu'
+import { ClipRecorderBar } from '@/components/clips/editor/recording/recorder-bar'
+import { useClipRecorder } from '@/components/clips/editor/recording/use-clip-recorder'
+import { useClipRecordingPlacement } from '@/components/clips/editor/recording/use-clip-recording-placement'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { nextShuttleRate, shuttleKey } from '@/lib/clips/editor/timeline-shortcuts'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
@@ -678,6 +682,18 @@ export function EditorShell({
   const studioSound = audioNorm.studioSound
   // E5: project media library (uploads + Rooms angles) — Media panel, B-roll Upload tab, preview.
   const media = useProjectMedia(projectId, mediaTranscripts)
+  const clipRec = useClipRecorder(projectId)
+  const recAtMsRef = useRef(0)
+  const editsRef = useRef(edits)
+  editsRef.current = edits
+  const recPlacement = useClipRecordingPlacement({
+    projectId,
+    getEdits: () => editsRef.current,
+    mediaLabels: media.items.map((i) => i.label),
+    onCommitEdits: setEdits,
+    refreshMedia: () => media.refresh(),
+  })
+  const recordDevicesOk = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
   // G1b2: synced camera angles in the media library (manual multicam keys 1–9 / transcript / menu).
   const angleSources = useMemo(
     () => media.items.filter((i) => i.mediaType === 'video' && !i.isMain && (i.ref === 'take' || i.syncMs != null)).map(sourceFromItem),
@@ -1240,6 +1256,31 @@ export function EditorShell({
       setPlayerMuted(false)
     }
   }
+
+  const beginClipRecording = useCallback(async () => {
+    recAtMsRef.current = outputMs
+    if (clipRec.mode === 'voiceover') {
+      toast.message('Use headphones to avoid echo', { id: 'vo-headphones' })
+      const v = videoRef.current
+      if (v) {
+        v.muted = clipRec.mutePreview || playerMuted || laneVoiceMuted
+        if (clipRec.mutePreview) setPlayerMuted(true)
+        if (v.paused) await togglePlay()
+      }
+    } else {
+      videoRef.current?.pause()
+    }
+    try {
+      await clipRec.startRecording({
+        onFinish: (take) => {
+          clipRec.setArmed(false)
+          if (take) void recPlacement.finishTake(take, recAtMsRef.current, clipRec.placeMode)
+        },
+      })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not start recording')
+    }
+  }, [clipRec, laneVoiceMuted, outputMs, playerMuted, recPlacement, togglePlay])
 
   useEffect(() => {
     const v = videoRef.current
@@ -2280,7 +2321,34 @@ export function EditorShell({
             onReplaceBrollMedia={setReplaceBrollId}
             inOut={exportTimelineInOut}
             onInOutChange={setExportTimelineInOut}
+            onArmVoiceover={() => clipRec.arm('voiceover')}
           />
+          {clipRec.armed ? (
+            <ClipRecorderBar
+              mode={clipRec.mode}
+              recording={clipRec.recording}
+              countdown={clipRec.countdown}
+              recSeconds={clipRec.recSeconds}
+              cameras={clipRec.cameras}
+              mics={clipRec.mics}
+              cameraId={clipRec.cameraId}
+              micId={clipRec.micId}
+              onCameraId={clipRec.setCameraId}
+              onMicId={clipRec.setMicId}
+              countdownEnabled={clipRec.countdownEnabled}
+              onCountdownEnabled={clipRec.setCountdownEnabled}
+              mutePreview={clipRec.mutePreview}
+              onMutePreview={clipRec.setMutePreview}
+              placeMode={clipRec.placeMode}
+              onPlaceMode={clipRec.setPlaceMode}
+              analysers={clipRec.analysers}
+              previewStream={clipRec.previewStream}
+              onDisarm={clipRec.disarm}
+              onStart={() => void beginClipRecording()}
+              onStop={() => void clipRec.stopRecording()}
+              onCancel={() => void clipRec.cancelRecording()}
+            />
+          ) : (
           <PlayerControls
             playing={playing}
             outputMs={displayPos}
@@ -2294,6 +2362,18 @@ export function EditorShell({
             onMeterToggle={() => setMeterOn((v) => !v)}
             meterSlot={
               meterOn ? <AudioMeter levels={peakLevels} voiceMetered={audioMeter.voiceMetered} /> : null
+            }
+            leadingSlot={
+              recordDevicesOk ? (
+                <ClipRecordMenu
+                  onPick={(m) => {
+                    clipRec.arm(m)
+                    if (m === 'voiceover') selectPanel('media')
+                  }}
+                />
+              ) : (
+                <ClipRecordMenu disabled disabledReason="Recording needs a secure origin and microphone access" onPick={() => undefined} />
+              )
             }
             onMuteToggle={() => {
               const v = videoRef.current
@@ -2318,6 +2398,7 @@ export function EditorShell({
               }
             }}
           />
+          )}
           </div>
         </section>
         <EditorRail active={panel} onChange={selectPanel} />

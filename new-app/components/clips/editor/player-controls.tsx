@@ -25,6 +25,7 @@ export function PlayerControls({
   onMeterToggle,
   meterSlot,
   showScrubber = true,
+  leadingSlot,
 }: {
   playing: boolean
   outputMs: number
@@ -40,11 +41,13 @@ export function PlayerControls({
   meterSlot?: React.ReactNode
   /** When false, timeline owns seek (avoids duplicate scrubber). */
   showScrubber?: boolean
+  leadingSlot?: React.ReactNode
 }) {
   const max = Math.max(1, outputDurationMs)
   const pct = outputDurationMs > 0 ? Math.min(100, (outputMs / outputDurationMs) * 100) : 0
   return (
     <div className="flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-lg border border-border bg-card/50 px-3 py-2 sm:gap-3">
+      {leadingSlot}
       <Button type="button" size="icon" variant="outline" className="shrink-0" onClick={onToggle} aria-label={playing ? 'Pause' : 'Play'}>
         {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
       </Button>
