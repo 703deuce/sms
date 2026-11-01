@@ -450,13 +450,19 @@ export function useEditorState(
         fixes[key] = text.trim()
         if (meta) fixMeta[key] = { s: meta.s, w: meta.w }
       }
-      setEdits({
+      const next: ClipEditsV2 = {
         ...state.edits,
         wordFixes: fixes,
         wordFixMeta: Object.keys(fixMeta).length ? fixMeta : undefined,
-      })
+      }
+      const rippled = rippleFrom(editsRef.current, next)
+      if (editsEqual(editsRef.current, rippled)) return
+      editsRef.current = rippled
+      setHistoryReady(true)
+      bumpLocalRevision()
+      dispatch({ type: 'pass', edits: rippled, label: 'Word fix' })
     },
-    [setEdits, state.edits],
+    [bumpLocalRevision, rippleFrom, state.edits],
   )
 
   const applyWordFixesBatch = useCallback(

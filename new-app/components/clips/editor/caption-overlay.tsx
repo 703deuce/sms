@@ -4,7 +4,7 @@ import './caption-anim.css'
 
 import { Fragment, useMemo, useRef, useEffect } from 'react'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
-import { wordKey } from '@/lib/clips/edits'
+import { wordDisplayText, wordKey } from '@/lib/clips/edits'
 import { activeCaptionWordIndex, captionEmojiForWord, previewCaptionWordIndex } from '@/lib/clips/caption-overlay-active'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { resolveCaptionPreset, type CaptionPreset } from '@/lib/clips/caption-presets'
@@ -118,7 +118,7 @@ export function CaptionOverlay({
     () =>
       captionChunkFit(
         fitCfg,
-        lineWords.map((w, i) => ({ w: w.w, i: w.idx ?? lineStart + i })),
+        lineWords.map((w, i) => ({ w: wordDisplayText(w, edits.wordFixes), i: wordKey(w) ?? lineStart + i })),
         new Set(cap.emphasis ?? []),
       ),
     [cap.emphasis, fitCfg, lineStart, lineWords],
@@ -232,9 +232,10 @@ export function CaptionOverlay({
         const idx = wordKey(w) ?? globalIdx
         const emoji = showEmojis ? captionEmojiForWord(w, globalIdx, emojiMap) : undefined
         // E3fix2: like the export (captions_ass.disp_words), sentence case restarts at each chunk.
-        const prevWord = i > 0 ? lineWords[i - 1]?.w : undefined
+        const prevWord = i > 0 ? wordDisplayText(lineWords[i - 1]!, edits.wordFixes) : undefined
         const sentenceStart = caseMode === 'sentence' && isSentenceBoundary(prevWord)
-        const text = formatCaptionWord(w.w, caseMode, sentenceStart) + (emoji && !hasEmojiMap ? ` ${emoji}` : '')
+        const displayWord = wordDisplayText(w, edits.wordFixes)
+        const text = formatCaptionWord(displayWord, caseMode, sentenceStart) + (emoji && !hasEmojiMap ? ` ${emoji}` : '')
         const strokeW = preset.outlineW
         const scaledStroke = previewCaptionStrokePx(strokeW, boxHeightPx, exportPlayH)
         const inactiveColor = preset.slug === 'boxed' ? '#FFFFFF' : preset.primary
