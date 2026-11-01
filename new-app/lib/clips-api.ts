@@ -216,7 +216,14 @@ export function deriveClipFromEditor(
 
 export function patchClip(
   clipId: string,
-  body: { title?: string; edits?: unknown; expectedUpdatedAt?: string; baseVersion?: number },
+  body: {
+    title?: string
+    edits?: unknown
+    expectedUpdatedAt?: string
+    baseVersion?: number
+    clientSaveSeq?: number
+    clientLocalRevision?: number
+  },
 ) {
   return clipsFetch<{
     id: string
@@ -224,6 +231,7 @@ export function patchClip(
     edits: unknown
     updatedAt?: string
     editsSaveVersion?: number
+    applied?: boolean
   }>(
     `/api/clips/clips/${clipId}`,
     {

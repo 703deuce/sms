@@ -1552,8 +1552,14 @@ export function Timeline({
   const startVideoReorder = (e: React.PointerEvent, item: TimelineItem) => {
     // TC4b (3): no native drag of the filmstrip images (it swallowed pointerup, so the drop only
     // completed on an extra click); a cancelled pointer ends the drag like a release.
+    // TC4fix2: pointer capture so pointerup/pointermove always fire after a slow drag (R2).
     e.preventDefault()
-    const ctx = opCtx()
+    const captureEl = e.currentTarget as HTMLElement
+    try {
+      captureEl.setPointerCapture(e.pointerId)
+    } catch {
+      /* ignore */
+    }
     const state: DragState = { mode: 'move', item, refs: [{ lane: 'video', id: item.id }], originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, reorder: true, insertBefore: undefined }
     setDrag(state)
     const onMove = (ev: PointerEvent) => {
@@ -1566,13 +1572,25 @@ export function Timeline({
       state.insertBefore = next ? next.id : null
       setDrag({ ...state })
     }
-    const onUp = () => {
+    const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
+      try {
+        captureEl.releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
       setDrag(null)
-      if (!state.moved || state.insertBefore === undefined) return
-      const next = moveVideoSegment(ctx, item.id, state.insertBefore)
+      if (!state.moved) return
+      let before = state.insertBefore
+      if (before === undefined) {
+        const dx = ev.clientX - state.originX
+        const at = (item.startMs + item.endMs) / 2 + dx / Math.max(1e-6, pxPerMs)
+        const next = lanes.video.find((v) => (v.startMs + v.endMs) / 2 > at && v.id !== item.id)
+        before = next ? next.id : null
+      }
+      const next = moveVideoSegment(opCtx(), item.id, before)
       if (next) commit(next)
     }
     window.addEventListener('pointermove', onMove)
