@@ -104,7 +104,11 @@ export function LayoutPanel({
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
   const aiExtras = clipEditorAiExtrasEnabled()
-  const layoutOptions = visibleLayoutOptions({ reframeV2Enabled, aiExtras })
+  const layoutOptions = visibleLayoutOptions({
+    reframeV2Enabled,
+    aiExtras,
+    aspect: edits.aspectRatio ?? '9:16',
+  })
   const currentAspect = edits.aspectRatio ?? '9:16'
   const customActive = isCustomAspect(currentAspect)
   const presetForCustom = EXPORT_ASPECT_PRESETS.includes(currentAspect as (typeof EXPORT_ASPECT_PRESETS)[number])

@@ -489,7 +489,10 @@ def _run_render_clip_job_body(
         resolution = "1080p"
     settings = {**settings, "aspectRatio": aspect, "exportResolution": resolution}
     if is_landscape_aspect(aspect):
-        settings = {**settings, "layout": "fit"}
+        from clips_worker.layout_router import landscape_layout
+
+        layout_mode = str((edits.get("layout") or {}).get("mode") or "")
+        settings = {**settings, "layout": landscape_layout(layout_mode)}
 
     from clips_worker.edits_render import keep_segments, output_duration_ms
 
@@ -714,12 +717,16 @@ def _run_render_clip_job_body(
             )
         else:
             from clips_worker.edits_render import output_duration_ms as _out_ms
-            from clips_worker.export_progress import RenderProgress, estimate_export_passes
+            from clips_worker.export_progress import RenderProgress, estimate_export_pass_weights
 
-            # FV4a: real progress from ffmpeg (-progress via a PATH shim), worker-side stall / hard cap,
-            # and cancellation when the claim is lost. Active until the upload starts.
+            pass_weights = [w for _, w in estimate_export_pass_weights(edits, deliver_spec)]
             tracker = progress_stack.enter_context(
-                RenderProgress(_out_ms(edits) / 1000.0, estimate_export_passes(edits), work_dir=td_path)
+                RenderProgress(
+                    _out_ms(edits) / 1000.0,
+                    len(pass_weights),
+                    pass_weights=pass_weights,
+                    work_dir=td_path,
+                )
             )
             post_progress(
                 job["id"],

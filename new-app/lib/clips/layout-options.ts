@@ -1,7 +1,8 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DEFAULT_FACECAM_BOX, DEFAULT_GAMEPLAY_BOX } from '@/lib/clips/facecam-geometry'
 import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
-import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
+import { isLandscapeAspect, type ExportAspect } from '@/lib/clips/export-aspect'
+import { landscapeLayoutVisible } from '@/lib/clips/editor/landscape-layouts'
 
 export type LayoutOptionId = ClipEditsV2['layout']['mode']
 
@@ -153,8 +154,11 @@ export function layoutPickPayload(
 export function visibleLayoutOptions(ctx: {
   reframeV2Enabled: boolean
   aiExtras: boolean
+  aspect?: ExportAspect
 }): LayoutOption[] {
+  const landscape = ctx.aspect != null && isLandscapeAspect(ctx.aspect)
   return LAYOUT_OPTIONS.filter((l) => {
+    if (landscape && !landscapeLayoutVisible(l.id)) return false
     if (l.disabled) return ctx.aiExtras
     if (isClipLayoutBeta(l.id) && !ctx.reframeV2Enabled) return ctx.aiExtras
     return true

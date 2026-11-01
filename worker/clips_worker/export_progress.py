@@ -161,6 +161,31 @@ def estimate_export_passes(edits: dict) -> int:
     return n
 
 
+def estimate_export_pass_weights(edits: dict, deliver: dict | None = None) -> list[tuple[str, float]]:
+    """EX-08: relative pass weights (§2.7); sum drives snapshot % when used by RenderProgress."""
+    from clips_worker.motion import has_layer_fx
+
+    weights: list[tuple[str, float]] = [("layout", 1.0), ("compose", 1.0)]
+    if has_layer_fx(edits, "video"):
+        weights.append(("video_fx", 1.6))
+    if edits.get("transitions"):
+        weights.append(("transitions", 0.6))
+    if edits.get("broll"):
+        weights.append(("broll", 1.2))
+    if edits.get("color"):
+        weights.append(("color", 1.3))
+    if isinstance(edits.get("zoom"), dict) and edits["zoom"].get("enabled"):
+        weights.append(("zoom", 1.4))
+    if edits.get("sourceSegments"):
+        weights.append(("source_segments", 1.0))
+    if deliver:
+        from clips_worker.export_deliver import deliver_time_factor
+
+        w = 0.4 * deliver_time_factor(deliver)
+        weights.append(("deliver", w))
+    return weights
+
+
 def descendant_cpu_seconds(root_pid: int | None = None) -> float:
     """CPU seconds used by live descendants of this process (python layout pass, ffmpeg, …).
 
@@ -229,6 +254,7 @@ class RenderProgress:
         length_s: float,
         est_passes: int,
         *,
+        pass_weights: list[float] | None = None,
         work_dir: Path | None = None,
         max_seconds: float | None = None,
         stall_seconds: float | None = None,
@@ -237,7 +263,9 @@ class RenderProgress:
         child_cpu=descendant_cpu_seconds,
     ) -> None:
         self.length_s = max(0.5, float(length_s or 0.5))
-        self.est_passes = max(1, int(est_passes))
+        self.pass_weights = pass_weights
+        self.total_weight = sum(pass_weights) if pass_weights else 0.0
+        self.est_passes = max(1, len(pass_weights) if pass_weights else int(est_passes))
         self.work_dir = Path(work_dir) if work_dir else None
         self.max_seconds = max_seconds if max_seconds is not None else render_max_seconds(self.length_s)
         self.stall_seconds = stall_seconds if stall_seconds is not None else ffmpeg_stall_seconds()
@@ -392,8 +420,13 @@ class RenderProgress:
             work = len(heavy_done) + (cur_frac if cur_heavy else 0.0)
             step = len(heavy_done) + (1 if cur_heavy else 0)
             steps = max(self.est_passes, step)
-            # FV4b: one monotonic encode fraction → overall % (10–89) and the ETA.
-            frac = max(self._last_frac, min(0.99, work / max(float(steps), work + 0.25)))
+            if self.pass_weights and self.total_weight > 0:
+                idx = min(len(heavy_done), len(self.pass_weights) - 1)
+                done_w = sum(self.pass_weights[: len(heavy_done)])
+                cur_w = self.pass_weights[idx] if cur_heavy else 0.0
+                frac = max(self._last_frac, min(0.99, (done_w + cur_frac * cur_w) / self.total_weight))
+            else:
+                frac = max(self._last_frac, min(0.99, work / max(float(steps), work + 0.25)))
             self._last_frac = frac
             progress = max(self._last_progress, min(PROGRESS_HI, overall_progress("encode", frac)))
             self._last_progress = progress
