@@ -57,7 +57,8 @@ import { GradePreview, layerMedia, stageFrame } from '@/components/clips/editor/
 import { corsMediaProps, prepareAll, setMediaSrc, watchMediaCors } from '@/components/clips/editor/g4/media-cors'
 import { applyBlurRegion, applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
 import { exportOnlyNote } from '@/lib/clips/editor/export-processing'
-import { chromaParams, layerFxOf } from '@/lib/clips/editor/layer-fx'
+import { brollFxOf, chromaParams } from '@/lib/clips/editor/layer-fx'
+import { mainFxOf, mainKeyAllowed } from '@/lib/clips/editor/main-fx'
 import { speedAtSource } from '@/lib/clips/editor/speed'
 import { textItemFrame } from '@/lib/clips/editor/text-frame'
 import { libassSupported, previewLibassEnabled } from '@/lib/clips/preview-libass-flag'
@@ -278,6 +279,7 @@ export function PreviewStage({
   const [gradeNotice, setGradeNotice] = useState<string | null>(null)
   const gradeNoticeRef = useRef<string | null>(null)
   const mainKfRef = useRef<HTMLDivElement>(null)
+  const mainFxRef = useRef<HTMLDivElement>(null)
   const mainLayerRef = useRef<HTMLDivElement>(null)
   const blurRegionRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const blurChipRef = useRef<HTMLParagraphElement | null>(null)
@@ -631,7 +633,11 @@ export function PreviewStage({
         stageFrame.outMs = outMs
         // G4c: media time = (source − offset) / 1000 (scene scan seeks its own CORS twin).
         stageFrame.offsetMs = mediaOffsetMs
-        gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current))
+        const fxFrame = exportFrameFor(boxSizeRef.current.w, boxSizeRef.current.h)
+        const mfx = e.layerFx?.length ? mainFxOf(e) : undefined
+        applyLayerFx(mainFxRef.current, null, mfx, outMs, fxFrame.W, fxFrame.H)
+        const mainChroma = mfx?.key && mainKeyAllowed(e) ? chromaParams(mfx.key) : null
+        gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current), mainChroma)
         const adjSpecs = adjustGradesAt(e, outMs).map((g) => g.spec)
         const adj = gp.chain(adjSpecs)
         if (adjustRef.current && adjustRef.current.style.filter !== adj) adjustRef.current.style.filter = adj
@@ -673,7 +679,7 @@ export function PreviewStage({
         // E1fix: live media rows via ref (the tick is mounted once).
         const media = brollMediaRef.current.find((m) => m.id === item.id)
         // G4b: mask / blend / chroma key / reverse (layer_fx.py) — nothing changes without a row.
-        const lfx = e.layerFx?.length ? layerFxOf(e, item.id) : undefined
+        const lfx = e.layerFx?.length ? brollFxOf(e, item.id) : undefined
         const fxEl = brollFxRefs.current[item.id] ?? null
         applyLayerFx(fxEl, fxEl?.closest<HTMLElement>('[data-testid="preview-broll"]') ?? null, lfx, outMs - item.startMs, fxFrame.W, fxFrame.H)
         const chroma = lfx?.key ? chromaParams(lfx.key) : null
@@ -1044,13 +1050,13 @@ export function PreviewStage({
         ) : null}
         {/* G4a: no z-index here; with no filter it creates no stacking context, so G1b stacking is unchanged. */}
         <div ref={adjustRef} className="absolute inset-0" data-testid="preview-adjust">
+        <div className="absolute inset-0" data-testid="preview-main-fx">
         {flatCanvasBg ? (
-          <CanvasBgFill
-            bg={canvasBg}
-            imageUrl={canvasBgImageUrl}
-            testId="preview-canvas-backdrop"
-          />
-        ) : null}
+          <CanvasBgFill bg={canvasBg} imageUrl={canvasBgImageUrl} testId="preview-canvas-backdrop" />
+        ) : (
+          <div className="pointer-events-none absolute inset-0 bg-black" data-testid="preview-canvas-backdrop" aria-hidden />
+        )}
+        <div ref={mainFxRef} className="absolute inset-0">
         <div ref={underRef} className="absolute inset-0" data-testid="preview-under">
         <div ref={mainKfRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }} data-testid="preview-main-kf">
         <div ref={mainLayerRef} className="absolute inset-0" data-testid="preview-main-layer">
@@ -1443,6 +1449,8 @@ export function PreviewStage({
             <canvas className="absolute inset-0 size-full" style={{ display: 'none' }} data-testid="preview-blur-canvas" />
           </div>
         ))}
+        </div>
+        </div>
         </div>
         {!compositePreview &&
           // G1a: DOM order = stacking order (time order; bring forward / back among overlapping items).

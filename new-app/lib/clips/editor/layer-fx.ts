@@ -49,6 +49,39 @@ export const BLEND_CSS: Record<BlendMode, string> = {
 }
 export type LayerFx = { target: string; mask?: LayerMask; key?: ChromaKey; blend?: Exclude<BlendMode, 'normal'>; reverse?: true }
 
+export type FxTargetKind = 'broll' | 'video' | 'text' | 'adjust'
+
+export const FX_FEATURES: Record<FxTargetKind, { mask: boolean; key: boolean; blend: boolean; reverse: boolean }> = {
+  broll: { mask: true, key: true, blend: true, reverse: true },
+  video: { mask: true, key: true, blend: false, reverse: false },
+  text: { mask: true, key: false, blend: true, reverse: false },
+  adjust: { mask: true, key: false, blend: true, reverse: false },
+}
+
+const TARGET_RE = /^(?:(?:broll|text|adjust):[A-Za-z0-9_~.:-]{1,128}|video)$/
+const TEXT_FX_CAP = 6
+
+export function fxTargetOf(target: string): FxTargetKind | null {
+  if (target === 'video') return 'video'
+  if (target.startsWith('broll:')) return 'broll'
+  if (target.startsWith('text:')) return 'text'
+  if (target.startsWith('adjust:')) return 'adjust'
+  return null
+}
+
+function stripLayerFxFields(row: LayerFx): LayerFx | null {
+  const kind = fxTargetOf(row.target)
+  if (!kind) return null
+  const out: LayerFx = { target: row.target }
+  const f = FX_FEATURES[kind]
+  if (f.mask && row.mask) out.mask = row.mask
+  if (f.key && row.key) out.key = row.key
+  if (f.blend && row.blend) out.blend = row.blend
+  if (f.reverse && row.reverse) out.reverse = row.reverse
+  if (out.mask || out.key || out.blend || out.reverse) return out
+  return null
+}
+
 export const MASK_SHORT = 160
 export const MASK_STEP_MS = 100
 export const MASK_MAX_KEYS = 16
@@ -112,7 +145,7 @@ export function normalizeLayerFx(raw: unknown): LayerFx[] | undefined {
     if (!r || typeof r !== 'object') continue
     const o = r as Record<string, unknown>
     const t = o.target
-    if (typeof t !== 'string' || !/^broll:[A-Za-z0-9_~.:-]{1,128}$/.test(t)) continue
+    if (typeof t !== 'string' || !TARGET_RE.test(t)) continue
     const row: LayerFx = { target: t }
     const mask = normalizeMask(o.mask)
     if (mask) row.mask = mask
@@ -120,25 +153,38 @@ export function normalizeLayerFx(raw: unknown): LayerFx[] | undefined {
     if (key) row.key = key
     if (typeof o.blend === 'string' && o.blend !== 'normal' && (BLEND_MODES as readonly string[]).includes(o.blend)) row.blend = o.blend as LayerFx['blend']
     if (o.reverse === true) row.reverse = true
-    if (row.mask || row.key || row.blend || row.reverse) byT.set(t, row)
+    const stripped = stripLayerFxFields(row)
+    if (stripped) byT.set(t, stripped)
   }
-  const out = [...byT.values()].sort((a, b) => (a.target < b.target ? -1 : a.target > b.target ? 1 : 0))
+  let out = [...byT.values()].sort((a, b) => (a.target < b.target ? -1 : a.target > b.target ? 1 : 0))
+  const textRows = out.filter((r) => r.target.startsWith('text:'))
+  if (textRows.length > TEXT_FX_CAP) {
+    const drop = new Set(textRows.slice(TEXT_FX_CAP).map((r) => r.target))
+    out = out.filter((r) => !drop.has(r.target))
+  }
   return out.length ? out.slice(0, 200) : undefined
 }
 
-export function layerFxOf(edits: { layerFx?: LayerFx[] }, itemId: string): LayerFx | undefined {
-  return normalizeLayerFx(edits.layerFx)?.find((r) => r.target === `broll:${itemId}`)
+export function layerFxOf(edits: { layerFx?: LayerFx[] }, target: string): LayerFx | undefined {
+  return normalizeLayerFx(edits.layerFx)?.find((r) => r.target === target)
 }
 
-/** Replace one item's row (null / empty = remove). */
-export function setLayerFx(list: LayerFx[] | undefined, itemId: string, patch: Partial<Omit<LayerFx, 'target'>> | null): LayerFx[] | undefined {
-  const target = `broll:${itemId}`
+export function brollFxOf(edits: { layerFx?: LayerFx[] }, itemId: string): LayerFx | undefined {
+  return layerFxOf(edits, `broll:${itemId}`)
+}
+
+/** Replace one target's row (null / empty = remove). */
+export function setLayerFx(list: LayerFx[] | undefined, target: string, patch: Partial<Omit<LayerFx, 'target'>> | null): LayerFx[] | undefined {
   const rest = (list ?? []).filter((r) => r.target !== target)
   if (!patch) return normalizeLayerFx(rest)
   const cur = (list ?? []).find((r) => r.target === target) ?? { target }
   const next: Record<string, unknown> = { ...cur, ...patch, target }
   for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k]
   return normalizeLayerFx([...rest, next])
+}
+
+export function setBrollFx(list: LayerFx[] | undefined, itemId: string, patch: Partial<Omit<LayerFx, 'target'>> | null): LayerFx[] | undefined {
+  return setLayerFx(list, `broll:${itemId}`, patch)
 }
 
 /** Mask geometry at item-local `localMs` (stepped to MASK_STEP_MS, linear between keys). */

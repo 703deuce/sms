@@ -11,7 +11,7 @@ import { newTextItem } from '@/lib/clips/editor/text-items'
 import { effectiveTracks, placeOnFreeTrack, trackIdOf } from '@/lib/clips/editor/tracks'
 import { applySpeedCurve, curvePieces, curveSpeedAt, matchSpeedCurve } from '@/lib/clips/editor/speed-curves'
 import { speedAtSource } from '@/lib/clips/editor/speed'
-import { layerFxOf, setLayerFx } from '@/lib/clips/editor/layer-fx'
+import { brollFxOf, setBrollFx } from '@/lib/clips/editor/layer-fx'
 import { LayerFxControls, setMaskGeom, toggleMaskKey } from '@/components/clips/editor/g4/layer-fx-controls'
 import { applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
 import { GradePreview } from '@/components/clips/editor/g4/grade-preview'
@@ -71,11 +71,11 @@ describe('layer fx', () => {
   })
 
   it('persists through normalize + save payload, cleared → null', () => {
-    const e = { ...base(), layerFx: setLayerFx(undefined, 'b1', { blend: 'screen', reverse: true }) } as ClipEditsV2
+    const e = { ...base(), layerFx: setBrollFx(undefined, 'b1', { blend: 'screen', reverse: true }) } as ClipEditsV2
     const n = normalizeEdits(JSON.parse(JSON.stringify(e)), bounds)
-    expect(layerFxOf(n, 'b1')).toEqual({ target: 'broll:b1', blend: 'screen', reverse: true })
+    expect(brollFxOf(n, 'b1')).toEqual({ target: 'broll:b1', blend: 'screen', reverse: true })
     expect(editsPayloadForSave({ ...n, layerFx: undefined }).layerFx).toBeNull()
-    expect(setLayerFx(n.layerFx, 'b1', null)).toBeUndefined()
+    expect(setBrollFx(n.layerFx, 'b1', null)).toBeUndefined()
   })
 
   it('controls write layerFx rows', () => {
@@ -83,7 +83,7 @@ describe('layer fx', () => {
       const [e, set] = useState<ClipEditsV2>({ ...base(), broll: [{ id: 'b1', source: 'stock', assetId: 'a', startMs: 0, endMs: 3000 }] } as ClipEditsV2)
       return (
         <>
-          <LayerFxControls edits={e} itemId="b1" localMs={500} isVideo onCommit={set} readOnly={false} />
+          <LayerFxControls edits={e} target="broll:b1" localMs={500} features={{ mask: true, key: true, blend: true, reverse: true }} onCommit={set} readOnly={false} />
           <pre data-testid="dump">{JSON.stringify(e.layerFx ?? null)}</pre>
         </>
       )

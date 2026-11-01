@@ -26,7 +26,14 @@ REVERSE_MAX_MS = 60_000
 DEFAULT_MASK = {"shape": "rect", "x": 50, "y": 50, "w": 60, "h": 40, "rot": 0, "feather": 10}
 DEFAULT_KEY = {"color": "#00ff00", "sim": 40, "blend": 10, "spill": 50}
 _HEX = re.compile(r"^#[0-9a-f]{6}$")
-_TARGET = re.compile(r"^broll:[A-Za-z0-9_~.:-]{1,128}$")
+_TARGET = re.compile(r"^(?:(?:broll|text|adjust):[A-Za-z0-9_~.:-]{1,128}|video)$")
+TEXT_FX_CAP = 6
+FX_FEATURES = {
+    "broll": {"mask": True, "key": True, "blend": True, "reverse": True},
+    "video": {"mask": True, "key": True, "blend": False, "reverse": False},
+    "text": {"mask": True, "key": False, "blend": True, "reverse": False},
+    "adjust": {"mask": True, "key": False, "blend": True, "reverse": False},
+}
 GEOM = ("x", "y", "w", "h", "rot", "feather")
 _RANGES = {"x": (-50, 150), "y": (-50, 150), "w": (1, 200), "h": (1, 200), "rot": (-180, 180), "feather": (0, 100)}
 
@@ -99,6 +106,40 @@ def normalize_chroma_key(raw):
     return out
 
 
+def fx_target_of(target: str) -> str | None:
+    if target == "video":
+        return "video"
+    if target.startswith("broll:"):
+        return "broll"
+    if target.startswith("text:"):
+        return "text"
+    if target.startswith("adjust:"):
+        return "adjust"
+    return None
+
+
+def features_for(target: str) -> dict:
+    kind = fx_target_of(target)
+    return FX_FEATURES[kind] if kind else {}
+
+
+def _strip_row(row: dict) -> dict | None:
+    kind = fx_target_of(row.get("target", ""))
+    if not kind:
+        return None
+    f = FX_FEATURES[kind]
+    out: dict = {"target": row["target"]}
+    if f["mask"] and row.get("mask"):
+        out["mask"] = row["mask"]
+    if f["key"] and row.get("key"):
+        out["key"] = row["key"]
+    if f["blend"] and row.get("blend"):
+        out["blend"] = row["blend"]
+    if f["reverse"] and row.get("reverse"):
+        out["reverse"] = True
+    return out if len(out) > 1 else None
+
+
 def normalize_layer_fx(raw) -> list[dict]:
     by_t: dict[str, dict] = {}
     for r in raw if isinstance(raw, list) else []:
@@ -119,18 +160,28 @@ def normalize_layer_fx(raw) -> list[dict]:
             row["blend"] = b
         if r.get("reverse") is True:
             row["reverse"] = True
-        if len(row) > 1:
-            by_t[t] = row
-    return [by_t[k] for k in sorted(by_t)][:200]
+        stripped = _strip_row(row)
+        if stripped:
+            by_t[t] = stripped
+    out = [by_t[k] for k in sorted(by_t)]
+    text_rows = [r for r in out if r["target"].startswith("text:")]
+    if len(text_rows) > TEXT_FX_CAP:
+        drop = {r["target"] for r in text_rows[TEXT_FX_CAP:]}
+        out = [r for r in out if r["target"] not in drop]
+    return out[:200]
 
 
-def layer_fx_of(edits: dict | None, item_id: str) -> dict:
+def layer_fx_for(edits: dict | None, target: str) -> dict:
     if not edits:
         return {}
     for r in normalize_layer_fx(edits.get("layerFx")):
-        if r["target"] == f"broll:{item_id}":
+        if r["target"] == target:
             return r
     return {}
+
+
+def layer_fx_of(edits: dict | None, item_id: str) -> dict:
+    return layer_fx_for(edits, f"broll:{item_id}")
 
 
 def mask_geom_at(mask: dict, local_ms: float) -> dict:

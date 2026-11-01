@@ -27,7 +27,7 @@ import {
   type TimelineItem,
 } from '@/lib/clips/editor/clip-timeline'
 import type { ColorSpec } from '@/lib/clips/editor/color'
-import { setLayerFx, type LayerFx } from '@/lib/clips/editor/layer-fx'
+import { setBrollFx, type LayerFx } from '@/lib/clips/editor/layer-fx'
 import type { KeyframeTarget, KeyframeTrack, LayerProp } from '@/lib/clips/editor/motion-schema'
 import { rippleGlobalKeyframes } from '@/lib/clips/editor/keyframes'
 import { remapCutTransitions } from '@/lib/clips/editor/transitions'
@@ -202,7 +202,7 @@ function withAttach(edits: ClipEditsV2, target: KeyframeTarget, a: Attach, color
     const had = next.color?.broll?.[colorKey]
     if (a.color || had) next = { ...next, color: { ...(next.color ?? {}), broll: Object.keys(broll).length ? broll : undefined } }
     const fxHad = next.layerFx?.some((r) => r.target === `broll:${colorKey}`)
-    if (a.fx || fxHad) next = { ...next, layerFx: setLayerFx(next.layerFx, colorKey, a.fx ? structuredCloneSafe(a.fx) : null) }
+    if (a.fx || fxHad) next = { ...next, layerFx: setBrollFx(next.layerFx, colorKey, a.fx ? structuredCloneSafe(a.fx) : null) }
   }
   return next
 }
