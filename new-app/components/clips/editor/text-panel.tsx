@@ -48,6 +48,7 @@ import { assPathToSvg } from '@/components/clips/editor/text-items-preview'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 import { TextAnimSection } from '@/components/clips/editor/text-anim-section'
 import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
+import { placeOnFreeTrack } from '@/lib/clips/editor/tracks'
 
 const ALIGNS: TextAlign[] = ['left', 'center', 'right']
 
@@ -183,7 +184,19 @@ export function TextPanel({
     write([...items, ...made])
     onSelect(made[made.length - 1]!.id)
   }
-  const addTemplate = (tid: string) => addItems(newTemplateItems(tid, newId(), playheadMs, durationMs))
+  // G4b: a title template lands at the playhead on a free text track (never on top of other text).
+  const addTemplate = (tid: string) => {
+    const made = newTemplateItems(tid, newId(), playheadMs, durationMs)
+    if (!made.length || TEXT_MAX_ITEMS - items.length < made.length) return
+    burst.current = null
+    const built = build([...items, ...made])
+    const placed = built.textItems?.filter((t) => made.some((m) => m.id === t.id)) ?? []
+    if (!placed.length) return onEdits(built)
+    const a = Math.min(...placed.map((t) => t.startMs))
+    const b = Math.max(...placed.map((t) => t.endMs))
+    onEdits(placeOnFreeTrack(built, 'text', placed.map((t) => t.id), a, b))
+    onSelect(made[made.length - 1]!.id)
+  }
   const addShape = (type: string) => addItems([newShapeItem(newId()(), type, playheadMs, durationMs)])
   const addSticker = (sid: string) => addItems([newStickerItem(newId()(), sid, playheadMs, durationMs)])
   const addProgress = () => addItems([newProgressItem(newId()(), durationMs)])

@@ -9,8 +9,9 @@
 import { bakeGrid, lookKey, type ColorSpec } from '@/lib/clips/editor/color'
 import { GRID, needs3d } from '@/lib/clips/editor/color-grade'
 import { GradeFilterBank } from './grade-filters'
-import { GradeMirrors, type Media } from './grade-gl'
+import { GradeMirrors, type GlKey, type Media } from './grade-gl'
 import { lutFor } from './lut-cache'
+import { shakeCss } from '@/lib/clips/editor/fx-library'
 
 const MAX_GRIDS = 24
 
@@ -54,26 +55,56 @@ export class GradePreview {
     return { grid: g.grid, key }
   }
 
-  /** Grade `layer` (and its media) with `spec`; returns the CSS filter that was set. */
-  apply(layer: HTMLElement | null, spec: ColorSpec | undefined | null, media: Media[]): string {
+  /**
+   * Grade `layer` (and its media) with `spec`; returns the CSS filter that was set. G4b `chroma`:
+   * the media is mirrored through the WebGL key (alpha from the ungraded pixel, despill), and the
+   * rest of the grade stays on the layer as CSS (3D stage in the mirror when needed).
+   */
+  apply(layer: HTMLElement | null, spec: ColorSpec | undefined | null, media: Media[], chroma: GlKey | null = null): string {
     if (!layer) return ''
     let css: string
-    if (spec && needs3d(spec) && media.length) {
-      const { grid, key } = this.gridFor(spec)
-      const states = media.map((m) => this.mirrors.sync(m, grid, GRID, key))
+    const d3 = Boolean(spec && needs3d(spec))
+    if ((d3 || chroma) && media.length) {
+      const g = d3 && spec ? this.gridFor(spec) : null
+      const states = media.map((m) => this.mirrors.sync(m, g?.grid ?? null, GRID, g?.key ?? 'id', chroma))
       if (states.every((s) => s === 'ok' || s === 'skip')) {
         media.forEach((m) => this.keep.add(m))
-        css = this.bank.css(spec, { spatialOnly: true })
+        css = this.bank.css(spec, { spatialOnly: d3 })
       } else {
         media.forEach((m) => this.mirrors.release(m))
-        if (states.includes('fail')) this.reasons.add(`HSL / LUT preview off: ${this.mirrors.blocked ?? 'unavailable'} (the export still applies them)`)
+        if (states.includes('fail')) {
+          const what = chroma && d3 ? 'Chroma key / HSL / LUT' : chroma ? 'Chroma key' : 'HSL / LUT'
+          this.reasons.add(`${what} preview off: ${this.mirrors.blocked ?? 'unavailable'} (the export still applies ${chroma && !d3 ? 'it' : 'them'})`)
+        }
         css = this.bank.css(spec)
       }
     } else {
       css = this.bank.css(spec)
     }
     if (layer.style.filter !== css) layer.style.filter = css
+    this.setShake(layer, this.shake([spec]))
     return css
+  }
+
+  /** G4b shake (CSS transform = the export's scale + crop) for the current frame. */
+  shake(specs: (ColorSpec | null | undefined)[]): string {
+    const { w, h } = this.bank.play
+    return specs
+      .map((s) => shakeCss(s?.fx?.shake ?? 0, w, h, this.bank.frame))
+      .filter(Boolean)
+      .join(' ')
+  }
+
+  /** Set / clear the shake transform (only ever clears a transform this runtime set). */
+  setShake(layer: HTMLElement | null, tf: string) {
+    if (!layer) return
+    if (tf) {
+      if (layer.style.transform !== tf) layer.style.transform = tf
+      layer.dataset.g4shake = '1'
+    } else if (layer.dataset.g4shake) {
+      layer.style.transform = ''
+      delete layer.dataset.g4shake
+    }
   }
 
   /** Chain of filters for adjustment layers (pointwise 3D stage is never used there). */

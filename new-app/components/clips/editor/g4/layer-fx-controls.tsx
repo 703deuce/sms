@@ -1,0 +1,238 @@
+'use client'
+
+/**
+ * G4b B-roll layer effects (Properties → Video for a B-roll item): shape mask with feather and
+ * keyframes, chroma key, blend mode, reverse. Manual only, no credits; stored in edits.layerFx
+ * (additive JSON), rendered by the export (layer_fx.py) and mirrored by the preview.
+ */
+import { Diamond, RotateCcw } from 'lucide-react'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import {
+  BLEND_LABELS,
+  BLEND_MODES,
+  DEFAULT_KEY,
+  DEFAULT_MASK,
+  MASK_LABELS,
+  MASK_SHAPES,
+  MASK_STEP_MS,
+  REVERSE_MAX_MS,
+  layerFxOf,
+  maskGeomAt,
+  setLayerFx,
+  type ChromaKey,
+  type LayerFx,
+  type LayerMask,
+  type MaskGeom,
+} from '@/lib/clips/editor/layer-fx'
+import { SliderRow } from '@/components/clips/editor/e4/slider-row'
+
+const btn =
+  'inline-flex h-7 items-center gap-1 rounded border border-border px-2 text-[11px] hover:bg-muted disabled:pointer-events-none disabled:opacity-35'
+const on = 'bg-primary text-primary-foreground hover:bg-primary'
+
+const GEOM_ROWS: { k: keyof MaskGeom; label: string; min: number; max: number; unit: string }[] = [
+  { k: 'x', label: 'Center X', min: -50, max: 150, unit: '%' },
+  { k: 'y', label: 'Center Y', min: -50, max: 150, unit: '%' },
+  { k: 'w', label: 'Width', min: 1, max: 200, unit: '%' },
+  { k: 'h', label: 'Height', min: 1, max: 200, unit: '%' },
+  { k: 'rot', label: 'Rotation', min: -180, max: 180, unit: '°' },
+  { k: 'feather', label: 'Feather', min: 0, max: 100, unit: '' },
+]
+
+/** Keyframe time for item-local ms (the 100 ms step both renderers use). */
+export const maskKeyMs = (localMs: number) => Math.floor(Math.max(0, localMs) / MASK_STEP_MS) * MASK_STEP_MS
+
+/** Set one geometry value: updates the key at the playhead when the mask is keyframed. */
+export function setMaskGeom(mask: LayerMask, k: keyof MaskGeom, v: number, localMs: number): LayerMask {
+  if (!mask.keys?.length) return { ...mask, [k]: v }
+  const ms = maskKeyMs(localMs)
+  const cur = maskGeomAt(mask, ms)
+  const keys = mask.keys.filter((x) => x.ms !== ms)
+  keys.push({ ...cur, [k]: v, ms })
+  keys.sort((a, b) => a.ms - b.ms)
+  return { ...mask, keys }
+}
+
+export function toggleMaskKey(mask: LayerMask, localMs: number): LayerMask {
+  const ms = maskKeyMs(localMs)
+  const has = mask.keys?.some((x) => x.ms === ms)
+  if (has) {
+    const keys = mask.keys!.filter((x) => x.ms !== ms)
+    if (keys.length) return { ...mask, keys }
+    const { keys: _k, ...rest } = mask
+    return { ...rest, ...maskGeomAt(mask, ms) }
+  }
+  return { ...mask, keys: [...(mask.keys ?? []), { ...maskGeomAt(mask, ms), ms }].sort((a, b) => a.ms - b.ms) }
+}
+
+export function LayerFxControls({
+  edits,
+  itemId,
+  localMs,
+  isVideo,
+  onCommit,
+  readOnly,
+}: {
+  edits: ClipEditsV2
+  itemId: string
+  localMs: number
+  isVideo: boolean
+  onCommit: (next: ClipEditsV2) => void
+  readOnly: boolean
+}) {
+  const fx: LayerFx | undefined = layerFxOf(edits, itemId)
+  const patch = (p: Partial<Omit<LayerFx, 'target'>>) => onCommit({ ...edits, layerFx: setLayerFx(edits.layerFx, itemId, p) })
+  const mask = fx?.mask
+  const g = mask ? maskGeomAt(mask, localMs) : null
+  const keyed = Boolean(mask?.keys?.length)
+  const keyHere = Boolean(mask?.keys?.some((x) => x.ms === maskKeyMs(localMs)))
+  const key = fx?.key
+  const setKey = (p: Partial<ChromaKey>) => patch({ key: { ...(key ?? DEFAULT_KEY), ...p } })
+  const item = (edits.broll ?? []).find((b) => b.id === itemId)
+  const tooLong = item ? item.endMs - item.startMs > REVERSE_MAX_MS : false
+  return (
+    <div className="space-y-4" data-testid="layer-fx">
+      <section className="space-y-1.5" data-testid="layer-fx-mask">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mask</h3>
+        <div className="flex flex-wrap gap-1">
+          <button type="button" className={`${btn} ${!mask ? on : ''}`} disabled={readOnly} onClick={() => patch({ mask: undefined })} data-testid="layer-fx-mask-none">
+            None
+          </button>
+          {MASK_SHAPES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`${btn} ${mask?.shape === s ? on : ''}`}
+              disabled={readOnly}
+              onClick={() => patch({ mask: { ...(mask ?? DEFAULT_MASK), shape: s } })}
+              data-testid={`layer-fx-mask-${s}`}
+            >
+              {MASK_LABELS[s]}
+            </button>
+          ))}
+        </div>
+        {mask && g ? (
+          <>
+            {GEOM_ROWS.filter((r) => !((mask.shape === 'linear' && (r.k === 'w' || r.k === 'h')) || (mask.shape === 'mirror' && r.k === 'w'))).map((r) => (
+              <SliderRow
+                key={r.k}
+                label={r.label}
+                value={Math.round(g[r.k] * 100) / 100}
+                min={r.min}
+                max={r.max}
+                unit={r.unit}
+                disabled={readOnly}
+                testId={`layer-fx-mask-${r.k}`}
+                onCommit={(v) => patch({ mask: setMaskGeom(mask, r.k, v, localMs) })}
+              />
+            ))}
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                className={`${btn} ${mask.invert ? on : ''}`}
+                aria-pressed={Boolean(mask.invert)}
+                disabled={readOnly}
+                onClick={() => patch({ mask: { ...mask, invert: mask.invert ? undefined : true } as LayerMask })}
+                data-testid="layer-fx-mask-invert"
+              >
+                Invert
+              </button>
+              <button
+                type="button"
+                className={`${btn} ${keyHere ? 'border-yellow-400 bg-yellow-400/15' : ''}`}
+                disabled={readOnly}
+                onClick={() => patch({ mask: toggleMaskKey(mask, localMs) })}
+                data-testid="layer-fx-mask-key"
+                title="Keyframe the mask at the playhead (100 ms steps)"
+              >
+                <Diamond className="size-3" aria-hidden /> {keyHere ? 'Remove key' : 'Key here'}
+              </button>
+              {keyed ? (
+                <button
+                  type="button"
+                  className={btn}
+                  disabled={readOnly}
+                  onClick={() => {
+                    const { keys: _k, ...rest } = mask
+                    patch({ mask: { ...rest, ...maskGeomAt(mask, localMs) } })
+                  }}
+                  data-testid="layer-fx-mask-clear-keys"
+                >
+                  <RotateCcw className="size-3" aria-hidden /> Clear keys
+                </button>
+              ) : null}
+            </div>
+            {keyed ? <p className="text-[10px] text-muted-foreground">{mask.keys!.length} mask key(s): sliders edit the key at the playhead.</p> : null}
+          </>
+        ) : null}
+      </section>
+      <section className="space-y-1.5" data-testid="layer-fx-key">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Chroma key</h3>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button type="button" className={`${btn} ${key ? on : ''}`} aria-pressed={Boolean(key)} disabled={readOnly} onClick={() => patch({ key: key ? undefined : DEFAULT_KEY })} data-testid="layer-fx-key-toggle">
+            {key ? 'On' : 'Off'}
+          </button>
+          {key ? (
+            <>
+              <button type="button" className={btn} disabled={readOnly} onClick={() => setKey({ color: '#00ff00' })} data-testid="layer-fx-key-green">
+                Green
+              </button>
+              <button type="button" className={btn} disabled={readOnly} onClick={() => setKey({ color: '#0000ff' })} data-testid="layer-fx-key-blue">
+                Blue
+              </button>
+              <input
+                type="color"
+                value={key.color}
+                disabled={readOnly}
+                onChange={(e) => setKey({ color: e.target.value.toLowerCase() })}
+                className="h-6 w-10 cursor-pointer rounded border border-border bg-transparent"
+                aria-label="Key color"
+                data-testid="layer-fx-key-color"
+              />
+            </>
+          ) : null}
+        </div>
+        {key ? (
+          <>
+            <SliderRow label="Strength" value={key.sim} min={0} max={100} disabled={readOnly} testId="layer-fx-key-sim" onCommit={(v) => setKey({ sim: v })} />
+            <SliderRow label="Edge softness" value={key.blend} min={0} max={100} disabled={readOnly} testId="layer-fx-key-blend" onCommit={(v) => setKey({ blend: v })} />
+            <SliderRow label="Spill removal" value={key.spill} min={0} max={100} disabled={readOnly} testId="layer-fx-key-spill" onCommit={(v) => setKey({ spill: v })} />
+          </>
+        ) : null}
+      </section>
+      <section className="space-y-1.5" data-testid="layer-fx-blend">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Blend</h3>
+        <div className="flex flex-wrap gap-1">
+          {BLEND_MODES.map((m) => (
+            <button
+              key={m}
+              type="button"
+              className={`${btn} ${(fx?.blend ?? 'normal') === m ? on : ''}`}
+              disabled={readOnly}
+              onClick={() => patch({ blend: m === 'normal' ? undefined : m })}
+              data-testid={`layer-fx-blend-${m}`}
+            >
+              {BLEND_LABELS[m]}
+            </button>
+          ))}
+        </div>
+      </section>
+      {isVideo ? (
+        <section className="space-y-1.5" data-testid="layer-fx-reverse">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Reverse</h3>
+          <button
+            type="button"
+            className={`${btn} ${fx?.reverse ? on : ''}`}
+            aria-pressed={Boolean(fx?.reverse)}
+            disabled={readOnly}
+            onClick={() => patch({ reverse: fx?.reverse ? undefined : true })}
+            data-testid="layer-fx-reverse-toggle"
+          >
+            {fx?.reverse ? 'Reversed' : 'Play backwards'}
+          </button>
+          {tooLong ? <p className="text-[10px] text-muted-foreground">Only the first {REVERSE_MAX_MS / 1000} s are reversed on export.</p> : null}
+        </section>
+      ) : null}
+    </div>
+  )
+}

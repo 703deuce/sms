@@ -111,6 +111,8 @@ def build_broll_filtergraph(
     extra_inputs: list[str] = []
     current = "base"
     cmd_files: list[tuple[Path, str]] = []
+    n_inputs = 1
+    from clips_worker.layer_fx import despill_chain, key_chain, layer_fx_of, reversed_media, write_mask_frames
 
     for i, spec in enumerate(broll_specs):
         clip_dur = clip_window_duration_s(spec)
@@ -124,7 +126,7 @@ def build_broll_filtergraph(
         if vis_end > end:
             clip_dur = clip_dur + (vis_end - end)  # feeds the next item's 'between' window
             end = vis_end
-        inp = f"{i + 1}:v"
+        inp = f"{n_inputs}:v"
         local = Path(spec["local_path"])
         in_s = max(0.0, float(spec.get("in_s") or 0.0))
         probed = probe_video_duration_s(local)
@@ -133,18 +135,60 @@ def build_broll_filtergraph(
         clip_dur = max(0.1, clip_dur)
         bar_crop = detect_letterbox_crop(local)
         bar_vf = f"{bar_crop}," if bar_crop else ""
-        trim = f"trim=0:{clip_dur:.3f}" if in_s <= 0 else f"trim={in_s:.3f}:{in_s + clip_dur:.3f}"
         from clips_worker.color import broll_color_filter
 
         # E4: per-item color look; G4a: keyframed color windows + sharpen / vignette / grain.
         look = broll_color_filter(edits, item["id"], cmd_dir, w=width, h=height, tag=f"bc{i}", start_s=start,
                                   end_s=end)
-        parts.append(
-            f"[{inp}]{trim},setpts=PTS-STARTPTS+{start:.3f}/TB,"
-            f"{bar_vf}"
-            f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-            f"crop={width}:{height}{look},fps=30,format=yuv420p[b{i}]"
-        )
+        # G4b: mask / chroma key / blend / reverse (layer_fx). Items without them render as before.
+        lfx = layer_fx_of(edits, item["id"]) if (edits is not None and spec.get("id") is not None) else {}
+        loop_args = ["-stream_loop", "-1"]
+        rev_pad = ""
+        if lfx.get("reverse") and cmd_dir is not None:
+            # Reversed copy of the item's own range (bars cropped, already w × h), played from 0; a
+            # 'between' extension past the item's end holds the last (= in-point) frame.
+            own = max(0.1, min(clip_dur, float(spec["end_s"]) - start))
+            local = reversed_media(local, in_s, own, width, height, Path(cmd_dir) / f"rev{i}.mp4",
+                                   pre_vf=bar_crop)
+            in_s, bar_vf, loop_args = 0.0, "", []
+            rev_pad = f"tpad=stop_mode=clone:stop_duration={clip_dur + 1:.3f},"
+        trim = f"trim=0:{clip_dur:.3f}" if in_s <= 0 else f"trim={in_s:.3f}:{in_s + clip_dur:.3f}"
+        head = (f"[{inp}]{rev_pad}{trim},setpts=PTS-STARTPTS+{start:.3f}/TB,"
+                f"{bar_vf}"
+                f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+                f"crop={width}:{height}")
+        extra_inputs.extend([*loop_args, "-i", str(local)])
+        n_inputs += 1
+        if not (lfx.get("key") or lfx.get("mask")):
+            parts.append(f"{head}{look},fps=30,format=yuv420p[b{i}]")
+        else:
+            # Alpha from the ungraded pixels (key) × the mask; colour from the graded chain.
+            alphas: list[str] = []
+            if lfx.get("key"):
+                parts.append(f"{head},fps=30,split=2[b{i}s0][b{i}s1]")
+                parts.append(f"[b{i}s0]null{despill_chain(lfx['key'])}{look},format=yuv420p[b{i}g]")
+                parts.append(f"[b{i}s1]{key_chain(lfx['key'])[1:]},alphaextract[b{i}ka]")
+                alphas.append(f"b{i}ka")
+            else:
+                parts.append(f"{head},fps=30{look},format=yuv420p[b{i}g]")
+            if lfx.get("mask"):
+                mpath = Path(cmd_dir if cmd_dir is not None else ".") / f"mask{i}.gray"
+                _, mw, mh, nfr = write_mask_frames(lfx["mask"], clip_dur, width, height, mpath)
+                extra_inputs.extend(["-f", "rawvideo", "-pix_fmt", "gray", "-video_size", f"{mw}x{mh}",
+                                     "-framerate", "10", "-i", str(mpath)])
+                mi = n_inputs
+                n_inputs += 1
+                pad = max(0.0, clip_dur - nfr / 10.0) + 1.0
+                parts.append(f"[{mi}:v]setpts=PTS-STARTPTS+{start:.3f}/TB,tpad=stop_mode=clone:"
+                             f"stop_duration={pad:.3f},fps=30,scale={width}:{height}:flags=bilinear,"
+                             f"format=gray[b{i}ma]")
+                alphas.append(f"b{i}ma")
+            if len(alphas) == 2:
+                parts.append(f"[{alphas[0]}][{alphas[1]}]blend=all_mode=multiply:shortest=1[b{i}al]")
+                al = f"b{i}al"
+            else:
+                al = alphas[0]
+            parts.append(f"[b{i}g][{al}]alphamerge,format=yuva420p[b{i}]")
         out = f"v{i}"
         enable = f"enable='between(t,{start:.3f},{end:.3f})':eof_action=pass"
         if my_windows:
@@ -156,12 +200,12 @@ def build_broll_filtergraph(
         else:
             main_cur, main_b = current, f"b{i}"
         pre = current
+        blend = lfx.get("blend")
         current = _broll_layer(parts, edits, target, main_b, main_cur, out, start, end, width, height, enable,
-                               moving, cmd_dir, cmd_files)
+                               moving, cmd_dir, cmd_files, blend=blend)
         for k, w in enumerate(my_windows):
             current = _broll_window(parts, w, f"{pre}w{k}", f"b{i}w{k}", current, f"bw{i}_{k}", edits, target,
-                                    start, width, height, moving, cmd_dir, cmd_files)
-        extra_inputs.extend(["-stream_loop", "-1", "-i", str(spec["local_path"])])
+                                    start, width, height, moving, cmd_dir, cmd_files, blend=blend)
 
     for path, text in cmd_files:
         path.write_text(text)
@@ -169,18 +213,38 @@ def build_broll_filtergraph(
 
 
 def _broll_layer(parts, edits, target, b_label, cur_label, out, start, end, width, height, enable, moving,
-                 cmd_dir, cmd_files) -> str:
-    """Overlay one B-roll layer (with E3 keyframes when present) onto cur_label → out."""
+                 cmd_dir, cmd_files, blend=None) -> str:
+    """Overlay one B-roll layer (with E3 keyframes when present) onto cur_label → out.
+
+    G4b `blend`: the (moved) layer is composited with that blend mode over [start, end] instead."""
+    if blend:
+        from clips_worker.layer_fx import blend_composite
+
+        s0, s1 = max(0.0, start), max(start, end)
+        layer = b_label
+        if moving:
+            # Moved layer on a transparent canvas (full frame) → blend with the composite.
+            parts.append(f"color=c=black@0.0:s={width}x{height}:r=30:d={s1 - s0 + 1:.3f},format=rgba,"
+                         f"setpts=PTS-STARTPTS+{s0:.3f}/TB[{out}_t]")
+            layer = _moving_layer(parts, edits, target, b_label, f"{out}_t", f"{out}_L", start, end, width, height,
+                                  enable, cmd_dir, cmd_files, keep_alpha=True)
+        return blend_composite(parts, cur_label, layer, out, blend, width, height, s0, s1)
     if not moving:
         parts.append(f"[{cur_label}][{b_label}]overlay=0:0:{enable}[{out}]")
         return out
+    return _moving_layer(parts, edits, target, b_label, cur_label, out, start, end, width, height, enable,
+                         cmd_dir, cmd_files)
+
+
+def _moving_layer(parts, edits, target, b_label, cur_label, out, start, end, width, height, enable, cmd_dir,
+                  cmd_files, keep_alpha=False) -> str:
     from clips_worker.motion import layer_motion_chain, layer_sendcmd
 
     cmd_file = (Path(cmd_dir) if cmd_dir else Path(".")) / f"{out}.cmd"
     graph, tags = layer_motion_chain(edits, target, w=width, h=height, origin_s=start, label_in=b_label,
                                      label_out=f"{out}_k", bg_label=cur_label, cmd_file=str(cmd_file))
     graph = graph.replace(":eval=frame:format=auto[", f":eval=frame:format=auto:{enable}[")
-    parts.append(graph + f";[{out}_k]format=yuv420p[{out}]")
+    parts.append(graph + f";[{out}_k]format={'rgba' if keep_alpha else 'yuv420p'}[{out}]")
     if tags:
         cmd_files.append((cmd_file, layer_sendcmd(edits, target, tags, w=width, h=height, start_s=max(0.0, start),
                                                   end_s=end, origin_s=start)))
@@ -188,7 +252,7 @@ def _broll_layer(parts, edits, target, b_label, cur_label, out, start, end, widt
 
 
 def _broll_window(parts, w, cur_w, b_w, current, lab, edits, target, start, width, height, moving,
-                  cmd_dir, cmd_files) -> str:
+                  cmd_dir, cmd_files, blend=None) -> str:
     """xfade between the composite without this item (A) and with it (B) over the window."""
     from clips_worker.motion import XFADE_NAME, ZOOM_AMOUNT
 
@@ -204,7 +268,10 @@ def _broll_window(parts, w, cur_w, b_w, current, lab, edits, target, start, widt
     if moving:
         local_edits = _shift_target(edits, target, w0 - start)
         _broll_layer(parts, local_edits, target, f"{lab}b", f"{lab}c1", f"{lab}with", 0.0, n / 30.0 + 0.1,
-                     width, height, enable, True, cmd_dir, cmd_files)
+                     width, height, enable, True, cmd_dir, cmd_files, blend=blend)
+    elif blend:
+        _broll_layer(parts, edits, target, f"{lab}b", f"{lab}c1", f"{lab}with", max(0.0, start - w0),
+                     n / 30.0 + 0.1, width, height, enable, False, cmd_dir, cmd_files, blend=blend)
     else:
         parts.append(f"[{lab}c1][{lab}b]overlay=0:0:{enable}[{lab}with]")
     without, with_ = f"{lab}c0", f"{lab}with"

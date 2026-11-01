@@ -1,6 +1,7 @@
 /**
  * G4a color grade v2 — shared math for preview and export. Line-for-line mirror of
- * worker/clips_worker/color_grade.py. No imports (color.ts composes it with the E4 affine look).
+ * worker/clips_worker/color_grade.py. Only imports fx-library.ts (itself import-free; color.ts composes
+ * this module with the E4 affine look).
  *
  * A spec with any G4a field is graded as:
  *   x1 = hsl(mix(x, userLUT(x), lutIntensity))     "3D stage" (only with HSL ranges or a LUT)
@@ -15,6 +16,7 @@
  * runs the SVG chain (no 3D stage) or samples the SAME grid in WebGL with `tetra` below.
  */
 
+import { FX2_KEYS, type Fx2Key } from '@/lib/clips/editor/fx-library'
 export const V2_ADJUST = ['exposure', 'highlights', 'shadows'] as const
 export type V2AdjustKey = (typeof V2_ADJUST)[number]
 export const HSL_RANGES = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'magenta'] as const
@@ -36,6 +38,9 @@ export const WHEELS = ['lift', 'gamma', 'gain'] as const
 export type WheelId = (typeof WHEELS)[number]
 export const FX_KEYS = ['sharpen', 'vignette', 'grain'] as const
 export type FxKey = (typeof FX_KEYS)[number]
+/** G4b: G4a fx + the effects library (fx-library.ts); canonical string adds the new ones as "e…". */
+export const FX_ALL = [...FX_KEYS, ...FX2_KEYS] as const
+export type FxAnyKey = FxKey | Fx2Key
 export const TABLE_N = 255
 export const GRID = 33
 export const CURVE_MAX_POINTS = 8
@@ -52,7 +57,7 @@ export type GradeFields = {
   wheels?: Partial<Record<WheelId, Wheel>>
   hsl?: Partial<Record<HslRange, HslAdj>>
   lut?: { id: string; intensity?: number }
-  fx?: Partial<Record<FxKey, number>>
+  fx?: Partial<Record<FxAnyKey, number>>
 }
 /** The slice of a ColorSpec this module reads. */
 export type GradeSpecLike = GradeFields & { adjust?: Partial<Record<string, number>> }
@@ -147,8 +152,8 @@ export function normalizeGradeFields(raw: Record<string, unknown>): GradeFields 
   }
   if (raw.fx && typeof raw.fx === 'object') {
     const fx = raw.fx as Record<string, unknown>
-    const f: Partial<Record<FxKey, number>> = {}
-    for (const k of FX_KEYS) {
+    const f: Partial<Record<FxAnyKey, number>> = {}
+    for (const k of FX_ALL) {
       const v = ri(clamp(num(fx[k]), 0, 100))
       if (v) f[k] = v
     }
@@ -173,14 +178,14 @@ export function needs3d(spec: GradeSpecLike | null | undefined): boolean {
   return Boolean(spec && (spec.hsl || spec.lut))
 }
 
-export function specFx(spec: GradeSpecLike | null | undefined): Record<FxKey, number> {
+export function specFx(spec: GradeSpecLike | null | undefined): Record<FxAnyKey, number> {
   const fx = spec?.fx
-  return { sharpen: fx?.sharpen ?? 0, vignette: fx?.vignette ?? 0, grain: fx?.grain ?? 0 }
+  return Object.fromEntries(FX_ALL.map((k) => [k, fx?.[k] ?? 0])) as Record<FxAnyKey, number>
 }
 
 export function hasFx(spec: GradeSpecLike | null | undefined): boolean {
   const f = specFx(spec)
-  return Boolean(f.sharpen || f.vignette || f.grain)
+  return FX_ALL.some((k) => f[k])
 }
 
 function fmt(v: number): string {
@@ -208,6 +213,7 @@ export function canonGrade(spec: GradeSpecLike | null | undefined): string {
   if (spec.lut) parts.push(`l${spec.lut.id},${spec.lut.intensity ?? 100}`)
   const fx = specFx(spec)
   if (fx.sharpen || fx.vignette || fx.grain) parts.push('f' + FX_KEYS.map((k) => String(fx[k])).join(','))
+  if (FX2_KEYS.some((k) => fx[k])) parts.push('e' + FX2_KEYS.filter((k) => fx[k]).map((k) => `${k}${fx[k]}`).join(','))
   return parts.join('|')
 }
 

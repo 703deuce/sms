@@ -51,6 +51,9 @@ import { lookKey, videoSpecAtSource } from '@/lib/clips/editor/color'
 import { hasGradeFields } from '@/lib/clips/editor/color-grade'
 import { adjustGradesAt, brollGradeAt, videoGradeAt } from '@/lib/clips/editor/grade-runtime'
 import { GradePreview, layerMedia, stageFrame } from '@/components/clips/editor/g4/grade-preview'
+import { prepareAll, setMediaSrc, watchMediaCors } from '@/components/clips/editor/g4/media-cors'
+import { applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
+import { chromaParams, layerFxOf } from '@/lib/clips/editor/layer-fx'
 import { speedAtSource } from '@/lib/clips/editor/speed'
 import { textItemFrame } from '@/lib/clips/editor/text-frame'
 import { libassSupported, previewLibassEnabled } from '@/lib/clips/preview-libass-flag'
@@ -265,6 +268,8 @@ export function PreviewStage({
   const cutDipRef = useRef<HTMLDivElement>(null)
   const cloneBRef = useRef<HTMLDivElement>(null)
   const brollBoxRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  // G4b: per-item layer-fx wrapper (mask) inside the keyframed box.
+  const brollFxRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const brollDipRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const hookRef = useRef<HTMLDivElement | null>(null)
   // E4: text item layers, last applied playback rate (per-item speed) and main-layer look.
@@ -421,7 +426,7 @@ export function PreviewStage({
     })
     if (b) {
       if (cropPreview || letterboxPreview || fitTopPreview) {
-        if (!b.src) b.src = videoUrl
+        if (!b.src) setMediaSrc(b, videoUrl)
       } else {
         b.removeAttribute('src')
         b.load()
@@ -605,8 +610,10 @@ export function PreviewStage({
         stageFrame.srcMs = src
         stageFrame.outMs = outMs
         gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current))
-        const adj = gp.chain(adjustGradesAt(e, outMs).map((g) => g.spec))
+        const adjSpecs = adjustGradesAt(e, outMs).map((g) => g.spec)
+        const adj = gp.chain(adjSpecs)
         if (adjustRef.current && adjustRef.current.style.filter !== adj) adjustRef.current.style.filter = adj
+        gp.setShake(adjustRef.current, gp.shake(adjSpecs))
       } else {
         const mainLook = lookFilterCss(videoSpecAtSource(e.color, src))
         if (mainLayerRef.current && mainLayerRef.current.style.filter !== mainLook) mainLayerRef.current.style.filter = mainLook
@@ -622,15 +629,21 @@ export function PreviewStage({
         if (el.style.transform !== f.transform) el.style.transform = f.transform
       }
       const bWins = brollTransitionWindows(e.broll)
+      const fxFrame = exportFrameFor(boxSizeRef.current.w, boxSizeRef.current.h)
       for (const item of e.broll || []) {
         // E1fix: live media rows via ref (the tick is mounted once).
         const media = brollMediaRef.current.find((m) => m.id === item.id)
+        // G4b: mask / blend / chroma key / reverse (layer_fx.py) — nothing changes without a row.
+        const lfx = e.layerFx?.length ? layerFxOf(e, item.id) : undefined
+        const fxEl = brollFxRefs.current[item.id] ?? null
+        applyLayerFx(fxEl, fxEl?.closest<HTMLElement>('[data-testid="preview-broll"]') ?? null, lfx, outMs - item.startMs, fxFrame.W, fxFrame.H)
+        const chroma = lfx?.key ? chromaParams(lfx.key) : null
         const img = brollImgRefs.current[item.id]
         if (img && media?.url) {
           const [iStart, iEnd] = brollVisibleRange(item, bWins)
           const iop = iStart <= outMs && outMs < iEnd ? '1' : '0'
           if (img.style.opacity !== iop) img.style.opacity = iop
-          if (gp) gp.apply(img, brollGradeAt(e, item.id, outMs), [img])
+          if (gp) gp.apply(img, brollGradeAt(e, item.id, outMs), [img], chroma)
           else {
             const iLook = lookFilterCss(e.color?.broll?.[item.id])
             if (img.style.filter !== iLook) img.style.filter = iLook
@@ -646,12 +659,17 @@ export function PreviewStage({
         // animates its box; keyframed opacity lives on the box, not here).
         const op = active ? '1' : '0'
         if (el.style.opacity !== op) el.style.opacity = op
-        if (gp) gp.apply(el, brollGradeAt(e, item.id, outMs), [el])
+        if (gp) gp.apply(el, brollGradeAt(e, item.id, outMs), [el], chroma)
         else {
           const bLook = lookFilterCss(e.color?.broll?.[item.id])
           if (el.style.filter !== bLook) el.style.filter = bLook
         }
-        if (active) {
+        if (active && lfx?.reverse) {
+          // G4b reverse: frame-stepped seek (the export plays a reversed copy of the item's range).
+          const rel = reversedMediaTime(item.inMs ?? 0, item.endMs - item.startMs, outMs - item.startMs)
+          if (!el.paused) el.pause()
+          if (Math.abs(el.currentTime - rel) > 0.02) el.currentTime = rel
+        } else if (active) {
           // E2: inMs = media in-point (split / left-trim). Export loops short B-roll (-stream_loop -1).
           const relRaw = (outMs - item.startMs + (item.inMs ?? 0)) / 1000
           const d = el.duration
@@ -936,6 +954,13 @@ export function PreviewStage({
     }
     return out.map((l, i) => ({ l, i, z: zOf(l) })).sort((a, b) => a.z - b.z || a.i - b.i).map((x) => x.l)
   }, [stageBoxEl])
+
+  // G4afix: every cross-origin <video> / <img> of the preview loads in CORS mode from its first
+  // fetch (pixel access for the WebGL grade, scopes, filmstrip); failures fall back to a plain load.
+  useLayoutEffect(() => {
+    prepareAll(wrapRef.current)
+  })
+  useEffect(() => watchMediaCors(wrapRef.current), [])
 
   return (
     <div ref={wrapRef} className="absolute inset-0 flex flex-col items-center justify-center">
@@ -1353,6 +1378,13 @@ export function PreviewStage({
                     data-testid="preview-broll-layer"
                     data-broll-id={item.id}
                   >
+                    <div
+                      ref={(el) => {
+                        brollFxRefs.current[item.id] = el
+                      }}
+                      className="pointer-events-none absolute inset-0 overflow-hidden"
+                      data-testid="preview-broll-fx"
+                    >
                     {media.mediaType === 'image' ? (
                       <img
                         ref={(el) => {
@@ -1374,6 +1406,7 @@ export function PreviewStage({
                         style={{ inset: 0, opacity: 0 }}
                       />
                     )}
+                    </div>
                   </div>
                 </div>
               )

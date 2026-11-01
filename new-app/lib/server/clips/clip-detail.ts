@@ -9,7 +9,7 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
 import { resolveEditorAssets } from '@/lib/server/clips/editor-assets'
 import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
-import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
+import { CLIPS_EDITOR_MEDIA_TTL_SEC, createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { resolveLayers } from '@/lib/clips/layers'
 import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
 
@@ -139,10 +139,10 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       where: { projectId: project.id },
       select: { chatSource: true, chatMessages: true, sourceType: true, state: true, channelId: true },
     }),
-    previewKey ? createCachedSignedDownloadUrl(storage, previewKey).catch(() => null) : Promise.resolve(null),
+    previewKey ? createCachedSignedDownloadUrl(storage, previewKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
     clip.posterKey ? createCachedSignedDownloadUrl(storage, clip.posterKey).catch(() => null) : Promise.resolve(null),
-    proxyKey ? createCachedSignedDownloadUrl(storage, proxyKey).catch(() => null) : Promise.resolve(null),
-    sourceKey ? createCachedSignedDownloadUrl(storage, sourceKey).catch(() => null) : Promise.resolve(null),
+    proxyKey ? createCachedSignedDownloadUrl(storage, proxyKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
+    sourceKey ? createCachedSignedDownloadUrl(storage, sourceKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
   ])
 
   const edits = normalizeEdits(clip.edits, bounds)
@@ -170,7 +170,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   } else if (sourceKey && signedSource) {
     media = { url: signedSource, kind: 'source', offsetMs: 0 }
   } else if (segmentExists && sourceSegKey) {
-    const segUrl = await createCachedSignedDownloadUrl(storage, sourceSegKey)
+    const segUrl = await createCachedSignedDownloadUrl(storage, sourceSegKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC)
     media = {
       url: segUrl,
       kind: 'segment',

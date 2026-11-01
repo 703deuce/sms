@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
+  MASK_TRANSITIONS,
+  TRANSITION_INFO,
   TRANSITIONS,
+  xfadeBWeight,
   TRANSITION_DEFAULT_MS,
   TRANSITION_MAX_MS,
   TRANSITION_MIN_MS,
@@ -11,7 +14,38 @@ import {
 } from '@/lib/clips/editor/transitions'
 import { Slider } from '@/components/ui/slider'
 
-const GROUPS = ['Basic', 'Push', 'Wipe', 'Zoom & blur'] as const
+const GROUPS = ['Basic', 'Push', 'Wipe', 'Soft wipe', 'Shape', 'Slice', 'Zoom & blur'] as const
+
+const thumbCache = new Map<string, string | null>()
+/** G4b: mask transitions draw their real xfade mask (mid-way) as the thumbnail. */
+function maskThumb(type: TransitionType): string | null {
+  if (thumbCache.has(type)) return thumbCache.get(type)!
+  let url: string | null = null
+  try {
+    const c = document.createElement('canvas')
+    c.width = 40
+    c.height = 28
+    const ctx = c.getContext('2d')
+    if (ctx) {
+      const img = ctx.createImageData(40, 28)
+      for (let y = 0; y < 28; y++)
+        for (let x = 0; x < 40; x++) {
+          const w = xfadeBWeight(TRANSITION_INFO[type].xfade, 0.55, x, y, 40, 28)
+          const i = (y * 40 + x) * 4
+          img.data[i] = Math.round(14 * (1 - w) + 217 * w)
+          img.data[i + 1] = Math.round(165 * (1 - w) + 70 * w)
+          img.data[i + 2] = Math.round(233 * (1 - w) + 239 * w)
+          img.data[i + 3] = 255
+        }
+      ctx.putImageData(img, 0, 0)
+      url = c.toDataURL()
+    }
+  } catch {
+    url = null
+  }
+  thumbCache.set(type, url)
+  return url
+}
 
 /** Tiny CSS thumbnails so the grid reads like CapCut's transition panel. */
 function Thumb({ type }: { type: TransitionType | 'none' }) {
@@ -19,6 +53,14 @@ function Thumb({ type }: { type: TransitionType | 'none' }) {
   const b = 'bg-fuchsia-500'
   const base = 'relative h-7 w-10 overflow-hidden rounded-sm'
   if (type === 'none') return <div className={`${base} ${a}`} />
+  if (MASK_TRANSITIONS.has(type)) {
+    const url = typeof document === 'undefined' ? null : maskThumb(type)
+    return url ? (
+      <img src={url} alt="" className={base} draggable={false} />
+    ) : (
+      <div className={`${base} bg-gradient-to-br from-sky-500 to-fuchsia-500`} />
+    )
+  }
   if (type === 'dip_black' || type === 'dip_white') {
     return (
       <div className={`${base} flex`}>
@@ -115,7 +157,7 @@ export function TransitionPopover({
           ✕
         </button>
       </div>
-      <div className="max-h-[210px] space-y-1 overflow-y-auto">
+      <div className="max-h-[260px] space-y-1 overflow-y-auto">
         <div className="grid grid-cols-5 gap-0.5">
           <button
             type="button"

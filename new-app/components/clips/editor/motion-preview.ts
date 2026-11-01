@@ -7,7 +7,7 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { brollFrame, hookFrame, mainFrame, type FrameStyle } from '@/lib/clips/editor/motion-frame'
-import type { LayerCss } from '@/lib/clips/editor/transitions'
+import { transitionMaskAlpha, type LayerCss } from '@/lib/clips/editor/transitions'
 
 export type MotionDom = {
   under: HTMLElement | null
@@ -38,6 +38,63 @@ function setStyle(el: HTMLElement | null, s: Partial<FrameStyle> | LayerCss | nu
   if (st.filter !== fl) st.filter = fl
   const vis = s.visibility ?? 'visible'
   if (st.visibility !== vis) st.visibility = vis
+  setTransitionMask(el, s.mask ?? '')
+}
+
+// G4b mask transitions: the top layer gets a CSS mask image = the xfade weight (transitions.ts).
+const maskUrls = new Map<string, string>()
+function maskUrl(key: string, W: number, H: number): string {
+  const k = `${key}|${W}x${H}`
+  const hit = maskUrls.get(k)
+  if (hit) return hit
+  const [xfade, p, top] = key.split('|')
+  const { mw, mh, alpha } = transitionMaskAlpha(xfade!, Number(p), top === 'A' ? 'A' : 'B', W, H)
+  let url = ''
+  try {
+    const c = document.createElement('canvas')
+    c.width = mw
+    c.height = mh
+    const ctx = c.getContext('2d')
+    if (ctx) {
+      const img = ctx.createImageData(mw, mh)
+      for (let i = 0; i < alpha.length; i++) {
+        img.data[i * 4] = 255
+        img.data[i * 4 + 1] = 255
+        img.data[i * 4 + 2] = 255
+        img.data[i * 4 + 3] = alpha[i]!
+      }
+      ctx.putImageData(img, 0, 0)
+      url = `url(${c.toDataURL()})`
+    }
+  } catch {
+    url = ''
+  }
+  if (maskUrls.size > 240) maskUrls.clear()
+  maskUrls.set(k, url)
+  return url
+}
+
+function setTransitionMask(el: HTMLElement, key: string) {
+  if ((el.dataset.tmask ?? '') === key) return
+  const st = el.style as CSSStyleDeclaration & { webkitMaskImage?: string; webkitMaskSize?: string }
+  if (!key) {
+    delete el.dataset.tmask
+    st.maskImage = ''
+    st.webkitMaskImage = ''
+    return
+  }
+  // Export frame size from the layer's aspect (short side 1080, like the export presets).
+  const w = el.clientWidth || 9
+  const h = el.clientHeight || 16
+  const W = w <= h ? 1080 : Math.round((1080 * w) / h)
+  const H = w <= h ? Math.round((1080 * h) / w) : 1080
+  const url = maskUrl(key, W, H)
+  el.dataset.tmask = key
+  st.maskImage = url
+  st.webkitMaskImage = url
+  st.maskSize = '100% 100%'
+  st.webkitMaskSize = '100% 100%'
+  st.maskRepeat = 'no-repeat'
 }
 
 /** Deep-clone the main layer once per layout (muted, no test ids, no autoplay). */

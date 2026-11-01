@@ -37,6 +37,7 @@ import { normalizeSplitEdits, type SplitEdit } from '@/lib/clips/editor/split-ed
 import { normalizeTrackFx, type TrackFx } from '@/lib/clips/editor/track-fx'
 import { normalizeTakes, type TakeGroup } from '@/lib/clips/editor/takes'
 import { normalizeTrackMotion, type TrackMotion } from '@/lib/clips/editor/track-motion'
+import { normalizeLayerFx, type LayerFx } from '@/lib/clips/editor/layer-fx'
 
 export type CutRange = [number, number]
 
@@ -196,6 +197,8 @@ export type ClipEditsV2 = {
   color?: ClipColorEdits
   /** G4a adjustment layers (output ms): grade everything below them (lib/clips/editor/adjust-layers.ts). */
   adjustLayers?: AdjustLayer[]
+  /** G4b: per-B-roll mask / chroma key / blend mode / reverse (lib/clips/editor/layer-fx.ts). */
+  layerFx?: LayerFx[]
   /** E4 per-item speed 0.25–4× over SOURCE ranges (pitch-preserved; export post-step warp). */
   segmentSpeeds?: SegmentSpeed[]
   /** E5 media this clip uses besides the main source (uploads, Rooms angles). */
@@ -485,6 +488,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.captionLines?.length) payload.captionLines = null
   if (!edits.color) payload.color = null
   if (!edits.adjustLayers?.length) payload.adjustLayers = null
+  if (!edits.layerFx?.length) payload.layerFx = null
   if (!edits.segmentSpeeds?.length) payload.segmentSpeeds = null
   if (!edits.sources?.length) payload.sources = null
   if (!edits.sourceSegments?.length) payload.sourceSegments = null
@@ -606,6 +610,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     captionLines: normalizeCaptionLinesEdits(o.captionLines),
     color: normalizeColorEdits(o.color),
     adjustLayers: normalizeAdjustLayers(o.adjustLayers),
+    layerFx: normalizeLayerFx(o.layerFx),
     segmentSpeeds: normalizeSegmentSpeeds(o.segmentSpeeds),
     ...normalizeSourceFields(o),
     vocabApplied:
@@ -704,6 +709,7 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     !hasColor(edits.color) &&
     // G4a: adjustment layers grade the frames.
     !edits.adjustLayers?.length &&
+    !edits.layerFx?.length && // G4b: layer effects change the frames.
     !edits.segmentSpeeds?.length &&
     // E5: other sources replace frames / sound.
     !edits.sourceSegments?.length &&

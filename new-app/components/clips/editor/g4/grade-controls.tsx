@@ -20,6 +20,8 @@ import {
   normalizeCurve,
   type CurveChannel,
   type CurvePts,
+  FX_ALL,
+  type FxAnyKey,
   type FxKey,
   type HslAdj,
   type HslRange,
@@ -27,6 +29,7 @@ import {
   type WheelId,
 } from '@/lib/clips/editor/color-grade'
 import type { ColorSpec } from '@/lib/clips/editor/color'
+import { FX2_KEYS, FX2_LABELS, FX_PRESETS } from '@/lib/clips/editor/fx-library'
 
 type Edit = { spec: ColorSpec; onLive: (s: ColorSpec) => void; onCommit: (s: ColorSpec, key?: string) => void; disabled?: boolean }
 
@@ -308,20 +311,60 @@ export function HslControls({ spec, onLive, onCommit, disabled }: Edit) {
 
 const FX_LABEL: Record<FxKey, string> = { sharpen: 'Sharpen', vignette: 'Vignette', grain: 'Grain' }
 
-function withFx(spec: ColorSpec, k: FxKey, v: number): ColorSpec {
+function withFx(spec: ColorSpec, k: FxAnyKey, v: number): ColorSpec {
   const fx = { ...(spec.fx ?? {}) }
   if (v) fx[k] = v
   else delete fx[k]
   return { ...spec, fx: Object.keys(fx).length ? fx : undefined }
 }
 
+/** G4b: a preset replaces the effect sliders (the grade itself is untouched). */
+function withFxPreset(spec: ColorSpec, fxSet: Partial<Record<FxAnyKey, number>> | null): ColorSpec {
+  const fx = fxSet ? { ...fxSet } : {}
+  return { ...spec, fx: Object.keys(fx).length ? fx : undefined }
+}
+
 export function FxControls({ spec, onLive, onCommit, disabled }: Edit) {
+  const keys: { k: FxAnyKey; label: string }[] = [
+    ...(['sharpen', 'vignette', 'grain'] as const).map((k) => ({ k, label: FX_LABEL[k] })),
+    ...FX2_KEYS.map((k) => ({ k, label: FX2_LABELS[k] })),
+  ]
+  const presetOn = (fx: Partial<Record<FxAnyKey, number>>) =>
+    FX_ALL.every((k) => (spec.fx?.[k] ?? 0) === (fx[k] ?? 0))
   return (
     <div className="space-y-3" data-testid="color-fx">
-      {(['sharpen', 'vignette', 'grain'] as const).map((k) => (
+      <div className="flex flex-wrap gap-1" data-testid="color-fx-presets">
+        {FX_PRESETS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            disabled={disabled}
+            className={cn(
+              'rounded-md border border-border px-2 py-0.5 text-[11px] hover:bg-muted disabled:opacity-40',
+              presetOn(p.fx) && 'border-primary bg-muted',
+            )}
+            onClick={() => onCommit(withFxPreset(spec, p.fx), `fx-preset-${p.id}`)}
+            data-testid={`color-fx-preset-${p.id}`}
+          >
+            {p.label}
+          </button>
+        ))}
+        {spec.fx ? (
+          <button
+            type="button"
+            disabled={disabled}
+            className="rounded-md px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted"
+            onClick={() => onCommit(withFxPreset(spec, null), 'fx-clear')}
+            data-testid="color-fx-clear"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+      {keys.map(({ k, label }) => (
         <SliderRow
           key={k}
-          label={FX_LABEL[k]}
+          label={label}
           value={spec.fx?.[k] ?? 0}
           min={0}
           max={100}

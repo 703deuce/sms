@@ -23,7 +23,8 @@ import {
   type TransitionType,
 } from '@/lib/clips/editor/motion-schema'
 
-export type TransitionInfo = { type: TransitionType; label: string; group: 'Basic' | 'Push' | 'Wipe' | 'Zoom & blur'; xfade: string }
+export type TransitionGroup = 'Basic' | 'Push' | 'Wipe' | 'Zoom & blur' | 'Soft wipe' | 'Shape' | 'Slice'
+export type TransitionInfo = { type: TransitionType; label: string; group: TransitionGroup; xfade: string }
 
 /** xfade names verified present in ffmpeg 5.1 (`ffmpeg -h filter=xfade`). Zoom in/out = scale + fade. */
 export const TRANSITIONS: TransitionInfo[] = [
@@ -41,7 +42,37 @@ export const TRANSITIONS: TransitionInfo[] = [
   { type: 'zoom_in', label: 'Zoom in', group: 'Zoom & blur', xfade: 'fade' },
   { type: 'zoom_out', label: 'Zoom out', group: 'Zoom & blur', xfade: 'fade' },
   { type: 'blur', label: 'Blur', group: 'Zoom & blur', xfade: 'hblur' },
+  // G4b — per-pixel mask transitions (xfadeBWeight = vf_xfade.c 5.1, checked against real ffmpeg).
+  { type: 'wipe_tl', label: 'Wipe ↖', group: 'Wipe', xfade: 'wipetl' },
+  { type: 'wipe_tr', label: 'Wipe ↗', group: 'Wipe', xfade: 'wipetr' },
+  { type: 'wipe_bl', label: 'Wipe ↙', group: 'Wipe', xfade: 'wipebl' },
+  { type: 'wipe_br', label: 'Wipe ↘', group: 'Wipe', xfade: 'wipebr' },
+  { type: 'smooth_left', label: 'Soft left', group: 'Soft wipe', xfade: 'smoothleft' },
+  { type: 'smooth_right', label: 'Soft right', group: 'Soft wipe', xfade: 'smoothright' },
+  { type: 'smooth_up', label: 'Soft up', group: 'Soft wipe', xfade: 'smoothup' },
+  { type: 'smooth_down', label: 'Soft down', group: 'Soft wipe', xfade: 'smoothdown' },
+  { type: 'diag_tl', label: 'Diagonal ↖', group: 'Soft wipe', xfade: 'diagtl' },
+  { type: 'diag_tr', label: 'Diagonal ↗', group: 'Soft wipe', xfade: 'diagtr' },
+  { type: 'diag_bl', label: 'Diagonal ↙', group: 'Soft wipe', xfade: 'diagbl' },
+  { type: 'diag_br', label: 'Diagonal ↘', group: 'Soft wipe', xfade: 'diagbr' },
+  { type: 'circle_open', label: 'Circle open', group: 'Shape', xfade: 'circleopen' },
+  { type: 'circle_close', label: 'Circle close', group: 'Shape', xfade: 'circleclose' },
+  { type: 'vert_open', label: 'Doors open', group: 'Shape', xfade: 'vertopen' },
+  { type: 'vert_close', label: 'Doors close', group: 'Shape', xfade: 'vertclose' },
+  { type: 'horz_open', label: 'Bars open', group: 'Shape', xfade: 'horzopen' },
+  { type: 'horz_close', label: 'Bars close', group: 'Shape', xfade: 'horzclose' },
+  { type: 'radial', label: 'Clock', group: 'Shape', xfade: 'radial' },
+  { type: 'slice_left', label: 'Slices left', group: 'Slice', xfade: 'hlslice' },
+  { type: 'slice_right', label: 'Slices right', group: 'Slice', xfade: 'hrslice' },
+  { type: 'slice_up', label: 'Slices up', group: 'Slice', xfade: 'vuslice' },
+  { type: 'slice_down', label: 'Slices down', group: 'Slice', xfade: 'vdslice' },
 ]
+/** G4b: transitions drawn with a per-pixel mask on the top layer. */
+export const MASK_TRANSITIONS: ReadonlySet<TransitionType> = new Set(
+  TRANSITIONS.filter((t) => TRANSITION_TYPES.indexOf(t.type) >= 14).map((t) => t.type),
+)
+/** Corner wipes are hard rectangles: drawn with an exact clip-path instead of a mask image. */
+const CORNER: Partial<Record<TransitionType, 'tl' | 'tr' | 'bl' | 'br'>> = { wipe_tl: 'tl', wipe_tr: 'tr', wipe_bl: 'bl', wipe_br: 'br' }
 export const TRANSITION_INFO = Object.fromEntries(TRANSITIONS.map((t) => [t.type, t])) as Record<TransitionType, TransitionInfo>
 /** Zoom transitions scale the zooming layer 1 → 1 + ZOOM_AMOUNT. */
 export const ZOOM_AMOUNT = 0.5
@@ -69,6 +100,8 @@ export type TransitionFrame = {
   b: LayerGeom
   /** horizontal box-blur width as a fraction of frame W (xfade hblur); 0 = none */
   blurFrac: number
+  /** G4b: per-pixel mask transition (xfade name + xfade progress P = 1 − q) */
+  mask?: { xfade: string; P: number }
 }
 
 function smoothstep(e0: number, e1: number, x: number): number {
@@ -82,6 +115,7 @@ export function transitionFrame(type: TransitionType, qIn: number): TransitionFr
   const q = Math.min(1, Math.max(0, qIn))
   const P = 1 - q
   const f: TransitionFrame = { wA: P, wB: q, wC: 0, color: null, geometric: false, a: G0(), b: G0(), blurFrac: 0 }
+  if (MASK_TRANSITIONS.has(type)) return { ...f, wA: 1, wB: 1, geometric: true, mask: { xfade: TRANSITION_INFO[type].xfade, P: Math.fround(1 - Math.fround(q)) } }
   switch (type) {
     case 'crossfade':
       return f
@@ -117,7 +151,133 @@ export function transitionFrame(type: TransitionType, qIn: number): TransitionFr
       const prog = P <= 0.5 ? P * 2 : (1 - P) * 2
       return { ...f, blurFrac: prog / 2 }
     }
+    default:
+      return f
   }
+}
+
+// ---------------------------------------------------------------------------
+// G4b mask transitions: the weight of input B, exactly vf_xfade.c 5.1 (float math; W × H = export
+// frame, x / y = export pixel). Mirrored by clips_worker/xfade_masks.py (checked against ffmpeg).
+// ---------------------------------------------------------------------------
+
+const f32 = Math.fround
+function ss32(e0: number, e1: number, x: number): number {
+  const t = f32(Math.min(1, Math.max(0, f32(f32(x - e0) / (e1 - e0)))))
+  return f32(f32(t * t) * f32(3 - 2 * t))
+}
+const fract = (a: number) => f32(a - Math.floor(a))
+
+/** xfade progress at frame k of an n-frame window (float32: 1 − pts / duration). */
+export function windowProgress(k: number, n: number): number {
+  return f32(1 - f32(f32(k) / f32(n)))
+}
+
+export function xfadeBWeight(name: string, P: number, x: number, y: number, W: number, H: number): number {
+  const p2 = f32(P * 2)
+  switch (name) {
+    case 'smoothleft':
+      return ss32(0, 1, f32(f32(1 + f32(x / W)) - p2))
+    case 'smoothright':
+      return ss32(0, 1, f32(f32(1 + f32((W - 1 - x) / W)) - p2))
+    case 'smoothup':
+      return ss32(0, 1, f32(f32(1 + f32(y / H)) - p2))
+    case 'smoothdown':
+      return ss32(0, 1, f32(f32(1 + f32((H - 1 - y) / H)) - p2))
+    case 'circleopen':
+    case 'circleclose': {
+      const hw = Math.trunc(W / 2)
+      const hh = Math.trunc(H / 2)
+      const z = f32(Math.hypot(hw, hh))
+      const d = f32(f32(Math.hypot(x - hw, y - hh)) / z)
+      return name === 'circleopen' ? 1 - ss32(0, 1, f32(d + f32(f32(P - 0.5) * 3))) : ss32(0, 1, f32(d + f32(f32(1 - P - 0.5) * 3)))
+    }
+    case 'vertopen':
+    case 'vertclose':
+    case 'horzopen':
+    case 'horzclose': {
+      const vert = name.startsWith('vert')
+      const c = (vert ? W : H) / 2
+      const a = f32(Math.abs(f32(((vert ? x : y) - c) / c)))
+      const base = name.endsWith('open') ? f32(2 - a) : f32(1 + a)
+      return ss32(0, 1, f32(base - p2))
+    }
+    case 'radial': {
+      const ang = f32(Math.atan2(x - Math.trunc(W / 2), y - Math.trunc(H / 2)))
+      return ss32(0, 1, f32(ang - f32(f32(P - 0.5) * f32(Math.PI * 2.5))))
+    }
+    case 'diagtl':
+    case 'diagtr':
+    case 'diagbl':
+    case 'diagbr': {
+      const xx = name === 'diagtl' || name === 'diagbl' ? f32(x / W) : f32((W - 1 - x) / W)
+      const yy = name === 'diagtl' || name === 'diagtr' ? f32(y / H) : f32((H - 1 - y) / H)
+      return ss32(0, 1, f32(f32(1 + f32(xx * yy)) - p2))
+    }
+    case 'hlslice':
+    case 'hrslice':
+    case 'vuslice':
+    case 'vdslice': {
+      let v: number
+      let ten: number
+      if (name === 'hlslice') {
+        v = f32(x / W)
+        ten = f32(f32(10 * x) / W)
+      } else if (name === 'hrslice') {
+        v = f32((W - 1 - x) / W)
+        ten = f32(10 * v)
+      } else if (name === 'vuslice') {
+        v = f32(y / H)
+        ten = f32(f32(10 * y) / H)
+      } else {
+        v = f32((H - 1 - y) / H)
+        ten = f32(10 * v)
+      }
+      const s = ss32(-0.5, 0, f32(v - f32(P * 1.5)))
+      return s <= fract(ten) ? 0 : 1
+    }
+    case 'wipetl':
+      return y <= Math.trunc(f32(H * P)) && x <= Math.trunc(f32(W * P)) ? 0 : 1
+    case 'wipetr':
+      return y <= Math.trunc(f32(H * P)) && x > Math.trunc(f32(W * f32(1 - P))) ? 0 : 1
+    case 'wipebl':
+      return y > Math.trunc(f32(H * f32(1 - P))) && x <= Math.trunc(f32(W * P)) ? 0 : 1
+    case 'wipebr':
+      return y > Math.trunc(f32(H * f32(1 - P))) && x > Math.trunc(f32(W * f32(1 - P))) ? 0 : 1
+  }
+  return 0
+}
+
+/** Mask image size used by the preview (export pixels are sampled at the cell centres). */
+export function maskGridSize(xfade: string, W: number, H: number): { mw: number; mh: number } {
+  // Slices: 10 bands per axis (≥ 24 mask px each); soft masks are smooth.
+  const short = xfade.endsWith('slice') ? 240 : 180
+  const k = short / Math.max(1, Math.min(W, H))
+  return { mw: Math.max(8, Math.round(W * k)), mh: Math.max(8, Math.round(H * k)) }
+}
+
+/** 8-bit alpha of the TOP layer for the mask transition (row-major mw × mh). */
+export function transitionMaskAlpha(xfade: string, P: number, top: 'A' | 'B', W: number, H: number): { mw: number; mh: number; alpha: Uint8ClampedArray } {
+  const { mw, mh } = maskGridSize(xfade, W, H)
+  const alpha = new Uint8ClampedArray(mw * mh)
+  for (let j = 0; j < mh; j++) {
+    const y = Math.min(H - 1, Math.max(0, Math.round(((j + 0.5) * H) / mh - 0.5)))
+    for (let i = 0; i < mw; i++) {
+      const x = Math.min(W - 1, Math.max(0, Math.round(((i + 0.5) * W) / mw - 0.5)))
+      const wb = xfadeBWeight(xfade, P, x, y, W, H)
+      alpha[j * mw + i] = Math.round((top === 'B' ? wb : 1 - wb) * 255)
+    }
+  }
+  return { mw, mh, alpha }
+}
+
+/** Exact corner-wipe region of A (fractions of the frame: x0, y0, x1, y1). */
+export function cornerRectA(c: 'tl' | 'tr' | 'bl' | 'br', P: number): [number, number, number, number] {
+  const q = 1 - P
+  if (c === 'tl') return [0, 0, P, P]
+  if (c === 'tr') return [q, 0, 1, P]
+  if (c === 'bl') return [0, q, P, 1]
+  return [q, q, 1, 1]
 }
 
 /** Complement of a wipe clip (the region the OTHER layer shows). */
@@ -130,7 +290,15 @@ function complementClip(c: [number, number, number, number]): [number, number, n
   return [0, 0, 0, 0]
 }
 
-export type LayerCss = { opacity: number; transform: string; clipPath: string; filter: string; visibility: 'visible' | 'hidden' }
+export type LayerCss = {
+  opacity: number
+  transform: string
+  clipPath: string
+  filter: string
+  visibility: 'visible' | 'hidden'
+  /** G4b: mask-transition key `xfade|P|A·B` (top layer only; motion-preview draws the mask image) */
+  mask?: string
+}
 
 const pct = (n: number) => `${Math.round(n * 1e5) / 1e3}%`
 
@@ -160,6 +328,20 @@ export function compositeCss(
 ): { a: LayerCss; b: LayerCss; color: { opacity: number; background: string } } {
   // Box blur of width s ≈ gaussian σ = s/√12.
   const blurPx = (f.blurFrac * displayW) / Math.sqrt(12)
+  if (f.mask) {
+    const { xfade, P } = f.mask
+    const a = layerCss(f.a, 1, null, 0)
+    const b = layerCss(f.b, 1, null, 0)
+    const top = aTop ? a : b
+    const corner = CORNER[TRANSITIONS.find((t) => t.xfade === xfade)?.type as TransitionType]
+    if (corner) {
+      const [x0, y0, x1, y1] = cornerRectA(corner, P)
+      if (aTop) top.clipPath = `inset(${pct(y0)} ${pct(1 - x1)} ${pct(1 - y1)} ${pct(x0)})`
+      else
+        top.clipPath = `polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ${pct(x0)} ${pct(y0)}, ${pct(x1)} ${pct(y0)}, ${pct(x1)} ${pct(y1)}, ${pct(x0)} ${pct(y1)}, ${pct(x0)} ${pct(y0)})`
+    } else top.mask = `${xfade}|${Math.round(P * 1e6) / 1e6}|${aTop ? 'A' : 'B'}`
+    return { a, b, color: { opacity: 0, background: 'transparent' } }
+  }
   if (f.geometric) {
     let aClip = f.a.clip
     let bClip = f.b.clip

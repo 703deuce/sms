@@ -30,6 +30,7 @@ import { MediaTranscribeControl } from '@/components/clips/editor/media-transcri
 import { InsertsSection } from '@/components/clips/editor/media-inserts-section'
 import { SourceMonitor, type MonitorRequest } from '@/components/clips/editor/source-monitor'
 import type { Timebase } from '@/lib/clips/editor/clip-timeline'
+import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
 
 const LANE_LABEL: Record<MediaDropLane, string> = { video: 'Video', broll: 'B-roll', music: 'Music', sfx: 'SFX' }
 /** 'visual' = video + images (B-roll Upload tab). */
@@ -43,11 +44,11 @@ function dur(ms: number | null | undefined): string {
 
 export function MediaThumb({ item, className = 'h-16 w-full' }: { item: ProjectMediaItem; className?: string }) {
   if (item.mediaType === 'image' && item.url) {
-    return <img src={item.url} alt="" className={`${className} rounded object-cover`} draggable={false} />
+    return <img src={item.url} {...corsMediaProps(item.url)} alt="" className={`${className} rounded object-cover`} draggable={false} />
   }
   if (item.mediaType === 'video' && item.url) {
     // Poster frame straight from the signed URL (metadata + first frame only).
-    return <video src={`${item.url}#t=0.1`} muted playsInline preload="metadata" className={`${className} rounded bg-black object-cover`} />
+    return <video src={`${item.url}#t=0.1`} {...corsMediaProps(item.url)} muted playsInline preload="metadata" className={`${className} rounded bg-black object-cover`} />
   }
   return (
     <div className={`${className} flex items-center justify-center rounded bg-muted text-muted-foreground`}>

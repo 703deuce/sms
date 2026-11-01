@@ -33,10 +33,18 @@ def _q(p: Path) -> str:
 
 def fx_parts(label_in: str, label_out: str, fx: dict, w: int, h: int, work_dir: Path, tag: str,
              enable: str | None = None) -> list[str]:
-    """Filter-complex parts: [label_in] → sharpen / vignette / grain → [label_out] (gbrp)."""
+    """Filter-complex parts: [label_in] → (G4b pre) → sharpen / vignette → (G4b post) → grain →
+    (G4b shake) → [label_out] (gbrp)."""
+    from clips_worker import fx_library as fl
+
     en = f":enable='{enable}'" if enable else ""
     parts: list[str] = []
     cur = label_in
+    parts.append(f"[{cur}]format=gbrp[{tag}in]")
+    cur = f"{tag}in"
+    # G4b: blur → glow → RGB split → glitch before sharpen.
+    pre, cur = fl.pre_parts(cur, fx, w, h, tag, en)
+    parts += pre
     chain = f"[{cur}]format=gbrp"
     if fx.get("sharpen"):
         m = " ".join(str(v) for v in sharpen_kernel(int(fx["sharpen"])))
@@ -51,6 +59,8 @@ def fx_parts(label_in: str, label_out: str, fx: dict, w: int, h: int, work_dir: 
         parts.append(f"movie='{_q(mask)}':loop=0,setpts=N/(30*TB),format=gbrp[{tag}vm]")
         parts.append(f"[{cur}][{tag}vm]blend=all_mode=multiply:shortest=1{en}[{tag}v]")
         cur = f"{tag}v"
+    post, cur = fl.post_parts(cur, fx, w, h, work_dir, tag, en)
+    parts += post
     if fx.get("grain"):
         c = grain_cell(h)
         gw, gh = -(-w // c), -(-h // c)
@@ -65,6 +75,8 @@ def fx_parts(label_in: str, label_out: str, fx: dict, w: int, h: int, work_dir: 
         )
         parts.append(f"[{cur}][{tag}gm]blend=all_mode=grainmerge:shortest=1{en}[{tag}g]")
         cur = f"{tag}g"
+    shake, cur = fl.shake_parts(cur, fx, w, h, tag, en)
+    parts += shake
     parts.append(f"[{cur}]null[{label_out}]")
     return parts
 

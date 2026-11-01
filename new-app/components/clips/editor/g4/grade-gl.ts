@@ -20,10 +20,25 @@ void main() { vUv = vec2((aPos.x + 1.0) * 0.5, (1.0 - aPos.y) * 0.5); gl_Positio
 const FS = `#version 300 es
 precision highp float; precision highp int; precision highp sampler3D;
 uniform sampler2D uSrc; uniform sampler3D uLut; uniform int uSize;
+// G4b chroma key (ffmpeg colorkey on the ungraded pixel → alpha; despill → colour, before the LUT).
+uniform int uUseLut; uniform int uKey; uniform vec3 uKeyRgb; uniform float uSim; uniform float uBlend;
+uniform int uSpill; uniform int uSpillType; uniform float uSpillAmt;
 in vec2 vUv; out vec4 o;
 vec3 L(int r, int g, int b) { return texelFetch(uLut, ivec3(r, g, b), 0).rgb; }
 void main() {
   vec3 c = floor(texture(uSrc, vUv).rgb * 255.0 + 0.5) / 255.0;
+  float a = 1.0;
+  if (uKey == 1) {
+    vec3 d = c * 255.0 - uKeyRgb;
+    float diff = sqrt(dot(d, d) / (255.0 * 255.0 * 3.0));
+    a = uBlend > 0.0001 ? floor(clamp((diff - uSim) / uBlend, 0.0, 1.0) * 255.0) / 255.0 : (diff > uSim ? 1.0 : 0.0);
+    if (uSpill == 1) {
+      float sm = uSpillType == 1 ? max(c.b - (c.r * 0.5 + c.g * 0.5), 0.0) : max(c.g - (c.r * 0.5 + c.b * 0.5), 0.0);
+      if (uSpillType == 1) c.b = max(c.b - sm * uSpillAmt, 0.0); else c.g = max(c.g - sm * uSpillAmt, 0.0);
+      c = floor(clamp(c, 0.0, 1.0) * 255.0) / 255.0;
+    }
+  }
+  if (uUseLut == 0) { o = vec4(c, a); return; }
   int lm = uSize - 1;
   vec3 s = clamp(c * float(lm), 0.0, float(lm));
   ivec3 p = ivec3(floor(s));
@@ -41,10 +56,13 @@ void main() {
     else v = (1.0 - d.g) * c000 + (d.g - d.r) * L(p.x, n.y, p.z) + (d.r - d.b) * L(n.x, n.y, p.z) + d.b * c111;
   }
   // ffmpeg lut3d (8-bit): av_clip_uint8(v * 255) truncates.
-  o = vec4((floor(clamp(v, 0.0, 1.0) * 255.0) + 0.5) / 255.0, 1.0);
+  o = vec4((floor(clamp(v, 0.0, 1.0) * 255.0) + 0.5) / 255.0, a);
 }`
 
 export type GlStatus = { ok: boolean; reason?: string }
+
+/** G4b chroma key for the mirror (layer-fx.ts chromaParams). */
+export type GlKey = { rgb: [number, number, number]; similarity: number; blend: number; despill: null | { type: 0 | 1; amount: number } }
 
 export class GradeGL {
   private static inst: GradeGL | null | undefined
@@ -55,6 +73,7 @@ export class GradeGL {
   private lutTex: WebGLTexture
   private lutKey = ''
   private uSize: WebGLUniformLocation | null
+  private u: Record<string, WebGLUniformLocation | null> = {}
   static status: GlStatus = { ok: false, reason: 'not started' }
 
   static get(): GradeGL | null {
@@ -111,6 +130,20 @@ export class GradeGL {
     gl.uniform1i(gl.getUniformLocation(prog, 'uSrc'), 0)
     gl.uniform1i(gl.getUniformLocation(prog, 'uLut'), 1)
     this.uSize = gl.getUniformLocation(prog, 'uSize')
+    for (const n of ['uUseLut', 'uKey', 'uKeyRgb', 'uSim', 'uBlend', 'uSpill', 'uSpillType', 'uSpillAmt']) this.u[n] = gl.getUniformLocation(prog, n)
+  }
+
+  private setKey(lut: boolean, k: GlKey | null) {
+    const gl = this.gl
+    gl.uniform1i(this.u.uUseLut!, lut ? 1 : 0)
+    gl.uniform1i(this.u.uKey!, k ? 1 : 0)
+    if (!k) return
+    gl.uniform3f(this.u.uKeyRgb!, k.rgb[0], k.rgb[1], k.rgb[2])
+    gl.uniform1f(this.u.uSim!, k.similarity)
+    gl.uniform1f(this.u.uBlend!, k.blend)
+    gl.uniform1i(this.u.uSpill!, k.despill ? 1 : 0)
+    gl.uniform1i(this.u.uSpillType!, k.despill?.type ?? 0)
+    gl.uniform1f(this.u.uSpillAmt!, k.despill?.amount ?? 0)
   }
 
   private setLut(grid: Float32Array, size: number, key: string) {
@@ -131,12 +164,13 @@ export class GradeGL {
   }
 
   /** Grade `src` into this.canvas (w × h). Throws SecurityError on tainted media. */
-  draw(src: TexImageSource, w: number, h: number, grid: Float32Array, size: number, key: string) {
+  draw(src: TexImageSource, w: number, h: number, grid: Float32Array | null, size: number, key: string, chroma: GlKey | null = null) {
     const gl = this.gl
     if (this.canvas.width !== w) this.canvas.width = w
     if (this.canvas.height !== h) this.canvas.height = h
     gl.viewport(0, 0, w, h)
-    this.setLut(grid, size, key)
+    if (grid) this.setLut(grid, size, key)
+    this.setKey(Boolean(grid), chroma)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, this.srcTex)
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
@@ -191,6 +225,8 @@ export class GradeGL {
 // ── CORS probe (cached per URL) ────────────────────────────────────────────
 
 const cors = new Map<string, 'ok' | 'no' | 'pending'>()
+/** URLs whose pixels could not be read even though they loaded (draw threw). */
+const tainted = new Set<string>()
 
 export function corsState(url: string): 'ok' | 'no' | 'pending' {
   const s = cors.get(url)
@@ -211,6 +247,16 @@ export function corsState(url: string): 'ok' | 'no' | 'pending' {
 
 export function markNoCors(url: string) {
   cors.set(url, 'no')
+}
+
+/** G4afix: a crossOrigin load of `url` succeeded (media-cors.ts) — no probe needed. */
+export function markCorsOk(url: string, force = false) {
+  if (force || cors.get(url) !== 'no') cors.set(url, 'ok')
+}
+
+/** Known state without starting a probe. */
+export function corsKnown(url: string): 'ok' | 'no' | 'pending' | undefined {
+  return cors.get(url)
 }
 
 // ── mirrors ────────────────────────────────────────────────────────────────
@@ -239,8 +285,8 @@ export class GradeMirrors {
    * 'ok' = `el` is shown through its graded mirror; 'skip' = nothing to show yet (no frame / no
    * grid); 'wait' = CORS probe / reload in flight; 'fail' = cannot mirror (reason in `blocked`).
    */
-  sync(el: Media, grid: Float32Array | null, size: number, key: string): SyncState {
-    if (!grid) {
+  sync(el: Media, grid: Float32Array | null, size: number, key: string, chroma: GlKey | null = null): SyncState {
+    if (!grid && !chroma) {
       this.release(el)
       return 'skip'
     }
@@ -252,6 +298,8 @@ export class GradeMirrors {
     }
     const url = el.currentSrc || el.getAttribute('src') || ''
     if (!url) return 'skip'
+    // G4afix: media already loaded in CORS mode (media-cors.ts) is pixel-readable — skip the probe.
+    if (el.crossOrigin === 'anonymous' && (el instanceof HTMLVideoElement ? el.readyState >= 2 : el.complete && el.naturalWidth > 0) && !tainted.has(url)) markCorsOk(url, true)
     const st = corsState(url)
     if (st !== 'ok') {
       if (st === 'no') this.blocked = 'this media does not allow pixel access (CORS)'
@@ -264,6 +312,8 @@ export class GradeMirrors {
       const t = v?.currentTime ?? 0
       const playing = v ? !v.paused : false
       el.crossOrigin = 'anonymous'
+      // G4afix: media-cors.ts falls back to a plain load if this CORS reload fails.
+      el.dataset.g4cors = url
       if (v) {
         v.load()
         v.addEventListener(
@@ -304,10 +354,12 @@ export class GradeMirrors {
     const css = el.style.cssText
     if (c.style.cssText !== css) c.style.cssText = css
     const t = el instanceof HTMLVideoElement ? el.currentTime : 0
-    if (mir.key !== key || mir.t !== t || c.width !== w || c.height !== h || (el instanceof HTMLVideoElement && !el.paused)) {
+    const mkey = chroma ? `${key}|k${chroma.rgb.join(',')}:${chroma.similarity}:${chroma.blend}:${chroma.despill?.amount ?? 0}` : key
+    if (mir.key !== mkey || mir.t !== t || c.width !== w || c.height !== h || (el instanceof HTMLVideoElement && !el.paused)) {
       try {
-        gl.draw(el, w, h, grid, size, key)
+        gl.draw(el, w, h, grid, size, key, chroma)
       } catch {
+        tainted.add(url)
         markNoCors(url)
         this.blocked = 'this media does not allow pixel access (CORS)'
         this.release(el)
@@ -315,8 +367,9 @@ export class GradeMirrors {
       }
       if (c.width !== w) c.width = w
       if (c.height !== h) c.height = h
+      mir.ctx.clearRect(0, 0, w, h)
       mir.ctx.drawImage(gl.canvas, 0, 0)
-      mir.key = key
+      mir.key = mkey
       mir.t = t
     }
     if (el.getAttribute('data-g4-src') !== '1') el.setAttribute('data-g4-src', '1')

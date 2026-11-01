@@ -33,8 +33,10 @@ export function SliderRow({
   /** Display text for the value (default: rounded value + unit). */
   format?: (v: number) => string
 }) {
-  const [draft, setDraft] = useState(value)
-  useEffect(() => setDraft(value), [value])
+  // G4afix: never hand the slider a non-finite value (its thumb would vanish until the next change).
+  const safe = Number.isFinite(value) ? value : min <= 0 && max >= 0 ? 0 : min
+  const [draft, setDraft] = useState(safe)
+  useEffect(() => setDraft(safe), [safe])
   const num = (v: number | readonly number[]) => (Array.isArray(v) ? v[0] : v) as number
   return (
     <div className="space-y-1" data-testid={`${testId}-row`}>
@@ -56,6 +58,10 @@ export function SliderRow({
         max={max}
         step={step}
         value={[draft]}
+        // G4afix: centre alignment needs no layout measurement. 'edge' (the design-system default)
+        // hides the thumb + fill while the control measures 0 px wide (panel hidden / mid-layout)
+        // and they could stay hidden after Reset → Auto color until a reload.
+        thumbAlignment="center"
         disabled={disabled}
         onValueChange={(v) => {
           const n = num(v)
