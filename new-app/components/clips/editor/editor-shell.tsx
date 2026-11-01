@@ -99,8 +99,7 @@ import {
 } from '@/lib/clips/editor/vocab-apply'
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
-import { useEditorWords } from '@/components/clips/editor/use-editor-words'
-import { SHOW_SURROUNDING_CONTEXT_MS } from '@/lib/clips/trim-bounds'
+import { useFullVideoHighlights } from '@/components/clips/editor/use-full-video-highlights'
 import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
 import type { ProjectMediaApi } from '@/components/clips/editor/use-project-media'
 import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
@@ -531,6 +530,7 @@ export function EditorShell({
     () => mergeMediaWords(clipEditorWords, { sources: editSources, sourceSegments: editSourceSegments }, mediaTranscripts.transcripts),
     [clipEditorWords, editSources, editSourceSegments, mediaTranscripts.transcripts],
   )
+  const fvHighlights = useFullVideoHighlights(projectId, fullVideo, editorWords)
   const [versionsEnabled, setVersionsEnabled] = useState(true)
   const [editVersions, setEditVersions] = useState<EditVersionRow[]>([])
   const vocabMountRef = useRef(false)
@@ -1578,6 +1578,17 @@ export function EditorShell({
               /* private mode */
             }
           }}
+          highlightWordIdx={fullVideo && fvHighlights.highlightsOn ? fvHighlights.highlightWordIdx : undefined}
+          momentRows={fullVideo && fvHighlights.highlightsOn ? fvHighlights.momentRows : undefined}
+          onSelectRange={
+            fullVideo && fvHighlights.highlightsOn
+              ? (startMs, endMs) => {
+                  const mid = fvHighlights.picks.find((p) => p.startMs === startMs && p.endMs === endMs)
+                  if (mid) fvHighlights.setSelectedClipId(mid.clipId)
+                  seekSource(startMs)
+                }
+              : undefined
+          }
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -2023,6 +2034,30 @@ export function EditorShell({
             {fullVideo ? (
               <FindClipsInVideoButton projectId={projectId} durationMs={bounds.clipEndMs - bounds.clipStartMs} />
             ) : null}
+            {fullVideo && fvHighlights.hasPicks ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={fvHighlights.highlightsOn ? 'default' : 'outline'}
+                  data-testid="editor-highlights-toggle"
+                  onClick={() => fvHighlights.persistToggle(!fvHighlights.highlightsOn)}
+                >
+                  Highlights
+                </Button>
+                {fvHighlights.highlightsOn ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    data-testid="highlight-make-all"
+                    onClick={() => void fvHighlights.onMakeAll()}
+                  >
+                    Make all
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
             <EditorVersionsMenu
               enabled={versionsEnabled}
               versions={editVersions}
@@ -2362,6 +2397,20 @@ export function EditorShell({
             inOut={exportTimelineInOut}
             onInOutChange={setExportTimelineInOut}
             onArmVoiceover={() => clipRec.arm('voiceover')}
+            highlights={
+              fullVideo && fvHighlights.highlightsOn && fvHighlights.ranges.length
+                ? {
+                    picks: fvHighlights.picks,
+                    ranges: fvHighlights.ranges,
+                    selectedClipId: fvHighlights.selectedClipId,
+                    durationMs: bounds.clipEndMs - bounds.clipStartMs,
+                    onSelect: (id) => fvHighlights.setSelectedClipId(id),
+                    onRangeChange: fvHighlights.onRangeChange,
+                    onMakeClip: (pick, range) => void fvHighlights.onMakeClip(pick, range),
+                    onOpenCard: fvHighlights.onOpenCard,
+                  }
+                : undefined
+            }
           />
           {clipRec.armed ? (
             <ClipRecorderBar

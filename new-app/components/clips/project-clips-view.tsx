@@ -98,6 +98,7 @@ export function ProjectClipsView({
   exportAspect = '9:16' as ClipProjectSettings['aspectRatio'],
   scriptEditorEnabled = false,
   byoProject = false,
+  viewOnFullVideoUrl = null,
 }: {
   projectId: string
   projectTitle: string
@@ -114,6 +115,7 @@ export function ProjectClipsView({
   exportAspect?: ClipProjectSettings['aspectRatio']
   scriptEditorEnabled?: boolean
   byoProject?: boolean
+  viewOnFullVideoUrl?: string | null
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
   const router = useRouter()
@@ -318,7 +320,18 @@ export function ProjectClipsView({
         title={projectTitle}
         description={desc}
         actions={
-          showResults && scriptEditorEnabled ? (
+          <>
+            {viewOnFullVideoUrl ? (
+              <Button
+                size="sm"
+                variant="outline"
+                data-testid="view-on-full-video"
+                render={<Link href={viewOnFullVideoUrl} />}
+              >
+                View on full video
+              </Button>
+            ) : null}
+            {showResults && scriptEditorEnabled ? (
             <Button
               size="sm"
               data-testid="edit-transcript-project"
@@ -350,7 +363,8 @@ export function ProjectClipsView({
               <FileText className="mr-1 size-4" />
               Edit clip
             </Button>
-          ) : null
+          ) : null}
+          </>
         }
         meta={
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
