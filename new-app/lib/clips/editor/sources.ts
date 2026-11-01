@@ -65,7 +65,7 @@ export const SOURCE_SEG_MIN_MS = 100
 export const IMAGE_DEFAULT_MS = 3000
 export const MAX_SOURCES = 50
 export const MAX_SOURCE_SEGMENTS = 500
-export const MULTICAM_MIN_HOLD_RANGE: readonly [number, number] = [500, 10_000]
+export const MULTICAM_MIN_HOLD_RANGE: readonly [number, number] = [2000, 10_000]
 export const MULTICAM_WIDE_EVERY_RANGE: readonly [number, number] = [5_000, 120_000]
 
 const MEDIA_TYPES = new Set<MediaType>(['video', 'image', 'audio'])

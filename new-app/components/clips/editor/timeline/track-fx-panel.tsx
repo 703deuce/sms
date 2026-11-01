@@ -77,6 +77,15 @@ export function TrackFxPanel({
               {cur.nr != null ? (
                 <>
                   <SliderRow label="Amount" value={cur.nr} min={FX_LIMITS.nr[0]} max={FX_LIMITS.nr[1]} unit=" dB" onCommit={(v) => set({ nr: v })} testId="track-fx-nr-amount" />
+                  <SliderRow
+                    label="Mix"
+                    value={Math.round((cur.nrMix ?? 1) * 100)}
+                    min={0}
+                    max={100}
+                    unit="%"
+                    onCommit={(v) => set({ nrMix: v / 100 })}
+                    testId="track-fx-nr-mix"
+                  />
                   <p className="text-[10px] text-muted-foreground">Applied on export (the preview can't denoise live).</p>
                 </>
               ) : null}

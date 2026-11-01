@@ -78,6 +78,9 @@ def run_studio_sound_job(conn, job: dict, post_progress) -> None:
     params = params or {}
     source_key = params.get("sourceKey")
     source_offset_ms = int(params.get("sourceOffsetMs") or 0)
+    preview_only = bool(params.get("previewOnly"))
+    window_start_ms = int(params.get("windowStartMs") or 0)
+    window_duration_ms = int(params.get("windowDurationMs") or 0)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -147,7 +150,31 @@ def run_studio_sound_job(conn, job: dict, post_progress) -> None:
         iso_mp3 = td_path / "isolated.mp3"
         download_object(source_key, src)
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "extract", "progress": 25})
-        _extract_audio(src, wav)
+        trim_src = src
+        if window_duration_ms > 0:
+            clip_path = td_path / "window.mp4"
+            start_sec = max(0.0, (source_offset_ms + window_start_ms) / 1000.0)
+            dur_sec = max(0.5, window_duration_ms / 1000.0)
+            subprocess.check_call(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-v",
+                    "error",
+                    "-ss",
+                    f"{start_sec:.3f}",
+                    "-t",
+                    f"{dur_sec:.3f}",
+                    "-i",
+                    str(src),
+                    "-c",
+                    "copy",
+                    str(clip_path),
+                ],
+            )
+            trim_src = clip_path
+            source_offset_ms = 0
+        _extract_audio(trim_src, wav)
         dur_sec = _probe_duration_sec(wav)
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "isolate", "progress": 45})
         iso_bytes = isolate_audio_file(wav)
@@ -188,7 +215,7 @@ def run_studio_sound_job(conn, job: dict, post_progress) -> None:
             ),
         )
     conn.commit()
-    if clip_id:
+    if clip_id and not preview_only:
         from clips_worker.clip_edits_patch import patch_clip_edits_json_path
 
         patch_clip_edits_json_path(

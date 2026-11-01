@@ -9,12 +9,26 @@ import { createId } from '@/lib/supabase/id'
 import { resolveClipSourceMediaKey } from '@/lib/server/clips/clip-source-media'
 import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 
-export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id: clipId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const clip = await getClipForWorkspace(workspaceId, clipId)
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const body = (await request.json().catch(() => ({}))) as {
+      previewOnly?: boolean
+      windowStartMs?: number
+      windowDurationMs?: number
+    }
+    const previewOnly = body.previewOnly === true
+    const windowDurationMs = previewOnly
+      ? Math.min(10_000, Math.max(1000, Math.round(body.windowDurationMs ?? 10_000)))
+      : undefined
+    const windowStartMs =
+      previewOnly && Number.isFinite(body.windowStartMs)
+        ? Math.max(0, Math.round(body.windowStartMs!))
+        : undefined
 
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
     const edits = normalizeEdits(clip.edits, bounds)
@@ -63,7 +77,12 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
         status: 'PENDING',
         provider: 'elevenlabs',
         prompt: 'studio-sound',
-        params: { clipId, sourceKey, lengthMs },
+        params: {
+          clipId,
+          sourceKey,
+          lengthMs,
+          ...(previewOnly ? { previewOnly: true, windowStartMs, windowDurationMs } : {}),
+        },
       },
     })
 
@@ -79,27 +98,30 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       },
     })
 
-    const saved = await writeClipEditsOrThrow(clipId, bounds, clip.editsSaveVersion, (cur) => {
-      const audio = normalizeAudioEdits(cur.audio)
-      return {
-        ...cur,
-        audio: {
-          ...audio,
-          studioSound: {
-            enabled: true,
-            generationId: gen.id,
-            mix: audio.studioSound?.mix ?? DEFAULT_STUDIO_SOUND_MIX,
-          },
-        },
-      }
-    })
+    const saved = previewOnly
+      ? null
+      : await writeClipEditsOrThrow(clipId, bounds, clip.editsSaveVersion, (cur) => {
+          const audio = normalizeAudioEdits(cur.audio)
+          return {
+            ...cur,
+            audio: {
+              ...audio,
+              studioSound: {
+                enabled: true,
+                generationId: gen.id,
+                mix: audio.studioSound?.mix ?? DEFAULT_STUDIO_SOUND_MIX,
+              },
+            },
+          }
+        })
 
     return NextResponse.json({
       data: {
         generationId: gen.id,
         jobId,
         status: 'PENDING',
-        editsSaveVersion: saved.editsSaveVersion,
+        previewOnly,
+        ...(saved ? { editsSaveVersion: saved.editsSaveVersion } : {}),
       },
     })
   } catch (err) {

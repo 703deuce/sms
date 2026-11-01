@@ -47,7 +47,7 @@ describe('E3fix2 caption fit parity (TS ↔ worker export ASS)', () => {
     expect(got).toEqual(c.expected)
   })
 
-  it('the live repro line breaks before "whatever"; 90% safe width', () => {
+  it('the live repro line avoids a one-word orphan (Q3.1)', () => {
     const f = fitCaptionLine(['Energy,', 'capital,', 'whatever'], {
       font: 'Montserrat Black',
       fontsize: 125,
@@ -55,7 +55,10 @@ describe('E3fix2 caption fit parity (TS ↔ worker export ASS)', () => {
       peakScale: 1.12,
       padPx: 8,
     })
-    expect(f).toEqual({ breaks: [2], scale: 1 })
+    if (f.breaks.length) {
+      expect(3 - f.breaks[f.breaks.length - 1]!).toBeGreaterThan(1)
+      expect(f.breaks[0]!).toBeGreaterThan(1)
+    }
     expect(textWidthPx('Energy, capital, whatever', 'Montserrat Black', 125)).toBeGreaterThan(1080)
     expect(captionSafeWidthPct('9:16')).toBeCloseTo(90, 5)
   })

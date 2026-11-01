@@ -16,6 +16,7 @@ export type ClipCardData = {
   reason?: string | null
   aiMeta?: unknown
   edits?: unknown
+  spokenFirstLine?: string
 }
 
 export function ClipGrid({

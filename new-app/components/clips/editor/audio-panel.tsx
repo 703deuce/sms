@@ -28,6 +28,7 @@ export function AudioPanel({
   edits,
   outputDurationMs,
   playheadMs,
+  playheadSourceMs,
   onSuggestMusic,
   onAttachMusic,
   onPatchMusic,
@@ -46,6 +47,7 @@ export function AudioPanel({
   edits: ClipEditsV2
   outputDurationMs: number
   playheadMs: number
+  playheadSourceMs?: number
   onSuggestMusic: (prompt: string) => void
   onAttachMusic: (generationId: string) => void
   onPatchMusic: (patch: { volume?: number; duckDepth?: number }) => void
@@ -79,6 +81,47 @@ export function AudioPanel({
   const music = audioNorm.music
   const musicGen = useGeneration(music?.generationId ?? null)
   const aiExtras = clipEditorAiExtrasEnabled()
+
+  const [previewGenId, setPreviewGenId] = useState<string | null>(null)
+  const previewGen = useGeneration(previewGenId)
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null)
+
+  const previewStudio10s = useCallback(async () => {
+    const start = Math.max(0, Math.round(playheadSourceMs ?? playheadMs))
+    setPreviewBusy(true)
+    try {
+      const data = await clipsFetch<{ generationId: string }>(
+        `/api/clips/clips/${clipId}/studio-sound`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ previewOnly: true, windowStartMs: start, windowDurationMs: 10_000 }),
+        },
+      )
+      setPreviewGenId(data.generationId)
+    } catch {
+      toast.error('Could not start Studio Sound preview')
+      setPreviewBusy(false)
+    }
+  }, [clipId, playheadMs, playheadSourceMs])
+
+  useEffect(() => {
+    if (previewGen.status !== 'READY' || !previewGen.downloadUrl) return
+    setPreviewBusy(false)
+    previewAudioRef.current?.pause()
+    const audio = new Audio(previewGen.downloadUrl)
+    audio.volume = Math.max(0, Math.min(1, studio?.mix ?? DEFAULT_STUDIO_SOUND_MIX))
+    previewAudioRef.current = audio
+    void audio.play().catch(() => toast.error('Could not play preview'))
+    toast.message('10s Studio Sound preview')
+  }, [previewGen.status, previewGen.downloadUrl, studio?.mix])
+
+  useEffect(() => {
+    if (previewGen.failed) {
+      setPreviewBusy(false)
+      toast.error('Studio Sound preview failed')
+    }
+  }, [previewGen.failed])
 
   const credits = musicCredits()
 
@@ -249,6 +292,8 @@ export function AudioPanel({
           studioEnqueueRef.current = false
           void enqueueStudioSound()
         }}
+        onPreview10s={() => void previewStudio10s()}
+        previewBusy={previewBusy || previewGen.running}
       />
       {studioSlow ? (
         <div

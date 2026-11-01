@@ -9,7 +9,7 @@ export type MulticamOptions = {
 const DEFAULTS: MulticamOptions = {
   minHoldMs: 2000,
   wideEveryMs: 45_000,
-  overlapMs: 800,
+  overlapMs: 1000,
 }
 
 type Segment = { speakerId: string; startWordId: string; startMs: number; endMs: number }

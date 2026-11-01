@@ -124,7 +124,7 @@ describe('E5 sources model', () => {
     const e = normalizeEdits(raw, bounds)
     expect(e.sources).toEqual(SOURCES)
     expect(e.sourceSegments).toEqual([{ id: 's1', sourceId: 'trk_b', startMs: 12_000, endMs: 14_000 }])
-    expect(e.multicam).toEqual({ speakerSources: { '0': 'main', '1': 'trk_b' }, minHoldMs: 500, wideEveryMs: 120_000 })
+    expect(e.multicam).toEqual({ speakerSources: { '0': 'main', '1': 'trk_b' }, minHoldMs: 2000, wideEveryMs: 120_000 })
     expect(isDefaultEdits(e, bounds)).toBe(false)
     const cleared = editsPayloadForSave(base())
     expect(cleared.sources).toBeNull()
