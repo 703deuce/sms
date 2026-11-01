@@ -675,7 +675,26 @@ export function Timeline({
   }
   const [autoXfade, setAutoXfade] = useState(true)
   // TC2c (TL-49): cross-track crossfades (opt-in; overlap across tracks is often picture-in-picture).
-  const [xfadeTracks, setXfadeTracks] = useState(false)
+  const [xfadeTracks, setXfadeTracksRaw] = useState(false)
+  // TC4b: the ⇅ Tracks choice is a per-user preference (kept across reloads).
+  useEffect(() => {
+    try {
+      setXfadeTracksRaw(localStorage.getItem('transovo.timeline.xfadeTracks') === '1')
+    } catch {
+      /* private mode */
+    }
+  }, [])
+  const setXfadeTracks = (f: (v: boolean) => boolean) =>
+    setXfadeTracksRaw((v) => {
+      const n = f(v)
+      try {
+        if (n) localStorage.setItem('transovo.timeline.xfadeTracks', '1')
+        else localStorage.removeItem('transovo.timeline.xfadeTracks')
+      } catch {
+        /* private mode */
+      }
+      return n
+    })
   const [drag, setDrag] = useState<DragState | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -1531,6 +1550,9 @@ export function Timeline({
   }
   /** G1b: drag a main-track clip earlier / later (CapCut main track; ripple, no gaps). */
   const startVideoReorder = (e: React.PointerEvent, item: TimelineItem) => {
+    // TC4b (3): no native drag of the filmstrip images (it swallowed pointerup, so the drop only
+    // completed on an extra click); a cancelled pointer ends the drag like a release.
+    e.preventDefault()
     const ctx = opCtx()
     const state: DragState = { mode: 'move', item, refs: [{ lane: 'video', id: item.id }], originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, reorder: true, insertBefore: undefined }
     setDrag(state)
@@ -1547,6 +1569,7 @@ export function Timeline({
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
       setDrag(null)
       if (!state.moved || state.insertBefore === undefined) return
       const next = moveVideoSegment(ctx, item.id, state.insertBefore)
@@ -1554,6 +1577,7 @@ export function Timeline({
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
   }
 
   const startDrag = (e: React.PointerEvent, item: TimelineItem, mode: DragState['mode']) => {
@@ -1677,7 +1701,7 @@ export function Timeline({
         const moved = state.deltaMs ? moveItems(ctx, state.refs, state.deltaMs) ?? ctx.edits : ctx.edits
         const onTrack = moveItemsToTrack(moved, state.refs, toRow.trackId) ?? (moved !== ctx.edits ? moved : null)
         // TC2c (TL-49): a drop onto another track can crossfade with what it overlaps there.
-        commit(onTrack && autoXfade && xfadeTracks ? autoCrossfade(ctx.edits, onTrack, ctx.previewEdits, ctx.previewEdits, state.refs, sfxDurationsMs, true) : onTrack)
+        commit(onTrack && autoXfade ? autoCrossfade(ctx.edits, onTrack, ctx.previewEdits, ctx.previewEdits, state.refs, sfxDurationsMs, xfadeTracks) : onTrack)
         return
       }
       if (!state.moved || !state.deltaMs) return

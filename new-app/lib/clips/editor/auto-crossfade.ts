@@ -100,10 +100,14 @@ export function autoCrossfade(
 ): ClipEditsV2 {
   const ids = new Set(refs.filter((r) => (LANES as readonly string[]).includes(r.lane)).map((r) => `${r.lane}:${r.id}`))
   if (!ids.size) return next
-  const before = pairsOf(prev, buildTimelineItems({ edits: prev, previewEdits: previewPrev, sfxDurationsMs }), ids, crossTrack)
-  const after = pairsOf(next, buildTimelineItems({ edits: next, previewEdits: previewNext, sfxDurationsMs }), ids, crossTrack)
+  // TC4b: old fades are looked up across tracks ALWAYS (they are matched by exact points, so this
+  // only removes fades this feature made) — dragging cross-track clips apart (or with ⇅ Tracks off
+  // by then) left the opacity keys behind. New fades are added across tracks only when opted in.
+  const before = pairsOf(prev, buildTimelineItems({ edits: prev, previewEdits: previewPrev, sfxDurationsMs }), ids, true)
+  const afterAll = pairsOf(next, buildTimelineItems({ edits: next, previewEdits: previewNext, sfxDurationsMs }), ids, true)
+  const after = crossTrack ? afterAll : afterAll.filter((p) => (p.a.track ?? '') === (p.b.track ?? ''))
   const key = (p: Pair) => `${p.lane}:${p.a.id}|${p.b.id}|${p.ov}`
-  const afterKeys = new Set(after.map(key))
+  const afterKeys = new Set(afterAll.map(key))
   let out = next
   // Old fades (from the previous overlap, measured on prev) go — matched by exact points.
   for (const p of before) if (!afterKeys.has(key(p))) for (const f of fadesFor(prev, p)) out = removeFade(out, f)

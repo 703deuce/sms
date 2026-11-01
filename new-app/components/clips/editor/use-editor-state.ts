@@ -715,6 +715,45 @@ export function useEditorState(
     }
   }, [clipId, processSaveQueue, state.edits, state.saveState])
 
+  // TC4b: leaving / reloading with unsaved edits (a pending 200 ms debounce, or newer edits behind
+  // an in-flight save — e.g. undo, undo, reload) must not leave the server on an older state.
+  // pagehide / beforeunload: (1) keep the latest edits as the local draft — without a server stamp
+  // while a save is in flight, so the in-flight save cannot make the reload discard it; (2) send
+  // them with a keepalive PATCH (version guards dropped only while our own save is in flight).
+  useEffect(() => {
+    const onLeave = () => {
+      if (savedRevisionRef.current >= localRevisionRef.current) return
+      if (editsEqual(editsRef.current, lastSavedEditsRef.current)) return
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      const inFlight = saveInFlightRef.current
+      writeEditorAutosaveDraft(clipId, {
+        edits: editsRef.current,
+        savedAt: new Date().toISOString(),
+        ...(inFlight ? {} : { serverUpdatedAt: serverUpdatedAtRef.current }),
+      })
+      try {
+        void fetch(`/api/clips/clips/${clipId}`, {
+          method: 'PATCH',
+          keepalive: true,
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            edits: editsPayloadForSave(editsRef.current),
+            ...(inFlight ? {} : { baseVersion: serverVersionRef.current, expectedUpdatedAt: serverUpdatedAtRef.current }),
+          }),
+        }).catch(() => {})
+      } catch {
+        /* body over the keepalive limit — the local draft restores it on reload */
+      }
+    }
+    window.addEventListener('pagehide', onLeave)
+    window.addEventListener('beforeunload', onLeave)
+    return () => {
+      window.removeEventListener('pagehide', onLeave)
+      window.removeEventListener('beforeunload', onLeave)
+    }
+  }, [clipId])
+
   useEffect(() => {
     const retrySave = () => {
       if (savedRevisionRef.current < localRevisionRef.current) {
