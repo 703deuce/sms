@@ -675,6 +675,11 @@ export function PreviewStage({
         }
       }
       for (const it of e.textItems ?? []) {
+        const lfx = e.layerFx?.length ? layerFxOf(e, `text:${it.id}`) : undefined
+        const fxHost = textFxRefs.current[it.id]
+        if (fxHost && lfx && (lfx.mask || lfx.blend)) {
+          applyLayerFx(fxHost, fxHost, lfx, outMs - it.startMs, tickFxFrame.W, tickFxFrame.H)
+        }
         const el = textRefs.current[it.id]
         if (!el) continue
         const f = textItemFrame(e, it, outMs)
@@ -683,11 +688,8 @@ export function PreviewStage({
         const op = String(f.visible ? f.opacity : 0)
         if (el.style.opacity !== op) el.style.opacity = op
         if (el.style.transform !== f.transform) el.style.transform = f.transform
-        const lfx = e.layerFx?.length ? layerFxOf(e, `text:${it.id}`) : undefined
-        const fxHost = textFxRefs.current[it.id]
-        const host = fxHost ?? (libassWanted && textItemHasFx(e, it.id) ? null : el)
-        if (host && lfx && (lfx.mask || lfx.blend)) {
-          applyLayerFx(host, host, lfx, outMs - it.startMs, tickFxFrame.W, tickFxFrame.H)
+        if (!fxHost && lfx && (lfx.mask || lfx.blend)) {
+          applyLayerFx(el, el, lfx, outMs - it.startMs, tickFxFrame.W, tickFxFrame.H)
         }
       }
       for (const ly of e.adjustLayers ?? []) {
@@ -1006,7 +1008,7 @@ export function PreviewStage({
       console.warn('[clipper:preview] libass_scripts_fail', err)
       return null
     }
-  }, [libassWanted, libassFailed, edits, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions, underPassList, usesUserFonts, userFonts.version])
+  }, [libassWanted, libassFailed, edits, edits.layerFx, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions, underPassList, usesUserFonts, userFonts.version])
   const onLibassStatus = useCallback<LibassStatusFn>((key, status, info) => {
     setLibassStatus((prev) => (prev[key] === status ? prev : { ...prev, [key]: status }))
     logEditorDecision('preview_ready', { renderer: 'libass', layer: key, status, ...info })
