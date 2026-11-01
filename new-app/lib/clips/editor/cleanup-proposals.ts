@@ -6,7 +6,7 @@ import { listFillerHits, type FillerFilter } from '@/lib/clips/script-editor/fil
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
 
-export type CleanupCutKind = 'filler' | 'gap' | 'manual' | 'unknown'
+export type CleanupCutKind = 'filler' | 'gap' | 'manual' | 'unknown' | 'clarity'
 
 export type CleanupProposal = {
   id: string
@@ -66,6 +66,17 @@ export function fillerProposals(
     kind: 'filler' as const,
     range: [h.word.t0Ms, h.word.t1Ms] as CutRange,
     label: h.word.text.trim() || 'filler',
+  }))
+}
+
+export function clarityProposals(
+  items: { range: CutRange; reason: string }[],
+): CleanupProposal[] {
+  return items.map(({ range, reason }) => ({
+    id: proposalId(range),
+    kind: 'clarity' as const,
+    range,
+    label: `Clarity · ${reason}`,
   }))
 }
 

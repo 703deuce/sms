@@ -1625,6 +1625,7 @@ export function EditorShell({
             onCommitTrim={setTrim}
             onAuditionChange={setAuditionEdits}
             onSeek={seekSource}
+            aiExtras={aiExtras}
           />
         </EditorPanelErrorBoundary>
       </div>
@@ -1827,6 +1828,10 @@ export function EditorShell({
             selectedId={selectedTextId}
             onSelect={setSelectedTextId}
             onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)}
+            clipId={clipId}
+            uploadLibraryFiles={media.uploadFiles}
+            addSfx={addSfx}
+            aiExtras={aiExtras}
           />
           </EditorPanelErrorBoundary>
         </div>

@@ -1,14 +1,17 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
+import { clipsFetch } from '@/lib/clips-api'
 import {
   appliedCutProposals,
   auditionEditsForProposals,
+  clarityProposals,
   fillerProposals,
   gapProposals,
   type CleanupProposal,
@@ -31,6 +34,7 @@ export function CleanupPanel({
   onCommitTrim,
   onAuditionChange,
   onSeek,
+  aiExtras = false,
 }: {
   clipId: string
   bounds: ClipBounds
@@ -42,8 +46,12 @@ export function CleanupPanel({
   onCommitTrim: (trim: { in: number; out: number }) => void
   onAuditionChange: (edits: ClipEditsV2 | null) => void
   onSeek: (sourceMs: number) => void
+  aiExtras?: boolean
 }) {
   const [auditionIds, setAuditionIds] = useState<Set<string>>(new Set())
+  const [clarityRows, setClarityRows] = useState<CleanupProposal[]>([])
+  const [clarityLoading, setClarityLoading] = useState(false)
+  const [clarityEmpty, setClarityEmpty] = useState<string | null>(null)
 
   const clipBounds = useMemo(
     () => ({ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }),
@@ -88,7 +96,38 @@ export function CleanupPanel({
     () => appliedCutProposals(edits, orderedWords, deletedSet),
     [edits, orderedWords, deletedSet],
   )
-  const proposed = useMemo(() => [...filler, ...gaps], [filler, gaps])
+  const proposed = useMemo(() => [...filler, ...gaps, ...clarityRows], [filler, gaps, clarityRows])
+
+  const runClarity = async () => {
+    setClarityLoading(true)
+    setClarityEmpty(null)
+    try {
+      const data = await clipsFetch<{ proposals: { startMs: number; endMs: number; reason: string }[] }>(
+        `/api/clips/clips/${clipId}/clarity`,
+        { method: 'POST', body: '{}' },
+      )
+      const props = clarityProposals(
+        (data.proposals ?? []).map((p) => ({
+          range: [p.startMs, p.endMs] as [number, number],
+          reason: p.reason,
+        })),
+      )
+      setClarityRows(props)
+      if (!props.length) setClarityEmpty('Nothing to tighten')
+    } catch {
+      setClarityRows([])
+      setClarityEmpty('Nothing to tighten')
+    } finally {
+      setClarityLoading(false)
+    }
+  }
+
+  const applyAllClarity = () => {
+    for (const p of clarityRows) onApplyProposal(p)
+    setClarityRows([])
+    setAuditionIds(new Set())
+    onAuditionChange(null)
+  }
 
   const toggleAudition = (p: CleanupProposal) => {
     setAuditionIds((prev) => {
@@ -140,6 +179,28 @@ export function CleanupPanel({
         </Button>
       </div>
 
+      {aiExtras ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-testid="clarity-run"
+            disabled={clarityLoading}
+            onClick={() => void runClarity()}
+          >
+            {clarityLoading ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : null}
+            Edit for clarity
+          </Button>
+          {clarityRows.length ? (
+            <Button type="button" size="sm" onClick={applyAllClarity}>
+              Apply all clarity
+            </Button>
+          ) : null}
+          {clarityEmpty ? <span className="text-xs text-muted-foreground">{clarityEmpty}</span> : null}
+        </div>
+      ) : null}
+
       <Tabs defaultValue="proposed">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="proposed">Proposed ({proposed.length})</TabsTrigger>
@@ -163,7 +224,9 @@ export function CleanupPanel({
                     onAuditionChange(null)
                     return n
                   })
+                  if (p.kind === 'clarity') setClarityRows((rows) => rows.filter((r) => r.id !== p.id))
                 }}
+                testId={p.kind === 'clarity' ? 'clarity-proposal' : undefined}
               />
             ))
           )}
@@ -194,14 +257,19 @@ function ProposalRow({
   auditioning,
   onAudition,
   onApply,
+  testId,
 }: {
   proposal: CleanupProposal
   auditioning: boolean
   onAudition: () => void
   onApply: () => void
+  testId?: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
+    <div
+      className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs"
+      data-testid={testId}
+    >
       <span>
         {proposal.label} · {proposal.kind}
       </span>
