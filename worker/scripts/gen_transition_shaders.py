@@ -59,7 +59,7 @@ def _render_frame(ctx, shader_type: str, progress: float, w: int, h: int, a: byt
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.parse_args()
-    from clips_worker.shader_transitions import gl_context
+    from clips_worker.shader_transitions import _PRELUDE_HEAD, _PRELUDE_TAIL, gl_context
 
     ctx, _ = gl_context()
     w, h = 160, 90
