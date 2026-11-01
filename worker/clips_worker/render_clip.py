@@ -14,22 +14,99 @@ from clips_worker.render_concurrency import ffmpeg_threads_per_job
 V3 = Path(os.environ.get("SPEAKERCROP_DIR", "/app/v3"))
 
 
+import re
+
+_PRESETS = {
+    "9:16": (9, 16),
+    "4:5": (4, 5),
+    "1:1": (1, 1),
+    "16:9": (16, 9),
+    "4:3": (4, 3),
+    "21:9": (21, 9),
+}
+_CUSTOM_RE = re.compile(r"^custom:(\d{1,5})x(\d{1,5})$")
+_CUSTOM_MIN = 240
+_CUSTOM_MAX = 3840
+_CUSTOM_MAX_RATIO = 4
+
+
+def _even(n: int) -> int:
+    return n - (n % 2)
+
+
+def _ratio_ok(w: int, h: int) -> bool:
+    if w <= 0 or h <= 0:
+        return False
+    r = w / h
+    return 1 / _CUSTOM_MAX_RATIO <= r <= _CUSTOM_MAX_RATIO
+
+
+def _custom_dims(w: int, h: int) -> tuple[int, int] | None:
+    W = _even(int(w))
+    H = _even(int(h))
+    W = min(_CUSTOM_MAX, max(_CUSTOM_MIN, W))
+    H = min(_CUSTOM_MAX, max(_CUSTOM_MIN, H))
+    if not _ratio_ok(W, H):
+        return None
+    return W, H
+
+
+def aspect_parts(aspect: str | None) -> tuple[int, int]:
+    if not aspect or not isinstance(aspect, str):
+        return 9, 16
+    s = aspect.strip()
+    if s in _PRESETS:
+        return _PRESETS[s]
+    m = _CUSTOM_RE.match(s)
+    if m:
+        dims = _custom_dims(int(m.group(1)), int(m.group(2)))
+        if dims:
+            return dims
+    print("[clipper:aspect] invalid", file=sys.stderr, flush=True)
+    return 9, 16
+
+
+def normalize_aspect_token(aspect: str | None) -> str:
+    if not aspect or not isinstance(aspect, str):
+        return "9:16"
+    s = aspect.strip()
+    if s in _PRESETS:
+        return s
+    m = _CUSTOM_RE.match(s)
+    if m:
+        dims = _custom_dims(int(m.group(1)), int(m.group(2)))
+        if dims:
+            return f"custom:{dims[0]}x{dims[1]}"
+    print("[clipper:aspect] invalid", file=sys.stderr, flush=True)
+    return "9:16"
+
+
+def is_landscape_aspect(aspect: str | None) -> bool:
+    aw, ah = aspect_parts(aspect)
+    return aw > ah
+
+
+def export_settings_for_aspect(settings: dict, aspect: str | None) -> dict:
+    """Apply aspect token and landscape → fit layout (render_job export path)."""
+    token = normalize_aspect_token(aspect)
+    out = {**settings, "aspectRatio": token}
+    if is_landscape_aspect(token):
+        out = {**out, "layout": "fit"}
+    return out
+
+
 def aspect_size(aspect: str, resolution: str = "720p") -> tuple[int, int]:
-    if resolution == "1080p":
-        if aspect == "1:1":
-            return 1080, 1080
-        if aspect == "16:9":
-            return 1920, 1080
-        if aspect == "4:5":
-            return 1080, 1350
-        return 1080, 1920
-    if aspect == "1:1":
-        return 720, 720
-    if aspect == "16:9":
-        return 1280, 720
-    if aspect == "4:5":
-        return 720, 900
-    return 720, 1280
+    short = 1080 if resolution == "1080p" else 720
+    aw, ah = aspect_parts(aspect)
+    if aw >= ah:
+        w, h = round(short * aw / ah), short
+    else:
+        w, h = short, round(short * ah / aw)
+    w, h = _even(w), _even(h)
+    if max(w, h) > _CUSTOM_MAX:
+        scale = _CUSTOM_MAX / max(w, h)
+        w, h = _even(int(w * scale)), _even(int(h * scale))
+    return w, h
 
 
 def slice_words(words: list[dict], start_ms: int, end_ms: int) -> list[dict]:

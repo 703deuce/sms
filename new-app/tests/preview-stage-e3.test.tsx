@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { PreviewStage } from '@/components/clips/editor/preview-stage'
+import { stageBoxForZoom } from '@/lib/clips/editor/preview-view'
 import { normalizeEdits } from '@/lib/clips/edits'
 
 const bounds = { clipStartMs: 0, clipEndMs: 20000 }
@@ -43,5 +44,27 @@ describe('PreviewStage E3 layers', () => {
     expect(r.getAllByTestId('preview-broll-layer').map((el) => el.getAttribute('data-broll-id'))).toEqual(['b1', 'b2'])
     // Clones are created lazily during a window → only one main video element at rest.
     expect(r.getByTestId('preview-transition-a').querySelector('video')).toBeNull()
+  })
+
+  it('21:9 testBoxSize uses pillarbox path and zoom 200 scales stage', () => {
+    const edits = normalizeEdits({ v: 2, trim: { in: 0, out: 5000 }, aspectRatio: '21:9' }, bounds)
+    const fit = { w: 420, h: 180 }
+    const at200 = stageBoxForZoom(fit, '21:9', 200, 1)
+    const r = render(
+      <PreviewStage
+        videoUrl="https://example.com/video.mp4"
+        edits={edits}
+        words={[]}
+        cropTrack={null}
+        videoRef={{ current: null }}
+        onTick={vi.fn()}
+        testBoxSize={fit}
+        previewZoom={200}
+      />,
+    )
+    const stage = r.container.querySelector('[data-preview-zoom="200"]') as HTMLElement
+    expect(stage).toBeTruthy()
+    expect(stage.style.width).toBe(`${at200.w}px`)
+    expect(stage.style.height).toBe(`${at200.h}px`)
   })
 })

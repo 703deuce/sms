@@ -6,6 +6,7 @@ import {
   EXPORT_PLATFORM_PRESETS,
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
+import { parseExportAspect } from '@/lib/clips/export-aspect'
 import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
 import { coerceEditsForPreviewExport } from '@/lib/clips/export-edits-coerce'
 import { previewExportMatchesDefault } from '@/lib/clips/export-edits-match'
@@ -34,7 +35,11 @@ const resolutionSchema = z.preprocess((v) => {
 
 const bodySchema = z.object({
   resolution: resolutionSchema.default('720p'),
-  aspect: z.enum(['9:16', '4:5', '1:1', '16:9']).default('9:16'),
+  aspect: z
+    .string()
+    .refine((v) => parseExportAspect(v) !== undefined, 'invalid aspect')
+    .transform((v) => parseExportAspect(v)!)
+    .default('9:16'),
   watermark: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
   removeDeadAir: z.boolean().optional(),

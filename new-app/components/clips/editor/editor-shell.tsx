@@ -103,6 +103,15 @@ import { mediaUrlFor, useMediaTranscripts, useProjectMedia } from '@/components/
 import { CanvasBackgroundChip, CanvasBackgroundSection } from '@/components/clips/editor/canvas-background'
 import { PreviewChipRow, previewChipButtonClass } from '@/components/clips/editor/preview-chip-row'
 import { canvasBgRelevant } from '@/lib/clips/canvas-bg'
+import { aspectCss } from '@/lib/clips/export-aspect'
+import {
+  nextZoom,
+  readPreviewQuality,
+  writePreviewQuality,
+  type PreviewQuality,
+  type PreviewZoom,
+} from '@/lib/clips/editor/preview-view'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
 import { addMediaToLane, placeAddedOnTrack, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
@@ -276,6 +285,11 @@ export function EditorShell({
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const previewFrameRef = useRef<HTMLDivElement | null>(null)
   const [previewFrameW, setPreviewFrameW] = useState(999)
+  const [previewQuality, setPreviewQuality] = useState<PreviewQuality>(() => readPreviewQuality())
+  const [previewZoom, setPreviewZoom] = useState<PreviewZoom>('fit')
+  const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 })
+  const [fitPct, setFitPct] = useState(100)
+  const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
   const selectionRef = useRef<TranscriptSelection | null>(null)
   const seededExportTemplateRef = useRef(false)
   const {
@@ -1311,6 +1325,14 @@ export function EditorShell({
   const TabIcon = editorRailIcon(panel)
   const meta = TAB_META[panel]
   const previewAspect = edits.aspectRatio ?? '9:16'
+  useEffect(() => {
+    setPreviewZoom('fit')
+    setPreviewPan({ x: 0, y: 0 })
+  }, [previewAspect])
+  useEffect(() => {
+    setPreviewZoom('fit')
+    setPreviewPan({ x: 0, y: 0 })
+  }, [clipId])
   const mainVideoSize = useMemo(() => {
     const m = mediaItems.find((i) => i.isMain)
     return m?.width && m?.height ? { width: m.width, height: m.height } : null
@@ -1322,14 +1344,7 @@ export function EditorShell({
     mainVideoSize?.height,
   )
   const compositePreviewClip = editorMedia?.kind === 'composite'
-  const aspectStyle =
-    previewAspect === '16:9'
-      ? '16 / 9'
-      : previewAspect === '1:1'
-        ? '1 / 1'
-        : previewAspect === '4:5'
-          ? '4 / 5'
-          : '9 / 16'
+  const aspectStyle = aspectCss(previewAspect)
   useEffect(() => {
     const el = previewFrameRef.current
     if (!el) return
@@ -1947,6 +1962,100 @@ export function EditorShell({
               >
                 {previewFrameW < 320 ? '⛶' : '⛶ Full screen'}
               </button>
+              <Select
+                value={previewQuality}
+                onValueChange={(v) => {
+                  if (v === 'auto' || v === 'full' || v === 'half') {
+                    setPreviewQuality(v)
+                    writePreviewQuality(v)
+                  }
+                }}
+              >
+                <SelectTrigger
+                  className={cn(previewChipButtonClass(), 'h-auto gap-1 border-0 px-2 py-1 shadow-none')}
+                  data-testid="preview-quality"
+                  title="Preview only — export is unaffected"
+                >
+                  <SelectValue>
+                    {previewFrameW < 320
+                      ? previewQuality === 'half'
+                        ? '½'
+                        : 'HD'
+                      : `Quality: ${previewQuality === 'auto' ? 'Auto' : previewQuality === 'full' ? 'Full' : 'Half'}`}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto" data-testid="preview-quality-auto">
+                    Auto
+                  </SelectItem>
+                  <SelectItem value="full" data-testid="preview-quality-full">
+                    Full
+                  </SelectItem>
+                  <SelectItem value="half" data-testid="preview-quality-half">
+                    Half
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                className={previewChipButtonClass()}
+                data-testid="preview-zoom-out"
+                title="Zoom out"
+                onClick={() => setPreviewZoom((z) => nextZoom(z, -1, fitPct))}
+              >
+                −
+              </button>
+              {previewFrameW >= 320 ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    className={previewChipButtonClass()}
+                    data-testid="preview-zoom-label"
+                    onClick={() => setZoomMenuOpen((o) => !o)}
+                  >
+                    {previewZoom === 'fit' ? `Fit · ${fitPct}%` : `${previewZoom}%`}
+                  </button>
+                  {zoomMenuOpen ? (
+                    <div className="absolute bottom-full left-0 z-50 mb-1 flex flex-col rounded-md border border-border bg-popover p-1 shadow-md">
+                      <button
+                        type="button"
+                        className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                        data-testid="preview-zoom-fit"
+                        onClick={() => {
+                          setPreviewZoom('fit')
+                          setPreviewPan({ x: 0, y: 0 })
+                          setZoomMenuOpen(false)
+                        }}
+                      >
+                        Fit
+                      </button>
+                      {[25, 50, 75, 100, 150, 200].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                          data-testid={`preview-zoom-${n}`}
+                          onClick={() => {
+                            setPreviewZoom(n as PreviewZoom)
+                            setZoomMenuOpen(false)
+                          }}
+                        >
+                          {n}%
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                className={previewChipButtonClass()}
+                data-testid="preview-zoom-in"
+                title="Zoom in"
+                onClick={() => setPreviewZoom((z) => nextZoom(z, 1, fitPct))}
+              >
+                +
+              </button>
               <CanvasBackgroundChip
                 edits={edits}
                 media={media}
@@ -1970,6 +2079,12 @@ export function EditorShell({
                   : null
               }
               mainVideoSize={mainVideoSize}
+              previewQuality={previewQuality}
+              previewZoom={previewZoom}
+              previewPan={previewPan}
+              onPreviewPanChange={setPreviewPan}
+              onPreviewZoomChange={setPreviewZoom}
+              onFitPercent={setFitPct}
               words={editorWords}
               previewWords={previewWords}
               brandLogoUrl={brandLogoUrl}

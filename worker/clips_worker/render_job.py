@@ -475,14 +475,18 @@ def _run_render_clip_job_body(
     if isinstance(settings, str):
         settings = json.loads(settings)
     settings = settings_with_clip_ai_meta(settings, ctx.get("aiMeta"))
-    aspect = ctx.get("aspectRatio") or edits.get("aspectRatio") or settings.get("aspectRatio") or "9:16"
+    from clips_worker.render_clip import is_landscape_aspect, normalize_aspect_token
+
+    aspect = normalize_aspect_token(
+        ctx.get("aspectRatio") or edits.get("aspectRatio") or settings.get("aspectRatio") or "9:16"
+    )
     resolution = ctx.get("resolution") or "720p"
     if resolution in (720, "720"):
         resolution = "720p"
     if resolution in (1080, "1080"):
         resolution = "1080p"
     settings = {**settings, "aspectRatio": aspect, "exportResolution": resolution}
-    if aspect == "16:9":
+    if is_landscape_aspect(aspect):
         settings = {**settings, "layout": "fit"}
 
     from clips_worker.edits_render import keep_segments, output_duration_ms

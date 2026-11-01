@@ -13,10 +13,13 @@ import { BLUR_UNIT } from '@/lib/clips/editor/blur-regions'
 const MAX_MASKS = 64
 const masks = new Map<string, string>()
 
-/** Export frame size for a stage box aspect (short side 1080, like the export presets). */
-export function exportFrameFor(boxW: number, boxH: number): { W: number; H: number } {
-  if (!(boxW > 0 && boxH > 0)) return { W: 1080, H: 1920 }
-  return boxW >= boxH ? { W: Math.round((1080 * boxW) / boxH), H: 1080 } : { W: 1080, H: Math.round((1080 * boxH) / boxW) }
+import type { ExportAspect } from '@/lib/clips/export-aspect'
+import { exportPixelSize } from '@/lib/clips/export-aspect'
+
+/** Export frame size (short side 1080, like export presets). */
+export function exportFrameFor(aspect: ExportAspect | undefined): { W: number; H: number } {
+  const { width, height } = exportPixelSize(aspect ?? '9:16', '1080p')
+  return { W: width, H: height }
 }
 
 /** data: URL of the mask at item-local ms (cached per geometry). */

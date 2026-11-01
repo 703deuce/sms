@@ -17,7 +17,16 @@ import { editorTemplateSegmentIndex, editorTemplateSpec } from '@/lib/clips/temp
 import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
 import { TemplateStage, TemplateTitleOverlay } from '@/components/clips/editor/template-stage'
 import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
-import type { ExportAspect } from '@/lib/clips/export-aspect'
+import { aspectRatioParts, exportPixelSize, type ExportAspect } from '@/lib/clips/export-aspect'
+import {
+  clampPan,
+  fitPercent,
+  nextZoom,
+  renderScaleFor,
+  stageBoxForZoom,
+  type PreviewQuality,
+  type PreviewZoom,
+} from '@/lib/clips/editor/preview-view'
 import { shotAt } from '@/lib/clips/crop-track'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video'
@@ -72,7 +81,6 @@ import { registerFontsFromItems } from '@/lib/clips/editor/workspace-fonts'
 function hasScript(scripts: PreviewScripts, k: PreviewScriptKey): boolean {
   return Boolean(scripts[k] || (k === 'text' && scripts.under?.length))
 }
-import { exportPixelSize } from '@/lib/clips/export-aspect'
 import { formatHeadlineForExport } from '@/lib/clips/export-template'
 import { TITLE_STYLES } from '@/lib/clips/templates/registry'
 import { LibassSinkContext, type LibassSink } from '@/components/clips/editor/libass-context'
@@ -106,19 +114,6 @@ function usesSpeakerCropPreview(edits: ClipEditsV2, track: CropTrack | null): bo
   return true
 }
 
-function aspectRatioParts(aspect: ExportAspect | undefined): { aw: number; ah: number } {
-  switch (aspect) {
-    case '16:9':
-      return { aw: 16, ah: 9 }
-    case '1:1':
-      return { aw: 1, ah: 1 }
-    case '4:5':
-      return { aw: 4, ah: 5 }
-    default:
-      return { aw: 9, ah: 16 }
-  }
-}
-
 export function PreviewStage({
   videoUrl,
   posterUrl = null,
@@ -145,6 +140,12 @@ export function PreviewStage({
   canvas = null,
   canvasBgImageUrl = null,
   mainVideoSize = null,
+  previewQuality = 'full',
+  previewZoom = 'fit',
+  previewPan = { x: 0, y: 0 },
+  onPreviewPanChange,
+  onPreviewZoomChange,
+  onFitPercent,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -183,6 +184,12 @@ export function PreviewStage({
   } | null
   canvasBgImageUrl?: string | null
   mainVideoSize?: { width: number; height: number } | null
+  previewQuality?: PreviewQuality
+  previewZoom?: PreviewZoom
+  previewPan?: { x: number; y: number }
+  onPreviewPanChange?: (pan: { x: number; y: number }) => void
+  onPreviewZoomChange?: (zoom: PreviewZoom) => void
+  onFitPercent?: (pct: number) => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -252,6 +259,11 @@ export function PreviewStage({
   editsRef.current = edits
   trackRef.current = normalizedTrack
   const [box, setBox] = useState({ w: 0, h: 0 })
+  const [fitBox, setFitBox] = useState({ w: 0, h: 0 })
+  const [renderScale, setRenderScale] = useState<1 | 0.5>(1)
+  const renderScaleRef = useRef<1 | 0.5>(1)
+  const dropRatioRef = useRef(0)
+  const panDragRef = useRef<{ x0: number; y0: number; px: number; py: number; btn: number } | null>(null)
   const [playing, setPlaying] = useState(false)
   const [canPlay, setCanPlay] = useState(false)
   const [captionTimeSec, setCaptionTimeSec] = useState(0)
@@ -415,8 +427,7 @@ export function PreviewStage({
 
   useLayoutEffect(() => {
     if (testBoxSize && testBoxSize.w > 0 && testBoxSize.h > 0) {
-      boxSizeRef.current = testBoxSize
-      setBox(testBoxSize)
+      setFitBox(testBoxSize)
       return
     }
     const el = wrapRef.current
@@ -427,14 +438,90 @@ export function PreviewStage({
       const h = Math.floor(Math.min(H, (W * ah) / aw))
       if (h <= 0) return
       const w = Math.floor((h * aw) / ah)
-      const prev = boxSizeRef.current
-      if (prev.w === w && prev.h === h) return
-      boxSizeRef.current = { w, h }
-      setBox({ w, h })
+      setFitBox((prev) => (prev.w === w && prev.h === h ? prev : { w, h }))
     })
     ro.observe(el)
     return () => ro.disconnect()
   }, [aspect, testBoxSize?.w, testBoxSize?.h])
+
+  useLayoutEffect(() => {
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+    const fit = fitBox.w > 0 && fitBox.h > 0 ? fitBox : testBoxSize ?? fitBox
+    if (!(fit.w > 0 && fit.h > 0)) return
+    const zoomed =
+      previewZoom === 'fit' && !testBoxSize
+        ? fit
+        : stageBoxForZoom(fit, aspect, previewZoom, dpr)
+    boxSizeRef.current = zoomed
+    setBox(zoomed)
+    onFitPercent?.(fitPercent(fit, aspect, dpr))
+  }, [aspect, fitBox, onFitPercent, previewZoom, testBoxSize?.h, testBoxSize?.w])
+
+  useEffect(() => {
+    if (previewZoom === 'fit') return
+    const el = wrapRef.current
+    if (!el || !(box.w > 0 && box.h > 0)) return
+    const vp = { w: el.clientWidth, h: el.clientHeight }
+    if (box.w <= vp.w && box.h <= vp.h) return
+    const clamped = clampPan(previewPan, box, vp)
+    if (clamped.x !== previewPan.x || clamped.y !== previewPan.y) onPreviewPanChange?.(clamped)
+  }, [box.h, box.w, onPreviewPanChange, previewPan.x, previewPan.y, previewZoom])
+
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el || previewZoom === 'fit') return
+    const onWheel = (ev: WheelEvent) => {
+      if (ev.ctrlKey || ev.metaKey) {
+        ev.preventDefault()
+        const dpr = window.devicePixelRatio || 1
+        const pct = fitPercent(fitBox, aspect, dpr)
+        onPreviewZoomChange?.(nextZoom(previewZoom, ev.deltaY < 0 ? 1 : -1, pct))
+        return
+      }
+      if (!onPreviewPanChange) return
+      const vp = { w: el.clientWidth, h: el.clientHeight }
+      const next = clampPan(
+        { x: previewPan.x + (ev.shiftKey ? ev.deltaY : ev.deltaX), y: previewPan.y + (ev.shiftKey ? 0 : ev.deltaY) },
+        box,
+        vp,
+      )
+      onPreviewPanChange(next)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [aspect, box, fitBox, onPreviewPanChange, onPreviewZoomChange, previewPan.x, previewPan.y, previewZoom])
+
+  useEffect(() => {
+    let id: ReturnType<typeof setInterval> | undefined
+    const sample = () => {
+      const v = videoRefInner.current
+      if (!v || v.paused) return
+      const q = v.getVideoPlaybackQuality?.()
+      if (!q || q.totalVideoFrames <= 0) return
+      dropRatioRef.current = q.droppedVideoFrames / q.totalVideoFrames
+    }
+    if (playing) id = setInterval(sample, 2000)
+    return () => {
+      if (id) clearInterval(id)
+    }
+  }, [playing])
+
+  useEffect(() => {
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+    const side = Math.max(box.w, box.h)
+    const next = renderScaleFor(previewQuality, {
+      boxPx: side,
+      dpr,
+      dropRatio: dropRatioRef.current,
+      prev: renderScaleRef.current,
+    })
+    if (next !== renderScaleRef.current) {
+      renderScaleRef.current = next
+      setRenderScale(next)
+    }
+    const gp = gradeRef.current
+    if (gp) gp.mirrors.renderScale = next
+  }, [box.h, box.w, playing, previewQuality])
 
   useEffect(() => {
     const v = videoRefInner.current
@@ -629,13 +716,13 @@ export function PreviewStage({
       // E4 / G4a: color — main layer by source position (+ color keyframes at output time), B-roll
       // per item, adjustment layers on the wrapper. SVG chain (grade-filters) or WebGL mirror for
       // the HSL / LUT stage (grade-gl), both from the same math as the export (color-grade.ts).
-      const tickFxFrame = exportFrameFor(boxSizeRef.current.w, boxSizeRef.current.h)
+      const tickFxFrame = exportFrameFor(aspect)
       const tickAdjGrades = adjustGradesAt(e, outMs)
       const gp = gradeRef.current
       if (gp) {
         gp.bank.attach(stageBoxElRef.current)
-        // Grain cells follow the export frame (1080p assumed; 720p has finer cells — G4_spec limits).
-        gp.bank.play = boxSizeRef.current.w > boxSizeRef.current.h ? { w: 1920, h: 1080 } : { w: 1080, h: 1920 }
+        const playPx = exportPixelSize(aspect, '1080p')
+        gp.bank.play = { w: playPx.width, h: playPx.height }
         gp.begin(Math.floor((outMs * 30) / 1000))
         stageFrame.video = v ?? null
         stageFrame.srcMs = src
@@ -659,7 +746,7 @@ export function PreviewStage({
       }
       if (e.blurRegions?.length || Object.keys(blurRegionRefs.current).length) {
         // G4c: blur regions (export: blur_regions.py) — same mask grid, CSS backdrop blur.
-        const bf = exportFrameFor(boxSizeRef.current.w, boxSizeRef.current.h)
+        const bf = exportFrameFor(aspect)
         const short = Math.min(boxSizeRef.current.w, boxSizeRef.current.h)
         for (const [id, el] of Object.entries(blurRegionRefs.current)) {
           const r = e.blurRegions?.find((x) => x.id === id)
@@ -1090,10 +1177,19 @@ export function PreviewStage({
       ) : null}
       <LibassSinkContext.Provider value={libassWanted ? libassSink : null}>
       <div
-        style={{ width: box.w || undefined, height: box.h || undefined }}
+        style={{
+          width: box.w || undefined,
+          height: box.h || undefined,
+          position: 'relative',
+          left: previewPan.x,
+          top: previewPan.y,
+        }}
         ref={setStageBoxEl}
-        className={`relative overflow-hidden rounded-xl bg-black ${libassClass}`}
+        className={`relative shrink-0 overflow-hidden rounded-xl bg-black ${libassClass}`}
         data-preview-renderer={libassClass ? 'libass' : 'dom'}
+        data-preview-zoom={previewZoom}
+        data-preview-quality={previewQuality}
+        data-preview-render-scale={renderScale}
       >
         {posterUrl && !canPlay ? (
           // G4c: CORS mode on the poster too (crossOrigin set before src), like every preview medium —
@@ -1706,6 +1802,7 @@ export function PreviewStage({
               scripts={libassScripts}
               playW={templatePreview?.playW ?? libassPlay.width}
               playH={templatePreview?.playH ?? libassPlay.height}
+              renderScale={renderScale}
               clock={libassClock}
               onStatus={onLibassStatus}
               fxHostRef={(id, el) => {
