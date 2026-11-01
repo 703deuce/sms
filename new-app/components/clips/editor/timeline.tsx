@@ -142,9 +142,10 @@ import { TransitionPopover } from '@/components/clips/editor/timeline/transition
 import { MEDIA_DND_TYPE, type MediaDropLane } from '@/lib/clips/editor/media-add'
 import { segmentMediaMs, sourceById, sourceSegmentWindows } from '@/lib/clips/editor/sources'
 import {
-  deleteKeyframesAt,
+  deleteKeyframeTimes,
   keyframeTimes,
-  moveKeyframesAt,
+  shiftKeyframeTimes,
+  toggleKfSelection,
   targetForItem,
   targetOriginMs,
   type KeyframeTarget,
@@ -718,8 +719,8 @@ export function Timeline({
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   // E3: selected keyframe (diamond), live diamond drag, open transition pop-over.
-  const [selKf, setSelKf] = useState<{ target: KeyframeTarget; tMs: number } | null>(null)
-  const [kfDrag, setKfDrag] = useState<{ target: KeyframeTarget; fromMs: number; toMs: number } | null>(null)
+  const [selKf, setSelKf] = useState<{ target: KeyframeTarget; times: number[] } | null>(null)
+  const [kfDrag, setKfDrag] = useState<{ target: KeyframeTarget; times: number[]; delta: number } | null>(null)
   const [trPop, setTrPop] = useState<TransitionTarget | null>(null)
   // G1b: in / out marks (output ms), shortcuts sheet, add-track menu.
   const [io, setIo] = useState<InOut>({ inMs: null, outMs: null })
@@ -872,9 +873,9 @@ export function Timeline({
   const nudge = (dir: -1 | 1, big: boolean) => {
     // A selected keyframe diamond nudges by the same frame step (1 frame / Shift 10).
     if (selKf) {
-      const to = Math.max(0, selKf.tMs + dir * arrowStepMs(big))
-      commit(moveKeyframesAt(edits, selKf.target, selKf.tMs, to))
-      setSelKf({ target: selKf.target, tMs: to })
+      const r = shiftKeyframeTimes(edits, selKf.target, selKf.times, dir * arrowStepMs(big))
+      commit(r.edits)
+      setSelKf({ target: selKf.target, times: r.times })
       return true
     }
     const movable = liveSelected.filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
@@ -891,9 +892,9 @@ export function Timeline({
     }
     if (!editable) return false
     if (selKf) {
-      const to = Math.max(0, selKf.tMs + d)
-      commit(moveKeyframesAt(edits, selKf.target, selKf.tMs, to))
-      setSelKf({ target: selKf.target, tMs: to })
+      const r = shiftKeyframeTimes(edits, selKf.target, selKf.times, d)
+      commit(r.edits)
+      setSelKf({ target: selKf.target, times: r.times })
       return true
     }
     const movable = liveSelected.filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
@@ -1556,8 +1557,12 @@ export function Timeline({
     e.stopPropagation()
     e.preventDefault()
     rootRef.current?.focus({ preventScroll: true })
-    setSelKf({ target, tMs })
+    const additive = e.shiftKey
+    const sel =
+      additive || !(selKf?.target === target && selKf.times.includes(tMs)) ? toggleKfSelection(selKf, target, tMs, additive) : selKf!
+    setSelKf(sel)
     onSeekOutput(origin + tMs)
+    if (additive) return
     if (!editable) return
     const originX = e.clientX
     const state = { toMs: tMs, moved: false }
@@ -1571,15 +1576,16 @@ export function Timeline({
       let t = Math.abs(raw - ph) * pxPerMs < SNAP_PX && snapOn ? ph : Math.round(raw / (1000 / 30)) * (1000 / 30)
       t = Math.max(0, Math.round(t))
       state.toMs = t
-      setKfDrag({ target, fromMs: tMs, toMs: t })
+      setKfDrag({ target, times: sel.times, delta: t - tMs })
     }
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       setKfDrag(null)
       if (!state.moved || state.toMs === tMs) return
-      commit(moveKeyframesAt(edits, target, tMs, state.toMs))
-      setSelKf({ target, tMs: state.toMs })
+      const r = shiftKeyframeTimes(edits, target, sel.times, state.toMs - tMs)
+      commit(r.edits)
+      setSelKf({ target, times: r.times })
       onSeekOutput(origin + state.toMs)
     }
     window.addEventListener('pointermove', onMove)
@@ -1903,7 +1909,7 @@ export function Timeline({
     } else if ((k === 'Delete' || k === 'Backspace') && editable && selKf) {
       e.preventDefault()
       e.stopPropagation()
-      commit(deleteKeyframesAt(edits, selKf.target, selKf.tMs))
+      commit(deleteKeyframeTimes(edits, selKf.target, selKf.times))
       setSelKf(null)
     } else if ((k === 'Delete' || k === 'Backspace') && editable && liveSelected.length) {
       e.preventDefault()
@@ -2302,8 +2308,9 @@ export function Timeline({
           : null}
         {!host
           ? kfs.map((t) => {
-              const shownT = kfDrag && kfDrag.target === kfTarget && kfDrag.fromMs === t ? kfDrag.toMs : t
-              const isSelKf = selKf?.target === kfTarget && selKf.tMs === t
+              const inSel = selKf?.target === kfTarget && selKf.times.includes(t)
+              const shownT = kfDrag && kfDrag.target === kfTarget && kfDrag.times.includes(t) ? Math.max(0, t + kfDrag.delta) : t
+              const isSelKf = inSel
               return (
                 <span
                   key={`kf${t}`}
@@ -2315,7 +2322,7 @@ export function Timeline({
                   data-target={kfTarget ?? undefined}
                   data-t-ms={Math.round(t)}
                   data-selected={isSelKf ? 'true' : undefined}
-                  title={`Keyframe ${((kfOrigin + t) / 1000).toFixed(2)} s — drag to move, Del to delete`}
+                  title={`Keyframe ${((kfOrigin + t) / 1000).toFixed(2)} s — drag to move, Shift-click to add to the selection, Del to delete`}
                   onPointerDown={(e) => startKfDrag(e, kfTarget!, t, kfOrigin)}
                 />
               )
@@ -2817,6 +2824,10 @@ export function Timeline({
           onCommit={(next) => commit(next)}
           onSeekLocal={(t) => onSeekOutput(inspected.origin + t)}
           readOnly={!editable || refLocked(edits, inspected.item)}
+          span={{
+            fromMs: inspected.item.startMs - inspected.origin,
+            toMs: inspected.item.endMs - inspected.origin,
+          }}
         />
       ) : null}
       {pacingOpen ? (

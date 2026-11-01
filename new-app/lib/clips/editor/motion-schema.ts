@@ -13,6 +13,20 @@ export type Ease = 'linear' | 'in' | 'out' | 'inOut'
 export const EASES: readonly Ease[] = ['linear', 'in', 'out', 'inOut'] as const
 export const EASE_LABELS: Record<Ease, string> = { linear: 'Linear', in: 'Ease in', out: 'Ease out', inOut: 'Ease in-out' }
 
+/** KF-15: the 4 presets as bezier heights (exact: y = u(c1 + u(c2 + u c3))). */
+export const EASE_BZ: Record<Ease, [number, number]> = { linear: [1 / 3, 2 / 3], in: [0, 1 / 3], out: [2 / 3, 1], inOut: [0, 1] }
+/** Clamp/round a raw bz; null when invalid. Returns { ease } when it equals a preset (to 0.01). */
+export function normalizeBz(raw: unknown): { bz?: [number, number]; ease?: Ease } | null {
+  if (!Array.isArray(raw) || raw.length !== 2) return null
+  const [a, b] = raw.map((n) => (typeof n === 'number' && Number.isFinite(n) ? Math.round(Math.min(1, Math.max(0, n)) * 100) / 100 : NaN))
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null
+  for (const e of EASES) {
+    const [pa, pb] = EASE_BZ[e]
+    if (Math.abs(pa - a) < 0.006 && Math.abs(pb - b) < 0.006) return e === 'linear' ? {} : { ease: e }
+  }
+  return { bz: [a, b] }
+}
+
 export type KeyProp =
   | 'x'
   | 'y'
@@ -76,8 +90,9 @@ export type KeyframeTarget =
   | `sfx:${string}`
   | `adjust:${string}`
 
-/** One keyframe. `ease` shapes the segment from this point to the next (After Effects "outgoing"). */
-export type KeyPoint = { tMs: number; v: number; ease?: Ease }
+/** One keyframe. `ease` shapes the segment from this point to the next (After Effects "outgoing").
+ *  KF-15 `bz` = custom curve heights [a, b] (x-handles fixed at 1/3, 2/3); wins over `ease`. */
+export type KeyPoint = { tMs: number; v: number; ease?: Ease; bz?: [number, number] }
 
 /** Points empty ⇒ the static `value` (or the property default) applies for the whole item. */
 export type KeyframeTrack = { target: KeyframeTarget; prop: KeyProp; value?: number; points: KeyPoint[] }
@@ -354,7 +369,9 @@ export function normalizeKeyframeTracks(raw: unknown): KeyframeTrack[] | undefin
       if (t == null || v == null || t < -600000 || t > 36_000_000) continue
       const ease = typeof q.ease === 'string' && (EASES as readonly string[]).includes(q.ease) ? (q.ease as Ease) : undefined
       const tMs = Math.round(t)
-      byT.set(tMs, { tMs, v: clampN(v, spec.min, spec.max), ...(ease && ease !== 'linear' ? { ease } : {}) })
+      const nb = normalizeBz(q.bz)
+      const shape = nb ?? (ease && ease !== 'linear' ? { ease } : {})
+      byT.set(tMs, { tMs, v: clampN(v, spec.min, spec.max), ...shape })
     }
     const points = [...byT.values()].sort((a, b) => a.tMs - b.tMs)
     const sv = finite(o.value)

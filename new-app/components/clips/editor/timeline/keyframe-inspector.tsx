@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Diamond } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, Diamond, Spline } from 'lucide-react'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
   EASES,
@@ -10,7 +10,9 @@ import {
   adjacentKeyframe,
   findTrack,
   pointAt,
+  pointBz,
   propsForTarget,
+  setKeyframeCurve,
   setKeyframeEase,
   setPropertyAt,
   toggleKeyframeAt,
@@ -20,6 +22,7 @@ import {
   type KeyframeTarget,
 } from '@/lib/clips/editor/keyframes'
 import { CROP_PROPS, isColorProp } from '@/lib/clips/editor/motion-schema'
+import { KeyframeLanes } from '@/components/clips/editor/timeline/keyframe-lanes'
 
 /**
  * G4cfix: a colour / effect track with no keyframes left is dropped, so the panel slider is the
@@ -50,6 +53,7 @@ export function KeyframeInspector({
   readOnly = false,
   props: only,
   baseValue,
+  span,
 }: {
   edits: ClipEditsV2
   target: KeyframeTarget
@@ -63,8 +67,11 @@ export function KeyframeInspector({
   props?: readonly KeyProp[]
   /** G4cfix: static (slider) value of a colour / effect row without keyframes. */
   baseValue?: (prop: KeyProp) => number | undefined
+  /** KF-19: item-local span for per-property lanes (timeline inspector only). */
+  span?: { fromMs: number; toMs: number }
 }) {
   const props = only ?? propsForTarget(target).filter((p) => !(CROP_PROPS as readonly string[]).includes(p))
+  const [lanesOpen, setLanesOpen] = useState(false)
   return (
     <div
       className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/60 bg-card/40 px-2 py-1"
@@ -86,6 +93,29 @@ export function KeyframeInspector({
           baseValue={baseValue}
         />
       ))}
+      {span ? (
+        <button
+          type="button"
+          className="text-[10px] text-muted-foreground hover:text-foreground"
+          onClick={() => setLanesOpen((o) => !o)}
+          aria-expanded={lanesOpen}
+          data-testid="kf-lanes-toggle"
+        >
+          Lanes {lanesOpen ? '▾' : '▸'}
+        </button>
+      ) : null}
+      {span && lanesOpen ? (
+        <KeyframeLanes
+          edits={edits}
+          target={target}
+          props={props}
+          span={span}
+          localMs={localMs}
+          onCommit={onCommit}
+          onSeekLocal={onSeekLocal}
+          readOnly={readOnly}
+        />
+      ) : null}
     </div>
   )
 }
@@ -121,6 +151,7 @@ function PropRow({
   const colorRow = isColorProp(prop)
   const value = colorRow && !hasPoints ? (baseValue?.(prop) ?? trackValueAt(undefined, prop, localMs)) : trackValueAt(track, prop, localMs)
   const [draft, setDraft] = useState(fmt(value))
+  const [graphOpen, setGraphOpen] = useState(false)
   useEffect(() => setDraft(fmt(value)), [value])
   const commitDraft = () => {
     const n = Number(draft)
@@ -211,10 +242,10 @@ function PropRow({
           role="radiogroup"
           aria-label={`${spec.label} ease (from this keyframe to the next)`}
           data-testid={`kf-ease-${prop}`}
-          data-value={here.ease ?? 'linear'}
+          data-value={here.bz ? 'curve' : (here.ease ?? 'linear')}
         >
           {EASES.map((e) => {
-            const on = (here.ease ?? 'linear') === e
+            const on = !here.bz && (here.ease ?? 'linear') === e
             return (
               <button
                 key={e}
@@ -231,8 +262,85 @@ function PropRow({
               </button>
             )
           })}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={Boolean(here.bz)}
+            disabled={readOnly}
+            title="Custom curve"
+            onClick={() => setGraphOpen((o) => !o)}
+            className={`h-6 px-1 text-[9px] ${here.bz ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            data-testid={`kf-ease-${prop}-curve`}
+          >
+            <Spline className="size-3" />
+          </button>
         </div>
       ) : null}
+      {here && graphOpen ? (
+        <EaseGraph
+          value={pointBz(here)}
+          readOnly={readOnly}
+          testId={`kf-graph-${prop}`}
+          onCommit={(bz) => onCommit(setKeyframeCurve(edits, target, prop, here.tMs, bz))}
+        />
+      ) : null}
     </div>
+  )
+}
+
+/** KF-15: 96×64 curve; two handles at x = 1/3, 2/3 dragged vertically. Commits once on pointerup. */
+function EaseGraph({
+  value,
+  onCommit,
+  readOnly,
+  testId,
+}: {
+  value: [number, number]
+  onCommit: (bz: [number, number]) => void
+  readOnly: boolean
+  testId: string
+}) {
+  const W = 96
+  const H = 64
+  const [bz, setBz] = useState<[number, number]>(value)
+  useEffect(() => setBz(value), [value[0], value[1]]) // eslint-disable-line react-hooks/exhaustive-deps
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const yOf = (v: number) => H - v * H
+  const path = `M0,${H} C${W / 3},${yOf(bz[0])} ${(2 * W) / 3},${yOf(bz[1])} ${W},0`
+  const drag = (i: 0 | 1) => (e: React.PointerEvent) => {
+    if (readOnly) return
+    e.preventDefault()
+    const r = svgRef.current!.getBoundingClientRect()
+    let cur = bz
+    const mv = (ev: PointerEvent) => {
+      const v = Math.round(Math.min(1, Math.max(0, 1 - (ev.clientY - r.top) / Math.max(1, r.height))) * 100) / 100
+      cur = (i === 0 ? [v, cur[1]] : [cur[0], v]) as [number, number]
+      setBz(cur)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', mv)
+      window.removeEventListener('pointerup', up)
+      onCommit(cur)
+    }
+    window.addEventListener('pointermove', mv)
+    window.addEventListener('pointerup', up)
+  }
+  return (
+    <svg ref={svgRef} width={W} height={H} className="rounded border border-border bg-background" data-testid={testId} data-bz={bz.join(',')}>
+      <line x1={0} y1={H} x2={W / 3} y2={yOf(bz[0])} className="stroke-muted-foreground" strokeWidth={0.5} />
+      <line x1={W} y1={0} x2={(2 * W) / 3} y2={yOf(bz[1])} className="stroke-muted-foreground" strokeWidth={0.5} />
+      <path d={path} fill="none" className="stroke-primary" strokeWidth={1.5} />
+      {([0, 1] as const).map((i) => (
+        <circle
+          key={i}
+          cx={((i + 1) * W) / 3}
+          cy={yOf(bz[i])}
+          r={4}
+          className="cursor-ns-resize fill-amber-400"
+          onPointerDown={drag(i)}
+          data-testid={`${testId}-h${i}`}
+        />
+      ))}
+    </svg>
   )
 }

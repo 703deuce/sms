@@ -7,7 +7,9 @@ import { MASK_MAX_KEYS, maskGeomAt, type LayerFx } from '@/lib/clips/editor/laye
 import { reconcileTracks } from '@/lib/clips/editor/tracks'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
+  EASE_BZ,
   isColorProp,
+  normalizeBz,
   PROP_SPECS,
   propsForTarget,
   type Ease,
@@ -37,6 +39,17 @@ export function easeValue(ease: Ease | undefined, u: number): number {
   }
 }
 
+/** KF-15: segment shape of point `a` (bz wins over ease). Same Horner form as motion.py. */
+export function pointEase(a: KeyPoint, u: number): number {
+  if (!a.bz) return easeValue(a.ease, u)
+  const x = Math.min(1, Math.max(0, u))
+  const [p, q] = a.bz
+  const c1 = 3 * p
+  const c2 = 3 * q - 6 * p
+  const c3 = 1 + 3 * p - 3 * q
+  return x * (c1 + x * (c2 + x * c3))
+}
+
 /** Value of a sorted point list at local time t (holds before the first / after the last point). */
 export function valueAtPoints(points: readonly KeyPoint[], t: number, def: number): number {
   const n = points.length
@@ -50,7 +63,7 @@ export function valueAtPoints(points: readonly KeyPoint[], t: number, def: numbe
     if (t < b.tMs) {
       const span = b.tMs - a.tMs
       if (span <= 0) return b.v
-      return a.v + (b.v - a.v) * easeValue(a.ease, (t - a.tMs) / span)
+      return a.v + (b.v - a.v) * pointEase(a, (t - a.tMs) / span)
     }
   }
   return last.v
@@ -219,6 +232,21 @@ export function setKeyframeEase(
   return withTrack(edits, target, prop, { ...tr, points })
 }
 
+/** KF-15: custom curve on the key under localMs (normalized: preset-equal → ease). */
+export function setKeyframeCurve(edits: ClipEditsV2, target: KeyframeTarget, prop: KeyProp, localMs: number, bz: [number, number]): ClipEditsV2 {
+  const tr = findTrack(edits, target, prop)
+  const hit = pointAt(tr, localMs)
+  const nb = normalizeBz(bz)
+  if (!tr || !hit || !nb) return edits
+  const points = tr.points.map((p) => (p === hit ? { tMs: p.tMs, v: p.v, ...nb } : p))
+  return withTrack(edits, target, prop, { ...tr, points })
+}
+
+/** Effective bz of a point (preset or custom), for drawing the graph. */
+export function pointBz(p: KeyPoint): [number, number] {
+  return p.bz ?? EASE_BZ[p.ease ?? 'linear']
+}
+
 /** All local keyframe times of a target (the diamonds on its timeline item). */
 export function keyframeTimes(edits: ClipEditsV2, target: KeyframeTarget): number[] {
   const set = new Set<number>()
@@ -250,6 +278,55 @@ export function deleteKeyframesAt(edits: ClipEditsV2, target: KeyframeTarget, tM
     next = withTrack(next, target, tr.prop, { ...tr, points, value: points.length ? tr.value : hit.v })
   }
   return next
+}
+
+/** KF-18: move every key of `target` at any of `times` by delta (clamped so min ≥ 0). Returns new edits + new times. */
+export function shiftKeyframeTimes(
+  edits: ClipEditsV2,
+  target: KeyframeTarget,
+  times: readonly number[],
+  deltaMs: number,
+): { edits: ClipEditsV2; times: number[] } {
+  if (!times.length) return { edits, times: [] }
+  const d = Math.round(Math.max(deltaMs, -Math.min(...times)))
+  if (Math.abs(d) < 1) return { edits, times: [...times] }
+  const isSel = (t: number) => times.some((s) => Math.abs(s - t) < 1)
+  let next = edits
+  for (const tr of tracksFor(edits, target)) {
+    const moved = tr.points.filter((p) => isSel(p.tMs)).map((p) => ({ ...p, tMs: p.tMs + d }))
+    if (!moved.length) continue
+    const kept = tr.points.filter((p) => !isSel(p.tMs) && !moved.some((m) => Math.abs(m.tMs - p.tMs) < 1))
+    next = withTrack(next, target, tr.prop, { ...tr, points: [...kept, ...moved].sort((a, b) => a.tMs - b.tMs) })
+  }
+  return { edits: next, times: times.map((t) => Math.round(t + d)) }
+}
+
+/** KF-18: delete every key of `target` at any of `times` (last-key rule = deleteKeyframesAt). */
+export function deleteKeyframeTimes(edits: ClipEditsV2, target: KeyframeTarget, times: readonly number[]): ClipEditsV2 {
+  return times.reduce((e, t) => deleteKeyframesAt(e, target, t), edits)
+}
+
+/** KF-18: click / shift-click on a diamond → next selection. */
+export function toggleKfSelection(
+  sel: { target: KeyframeTarget; times: number[] } | null,
+  target: KeyframeTarget,
+  tMs: number,
+  additive: boolean,
+): { target: KeyframeTarget; times: number[] } {
+  if (!additive || !sel || sel.target !== target) return { target, times: [tMs] }
+  const has = sel.times.includes(tMs)
+  const times = has ? sel.times.filter((t) => t !== tMs) : [...sel.times, tMs].sort((a, b) => a - b)
+  return times.length ? { target, times } : { target, times: [tMs] }
+}
+
+/** KF-19: move one property's key (lane drag). */
+export function moveTrackPoint(edits: ClipEditsV2, target: KeyframeTarget, prop: KeyProp, fromMs: number, toMs: number): ClipEditsV2 {
+  const tr = findTrack(edits, target, prop)
+  const hit = pointAt(tr, fromMs, 1)
+  const to = Math.max(0, Math.round(toMs))
+  if (!tr || !hit || Math.abs(to - hit.tMs) < 1) return edits
+  const points = [...tr.points.filter((p) => p !== hit && Math.abs(p.tMs - to) >= 1), { ...hit, tMs: to }].sort((a, b) => a.tMs - b.tMs)
+  return withTrack(edits, target, prop, { ...tr, points })
 }
 
 /** Previous / next keyframe time (any of the target's props, or one prop). */

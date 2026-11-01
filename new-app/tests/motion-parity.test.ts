@@ -23,6 +23,7 @@ const FIXTURE = path.resolve(here, '../../worker/tests/fixtures/motion_parity.js
 
 const TRACKS: KeyframeTrack[] = [
   { target: 'video', prop: 'x', points: [{ tMs: 0, v: -20 }, { tMs: 1000, v: 30 }, { tMs: 2500, v: 0, ease: 'inOut' }, { tMs: 4000, v: 50 }] },
+  { target: 'video', prop: 'y', points: [{ tMs: 0, v: 0, bz: [1, 1] }, { tMs: 2000, v: 40, bz: [0.2, 0.9] }, { tMs: 3000, v: -10 }] },
   { target: 'video', prop: 'scale', points: [{ tMs: 200, v: 100, ease: 'in' }, { tMs: 1700, v: 250, ease: 'out' }, { tMs: 3100, v: 60 }] },
   { target: 'video', prop: 'rotation', value: 15, points: [] },
   { target: 'video', prop: 'opacity', points: [{ tMs: 500, v: 100, ease: 'out' }, { tMs: 900, v: 0 }] },
