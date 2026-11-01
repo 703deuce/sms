@@ -26,6 +26,11 @@ import { clipsFetch } from '@/lib/clips-api'
 import { cn } from '@/lib/utils'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
 import {
+  chunksForTranslation,
+  linesFromTranslation,
+  TRANSLATE_CAPTION_LANGUAGES,
+} from '@/lib/clips/caption-translate'
+import {
   captionInBottomUnsafeBand,
   moveUpMarginVPct,
 } from '@/components/clips/editor/preview-safe-zone'
@@ -126,6 +131,8 @@ export function CaptionsPanel({
   const [vocabTo, setVocabTo] = useState('')
   const [saveOpen, setSaveOpen] = useState(false)
   const [saveName, setSaveName] = useState('')
+  const [translateLang, setTranslateLang] = useState('')
+  const [translateBusy, setTranslateBusy] = useState(false)
 
   const loadCustom = useCallback(async () => {
     try {
@@ -185,6 +192,32 @@ export function CaptionsPanel({
       toast.success(`Added ${data.picks.length} emoji(s)`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Emoji suggest failed')
+    }
+  }
+
+  const runTranslate = async () => {
+    if (!clipId || !onEdits || !translateLang) return
+    const lang = TRANSLATE_CAPTION_LANGUAGES.find((l) => l.code === translateLang)
+    if (!lang) return
+    const ok = window.confirm(`Replace captions with ${lang.label}? (Undo restores)`)
+    if (!ok) return
+    setTranslateBusy(true)
+    try {
+      const chunks = chunksForTranslation(edits, words)
+      const data = await clipsFetch<{ lines: string[] }>(`/api/clips/clips/${clipId}/captions/translate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          targetLang: translateLang,
+          lines: chunks.map((c) => ({ text: c.text })),
+        }),
+      })
+      const captionLines = linesFromTranslation(chunks, data.lines)
+      onEdits({ ...edits, captionLines })
+      toast.success(`Captions translated to ${lang.label}`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Translate failed')
+    } finally {
+      setTranslateBusy(false)
     }
   }
 
@@ -501,6 +534,35 @@ export function CaptionsPanel({
       </div>
       {cap.autoEmojis && clipId ? (
         <Button size="sm" variant="outline" onClick={() => void suggestEmojis()}>Suggest emojis</Button>
+      ) : null}
+
+      {clipId && onEdits && words.length ? (
+        <div className="flex flex-wrap items-center gap-2" data-testid="captions-translate">
+          <Select
+            items={TRANSLATE_CAPTION_LANGUAGES.map((l) => ({ value: l.code, label: l.label }))}
+            value={translateLang}
+            onValueChange={(v) => v && setTranslateLang(v)}
+          >
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="Translate…" />
+            </SelectTrigger>
+            <SelectContent>
+              {TRANSLATE_CAPTION_LANGUAGES.map((l) => (
+                <SelectItem key={l.code} value={l.code}>
+                  {l.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={translateBusy || !translateLang}
+            onClick={() => void runTranslate()}
+          >
+            Translate captions
+          </Button>
+        </div>
       ) : null}
 
       <div className="flex items-center justify-between">

@@ -2,7 +2,7 @@ import 'server-only'
 
 import { EMOJI_WHITELIST_SET } from '@/lib/clips/emoji-whitelist'
 import { normalizeEdits } from '@/lib/clips/edits'
-import { loadSourceWords } from '@/lib/clips/source-words'
+import { loadSourceWords, type SourceWord } from '@/lib/clips/source-words'
 import { getPrisma } from '@/lib/server/db'
 import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 import { getClipStorage } from '@/lib/storage'
@@ -22,34 +22,11 @@ export async function suggestCaptionEmojisForClip(
   const prisma = getPrisma()
   const clip = await prisma.clip.findFirst({ where: { id: clipId, workspaceId, deletedAt: null } })
   if (!clip) throw new Error('Clip not found')
-  const project = await prisma.clipProject.findUnique({ where: { id: clip.projectId } })
-  const storage = getClipStorage()
-  let words = loadSourceWords([])
-  if (project?.transcriptKey) {
-    try {
-      words = loadSourceWords(await storage.getJson(project.transcriptKey))
-    } catch {
-      words = []
-    }
-  }
-  const clipWordsKey = `ws/${workspaceId}/projects/${clip.projectId}/clips/${clipId}/words.json`
-  try {
-    const clipWords = await storage.getJson<{ w: string; s: number; e: number; i?: number }[]>(clipWordsKey)
-    words = loadSourceWords(clipWords)
-  } catch {
-    /* project transcript */
-  }
-
+  const { inSpan, edits } = await loadClipWordsForLlm(workspaceId, clipId)
   const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
-  const edits = normalizeEdits(clip.edits, bounds)
   const segs = edits.cutRanges
   const trimIn = edits.trim.in
   const trimOut = edits.trim.out
-  const inSpan = words.filter((w) => {
-    const mid = ((w.s + w.e) / 2) * 1000
-    if (mid < trimIn || mid >= trimOut) return false
-    return !segs.some(([a, b]) => mid >= a && mid < b)
-  })
   const durationS = Math.max(1, (trimOut - trimIn) / 1000)
   const maxPicks = Math.max(1, Math.floor(durationS / 3))
   const excerpt = inSpan
@@ -89,6 +66,48 @@ export async function suggestCaptionEmojisForClip(
     map[String(idx)] = p.emoji
   }
   return map
+}
+
+/** Shared loader for LLM clip tools (caption emojis, clarity cuts). */
+export async function loadClipWordsForLlm(
+  workspaceId: string,
+  clipId: string,
+): Promise<{
+  bounds: { clipStartMs: number; clipEndMs: number }
+  edits: ReturnType<typeof normalizeEdits>
+  inSpan: SourceWord[]
+}> {
+  const prisma = getPrisma()
+  const clip = await prisma.clip.findFirst({ where: { id: clipId, workspaceId, deletedAt: null } })
+  if (!clip) throw new Error('Clip not found')
+  const project = await prisma.clipProject.findUnique({ where: { id: clip.projectId } })
+  const storage = getClipStorage()
+  let words = loadSourceWords([])
+  if (project?.transcriptKey) {
+    try {
+      words = loadSourceWords(await storage.getJson(project.transcriptKey))
+    } catch {
+      words = []
+    }
+  }
+  const clipWordsKey = `ws/${workspaceId}/projects/${clip.projectId}/clips/${clipId}/words.json`
+  try {
+    const clipWords = await storage.getJson<{ w: string; s: number; e: number; i?: number }[]>(clipWordsKey)
+    words = loadSourceWords(clipWords)
+  } catch {
+    /* project transcript */
+  }
+  const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
+  const edits = normalizeEdits(clip.edits, bounds)
+  const segs = edits.cutRanges
+  const trimIn = edits.trim.in
+  const trimOut = edits.trim.out
+  const inSpan = words.filter((w) => {
+    const mid = ((w.s + w.e) / 2) * 1000
+    if (mid < trimIn || mid >= trimOut) return false
+    return !segs.some(([a, b]) => mid >= a && mid < b)
+  })
+  return { bounds, edits, inSpan }
 }
 
 export async function applyProjectAutoEmojis(workspaceId: string, projectId: string) {
