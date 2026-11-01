@@ -19,9 +19,9 @@ def main() -> None:
     cases: list[dict] = []
     idx = 0
     for ttype in TRANSITION_TYPES:
-        trs = {5000: {"type": ttype, "durationMs": 400}}
+        trs = [{"srcMs": 5000, "type": ttype, "durationMs": 400}]
         if ttype in ("zoom_in", "zoom_out"):
-            trs[10000] = {"type": ttype, "durationMs": 600}
+            trs.append({"srcMs": 10000, "type": ttype, "durationMs": 600})
         wins = cut_transition_windows(SEGS, trs)
         if not wins:
             continue
@@ -38,7 +38,10 @@ def main() -> None:
         cases.append({"id": idx, "type": ttype, "windows": len(wins), "cmd": cmd})
         idx += 1
     # two-window crossfade mix
-    trs2 = {5000: {"type": "crossfade", "durationMs": 400}, 10000: {"type": "wipe_left", "durationMs": 500}}
+    trs2 = [
+        {"srcMs": 5000, "type": "crossfade", "durationMs": 400},
+        {"srcMs": 10000, "type": "wipe_left", "durationMs": 500},
+    ]
     wins2 = cut_transition_windows(SEGS, trs2)
     cases.append(
         {

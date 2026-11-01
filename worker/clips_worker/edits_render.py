@@ -1728,7 +1728,7 @@ def render_edited_clip(
         concat_ms = [
             (clip_start_ms + int(round(a * 1000)), clip_start_ms + int(round(b * 1000))) for a, b in segs_sec
         ]
-        cut_mp4 = apply_motion_after_cut(cut_mp4, full_render, edits, concat_ms, clip_start_ms, work_dir)
+        cut_mp4 = apply_motion_after_cut(cut_mp4, full_render, edits, concat_ms, clip_start_ms, work_dir, render_meta)
         stage("motion_done")
 
     if render_meta is not None and edits.get("segmentSpeeds"):

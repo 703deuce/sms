@@ -7,6 +7,7 @@ output length. It is centred on the cut, video only, and uses handle frames from
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
 
 from clips_worker.filtergraph import _escape_movie_path, canvas_bg, canvas_bg_flat
@@ -14,6 +15,7 @@ from clips_worker.motion import (
     MOTION_FPS,
     COVER_TRANSITIONS,
     REVEAL_TRANSITIONS,
+    SHADER_TRANSITIONS,
     XFADE_NAME,
     ZOOM_AMOUNT,
     cut_transition_windows,
@@ -36,35 +38,42 @@ def probe_size_duration(video: Path) -> tuple[int, int, float]:
     return int(vals["width"]), int(vals["height"]), float(vals.get("duration") or 0)
 
 
+def _window_src_chain(
+    i: int,
+    pad: float,
+    lab: str,
+    zoom: str | None,
+    w: int,
+    h: int,
+    n: int,
+    fps: int = MOTION_FPS,
+    *,
+    yuv: bool = False,
+) -> str:
+    """Source chain for one window side (gbrp, trimmed to n+1 frames)."""
+    norm = f"fps={fps},scale={w}:{h},setsar=1,format=gbrp"
+    yuv_out = ",scale=out_color_matrix=bt709:out_range=full,format=yuv444p"
+    pre = f"tpad=start_mode=clone:start_duration={pad:.4f}," if pad > 0 else ""
+    chain = f"[{i}:v]{norm},{pre}tpad=stop_mode=clone:stop_duration=5,trim=end_frame={n + 1},setpts=PTS-STARTPTS"
+    if zoom:
+        chain += (
+            f",split=2[{lab}z0][{lab}z1];"
+            f"[{lab}z1]scale=w='trunc({w}*({zoom})/2)*2':h='trunc({h}*({zoom})/2)*2':eval=frame[{lab}z2];"
+            f"[{lab}z0][{lab}z2]overlay=x='(W-w)/2':y='(H-h)/2':eval=frame,format=gbrp,setsar=1"
+        )
+    if yuv:
+        chain += yuv_out
+    return chain + f",fps={fps}[{lab}]"
+
+
 def xfade_window_filters(win: dict, ia: int, ib: int, w: int, h: int, label: str, *,
                          a_pad_start: float = 0.0, b_pad_start: float = 0.0) -> str:
     """[ia]/[ib] are window inputs already seeked to the window start; output [label] = N frames at pts w0."""
     n = int(win["frames"])
     fps = MOTION_FPS
     ttype = win["type"]
-    # xfade runs in RGB (gbrp) so dip-to-black / white are true #000 / #fff, exactly the preview's CSS
-    # colour layer (in limited-range YUV xfade's black / white are super-black / super-white).
-    norm = f"fps={fps},scale={w}:{h},setsar=1,format=gbrp"
-    yuv_out = ",scale=out_color_matrix=bt709:out_range=full,format=yuv444p"
     gbrp_back = ",scale=in_color_matrix=bt709:in_range=full,format=gbrp"
 
-    def src(i: int, pad: float, lab: str, zoom: str | None, *, yuv: bool = False) -> str:
-        pre = f"tpad=start_mode=clone:start_duration={pad:.4f}," if pad > 0 else ""
-        chain = f"[{i}:v]{norm},{pre}tpad=stop_mode=clone:stop_duration=5,trim=end_frame={n + 1},setpts=PTS-STARTPTS"
-        if zoom:
-            # Centred zoom ≥ 1: scale per frame, then overlay centred on the unscaled frame (fully
-            # covered). crop's x/y do not follow per-frame size changes reliably across versions.
-            chain += (
-                f",split=2[{lab}z0][{lab}z1];"
-                f"[{lab}z1]scale=w='trunc({w}*({zoom})/2)*2':h='trunc({h}*({zoom})/2)*2':eval=frame[{lab}z2];"
-                f"[{lab}z0][{lab}z2]overlay=x='(W-w)/2':y='(H-h)/2':eval=frame,format=gbrp,setsar=1"
-            )
-        if yuv:
-            chain += yuv_out
-        # tpad / trim drop the stream frame rate; xfade requires a constant one.
-        return chain + f",fps={fps}[{lab}]"
-
-    # Frame index from t (scale's `n` differs between ffmpeg 5.1 and 7.x after a size change).
     za = f"1+{ZOOM_AMOUNT}*round(t*{fps})/{n}" if ttype == "zoom_in" else None
     zb = f"1+{ZOOM_AMOUNT}*(1-round(t*{fps})/{n})" if ttype == "zoom_out" else None
     dur = n / fps
@@ -100,16 +109,16 @@ def xfade_window_filters(win: dict, ia: int, ib: int, w: int, h: int, label: str
             ox = "0"
             oy = f"floor({h}*(1-({p_expr}))+0.5)"
         return ";".join([
-            src(ia, a_pad_start, f"{label}a", za),
-            src(ib, b_pad_start, f"{label}b", zb),
+            _window_src_chain(ia, a_pad_start, f"{label}a", za, w, h, n, fps),
+            _window_src_chain(ib, b_pad_start, f"{label}b", zb, w, h, n, fps),
             f"[{base_lab}][{top_lab}]overlay=x='{ox}':y='{oy}':eval=frame,"
             f"trim=end_frame={n},format=yuv420p,setpts=PTS-STARTPTS+{w0:.6f}/TB[{label}]",
         ])
 
     yuv_xfade = ttype == "fade_grays"
     parts = [
-        src(ia, a_pad_start, f"{label}a", za, yuv=yuv_xfade),
-        src(ib, b_pad_start, f"{label}b", zb, yuv=yuv_xfade),
+        _window_src_chain(ia, a_pad_start, f"{label}a", za, w, h, n, fps, yuv=yuv_xfade),
+        _window_src_chain(ib, b_pad_start, f"{label}b", zb, w, h, n, fps, yuv=yuv_xfade),
     ]
     xfade_line = (
         f"[{label}a][{label}b]xfade=transition={XFADE_NAME[ttype]}:duration={dur:.6f}:offset=0,"
@@ -121,45 +130,112 @@ def xfade_window_filters(win: dict, ia: int, ib: int, w: int, h: int, label: str
     return ";".join(parts)
 
 
-def build_cut_transition_cmd(cut_mp4: Path, full_render: Path, out: Path, windows: list[dict],
-                             clip_start_ms: int, w: int, h: int, full_dur_s: float) -> list[str]:
+def _window_inputs(win: dict, clip_start_ms: int, full_dur_s: float) -> tuple[float, float, float, float, float]:
+    n = int(win["frames"])
+    off_s = (win["startFrame"] / MOTION_FPS) - win["cutMs"] / 1000.0
+    a_s = (win["aEnd"] - clip_start_ms) / 1000.0 + off_s
+    b_s = (win["bStart"] - clip_start_ms) / 1000.0 + off_s
+    a_pad = max(0.0, -a_s)
+    b_pad = max(0.0, -b_s)
+    span = n / MOTION_FPS + 0.5
+    a_s = min(max(0.0, a_s), max(0.0, full_dur_s - 1.0 / MOTION_FPS))
+    b_s = min(max(0.0, b_s), max(0.0, full_dur_s - 1.0 / MOTION_FPS))
+    return a_s, b_s, a_pad, b_pad, span
+
+
+def window_decode_cmd(full_render: Path, seek_s: float, span_s: float, pad: float, n: int, w: int, h: int) -> list[str]:
+    chain = _window_src_chain(0, pad, "v", None, w, h, n)
+    return [
+        "ffmpeg", "-v", "error", "-ss", f"{seek_s:.4f}", "-t", f"{span_s:.4f}", "-i", str(full_render),
+        "-filter_complex", f"{chain},format=rgb24[v]", "-map", "[v]", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:",
+    ]
+
+
+def build_cut_transition_cmd(
+    cut_mp4: Path,
+    full_render: Path,
+    out: Path,
+    windows: list[dict],
+    clip_start_ms: int,
+    w: int,
+    h: int,
+    full_dur_s: float,
+    *,
+    rendered: dict[int, Path] | None = None,
+) -> list[str]:
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(cut_mp4)]
     parts = ["[0:v]format=yuv420p,setsar=1[base]"]
     cur = "base"
     idx = 1
+    rendered = rendered or {}
     for i, win in enumerate(windows):
         n = int(win["frames"])
-        off_s = (win["startFrame"] / MOTION_FPS) - win["cutMs"] / 1000.0  # w0 − cut (≤ 0)
-        a_s = (win["aEnd"] - clip_start_ms) / 1000.0 + off_s
-        b_s = (win["bStart"] - clip_start_ms) / 1000.0 + off_s
-        a_pad = max(0.0, -a_s)
-        b_pad = max(0.0, -b_s)
-        span = n / MOTION_FPS + 0.5
-        for s in (max(0.0, a_s), max(0.0, b_s)):
-            s = min(s, max(0.0, full_dur_s - 1.0 / MOTION_FPS))
-            cmd += ["-ss", f"{s:.4f}", "-t", f"{span:.4f}", "-i", str(full_render)]
-        lab = f"x{i}"
-        parts.append(xfade_window_filters(win, idx, idx + 1, w, h, lab, a_pad_start=a_pad, b_pad_start=b_pad))
         w0 = win["startFrame"] / MOTION_FPS
+        lab = f"x{i}"
+        if i in rendered:
+            cmd += ["-i", str(rendered[i])]
+            parts.append(
+                f"[{idx}:v]format=gbrp,trim=end_frame={n},format=yuv420p,setpts=PTS-STARTPTS+{w0:.6f}/TB[{lab}]"
+            )
+            idx += 1
+        else:
+            a_s, b_s, a_pad, b_pad, span = _window_inputs(win, clip_start_ms, full_dur_s)
+            for s in (max(0.0, a_s), max(0.0, b_s)):
+                cmd += ["-ss", f"{s:.4f}", "-t", f"{span:.4f}", "-i", str(full_render)]
+            parts.append(xfade_window_filters(win, idx, idx + 1, w, h, lab, a_pad_start=a_pad, b_pad_start=b_pad))
+            idx += 2
         w1 = (win["startFrame"] + n) / MOTION_FPS
         parts.append(
             f"[{cur}][{lab}]overlay=0:0:eof_action=pass:enable='between(t,{w0 - 0.5 / MOTION_FPS:.6f},{w1 - 0.5 / MOTION_FPS:.6f})'[c{i}]"
         )
         cur = f"c{i}"
-        idx += 2
     cmd += ["-filter_complex", ";".join(parts), "-map", f"[{cur}]", "-map", "0:a?", *X264, "-c:a", "copy", str(out)]
     return cmd
 
 
-def apply_cut_transitions(cut_mp4: Path, full_render: Path, out: Path, segs_ms: list[tuple[int, int]],
-                          transitions, clip_start_ms: int) -> bool:
+def apply_cut_transitions(
+    cut_mp4: Path,
+    full_render: Path,
+    out: Path,
+    segs_ms: list[tuple[int, int]],
+    transitions,
+    clip_start_ms: int,
+    *,
+    work_dir: Path | None = None,
+    render_meta: dict | None = None,
+) -> bool:
     windows = cut_transition_windows(segs_ms, transitions)
     if not windows:
         return False
     w, h, _ = probe_size_duration(cut_mp4)
     _, _, full_dur = probe_size_duration(full_render)
-    subprocess.check_call(build_cut_transition_cmd(cut_mp4, full_render, out, windows, clip_start_ms, w, h, full_dur))
-    print(f"[clipper:transitions] cut windows={len(windows)}", flush=True)
+    rendered: dict[int, Path] = {}
+    shader_n = 0
+    fallback_n = 0
+    renderer = ""
+    if work_dir and any(win["type"] in SHADER_TRANSITIONS for win in windows):
+        from clips_worker.shader_transitions import ShaderUnavailable, render_shader_windows
+
+        t0 = time.perf_counter()
+        try:
+            rendered, shader_n, fallback_n, renderer, fb_meta = render_shader_windows(
+                windows, full_render, clip_start_ms, full_dur, w, h, Path(work_dir), render_meta,
+            )
+            if render_meta is not None and fb_meta:
+                render_meta.setdefault("shader_fallback", []).extend(fb_meta)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[clipper:transitions] shader_init_fail reason={type(exc).__name__}:{str(exc)[:120]}", flush=True)
+        shader_ms = int((time.perf_counter() - t0) * 1000)
+        print(
+            f"[clipper:transitions] cut windows={len(windows)} shader={shader_n} fallback={fallback_n} "
+            f"renderer={renderer or 'none'} shader_ms={shader_ms}",
+            flush=True,
+        )
+    subprocess.check_call(
+        build_cut_transition_cmd(cut_mp4, full_render, out, windows, clip_start_ms, w, h, full_dur, rendered=rendered)
+    )
+    if not shader_n and not fallback_n:
+        print(f"[clipper:transitions] cut windows={len(windows)}", flush=True)
     return True
 
 
@@ -214,13 +290,23 @@ def apply_voice_volume(video: Path, out: Path, edits: dict) -> bool:
     return True
 
 
-def apply_motion_after_cut(cut_mp4: Path, full_render: Path, edits: dict, segs_ms: list[tuple[int, int]],
-                           clip_start_ms: int, work_dir: Path) -> Path:
+def apply_motion_after_cut(
+    cut_mp4: Path,
+    full_render: Path,
+    edits: dict,
+    segs_ms: list[tuple[int, int]],
+    clip_start_ms: int,
+    work_dir: Path,
+    render_meta: dict | None = None,
+) -> Path:
     """cut.mp4 → (+cut transitions) → (+main keyframes). Returns the new video path."""
     cur = cut_mp4
     if edits.get("transitions"):
         out = Path(work_dir) / "cut_transitions.mp4"
-        if apply_cut_transitions(cur, full_render, out, segs_ms, edits.get("transitions"), clip_start_ms):
+        if apply_cut_transitions(
+            cur, full_render, out, segs_ms, edits.get("transitions"), clip_start_ms,
+            work_dir=work_dir, render_meta=render_meta,
+        ):
             cur = out
     out = Path(work_dir) / "main_keyframes.mp4"
     if apply_main_keyframes(cur, out, edits, work_dir):
