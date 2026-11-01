@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { ClipAudioMusic, ClipAudioSfx, ClipEditsAudio, ClipStudioSound } from '@/lib/clips/audio'
 import {
   DEFAULT_DUCK_DEPTH,
@@ -208,6 +208,8 @@ export function useEditorState(
     saveState: draftDiffers ? 'dirty' : 'saved',
     producerStrip: null,
   })
+  /** TC4fix: undo is user-session only — nothing before first editor gesture counts (load seeds, draft). */
+  const [historyReady, setHistoryReady] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const localRevisionRef = useRef(draftDiffers ? 1 : 0)
   const savedRevisionRef = useRef(0)
@@ -233,12 +235,22 @@ export function useEditorState(
 
   // TC4fix: fresh load / bfcache restore must not keep pre-reload undo stacks (draft restores content only).
   useEffect(() => {
+    setHistoryReady(false)
     dispatch({ type: 'resetHistory' })
+    const arm = () => setHistoryReady(true)
+    window.addEventListener('pointerdown', arm, { once: true, capture: true })
+    window.addEventListener('keydown', arm, { once: true, capture: true })
     const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) dispatch({ type: 'resetHistory' })
+      if (!e.persisted) return
+      setHistoryReady(false)
+      dispatch({ type: 'resetHistory' })
     }
     window.addEventListener('pageshow', onPageShow)
-    return () => window.removeEventListener('pageshow', onPageShow)
+    return () => {
+      window.removeEventListener('pointerdown', arm, { capture: true })
+      window.removeEventListener('keydown', arm, { capture: true })
+      window.removeEventListener('pageshow', onPageShow)
+    }
   }, [clipId])
 
   const bumpLocalRevision = useCallback(() => {
@@ -260,6 +272,7 @@ export function useEditorState(
     const edits = rippleFrom(editsRef.current, input)
     if (editsEqual(editsRef.current, edits)) return
     editsRef.current = edits
+    if (pushHistory) setHistoryReady(true)
     bumpLocalRevision()
     dispatch({ type: 'set', edits, pushHistory })
   }, [bumpLocalRevision, rippleFrom])
@@ -288,10 +301,12 @@ export function useEditorState(
   )
 
   const undo = useCallback(() => {
+    setHistoryReady(true)
     bumpLocalRevision()
     dispatch({ type: 'undo' })
   }, [bumpLocalRevision])
   const redo = useCallback(() => {
+    setHistoryReady(true)
     bumpLocalRevision()
     dispatch({ type: 'redo' })
   }, [bumpLocalRevision])
@@ -826,6 +841,7 @@ export function useEditorState(
 
   const applyRestoredEdits = useCallback(
     (restored: ClipEditsV2) => {
+      setHistoryReady(true)
       cancelPendingAutosave()
       bumpLocalRevision()
       const normalized = normalizeEdits(restored, bounds)
@@ -866,8 +882,8 @@ export function useEditorState(
     hydrateEdits,
     undo,
     redo,
-    canUndo: state.past.length > 0,
-    canRedo: state.future.length > 0,
+    canUndo: historyReady && state.past.length > 0,
+    canRedo: historyReady && state.future.length > 0,
     saveState: state.saveState,
     producerStrip: state.producerStrip,
     clearProducerStrip,
