@@ -186,7 +186,7 @@ export function CleanupPanel({
       })
       let groups = findRetakes(retakeWords)
       if (!groups.length) {
-        toast.message('No repeated sentences found')
+        toast.message('No retakes found')
         setRetakeExtras([])
         setRetakeGroups([])
         return
@@ -213,7 +213,7 @@ export function CleanupPanel({
       const props = retakeProposals(groups, edits.cutRanges ?? [])
       setRetakeGroups(groups)
       setRetakeExtras(props)
-      if (!props.length) toast.message('Retakes already cut or none left')
+      if (!props.length) toast.message('No retakes found')
       else toast.success(`${props.length} retake cut(s) ready — review below`)
     } finally {
       setRetakeBusy(false)

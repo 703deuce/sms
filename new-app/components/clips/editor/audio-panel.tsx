@@ -400,6 +400,7 @@ export function AudioPanel({
         <div className="space-y-2" data-testid="audio-library">
           <p className="text-xs font-medium text-muted-foreground">Library</p>
           <StockAudioPicker
+            clipId={clipId}
             kind="music"
             playheadMs={playheadMs}
             hasMusicBed={Boolean(music)}
@@ -421,6 +422,7 @@ export function AudioPanel({
             onSfxUploaded={(uploadId, atMs) => onAddSfx(uploadId, atMs)}
           />
           <StockAudioPicker
+            clipId={clipId}
             kind="sfx"
             playheadMs={playheadMs}
             hasMusicBed={false}

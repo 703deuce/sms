@@ -44,6 +44,17 @@ export function gapQuietThresholdLinear(noiseFloor: number): number {
   return 10 ** (thrDb / 20)
 }
 
+/** Shared RMS gate for gap lists (Cleanup + Polish shorten gaps). */
+export function gapHitIsRmsQuiet(
+  gapStartMs: number,
+  gapEndMs: number,
+  rmsSamples: GapRmsSample[] | null | undefined,
+): boolean {
+  if (rmsSamples === undefined) return true
+  if (!rmsSamples?.length) return false
+  return !gapHasLoudProgramAudio(gapStartMs, gapEndMs, rmsSamples)
+}
+
 export function gapHasLoudProgramAudio(
   gapStartMs: number,
   gapEndMs: number,

@@ -29,14 +29,16 @@ type Preset = {
 }
 
 export function StockAudioPicker({
+  clipId,
   kind,
   playheadMs,
   hasMusicBed,
   onGeneratePreset,
-  uploadLibraryFiles,
+  uploadLibraryFiles: _uploadLibraryFiles,
   onMusicUploaded,
   onSfxUploaded,
 }: {
+  clipId: string
   kind: 'music' | 'sfx'
   playheadMs: number
   hasMusicBed: boolean
@@ -75,20 +77,15 @@ export function StockAudioPicker({
   }, [kind])
 
   const addHit = async (hit: Hit) => {
-    if (!uploadLibraryFiles) {
-      toast.message('Upload not available in this context')
-      return
-    }
     setBusy(true)
     try {
-      const res = await fetch(hit.previewUrl)
-      if (!res.ok) throw new Error('Could not fetch audio')
-      const blob = await res.blob()
-      const ext = hit.kind === 'sfx' ? 'wav' : 'mp3'
-      const file = new File([blob], `${hit.title}.${ext}`, { type: blob.type || 'audio/wav' })
-      const uploaded = await uploadLibraryFiles([file])
-      const uploadId = uploaded[0]?.refId
-      if (!uploadId) throw new Error('Upload failed')
+      const data = await clipsFetch<{ uploadId: string }>(`/api/clips/clips/${clipId}/stock-audio/attach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stockId: hit.id }),
+      })
+      const uploadId = data.uploadId
+      if (!uploadId) throw new Error('Attach failed')
       if (hit.kind === 'music') onMusicUploaded(uploadId)
       else onSfxUploaded(uploadId, playheadMs)
       toast.success(`Added ${hit.title}`)
