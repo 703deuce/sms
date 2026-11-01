@@ -1,0 +1,40 @@
+name: New app CI guards
+
+on:
+  push:
+    branches: [master, "cursor/**"]
+    paths:
+      - "new-app/app/**"
+      - "new-app/prisma/**"
+      - "new-app/scripts/verify-app-route-dynamic-segments.mjs"
+      - "new-app/scripts/verify-migration-table-refs.mjs"
+      - "new-app/tests/new-app-ci-guards.test.ts"
+      - ".github/workflows/new-app-ci-guards.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "new-app/app/**"
+      - "new-app/prisma/**"
+      - "new-app/scripts/**"
+      - "new-app/tests/new-app-ci-guards.test.ts"
+
+jobs:
+  new-app-guards:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: new-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-app-route-dynamic-segments.mjs
+      - run: node scripts/verify-migration-table-refs.mjs
+      - run: pnpm exec vitest run tests/new-app-ci-guards.test.ts
