@@ -1,5 +1,6 @@
 import { editsVersionHash, type ClipEditsV2 } from '@/lib/clips/edits'
 import type { ExportAspect, ExportResolution } from '@/lib/clips/export-aspect'
+import { renderVersionHash } from '@/lib/clips/export-aspect'
 import { exportFilename } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
@@ -22,7 +23,7 @@ export async function createReadyRenderFromPreview(opts: {
   const renderId = createId('rnd')
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   const filename = exportFilename(opts.title)
-  const hash = editsVersionHash(opts.edits)
+  const hash = renderVersionHash(editsVersionHash(opts.edits), opts.aspect, opts.resolution)
   const sizeBytes = await storage.getObjectSizeBytes(opts.previewKey)
 
   await prisma.clipRender.create({
