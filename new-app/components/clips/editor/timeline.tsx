@@ -61,7 +61,7 @@ import {
   type TimelineRow,
   videoLaneSegments,
 } from '@/lib/clips/editor/clip-timeline'
-import { rollEdit, slideEdit, splitEdgeTrim, TRIM_TOOL_KEYS, type TrimTool, slipEdit, slideMainNeedsMiddleSegment, applyJLCutAt, DEFAULT_JL_CUT_MS } from '@/lib/clips/editor/trim-tools'
+import { rollEdit, slideEdit, splitEdgeTrim, TRIM_TOOL_KEYS, type TrimTool, slipEdit, slideMainNeedsMiddleSegment, applyJLCutAt, DEFAULT_JL_CUT_MS, jlCutBoundarySrcMs } from '@/lib/clips/editor/trim-tools'
 import { autoCrossfade, autoCrossfadeOverlaps } from '@/lib/clips/editor/auto-crossfade'
 import { addFreezeFrame, addGapAt } from '@/lib/clips/editor/inserts'
 import { adjacentMarker, patchMarker, toggleMarkerAt, type Marker } from '@/lib/clips/editor/markers'
@@ -172,6 +172,7 @@ import {
   applyCutTransitionToAll,
   brollTransitionWindows,
   cutTransitionWindows,
+  videoSplitTransitionWindows,
   transitionAtCut,
   setBrollTransition,
   setCutTransition,
@@ -826,7 +827,7 @@ export function Timeline({
     [autoXfade, edits, previewEdits, sfxDurationsMs, xfadeTracks],
   )
   const [drag, setDrag] = useState<DragState | null>(null)
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hitSrcMs?: number | null } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   // E3: selected keyframe (diamond), live diamond drag, open transition pop-over.
   const [selKf, setSelKf] = useState<{ target: KeyframeTarget; times: number[] } | null>(null)
@@ -972,28 +973,12 @@ export function Timeline({
   const commit = (next: ClipEditsV2 | null, pushHistory = true) => {
     if (next && onCommitEdits) onCommitEdits(next, pushHistory)
   }
-  /** Source ms of a cut near the playhead or the selected video clip's start boundary. */
-  const cutSrcForJl = (): number | null => {
-    const tb = timebaseFor(edits)
-    let best: { at: number; d: number } | null = null
-    for (const k of realCutIndices(tb)) {
-      const d = Math.abs(tb.starts[k]! - playheadMs)
-      if (d <= 120 && (!best || d < best.d)) best = { at: tb.segs[k]![0], d }
-    }
-    for (const s of edits.videoSplits ?? []) {
-      const seg = lanes.video.find((v) => v.srcInMs === s)
-      const d = seg ? Math.abs(seg.startMs - playheadMs) : Infinity
-      if (d <= 120 && (!best || d < best.d)) best = { at: s, d }
-    }
-    if (liveSelected.length === 1 && liveSelected[0]!.lane === 'video') {
-      const it = lanes.video.find((i) => i.id === liveSelected[0]!.id)
-      if (it?.srcInMs != null && it.srcInMs > 0) return it.srcInMs
-    }
-    return best?.at ?? null
-  }
-  const applyJLCut = (kind: 'j' | 'l') => {
+  /** Source ms of a cut near the playhead, context-menu click, or the selected video clip's nearest edge. */
+  const cutSrcForJl = (outMs = playheadMs): number | null =>
+    jlCutBoundarySrcMs(timebaseFor(edits), edits, lanes, outMs, liveSelected)
+  const applyJLCut = (kind: 'j' | 'l', atOverride?: number | null) => {
     if (!editable) return
-    const at = cutSrcForJl()
+    const at = atOverride ?? cutSrcForJl()
     if (at == null) {
       toast.message('Move the playhead to a cut (or select a video clip) for J/L-cut', { id: 'timeline-jl' })
       return
@@ -1816,7 +1801,11 @@ export function Timeline({
     window.addEventListener('pointerup', onUp)
   }
 
-  const cutWindows = useMemo(() => cutTransitionWindows(tb.segs, tb.starts, edits.transitions), [edits.transitions, tb])
+  const cutWindows = useMemo(() => {
+    const cuts = cutTransitionWindows(tb.segs, tb.starts, edits.transitions)
+    const splits = videoSplitTransitionWindows(tb, edits.videoSplits, edits.transitions)
+    return [...cuts, ...splits]
+  }, [edits.transitions, edits.videoSplits, tb])
   // E5: Video-lane segments from another source (uploads / angles / multicam), drawn over the clip.
   const sourceChips = useMemo(
     () =>
@@ -2065,14 +2054,18 @@ export function Timeline({
       // (display delta → base delta at the dragged edge), not off by the insert's length.
       const anchor = dragMode === 'end' ? item.endMs : item.startMs
       const rule = dragMode === 'end' ? 'end' : 'start'
-      const raw = tmap.totalMs
-        ? toBaseMs(tmap, Math.max(0, toExportMs(tmap, anchor, rule) + dx / Math.max(1e-6, pxPerMs))) - anchor
-        : dx / Math.max(1e-6, pxPerMs)
+      const raw =
+        slideTool && item.lane === 'video'
+          ? dx / Math.max(1e-6, pxPerMs)
+          : tmap.totalMs
+            ? toBaseMs(tmap, Math.max(0, toExportMs(tmap, anchor, rule) + dx / Math.max(1e-6, pxPerMs))) - anchor
+            : dx / Math.max(1e-6, pxPerMs)
       const snapping = snapOn && !ev.altKey
       if (ev.altKey) state.alt = true
       if (dragMode === 'move') {
         const edges = moving.flatMap((m) => [m.startMs, m.endMs])
-        const s = snapping ? snapMoveDelta(edges, raw, targets, thr) : { deltaMs: raw, snappedTo: null }
+        const s =
+          snapping && !slideTool ? snapMoveDelta(edges, raw, targets, thr) : { deltaMs: raw, snappedTo: null }
         state.deltaMs = s.deltaMs
         state.snappedTo = s.snappedTo
       } else {
@@ -2471,7 +2464,7 @@ export function Timeline({
           e.stopPropagation()
           if (!selectedKeys.has(refKey(item)))
             setSelected(expandToGroups(edits, [{ lane: item.lane, id: item.id }], (lane, id) => ({ lane: lane as LaneId, id }), openCompound))
-          setCtxMenu({ x: e.clientX, y: e.clientY })
+          setCtxMenu({ x: e.clientX, y: e.clientY, hitSrcMs: cutSrcForJl() })
         }}
       >
         {host ? (
@@ -3370,7 +3363,12 @@ export function Timeline({
               onContextMenu={(e) => {
                 if (!onSplitLayout && !editable) return
                 e.preventDefault()
-                setCtxMenu({ x: e.clientX, y: e.clientY })
+                const hitMs = msAtClientX(e.clientX, e.currentTarget)
+                setCtxMenu({
+                  x: e.clientX,
+                  y: e.clientY,
+                  hitSrcMs: jlCutBoundarySrcMs(timebaseFor(edits), edits, lanes, hitMs, liveSelected),
+                })
               }}
             >
               <TimelineRuler
@@ -3844,7 +3842,7 @@ export function Timeline({
               >
                 Split at playhead (S)
               </button>
-              {cutSrcForJl() != null ? (
+              {cutSrcForJl() != null || ctxMenu.hitSrcMs != null ? (
                 <>
                   <button
                     type="button"
@@ -3852,7 +3850,7 @@ export function Timeline({
                     role="menuitem"
                     data-testid="timeline-ctx-j-cut"
                     onClick={() => {
-                      applyJLCut('j')
+                      applyJLCut('j', ctxMenu.hitSrcMs ?? cutSrcForJl())
                       setCtxMenu(null)
                     }}
                   >
@@ -3864,7 +3862,7 @@ export function Timeline({
                     role="menuitem"
                     data-testid="timeline-ctx-l-cut"
                     onClick={() => {
-                      applyJLCut('l')
+                      applyJLCut('l', ctxMenu.hitSrcMs ?? cutSrcForJl())
                       setCtxMenu(null)
                     }}
                   >
