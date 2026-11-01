@@ -156,6 +156,8 @@ export function ExportDialog({
   // FV4c: set once Export MP4 was clicked in this open session, so a late active-render lookup
   // never overwrites the render the user just started.
   const exportClickedRef = useRef(false)
+  const exportPrefsInitializedRef = useRef(false)
+  const resolutionTouchedRef = useRef(false)
   // FV4d: the in-flight render this dialog re-attached to (wins over saved export preferences).
   const resumeRef = useRef<{ resolution: '720p' | '1080p' | null; aspectRatio: ExportAspect | null } | null>(null)
   const [lookupPending, setLookupPending] = useState(false)
@@ -188,7 +190,12 @@ export function ExportDialog({
   }
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      exportPrefsInitializedRef.current = false
+      resolutionTouchedRef.current = false
+      return
+    }
+    if (exportPrefsInitializedRef.current) return
     refreshChannels()
     void loadMergedExportDialogPreferences().then((prefs) => {
       setRemoveDeadAir(Boolean(edits.silenceTrim?.enabled))
@@ -197,16 +204,19 @@ export function ExportDialog({
       const resumed = resumeRef.current
       if (resumed) {
         // FV4d: re-attached to an in-flight render — keep its resolution / aspect selected.
-        if (resumed.resolution) setResolution(resumed.resolution)
+        if (resumed.resolution && !resolutionTouchedRef.current) setResolution(resumed.resolution)
         if (resumed.aspectRatio) setAspect(resumed.aspectRatio)
       } else if (fullVideo) {
         const a = edits.aspectRatio ?? '16:9'
         setAspect(a)
-        setResolution(can('', 'export_1080p') ? '1080p' : '720p')
+        if (!resolutionTouchedRef.current) {
+          if (prefs.defaultResolution) setResolution(prefs.defaultResolution)
+          else setResolution(can('', 'export_1080p') ? '1080p' : '720p')
+        }
         onAspectChange?.(a)
       } else {
         setAspect(prefs.defaultAspect ?? edits.aspectRatio ?? '9:16')
-        if (prefs.defaultResolution) setResolution(prefs.defaultResolution)
+        if (!resolutionTouchedRef.current && prefs.defaultResolution) setResolution(prefs.defaultResolution)
       }
       if (edits.exportTemplate) {
         const url =
@@ -222,9 +232,7 @@ export function ExportDialog({
             url,
           },
         })
-        return
-      }
-      if (platform && (platform === 'kick' || platform === 'twitch')) {
+      } else if (platform && (platform === 'kick' || platform === 'twitch')) {
         setExportTemplate(
           applyExportPreferencesToTemplate(
             defaultStreamHeadlineExportTemplate({
@@ -235,9 +243,10 @@ export function ExportDialog({
             prefs,
           ),
         )
-        return
+      } else {
+        setExportTemplate(edits.exportTemplate)
       }
-      setExportTemplate(edits.exportTemplate)
+      exportPrefsInitializedRef.current = true
     })
   }, [open, edits.exportTemplate, edits.aspectRatio, edits.silenceTrim?.enabled, platform, defaultChannelUrl, fullVideo, onAspectChange])
 
@@ -304,7 +313,7 @@ export function ExportDialog({
         setErrorDetail(null)
         // FV4d: show the running render's settings, whatever the saved / default selection was.
         setExportPlatform('none')
-        if (resume.resolution) setResolution(resume.resolution)
+        if (resume.resolution && !resolutionTouchedRef.current) setResolution(resume.resolution)
         if (resume.aspectRatio) setAspect(resume.aspectRatio)
         setInFlightResolution(resume.resolution)
       })
@@ -662,6 +671,7 @@ export function ExportDialog({
                   disabled={disabled}
                   data-testid={r === '1440p' ? 'export-res-1440p' : r === '2160p' ? 'export-res-2160p' : undefined}
                   onClick={() => {
+                    resolutionTouchedRef.current = true
                     setResolution(r)
                     if (r === '720p' || r === '1080p') persistExportDialogPreferences({ defaultResolution: r })
                   }}
