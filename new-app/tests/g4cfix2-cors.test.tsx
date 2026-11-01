@@ -78,11 +78,15 @@ describe('G4cfix2 CORS on every B2 medium', () => {
     for (const el of els) expect(el.getAttribute('crossorigin')).toBe('anonymous')
   })
 
-  it('a CORS element rendered by JSX / SSR falls back once on error (no data-g4cors needed)', () => {
+  it('a CORS element rendered by JSX / SSR falls back once on error (no data-g4cors needed)', async () => {
+    // G4cfix3: the cache-refresh refetch fails (host really sends no ACAO) → plain fallback.
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
     const img = document.createElement('img')
     img.crossOrigin = 'anonymous'
-    img.setAttribute('src', POSTER)
+    img.setAttribute('src', POSTER + '&g4cfix2')
     expect(onMediaCorsError(img)).toBe(true)
+    await new Promise((r) => setTimeout(r, 0))
+    vi.unstubAllGlobals()
     expect(img.getAttribute('crossorigin')).toBeNull()
     expect(onMediaCorsError(img)).toBe(false)
   })

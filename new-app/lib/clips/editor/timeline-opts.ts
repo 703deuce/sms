@@ -28,3 +28,25 @@ export function setTimelineOpt(o: TimelineOpts | undefined, key: keyof TimelineO
   else n[key] = false
   return normalizeTimelineOpts(n)
 }
+
+/**
+ * TC1fix: the main magnet is a per-user editor preference (localStorage, default ON) — it only
+ * changes how Delete edits, never the frames, so it is not stored in the clip any more (a stale
+ * `timelineOpts.magnet: false` in saved edits is ignored).
+ */
+export const MAGNET_PREF_KEY = 'transovo.timeline.magnet'
+export function readMagnetPref(): boolean {
+  try {
+    return typeof localStorage === 'undefined' || localStorage.getItem(MAGNET_PREF_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+export function writeMagnetPref(on: boolean) {
+  try {
+    if (on) localStorage.removeItem(MAGNET_PREF_KEY)
+    else localStorage.setItem(MAGNET_PREF_KEY, '0')
+  } catch {
+    /* private mode: session only */
+  }
+}

@@ -127,13 +127,19 @@ describe('TC1 timeline UI', () => {
     expect(next.groups).toBeUndefined()
   })
 
-  it('Gap button inserts a 1 s gap at the playhead; magnet / link toggles store only `false`', () => {
+  it('Gap button inserts a 1 s gap at the playhead; magnet = user pref, link stores only `false`', () => {
     const t = setup()
     fireEvent.click(t.getByTestId('timeline-gap'))
     const a = t.onCommitEdits.mock.calls.at(-1)![0] as ClipEditsV2
     expect(a.inserts).toEqual([expect.objectContaining({ sourceId: 'gap', durMs: 1000, atSrcMs: 10000 })])
+    // TC1fix: the magnet is a per-user preference (localStorage), not a clip edit.
+    const n = t.onCommitEdits.mock.calls.length
     fireEvent.click(t.getByTestId('timeline-magnet'))
-    expect((t.onCommitEdits.mock.calls.at(-1)![0] as ClipEditsV2).timelineOpts).toEqual({ magnet: false })
+    expect(t.onCommitEdits.mock.calls.length).toBe(n)
+    expect(t.getByTestId('timeline-magnet').getAttribute('aria-pressed')).toBe('false')
+    expect(localStorage.getItem('transovo.timeline.magnet')).toBe('0')
+    fireEvent.click(t.getByTestId('timeline-magnet'))
+    expect(localStorage.getItem('transovo.timeline.magnet')).toBeNull()
     fireEvent.click(t.getByTestId('timeline-link-overlays'))
     expect((t.onCommitEdits.mock.calls.at(-1)![0] as ClipEditsV2).timelineOpts).toEqual({ rippleOverlays: false })
   })

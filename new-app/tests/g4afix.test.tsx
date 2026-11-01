@@ -25,13 +25,17 @@ describe('media-cors', () => {
     expect(isCrossOriginUrl('data:image/png;base64,AA')).toBe(false)
   })
 
-  it('sets crossOrigin before the first fetch and falls back to a plain load on a CORS error', () => {
+  it('sets crossOrigin before the first fetch and falls back to a plain load on a CORS error', async () => {
+    // G4cfix3: the cache-refresh refetch fails too (no ACAO) → plain.
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('No ACAO'))))
     const v = document.createElement('video')
     v.setAttribute('src', B2)
     prepareMediaCors(v)
     expect(v.crossOrigin).toBe('anonymous')
     const load = vi.spyOn(v, 'load').mockImplementation(() => {})
     expect(onMediaCorsError(v)).toBe(true)
+    await new Promise((r) => setTimeout(r, 0))
+    vi.unstubAllGlobals()
     expect(v.hasAttribute('crossorigin')).toBe(false)
     expect(load).toHaveBeenCalledTimes(1)
     expect(corsKnown(B2)).toBe('no')
@@ -51,7 +55,10 @@ describe('media-cors', () => {
     root.appendChild(img)
     await new Promise((r) => setTimeout(r, 0))
     expect(img.crossOrigin).toBe('anonymous')
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('No ACAO'))))
     img.dispatchEvent(new Event('error'))
+    await new Promise((r) => setTimeout(r, 0))
+    vi.unstubAllGlobals()
     expect(img.hasAttribute('crossorigin')).toBe(false)
     const v = document.createElement('video')
     vi.spyOn(v, 'load').mockImplementation(() => {})

@@ -37,7 +37,10 @@ export function TimelineInsertMarkers({
             title={`Inserted: ${labels} (+${(addMs / 1000).toFixed(1)} s)`}
             data-testid="timeline-insert-marker"
           >
-            <span className="rounded-sm bg-violet-600 px-1 text-[9px] leading-[12px] text-white shadow">+{(addMs / 1000).toFixed(1)}s</span>
+            <span className="whitespace-nowrap rounded-sm bg-violet-600 px-1 text-[9px] leading-[12px] text-white shadow" data-testid="timeline-insert-label">
+              {/* TC1fix: name what was inserted (Gap / Freeze / clip) next to the length it adds. */}
+              {ws.length === 1 ? `${labels} ` : ''}+{(addMs / 1000).toFixed(1)}s
+            </span>
             <span className="w-0.5 flex-1 bg-violet-500" />
           </div>
         )
