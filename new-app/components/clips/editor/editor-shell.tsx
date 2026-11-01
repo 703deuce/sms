@@ -2016,7 +2016,7 @@ export function EditorShell({
                     {previewZoom === 'fit' ? `Fit · ${fitPct}%` : `${previewZoom}%`}
                   </button>
                   {zoomMenuOpen ? (
-                    <div className="absolute bottom-full left-0 z-50 mb-1 flex flex-col rounded-md border border-border bg-popover p-1 shadow-md">
+                    <div className="absolute bottom-full left-0 z-[60] mb-1 flex flex-col rounded-md border border-border bg-popover p-1 shadow-md">
                       <button
                         type="button"
                         className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
