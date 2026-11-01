@@ -45,7 +45,7 @@ export type ClipboardEntry =
   | ({ kind: 'broll'; item: BrollItem; track: string } & Attach)
   | ({ kind: 'text'; item: TextItem; track: string } & Attach)
   | { kind: 'sfx'; cue: ClipAudioSfx; track: string; startMs: number }
-export type TimelineClipboard = { v: 1; originMs: number; entries: ClipboardEntry[] }
+export type TimelineClipboard = { v: 1; originMs: number; entries: ClipboardEntry[]; compound?: { name: string } }
 
 const startOf = (e: ClipboardEntry) => (e.kind === 'sfx' ? e.startMs : e.item.startMs)
 

@@ -32,6 +32,9 @@ export type TimelineCommand =
   | 'toggleEnabled'
   | 'group'
   | 'ungroup'
+  | 'compound'
+  | 'uncompound'
+  | 'openCompound'
   | 'loop'
   | 'trimStart'
   | 'trimEnd'
@@ -68,6 +71,7 @@ export function timelineCommandFor(e: KeyLike): TimelineCommand | null {
     // TC1: Alt+M previous marker, Alt+L loop in–out (by code: macOS Option types other characters).
     if (k === 'm' || e.code === 'KeyM') return 'prevMarker'
     if (k === 'l' || e.code === 'KeyL') return 'loop'
+    if (k === 'g' || e.code === 'KeyG') return e.shiftKey ? 'uncompound' : 'compound'
     return null
   }
   if (k === 's') return 'split'
@@ -140,6 +144,7 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
         { keys: ['[', ']'], label: 'Trim start / end of the selected item (or the clip under the playhead) to the playhead' },
         { keys: ['Shift+E'], label: 'Deactivate / activate selected (kept on the timeline, not rendered)' },
         { keys: [`${m}+G`, `${m}+Shift+G`], label: 'Group / ungroup selected (click one = select all)' },
+        { keys: ['Alt+G', 'Alt+Shift+G'], label: 'Create compound clip / uncompound (double-click opens)' },
         { keys: [`${m}+R`], label: 'Speed of the clip under the playhead' },
       ],
     },

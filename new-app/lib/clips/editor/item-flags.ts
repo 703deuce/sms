@@ -12,7 +12,7 @@
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 
-export type ItemGroup = { id: string; items: string[] }
+export type ItemGroup = { id: string; items: string[]; compound?: { name: string } }
 
 export const ENABLE_LANES = ['broll', 'text', 'sfx', 'adjust'] as const
 export type EnableLane = (typeof ENABLE_LANES)[number]
@@ -57,7 +57,9 @@ export function normalizeGroups(raw: unknown): ItemGroup[] | undefined {
     if (items.length < 2) continue
     items.forEach((k) => claimed.add(k))
     ids.add(id)
-    out.push({ id, items })
+    const c = o.compound && typeof o.compound === 'object' ? (o.compound as Record<string, unknown>) : null
+    const name = c ? (typeof c.name === 'string' && c.name.trim() ? c.name.trim().slice(0, 60) : 'Compound') : null
+    out.push(name ? { id, items, compound: { name } } : { id, items })
     if (out.length >= MAX_GROUPS) break
   }
   return out.length ? out : undefined
@@ -128,13 +130,13 @@ export function ungroupItems(edits: ClipEditsV2, refs: readonly Ref[]): ClipEdit
 }
 
 /** Selection grows to whole groups (click one member → all members). */
-export function expandToGroups<R extends Ref>(edits: Pick<ClipEditsV2, 'groups'>, refs: readonly R[], make: (lane: string, id: string) => R): R[] {
+export function expandToGroups<R extends Ref>(edits: Pick<ClipEditsV2, 'groups'>, refs: readonly R[], make: (lane: string, id: string) => R, skipGroupId?: string | null): R[] {
   if (!edits.groups?.length) return [...refs]
   const out = [...refs]
   const seen = new Set(refs.map(keyOf))
   for (const r of refs) {
     const g = groupOf(edits, r)
-    if (!g) continue
+    if (!g || g.id === skipGroupId) continue
     for (const k of g.items) {
       if (seen.has(k)) continue
       seen.add(k)

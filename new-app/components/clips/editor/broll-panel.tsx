@@ -12,6 +12,7 @@ import { clipsFetch } from '@/lib/clips-api'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { aiBrollCredits } from '@/lib/clips/credit-cost'
 import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
+import { brollPanelThumb } from '@/lib/clips/editor/broll-thumb'
 
 function msLabel(ms: number) {
   const s = Math.floor(ms / 1000)
@@ -246,12 +247,13 @@ export function BrollPanel({
           <ul className="space-y-2">
             {(edits.broll || []).map((item) => {
               const m = mediaById.get(item.id)
+              const thumb = brollPanelThumb(item, m)
               return (
                 <li key={item.id} className="flex gap-2 rounded border p-2 text-xs">
-                  {m?.thumbUrl ? (
-                    <img {...corsMediaProps(m.thumbUrl)} src={m.thumbUrl} alt="" className="h-14 w-8 rounded object-cover" />
-                  ) : m?.url && item.source === 'ai' ? (
-                    <video {...corsMediaProps(m.url)} src={m.url} muted playsInline preload="metadata" className="h-14 w-8 rounded object-cover" />
+                  {thumb.kind === 'img' && thumb.src ? (
+                    <img {...corsMediaProps(thumb.src)} src={thumb.src} alt="" className="h-14 w-8 rounded object-cover" data-testid="broll-panel-thumb" />
+                  ) : thumb.kind === 'video' && thumb.src ? (
+                    <video {...corsMediaProps(thumb.src)} src={thumb.src} muted playsInline preload="metadata" className="h-14 w-8 rounded object-cover" data-testid="broll-panel-thumb" />
                   ) : (
                     <div className="h-14 w-8 rounded bg-muted" />
                   )}
@@ -263,6 +265,8 @@ export function BrollPanel({
                       </a>
                     ) : item.source === 'ai' ? (
                       <span className="text-muted-foreground">AI shot</span>
+                    ) : item.source === 'upload' ? (
+                      <span className="text-muted-foreground">{item.still || m?.mediaType === 'image' ? 'Image' : 'Upload'}</span>
                     ) : null}
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => onRemoveBroll(item.id)}>Remove</Button>

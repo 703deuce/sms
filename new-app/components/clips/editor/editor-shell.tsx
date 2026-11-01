@@ -1620,7 +1620,7 @@ export function EditorShell({
             outputDurationMs={outDur}
             playheadMs={outputMs}
             aiMeta={aiMeta}
-            brollMedia={brollMedia}
+            brollMedia={previewBrollMedia}
             onMergeBroll={mergeBroll}
             onSetBroll={setBroll}
             onRemoveBroll={removeBroll}

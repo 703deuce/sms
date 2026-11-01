@@ -58,6 +58,14 @@ import { autoCrossfade } from '@/lib/clips/editor/auto-crossfade'
 import { addFreezeFrame, addGapAt } from '@/lib/clips/editor/inserts'
 import { adjacentMarker, patchMarker, toggleMarkerAt, type Marker } from '@/lib/clips/editor/markers'
 import { canToggleEnabled, expandToGroups, groupItems, groupOf, isDisabled, toggleItemsEnabled, ungroupItems } from '@/lib/clips/editor/item-flags'
+import {
+  compoundOfSelection,
+  compoundView,
+  createCompound,
+  isCompound,
+  trimCompound,
+  uncompound,
+} from '@/lib/clips/editor/compound'
 import { readMagnetPref, rippleOverlaysOn, setTimelineOpt, writeMagnetPref } from '@/lib/clips/editor/timeline-opts'
 import { getPreviewRate, PREVIEW_RATES, setPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
 import { TimelineMarkers } from '@/components/clips/editor/timeline/timeline-markers'
@@ -244,6 +252,8 @@ const GLOBAL_COMMANDS = new Set<TimelineCommand>([
   'toggleEnabled',
   'group',
   'ungroup',
+  'compound',
+  'uncompound',
   'loop',
   'trimStart',
   'trimEnd',
@@ -666,6 +676,9 @@ export function Timeline({
   const editable = Boolean(onCommitEdits)
 
   const [selected, setSelected] = useState<ItemRef[]>([])
+  const [openCompound, setOpenCompound] = useState<string | null>(null)
+  const cview = useMemo(() => compoundView(edits, lanes, openCompound), [edits, lanes, openCompound])
+  const hostOf = (it: TimelineItem) => cview.hosts.get(refKey(it))
   const [snapOn, setSnapOn] = useState(true)
   // G1b3: trim tools (V select · R roll · U slide) and Vegas-style auto-crossfade on overlap.
   const [tool, setTool] = useState<TrimTool>('select')
@@ -737,12 +750,19 @@ export function Timeline({
   const [speedFocusSeq, setSpeedFocusSeq] = useState(0)
   const trackAreaRef = useRef<HTMLDivElement | null>(null)
   const rows = useMemo(() => timelineRows(edits), [edits])
+  const rowIndexOf = (r: ItemRef) =>
+    rows.findIndex((row) => row.lane === r.lane && rowItems(lanes, row).some((i) => i.id === r.id))
+
+  useEffect(() => {
+    if (openCompound && !edits.groups?.some((g) => g.id === openCompound && g.compound)) setOpenCompound(null)
+  }, [edits.groups, openCompound])
 
   // Drop selections whose items no longer exist (ids change after cuts / undo).
   const liveSelected = useMemo(
     () => selected.filter((r) => lanes[r.lane].some((i) => i.id === r.id)),
     [lanes, selected],
   )
+  const selCompound = useMemo(() => compoundOfSelection(edits, liveSelected), [edits, liveSelected])
   const selectedKeys = useMemo(() => new Set(liveSelected.map(refKey)), [liveSelected])
   // E4: report the single selection (by key + source range so re-renders don't spam the shell).
   const singleSel = liveSelected.length === 1 ? lanes[liveSelected[0]!.lane].find((i) => i.id === liveSelected[0]!.id) ?? null : null
@@ -793,6 +813,10 @@ export function Timeline({
   }
   const split = () => {
     if (!editable) return
+    if (selCompound && selCompound.id !== openCompound) {
+      toast.message('Open the compound (double-click) to split inside it', { id: 'timeline-compound' })
+      return
+    }
     const next = splitAt(opCtx(), liveSelected, playheadMs)
     if (next) commit(next)
     else toast.message(splitNoopMessage(edits, liveSelected))
@@ -878,14 +902,14 @@ export function Timeline({
       if (!editable) return false
       const r = cutItems(opCtx(), refs)
       if (!r) return false
-      timelineClipboard.set(r.clip)
+      timelineClipboard.set(selCompound ? { ...r.clip, compound: { ...selCompound.compound } } : r.clip)
       commit(r.edits)
       setSelected([])
       toast.message(`Cut ${r.clip.entries.length} item${r.clip.entries.length > 1 ? 's' : ''}`, { id: 'timeline-clipboard' })
     } else {
       const c = copyItems(edits, refs)
       if (!c) return false
-      timelineClipboard.set(c)
+      timelineClipboard.set(selCompound ? { ...c, compound: { ...selCompound.compound } } : c)
       toast.message(`Copied ${c.entries.length} item${c.entries.length > 1 ? 's' : ''}`, { id: 'timeline-clipboard' })
     }
     return true
@@ -898,16 +922,25 @@ export function Timeline({
       toast.message('Nothing to paste here', { id: 'timeline-clipboard' })
       return true
     }
-    commit(r.edits)
+    const e2 =
+      c.compound && r.refs.length >= 2
+        ? createCompound(r.edits, r.refs, `c_${Date.now().toString(36)}`, undefined, c.compound.name)
+        : null
+    commit(e2 ?? r.edits)
     setSelected(r.refs)
     if (r.skipped) toast.message(`${r.skipped} item${r.skipped > 1 ? 's' : ''} can't be placed twice (AI / library sounds)`, { id: 'timeline-clipboard' })
     return true
   }
   const duplicate = () => {
     if (!editable) return false
+    const src = selCompound
     const r = duplicateItems(opCtx(), liveSelected)
     if (!r) return false
-    commit(r.edits)
+    const wrapped =
+      src && r.refs.length >= 2
+        ? createCompound(r.edits, r.refs, `c_${Date.now().toString(36)}`, undefined, `${src.compound.name} copy`)
+        : null
+    commit(wrapped ?? r.edits)
     setSelected(r.refs)
     return true
   }
@@ -998,6 +1031,24 @@ export function Timeline({
     toast.message('Ungrouped', { id: 'timeline-group' })
     return true
   }
+  const compoundSel = (): boolean => {
+    if (!editable) return false
+    const next = createCompound(edits, liveSelected, `c_${Date.now().toString(36)}`, rowIndexOf)
+    if (!next) {
+      toast.message('Select 2 or more B-roll / text / SFX / adjustment items to make a compound clip', { id: 'timeline-compound' })
+      return true
+    }
+    commit(next)
+    const g = next.groups?.find((x) => isCompound(x) && !edits.groups?.some((o) => o.id === x.id))
+    toast.message(`Created ${g?.compound?.name ?? 'compound'} (${g?.items.length ?? 2} clips)`, { id: 'timeline-compound' })
+    return true
+  }
+  const uncompoundSel = (): boolean => {
+    if (!editable || !selCompound) return false
+    commit(uncompound(edits, selCompound.id))
+    toast.message('Uncompounded', { id: 'timeline-compound' })
+    return true
+  }
   const insertGap = (): boolean => {
     if (!editable || refLocked(edits, { lane: 'video', id: '' })) return false
     const ins = addGapAt(edits.inserts, tb.segs, playheadMs, newGapId())
@@ -1039,6 +1090,10 @@ export function Timeline({
   }
   const trimToPlayhead = (edge: 'start' | 'end'): boolean => {
     if (!editable) return false
+    if (selCompound && selCompound.id !== openCompound) {
+      commit(trimCompound(opCtx(), selCompound, edge, playheadMs))
+      return true
+    }
     const inside = (i: TimelineItem | undefined) => Boolean(i && playheadMs > i.startMs + 1 && playheadMs < i.endMs - 1)
     let refs: ItemRef[] = liveSelected.filter((r) => inside(lanes[r.lane].find((i) => i.id === r.id)))
     if (!refs.length) {
@@ -1112,6 +1167,16 @@ export function Timeline({
         return groupSel()
       case 'ungroup':
         return ungroupSel()
+      case 'compound':
+        return compoundSel()
+      case 'uncompound':
+        return uncompoundSel()
+      case 'openCompound':
+        if (selCompound) {
+          setOpenCompound(selCompound.id)
+          setSelected([])
+        }
+        return Boolean(selCompound)
       case 'loop':
         return toggleLoop()
       case 'trimStart':
@@ -1335,8 +1400,8 @@ export function Timeline({
       }
       const hit: ItemRef[] = [...base]
       const seen = new Set(hit.map(refKey))
-      area.querySelectorAll<HTMLElement>('[data-testid^="timeline-item-"][data-item-id]').forEach((el) => {
-        const lane = el.dataset.testid!.slice('timeline-item-'.length) as LaneId
+      area.querySelectorAll<HTMLElement>('[data-testid^="timeline-item-"][data-item-id], [data-testid="timeline-compound"][data-item-id]').forEach((el) => {
+        const lane = (el.dataset.lane ?? el.dataset.testid!.slice('timeline-item-'.length)) as LaneId
         const id = el.dataset.itemId!
         if (lane === 'voice' || !lanes[lane]?.some((i) => i.id === id)) return
         const b = el.getBoundingClientRect()
@@ -1346,7 +1411,7 @@ export function Timeline({
         seen.add(refKey(ref))
         hit.push(ref)
       })
-      setSelected(expandToGroups(edits, hit, (lane, id) => ({ lane: lane as LaneId, id })))
+      setSelected(expandToGroups(edits, hit, (lane, id) => ({ lane: lane as LaneId, id }), openCompound))
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -1367,6 +1432,9 @@ export function Timeline({
     { id: 'toggleEnabled', group: 'Edit', label: 'Deactivate / activate selected', keys: 'Shift+E', run: () => void toggleEnabled(), disabled: !editable },
     { id: 'group', group: 'Edit', label: 'Group selected', keys: `${mk}G`, run: () => void groupSel(), disabled: !editable },
     { id: 'ungroup', group: 'Edit', label: 'Ungroup selected', keys: `${mk}Shift+G`, run: () => void ungroupSel(), disabled: !editable },
+    { id: 'compound', group: 'Edit', label: 'Create compound clip', keys: 'Alt+G', run: () => void compoundSel(), disabled: !editable },
+    { id: 'uncompound', group: 'Edit', label: 'Uncompound', keys: 'Alt+Shift+G', run: () => void uncompoundSel(), disabled: !editable || !selCompound },
+    { id: 'openCompound', group: 'Edit', label: 'Open compound', run: () => void runCommand('openCompound'), disabled: !selCompound },
     { id: 'freeze', group: 'Edit', label: 'Freeze frame at playhead', run: freezeFrame, disabled: !editable },
     { id: 'gap', group: 'Edit', label: 'Insert gap at playhead', run: () => void insertGap(), disabled: !editable },
     { id: 'replaceGap', group: 'Edit', label: 'Replace selected main clip with gap', run: () => void replaceSelWithGap(), disabled: !editable || !liveSelected.some((r) => r.lane === 'video') },
@@ -1638,7 +1706,7 @@ export function Timeline({
     }
     const already = selectedKeys.has(key)
     // TC1 (TL-30): clicking one member of a group selects (and drags) the whole group.
-    const groupSel0 = expandToGroups(edits, [{ lane: item.lane, id: item.id }], (lane, id) => ({ lane: lane as LaneId, id })).filter(
+    const groupSel0 = expandToGroups(edits, [{ lane: item.lane, id: item.id }], (lane, id) => ({ lane: lane as LaneId, id }), openCompound).filter(
       (r) => lanes[r.lane].some((i) => i.id === r.id) && !refLocked(edits, r),
     )
     if (!already) setSelected(groupSel0)
@@ -1747,6 +1815,8 @@ export function Timeline({
         commit(moved && autoXfade ? autoCrossfade(ctx.edits, moved, ctx.previewEdits, ctx.previewEdits, state.refs, sfxDurationsMs, xfadeTracks) : moved)
       } else {
         const edge = mode === 'start' ? item.startMs : item.endMs
+        const host = hostOf(item)
+        if (host) return commit(trimCompound(ctx, host.group, mode, edge + state.deltaMs))
         commit(trimItem(ctx, { lane: item.lane, id: item.id }, mode, edge + state.deltaMs))
       }
     }
@@ -1825,6 +1895,11 @@ export function Timeline({
         toast.message(`${LANE_LABELS[lockedClickRef.current]} lane is locked`, { id: 'timeline-locked' })
       }
     } else if (k === 'Escape') {
+      if (openCompound) {
+        setOpenCompound(null)
+        setSelected([])
+        return
+      }
       setTool('select')
       lockedClickRef.current = null
       setSelected([])
@@ -1994,10 +2069,13 @@ export function Timeline({
     // TC1: deactivated items stay on the timeline, dimmed + striped.
     const off = isDisabled(edits, item)
     const grp = groupOf(edits, item)
-    const inGroup = Boolean(grp)
+    const host = hostOf(item)
+    const dimmed = Boolean(openCompound && grp?.id !== openCompound)
+    const inOpen = Boolean(openCompound && grp?.id === openCompound)
+    const inGroup = Boolean(grp) && !host
     // TC1fix: a group is visible — numbered badge on every member, amber outline while selected.
     const grpNo = grp ? (edits.groups ?? []).indexOf(grp) + 1 : 0
-    const grpSel = Boolean(grp && grp.items.some((k) => selectedKeys.has(k)))
+    const grpSel = Boolean(grp && !host && grp.items.some((k) => selectedKeys.has(k)))
     const faded = st.hidden || st.muted || off
     const h = LANE_H[item.lane]
     // E3: Voice is selectable (volume keyframes) but cannot move / trim.
@@ -2012,36 +2090,59 @@ export function Timeline({
     return (
       <div
         key={refKey(item)}
-        className={`absolute top-0.5 overflow-hidden rounded-[3px] text-[10px] leading-4 text-white ${LANE_COLORS[item.lane]} ${
-          isSel ? 'ring-2 ring-white ring-offset-1 ring-offset-primary' : ''
-        } ${faded ? 'opacity-40' : ''} ${grpSel ? 'outline outline-2 outline-amber-400' : inGroup ? 'outline-dashed outline-1 outline-white/70' : ''} ${st.locked ? 'cursor-not-allowed' : item.caps.move ? 'cursor-grab' : interactive ? 'cursor-pointer' : ''}`}
+        className={`absolute top-0.5 overflow-hidden rounded-[3px] text-[10px] leading-4 text-white ${
+          host ? 'bg-violet-600' : LANE_COLORS[item.lane]
+        } ${isSel ? 'ring-2 ring-white ring-offset-1 ring-offset-primary' : ''} ${faded ? 'opacity-40' : ''} ${
+          dimmed ? 'pointer-events-none opacity-30' : ''
+        } ${inOpen ? 'outline outline-dashed outline-1 outline-violet-300' : ''} ${
+          grpSel ? 'outline outline-2 outline-amber-400' : inGroup ? 'outline-dashed outline-1 outline-white/70' : ''
+        } ${st.locked ? 'cursor-not-allowed' : item.caps.move ? 'cursor-grab' : interactive ? 'cursor-pointer' : ''}`}
         style={{
           left,
           width: w,
           height: h - 4,
-          pointerEvents: interactive ? 'auto' : 'none',
+          pointerEvents: interactive && !dimmed ? 'auto' : 'none',
           ...(off ? { backgroundImage: 'repeating-linear-gradient(135deg, rgba(0,0,0,0.45) 0 4px, transparent 4px 8px)' } : {}),
         }}
-        data-testid={`timeline-item-${item.lane}`}
+        data-testid={host ? 'timeline-compound' : `timeline-item-${item.lane}`}
+        data-lane={item.lane}
         data-item-id={item.id}
         data-start-ms={Math.round(item.startMs)}
         data-end-ms={Math.round(item.endMs)}
         data-selected={isSel ? 'true' : undefined}
         data-disabled={off ? 'true' : undefined}
-        data-grouped={inGroup ? 'true' : undefined}
+        data-grouped={inGroup || host ? 'true' : undefined}
         data-group-selected={grpSel ? 'true' : undefined}
-        title={`${off ? '[Deactivated] ' : ''}${inGroup ? '[Grouped] ' : ''}${item.label} · ${(item.startMs / 1000).toFixed(2)}–${(item.endMs / 1000).toFixed(2)} s`}
-        onPointerDown={interactive ? (e) => startDrag(e, item, 'move') : undefined}
+        data-compound={host ? host.group.id : undefined}
+        title={`${off ? '[Deactivated] ' : ''}${host ? '[Compound] ' : inGroup ? '[Grouped] ' : ''}${item.label} · ${(item.startMs / 1000).toFixed(2)}–${(item.endMs / 1000).toFixed(2)} s`}
+        onPointerDown={interactive && !dimmed ? (e) => startDrag(e, item, 'move') : undefined}
+        onDoubleClick={
+          host
+            ? (e) => {
+                e.stopPropagation()
+                setOpenCompound(host.group.id)
+                setSelected([])
+              }
+            : undefined
+        }
         onContextMenu={(e) => {
-          if (!interactive) return
+          if (!interactive || dimmed) return
           e.preventDefault()
           e.stopPropagation()
           if (!selectedKeys.has(refKey(item)))
-            setSelected(expandToGroups(edits, [{ lane: item.lane, id: item.id }], (lane, id) => ({ lane: lane as LaneId, id })))
+            setSelected(expandToGroups(edits, [{ lane: item.lane, id: item.id }], (lane, id) => ({ lane: lane as LaneId, id }), openCompound))
           setCtxMenu({ x: e.clientX, y: e.clientY })
         }}
       >
-        {inGroup ? (
+        {host ? (
+          <span
+            className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-violet-200 px-0.5 text-[8px] font-semibold leading-[10px] text-violet-950"
+            title="Compound — double-click to open"
+            data-testid="timeline-group-badge"
+          >
+            ⧉
+          </span>
+        ) : inGroup ? (
           <span
             className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-amber-400 px-0.5 text-[8px] font-semibold leading-[10px] text-black"
             title={`Group ${grpNo} (click one = select all · Ctrl+Shift+G ungroups)`}
@@ -2050,7 +2151,7 @@ export function Timeline({
             G{grpNo}
           </span>
         ) : null}
-        {item.lane === 'video' && item.srcInMs != null && item.srcOutMs != null ? (
+        {!host && item.lane === 'video' && item.srcInMs != null && item.srcOutMs != null ? (
           <TimelineFilmstrip
             fromMs={item.srcInMs - mediaOffsetMs}
             toMs={item.srcOutMs - mediaOffsetMs}
@@ -2064,7 +2165,7 @@ export function Timeline({
             stillUrl={posterUrl}
           />
         ) : null}
-        {item.lane === 'broll' && bMedia ? (
+        {!host && item.lane === 'broll' && bMedia ? (
           <BrollFilmstrip
             media={bMedia}
             fromMs={item.inMs ?? 0}
@@ -2074,7 +2175,7 @@ export function Timeline({
             pxPerMs={pxPerMs}
           />
         ) : null}
-        {item.lane === 'voice' ? (
+        {!host && item.lane === 'voice' ? (
           <TimelineWaveform
             peaks={voicePeaks}
             mediaFromMs={(item.srcInMs ?? 0) - mediaOffsetMs}
@@ -2085,7 +2186,7 @@ export function Timeline({
             className="absolute inset-0 size-full text-emerald-400/90"
           />
         ) : null}
-        {item.lane === 'music' ? (
+        {!host && item.lane === 'music' ? (
           <TimelineWaveform
             peaks={musicPeaks}
             mediaFromMs={item.inMs ?? 0}
@@ -2096,7 +2197,7 @@ export function Timeline({
             className="absolute inset-0 size-full text-teal-200/80"
           />
         ) : null}
-        {item.lane === 'sfx' && sfxPeaks?.[item.id] ? (
+        {!host && item.lane === 'sfx' && sfxPeaks?.[item.id] ? (
           <TimelineWaveform
             peaks={sfxPeaks[item.id]!}
             mediaFromMs={edits.audio?.sfx.find((x) => x.generationId === item.id)?.inMs ?? 0}
@@ -2169,26 +2270,28 @@ export function Timeline({
               )
             })()
           : null}
-        {kfs.map((t) => {
-          const shownT = kfDrag && kfDrag.target === kfTarget && kfDrag.fromMs === t ? kfDrag.toMs : t
-          const isSelKf = selKf?.target === kfTarget && selKf.tMs === t
-          return (
-            <span
-              key={`kf${t}`}
-              className={`absolute top-1/2 z-10 size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-ew-resize border ${
-                isSelKf ? 'border-white bg-amber-300 ring-1 ring-amber-200' : 'border-black/60 bg-amber-400'
-              }`}
-              style={{ left: (kfOrigin + shownT - geo.startMs) * pxPerMs }}
-              data-testid="timeline-keyframe"
-              data-target={kfTarget ?? undefined}
-              data-t-ms={Math.round(t)}
-              data-selected={isSelKf ? 'true' : undefined}
-              title={`Keyframe ${((kfOrigin + t) / 1000).toFixed(2)} s — drag to move, Del to delete`}
-              onPointerDown={(e) => startKfDrag(e, kfTarget!, t, kfOrigin)}
-            />
-          )
-        })}
-        {item.lane === 'broll' && editable && !st.locked && w > 36
+        {!host
+          ? kfs.map((t) => {
+              const shownT = kfDrag && kfDrag.target === kfTarget && kfDrag.fromMs === t ? kfDrag.toMs : t
+              const isSelKf = selKf?.target === kfTarget && selKf.tMs === t
+              return (
+                <span
+                  key={`kf${t}`}
+                  className={`absolute top-1/2 z-10 size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-ew-resize border ${
+                    isSelKf ? 'border-white bg-amber-300 ring-1 ring-amber-200' : 'border-black/60 bg-amber-400'
+                  }`}
+                  style={{ left: (kfOrigin + shownT - geo.startMs) * pxPerMs }}
+                  data-testid="timeline-keyframe"
+                  data-target={kfTarget ?? undefined}
+                  data-t-ms={Math.round(t)}
+                  data-selected={isSelKf ? 'true' : undefined}
+                  title={`Keyframe ${((kfOrigin + t) / 1000).toFixed(2)} s — drag to move, Del to delete`}
+                  onPointerDown={(e) => startKfDrag(e, kfTarget!, t, kfOrigin)}
+                />
+              )
+            })
+          : null}
+        {!host && item.lane === 'broll' && editable && !st.locked && w > 36
           ? (['in', 'out'] as const).map((edge) => {
               const spec = edge === 'in' ? bItem?.transitionIn : bItem?.transitionOut
               return (
@@ -2607,6 +2710,21 @@ export function Timeline({
           ) : null}
         </div>
         <div className="flex items-center gap-1" data-testid="timeline-zoom-controls">
+          {openCompound ? (
+            <span className="flex items-center gap-1 rounded bg-violet-600/20 px-2 text-[11px]" data-testid="timeline-compound-banner">
+              Editing {edits.groups?.find((g) => g.id === openCompound)?.compound?.name}
+              <button
+                type="button"
+                className={tbtn}
+                onClick={() => {
+                  setOpenCompound(null)
+                  setSelected([])
+                }}
+              >
+                Done (Esc)
+              </button>
+            </span>
+          ) : null}
           <button
             type="button"
             className="inline-flex size-7 items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -2920,7 +3038,30 @@ export function Timeline({
                         />
                       ))
                     : null}
-                  {(virtualize ? rowItems(lanes, { lane, ...row }).filter((i) => inView(shown(i).startMs, shown(i).endMs)) : rowItems(lanes, { lane, ...row })).map(renderItem)}
+                  {(virtualize
+                    ? (() => {
+                        const base = rowItems(lanes, { lane, ...row })
+                          .filter((i) => !cview.hidden.has(refKey(i)))
+                          .map((i) => {
+                            const h = hostOf(i)
+                            return h
+                              ? { ...i, startMs: h.startMs, endMs: h.endMs, label: `⧉ ${h.group.compound.name} · ${h.count} clips` }
+                              : i
+                          })
+                        return base.filter((i) => inView(shown(i).startMs, shown(i).endMs))
+                      })()
+                    : (() => {
+                        const base = rowItems(lanes, { lane, ...row })
+                          .filter((i) => !cview.hidden.has(refKey(i)))
+                          .map((i) => {
+                            const h = hostOf(i)
+                            return h
+                              ? { ...i, startMs: h.startMs, endMs: h.endMs, label: `⧉ ${h.group.compound.name} · ${h.count} clips` }
+                              : i
+                          })
+                        return base
+                      })()
+                  ).map(renderItem)}
                   {lane === 'video' && drag?.reorder && drag.moved && drag.insertBefore !== undefined ? (
                     <div
                       className="pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-primary"
@@ -3452,6 +3593,49 @@ export function Timeline({
                 >
                   {liveSelected.filter(canToggleEnabled).every((r) => isDisabled(edits, r)) ? 'Activate' : 'Deactivate'} (Shift+E)
                 </button>
+              ) : null}
+              {liveSelected.length > 1 && !selCompound ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-ctx-compound"
+                  onClick={() => {
+                    compoundSel()
+                    setCtxMenu(null)
+                  }}
+                >
+                  Create compound clip (Alt+G)
+                </button>
+              ) : null}
+              {selCompound && selCompound.id !== openCompound ? (
+                <>
+                  <button
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                    role="menuitem"
+                    data-testid="timeline-ctx-open-compound"
+                    onClick={() => {
+                      setOpenCompound(selCompound.id)
+                      setSelected([])
+                      setCtxMenu(null)
+                    }}
+                  >
+                    Open compound
+                  </button>
+                  <button
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                    role="menuitem"
+                    data-testid="timeline-ctx-uncompound"
+                    onClick={() => {
+                      uncompoundSel()
+                      setCtxMenu(null)
+                    }}
+                  >
+                    Uncompound (Alt+Shift+G)
+                  </button>
+                </>
               ) : null}
               {liveSelected.length > 1 ? (
                 <button
