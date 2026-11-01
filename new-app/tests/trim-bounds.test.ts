@@ -16,4 +16,12 @@ describe('trim-bounds', () => {
     expect(trim.in).toBe(2000)
     expect(trim.out).toBe(28_000)
   })
+
+  it('limits honour window beyond 8s (worker parity)', () => {
+    const limits = { minMs: 0, maxMs: 120_000 }
+    const trim = { in: 1000, out: 50_000 }
+    const cut = expandedSourceCutMs(10_000, 20_000, { trim }, limits)
+    expect(cut.cutStartMs).toBe(1000)
+    expect(cut.cutEndMs).toBe(50_000)
+  })
 })

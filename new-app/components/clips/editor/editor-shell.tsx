@@ -100,6 +100,7 @@ import {
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
+import { SHOW_SURROUNDING_CONTEXT_MS } from '@/lib/clips/trim-bounds'
 import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
 import type { ProjectMediaApi } from '@/components/clips/editor/use-project-media'
 import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
@@ -505,7 +506,23 @@ export function EditorShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once on open
   }, [])
 
-  const { words: clipEditorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
+  const [showSurrounding, setShowSurrounding] = useState(false)
+  useEffect(() => {
+    try {
+      setShowSurrounding(localStorage.getItem('transovo.script.showSurrounding') === '1')
+    } catch {
+      /* private mode */
+    }
+  }, [])
+
+  const editorWordsContextMs = showSurrounding ? SHOW_SURROUNDING_CONTEXT_MS : undefined
+  const { words: clipEditorWords, wordsLoading } = useEditorWords(
+    clipId,
+    words,
+    bounds,
+    edits.trim,
+    editorWordsContextMs,
+  )
   // E5b: words of transcribed media join the transcript where that clip's own sound plays.
   const mediaTranscripts = useMediaTranscripts(projectId)
   const editSources = edits.sources
@@ -1552,6 +1569,15 @@ export function EditorShell({
           angleSources={angleSources}
           onBuildFromTranscript={openBuildFromTranscript}
           playheadSourceMs={playheadSourceMs}
+          showSurrounding={showSurrounding}
+          onShowSurroundingChange={(on) => {
+            setShowSurrounding(on)
+            try {
+              localStorage.setItem('transovo.script.showSurrounding', on ? '1' : '0')
+            } catch {
+              /* private mode */
+            }
+          }}
         />
         </EditorPanelErrorBoundary>
       </div>

@@ -70,6 +70,10 @@ def _annotate_clip_type_meta(
             else None
         )
         meta["videoMomentMatchIou"] = round(float(iou), 4)
+        if vm:
+            why = str(vm.get("why_it_works") or vm.get("reason") or "").strip()[:200]
+            if why:
+                meta["videoWhy"] = why
         meta["sectionActivity"] = section_activity_for_moment(vm, vp_sections) if vm else None
         meta["streamMajorityType"] = stream_majority
     maj = upload_project_majority_type(picks)

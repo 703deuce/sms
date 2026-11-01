@@ -20,8 +20,11 @@ import {
   clipFallbackPickLabel,
   clipTypeBadge,
   clipWhySummary,
+  clipScoreTooltipLines,
+  reasonTagLabel,
   type ClipAiMeta,
 } from '@/lib/clips/clip-results-chips'
+import { clipReasonTag } from '@/lib/clips/reason-tag'
 import { clipCardAspectClass } from '@/lib/clips/card-aspect'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { ClipPostCopy } from '@/components/clips/clip-post-copy'
@@ -29,7 +32,8 @@ import { OpenInFullVideoButton } from '@/components/clips/editor/open-in-full-vi
 import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { CLIP_PREVIEW_EXPORT_ASPECT } from '@/lib/clips/export-preview-reuse'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
-import { ThumbsDown, EyeOff } from 'lucide-react'
+import { ThumbsDown, EyeOff, Mic, Eye, Sparkles } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export function ClipCard({
   clip,
@@ -134,6 +138,13 @@ export function ClipCard({
     ['Value', scores.value],
     ['Trend', scores.trend],
   ] as const
+  const reasonTag = clipReasonTag(aiMeta, {
+    wps: aiMeta.wordsPerSec ?? 0,
+    startMs: clip.startMs,
+    endMs: clip.endMs,
+  })
+  const scoreTooltipLines = clipScoreTooltipLines(clip)
+  const ReasonIcon = reasonTag === 'visual' ? Eye : reasonTag === 'both' ? Sparkles : Mic
 
   return (
     <article
@@ -184,9 +195,22 @@ export function ClipCard({
             overlayBurnedIn={isStreamer}
           />
         ) : null}
-        <div className="absolute left-2 top-2" title={why ?? undefined}>
-          <ScoreRing score={clip.score} display={showClipperDims ? 'letter' : 'numeric'} />
-        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger>
+              <div className="absolute left-2 top-2" title={why ?? undefined}>
+                <ScoreRing score={clip.score} display={showClipperDims ? 'letter' : 'numeric'} />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent data-testid="clip-score-tooltip">
+              <div className="flex max-w-xs flex-col gap-0.5 text-xs">
+                {scoreTooltipLines.map((line) => (
+                  <span key={line}>{line}</span>
+                ))}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         {onHidden ? (
           <button
             type="button"
@@ -199,6 +223,13 @@ export function ClipCard({
           </button>
         ) : null}
         <DurationChip ms={clip.durationMs} />
+        <span
+          data-testid="clip-reason-tag"
+          className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+        >
+          <ReasonIcon className="size-3" aria-hidden />
+          {reasonTagLabel(reasonTag)}
+        </span>
       </div>
       <div className="flex flex-col gap-2 p-3">
         <h3 className="line-clamp-2 text-sm font-medium leading-snug break-words">
@@ -233,9 +264,22 @@ export function ClipCard({
           )
         })()}
         <div className="flex flex-wrap gap-1.5">
-          <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary tabular-nums">
-            Score {clip.score}
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary tabular-nums">
+                  Score {clip.score}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent data-testid="clip-score-tooltip">
+                <div className="flex max-w-xs flex-col gap-0.5 text-xs">
+                  {scoreTooltipLines.map((line) => (
+                    <span key={line}>{line}</span>
+                  ))}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {fallbackLabel ? (
             <span
               className="rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-200"

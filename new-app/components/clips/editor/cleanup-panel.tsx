@@ -114,6 +114,17 @@ export function CleanupPanel({
   return (
     <div className="flex flex-col gap-4 p-3">
       <TrimRangeBar bounds={bounds} trim={edits.trim} onCommitTrim={onCommitTrim} />
+      {edits.trim.in !== bounds.clipStartMs || edits.trim.out !== bounds.clipEndMs ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          data-testid="reset-ai-cut"
+          onClick={() => onCommitTrim({ in: bounds.clipStartMs, out: bounds.clipEndMs })}
+        >
+          Reset to AI cut
+        </Button>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="outline" onClick={() => onCommitTrim(nudgeTrimIn(edits.trim, -100, limits))}>
           Nudge in −100ms

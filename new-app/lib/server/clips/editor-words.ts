@@ -1,6 +1,6 @@
 import type { ClipWord } from '@/lib/clips/edits'
 import { mergeClipWordsWithProjectTranscript } from '@/lib/clips/editor-words-merge'
-import { MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
+import { MAX_EDITOR_WORDS_CONTEXT_MS, MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
 import { loadSourceWords, wordsInRange, type SourceWord } from '@/lib/clips/source-words'
 import type { getClipStorage } from '@/lib/storage'
 
@@ -75,7 +75,12 @@ export async function resolveEditorWords(
   workspaceId: string,
   clip: { id: string; projectId: string; startMs: number; endMs: number; wordsKey: string | null },
   projectTranscript: ClipWord[],
-  opts?: { trimInMs?: number; trimOutMs?: number },
+  opts?: {
+    trimInMs?: number
+    trimOutMs?: number
+    contextMs?: number
+    trimLimits?: { minMs: number; maxMs: number }
+  },
 ): Promise<SourceWord[]> {
   let clipRaw = await readClipWordJson(storage, clip.wordsKey)
   if (!clipRaw.length) {
@@ -87,19 +92,21 @@ export async function resolveEditorWords(
     const clipLoaded = loadSourceWords(absolute)
     if (projectTranscript.length) {
       const projectLoaded = loadSourceWords(projectTranscript)
-      const sliced = wordsInRange(projectLoaded, clip.startMs, clip.endMs)
-      if (sliced.length) {
-        return mergeClipWordsWithProjectTranscript(
-          clipLoaded,
-          projectLoaded,
-          clip.startMs,
-          clip.endMs,
-          MAX_TRIM_EXTEND_MS,
-          opts?.trimInMs != null && opts?.trimOutMs != null
-            ? { startMs: opts.trimInMs, endMs: opts.trimOutMs }
-            : undefined,
-        )
-      }
+      const extendMs =
+        opts?.contextMs != null && Number.isFinite(opts.contextMs)
+          ? Math.min(MAX_EDITOR_WORDS_CONTEXT_MS, Math.max(0, Math.floor(opts.contextMs)))
+          : MAX_TRIM_EXTEND_MS
+      return mergeClipWordsWithProjectTranscript(
+        clipLoaded,
+        projectLoaded,
+        clip.startMs,
+        clip.endMs,
+        extendMs,
+        opts?.trimInMs != null && opts?.trimOutMs != null
+          ? { startMs: opts.trimInMs, endMs: opts.trimOutMs }
+          : undefined,
+        opts?.trimLimits,
+      )
     }
     return clipLoaded
   }
