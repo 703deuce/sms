@@ -33,7 +33,7 @@ import {
 import { splitLayoutSegmentAt } from '@/lib/clips/layout-segments'
 import { reconcileItemMotion, rippleGlobalKeyframes } from '@/lib/clips/editor/keyframes'
 import { remapCutTransitions } from '@/lib/clips/editor/transitions'
-import { remapSplitEdits, splitOffsets } from '@/lib/clips/editor/split-edits'
+import { remapSplitEdits, splitEditAt, splitOffsets } from '@/lib/clips/editor/split-edits'
 import { TEXT_MIN_MS, textItemLabel, type TextItem } from '@/lib/clips/editor/text-items'
 import { ADJUST_MIN_MS, adjustLabel } from '@/lib/clips/editor/adjust-layers'
 import {
@@ -373,22 +373,28 @@ export function buildTimelineItems(input: {
       caps: { move: false, trimStart: true, trimEnd: true, split: true, del: multi },
     })
   })
-  // G1b3: J / L cuts — each Voice piece is drawn where its SOUND plays ([s_i + a_i, e_i + a_{i+1}]);
-  // its edges at real cuts are handles (Alt-drag = audio-only edge, plain drag = linked trim).
+  // G1b3: J / L cuts — Voice pieces follow video-lane splits; sound may lead/lag picture at each boundary.
   const offs = splitOffsets(tb.segs, edits.splitEdits, previewEdits.trim.in, previewEdits.trim.out)
   const real = new Set(realCutIndices(tb))
-  tb.segs.forEach(([a, b], i) => {
-    const startMs = tb.starts[i]! + offs[i]!
-    const endMs = tb.starts[i]! + (b - a) + offs[i + 1]!
+  vsegs.forEach((vs, vi) => {
+    const ki = tb.segs.findIndex(([a, b]) => a <= vs.a && vs.b <= b)
+    if (ki < 0) return
+    const [ka, kb] = tb.segs[ki]!
+    const picStart = tb.starts[ki]! + (vs.a - ka)
+    const picEnd = tb.starts[ki]! + (vs.b - ka)
+    const firstInKeep = vs.a <= ka + 1
+    const lastInKeep = vs.b >= kb - 1
+    const startMs = picStart + (firstInKeep ? offs[ki]! : splitEditAt(edits, vs.a))
+    const endMs = picEnd + (lastInKeep ? offs[ki + 1]! : splitEditAt(edits, vsegs[vi + 1]!.a))
     lanes.voice.push({
       lane: 'voice',
-      id: `voice:${a}`,
+      id: `voice:${vs.a}`,
       startMs,
       endMs,
-      srcInMs: a + offs[i]!,
-      srcOutMs: b + offs[i + 1]!,
-      label: offs[i] || offs[i + 1] ? 'Voice · split' : 'Voice',
-      caps: { ...NO_CAPS, trimStart: real.has(i), trimEnd: real.has(i + 1) },
+      srcInMs: vs.a + (firstInKeep ? offs[ki]! : splitEditAt(edits, vs.a)),
+      srcOutMs: vs.b + (lastInKeep ? offs[ki + 1]! : splitEditAt(edits, vsegs[vi + 1]!.a)),
+      label: (firstInKeep ? offs[ki]! : splitEditAt(edits, vs.a)) || (lastInKeep ? offs[ki + 1]! : splitEditAt(edits, vsegs[vi + 1]!.a)) ? 'Voice · split' : 'Voice',
+      caps: { ...NO_CAPS, trimStart: !firstInKeep || real.has(ki), trimEnd: !lastInKeep || real.has(ki + 1) },
     })
   })
 

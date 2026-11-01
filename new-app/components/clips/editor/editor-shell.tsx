@@ -21,7 +21,8 @@ import { patchClip } from '@/lib/clips-api'
 import { editorPreviewDurationMs, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { seedEditorExportTemplate } from '@/lib/clips/editor-export-template-seed'
 import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-log'
-import { keepSegments, outputDurationMs, displayDurationMs, displayPositionMs, editMsAtDisplayMs } from '@/lib/clips/edits'
+import { exportTimeMap, toExportMs } from '@/lib/clips/editor/export-time'
+import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
@@ -88,7 +89,7 @@ import { isFormControlTarget } from '@/lib/clips/editor/timeline-zoom'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
 import { EditorVersionsMenu, EditorLayoutMenu, type EditVersionRow } from '@/components/clips/editor/editor-versions-menu'
-import { normalizeEdits, normalizeEditSpeed } from '@/lib/clips/edits'
+import { normalizeEdits, normalizeEditSpeed, outputDurationMs, displayDurationMs, displayPositionMs, editMsAtDisplayMs } from '@/lib/clips/edits'
 import { LayoutQuickPicker } from '@/components/clips/editor/layout-quick-picker'
 import type { StickerLayer } from '@/lib/clips/layers'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
@@ -122,7 +123,6 @@ import { mergeMediaWords } from '@/lib/clips/editor/media-words'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { SHOW_SURROUNDING_CONTEXT_MS } from '@/lib/clips/trim-bounds'
 import { addMediaToLane, placeAddedOnTrack, replaceBrollMedia, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
-import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { ClipRecordMenu } from '@/components/clips/editor/recording/record-menu'
 import { ClipRecorderBar } from '@/components/clips/editor/recording/recorder-bar'
 import { useClipRecorder } from '@/components/clips/editor/recording/use-clip-recorder'
@@ -901,6 +901,14 @@ export function EditorShell({
   const displayDur = useMemo(() => displayDurationMs(displayEdits), [displayEdits])
   // E4fix: the clock shows output (exported) time on both sides — position warped like the duration.
   const displayPos = useMemo(() => Math.min(displayDur, displayPositionMs(displayEdits, outputMs)), [displayDur, displayEdits, outputMs])
+  /** TC2: match the timeline ruler / playhead (export time with inserts), not a lagging preview tick. */
+  const transportClockMs = useMemo(() => {
+    const preview = editorPreviewEdits(edits, editorWords)
+    const tb = timebaseFor(preview)
+    const tmap = exportTimeMap(tb.segs, edits.inserts)
+    const exportAt = toExportMs(tmap, outputMs, 'end')
+    return Math.min(displayDur, Math.max(0, exportAt))
+  }, [displayDur, edits, editorWords, outputMs])
 
   useEffect(() => {
     void clipsFetch<{ items: { id: string; name: string; settings: unknown }[] }>('/api/clips/brand/templates')
@@ -1250,11 +1258,14 @@ export function EditorShell({
 
   const seekOutput = useCallback(
     (ms: number) => {
+      const preview = editorPreviewEdits(edits, editorWords)
+      const clamped = Math.max(0, Math.min(Math.max(0, outputDurationMs(preview) - 1), Math.round(ms)))
+      outputMsRef.current = clamped
+      setOutputMs(clamped)
       const v = videoRef.current
       if (!v) return
-      const preview = editorPreviewEdits(edits, editorWords)
       const resume = keepPlayStateAcrossSeek(v)
-      seekToOutputMs(v, preview, ms, mediaOffsetMs)
+      seekToOutputMs(v, preview, clamped, mediaOffsetMs)
       resume()
     },
     [edits, editorWords, mediaOffsetMs],
@@ -2456,7 +2467,7 @@ export function EditorShell({
           ) : (
           <PlayerControls
             playing={playing}
-            outputMs={displayPos}
+            outputMs={transportClockMs}
             outputDurationMs={displayDur}
             onToggle={() => void togglePlay()}
             onScrub={seekDisplay}

@@ -28,7 +28,7 @@ import {
   type OpCtx,
   type TimelineItem,
 } from '@/lib/clips/editor/clip-timeline'
-import { setSplitEdit, splitEditAt, splitOffsets, SPLIT_MAX_MS, moveSplitKey } from '@/lib/clips/editor/split-edits'
+import { setSplitEdit, splitEditAt, splitOffsets, SPLIT_MAX_MS, SPLIT_MIN_PIECE_MS, moveSplitKey } from '@/lib/clips/editor/split-edits'
 import { TEXT_MIN_MS, type TextItem } from '@/lib/clips/editor/text-items'
 
 export type TrimTool = 'select' | 'roll' | 'slide' | 'slip' | 'blade' | 'hand'
@@ -256,33 +256,76 @@ function rightAOf(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end'): number | nul
   return j >= 1 && j < vs.length ? vs[j]!.a : null
 }
 
+/** Source ms + picture output ms for a J / L boundary on the Voice lane. */
+function voiceJlBoundary(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end'): { atMs: number; picMs: number } | null {
+  const tb = timebaseFor(ctx.edits)
+  const vsegs = videoLaneSegments(tb, ctx.edits.videoSplits)
+  const i = vsegs.findIndex((v) => `voice:${v.a}` === ref.id)
+  if (i < 0) return null
+  const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits })
+  const it = findItem(lanes, ref)
+  if (!it) return null
+  if (edge === 'start') {
+    if (i < 1) return null
+    const atMs = vsegs[i]!.a
+    return { atMs, picMs: it.startMs }
+  }
+  if (i >= vsegs.length - 1) {
+    const ki = tb.segs.findIndex(([a, b]) => a <= vsegs[i]!.a && vsegs[i]!.b <= b)
+    const k = ki + 1
+    if (ki < 0 || !realCutIndices(tb).includes(k)) return null
+    return { atMs: tb.segs[k]![0], picMs: it.endMs }
+  }
+  const atMs = vsegs[i + 1]!.a
+  return { atMs, picMs: it.endMs }
+}
+
+function clampJlAudioMs(ctx: OpCtx, atMs: number, audioMs: number): number {
+  const tb = timebaseFor(ctx.edits)
+  const vsegs = videoLaneSegments(tb, ctx.edits.videoSplits)
+  const right = vsegs.find((v) => v.a === atMs)
+  const left = vsegs.find((v) => v.b === atMs)
+  if (!left || !right) {
+    const k = tb.segs.findIndex(([a]) => a === atMs)
+    if (k < 1) return 0
+    const [p0, p1] = tb.segs[k - 1]!
+    const [q0, q1] = tb.segs[k]!
+    const lim = Math.floor((Math.min(p1 - p0, q1 - q0) - SPLIT_MIN_PIECE_MS) / 2)
+    if (lim <= 0) return 0
+    let v = Math.max(-lim, Math.min(lim, Math.round(audioMs)))
+    if (v > 0) v = Math.min(v, Math.max(0, ctx.edits.trim.out - p1))
+    else v = Math.max(v, -Math.max(0, q0 - ctx.edits.trim.in))
+    return v
+  }
+  const lim = Math.floor((Math.min(left.b - left.a, right.b - right.a) - SPLIT_MIN_PIECE_MS) / 2)
+  if (lim <= 0) return 0
+  return Math.max(-lim, Math.min(lim, Math.round(audioMs)))
+}
+
 /**
  * J / L (Alt-drag): a Voice edge at a real cut moves only the SOUND boundary; a Video edge at a real
  * cut moves only the PICTURE (picture-only roll). `toMs` = where the dragged edge was dropped.
  */
 export function splitEdgeTrim(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: number): ClipEditsV2 | null {
   if (refLocked(ctx.edits, ref)) return null
-  const tb = timebaseFor(ctx.previewEdits)
+  const tb = timebaseFor(ctx.edits)
   if (ref.lane === 'voice') {
-    const i = tb.segs.findIndex(([a]) => `voice:${a}` === ref.id)
-    if (i < 0) return null
-    const k = edge === 'start' ? i : i + 1
-    if (!realCutIndices(tb).includes(k)) return null
-    const q0 = tb.segs[k]![0]
-    const v = Math.max(-SPLIT_MAX_MS, Math.min(SPLIT_MAX_MS, Math.round(toMs - tb.starts[k]!)))
-    // Store what the clamp allows (so the drawn edge = the played edge).
-    const trial = setSplitEdit(ctx.edits, q0, v)
-    const eff = splitOffsets(tb.segs, trial.splitEdits, ctx.previewEdits.trim.in, ctx.previewEdits.trim.out)[k]!
-    if (eff === splitEditAt(ctx.edits, q0)) return null
-    return setSplitEdit(ctx.edits, q0, eff)
+    const b = voiceJlBoundary(ctx, ref, edge)
+    if (!b) return null
+    const v = clampJlAudioMs(ctx, b.atMs, Math.round(toMs - b.picMs) + splitEditAt(ctx.edits, b.atMs))
+    if (v === splitEditAt(ctx.edits, b.atMs)) return null
+    return setSplitEdit(ctx.edits, b.atMs, v)
   }
   if (ref.lane === 'video') {
     const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits })
     const it = findItem(lanes, ref)
     const right = rightAOf(ctx, ref, edge)
     if (!it || right == null) return null
+    const splits = new Set(ctx.edits.videoSplits ?? [])
+    const isVideoSplit = splits.has(right)
     const k = tb.segs.findIndex(([a]) => a === right)
-    if (k < 1 || !realCutIndices(tb).includes(k)) return null
+    const isRealCut = k >= 1 && realCutIndices(tb).includes(k)
+    if (!isRealCut && !isVideoSplit) return null
     return rollMainEdit(ctx, right, toMs - (edge === 'start' ? it.startMs : it.endMs), { pictureOnly: true })
   }
   return null
