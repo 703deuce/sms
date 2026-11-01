@@ -583,7 +583,7 @@ def burn_captions(
     cap = edits_captions if isinstance(edits_captions, dict) else {}
     if not cap.get("presetId") and not cap.get("preset"):
         cap = {**cap, "presetId": "bold_pop", "animation": "pop"}
-    build_ass(words, cap, ass, play_w=play_w, play_h=play_h)
+    build_ass(words, cap, ass, play_w=play_w, play_h=play_h, edits=edits)
     fontsdir = V3 / "fonts"
     emoji_by_word = cap.get("emojiByWord") if isinstance(cap.get("emojiByWord"), dict) else {}
     emoji_events: list = []
@@ -1696,7 +1696,7 @@ def render_edited_clip(
 
     if layer_fx_for(edits, "video").get("key") and main_key_allowed(edits):
         keyed = work_dir / "keyed.mp4"
-        full_render = apply_full_render_key(pre_color, full_render, keyed, edits)
+        full_render = apply_full_render_key(pre_color, full_render, keyed, edits, work_dir)
         stage("main_key_done")
 
     if render_meta is not None:

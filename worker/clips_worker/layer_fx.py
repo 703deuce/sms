@@ -25,6 +25,8 @@ MASK_MAX_KEYS = 16
 REVERSE_MAX_MS = 60_000
 DEFAULT_MASK = {"shape": "rect", "x": 50, "y": 50, "w": 60, "h": 40, "rot": 0, "feather": 10}
 DEFAULT_KEY = {"color": "#00ff00", "sim": 40, "blend": 10, "spill": 50}
+CHROMA_KEY_MAX_KEYS = 16
+KEY_FIELDS = ("sim", "blend", "spill")
 _HEX = re.compile(r"^#[0-9a-f]{6}$")
 _TARGET = re.compile(r"^(?:(?:broll|text|adjust):[A-Za-z0-9_~.:-]{1,128}|video)$")
 TEXT_FX_CAP = 6
@@ -103,6 +105,20 @@ def normalize_chroma_key(raw):
     for k in ("sim", "blend", "spill"):
         v = _fin(raw.get(k))
         out[k] = _jround(min(100, max(0, DEFAULT_KEY[k] if v is None else v)))
+    if isinstance(raw.get("keys"), list):
+        by_ms: dict[int, dict] = {}
+        for row in raw["keys"]:
+            if not isinstance(row, dict):
+                continue
+            ms = _fin(row.get("ms"))
+            if ms is None or ms < 0:
+                continue
+            m = _jround(min(ms, 3_600_000))
+            picked = {fk: _jround(min(100, max(0, _fin(row.get(fk)) if _fin(row.get(fk)) is not None else out[fk]))) for fk in KEY_FIELDS}
+            by_ms[m] = {"ms": m, **picked}
+        keys = [by_ms[m] for m in sorted(by_ms)][:CHROMA_KEY_MAX_KEYS]
+        if keys:
+            out["keys"] = keys
     return out
 
 
@@ -239,6 +255,66 @@ def mask_alpha(shape: str, g: dict, invert: bool, w: int, h: int):
     if invert:
         m = 1 - m
     return np.floor(m * 255 + 0.5).astype("uint8")
+
+
+def chroma_key_at(key: dict, local_ms: float) -> dict:
+    """KF-10: linear between keys on 100 ms steps (color stays fixed)."""
+    keys = key.get("keys") or []
+    base = {"color": key["color"], "sim": key["sim"], "blend": key["blend"], "spill": key["spill"]}
+    if not keys:
+        return base
+    t = math.floor(max(0.0, local_ms) / MASK_STEP_MS) * MASK_STEP_MS
+    pick = lambda k: {"color": key["color"], "sim": k["sim"], "blend": k["blend"], "spill": k["spill"]}  # noqa: E731
+    if t <= keys[0]["ms"]:
+        return pick(keys[0])
+    if t >= keys[-1]["ms"]:
+        return pick(keys[-1])
+    for a, b in zip(keys, keys[1:]):
+        if a["ms"] <= t < b["ms"]:
+            u = (t - a["ms"]) / (b["ms"] - a["ms"])
+            return {
+                "color": key["color"],
+                "sim": _jround(a["sim"] + (b["sim"] - a["sim"]) * u),
+                "blend": _jround(a["blend"] + (b["blend"] - a["blend"]) * u),
+                "spill": _jround(a["spill"] + (b["spill"] - a["spill"]) * u),
+            }
+    return pick(keys[-1])
+
+
+def chroma_params_at(key: dict, local_ms: float) -> dict:
+    return chroma_params(chroma_key_at(key, local_ms))
+
+
+def write_chroma_key_alpha_frames(src: Path, in_s: float, dur_s: float, w: int, h: int, key: dict, path: Path) -> tuple[Path, int, int, int]:
+    """KF-10: raw gray alpha @ 10 fps (stepped key params), bilinear-upscaled like mask."""
+    mw, mh = mask_grid(w, h)
+    n = max(1, math.ceil(dur_s * 1000 / MASK_STEP_MS))
+    path = Path(path)
+    fps = 1000 / MASK_STEP_MS
+    cmd = [
+        "ffmpeg", "-y", "-v", "error", "-ss", f"{in_s:.3f}", "-t", f"{dur_s:.3f}", "-i", str(src),
+        "-vf", f"fps={fps},scale={mw}:{mh}:force_original_aspect_ratio=increase,crop={mw}:{mh},format=rgb24",
+        "-f", "rawvideo", "-",
+    ]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    assert proc.stdout is not None
+    frame_bytes = mw * mh * 3
+    with path.open("wb") as fh:
+        for i in range(n):
+            k_at = chroma_key_at(key, i * MASK_STEP_MS)
+            raw = proc.stdout.read(frame_bytes)
+            if not raw or len(raw) < frame_bytes:
+                raw = raw or b""
+                raw = raw.ljust(frame_bytes, b"\x00")
+            alpha = bytearray(mw * mh)
+            for px in range(mw * mh):
+                o = px * 3
+                a, _ = key_pixel((raw[o], raw[o + 1], raw[o + 2]), k_at)
+                alpha[px] = a
+            fh.write(alpha)
+    proc.stdout.close()
+    proc.wait()
+    return path, mw, mh, n
 
 
 def chroma_params(k: dict) -> dict:

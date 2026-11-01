@@ -31,6 +31,9 @@ import {
 } from '@/components/clips/editor/preview-safe-zone'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { previewCaptionBottomPct } from '@/lib/clips/caption-safe-area'
+import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
+import { keyframeGlobalEditMs } from '@/lib/clips/editor/keyframe-time'
+import { CAPTION_PROPS } from '@/lib/clips/editor/motion-schema'
 
 const CAPTION_FONTS = ['Poppins', 'Anton', 'Montserrat Black'] as const
 
@@ -94,6 +97,10 @@ export function CaptionsPanel({
   onChange,
   onApplyBrand,
   onSaveClipTemplate,
+  outputMs,
+  onEdits,
+  onSeekOutput,
+  readOnly,
 }: {
   clipId?: string
   edits: ClipEditsV2
@@ -103,6 +110,10 @@ export function CaptionsPanel({
   onChange: (captions: ClipEditsV2['captions']) => void
   onApplyBrand?: () => void
   onSaveClipTemplate?: () => void
+  outputMs?: number
+  onEdits?: (next: ClipEditsV2) => void
+  onSeekOutput?: (ms: number) => void
+  readOnly?: boolean
 }) {
   const cap = edits.captions ?? {}
   const [editingWordI, setEditingWordI] = useState<number | null>(null)
@@ -574,6 +585,25 @@ export function CaptionsPanel({
           </Button>
         ))}
       </div>
+
+      {outputMs != null && onEdits && onSeekOutput ? (
+        <section className="space-y-1 rounded-lg border border-border p-3" data-testid="caption-keyframes">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motion keyframes</p>
+          <p className="text-[10px] text-muted-foreground">
+            Offset and scale burned captions on the output timeline (preview and export use the same ASS tags).
+          </p>
+          <KeyframeInspector
+            edits={edits}
+            target="captions"
+            label="Captions"
+            localMs={keyframeGlobalEditMs(edits, outputMs)}
+            onCommit={onEdits}
+            onSeekLocal={onSeekOutput}
+            readOnly={Boolean(readOnly)}
+            props={[...CAPTION_PROPS]}
+          />
+        </section>
+      ) : null}
 
       <div className="flex gap-2">
         <Button

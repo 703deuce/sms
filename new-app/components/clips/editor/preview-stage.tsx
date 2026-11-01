@@ -67,7 +67,9 @@ import { corsMediaProps, prepareAll, setMediaSrc, watchMediaCors } from '@/compo
 import { reversedSourceMs } from '@/lib/clips/editor/video-reverse'
 import { applyBlurRegion, applyLayerFx, exportFrameFor, reversedMediaTime } from '@/components/clips/editor/g4/layer-fx-preview'
 import { exportOnlyNote } from '@/lib/clips/editor/export-processing'
-import { brollFxOf, chromaParams, layerFxOf, textItemHasFx, adjustLayerHasFx } from '@/lib/clips/editor/layer-fx'
+import { brollFxOf, chromaParamsAt, layerFxOf, textItemHasFx, adjustLayerHasFx } from '@/lib/clips/editor/layer-fx'
+import { keyframeLocalEditFromPlayhead } from '@/lib/clips/editor/keyframe-time'
+import { targetOriginMs } from '@/lib/clips/editor/keyframes'
 import { mainFxOf, mainKeyAllowed } from '@/lib/clips/editor/main-fx'
 import { speedAtSource } from '@/lib/clips/editor/speed'
 import { textItemFrame } from '@/lib/clips/editor/text-frame'
@@ -736,7 +738,7 @@ export function PreviewStage({
         stageFrame.offsetMs = mediaOffsetMs
         const mfx = e.layerFx?.length ? mainFxOf(e) : undefined
         applyLayerFx(mainFxRef.current, null, mfx, outMs, tickFxFrame.W, tickFxFrame.H)
-        const mainChroma = mfx?.key && mainKeyAllowed(e) ? chromaParams(mfx.key) : null
+        const mainChroma = mfx?.key && mainKeyAllowed(e) ? chromaParamsAt(mfx.key, keyframeLocalEditFromPlayhead(e, outMs, 0)) : null
         gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current), mainChroma)
         const adjGrades = tickAdjGrades
         const adjSpecs = adjGrades
@@ -816,7 +818,7 @@ export function PreviewStage({
         const lfx = e.layerFx?.length ? brollFxOf(e, item.id) : undefined
         const fxEl = brollFxRefs.current[item.id] ?? null
         applyLayerFx(fxEl, fxEl?.closest<HTMLElement>('[data-testid="preview-broll"]') ?? null, lfx, outMs - item.startMs, tickFxFrame.W, tickFxFrame.H)
-        const chroma = lfx?.key ? chromaParams(lfx.key) : null
+        const chroma = lfx?.key ? chromaParamsAt(lfx.key, keyframeLocalEditFromPlayhead(e, outMs, targetOriginMs(e, `broll:${item.id}`))) : null
         const img = brollImgRefs.current[item.id]
         if (img && media?.url) {
           const [iStart, iEnd] = brollVisibleRange(item, bWins)

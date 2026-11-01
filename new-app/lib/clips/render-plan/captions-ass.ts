@@ -9,6 +9,8 @@ import { byId as LEGACY_PRESETS } from '@/lib/clips/caption-presets'
 import { CAPTION_PRESETS_V2 } from '@/lib/clips/templates/registry'
 import { captionSafeWidthPx, fitCaptionLine, fitReferenceFrame, roundHalfUp } from '@/lib/clips/caption-fit'
 import { hex2, pyFixedPad, pyFloat, pyInt, pyRound, pyRoundN } from '@/lib/clips/render-plan/py'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { captionAssMotionTags, captionMotionAt } from '@/lib/clips/editor/caption-keyframes'
 
 /** G3a: `ln` = manual caption line index (captionLines) — one caption per line. */
 /** G3afix: `br` = starts a new line of a manual caption line; `it`/`bo` = <i>/<b> from SRT/VTT/typed. */
@@ -314,10 +316,14 @@ function appendCaptionEvents(
   o: {
     words: AssWord[]; cap: Dict; preset: Preset; anim: string; wpl: number; caseMode: string; colors: Dict | null
     emphasis: Set<number>; emphScale: number; box: Dict | null; playW: number; playH: number; position: string
-    highlightMode: string; fit: Fit
+    highlightMode: string; fit: Fit; motionEdits?: ClipEditsV2 | null; assAlign: number; marginV: number
   },
 ): void {
   const { words, cap, preset, wpl, caseMode, colors, emphasis, emphScale, box, playW, playH, position, fit } = o
+  const motionPrefix = (tSec: number) => {
+    if (!o.motionEdits?.keyframes?.length) return ''
+    return captionAssMotionTags(captionMotionAt(o.motionEdits, tSec * 1000), playW, playH, o.assAlign, o.marginV)
+  }
   let anim = o.anim
   let activeStyle = String(or(cap.activeStyle, '')).toLowerCase()
   if (!['color', 'highlight', 'fill'].includes(activeStyle)) activeStyle = ''
@@ -345,7 +351,7 @@ function appendCaptionEvents(
       const y = ({ bottom: pyInt(playH * 0.88), middle: Math.floor(playH / 2), top: pyInt(playH * 0.12) } as Record<string, number>)[position] ?? pyInt(playH * 0.88)
       const move = `{\\move(${cx},${y + pyInt(0.03 * playH)},${cx},${y},0,150)\\fad(150,0)}`
       const line = applyLineScale(joinCaptionParts(dispWordsPy(chunk, caseMode), breaks), lineScale)
-      events.push(`Dialogue: 1,${assTs(ws)},${assTs(chunkEnd)},Cap,,0,0,0,,${move}${line}`)
+      events.push(`Dialogue: 1,${assTs(ws)},${assTs(chunkEnd)},Cap,,0,0,0,,${motionPrefix(ws)}${move}${line}`)
       return
     }
     if (anim === 'karaoke' || activeStyle === 'fill') {
@@ -355,7 +361,10 @@ function appendCaptionEvents(
       const sec = hexToAss(preset.primary)
       const spk = chunk.length ? pyInt(pyFloat(chunk[0]!.spk ?? 0)) : 0
       const pri = activeStyle === 'fill' ? hexToAss(highlightHex) : activeColor(preset, spk, colors)
-      events.push(`Dialogue: 1,${assTs(ws)},${assTs(chunkEnd)},Cap,,0,0,0,,` + applyLineScale(`{\\1c${pri}\\3c${capOut}\\2c${sec}}` + joinCaptionParts(parts, breaks), lineScale))
+      events.push(
+        `Dialogue: 1,${assTs(ws)},${assTs(chunkEnd)},Cap,,0,0,0,,${motionPrefix(ws)}` +
+          applyLineScale(`{\\1c${pri}\\3c${capOut}\\2c${sec}}` + joinCaptionParts(parts, breaks), lineScale),
+      )
       return
     }
     if (anim === 'karaoke_dim' || highlightMode === 'karaoke_dim') {
@@ -365,7 +374,10 @@ function appendCaptionEvents(
       const parts = chunk.map((w, k) => `{\\kf${Math.max(1, pyInt((pyFloat(w.e) - pyFloat(w.s)) * 100))}}${cased[k]}`)
       const spk = chunk.length ? pyInt(pyFloat(chunk[0]!.spk ?? 0)) : 0
       const pri = activeColor(preset, spk, colors)
-      events.push(`Dialogue: 1,${assTs(ws)},${assTs(chunkEnd)},Cap,,0,0,0,,` + applyLineScale(`{\\1c${pri}\\3c${capOut}\\2c${dim}\\alpha&H40&}` + joinCaptionParts(parts, breaks), lineScale))
+      events.push(
+        `Dialogue: 1,${assTs(ws)},${assTs(chunkEnd)},Cap,,0,0,0,,${motionPrefix(ws)}` +
+          applyLineScale(`{\\1c${pri}\\3c${capOut}\\2c${dim}\\alpha&H40&}` + joinCaptionParts(parts, breaks), lineScale),
+      )
       return
     }
     if (anim === 'typewriter') {
@@ -384,7 +396,7 @@ function appendCaptionEvents(
           built += `{\\alpha&HFF&\\t(${off0},${off1},\\alpha&H00&)}${ch}`
         })
         const col = activeColor(preset, pyInt(pyFloat(w.spk ?? 0)), colors)
-        events.push(`Dialogue: 1,${assTs(wStart)},${assTs(wEnd)},Cap,,0,0,0,,{\\c${col}}${built}`)
+        events.push(`Dialogue: 1,${assTs(wStart)},${assTs(wEnd)},Cap,,0,0,0,,${motionPrefix(wStart)}{\\c${col}}${built}`)
       })
       return
     }
@@ -433,13 +445,19 @@ function appendCaptionEvents(
       const cpBg = Boolean(box) && slug.startsWith('cp')
       if (cpBg) events.push(`Dialogue: 0,${assTs(wStart)},${assTs(wEnd)},Box,,0,0,0,,` + applyLineScale(cpLineBgText(cased, box!, breaks), lineScale))
       if (useFullLineBox) events.push(`Dialogue: ${cpBg ? 1 : 0},${assTs(wStart)},${assTs(wEnd)},Box,,0,0,0,,` + applyLineScale(fullLineBoxLayerText(cased, ki, boxFill, breaks), lineScale))
-      events.push(`Dialogue: ${cpBg ? 2 : 1},${assTs(wStart)},${assTs(wEnd)},Cap,,0,0,0,,${line}`)
+      events.push(`Dialogue: ${cpBg ? 2 : 1},${assTs(wStart)},${assTs(wEnd)},Cap,,0,0,0,,${motionPrefix(wStart)}${line}`)
     })
   })
 }
 
 /** captions_ass.build_ass → the .ass text (Python writes header + "\n".join(events) + "\n"). */
-export function buildCaptionsAss(words: readonly AssWord[], editsCaptions: Dict | null | undefined, playW = 720, playH = 1280): string {
+export function buildCaptionsAss(
+  words: readonly AssWord[],
+  editsCaptions: Dict | null | undefined,
+  playW = 720,
+  playH = 1280,
+  motionEdits: ClipEditsV2 | null = null,
+): string {
   let cap = clampCaptionExportStyle(isDict(editsCaptions) ? editsCaptions : {}, playH, playW)
   const presetId = String(or(cap.presetId, cap.preset, 'bold_pop'))
   const isCp = presetId.startsWith('cp')
@@ -514,7 +532,26 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   const ws = words.map((w) => ({ ...w }))
   const events: string[] = []
   const run = (c: Dict) =>
-    appendCaptionEvents(events, { words: ws, cap: c, preset, anim, wpl, caseMode, colors, emphasis, emphScale, box, playW, playH, position, highlightMode, fit })
+    appendCaptionEvents(events, {
+      words: ws,
+      cap: c,
+      preset,
+      anim,
+      wpl,
+      caseMode,
+      colors,
+      emphasis,
+      emphScale,
+      box,
+      playW,
+      playH,
+      position,
+      highlightMode,
+      fit,
+      motionEdits,
+      assAlign,
+      marginV,
+    })
   try {
     run(cap)
   } catch {

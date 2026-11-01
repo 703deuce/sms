@@ -1576,6 +1576,9 @@ export function EditorShell({
           onChange={setCaptions}
           onApplyBrand={() => void applyBrand()}
           onSaveClipTemplate={() => void saveClipTemplate()}
+          outputMs={outputMs}
+          onEdits={setEdits}
+          onSeekOutput={seekOutput}
         />
         <CaptionLinesPanel
           edits={edits}

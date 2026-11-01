@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 from clips_worker.filtergraph import canvas_bg, canvas_bg_flat, canvas_bg_from_input, fit_blur_strength
-from clips_worker.layer_fx import despill_chain, key_chain, layer_fx_for, write_mask_frames
+from clips_worker.layer_fx import despill_chain, key_chain, layer_fx_for, write_chroma_key_alpha_frames, write_mask_frames
 from clips_worker.motion_render import probe_size_duration
 
 MULTI_VIDEO_LAYOUTS = frozenset(
@@ -49,42 +49,64 @@ def _reveal_bg_filter(edits: dict, w: int, h: int, fps: int, dur_s: float, blur_
     return f"color=c=black:s={w}x{h}:r={fps}:d={dur_s:.3f}[mfxbg]", extra, "mfxbg"
 
 
-def apply_full_render_key(pre_color: Path, graded: Path, out: Path, edits: dict) -> Path:
+def apply_full_render_key(pre_color: Path, graded: Path, out: Path, edits: dict, work_dir: Path | None = None) -> Path:
     lfx = layer_fx_for(edits, "video")
     k = lfx.get("key")
     if not k or not main_key_allowed(edits):
         return graded
     w, h, dur = probe_size_duration(graded)
     fps = 30
+    wd = Path(work_dir) if work_dir else out.parent
+    keyed_alpha = bool(k.get("keys"))
     bg = canvas_bg(edits)
     use_blur_bg = bool(bg and bg.get("type") == "blur")
-    if pre_color == graded:
+    dual = pre_color != graded
+
+    def keyed_alpha_block(alpha_src: Path, n_inputs: int) -> tuple[list[str], str, int]:
+        kpath = wd / "main_keyalpha.gray"
+        _, kmw, kmh, knfr = write_chroma_key_alpha_frames(alpha_src, 0.0, dur, w, h, k, kpath)
+        pad = max(0.0, dur - knfr / 10.0) + 1.0
+        extra = ["-f", "rawvideo", "-pix_fmt", "gray", "-video_size", f"{kmw}x{kmh}", "-framerate", "10", "-i", str(kpath)]
+        block = (
+            f"[{n_inputs}:v]setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration={pad:.3f},fps={fps},"
+            f"scale={w}:{h}:flags=bilinear,format=gray[ka];"
+        )
+        return extra, block, n_inputs + 1
+
+    if dual:
+        bg_f, bg_extra, bg_l = _reveal_bg_filter(edits, w, h, fps, dur, None)
+        n_in = 2 + sum(1 for i, x in enumerate(bg_extra) if x == "-i" and i > 0)
+        alpha_extra: list[str] = []
+        if keyed_alpha:
+            alpha_extra, alpha, _ = keyed_alpha_block(pre_color, n_in)
+        else:
+            alpha = f"[0:v]{key_chain(k)[1:]},alphaextract[ka];"
+        color = f"[1:v]null{despill_chain(k)},format=yuv420p[kc];"
+        fc = f"{alpha}{color}[kc][ka]alphamerge[kk];{bg_f};[{bg_l}][kk]overlay=0:0:shortest=1:format=auto,format=yuv420p[vout]"
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(pre_color), "-i", str(graded), *bg_extra, *alpha_extra,
+               "-filter_complex", fc, "-map", "[vout]", "-map", "1:a?", "-c:v", "libx264", "-preset", "veryfast",
+               "-crf", "18", "-c:a", "copy", str(out)]
+    else:
         blur_in = "0:c" if use_blur_bg else None
         bg_f, bg_extra, bg_l = _reveal_bg_filter(edits, w, h, fps, dur, blur_in)
         split_n = 3 if use_blur_bg else 2
         labels = ["0a", "0b"] + (["0c"] if use_blur_bg else [])
         split = f"[0:v]split={split_n}" + "".join(f"[{x}]" for x in labels) + ";"
-        alpha = f"[0a]{key_chain(k)[1:]},alphaextract[ka];"
-        color = f"[0b]null{despill_chain(k)},format=yuv420p[kc];"
+        n_in = 1 + sum(1 for i, x in enumerate(bg_extra) if x == "-i" and i > 0)
+        alpha_extra = []
+        if keyed_alpha:
+            alpha_extra, alpha, _ = keyed_alpha_block(graded, n_in)
+            color = f"[0b]null{despill_chain(k)},format=yuv420p[kc];"
+        else:
+            alpha = f"[0a]{key_chain(k)[1:]},alphaextract[ka];"
+            color = f"[0b]null{despill_chain(k)},format=yuv420p[kc];"
         merge = "[kc][ka]alphamerge[kk];"
         if use_blur_bg:
             bg_f = canvas_bg_from_input("0:c", "mfxbg", w, h, bg, fit_blur_strength(edits), "mfxcb")
             bg_f += f";[mfxbg]fps={fps},tpad=stop_mode=clone:stop_duration={dur:.3f}[mfxbg]"
         fc = f"{split}{alpha}{color}{merge}{bg_f};[{bg_l}][kk]overlay=0:0:shortest=1:format=auto,format=yuv420p[vout]"
-        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(graded), *bg_extra, "-filter_complex", fc,
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(graded), *bg_extra, *alpha_extra, "-filter_complex", fc,
                "-map", "[vout]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "copy", str(out)]
-    else:
-        bg_f, bg_extra, bg_l = _reveal_bg_filter(edits, w, h, fps, dur, None)
-        fc = (
-            f"[0:v]{key_chain(k)[1:]},alphaextract[ka];"
-            f"[1:v]null{despill_chain(k)},format=yuv420p[kc];"
-            f"[kc][ka]alphamerge[kk];"
-            f"{bg_f};"
-            f"[{bg_l}][kk]overlay=0:0:shortest=1:format=auto,format=yuv420p[vout]"
-        )
-        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(pre_color), "-i", str(graded), *bg_extra,
-               "-filter_complex", fc, "-map", "[vout]", "-map", "1:a?", "-c:v", "libx264", "-preset", "veryfast",
-               "-crf", "18", "-c:a", "copy", str(out)]
     subprocess.check_call(cmd)
     return out
 
