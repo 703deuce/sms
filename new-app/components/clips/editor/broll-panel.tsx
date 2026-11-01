@@ -249,9 +249,9 @@ export function BrollPanel({
               return (
                 <li key={item.id} className="flex gap-2 rounded border p-2 text-xs">
                   {m?.thumbUrl ? (
-                    <img src={m.thumbUrl} alt="" className="h-14 w-8 rounded object-cover" />
+                    <img {...corsMediaProps(m.thumbUrl)} src={m.thumbUrl} alt="" className="h-14 w-8 rounded object-cover" />
                   ) : m?.url && item.source === 'ai' ? (
-                    <video src={m.url} {...corsMediaProps(m.url)} muted playsInline preload="metadata" className="h-14 w-8 rounded object-cover" />
+                    <video {...corsMediaProps(m.url)} src={m.url} muted playsInline preload="metadata" className="h-14 w-8 rounded object-cover" />
                   ) : (
                     <div className="h-14 w-8 rounded bg-muted" />
                   )}

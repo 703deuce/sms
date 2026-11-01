@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
 import { editorTemplateSpec } from '@/lib/clips/templates/editor-spec'
 import { TemplateStage } from '@/components/clips/editor/template-stage'
+import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
 
 type NormBox = { x: number; y: number; w: number; h: number }
 
@@ -287,6 +288,7 @@ export function FacecamLayoutStudio({
         >
           {videoUrl ? (
             <video
+              {...corsMediaProps(videoUrl)}
               src={videoUrl}
               className="absolute inset-0 h-full w-full object-contain"
               muted
@@ -296,7 +298,7 @@ export function FacecamLayoutStudio({
             />
           ) : posterUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img {...corsMediaProps(posterUrl)} src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No preview</div>
           )}
@@ -368,7 +370,8 @@ export function FacecamLayoutStudio({
                 style={{ top: 0, height: `${stackPreview.faceFrac * 100}%` }}
               >
                 <video
-                  src={videoUrl}
+                  {...corsMediaProps(videoUrl)}
+              src={videoUrl}
                   className="h-full w-full"
                   style={coverBoxStyle(faceBox)}
                   muted
@@ -382,7 +385,8 @@ export function FacecamLayoutStudio({
                 style={{ bottom: 0, height: `${stackPreview.gameFrac * 100}%` }}
               >
                 <video
-                  src={videoUrl}
+                  {...corsMediaProps(videoUrl)}
+              src={videoUrl}
                   className="h-full w-full"
                   style={coverBoxStyle(gameBox)}
                   muted
@@ -394,6 +398,7 @@ export function FacecamLayoutStudio({
             </>
           ) : videoUrl ? (
             <video
+              {...corsMediaProps(videoUrl)}
               src={videoUrl}
               className="h-full w-full object-cover"
               muted

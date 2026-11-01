@@ -19,7 +19,12 @@ type Media = HTMLVideoElement | HTMLImageElement
 
 export function isCrossOriginUrl(url: string): boolean {
   if (!url || url.startsWith('blob:') || url.startsWith('data:') || url.startsWith('/')) return false
-  if (typeof location === 'undefined') return false
+  // G4cfix2: on the server (SSR of the editor page) there is no location — an absolute http(s)
+  // URL is treated as cross-origin so the HTML already carries crossorigin="anonymous". Before,
+  // SSR markup had none, the browser fetched poster / source in no-CORS mode before hydration
+  // (React does not patch attribute mismatches), the response was cached without ACAO and every
+  // later CORS load of the same signed URL failed ("No Access-Control-Allow-Origin").
+  if (typeof location === 'undefined') return /^https?:\/\//i.test(url)
   try {
     const u = new URL(url, location.href)
     return (u.protocol === 'https:' || u.protocol === 'http:') && u.origin !== location.origin
@@ -79,7 +84,10 @@ export function prepareMediaCors(el: Media) {
 export function onMediaCorsError(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLVideoElement || el instanceof HTMLImageElement)) return false
   const url = srcOf(el)
-  if (!url || el.dataset.g4cors !== url || el.crossOrigin !== 'anonymous') return false
+  // G4cfix2: also elements rendered with crossOrigin in JSX / SSR (no data-g4cors yet); one
+  // plain reload per URL at most (data-g4corsOff).
+  if (!url || el.crossOrigin !== 'anonymous' || el.dataset.g4corsOff === url) return false
+  if (el.dataset.g4cors !== url && !isCrossOriginUrl(url)) return false
   markNoCors(url)
   delete el.dataset.g4cors
   el.dataset.g4corsOff = url
@@ -158,4 +166,24 @@ export function audioGraphSafe(el: HTMLMediaElement): boolean {
   if (!url || !isCrossOriginUrl(url)) return true
   if (el.crossOrigin !== 'anonymous' || el.dataset.g4corsOff === url) return false
   return corsKnown(url) !== 'no'
+}
+
+/** G4cfix2: did this CORS-mode element already fail (e.g. before hydration attached onError)? */
+export function corsLoadFailed(el: Media): boolean {
+  if (el.crossOrigin !== 'anonymous' || !srcOf(el)) return false
+  if (el instanceof HTMLImageElement) return el.complete && el.naturalWidth === 0
+  return el.error != null || el.networkState === HTMLMediaElement.NETWORK_NO_SOURCE
+}
+
+/**
+ * G4cfix2: editor-wide safety net (EditorShell mounts it on document.body): every cross-origin
+ * <video> / <img> anywhere on the editor route (<audio> uses corsMediaProps) gets CORS mode, failures that happened
+ * before hydration fall back once, later errors fall back, successful loads mark the URL.
+ */
+export function watchEditorMediaCors(root: HTMLElement | null): () => void {
+  if (!root) return () => {}
+  root.querySelectorAll<Media>('video, img').forEach((el) => {
+    if (corsLoadFailed(el)) onMediaCorsError(el)
+  })
+  return watchMediaCors(root)
 }

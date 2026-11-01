@@ -129,8 +129,8 @@ export function SourceMonitor({
           {item.mediaType === 'video' ? (
             <video
               ref={mediaRef}
-              src={item.url ?? undefined}
               {...corsMediaProps(item.url)}
+              src={item.url ?? undefined}
               className="aspect-video w-full rounded bg-black"
               controls
               playsInline
@@ -147,8 +147,8 @@ export function SourceMonitor({
           ) : (
             <audio
               ref={mediaRef}
-              src={item.url ?? undefined}
               {...corsMediaProps(item.url)}
+              src={item.url ?? undefined}
               className="w-full"
               controls
               preload="metadata"

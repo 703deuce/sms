@@ -1514,6 +1514,7 @@ export function PreviewStage({
         ) : null}
         {!compositePreview && brandLogoUrl && brand.logoKey && (
           <img
+            {...corsMediaProps(brandLogoUrl)}
             src={brandLogoUrl}
             alt=""
             className="pointer-events-none absolute z-[20]"
