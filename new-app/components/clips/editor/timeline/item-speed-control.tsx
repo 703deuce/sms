@@ -1,11 +1,20 @@
 'use client'
 
+import { useRef, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { setSegmentSpeed, speedAtSource, SPEED_MAX, SPEED_MIN, SPEED_PRESETS, type SmoothSlowmo } from '@/lib/clips/editor/speed'
+import { clampSpeed, setSegmentSpeed, speedAtSource, SPEED_MAX, SPEED_MIN, SPEED_PRESETS, type SmoothSlowmo } from '@/lib/clips/editor/speed'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
-import { applySpeedCurve, matchSpeedCurve, SPEED_CURVE_IDS, SPEED_CURVES, type SpeedCurveId } from '@/lib/clips/editor/speed-curves'
+import {
+  applyCustomCurve,
+  applySpeedCurve,
+  matchSpeedCurve,
+  readCurveBars,
+  SPEED_CURVE_IDS,
+  SPEED_CURVES,
+  type SpeedCurveId,
+} from '@/lib/clips/editor/speed-curves'
 
 /** Speed of a Video-lane item (source range), as stored: one SegmentSpeed covering the range. */
 export function itemSpeed(edits: ClipEditsV2, srcInMs: number, srcOutMs: number): number {
@@ -43,6 +52,9 @@ export function ItemSpeedControl({
   const cur = itemSpeed(edits, srcInMs, srcOutMs)
   const slowHere = (edits.segmentSpeeds ?? []).some((s) => s.speed < 1 && s.fromMs < srcOutMs && s.toMs > srcInMs)
   const curve = matchSpeedCurve(edits.segmentSpeeds, srcInMs, srcOutMs)
+  const [customOpen, setCustomOpen] = useState(false)
+  const bars = readCurveBars(edits.segmentSpeeds, srcInMs, srcOutMs)
+  const isCustom = !curve && bars.length > 1 && bars.some((b) => b !== bars[0])
   const setCurve = (id: SpeedCurveId) => onCommit({ ...edits, segmentSpeeds: applySpeedCurve(edits.segmentSpeeds, srcInMs, srcOutMs, id) })
   const set = (s: number) => onCommit({ ...edits, segmentSpeeds: setSegmentSpeed(edits.segmentSpeeds, srcInMs, srcOutMs, s) })
   // Slider runs on a log2 scale so 1× sits in the middle of 0.25–4×.
@@ -82,7 +94,7 @@ export function ItemSpeedControl({
         />
       </div>
       <span className="tabular-nums text-muted-foreground" data-testid="item-speed-value">
-        {curve ? SPEED_CURVES[curve].label : speedLabel(cur)}
+        {curve ? SPEED_CURVES[curve].label : isCustom ? 'Custom curve' : speedLabel(cur)}
       </span>
       {slowHere ? (
         // G4c smooth slow-mo (export-side, all slowed items): frame blending or optical flow.
@@ -122,7 +134,88 @@ export function ItemSpeedControl({
             {SPEED_CURVES[id].label}
           </button>
         ))}
+        <button
+          type="button"
+          disabled={readOnly}
+          className={cn(
+            'rounded px-1.5 py-0.5 hover:bg-muted',
+            (isCustom || customOpen) && 'bg-primary text-primary-foreground hover:bg-primary',
+          )}
+          onClick={() => setCustomOpen((o) => !o)}
+          data-testid="item-speed-curve-custom"
+        >
+          Custom
+        </button>
       </div>
+      {customOpen ? (
+        <CurveBars
+          bars={bars}
+          readOnly={readOnly}
+          onCommit={(b) => onCommit({ ...edits, segmentSpeeds: applyCustomCurve(edits.segmentSpeeds, srcInMs, srcOutMs, b) })}
+        />
+      ) : null}
     </div>
+  )
+}
+
+function CurveBars({ bars, readOnly, onCommit }: { bars: readonly number[]; readOnly?: boolean; onCommit: (b: number[]) => void }) {
+  const [draft, setDraft] = useState(() => [...bars])
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const n = bars.length
+  const logMin = Math.log2(SPEED_MIN)
+  const logMax = Math.log2(SPEED_MAX)
+  const yOf = (s: number) => {
+    const t = (Math.log2(Math.max(SPEED_MIN, s)) - logMin) / (logMax - logMin)
+    return 1 - t
+  }
+  const speedAtY = (fracY: number) => clampSpeed(Math.round(2 ** (logMin + (1 - fracY) * (logMax - logMin)) * 20) / 20)
+  const paint = (clientX: number, clientY: number) => {
+    const r = svgRef.current!.getBoundingClientRect()
+    const fx = Math.min(1, Math.max(0, (clientX - r.left) / Math.max(1, r.width)))
+    const fy = Math.min(1, Math.max(0, (clientY - r.top) / Math.max(1, r.height)))
+    const i = Math.min(n - 1, Math.max(0, Math.floor(fx * n)))
+    const sp = speedAtY(fy)
+    setDraft((prev) => {
+      const next = [...prev]
+      next[i] = sp
+      return next
+    })
+  }
+  const onDown = (e: React.PointerEvent) => {
+    if (readOnly) return
+    e.preventDefault()
+    paint(e.clientX, e.clientY)
+    const mv = (ev: PointerEvent) => paint(ev.clientX, ev.clientY)
+    const up = () => {
+      window.removeEventListener('pointermove', mv)
+      window.removeEventListener('pointerup', up)
+      setDraft((cur) => {
+        onCommit(cur)
+        return cur
+      })
+    }
+    window.addEventListener('pointermove', mv)
+    window.addEventListener('pointerup', up)
+  }
+  return (
+    <svg ref={svgRef} className="h-16 w-full rounded border border-border bg-background" data-testid="item-speed-bars" onPointerDown={onDown}>
+      <line x1="0" y1="50%" x2="100%" y2="50%" className="stroke-muted-foreground" strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
+      {draft.map((s, i) => {
+        const w = 100 / n
+        const h = yOf(s) * 100
+        return (
+          <rect
+            key={i}
+            x={`${i * w}%`}
+            y={`${h}%`}
+            width={`${w}%`}
+            height={`${100 - h}%`}
+            className="fill-primary/60"
+            data-testid={`item-speed-bar-${i}`}
+            data-speed={s}
+          />
+        )
+      })}
+    </svg>
   )
 }

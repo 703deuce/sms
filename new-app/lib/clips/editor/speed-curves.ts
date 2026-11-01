@@ -65,3 +65,36 @@ export function matchSpeedCurve(speeds: SegmentSpeed[] | undefined, fromMs: numb
   }
   return null
 }
+
+/** KF-14: piece count used for [fromMs, toMs) (same rule as curvePieces). */
+export function curvePieceCount(fromMs: number, toMs: number): number {
+  const len = Math.round(toMs) - Math.round(fromMs)
+  return len > 0 ? Math.max(1, Math.min(CURVE_PIECES, Math.floor(len / CURVE_MIN_PIECE_MS))) : 0
+}
+
+/** KF-14: stored speed at each piece midpoint (seeds the bar editor). */
+export function readCurveBars(speeds: SegmentSpeed[] | undefined, fromMs: number, toMs: number): number[] {
+  const a = Math.round(fromMs)
+  const b = Math.round(toMs)
+  const n = curvePieceCount(a, b)
+  return Array.from({ length: n }, (_, i) => speedAtSource(speeds, a + ((b - a) * (i + 0.5)) / n))
+}
+
+/** KF-14: replace [fromMs, toMs) with user bars (rounded 0.05×, clamped). bars.length must equal curvePieceCount. */
+export function applyCustomCurve(
+  speeds: SegmentSpeed[] | undefined,
+  fromMs: number,
+  toMs: number,
+  bars: readonly number[],
+): SegmentSpeed[] | undefined {
+  const a = Math.round(fromMs)
+  const b = Math.round(toMs)
+  const n = curvePieceCount(a, b)
+  if (!n || bars.length !== n) return speeds
+  const pieces = bars.map((s, i) => ({
+    fromMs: a + Math.round(((b - a) * i) / n),
+    toMs: a + Math.round(((b - a) * (i + 1)) / n),
+    speed: clampSpeed(Math.round(s * 20) / 20),
+  }))
+  return normalizeSegmentSpeeds([...(setSegmentSpeed(speeds, a, b, 1) ?? []), ...pieces])
+}

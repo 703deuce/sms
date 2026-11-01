@@ -43,6 +43,7 @@ for _p in FX_PROPS:
 COLOR_PROPS = COLOR_PROPS + FX_PROPS
 KEY_PROPS = KEY_PROPS + COLOR_PROPS
 EASES = ("linear", "in", "out", "inOut")
+EASE_BZ = {"linear": (1 / 3, 2 / 3), "in": (0.0, 1 / 3), "out": (2 / 3, 1.0), "inOut": (0.0, 1.0)}
 TRANSITION_TYPES = (
     "crossfade", "dip_black", "dip_white",
     "push_left", "push_right", "push_up", "push_down",
@@ -118,6 +119,39 @@ def ease_value(ease: str | None, u: float) -> float:
     return x
 
 
+def _bz_coeffs(bz) -> tuple[float, float, float]:
+    a, b = float(bz[0]), float(bz[1])
+    return 3 * a, 3 * b - 6 * a, 1 + 3 * a - 3 * b
+
+
+def point_ease(p: dict, u: float) -> float:
+    """KF-15: segment shape of point p (bz wins over ease). Same Horner form as keyframes.ts pointEase."""
+    bz = p.get("bz")
+    if not bz:
+        return ease_value(p.get("ease"), u)
+    x = min(1.0, max(0.0, u))
+    c1, c2, c3 = _bz_coeffs(bz)
+    return x * (c1 + x * (c2 + x * c3))
+
+
+def normalize_bz(raw):
+    """Mirror of motion-schema normalizeBz: None if invalid, {} / {"ease": e} if preset, else {"bz": [a, b]}."""
+    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+        return None
+    vals = []
+    for n in raw:
+        f = _finite(n)
+        if f is None or isinstance(n, bool):
+            return None
+        vals.append(math.floor(min(1.0, max(0.0, f)) * 100 + 0.5) / 100)
+    a, b = vals
+    for e in EASES:
+        pa, pb = EASE_BZ[e]
+        if abs(pa - a) < 0.006 and abs(pb - b) < 0.006:
+            return {} if e == "linear" else {"ease": e}
+    return {"bz": [a, b]}
+
+
 def value_at_points(points: list[dict], t: float, default: float) -> float:
     n = len(points)
     if not n:
@@ -131,7 +165,7 @@ def value_at_points(points: list[dict], t: float, default: float) -> float:
             span = b["tMs"] - a["tMs"]
             if span <= 0:
                 return float(b["v"])
-            return a["v"] + (b["v"] - a["v"]) * ease_value(a.get("ease"), (t - a["tMs"]) / span)
+            return a["v"] + (b["v"] - a["v"]) * point_ease(a, (t - a["tMs"]) / span)
     return float(points[-1]["v"])
 
 
@@ -196,7 +230,10 @@ def normalize_keyframes(raw) -> list[dict]:
             if t is None or v is None:
                 continue
             pt = {"tMs": int(round(t)), "v": min(hi, max(lo, v))}
-            if p.get("ease") in ("in", "out", "inOut"):
+            nb = normalize_bz(p.get("bz"))
+            if nb is not None:
+                pt.update(nb)
+            elif p.get("ease") in ("in", "out", "inOut"):
                 pt["ease"] = p["ease"]
             by_t[pt["tMs"]] = pt
         pts = [by_t[k] for k in sorted(by_t)]
@@ -493,7 +530,11 @@ def track_expr(track: dict | None, prop: str, *, var: str = "t", origin_s: float
         else:
             u = f"(({L}-{_num(ta)})/{_num(tb - ta)})"
             e = a.get("ease")
-            if e == "in":
+            bz = a.get("bz")
+            if bz:
+                c1, c2, c3 = _bz_coeffs(bz)
+                f = f"{u}*({_num(c1)}+{u}*({_num(c2)}+{u}*{_num(c3)}))"
+            elif e == "in":
                 f = f"{u}*{u}"
             elif e == "out":
                 f = f"{u}*(2-{u})"
@@ -517,6 +558,13 @@ def _smoothstep(e0: float, e1: float, x: float) -> float:
     return t * t * (3 - 2 * t)
 
 
+def _fround(x: float) -> float:
+    """JS Math.fround (IEEE754 binary32) — mask transition P must match transitions.ts."""
+    import struct
+
+    return struct.unpack("f", struct.pack("f", float(x)))[0]
+
+
 def transition_frame(ttype: str, q_in: float) -> dict:
     """Same dict shape as transitionFrame() in transitions.ts (geometry in frame fractions)."""
     q = min(1.0, max(0.0, q_in))
@@ -534,7 +582,8 @@ def transition_frame(ttype: str, q_in: float) -> dict:
         f["a"][axis] = sign * q
         f["b"][axis] = -sign * P
     elif ttype in MASK_TRANSITIONS:
-        f.update(wA=1.0, wB=1.0, geometric=True, mask={"xfade": XFADE_NAME[ttype], "P": P})
+        Pm = _fround(1 - _fround(q))
+        f.update(wA=1.0, wB=1.0, geometric=True, mask={"xfade": XFADE_NAME[ttype], "P": Pm})
     elif ttype.startswith("wipe_"):
         f.update(wA=1.0, wB=1.0, geometric=True)
         f["b"]["clip"] = {
