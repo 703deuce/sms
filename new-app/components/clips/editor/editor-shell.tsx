@@ -1180,15 +1180,25 @@ export function EditorShell({
       const v = videoRef.current
       if (!v) return
       const preview = editorPreviewEdits(edits, editorWords)
-      const editMs =
-        preview.segmentSpeeds?.length || preview.inserts?.length || (normalizeEditSpeed(preview.speed) ?? 1) !== 1
-          ? editMsAtDisplayMs({ ...preview, speed: edits.speed }, ms)
-          : ms
       const resume = keepPlayStateAcrossSeek(v)
-      seekToOutputMs(v, preview, editMs, mediaOffsetMs)
+      seekToOutputMs(v, preview, ms, mediaOffsetMs)
       resume()
     },
     [edits, editorWords, mediaOffsetMs],
+  )
+
+  /** Transport / display-clock scrub (PlayerControls) → stored edit ms. Timeline uses seekOutput directly. */
+  const seekDisplay = useCallback(
+    (displayMs: number) => {
+      const preview = editorPreviewEdits(edits, editorWords)
+      const timingActive =
+        preview.segmentSpeeds?.length ||
+        preview.inserts?.length ||
+        (normalizeEditSpeed(preview.speed) ?? 1) !== 1
+      const editMs = timingActive ? editMsAtDisplayMs({ ...preview, speed: edits.speed }, displayMs) : displayMs
+      seekOutput(editMs)
+    },
+    [edits, editorWords, seekOutput],
   )
 
   const togglePlay = async () => {
@@ -2242,7 +2252,7 @@ export function EditorShell({
             outputMs={displayPos}
             outputDurationMs={displayDur}
             onToggle={() => void togglePlay()}
-            onScrub={seekOutput}
+            onScrub={seekDisplay}
             showScrubber={false}
             muted={playerMuted}
             volume={playerVolume}
