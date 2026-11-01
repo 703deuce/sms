@@ -93,6 +93,7 @@ export function applyBlurRegion(
   W: number,
   H: number,
   boxShortPx: number,
+  video?: HTMLVideoElement | null,
 ) {
   if (!el) return
   if (!region) {
@@ -101,11 +102,56 @@ export function applyBlurRegion(
   }
   if (el.style.visibility !== 'visible') el.style.visibility = 'visible'
   const sigma = Math.round((region.amount / 100) * BLUR_UNIT * Math.max(1, boxShortPx) * 100) / 100
-  const bf = `blur(${sigma}px)`
+  // G4cfix: draw the blurred main frame into the region's own canvas (works whatever the stacking /
+  // backdrop root, and for no-CORS media: a tainted canvas still displays). Backdrop blur is only
+  // the fallback for engines without CanvasRenderingContext2D.filter.
+  const cv = el.querySelector('canvas')
+  const drawn = Boolean(cv && video && drawBlurFrame(cv, video, el, sigma))
+  const bf = drawn ? '' : `blur(${sigma}px)`
   const st = el.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }
   if (st.backdropFilter !== bf) {
     st.backdropFilter = bf
     st.webkitBackdropFilter = bf
   }
+  if (cv && !drawn && cv.style.display !== 'none') cv.style.display = 'none'
   setMask(el, maskUrl(region.mask, localMs, W, H))
+}
+
+/** Where a video's picture lands inside its element box (object-fit cover / contain / fill, centred). */
+export function videoContentRect(
+  box: { left: number; top: number; width: number; height: number },
+  vw: number,
+  vh: number,
+  fit: string,
+): { x: number; y: number; w: number; h: number } {
+  if (!vw || !vh || fit === 'fill') return { x: box.left, y: box.top, w: box.width, h: box.height }
+  const s = fit === 'contain' || fit === 'scale-down' ? Math.min(box.width / vw, box.height / vh) : Math.max(box.width / vw, box.height / vh)
+  const w = vw * s
+  const h = vh * s
+  return { x: box.left + (box.width - w) / 2, y: box.top + (box.height - h) / 2, w, h }
+}
+
+function drawBlurFrame(cv: HTMLCanvasElement, video: HTMLVideoElement, host: HTMLElement, sigma: number): boolean {
+  if (video.readyState < 2 || !video.videoWidth) return false
+  const ctx = cv.getContext('2d')
+  if (!ctx || !('filter' in ctx)) return false
+  const hr = host.getBoundingClientRect()
+  const vr = video.getBoundingClientRect()
+  if (hr.width < 2 || hr.height < 2 || vr.width < 2) return false
+  const w = Math.round(hr.width)
+  const h = Math.round(hr.height)
+  if (cv.width !== w) cv.width = w
+  if (cv.height !== h) cv.height = h
+  const fit = (typeof getComputedStyle !== 'undefined' ? getComputedStyle(video).objectFit : '') || 'contain'
+  const r = videoContentRect({ left: vr.left - hr.left, top: vr.top - hr.top, width: vr.width, height: vr.height }, video.videoWidth, video.videoHeight, fit)
+  ctx.clearRect(0, 0, w, h)
+  ctx.filter = `blur(${sigma}px)`
+  try {
+    ctx.drawImage(video, r.x, r.y, r.w, r.h)
+  } catch {
+    return false
+  }
+  ctx.filter = 'none'
+  if (cv.style.display !== 'block') cv.style.display = 'block'
+  return true
 }

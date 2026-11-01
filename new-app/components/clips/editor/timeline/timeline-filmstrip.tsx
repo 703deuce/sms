@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { corsMediaProps } from "@/components/clips/editor/g4/media-cors";
 import {
   clientFrameQuantumMs,
   filmstripTiles,
@@ -113,19 +114,31 @@ export function TimelineFilmstrip({
           style.backgroundImage = `url("${sprite.sheetUrls[st.sheet]}")`;
           style.backgroundSize = `${sprite.cols * sprite.tileW * scale}px ${sprite.rows * sprite.tileH * scale}px`;
           style.backgroundPosition = `${-st.x * scale}px ${-st.y * scale}px`;
-        } else if (stillUrl) {
-          style.backgroundImage = `url("${stillUrl}")`;
-          style.backgroundSize = "cover";
-          style.backgroundPosition = "center";
         }
+        // G4cfix: the still (poster / thumbnail / image upload) is a CORS <img>, never a CSS
+        // background — a no-CORS background fetch got cached and then broke the preview's CORS
+        // load of the same signed URL ("No Access-Control-Allow-Origin" on a fresh reload).
+        const still = !client && !st && stillUrl ? stillUrl : null;
         return (
           <span
             key={t.leftPx}
-            className="absolute top-0 border-r border-black/40 bg-black/20 bg-no-repeat"
+            className="absolute top-0 overflow-hidden border-r border-black/40 bg-black/20 bg-no-repeat"
             style={style}
             data-testid="timeline-filmstrip-tile"
             data-media-ms={Math.round(t.mediaMs)}
-          />
+          >
+            {still ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                {...corsMediaProps(still)}
+                src={still}
+                alt=""
+                draggable={false}
+                className="size-full object-cover"
+                data-testid="timeline-filmstrip-still"
+              />
+            ) : null}
+          </span>
         );
       })}
     </div>

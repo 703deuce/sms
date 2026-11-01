@@ -266,6 +266,7 @@ export function PreviewStage({
   const mainKfRef = useRef<HTMLDivElement>(null)
   const mainLayerRef = useRef<HTMLDivElement>(null)
   const blurRegionRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const blurChipRef = useRef<HTMLParagraphElement | null>(null)
   const cloneARef = useRef<HTMLDivElement>(null)
   const cutDipRef = useRef<HTMLDivElement>(null)
   const cloneBRef = useRef<HTMLDivElement>(null)
@@ -629,7 +630,14 @@ export function PreviewStage({
         for (const [id, el] of Object.entries(blurRegionRefs.current)) {
           const r = e.blurRegions?.find((x) => x.id === id)
           const on = r && r.startMs <= outMs && outMs < r.endMs ? r : null
-          applyBlurRegion(el, on, on ? outMs - on.startMs : 0, bf.W, bf.H, short)
+          applyBlurRegion(el, on, on ? outMs - on.startMs : 0, bf.W, bf.H, short, v)
+        }
+        // G4cfix: chip while an auto-faces region plays (the preview shows its stand-in mask).
+        const chip = blurChipRef.current
+        if (chip) {
+          const faces = (e.blurRegions ?? []).some((r) => r.mode === 'faces' && r.startMs <= outMs && outMs < r.endMs)
+          const vis = faces ? 'visible' : 'hidden'
+          if (chip.style.visibility !== vis) chip.style.visibility = vis
         }
       }
       for (const it of e.textItems ?? []) {
@@ -714,7 +722,11 @@ export function PreviewStage({
           rate,
           mediaOffsetMs,
           // Transition clones: SVG chain (no WebGL mirror / 3D stage on clones — G4_spec limits).
-          lookAt: e.color ? (ms: number) => (gp ? gp.bank.css(videoSpecAtSource(e.color, ms)) : lookFilterCss(videoSpecAtSource(e.color, ms))) : undefined,
+          // G4cfix: clones carry the keyframed grade / effects too (videoGradeAt at output time).
+          lookAt:
+            e.color || e.keyframes?.length
+              ? (ms: number) => (gp ? gp.bank.css(videoGradeAt(e, ms, outMs)) : lookFilterCss(videoSpecAtSource(e.color, ms)))
+              : undefined,
         },
       )
       if (gp) {
@@ -1032,7 +1044,8 @@ export function PreviewStage({
             <video
               key={`preview-blur-${layoutMode}`}
               ref={blurRef}
-              src={videoUrl ?? undefined}
+              {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
               className="absolute inset-0 size-full max-w-none scale-110 object-cover blur-2xl"
               style={{ filter: fitBlurCssFilter(blurStrength, box.w) }}
               muted
@@ -1042,7 +1055,8 @@ export function PreviewStage({
             <video
               key={`preview-main-${layoutMode}`}
               ref={videoRefInner}
-              src={videoUrl ?? undefined}
+              {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
               className={`absolute inset-x-0 top-1/2 z-[1] w-full -translate-y-1/2 object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
               playsInline
               onLoadedMetadata={() => {
@@ -1065,7 +1079,8 @@ export function PreviewStage({
               <>
                 <video
                   ref={blurRef}
-                  src={videoUrl ?? undefined}
+                  {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
                   className="absolute inset-0 size-full max-w-none object-cover"
                   style={{ filter: fitBlurCssFilter(blurStrength, box.w) }}
                   muted
@@ -1075,7 +1090,8 @@ export function PreviewStage({
                 <video
                   key={`preview-main-${layoutMode}`}
                   ref={videoRefInner}
-                  src={videoUrl ?? undefined}
+                  {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
                   data-testid={composeSpec ? 'compose-video' : 'fit-top-main-video'}
                   className={`absolute inset-x-0 z-[1] max-w-none object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                   style={{ top: videoTop, height: videoH, width: '100%' }}
@@ -1096,7 +1112,8 @@ export function PreviewStage({
         ) : fitTopPreview && videoUrl ? (
           <video
             ref={videoRefInner}
-            src={videoUrl ?? undefined}
+            {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
             className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
             playsInline
             onCanPlay={() => setCanPlay(true)}
@@ -1125,7 +1142,8 @@ export function PreviewStage({
                     <video
                       key={`stack-${idx}-${layoutMode}`}
                       ref={idx === (faceFirst ? 1 : 0) ? videoRefInner : undefined}
-                      src={videoUrl ?? undefined}
+                      {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
                       className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                       style={coverBoxStyle(panel.box)}
                       playsInline
@@ -1155,7 +1173,8 @@ export function PreviewStage({
               <div className="relative size-full overflow-hidden">
                 <video
                   ref={videoRefInner}
-                  src={videoUrl ?? undefined}
+                  {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
                   className={`max-w-none size-full object-cover ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                   style={coverBoxStyle(facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 })}
                   playsInline
@@ -1178,7 +1197,8 @@ export function PreviewStage({
                   }
                 >
                   <video
-                    src={videoUrl ?? undefined}
+                    {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
                     className="max-w-none"
                     style={coverBoxStyle(facecamBox)}
                     playsInline
@@ -1206,7 +1226,8 @@ export function PreviewStage({
                 <video
                   key={`preview-blur-${layoutMode}`}
                   ref={blurRef}
-                  src={videoUrl ?? undefined}
+                  {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
                   className="absolute inset-0 size-full max-w-none object-cover"
                   muted
                   playsInline
@@ -1215,7 +1236,8 @@ export function PreviewStage({
                 <video
                   key={`preview-main-${layoutMode}`}
                   ref={videoRefInner}
-                  src={videoUrl ?? undefined}
+                  {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
                   className={`absolute left-0 top-0 z-[1] max-w-none transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                   style={{ position: 'absolute', left: 0, top: 0, maxWidth: 'none' }}
                   playsInline
@@ -1248,6 +1270,7 @@ export function PreviewStage({
               <video
                 key={`preview-main-${layoutMode}`}
                 ref={videoRefInner}
+                {...corsMediaProps(videoUrl)}
                 src={videoUrl ?? undefined}
                 data-testid="center-crop-video"
                 className={`size-full transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'} ${edits.layout.cropBox ? '' : 'object-cover'}`}
@@ -1274,7 +1297,8 @@ export function PreviewStage({
           <>
             <video
               ref={videoRefInner}
-            src={videoUrl ?? undefined}
+            {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
             className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
             playsInline
             onCanPlay={() => setCanPlay(true)}
@@ -1289,7 +1313,8 @@ export function PreviewStage({
         ) : videoUrl ? (
           <video
             ref={videoRefInner}
-            src={videoUrl ?? undefined}
+            {...corsMediaProps(videoUrl)}
+                src={videoUrl ?? undefined}
             className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
             playsInline
             onCanPlay={() => setCanPlay(true)}
@@ -1375,7 +1400,9 @@ export function PreviewStage({
             data-blur-id={r.id}
             data-blur-mode={r.mode}
             aria-hidden
-          />
+          >
+            <canvas className="absolute inset-0 size-full" style={{ display: 'none' }} data-testid="preview-blur-canvas" />
+          </div>
         ))}
         </div>
         {!compositePreview &&
@@ -1566,6 +1593,17 @@ export function PreviewStage({
             onCropModeChange={canvas.onCropModeChange}
             readOnly={Boolean(audition)}
           />
+        ) : null}
+        {edits.blurRegions?.some((r) => r.mode === 'faces') ? (
+          <p
+            ref={blurChipRef}
+            className="pointer-events-none absolute right-2 top-2 z-[30] rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white/85"
+            style={{ visibility: 'hidden' }}
+            data-testid="blur-export-chip"
+            title="Every face in this range is found and blurred on export; the preview blurs the mask area as a stand-in"
+          >
+            Face blur · processed on export
+          </p>
         ) : null}
         {libassFailed ? (
           <p

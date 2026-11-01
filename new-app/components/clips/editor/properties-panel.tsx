@@ -114,6 +114,7 @@ export function PropertiesPanel({
   speedSlot,
   colorSlot,
   videoSlot,
+  brollSceneSlot,
 }: {
   edits: ClipEditsV2
   target: KeyframeTarget | null
@@ -130,6 +131,8 @@ export function PropertiesPanel({
   colorSlot?: ReactNode
   /** G4c main-video tools (stabilize / scene split / blur regions) under Video for the Video layer. */
   videoSlot?: ReactNode
+  /** G4cfix: scene split for the selected B-roll item (rendered under its layer effects). */
+  brollSceneSlot?: (id: string) => ReactNode
 }) {
   const avail = tabsFor(target)
   const [tab, setTab] = useState<PropertiesTab>('video')
@@ -188,6 +191,7 @@ export function PropertiesPanel({
             readOnly={readOnly}
           />
           {target === 'video' && videoSlot ? videoSlot : null}
+          {target.startsWith('broll:') && brollSceneSlot ? brollSceneSlot(target.slice('broll:'.length)) : null}
         </>
       ) : tab === 'audio' && avail.audio == null ? (
         <KeyframeInspector

@@ -17,13 +17,14 @@ import {
   type BlurRegion,
 } from '@/lib/clips/editor/blur-regions'
 import { MASK_LABELS, MASK_SHAPES, maskGeomAt, type LayerMask, type MaskGeom } from '@/lib/clips/editor/layer-fx'
-import { detectCuts, frameSig, refineCut, sampleTimes, usableCuts, type SceneSample } from '@/lib/clips/editor/scene-detect'
+import { clipRanges, usableCuts } from '@/lib/clips/editor/scene-detect'
+import { splitBrollAtMedia, splitInsertAtMedia } from '@/lib/clips/editor/scene-items'
 import { sourceToOutput, timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 import { maskKeyMs, setMaskGeom, toggleMaskKey } from './layer-fx-controls'
 import { stageFrame } from './grade-preview'
-import { openScanner } from './frame-scan'
+import { scanSceneCuts } from './scene-scan'
 
 const btn =
   'inline-flex h-7 items-center gap-1 rounded border border-border px-2 text-[11px] hover:bg-muted disabled:pointer-events-none disabled:opacity-35'
@@ -99,71 +100,60 @@ export function SceneSplitSection({
   onCommit,
   onSeekOutput,
   readOnly,
+  videoItem = null,
 }: {
   edits: ClipEditsV2
   onCommit: (next: ClipEditsV2) => void
   onSeekOutput: (ms: number) => void
   readOnly?: boolean
+  /** G4cfix: the selected Video item — scanned alone by default (a 12-min clip took minutes). */
+  videoItem?: { srcInMs: number; srcOutMs: number } | null
 }) {
   const [phase, setPhase] = useState<'idle' | 'scan' | 'done'>('idle')
   const [progress, setProgress] = useState(0)
   const [msg, setMsg] = useState<string | null>(null)
   const [cands, setCands] = useState<Cand[]>([])
+  const [scope, setScope] = useState<'item' | 'all'>('item')
   const stop = useRef(false)
   useEffect(() => () => void (stop.current = true), [])
   const tb = timebaseFor(edits)
   const outOf = (src: number) => sourceToOutput(tb, src)
+  const useItem = scope === 'item' && videoItem != null
 
   const scan = async () => {
     const v = stageFrame.video
     const url = v ? v.currentSrc || v.src : ''
     setMsg(null)
     setCands([])
-    const sc = await openScanner(url, 96)
-    if ('error' in sc) {
-      setMsg(sc.error)
-      return
-    }
     stop.current = false
     setPhase('scan')
     setProgress(0)
     const off = stageFrame.offsetMs ?? 0
     const segs = orderedKeepSegments(edits)
-    const times = sampleTimes(segs)
-    const samples: SceneSample[] = []
-    const sigAt = async (t: number) => {
-      const f = await sc.frameAt(videoTimeFromSourceMs(t, off))
-      return f ? frameSig(f.px, f.w, f.h) : null
+    const ranges = useItem ? clipRanges(segs, videoItem.srcInMs, videoItem.srcOutMs) : segs
+    const r = await scanSceneCuts({
+      url,
+      ranges,
+      toVideoSec: (t) => videoTimeFromSourceMs(t, off),
+      onProgress: setProgress,
+      stopped: () => stop.current,
+    })
+    if ('stopped' in r) {
+      setPhase('idle')
+      return
     }
-    try {
-      for (let i = 0; i < times.length; i++) {
-        if (stop.current) break
-        const sig = await sigAt(times[i]!)
-        if (sig) samples.push({ t: times[i]!, sig })
-        if (i % 8 === 0) setProgress(Math.round((i / times.length) * 90))
-      }
-      if (stop.current) {
-        setPhase('idle')
-        return
-      }
-      const raw = detectCuts(samples)
-      const refined: Cand[] = []
-      for (const c of raw) {
-        const i = samples.findIndex((s) => s.t === c.t)
-        const prev = samples[i - 1]
-        const sameSeg = prev && segs.some(([a, b]) => prev.t >= a && c.t < b)
-        const t = sameSeg && prev ? await refineCut(prev.t, c.t, prev.sig, samples[i]!.sig, sigAt) : c.t
-        refined.push({ src: t, score: c.score, on: true })
-      }
-      const keep = new Set(usableCuts(refined.map((r) => r.src), segs, edits.videoSplits ?? [], SCENE_MIN_SEG_MS))
-      const list = refined.filter((r) => keep.has(r.src))
-      setCands(list)
-      setPhase('done')
-      setProgress(100)
-      setMsg(list.length ? null : 'No scene changes found.')
-    } finally {
-      sc.close()
+    if ('error' in r) {
+      setPhase('idle')
+      setMsg(r.error)
+      return
     }
+    const refined: Cand[] = r.cuts.map((c) => ({ src: c.t, score: c.score, on: true }))
+    const keep = new Set(usableCuts(refined.map((x) => x.src), segs, edits.videoSplits ?? [], SCENE_MIN_SEG_MS))
+    const list = refined.filter((x) => keep.has(x.src))
+    setCands(list)
+    setPhase('done')
+    setProgress(100)
+    setMsg(list.length ? null : 'No scene changes found.')
   }
 
   const apply = () => {
@@ -189,9 +179,28 @@ export function SceneSplitSection({
             </button>
           </>
         ) : (
-          <button type="button" className={btn} disabled={readOnly} onClick={() => void scan()} data-testid="scene-split-detect">
-            <Scissors className="size-3" aria-hidden /> Detect scenes
-          </button>
+          <>
+            {videoItem ? (
+              <div className="flex overflow-hidden rounded border border-border" role="radiogroup" aria-label="Scan range" data-testid="scene-split-scope">
+                {(['item', 'all'] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    role="radio"
+                    aria-checked={scope === k}
+                    onClick={() => setScope(k)}
+                    className={`h-7 px-2 text-[11px] ${scope === k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+                    data-testid={`scene-split-scope-${k}`}
+                  >
+                    {k === 'item' ? 'Selected item' : 'Whole clip'}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <button type="button" className={btn} disabled={readOnly} onClick={() => void scan()} data-testid="scene-split-detect">
+              <Scissors className="size-3" aria-hidden /> Detect scenes
+            </button>
+          </>
         )}
       </div>
       {cands.length ? (
@@ -407,8 +416,94 @@ export function MainVideoTools({
           <p className="text-[10px] text-muted-foreground">Select a Video item on the timeline to stabilize it.</p>
         )}
       </Section>
-      <SceneSplitSection edits={edits} onCommit={onCommit} onSeekOutput={onSeekOutput} readOnly={readOnly} />
+      <SceneSplitSection edits={edits} onCommit={onCommit} onSeekOutput={onSeekOutput} readOnly={readOnly} videoItem={videoItem} />
       <BlurRegionsSection edits={edits} outputMs={outputMs} durationMs={durationMs} onCommit={onCommit} onSeekOutput={onSeekOutput} readOnly={readOnly} />
+    </div>
+  )
+}
+
+/**
+ * G4cfix: scene split for one B-roll item or inserted clip — scans its own file over the used
+ * media range and splits it into pieces at the cuts you keep (manual, no credits).
+ */
+export function MediaSceneSplit({
+  edits,
+  kind,
+  id,
+  url,
+  inMs,
+  outMs,
+  onCommit,
+  readOnly,
+}: {
+  edits: ClipEditsV2
+  kind: 'broll' | 'insert'
+  id: string
+  url: string | null | undefined
+  /** Used media range (ms in the item's file). */
+  inMs: number
+  outMs: number
+  onCommit: (next: ClipEditsV2) => void
+  readOnly?: boolean
+}) {
+  const [busy, setBusy] = useState<number | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [cands, setCands] = useState<{ t: number; on: boolean }[]>([])
+  const stop = useRef(false)
+  useEffect(() => () => void (stop.current = true), [])
+  const scan = async () => {
+    if (!url) return
+    stop.current = false
+    setMsg(null)
+    setCands([])
+    setBusy(0)
+    const r = await scanSceneCuts({ url, ranges: [[inMs, outMs]], toVideoSec: (t) => t / 1000, onProgress: setBusy, stopped: () => stop.current })
+    setBusy(null)
+    if ('stopped' in r) return
+    if ('error' in r) return setMsg(r.error)
+    const keep = usableCuts(r.cuts.map((c) => c.t), [[inMs, outMs]], [], SCENE_MIN_SEG_MS)
+    setCands(keep.map((t) => ({ t, on: true })))
+    if (!keep.length) setMsg('No scene changes found.')
+  }
+  const apply = () => {
+    const pick = cands.filter((c) => c.on).map((c) => c.t)
+    if (!pick.length) return
+    onCommit(kind === 'broll' ? splitBrollAtMedia(edits, id, pick) : splitInsertAtMedia(edits, id, pick))
+    setCands([])
+    setMsg(`Split into ${pick.length + 1} parts.`)
+  }
+  return (
+    <div className="space-y-1" data-testid={`media-scene-split-${kind}`}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {busy != null ? (
+          <>
+            <span className="text-[11px] tabular-nums" data-testid="media-scene-split-progress">Scanning… {busy}%</span>
+            <button type="button" className={btn} onClick={() => (stop.current = true)}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button type="button" className={btn} disabled={readOnly || !url} onClick={() => void scan()} data-testid="media-scene-split-detect">
+            <Scissors className="size-3" aria-hidden /> Detect scenes
+          </button>
+        )}
+        {cands.length ? (
+          <button type="button" className={`${btn} ${on}`} disabled={readOnly || !cands.some((c) => c.on)} onClick={apply} data-testid="media-scene-split-apply">
+            Split at {cands.filter((c) => c.on).length}
+          </button>
+        ) : null}
+      </div>
+      {cands.length ? (
+        <div className="flex flex-wrap gap-2 text-[11px]">
+          {cands.map((c, i) => (
+            <label key={c.t} className="flex items-center gap-1 tabular-nums">
+              <input type="checkbox" checked={c.on} onChange={() => setCands(cands.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))} />
+              {fmtMs(c.t)}
+            </label>
+          ))}
+        </div>
+      ) : null}
+      {msg ? <p className="text-[10px] text-muted-foreground" data-testid="media-scene-split-msg">{msg}</p> : null}
     </div>
   )
 }

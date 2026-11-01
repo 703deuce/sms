@@ -24,7 +24,7 @@ import {
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 import { addAdjustLayer, patchAdjustLayer, removeAdjustLayer } from '@/lib/clips/editor/adjust-layers'
-import { FX_KEY_QUANT } from '@/lib/clips/editor/color-grade'
+import { COLOR_KEY_PROPS, FX_KEY_PROPS, FX_KEY_QUANT, type FxKeyProp } from '@/lib/clips/editor/color-grade'
 import { ADJUST_KEY_PROPS, FX_PROPS, type KeyframeTarget } from '@/lib/clips/editor/motion-schema'
 import { targetOriginMs } from '@/lib/clips/editor/keyframes'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
@@ -201,6 +201,12 @@ export function ColorPanel({
   const adjustLayer = isAdjust ? edits.adjustLayers?.find((l) => l.id === target.id) : undefined
   const kfTarget = colorKeyTarget(target)
   const kfOrigin = outputMs != null ? targetOriginMs(edits, kfTarget) : 0
+  const kfBase = (p: string) =>
+    p in FX_KEY_PROPS
+      ? Number(spec?.fx?.[FX_KEY_PROPS[p as FxKeyProp]] ?? 0)
+      : p in COLOR_KEY_PROPS
+        ? Number(spec?.adjust?.[COLOR_KEY_PROPS[p as keyof typeof COLOR_KEY_PROPS]] ?? 0)
+        : undefined
   const kfLocal = outputMs != null ? Math.max(0, outputMs - kfOrigin) : 0
   const addLayer = () => {
     if (outputMs == null || !outputDurationMs) return
@@ -379,6 +385,7 @@ export function ColorPanel({
             }}
             onSeekLocal={(t) => onSeekOutput(kfOrigin + t)}
             props={ADJUST_KEY_PROPS}
+            baseValue={kfBase}
           />
         </section>
       ) : null}
@@ -418,6 +425,7 @@ export function ColorPanel({
               }}
               onSeekLocal={(t) => onSeekOutput(kfOrigin + t)}
               props={FX_PROPS}
+              baseValue={kfBase}
             />
           </div>
         ) : null}

@@ -19,7 +19,18 @@ import {
   type KeyProp,
   type KeyframeTarget,
 } from '@/lib/clips/editor/keyframes'
-import { CROP_PROPS } from '@/lib/clips/editor/motion-schema'
+import { CROP_PROPS, isColorProp } from '@/lib/clips/editor/motion-schema'
+
+/**
+ * G4cfix: a colour / effect track with no keyframes left is dropped, so the panel slider is the
+ * static value again (a pointless static track used to keep the last keyframed value: stale 80).
+ */
+export function dropEmptyColorTrack(edits: ClipEditsV2, target: KeyframeTarget, prop: KeyProp): ClipEditsV2 {
+  if (!isColorProp(prop)) return edits
+  const t = findTrack(edits, target, prop)
+  if (!t || t.points.length) return edits
+  return { ...edits, keyframes: (edits.keyframes ?? []).filter((k) => k !== t) }
+}
 
 const EASE_SHORT: Record<Ease, string> = { linear: 'Lin', in: 'In', out: 'Out', inOut: 'In-Out' }
 
@@ -38,6 +49,7 @@ export function KeyframeInspector({
   onSeekLocal,
   readOnly = false,
   props: only,
+  baseValue,
 }: {
   edits: ClipEditsV2
   target: KeyframeTarget
@@ -49,6 +61,8 @@ export function KeyframeInspector({
   readOnly?: boolean
   /** G1a: rows to show (default: the E3 transform / volume rows — crop lives in Properties). */
   props?: readonly KeyProp[]
+  /** G4cfix: static (slider) value of a colour / effect row without keyframes. */
+  baseValue?: (prop: KeyProp) => number | undefined
 }) {
   const props = only ?? propsForTarget(target).filter((p) => !(CROP_PROPS as readonly string[]).includes(p))
   return (
@@ -69,6 +83,7 @@ export function KeyframeInspector({
           onCommit={onCommit}
           onSeekLocal={onSeekLocal}
           readOnly={readOnly}
+          baseValue={baseValue}
         />
       ))}
     </div>
@@ -87,6 +102,7 @@ function PropRow({
   onCommit,
   onSeekLocal,
   readOnly,
+  baseValue,
 }: {
   edits: ClipEditsV2
   target: KeyframeTarget
@@ -95,12 +111,15 @@ function PropRow({
   onCommit: (next: ClipEditsV2) => void
   onSeekLocal: (localMs: number) => void
   readOnly: boolean
+  baseValue?: (prop: KeyProp) => number | undefined
 }) {
   const spec = PROP_SPECS[prop]
   const track = findTrack(edits, target, prop)
-  const value = trackValueAt(track, prop, localMs)
   const here = pointAt(track, localMs)
   const hasPoints = Boolean(track?.points.length)
+  // G4cfix: colour / effect rows without keyframes show (and start from) the panel slider value.
+  const colorRow = isColorProp(prop)
+  const value = colorRow && !hasPoints ? (baseValue?.(prop) ?? trackValueAt(undefined, prop, localMs)) : trackValueAt(track, prop, localMs)
   const [draft, setDraft] = useState(fmt(value))
   useEffect(() => setDraft(fmt(value)), [value])
   const commitDraft = () => {
@@ -109,7 +128,15 @@ function PropRow({
       setDraft(fmt(value))
       return
     }
-    onCommit(setPropertyAt(edits, target, prop, localMs, n))
+    const set = setPropertyAt(edits, target, prop, localMs, n)
+    // G4cfix: typing on a colour / effect row without keyframes starts one here (the static value
+    // stays the panel slider's, so preview, slider and export never disagree).
+    onCommit(colorRow && !hasPoints ? toggleKeyframeAt(set, target, prop, localMs) : set)
+  }
+  const toggle = () => {
+    if (!colorRow) return onCommit(toggleKeyframeAt(edits, target, prop, localMs))
+    const from = hasPoints ? edits : setPropertyAt(edits, target, prop, localMs, value)
+    onCommit(dropEmptyColorTrack(toggleKeyframeAt(from, target, prop, localMs), target, prop))
   }
   const prev = adjacentKeyframe(edits, target, prop, localMs, -1)
   const next = adjacentKeyframe(edits, target, prop, localMs, 1)
@@ -157,7 +184,7 @@ function PropRow({
         type="button"
         className={`${btn} ${here ? 'text-amber-400' : hasPoints ? 'text-foreground' : 'text-muted-foreground'}`}
         disabled={readOnly}
-        onClick={() => onCommit(toggleKeyframeAt(edits, target, prop, localMs))}
+        onClick={toggle}
         aria-pressed={Boolean(here)}
         aria-label={here ? `Remove ${spec.label} keyframe` : `Add ${spec.label} keyframe`}
         title={here ? 'Remove keyframe' : 'Add keyframe at playhead'}

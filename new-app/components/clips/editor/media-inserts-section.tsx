@@ -5,7 +5,8 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
-import type { ProjectMediaApi } from '@/components/clips/editor/use-project-media'
+import { mediaUrlFor, type ProjectMediaApi } from '@/components/clips/editor/use-project-media'
+import { MediaSceneSplit } from '@/components/clips/editor/g4/video-tools'
 import { orderedKeepSegments, type ClipEditsV2 } from '@/lib/clips/edits'
 import {
   INSERT_MIN_MS,
@@ -85,6 +86,18 @@ export function InsertsSection({
                 </Button>
               ))}
             </div>
+            {src?.mediaType === 'video' && !w.freeze ? (
+              // G4cfix: scene split on inserted media (splits this insert into consecutive inserts).
+              <MediaSceneSplit
+                edits={edits}
+                kind="insert"
+                id={w.id}
+                url={mediaUrlFor(media.items, src.refId)}
+                inMs={w.inMs}
+                outMs={w.inMs + w.durMs}
+                onCommit={onEdits}
+              />
+            ) : null}
             <SliderRow
               label="Length"
               value={w.durMs / 1000}
