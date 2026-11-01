@@ -2,7 +2,8 @@
 
 import './libass-preview.css'
 
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
 import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { normalizeEditSpeed, orderedKeepSegments } from '@/lib/clips/edits'
@@ -285,6 +286,8 @@ export function PreviewStage({
   // while the picture is already / still on the other side of a cut (export: split_edits.py).
   const splitAudioRef = useRef<HTMLVideoElement | null>(null)
   const lastRateRef = useRef<number | null>(null)
+  // TC1 (TL-39): preview-only speed (timeline toolbar); multiplies every element's playbackRate.
+  const previewRate = useSyncExternalStore(subscribePreviewRate, getPreviewRate, () => 1)
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
   const captionTimeRef = useRef(0)
@@ -466,7 +469,7 @@ export function PreviewStage({
   ])
 
   useEffect(() => {
-    const rate = normalizeEditSpeed(edits.speed) ?? 1
+    const rate = (normalizeEditSpeed(edits.speed) ?? 1) * previewRate
     const applyRate = (el: HTMLVideoElement | null) => {
       if (el) el.playbackRate = rate
     }
@@ -474,7 +477,7 @@ export function PreviewStage({
     applyRate(blurRef.current)
     wrapRef.current?.querySelectorAll('video').forEach((el) => applyRate(el))
     Object.values(brollRefs.current).forEach((el) => applyRate(el))
-  }, [edits.speed, videoUrl, canPlay])
+  }, [edits.speed, videoUrl, canPlay, previewRate])
 
   useEffect(() => {
     let raf = 0
@@ -535,10 +538,11 @@ export function PreviewStage({
       outMsRef.current = out
       // E4: per-item speed — every element plays at global × segment speed (pitch preserved), so
       // the edit-time clock (captions, overlays, B-roll, music) advances exactly like the export warp.
-      const rate = (normalizeEditSpeed(e.speed) ?? 1) * speedAtSource(e.segmentSpeeds, src)
-      if (e.segmentSpeeds?.length || lastRateRef.current !== null) {
+      const pr = getPreviewRate()
+      const rate = (normalizeEditSpeed(e.speed) ?? 1) * speedAtSource(e.segmentSpeeds, src) * pr
+      if (e.segmentSpeeds?.length || pr !== 1 || lastRateRef.current !== null) {
         // Compared per element each tick (cheap), so B-roll / remounted videos pick it up too.
-        lastRateRef.current = e.segmentSpeeds?.length ? rate : null
+        lastRateRef.current = e.segmentSpeeds?.length || pr !== 1 ? rate : null
         const setRate = (el: HTMLVideoElement | null) => {
           if (el && el.playbackRate !== rate) el.playbackRate = rate
         }

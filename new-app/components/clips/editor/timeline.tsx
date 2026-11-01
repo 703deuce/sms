@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
-import { Activity, Blend, Keyboard, Layers, Magnet, Maximize2, Pause, Plus, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
+import { Activity, Blend, Bookmark, Command, Keyboard, Layers, Link2, Magnet, Maximize2, Pause, Plus, Redo2, Repeat, Scissors, Square, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -23,6 +23,8 @@ import {
   deleteItems,
   joinVideoSplits,
   laneState,
+  newGapId,
+  replaceWithGaps,
   moveItems,
   outputToSource,
   realCutIndices,
@@ -50,7 +52,14 @@ import {
 } from '@/lib/clips/editor/clip-timeline'
 import { rollEdit, slideEdit, splitEdgeTrim, TRIM_TOOL_KEYS, type TrimTool } from '@/lib/clips/editor/trim-tools'
 import { autoCrossfade } from '@/lib/clips/editor/auto-crossfade'
-import { addFreezeFrame } from '@/lib/clips/editor/inserts'
+import { addFreezeFrame, addGapAt } from '@/lib/clips/editor/inserts'
+import { adjacentMarker, patchMarker, toggleMarkerAt, type Marker } from '@/lib/clips/editor/markers'
+import { canToggleEnabled, expandToGroups, groupItems, groupOf, isDisabled, toggleItemsEnabled, ungroupItems } from '@/lib/clips/editor/item-flags'
+import { magnetOn, rippleOverlaysOn, setTimelineOpt } from '@/lib/clips/editor/timeline-opts'
+import { getPreviewRate, PREVIEW_RATES, setPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
+import { TimelineMarkers } from '@/components/clips/editor/timeline/timeline-markers'
+import { MarkerList } from '@/components/clips/editor/timeline/marker-list'
+import { CommandPalette, type PaletteCommand } from '@/components/clips/editor/timeline/command-palette'
 import {
   addTrack,
   applyAudioSolo,
@@ -223,6 +232,19 @@ const GLOBAL_COMMANDS = new Set<TimelineCommand>([
   'nextTake',
   'prevTake',
   'matchFrame',
+  // TC1
+  'marker',
+  'nextMarker',
+  'prevMarker',
+  'toggleEnabled',
+  'group',
+  'ungroup',
+  'loop',
+  'trimStart',
+  'trimEnd',
+  'speed',
+  'export',
+  'palette',
 ])
 
 function hasDomTextSelection(): boolean {
@@ -279,6 +301,7 @@ export function Timeline({
   selectRequest = null,
   angleSources = NO_SOURCES,
   onMatchFrame,
+  onOpenExport,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -336,6 +359,8 @@ export function Timeline({
   angleSources?: readonly ClipMediaSource[]
   /** G1c: F — open the source media at the playhead's moment (output ms). */
   onMatchFrame?: (outMs: number) => boolean
+  /** TC1: Ctrl/Cmd+E and the command palette open the export dialog. */
+  onOpenExport?: () => void
   selectedSourceSegmentId?: string | null
   /** G1a: select an item from outside (canvas click); a new `seq` re-applies. `atMs` = output ms. */
   selectRequest?: { lane: LaneId; id?: string; atMs?: number; seq: number } | null
@@ -653,6 +678,15 @@ export function Timeline({
   useDismiss(addMenuRef, addMenu, closeAddMenu)
   // G1b: Vegas-style envelopes (opacity on visual items, volume on Voice / Music) drawn on items.
   const [envOn, setEnvOn] = useState(false)
+  // TC1: marker list (focus = marker being edited), command palette, loop in–out, preview speed,
+  // box-select rectangle (track-area px), speed-control focus request.
+  const [markerPanel, setMarkerPanel] = useState<{ focusId: string | null } | null>(null)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [loopOn, setLoopOn] = useState(false)
+  const previewRate = useSyncExternalStore(subscribePreviewRate, getPreviewRate, () => 1)
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  const speedSlotRef = useRef<HTMLDivElement | null>(null)
+  const [speedFocusSeq, setSpeedFocusSeq] = useState(0)
   const trackAreaRef = useRef<HTMLDivElement | null>(null)
   const rows = useMemo(() => timelineRows(edits), [edits])
 
@@ -826,8 +860,180 @@ export function Timeline({
     onSeekOutput(to)
     return true
   }
+  // ---- TC1: markers, deactivate, groups, gaps, magnet / link, loop, trim to playhead -------
+  const markerNote = (m: Marker | null | undefined) => (m ? `${m.chapter ? 'Chapter' : 'Marker'}${m.label ? ` “${m.label}”` : ''}` : '')
+  const toggleMarker = (): boolean => {
+    if (!editable) return false
+    const id = `mk_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
+    const next = toggleMarkerAt(edits.markers, playheadMs, id)
+    commit({ ...edits, markers: next })
+    return true
+  }
+  const jumpMarker = (dir: 1 | -1): boolean => {
+    const m = adjacentMarker(edits.markers, playheadMs, dir)
+    if (!m) {
+      toast.message(edits.markers?.length ? `No ${dir > 0 ? 'next' : 'previous'} marker` : 'No markers — press M to add one', { id: 'timeline-markers' })
+      return true
+    }
+    onSeekOutput(m.ms)
+    const note = markerNote(m)
+    if (m.label) toast.message(note, { id: 'timeline-markers' })
+    return true
+  }
+  const patchMarkerById = (id: string, patch: Partial<Omit<Marker, 'id'>> | null) => {
+    if (!editable) return
+    commit({ ...edits, markers: patchMarker(edits.markers, id, patch) })
+  }
+  const toggleEnabled = (): boolean => {
+    if (!editable) return false
+    const refs = liveSelected.filter((r) => !refLocked(edits, r))
+    const next = toggleItemsEnabled(edits, refs)
+    if (!next) {
+      toast.message('Select B-roll, text, adjustment or sound items to deactivate', { id: 'timeline-enable' })
+      return true
+    }
+    commit(next)
+    return true
+  }
+  const groupSel = (): boolean => {
+    if (!editable) return false
+    const next = groupItems(edits, liveSelected, `g_${Date.now().toString(36)}`)
+    if (!next) {
+      toast.message('Select 2 or more overlay / text / sound items to group', { id: 'timeline-group' })
+      return true
+    }
+    commit(next)
+    return true
+  }
+  const ungroupSel = (): boolean => {
+    if (!editable) return false
+    const next = ungroupItems(edits, liveSelected)
+    if (!next) return false
+    commit(next)
+    return true
+  }
+  const insertGap = (): boolean => {
+    if (!editable || refLocked(edits, { lane: 'video', id: '' })) return false
+    const ins = addGapAt(edits.inserts, tb.segs, playheadMs, newGapId())
+    if (!ins) {
+      toast.message('Too many inserted clips')
+      return true
+    }
+    commit({ ...edits, inserts: ins })
+    toast.message('Gap inserted (1 s) — set its length under Media → Inserted clips', { id: 'timeline-gap' })
+    return true
+  }
+  const replaceSelWithGap = (): boolean => {
+    if (!editable) return false
+    const next = replaceWithGaps(opCtx(), liveSelected)
+    if (!next) return false
+    commit(next)
+    setSelected([])
+    return true
+  }
+  const toggleOpt = (key: 'magnet' | 'rippleOverlays') => {
+    if (!editable) return
+    const on = key === 'magnet' ? magnetOn(edits.timelineOpts) : rippleOverlaysOn(edits.timelineOpts)
+    commit({ ...edits, timelineOpts: setTimelineOpt(edits.timelineOpts, key, !on) })
+  }
+  const toggleLoop = (): boolean => {
+    if (!loopOn && !range) {
+      toast.message('Mark in and out first (I / O), then loop', { id: 'timeline-loop' })
+      return true
+    }
+    setLoopOn((v) => !v)
+    return true
+  }
+  const trimToPlayhead = (edge: 'start' | 'end'): boolean => {
+    if (!editable) return false
+    const inside = (i: TimelineItem | undefined) => Boolean(i && playheadMs > i.startMs + 1 && playheadMs < i.endMs - 1)
+    let refs: ItemRef[] = liveSelected.filter((r) => inside(lanes[r.lane].find((i) => i.id === r.id)))
+    if (!refs.length) {
+      const v = lanes.video.find((i) => inside(i))
+      refs = v ? [{ lane: 'video', id: v.id }] : []
+    }
+    if (!refs.length) {
+      toast.message('Put the playhead inside the clip to trim', { id: 'timeline-trim' })
+      return true
+    }
+    // Main video edits change the timebase: one at a time (the first); overlays all together.
+    const video = refs.find((r) => r.lane === 'video')
+    if (video) {
+      commit(trimItem(opCtx(), video, edge, playheadMs))
+      return true
+    }
+    let cur = edits
+    for (const r of refs) {
+      if (refLocked(cur, r)) continue
+      const it = lanes[r.lane].find((i) => i.id === r.id)
+      if (!it || !(edge === 'start' ? it.caps.trimStart : it.caps.trimEnd)) continue
+      cur = trimItem({ ...opCtx(), edits: cur }, r, edge, playheadMs) ?? cur
+    }
+    commit(cur !== edits ? cur : null)
+    return true
+  }
+  const openSpeed = (): boolean => {
+    const sel = liveSelected.length === 1 && liveSelected[0]!.lane === 'video' ? liveSelected[0]! : null
+    const v = sel ?? (() => {
+      const it = lanes.video.find((i) => playheadMs >= i.startMs && playheadMs < i.endMs)
+      return it ? { lane: 'video' as const, id: it.id } : null
+    })()
+    if (!v || !editable) return false
+    setSelected([v])
+    setSpeedFocusSeq((n) => n + 1)
+    return true
+  }
+  useEffect(() => {
+    if (!speedFocusSeq) return
+    const id = requestAnimationFrame(() => {
+      const el = speedSlotRef.current?.querySelector<HTMLElement>('input,button,[tabindex]')
+      speedSlotRef.current?.scrollIntoView({ block: 'nearest' })
+      el?.focus()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [speedFocusSeq])
+  // TC1 (TL-37): loop in–out — playback that runs past Out jumps back to In.
+  const loopPrevRef = useRef(outputMs)
+  useEffect(() => {
+    const prev = loopPrevRef.current
+    loopPrevRef.current = outputMs
+    if (!loopOn || !range) return
+    const [a, b] = range
+    if (prev >= a && prev < b && outputMs >= b && outputMs - prev < 1500) onSeekOutput(a)
+  }, [outputMs, loopOn, range?.[0], range?.[1]]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (loopOn && !range) setLoopOn(false)
+  }, [loopOn, range])
+
   const runCommand = (cmd: TimelineCommand): boolean => {
     switch (cmd) {
+      case 'marker':
+        return toggleMarker()
+      case 'nextMarker':
+        return jumpMarker(1)
+      case 'prevMarker':
+        return jumpMarker(-1)
+      case 'toggleEnabled':
+        return toggleEnabled()
+      case 'group':
+        return groupSel()
+      case 'ungroup':
+        return ungroupSel()
+      case 'loop':
+        return toggleLoop()
+      case 'trimStart':
+        return trimToPlayhead('start')
+      case 'trimEnd':
+        return trimToPlayhead('end')
+      case 'speed':
+        return openSpeed()
+      case 'export':
+        if (!onOpenExport) return false
+        onOpenExport()
+        return true
+      case 'palette':
+        setPaletteOpen(true)
+        return true
       case 'copy':
         return copySel(false)
       case 'cut':
@@ -1006,6 +1212,104 @@ export function Timeline({
   )
   const cmdRef = useRef(runCommand)
   cmdRef.current = runCommand
+  // TC1 (TL-23): box select — drag on empty track space; items the box touches are selected.
+  const startMarquee = (e: React.PointerEvent<HTMLDivElement>, additive: boolean) => {
+    const area = e.currentTarget
+    const r0 = area.getBoundingClientRect()
+    const x0 = e.clientX - r0.left
+    const y0 = e.clientY - r0.top
+    const base = additive ? liveSelected : []
+    let moved = false
+    const onMove = (ev: PointerEvent) => {
+      const r = area.getBoundingClientRect()
+      const x1 = ev.clientX - r.left
+      const y1 = ev.clientY - r.top
+      if (!moved && Math.abs(x1 - x0) < DRAG_SLOP_PX && Math.abs(y1 - y0) < DRAG_SLOP_PX) return
+      moved = true
+      setMarquee({ x0, y0, x1, y1 })
+    }
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      setMarquee(null)
+      if (!moved) return
+      const r = area.getBoundingClientRect()
+      const box = {
+        l: Math.min(x0, ev.clientX - r.left) + r.left,
+        r: Math.max(x0, ev.clientX - r.left) + r.left,
+        t: Math.min(y0, ev.clientY - r.top) + r.top,
+        b: Math.max(y0, ev.clientY - r.top) + r.top,
+      }
+      const hit: ItemRef[] = [...base]
+      const seen = new Set(hit.map(refKey))
+      area.querySelectorAll<HTMLElement>('[data-testid^="timeline-item-"][data-item-id]').forEach((el) => {
+        const lane = el.dataset.testid!.slice('timeline-item-'.length) as LaneId
+        const id = el.dataset.itemId!
+        if (lane === 'voice' || !lanes[lane]?.some((i) => i.id === id)) return
+        const b = el.getBoundingClientRect()
+        if (b.right < box.l || b.left > box.r || b.bottom < box.t || b.top > box.b) return
+        const ref = { lane, id }
+        if (refLocked(edits, ref) || seen.has(refKey(ref))) return
+        seen.add(refKey(ref))
+        hit.push(ref)
+      })
+      setSelected(expandToGroups(edits, hit, (lane, id) => ({ lane: lane as LaneId, id })))
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+  // TC1 (TL-54): every command by name (Ctrl/Cmd+K).
+  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '')
+  const mk = mac ? '⌘' : 'Ctrl+'
+  const paletteCommands: PaletteCommand[] = [
+    { id: 'split', group: 'Edit', label: 'Split at playhead', keys: 'S', run: split, disabled: !editable },
+    { id: 'delete', group: 'Edit', label: 'Delete selected', keys: 'Del', run: () => void del(), disabled: !editable || !liveSelected.length },
+    { id: 'copy', group: 'Edit', label: 'Copy', keys: `${mk}C`, run: () => void copySel(false) },
+    { id: 'cut', group: 'Edit', label: 'Cut', keys: `${mk}X`, run: () => void copySel(true), disabled: !editable },
+    { id: 'paste', group: 'Edit', label: 'Paste at playhead', keys: `${mk}V`, run: () => void paste(), disabled: !editable },
+    { id: 'duplicate', group: 'Edit', label: 'Duplicate', keys: `${mk}D`, run: () => void duplicate(), disabled: !editable },
+    { id: 'pasteAttrs', group: 'Edit', label: 'Paste attributes', keys: `${mk}Shift+V`, run: () => void pasteAttrs(), disabled: !editable },
+    { id: 'trimStart', group: 'Edit', label: 'Trim start to playhead', keys: '[', run: () => void trimToPlayhead('start'), disabled: !editable },
+    { id: 'trimEnd', group: 'Edit', label: 'Trim end to playhead', keys: ']', run: () => void trimToPlayhead('end'), disabled: !editable },
+    { id: 'toggleEnabled', group: 'Edit', label: 'Deactivate / activate selected', keys: 'Shift+E', run: () => void toggleEnabled(), disabled: !editable },
+    { id: 'group', group: 'Edit', label: 'Group selected', keys: `${mk}G`, run: () => void groupSel(), disabled: !editable },
+    { id: 'ungroup', group: 'Edit', label: 'Ungroup selected', keys: `${mk}Shift+G`, run: () => void ungroupSel(), disabled: !editable },
+    { id: 'freeze', group: 'Edit', label: 'Freeze frame at playhead', run: freezeFrame, disabled: !editable },
+    { id: 'gap', group: 'Edit', label: 'Insert gap at playhead', run: () => void insertGap(), disabled: !editable },
+    { id: 'replaceGap', group: 'Edit', label: 'Replace selected main clip with gap', run: () => void replaceSelWithGap(), disabled: !editable || !liveSelected.some((r) => r.lane === 'video') },
+    { id: 'speed', group: 'Edit', label: 'Speed of the clip under the playhead', keys: `${mk}R`, run: () => void openSpeed(), disabled: !editable },
+    { id: 'matchFrame', group: 'Edit', label: 'Match frame', keys: 'F', run: () => void (onMatchFrame && onMatchFrame(playheadMs)), disabled: !onMatchFrame },
+    { id: 'nextTake', group: 'Edit', label: 'Next take', keys: 'T', run: () => void cycleTake(1), disabled: !editable },
+    { id: 'undo', group: 'Edit', label: 'Undo', keys: `${mk}Z`, run: () => onUndo?.(), disabled: !onUndo || !canUndo },
+    { id: 'redo', group: 'Edit', label: 'Redo', keys: `${mk}Shift+Z`, run: () => onRedo?.(), disabled: !onRedo || !canRedo },
+    { id: 'marker', group: 'Markers', label: 'Add / remove marker at playhead', keys: 'M', run: () => void toggleMarker(), disabled: !editable },
+    { id: 'nextMarker', group: 'Markers', label: 'Next marker', keys: 'Shift+M', run: () => void jumpMarker(1) },
+    { id: 'prevMarker', group: 'Markers', label: 'Previous marker', keys: 'Alt+M', run: () => void jumpMarker(-1) },
+    { id: 'markerList', group: 'Markers', label: 'Marker list / copy chapters', run: () => setMarkerPanel({ focusId: null }) },
+    { id: 'markIn', group: 'Range', label: 'Mark in', keys: 'I', run: () => void runCommand('markIn') },
+    { id: 'markOut', group: 'Range', label: 'Mark out', keys: 'O', run: () => void runCommand('markOut') },
+    { id: 'clearIO', group: 'Range', label: 'Clear in / out', keys: 'Alt+X', run: () => void runCommand('clearInOut') },
+    { id: 'rangeDel', group: 'Range', label: 'Delete in–out range (ripple)', keys: 'Shift+Del', run: () => void rippleDeleteRange(), disabled: !range || !editable },
+    { id: 'loop', group: 'Range', label: loopOn ? 'Stop looping in–out' : 'Loop in–out', keys: 'Alt+L', run: () => void toggleLoop() },
+    { id: 'home', group: 'Playback', label: 'Go to start', keys: 'Home', run: () => onSeekOutput(0) },
+    { id: 'end', group: 'Playback', label: 'Go to end', keys: 'End', run: () => onSeekOutput(Math.max(0, span - 1)) },
+    { id: 'prevEdit', group: 'Playback', label: 'Previous edit point', keys: '↑', run: () => void jump(-1) },
+    { id: 'nextEdit', group: 'Playback', label: 'Next edit point', keys: '↓', run: () => void jump(1) },
+    ...PREVIEW_RATES.map((r) => ({ id: `rate${r}`, group: 'Playback', label: `Preview speed ${r}×`, run: () => setPreviewRate(r) })),
+    { id: 'snap', group: 'Timeline', label: snapOn ? 'Snapping off' : 'Snapping on', keys: 'N', run: () => setSnapOn((v) => !v) },
+    { id: 'magnet', group: 'Timeline', label: magnetOn(edits.timelineOpts) ? 'Main magnet off (deletes leave gaps)' : 'Main magnet on (deletes close gaps)', run: () => toggleOpt('magnet'), disabled: !editable },
+    { id: 'link', group: 'Timeline', label: rippleOverlaysOn(edits.timelineOpts) ? 'Unlink overlays from the main track' : 'Link overlays to the main track', run: () => toggleOpt('rippleOverlays'), disabled: !editable },
+    { id: 'envelopes', group: 'Timeline', label: envOn ? 'Hide envelopes' : 'Show envelopes', run: () => setEnvOn((v) => !v) },
+    { id: 'pacing', group: 'Timeline', label: 'Pacing check', run: () => setPacingOpen(true) },
+    { id: 'zoomFit', group: 'Timeline', label: 'Zoom to fit', keys: '0', run: zoomFit },
+    { id: 'zoomIn', group: 'Timeline', label: 'Zoom in', keys: '+', run: zoomIn },
+    { id: 'zoomOut', group: 'Timeline', label: 'Zoom out', keys: '-', run: zoomOut },
+    { id: 'addOverlay', group: 'Timeline', label: 'Add video overlay track', run: () => addTrackOf('overlay'), disabled: !editable || !canAddTrack(edits, 'overlay') },
+    { id: 'addText', group: 'Timeline', label: 'Add text track', run: () => addTrackOf('text'), disabled: !editable || !canAddTrack(edits, 'text') },
+    { id: 'addAudio', group: 'Timeline', label: 'Add audio track', run: () => addTrackOf('audio'), disabled: !editable || !canAddTrack(edits, 'audio') },
+    { id: 'help', group: 'Timeline', label: 'Keyboard shortcuts', keys: '?', run: () => setHelpOpen(true) },
+    ...(onOpenExport ? [{ id: 'export', group: 'File', label: 'Export', keys: `${mk}E`, run: onOpenExport }] : []),
+  ]
   const addTrackOf = (kind: TrackKind, above?: string) => {
     const r = addTrack(edits, kind, { above })
     if (!r) {
@@ -1201,7 +1505,11 @@ export function Timeline({
       return
     }
     const already = selectedKeys.has(key)
-    if (!already) setSelected([{ lane: item.lane, id: item.id }])
+    // TC1 (TL-30): clicking one member of a group selects (and drags) the whole group.
+    const groupSel0 = expandToGroups(edits, [{ lane: item.lane, id: item.id }], (lane, id) => ({ lane: lane as LaneId, id })).filter(
+      (r) => lanes[r.lane].some((i) => i.id === r.id) && !refLocked(edits, r),
+    )
+    if (!already) setSelected(groupSel0)
     if (!editable) return
     const slideTool = tool === 'slide' && mode === 'move' && (item.lane === 'video' || item.lane === 'broll' || item.lane === 'text')
     const rollTool = tool === 'roll' && mode !== 'move'
@@ -1213,8 +1521,8 @@ export function Timeline({
     if (mode === 'start' && !item.caps.trimStart) return
     if (mode === 'end' && !item.caps.trimEnd) return
     const refs =
-      mode === 'move' && already
-        ? liveSelected.filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
+      mode === 'move' && (already || groupSel0.length > 1)
+        ? (already ? liveSelected : groupSel0).filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
         : [{ lane: item.lane, id: item.id }]
     const moving = refs.map((r) => lanes[r.lane].find((i) => i.id === r.id)!).filter(Boolean)
     const exclude = new Set(refs.map(refKey))
@@ -1517,7 +1825,10 @@ export function Timeline({
     const w = Math.max(2, (geo.endMs - geo.startMs) * pxPerMs)
     const st = itemState(item)
     const isSel = selectedKeys.has(refKey(item))
-    const faded = st.hidden || st.muted
+    // TC1: deactivated items stay on the timeline, dimmed + striped.
+    const off = isDisabled(edits, item)
+    const inGroup = Boolean(groupOf(edits, item))
+    const faded = st.hidden || st.muted || off
     const h = LANE_H[item.lane]
     // E3: Voice is selectable (volume keyframes) but cannot move / trim.
     const interactive = true
@@ -1533,20 +1844,29 @@ export function Timeline({
         key={refKey(item)}
         className={`absolute top-0.5 overflow-hidden rounded-[3px] text-[10px] leading-4 text-white ${LANE_COLORS[item.lane]} ${
           isSel ? 'ring-2 ring-white ring-offset-1 ring-offset-primary' : ''
-        } ${faded ? 'opacity-40' : ''} ${st.locked ? 'cursor-not-allowed' : item.caps.move ? 'cursor-grab' : interactive ? 'cursor-pointer' : ''}`}
-        style={{ left, width: w, height: h - 4, pointerEvents: interactive ? 'auto' : 'none' }}
+        } ${faded ? 'opacity-40' : ''} ${inGroup && !isSel ? 'outline-dashed outline-1 outline-white/70' : ''} ${st.locked ? 'cursor-not-allowed' : item.caps.move ? 'cursor-grab' : interactive ? 'cursor-pointer' : ''}`}
+        style={{
+          left,
+          width: w,
+          height: h - 4,
+          pointerEvents: interactive ? 'auto' : 'none',
+          ...(off ? { backgroundImage: 'repeating-linear-gradient(135deg, rgba(0,0,0,0.45) 0 4px, transparent 4px 8px)' } : {}),
+        }}
         data-testid={`timeline-item-${item.lane}`}
         data-item-id={item.id}
         data-start-ms={Math.round(item.startMs)}
         data-end-ms={Math.round(item.endMs)}
         data-selected={isSel ? 'true' : undefined}
-        title={`${item.label} · ${(item.startMs / 1000).toFixed(2)}–${(item.endMs / 1000).toFixed(2)} s`}
+        data-disabled={off ? 'true' : undefined}
+        data-grouped={inGroup ? 'true' : undefined}
+        title={`${off ? '[Deactivated] ' : ''}${inGroup ? '[Grouped] ' : ''}${item.label} · ${(item.startMs / 1000).toFixed(2)}–${(item.endMs / 1000).toFixed(2)} s`}
         onPointerDown={interactive ? (e) => startDrag(e, item, 'move') : undefined}
         onContextMenu={(e) => {
           if (!interactive) return
           e.preventDefault()
           e.stopPropagation()
-          if (!selectedKeys.has(refKey(item))) setSelected([{ lane: item.lane, id: item.id }])
+          if (!selectedKeys.has(refKey(item)))
+            setSelected(expandToGroups(edits, [{ lane: item.lane, id: item.id }], (lane, id) => ({ lane: lane as LaneId, id })))
           setCtxMenu({ x: e.clientX, y: e.clientY })
         }}
       >
@@ -1777,6 +2097,18 @@ export function Timeline({
           <button
             type="button"
             className={tbtn}
+            onClick={() => insertGap()}
+            disabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
+            aria-label="Insert gap at playhead"
+            title="Insert gap: 1 s of black + silence at the playhead (lengthens the video; set the length under Media → Inserted clips)"
+            data-testid="timeline-gap"
+          >
+            <Square className="size-3.5" />
+            Gap
+          </button>
+          <button
+            type="button"
+            className={tbtn}
             onClick={() => del()}
             disabled={!editable || !liveSelected.length}
             aria-label="Delete selected"
@@ -1820,6 +2152,41 @@ export function Timeline({
             <Magnet className="size-3.5" />
             Snap
           </button>
+          {editable ? (
+            <>
+              <button
+                type="button"
+                className={`${tbtn} ${magnetOn(edits.timelineOpts) ? 'text-primary' : 'text-muted-foreground'}`}
+                onClick={() => toggleOpt('magnet')}
+                aria-pressed={magnetOn(edits.timelineOpts)}
+                aria-label="Main track magnet"
+                title={
+                  magnetOn(edits.timelineOpts)
+                    ? 'Main track magnet ON: deleting a main clip closes the gap'
+                    : 'Main track magnet OFF: deleting a main clip leaves a black gap, so later clips keep their time'
+                }
+                data-testid="timeline-magnet"
+              >
+                Main magnet
+              </button>
+              <button
+                type="button"
+                className={`${tbtn} ${rippleOverlaysOn(edits.timelineOpts) ? 'text-primary' : 'text-muted-foreground'}`}
+                onClick={() => toggleOpt('rippleOverlays')}
+                aria-pressed={rippleOverlaysOn(edits.timelineOpts)}
+                aria-label="Link overlays to the main track"
+                title={
+                  rippleOverlaysOn(edits.timelineOpts)
+                    ? 'Linked: B-roll, text, adjustment layers and sounds move with cuts to the main video'
+                    : 'Unlinked: overlays stay at their time when the main video is cut (captions still follow the words)'
+                }
+                data-testid="timeline-link-overlays"
+              >
+                <Link2 className="size-3.5" />
+                Link
+              </button>
+            </>
+          ) : null}
           {hasBeats ? (
             <button
               type="button"
@@ -1937,6 +2304,74 @@ export function Timeline({
           >
             <Activity className="size-3.5" />
             Envelopes
+          </button>
+          <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+          <button
+            type="button"
+            className={tbtn}
+            onClick={() => toggleMarker()}
+            disabled={!editable}
+            aria-label="Add or remove marker at playhead"
+            title="Marker at playhead (M) · next / previous: Shift+M / Alt+M"
+            data-testid="timeline-add-marker"
+          >
+            <Bookmark className="size-3.5" />
+            Marker
+          </button>
+          <button
+            type="button"
+            className={`${tbtn} w-auto px-1 text-[10px] ${markerPanel ? 'text-primary' : 'text-muted-foreground'}`}
+            onClick={() => setMarkerPanel((v) => (v ? null : { focusId: null }))}
+            aria-pressed={Boolean(markerPanel)}
+            title="Marker list: labels, colors, chapters, Copy chapters"
+            data-testid="timeline-markers-list"
+          >
+            {edits.markers?.length ?? 0}
+          </button>
+          <button
+            type="button"
+            className={`${tbtn} ${loopOn ? 'text-primary' : 'text-muted-foreground'}`}
+            onClick={() => toggleLoop()}
+            aria-pressed={loopOn}
+            aria-label="Loop in–out"
+            title="Loop playback between in and out (Alt+L)"
+            data-testid="timeline-loop"
+          >
+            <Repeat className="size-3.5" />
+            Loop
+          </button>
+          {/* Segmented preview speed (the editor bans native select elements, §13 audit). */}
+          <div
+            className="inline-flex overflow-hidden rounded border border-border"
+            role="radiogroup"
+            aria-label="Preview speed"
+            title="Preview speed (playback only — the export is unchanged)"
+            data-testid="timeline-preview-rate"
+            data-value={previewRate}
+          >
+            {PREVIEW_RATES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                role="radio"
+                aria-checked={previewRate === r}
+                onClick={() => setPreviewRate(r)}
+                className={`h-6 px-1 text-[10px] tabular-nums ${previewRate === r ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+                data-testid={`timeline-preview-rate-${r}`}
+              >
+                {r}×
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={tbtn}
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Command palette"
+            title="Command palette (Ctrl/Cmd+K)"
+            data-testid="timeline-palette"
+          >
+            <Command className="size-3.5" />
           </button>
           {range ? (
             <span className="ml-1 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] tabular-nums text-primary" data-testid="timeline-inout-chip">
@@ -2070,14 +2505,30 @@ export function Timeline({
         />
       ) : null}
       {singleSel && singleSel.lane === 'video' && singleSel.srcInMs != null && singleSel.srcOutMs != null && editable ? (
-        <ItemSpeedControl
-          edits={edits}
-          srcInMs={singleSel.srcInMs}
-          srcOutMs={singleSel.srcOutMs}
-          onCommit={(next) => commit(next)}
-          readOnly={laneState(edits, 'video').locked}
-        />
+        <div ref={speedSlotRef} data-testid="timeline-speed-slot">
+          <ItemSpeedControl
+            edits={edits}
+            srcInMs={singleSel.srcInMs}
+            srcOutMs={singleSel.srcOutMs}
+            onCommit={(next) => commit(next)}
+            readOnly={laneState(edits, 'video').locked}
+          />
+        </div>
       ) : null}
+      {markerPanel ? (
+        <div className="relative">
+          <MarkerList
+            markers={edits.markers}
+            focusId={markerPanel.focusId}
+            durationMs={span}
+            editable={editable}
+            onPatch={patchMarkerById}
+            onSeek={onSeekOutput}
+            onClose={() => setMarkerPanel(null)}
+          />
+        </div>
+      ) : null}
+      <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
       <div className="flex min-w-0 rounded-lg border border-border bg-card/30">
         <div className="w-[104px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
@@ -2116,9 +2567,13 @@ export function Timeline({
                 if (e.button !== 0) return
                 if ((e.target as HTMLElement).closest('[data-testid^="timeline-item-"],[data-testid="timeline-word"],button')) return
                 rootRef.current?.focus({ preventScroll: true })
-                if (!(e.shiftKey || e.metaKey || e.ctrlKey)) setSelected([])
+                const additive = e.shiftKey || e.metaKey || e.ctrlKey
+                if (!additive) setSelected([])
                 const y = e.clientY - e.currentTarget.getBoundingClientRect().top
-                if (y > RULER_H) onSeekOutput(msAtClientX(e.clientX, e.currentTarget))
+                if (y > RULER_H) {
+                  onSeekOutput(msAtClientX(e.clientX, e.currentTarget))
+                  startMarquee(e, additive)
+                }
               }}
               onContextMenu={(e) => {
                 if (!onSplitLayout && !editable) return
@@ -2135,6 +2590,25 @@ export function Timeline({
                 visFromPx={virtualize ? visFromPx : undefined}
                 visToPx={virtualize ? visToPx : undefined}
               />
+              <TimelineMarkers
+                markers={edits.markers}
+                pxPerMs={pxPerMs}
+                height={totalH}
+                onSeek={onSeekOutput}
+                onEdit={(id) => setMarkerPanel({ focusId: id })}
+              />
+              {marquee ? (
+                <div
+                  className="pointer-events-none absolute z-[30] border border-primary bg-primary/15"
+                  style={{
+                    left: Math.min(marquee.x0, marquee.x1),
+                    top: Math.min(marquee.y0, marquee.y1),
+                    width: Math.abs(marquee.x1 - marquee.x0),
+                    height: Math.abs(marquee.y1 - marquee.y0),
+                  }}
+                  data-testid="timeline-marquee"
+                />
+              ) : null}
               {range ? (
                 <div
                   className="pointer-events-none absolute inset-y-0 z-[5] border-x-2 border-primary/80 bg-primary/10"
@@ -2668,6 +3142,86 @@ export function Timeline({
                   </button>
                 </>
               ) : null}
+              {liveSelected.some(canToggleEnabled) ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-ctx-toggle-enabled"
+                  onClick={() => {
+                    toggleEnabled()
+                    setCtxMenu(null)
+                  }}
+                >
+                  {liveSelected.filter(canToggleEnabled).every((r) => isDisabled(edits, r)) ? 'Activate' : 'Deactivate'} (Shift+E)
+                </button>
+              ) : null}
+              {liveSelected.length > 1 ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-ctx-group"
+                  onClick={() => {
+                    groupSel()
+                    setCtxMenu(null)
+                  }}
+                >
+                  Group (Ctrl+G)
+                </button>
+              ) : null}
+              {liveSelected.some((r) => groupOf(edits, r)) ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-ctx-ungroup"
+                  onClick={() => {
+                    ungroupSel()
+                    setCtxMenu(null)
+                  }}
+                >
+                  Ungroup (Ctrl+Shift+G)
+                </button>
+              ) : null}
+              {liveSelected.some((r) => r.lane === 'video') && lanes.video.length > 1 ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-ctx-replace-gap"
+                  onClick={() => {
+                    replaceSelWithGap()
+                    setCtxMenu(null)
+                  }}
+                >
+                  Replace with gap
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                role="menuitem"
+                data-testid="timeline-ctx-insert-gap"
+                onClick={() => {
+                  insertGap()
+                  setCtxMenu(null)
+                }}
+              >
+                Insert gap at playhead
+              </button>
+              <button
+                type="button"
+                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                role="menuitem"
+                data-testid="timeline-ctx-marker"
+                onClick={() => {
+                  toggleMarker()
+                  setCtxMenu(null)
+                }}
+              >
+                Add / remove marker (M)
+              </button>
               <div className="my-1 border-t border-border" role="separator" />
             </>
           ) : null}

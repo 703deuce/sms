@@ -2,7 +2,8 @@
 
 import { Anton, Montserrat, Poppins } from 'next/font/google'
 import { addFontVarsToBody, clipDisplayFontVars } from '@/components/clips/editor/clip-editor-fonts'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
 import { EditorRail, EDITOR_RAIL_ITEMS, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
@@ -857,9 +858,12 @@ export function EditorShell({
     [selectPanel],
   )
   // E4: per-item speed → the music bed follows the video rate (pitch-preserved like export atempo).
-  const musicRate = renderEdits.segmentSpeeds?.length
+  // TC1 (TL-39): × the preview-only speed (1 when unset — same as the default element rate).
+  const previewRate = useSyncExternalStore(subscribePreviewRate, getPreviewRate, () => 1)
+  const baseMusicRate = renderEdits.segmentSpeeds?.length
     ? (normalizeEditSpeed(renderEdits.speed) ?? 1) * speedAtSource(renderEdits.segmentSpeeds, playheadSourceMs)
     : undefined
+  const musicRate = (baseMusicRate ?? 1) * previewRate
   const onTimelineSelection = useCallback(
     (item: TimelineItem | null) => {
       setSelectedVideo(
@@ -1968,6 +1972,7 @@ export function EditorShell({
             selectedSourceSegmentId={selectedSourceSegmentId}
             selectRequest={timelineSelReq}
             onMatchFrame={matchFrame}
+            onOpenExport={() => setExportOpen(true)}
           />
           <PlayerControls
             playing={playing}

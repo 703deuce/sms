@@ -17,6 +17,10 @@
  * export by `applyTimelineLaneState` (mirrored in worker `timeline_lanes.py`).
  */
 import { splitAnim } from '@/lib/clips/editor/layer-anim'
+import { applyItemEnable, reconcileItemFlags } from '@/lib/clips/editor/item-flags'
+import { rippleMarkers } from '@/lib/clips/editor/markers'
+import { magnetOn, rippleOverlaysOn } from '@/lib/clips/editor/timeline-opts'
+import { GAP_SOURCE_ID, INSERT_MAX_MS, INSERT_MIN_MS, MAX_INSERTS } from '@/lib/clips/editor/inserts'
 import type { ClipAudioMusic, ClipAudioSfx } from '@/lib/clips/audio'
 import { BROLL_MIN_MS, type BrollItem } from '@/lib/clips/broll'
 import {
@@ -210,7 +214,8 @@ export function applyTimelineLaneState(edits: ClipEditsV2): ClipEditsV2 {
   // G1b: hidden overlay / text tracks and muted audio tracks (non-default tracks) first.
   // G1c: takes / track color / track motion (worker: track_render.apply_track_render).
   // G2: solo first — it only sets mute flags, which the paths below honour.
-  const base = applyTrackRender(applyTrackState(applyAudioSolo(edits)))
+  // TC1: deactivated items first (worker: timeline_lanes.apply_item_enable).
+  const base = applyTrackRender(applyTrackState(applyAudioSolo(applyItemEnable(edits))))
   const lanes = normalizeTimelineLanes(base.timelineLanes)
   if (!lanes) return base
   let next: ClipEditsV2 = base
@@ -1003,8 +1008,50 @@ export function deleteItems(ctx: OpCtx, refs: ItemRef[]): ClipEditsV2 | null {
       videoCuts.pop() // keep at least one segment
     }
     if (videoCuts.length) next = { ...next, cutRanges: mergeCutRanges([...next.cutRanges, ...videoCuts]) }
+    // TC1 (TL-08): magnet off — each deleted main segment leaves a black gap of its length, so the
+    // rest of the timeline keeps its place (the gap sits before the next kept piece).
+    if (videoCuts.length && !magnetOn(ctx.edits.timelineOpts)) next = liftToGaps(next, lanes.video, videoCuts)
   }
   return changed && next !== ctx.edits ? next : null
+}
+
+/** TC1 (TL-34): "Replace with gap" — delete the selected main segments, leaving black gaps. */
+export function replaceWithGaps(ctx: OpCtx, refs: ItemRef[]): ClipEditsV2 | null {
+  const vids = refs.filter((r) => r.lane === 'video')
+  if (!vids.length) return null
+  const { timelineOpts, ...rest } = ctx.edits
+  const next = deleteItems({ ...ctx, edits: { ...rest, timelineOpts: { ...(timelineOpts ?? {}), magnet: false } } as ClipEditsV2 }, vids)
+  if (!next) return null
+  const { timelineOpts: _drop, ...out } = next
+  void _drop
+  return (timelineOpts ? { ...out, timelineOpts } : out) as ClipEditsV2
+}
+
+let gapSeq = 0
+/** TC1: unique insert id for a new gap clip. */
+export function newGapId(): string {
+  gapSeq = (gapSeq + 1) % 1_000_000
+  return `gap_${Date.now().toString(36)}_${gapSeq}`
+}
+
+function liftToGaps(edits: ClipEditsV2, video: readonly TimelineItem[], cuts: readonly CutRange[]): ClipEditsV2 {
+  const gone = new Set(cuts.map(([a]) => a))
+  const inserts = [...(edits.inserts ?? [])]
+  video.forEach((v, i) => {
+    if (!gone.has(v.srcInMs!) || inserts.length >= MAX_INSERTS) return
+    const after = video.slice(i + 1).find((x) => !gone.has(x.srcInMs!))
+    const durMs = Math.min(INSERT_MAX_MS, Math.max(INSERT_MIN_MS, Math.round(v.endMs - v.startMs)))
+    inserts.push({
+      id: newGapId(),
+      sourceId: GAP_SOURCE_ID,
+      atSrcMs: after ? after.srcInMs! : 0,
+      ...(after ? {} : { append: true as const }),
+      inMs: 0,
+      durMs,
+      audio: 'mute',
+    })
+  })
+  return inserts.length === (edits.inserts?.length ?? 0) ? edits : { ...edits, inserts }
 }
 
 // ---------------------------------------------------------------------------
@@ -1019,7 +1066,7 @@ function sameSegs(a: Timebase, b: Timebase): boolean {
 }
 
 function anchoredJson(e: ClipEditsV2): string {
-  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null, e.textItems ?? null, e.captionLines ?? null, e.adjustLayers ?? null, e.blurRegions ?? null])
+  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null, e.textItems ?? null, e.captionLines ?? null, e.adjustLayers ?? null, e.blurRegions ?? null, e.markers ?? null])
 }
 
 /** E3: anything that must follow the EDL or its items (ripple / reconcile). */
@@ -1034,7 +1081,8 @@ export function hasAnchoredContent(e: ClipEditsV2): boolean {
       e.textItems?.length ||
       e.captionLines?.length ||
       e.adjustLayers?.length ||
-      e.blurRegions?.length,
+      e.blurRegions?.length ||
+      e.markers?.length,
   )
 }
 
@@ -1052,9 +1100,10 @@ export function rippleAnchoredItems(
   nextPreview: ClipEditsV2,
 ): ClipEditsV2 {
   // G1b3: an op that already placed every track (range extract) must not be mapped again.
-  if (RIPPLED.has(next)) return reconcileItemMotion(prev, next)
+  // TC1: split children inherit deactivated / group flags; deleted items leave them.
+  if (RIPPLED.has(next)) return reconcileItemFlags(prev, reconcileItemMotion(prev, next))
   // E3: item edits keep their keyframes on the item's media (trim / split / delete).
-  next = reconcileItemMotion(prev, next)
+  next = reconcileItemFlags(prev, reconcileItemMotion(prev, next))
   // Only ripple when the change was to the EDL, not to the anchored items themselves.
   if (anchoredJson(prev) !== anchoredJson(next)) return next
   if (!hasAnchoredContent(next)) return next
@@ -1064,7 +1113,16 @@ export function rippleAnchoredItems(
   const mapStart = (out: number) => sourceToOutputSnapped(b, outputToSource(a, out))
   const mapEnd = (out: number) => sourceToOutputSnapped(b, outputToSourceEnd(a, out))
   const dur = b.durationMs
+  // TC1 (TL-14/15): overlays unlinked from the main track keep their output time (clamped to the
+  // new length); captions, blur regions, keyframes and markers still follow their content.
+  const linked = rippleOverlaysOn(next.timelineOpts)
+  const ovStart = linked ? mapStart : (x: number) => x
+  const ovEnd = linked ? mapEnd : (x: number) => x
   let out = next
+  if (next.markers?.length) {
+    const mk = rippleMarkers(next.markers, mapStart, dur)
+    if (mk !== next.markers) out = { ...out, markers: mk.length ? mk : undefined }
+  }
   if (next.keyframes?.length) {
     const kf = rippleGlobalKeyframes(next.keyframes, mapStart)
     if (kf !== next.keyframes) out = { ...out, keyframes: kf }
@@ -1082,8 +1140,8 @@ export function rippleAnchoredItems(
     out = {
       ...out,
       broll: next.broll.map((it) => {
-        let s = mapStart(it.startMs)
-        let e = mapEnd(it.endMs)
+        let s = ovStart(it.startMs)
+        let e = ovEnd(it.endMs)
         if (e - s < BROLL_MIN_MS) e = s + BROLL_MIN_MS
         if (e > dur) {
           e = dur
@@ -1114,8 +1172,8 @@ export function rippleAnchoredItems(
     out = {
       ...out,
       textItems: next.textItems.map((it) => {
-        let s = mapStart(it.startMs)
-        let e = mapEnd(it.endMs)
+        let s = ovStart(it.startMs)
+        let e = ovEnd(it.endMs)
         if (e - s < TEXT_MIN_MS) e = s + TEXT_MIN_MS
         if (e > dur) {
           e = dur
@@ -1130,8 +1188,8 @@ export function rippleAnchoredItems(
     out = {
       ...out,
       adjustLayers: next.adjustLayers.map((l) => {
-        let s = mapStart(l.startMs)
-        let e = mapEnd(l.endMs)
+        let s = ovStart(l.startMs)
+        let e = ovEnd(l.endMs)
         if (e - s < ADJUST_MIN_MS) e = s + ADJUST_MIN_MS
         if (e > dur) {
           e = dur
@@ -1159,7 +1217,7 @@ export function rippleAnchoredItems(
       au = {
         ...au,
         sfx: au.sfx.map((s) => {
-          const at = Math.min(Math.max(0, dur - 1), mapStart(s.atMs))
+          const at = Math.min(Math.max(0, dur - 1), ovStart(s.atMs))
           return at === s.atMs ? s : { ...s, atMs: at }
         }),
       }
@@ -1167,8 +1225,8 @@ export function rippleAnchoredItems(
     const m = au.music
     if (m && (m.startMs != null || m.endMs != null)) {
       const wasFull = m.endMs == null || m.endMs >= a.durationMs
-      const s = m.startMs != null ? mapStart(m.startMs) : undefined
-      const e = wasFull ? undefined : mapEnd(m.endMs!)
+      const s = m.startMs != null ? ovStart(m.startMs) : undefined
+      const e = wasFull ? undefined : ovEnd(m.endMs!)
       au = { ...au, music: { ...m, startMs: s, endMs: e } }
     }
     if (au !== audio) out = { ...out, audio: au }

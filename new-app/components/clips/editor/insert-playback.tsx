@@ -10,6 +10,7 @@ import { crossedCue, insertCues, type InsertCue } from '@/lib/clips/editor/inser
 import { sourceById } from '@/lib/clips/editor/sources'
 import { sourceMsFromVideo } from '@/lib/clips/editor-playback'
 import { setMediaSrc } from '@/components/clips/editor/g4/media-cors'
+import { getPreviewRate } from '@/lib/clips/editor/preview-rate'
 
 /**
  * E5b: plays inserted clips in the preview. Holds the main video at the insert point, shows the
@@ -65,6 +66,14 @@ export function InsertPlayback({
         if (!vid.paused) vid.pause()
         return
       }
+      if (w.gap) {
+        // TC1: gap clip — black (the export renders black frames + silence).
+        box.style.visibility = 'visible'
+        vid.style.display = 'none'
+        img.style.display = 'none'
+        if (!vid.paused) vid.pause()
+        return
+      }
       const src = sourceById(editsRef.current.sources, w.sourceId)
       const url = src ? urlRef.current?.[src.refId] : undefined
       box.style.visibility = 'visible'
@@ -82,6 +91,7 @@ export function InsertPlayback({
       if (url && vid.src !== url) setMediaSrc(vid, url)
       vid.muted = w.audio === 'mute'
       vid.currentTime = w.inMs / 1000
+      vid.playbackRate = getPreviewRate() // TC1: preview speed
       void vid.play().catch(() => {})
     }
 
@@ -97,7 +107,7 @@ export function InsertPlayback({
             show(null)
           } else {
             const w = hold.cue.windows[hold.idx]!
-            if (performance.now() - hold.t0 >= w.durMs) {
+            if (performance.now() - hold.t0 >= w.durMs / getPreviewRate()) {
               hold.idx += 1
               if (hold.idx < hold.cue.windows.length) {
                 hold.t0 = performance.now()

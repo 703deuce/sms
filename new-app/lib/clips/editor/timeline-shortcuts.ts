@@ -25,6 +25,19 @@ export type TimelineCommand =
   | 'nextTake'
   | 'prevTake'
   | 'matchFrame'
+  // TC1
+  | 'marker'
+  | 'nextMarker'
+  | 'prevMarker'
+  | 'toggleEnabled'
+  | 'group'
+  | 'ungroup'
+  | 'loop'
+  | 'trimStart'
+  | 'trimEnd'
+  | 'speed'
+  | 'export'
+  | 'palette'
 
 export type KeyLike = { key: string; code?: string; metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean }
 
@@ -43,9 +56,20 @@ export function timelineCommandFor(e: KeyLike): TimelineCommand | null {
     if (k === 'z') return e.shiftKey ? 'redo' : 'undo'
     if (k === 'y') return 'redo'
     if (k === '/') return 'help'
+    // TC1: group / ungroup, speed, export, command palette.
+    if (k === 'g' && !e.altKey) return e.shiftKey ? 'ungroup' : 'group'
+    if (k === 'r' && !e.shiftKey && !e.altKey) return 'speed'
+    if (k === 'e' && !e.shiftKey && !e.altKey) return 'export'
+    if (k === 'k' && !e.shiftKey && !e.altKey) return 'palette'
     return null
   }
-  if (e.altKey) return k === 'x' || e.code === 'KeyX' ? 'clearInOut' : null
+  if (e.altKey) {
+    if (k === 'x' || e.code === 'KeyX') return 'clearInOut'
+    // TC1: Alt+M previous marker, Alt+L loop in–out (by code: macOS Option types other characters).
+    if (k === 'm' || e.code === 'KeyM') return 'prevMarker'
+    if (k === 'l' || e.code === 'KeyL') return 'loop'
+    return null
+  }
   if (k === 's') return 'split'
   if (k === 'Delete' || k === 'Backspace') return e.shiftKey ? 'rippleDeleteRange' : 'delete'
   if (k === 'i') return 'markIn'
@@ -58,6 +82,11 @@ export function timelineCommandFor(e: KeyLike): TimelineCommand | null {
   // G1c: T / Shift+T cycle takes, F = match frame.
   if (k === 't') return e.shiftKey ? 'prevTake' : 'nextTake'
   if (k === 'f' && !e.shiftKey) return 'matchFrame'
+  // TC1: M marker (Shift: next), Shift+E activate / deactivate, [ / ] trim to the playhead.
+  if (k === 'm') return e.shiftKey ? 'nextMarker' : 'marker'
+  if (k === 'e' && e.shiftKey) return 'toggleEnabled'
+  if (k === '[' || e.code === 'BracketLeft') return 'trimStart'
+  if (k === ']' || e.code === 'BracketRight') return 'trimEnd'
   return null
 }
 
@@ -108,6 +137,10 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
         { keys: ['Alt+drag edge'], label: 'J / L cut: Voice edge = sound only · Video edge = picture only' },
         { keys: ['T', 'Shift+T'], label: 'Next / previous take (selected item or Video at the playhead)' },
         { keys: ['F'], label: 'Match frame: open the source media at this moment' },
+        { keys: ['[', ']'], label: 'Trim start / end of the selected item (or the clip under the playhead) to the playhead' },
+        { keys: ['Shift+E'], label: 'Deactivate / activate selected (kept on the timeline, not rendered)' },
+        { keys: [`${m}+G`, `${m}+Shift+G`], label: 'Group / ungroup selected (click one = select all)' },
+        { keys: [`${m}+R`], label: 'Speed of the clip under the playhead' },
       ],
     },
     {
@@ -116,6 +149,15 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
         { keys: ['I', 'O'], label: 'Mark in / out at playhead' },
         { keys: ['Alt+X'], label: 'Clear in / out' },
         { keys: ['Shift+Del'], label: 'Delete in–out range on every unlocked track (ripple)' },
+        { keys: ['Alt+L'], label: 'Loop playback between in and out' },
+      ],
+    },
+    {
+      title: 'Markers',
+      rows: [
+        { keys: ['M'], label: 'Add / remove a marker at the playhead' },
+        { keys: ['Shift+M', 'Alt+M'], label: 'Next / previous marker' },
+        { keys: ['Double-click'], label: 'Edit a marker (label, color, chapter)' },
       ],
     },
     {
@@ -124,6 +166,9 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
         { keys: ['+', '-'], label: 'Zoom in / out' },
         { keys: ['0'], label: 'Zoom to fit' },
         { keys: ['N'], label: 'Snapping on / off (Alt while dragging bypasses)' },
+        { keys: [`${m}+K`], label: 'Command palette (every command by name)' },
+        { keys: [`${m}+E`], label: 'Export' },
+        { keys: ['Drag on empty space'], label: 'Box-select items' },
         { keys: ['?', `${m}+/`], label: 'This sheet' },
       ],
     },

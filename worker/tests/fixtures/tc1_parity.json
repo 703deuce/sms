@@ -1,0 +1,660 @@
+{
+ "_doc": "TC1 parity (vitest tests/tc1-model.test.ts + pytest tests/test_tc1.py). Expected values computed by the worker and asserted on both sides.",
+ "gapNormalize": [
+  {
+   "raw": [
+    {
+     "id": "g1",
+     "sourceId": "gap",
+     "atSrcMs": 12000.4,
+     "durMs": 1500,
+     "inMs": 700,
+     "audio": "source",
+     "fit": "contain"
+    },
+    {
+     "id": "g2",
+     "sourceId": "gap",
+     "atSrcMs": 0,
+     "append": true,
+     "durMs": 999999
+    },
+    {
+     "id": "g3",
+     "sourceId": "gap",
+     "atSrcMs": 5000,
+     "durMs": 100
+    },
+    {
+     "id": "g1",
+     "sourceId": "gap",
+     "atSrcMs": 13000,
+     "durMs": 1000
+    },
+    {
+     "id": "f1",
+     "sourceId": "freeze",
+     "atSrcMs": 15000,
+     "durMs": 2000
+    },
+    {
+     "id": "bad id",
+     "sourceId": "gap",
+     "atSrcMs": 1,
+     "durMs": 1000
+    }
+   ],
+   "out": [
+    {
+     "id": "g1",
+     "sourceId": "gap",
+     "atSrcMs": 12000,
+     "inMs": 0,
+     "durMs": 1500,
+     "audio": "mute"
+    },
+    {
+     "id": "g2",
+     "sourceId": "gap",
+     "atSrcMs": 0,
+     "append": true,
+     "inMs": 0,
+     "durMs": 600000,
+     "audio": "mute"
+    },
+    {
+     "id": "f1",
+     "sourceId": "freeze",
+     "atSrcMs": 15000,
+     "inMs": 0,
+     "durMs": 2000,
+     "audio": "mute"
+    }
+   ]
+  }
+ ],
+ "gapWindows": [
+  {
+   "segs": [
+    [
+     10000,
+     14000
+    ],
+    [
+     16000,
+     20000
+    ]
+   ],
+   "inserts": [
+    {
+     "id": "g1",
+     "sourceId": "gap",
+     "atSrcMs": 12000,
+     "inMs": 0,
+     "durMs": 1500,
+     "audio": "mute"
+    },
+    {
+     "id": "g2",
+     "sourceId": "gap",
+     "atSrcMs": 0,
+     "append": true,
+     "inMs": 0,
+     "durMs": 600000,
+     "audio": "mute"
+    },
+    {
+     "id": "f1",
+     "sourceId": "freeze",
+     "atSrcMs": 15000,
+     "inMs": 0,
+     "durMs": 2000,
+     "audio": "mute"
+    }
+   ],
+   "out": [
+    {
+     "id": "g1",
+     "sourceId": "gap",
+     "baseMs": 2000,
+     "startMs": 2000,
+     "endMs": 3500,
+     "inMs": 0,
+     "durMs": 1500,
+     "audio": "mute",
+     "fit": "cover",
+     "gap": true
+    },
+    {
+     "id": "f1",
+     "sourceId": "freeze",
+     "baseMs": 4000,
+     "startMs": 5500,
+     "endMs": 7500,
+     "inMs": 0,
+     "durMs": 2000,
+     "audio": "mute",
+     "fit": "cover",
+     "freeze": true
+    },
+    {
+     "id": "g2",
+     "sourceId": "gap",
+     "baseMs": 8000,
+     "startMs": 11500,
+     "endMs": 611500,
+     "inMs": 0,
+     "durMs": 600000,
+     "audio": "mute",
+     "fit": "cover",
+     "gap": true
+    }
+   ]
+  }
+ ],
+ "disabled": [
+  {
+   "edits": {
+    "disabledItems": [
+     "broll:b1",
+     "text:t2",
+     "sfx:g9",
+     "adjust:a1",
+     "captions:c1",
+     "bad key",
+     5,
+     "broll:b1"
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "startMs": 0,
+      "endMs": 1000
+     },
+     {
+      "id": "b2",
+      "startMs": 0,
+      "endMs": 1000
+     },
+     {
+      "id": "b1~2000",
+      "startMs": 2000,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t2",
+      "startMs": 0,
+      "endMs": 1000
+     }
+    ],
+    "adjustLayers": [
+     {
+      "id": "a1",
+      "startMs": 0,
+      "endMs": 10
+     },
+     {
+      "id": "a2",
+      "startMs": 0,
+      "endMs": 10
+     }
+    ],
+    "audio": {
+     "sfx": [
+      {
+       "generationId": "g9",
+       "atMs": 0
+      },
+      {
+       "generationId": "g8",
+       "atMs": 5
+      }
+     ],
+     "music": null
+    }
+   },
+   "out": {
+    "broll": [
+     "b2",
+     "b1~2000"
+    ],
+    "textItems": null,
+    "adjustLayers": [
+     "a2"
+    ],
+    "sfx": [
+     "g8"
+    ]
+   }
+  }
+ ],
+ "cap": [
+  {
+   "passes": [
+    {
+     "kind": "overlay",
+     "trackId": "ov0",
+     "ids": [
+      "x0"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "x1"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov2",
+     "ids": [
+      "x2"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx3",
+     "ids": [
+      "x3"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov4",
+     "ids": [
+      "x4"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx5",
+     "ids": [
+      "x5"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov6",
+     "ids": [
+      "x6"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx7",
+     "ids": [
+      "x7"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov8",
+     "ids": [
+      "x8"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx9",
+     "ids": [
+      "x9"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov10",
+     "ids": [
+      "x10"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx11",
+     "ids": [
+      "x11"
+     ]
+    }
+   ],
+   "out": [
+    {
+     "kind": "overlay",
+     "trackId": "ov0",
+     "ids": [
+      "x0"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "x1"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov2",
+     "ids": [
+      "x2"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx3",
+     "ids": [
+      "x3"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov4",
+     "ids": [
+      "x4"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx5",
+     "ids": [
+      "x5"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov6",
+     "ids": [
+      "x6"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx7",
+     "ids": [
+      "x7"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov8",
+     "ids": [
+      "x8",
+      "x10"
+     ]
+    }
+   ]
+  },
+  {
+   "passes": [
+    {
+     "kind": "overlay",
+     "trackId": "ov0",
+     "ids": [
+      "x0"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "x1"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov2",
+     "ids": [
+      "x2"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx3",
+     "ids": [
+      "x3"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov4",
+     "ids": [
+      "x4"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx5",
+     "ids": [
+      "x5"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov6",
+     "ids": [
+      "x6"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx7",
+     "ids": [
+      "x7"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov8",
+     "ids": [
+      "x8"
+     ]
+    }
+   ],
+   "out": [
+    {
+     "kind": "overlay",
+     "trackId": "ov0",
+     "ids": [
+      "x0"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "x1"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov2",
+     "ids": [
+      "x2"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx3",
+     "ids": [
+      "x3"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov4",
+     "ids": [
+      "x4"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx5",
+     "ids": [
+      "x5"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov6",
+     "ids": [
+      "x6"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx7",
+     "ids": [
+      "x7"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov8",
+     "ids": [
+      "x8"
+     ]
+    }
+   ]
+  },
+  {
+   "passes": [
+    {
+     "kind": "overlay",
+     "trackId": "ov0",
+     "ids": [
+      "x0"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "x1"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov2",
+     "ids": [
+      "x2"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx3",
+     "ids": [
+      "x3"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov4",
+     "ids": [
+      "x4"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx5",
+     "ids": [
+      "x5"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov6",
+     "ids": [
+      "x6"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx7",
+     "ids": [
+      "x7"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov8",
+     "ids": [
+      "x8"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx9",
+     "ids": [
+      "x9"
+     ]
+    }
+   ],
+   "out": [
+    {
+     "kind": "overlay",
+     "trackId": "ov0",
+     "ids": [
+      "x0"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "x1"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov2",
+     "ids": [
+      "x2"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx3",
+     "ids": [
+      "x3"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov4",
+     "ids": [
+      "x4"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx5",
+     "ids": [
+      "x5"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov6",
+     "ids": [
+      "x6"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx7",
+     "ids": [
+      "x7"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov8",
+     "ids": [
+      "x8"
+     ]
+    }
+   ]
+  }
+ ]
+}

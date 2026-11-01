@@ -41,6 +41,14 @@ export type ClipInsert = {
  */
 export const FREEZE_SOURCE_ID = 'freeze'
 export const FREEZE_DEFAULT_MS = 3000
+/**
+ * TC1 (TL-34 gap clips, TL-08 magnet off): a gap is an insert with this reserved sourceId — black
+ * picture + silence for its length (export: lavfi `color` + `anullsrc` in the splice graph;
+ * preview: a black box). Like every insert it lengthens the video and moves everything after it.
+ */
+export const GAP_SOURCE_ID = 'gap'
+export const GAP_DEFAULT_MS = 1000
+const RESERVED_SOURCE_IDS = new Set([FREEZE_SOURCE_ID, GAP_SOURCE_ID])
 
 export const INSERT_MIN_MS = 200
 export const INSERT_MAX_MS = 10 * 60 * 1000
@@ -69,12 +77,13 @@ export function normalizeInserts(raw: unknown, sources: readonly ClipMediaSource
     const id = safeId(o.id)
     const at = int(o.atSrcMs)
     const dur = int(o.durMs)
-    if (safeId(o.sourceId) === FREEZE_SOURCE_ID) {
+    const reserved = safeId(o.sourceId)
+    if (RESERVED_SOURCE_IDS.has(reserved)) {
       if (!id || seen.has(id) || at === undefined || dur === undefined || dur < INSERT_MIN_MS) continue
       seen.add(id)
       out.push({
         id,
-        sourceId: FREEZE_SOURCE_ID,
+        sourceId: reserved,
         atSrcMs: Math.max(0, at),
         ...(o.append === true ? { append: true as const } : {}),
         inMs: 0,
@@ -135,6 +144,8 @@ export type InsertWindow = {
   fit: SourceFit
   /** G1b3: freeze frame (hold the frame at baseMs). */
   freeze?: true
+  /** TC1: gap (black + silence). */
+  gap?: true
 }
 
 /** Display windows in play order (worker parity: media_inserts.insert_windows). */
@@ -166,6 +177,7 @@ export function insertWindows(
       audio: insertAudio(p.ins),
       fit: p.ins.fit ?? 'cover',
       ...(p.ins.sourceId === FREEZE_SOURCE_ID ? { freeze: true as const } : {}),
+      ...(p.ins.sourceId === GAP_SOURCE_ID ? { gap: true as const } : {}),
     })
     shift += p.ins.durMs
   }
@@ -255,6 +267,45 @@ export function addFreezeFrame(
       }
       acc += b - a
     }
+  }
+  return [...(inserts ?? []), ins]
+}
+
+export function isGapInsert(ins: Pick<ClipInsert, 'sourceId'>): boolean {
+  return ins.sourceId === GAP_SOURCE_ID
+}
+
+/** Main-source anchor of edit-timeline ms `baseMs` (append when at / past the end). */
+function anchorAt(segs: readonly [number, number][], baseMs: number): Pick<ClipInsert, 'atSrcMs' | 'append'> {
+  const total = segs.reduce((s, [a, b]) => s + (b - a), 0)
+  const t = Math.max(0, Math.min(total, Math.round(baseMs)))
+  if (t >= total) return { atSrcMs: 0, append: true }
+  let acc = 0
+  for (const [a, b] of segs) {
+    if (t < acc + (b - a)) return { atSrcMs: a + (t - acc) }
+    acc += b - a
+  }
+  return { atSrcMs: 0, append: true }
+}
+
+/** TC1: insert a gap (black + silence) at edit-timeline ms `baseMs`. */
+export function addGapAt(
+  inserts: readonly ClipInsert[] | undefined,
+  segs: readonly [number, number][],
+  baseMs: number,
+  id: string,
+  durMs = GAP_DEFAULT_MS,
+): ClipInsert[] | null {
+  if ((inserts?.length ?? 0) >= MAX_INSERTS) return null
+  const a = anchorAt(segs, baseMs)
+  const ins: ClipInsert = {
+    id,
+    sourceId: GAP_SOURCE_ID,
+    atSrcMs: a.atSrcMs,
+    ...(a.append ? { append: true as const } : {}),
+    inMs: 0,
+    durMs: Math.min(INSERT_MAX_MS, Math.max(INSERT_MIN_MS, Math.round(durMs))),
+    audio: 'mute',
   }
   return [...(inserts ?? []), ins]
 }
