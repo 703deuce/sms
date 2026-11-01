@@ -93,6 +93,8 @@ export const clipProjectSettingsSchema = z.object({
   fullVideo: z.boolean().optional(),
   /** G1b3: blank project (no source video; the worker makes a black canvas — no transcription). */
   blank: z.boolean().optional(),
+  /** CL-05: found-clips project → source full-video project id. */
+  fromFullVideoProjectId: z.string().optional(),
 })
 
 export type ClipProjectSettings = z.infer<typeof clipProjectSettingsSchema>

@@ -34,6 +34,7 @@ export async function createFindClipsProjectFromFullVideo(workspaceId: string, p
       brand: keep.brand,
       rangeStartMs: 0,
       rangeEndMs: upload.durationMs || src.rangeEndMs || 0,
+      fromFullVideoProjectId: src.id,
     }),
   )
   const newId = createId('proj')

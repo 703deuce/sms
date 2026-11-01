@@ -11,12 +11,22 @@ function wordsToTranscript(words: { w: string }[]): string {
   return words.map((x) => x.w).join(' ').trim()
 }
 
-export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id: clipId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const clip = await getClipForWorkspace(workspaceId, clipId)
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    let summaryHint: string | undefined
+    try {
+      const raw = await request.json()
+      if (raw && typeof raw === 'object' && typeof (raw as { summaryHint?: string }).summaryHint === 'string') {
+        summaryHint = (raw as { summaryHint: string }).summaryHint.slice(0, 6000)
+      }
+    } catch {
+      /* empty body ok */
+    }
 
     const words = await loadClipSourceWords(clip)
     const transcript = wordsToTranscript(words)
@@ -32,7 +42,10 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       title: clip.title,
       hook: aiMeta.hook,
       why: clipWhySummary(aiMeta) ?? undefined,
-      transcript,
+      transcript:
+        summaryHint && (clip.endMs - clip.startMs) / 1000 > 180
+          ? `${summaryHint}\n\n${transcript.slice(0, 6000)}`
+          : transcript,
       durationSec: (clip.endMs - clip.startMs) / 1000,
     })
 
