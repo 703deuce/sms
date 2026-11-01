@@ -27,6 +27,9 @@ PROP_SPECS = {
     "cropT": (0.0, 90.0, 0.0),
     "cropR": (0.0, 90.0, 0.0),
     "cropB": (0.0, 90.0, 0.0),
+    "capX": (-50.0, 50.0, 0.0),
+    "capY": (-50.0, 50.0, 0.0),
+    "capScale": (50.0, 200.0, 100.0),
 }
 # G4a: keyframable color (Adjust sliders) on video / B-roll / adjustment layers. Read by the color
 # pass (color_grade.spec_with_overrides), never by the motion chain (has_motion skips them).
@@ -178,7 +181,7 @@ def _finite(v):
 
 
 def _valid_target(t) -> bool:
-    return isinstance(t, str) and (t in ("video", "voice", "music", "text") or (t.startswith("broll:") and len(t) > 6)
+    return isinstance(t, str) and (t in ("video", "voice", "music", "text", "captions") or (t.startswith("broll:") and len(t) > 6)
                                    or (t.startswith("text:") and len(t) > 5) or (t.startswith("sfx:") and len(t) > 4)
                                    or is_adjust_target(t))
 
@@ -197,6 +200,8 @@ def is_media_layer_target(target) -> bool:
 
 
 def props_for_target(target: str) -> tuple[str, ...]:
+    if target == "captions":
+        return ("capX", "capY", "capScale")
     if target in ("voice", "music") or target.startswith("sfx:"):
         return ("volume",)
     if is_adjust_target(target):

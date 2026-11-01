@@ -19,7 +19,9 @@ export const MASK_LABELS: Record<MaskShape, string> = { rect: 'Rectangle', ellip
 export type MaskGeom = { x: number; y: number; w: number; h: number; rot: number; feather: number }
 export type MaskKey = MaskGeom & { ms: number }
 export type LayerMask = MaskGeom & { shape: MaskShape; invert?: true; keys?: MaskKey[] }
-export type ChromaKey = { color: string; sim: number; blend: number; spill: number }
+export type ChromaKey = { color: string; sim: number; blend: number; spill: number; keys?: ChromaKeyKey[] }
+export type ChromaKeyKey = { ms: number; sim: number; blend: number; spill: number }
+export const CHROMA_KEY_MAX_KEYS = 16
 export const BLEND_MODES = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'difference', 'exclusion', 'hardlight', 'addition'] as const
 export type BlendMode = (typeof BLEND_MODES)[number]
 export const BLEND_LABELS: Record<BlendMode, string> = {
@@ -131,11 +133,29 @@ export function normalizeChromaKey(raw: unknown): ChromaKey | undefined {
   const o = raw as Record<string, unknown>
   const color = typeof o.color === 'string' ? o.color.toLowerCase() : ''
   if (!HEX.test(color)) return undefined
-  const n = (k: keyof ChromaKey, d: number) => {
+  const n = (k: 'sim' | 'blend' | 'spill', d: number) => {
     const v = fin(o[k])
     return Math.round(clampN(v == null ? d : v, 0, 100))
   }
-  return { color, sim: n('sim', DEFAULT_KEY.sim), blend: n('blend', DEFAULT_KEY.blend), spill: n('spill', DEFAULT_KEY.spill) }
+  const out: ChromaKey = { color, sim: n('sim', DEFAULT_KEY.sim), blend: n('blend', DEFAULT_KEY.blend), spill: n('spill', DEFAULT_KEY.spill) }
+  if (Array.isArray(o.keys)) {
+    const byMs = new Map<number, ChromaKeyKey>()
+    for (const k of o.keys) {
+      if (!k || typeof k !== 'object') continue
+      const ko = k as Record<string, unknown>
+      const ms = fin(ko.ms)
+      if (ms == null || ms < 0) continue
+      const m = Math.round(Math.min(ms, 3_600_000))
+      const pick = (pk: 'sim' | 'blend' | 'spill') => {
+        const v = fin(ko[pk])
+        return Math.round(clampN(v == null ? out[pk] : v, 0, 100))
+      }
+      byMs.set(m, { ms: m, sim: pick('sim'), blend: pick('blend'), spill: pick('spill') })
+    }
+    const keys = [...byMs.values()].sort((a, b) => a.ms - b.ms).slice(0, CHROMA_KEY_MAX_KEYS)
+    if (keys.length) out.keys = keys
+  }
+  return out
 }
 
 export function normalizeLayerFx(raw: unknown): LayerFx[] | undefined {
@@ -272,6 +292,32 @@ export function maskAlpha(shape: MaskShape, g: MaskGeom, invert: boolean, W: num
     }
   }
   return { mw, mh, alpha }
+}
+
+/** Chroma key params at item-local ms (KF-10: linear between keys, 100 ms steps). */
+export function chromaKeyAt(key: ChromaKey, localMs: number): ChromaKey {
+  const keys = key.keys
+  const base = { color: key.color, sim: key.sim, blend: key.blend, spill: key.spill }
+  if (!keys?.length) return base
+  const t = Math.floor(Math.max(0, localMs) / MASK_STEP_MS) * MASK_STEP_MS
+  const pick = (k: ChromaKeyKey): Omit<ChromaKey, 'keys'> => ({ color: key.color, sim: k.sim, blend: k.blend, spill: k.spill })
+  if (t <= keys[0]!.ms) return pick(keys[0]!)
+  const last = keys[keys.length - 1]!
+  if (t >= last.ms) return pick(last)
+  for (let i = 0; i < keys.length - 1; i++) {
+    const a = keys[i]!
+    const b = keys[i + 1]!
+    if (t >= a.ms && t < b.ms) {
+      const u = (t - a.ms) / (b.ms - a.ms)
+      const l = (p: number, q: number) => Math.round(p + (q - p) * u)
+      return { color: key.color, sim: l(a.sim, b.sim), blend: l(a.blend, b.blend), spill: l(a.spill, b.spill) }
+    }
+  }
+  return pick(last)
+}
+
+export function chromaParamsAt(key: ChromaKey, localMs: number) {
+  return chromaParams(chromaKeyAt(key, localMs))
 }
 
 /** ffmpeg colorkey / despill parameters for a key (shared by the export and the WebGL mirror). */

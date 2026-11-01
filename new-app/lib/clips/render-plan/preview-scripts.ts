@@ -5,6 +5,7 @@
  *   title/headline + badge text (clip_export_template / stream_frame).
  */
 import { buildCaptionsAss, type AssWord } from '@/lib/clips/render-plan/captions-ass'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { hookAssForEdits } from '@/lib/clips/render-plan/hook-ass'
 import { buildTextItemsAss } from '@/lib/clips/render-plan/text-items-ass'
 import { layerFxOf } from '@/lib/clips/editor/layer-fx'
@@ -102,7 +103,7 @@ export function buildPreviewScripts(o: PreviewScriptInput): PreviewScripts {
       if (w.bo) a.bo = true
       return a
     })
-    captions = buildCaptionsAss(words, exportCaptionEdits(cap, o), o.playW, o.playH)
+    captions = buildCaptionsAss(words, exportCaptionEdits(cap, o), o.playW, o.playH, o.edits as ClipEditsV2)
   }
   // edits_render: the T6 title already shows the hook line → no hook burn.
   // E6: …and none when the hook repeats the opening captions (hook_text_duplicates_captions).

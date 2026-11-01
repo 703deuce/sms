@@ -38,6 +38,7 @@ import {
 } from '@/lib/clips/editor/canvas-geometry'
 import { layerCropAt, layerFlip, mediaToScreenCrop, screenToMediaCrop, setCropAt, setLayerFlip } from '@/lib/clips/editor/layer-props'
 import { rotateBy90 } from '@/lib/clips/editor/canvas-ops'
+import { motionPathPoints, motionPathScreenPoints, motionPathVisible } from '@/lib/clips/editor/motion-path'
 
 export type CanvasLayerDom = {
   target: KeyframeTarget
@@ -377,6 +378,10 @@ export function CanvasSelectionOverlay({
   const canEdit = !readOnly && selected != null && !locked(selected)
   const W = box?.clientWidth ?? 0
   const H = box?.clientHeight ?? 0
+  const pathLine =
+    selected && motionPathVisible(baseEdits, selected)
+      ? motionPathScreenPoints(motionPathPoints(baseEdits, selected)).map((p) => `${p.x * W},${p.y * H}`)
+      : []
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[40]" data-testid="canvas-selection-overlay" data-canvas-skip>
@@ -388,6 +393,16 @@ export function CanvasSelectionOverlay({
             <line key={i} x1={0} x2={W} y1={g.at} y2={g.at} stroke="#f0f" strokeWidth={1} strokeDasharray="4 3" data-testid="canvas-guide-y" />
           ),
         )}
+        {pathLine.length >= 2 ? (
+          <polyline
+            points={pathLine.join(' ')}
+            fill="none"
+            stroke="#fbbf24"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            data-testid="motion-path"
+          />
+        ) : null}
         {quad ? (
           <polygon
             points={quad.map((p) => `${p.x},${p.y}`).join(' ')}

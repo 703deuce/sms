@@ -283,7 +283,16 @@ def _append_caption_events(
     position: str,
     highlight_mode: str = "color",
     fit: dict | None = None,
+    edits: dict | None = None,
+    ass_align: int = 2,
+    margin_v: int = 0,
 ) -> None:
+    from clips_worker.caption_kf import caption_ass_motion_tags, caption_motion_at
+
+    def motion_prefix(t_sec: float) -> str:
+        if not edits or not edits.get("keyframes"):
+            return ""
+        return caption_ass_motion_tags(caption_motion_at(edits, t_sec * 1000.0), play_w, play_h, ass_align, margin_v)
     active_style = str(edits_captions.get("activeStyle") or "").lower()
     if active_style not in ("color", "highlight", "fill"):
         active_style = ""
@@ -318,7 +327,7 @@ def _append_caption_events(
             )
             move = f"{{\\move({cx},{y + int(0.03 * play_h)},{cx},{y},0,150)\\fad(150,0)}}"
             line = apply_line_scale(join_caption_parts(disp_words(chunk, case), breaks), line_scale)
-            events.append(f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,{move}{line}")
+            events.append(f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,{motion_prefix(ws)}{move}{line}")
             continue
 
         if anim == "karaoke" or active_style == "fill":
@@ -335,7 +344,7 @@ def _append_caption_events(
             else:
                 pri = active_color(preset, spk, colors)
             events.append(
-                f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,"
+                f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,{motion_prefix(ws)}"
                 + apply_line_scale(f"{{\\1c{pri}\\3c{cap_out}\\2c{sec}}}" + join_caption_parts(parts, breaks), line_scale)
             )
             continue
@@ -350,7 +359,7 @@ def _append_caption_events(
             spk = int(chunk[0].get("spk", 0)) if chunk else 0
             pri = active_color(preset, spk, colors)
             events.append(
-                f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,"
+                f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,{motion_prefix(ws)}"
                 + apply_line_scale(
                     f"{{\\1c{pri}\\3c{cap_out}\\2c{dim}\\alpha&H40&}}" + join_caption_parts(parts, breaks), line_scale
                 )
@@ -372,7 +381,7 @@ def _append_caption_events(
                     built += f"{{\\alpha&HFF&\\t({off0},{off1},\\alpha&H00&)}}{ch}"
                 spk = int(w.get("spk", 0))
                 col = active_color(preset, spk, colors)
-                events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{{\\c{col}}}{built}")
+                events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{motion_prefix(w_start)}{{\\c{col}}}{built}")
             continue
 
         for ki, w in enumerate(chunk):
@@ -443,7 +452,7 @@ def _append_caption_events(
                     f"Dialogue: {1 if cp_bg else 0},{ts(w_start)},{ts(w_end)},Box,,0,0,0,,"
                     + apply_line_scale(_full_line_box_layer_text(cased, ki, box_fill, breaks=breaks), line_scale)
                 )
-            events.append(f"Dialogue: {2 if cp_bg else 1},{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{line}")
+            events.append(f"Dialogue: {2 if cp_bg else 1},{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{motion_prefix(w_start)}{line}")
 
 
 def _chunk_fit(
@@ -500,6 +509,7 @@ def build_ass(
     ass_path: Path,
     play_w: int = 720,
     play_h: int = 1280,
+    edits: dict | None = None,
 ) -> None:
     edits_captions = clamp_caption_export_style(edits_captions if isinstance(edits_captions, dict) else {}, play_h, play_w)
     preset_id = str(edits_captions.get("presetId") or edits_captions.get("preset") or "bold_pop")
@@ -609,6 +619,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             position=position,
             highlight_mode=highlight_mode,
             fit=fit,
+            edits=edits,
+            ass_align=ass_align,
+            margin_v=margin_v,
         )
     except Exception as e:
         print(f"[clipper:captions] active_style_fallback reason={type(e).__name__}")
@@ -633,6 +646,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             position=position,
             highlight_mode=highlight_mode,
             fit=fit,
+            edits=edits,
+            ass_align=ass_align,
+            margin_v=margin_v,
         )
 
     ass_path.write_text(header + "\n".join(events) + "\n")

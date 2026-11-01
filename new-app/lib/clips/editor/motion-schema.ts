@@ -7,6 +7,7 @@
  *  - target `broll:<id>`                 → item-local ms (0 = item start); content-anchored via inMs
  *  - target 'music'                      → local to the music window start (0 = window start)
  *  - target `text:<id>` (E4 text item)  → item-local ms (0 = item start)
+ *  - target 'captions' (KF-12)           → OUTPUT ms (burned caption transform)
  */
 
 export type Ease = 'linear' | 'in' | 'out' | 'inOut'
@@ -27,6 +28,10 @@ export function normalizeBz(raw: unknown): { bz?: [number, number]; ease?: Ease 
   return { bz: [a, b] }
 }
 
+/** KF-12: caption block offset / scale (output ms), applied as ASS \\pos + \\fscx/\\fscy. */
+export const CAPTION_PROPS = ['capX', 'capY', 'capScale'] as const
+export type CaptionKeyProp = (typeof CAPTION_PROPS)[number]
+
 export type KeyProp =
   | 'x'
   | 'y'
@@ -38,6 +43,7 @@ export type KeyProp =
   | 'cropT'
   | 'cropR'
   | 'cropB'
+  | CaptionKeyProp
   | ColorKeyProp
 /**
  * G4a: keyframable color (Adjust sliders) on picture layers — video, B-roll, adjustment layers.
@@ -75,7 +81,20 @@ export function isFxProp(p: string): boolean {
 export function isColorProp(p: string): p is ColorKeyProp {
   return (COLOR_PROPS as readonly string[]).includes(p)
 }
-export const KEY_PROPS: readonly KeyProp[] = ['x', 'y', 'scale', 'rotation', 'opacity', 'volume', 'cropL', 'cropT', 'cropR', 'cropB', ...COLOR_PROPS] as const
+export const KEY_PROPS: readonly KeyProp[] = [
+  'x',
+  'y',
+  'scale',
+  'rotation',
+  'opacity',
+  'volume',
+  'cropL',
+  'cropT',
+  'cropR',
+  'cropB',
+  ...CAPTION_PROPS,
+  ...COLOR_PROPS,
+] as const
 /** G1a: crop edges (% of the layer, measured in the un-flipped media) — video + B-roll layers only. */
 export const CROP_PROPS = ['cropL', 'cropT', 'cropR', 'cropB'] as const
 export type CropProp = (typeof CROP_PROPS)[number]
@@ -85,6 +104,7 @@ export type KeyframeTarget =
   | 'voice'
   | 'music'
   | 'text'
+  | 'captions'
   | `broll:${string}`
   | `text:${string}`
   | `sfx:${string}`
@@ -114,6 +134,9 @@ export const PROP_SPECS: Record<KeyProp, PropSpec> = {
   cropT: { label: 'Crop top', unit: '%', min: 0, max: 90, def: 0, step: 1 },
   cropR: { label: 'Crop right', unit: '%', min: 0, max: 90, def: 0, step: 1 },
   cropB: { label: 'Crop bottom', unit: '%', min: 0, max: 90, def: 0, step: 1 },
+  capX: { label: 'Caption X', unit: '%', min: -50, max: 50, def: 0, step: 0.5 },
+  capY: { label: 'Caption Y', unit: '%', min: -50, max: 50, def: 0, step: 0.5 },
+  capScale: { label: 'Caption scale', unit: '%', min: 50, max: 200, def: 100, step: 1 },
   cExposure: { label: 'Exposure', unit: '', min: -100, max: 100, def: 0, step: 1 },
   cBrightness: { label: 'Brightness', unit: '', min: -100, max: 100, def: 0, step: 1 },
   cContrast: { label: 'Contrast', unit: '', min: -100, max: 100, def: 0, step: 1 },
@@ -240,7 +263,7 @@ function clampN(n: number, lo: number, hi: number): number {
 
 function isTarget(t: unknown): t is KeyframeTarget {
   if (typeof t !== 'string') return false
-  return t === 'video' || t === 'voice' || t === 'music' || t === 'text' || (t.startsWith('broll:') && t.length > 6) || (t.startsWith('text:') && t.length > 5) || isSfxTarget(t) || isAdjustTarget(t)
+  return t === 'video' || t === 'voice' || t === 'music' || t === 'text' || t === 'captions' || (t.startsWith('broll:') && t.length > 6) || (t.startsWith('text:') && t.length > 5) || isSfxTarget(t) || isAdjustTarget(t)
 }
 
 /** G4a: adjustment layer (`adjust:<id>`, local ms from the layer start) — color props only. */
@@ -260,6 +283,7 @@ export function isSfxTarget(t: string): boolean {
 
 /** Which properties a target can animate (CapCut: visual layers vs audio). */
 export function propsForTarget(target: KeyframeTarget): readonly KeyProp[] {
+  if (target === 'captions') return [...CAPTION_PROPS]
   if (target === 'voice' || target === 'music' || isSfxTarget(target)) return ['volume']
   if (isAdjustTarget(target)) return []
   if (isMediaLayerTarget(target)) return ['x', 'y', 'scale', 'rotation', 'opacity', ...CROP_PROPS]

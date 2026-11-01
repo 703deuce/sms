@@ -21,6 +21,8 @@ import {
   layerFxOf,
   maskGeomAt,
   setLayerFx,
+  chromaKeyAt,
+  chromaParamsAt,
   type ChromaKey,
   type FxTargetKind,
   type LayerFx,
@@ -56,6 +58,29 @@ export function setMaskGeom(mask: LayerMask, k: keyof MaskGeom, v: number, local
   keys.push({ ...cur, [k]: v, ms })
   keys.sort((a, b) => a.ms - b.ms)
   return { ...mask, keys }
+}
+
+export function toggleChromaKey(key: ChromaKey, localMs: number): ChromaKey {
+  const ms = maskKeyMs(localMs)
+  const has = key.keys?.some((x) => x.ms === ms)
+  if (has) {
+    const keys = key.keys!.filter((x) => x.ms !== ms)
+    if (keys.length) return { ...key, keys }
+    const { keys: _k, ...rest } = key
+    return { ...rest, ...chromaKeyAt(key, ms) }
+  }
+  return { ...key, keys: [...(key.keys ?? []), { ms, sim: chromaKeyAt(key, ms).sim, blend: chromaKeyAt(key, ms).blend, spill: chromaKeyAt(key, ms).spill }].sort((a, b) => a.ms - b.ms) }
+}
+
+export function setChromaParam(key: ChromaKey, localMs: number, patch: Partial<Pick<ChromaKey, 'sim' | 'blend' | 'spill'>>): ChromaKey {
+  const ms = maskKeyMs(localMs)
+  const cur = chromaKeyAt(key, ms)
+  const next = { ...cur, ...patch }
+  if (!key.keys?.length) return { ...key, ...patch }
+  const keys = key.keys.filter((x) => x.ms !== ms)
+  keys.push({ ms, sim: next.sim, blend: next.blend, spill: next.spill })
+  keys.sort((a, b) => a.ms - b.ms)
+  return { ...key, keys }
 }
 
 export function toggleMaskKey(mask: LayerMask, localMs: number): LayerMask {
@@ -94,7 +119,10 @@ export function LayerFxControls({
   const keyed = Boolean(mask?.keys?.length)
   const keyHere = Boolean(mask?.keys?.some((x) => x.ms === maskKeyMs(localMs)))
   const key = fx?.key
-  const setKey = (p: Partial<ChromaKey>) => patch({ key: { ...(key ?? DEFAULT_KEY), ...p } })
+  const keyAt = key ? chromaKeyAt(key, localMs) : null
+  const chromaKeyed = Boolean(key?.keys?.length)
+  const chromaKeyHere = Boolean(key?.keys?.some((x) => x.ms === maskKeyMs(localMs)))
+  const setKey = (p: Partial<ChromaKey>) => patch({ key: key ? setChromaParam(key, localMs, p) : { ...(DEFAULT_KEY), ...p } })
   const brollId = fxTargetOf(target) === 'broll' ? target.slice('broll:'.length) : null
   const item = brollId ? (edits.broll ?? []).find((b) => b.id === brollId) : undefined
   const tooLong = item ? item.endMs - item.startMs > REVERSE_MAX_MS : false
@@ -215,9 +243,37 @@ export function LayerFxControls({
         </div>
         {key ? (
           <>
-            <SliderRow label="Strength" value={key.sim} min={0} max={100} disabled={readOnly || keyOff} testId="layer-fx-key-sim" onCommit={(v) => setKey({ sim: v })} />
-            <SliderRow label="Edge softness" value={key.blend} min={0} max={100} disabled={readOnly || keyOff} testId="layer-fx-key-blend" onCommit={(v) => setKey({ blend: v })} />
-            <SliderRow label="Spill removal" value={key.spill} min={0} max={100} disabled={readOnly || keyOff} testId="layer-fx-key-spill" onCommit={(v) => setKey({ spill: v })} />
+            <SliderRow label="Strength" value={keyAt?.sim ?? key.sim} min={0} max={100} disabled={readOnly || keyOff} testId="layer-fx-key-sim" onCommit={(v) => setKey({ sim: v })} />
+            <SliderRow label="Edge softness" value={keyAt?.blend ?? key.blend} min={0} max={100} disabled={readOnly || keyOff} testId="layer-fx-key-blend" onCommit={(v) => setKey({ blend: v })} />
+            <SliderRow label="Spill removal" value={keyAt?.spill ?? key.spill} min={0} max={100} disabled={readOnly || keyOff} testId="layer-fx-key-spill" onCommit={(v) => setKey({ spill: v })} />
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                className={`${btn} ${chromaKeyHere ? 'border-yellow-400 bg-yellow-400/15' : ''}`}
+                disabled={readOnly || keyOff}
+                onClick={() => key && patch({ key: toggleChromaKey(key, localMs) })}
+                data-testid="layer-fx-key-kf"
+                title="Keyframe chroma settings at the playhead (100 ms steps)"
+              >
+                <Diamond className="size-3" aria-hidden /> {chromaKeyHere ? 'Remove key' : 'Key here'}
+              </button>
+              {chromaKeyed ? (
+                <button
+                  type="button"
+                  className={btn}
+                  disabled={readOnly || keyOff}
+                  onClick={() => {
+                    if (!key) return
+                    const { keys: _k, ...rest } = key
+                    patch({ key: { ...rest, ...chromaKeyAt(key, localMs) } })
+                  }}
+                  data-testid="layer-fx-key-clear-keys"
+                >
+                  <RotateCcw className="size-3" aria-hidden /> Clear keys
+                </button>
+              ) : null}
+            </div>
+            {chromaKeyed ? <p className="text-[10px] text-muted-foreground">{key!.keys!.length} chroma key(s): sliders edit the key at the playhead.</p> : null}
           </>
         ) : null}
       </section>

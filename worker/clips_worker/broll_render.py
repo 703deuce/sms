@@ -112,7 +112,7 @@ def build_broll_filtergraph(
     current = "base"
     cmd_files: list[tuple[Path, str]] = []
     n_inputs = 1
-    from clips_worker.layer_fx import despill_chain, key_chain, layer_fx_of, reversed_media, write_mask_frames
+    from clips_worker.layer_fx import despill_chain, key_chain, layer_fx_of, reversed_media, write_chroma_key_alpha_frames, write_mask_frames
 
     for i, spec in enumerate(broll_specs):
         clip_dur = clip_window_duration_s(spec)
@@ -165,9 +165,22 @@ def build_broll_filtergraph(
             # Alpha from the ungraded pixels (key) × the mask; colour from the graded chain.
             alphas: list[str] = []
             if lfx.get("key"):
+                k = lfx["key"]
                 parts.append(f"{head},fps=30,split=2[b{i}s0][b{i}s1]")
-                parts.append(f"[b{i}s0]null{despill_chain(lfx['key'])}{look},format=yuv420p[b{i}g]")
-                parts.append(f"[b{i}s1]{key_chain(lfx['key'])[1:]},alphaextract[b{i}ka]")
+                parts.append(f"[b{i}s0]null{despill_chain(k)}{look},format=yuv420p[b{i}g]")
+                if k.get("keys"):
+                    kpath = Path(cmd_dir if cmd_dir is not None else ".") / f"keyalpha{i}.gray"
+                    _, kmw, kmh, knfr = write_chroma_key_alpha_frames(local, in_s, clip_dur, width, height, k, kpath)
+                    extra_inputs.extend(["-f", "rawvideo", "-pix_fmt", "gray", "-video_size", f"{kmw}x{kmh}",
+                                         "-framerate", "10", "-i", str(kpath)])
+                    ki = n_inputs
+                    n_inputs += 1
+                    pad = max(0.0, clip_dur - knfr / 10.0) + 1.0
+                    parts.append(f"[{ki}:v]setpts=PTS-STARTPTS+{start:.3f}/TB,tpad=stop_mode=clone:"
+                                 f"stop_duration={pad:.3f},fps=30,scale={width}:{height}:flags=bilinear,"
+                                 f"format=gray[b{i}ka]")
+                else:
+                    parts.append(f"[b{i}s1]{key_chain(k)[1:]},alphaextract[b{i}ka]")
                 alphas.append(f"b{i}ka")
             else:
                 parts.append(f"{head},fps=30{look},format=yuv420p[b{i}g]")
