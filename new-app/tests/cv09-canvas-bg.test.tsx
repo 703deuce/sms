@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { defaultEdits, editsPayloadForSave, isDefaultEdits, normalizeEdits } from '@/lib/clips/edits'
 import { normalizeCanvasBg, resolveCanvasBg, withCanvasBg } from '@/lib/clips/canvas-bg'
 import { CanvasBgFill } from '@/components/clips/editor/canvas-bg-fill'
@@ -59,5 +59,32 @@ describe('CV-09 canvasBg', () => {
     )
     const fills = screen.getAllByTestId('preview-canvas-bg')
     expect(fills.some((el) => el.getAttribute('style')?.includes('#FF0000'))).toBe(true)
+  })
+
+  it('CV09fix: flat canvas backdrop sits outside the video crop/keyframe layer', async () => {
+    cleanup()
+    vi.resetModules()
+    const { PreviewStage } = await import('@/components/clips/editor/preview-stage')
+    const { setCropAt, layerCropAt, cropClipPath } = await import('@/lib/clips/editor/layer-props')
+    const base = { ...defaultEdits(bounds), layout: { ...defaultEdits(bounds).layout, mode: 'fit_blur' as const } }
+    const edits = setCropAt(withCanvasBg(base, { type: 'color', color: '#3B82F6' }), 'video', 0, { r: 20 })
+    expect(cropClipPath(layerCropAt(edits, 'video', 0))).toContain('20%')
+    render(
+      <PreviewStage
+        videoUrl="https://example.com/v.mp4"
+        edits={edits}
+        words={[]}
+        cropTrack={null}
+        videoRef={{ current: null }}
+        onTick={() => {}}
+        testBoxSize={{ w: 360, h: 640 }}
+      />,
+    )
+    const kf = screen.getAllByTestId('preview-main-kf')[0]!
+    const backdrop = screen.getByTestId('preview-canvas-backdrop')
+    expect(kf.contains(backdrop)).toBe(false)
+    expect(screen.getByTestId('preview-adjust').contains(backdrop)).toBe(true)
+    expect(backdrop.getAttribute('style')).toContain('#3B82F6')
+    expect(backdrop.style.clipPath).toBe('')
   })
 })

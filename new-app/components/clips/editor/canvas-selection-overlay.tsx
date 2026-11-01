@@ -109,13 +109,30 @@ type Drag =
 
 const SKIP = 'button, a, input, textarea, select, [role="button"], [role="slider"], [data-canvas-skip]'
 
+const CHIP_BAND = 32
+
 /** Keep corner handles inside the stage (main video fills the frame; handles were clipped). */
-export function insetCanvasHandle(p: Pt, boxW: number, boxH: number, inset = 10): Pt {
+export function insetCanvasHandle(
+  p: Pt,
+  boxW: number,
+  boxH: number,
+  inset = 10,
+  bottomBand = 0,
+): Pt {
   if (boxW <= inset * 2 || boxH <= inset * 2) return p
+  const maxY = bottomBand > 0 ? boxH - bottomBand / 2 - inset : boxH - inset
   return {
     x: Math.min(boxW - inset, Math.max(inset, p.x)),
-    y: Math.min(boxH - inset, Math.max(inset, p.y)),
+    y: Math.min(maxY, Math.max(inset, p.y)),
   }
+}
+
+/** TC4a + CV09fix: floating toolbar placement (pure for tests). */
+export function floatToolbarTop(b: { x: number; y: number; w: number; h: number }, H: number, band = CHIP_BAND): number {
+  const below = b.y + b.h + 6
+  if (b.y > 34) return b.y - 30
+  if (below <= H - band - 26) return below
+  return 4
 }
 
 export function CanvasSelectionOverlay({
@@ -388,7 +405,7 @@ export function CanvasSelectionOverlay({
         ? quad.map((p, i) => {
             const at =
               selected === 'video' && box
-                ? insetCanvasHandle(p, box.clientWidth, box.clientHeight)
+                ? insetCanvasHandle(p, box.clientWidth, box.clientHeight, 10, CHIP_BAND)
                 : p
             return (
             <div
@@ -436,7 +453,7 @@ export function CanvasSelectionOverlay({
           className="pointer-events-auto absolute flex items-center gap-0.5 rounded-md bg-black/80 p-0.5 text-[11px] font-medium text-white shadow-lg ring-1 ring-white/15"
           style={{
             left: Math.max(4, Math.min(W - 230, quadBounds(quad).x)),
-            top: quadBounds(quad).y > 34 ? quadBounds(quad).y - 30 : Math.min(H - 26, quadBounds(quad).y + quadBounds(quad).h + 6),
+            top: floatToolbarTop(quadBounds(quad), H),
           }}
           onPointerDown={(e) => e.stopPropagation()}
           role="toolbar"

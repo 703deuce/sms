@@ -9,6 +9,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from clips_worker.filtergraph import _escape_movie_path, canvas_bg, canvas_bg_flat
 from clips_worker.motion import (
     MOTION_FPS,
     XFADE_NAME,
@@ -113,8 +114,22 @@ def apply_cut_transitions(cut_mp4: Path, full_render: Path, out: Path, segs_ms: 
     return True
 
 
+def main_kf_bg_filter(edits: dict, w: int, h: int) -> str:
+    bg = canvas_bg(edits)
+    if canvas_bg_flat(bg) and bg["type"] == "color":
+        return f"[bgs]drawbox=x=0:y=0:w=iw:h=ih:color=0x{bg['color']}:t=fill[bg]"
+    if canvas_bg_flat(bg) and bg["type"] == "image":
+        p = _escape_movie_path(bg["path"])
+        return (
+            f"[bgs]drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill[bgk];"
+            f"movie='{p}',scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,format=rgba[bgi];"
+            f"[bgk][bgi]overlay=0:0:eof_action=repeat[bg]"
+        )
+    return "[bgs]drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill[bg]"
+
+
 def apply_main_keyframes(video: Path, out: Path, edits: dict, work_dir: Path) -> bool:
-    """Video-lane keyframes / crop / flip: transform the main video layer over black (CapCut canvas)."""
+    """Video-lane keyframes / crop / flip: transform the main video layer over the canvas background."""
     if not has_layer_fx(edits, "video"):
         return False
     w, h, dur = probe_size_duration(video)
@@ -127,7 +142,7 @@ def apply_main_keyframes(video: Path, out: Path, edits: dict, work_dir: Path) ->
         cmd_file.write_text(layer_sendcmd(edits, "video", tags, w=w, h=h, start_s=0, end_s=dur + 1, origin_s=0.0))
     fc = (
         "[0:v]setsar=1,format=rgba,split=2[src][bgs];"
-        "[bgs]drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill[bg];"
+        f"{main_kf_bg_filter(edits, w, h)};"
         f"{graph};[kf]format=yuv420p[vout]"
     )
     subprocess.check_call(

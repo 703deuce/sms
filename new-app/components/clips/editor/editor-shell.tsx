@@ -101,6 +101,7 @@ import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
 import { buildFromTranscriptItem, matchFrameAt } from '@/lib/clips/editor/source-monitor'
 import { mediaUrlFor, useMediaTranscripts, useProjectMedia } from '@/components/clips/editor/use-project-media'
 import { CanvasBackgroundChip, CanvasBackgroundSection } from '@/components/clips/editor/canvas-background'
+import { PreviewChipRow, previewChipButtonClass } from '@/components/clips/editor/preview-chip-row'
 import { canvasBgRelevant } from '@/lib/clips/canvas-bg'
 import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
@@ -273,6 +274,8 @@ export function EditorShell({
   const [playerMuted, setPlayerMuted] = useState(false)
   const [playerVolume, setPlayerVolume] = useState(100)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const previewFrameRef = useRef<HTMLDivElement | null>(null)
+  const [previewFrameW, setPreviewFrameW] = useState(999)
   const selectionRef = useRef<TranscriptSelection | null>(null)
   const seededExportTemplateRef = useRef(false)
   const {
@@ -1320,6 +1323,14 @@ export function EditorShell({
         : previewAspect === '4:5'
           ? '4 / 5'
           : '9 / 16'
+  useEffect(() => {
+    const el = previewFrameRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => setPreviewFrameW(entry.contentRect.width))
+    ro.observe(el)
+    setPreviewFrameW(el.getBoundingClientRect().width)
+    return () => ro.disconnect()
+  }, [aspectStyle, panel])
   const pickerWhy = clipWhySummary(aiMeta as ClipAiMeta | null)
   const detectedLayout = clipLayoutChip(aiMeta as ClipAiMeta | null)
   const clipTypeLabel = clipTypeBadge(aiMeta as ClipAiMeta | null)
@@ -1885,6 +1896,7 @@ export function EditorShell({
         <section className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-x-hidden overflow-y-auto p-2 sm:p-3 md:p-4">
           <div className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4">
             <div
+              ref={previewFrameRef}
               className="relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
               style={{ aspectRatio: aspectStyle }}
             >
@@ -1908,37 +1920,35 @@ export function EditorShell({
                 {pendingDerivedClipId === 'pending' ? 'Creating clip…' : 'New clip saved'}
               </Badge>
             ) : null}
-            <button
-              type="button"
-              className="absolute bottom-2 right-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15"
-              onClick={toggleLoopFriendly}
-            >
-              Loop trim {edits.loopFriendlyEnd === false ? 'off' : 'on'}
-            </button>
-            <button
-              type="button"
-              className="absolute bottom-2 right-24 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15"
-              onClick={(e) => {
-                // TC3 (CV-12): full-screen preview (browser Fullscreen API; Esc leaves).
-                const box = e.currentTarget.parentElement
-                if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
-                else void box?.requestFullscreen?.().catch(() => {})
-              }}
-              title="Full-screen preview (Esc to leave)"
-              data-testid="preview-fullscreen"
-            >
-              ⛶ Full screen
-            </button>
-            <CanvasBackgroundChip
-              edits={edits}
-              media={media}
-              projectId={projectId}
-              clipId={clipId}
-              visible={canvasBgChipVisible}
-              compositeLocked={compositePreviewClip}
-              readOnly={Boolean(edits.timelineLanes?.video?.locked)}
-              onCommit={(next) => setEdits(next)}
-            />
+            <PreviewChipRow>
+              <CanvasBackgroundChip
+                edits={edits}
+                media={media}
+                projectId={projectId}
+                clipId={clipId}
+                visible={canvasBgChipVisible}
+                compositeLocked={compositePreviewClip}
+                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+                onCommit={(next) => setEdits(next)}
+                narrow={previewFrameW < 260}
+              />
+              <button
+                type="button"
+                className={previewChipButtonClass()}
+                onClick={() => {
+                  const box = previewFrameRef.current
+                  if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+                  else void box?.requestFullscreen?.().catch(() => {})
+                }}
+                title="Full-screen preview (Esc to leave)"
+                data-testid="preview-fullscreen"
+              >
+                ⛶ Full screen
+              </button>
+              <button type="button" className={previewChipButtonClass()} onClick={toggleLoopFriendly}>
+                Loop trim {edits.loopFriendlyEnd === false ? 'off' : 'on'}
+              </button>
+            </PreviewChipRow>
             <EditorPanelErrorBoundary label="Preview">
             <PreviewStage
               videoUrl={videoUrl}
