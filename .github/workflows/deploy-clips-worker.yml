@@ -1,0 +1,40 @@
+name: Deploy clips worker (Coolify)
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Git ref (commit SHA or branch)
+        required: true
+        default: master
+
+jobs:
+  deploy-clips-worker:
+    runs-on: ubuntu-latest
+    if: github.repository == '703deuce/sms'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref }}
+          fetch-depth: 0
+      - name: Setup Coolify SSH
+        env:
+          COOLIFY_SSH_KEY: ${{ secrets.COOLIFY_SSH_KEY }}
+        run: |
+          if [[ -z "${COOLIFY_SSH_KEY:-}" ]]; then
+            echo "FATAL: COOLIFY_SSH_KEY not configured in GitHub Actions secrets"
+            exit 1
+          fi
+          bash scripts/cloud-agent/install-coolify-ssh.sh
+      - name: Deploy clips worker
+        run: bash scripts/deploy-worker.sh "${{ inputs.git_ref }}"
+      - name: Verify worker SHA and disk
+        run: |
+          REF="$(git rev-parse "${{ inputs.git_ref }}^{commit}")"
+          echo "expected CLIPS_WORKER_GIT_SHA=${REF}"
+          for name in clips-worker clips-worker-stream; do
+            got="$(ssh coolify-server "docker exec ${name} printenv CLIPS_WORKER_GIT_SHA")"
+            echo "${name} CLIPS_WORKER_GIT_SHA=${got}"
+            test "${got}" = "${REF}"
+          done
+          ssh coolify-server "df / --output=pcent | tail -1"
