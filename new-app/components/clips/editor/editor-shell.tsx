@@ -245,6 +245,16 @@ export function EditorShell({
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
+  const [beatCutApi, setBeatCutApi] = useState<{
+    cut: (every: 1 | 2 | 4) => void
+    hasBeats: boolean
+  } | null>(null)
+  const registerBeatCut = useCallback(
+    (api: { cut: (every: 1 | 2 | 4) => void; hasBeats: boolean } | null) => {
+      setBeatCutApi(api)
+    },
+    [],
+  )
   const [exportTimelineInOut, setExportTimelineInOut] = useState<import('@/lib/clips/editor/timeline-edit-ops').InOut>({
     inMs: null,
     outMs: null,
@@ -1812,6 +1822,8 @@ export function EditorShell({
           }}
           textVoiceover={textVoiceoverTarget}
           addVoiceoverSfx={addSfx}
+          onCutToBeat={(every) => beatCutApi?.cut(every)}
+          beatsAvailable={Boolean(beatCutApi?.hasBeats)}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -2480,6 +2492,7 @@ export function EditorShell({
             }}
             playheadOutMsRef={outputMsRef}
             transcriptSelectionRef={selectionRef}
+            registerBeatCut={registerBeatCut}
             highlights={
               fullVideo && fvHighlights.highlightsOn && fvHighlights.ranges.length
                 ? {

@@ -18,9 +18,9 @@ import { normalizeEditSpeed } from '@/lib/clips/edits'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import { creditsLabel, musicCredits } from '@/lib/clips/credit-cost'
-import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import { toast } from 'sonner'
 import { StockAudioPicker } from '@/components/clips/editor/stock-audio-picker'
+import { BeatCutControls } from '@/components/clips/editor/beat-cut-controls'
 import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { TextVoiceoverSection } from '@/components/clips/editor/text-voiceover-section'
 import type { ClipAudioSfx } from '@/lib/clips/edits'
@@ -46,6 +46,8 @@ export function AudioPanel({
   uploadLibraryFiles,
   textVoiceover,
   addVoiceoverSfx,
+  onCutToBeat,
+  beatsAvailable = false,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -72,6 +74,9 @@ export function AudioPanel({
   /** Selected plain text item — stock TTS (same as Text panel). */
   textVoiceover?: { text: string; atMs: number } | null
   addVoiceoverSfx?: (item: ClipAudioSfx) => void
+  /** Wired from timeline beat detection (Cut to beat). */
+  onCutToBeat?: (every: 1 | 2 | 4) => void
+  beatsAvailable?: boolean
 }) {
   const [prompt, setPrompt] = useState('')
   const [instrumental, setInstrumental] = useState(true)
@@ -87,7 +92,6 @@ export function AudioPanel({
   const sawStudioRunningRef = useRef(false)
   const music = audioNorm.music
   const musicGen = useGeneration(music?.generationId ?? null)
-  const aiExtras = clipEditorAiExtrasEnabled()
 
   const [previewGenId, setPreviewGenId] = useState<string | null>(null)
   const previewGen = useGeneration(previewGenId)
@@ -326,48 +330,12 @@ export function AudioPanel({
           />
         </section>
       ) : null}
-      <section className="space-y-2 rounded-md border border-border p-2" data-testid="audio-library">
-        <h3 className="font-medium">Library</h3>
-        <StockAudioPicker
-          kind="music"
-          playheadMs={playheadMs}
-          hasMusicBed={Boolean(music)}
-          uploadLibraryFiles={uploadLibraryFiles}
-          onGeneratePreset={(p) => {
-            if (!aiExtras) {
-              toast.message('AI music generation requires workspace AI extras')
-              return
-            }
-            setPrompt(p)
-            setBusy(true)
-            void clipsFetch<{ generationId: string }>(`/api/clips/clips/${clipId}/music`, {
-              method: 'POST',
-              body: JSON.stringify({ prompt: p, instrumental: true }),
-            })
-              .then((data) => setActiveGen(data.generationId))
-              .finally(() => setBusy(false))
-          }}
-          onMusicUploaded={(uploadId) => {
-            if (!music) onAttachMusic(uploadId)
-            else onAddSfx(uploadId, playheadMs)
-          }}
-          onSfxUploaded={(uploadId, atMs) => onAddSfx(uploadId, atMs)}
-        />
-        <StockAudioPicker
-          kind="sfx"
-          playheadMs={playheadMs}
-          hasMusicBed={false}
-          uploadLibraryFiles={uploadLibraryFiles}
-          onGeneratePreset={() => {}}
-          onMusicUploaded={() => {}}
-          onSfxUploaded={(uploadId, atMs) => onAddSfx(uploadId, atMs)}
-        />
-      </section>
-      {aiExtras ? (
-      <section className="space-y-2">
-        <h3 className="font-medium">Music</h3>
+      <section className="space-y-3 rounded-md border border-border p-2" data-testid="audio-music-sfx-mix">
+        <h3 className="font-medium">Music, SFX &amp; mix</h3>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => void suggest()}>Suggest</Button>
+          <Button size="sm" variant="outline" disabled={busy} data-testid="audio-music-suggest" onClick={() => void suggest()}>
+            Suggest mood
+          </Button>
           <div className="flex items-center gap-2">
             <Switch
               id="music-instrumental"
@@ -384,9 +352,10 @@ export function AudioPanel({
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Music prompt…"
+          data-testid="audio-music-prompt"
         />
         <p className="text-xs text-muted-foreground">Uses {creditsLabel(credits)}</p>
-        <Button size="sm" disabled={busy || !prompt.trim()} onClick={() => void generateMusic()}>
+        <Button size="sm" disabled={busy || !prompt.trim()} data-testid="audio-music-generate" onClick={() => void generateMusic()}>
           Generate
         </Button>
         {activeGen && !gen.failed && (
@@ -428,47 +397,79 @@ export function AudioPanel({
             </div>
           </div>
         )}
-      </section>
-      ) : null}
-
-      {aiExtras ? (
-      <section className="space-y-2">
-        <h3 className="font-medium">Sound effects</h3>
-        <div className="flex flex-wrap gap-1">
-          {SFX_PRESETS.map((p) => (
-            <Button key={p.id} size="sm" variant="secondary" disabled={busy} onClick={() => void placeSfx(p.id)}>
-              {p.label}
-            </Button>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <input
-            className="flex-1 rounded border border-border px-2 py-1 text-xs"
-            value={customSfx}
-            onChange={(e) => setCustomSfx(e.target.value)}
-            placeholder="Custom SFX prompt"
+        <div className="space-y-2" data-testid="audio-library">
+          <p className="text-xs font-medium text-muted-foreground">Library</p>
+          <StockAudioPicker
+            kind="music"
+            playheadMs={playheadMs}
+            hasMusicBed={Boolean(music)}
+            uploadLibraryFiles={uploadLibraryFiles}
+            onGeneratePreset={(p) => {
+              setPrompt(p)
+              setBusy(true)
+              void clipsFetch<{ generationId: string }>(`/api/clips/clips/${clipId}/music`, {
+                method: 'POST',
+                body: JSON.stringify({ prompt: p, instrumental: true }),
+              })
+                .then((data) => setActiveGen(data.generationId))
+                .finally(() => setBusy(false))
+            }}
+            onMusicUploaded={(uploadId) => {
+              if (!music) onAttachMusic(uploadId)
+              else onAddSfx(uploadId, playheadMs)
+            }}
+            onSfxUploaded={(uploadId, atMs) => onAddSfx(uploadId, atMs)}
           />
-          <Button size="sm" disabled={busy || !customSfx.trim()} onClick={() => void placeSfx(undefined, customSfx)}>
-            Add
-          </Button>
+          <StockAudioPicker
+            kind="sfx"
+            playheadMs={playheadMs}
+            hasMusicBed={false}
+            uploadLibraryFiles={uploadLibraryFiles}
+            onGeneratePreset={() => {}}
+            onMusicUploaded={() => {}}
+            onSfxUploaded={(uploadId, atMs) => onAddSfx(uploadId, atMs)}
+          />
         </div>
-        <ul className="space-y-1 text-xs">
-          {(edits.audio?.sfx || []).map((s) => (
-            <li key={s.generationId} className="flex items-center justify-between gap-2 rounded bg-muted/50 px-2 py-1">
-              <span>
-                {Math.floor(s.atMs / 1000)}s · vol {Math.round((s.volume ?? 0.8) * 100)}%
-              </span>
-              <div className="flex gap-1">
-                <Button size="sm" variant="ghost" onClick={() => onUpdateSfx(s.generationId, { atMs: playheadMs })}>
-                  Move to playhead
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => onRemoveSfx(s.generationId)}>×</Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">Sound effects</p>
+          <div className="flex flex-wrap gap-1">
+            {SFX_PRESETS.map((p) => (
+              <Button key={p.id} size="sm" variant="secondary" disabled={busy} onClick={() => void placeSfx(p.id)}>
+                {p.label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded border border-border px-2 py-1 text-xs"
+              value={customSfx}
+              onChange={(e) => setCustomSfx(e.target.value)}
+              placeholder="Custom SFX prompt"
+            />
+            <Button size="sm" disabled={busy || !customSfx.trim()} onClick={() => void placeSfx(undefined, customSfx)}>
+              Add
+            </Button>
+          </div>
+          <ul className="space-y-1 text-xs">
+            {(edits.audio?.sfx || []).map((s) => (
+              <li key={s.generationId} className="flex items-center justify-between gap-2 rounded bg-muted/50 px-2 py-1">
+                <span>
+                  {Math.floor(s.atMs / 1000)}s · vol {Math.round((s.volume ?? 0.8) * 100)}%
+                </span>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => onUpdateSfx(s.generationId, { atMs: playheadMs })}>
+                    Move to playhead
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onRemoveSfx(s.generationId)}>×</Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        {onCutToBeat ? (
+          <BeatCutControls disabled={!beatsAvailable} onCut={onCutToBeat} />
+        ) : null}
       </section>
-      ) : null}
     </div>
   )
 }

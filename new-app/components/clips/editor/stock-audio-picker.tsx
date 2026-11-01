@@ -103,6 +103,14 @@ export function StockAudioPicker({
 
   return (
     <div className="space-y-2" data-testid="stock-audio-picker">
+      {kind === 'sfx' ? (
+        <span
+          className="inline-flex rounded border border-border/80 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+          data-testid="stock-sfx-license-badge"
+        >
+          CC0 · Kenney
+        </span>
+      ) : null}
       <div className="flex flex-wrap gap-1">
         <input
           className="min-w-0 flex-1 rounded border border-border px-2 py-1 text-xs"

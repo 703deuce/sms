@@ -110,13 +110,21 @@ export function ExportRenderShareDialog({
               <Button type="button" variant="outline" disabled={busy} onClick={() => void onRevoke()}>
                 Revoke link
               </Button>
-              <Button type="button" onClick={() => void copy()}>
+              <Button
+                type="button"
+                variant="outline"
+                data-testid="export-share-open"
+                onClick={() => window.open(shareUrl, '_blank', 'noopener,noreferrer')}
+              >
+                Open
+              </Button>
+              <Button type="button" data-testid="export-share-copy" onClick={() => void copy()}>
                 <Copy className="size-4" aria-hidden />
                 Copy link
               </Button>
             </>
           ) : (
-            <Button type="button" className="w-full sm:ml-auto" disabled={busy || !renderId} onClick={() => void onCreate()}>
+            <Button type="button" className="w-full sm:ml-auto" disabled={busy || !renderId} data-testid="export-share-create" onClick={() => void onCreate()}>
               {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Link2 className="size-4" aria-hidden />}
               Create link
             </Button>

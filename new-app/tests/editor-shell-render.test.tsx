@@ -23,6 +23,28 @@ vi.mock('@/components/shell/breadcrumb-context', () => ({
   useSetBreadcrumbTitle: vi.fn(),
 }))
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/app/clips/p/edit/c',
+}))
+
+vi.mock('@/components/clips/editor/use-full-video-highlights', () => ({
+  useFullVideoHighlights: () => ({
+    highlightsOn: false,
+    hasPicks: false,
+    ranges: [],
+    picks: [],
+    selectedClipId: null,
+    highlightWordIdx: undefined,
+    momentRows: undefined,
+    setSelectedClipId: vi.fn(),
+    onRangeChange: vi.fn(),
+    onMakeClip: vi.fn(async () => {}),
+    onOpenCard: vi.fn(),
+  }),
+}))
+
 vi.mock('@/lib/clips-api', () => ({
   clipsFetch: vi.fn((url: string) => {
     if (String(url).includes('/versions')) {
