@@ -70,13 +70,14 @@ async function main() {
 
     await page.locator('[data-testid="preview-canvas-bg-chip"]').click()
     results.chipOpens = await page.locator('[data-testid="canvas-bg-controls"]').last().isVisible({ timeout: 8000 })
+    const controls = page.locator('[data-testid="canvas-bg-controls"]').last()
     results.labelNone = (await page.locator('[data-testid="preview-canvas-bg-chip"]').innerText()).includes('None')
-    await page.getByRole('button', { name: 'Color', exact: true }).click()
+    await controls.getByRole('button', { name: 'Color', exact: true }).click()
     await page.waitForTimeout(400)
     results.labelColor = (await page.locator('[data-testid="preview-canvas-bg-chip"]').innerText()).match(/Color/i)
 
-    await page.getByRole('button', { name: 'Image', exact: true }).click()
-    results.imageUploadTile = await page.getByRole('button', { name: /upload/i }).isVisible()
+    await controls.getByRole('button', { name: 'Image', exact: true }).click()
+    results.imageUploadTile = await controls.getByRole('button', { name: /upload/i }).isVisible()
     await page.keyboard.press('Escape')
     await page.waitForTimeout(300)
 
