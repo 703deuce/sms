@@ -9,6 +9,12 @@ describe('T4.5 render cache version', () => {
     expect(hash.startsWith(`${CLIP_RENDER_PIPELINE_REV}:`)).toBe(true)
     expect(hash).not.toBe('abc:9:16:1080p')
   })
+
+  it('pipeline rev bump invalidates pre-worker-fix reuse keys', () => {
+    const hash = renderVersionHash('abc', '9:16', '720p')
+    expect(hash).toBe(`${CLIP_RENDER_PIPELINE_REV}:abc:9:16:720p`)
+    expect(hash).not.toBe('t47-v1:abc:9:16:720p')
+  })
 })
 
 describe('headline fit', () => {

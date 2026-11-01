@@ -8,8 +8,8 @@ export const CUSTOM_ASPECT_MIN = 240
 export const CUSTOM_ASPECT_MAX = 3840
 export const CUSTOM_ASPECT_MAX_RATIO = 4
 
-/** Bump when export compositor / burn-in behavior changes (invalidates READY render reuse). */
-export const CLIP_RENDER_PIPELINE_REV = 't47-v1'
+/** Bump when export compositor / worker render behavior changes (invalidates READY render reuse). */
+export const CLIP_RENDER_PIPELINE_REV = 't47-v2'
 
 const PRESET_PARTS: Record<PresetAspect, [number, number]> = {
   '9:16': [9, 16],
