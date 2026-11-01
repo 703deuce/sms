@@ -94,6 +94,19 @@ describe('TL roll / slide pointer path', () => {
     expect(onCommitEdits.mock.calls.at(-1)![1]).toBe(true)
   })
 
+  it('slide on MC-style middle clip (4640–29210 ms) commits one undo step', () => {
+    const e = edits({ videoSplits: [4640, 29210], trim: { in: 0, out: 35000 } })
+    const { getByTestId, getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
+    fireEvent.keyDown(getByTestId('timeline-scroll'), { key: 'u' })
+    const mid = getAllByTestId('timeline-item-video')[1]!
+    drag(mid, 990 * pxPerMs())
+    expect(onCommitEdits).toHaveBeenCalledTimes(1)
+    const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
+    expect(next.videoSplits![0]! - 4640).toBeGreaterThan(800)
+    expect(next.videoSplits![1]! - 29210).toBeGreaterThan(800)
+    expect(onCommitEdits.mock.calls[0]![1]).toBe(true)
+  })
+
   it('slide on a two-segment main track shows a toast instead of silent no-op', async () => {
     const { toast } = await import('sonner')
     const { getByTestId, getAllByTestId, pxPerMs } = setup(edits({ videoSplits: [29700] }))
