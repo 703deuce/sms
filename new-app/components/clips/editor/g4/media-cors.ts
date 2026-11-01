@@ -9,8 +9,9 @@
  * no-CORS response for a later CORS request of the same URL (the old cause of the "does not allow
  * pixel access" notice and of the filmstrip's console CORS errors).
  *
- * Graceful fallback: when a CORS load fails (host sends no Access-Control-Allow-Origin), the
- * element is reloaded WITHOUT crossOrigin (time / play state kept) and the URL is remembered as
+ * Graceful fallback: when a CORS load fails, the cache entry is refreshed once in CORS mode and
+ * the element retried with crossOrigin (G4cfix3); only if the host really sends no
+ * Access-Control-Allow-Origin is the element reloaded WITHOUT crossOrigin (time / play state kept) and the URL is remembered as
  * no-CORS, so playback never breaks; the grade preview then says why the 3D stage is off.
  */
 import { corsKnown, markCorsOk, markNoCors } from './grade-gl'
@@ -80,7 +81,51 @@ export function prepareMediaCors(el: Media) {
   if (started) reload(el)
 }
 
-/** Load error of a CORS-mode element → drop crossOrigin, reload plain, remember the URL. */
+/**
+ * G4cfix3: a browser that loaded a signed URL before G4cfix2 (no crossorigin) may still hold a
+ * cached response WITHOUT Access-Control-Allow-Origin for that exact URL; every CORS load then
+ * fails from cache. One CORS fetch with `cache: 'reload'` bypasses and REPLACES that entry with
+ * the ACAO response (B2 sends ACAO for the app origins), so the element can retry in CORS mode.
+ * Shared per URL (a poster is used by several elements). Resolves false when the host really
+ * sends no ACAO (fetch rejects in CORS mode) or fetch is unavailable.
+ */
+const refreshes = new Map<string, Promise<boolean>>()
+export function refreshCorsCache(url: string, video: boolean): Promise<boolean> {
+  const hit = refreshes.get(url)
+  if (hit) return hit
+  const p =
+    typeof fetch !== 'function'
+      ? Promise.resolve(false)
+      : fetch(url, {
+          mode: 'cors',
+          credentials: 'omit',
+          cache: 'reload',
+          // media: two bytes are enough to re-key the (range-cached) entry; posters: whole file
+          ...(video ? { headers: { Range: 'bytes=0-1' } } : {}),
+        }).then(
+          (r) => {
+            void r.body?.cancel().catch(() => {})
+            return r.ok || r.status === 206
+          },
+          () => false,
+        )
+  refreshes.set(url, p)
+  return p
+}
+
+function plainFallback(el: Media, url: string) {
+  markNoCors(url)
+  delete el.dataset.g4cors
+  el.dataset.g4corsOff = url
+  el.removeAttribute('crossorigin')
+  reload(el)
+}
+
+/**
+ * Load error of a CORS-mode element. G4cfix3: first refresh the HTTP-cache entry (CORS fetch,
+ * cache: 'reload') and retry the element WITH crossorigin; only if that refetch also fails (no
+ * ACAO) or the CORS retry fails again: drop crossOrigin, reload plain, remember the URL.
+ */
 export function onMediaCorsError(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLVideoElement || el instanceof HTMLImageElement)) return false
   const url = srcOf(el)
@@ -88,11 +133,18 @@ export function onMediaCorsError(el: EventTarget | null): boolean {
   // plain reload per URL at most (data-g4corsOff).
   if (!url || el.crossOrigin !== 'anonymous' || el.dataset.g4corsOff === url) return false
   if (el.dataset.g4cors !== url && !isCrossOriginUrl(url)) return false
-  markNoCors(url)
-  delete el.dataset.g4cors
-  el.dataset.g4corsOff = url
-  el.removeAttribute('crossorigin')
-  reload(el)
+  if (el.dataset.g4corsRetry === url) {
+    plainFallback(el, url)
+    return true
+  }
+  el.dataset.g4corsRetry = url
+  void refreshCorsCache(url, el instanceof HTMLVideoElement).then((ok) => {
+    if (srcOf(el) !== url || el.dataset.g4corsOff === url) return
+    if (!ok) return plainFallback(el, url)
+    el.crossOrigin = 'anonymous'
+    el.dataset.g4cors = url
+    reload(el)
+  })
   return true
 }
 

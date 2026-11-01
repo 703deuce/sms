@@ -55,7 +55,7 @@ import { autoCrossfade } from '@/lib/clips/editor/auto-crossfade'
 import { addFreezeFrame, addGapAt } from '@/lib/clips/editor/inserts'
 import { adjacentMarker, patchMarker, toggleMarkerAt, type Marker } from '@/lib/clips/editor/markers'
 import { canToggleEnabled, expandToGroups, groupItems, groupOf, isDisabled, toggleItemsEnabled, ungroupItems } from '@/lib/clips/editor/item-flags'
-import { magnetOn, rippleOverlaysOn, setTimelineOpt } from '@/lib/clips/editor/timeline-opts'
+import { readMagnetPref, rippleOverlaysOn, setTimelineOpt, writeMagnetPref } from '@/lib/clips/editor/timeline-opts'
 import { getPreviewRate, PREVIEW_RATES, setPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
 import { TimelineMarkers } from '@/components/clips/editor/timeline/timeline-markers'
 import { MarkerList } from '@/components/clips/editor/timeline/marker-list'
@@ -713,7 +713,10 @@ export function Timeline({
     onSelRef.current?.(singleSelRef.current)
   }, [singleSelKey])
 
-  const opCtx = (): OpCtx => ({ edits, previewEdits, clampTrim, sfxDurationsMs })
+  // TC1fix: main magnet = per-user preference (default ON), read after mount (SSR-safe).
+  const [magnet, setMagnet] = useState(true)
+  useEffect(() => setMagnet(readMagnetPref()), [])
+  const opCtx = (): OpCtx => ({ edits, previewEdits, clampTrim, sfxDurationsMs, magnet })
   // G1b2 manual multicam (angles = main + video sources; switches are E5 source segments).
   const angles = multicamAngles(edits, angleSources)
   const angleRef = useRef<(n: number) => boolean>(() => false)
@@ -761,8 +764,12 @@ export function Timeline({
   const lockedClickRef = useRef<LaneId | null>(null)
   const del = () => {
     if (!liveSelected.length) return false
-    commit(deleteItems(opCtx(), liveSelected))
+    const next = deleteItems(opCtx(), liveSelected)
+    commit(next)
     setSelected([])
+    // TC1fix: magnet off — say where the gap went (the lanes show edit time; inserts are the ▼ marks).
+    if (next && !magnet && (next.inserts?.length ?? 0) > (edits.inserts?.length ?? 0))
+      toast.message('Gap kept (black + silence) — later clips keep their export time; the gap is the violet mark on the Video lane', { id: 'timeline-gap' })
     return true
   }
   const nudge = (dir: -1 | 1, big: boolean) => {
@@ -899,10 +906,17 @@ export function Timeline({
     if (!editable) return false
     const next = groupItems(edits, liveSelected, `g_${Date.now().toString(36)}`)
     if (!next) {
-      toast.message('Select 2 or more overlay / text / sound items to group', { id: 'timeline-group' })
+      toast.message(
+        liveSelected.some((r) => r.lane === 'video' || r.lane === 'voice' || r.lane === 'music')
+          ? 'Main video, voice and music are tracks, not groupable — select 2 or more B-roll / text / caption / SFX / adjustment items'
+          : 'Select 2 or more B-roll / text / caption / SFX / adjustment items to group',
+        { id: 'timeline-group' },
+      )
       return true
     }
     commit(next)
+    const g = next.groups?.[next.groups.length - 1]
+    toast.message(`Grouped ${g?.items.length ?? 2} items (G${next.groups?.length ?? 1})`, { id: 'timeline-group' })
     return true
   }
   const ungroupSel = (): boolean => {
@@ -910,6 +924,7 @@ export function Timeline({
     const next = ungroupItems(edits, liveSelected)
     if (!next) return false
     commit(next)
+    toast.message('Ungrouped', { id: 'timeline-group' })
     return true
   }
   const insertGap = (): boolean => {
@@ -933,7 +948,12 @@ export function Timeline({
   }
   const toggleOpt = (key: 'magnet' | 'rippleOverlays') => {
     if (!editable) return
-    const on = key === 'magnet' ? magnetOn(edits.timelineOpts) : rippleOverlaysOn(edits.timelineOpts)
+    if (key === 'magnet') {
+      writeMagnetPref(!magnet)
+      setMagnet(!magnet)
+      return
+    }
+    const on = rippleOverlaysOn(edits.timelineOpts)
     commit({ ...edits, timelineOpts: setTimelineOpt(edits.timelineOpts, key, !on) })
   }
   const toggleLoop = (): boolean => {
@@ -1297,7 +1317,7 @@ export function Timeline({
     { id: 'nextEdit', group: 'Playback', label: 'Next edit point', keys: '↓', run: () => void jump(1) },
     ...PREVIEW_RATES.map((r) => ({ id: `rate${r}`, group: 'Playback', label: `Preview speed ${r}×`, run: () => setPreviewRate(r) })),
     { id: 'snap', group: 'Timeline', label: snapOn ? 'Snapping off' : 'Snapping on', keys: 'N', run: () => setSnapOn((v) => !v) },
-    { id: 'magnet', group: 'Timeline', label: magnetOn(edits.timelineOpts) ? 'Main magnet off (deletes leave gaps)' : 'Main magnet on (deletes close gaps)', run: () => toggleOpt('magnet'), disabled: !editable },
+    { id: 'magnet', group: 'Timeline', label: magnet ? 'Main magnet off (deletes leave gaps)' : 'Main magnet on (deletes close gaps)', run: () => toggleOpt('magnet'), disabled: !editable },
     { id: 'link', group: 'Timeline', label: rippleOverlaysOn(edits.timelineOpts) ? 'Unlink overlays from the main track' : 'Link overlays to the main track', run: () => toggleOpt('rippleOverlays'), disabled: !editable },
     { id: 'envelopes', group: 'Timeline', label: envOn ? 'Hide envelopes' : 'Show envelopes', run: () => setEnvOn((v) => !v) },
     { id: 'pacing', group: 'Timeline', label: 'Pacing check', run: () => setPacingOpen(true) },
@@ -1827,7 +1847,11 @@ export function Timeline({
     const isSel = selectedKeys.has(refKey(item))
     // TC1: deactivated items stay on the timeline, dimmed + striped.
     const off = isDisabled(edits, item)
-    const inGroup = Boolean(groupOf(edits, item))
+    const grp = groupOf(edits, item)
+    const inGroup = Boolean(grp)
+    // TC1fix: a group is visible — numbered badge on every member, amber outline while selected.
+    const grpNo = grp ? (edits.groups ?? []).indexOf(grp) + 1 : 0
+    const grpSel = Boolean(grp && grp.items.some((k) => selectedKeys.has(k)))
     const faded = st.hidden || st.muted || off
     const h = LANE_H[item.lane]
     // E3: Voice is selectable (volume keyframes) but cannot move / trim.
@@ -1844,7 +1868,7 @@ export function Timeline({
         key={refKey(item)}
         className={`absolute top-0.5 overflow-hidden rounded-[3px] text-[10px] leading-4 text-white ${LANE_COLORS[item.lane]} ${
           isSel ? 'ring-2 ring-white ring-offset-1 ring-offset-primary' : ''
-        } ${faded ? 'opacity-40' : ''} ${inGroup && !isSel ? 'outline-dashed outline-1 outline-white/70' : ''} ${st.locked ? 'cursor-not-allowed' : item.caps.move ? 'cursor-grab' : interactive ? 'cursor-pointer' : ''}`}
+        } ${faded ? 'opacity-40' : ''} ${grpSel ? 'outline outline-2 outline-amber-400' : inGroup ? 'outline-dashed outline-1 outline-white/70' : ''} ${st.locked ? 'cursor-not-allowed' : item.caps.move ? 'cursor-grab' : interactive ? 'cursor-pointer' : ''}`}
         style={{
           left,
           width: w,
@@ -1859,6 +1883,7 @@ export function Timeline({
         data-selected={isSel ? 'true' : undefined}
         data-disabled={off ? 'true' : undefined}
         data-grouped={inGroup ? 'true' : undefined}
+        data-group-selected={grpSel ? 'true' : undefined}
         title={`${off ? '[Deactivated] ' : ''}${inGroup ? '[Grouped] ' : ''}${item.label} · ${(item.startMs / 1000).toFixed(2)}–${(item.endMs / 1000).toFixed(2)} s`}
         onPointerDown={interactive ? (e) => startDrag(e, item, 'move') : undefined}
         onContextMenu={(e) => {
@@ -1870,6 +1895,15 @@ export function Timeline({
           setCtxMenu({ x: e.clientX, y: e.clientY })
         }}
       >
+        {inGroup ? (
+          <span
+            className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-amber-400 px-0.5 text-[8px] font-semibold leading-[10px] text-black"
+            title={`Group ${grpNo} (click one = select all · Ctrl+Shift+G ungroups)`}
+            data-testid="timeline-group-badge"
+          >
+            G{grpNo}
+          </span>
+        ) : null}
         {item.lane === 'video' && item.srcInMs != null && item.srcOutMs != null ? (
           <TimelineFilmstrip
             fromMs={item.srcInMs - mediaOffsetMs}
@@ -2156,12 +2190,12 @@ export function Timeline({
             <>
               <button
                 type="button"
-                className={`${tbtn} ${magnetOn(edits.timelineOpts) ? 'text-primary' : 'text-muted-foreground'}`}
+                className={`${tbtn} ${magnet ? 'text-primary' : 'text-muted-foreground'}`}
                 onClick={() => toggleOpt('magnet')}
-                aria-pressed={magnetOn(edits.timelineOpts)}
+                aria-pressed={magnet}
                 aria-label="Main track magnet"
                 title={
-                  magnetOn(edits.timelineOpts)
+                  magnet
                     ? 'Main track magnet ON: deleting a main clip closes the gap'
                     : 'Main track magnet OFF: deleting a main clip leaves a black gap, so later clips keep their time'
                 }

@@ -520,6 +520,8 @@ export type OpCtx = {
   clampTrim?: (t: { in: number; out: number }) => { in: number; out: number }
   /** G2: decoded audio clip lengths (trim an audio clip up to its media end). */
   sfxDurationsMs?: Record<string, number>
+  /** TC1fix: main magnet (user preference); undefined = the clip's timelineOpts (legacy). */
+  magnet?: boolean
 }
 
 function lockedLanes(edits: ClipEditsV2): Set<LaneId> {
@@ -1010,7 +1012,7 @@ export function deleteItems(ctx: OpCtx, refs: ItemRef[]): ClipEditsV2 | null {
     if (videoCuts.length) next = { ...next, cutRanges: mergeCutRanges([...next.cutRanges, ...videoCuts]) }
     // TC1 (TL-08): magnet off — each deleted main segment leaves a black gap of its length, so the
     // rest of the timeline keeps its place (the gap sits before the next kept piece).
-    if (videoCuts.length && !magnetOn(ctx.edits.timelineOpts)) next = liftToGaps(next, lanes.video, videoCuts)
+    if (videoCuts.length && !(ctx.magnet ?? magnetOn(ctx.edits.timelineOpts))) next = liftToGaps(next, lanes.video, videoCuts)
   }
   return changed && next !== ctx.edits ? next : null
 }
@@ -1020,7 +1022,7 @@ export function replaceWithGaps(ctx: OpCtx, refs: ItemRef[]): ClipEditsV2 | null
   const vids = refs.filter((r) => r.lane === 'video')
   if (!vids.length) return null
   const { timelineOpts, ...rest } = ctx.edits
-  const next = deleteItems({ ...ctx, edits: { ...rest, timelineOpts: { ...(timelineOpts ?? {}), magnet: false } } as ClipEditsV2 }, vids)
+  const next = deleteItems({ ...ctx, magnet: false, edits: { ...rest, timelineOpts: { ...(timelineOpts ?? {}), magnet: false } } as ClipEditsV2 }, vids)
   if (!next) return null
   const { timelineOpts: _drop, ...out } = next
   void _drop

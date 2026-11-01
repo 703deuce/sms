@@ -9,7 +9,14 @@ export const CLIPS_BROWSER_DOWNLOAD_TTL_SEC = 7 * 24 * 3600
  * `immutable`, and B2 does not vary on Origin) was reused for the editor's crossOrigin request and
  * failed the CORS check — the WebGL grade preview then said "does not allow pixel access".
  */
-export const CLIPS_EDITOR_MEDIA_TTL_SEC = CLIPS_BROWSER_DOWNLOAD_TTL_SEC - 3600
+export const CLIPS_EDITOR_MEDIA_TTL_SEC = CLIPS_BROWSER_DOWNLOAD_TTL_SEC - 2 * 3600
+/**
+ * G4cfix3: the TTL above was `- 3600` before; changing it changes X-Amz-Expires on every editor
+ * URL, so browsers that cached no-ACAO copies of the old editor URLs (pre-G4cfix2 SSR loads)
+ * get fresh cache keys after deploy. To re-key again, use another value that differs from the
+ * grid TTL and every previous editor TTL (history: -3600 [G4afix], -7200 [G4cfix3]).
+ */
+export const CLIPS_EDITOR_MEDIA_TTL_HISTORY_SEC = [CLIPS_BROWSER_DOWNLOAD_TTL_SEC - 3600] as const
 
 const CACHE_CONTROL_IMMUTABLE = 'private, max-age=31536000, immutable'
 

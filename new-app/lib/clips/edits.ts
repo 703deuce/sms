@@ -42,7 +42,7 @@ import {
   type ClipMulticam,
   type SourceSegment,
 } from '@/lib/clips/editor/sources'
-import { normalizeInserts, type ClipInsert } from '@/lib/clips/editor/inserts'
+import { insertWindows, normalizeInserts, type ClipInsert } from '@/lib/clips/editor/inserts'
 import { normalizeSplitEdits, type SplitEdit } from '@/lib/clips/editor/split-edits'
 import { normalizeTrackFx, type TrackFx } from '@/lib/clips/editor/track-fx'
 import { normalizeTakes, type TakeGroup } from '@/lib/clips/editor/takes'
@@ -893,7 +893,8 @@ export function displayDurationMs(edits: ClipEditsV2): number {
   const base = edits.segmentSpeeds?.length
     ? warpedDurationMs(speedWarpPieces(orderedKeepSegments(edits), edits.segmentSpeeds))
     : outputDurationMs(edits)
-  return Math.round(base / speed)
+  // TC1fix: inserts / gaps are spliced into the finished export (after speed) — they lengthen it.
+  return Math.round(base / speed) + (edits.inserts ?? []).reduce((s, i) => s + i.durMs, 0)
 }
 
 /**
@@ -905,7 +906,9 @@ export function displayPositionMs(edits: ClipEditsV2, editMs: number): number {
   const base = edits.segmentSpeeds?.length
     ? warpMs(speedWarpPieces(orderedKeepSegments(edits), edits.segmentSpeeds), Math.max(0, editMs))
     : Math.max(0, editMs)
-  return Math.round(base / speed)
+  // TC1fix: + every insert / gap that plays before this point.
+  const ins = edits.inserts?.length ? insertWindows(orderedKeepSegments(edits), edits.inserts) : []
+  return Math.round(base / speed) + ins.reduce((s, w) => s + (w.baseMs <= editMs ? w.durMs : 0), 0)
 }
 
 const MIN_SEGMENT_MS = 80
