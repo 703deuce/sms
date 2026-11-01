@@ -1,6 +1,7 @@
 /** TC4fix / TC4fix2: autosave ordering + pagehide newest revision. */
 import { describe, expect, it } from 'vitest'
 import {
+  nextClientSaveSeq,
   nextStoredClientSaveSeq,
   saveSyncRequired,
   shouldApplySaveResponse,
@@ -48,5 +49,9 @@ describe('TC4fix2 pagehide + draft', () => {
     expect(shouldRejectStaleClientSave(2, 5)).toBe(true)
     expect(shouldRejectStaleClientSave(6, 5)).toBe(false)
     expect(nextStoredClientSaveSeq(6, 5)).toBe(6)
+  })
+
+  it('TC4fix3 client save seq is monotonic across fresh sessions', () => {
+    expect(nextClientSaveSeq(0)).toBeGreaterThan(1e12)
   })
 })

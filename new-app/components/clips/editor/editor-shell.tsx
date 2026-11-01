@@ -316,7 +316,15 @@ export function EditorShell({
     applyRestoredEdits,
     applyProducerPatch,
     producerStrip,
-  } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, editsSaveVersion, words })
+  } = useEditorState(clipId, bounds, initialEdits, {
+    serverUpdatedAt,
+    editsSaveVersion,
+    words,
+    editorSaveSeq:
+      typeof (aiMeta as { __editorSaveSeq?: number } | null)?.__editorSaveSeq === 'number'
+        ? (aiMeta as { __editorSaveSeq: number }).__editorSaveSeq
+        : 0,
+  })
   // TC2: an audition (a slider's live preview, e.g. Color > HSL) can outlive its commit when the
   // slider reports one more value after release; it then masked Undo / Redo in the preview (Undo
   // reverted the edit, the preview kept the slider look until Color > Reset cleared it). Undo /
@@ -445,7 +453,7 @@ export function EditorShell({
           : `https://twitch.tv/${login}`
         : undefined
     const next = seedEditorExportTemplate(edits, { title, aiMeta }, { platform, channelUrl })
-    if (next.exportTemplate !== edits.exportTemplate) hydrateEdits(next)
+    if (next.exportTemplate !== edits.exportTemplate) setEdits(next, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once on open
   }, [])
 

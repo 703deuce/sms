@@ -93,6 +93,8 @@ import {
   itemsInRange,
   moveItemsToTrack,
   moveVideoSegment,
+  reorderInsertBefore,
+  isNoopReorder,
   pasteAttributes,
   pasteItems,
   rangeOf,
@@ -1560,16 +1562,21 @@ export function Timeline({
     } catch {
       /* ignore */
     }
+    const grabMs =
+      item.startMs + (e.clientX - captureEl.getBoundingClientRect().left) / Math.max(1e-6, pxPerMs)
     const state: DragState = { mode: 'move', item, refs: [{ lane: 'video', id: item.id }], originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, reorder: true, insertBefore: undefined }
     setDrag(state)
+    const slotFromPointer = (dx: number) => {
+      const pointerMs = grabMs + dx / Math.max(1e-6, pxPerMs)
+      const before = reorderInsertBefore(lanes.video, item.id, pointerMs)
+      return isNoopReorder(lanes.video, item.id, before) ? undefined : before
+    }
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - state.originX
       if (!state.moved && Math.abs(dx) < DRAG_SLOP_PX * 2) return
       state.moved = true
       state.deltaMs = dx / Math.max(1e-6, pxPerMs)
-      const at = (item.startMs + item.endMs) / 2 + state.deltaMs
-      const next = lanes.video.find((v) => (v.startMs + v.endMs) / 2 > at && v.id !== item.id)
-      state.insertBefore = next ? next.id : null
+      state.insertBefore = slotFromPointer(dx)
       setDrag({ ...state })
     }
     const onUp = (ev: PointerEvent) => {
@@ -1585,10 +1592,9 @@ export function Timeline({
       if (!state.moved) return
       let before = state.insertBefore
       if (before === undefined) {
-        const dx = ev.clientX - state.originX
-        const at = (item.startMs + item.endMs) / 2 + dx / Math.max(1e-6, pxPerMs)
-        const next = lanes.video.find((v) => (v.startMs + v.endMs) / 2 > at && v.id !== item.id)
-        before = next ? next.id : null
+        const resolved = slotFromPointer(ev.clientX - state.originX)
+        if (resolved === undefined) return
+        before = resolved
       }
       const next = moveVideoSegment(opCtx(), item.id, before)
       if (next) commit(next)
