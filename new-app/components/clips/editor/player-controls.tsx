@@ -21,6 +21,9 @@ export function PlayerControls({
   volume,
   onMuteToggle,
   onVolumeChange,
+  meterOn,
+  onMeterToggle,
+  meterSlot,
   showScrubber = true,
 }: {
   playing: boolean
@@ -32,6 +35,9 @@ export function PlayerControls({
   volume?: number
   onMuteToggle?: () => void
   onVolumeChange?: (pct: number) => void
+  meterOn?: boolean
+  onMeterToggle?: () => void
+  meterSlot?: React.ReactNode
   /** When false, timeline owns seek (avoids duplicate scrubber). */
   showScrubber?: boolean
 }) {
@@ -62,6 +68,19 @@ export function PlayerControls({
           />
         </div>
       ) : null}
+      {onMeterToggle ? (
+        <Button
+          type="button"
+          size="sm"
+          variant={meterOn ? 'secondary' : 'ghost'}
+          className="h-8 shrink-0 px-2 text-[11px]"
+          onClick={onMeterToggle}
+          data-testid="preview-meter-toggle"
+        >
+          Meter
+        </Button>
+      ) : null}
+      {meterSlot}
       {showScrubber ? (
       <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 overflow-hidden">
         <Slider
