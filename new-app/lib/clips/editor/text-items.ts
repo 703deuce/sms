@@ -135,6 +135,12 @@ export const TEXT_PRESETS: { id: string; label: string; style: TextStyle }[] = [
   { id: 'tall_clean', label: 'Tall clean', style: { font: 'Bebas Neue', size: 130, color: '#FFFFFF', align: 'center', case: 'upper', shadow: { color: '#000000', opacity: 60, dist: 4 } } },
   { id: 'hype', label: 'Hype', style: { font: 'Luckiest Guy', size: 110, color: '#22D3EE', align: 'center', case: 'upper', stroke: { color: '#0F172A', width: 8 } } },
   { id: 'caption_left', label: 'Lower third', style: { font: 'Poppins', size: 64, color: '#FFFFFF', align: 'left', case: 'none', box: { color: '#0F172A', opacity: 80, pad: 14 } } },
+  { id: 'wa_sunset', label: 'WordArt · Sunset', style: { font: 'Luckiest Guy', size: 120, color: '#FDE047', align: 'center', case: 'upper', stroke: { color: '#7C2D12', width: 8 }, gradient: { from: '#FDE047', to: '#F97316', dir: 'v' } } },
+  { id: 'wa_neon', label: 'WordArt · Neon', style: { font: 'Bebas Neue', size: 130, color: '#F0ABFC', align: 'center', case: 'upper', stroke: { color: '#701A75', width: 6 }, shadow: { color: '#E879F9', opacity: 80, dist: 1 } } },
+  { id: 'wa_chrome', label: 'WordArt · Chrome', style: { font: 'Anton', size: 128, color: '#F8FAFC', align: 'center', case: 'upper', stroke: { color: '#0F172A', width: 6 }, gradient: { from: '#F8FAFC', to: '#64748B', dir: 'v' } } },
+  { id: 'wa_retro', label: 'WordArt · Retro', style: { font: 'Bangers', size: 120, color: '#22D3EE', align: 'center', case: 'upper', shadow: { color: '#1E1B4B', opacity: 100, dist: 8 }, gradient: { from: '#22D3EE', to: '#F472B6', dir: 'h' } } },
+  { id: 'wa_fire', label: 'WordArt · Fire', style: { font: 'Archivo Black', size: 110, color: '#FACC15', align: 'center', case: 'upper', stroke: { color: '#000000', width: 8 }, gradient: { from: '#FACC15', to: '#DC2626', dir: 'v' } } },
+  { id: 'wa_ice', label: 'WordArt · Ice', style: { font: 'Montserrat', size: 104, color: '#FFFFFF', align: 'center', case: 'upper', stroke: { color: '#0C4A6E', width: 6 }, gradient: { from: '#FFFFFF', to: '#38BDF8', dir: 'v' } } },
 ]
 
 export function textPreset(id: string | undefined): { id: string; label: string; style: TextStyle } | undefined {
@@ -497,6 +503,27 @@ export const TITLE_TEMPLATES: TitleTemplate[] = [
         text: '', kind: 'sticker', sticker: 'pointer', x: 70, y: 78, delayMs: 400,
         style: { ...PLAIN_STYLE, size: 180 },
         anim: { in: blockIn('slide_up', 400), out: blockIn('fade', 300), loop: { type: 'bounce', periodMs: 900 } },
+      },
+    ],
+  },
+  {
+    id: 'speech_bubble',
+    label: 'Speech bubble',
+    parts: [
+      {
+        text: '',
+        kind: 'shape',
+        shape: { type: 'rounded', w: 1152, h: 346 },
+        x: 50,
+        y: 30,
+        style: { ...PLAIN_STYLE, color: '#FFFFFF' },
+      },
+      {
+        text: 'Say something!',
+        x: 50,
+        y: 30,
+        style: { font: 'Poppins', size: 72, color: '#111111', align: 'center', case: 'none' },
+        anim: { in: blockIn('pop', 400), out: blockIn('fade', 300) },
       },
     ],
   },

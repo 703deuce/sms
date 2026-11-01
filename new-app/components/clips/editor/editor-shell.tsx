@@ -25,6 +25,7 @@ import { exportTimeMap, toExportMs } from '@/lib/clips/editor/export-time'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
+import { EditorHistoryPanel } from '@/components/clips/editor/history-panel'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { CaptionLinesPanel } from '@/components/clips/editor/caption-lines-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
@@ -335,6 +336,9 @@ export function EditorShell({
     edits,
     undo: undoEdits,
     redo: redoEdits,
+    jumpHistory: jumpHistoryEdits,
+    historyPast,
+    historyFuture,
     canUndo,
     canRedo,
     saveState,
@@ -395,6 +399,22 @@ export function EditorShell({
     setAuditionEdits(null)
     redoEdits()
   }, [redoEdits])
+  const jumpHistory = useCallback(
+    (steps: number) => {
+      setAuditionEdits(null)
+      jumpHistoryEdits(steps)
+    },
+    [jumpHistoryEdits],
+  )
+  const historyPanel = (
+    <EditorHistoryPanel
+      edits={edits}
+      historyPast={historyPast}
+      historyFuture={historyFuture}
+      jumpHistory={jumpHistory}
+      disabled={!canUndo && !canRedo}
+    />
+  )
 
   const onApplyCleanupProposal = useCallback(
     (proposal: CleanupProposal) => {
@@ -2034,6 +2054,7 @@ export function EditorShell({
           canRedo={canRedo}
           onUndo={undo}
           onRedo={redo}
+          historySlot={historyPanel}
           onExport={() => setExportOpen(true)}
           layoutSlot={<OpenInFullVideoButton clipId={clipId} />}
           onRetrySave={() => {
@@ -2404,6 +2425,7 @@ export function EditorShell({
             onRedo={redo}
             canUndo={canUndo}
             canRedo={canRedo}
+            historySlot={historyPanel}
             mediaOffsetMs={mediaOffsetMs}
             musicUrl={musicUrl}
             sfxDurationsMs={sfxPreview.durationsMs}

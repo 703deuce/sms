@@ -106,33 +106,70 @@ export async function softDeleteProjects(workspaceId: string, projectIds: string
 
 export async function duplicateClipProjects(workspaceId: string, projectIds: string[]) {
   const prisma = getPrisma()
+  const newProjectIds: string[] = []
   for (const id of projectIds) {
     const p = await prisma.clipProject.findFirst({
       where: { id, workspaceId, deletedAt: null },
     })
     if (!p) continue
-    await prisma.clipProject.create({
-      data: {
-        id: createId('proj'),
-        workspaceId,
-        createdById: p.createdById,
-        title: `${p.title} (copy)`,
-        uploadId: p.uploadId,
-        sourceUrl: p.sourceUrl,
-        settings: (p.settings ?? {}) as Prisma.InputJsonValue,
-        rangeStartMs: p.rangeStartMs,
-        rangeEndMs: p.rangeEndMs,
-        status: p.status,
-        stage: p.stage,
-        progress: p.progress,
-        transcriptKey: p.transcriptKey,
-        transcriptWords: p.transcriptWords ?? undefined,
-        proxyKey: p.proxyKey,
-        thumbKey: p.thumbKey,
-        folderId: p.folderId,
-      },
+    const newProjectId = createId('proj')
+    await prisma.$transaction(async (tx) => {
+      await tx.clipProject.create({
+        data: {
+          id: newProjectId,
+          workspaceId,
+          createdById: p.createdById,
+          title: `${p.title} (copy)`,
+          uploadId: p.uploadId,
+          sourceUrl: p.sourceUrl,
+          settings: (p.settings ?? {}) as Prisma.InputJsonValue,
+          rangeStartMs: p.rangeStartMs,
+          rangeEndMs: p.rangeEndMs,
+          status: p.status,
+          stage: p.stage,
+          progress: p.progress,
+          transcriptKey: p.transcriptKey,
+          transcriptWords: p.transcriptWords ?? undefined,
+          proxyKey: p.proxyKey,
+          thumbKey: p.thumbKey,
+          folderId: p.folderId,
+        },
+      })
+      const clips = await tx.clip.findMany({
+        where: { projectId: id, workspaceId, deletedAt: null },
+      })
+      if (clips.length) {
+        await tx.clip.createMany({
+          data: clips.map((c) => ({
+            id: createId('clip'),
+            projectId: newProjectId,
+            workspaceId: c.workspaceId,
+            title: c.title,
+            reason: c.reason,
+            startMs: c.startMs,
+            endMs: c.endMs,
+            segmentKey: c.segmentKey,
+            score: c.score,
+            scores: c.scores ?? {},
+            cropKey: c.cropKey,
+            wordsKey: c.wordsKey,
+            previewKey: null,
+            posterKey: c.posterKey,
+            storageDriver: c.storageDriver,
+            edits: c.edits ?? {},
+            editsSaveVersion: c.editsSaveVersion,
+            aiMeta: c.aiMeta ?? undefined,
+            favorite: c.favorite,
+            sourceSegKey: c.sourceSegKey,
+            sourceSegStartMs: c.sourceSegStartMs,
+            sourceSegEndMs: c.sourceSegEndMs,
+          })),
+        })
+      }
     })
+    newProjectIds.push(newProjectId)
   }
+  return newProjectIds
 }
 
 export async function restoreProjects(workspaceId: string, projectIds: string[]) {
