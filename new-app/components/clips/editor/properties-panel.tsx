@@ -27,6 +27,7 @@ import {
 import { layerFlip, moveInStack, setLayerFlip, stackKindOf, stackMoves, type StackMove } from '@/lib/clips/editor/layer-props'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
 import { TextAnimSection } from '@/components/clips/editor/text-anim-section'
+import { LayerFxControls } from '@/components/clips/editor/g4/layer-fx-controls'
 import type { TextAnim } from '@/lib/clips/render-plan/text-anim'
 
 /** G3b: the selection's in / out / loop preset (B-roll / image / overlay layers and text items). */
@@ -299,6 +300,16 @@ function VideoTab({
             </button>
           </div>
         </Section>
+      ) : null}
+      {target.startsWith('broll:') ? (
+        <LayerFxControls
+          edits={edits}
+          itemId={target.slice('broll:'.length)}
+          localMs={localMs}
+          isVideo={!(edits.broll ?? []).some((b) => `broll:${b.id}` === target && 'still' in b && b.still)}
+          onCommit={onCommit}
+          readOnly={readOnly}
+        />
       ) : null}
       {kind ? (
         <Section title="Layer order" testId="properties-order">

@@ -11,6 +11,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { aiBrollCredits } from '@/lib/clips/credit-cost'
+import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
 
 function msLabel(ms: number) {
   const s = Math.floor(ms / 1000)
@@ -250,7 +251,7 @@ export function BrollPanel({
                   {m?.thumbUrl ? (
                     <img src={m.thumbUrl} alt="" className="h-14 w-8 rounded object-cover" />
                   ) : m?.url && item.source === 'ai' ? (
-                    <video src={m.url} muted playsInline preload="metadata" className="h-14 w-8 rounded object-cover" />
+                    <video src={m.url} {...corsMediaProps(m.url)} muted playsInline preload="metadata" className="h-14 w-8 rounded object-cover" />
                   ) : (
                     <div className="h-14 w-8 rounded bg-muted" />
                   )}

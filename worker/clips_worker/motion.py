@@ -41,6 +41,12 @@ TRANSITION_TYPES = (
     "push_left", "push_right", "push_up", "push_down",
     "wipe_left", "wipe_right", "wipe_up", "wipe_down",
     "zoom_in", "zoom_out", "blur",
+    # G4b: more xfade 5.1 transitions (per-pixel masks; preview = transitions.ts xfadeBWeight).
+    "smooth_left", "smooth_right", "smooth_up", "smooth_down",
+    "circle_open", "circle_close", "vert_open", "vert_close", "horz_open", "horz_close",
+    "radial", "diag_tl", "diag_tr", "diag_bl", "diag_br",
+    "slice_left", "slice_right", "slice_up", "slice_down",
+    "wipe_tl", "wipe_tr", "wipe_bl", "wipe_br",
 )
 TRANSITION_DEFAULT_MS = 400
 TRANSITION_MIN_MS = 100
@@ -62,7 +68,32 @@ XFADE_NAME = {
     "zoom_in": "fade",
     "zoom_out": "fade",
     "blur": "hblur",
+    "smooth_left": "smoothleft",
+    "smooth_right": "smoothright",
+    "smooth_up": "smoothup",
+    "smooth_down": "smoothdown",
+    "circle_open": "circleopen",
+    "circle_close": "circleclose",
+    "vert_open": "vertopen",
+    "vert_close": "vertclose",
+    "horz_open": "horzopen",
+    "horz_close": "horzclose",
+    "radial": "radial",
+    "diag_tl": "diagtl",
+    "diag_tr": "diagtr",
+    "diag_bl": "diagbl",
+    "diag_br": "diagbr",
+    "slice_left": "hlslice",
+    "slice_right": "hrslice",
+    "slice_up": "vuslice",
+    "slice_down": "vdslice",
+    "wipe_tl": "wipetl",
+    "wipe_tr": "wipetr",
+    "wipe_bl": "wipebl",
+    "wipe_br": "wipebr",
 }
+# G4b: transitions drawn by a per-pixel mask (no geometry / global weights).
+MASK_TRANSITIONS = frozenset(TRANSITION_TYPES[14:])
 
 
 # ---------------------------------------------------------------------------
@@ -495,6 +526,8 @@ def transition_frame(ttype: str, q_in: float) -> dict:
         sign = -1 if ttype in ("push_left", "push_up") else 1
         f["a"][axis] = sign * q
         f["b"][axis] = -sign * P
+    elif ttype in MASK_TRANSITIONS:
+        f.update(wA=1.0, wB=1.0, geometric=True, mask={"xfade": XFADE_NAME[ttype], "P": P})
     elif ttype.startswith("wipe_"):
         f.update(wA=1.0, wB=1.0, geometric=True)
         f["b"]["clip"] = {

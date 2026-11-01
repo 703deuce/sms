@@ -9,6 +9,7 @@ import type { Timebase } from '@/lib/clips/editor/clip-timeline'
 import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import type { MediaTranscript } from '@/lib/clips/editor/media-words'
 import { insertFromSource, overwriteFromSource, transcriptLines, wordRangeMs } from '@/lib/clips/editor/source-monitor'
+import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
 
 export type MonitorRequest = { itemId: string; mediaMs: number; seq: number }
 
@@ -129,6 +130,7 @@ export function SourceMonitor({
             <video
               ref={mediaRef}
               src={item.url ?? undefined}
+              {...corsMediaProps(item.url)}
               className="aspect-video w-full rounded bg-black"
               controls
               playsInline
@@ -146,6 +148,7 @@ export function SourceMonitor({
             <audio
               ref={mediaRef}
               src={item.url ?? undefined}
+              {...corsMediaProps(item.url)}
               className="w-full"
               controls
               preload="metadata"

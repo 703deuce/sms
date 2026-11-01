@@ -510,3 +510,42 @@ export function reconcileTracks(prev: ClipEditsV2, next: ClipEditsV2): ClipEdits
     }),
   )
 }
+
+/**
+ * G4b: put freshly added items (`ids`, all spanning [aMs, bMs)) on the lowest unlocked, visible
+ * track of `kind` that has nothing else in that span; when every track is busy a new track is
+ * added on top (falls back to the default track when the track limit is reached). Used by the
+ * animated title templates so they never stack on top of existing text.
+ */
+export function placeOnFreeTrack(edits: ClipEditsV2, kind: 'text' | 'overlay', ids: readonly string[], aMs: number, bMs: number): ClipEditsV2 {
+  if (!ids.length) return edits
+  const mine = new Set(ids)
+  const ts = effectiveTracks(edits)
+  const others = ((kind === 'text' ? edits.textItems : edits.broll) ?? []).filter((it) => !mine.has(it.id))
+  const busy = (trackId: string) =>
+    others.some((it) => it.startMs < bMs && it.endMs > aMs && trackIdOf(edits, kind, it.id, ts) === trackId)
+  const free = ts.find((t) => {
+    if (t.kind !== kind) return false
+    const st = trackState(edits, t.id)
+    return !st.locked && !st.hidden && !busy(t.id)
+  })
+  if (free) {
+    if (ids.every((id) => trackIdOf(edits, kind, id, ts) === free.id)) return edits
+    if (isDefaultTrackId(free.id)) {
+      // Unlisted = default track: drop the ids from any other track list.
+      return withTracks(edits, ts.map((t) => (t.items?.some((x) => mine.has(x)) ? dropItems(t, mine) : t)))
+    }
+    return setItemsTrack(edits, kind, ids, free.id) ?? edits
+  }
+  const added = addTrack(edits, kind)
+  if (!added) return edits
+  return setItemsTrack(added.edits, kind, ids, added.trackId) ?? added.edits
+}
+
+function dropItems(t: Track, ids: Set<string>): Track {
+  const items = (t.items ?? []).filter((x) => !ids.has(x))
+  const out: Track = { ...t }
+  if (items.length) out.items = items
+  else delete out.items
+  return out
+}

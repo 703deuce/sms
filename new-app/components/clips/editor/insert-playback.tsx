@@ -9,6 +9,7 @@ import { insertWindows, type InsertWindow } from '@/lib/clips/editor/inserts'
 import { crossedCue, insertCues, type InsertCue } from '@/lib/clips/editor/insert-playback'
 import { sourceById } from '@/lib/clips/editor/sources'
 import { sourceMsFromVideo } from '@/lib/clips/editor-playback'
+import { setMediaSrc } from '@/components/clips/editor/g4/media-cors'
 
 /**
  * E5b: plays inserted clips in the preview. Holds the main video at the insert point, shows the
@@ -72,13 +73,13 @@ export function InsertPlayback({
         vid.style.display = 'none'
         img.style.display = 'block'
         img.style.objectFit = fit
-        if (url && img.src !== url) img.src = url
+        if (url && img.src !== url) setMediaSrc(img, url)
         return
       }
       img.style.display = 'none'
       vid.style.display = 'block'
       vid.style.objectFit = fit
-      if (url && vid.src !== url) vid.src = url
+      if (url && vid.src !== url) setMediaSrc(vid, url)
       vid.muted = w.audio === 'mute'
       vid.currentTime = w.inMs / 1000
       void vid.play().catch(() => {})

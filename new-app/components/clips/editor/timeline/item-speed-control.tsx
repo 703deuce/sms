@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { setSegmentSpeed, speedAtSource, SPEED_MAX, SPEED_MIN, SPEED_PRESETS } from '@/lib/clips/editor/speed'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
+import { applySpeedCurve, matchSpeedCurve, SPEED_CURVE_IDS, SPEED_CURVES, type SpeedCurveId } from '@/lib/clips/editor/speed-curves'
 
 /** Speed of a Video-lane item (source range), as stored: one SegmentSpeed covering the range. */
 export function itemSpeed(edits: ClipEditsV2, srcInMs: number, srcOutMs: number): number {
@@ -34,6 +35,8 @@ export function ItemSpeedControl({
   readOnly?: boolean
 }) {
   const cur = itemSpeed(edits, srcInMs, srcOutMs)
+  const curve = matchSpeedCurve(edits.segmentSpeeds, srcInMs, srcOutMs)
+  const setCurve = (id: SpeedCurveId) => onCommit({ ...edits, segmentSpeeds: applySpeedCurve(edits.segmentSpeeds, srcInMs, srcOutMs, id) })
   const set = (s: number) => onCommit({ ...edits, segmentSpeeds: setSegmentSpeed(edits.segmentSpeeds, srcInMs, srcOutMs, s) })
   // Slider runs on a log2 scale so 1× sits in the middle of 0.25–4×.
   const toPos = (s: number) => Math.round(Math.log2(s) * 100)
@@ -72,8 +75,24 @@ export function ItemSpeedControl({
         />
       </div>
       <span className="tabular-nums text-muted-foreground" data-testid="item-speed-value">
-        {speedLabel(cur)}
+        {curve ? SPEED_CURVES[curve].label : speedLabel(cur)}
       </span>
+      {/* G4b speed curves: stepped pieces on the same source-anchored speeds (preview = export). */}
+      <div className="flex w-full flex-wrap items-center gap-0.5" data-testid="item-speed-curves">
+        <span className="mr-1 text-muted-foreground">Curve</span>
+        {SPEED_CURVE_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            disabled={readOnly}
+            className={cn('rounded px-1.5 py-0.5 hover:bg-muted', curve === id && 'bg-primary text-primary-foreground hover:bg-primary')}
+            onClick={() => setCurve(id)}
+            data-testid={`item-speed-curve-${id}`}
+          >
+            {SPEED_CURVES[id].label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

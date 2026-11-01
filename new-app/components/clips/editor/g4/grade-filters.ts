@@ -33,11 +33,29 @@ import {
   specFx,
   vignetteMask,
 } from '@/lib/clips/editor/color-grade'
+import {
+  blurSigma,
+  flickerGain,
+  GLOW_SIGMA,
+  glitchBands,
+  glitchState,
+  glowOpacity,
+  rgbsplitPx,
+  scanlineRows,
+  unit,
+} from '@/lib/clips/editor/fx-library'
 
 const NS = 'http://www.w3.org/2000/svg'
 const MAX_FILTERS = 96
 
-type Entry = { el: SVGFilterElement; used: number; grain?: { img: SVGFEImageElement; gw: number; gh: number } }
+type Entry = {
+  el: SVGFilterElement
+  used: number
+  grain?: { img: SVGFEImageElement; gw: number; gh: number }
+  /** G4b per-frame nodes */
+  glitch?: { v: number; nodes: SVGFEOffsetElement[] }
+  flicker?: { v: number; funcs: SVGElement[] }
+}
 
 export type GradeCssOpts = { spatialOnly?: boolean }
 
@@ -78,6 +96,8 @@ export class GradeFilterBank {
   private tick = 0
   /** Export frame size (grain cell grid follows the export resolution). */
   play = { w: 720, h: 1280 }
+  /** Export frame index of the current tick (G4b per-frame effects / shake). */
+  frame = 0
   /** Legacy E4 looks already rendered by <ColorLookDefs> (keeps their exact old filter ids). */
   staticKeys = new Set<string>()
 
@@ -121,8 +141,23 @@ export class GradeFilterBank {
 
   /** Grain moves every export frame (30 fps): same per-frame cell offset as color_fx.py. */
   setFrame(frame: number) {
+    this.frame = frame
     const [ox, oy] = grainOffset(frame)
+    const { w: W, h: H } = this.play
     for (const e of this.cache.values()) {
+      if (e.glitch) {
+        const st = glitchState(e.glitch.v, W, H, frame)
+        e.glitch.nodes.forEach((n, i) => {
+          const dx = String(st[i]![1] / W)
+          const y = String(st[i]![0] / H)
+          if (n.getAttribute('dx') !== dx) n.setAttribute('dx', dx)
+          if (n.getAttribute('y') !== y) n.setAttribute('y', y)
+        })
+      }
+      if (e.flicker) {
+        const g = String(Math.round(flickerGain(e.flicker.v, frame) * 1e5) / 1e5)
+        for (const f of e.flicker.funcs) if (f.getAttribute('slope') !== g) f.setAttribute('slope', g)
+      }
       if (!e.grain) continue
       const { img, gw, gh } = e.grain
       const x = String(-ox / gw)
@@ -187,6 +222,62 @@ export class GradeFilterBank {
       }
     }
     const fx = specFx(spec)
+    const { w: W, h: H } = this.play
+    // G4b (fx-library.ts): blur → glow → RGB split → glitch, before sharpen.
+    /** Gaussian blur renormalised at the frame edge (≈ ffmpeg gblur's edge handling). */
+    const blur = (sigma: number, name: string) => {
+      step(el('feGaussianBlur', { stdDeviation: `${sigma / W} ${sigma / H}` }), `${name}0`)
+      const ct = el('feComponentTransfer', {})
+      ct.appendChild(el('feFuncA', { type: 'linear', slope: 0, intercept: 1 }))
+      step(ct, name)
+    }
+    if (fx.blur) blur(blurSigma(fx.blur, W, H), 'fxblur')
+    if (fx.glow) {
+      const src = last
+      blur(GLOW_SIGMA * unit(W, H), 'fxglowb')
+      const glowB = last
+      const bl = el('feBlend', { mode: 'screen', in2: glowB })
+      last = src
+      step(bl, 'fxglows')
+      const o = glowOpacity(fx.glow)
+      const mix = el('feComposite', { operator: 'arithmetic', k1: 0, k2: o, k3: 1 - o, k4: 0, in2: src })
+      step(mix, 'fxglow')
+    }
+    if (fx.rgbsplit) {
+      const d = rgbsplitPx(fx.rgbsplit, W, H)
+      if (d) {
+        const src = last
+        const chan = (row: number, dx: number, name: string) => {
+          const m = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0]
+          m[row * 5 + row] = 1
+          last = src
+          step(el('feColorMatrix', { type: 'matrix', values: m.join(' ') }), `${name}m`)
+          if (dx) step(el('feOffset', { dx: dx / W, dy: 0 }), name)
+          return last
+        }
+        const r = chan(0, -d, 'fxr')
+        const g = chan(1, 0, 'fxg')
+        const b = chan(2, d, 'fxb')
+        last = r
+        step(el('feComposite', { operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0, in2: g }), 'fxrg')
+        step(el('feComposite', { operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0, in2: b }), 'fxrgb')
+      }
+    }
+    if (fx.glitch) {
+      const src = last
+      const nodes: SVGFEOffsetElement[] = []
+      const st = glitchState(fx.glitch, W, H, this.frame)
+      glitchBands(fx.glitch, W, H).forEach((b, i) => {
+        const n = el('feOffset', { in: src, dx: st[i]![1] / W, dy: 0, x: 0, y: st[i]![0] / H, width: 1, height: b.h / H, result: `fxgl${i}` })
+        f.appendChild(n)
+        nodes.push(n)
+      })
+      const merge = el('feMerge', { result: 'fxglitch' })
+      for (const name of [src, ...nodes.map((_, i) => `fxgl${i}`)]) merge.appendChild(el('feMergeNode', { in: name }))
+      f.appendChild(merge)
+      last = 'fxglitch'
+      entry.glitch = { v: fx.glitch, nodes }
+    }
     if (fx.sharpen) {
       step(
         el('feConvolveMatrix', {
@@ -211,6 +302,29 @@ export class GradeFilterBank {
       f.appendChild(img)
       const comp = el('feComposite', { in2: 'vm', operator: 'arithmetic', k1: 1, k2: 0, k3: 0, k4: 0 })
       step(comp, 'vig')
+    }
+    if (fx.scanlines) {
+      const sk = `s${fx.scanlines}_${W}x${H}`
+      let url = maskCache.get(sk)
+      if (!url) {
+        url = grayPngUrl(scanlineRows(fx.scanlines, W, H), 1, H)
+        maskCache.set(sk, url)
+      }
+      const img = el('feImage', { x: 0, y: 0, width: 1, height: 1, preserveAspectRatio: 'none', result: 'sm' })
+      img.setAttribute('href', url)
+      f.appendChild(img)
+      step(el('feComposite', { in2: 'sm', operator: 'arithmetic', k1: 1, k2: 0, k3: 0, k4: 0 }), 'scan')
+    }
+    if (fx.flicker) {
+      const ct = el('feComponentTransfer', {})
+      const g = String(Math.round(flickerGain(fx.flicker, this.frame) * 1e5) / 1e5)
+      const funcs = (['feFuncR', 'feFuncG', 'feFuncB'] as const).map((t) => {
+        const fn = el(t, { type: 'linear', slope: g, intercept: 0 })
+        ct.appendChild(fn)
+        return fn as SVGElement
+      })
+      step(ct, 'flick')
+      entry.flicker = { v: fx.flicker, funcs }
     }
     if (fx.grain) {
       const c = grainCell(this.play.h)

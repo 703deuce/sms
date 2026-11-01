@@ -36,7 +36,15 @@ import {
 export const HOOK_FADE_IN_MS = 180
 export const HOOK_FADE_OUT_MS = 220
 
-export type FrameStyle = { transform: string; opacity: number; clipPath: string; filter: string; visibility: 'visible' | 'hidden' }
+export type FrameStyle = {
+  transform: string
+  opacity: number
+  clipPath: string
+  filter: string
+  visibility: 'visible' | 'hidden'
+  /** G4b: mask-transition key (transitions.ts compositeCss) */
+  mask?: string
+}
 
 const NONE: FrameStyle = { transform: '', opacity: 1, clipPath: '', filter: '', visibility: 'visible' }
 
@@ -163,6 +171,7 @@ export function brollFrame(edits: ClipEditsV2, outMs: number, boxW: number): Bro
         clipPath: intersectClipPaths(slot.box.clipPath, mirrorClipPath(top.clipPath, layerFlip(edits, `broll:${item.id}`))),
         filter: top.filter,
         visibility: top.visibility,
+        ...(top.mask ? { mask: top.mask } : {}),
       }
     }
     slot.dip = css.color

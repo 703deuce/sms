@@ -30,6 +30,9 @@ HSL_CENTERS = (0.0, 30.0, 60.0, 120.0, 180.0, 240.0, 280.0, 320.0)
 CURVE_CHANNELS = ("m", "r", "g", "b")
 WHEELS = ("lift", "gamma", "gain")
 FX_KEYS = ("sharpen", "vignette", "grain")
+# G4b effects library (fx_library.py); canonical string adds them as an "e" part only when set.
+FX2_KEYS = ("blur", "glow", "rgbsplit", "glitch", "shake", "flicker", "scanlines")
+FX_ALL = FX_KEYS + FX2_KEYS
 TABLE_N = 255  # 256-entry tables
 GRID = 33
 CURVE_MAX_POINTS = 8
@@ -134,7 +137,7 @@ def normalize_grade_fields(raw: dict) -> dict:
             out["lut"] = {"id": lut["id"], **({"intensity": it} if it != 100 else {})}
     fx = raw.get("fx")
     if isinstance(fx, dict):
-        f = {k: _ri((_clamp(_num(fx.get(k)), 0, 100))) for k in FX_KEYS}
+        f = {k: _ri((_clamp(_num(fx.get(k)), 0, 100))) for k in FX_ALL}
         f = {k: v for k, v in f.items() if v}
         if f:
             out["fx"] = f
@@ -165,7 +168,7 @@ def needs_3d(spec) -> bool:
 
 def spec_fx(spec) -> dict:
     fx = spec.get("fx") if isinstance(spec, dict) else None
-    return {k: int(fx.get(k) or 0) for k in FX_KEYS} if isinstance(fx, dict) else {k: 0 for k in FX_KEYS}
+    return {k: int(fx.get(k) or 0) for k in FX_ALL} if isinstance(fx, dict) else {k: 0 for k in FX_ALL}
 
 
 def has_fx(spec) -> bool:
@@ -200,8 +203,10 @@ def canon_grade(spec) -> str:
     if spec.get("lut"):
         parts.append(f"l{spec['lut']['id']},{int(spec['lut'].get('intensity', 100))}")
     fx = spec_fx(spec)
-    if any(fx.values()):
+    if any(fx[k] for k in FX_KEYS):
         parts.append("f" + ",".join(str(fx[k]) for k in FX_KEYS))
+    if any(fx[k] for k in FX2_KEYS):
+        parts.append("e" + ",".join(f"{k}{fx[k]}" for k in FX2_KEYS if fx[k]))
     return "|".join(parts)
 
 

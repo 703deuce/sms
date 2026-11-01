@@ -112,6 +112,30 @@ export type TransitionType =
   | 'zoom_in'
   | 'zoom_out'
   | 'blur'
+  // G4b: more xfade 5.1 transitions (per-pixel masks).
+  | 'smooth_left'
+  | 'smooth_right'
+  | 'smooth_up'
+  | 'smooth_down'
+  | 'circle_open'
+  | 'circle_close'
+  | 'vert_open'
+  | 'vert_close'
+  | 'horz_open'
+  | 'horz_close'
+  | 'radial'
+  | 'diag_tl'
+  | 'diag_tr'
+  | 'diag_bl'
+  | 'diag_br'
+  | 'slice_left'
+  | 'slice_right'
+  | 'slice_up'
+  | 'slice_down'
+  | 'wipe_tl'
+  | 'wipe_tr'
+  | 'wipe_bl'
+  | 'wipe_br'
 
 export const TRANSITION_TYPES: readonly TransitionType[] = [
   'crossfade',
@@ -128,6 +152,29 @@ export const TRANSITION_TYPES: readonly TransitionType[] = [
   'zoom_in',
   'zoom_out',
   'blur',
+  'smooth_left',
+  'smooth_right',
+  'smooth_up',
+  'smooth_down',
+  'circle_open',
+  'circle_close',
+  'vert_open',
+  'vert_close',
+  'horz_open',
+  'horz_close',
+  'radial',
+  'diag_tl',
+  'diag_tr',
+  'diag_bl',
+  'diag_br',
+  'slice_left',
+  'slice_right',
+  'slice_up',
+  'slice_down',
+  'wipe_tl',
+  'wipe_tr',
+  'wipe_bl',
+  'wipe_br',
 ] as const
 
 export type TransitionSpec = { type: TransitionType; durMs: number }
