@@ -29,6 +29,8 @@ import { layerFlip, moveInStack, setLayerFlip, stackKindOf, stackMoves, type Sta
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
 import { TextAnimSection } from '@/components/clips/editor/text-anim-section'
 import { LayerFxControls } from '@/components/clips/editor/g4/layer-fx-controls'
+import { FX_FEATURES, fxTargetOf } from '@/lib/clips/editor/layer-fx'
+import { mainKeyAllowed } from '@/lib/clips/editor/main-fx'
 import type { TextAnim } from '@/lib/clips/render-plan/text-anim'
 
 /** G3b: the selection's in / out / loop preset (B-roll / image / overlay layers and text items). */
@@ -320,16 +322,21 @@ function VideoTab({
           </div>
         </Section>
       ) : null}
-      {target.startsWith('broll:') ? (
-        <LayerFxControls
-          edits={edits}
-          itemId={target.slice('broll:'.length)}
-          localMs={localMs}
-          isVideo={!(edits.broll ?? []).some((b) => `broll:${b.id}` === target && 'still' in b && b.still)}
-          onCommit={onCommit}
-          readOnly={readOnly}
-        />
-      ) : null}
+      {(() => {
+        const fxKind = fxTargetOf(target)
+        if (!fxKind || fxKind === 'text' || fxKind === 'adjust') return null
+        return (
+          <LayerFxControls
+            edits={edits}
+            target={target}
+            localMs={localMs}
+            features={FX_FEATURES[fxKind]}
+            keyDisabled={target === 'video' && !mainKeyAllowed(edits) ? 'Not available in this layout' : undefined}
+            onCommit={onCommit}
+            readOnly={readOnly}
+          />
+        )
+      })()}
       {kind ? (
         <Section title="Layer order" testId="properties-order">
           <div className="flex flex-wrap gap-1.5">

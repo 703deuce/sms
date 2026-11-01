@@ -1681,7 +1681,16 @@ def render_edited_clip(
 
     # E4: source-anchored color looks on full_render (source time) → cut.mp4 and the E3 transition
     # handles (both cut from full_render) carry the right look per side.
+    pre_color = full_render
     full_render = apply_full_render_color(full_render, edits, clip_start_ms, clip_end_ms, work_dir)
+
+    from clips_worker.main_fx import apply_full_render_key, main_key_allowed
+    from clips_worker.layer_fx import layer_fx_for
+
+    if layer_fx_for(edits, "video").get("key") and main_key_allowed(edits):
+        keyed = work_dir / "keyed.mp4"
+        full_render = apply_full_render_key(pre_color, full_render, keyed, edits)
+        stage("main_key_done")
 
     if render_meta is not None:
         # E5b: exact keep segments (source ms) for the insert splice after the export post-step.
@@ -1738,6 +1747,15 @@ def render_edited_clip(
         if apply_blur_regions(cut_mp4, blur_out, edits, bw, bh, work_dir):
             cut_mp4 = blur_out
             stage("blur_regions_done")
+    from clips_worker.main_fx import apply_main_mask
+    from clips_worker.layer_fx import layer_fx_for
+
+    if layer_fx_for(edits, "video").get("mask"):
+        mw, mh = probe_video_size(cut_mp4)
+        mask_out = work_dir / "with_main_mask.mp4"
+        if apply_main_mask(cut_mp4, mask_out, edits, mw, mh, work_dir):
+            cut_mp4 = mask_out
+            stage("main_mask_done")
     caption_src = cut_mp4
     under_text_ids: list[str] = []
     if broll_specs:

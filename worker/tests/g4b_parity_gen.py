@@ -78,6 +78,13 @@ def build() -> dict:
         {"target": "broll:a", "mask": {"shape": "ellipse", "x": 500, "feather": -3, "keys": [{"ms": 5.4, "x": 1}, {"ms": -1}]}, "blend": "normal"},
         {"target": "broll:b", "key": {"color": "#00FF00", "sim": "70"}, "blend": "screen", "reverse": True},
         {"target": "bad target"}, {"target": "broll:c"}, {"target": "broll:d", "blend": "nope", "reverse": 1},
+        {"target": "video", "blend": "screen", "mask": {"shape": "rect", "x": 50, "y": 50, "w": 60, "h": 40, "rot": 0, "feather": 10}},
+        {"target": "text:a", "key": {"color": "#00ff00", "sim": 40, "blend": 10, "spill": 50}, "blend": "multiply"},
+        {"target": "adjust:x", "mask": {"shape": "ellipse", "x": 50, "y": 50, "w": 40, "h": 40, "rot": 0, "feather": 5}},
+        {"target": "text:t0", "blend": "screen"}, {"target": "text:t1", "blend": "screen"},
+        {"target": "text:t2", "blend": "screen"}, {"target": "text:t3", "blend": "screen"},
+        {"target": "text:t4", "blend": "screen"}, {"target": "text:t5", "blend": "screen"},
+        {"target": "text:t6", "blend": "screen"},
     ]
     return {"xfade": {"W": XW, "H": XH, "cases": xf}, "masks": masks, "maskKeyed": keyed, "maskGeom": geom, "key": key, "fx": fx,
             "normalize": {"in": norm_in, "out": normalize_layer_fx(norm_in)}}

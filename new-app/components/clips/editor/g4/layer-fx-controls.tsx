@@ -12,14 +12,17 @@ import {
   BLEND_MODES,
   DEFAULT_KEY,
   DEFAULT_MASK,
+  FX_FEATURES,
   MASK_LABELS,
   MASK_SHAPES,
   MASK_STEP_MS,
   REVERSE_MAX_MS,
+  fxTargetOf,
   layerFxOf,
   maskGeomAt,
   setLayerFx,
   type ChromaKey,
+  type FxTargetKind,
   type LayerFx,
   type LayerMask,
   type MaskGeom,
@@ -67,31 +70,36 @@ export function toggleMaskKey(mask: LayerMask, localMs: number): LayerMask {
 
 export function LayerFxControls({
   edits,
-  itemId,
+  target,
   localMs,
-  isVideo,
+  features,
+  keyDisabled,
   onCommit,
   readOnly,
 }: {
   edits: ClipEditsV2
-  itemId: string
+  target: string
   localMs: number
-  isVideo: boolean
+  features: (typeof FX_FEATURES)[FxTargetKind]
+  keyDisabled?: string
   onCommit: (next: ClipEditsV2) => void
   readOnly: boolean
 }) {
-  const fx: LayerFx | undefined = layerFxOf(edits, itemId)
-  const patch = (p: Partial<Omit<LayerFx, 'target'>>) => onCommit({ ...edits, layerFx: setLayerFx(edits.layerFx, itemId, p) })
+  const fx: LayerFx | undefined = layerFxOf(edits, target)
+  const patch = (p: Partial<Omit<LayerFx, 'target'>>) => onCommit({ ...edits, layerFx: setLayerFx(edits.layerFx, target, p) })
   const mask = fx?.mask
   const g = mask ? maskGeomAt(mask, localMs) : null
   const keyed = Boolean(mask?.keys?.length)
   const keyHere = Boolean(mask?.keys?.some((x) => x.ms === maskKeyMs(localMs)))
   const key = fx?.key
   const setKey = (p: Partial<ChromaKey>) => patch({ key: { ...(key ?? DEFAULT_KEY), ...p } })
-  const item = (edits.broll ?? []).find((b) => b.id === itemId)
+  const brollId = fxTargetOf(target) === 'broll' ? target.slice('broll:'.length) : null
+  const item = brollId ? (edits.broll ?? []).find((b) => b.id === brollId) : undefined
   const tooLong = item ? item.endMs - item.startMs > REVERSE_MAX_MS : false
+  const keyOff = Boolean(keyDisabled)
   return (
     <div className="space-y-4" data-testid="layer-fx">
+      {features.mask ? (
       <section className="space-y-1.5" data-testid="layer-fx-mask">
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mask</h3>
         <div className="flex flex-wrap gap-1">
@@ -166,24 +174,27 @@ export function LayerFxControls({
           </>
         ) : null}
       </section>
+      ) : null}
+      {features.key ? (
       <section className="space-y-1.5" data-testid="layer-fx-key">
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Chroma key</h3>
+        {keyDisabled ? <p className="text-[10px] text-muted-foreground">{keyDisabled}</p> : null}
         <div className="flex flex-wrap items-center gap-1.5">
-          <button type="button" className={`${btn} ${key ? on : ''}`} aria-pressed={Boolean(key)} disabled={readOnly} onClick={() => patch({ key: key ? undefined : DEFAULT_KEY })} data-testid="layer-fx-key-toggle">
+          <button type="button" className={`${btn} ${key ? on : ''}`} aria-pressed={Boolean(key)} disabled={readOnly || keyOff} onClick={() => patch({ key: key ? undefined : DEFAULT_KEY })} data-testid="layer-fx-key-toggle">
             {key ? 'On' : 'Off'}
           </button>
           {key ? (
             <>
-              <button type="button" className={btn} disabled={readOnly} onClick={() => setKey({ color: '#00ff00' })} data-testid="layer-fx-key-green">
+              <button type="button" className={btn} disabled={readOnly || keyOff} onClick={() => setKey({ color: '#00ff00' })} data-testid="layer-fx-key-green">
                 Green
               </button>
-              <button type="button" className={btn} disabled={readOnly} onClick={() => setKey({ color: '#0000ff' })} data-testid="layer-fx-key-blue">
+              <button type="button" className={btn} disabled={readOnly || keyOff} onClick={() => setKey({ color: '#0000ff' })} data-testid="layer-fx-key-blue">
                 Blue
               </button>
               <input
                 type="color"
                 value={key.color}
-                disabled={readOnly}
+                disabled={readOnly || keyOff}
                 onChange={(e) => setKey({ color: e.target.value.toLowerCase() })}
                 className="h-6 w-10 cursor-pointer rounded border border-border bg-transparent"
                 aria-label="Key color"
@@ -194,12 +205,14 @@ export function LayerFxControls({
         </div>
         {key ? (
           <>
-            <SliderRow label="Strength" value={key.sim} min={0} max={100} disabled={readOnly} testId="layer-fx-key-sim" onCommit={(v) => setKey({ sim: v })} />
-            <SliderRow label="Edge softness" value={key.blend} min={0} max={100} disabled={readOnly} testId="layer-fx-key-blend" onCommit={(v) => setKey({ blend: v })} />
-            <SliderRow label="Spill removal" value={key.spill} min={0} max={100} disabled={readOnly} testId="layer-fx-key-spill" onCommit={(v) => setKey({ spill: v })} />
+            <SliderRow label="Strength" value={key.sim} min={0} max={100} disabled={readOnly || keyOff} testId="layer-fx-key-sim" onCommit={(v) => setKey({ sim: v })} />
+            <SliderRow label="Edge softness" value={key.blend} min={0} max={100} disabled={readOnly || keyOff} testId="layer-fx-key-blend" onCommit={(v) => setKey({ blend: v })} />
+            <SliderRow label="Spill removal" value={key.spill} min={0} max={100} disabled={readOnly || keyOff} testId="layer-fx-key-spill" onCommit={(v) => setKey({ spill: v })} />
           </>
         ) : null}
       </section>
+      ) : null}
+      {features.blend ? (
       <section className="space-y-1.5" data-testid="layer-fx-blend">
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Blend</h3>
         <div className="flex flex-wrap gap-1">
@@ -217,8 +230,9 @@ export function LayerFxControls({
           ))}
         </div>
       </section>
-      {isVideo ? (
-        <section className="space-y-1.5" data-testid="layer-fx-reverse">
+      ) : null}
+      {features.reverse ? (
+      <section className="space-y-1.5" data-testid="layer-fx-reverse">
           <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Reverse</h3>
           <button
             type="button"
