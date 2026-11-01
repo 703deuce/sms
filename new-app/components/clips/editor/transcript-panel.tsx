@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Scissors, Search, Undo2, User } from 'lucide-react'
+import { Scissors, Search, Undo2, User, EyeOff, RotateCcw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,17 @@ import { maxPlausibleGapMsForTrim, sourceWordsForClipEditing } from '@/lib/clips
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { speakerLabelForWord } from '@/lib/clips/crop-shots'
 import { findMatches, replacementFixes } from '@/lib/clips/editor/find-replace'
+import {
+  activeWordAt,
+  collapseCutRuns,
+  isWordIgnored,
+  nextIgnoreState,
+  paragraphStarts,
+  selectionHasCuts,
+  setSpeakerName,
+  setWordsIgnored,
+  speakerDisplayName,
+} from '@/lib/clips/editor/transcript-edit'
 import { clipsFetch } from '@/lib/clips-api'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
@@ -63,6 +74,7 @@ export function TranscriptPanel({
   onSetEdits,
   angleSources,
   onBuildFromTranscript,
+  playheadSourceMs,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -91,6 +103,8 @@ export function TranscriptPanel({
   angleSources?: readonly ClipMediaSource[]
   /** FV4e: open the Media panel's source monitor ("Build from transcript" of an uploaded file). */
   onBuildFromTranscript?: () => void
+  /** TB-15: source-ms playhead for the active word. */
+  playheadSourceMs?: number
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
@@ -100,6 +114,29 @@ export function TranscriptPanel({
   const [matchIndex, setMatchIndex] = useState(0)
   const [addToVocab, setAddToVocab] = useState(false)
   const findInputRef = useRef<HTMLInputElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const pauseFollowUntil = useRef(0)
+  const [follow, setFollow] = useState(true)
+  const [showDeleted, setShowDeleted] = useState(true)
+  const [renamingSpk, setRenamingSpk] = useState<string | null>(null)
+  useEffect(() => {
+    try {
+      setFollow(localStorage.getItem('transovo.script.follow') !== '0')
+      setShowDeleted(localStorage.getItem('transovo.script.showDeleted') !== '0')
+    } catch {
+      /* private mode */
+    }
+  }, [])
+  const persist = (k: string, v: boolean) => {
+    try {
+      localStorage.setItem(k, v ? '1' : '0')
+    } catch {
+      /* private mode */
+    }
+  }
+  const bumpFollowPause = () => {
+    pauseFollowUntil.current = Date.now() + 3000
+  }
   const visible = useMemo(() => {
     if (!words.length) return []
     const bounds =
@@ -135,6 +172,7 @@ export function TranscriptPanel({
       }),
     [visible],
   )
+  const activeI = useMemo(() => activeWordAt(visible, playheadSourceMs), [visible, playheadSourceMs])
 
   const moveSection = (dir: 'up' | 'down') => {
     if (selStart === null || selEnd === null) return
@@ -207,6 +245,16 @@ export function TranscriptPanel({
     }
   }, [selEnd, selStart, selectionRef])
 
+  useEffect(() => {
+    if (!follow || !panelActive || activeI == null || Date.now() < pauseFollowUntil.current) return
+    const box = scrollRef.current
+    const el = box?.querySelector<HTMLElement>(`[data-word-i="${activeI}"]`)
+    if (!box || !el) return
+    const b = box.getBoundingClientRect()
+    const r = el.getBoundingClientRect()
+    if (r.top < b.top || r.bottom > b.bottom) el.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+  }, [activeI, follow, panelActive])
+
   // G1b2: camera angle for the selected words (main-source span of the first..last word).
   const angles = onSetEdits ? multicamAngles(edits, angleSources) : []
   const angleSelection = (sourceId: string) => {
@@ -234,6 +282,44 @@ export function TranscriptPanel({
     onAddCut([Math.round(wa.s * 1000), Math.round(wb.e * 1000)])
     setSelStart(null)
     setSelEnd(null)
+  }
+
+  const cutCount = edits.cutRanges?.length ?? 0
+
+  const selectionWords = (): SourceWord[] => {
+    if (selStart === null || selEnd === null) return []
+    const a = Math.min(selStart, selEnd)
+    const b = Math.max(selStart, selEnd)
+    return visible.filter((w) => {
+      const { startMs, endMs } = wordSourceMs(w)
+      return endMs > a && startMs < b
+    })
+  }
+  const selRange = (): CutRange | null => {
+    const sw = selectionWords()
+    return sw.length ? [Math.round(sw[0]!.s * 1000), Math.round(sw[sw.length - 1]!.e * 1000)] : null
+  }
+  const ignoreTargets = () => selectionWords().filter((w) => !isWordCut(w, edits.cutRanges))
+  const toggleIgnoreSelection = () => {
+    const ws = ignoreTargets()
+    if (!ws.length || !onSetEdits) {
+      toast.message('Select words that are not cut')
+      return
+    }
+    const on = nextIgnoreState(ws, edits.wordFixes)
+    onSetEdits({ ...edits, ...setWordsIgnored(edits.wordFixes, edits.wordFixMeta, ws, on) })
+  }
+  const restoreSelection = () => {
+    const r = selRange()
+    if (!r || !onRestoreCutRange) return
+    onRestoreCutRange(r)
+    setSelStart(null)
+    setSelEnd(null)
+  }
+  const restoreAll = () => {
+    if (!onSetEdits || !cutCount) return
+    if (!window.confirm(`Restore all ${cutCount} removed sections? This includes silence and filler cleanup. Undo with Ctrl+Z.`)) return
+    onSetEdits({ ...edits, cutRanges: [] })
   }
 
   const inTrim = (w: SourceWord) => {
@@ -290,7 +376,8 @@ export function TranscriptPanel({
     const cutRange = wordCutRange(w)
     const cut = Boolean(cutRange) || isWordCut(w, edits.cutRanges)
     const display = wordDisplayText(w, edits.wordFixes)
-    const hidden = String(w.i) in edits.wordFixes && edits.wordFixes[String(w.i)] === ''
+    const ignored = isWordIgnored(w.i, edits.wordFixes)
+    const active = activeI === w.i
     const isFiller = FILLER_RE.test(display.trim())
     const inPhraseMatch =
       activeMatch?.wordIdx.includes(w.i) &&
@@ -329,13 +416,18 @@ export function TranscriptPanel({
         <button
           type="button"
           disabled={muted}
+          data-word-i={w.i}
+          data-active={active ? '1' : undefined}
+          data-ignored={ignored && !cut ? '1' : undefined}
           className={`rounded px-0.5 transition hover:bg-accent cursor-text ${
+            active ? 'bg-[#FFD400]/35' : ''
+          } ${
             cut
               ? `text-muted-foreground/60 line-through decoration-destructive/70 decoration-2 bg-destructive/5 ${
                   isFiller ? 'decoration-muted-foreground/80' : ''
                 }`
               : ''
-          } ${selected ? 'bg-primary/30 ring-1 ring-primary/50' : ''} ${
+          } ${ignored && !cut ? 'text-muted-foreground/50 line-through decoration-dashed decoration-muted-foreground/70' : ''} ${selected ? 'bg-primary/30 ring-1 ring-primary/50' : ''} ${
             edits.captions?.emphasis?.includes(w.i) ? 'underline decoration-dotted decoration-lane-ai' : ''
           }`}
           onClick={(e) => {
@@ -357,17 +449,15 @@ export function TranscriptPanel({
           onDoubleClick={(e) => {
             e.preventDefault()
             if (muted) return
-            if (hidden) {
+            if (ignored) {
               onWordFix(w.i, '')
               return
             }
             setEditingI(w.i)
           }}
         >
-          {hidden ? (
-            <span className="text-muted-foreground/40" title="Merged into previous word — double-click to restore">
-              ·
-            </span>
+          {ignored ? (
+            <span title="Ignored: kept in the video, hidden from captions (double-click to unignore)">{w.w}</span>
           ) : highlight ? (
             <mark className="rounded bg-lane-caption/30 text-foreground">{display}</mark>
           ) : (
@@ -389,8 +479,6 @@ export function TranscriptPanel({
       </span>
     )
   }
-
-  const cutCount = edits.cutRanges?.length ?? 0
 
   return (
     <div className="flex flex-col gap-3 p-3" aria-busy={wordsLoading}>
@@ -465,7 +553,49 @@ export function TranscriptPanel({
             Add to my vocabulary
           </label>
         </div>
-        <Badge variant="secondary" className="h-7 w-fit tabular-nums">{cutCount} cuts</Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary" className="h-7 w-fit tabular-nums">
+            {cutCount} cuts
+          </Badge>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {cutCount > 0 && onSetEdits ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 gap-1"
+                onClick={restoreAll}
+                data-testid="transcript-restore-all"
+              >
+                <RotateCcw className="size-3.5" /> Restore all
+              </Button>
+            ) : null}
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={showDeleted}
+                data-testid="transcript-show-deleted"
+                onChange={(e) => {
+                  setShowDeleted(e.target.checked)
+                  persist('transovo.script.showDeleted', e.target.checked)
+                }}
+              />
+              Show deleted
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={follow}
+                data-testid="transcript-follow"
+                onChange={(e) => {
+                  setFollow(e.target.checked)
+                  persist('transovo.script.follow', e.target.checked)
+                }}
+              />
+              Follow playhead
+            </label>
+          </div>
+        </div>
       </div>
       {selStart !== null && selEnd !== null && (
         <div className="flex w-fit gap-1 rounded-lg border border-border bg-popover p-1 shadow-md">
@@ -473,6 +603,33 @@ export function TranscriptPanel({
             <Scissors className="size-3.5" />
             Cut
           </Button>
+          {onRestoreCutRange && (() => {
+            const r = selRange()
+            return r && selectionHasCuts(edits.cutRanges, r[0], r[1])
+          })() ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1"
+              onClick={restoreSelection}
+              data-testid="transcript-restore-selection"
+            >
+              <RotateCcw className="size-3.5" /> Restore
+            </Button>
+          ) : null}
+          {onSetEdits ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1"
+              onClick={toggleIgnoreSelection}
+              title="Strike from the script and captions; keep the video and audio. Ignoring drops any text correction on that word."
+              data-testid="transcript-ignore"
+            >
+              <EyeOff className="size-3.5" />
+              {ignoreTargets().length && !nextIgnoreState(ignoreTargets(), edits.wordFixes) ? 'Unignore' : 'Ignore'}
+            </Button>
+          ) : null}
           <Button
             size="sm"
             variant="ghost"
@@ -564,7 +721,13 @@ export function TranscriptPanel({
           </Button>
         ) : null}
       </div>
-      <div className="max-h-[min(50vh,420px)] overflow-y-auto text-sm leading-relaxed">
+      <div
+        ref={scrollRef}
+        className="max-h-[min(50vh,420px)] overflow-y-auto text-sm leading-relaxed"
+        onWheel={bumpFollowPause}
+        onTouchStart={bumpFollowPause}
+        onScroll={bumpFollowPause}
+      >
         {!visible.length ? (
           <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
             No transcript words for this clip yet. They appear after processing finishes.
@@ -599,30 +762,93 @@ export function TranscriptPanel({
           const dot = SPEAKER_DOT[(block.speakerNum - 1) % SPEAKER_DOT.length]
           const prevBlockLast =
             bi > 0 ? blocks[bi - 1].words[blocks[bi - 1].words.length - 1] : null
+          const paras = paragraphStarts(block.words, (x) => wordDisplayText(x, edits.wordFixes))
+          const emitSlice = (slice: SourceWord[], prevBefore: SourceWord | null) => {
+            const runs = showDeleted
+              ? slice.map((w) => ({ kind: 'word' as const, w }))
+              : collapseCutRuns(slice, (x) => isWordCut(x, edits.cutRanges))
+            const nodes: ReactNode[] = []
+            let prev = prevBefore
+            for (const run of runs) {
+              if (run.kind === 'removed') {
+                nodes.push(
+                  <span
+                    key={`rm-${run.range[0]}`}
+                    className="mx-0.5 inline-flex items-center gap-1 rounded bg-destructive/10 px-1 py-0.5 text-[10px] text-muted-foreground"
+                    data-testid="transcript-removed-run"
+                  >
+                    ⋯ {run.words.length} word{run.words.length === 1 ? '' : 's'} removed
+                    {onRestoreCutRange ? (
+                      <button type="button" className="font-medium text-primary" onClick={() => onRestoreCutRange(run.range)}>
+                        Restore
+                      </button>
+                    ) : null}
+                  </span>,
+                )
+                continue
+              }
+              const w = run.w
+              if (paras.has(w.i)) {
+                nodes.push(
+                  <span key={`p-${w.i}`} className="block h-1.5" data-testid="transcript-para-break" aria-hidden />,
+                )
+              }
+              let gapCut = prev ? gapCutBetweenSourceWords(prev, w, edits.cutRanges ?? []) : null
+              if (prev && gapCut) {
+                const gapMs = wordSourceMs(w).startMs - wordSourceMs(prev).endMs
+                if (gapMs > maxPlausibleGapMs) gapCut = null
+              }
+              nodes.push(renderWord(w))
+              if (gapCut) nodes.push(renderGapCut(gapCut))
+              prev = w
+            }
+            return nodes
+          }
           return (
             <div key={`${block.spk}-${bi}`}>
               <div className="mt-3 flex items-center gap-1.5 first:mt-0">
-                <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-muted px-2 text-xs font-medium">
-                  <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
-                  <User className="size-3" aria-hidden />
-                  Speaker {block.speakerNum}
-                </span>
+                {renamingSpk === `${block.spk}-${bi}` && onSetEdits ? (
+                  <Input
+                    autoFocus
+                    maxLength={32}
+                    className="h-6 w-36 text-xs"
+                    data-testid="transcript-speaker-input"
+                    defaultValue={edits.speakerNames?.[block.spk] ?? ''}
+                    placeholder={`Speaker ${block.speakerNum}`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        onSetEdits({ ...edits, speakerNames: setSpeakerName(edits.speakerNames, block.spk, e.currentTarget.value) })
+                        setRenamingSpk(null)
+                      }
+                      if (e.key === 'Escape') {
+                        e.stopPropagation()
+                        setRenamingSpk(null)
+                      }
+                    }}
+                    onBlur={(e) => {
+                      onSetEdits({ ...edits, speakerNames: setSpeakerName(edits.speakerNames, block.spk, e.target.value) })
+                      setRenamingSpk(null)
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    data-testid="transcript-speaker-chip"
+                    title="Rename speaker"
+                    className="inline-flex h-6 items-center gap-1.5 rounded-full bg-muted px-2 text-xs font-medium hover:bg-accent"
+                    onClick={() => onSetEdits && setRenamingSpk(`${block.spk}-${bi}`)}
+                  >
+                    <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
+                    <User className="size-3" aria-hidden />
+                    {speakerDisplayName(edits.speakerNames, block.spk, block.speakerNum)}
+                  </button>
+                )}
               </div>
               {transcriptChunkStarts(block.words.length, longTranscript).map((from) => {
                 const to = Math.min(block.words.length, from + TRANSCRIPT_CHUNK_WORDS)
-                const renderRange = () =>
-                  block.words.slice(from, to).flatMap((w, k) => {
-                    const wi = from + k
-                    const prev = wi === 0 ? prevBlockLast : block.words[wi - 1]
-                    let gapCut = prev ? gapCutBetweenSourceWords(prev, w, edits.cutRanges ?? []) : null
-                    if (prev && gapCut) {
-                      const gapMs = wordSourceMs(w).startMs - wordSourceMs(prev).endMs
-                      if (gapMs > maxPlausibleGapMs) gapCut = null
-                    }
-                    const nodes = [renderWord(w)]
-                    if (gapCut) nodes.push(renderGapCut(gapCut))
-                    return nodes
-                  })
+                const slice = block.words.slice(from, to)
+                const prevBefore = from === 0 ? prevBlockLast : block.words[from - 1]!
+                const renderRange = () => emitSlice(slice, prevBefore)
                 return longTranscript ? (
                   <LazyTranscriptChunk key={from} words={to - from}>
                     {renderRange}

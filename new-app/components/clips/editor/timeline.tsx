@@ -169,6 +169,7 @@ import {
   fitPxPerSec,
   initialPxPerSec,
   isFormControlTarget,
+  isTextEntryTarget,
   pxPerSecToSlider,
   readablePxPerSec,
   sliderToPxPerSec,
@@ -757,6 +758,30 @@ export function Timeline({
     if (openCompound && !edits.groups?.some((g) => g.id === openCompound && g.compound)) setOpenCompound(null)
   }, [edits.groups, openCompound])
 
+  const escCloseRef = useRef<() => boolean>(() => false)
+  escCloseRef.current = () => {
+    if (!openCompound) return false
+    if (paletteOpen || ctxMenu || addMenu || markerPanel || trPop) return false
+    setOpenCompound(null)
+    setSelected([])
+    setSelKf(null)
+    onSelRef.current?.(null)
+    return true
+  }
+  useEffect(() => {
+    if (!openCompound) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (isTextEntryTarget(e.target)) return
+      if (document.querySelector('[role="dialog"][data-state="open"],[role="menu"][data-state="open"]')) return
+      if (!escCloseRef.current()) return
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [openCompound])
+
   // Drop selections whose items no longer exist (ids change after cuts / undo).
   const liveSelected = useMemo(
     () => selected.filter((r) => lanes[r.lane].some((i) => i.id === r.id)),
@@ -1175,6 +1200,7 @@ export function Timeline({
         if (selCompound) {
           setOpenCompound(selCompound.id)
           setSelected([])
+          rootRef.current?.focus({ preventScroll: true })
         }
         return Boolean(selCompound)
       case 'loop':
@@ -1896,8 +1922,12 @@ export function Timeline({
       }
     } else if (k === 'Escape') {
       if (openCompound) {
+        e.preventDefault()
+        e.stopPropagation()
         setOpenCompound(null)
         setSelected([])
+        setSelKf(null)
+        onSelRef.current?.(null)
         return
       }
       setTool('select')
@@ -3619,6 +3649,7 @@ export function Timeline({
                       setOpenCompound(selCompound.id)
                       setSelected([])
                       setCtxMenu(null)
+                      rootRef.current?.focus({ preventScroll: true })
                     }}
                   >
                     Open compound
