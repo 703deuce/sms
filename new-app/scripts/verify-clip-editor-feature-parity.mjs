@@ -27,7 +27,7 @@ const MOUNTS = [
   { name: 'SFX Kenney badge', testId: 'stock-sfx-license-badge', inFiles: ['stock-audio-picker.tsx'] },
   { name: 'Cut to beat (audio panel)', testId: 'audio-beat-cut', inFiles: ['beat-cut-controls.tsx', 'audio-panel.tsx'] },
   { name: 'Export share from dialog', testId: 'export-share-open-dialog', inFiles: ['export-dialog.tsx'] },
-  { name: 'Export FCP XML', testId: 'export-xml-download', inFiles: ['export-dialog.tsx'] },
+  { name: 'Export NLE zip', testId: 'export-xml-download', inFiles: ['export-dialog.tsx'] },
   { name: 'Export stems (visible)', testId: 'export-stems-main', inFiles: ['export-dialog.tsx'] },
 ]
 

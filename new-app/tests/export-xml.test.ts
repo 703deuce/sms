@@ -37,7 +37,7 @@ describe('export-xml fcpxml', () => {
     expect(xml).toContain('file:///media/source.mp4')
   })
 
-  it('builds from clip edits with placeholder source', () => {
+  it('builds from clip edits with real source filename', () => {
     const bounds = { clipStartMs: 0, clipEndMs: 10_000 }
     const xml = buildFcpxmlFromClipEdits({
       title: 'My Clip',
@@ -45,10 +45,12 @@ describe('export-xml fcpxml', () => {
       clipEndMs: 10_000,
       edits: defaultEdits(bounds),
       bounds,
-      sourceMediaHref: 'file:///SOURCE_MEDIA',
+      sourceMediaHref: 'file:///short_apex_32s.mp4',
+      sourceMediaFilename: 'short_apex_32s.mp4',
     })
     expect(xml).toContain('My Clip')
-    expect(xml).toContain('file:///SOURCE_MEDIA')
+    expect(xml).toContain('file:///short_apex_32s.mp4')
+    expect(xml).toContain('name="short_apex_32s.mp4"')
   })
 
   it('sanitizes download filename', () => {

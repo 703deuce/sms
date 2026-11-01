@@ -19,6 +19,8 @@ export type FcpxmlSegment = {
 export type ClipFcpxmlInput = {
   title: string
   sourceMediaHref: string
+  /** Display / relink name in FCPXML asset (defaults to title). */
+  sourceMediaName?: string
   /** Absolute source media duration (seconds) when known. */
   sourceDurationSec: number
   segments: FcpxmlSegment[]
@@ -77,6 +79,7 @@ export function buildClipTimelineFcpxml(input: ClipFcpxmlInput): string {
   const frameDuration = `100/${fps * 100}s`
   const formatName = `FFVideoFormat${height}p${fps}`
   const title = escapeXml(input.title.trim() || 'Transovo clip')
+  const assetName = escapeXml(input.sourceMediaName?.trim() || input.title.trim() || 'Transovo clip')
   const src = escapeXml(input.sourceMediaHref)
   const sourceDuration = fcpxTimeSeconds(input.sourceDurationSec)
   const sequenceDuration = fcpxTimeSeconds(
@@ -96,7 +99,7 @@ export function buildClipTimelineFcpxml(input: ClipFcpxmlInput): string {
 <fcpxml version="1.10">
   <resources>
     <format id="r1" name="${formatName}" frameDuration="${frameDuration}" width="${width}" height="${height}" />
-    <asset id="r2" name="${title}" uid="${escapeXml(input.title)}" src="${src}" start="0s" duration="${sourceDuration}" hasVideo="1" hasAudio="1" format="r1" />
+    <asset id="r2" name="${assetName}" uid="${escapeXml(input.title)}" src="${src}" start="0s" duration="${sourceDuration}" hasVideo="1" hasAudio="1" format="r1" />
   </resources>
   <library>
     <event name="Transovo Export">
@@ -120,6 +123,8 @@ export function buildFcpxmlFromClipEdits(opts: {
   edits: unknown
   bounds: ClipBounds
   sourceMediaHref: string
+  /** Basename for FCPXML asset @name (defaults to title). */
+  sourceMediaFilename?: string
   sourceDurationMs?: number
   fps?: number
   aspect?: string
@@ -139,6 +144,7 @@ export function buildFcpxmlFromClipEdits(opts: {
   return buildClipTimelineFcpxml({
     title: opts.title,
     sourceMediaHref: opts.sourceMediaHref,
+    sourceMediaName: opts.sourceMediaFilename,
     sourceDurationSec,
     segments,
     fps: opts.fps,

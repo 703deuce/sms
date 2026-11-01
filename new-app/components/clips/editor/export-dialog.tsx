@@ -172,6 +172,8 @@ export function ExportDialog({
   const exportToast = useMemo(() => createExportToast(toast), [])
   useEffect(() => () => exportToast.dismiss(), [exportToast])
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const [stemsDownloadUrl, setStemsDownloadUrl] = useState<string | null>(null)
+  const [stemsFilename, setStemsFilename] = useState<string | null>(null)
   const [filename, setFilename] = useState('clip.mp4')
   const [status, setStatus] = useState<string | null>(null)
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
@@ -380,6 +382,8 @@ export function ExportDialog({
         if (r.status === 'READY' && r.downloadUrl) {
           setDownloadUrl(r.downloadUrl)
           setFilename(r.filename || 'clip.mp4')
+          setStemsDownloadUrl(r.stemsDownloadUrl ?? null)
+          setStemsFilename(r.stemsFilename ?? null)
           setErrorDetail(null)
           setBusy(false)
           exportToast.ready()
@@ -507,8 +511,12 @@ export function ExportDialog({
       if (data.downloadUrl) {
         setDownloadUrl(data.downloadUrl)
         setFilename(data.filename || 'clip.mp4')
+        setStemsDownloadUrl(data.stemsDownloadUrl ?? null)
+        setStemsFilename(data.stemsFilename ?? null)
         exportToast.ready('Export ready')
       } else {
+        setStemsDownloadUrl(null)
+        setStemsFilename(null)
         setStatus(data.status === 'READY' ? 'READY' : 'RUNNING')
         exportToast.rendering()
       }
@@ -685,10 +693,12 @@ export function ExportDialog({
               }
               nativeButton={false}
             >
-              FCP XML
+              Premiere / Resolve / FCP (zip)
             </Button>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">For Final Cut Pro / NLE round-trip (placeholder media path).</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            FCPXML 1.10 + Premiere xmeml, captions .srt, and README with relink steps (uses your upload filename).
+          </p>
         </div>
         <div className="mt-3">
           <p className="text-xs font-medium">Resolution</p>
@@ -1137,6 +1147,15 @@ export function ExportDialog({
           ) : (
             <Button render={<a href={downloadUrl} download={filename} />}>Download MP4</Button>
           )}
+          {stemsDownloadUrl ? (
+            <Button
+              variant="outline"
+              data-testid="export-stems-download"
+              render={<a href={stemsDownloadUrl} download={stemsFilename ?? 'stems.zip'} />}
+            >
+              Download stems (.zip)
+            </Button>
+          ) : null}
           {renderId && status === 'READY' ? (
             <Button type="button" variant="outline" data-testid="export-share-open-dialog" onClick={() => setShareOpen(true)}>
               Share link
