@@ -9,17 +9,24 @@ export function Segmented({
   value,
   onChange,
   className,
+  size = 'default',
   'aria-label': ariaLabel,
 }: {
   items: SegmentedItem[]
   value: string
   onChange: (id: string) => void
   className?: string
+  size?: 'default' | 'sm'
   'aria-label'?: string
 }) {
+  const sm = size === 'sm'
   return (
     <div
-      className={cn('inline-flex h-8 rounded-md bg-secondary p-0.5', className)}
+      className={cn(
+        'inline-flex rounded-md bg-secondary p-0.5',
+        sm ? 'h-7' : 'h-8',
+        className,
+      )}
       role="radiogroup"
       aria-label={ariaLabel}
     >
@@ -33,7 +40,8 @@ export function Segmented({
             aria-checked={selected}
             disabled={item.disabled}
             className={cn(
-              'h-7 rounded-[5px] px-2.5 text-[13px] transition-colors disabled:opacity-40',
+              'rounded-[5px] px-2.5 transition-colors disabled:opacity-40',
+              sm ? 'h-6 text-[11px]' : 'h-7 text-[13px]',
               selected ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
             )}
             onClick={() => onChange(item.id)}

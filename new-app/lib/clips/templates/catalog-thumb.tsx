@@ -209,7 +209,7 @@ export function LayoutSchematic({ regions, className }: { regions: SchematicRegi
           key={`${r.label ?? 'r'}-${i}`}
           data-region
           className={cn(
-            'absolute flex items-center justify-center overflow-hidden rounded-md border text-[9px] font-semibold uppercase tracking-wide text-white/90',
+            'absolute flex items-center justify-center overflow-hidden rounded-md border text-[11px] font-semibold uppercase tracking-wide text-white/90',
             TINTS[i % TINTS.length],
             r.thin ? 'min-h-[8px] py-0' : '',
           )}

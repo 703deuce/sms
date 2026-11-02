@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { PageContainer, PageHeader } from '@/components/app/page-primitives'
+import { OptionCard } from '@/components/app/option-card'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { Dropzone } from '@/components/clips/dropzone'
 import { BlankProjectCard } from '@/components/clips/blank-project-card'
@@ -219,12 +220,12 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
               },
             ] as const
           ).map((opt) => (
-            <label
+            <OptionCard
               key={opt.id}
-              className={cn(
-                'flex flex-1 cursor-pointer flex-col gap-1 rounded-xl border p-3 transition hover:border-primary/40',
-                projectIntent === opt.id && 'border-primary bg-primary/8 ring-1 ring-primary/40',
-              )}
+              selected={projectIntent === opt.id}
+              title={opt.label}
+              hint={opt.hint}
+              className="min-h-[72px] flex-1"
             >
               <input
                 type="radio"
@@ -255,9 +256,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
                 }}
                 className="sr-only"
               />
-              <span className="text-sm font-semibold">{opt.label}</span>
-              <span className="text-xs text-muted-foreground">{opt.hint}</span>
-            </label>
+            </OptionCard>
           ))}
         </fieldset>
       ) : null}
@@ -272,12 +271,13 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
             { id: 'streamer' as const, label: 'Streamer', hint: 'Twitch or Kick', icon: Radio },
           ] as const
         ).map((opt) => (
-          <label
+          <OptionCard
             key={opt.id}
-            className={cn(
-              'flex cursor-pointer flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:border-primary/40',
-              tab === opt.id && 'border-primary bg-primary/8 ring-1 ring-primary/40',
-            )}
+            selected={tab === opt.id}
+            icon={opt.icon}
+            title={opt.label}
+            hint={opt.hint}
+            className="min-h-[72px]"
             data-testid={`new-project-source-${opt.id}`}
           >
             <input
@@ -288,24 +288,17 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
               onChange={() => setTab(opt.id)}
               className="sr-only"
             />
-            <span className="grid size-10 place-items-center rounded-lg bg-muted">
-              <opt.icon className="size-5 text-primary" aria-hidden />
-            </span>
-            <span className="text-sm font-semibold">{opt.label}</span>
-            <span className="text-xs text-muted-foreground">{opt.hint}</span>
-          </label>
+          </OptionCard>
         ))}
         {isT2vFeatureEnabled() ? (
-          <Link
-            href="/app/clips/video/new"
-            className="flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:border-primary/40"
-            data-testid="new-project-t2v-card"
-          >
-            <span className="grid size-10 place-items-center rounded-lg bg-muted">
-              <Clapperboard className="size-5 text-primary" aria-hidden />
-            </span>
-            <span className="text-sm font-semibold">AI Video</span>
-            <span className="text-xs text-muted-foreground">Idea, script, or link → video</span>
+          <Link href="/app/clips/video/new" className="block min-h-[72px]" data-testid="new-project-t2v-card">
+            <OptionCard
+              selected={false}
+              icon={Clapperboard}
+              title="AI Video"
+              hint="Idea, script, or link → video"
+              className="min-h-[72px] h-full pointer-events-none"
+            />
           </Link>
         ) : null}
       </fieldset>
@@ -389,7 +382,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
         </div>
         <div className="flex min-h-0 flex-col gap-4 pb-6 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-5.5rem)] lg:self-start">
           <div
-            className="min-h-0 flex-1 overflow-y-auto scroll-pb-6 pb-6 pr-1"
+            className="min-h-0 flex-1 overflow-y-auto scroll-pb-6 pr-1 pb-[calc(2.75rem+16px)]"
             data-testid="new-project-settings-scroll"
           >
             <ProjectSettingsForm
@@ -401,7 +394,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
               byoMode={projectIntent !== 'find'}
             />
           </div>
-          <div className="shrink-0 border-t border-border pt-3">
+          <div className="shrink-0 border-t border-border pt-3" data-testid="new-project-action-bar">
             {estimate && tab === 'upload' && projectIntent === 'find' && (
               <p className="mb-3 text-xs text-muted-foreground">
                 {testMode

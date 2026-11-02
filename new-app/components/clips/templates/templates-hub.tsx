@@ -174,7 +174,7 @@ export function TemplatesHub({
       ) : (
         <>
           {tab === 'layouts' ? (
-            <section ref={myRef} className="space-y-3 rounded-xl border border-border p-4" data-testid="my-layouts">
+            <section ref={myRef} className="space-y-3 rounded-xl border border-border p-5" data-testid="my-layouts">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold">My layouts</h2>
                 {packsLoading ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
@@ -182,9 +182,12 @@ export function TemplatesHub({
               {packs.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Save a layout from the editor Templates panel.</p>
               ) : (
-                <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <ul className="flex flex-col gap-2">
                   {packs.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+                    <li
+                      key={p.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 text-sm"
+                    >
                       <div className="min-w-0">
                         <p className="truncate font-medium">{p.name}</p>
                         <p className="text-[10px] text-muted-foreground">{p.aspect}</p>
@@ -222,7 +225,7 @@ export function TemplatesHub({
             </section>
           ) : null}
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
             {visible.map((item) => (
               <article
                 key={`${item.kind}:${item.id}`}
@@ -234,18 +237,16 @@ export function TemplatesHub({
                 <div className="flex flex-1 flex-col gap-2 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium leading-tight">{item.name}</p>
-                    {item.badge === 'Beta' ? (
-                      <BetaBadge />
-                    ) : item.badge ? (
+                    {item.badge && item.badge !== 'Beta' ? (
                       <Badge variant="secondary">{item.badge}</Badge>
                     ) : null}
                   </div>
                   {item.disabled ? (
-                    <Button variant="secondary" size="sm" className="mt-auto w-full" disabled title={item.disabled}>
+                    <Button variant="secondary" size="sm" className="mt-auto h-9 w-full" disabled title={item.disabled}>
                       Coming soon
                     </Button>
                   ) : (
-                    <PrimaryButton size="sm" className="mt-auto w-full" onClick={() => useItem(item)}>
+                    <PrimaryButton size="sm" className="mt-auto h-9 w-full" onClick={() => useItem(item)}>
                       Use
                     </PrimaryButton>
                   )}
@@ -270,6 +271,7 @@ export function TemplatesHub({
 }
 
 function TplThumb({ item }: { item: CatalogItem }) {
+  const thumb = (() => {
   if (item.kind === 'layout' || item.kind === 'layout_template' || item.kind === 'multicam') {
     return <CatalogTplThumb item={item} />
   }
@@ -307,6 +309,17 @@ function TplThumb({ item }: { item: CatalogItem }) {
   return (
     <div className="flex aspect-[9/16] max-h-44 w-full items-end bg-gradient-to-br from-slate-800 via-slate-900 to-black p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-white/90">{mode}</p>
+    </div>
+  )
+  })()
+  return (
+    <div className="relative aspect-[9/16] max-h-44 w-full overflow-hidden">
+      {item.badge === 'Beta' ? (
+        <span className="absolute right-2 top-2 z-10">
+          <BetaBadge />
+        </span>
+      ) : null}
+      {thumb}
     </div>
   )
 }

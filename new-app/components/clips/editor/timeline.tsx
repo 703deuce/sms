@@ -289,6 +289,17 @@ const GLOBAL_COMMANDS = new Set<TimelineCommand>([
   'palette',
 ])
 
+/** UI_fix3: hide under 48px; never show fewer than 4 visible chars with an ellipsis. */
+function timelineClipLabelVisible(label: string, widthPx: number): string | null {
+  if (widthPx < 48) return null
+  const padding = 8
+  const charPx = 6.5
+  const maxChars = Math.floor((widthPx - padding) / charPx)
+  if (maxChars < 4) return null
+  if (label.length <= maxChars) return label
+  return label.slice(0, maxChars)
+}
+
 function hasDomTextSelection(): boolean {
   if (typeof window === 'undefined' || !window.getSelection) return false
   const sel = window.getSelection()
@@ -2708,12 +2719,29 @@ export function Timeline({
           </span>
         ) : null}
         {item.lane === 'music' || item.lane === 'sfx' ? renderFades(item, geo, w, h, st) : null}
-        {item.lane !== 'voice' && item.lane !== 'video' && w > 28 ? (
-          <span className="pointer-events-none relative truncate px-1">{item.label}</span>
-        ) : null}
-        {item.lane === 'video' && w > 40 ? (
-          <span className="pointer-events-none absolute left-1 top-0 z-[1] rounded-sm bg-black/45 px-0.5 text-[11px] text-white/90">{item.label}</span>
-        ) : null}
+        {item.lane !== 'voice' && item.lane !== 'video'
+          ? (() => {
+              const visible = timelineClipLabelVisible(item.label, w)
+              return visible ? (
+                <span className="pointer-events-none relative px-1 text-[11px]" title={item.label}>
+                  {visible}
+                </span>
+              ) : null
+            })()
+          : null}
+        {item.lane === 'video'
+          ? (() => {
+              const visible = timelineClipLabelVisible(item.label, w)
+              return visible ? (
+                <span
+                  className="pointer-events-none absolute left-1 top-0 z-[1] rounded-sm bg-black/45 px-0.5 text-[11px] text-white/90"
+                  title={item.label}
+                >
+                  {visible}
+                </span>
+              ) : null
+            })()
+          : null}
         {item.lane === 'video' && item.srcInMs != null && item.srcOutMs != null && edits.segmentSpeeds?.length
           ? (() => {
               const s = itemSpeed(edits, item.srcInMs, item.srcOutMs)

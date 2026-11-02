@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { PrimaryButton } from '@/components/app/primary-button'
+import { Segmented } from '@/components/app/segmented'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,6 +30,14 @@ import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type SourceTab = 'prompt' | 'script' | 'url' | 'deck' | 'audio'
+
+const SOURCE_TABS: { id: SourceTab; label: string }[] = [
+  { id: 'prompt', label: 'Idea' },
+  { id: 'script', label: 'Script' },
+  { id: 'url', label: 'URL / Blog' },
+  { id: 'deck', label: 'PPT / PDF' },
+  { id: 'audio', label: 'Audio' },
+]
 
 const ASPECTS: T2vAspect[] = ['16:9', '9:16', '1:1', '4:5']
 const LENGTHS: Array<30 | 60 | 90 | 120 | 180> = [30, 60, 90, 120, 180]
@@ -60,6 +69,26 @@ export function T2vCreateWorkspace() {
   const [sceneSplit, setSceneSplit] = useState<T2vDraftV1['settings']['sceneSplit']>('sentence')
   const [voice, setVoice] = useState<T2vVoiceSettings>(DEFAULT_T2V_VOICE)
   const [writingScript, setWritingScript] = useState(false)
+  const [templateName, setTemplateName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!templateId) {
+      setTemplateName(null)
+      return
+    }
+    void fetch('/api/t2v/templates')
+      .then((r) => r.json())
+      .then((b) => {
+        const hit = (b.data?.templates ?? []).find((t: { id: string; name: string }) => t.id === templateId)
+        setTemplateName(hit?.name ?? templateId)
+      })
+      .catch(() => setTemplateName(templateId))
+  }, [templateId])
+
+  const sourceTypeLabel = useMemo(() => {
+    const row = SOURCE_TABS.find((t) => t.id === tab)
+    return row?.label ?? tab
+  }, [tab])
 
   useEffect(() => {
     void fetch('/api/t2v/config')
@@ -229,33 +258,18 @@ export function T2vCreateWorkspace() {
   return (
     <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h1 className="text-xl font-semibold">AI Video</h1>
-            <p className="text-sm text-muted-foreground">Idea, script, link, or deck → finished video</p>
-          </div>
-          <Link href="/app/clips/video/templates" className="text-sm text-primary">Browse templates</Link>
+        <div className="flex flex-wrap items-end justify-end gap-2">
+          <Link href="/app/clips/video/templates" className="text-sm text-primary">
+            Browse templates
+          </Link>
         </div>
-        <div className="flex flex-wrap gap-1 rounded-lg border border-border p-1">
-          {(['prompt', 'script', 'url', 'deck', 'audio'] as SourceTab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={cn('flex-1 rounded-md py-2 text-sm capitalize', tab === t && 'bg-muted font-medium')}
-              onClick={() => setTab(t)}
-            >
-              {t === 'prompt'
-                ? 'Idea'
-                : t === 'url'
-                  ? 'URL / Blog'
-                  : t === 'deck'
-                    ? 'PPT / PDF'
-                    : t === 'audio'
-                      ? 'Audio'
-                      : 'Script'}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          className="flex w-full flex-wrap"
+          aria-label="Input type"
+          items={SOURCE_TABS}
+          value={tab}
+          onChange={(id) => setTab(id as SourceTab)}
+        />
         {tab === 'prompt' && (
           <Textarea rows={6} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="60-second explainer on how solar panels work…" />
         )}
@@ -361,32 +375,61 @@ export function T2vCreateWorkspace() {
             ) : null}
           </div>
         )}
-        <div className="flex flex-wrap gap-2">
-          {ASPECTS.map((a) => (
-            <button
-              key={a}
-              type="button"
-              className={cn('rounded-md border px-2 py-1 text-xs', aspect === a && 'border-primary')}
-              onClick={() => setAspect(a)}
-            >
-              {a}
-            </button>
-          ))}
-          {LENGTHS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={cn('rounded-md border px-2 py-1 text-xs', targetDurationS === s && 'border-primary')}
-              onClick={() => setTargetDurationS(s)}
-            >
-              {s < 60 ? `${s}s` : `${s / 60}m`}
-            </button>
-          ))}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium text-muted-foreground">Aspect</span>
+            <Segmented
+              size="sm"
+              aria-label="Aspect ratio"
+              items={ASPECTS.map((a) => ({ id: a, label: a }))}
+              value={aspect}
+              onChange={(id) => setAspect(id as T2vAspect)}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium text-muted-foreground">Length</span>
+            <Segmented
+              size="sm"
+              aria-label="Target length"
+              items={LENGTHS.map((s) => ({
+                id: String(s),
+                label: s < 60 ? `${s}s` : `${s / 60}m`,
+              }))}
+              value={String(targetDurationS)}
+              onChange={(id) => setTargetDurationS(Number(id) as (typeof LENGTHS)[number])}
+            />
+          </div>
         </div>
       </div>
-      <aside className="space-y-4 rounded-xl border border-border p-4">
+      <aside className="flex min-h-[320px] flex-col gap-4 rounded-xl border border-border p-4">
         <p className="text-sm font-medium">Step 1 · Create</p>
-        <PrimaryButton className="w-full" disabled={!canContinue || loading} onClick={() => void onContinue()}>
+        <dl className="space-y-2 text-[13px]">
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Template</dt>
+            <dd className="text-right font-medium">{templateName ?? 'Default'}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Aspect</dt>
+            <dd className="font-medium">{aspect}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Length</dt>
+            <dd className="font-medium">{targetDurationS < 60 ? `${targetDurationS}s` : `${targetDurationS / 60} min`}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Source</dt>
+            <dd className="font-medium">{sourceTypeLabel}</dd>
+          </div>
+        </dl>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">What happens next</p>
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-[13px] text-muted-foreground">
+            <li>We save a draft project with your settings.</li>
+            <li>Step 2 lets you tune voice, tone, and visuals.</li>
+            <li>Then we generate a script and scene plan for the editor.</li>
+          </ul>
+        </div>
+        <PrimaryButton className="mt-auto w-full" disabled={!canContinue || loading} onClick={() => void onContinue()}>
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Continue →
         </PrimaryButton>

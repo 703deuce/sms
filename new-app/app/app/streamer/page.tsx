@@ -1,4 +1,4 @@
-import { Page, PageHeader } from '@/components/app/page-primitives'
+import { PageContainer, PageHeader } from '@/components/app/page-primitives'
 import { StreamerImportPanel } from '@/components/streamer/streamer-import-panel'
 import { ObsFallbackDocs } from '@/components/streamer/obs-fallback-docs'
 import { StreamerVodList } from '@/components/streamer/streamer-vod-list'
@@ -25,49 +25,56 @@ export default async function StreamerHubPage() {
     listStreamerChannels(workspaceId),
   ])
   return (
-    <Page>
+    <PageContainer className="max-w-none">
       <PageHeader
         icon={Radio}
         iconTone="brand"
         title="Streamer"
         description="VOD-first: import finished streams by link or upload. Chat replay and clip cues run on the recording after it is available."
       />
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-8">
-        <StreamerUsageMeter initial={usage} />
-        {!streamerLiveRealtimeEnabled() ? <StreamerLiveComingSoon /> : null}
-        <StreamerImportPanel usageInitial={usage} />
-        {flags.autopullUiEnabled ? (
-          <section className="rounded-lg border border-border p-4">
-            <Link href="/app/streamer/autopull" className="text-sm font-semibold text-primary hover:underline">
-              Auto-pull settings & incoming streams →
-            </Link>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Connect Twitch/Kick, toggle auto-import, and track replay → clips status. Notifications appear in the bell
-              when clips are ready.
-            </p>
+      <div className="grid gap-8 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="flex flex-col gap-8">
+          <StreamerUsageMeter initial={usage} />
+          {!streamerLiveRealtimeEnabled() ? <StreamerLiveComingSoon /> : null}
+          <StreamerImportPanel usageInitial={usage} />
+          {flags.autopullUiEnabled ? (
+            <section className="rounded-lg border border-border p-4">
+              <Link href="/app/streamer/autopull" className="text-sm font-semibold text-primary hover:underline">
+                Auto-pull settings & incoming streams →
+              </Link>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Connect Twitch/Kick, toggle auto-import, and track replay → clips status. Notifications appear in the bell
+                when clips are ready.
+              </p>
+            </section>
+          ) : null}
+          <section className="space-y-3 rounded-lg border border-border p-4">
+            <h2 className="text-sm font-semibold">Channels</h2>
+            <StreamerOAuthButtons />
+            <ul className="space-y-2 text-sm">
+              {channels.map((ch) => (
+                <li key={ch.id}>
+                  <Link href={`/app/streamer/channels/${ch.id}`} className="text-primary hover:underline">
+                    {ch.displayName || ch.login}
+                  </Link>
+                  <span className="text-muted-foreground">
+                    {' '}
+                    · {ch.platform} · {ch.status}
+                  </span>
+                </li>
+              ))}
+              {channels.length === 0 ? (
+                <li className="text-muted-foreground">Connect a channel or paste a VOD below.</li>
+              ) : null}
+            </ul>
           </section>
-        ) : null}
-        <section className="space-y-3 rounded-lg border border-border p-4">
-          <h2 className="text-sm font-semibold">Channels</h2>
-          <StreamerOAuthButtons />
-          <ul className="space-y-2 text-sm">
-            {channels.map((ch) => (
-              <li key={ch.id}>
-                <Link href={`/app/streamer/channels/${ch.id}`} className="text-primary hover:underline">
-                  {ch.displayName || ch.login}
-                </Link>
-                <span className="text-muted-foreground"> · {ch.platform} · {ch.status}</span>
-              </li>
-            ))}
-            {channels.length === 0 ? <li className="text-muted-foreground">Connect a channel or paste a VOD below.</li> : null}
-          </ul>
-        </section>
-        <ObsFallbackDocs />
-        <div className="space-y-3">
+          <ObsFallbackDocs />
+        </div>
+        <div className="min-w-0 space-y-3">
           <h2 className="text-sm font-semibold text-foreground">Your VOD imports</h2>
           <StreamerVodList rows={vods} />
         </div>
       </div>
-    </Page>
+    </PageContainer>
   )
 }

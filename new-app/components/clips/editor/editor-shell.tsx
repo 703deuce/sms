@@ -1771,6 +1771,9 @@ export function EditorShell({
               ]?.locked,
           )}
           onReplaceBroll={setReplaceBrollId}
+          onOpenTextPanel={() => selectPanel('text')}
+          onOpenCaptionsPanel={() => selectPanel('captions')}
+          onOpenLayoutPanel={() => selectPanel('layout')}
           speedSlot={
             selVideoSeg ? (
               <ItemSpeedControl

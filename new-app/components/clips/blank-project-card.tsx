@@ -6,7 +6,9 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Loader2, Square } from 'lucide-react'
 import { createBlankProject } from '@/lib/clips-api'
-import { cn } from '@/lib/utils'
+import { OptionCard } from '@/components/app/option-card'
+import { Segmented } from '@/components/app/segmented'
+import { PrimaryButton } from '@/components/app/primary-button'
 
 const ASPECTS = [
   { id: '9:16', label: '9:16', hint: 'Shorts / Reels' },
@@ -30,41 +32,26 @@ export function BlankProjectCard() {
     }
   }
   return (
-    <section className="mb-6 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center" data-testid="new-project-blank">
-      <div className="flex items-center gap-2">
-        <span className="grid size-10 place-items-center rounded-lg bg-muted">
-          <Square className="size-5 text-primary" aria-hidden />
-        </span>
-        <div>
-          <div className="text-sm font-semibold">Blank project</div>
-          <div className="text-xs text-muted-foreground">Start from an empty canvas, then add media in the editor</div>
-        </div>
-      </div>
-      <div className="flex flex-1 flex-wrap items-center gap-1 sm:justify-end" role="radiogroup" aria-label="Canvas aspect ratio">
-        {ASPECTS.map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            role="radio"
-            aria-checked={aspect === a.id}
-            title={a.hint}
-            onClick={() => setAspect(a.id)}
-            className={cn('rounded-md border px-2 py-1 text-xs', aspect === a.id ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground')}
-            data-testid={`blank-aspect-${a.id}`}
-          >
-            {a.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => void start()}
-          disabled={busy}
-          className="ml-1 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-60"
-          data-testid="blank-start"
-        >
-          {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
+    <section className="mb-6 space-y-3" data-testid="new-project-blank">
+      <OptionCard
+        selected={false}
+        icon={Square}
+        title="Blank project"
+        hint="Start from an empty canvas, then add media in the editor"
+        className="min-h-[72px]"
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3">
+        <Segmented
+          size="sm"
+          aria-label="Canvas aspect ratio"
+          items={ASPECTS.map((a) => ({ id: a.id, label: a.label }))}
+          value={aspect}
+          onChange={(id) => setAspect(id as (typeof ASPECTS)[number]['id'])}
+        />
+        <PrimaryButton size="sm" disabled={busy} onClick={() => void start()} data-testid="blank-start">
+          {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
           Create
-        </button>
+        </PrimaryButton>
       </div>
     </section>
   )

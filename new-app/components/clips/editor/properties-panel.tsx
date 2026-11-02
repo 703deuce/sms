@@ -9,7 +9,19 @@
 import { rotateBy90 } from '@/lib/clips/editor/canvas-ops'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import { ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronUp, Crop, Diamond, MoveHorizontal, MoveVertical, RotateCcw, Trash2 } from 'lucide-react'
+import {
+  ArrowDownToLine,
+  ArrowUpToLine,
+  ChevronDown,
+  ChevronUp,
+  Crop,
+  Diamond,
+  MousePointerClick,
+  MoveHorizontal,
+  MoveVertical,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
   CROP_PROPS,
@@ -120,6 +132,9 @@ export function PropertiesPanel({
   videoSlot,
   brollSceneSlot,
   onReplaceBroll,
+  onOpenTextPanel,
+  onOpenCaptionsPanel,
+  onOpenLayoutPanel,
 }: {
   edits: ClipEditsV2
   target: KeyframeTarget | null
@@ -140,6 +155,9 @@ export function PropertiesPanel({
   brollSceneSlot?: (id: string) => ReactNode
   /** FV-19: open replace-media dialog for the selected B-roll item. */
   onReplaceBroll?: (brollId: string) => void
+  onOpenTextPanel?: () => void
+  onOpenCaptionsPanel?: () => void
+  onOpenLayoutPanel?: () => void
 }) {
   const avail = tabsFor(target)
   const [tab, setTab] = useState<PropertiesTab>('video')
@@ -180,10 +198,32 @@ export function PropertiesPanel({
         })}
       </div>
       {!target ? (
-        <p className="text-xs text-muted-foreground" data-testid="properties-empty">
-          Click a layer in the preview (video, B-roll, text, hook) or an item on the timeline. Drag it to move, drag a
-          corner to resize, use the round handle to rotate; double-click text to edit it.
-        </p>
+        <div
+          className="flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/80 bg-muted/30 px-4 py-8 text-center"
+          data-testid="properties-empty"
+        >
+          <MousePointerClick className="size-5 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+          <p className="max-w-[240px] text-[13px] text-muted-foreground">
+            Select a clip, caption or text to edit its properties
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button type="button" size="sm" variant="secondary" disabled={!onOpenTextPanel} onClick={onOpenTextPanel}>
+              Add text
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={!onOpenCaptionsPanel}
+              onClick={onOpenCaptionsPanel}
+            >
+              Captions style
+            </Button>
+            <Button type="button" size="sm" variant="secondary" disabled={!onOpenLayoutPanel} onClick={onOpenLayoutPanel}>
+              Layout
+            </Button>
+          </div>
+        </div>
       ) : tab === 'video' && avail.video == null ? (
         <>
           <VideoTab

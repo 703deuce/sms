@@ -37,6 +37,10 @@ export function ProjectCard({
   const href = t2vProjectHref(project)
   const displayThumb = thumbUrl ?? project.sourceThumbUrl ?? null
   const isDraft = project.status === 'DRAFT'
+  const failed = project.status === 'FAILED'
+  const noThumb = !displayThumb
+  const showThumbOverlay = processing && displayThumb
+  const showPlaceholderStatus = (processing || failed) && noThumb
   const KindIcon = isT2v ? Clapperboard : project.sourceUrl ? Radio : Film
 
   return (
@@ -74,11 +78,16 @@ export function ProjectCard({
               <span className="grid size-10 place-items-center rounded-lg bg-background/60">
                 <KindIcon className="size-6 text-muted-foreground" aria-hidden />
               </span>
-              <p className="text-[13px] font-medium">{isDraft ? 'Draft' : 'No preview yet'}</p>
-              <p className="text-xs text-muted-foreground">
-                {isDraft ? 'Add media to start' : 'No preview yet'}
+              <p className="text-[13px] font-medium">
+                {isDraft ? 'Draft' : showPlaceholderStatus ? overlayLabel : 'No preview yet'}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {isDraft ? 'Add media to start' : showPlaceholderStatus ? stageLabel : 'No preview yet'}
               </p>
             </div>
+            {showPlaceholderStatus && processing ? (
+              <Loader2 className="absolute bottom-4 size-6 animate-spin text-muted-foreground" aria-hidden />
+            ) : null}
           </div>
         )}
         <div className="absolute left-2 top-2 z-10 flex gap-1.5">
@@ -89,26 +98,29 @@ export function ProjectCard({
             <Badge variant="onMedia">{t2vLabel}</Badge>
           )}
         </div>
-        {durationMs > 0 && !processing && (
-          <DurationChip ms={durationMs} />
-        )}
-        {processing && (
+        {durationMs > 0 && !processing && <DurationChip ms={durationMs} />}
+        {showThumbOverlay ? (
           <div
             className="absolute inset-0 flex flex-col items-center justify-end bg-gradient-to-t from-black/75 via-black/25 to-transparent px-3 pb-3 pt-10"
             aria-live="polite"
           >
             <Loader2 className="size-7 animate-spin text-white" aria-hidden />
-            <span className="mt-2 text-center text-xs font-medium leading-snug text-white">{overlayLabel}</span>
+            <span className="mt-2 text-center text-[11px] font-medium leading-snug text-white">{overlayLabel}</span>
             <ProjectCardQueueHint projectId={project.id} processing={processing} />
             {stageLabel.toLowerCase() !== overlayLabel.toLowerCase() ? (
               <span className="mt-0.5 text-center text-[11px] text-white/80 capitalize">{stageLabel}</span>
             ) : null}
           </div>
-        )}
+        ) : null}
+        {showPlaceholderStatus && processing ? (
+          <div className="absolute bottom-2 left-0 right-0 px-2 text-center text-[11px] text-muted-foreground">
+            <ProjectCardQueueHint projectId={project.id} processing={processing} />
+          </div>
+        ) : null}
       </div>
       <div className="p-3.5">
-        <p className="line-clamp-1 text-sm font-medium group-hover:text-primary">{project.title}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <p className="line-clamp-1 text-[13px] font-medium group-hover:text-primary">{project.title}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <Sparkles className="size-3.5" aria-hidden />
             {isT2v

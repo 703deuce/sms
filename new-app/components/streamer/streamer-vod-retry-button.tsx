@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { clipsFetch } from '@/lib/clips-api'
 
-export function StreamerVodRetryButton({ projectId }: { projectId: string }) {
+export function StreamerVodRetryButton({ projectId, disabled }: { projectId: string; disabled?: boolean }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
 
@@ -14,7 +14,7 @@ export function StreamerVodRetryButton({ projectId }: { projectId: string }) {
     <Button
       size="sm"
       variant="outline"
-      disabled={busy}
+      disabled={busy || disabled}
       onClick={() => {
         setBusy(true)
         void (async () => {
