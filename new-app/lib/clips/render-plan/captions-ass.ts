@@ -51,8 +51,10 @@ const isDict = (v: unknown): v is Dict => typeof v === 'object' && v !== null &&
 
 export function resolveAssFontName(cap: Dict, preset: Preset): string {
   const raw = String(or(cap.font, preset.font, 'Poppins')).trim()
+  if (cap._userFont === true && raw) return raw
   const canonical = ASS_FONT_ALIASES[raw] ?? raw
-  return ASS_FONT_FILES.has(canonical) ? canonical : 'Poppins ExtraBold'
+  if (ASS_FONT_FILES.has(canonical)) return canonical
+  return 'Poppins ExtraBold'
 }
 
 export function hexToAss(hex: string): string {

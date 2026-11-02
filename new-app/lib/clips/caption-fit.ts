@@ -10,6 +10,8 @@
 import METRICS from '@/lib/clips/caption-fit-metrics.json'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { exportPixelSize } from '@/lib/clips/export-aspect'
+import { workspaceFontForCaption } from '@/lib/clips/caption-user-font'
+import type { WorkspaceFont } from '@/lib/clips/fonts-shared'
 import { resolvePreset } from '@/lib/clips/caption-presets'
 import { effectiveCaptionEdits, resolveT6CaptionPreset } from '@/lib/clips/caption-v2-bridge'
 
@@ -47,6 +49,8 @@ export function roundHalfUp(x: number): number {
 
 export function assFontName(raw: string | undefined | null): string {
   const name = String(raw ?? '').trim() || 'Poppins'
+  if (name.startsWith('user:')) return 'Poppins ExtraBold'
+  if (Object.hasOwn(USER, name)) return name
   return ASS_FONT_ALIASES[name] ?? (Object.hasOwn(USER, name) ? name : 'Poppins ExtraBold')
 }
 
@@ -326,12 +330,15 @@ export function captionFitConfigForEdits(
   captions: Parameters<typeof effectiveCaptionEdits>[0] & CapLike,
   t6Caps: boolean,
   aspect: ExportAspect = '9:16',
+  workspaceFonts: WorkspaceFont[] = [],
 ): CaptionFitConfig {
   const cap = effectiveCaptionEdits(captions ?? {}, t6Caps) as CapLike
+  const userRow = workspaceFontForCaption(cap.font, workspaceFonts)
+  const capForFit = userRow ? { ...cap, font: userRow.family } : cap
   const preset = resolveT6CaptionPreset(captions as Parameters<typeof resolveT6CaptionPreset>[0], t6Caps) as PresetLike
   const id = String(captions?.presetId ?? '').trim() || 'bold_pop'
   return captionFitConfig({
-    cap,
+    cap: capForFit,
     preset,
     basePresetSizePct: resolvePreset(id).sizePct,
     cpMode: t6Caps && id.startsWith('cp'),

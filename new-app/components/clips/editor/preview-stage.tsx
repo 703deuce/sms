@@ -79,6 +79,8 @@ import { buildPreviewScripts, PREVIEW_SCRIPT_ORDER, UNDER_Z_BASE, type PreviewSc
 import { underPasses } from '@/lib/clips/editor/tracks'
 import { useWorkspaceFonts } from '@/components/clips/editor/use-workspace-fonts'
 import { registerFontsFromItems } from '@/lib/clips/editor/workspace-fonts'
+import { captionEditsForAssPreview, registerCaptionUserFont } from '@/lib/clips/caption-user-font'
+import { userFontId } from '@/lib/clips/render-plan/text-rich'
 
 /** G1b: the Text script counts as present when only under-text canvases carry text items. */
 function hasScript(scripts: PreviewScripts, k: PreviewScriptKey): boolean {
@@ -1116,15 +1118,26 @@ export function PreviewStage({
   const underZRef = useRef(underZ)
   underZRef.current = underZ
   // G3b: workspace fonts used by text items → metrics + JASSUB URLs registered before the build.
-  const usesUserFonts = (lookEdits.textItems ?? []).some((t) => String(t.style?.font ?? '').startsWith('user:'))
-  const userFonts = useWorkspaceFonts(usesUserFonts)
+  const captionUserFontId = userFontId(String(lookEdits.captions?.font ?? ''))
+  const usesUserFonts =
+    Boolean(captionUserFontId) ||
+    (lookEdits.textItems ?? []).some((t) => String(t.style?.font ?? '').startsWith('user:'))
+  const userFonts = useWorkspaceFonts(usesUserFonts || libassWanted)
   const libassScripts = useMemo(() => {
     if (!libassWanted || libassFailed) return null
     try {
       if (usesUserFonts) registerFontsFromItems(lookEdits.textItems)
+      if (captionUserFontId) registerCaptionUserFont(String(lookEdits.captions?.font ?? ''), userFonts.fonts)
+      const editsForAss =
+        captionUserFontId && lookEdits.captions
+          ? {
+              ...lookEdits,
+              captions: captionEditsForAssPreview(lookEdits.captions as Record<string, unknown>, userFonts.fonts),
+            }
+          : lookEdits
       const mode = previewLayoutMode(lookEdits)
       return buildPreviewScripts({
-        edits: lookEdits as unknown as Record<string, unknown>,
+        edits: editsForAss as unknown as Record<string, unknown>,
         words: lookEdits.captions?.enabled === false ? [] : captionWords,
         playW: templatePreview?.playW ?? libassPlay.width,
         playH: templatePreview?.playH ?? libassPlay.height,
@@ -1143,7 +1156,7 @@ export function PreviewStage({
       console.warn('[clipper:preview] libass_scripts_fail', err)
       return null
     }
-  }, [libassWanted, libassFailed, lookEdits, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions, underPassList, usesUserFonts, userFonts.version])
+  }, [libassWanted, libassFailed, lookEdits, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions, underPassList, usesUserFonts, captionUserFontId, userFonts.version])
   const onLibassStatus = useCallback<LibassStatusFn>((key, status, info) => {
     setLibassStatus((prev) => (prev[key] === status ? prev : { ...prev, [key]: status }))
     logEditorDecision('preview_ready', { renderer: 'libass', layer: key, status, ...info })
