@@ -241,6 +241,7 @@ export function MediaPanel({
   onAdd,
   onReplaceSelected,
   onEdits,
+  onEditsPass,
   playheadSourceMs,
   onSeekSource,
   monitorRequest = null,
@@ -259,6 +260,8 @@ export function MediaPanel({
   onAdd: (item: ProjectMediaItem, lane: MediaDropLane) => void
   onReplaceSelected: (item: ProjectMediaItem) => void
   onEdits: (next: ClipEditsV2) => void
+  /** One named undo step (e.g. multicam auto-switch). */
+  onEditsPass?: (next: ClipEditsV2, label: string) => void
   playheadSourceMs: number
   onSeekSource: (sourceMs: number) => void
   /** G1c: match frame / open request for the source monitor. */
@@ -324,7 +327,8 @@ export function MediaPanel({
       edits.trim.out,
       shots,
     )
-    onEdits(next)
+    if (onEditsPass) onEditsPass(next, 'Auto camera cuts')
+    else onEdits(next)
     toast.success(
       generated.length
         ? `${generated.length} auto cut${generated.length === 1 ? '' : 's'} in open gaps`
