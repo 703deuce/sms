@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
 import { EditorRail, EDITOR_RAIL_ITEMS, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
+import { EditorLayout, useEditorBand, aspectCssToNumber } from '@/components/clips/editor/editor-layout'
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
@@ -307,12 +308,18 @@ export function EditorShell({
   const pendingApplyDone = useRef(false)
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
+  const band = useEditorBand()
   const selectPanel = useCallback((id: EditorPanelId) => {
     setPanel(id)
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+    if (band === 'mobile' || band === 'compact') {
       setMobilePanelOpen(true)
     }
-  }, [])
+  }, [band])
+  useEffect(() => {
+    if (band === 'wide' && panel === 'inspector') {
+      setPanel('transcript')
+    }
+  }, [band, panel])
   const openLayersTab = useCallback(() => selectPanel('layers'), [selectPanel])
 
   // G4cfix2: every B2 medium on the editor route in CORS mode (+ recovery of pre-hydration failures).
@@ -1733,6 +1740,104 @@ export function EditorShell({
     toast.success('Auto template applied')
   }, [edits, setEdits, streamerSide])
 
+  const renderInspectorPropertiesPanel = () =>
+    panelMounted('inspector') ? (
+      <EditorPanelErrorBoundary label="Properties">
+        <PropertiesPanel
+          edits={edits}
+          target={canvasSel?.target ?? null}
+          label={canvasSel?.label ?? ''}
+          outputMs={outputMs}
+          onCommit={(next) => setEdits(next)}
+          onSeekOutput={seekOutput}
+          cropMode={cropMode}
+          onCropModeChange={setCropMode}
+          readOnly={Boolean(
+            canvasSel &&
+              edits.timelineLanes?.[
+                canvasSel.target === 'video'
+                  ? 'video'
+                  : canvasSel.target.startsWith('broll:')
+                    ? 'broll'
+                    : canvasSel.target === 'voice'
+                      ? 'voice'
+                      : canvasSel.target === 'music'
+                        ? 'music'
+                        : canvasSel.target.startsWith('sfx:')
+                          ? 'sfx'
+                          : canvasSel.target.startsWith('adjust:')
+                            ? 'adjust'
+                            : 'text'
+              ]?.locked,
+          )}
+          onReplaceBroll={setReplaceBrollId}
+          speedSlot={
+            selVideoSeg ? (
+              <ItemSpeedControl
+                edits={edits}
+                srcInMs={selVideoSeg.srcInMs}
+                srcOutMs={selVideoSeg.srcOutMs}
+                onCommit={(next) => setEdits(next)}
+                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+              />
+            ) : null
+          }
+          brollSceneSlot={(id) => {
+            const b = (edits.broll ?? []).find((x) => x.id === id)
+            const m = previewBrollMedia.find((x) => x.id === id)
+            if (!b || !m?.url || m.mediaType === 'image' || ('still' in b && b.still)) return null
+            const inMs = b.inMs ?? 0
+            return (
+              <MediaSceneSplit
+                edits={edits}
+                kind="broll"
+                id={id}
+                url={m.url}
+                inMs={inMs}
+                outMs={inMs + (b.endMs - b.startMs)}
+                onCommit={(next) => setEdits(next)}
+                readOnly={Boolean(edits.timelineLanes?.broll?.locked)}
+              />
+            )
+          }}
+          videoSlot={
+            <>
+              <MainVideoTools
+                edits={edits}
+                videoItem={selVideoSeg ? { srcInMs: selVideoSeg.srcInMs, srcOutMs: selVideoSeg.srcOutMs } : null}
+                outputMs={outputMs}
+                durationMs={outDur}
+                onCommit={(next) => setEdits(next)}
+                onSeekOutput={seekOutput}
+                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+              />
+              <CanvasBackgroundSection
+                edits={edits}
+                media={media}
+                projectId={projectId}
+                clipId={clipId}
+                compositeLocked={compositePreviewClip}
+                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+                onCommit={(next) => setEdits(next)}
+              />
+            </>
+          }
+          colorSlot={
+            <ColorPanel
+              edits={edits}
+              target={colorTarget}
+              onEdits={setEdits}
+              onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)}
+              outputMs={outputMs}
+              outputDurationMs={outDur}
+              onSeekOutput={seekOutput}
+              onTargetChange={setColorTarget}
+            />
+          }
+        />
+      </EditorPanelErrorBoundary>
+    ) : null
+
   const panelBody = (
     <>
       <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
@@ -2121,102 +2226,9 @@ export function EditorShell({
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
-      {panelMounted('inspector') ? (
+      {band !== 'wide' && panelMounted('inspector') ? (
         <div className={panel === 'inspector' ? undefined : 'hidden'} aria-hidden={panel !== 'inspector'} data-testid="editor-panel-inspector">
-          <EditorPanelErrorBoundary label="Properties">
-          <PropertiesPanel
-            edits={edits}
-            target={canvasSel?.target ?? null}
-            label={canvasSel?.label ?? ''}
-            outputMs={outputMs}
-            onCommit={(next) => setEdits(next)}
-            onSeekOutput={seekOutput}
-            cropMode={cropMode}
-            onCropModeChange={setCropMode}
-            readOnly={Boolean(
-              canvasSel &&
-                edits.timelineLanes?.[
-                  canvasSel.target === 'video'
-                    ? 'video'
-                    : canvasSel.target.startsWith('broll:')
-                      ? 'broll'
-                      : canvasSel.target === 'voice'
-                        ? 'voice'
-                        : canvasSel.target === 'music'
-                          ? 'music'
-                          : canvasSel.target.startsWith('sfx:')
-                            ? 'sfx'
-                            : canvasSel.target.startsWith('adjust:')
-                              ? 'adjust'
-                              : 'text'
-                ]?.locked,
-            )}
-            onReplaceBroll={setReplaceBrollId}
-            speedSlot={
-              selVideoSeg ? (
-                <ItemSpeedControl
-                  edits={edits}
-                  srcInMs={selVideoSeg.srcInMs}
-                  srcOutMs={selVideoSeg.srcOutMs}
-                  onCommit={(next) => setEdits(next)}
-                  readOnly={Boolean(edits.timelineLanes?.video?.locked)}
-                />
-              ) : null
-            }
-            brollSceneSlot={(id) => {
-              const b = (edits.broll ?? []).find((x) => x.id === id)
-              const m = previewBrollMedia.find((x) => x.id === id)
-              if (!b || !m?.url || m.mediaType === 'image' || ('still' in b && b.still)) return null
-              const inMs = b.inMs ?? 0
-              return (
-                <MediaSceneSplit
-                  edits={edits}
-                  kind="broll"
-                  id={id}
-                  url={m.url}
-                  inMs={inMs}
-                  outMs={inMs + (b.endMs - b.startMs)}
-                  onCommit={(next) => setEdits(next)}
-                  readOnly={Boolean(edits.timelineLanes?.broll?.locked)}
-                />
-              )
-            }}
-            videoSlot={
-              <>
-                <MainVideoTools
-                  edits={edits}
-                  videoItem={selVideoSeg ? { srcInMs: selVideoSeg.srcInMs, srcOutMs: selVideoSeg.srcOutMs } : null}
-                  outputMs={outputMs}
-                  durationMs={outDur}
-                  onCommit={(next) => setEdits(next)}
-                  onSeekOutput={seekOutput}
-                  readOnly={Boolean(edits.timelineLanes?.video?.locked)}
-                />
-                <CanvasBackgroundSection
-                  edits={edits}
-                  media={media}
-                  projectId={projectId}
-                  clipId={clipId}
-                  compositeLocked={compositePreviewClip}
-                  readOnly={Boolean(edits.timelineLanes?.video?.locked)}
-                  onCommit={(next) => setEdits(next)}
-                />
-              </>
-            }
-            colorSlot={
-              <ColorPanel
-              edits={edits}
-              target={colorTarget}
-              onEdits={setEdits}
-              onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)}
-              outputMs={outputMs}
-              outputDurationMs={outDur}
-              onSeekOutput={seekOutput}
-              onTargetChange={setColorTarget}
-            />
-            }
-          />
-          </EditorPanelErrorBoundary>
+          {renderInspectorPropertiesPanel()}
         </div>
       ) : null}
       {panelMounted('color') ? (
@@ -2274,8 +2286,9 @@ export function EditorShell({
 
   return (
     <div
+      data-testid="editor-shell-root"
       className={cn(
-        'flex h-[calc(100dvh-3.5rem)] max-w-[100vw] flex-col overflow-x-hidden bg-background',
+        'flex h-dvh min-h-0 flex-col overflow-hidden bg-background',
         clipEditorAnton.variable,
         clipEditorMontserrat.variable,
         clipEditorPoppins.variable,
@@ -2408,16 +2421,53 @@ export function EditorShell({
         targetGapSec={gapToolSettings.targetGapSec}
         onTargetGapSecChange={(n) => setGapToolSettings((s) => ({ ...s, targetGapSec: n }))}
       />
-      <EditorMobileRail active={panel} onChange={selectPanel} />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_56px_minmax(0,380px)] xl:grid-cols-[minmax(0,1fr)_56px_minmax(0,420px)]">
-        <section className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-x-hidden overflow-y-auto p-2 sm:p-3 md:p-4">
-          <div className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4">
-            <div className="flex w-full max-w-full items-stretch justify-center gap-2">
-            <div
-              ref={previewFrameRef}
-              className="relative h-full max-h-full min-w-0 flex-1 w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
-              style={{ aspectRatio: aspectStyle }}
-            >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <EditorLayout
+          band={band}
+          panelOpen={mobilePanelOpen}
+          onClosePanel={() => setMobilePanelOpen(false)}
+          rail={
+            <>
+              <EditorMobileRail active={panel} onChange={selectPanel} />
+              <div className="hidden min-h-0 lg:block">
+                <EditorRail
+                  active={panel}
+                  onChange={selectPanel}
+                  hiddenIds={band === 'wide' ? ['inspector'] : []}
+                />
+              </div>
+            </>
+          }
+          panel={
+            <>
+              <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
+                <TabIcon className="size-4 text-muted-foreground" aria-hidden />
+                <h2 className="text-sm font-semibold">{meta.label}</h2>
+                <span className="ml-auto text-xs text-muted-foreground">{meta.hint}</span>
+                {band === 'mobile' || band === 'compact' ? (
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setMobilePanelOpen(false)}>
+                    Close
+                  </Button>
+                ) : null}
+              </div>
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="p-4">{panelBody}</div>
+              </ScrollArea>
+            </>
+          }
+          preview={
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-2 sm:p-3">
+              <div
+                className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4 [container-type:size]"
+              >
+                <div
+                  ref={previewFrameRef}
+                  className="relative max-h-full min-w-0 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
+                  style={{
+                    aspectRatio: aspectStyle,
+                    width: `min(100%, calc(100cqh * ${aspectCssToNumber(previewAspect)}))`,
+                  }}
+                >
             {(edits.layout.shotOverrides?.length ?? 0) > 0 ? (
               <span
                 className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15"
@@ -2438,153 +2488,6 @@ export function EditorShell({
                 {pendingDerivedClipId === 'pending' ? 'Creating clip…' : 'New clip saved'}
               </Badge>
             ) : null}
-            <PreviewChipRow>
-              <button type="button" className={previewChipButtonClass()} onClick={toggleLoopFriendly}>
-                {previewFrameW < 320
-                  ? `Loop ${edits.loopFriendlyEnd === false ? 'off' : 'on'}`
-                  : `Loop trim ${edits.loopFriendlyEnd === false ? 'off' : 'on'}`}
-              </button>
-              <button
-                type="button"
-                className={previewChipButtonClass()}
-                onClick={() => {
-                  const box = previewFrameRef.current
-                  if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
-                  else void box?.requestFullscreen?.().catch(() => {})
-                }}
-                title="Full-screen preview (Esc to leave)"
-                aria-label="Full screen"
-                data-testid="preview-fullscreen"
-              >
-                {previewFrameW < 320 ? '⛶' : '⛶ Full screen'}
-              </button>
-              <Select
-                value={previewQuality}
-                onValueChange={(v) => {
-                  if (v === 'auto' || v === 'full' || v === 'half') {
-                    setPreviewQuality(v)
-                    writePreviewQuality(v)
-                  }
-                }}
-              >
-                <SelectTrigger
-                  className={cn(previewChipButtonClass(), 'h-auto gap-1 border-0 px-2 py-1 shadow-none')}
-                  data-testid="preview-quality"
-                  title="Preview only — export is unaffected"
-                >
-                  <SelectValue>
-                    {previewFrameW < 320
-                      ? previewQuality === 'half'
-                        ? '½'
-                        : 'HD'
-                      : `Quality: ${previewQuality === 'auto' ? 'Auto' : previewQuality === 'full' ? 'Full' : 'Half'}`}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto" data-testid="preview-quality-auto">
-                    Auto
-                  </SelectItem>
-                  <SelectItem value="full" data-testid="preview-quality-full">
-                    Full
-                  </SelectItem>
-                  <SelectItem value="half" data-testid="preview-quality-half">
-                    Half
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <button
-                type="button"
-                className={previewChipButtonClass()}
-                data-testid="preview-zoom-out"
-                title="Zoom out"
-                onClick={() => setPreviewZoom((z) => nextZoom(z, -1, fitPct))}
-              >
-                −
-              </button>
-              {multicamGridEligible ? (
-                <button
-                  type="button"
-                  className={previewChipButtonClass(multicamGridOn ? 'ring-2 ring-primary' : undefined)}
-                  data-testid="preview-multicam-grid-toggle"
-                  title="Show all camera angles beside the preview"
-                  onClick={() => {
-                    setMulticamGridOn((on) => {
-                      const next = !on
-                      try {
-                        localStorage.setItem('transovo.multicam.grid', next ? '1' : '0')
-                      } catch {
-                        /* private mode */
-                      }
-                      return next
-                    })
-                  }}
-                >
-                  Angles
-                </button>
-              ) : null}
-              {previewFrameW >= 320 ? (
-                <div className="relative">
-                  <button
-                    type="button"
-                    className={previewChipButtonClass()}
-                    data-testid="preview-zoom-label"
-                    onClick={() => setZoomMenuOpen((o) => !o)}
-                  >
-                    {previewZoom === 'fit' ? `Fit · ${fitPct}%` : `${previewZoom}%`}
-                  </button>
-                  {zoomMenuOpen ? (
-                    <div className="absolute bottom-full left-0 z-[60] mb-1 flex flex-col rounded-md border border-border bg-popover p-1 shadow-md">
-                      <button
-                        type="button"
-                        className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                        data-testid="preview-zoom-fit"
-                        onClick={() => {
-                          setPreviewZoom('fit')
-                          setPreviewPan({ x: 0, y: 0 })
-                          setZoomMenuOpen(false)
-                        }}
-                      >
-                        Fit
-                      </button>
-                      {[25, 50, 75, 100, 150, 200].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                          data-testid={`preview-zoom-${n}`}
-                          onClick={() => {
-                            setPreviewZoom(n as PreviewZoom)
-                            setZoomMenuOpen(false)
-                          }}
-                        >
-                          {n}%
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              <button
-                type="button"
-                className={previewChipButtonClass()}
-                data-testid="preview-zoom-in"
-                title="Zoom in"
-                onClick={() => setPreviewZoom((z) => nextZoom(z, 1, fitPct))}
-              >
-                +
-              </button>
-              <CanvasBackgroundChip
-                edits={edits}
-                media={media}
-                projectId={projectId}
-                clipId={clipId}
-                visible={canvasBgChipVisible}
-                compositeLocked={compositePreviewClip}
-                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
-                onCommit={(next) => setEdits(next)}
-                narrow={previewFrameW < 320}
-              />
-            </PreviewChipRow>
             <EditorPanelErrorBoundary label="Preview">
             <PreviewStage
               videoUrl={videoUrl}
@@ -2649,9 +2552,8 @@ export function EditorShell({
               enabled={studioPreviewActive}
             />
             </EditorPanelErrorBoundary>
-            </div>
             {multicamGridOn && multicamGridEligible ? (
-              <div className="hidden w-full max-w-[min(40%,320px)] shrink-0 md:block">
+              <div className="absolute right-3 top-3 z-10 hidden w-[min(28%,240px)] xl:block">
                 <MulticamAngleGrid
                   edits={edits}
                   library={angleSources}
@@ -2675,10 +2577,10 @@ export function EditorShell({
                 />
               </div>
             ) : null}
-            </div>
-          </div>
-          {pickerWhy || detectedLayout || clipTypeLabel ? (
-            <div className="max-w-xl space-y-1 px-1">
+                </div>
+              </div>
+              {pickerWhy || detectedLayout || clipTypeLabel ? (
+                <div className="hidden max-w-xl space-y-1 px-1 2xl:block">
               {clipTypeLabel ? (
                 <p className="text-[10px] text-muted-foreground">
                   <span className="font-medium text-foreground">Clip type:</span> {clipTypeLabel}
@@ -2694,7 +2596,263 @@ export function EditorShell({
               ) : null}
             </div>
           ) : null}
-          <div className="min-w-0 w-full space-y-2">
+              <div className="min-w-0 shrink-0 space-y-2 border-t border-border pt-2">
+                <PreviewChipRow>
+                <button type="button" className={previewChipButtonClass()} onClick={toggleLoopFriendly}>
+                {previewFrameW < 320
+                ? `Loop ${edits.loopFriendlyEnd === false ? 'off' : 'on'}`
+                : `Loop trim ${edits.loopFriendlyEnd === false ? 'off' : 'on'}`}
+                </button>
+                <button
+                type="button"
+                className={previewChipButtonClass()}
+                onClick={() => {
+                const box = previewFrameRef.current
+                if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+                else void box?.requestFullscreen?.().catch(() => {})
+                }}
+                title="Full-screen preview (Esc to leave)"
+                aria-label="Full screen"
+                data-testid="preview-fullscreen"
+                >
+                {previewFrameW < 320 ? '⛶' : '⛶ Full screen'}
+                </button>
+                <Select
+                value={previewQuality}
+                onValueChange={(v) => {
+                if (v === 'auto' || v === 'full' || v === 'half') {
+                setPreviewQuality(v)
+                writePreviewQuality(v)
+                }
+                }}
+                >
+                <SelectTrigger
+                className={cn(previewChipButtonClass(), 'h-auto gap-1 border-0 px-2 py-1 shadow-none')}
+                data-testid="preview-quality"
+                title="Preview only — export is unaffected"
+                >
+                <SelectValue>
+                {previewFrameW < 320
+                ? previewQuality === 'half'
+                ? '½'
+                : 'HD'
+                : `Quality: ${previewQuality === 'auto' ? 'Auto' : previewQuality === 'full' ? 'Full' : 'Half'}`}
+                </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                <SelectItem value="auto" data-testid="preview-quality-auto">
+                Auto
+                </SelectItem>
+                <SelectItem value="full" data-testid="preview-quality-full">
+                Full
+                </SelectItem>
+                <SelectItem value="half" data-testid="preview-quality-half">
+                Half
+                </SelectItem>
+                </SelectContent>
+                </Select>
+                <button
+                type="button"
+                className={previewChipButtonClass()}
+                data-testid="preview-zoom-out"
+                title="Zoom out"
+                onClick={() => setPreviewZoom((z) => nextZoom(z, -1, fitPct))}
+                >
+                −
+                </button>
+                {multicamGridEligible ? (
+                <button
+                type="button"
+                className={previewChipButtonClass(multicamGridOn ? 'ring-2 ring-primary' : undefined)}
+                data-testid="preview-multicam-grid-toggle"
+                title="Show all camera angles beside the preview"
+                onClick={() => {
+                setMulticamGridOn((on) => {
+                const next = !on
+                try {
+                localStorage.setItem('transovo.multicam.grid', next ? '1' : '0')
+                } catch {
+                /* private mode */
+                }
+                return next
+                })
+                }}
+                >
+                Angles
+                </button>
+                ) : null}
+                {previewFrameW >= 320 ? (
+                <div className="relative">
+                <button
+                type="button"
+                className={previewChipButtonClass()}
+                data-testid="preview-zoom-label"
+                onClick={() => setZoomMenuOpen((o) => !o)}
+                >
+                {previewZoom === 'fit' ? `Fit · ${fitPct}%` : `${previewZoom}%`}
+                </button>
+                {zoomMenuOpen ? (
+                <div className="absolute bottom-full left-0 z-[60] mb-1 flex flex-col rounded-md border border-border bg-popover p-1 shadow-md">
+                <button
+                type="button"
+                className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                data-testid="preview-zoom-fit"
+                onClick={() => {
+                setPreviewZoom('fit')
+                setPreviewPan({ x: 0, y: 0 })
+                setZoomMenuOpen(false)
+                }}
+                >
+                Fit
+                </button>
+                {[25, 50, 75, 100, 150, 200].map((n) => (
+                <button
+                key={n}
+                type="button"
+                className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                data-testid={`preview-zoom-${n}`}
+                onClick={() => {
+                setPreviewZoom(n as PreviewZoom)
+                setZoomMenuOpen(false)
+                }}
+                >
+                {n}%
+                </button>
+                ))}
+                </div>
+                ) : null}
+                </div>
+                ) : null}
+                <button
+                type="button"
+                className={previewChipButtonClass()}
+                data-testid="preview-zoom-in"
+                title="Zoom in"
+                onClick={() => setPreviewZoom((z) => nextZoom(z, 1, fitPct))}
+                >
+                +
+                </button>
+                <CanvasBackgroundChip
+                edits={edits}
+                media={media}
+                projectId={projectId}
+                clipId={clipId}
+                visible={canvasBgChipVisible}
+                compositeLocked={compositePreviewClip}
+                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+                onCommit={(next) => setEdits(next)}
+                narrow={previewFrameW < 320}
+                />
+                </PreviewChipRow>
+                {clipRec.armed ? (
+                <ClipRecorderBar
+                mode={clipRec.mode}
+                recording={clipRec.recording}
+                countdown={clipRec.countdown}
+                recSeconds={clipRec.recSeconds}
+                cameras={clipRec.cameras}
+                mics={clipRec.mics}
+                cameraId={clipRec.cameraId}
+                micId={clipRec.micId}
+                onCameraId={clipRec.setCameraId}
+                onMicId={clipRec.setMicId}
+                countdownEnabled={clipRec.countdownEnabled}
+                onCountdownEnabled={clipRec.setCountdownEnabled}
+                mutePreview={clipRec.mutePreview}
+                onMutePreview={clipRec.setMutePreview}
+                placeMode={clipRec.placeMode}
+                onPlaceMode={clipRec.setPlaceMode}
+                bubbleOn={clipRec.bubbleOn}
+                onBubbleOn={clipRec.setBubbleOn}
+                bubbleCorner={clipRec.bubbleCorner}
+                onBubbleCorner={clipRec.setBubbleCorner}
+                bubbleSize={clipRec.bubbleSize}
+                onBubbleSize={clipRec.setBubbleSize}
+                analysers={clipRec.analysers}
+                previewStream={clipRec.previewStream}
+                teleprompterOpen={teleprompterOpen}
+                onTeleprompterOpen={setTeleprompterOpen}
+                scriptText={teleprompterScript}
+                onScriptText={saveTeleprompterScript}
+                onUseTranscript={() =>
+                saveTeleprompterScript(editorWords.map((w) => w.word).join(' '))
+                }
+                teleprompterPlaying={clipRec.teleprompterPlaying}
+                onDisarm={clipRec.disarm}
+                onStart={() => void beginClipRecording()}
+                onStop={() => void clipRec.stopRecording()}
+                onCancel={() => void clipRec.cancelRecording()}
+                />
+                ) : (
+                <PlayerControls
+                playing={playing}
+                outputMs={transportClockMs}
+                outputDurationMs={displayDur}
+                onToggle={() => void togglePlay()}
+                onScrub={seekDisplay}
+                showScrubber={false}
+                muted={playerMuted}
+                volume={playerVolume}
+                meterOn={meterOn}
+                onMeterToggle={() => setMeterOn((v) => !v)}
+                meterSlot={
+                meterOn ? <AudioMeter levels={peakLevels} voiceMetered={audioMeter.voiceMetered} /> : null
+                }
+                leadingSlot={
+                recordDevicesOk ? (
+                <ClipRecordMenu
+                onPick={(m) => {
+                clipRec.arm(m)
+                if (m === 'voiceover') selectPanel('media')
+                }}
+                onOpenAiVoiceover={() => selectPanel('audio')}
+                />
+                ) : (
+                <ClipRecordMenu disabled disabledReason="Recording needs a secure origin and microphone access" onPick={() => undefined} />
+                )
+                }
+                onMuteToggle={() => {
+                const v = videoRef.current
+                if (!v) return
+                const next = !playerMuted
+                setPlayerMuted(next)
+                v.muted = next
+                if (!next) {
+                v.volume = playerVolume / 100
+                void playWithSound(v)
+                }
+                }}
+                onVolumeChange={(pct) => {
+                setPlayerVolume(pct)
+                const v = videoRef.current
+                if (v) {
+                v.volume = pct / 100
+                if (pct > 0) {
+                v.muted = false
+                setPlayerMuted(false)
+                }
+                }
+                }}
+                />
+                )}
+              </div>
+            </div>
+          }
+          properties={
+            band === 'wide' ? (
+              <>
+                <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
+                  <h2 className="text-sm font-semibold">Properties</h2>
+                </div>
+                <ScrollArea className="min-h-0 flex-1">
+                  <div className="p-4" data-testid="editor-panel-inspector">
+                    {renderInspectorPropertiesPanel()}
+                  </div>
+                </ScrollArea>
+              </>
+            ) : null
+          }
+          timeline={
           <Timeline
             angleSources={angleSources}
             edits={edits}
@@ -2774,131 +2932,13 @@ export function EditorShell({
                 : undefined
             }
           />
-          {clipRec.armed ? (
-            <ClipRecorderBar
-              mode={clipRec.mode}
-              recording={clipRec.recording}
-              countdown={clipRec.countdown}
-              recSeconds={clipRec.recSeconds}
-              cameras={clipRec.cameras}
-              mics={clipRec.mics}
-              cameraId={clipRec.cameraId}
-              micId={clipRec.micId}
-              onCameraId={clipRec.setCameraId}
-              onMicId={clipRec.setMicId}
-              countdownEnabled={clipRec.countdownEnabled}
-              onCountdownEnabled={clipRec.setCountdownEnabled}
-              mutePreview={clipRec.mutePreview}
-              onMutePreview={clipRec.setMutePreview}
-              placeMode={clipRec.placeMode}
-              onPlaceMode={clipRec.setPlaceMode}
-              bubbleOn={clipRec.bubbleOn}
-              onBubbleOn={clipRec.setBubbleOn}
-              bubbleCorner={clipRec.bubbleCorner}
-              onBubbleCorner={clipRec.setBubbleCorner}
-              bubbleSize={clipRec.bubbleSize}
-              onBubbleSize={clipRec.setBubbleSize}
-              analysers={clipRec.analysers}
-              previewStream={clipRec.previewStream}
-              teleprompterOpen={teleprompterOpen}
-              onTeleprompterOpen={setTeleprompterOpen}
-              scriptText={teleprompterScript}
-              onScriptText={saveTeleprompterScript}
-              onUseTranscript={() =>
-                saveTeleprompterScript(editorWords.map((w) => w.word).join(' '))
-              }
-              teleprompterPlaying={clipRec.teleprompterPlaying}
-              onDisarm={clipRec.disarm}
-              onStart={() => void beginClipRecording()}
-              onStop={() => void clipRec.stopRecording()}
-              onCancel={() => void clipRec.cancelRecording()}
-            />
-          ) : (
-          <PlayerControls
-            playing={playing}
-            outputMs={transportClockMs}
-            outputDurationMs={displayDur}
-            onToggle={() => void togglePlay()}
-            onScrub={seekDisplay}
-            showScrubber={false}
-            muted={playerMuted}
-            volume={playerVolume}
-            meterOn={meterOn}
-            onMeterToggle={() => setMeterOn((v) => !v)}
-            meterSlot={
-              meterOn ? <AudioMeter levels={peakLevels} voiceMetered={audioMeter.voiceMetered} /> : null
-            }
-            leadingSlot={
-              recordDevicesOk ? (
-                <ClipRecordMenu
-                  onPick={(m) => {
-                    clipRec.arm(m)
-                    if (m === 'voiceover') selectPanel('media')
-                  }}
-                  onOpenAiVoiceover={() => selectPanel('audio')}
-                />
-              ) : (
-                <ClipRecordMenu disabled disabledReason="Recording needs a secure origin and microphone access" onPick={() => undefined} />
-              )
-            }
-            onMuteToggle={() => {
-              const v = videoRef.current
-              if (!v) return
-              const next = !playerMuted
-              setPlayerMuted(next)
-              v.muted = next
-              if (!next) {
-                v.volume = playerVolume / 100
-                void playWithSound(v)
-              }
-            }}
-            onVolumeChange={(pct) => {
-              setPlayerVolume(pct)
-              const v = videoRef.current
-              if (v) {
-                v.volume = pct / 100
-                if (pct > 0) {
-                  v.muted = false
-                  setPlayerMuted(false)
-                }
-              }
-            }}
-          />
-          )}
-          </div>
-        </section>
-        <EditorRail active={panel} onChange={selectPanel} />
-        <aside
-          className={cn(
-            'flex min-h-0 flex-col border-border bg-card',
-            'max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-50 max-md:max-h-[85dvh] max-md:rounded-t-xl max-md:border-t max-md:shadow-2xl',
-            !mobilePanelOpen && 'max-md:hidden',
-            'md:relative md:border-l md:max-h-none',
-          )}
-        >
-          <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-            <TabIcon className="size-4 text-muted-foreground" aria-hidden />
-            <h2 className="text-sm font-semibold">{meta.label}</h2>
-            <span className="ml-auto text-xs text-muted-foreground">{meta.hint}</span>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="md:hidden"
-              onClick={() => setMobilePanelOpen(false)}
-            >
-              Close
-            </Button>
-          </div>
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="p-4">{panelBody}</div>
-          </ScrollArea>
-        </aside>
+          }
+        />
       </div>
       <Button
         type="button"
         size="icon"
-        className="fixed bottom-4 right-4 z-40 size-12 rounded-full shadow-lg md:hidden"
+        className="fixed bottom-4 right-4 z-40 size-12 rounded-full shadow-lg lg:hidden"
         aria-label="Open editor panel"
         onClick={() => setMobilePanelOpen(true)}
       >
