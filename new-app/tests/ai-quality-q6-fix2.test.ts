@@ -115,6 +115,10 @@ describe('Q6-fix2 batch', () => {
 
   it('buildAutoBrollItems surfaces providerError when Pixabay is not configured', async () => {
     vi.stubEnv('PIXABAY_API_KEY', '')
+    const db = await import('@/lib/server/db')
+    vi.spyOn(db, 'getPrisma').mockReturnValue({
+      stockAsset: { findUnique: vi.fn().mockResolvedValue(null) },
+    } as never)
     const { buildAutoBrollItems } = await import('@/lib/server/clips/broll-auto')
     vi.spyOn(await import('@/lib/server/clips/broll-auto-llm'), 'suggestAutoBrollPlacements').mockResolvedValue({
       placements: [{ atMs: 5000, durationMs: 2500, query: 'coffee cup', must_include: ['coffee'] }],
