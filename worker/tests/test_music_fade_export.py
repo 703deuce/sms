@@ -101,6 +101,41 @@ def test_short_bed_loops_with_crossfade_through_clip_end():
 
 
 @pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="no ffmpeg")
+def test_effective_bed_len_ignores_trailing_container_silence():
+    from clips_worker.audio_assets import _effective_bed_len_ms
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        tone = d / "tone.wav"
+        padded = d / "padded.wav"
+        _tone(tone, 38.7, 440)
+        _ff("-i", str(tone), "-af", "apad=pad_dur=2.5", "-t", "41.0", str(padded))
+        eff = _effective_bed_len_ms(padded)
+        assert eff is not None
+        assert 38_000 <= eff <= 39_200, eff
+
+
+@pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="no ffmpeg")
+def test_padded_bed_auto_loops_without_end_ms():
+    from clips_worker.audio_assets import _maybe_auto_loop_music
+    from clips_worker.edits_render import normalize_edits
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        tone = d / "tone.wav"
+        padded = d / "padded.wav"
+        _tone(tone, 38.7, 440)
+        _ff("-i", str(tone), "-af", "apad=pad_dur=2.5", "-t", "41.0", str(padded))
+        edits = normalize_edits({"trim": {"in": 0, "out": 41_000}, "cutRanges": []}, 0, 41_000)
+        music = {"generationId": "g", "fadeOutMs": 3000}
+        meta: dict = {"loop": False}
+        _maybe_auto_loop_music(music, meta, padded, edits)
+        assert meta.get("loop") is True
+        assert meta.get("cycle_ms") is not None
+        assert 38_000 <= int(meta["cycle_ms"]) <= 39_200
+
+
+@pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="no ffmpeg")
 def test_music_fade_envelope_trimmed_from_long_source():
     """10 s output clip, 60 s source, fade in 2 s / fade out 3 s, in-point at 5 s media."""
     with tempfile.TemporaryDirectory() as td:

@@ -1835,7 +1835,13 @@ def render_edited_clip(
     music_loop = bool(meta.get("loop"))
     music_cfg = (edits.get("audio") or {}).get("music") or {}
     cycle_s = None
-    if music_cfg.get("endMs") is not None:
+    try:
+        cycle_ms = meta.get("cycle_ms")
+        if cycle_ms is not None:
+            cycle_s = max(0.1, int(round(float(cycle_ms))) / 1000.0)
+    except (TypeError, ValueError):
+        cycle_s = None
+    if cycle_s is None and music_cfg.get("endMs") is not None:
         try:
             cycle_s = max(
                 0.1,

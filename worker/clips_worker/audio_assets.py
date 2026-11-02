@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import re
+import subprocess
 from pathlib import Path
 
 from clips_worker.storage import download_object
@@ -71,8 +73,6 @@ def _sfx_fx(item: dict) -> dict | None:
 
 def _media_len_ms(path: Path) -> int | None:
     """Audio length (ms) for a fade-out on a clip with no explicit play length."""
-    import subprocess
-
     try:
         out = subprocess.check_output(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)],
@@ -82,6 +82,46 @@ def _media_len_ms(path: Path) -> int | None:
         return int(round(float(out.strip()) * 1000))
     except Exception:
         return None
+
+
+def _effective_bed_len_ms(path: Path) -> int | None:
+    """Audible bed length — provider MP3s may pad/trail silence past real content."""
+    container = _media_len_ms(path)
+    if not container or container < 500:
+        return container
+    try:
+        log = subprocess.check_output(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-i",
+                str(path),
+                "-af",
+                "silencedetect=noise=-40dB:d=0.25",
+                "-f",
+                "null",
+                "-",
+            ],
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=120,
+        )
+    except Exception:
+        return container
+    starts: list[float] = []
+    for line in log.splitlines():
+        m = re.search(r"silence_start:\s*([\d.]+)", line)
+        if m:
+            starts.append(float(m.group(1)))
+    if not starts:
+        return container
+    dur_s = container / 1000.0
+    for s in reversed(starts):
+        if s < 1.0:
+            continue
+        if dur_s - s >= 0.75:
+            return max(500, int(round(s * 1000)))
+    return container
 
 
 def _with_play_len(fx: dict | None, path: Path, trim: tuple[int, int | None]) -> dict | None:
@@ -119,10 +159,13 @@ def _maybe_auto_loop_music(music: dict, music_meta: dict, music_path: Path, edit
             end_i = None
         if end_i is not None and end_i + 80 < play_ms:
             music_meta["loop"] = True
+            music_meta["cycle_ms"] = max(500, end_i - int(round(float(music.get("inMs") or 0))))
             return
-    mlen = _media_len_ms(music_path)
+    in_ms = int(round(float(music.get("inMs") or 0)))
+    mlen = _effective_bed_len_ms(music_path) or _media_len_ms(music_path)
     if mlen and mlen + 80 < play_ms:
         music_meta["loop"] = True
+        music_meta["cycle_ms"] = max(500, mlen - in_ms)
 
 
 def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = None) -> dict:
