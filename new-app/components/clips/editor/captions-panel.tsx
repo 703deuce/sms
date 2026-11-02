@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { CaptionMiniPreview } from '@/components/clips/editor/caption-overlay'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,9 @@ import { clipsFetch } from '@/lib/clips-api'
 import { cn } from '@/lib/utils'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
 import { useWorkspaceFonts } from '@/components/clips/editor/use-workspace-fonts'
+import { uploadWorkspaceFont } from '@/lib/clips/editor/workspace-fonts'
+import { captionFontDisplayLabel } from '@/lib/clips/caption-user-font'
+import { FONT_MAX_BYTES } from '@/lib/clips/font-parse'
 import {
   chunksForTranslation,
   linesFromTranslation,
@@ -42,6 +46,12 @@ import { keyframeGlobalEditMs } from '@/lib/clips/editor/keyframe-time'
 import { CAPTION_PROPS } from '@/lib/clips/editor/motion-schema'
 
 const CAPTION_FONTS = ['Poppins', 'Anton', 'Montserrat Black'] as const
+const CAPTION_FONT_LABELS: Record<string, string> = {
+  Poppins: 'Poppins',
+  Anton: 'Anton',
+  'Montserrat Black': 'Montserrat Black',
+}
+const UPLOAD_FONT = '__upload__'
 
 function CaptionHexInput({
   label,
@@ -123,10 +133,19 @@ export function CaptionsPanel({
 }) {
   const cap = edits.captions ?? {}
   const userFonts = useWorkspaceFonts()
+  const fontFileRef = useRef<HTMLInputElement | null>(null)
+  const [fontUploadBusy, setFontUploadBusy] = useState(false)
+  const [fontUploadMsg, setFontUploadMsg] = useState<string | null>(null)
   const [editingWordI, setEditingWordI] = useState<number | null>(null)
   const wordFixCommittedRef = useRef(false)
   const presetId = cap.presetId || 'bold_pop'
   const preset = resolveCaptionPreset(cap)
+  const captionFontValue = cap.font ?? preset.font ?? 'Poppins'
+  const captionFontItems: Record<string, string> = {
+    ...CAPTION_FONT_LABELS,
+    ...Object.fromEntries(userFonts.fonts.map((f) => [`user:${f.id}`, f.family])),
+    [UPLOAD_FONT]: 'Upload font…',
+  }
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>([])
   const [vocabulary, setVocabulary] = useState<VocabEntry[]>([])
   const [vocabAutoApply, setVocabAutoApply] = useState(true)
@@ -709,11 +728,16 @@ export function CaptionsPanel({
 
       <label className="text-xs font-medium text-muted-foreground">Font</label>
       <Select
-        value={cap.font ?? preset.font ?? 'Poppins'}
-        onValueChange={(font) => patch({ font })}
+        items={captionFontItems}
+        value={captionFontValue}
+        onValueChange={(font) => {
+          if (!font || typeof font !== 'string') return
+          if (font === UPLOAD_FONT) return fontFileRef.current?.click()
+          patch({ font })
+        }}
       >
-        <SelectTrigger className="h-9">
-          <SelectValue />
+        <SelectTrigger className="h-9" data-testid="caption-font">
+          <SelectValue>{captionFontDisplayLabel(captionFontValue, userFonts.fonts, CAPTION_FONT_LABELS)}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {CAPTION_FONTS.map((f) => (
@@ -725,14 +749,61 @@ export function CaptionsPanel({
             <>
               <div className="px-2 py-1.5 text-[10px] font-semibold uppercase text-muted-foreground">Your fonts</div>
               {userFonts.fonts.map((f) => (
-                <SelectItem key={f.id} value={`user:${f.id}`}>
+                <SelectItem key={f.id} value={`user:${f.id}`} data-testid={`caption-font-user-${f.id}`}>
                   {f.family}
                 </SelectItem>
               ))}
             </>
           ) : null}
+          <SelectItem value={UPLOAD_FONT} data-testid="caption-font-upload">
+            <span className="inline-flex items-center gap-1">
+              <Upload className="size-3.5" aria-hidden /> Upload font…
+            </span>
+          </SelectItem>
         </SelectContent>
       </Select>
+      <input
+        ref={fontFileRef}
+        type="file"
+        accept=".ttf,.otf,font/ttf,font/otf"
+        className="hidden"
+        data-testid="caption-font-file"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          e.target.value = ''
+          if (!f) return
+          if (f.size > FONT_MAX_BYTES) {
+            setFontUploadMsg('Font file is over 8 MB')
+            return
+          }
+          setFontUploadBusy(true)
+          setFontUploadMsg(null)
+          void uploadWorkspaceFont(f)
+            .then((r) => {
+              if (r.error || !r.font) {
+                setFontUploadMsg(r.error ?? 'Upload failed')
+                return
+              }
+              patch({ font: `user:${r.font.id}` })
+              setFontUploadMsg(
+                r.existing ? `${r.font.family} is already uploaded — selected it.` : `Uploaded ${r.font.family}.`,
+              )
+            })
+            .catch((err) => setFontUploadMsg(err instanceof Error ? err.message : 'Upload failed'))
+            .finally(() => setFontUploadBusy(false))
+        }}
+      />
+      {fontUploadBusy || fontUploadMsg ? (
+        <p className="text-[11px] text-muted-foreground" data-testid="caption-font-msg" role="status">
+          {fontUploadBusy ? (
+            <>
+              <Loader2 className="mr-1 inline size-3 animate-spin" aria-hidden /> Uploading font…
+            </>
+          ) : (
+            fontUploadMsg
+          )}
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3">
         <CaptionHexInput

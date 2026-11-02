@@ -44,6 +44,11 @@ function register(f: WorkspaceFont) {
   addFace(f.family, fontFileUrl(f.id))
 }
 
+/** Metrics + JASSUB URL + FontFace (preview parity with export). */
+export function ensureWorkspaceFontLoaded(f: WorkspaceFont): void {
+  register(f)
+}
+
 export function setWorkspaceFonts(fonts: WorkspaceFont[]) {
   fonts.forEach(register)
   emit({ fonts, loaded: true, error: null })

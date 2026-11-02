@@ -14,6 +14,7 @@ import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
 import { captionHighlightContrastText } from '@/lib/clips/caption-active-style'
 import { previewCaptionBottomPct, previewCaptionTopPct } from '@/lib/clips/caption-safe-area'
 import { captionFontStack, captionFontWeight, previewCaptionStrokePx } from '@/lib/clips/caption-fonts'
+import { registerCaptionUserFont, workspaceFontForCaption } from '@/lib/clips/caption-user-font'
 import { useWorkspaceFonts } from '@/components/clips/editor/use-workspace-fonts'
 import { exportPixelSize } from '@/lib/clips/export-aspect'
 import { assEmPerFontsize, captionChunkFit, captionFitConfigForEdits, captionSafeWidthPct } from '@/lib/clips/caption-fit'
@@ -67,6 +68,10 @@ export function CaptionOverlay({
   const preset = resolveT6CaptionPreset(cap, t6Caps)
   const captionFont = cap.font?.trim() || preset.font
   const userFonts = useWorkspaceFonts()
+  const captionUserRow = workspaceFontForCaption(captionFont, userFonts.fonts)
+  useEffect(() => {
+    if (captionUserRow) registerCaptionUserFont(captionFont, userFonts.fonts)
+  }, [captionFont, captionUserRow?.id, userFonts.version])
   const resolveCaptionUser = (id: string) => {
     const row = userFonts.fonts.find((f) => f.id === id)
     if (!row) return null
@@ -76,7 +81,10 @@ export function CaptionOverlay({
   const animation = (cap.animation || preset.animation) as string
   // E3fix2: chunking, font size, safe width and line breaks mirror the export ASS (caption-fit.ts).
   const aspect = edits.aspectRatio ?? '9:16'
-  const fitCfg = useMemo(() => captionFitConfigForEdits(edits.captions ?? {}, t6Caps, aspect), [edits.captions, t6Caps, aspect])
+  const fitCfg = useMemo(
+    () => captionFitConfigForEdits(edits.captions ?? {}, t6Caps, aspect, userFonts.fonts),
+    [edits.captions, t6Caps, aspect, userFonts.version],
+  )
   const wpl = Math.max(1, fitCfg.wordsPerLine)
   const caseMode = (cap.case || preset.case) as string
   const exportPlay = exportPixelSize(edits.aspectRatio ?? '9:16', '720p')
