@@ -31,7 +31,7 @@ import {
 export const IN_LABEL: Record<TextAnimType, string> = {
   fade: 'Fade',
   pop: 'Pop',
-  zoom: 'Zoom',
+  zoom: 'Shrink',
   slide_up: 'Slide up',
   slide_down: 'Slide down',
   slide_left: 'Slide left',
@@ -41,7 +41,7 @@ export const IN_LABEL: Record<TextAnimType, string> = {
 /** G3afix: an out slide is named (and stored) by the direction it leaves in — text-anim OUT_MOTION. */
 export const OUT_LABEL: Record<TextAnimType, string> = { ...IN_LABEL, slide_up: 'Slide up (exit up)', slide_down: 'Slide down (exit down)', slide_left: 'Slide left (exit left)', slide_right: 'Slide right (exit right)' }
 const UNIT_LABEL: Record<TextAnimUnit, string> = { block: 'Whole text', line: 'By line', word: 'By word', char: 'By letter' }
-const LOOP_LABEL: Record<TextAnimLoopType, string> = { pulse: 'Pulse', bounce: 'Bounce', wiggle: 'Wiggle', flicker: 'Flicker' }
+const LOOP_LABEL: Record<TextAnimLoopType, string> = { pulse: 'Pulse', bounce: 'Float', wiggle: 'Wiggle', flicker: 'Flicker' }
 const NONE = 'none'
 
 export const unitsFor = (type: TextAnimType): TextAnimUnit[] =>

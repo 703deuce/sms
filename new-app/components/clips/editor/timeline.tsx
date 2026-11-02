@@ -965,6 +965,28 @@ export function Timeline({
   // FV4b: the takes commands are findable from the toolbar too (T alone only showed a hint).
   const [takesMenu, setTakesMenu] = useState(false)
   const [takesSub, setTakesSub] = useState(false)
+  useEffect(() => {
+    if (!takesMenu) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setTakesMenu(false)
+        setTakesSub(false)
+      }
+    }
+    const onDoc = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el?.closest('[data-testid="timeline-takes-menu"]')) return
+      if (el?.closest('[data-testid="timeline-toolbar-takes-submenu"]')) return
+      setTakesMenu(false)
+      setTakesSub(false)
+    }
+    window.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDoc)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onDoc)
+    }
+  }, [takesMenu])
   /** G1b3: Alt held — show J/L edge affordances and hit-test cuts before track scrub. */
   const [altHeld, setAltHeld] = useState(false)
   useEffect(() => {
@@ -1776,6 +1798,15 @@ export function Timeline({
     { id: 'gap', group: 'Edit', label: 'Insert gap at playhead', run: () => void insertGap(), disabled: !editable },
     { id: 'replaceGap', group: 'Edit', label: 'Replace selected main clip with gap', run: () => void replaceSelWithGap(), disabled: !editable || !liveSelected.some((r) => r.lane === 'video') },
     { id: 'speed', group: 'Edit', label: 'Speed of the clip under the playhead', keys: `${mk}R`, run: () => void openSpeed(), disabled: !editable },
+    {
+      id: 'joinNext',
+      group: 'Edit',
+      label: 'Join with next',
+      run: () => {
+        if (joinOpts.next !== null) join([joinOpts.next])
+      },
+      disabled: !editable || joinOpts.next === null,
+    },
     { id: 'matchFrame', group: 'Edit', label: 'Match frame', keys: 'F', run: () => void (onMatchFrame && onMatchFrame(playheadMs)), disabled: !onMatchFrame },
     { id: 'nextTake', group: 'Edit', label: 'Next take', keys: 'T', run: () => void cycleTake(1), disabled: !editable },
     { id: 'undo', group: 'Edit', label: 'Undo', keys: `${mk}Z`, run: () => onUndo?.(), disabled: !onUndo || !canUndo },
@@ -2860,8 +2891,8 @@ export function Timeline({
       onKeyDown={onKeyDown}
       data-testid="timeline-root"
     >
-      <div className="flex h-10 flex-nowrap items-center gap-1 overflow-x-auto border-b border-border px-2 [scrollbar-width:none]" data-testid="timeline-toolbar">
-        <div className="flex items-center gap-0.5">
+      <div className="flex h-10 items-stretch border-b border-border" data-testid="timeline-toolbar">
+        <div className="flex shrink-0 items-center gap-0.5 px-2">
           {onUndo ? (
             <button type="button" className={tbtn} onClick={onUndo} disabled={!canUndo} aria-label="Undo" title="Undo (Ctrl/Cmd+Z)">
               <Undo2 className="size-3.5" />
@@ -2922,6 +2953,8 @@ export function Timeline({
             <Trash2 className="size-3.5" />
             Delete
           </button>
+        </div>
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none]">
           {editable ? (
             <div className="relative">
               <button
@@ -3303,7 +3336,7 @@ export function Timeline({
             </span>
           ) : null}
         </div>
-        <div className="flex items-center gap-1" data-testid="timeline-zoom-controls">
+        <div className="flex shrink-0 items-center gap-1 border-l border-border px-2" data-testid="timeline-zoom-controls">
           {openCompound ? (
             <span className="flex items-center gap-1 rounded bg-violet-600/20 px-2 text-[11px]" data-testid="timeline-compound-banner">
               Editing {edits.groups?.find((g) => g.id === openCompound)?.compound?.name}
