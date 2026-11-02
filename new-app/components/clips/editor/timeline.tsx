@@ -133,7 +133,11 @@ import { fadeDragMsPerPx, fadeFromDrag, patchAudioClip } from '@/lib/clips/edito
 import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 import { audioClipKindOf } from '@/lib/clips/editor/audio-kind'
 import { beatsToOutput } from '@/lib/clips/editor/beats'
-import { autoCutOverlays, beatSplitsForSegment } from '@/lib/clips/editor/beat-autocut'
+import {
+  applyBeatCutToEdits,
+  resolveVideoLaneSegmentForBeatCut,
+  type BeatCutRegisterApi,
+} from '@/lib/clips/editor/beat-autocut'
 import { filterBeatsForCut } from '@/lib/clips/editor/strong-beats'
 import { DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS } from '@/lib/clips/audio'
 import { useDismiss } from '@/components/clips/editor/use-dismiss'
@@ -439,7 +443,7 @@ export function Timeline({
   /** Script word selection — keys 1–9 apply camera to this span instead of the playhead cut. */
   transcriptSelectionRef?: React.MutableRefObject<TranscriptSelection | null>
   /** Lets Audio panel invoke the same Cut to beat handler as the timeline toolbar. */
-  registerBeatCut?: (api: { cut: (every: 1 | 2 | 4) => void; hasBeats: boolean } | null) => void
+  registerBeatCut?: (api: BeatCutRegisterApi | null) => void
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -740,16 +744,61 @@ export function Timeline({
     [beatMarks],
   )
   const beatStrength = edits.beatSync?.strength ?? 'all'
-  const cutBeatsMs = useMemo(
-    () =>
-      filterBeatsForCut(
-        allBeatsMs,
+  const cutBeatsMs = useMemo(() => {
+    const out: number[] = []
+    const m = edits.audio?.music
+    const mi = lanes.music[0]
+    if (m && mi && musicPeaks.beatsMs?.length) {
+      const filtered = filterBeatsForCut(
+        musicPeaks.beatsMs,
         beatStrength,
-        musicPeaks.beatSamples,
+        musicPeaks.beatOnset,
         musicPeaks.beatSampleRate,
-      ),
-    [allBeatsMs, beatStrength, musicPeaks.beatSamples, musicPeaks.beatSampleRate],
-  )
+      )
+      out.push(
+        ...beatsToOutput(
+          filtered,
+          { startMs: mi.startMs, endMs: mi.endMs, inMs: mi.inMs ?? 0 },
+          musicPeaks.durationMs || null,
+          Boolean(m.loop),
+        ),
+      )
+    }
+    for (const it of lanes.sfx) {
+      const b = sfxBeatsMs?.[it.id]
+      if (!b?.length) continue
+      const cue = edits.audio?.sfx.find((x) => x.generationId === it.id)
+      out.push(
+        ...beatsToOutput(
+          b,
+          { startMs: it.startMs, endMs: it.endMs, inMs: cue?.inMs ?? 0 },
+          sfxDurationsMs?.[it.id] ?? null,
+          Boolean(cue?.loop),
+        ),
+      )
+    }
+    return [...new Set(out)].sort((a, b) => a - b)
+  }, [
+    beatStrength,
+    edits.audio,
+    lanes.music,
+    lanes.sfx,
+    musicPeaks.beatOnset,
+    musicPeaks.beatSampleRate,
+    musicPeaks.beatsMs,
+    musicPeaks.durationMs,
+    sfxBeatsMs,
+    sfxDurationsMs,
+  ])
+  const beatMarksDisplay = useMemo(() => {
+    if (beatStrength === 'all') return beatMarks
+    const out: Record<string, number[]> = {}
+    for (const item of [...lanes.music, ...lanes.sfx]) {
+      const key = refKey(item)
+      out[key] = cutBeatsMs.filter((b) => b >= item.startMs && b < item.endMs)
+    }
+    return out
+  }, [beatMarks, beatStrength, cutBeatsMs, lanes.music, lanes.sfx])
   // G2: solo — items of audio tracks silenced by another track's solo draw faded.
   const soloEdits = useMemo(() => applyAudioSolo(edits), [edits])
   const editable = Boolean(onCommitEdits)
@@ -757,52 +806,68 @@ export function Timeline({
   const [selected, setSelected] = useState<ItemRef[]>([])
   const applyBeatCut = useCallback(
     (every: 1 | 2 | 4) => {
-      if (!onCommitEdits || !cutBeatsMs.length) return
-      let next = edits
-      let skipped = 0
+      if (!onCommitEdits || !cutBeatsMs.length) {
+        toast.message('No beats detected on the timeline — add music first.')
+        return
+      }
+      const playheadMs = playheadOutMsRef?.current ?? outputMs
       const brollRefs = selected.filter((r) => r.lane === 'broll')
-      if (brollRefs.length) {
-        const picked = brollRefs
-          .map((r) => (next.broll ?? []).find((b) => b.id === r.id))
-          .filter(Boolean) as BrollItem[]
-        const { items, skipped: sk } = autoCutOverlays(picked, cutBeatsMs, every, () => null)
-        skipped += sk.length
-        const byId = new Map(items.map((i) => [i.id, i]))
-        next = {
-          ...next,
-          broll: (next.broll ?? []).map((b) => (byId.has(b.id) ? { ...b, ...byId.get(b.id)! } : b)),
-        }
+      const picked = brollRefs
+        .map((r) => (edits.broll ?? []).find((b) => b.id === r.id))
+        .filter(Boolean) as BrollItem[]
+      const videoSelRef = selected.find((r) => r.lane === 'video')
+      const videoItem = videoSelRef ? lanes.video.find((i) => i.id === videoSelRef.id) : undefined
+      const selectedVideo =
+        videoItem?.srcInMs != null && videoItem.srcOutMs != null
+          ? {
+              srcInMs: videoItem.srcInMs,
+              srcOutMs: videoItem.srcOutMs,
+              startMs: videoItem.startMs,
+              endMs: videoItem.endMs,
+            }
+          : null
+      const vsegs = videoLaneSegments(tb, edits.videoSplits)
+      const videoSegment = resolveVideoLaneSegmentForBeatCut(vsegs, playheadMs, selectedVideo)
+      const cutVideo = Boolean(videoSelRef || (!brollRefs.length && selected.length === 0))
+      const { next, skippedOverlays, cutCount, changed } = applyBeatCutToEdits({
+        edits,
+        tb,
+        cutBeatsMs,
+        every,
+        playheadMs,
+        brollItems: picked,
+        videoSegment,
+        cutVideo,
+      })
+      if (!changed) {
+        toast.message('No new beat cuts in this segment — try another spacing or move the playhead.')
+        return
       }
-      const videoSel = selected.some((r) => r.lane === 'video')
-      if (videoSel || (!brollRefs.length && selected.length === 0)) {
-        const vsegs = videoLaneSegments(tb, next.videoSplits)
-        const seg = vsegs.find((v) => outputMs > v.startMs && outputMs < v.startMs + (v.b - v.a))
-        if (seg) {
-          const splits = beatSplitsForSegment(
-            {
-              startMs: seg.startMs,
-              endMs: seg.startMs + (seg.b - seg.a),
-              srcIn: seg.a,
-              srcOut: seg.b,
-            },
-            cutBeatsMs,
-            every,
-            (o) => outputToSource(tb, o),
-            next.videoSplits ?? [],
-          )
-          next = { ...next, videoSplits: splits }
-        }
-      }
-      onCommitEdits(next, true, 'Cut to beat')
-      if (skipped) toast.message(`${skipped} overlay(s) past the last beat — unchanged`)
-      else toast.success('Cut to beat')
+      const label = cutCount === 1 ? 'Cut to beat · 1 cut' : `Cut to beat · ${cutCount} cuts`
+      onCommitEdits(next, true, label)
+      if (skippedOverlays) toast.message(`${skippedOverlays} overlay(s) past the last beat — unchanged`)
+      else toast.success(label)
     },
-    [cutBeatsMs, edits, onCommitEdits, outputMs, selected, tb],
+    [cutBeatsMs, edits, lanes.video, onCommitEdits, outputMs, playheadOutMsRef, selected, tb],
   )
   useEffect(() => {
-    registerBeatCut?.({ cut: applyBeatCut, hasBeats })
+    registerBeatCut?.({
+      cut: applyBeatCut,
+      hasBeats: cutBeatsMs.length > 0,
+      beatCount: cutBeatsMs.length,
+      bpm: musicPeaks.bpm,
+      analyzing: Boolean(edits.audio?.music && musicUrl && musicPeaks.beatsLoading),
+    })
     return () => registerBeatCut?.(null)
-  }, [applyBeatCut, hasBeats, registerBeatCut])
+  }, [
+    applyBeatCut,
+    cutBeatsMs.length,
+    edits.audio?.music,
+    musicPeaks.beatsLoading,
+    musicPeaks.bpm,
+    musicUrl,
+    registerBeatCut,
+  ])
   const [openCompound, setOpenCompound] = useState<string | null>(null)
   const cview = useMemo(() => compoundView(edits, lanes, openCompound), [edits, lanes, openCompound])
   const hostOf = (it: TimelineItem) => cview.hosts.get(refKey(it))
@@ -2593,8 +2658,8 @@ export function Timeline({
             className="absolute inset-0 size-full text-orange-100/80"
           />
         ) : null}
-        {beatsOn && beatMarks[refKey(item)]?.length
-          ? beatMarks[refKey(item)]!.map((b) => (
+        {beatsOn && beatMarksDisplay[refKey(item)]?.length
+          ? beatMarksDisplay[refKey(item)]!.map((b) => (
               <span
                 key={`bt${b}`}
                 className="pointer-events-none absolute bottom-0 w-px bg-yellow-200/70"

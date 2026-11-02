@@ -50,6 +50,9 @@ export function AudioPanel({
   addVoiceover,
   onCutToBeat,
   beatsAvailable = false,
+  beatCount = 0,
+  beatBpm,
+  beatsAnalyzing = false,
   onBeatSyncPass,
 }: {
   clipId: string
@@ -82,6 +85,9 @@ export function AudioPanel({
   /** Wired from timeline beat detection (Cut to beat). */
   onCutToBeat?: (every: 1 | 2 | 4) => void
   beatsAvailable?: boolean
+  beatCount?: number
+  beatBpm?: number
+  beatsAnalyzing?: boolean
   onBeatSyncPass?: (next: ClipEditsV2, label: string) => void
 }) {
   const [prompt, setPrompt] = useState('')
@@ -506,6 +512,9 @@ export function AudioPanel({
             disabled={!beatsAvailable}
             onCut={onCutToBeat}
             strength={edits.beatSync?.strength ?? 'all'}
+            beatCount={beatCount}
+            bpm={beatBpm}
+            analyzing={beatsAnalyzing}
             onStrengthChange={
               onBeatSyncPass
                 ? (strength) =>

@@ -1,24 +1,24 @@
 /**
  * Q6.4 AU-20: optional strong-beat grid (downbeats / high-onset only) for cut-to-beat.
  */
-import { BEAT_FRAME_MS, onsetEnvelope } from '@/lib/clips/editor/beats'
+import { BEAT_FRAME_MS } from '@/lib/clips/editor/beats'
 
 export type BeatCutStrength = 'all' | 'strong'
 
 /** Keep beats whose onset energy is in the top tier, then thin to ~quarter-note downbeats. */
 export function filterBeatsForCut(
+  /** Music-file ms (not timeline output ms). */
   beatsMs: number[],
   strength: BeatCutStrength,
-  samples?: Float32Array,
+  onset?: Float32Array,
   sampleRate?: number,
 ): number[] {
   if (strength === 'all' || !beatsMs.length) return [...beatsMs].sort((a, b) => a - b)
   const sorted = [...beatsMs].sort((a, b) => a - b)
-  if (!samples?.length || !sampleRate) {
+  if (!onset?.length || !sampleRate) {
     return sorted.filter((_, i) => i % 4 === 0)
   }
-  const onset = onsetEnvelope(samples, sampleRate)
-  const frameMs = (Math.max(1, Math.round((sampleRate * BEAT_FRAME_MS) / 1000)) * 1000) / sampleRate
+  const frameMs = BEAT_FRAME_MS
   let peak = 0
   for (let i = 0; i < onset.length; i++) peak = Math.max(peak, onset[i]!)
   const floor = peak * 0.45

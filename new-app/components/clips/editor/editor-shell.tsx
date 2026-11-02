@@ -117,6 +117,7 @@ import { useFullVideoHighlights } from '@/components/clips/editor/use-full-video
 import { useFullVideoMomentFocus } from '@/components/clips/editor/full-video-moment-focus'
 import { snapTranscriptSelectionMs } from '@/lib/clips/editor/make-clip-from-transcript'
 import { filterAutoBrollSuggestions } from '@/lib/clips/editor/broll-approve-first'
+import type { BeatCutRegisterApi } from '@/lib/clips/editor/beat-autocut'
 import { isPendingStockAssetId, pendingStockProviderId } from '@/lib/clips/broll-auto-utils'
 import type { BrollItem } from '@/lib/clips/broll'
 import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
@@ -254,16 +255,10 @@ export function EditorShell({
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
-  const [beatCutApi, setBeatCutApi] = useState<{
-    cut: (every: 1 | 2 | 4) => void
-    hasBeats: boolean
-  } | null>(null)
-  const registerBeatCut = useCallback(
-    (api: { cut: (every: 1 | 2 | 4) => void; hasBeats: boolean } | null) => {
-      setBeatCutApi(api)
-    },
-    [],
-  )
+  const [beatCutApi, setBeatCutApi] = useState<BeatCutRegisterApi | null>(null)
+  const registerBeatCut = useCallback((api: BeatCutRegisterApi | null) => {
+    setBeatCutApi(api)
+  }, [])
   const [exportTimelineInOut, setExportTimelineInOut] = useState<import('@/lib/clips/editor/timeline-edit-ops').InOut>({
     inMs: null,
     outMs: null,
@@ -1874,6 +1869,9 @@ export function EditorShell({
           addVoiceover={placeVoiceoverClip}
           onCutToBeat={(every) => beatCutApi?.cut(every)}
           beatsAvailable={Boolean(beatCutApi?.hasBeats)}
+          beatCount={beatCutApi?.beatCount ?? 0}
+          beatBpm={beatCutApi?.bpm}
+          beatsAnalyzing={Boolean(beatCutApi?.analyzing)}
           onBeatSyncPass={setEditsPass}
         />
         </EditorPanelErrorBoundary>

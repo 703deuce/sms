@@ -1,4 +1,8 @@
 import type { BrollItem } from '@/lib/clips/broll'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { canonicalEditsJson } from '@/lib/clips/edits'
+import type { VideoLaneSeg } from '@/lib/clips/editor/clip-timeline'
+import { outputToSource, type Timebase } from '@/lib/clips/editor/clip-timeline'
 
 export function beatGrid(beatsMs: number[], every: 1 | 2 | 4, fromMs: number): number[] {
   if (!beatsMs.length) return []
@@ -77,4 +81,116 @@ export function beatSplitsForSegment(
     out.push(s)
   }
   return out
+}
+
+export type BeatCutVideoSegment = { startMs: number; endMs: number; srcIn: number; srcOut: number }
+
+export type BeatCutVideoPick = {
+  srcInMs: number
+  srcOutMs: number
+  startMs: number
+  endMs: number
+}
+
+/** Playhead at segment start (0) matches; otherwise clamp to nearest video lane segment. */
+export function resolveVideoLaneSegmentForBeatCut(
+  vsegs: readonly VideoLaneSeg[],
+  playheadMs: number,
+  selectedVideo?: BeatCutVideoPick | null,
+): BeatCutVideoSegment | null {
+  if (selectedVideo) {
+    return {
+      startMs: selectedVideo.startMs,
+      endMs: selectedVideo.endMs,
+      srcIn: selectedVideo.srcInMs,
+      srcOut: selectedVideo.srcOutMs,
+    }
+  }
+  for (const v of vsegs) {
+    const endMs = v.startMs + (v.b - v.a)
+    if (playheadMs >= v.startMs && playheadMs < endMs) {
+      return { startMs: v.startMs, endMs, srcIn: v.a, srcOut: v.b }
+    }
+  }
+  if (!vsegs.length) return null
+  let best = vsegs[0]!
+  let bestDist = Infinity
+  for (const v of vsegs) {
+    const endMs = v.startMs + (v.b - v.a)
+    const dist =
+      playheadMs < v.startMs ? v.startMs - playheadMs : playheadMs >= endMs ? playheadMs - endMs + 1 : 0
+    if (dist < bestDist) {
+      bestDist = dist
+      best = v
+    }
+  }
+  const endMs = best.startMs + (best.b - best.a)
+  return { startMs: best.startMs, endMs, srcIn: best.a, srcOut: best.b }
+}
+
+export function countBeatCutChanges(before: ClipEditsV2, after: ClipEditsV2): number {
+  const prevSplits = new Set(before.videoSplits ?? [])
+  let n = (after.videoSplits ?? []).filter((s) => !prevSplits.has(s)).length
+  const prevBroll = new Map((before.broll ?? []).map((b) => [b.id, b]))
+  for (const b of after.broll ?? []) {
+    const p = prevBroll.get(b.id)
+    if (p && (p.startMs !== b.startMs || p.endMs !== b.endMs)) n += 1
+  }
+  return n
+}
+
+export function beatCutWouldChangeEdits(before: ClipEditsV2, after: ClipEditsV2): boolean {
+  return canonicalEditsJson(before) !== canonicalEditsJson(after)
+}
+
+export type BeatCutApplyResult = {
+  next: ClipEditsV2
+  skippedOverlays: number
+  cutCount: number
+  changed: boolean
+}
+
+export function applyBeatCutToEdits(input: {
+  edits: ClipEditsV2
+  tb: Timebase
+  cutBeatsMs: number[]
+  every: 1 | 2 | 4
+  playheadMs: number
+  brollItems: BrollItem[]
+  videoSegment: BeatCutVideoSegment | null
+  cutVideo: boolean
+}): BeatCutApplyResult {
+  let next = input.edits
+  let skipped = 0
+  if (input.brollItems.length) {
+    const { items, skipped: sk } = autoCutOverlays(input.brollItems, input.cutBeatsMs, input.every, () => null)
+    skipped += sk.length
+    const byId = new Map(items.map((i) => [i.id, i]))
+    next = {
+      ...next,
+      broll: (next.broll ?? []).map((b) => (byId.has(b.id) ? { ...b, ...byId.get(b.id)! } : b)),
+    }
+  }
+  if (input.cutVideo && input.videoSegment) {
+    const seg = input.videoSegment
+    const splits = beatSplitsForSegment(
+      { startMs: seg.startMs, endMs: seg.endMs, srcIn: seg.srcIn, srcOut: seg.srcOut },
+      input.cutBeatsMs,
+      input.every,
+      (o) => outputToSource(input.tb, o),
+      next.videoSplits ?? [],
+    )
+    next = { ...next, videoSplits: splits }
+  }
+  const changed = beatCutWouldChangeEdits(input.edits, next)
+  const cutCount = changed ? countBeatCutChanges(input.edits, next) : 0
+  return { next, skippedOverlays: skipped, cutCount, changed }
+}
+
+export type BeatCutRegisterApi = {
+  cut: (every: 1 | 2 | 4) => void
+  hasBeats: boolean
+  beatCount: number
+  bpm?: number
+  analyzing: boolean
 }

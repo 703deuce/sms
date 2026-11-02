@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { decodePeaksFile } from '@/lib/clips/editor/editor-assets'
-import { detectBeats, monoSamples } from '@/lib/clips/editor/beats'
+import { detectBeats, monoSamples, onsetEnvelope } from '@/lib/clips/editor/beats'
 
 /** G2: `beatsMs` / `bpm` (media ms) when the hook was asked for beats (`opts.beats`). */
 export type AudioPeaks = {
@@ -11,9 +11,11 @@ export type AudioPeaks = {
   durationMs: number
   beatsMs?: number[]
   bpm?: number
-  /** Set when `opts.beats` — for strong-beat filtering (not sent to server). */
-  beatSamples?: Float32Array
+  /** Precomputed onset envelope (music-file frames) for strong-beat filtering. */
+  beatOnset?: Float32Array
   beatSampleRate?: number
+  /** True while decoding / detecting beats for `opts.beats`. */
+  beatsLoading?: boolean
 }
 
 const EMPTY: AudioPeaks = { peaks: [], peaksPerSec: 0, durationMs: 0 }
@@ -55,6 +57,7 @@ export function useAudioPeaks(
       return
     }
     let cancelled = false
+    if (wantBeats) setState((s) => ({ ...s, beatsLoading: true }))
     const run = async () => {
       try {
         const res = await fetch(url)
@@ -63,9 +66,9 @@ export function useAudioPeaks(
         const decoded = await ctx.decodeAudioData(buf.slice(0))
         await ctx.close()
         const p = peaksFromSamples(decoded.getChannelData(0), decoded.duration, peaksPerSec, maxBuckets)
-        // G2: local beat detection on the same decode (no extra download, no API).
         const mono = monoSamples(decoded)
         const grid = wantBeats ? detectBeats(mono, decoded.sampleRate) : null
+        const beatOnset = wantBeats ? onsetEnvelope(mono, decoded.sampleRate) : undefined
         if (!cancelled) {
           setState(
             grid
@@ -73,14 +76,15 @@ export function useAudioPeaks(
                   ...p,
                   beatsMs: grid.beatsMs,
                   bpm: grid.bpm,
-                  beatSamples: mono,
+                  beatOnset,
                   beatSampleRate: decoded.sampleRate,
+                  beatsLoading: false,
                 }
-              : p,
+              : { ...p, beatsLoading: false },
           )
         }
       } catch {
-        if (!cancelled) setState(EMPTY)
+        if (!cancelled) setState({ ...EMPTY, beatsLoading: false })
       }
     }
     void run()
