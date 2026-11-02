@@ -1,5 +1,15 @@
 import type { BrollItem } from '@/lib/clips/broll'
 
+export const PENDING_STOCK_ASSET_PREFIX = 'pending:'
+
+export function isPendingStockAssetId(assetId: string): boolean {
+  return assetId.startsWith(PENDING_STOCK_ASSET_PREFIX)
+}
+
+export function pendingStockProviderId(assetId: string): string {
+  return assetId.slice(PENDING_STOCK_ASSET_PREFIX.length)
+}
+
 /** Manual placements are kept when auto B-roll runs again. */
 export function isManualBroll(item: BrollItem): boolean {
   return item.placement === 'manual'

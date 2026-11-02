@@ -40,7 +40,7 @@ export function normalizeLayoutSegments(
   const segs: LayoutSegment[] = []
   for (const row of raw) {
     if (!row || typeof row !== 'object') continue
-    const r = row as { startMs?: unknown; endMs?: unknown; mode?: unknown }
+    const r = row as { startMs?: unknown; endMs?: unknown; mode?: unknown; auto?: unknown }
     const startMs = Math.round(Number(r.startMs))
     const endMs = Math.round(Number(r.endMs))
     const mode = modes.has(r.mode as ClipEditsV2['layout']['mode'])
@@ -51,6 +51,7 @@ export function normalizeLayoutSegments(
       startMs: Math.max(trimIn, startMs),
       endMs: Math.min(trimOut, endMs),
       mode,
+      ...(r.auto === true ? { auto: true as const } : {}),
     })
   }
   if (!segs.length) return defaultLayoutSegments(trimIn, trimOut, fallbackMode)
@@ -73,7 +74,11 @@ function mergeAdjacentSegments(segs: LayoutSegment[]): LayoutSegment[] {
 export function layoutModeAtSourceMs(edits: ClipEditsV2, sourceMs: number): ClipEditsV2['layout']['mode'] {
   const segs = edits.layout.layoutSegments
   if (!segs?.length) return edits.layout.mode
-  const hit = segs.find((s) => sourceMs >= s.startMs && sourceMs < s.endMs)
+  const ms = sourceMs
+  let hit: LayoutSegment | undefined
+  for (const s of segs) {
+    if (ms >= s.startMs && ms < s.endMs) hit = s
+  }
   return hit?.mode ?? edits.layout.mode
 }
 

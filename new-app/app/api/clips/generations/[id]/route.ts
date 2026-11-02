@@ -3,6 +3,7 @@ import { fetchKieTask, kieVideoCostUsd, parseResultVideoUrl } from '@/lib/server
 import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
+import { createReadableSignedUrl } from '@/lib/storage/resolve'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { Decimal } from '@prisma/client/runtime/library'
 
@@ -62,9 +63,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     }
 
     const fresh = await prisma.aiGeneration.findUnique({ where: { id } })
-    const storage = getClipStorage()
     const downloadUrl =
-      fresh?.storageKey ? await storage.createSignedDownloadUrl(fresh.storageKey, 3600) : null
+      fresh?.storageKey ? await createReadableSignedUrl(fresh.storageKey, 3600) : null
 
     return NextResponse.json({
       data: {

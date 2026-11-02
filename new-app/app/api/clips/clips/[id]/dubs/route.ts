@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorage } from '@/lib/storage'
+import { createReadableSignedUrl } from '@/lib/storage/resolve'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -17,7 +17,6 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       where: { clipId },
       orderBy: { createdAt: 'desc' },
     })
-    const storage = getClipStorage()
     const items = await Promise.all(
       rows.map(async (r) => ({
         id: r.id,
@@ -25,7 +24,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
         status: r.status,
         error: r.error,
         costUsdMicros: r.costUsdMicros,
-        audioUrl: r.audioKey ? await storage.createSignedDownloadUrl(r.audioKey, 3600) : null,
+        audioUrl: r.audioKey ? await createReadableSignedUrl(r.audioKey, 3600) : null,
         words: r.words,
       })),
     )

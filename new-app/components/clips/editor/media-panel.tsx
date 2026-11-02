@@ -18,6 +18,7 @@ import type { CropShot } from '@/lib/server/clips/clip-detail'
 import { MEDIA_DND_TYPE, mediaLanesFor, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import {
   applyMulticamSegments,
+  autoMapSpeakersToAngles,
   fillActiveSpeakerGaps,
   multicamSpeakerRows,
   patchSourceSegment,
@@ -326,8 +327,17 @@ export function MediaPanel({
       const own = sources?.find((s) => s.id === a.refId)
       if (own && own.syncMs === undefined) sources = upsertSource(sources, sourceFromItem(a)).sources
     }
+    const speakerIds = speakerRows.map((r) => r.id)
+    const angleIds = angles.filter((a) => a.mediaType === 'video').map((a) => a.refId)
+    let base = { ...edits, sources }
+    base = autoMapSpeakersToAngles(base, speakerIds, angleIds)
+    for (const refId of new Set(Object.values(base.multicam?.speakerSources ?? {}))) {
+      if (!refId || refId === 'main') continue
+      const it = angles.find((a) => a.refId === refId)
+      if (it) sources = upsertSource(sources, sourceFromItem(it)).sources
+    }
     const { edits: next, generated } = fillActiveSpeakerGaps(
-      { ...edits, sources },
+      { ...base, sources },
       words,
       edits.trim.in,
       edits.trim.out,
@@ -335,11 +345,13 @@ export function MediaPanel({
     )
     if (onEditsPass) onEditsPass(next, 'Auto camera cuts')
     else onEdits(next)
-    toast.success(
-      generated.length
-        ? `${generated.length} auto cut${generated.length === 1 ? '' : 's'} in open gaps`
-        : 'No speaker turns long enough — manual switches unchanged',
-    )
+    if (generated.length) {
+      toast.success(`${generated.length} auto cut${generated.length === 1 ? '' : 's'} in open gaps`)
+    } else if (!angleIds.length) {
+      toast.message('Add synced video angles in the library before auto-switch.')
+    } else {
+      toast.message('No open gaps for auto cuts — manual switches unchanged.')
+    }
   }
   const onInsert = (item: ProjectMediaItem, mode: InsertMode) => {
     const res = insertMediaAt(edits, item, playheadSourceMs, mode, () => crypto.randomUUID())

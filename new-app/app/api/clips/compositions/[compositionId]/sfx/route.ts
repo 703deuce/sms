@@ -8,6 +8,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { getCompositionAudioContext } from '@/lib/server/clips/composition-audio'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
+import { createReadableSignedUrl } from '@/lib/storage/resolve'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { createId } from '@/lib/supabase/id'
 import { Decimal } from '@prisma/client/runtime/library'
@@ -110,7 +111,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
         generationId: genId,
         status: 'READY',
         cached: false,
-        downloadUrl: await storage.createSignedDownloadUrl(storageKey, 3600),
+        downloadUrl: await createReadableSignedUrl(storageKey, 3600),
       },
     })
   } catch (err) {

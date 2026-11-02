@@ -117,6 +117,8 @@ import { useFullVideoHighlights } from '@/components/clips/editor/use-full-video
 import { useFullVideoMomentFocus } from '@/components/clips/editor/full-video-moment-focus'
 import { snapTranscriptSelectionMs } from '@/lib/clips/editor/make-clip-from-transcript'
 import { filterAutoBrollSuggestions } from '@/lib/clips/editor/broll-approve-first'
+import { isPendingStockAssetId, pendingStockProviderId } from '@/lib/clips/broll-auto-utils'
+import type { BrollItem } from '@/lib/clips/broll'
 import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
 import type { ProjectMediaApi } from '@/components/clips/editor/use-project-media'
 import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
@@ -1892,12 +1894,36 @@ export function EditorShell({
             onBrollMedia={mergeBrollMedia}
             onFlushEdits={() => void flushSave()}
             onAcceptBrollSuggestions={(items) => {
-              const filtered = filterAutoBrollSuggestions(edits.broll ?? [], items)
-              if (!filtered.accepted.length) {
-                toast.message('No new B-roll passed the 60 s repeat rule')
-                return
-              }
-              setEditsPass({ ...edits, broll: [...(edits.broll ?? []), ...filtered.accepted] }, 'Accept B-roll')
+              void (async () => {
+                const resolved: BrollItem[] = []
+                for (const item of items) {
+                  if (item.source !== 'stock' || !isPendingStockAssetId(item.assetId)) {
+                    resolved.push(item)
+                    continue
+                  }
+                  const providerId = pendingStockProviderId(item.assetId)
+                  try {
+                    const data = await clipsFetch<{ assetId: string }>(`/api/clips/clips/${clipId}/broll`, {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        providerId,
+                        startMs: item.startMs,
+                        endMs: item.endMs,
+                      }),
+                    })
+                    resolved.push({ ...item, assetId: data.assetId })
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'Failed to cache stock clip')
+                    return
+                  }
+                }
+                const filtered = filterAutoBrollSuggestions(edits.broll ?? [], resolved)
+                if (!filtered.accepted.length) {
+                  toast.message('No new B-roll passed the 60 s repeat rule')
+                  return
+                }
+                setEditsPass({ ...edits, broll: [...(edits.broll ?? []), ...filtered.accepted] }, 'Accept B-roll')
+              })()
             }}
             uploadSlot={
               <MediaLibraryGrid media={media} filter="visual" lanes={['broll']} onAdd={(item, lane) => onAddMedia(item, lane)} compact />

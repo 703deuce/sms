@@ -54,6 +54,7 @@ export function BrollPanel({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pendingAuto, setPendingAuto] = useState<BrollItem[]>([])
   const [pendingRejected, setPendingRejected] = useState<{ item: BrollItem; reason: string }[]>([])
+  const [autoEmptyHint, setAutoEmptyHint] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<{ atMs: number; durationS: number; prompt: string }[]>([])
   const [manualAi, setManualAi] = useState({
     prompt: aiMeta?.brollIdeas?.[0] || '',
@@ -118,16 +119,21 @@ export function BrollPanel({
         queriesUsed?: string[]
         rejected?: { item: BrollItem; reason: string }[]
         suggestOnly?: boolean
+        providerError?: string
+        rawCount?: number
       }>(`/api/clips/clips/${clipId}/broll/auto`, {
         method: 'POST',
         body: JSON.stringify({ suggestOnly: true }),
       })
       if (!data.items?.length) {
-        toast.error(data.message || 'No B-roll suggestions')
+        const msg = data.providerError || data.message || 'No B-roll suggestions'
+        setAutoEmptyHint(msg)
+        toast.error(msg)
         setPendingAuto([])
         setPendingRejected(data.rejected ?? [])
         return
       }
+      setAutoEmptyHint(null)
       if (data.media?.length) onBrollMedia(data.media)
       setPendingAuto(data.items)
       setPendingRejected(data.rejected ?? [])
@@ -276,6 +282,11 @@ export function BrollPanel({
           <Button size="sm" onClick={() => void autoBroll()} disabled={busy} data-testid="broll-auto-suggest">
             {busy ? 'Suggesting B-roll…' : 'Suggest auto B-roll'}
           </Button>
+          {!pendingAuto.length && autoEmptyHint && !busy ? (
+            <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground" data-testid="broll-auto-empty">
+              {autoEmptyHint}
+            </p>
+          ) : null}
           {pendingAuto.length ? (
             <div className="space-y-2 rounded-md border border-dashed p-2 text-xs" data-testid="broll-pending-suggestions">
               <p className="font-medium">{pendingAuto.length} pending — nothing on timeline until you accept</p>

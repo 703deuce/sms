@@ -422,6 +422,28 @@ export function applyMulticamSegments(
   return normalizeSourceSegments([...manual, ...(next ?? [])], sources)
 }
 
+/** Round-robin map diarized speakers to video angles when every speaker is still on main. */
+export function autoMapSpeakersToAngles(
+  edits: ClipEditsV2,
+  speakerIds: string[],
+  angleSourceIds: string[],
+): ClipEditsV2 {
+  const videoAngles = angleSourceIds.filter(Boolean)
+  if (!videoAngles.length || !speakerIds.length) return edits
+  const mc = edits.multicam ?? {}
+  const map = remapSpeakerSourceMap(mc.speakerSources, speakerIds) ?? {}
+  const hasMapped = speakerIds.some((id) => {
+    const v = map[id]
+    return v && v !== 'main' && v !== MAIN_SOURCE_ID
+  })
+  if (hasMapped) return edits
+  const nextMap: Record<string, string> = { ...map }
+  speakerIds.forEach((spk, i) => {
+    nextMap[spk] = videoAngles[i % videoAngles.length]!
+  })
+  return { ...edits, multicam: { ...mc, speakerSources: nextMap } }
+}
+
 /** MC-08: active-speaker auto cuts in gaps only; manual `sourceSegments` (no `auto`) are kept. */
 export function fillActiveSpeakerGaps(
   edits: ClipEditsV2,

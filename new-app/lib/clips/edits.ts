@@ -599,7 +599,8 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
           const focus = r.focus
           if (!Number.isFinite(i)) return null
           if (focus !== 'auto' && focus !== 'A' && focus !== 'B' && focus !== 'both') return null
-          return { i: Math.round(i), focus }
+          const auto = (row as { auto?: unknown }).auto === true ? ({ auto: true as const } as const) : {}
+          return { i: Math.round(i), focus, ...auto }
         })
         .filter(Boolean) as ClipEditsV2['layout']['shotOverrides']
     : []

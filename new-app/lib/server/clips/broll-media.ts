@@ -1,9 +1,10 @@
 import 'server-only'
 
 import type { BrollItem } from '@/lib/clips/broll'
+import { isPendingStockAssetId, pendingStockProviderId } from '@/lib/clips/broll-auto-utils'
 import { ensureStockAsset, findCachedHit } from '@/lib/server/ai/pixabay'
 import { getPrisma } from '@/lib/server/db'
-import { createReadableSignedUrl, getClipStorage } from '@/lib/storage'
+import { createReadableSignedUrl } from '@/lib/storage'
 
 export type BrollMediaRow = {
   id: string
@@ -21,29 +22,40 @@ export type BrollMediaRow = {
   mediaType?: 'video' | 'image'
 }
 
-export async function resolveBrollMedia(items: BrollItem[]): Promise<BrollMediaRow[]> {
+export async function resolveBrollMedia(
+  items: BrollItem[],
+  options?: { materializeStock?: boolean },
+): Promise<BrollMediaRow[]> {
   const prisma = getPrisma()
-  const storage = getClipStorage()
+  const materializeStock = options?.materializeStock !== false
   const out: BrollMediaRow[] = []
 
   for (const item of items) {
     // E5: upload B-roll URLs come from the project media library (signed per project, client-side).
     if (item.source === 'upload') continue
     if (item.source === 'stock') {
-      const asset = await prisma.stockAsset.findUnique({ where: { id: item.assetId } })
-      if (!asset) continue
+      const pending = isPendingStockAssetId(item.assetId)
+      const providerId = pending ? pendingStockProviderId(item.assetId) : undefined
+      const asset = pending
+        ? null
+        : await prisma.stockAsset.findUnique({ where: { id: item.assetId } })
+      if (!asset && !providerId) continue
       let url: string | null = null
-      const hit = asset.provider === 'pixabay' ? await findCachedHit(asset.providerId) : null
-      if (hit) {
+      const hit =
+        asset?.provider === 'pixabay'
+          ? await findCachedHit(asset.providerId)
+          : providerId
+            ? await findCachedHit(providerId)
+            : null
+      if (hit && materializeStock && !pending) {
         const ensured = await ensureStockAsset(hit)
         url = ensured.url
-      } else if (asset.storageKey) {
-        url = await storage.createSignedDownloadUrl(asset.storageKey, 3600)
+      } else if (hit) {
+        url = hit.preview || hit.srcUrl || null
+      } else if (asset?.storageKey) {
+        url = await createReadableSignedUrl(asset.storageKey, 3600)
       }
-      if (!url) {
-        url = hit?.preview || hit?.srcUrl || null
-      }
-      const thumbUrl = asset.thumbUrl || (await findCachedHit(asset.providerId))?.thumbUrl
+      const thumbUrl = asset?.thumbUrl || hit?.thumbUrl
       out.push({
         id: item.id,
         source: 'stock',
@@ -51,9 +63,9 @@ export async function resolveBrollMedia(items: BrollItem[]): Promise<BrollMediaR
         endMs: item.endMs,
         url,
         thumbUrl,
-        author: asset.author,
-        pageUrl: asset.pageUrl,
-        assetId: asset.id,
+        author: asset?.author,
+        pageUrl: asset?.pageUrl,
+        assetId: asset?.id ?? item.assetId,
       })
     } else {
       const gen = await prisma.aiGeneration.findUnique({ where: { id: item.generationId } })

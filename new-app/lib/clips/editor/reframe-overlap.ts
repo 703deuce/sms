@@ -65,16 +65,65 @@ export function shotIndicesForRange(shots: readonly CropShot[], startMs: number,
   return out
 }
 
-function mergeLayoutSegments(segs: LayoutSegment[], trimIn: number, trimOut: number, fallback: ClipEditsV2['layout']['mode']): LayoutSegment[] {
-  const sorted = [...segs].sort((a, b) => a.startMs - b.startMs)
+function clipSeg(seg: LayoutSegment, trimIn: number, trimOut: number): LayoutSegment | null {
+  const startMs = Math.max(trimIn, seg.startMs)
+  const endMs = Math.min(trimOut, seg.endMs)
+  if (endMs <= startMs) return null
+  return { ...seg, startMs, endMs }
+}
+
+/** Remove [cutStart, cutEnd) from each segment; returns sorted non-overlapping pieces. */
+export function subtractRangeFromLayoutSegments(
+  segs: LayoutSegment[],
+  cutStart: number,
+  cutEnd: number,
+): LayoutSegment[] {
   const out: LayoutSegment[] = []
-  for (const s of sorted) {
-    const row = { ...s, startMs: Math.max(trimIn, s.startMs), endMs: Math.min(trimOut, s.endMs) }
-    if (row.endMs <= row.startMs) continue
+  for (const seg of segs) {
+    if (seg.endMs <= cutStart || seg.startMs >= cutEnd) {
+      out.push({ ...seg })
+      continue
+    }
+    if (seg.startMs < cutStart) {
+      out.push({ ...seg, endMs: cutStart })
+    }
+    if (seg.endMs > cutEnd) {
+      out.push({ ...seg, startMs: cutEnd })
+    }
+  }
+  return out.sort((a, b) => a.startMs - b.startMs || (a.auto ? 1 : 0) - (b.auto ? 1 : 0))
+}
+
+function mergeLayoutSegments(segs: LayoutSegment[], trimIn: number, trimOut: number, fallback: ClipEditsV2['layout']['mode']): LayoutSegment[] {
+  const sorted = [...segs]
+    .map((s) => clipSeg(s, trimIn, trimOut))
+    .filter(Boolean) as LayoutSegment[]
+  sorted.sort((a, b) => a.startMs - b.startMs || (a.auto ? 1 : 0) - (b.auto ? 1 : 0))
+  const out: LayoutSegment[] = []
+  for (const row of sorted) {
     const prev = out[out.length - 1]
-    if (prev && prev.mode === row.mode && prev.endMs >= row.startMs - 1) {
+    if (prev && row.startMs < prev.endMs) {
+      if (prev.endMs > row.startMs) {
+        if (row.mode === 'split' || row.auto) {
+          if (prev.startMs < row.startMs) {
+            out[out.length - 1] = { ...prev, endMs: row.startMs }
+            out.push(row)
+          } else {
+            out[out.length - 1] = row
+          }
+          if (prev.endMs > row.endMs) {
+            out.push({ ...prev, startMs: row.endMs, endMs: prev.endMs })
+          }
+          continue
+        }
+        out[out.length - 1] = { ...prev, endMs: row.startMs }
+      }
+    }
+    if (prev && prev.mode === row.mode && prev.auto === row.auto && prev.endMs >= row.startMs - 1) {
       prev.endMs = Math.max(prev.endMs, row.endMs)
-    } else out.push(row)
+    } else {
+      out.push({ ...row })
+    }
   }
   return out.length ? out : [{ startMs: trimIn, endMs: trimOut, mode: fallback }]
 }
@@ -115,15 +164,19 @@ export function applySplitScreenOnOverlap(
   const manual = prevOverrides.filter((o) => !(o as { auto?: boolean }).auto)
   const autoOverrides = [...shotIdx].map((i) => ({ i, focus: 'both' as const, auto: true as const }))
 
-  const baseSegs = (edits.layout.layoutSegments ?? [{ startMs: trimIn, endMs: trimOut, mode: fallbackMode }]).filter(
+  let baseSegs = (edits.layout.layoutSegments ?? [{ startMs: trimIn, endMs: trimOut, mode: fallbackMode }]).filter(
     (s) => !(s as LayoutSegment & { auto?: boolean }).auto,
   )
-  const splitSegs: LayoutSegment[] = ranges.map((r) => ({
-    startMs: r.startMs,
-    endMs: r.endMs,
-    mode: 'split',
-    auto: true,
-  }))
+  const splitSegs: LayoutSegment[] = []
+  for (const r of ranges) {
+    baseSegs = subtractRangeFromLayoutSegments(baseSegs, r.startMs, r.endMs)
+    splitSegs.push({
+      startMs: r.startMs,
+      endMs: r.endMs,
+      mode: 'split',
+      auto: true,
+    })
+  }
 
   return {
     ...edits,
