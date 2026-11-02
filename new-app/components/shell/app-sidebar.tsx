@@ -43,6 +43,15 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar'
 
+const HEAVY_NAV_HREF_NO_PREFETCH = new Set([
+  '/app/streamer',
+  '/app/exports',
+  '/app/record',
+  '/app/editor',
+  '/app/rooms',
+  '/app/rooms/new',
+])
+
 function NavLink({
   item,
   pathname,
@@ -64,7 +73,7 @@ function NavLink({
           item.disabled ? (
             <span aria-disabled="true" tabIndex={-1} className="flex items-center gap-3" />
           ) : (
-            <Link href={item.href} />
+            <Link href={item.href} prefetch={HEAVY_NAV_HREF_NO_PREFETCH.has(item.href) ? false : undefined} />
           )
         }
       >

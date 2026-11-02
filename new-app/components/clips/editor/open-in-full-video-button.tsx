@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { clipsFetch } from '@/lib/clips-api'
@@ -42,21 +42,16 @@ function clearPersisted(clipId: string) {
 export function OpenInFullVideoButton({ clipId, hasUpload = true }: { clipId: string; hasUpload?: boolean }) {
   const [url, setUrl] = useState<string | null>(null)
   const [progress, setProgress] = useState<string | null>(() => readPersisted(clipId))
-  const [loading, setLoading] = useState(hasUpload)
+  const [loading, setLoading] = useState(false)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const startedRef = useRef(false)
 
-  useEffect(() => {
-    if (!hasUpload) {
-      setLoading(false)
-      return
-    }
-
-    let cancelled = false
-
-    const load = async (attempt = 0) => {
+  const load = useCallback(
+    async (attempt = 0) => {
+      if (!hasUpload) return
+      setLoading(true)
       try {
         const data = await clipsFetch<FullVideoLinkData | null>(`/api/clips/clips/${clipId}/full-video-link`)
-        if (cancelled) return
         if (data && 'url' in data && data.url) {
           setUrl(data.url)
           setProgress(null)
@@ -68,7 +63,6 @@ export function OpenInFullVideoButton({ clipId, hasUpload = true }: { clipId: st
           const msg = data.message || 'Preparing full video…'
           setProgress(msg)
           persistPreparing(clipId, msg)
-          setLoading(true)
           pollRef.current = setTimeout(() => void load(attempt + 1), Math.min(2500 + attempt * 200, 8000))
           return
         }
@@ -76,22 +70,26 @@ export function OpenInFullVideoButton({ clipId, hasUpload = true }: { clipId: st
         clearPersisted(clipId)
         setLoading(false)
       } catch {
-        if (!cancelled) {
-          setProgress(null)
-          setLoading(false)
-        }
+        setProgress(null)
+        setLoading(false)
       }
-    }
+    },
+    [clipId, hasUpload],
+  )
 
-    setLoading(true)
+  const ensureLoad = useCallback(() => {
+    if (!hasUpload || startedRef.current) return
+    startedRef.current = true
     if (!progress) setProgress(readPersisted(clipId))
     void load(0)
+  }, [clipId, hasUpload, load, progress])
 
-    return () => {
-      cancelled = true
+  useEffect(
+    () => () => {
       if (pollRef.current) clearTimeout(pollRef.current)
-    }
-  }, [clipId, hasUpload])
+    },
+    [],
+  )
 
   if (!hasUpload) return null
 
@@ -99,16 +97,23 @@ export function OpenInFullVideoButton({ clipId, hasUpload = true }: { clipId: st
     ? 'Open in full video'
     : loading
       ? progress || 'Preparing full video…'
-      : 'Full video unavailable'
+      : 'Open in full video'
 
   return (
     <Button
       size="sm"
       variant="outline"
       asChild={Boolean(url)}
-      disabled={loading || !url}
+      disabled={loading && !url}
       data-testid="open-in-full-video"
       title={progress ?? undefined}
+      onPointerEnter={ensureLoad}
+      onFocus={ensureLoad}
+      onClick={(e) => {
+        if (url) return
+        e.preventDefault()
+        ensureLoad()
+      }}
     >
       {url ? (
         <a href={url} target="_blank" rel="noopener noreferrer">

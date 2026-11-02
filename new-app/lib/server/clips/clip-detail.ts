@@ -1,7 +1,7 @@
 import { shotsFromCropJson, inferShotsFromWords } from '@/lib/clips/crop-shots'
 import { normalizeCropTrack, shotsToCropShots, type CropTrack } from '@/lib/clips/crop-track'
 import { mergeEditsPatch, normalizeEdits, type ClipBounds, type ClipWord } from '@/lib/clips/edits'
-import { normalizeTranscriptJson, resolveEditorWords } from '@/lib/server/clips/editor-words'
+import { normalizeTranscriptJson, preloadClipWordJson, resolveEditorWords } from '@/lib/server/clips/editor-words'
 import { clipperCapabilities } from '@/lib/server/clips/clipper-capabilities'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
@@ -41,18 +41,39 @@ export type EditorMedia = {
   maxMs?: number
 }
 
+const TRANSCRIPT_CACHE_MAX = 50
+const projectTranscriptCache = new Map<string, ClipWord[]>()
+
+function transcriptCacheKey(transcriptKey: string, updatedAt: Date): string {
+  return `${transcriptKey}:${updatedAt.toISOString()}`
+}
+
+/** Test hook. */
+export function __resetProjectTranscriptCache(): void {
+  projectTranscriptCache.clear()
+}
+
 async function loadProjectTranscript(
   storage: ReturnType<typeof getClipStorage>,
-  project: { transcriptKey: string | null },
+  project: { transcriptKey: string | null; updatedAt: Date },
 ): Promise<ClipWord[]> {
-  if (project.transcriptKey) {
-    try {
-      const raw = await storage.getJson<unknown>(project.transcriptKey)
-      const normalized = normalizeTranscriptJson(raw)
-      if (normalized.length) return normalized
-    } catch {
-      /* fall through */
+  if (!project.transcriptKey) return []
+  const cacheKey = transcriptCacheKey(project.transcriptKey, project.updatedAt)
+  const hit = projectTranscriptCache.get(cacheKey)
+  if (hit) return hit
+  try {
+    const raw = await storage.getJson<unknown>(project.transcriptKey)
+    const normalized = normalizeTranscriptJson(raw)
+    if (normalized.length) {
+      if (projectTranscriptCache.size >= TRANSCRIPT_CACHE_MAX) {
+        const first = projectTranscriptCache.keys().next().value
+        if (first) projectTranscriptCache.delete(first)
+      }
+      projectTranscriptCache.set(cacheKey, normalized)
+      return normalized
     }
+  } catch {
+    /* fall through */
   }
   return []
 }
@@ -67,12 +88,14 @@ export async function getClipEditorWords(
   const prisma = getPrisma()
   const project = await prisma.clipProject.findUnique({
     where: { id: clip.projectId },
-    include: { upload: true },
+    select: { transcriptKey: true, updatedAt: true, upload: { select: { storageDriver: true } } },
   })
   if (!project) return null
   const driverHint = clip.storageDriver ?? project.upload?.storageDriver ?? null
   const storage = project.transcriptKey
-    ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
+    ? driverHint
+      ? getClipStorage(driverHint)
+      : await getClipStorageForObjectKey(project.transcriptKey, driverHint)
     : getClipStorage(driverHint)
   const projectTranscript = await loadProjectTranscript(storage, project)
   const bounds = await clipBoundsForPatch({
@@ -99,26 +122,50 @@ export async function getClipEditorWords(
 
 export async function getClipEditorPayload(workspaceId: string, clipId: string) {
   const detailStartedAt = Date.now()
-  const clip = await getClipForWorkspace(workspaceId, clipId)
-  if (!clip) return null
   const prisma = getPrisma()
-  const project = await prisma.clipProject.findUnique({
-    where: { id: clip.projectId },
+  const row = await prisma.clip.findFirst({
+    where: { id: clipId, workspaceId, deletedAt: null },
     select: {
       id: true,
+      projectId: true,
       title: true,
-      settings: true,
-      status: true,
-      transcriptKey: true,
-      proxyKey: true,
+      startMs: true,
+      endMs: true,
+      score: true,
       updatedAt: true,
-      upload: { select: { key: true, storageDriver: true } },
+      editsSaveVersion: true,
+      edits: true,
+      previewKey: true,
+      posterKey: true,
+      cropKey: true,
+      sourceSegKey: true,
+      sourceSegStartMs: true,
+      sourceSegEndMs: true,
+      storageDriver: true,
+      aiMeta: true,
+      wordsKey: true,
+      project: {
+        select: {
+          id: true,
+          title: true,
+          settings: true,
+          status: true,
+          transcriptKey: true,
+          proxyKey: true,
+          updatedAt: true,
+          upload: { select: { key: true, storageDriver: true } },
+        },
+      },
     },
   })
-  if (!project) return null
+  if (!row) return null
+  const clip = row
+  const project = row.project
   const driverHint = clip.storageDriver ?? project.upload?.storageDriver ?? null
   const storage = project.transcriptKey
-    ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
+    ? driverHint
+      ? getClipStorage(driverHint)
+      : await getClipStorageForObjectKey(project.transcriptKey, driverHint)
     : getClipStorage(driverHint)
 
   const clipVersionHint = clip.updatedAt.toISOString()
@@ -144,6 +191,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     previewKey: clip.previewKey,
   })
   const projectTranscriptP = loadProjectTranscript(storage, project)
+  const clipWordsP = preloadClipWordJson(storage, workspaceId, clip)
   const cropTrackJsonP = storage.getJson<unknown>(cropTrackKey).catch(() => null)
   const cropRawP = clip.cropKey ? storage.getJson(clip.cropKey).catch(() => null) : Promise.resolve(null)
   const segmentSizeP = sourceSegKey
@@ -188,7 +236,9 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     sourceKey
       ? createCachedSignedDownloadUrl(storage, sourceKey, signProject, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
       : Promise.resolve(null),
-    Promise.all([projectTranscriptP]).then(([pt]) => resolveEditorWords(storage, workspaceId, clip, pt)),
+    Promise.all([projectTranscriptP, clipWordsP]).then(([pt, clipWords]) =>
+      resolveEditorWords(storage, workspaceId, clip, pt, { preloadedClipWords: clipWords }),
+    ),
     cropTrackJsonP.then((track) =>
       track
         ? createCachedSignedDownloadUrl(storage, cropTrackKey, signClip, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)

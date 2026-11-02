@@ -29,6 +29,10 @@ export function resolvePrismaDatabaseUrl(raw: string): string {
       url.searchParams.set("pgbouncer", "true");
     }
 
+    if (url.port === "5432") {
+      url.searchParams.delete("pgbouncer");
+    }
+
     const envLimit = process.env.DATABASE_CONNECTION_LIMIT?.trim();
     if (!url.searchParams.has("connection_limit")) {
       const limit = envLimit || (isPooler ? "3" : "");

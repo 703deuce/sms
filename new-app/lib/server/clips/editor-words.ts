@@ -97,11 +97,15 @@ export async function resolveEditorWords(
     trimOutMs?: number
     contextMs?: number
     trimLimits?: { minMs: number; maxMs: number }
+    preloadedClipWords?: ClipWord[]
   },
 ): Promise<SourceWord[]> {
-  let clipRaw = await readClipWordJson(storage, clip.wordsKey)
-  if (!clipRaw.length) {
-    clipRaw = await readClipWordJson(storage, clipWordsStorageKey(workspaceId, clip.projectId, clip.id))
+  let clipRaw = opts?.preloadedClipWords ?? []
+  if (!clipRaw.length && opts?.preloadedClipWords === undefined) {
+    clipRaw = await readClipWordJson(storage, clip.wordsKey)
+    if (!clipRaw.length) {
+      clipRaw = await readClipWordJson(storage, clipWordsStorageKey(workspaceId, clip.projectId, clip.id))
+    }
   }
 
   if (clipRaw.length) {
@@ -136,4 +140,15 @@ export async function resolveEditorWords(
   }
 
   return []
+}
+
+/** Start clip + fallback words.json downloads in parallel (editor payload). */
+export function preloadClipWordJson(
+  storage: ReturnType<typeof getClipStorage>,
+  workspaceId: string,
+  clip: { id: string; projectId: string; wordsKey: string | null },
+): Promise<ClipWord[]> {
+  const primary = readClipWordJson(storage, clip.wordsKey)
+  const fallback = readClipWordJson(storage, clipWordsStorageKey(workspaceId, clip.projectId, clip.id))
+  return Promise.all([primary, fallback]).then(([a, b]) => (a.length ? a : b))
 }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ScoreRing } from '@/components/clips/ui/score-ring'
@@ -78,10 +78,6 @@ export function ClipCard({
       : undefined
 
   const editorHref = `/app/clips/${projectId}/edit/${clip.id}`
-
-  useEffect(() => {
-    router.prefetch(editorHref)
-  }, [router, editorHref])
 
   const openEditor = () => {
     router.push(editorHref)
@@ -242,7 +238,7 @@ export function ClipCard({
         <h3 className="line-clamp-2 text-sm font-medium leading-snug break-words">
           <Link
             href={editorHref}
-            prefetch
+            prefetch={false}
             className="text-left hover:text-primary hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
@@ -341,7 +337,7 @@ export function ClipCard({
           <Button
             size="sm"
             variant="default"
-            render={<Link href={editorHref} prefetch />}
+            render={<Link href={editorHref} prefetch={false} />}
             onClick={(e) => e.stopPropagation()}
           >
             Edit

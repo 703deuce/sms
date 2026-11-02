@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const getClipForWorkspace = vi.fn()
-const findUnique = vi.fn()
+const findFirst = vi.fn()
 const streamVodFind = vi.fn()
 const resolveEditorWords = vi.fn()
 const resolveBrollMedia = vi.fn()
@@ -10,26 +9,32 @@ const clipBoundsForPatch = vi.fn()
 const createCachedSignedDownloadUrl = vi.fn()
 const getObjectSizeBytes = vi.fn()
 const getJson = vi.fn()
+const getClipStorageForObjectKey = vi.fn()
+const preloadClipWordJson = vi.fn()
 
-vi.mock('@/lib/server/clips/clips', () => ({ getClipForWorkspace }))
 vi.mock('@/lib/server/db', () => ({
   getPrisma: () => ({
-    clipProject: { findUnique },
+    clip: { findFirst },
     streamVod: { findUnique: streamVodFind },
   }),
 }))
 vi.mock('@/lib/storage', () => ({
   getClipStorage: () => ({ name: 's3', getJson, getObjectSizeBytes }),
-  getClipStorageForObjectKey: vi.fn(async () => ({ name: 's3', getJson, getObjectSizeBytes })),
+  getClipStorageForObjectKey,
 }))
 vi.mock('@/lib/storage/signed-download-cache', async (importOriginal) => {
   const orig = await importOriginal<typeof import('@/lib/storage/signed-download-cache')>()
   return { ...orig, createCachedSignedDownloadUrl }
 })
-vi.mock('@/lib/server/clips/editor-words', () => ({
-  normalizeTranscriptJson: (x: unknown) => x,
-  resolveEditorWords,
-}))
+vi.mock('@/lib/server/clips/editor-words', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('@/lib/server/clips/editor-words')>()
+  return {
+    ...orig,
+    normalizeTranscriptJson: (x: unknown) => x,
+    resolveEditorWords,
+    preloadClipWordJson,
+  }
+})
 vi.mock('@/lib/server/clips/broll-media', () => ({ resolveBrollMedia }))
 vi.mock('@/lib/server/clips/editor-assets', () => ({ resolveEditorAssets }))
 vi.mock('@/lib/clips/edits', async (importOriginal) => {
@@ -57,7 +62,7 @@ describe('PERF-2 getClipEditorPayload', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    getClipForWorkspace.mockResolvedValue({
+    findFirst.mockResolvedValue({
       id: 'clip_1',
       projectId: 'proj_1',
       workspaceId: 'ws',
@@ -74,18 +79,19 @@ describe('PERF-2 getClipEditorPayload', () => {
       sourceSegKey: null,
       sourceSegStartMs: null,
       sourceSegEndMs: null,
-      storageDriver: null,
+      storageDriver: 's3',
       aiMeta: null,
-    })
-    findUnique.mockResolvedValue({
-      id: 'proj_1',
-      title: 'P',
-      settings: {},
-      status: 'READY',
-      transcriptKey: null,
-      proxyKey: null,
-      updatedAt: projectUpdated,
-      upload: { key: 'src.mp4', storageDriver: 's3' },
+      wordsKey: 'ws/ws/projects/proj_1/clips/clip_1/words.json',
+      project: {
+        id: 'proj_1',
+        title: 'P',
+        settings: {},
+        status: 'READY',
+        transcriptKey: 'ws/ws/projects/proj_1/words.json',
+        proxyKey: null,
+        updatedAt: projectUpdated,
+        upload: { key: 'src.mp4', storageDriver: 's3' },
+      },
     })
     clipBoundsForPatch.mockResolvedValue({ trimMinMs: 0, trimMaxMs: 1000 })
     getJson.mockResolvedValue(null)
@@ -94,14 +100,17 @@ describe('PERF-2 getClipEditorPayload', () => {
     resolveEditorWords.mockResolvedValue([])
     resolveBrollMedia.mockResolvedValue([])
     resolveEditorAssets.mockResolvedValue({ fullVideo: null, peaksUrl: null, filmstrip: null })
+    preloadClipWordJson.mockResolvedValue([])
     createCachedSignedDownloadUrl.mockImplementation(async (_s, key, opts) => {
       return `https://signed/${key}?v=${opts?.versionHint ?? 'head'}`
     })
+    getClipStorageForObjectKey.mockResolvedValue({ name: 's3', getJson, getObjectSizeBytes })
   })
 
-  it('passes versionHint and skips objectVersionToken paths', async () => {
+  it('passes versionHint and skips storage HEAD when driverHint is set', async () => {
     const { getClipEditorPayload } = await import('@/lib/server/clips/clip-detail')
     await getClipEditorPayload('ws', 'clip_1')
+    expect(getClipStorageForObjectKey).not.toHaveBeenCalled()
     expect(createCachedSignedDownloadUrl).toHaveBeenCalled()
     for (const call of createCachedSignedDownloadUrl.mock.calls) {
       const opts = call[2] as { versionHint?: string } | undefined
@@ -146,5 +155,34 @@ describe('PERF-2 getClipEditorPayload', () => {
     const firstFinish = Math.min(order.indexOf('words:after'), order.indexOf('assets:after'))
     expect(wordsStart).toBeLessThan(firstFinish)
     expect(assetsStart).toBeLessThan(firstFinish)
+  })
+
+  it('starts clip words preload in parallel with project transcript', async () => {
+    const order: string[] = []
+    const gate = { open: false }
+    const track = (name: string) => {
+      order.push(`${name}:start`)
+      return new Promise<unknown>((resolve) => {
+        const tick = () => {
+          if (gate.open) {
+            order.push(`${name}:after`)
+            resolve(name === 'transcript' ? [] : [])
+          } else setTimeout(tick, 0)
+        }
+        tick()
+      })
+    }
+
+    getJson.mockImplementation(() => track('transcript'))
+    preloadClipWordJson.mockImplementation(() => track('clipWords'))
+
+    const { getClipEditorPayload } = await import('@/lib/server/clips/clip-detail')
+    const run = getClipEditorPayload('ws', 'clip_1')
+    await new Promise((r) => setTimeout(r, 5))
+    expect(order.filter((e) => e.endsWith(':start'))).toEqual(
+      expect.arrayContaining(['transcript:start', 'clipWords:start']),
+    )
+    gate.open = true
+    await run
   })
 })

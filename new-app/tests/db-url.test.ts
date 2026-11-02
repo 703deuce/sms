@@ -24,6 +24,13 @@ describe('resolvePrismaDatabaseUrl', () => {
     expect(url.searchParams.get('connection_limit')).toBe('3')
   })
 
+  it('strips pgbouncer=true from URL when port is 5432', () => {
+    const out = resolvePrismaDatabaseUrl(
+      'postgresql://user:pass@aws-0-us-east-1.pooler.supabase.com:5432/postgres?pgbouncer=true',
+    )
+    expect(new URL(out).searchParams.get('pgbouncer')).toBeNull()
+  })
+
   it('does not add pgbouncer when PRISMA_PGBOUNCER_MODE=off', () => {
     process.env.PRISMA_PGBOUNCER_MODE = 'off'
     const out = resolvePrismaDatabaseUrl(
