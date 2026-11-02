@@ -4,40 +4,45 @@ import Link from 'next/link'
 import { useEffect } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
-  AudioLines,
+  Clapperboard,
   Download,
   FlaskConical,
   GraduationCap,
+  House,
   Images,
   LayoutTemplate,
   Palette,
-  PenLine,
   Radio,
   Scissors,
-  Users,
+  Settings,
+  Sparkles,
   Video,
-  Film,
+  type LucideIcon,
 } from 'lucide-react'
 import { LogoMark } from '@/components/brand/logo-mark'
 import { DriveWorkspaceSwitcher } from '@/components/drive/drive-workspace-switcher'
 import { ClipsProjectsNav } from '@/components/shell/clips-projects-nav'
 import { SidebarCreateMenu } from '@/components/shell/sidebar-create-menu'
-import { SidebarProductSection } from '@/components/shell/sidebar-product-section'
 import { useClipsWorkspace } from '@/components/providers/clips-workspace-provider'
-import { resolveActiveSidebarSection } from '@/lib/app-sidebar-sections'
-import { isItemActive, type NavItem } from '@/lib/nav'
-import { isScreenwritingEnabled } from '@/lib/features/screenwriting'
 import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { useRecordingEnabled, useSoloRecordingEnabled } from '@/lib/recording/use-recording-enabled'
-import { cn } from '@/lib/utils'
+import {
+  activeSidebarId,
+  buildSidebarNav,
+  createMenuItems,
+  type SidebarNavGroup,
+  type SidebarNavIcon,
+  type SidebarNavItem,
+} from '@/lib/sidebar-nav'
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -52,39 +57,41 @@ const HEAVY_NAV_HREF_NO_PREFETCH = new Set([
   '/app/rooms/new',
 ])
 
-function NavLink({
-  item,
-  pathname,
-  searchParams,
-}: {
-  item: NavItem
-  pathname: string
-  searchParams: URLSearchParams
-}) {
-  const active = isItemActive(item, pathname, searchParams)
-  const Icon = item.icon
+const ICONS: Record<SidebarNavIcon, LucideIcon> = {
+  home: House,
+  clips: Scissors,
+  streamer: Radio,
+  editor: Clapperboard,
+  record: Video,
+  aiVideo: Sparkles,
+  media: Images,
+  brand: Palette,
+  templates: LayoutTemplate,
+  exports: Download,
+  learn: GraduationCap,
+  settings: Settings,
+}
+
+const navButtonClass =
+  'relative h-9 gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:inset-y-2 data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary'
+
+function NavItemRow({ item, active }: { item: SidebarNavItem; active: boolean }) {
+  const Icon = ICONS[item.icon]
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        tooltip={item.title}
+        tooltip={item.label}
         isActive={active}
-        className={cn('relative h-9 gap-3 rounded-md text-sm', item.disabled && 'pointer-events-none opacity-50')}
+        aria-current={active ? 'page' : undefined}
+        data-nav-id={item.id}
+        className={navButtonClass}
         render={
-          item.disabled ? (
-            <span aria-disabled="true" tabIndex={-1} className="flex items-center gap-3" />
-          ) : (
-            <Link href={item.href} prefetch={HEAVY_NAV_HREF_NO_PREFETCH.has(item.href) ? false : undefined} />
-          )
+          <Link href={item.href} prefetch={HEAVY_NAV_HREF_NO_PREFETCH.has(item.href) ? false : undefined} />
         }
       >
-        <Icon className="size-4" />
-        <span>{item.title}</span>
+        <Icon className="size-5" strokeWidth={1.75} />
+        <span>{item.label}</span>
       </SidebarMenuButton>
-      {item.badge === 'soon' && (
-        <SidebarMenuBadge className="rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
-          Soon
-        </SidebarMenuBadge>
-      )}
     </SidebarMenuItem>
   )
 }
@@ -96,7 +103,6 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
   const recordingEnabledClient = useRecordingEnabled()
   const soloRecordingEnabled = useSoloRecordingEnabled()
   const recordingEnabled = recordingNavEnabled || recordingEnabledClient
-  const activeSection = resolveActiveSidebarSection(pathname, searchParams)
   const t2vEnabled = isT2vFeatureEnabled()
   const scriptEditorEnabled = isScriptEditorEnabled()
 
@@ -108,126 +114,55 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
     console.info('[editor:flag]', { enabled: scriptEditorEnabled })
   }, [scriptEditorEnabled])
 
-  useEffect(() => {
-    console.info('[nav:section]', { activeSection, pathname })
-  }, [activeSection, pathname])
-
-  const clipsItems: NavItem[] = [
-    { title: 'Streamer', href: '/app/streamer', icon: Radio },
-    ...(soloRecordingEnabled ? [{ title: 'Record', href: '/app/record', icon: Video }] : []),
-    { title: 'Exports', href: '/app/exports', icon: Download },
-  ]
-
-  const mediaLibraryItem: NavItem = { title: 'Media library', href: '/app/clips/media', icon: Images }
-  const layoutPacksItem: NavItem = {
-    title: 'Layout packs',
-    href: '/app/clips/templates?tab=layouts&sub=mine',
-    icon: LayoutTemplate,
+  const flags = {
+    recording: recordingEnabled,
+    soloRecording: soloRecordingEnabled,
+    scriptEditor: scriptEditorEnabled,
+    t2v: t2vEnabled,
   }
-
-  const editorItems: NavItem[] = scriptEditorEnabled
-    ? [
-        { title: 'Editor hub', href: '/app/editor', icon: Scissors, isActive: (p) => p === '/app/editor' || p.startsWith('/app/editor/') },
-        ...(recordingEnabled
-          ? [
-              { title: 'Rooms', href: '/app/rooms/new', icon: Video },
-              { title: 'Rooms recordings', href: '/app/rooms', icon: Video },
-            ]
-          : []),
-        mediaLibraryItem,
-        layoutPacksItem,
-        { title: 'Voice', href: '/app/voice', icon: AudioLines, badge: 'soon', disabled: true },
-        ...(isScreenwritingEnabled()
-          ? [{ title: 'Screenwriting', href: '/app/sw', icon: PenLine }]
-          : []),
-      ]
-    : []
-
-  const sharedMediaItems: NavItem[] = scriptEditorEnabled ? [] : [mediaLibraryItem, layoutPacksItem]
-
-  const t2vItems: NavItem[] = t2vEnabled
-    ? [
-        { title: 'New AI Video', href: '/app/clips/video/new', icon: Video },
-        { title: 'Templates', href: '/app/clips/templates?tab=ai-video', icon: LayoutTemplate },
-        { title: 'AI Video projects', href: '/app/clips?kind=video', icon: Film },
-      ]
-    : []
-
-  const templatesNavItem: NavItem = { title: 'Templates', href: '/app/clips/templates', icon: LayoutTemplate }
-
-  const sharedItems: NavItem[] = [
-    templatesNavItem,
-    { title: 'Brand kit', href: '/app/clips/brand', icon: Palette },
-    {
-      title: 'Brand templates',
-      href: '/app/clips/brand?tab=templates',
-      icon: LayoutTemplate,
-    },
-    { title: 'Workspaces', href: '/app/clips?view=workspaces', icon: Users },
-    { title: 'Learn', href: '/app/help', icon: GraduationCap },
-  ]
+  const items = buildSidebarNav(flags)
+  const activeId = activeSidebarId(pathname ?? '', searchParams)
+  const group = (g: SidebarNavGroup) => items.filter((i) => i.group === g)
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border" data-testid="app-sidebar">
-      <SidebarHeader className="flex flex-col gap-2 px-2 py-3">
-        <div className="flex h-9 flex-row items-center gap-2.5 px-1 group-data-[collapsible=icon]:justify-center">
+      <SidebarHeader className="gap-2 p-2">
+        <div data-nav-id="workspace-switcher" className="flex items-center gap-2">
           <LogoMark className="size-7 shrink-0" />
-          <p className="min-w-0 text-sm font-semibold group-data-[collapsible=icon]:hidden">
-            Transovo <span className="text-brand-gradient">Studio</span>
-          </p>
+          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+            <DriveWorkspaceSwitcher />
+          </div>
         </div>
-        <div className="group-data-[collapsible=icon]:hidden">
-          <DriveWorkspaceSwitcher />
-        </div>
+        <SidebarCreateMenu items={createMenuItems(flags)} />
       </SidebarHeader>
-      <SidebarContent className="scrollbar-thin">
-        <div className="px-2 pb-2 group-data-[collapsible=icon]:px-1">
-          <SidebarCreateMenu />
-        </div>
-
-        <SidebarProductSection section="clips" title="Clips" active={activeSection === 'clips'}>
+      <SidebarContent>
+        <SidebarGroup data-nav-group="home">
           <SidebarMenu>
-            {clipsItems.map((item) => (
-              <NavLink key={item.href} item={item} pathname={pathname} searchParams={searchParams} />
-            ))}
-            <SidebarMenuItem>
-              <ClipsProjectsNav />
-            </SidebarMenuItem>
+            <ClipsProjectsNav active={activeId === 'home'} />
           </SidebarMenu>
-        </SidebarProductSection>
-
-        {editorItems.length > 0 ? (
-          <SidebarProductSection section="editor" title="Editor" active={activeSection === 'editor'}>
-            <SidebarMenu>
-              {editorItems.map((item) => (
-                <NavLink key={item.href + item.title} item={item} pathname={pathname} searchParams={searchParams} />
-              ))}
-            </SidebarMenu>
-          </SidebarProductSection>
-        ) : null}
-
-        {t2vItems.length > 0 ? (
-          <SidebarProductSection section="t2v" title="AI Video" active={activeSection === 't2v'}>
-            <SidebarMenu>
-              {t2vItems.map((item) => (
-                <NavLink key={item.href} item={item} pathname={pathname} searchParams={searchParams} />
-              ))}
-            </SidebarMenu>
-          </SidebarProductSection>
-        ) : null}
-
-        <SidebarProductSection section="shared" title="Shared" active={activeSection === 'shared'}>
+        </SidebarGroup>
+        <SidebarGroup data-nav-group="products">
           <SidebarMenu>
-            {sharedMediaItems.map((item) => (
-              <NavLink key={item.href + item.title} item={item} pathname={pathname} searchParams={searchParams} />
-            ))}
-            {sharedItems.map((item) => (
-              <NavLink key={item.href + item.title} item={item} pathname={pathname} searchParams={searchParams} />
+            {group('products').map((i) => (
+              <NavItemRow key={i.id} item={i} active={activeId === i.id} />
             ))}
           </SidebarMenu>
-        </SidebarProductSection>
+        </SidebarGroup>
+        <SidebarGroup data-nav-group="library">
+          <SidebarGroupLabel>Library</SidebarGroupLabel>
+          <SidebarMenu>
+            {group('library').map((i) => (
+              <NavItemRow key={i.id} item={i} active={activeId === i.id} />
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-2">
+      <SidebarFooter>
+        <SidebarMenu data-nav-group="footer">
+          {group('footer').map((i) => (
+            <NavItemRow key={i.id} item={i} active={activeId === i.id} />
+          ))}
+        </SidebarMenu>
         {testMode && (
           <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs group-data-[collapsible=icon]:hidden">
             <p className="flex items-center gap-1.5 font-medium text-warning">

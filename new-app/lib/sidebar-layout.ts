@@ -1,5 +1,9 @@
+import { isClipEditRoute } from '@/lib/sidebar-nav'
+
 /** Viewport at or below this width uses icon rail unless user expands on large screens. */
 export const SIDEBAR_AUTO_COLLAPSE_MAX_WIDTH_PX = 1279
+
+export const SIDEBAR_DRAWER_BREAKPOINT_PX = 1024
 
 export const SIDEBAR_OPEN_STORAGE_KEY = 'transovo_sidebar_open'
 
@@ -24,12 +28,7 @@ export function writeSidebarOpenToStorage(open: boolean) {
 }
 
 export function isClipEditorPath(pathname: string) {
-  if (pathname === '/app/editor' || pathname.startsWith('/app/editor/')) return true
-  if (pathname.includes('/script')) return true
-  if (pathname.includes('/edit/')) return true
-  if (pathname.startsWith('/app/clips/video/')) return true
-  if (/^\/app\/clips\/[^/]+\/video(?:\/|$)/.test(pathname)) return true
-  return false
+  return isClipEditRoute(pathname)
 }
 
 export function isClipsProjectsLibraryPath(pathname: string, searchParams?: URLSearchParams) {
