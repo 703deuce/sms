@@ -1,11 +1,13 @@
 /**
- * Q6.1: Studio Sound / denoise per lane (voice, music, voiceover) — reuses existing
+ * Q6.1: Studio Sound / denoise per lane (voice, music, voiceover au tracks) — reuses existing
  * voice Studio Sound job + G1c track FX NR (Q3.4 nrMix) on music / voiceover buses.
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { ClipStudioSound } from '@/lib/clips/audio'
 import { DEFAULT_STUDIO_SOUND_MIX } from '@/lib/clips/audio'
 import { FX_LIMITS, type TrackFx } from '@/lib/clips/editor/track-fx'
+import { effectiveTracks } from '@/lib/clips/editor/tracks'
+import { isVoiceoverTrackName } from '@/lib/clips/editor/recording'
 
 export type StudioSoundLane = 'voice' | 'music' | 'voiceover'
 
@@ -30,10 +32,18 @@ function fxFor(edits: ClipEditsV2, key: string): TrackFx | undefined {
   return trackFxList(edits).find((f) => f.track === key)
 }
 
+/** au<N> tracks named Voiceover (AI TTS + recorded VO cues). */
+export function voiceoverStudioFxTrackKeys(edits: ClipEditsV2): string[] {
+  return effectiveTracks(edits)
+    .filter((t) => t.kind === 'audio' && isVoiceoverTrackName(t.name))
+    .map((t) => t.id)
+}
+
 export function readStudioSoundLanes(edits: ClipEditsV2): Record<StudioSoundLane, StudioSoundLaneState> {
   const voice = edits.audio?.studioSound
   const musicFx = fxFor(edits, 'music')
-  const voFx = fxFor(edits, 'voiceover')
+  const voKeys = voiceoverStudioFxTrackKeys(edits)
+  const voFx = voKeys.map((k) => fxFor(edits, k)).find((f) => f?.nr != null)
   return {
     voice: {
       enabled: Boolean(voice?.enabled),
@@ -45,7 +55,7 @@ export function readStudioSoundLanes(edits: ClipEditsV2): Record<StudioSoundLane
       mix: musicFx?.nrMix ?? 1,
     },
     voiceover: {
-      enabled: voFx?.nr != null,
+      enabled: Boolean(voFx?.nr != null),
       mix: voFx?.nrMix ?? 1,
     },
   }
@@ -62,6 +72,23 @@ function upsertTrackFx(edits: ClipEditsV2, key: string, patch: Partial<Omit<Trac
     list.push({ track: key, ...patch })
   }
   return { ...edits, trackFx: list.length ? list : undefined }
+}
+
+function patchVoiceoverBus(edits: ClipEditsV2, enabled: boolean, mix?: number): ClipEditsV2 {
+  const keys = voiceoverStudioFxTrackKeys(edits)
+  if (!keys.length) return edits
+  let next = edits
+  for (const key of keys) {
+    const cur = fxFor(next, key)
+    if (!enabled) {
+      next = upsertTrackFx(next, key, cur?.nr != null ? { nr: undefined, nrMix: undefined } : null)
+      continue
+    }
+    const nr = cur?.nr ?? FX_LIMITS.nr[2]
+    const nrMix = mix ?? cur?.nrMix ?? 1
+    next = upsertTrackFx(next, key, { nr, nrMix })
+  }
+  return next
 }
 
 export function patchStudioSoundLane(
@@ -86,7 +113,15 @@ export function patchStudioSoundLane(
       audio: { ...(edits.audio ?? { music: null, sfx: [] }), studioSound: next },
     }
   }
-  const key = lane === 'music' ? 'music' : 'voiceover'
+  if (lane === 'voiceover') {
+    const enabled = patch.enabled
+    if (enabled === false) return patchVoiceoverBus(edits, false)
+    if (enabled === true || patch.mix != null) {
+      return patchVoiceoverBus(edits, true, patch.mix)
+    }
+    return edits
+  }
+  const key = 'music'
   const enabled = patch.enabled
   const mix = patch.mix
   const cur = fxFor(edits, key)

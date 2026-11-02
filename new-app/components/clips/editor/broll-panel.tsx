@@ -151,6 +151,22 @@ export function BrollPanel({
     toast.success('B-roll placed on timeline')
   }
 
+  const acceptOne = (item: BrollItem) => {
+    if (onAcceptBrollSuggestions) {
+      onAcceptBrollSuggestions([item])
+    } else {
+      onMergeBroll([item])
+    }
+    setPendingAuto((prev) => prev.filter((x) => x.id !== item.id))
+    onFlushEdits?.()
+    toast.success('B-roll placed on timeline')
+  }
+
+  const rejectOne = (item: BrollItem) => {
+    setPendingAuto((prev) => prev.filter((x) => x.id !== item.id))
+    toast.message('Suggestion dismissed')
+  }
+
   const suggest = async () => {
     setBusy(true)
     try {
@@ -265,8 +281,20 @@ export function BrollPanel({
               <p className="font-medium">{pendingAuto.length} pending — nothing on timeline until you accept</p>
               <ul className="max-h-32 space-y-1 overflow-y-auto">
                 {pendingAuto.map((item) => (
-                  <li key={item.id} className="tabular-nums text-muted-foreground">
-                    {msLabel(item.startMs)}–{msLabel(item.endMs)}
+                  <li
+                    key={item.id}
+                    className="flex flex-wrap items-center gap-2 tabular-nums text-muted-foreground"
+                    data-testid={`broll-pending-${item.id}`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      {msLabel(item.startMs)}–{msLabel(item.endMs)}
+                    </span>
+                    <Button size="xs" variant="secondary" onClick={() => acceptOne(item)} data-testid={`broll-accept-${item.id}`}>
+                      Accept
+                    </Button>
+                    <Button size="xs" variant="ghost" onClick={() => rejectOne(item)} data-testid={`broll-reject-${item.id}`}>
+                      Reject
+                    </Button>
                   </li>
                 ))}
               </ul>

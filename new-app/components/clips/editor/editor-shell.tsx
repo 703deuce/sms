@@ -116,6 +116,7 @@ import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel
 import { useFullVideoHighlights } from '@/components/clips/editor/use-full-video-highlights'
 import { useFullVideoMomentFocus } from '@/components/clips/editor/full-video-moment-focus'
 import { snapTranscriptSelectionMs } from '@/lib/clips/editor/make-clip-from-transcript'
+import { filterAutoBrollSuggestions } from '@/lib/clips/editor/broll-approve-first'
 import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
 import type { ProjectMediaApi } from '@/components/clips/editor/use-project-media'
 import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
@@ -1891,8 +1892,12 @@ export function EditorShell({
             onBrollMedia={mergeBrollMedia}
             onFlushEdits={() => void flushSave()}
             onAcceptBrollSuggestions={(items) => {
-              const cur = edits.broll ?? []
-              setEditsPass({ ...edits, broll: [...cur, ...items] }, 'Accept B-roll')
+              const filtered = filterAutoBrollSuggestions(edits.broll ?? [], items)
+              if (!filtered.accepted.length) {
+                toast.message('No new B-roll passed the 60 s repeat rule')
+                return
+              }
+              setEditsPass({ ...edits, broll: [...(edits.broll ?? []), ...filtered.accepted] }, 'Accept B-roll')
             }}
             uploadSlot={
               <MediaLibraryGrid media={media} filter="visual" lanes={['broll']} onAdd={(item, lane) => onAddMedia(item, lane)} compact />
@@ -2234,8 +2239,15 @@ export function EditorShell({
           onPendingPaidChange={setProducerPendingPaid}
           words={clipEditorWords as ClipWord[]}
           onRunPlanStep={(index, tools: ProducerToolCall[]) => {
-            const res = applyProducerPlanStep(edits, bounds, clipEditorWords as ClipWord[], tools, index)
-            if (res) setEditsPass(res.edits, res.label)
+            const cur = editsRef.current
+            const res = applyProducerPlanStep(cur, bounds, clipEditorWords as ClipWord[], tools, index)
+            if (res?.applied) {
+              editsRef.current = res.edits
+              setEditsPass(res.edits, res.label)
+              return true
+            }
+            if (res && !res.applied) toast.message(`Producer: ${tools[index]?.name ?? 'step'} made no change`)
+            return false
           }}
         />
       </EditorPanelErrorBoundary>

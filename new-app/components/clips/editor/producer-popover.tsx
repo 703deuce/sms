@@ -108,20 +108,20 @@ export function ProducerPopover({
       {planTools?.length ? (
         <ProducerPlanList
           tools={planTools}
-          onRunStep={(index) => onRunPlanStep?.(index, planTools)}
+          onRunStep={(index) => {
+            const ok = onRunPlanStep?.(index, planTools)
+            return ok !== false
+          }}
           onRunAll={() => {
-            if (proposal) {
-              onAudition(null)
-              onAccept(proposal.edits, proposal.before, proposal.changeCount)
-              setProposal(null)
-              setPreviewing(false)
+            if (!planTools?.length || !onRunPlanStep) return
+            for (let i = 0; i < planTools.length; i++) {
+              onRunPlanStep(i, planTools)
             }
-            setPlanTools(null)
           }}
           onDismiss={() => setPlanTools(null)}
         />
       ) : null}
-      {proposal ? (
+      {proposal && !planTools?.length ? (
         <div className="space-y-2 border-b bg-primary/5 px-3 py-2 text-xs" data-testid="producer-proposal">
           <p className="font-medium">
             {proposal.changeCount} proposed change{proposal.changeCount === 1 ? '' : 's'}

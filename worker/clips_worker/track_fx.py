@@ -93,6 +93,9 @@ def normalize_track_fx_one(raw) -> dict | None:
         nr = _clamp(raw.get("nr"), FX_LIMITS["nr"])
         if nr is not None:
             out["nr"] = _num_out(nr)
+            nr_mix = _num(raw.get("nrMix"))
+            if nr_mix is not None:
+                out["nrMix"] = _r2(max(0.0, min(1.0, float(nr_mix))))
         e = raw.get("eq")
         if isinstance(e, dict):
             eq: dict = {}
@@ -221,7 +224,15 @@ def pre_chain(fx: dict) -> list[str]:
         return []
     out: list[str] = []
     if fx.get("nr") is not None:
-        out.append(f"afftdn=nr={_f(fx['nr'], 2)}:nf=-50")
+        nr_f = f"afftdn=nr={_f(fx['nr'], 2)}:nf=-50"
+        mix = fx.get("nrMix")
+        if mix is not None and float(mix) < 0.999:
+            wet = max(0.0, min(1.0, float(mix)))
+            dry = _f(1.0 - wet, 4)
+            wet_s = _f(wet, 4)
+            out.append(f"asplit=2[drynr][wetnr];[wetnr]{nr_f}[den];[drynr][den]amix=inputs=2:weights={dry} {wet_s}")
+        else:
+            out.append(nr_f)
     eq = fx.get("eq") or {}
     if eq.get("hp") is not None:
         out.append(f"highpass=f={int(eq['hp'])}:p=2:t=q:w=0.7071")

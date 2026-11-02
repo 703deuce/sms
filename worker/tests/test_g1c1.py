@@ -90,6 +90,8 @@ def test_chain_strings():
     assert post_chain(FULL, None) == ["alimiter=limit=0.89125:attack=5:release=50:level=0"]
     assert chain_str({**FULL, "bypass": True}) == ""
     assert chain_str(None) == ""
+    nr_mix = pre_chain({"track": "music", "nr": 18, "nrMix": 0.5})
+    assert len(nr_mix) == 1 and "amix=inputs=2" in nr_mix[0] and "afftdn=nr=18" in nr_mix[0]
     # Floors: ffmpeg 5.1 option minimums.
     low = pre_chain({"track": "au1", "comp": {"threshold": -60, "ratio": 2, "attack": 1, "release": 50, "makeup": 0}})[0]
     assert "threshold=0.001:" in low  # −60 dB ≥ 5.1's 0.000977 floor

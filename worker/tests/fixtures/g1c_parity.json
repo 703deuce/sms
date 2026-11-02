@@ -306,6 +306,22 @@
      }
     }
    ]
+  },
+  {
+   "raw": [
+    {
+     "track": "music",
+     "nr": 18,
+     "nrMix": 0.5
+    }
+   ],
+   "out": [
+    {
+     "track": "music",
+     "nr": 18,
+     "nrMix": 0.5
+    }
+   ]
   }
  ],
  "gain_cases": [
@@ -558,6 +574,15 @@
    },
    "lufs_gain": null,
    "chain": "highpass=f=300:p=2:t=q:w=0.7071,lowpass=f=3400:p=2:t=q:w=0.7071"
+  },
+  {
+   "fx": {
+    "track": "music",
+    "nr": 18,
+    "nrMix": 0.5
+   },
+   "lufs_gain": null,
+   "chain": "asplit=2[drynr][wetnr];[wetnr]afftdn=nr=18:nf=-50[den];[drynr][den]amix=inputs=2:weights=0.5 0.5"
   }
  ]
 }

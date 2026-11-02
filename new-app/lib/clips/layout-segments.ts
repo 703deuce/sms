@@ -4,6 +4,8 @@ export type LayoutSegment = {
   startMs: number
   endMs: number
   mode: ClipEditsV2['layout']['mode']
+  /** Q6.2: split-screen toggle added this segment — removed when toggle off. */
+  auto?: true
 }
 
 export function defaultLayoutSegments(trimIn: number, trimOut: number, mode: ClipEditsV2['layout']['mode']): LayoutSegment[] {

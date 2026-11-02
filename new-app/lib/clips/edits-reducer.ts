@@ -125,6 +125,7 @@ export function applyProducerTool(
         assetId: String(call.args.assetId || ''),
         startMs: Number(call.args.atMs ?? 0),
         endMs: Number(call.args.atMs ?? 0) + Number(call.args.durationMs ?? 3000),
+        placement: 'manual',
       }
       return {
         edits: { ...base, broll: [...(base.broll || []), item] },

@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MAIN_ANGLE } from '@/lib/clips/editor/multicam-manual'
-import { pruneSources, sourceById } from '@/lib/clips/editor/sources'
+import { pruneSources, upsertSource } from '@/lib/clips/editor/sources'
+import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { formatTimecode } from '@/lib/clips/format'
@@ -31,8 +32,27 @@ export function MulticamReviewPanel({
   ]
 
   const setAngle = (segId: string, sourceId: string) => {
-    const sourceSegments = (edits.sourceSegments ?? []).map((s) => (s.id === segId ? { ...s, sourceId } : s))
-    onEditsPass({ ...edits, sourceSegments }, 'Multicam: change angle')
+    const seg = (edits.sourceSegments ?? []).find((s) => s.id === segId)
+    if (!seg) return
+    let sources = edits.sources
+    if (sourceId !== MAIN_ANGLE) {
+      const item = angles.find((a) => a.refId === sourceId)
+      if (item) sources = upsertSource(sources, sourceFromItem(item)).sources
+    }
+    const sourceSegments = (edits.sourceSegments ?? []).map((s) => {
+      if (s.id !== segId) return s
+      const next = { ...s, sourceId: sourceId === MAIN_ANGLE ? MAIN_ANGLE : sourceId }
+      delete (next as { auto?: boolean }).auto
+      return next
+    })
+    onEditsPass(
+      {
+        ...edits,
+        sources: pruneSources(sources, sourceSegments, edits.multicam, edits.inserts),
+        sourceSegments,
+      },
+      'Multicam: change angle',
+    )
   }
 
   const deleteSwitch = (segId: string) => {

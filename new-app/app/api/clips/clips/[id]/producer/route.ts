@@ -18,6 +18,8 @@ const bodySchema = z.object({
   message: z.string().min(1).max(4000),
   /** E4 pop-over: return the proposed edits without saving them (the editor previews / accepts). */
   dryRun: z.boolean().optional(),
+  /** Q6.6: return plan + confirm cards only — do not apply tools server-side. */
+  planOnly: z.boolean().optional(),
 })
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -25,6 +27,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   let workspaceId = ''
   let userMessage = ''
   let dryRun = false
+  let planOnly = false
   try {
     const params = await ctx.params
     clipId = params.id
@@ -34,6 +37,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const body = bodySchema.parse(await request.json())
     userMessage = body.message
     dryRun = body.dryRun === true
+    planOnly = body.planOnly === true
   } catch (err) {
     return jsonError(err, 400)
   }
@@ -100,6 +104,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
             },
           }
         })
+
+        send('plan', { tools: enrichedTools, reply: llm.reply })
+
+        if (planOnly || dryRun) {
+          send('message', { role: 'assistant', content: llm.reply })
+          send('tools', { summaries: [], pendingPaid: [], plan: enrichedTools })
+          return
+        }
+
         const prismaWords = getPrisma()
         const project = await prismaWords.clipProject.findUnique({ where: { id: clip.projectId } })
         const words = await loadClipWords(workspaceId, clip.projectId, clipId, project?.transcriptWords)
@@ -114,7 +127,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         send('edits', { edits: applied.edits, changeCount: applied.changeCount })
 
         const prisma = getPrisma()
-        if (applied.changeCount > 0 && !dryRun) {
+        if (applied.changeCount > 0) {
           await prisma.clip.update({
             where: { id: clipId },
             data: { edits: applied.edits as object },

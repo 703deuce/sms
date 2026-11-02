@@ -26,12 +26,20 @@ export function applyProducerPlanStep(
   words: ClipWord[],
   tools: ProducerToolCall[],
   stepIndex: number,
-): { edits: ClipEditsV2; label: string; changeCount: number } | null {
+): { edits: ClipEditsV2; label: string; changeCount: number; applied: boolean } | null {
   const tool = tools[stepIndex]
   if (!tool) return null
+  const before = JSON.stringify(edits)
   const applied = applyProducerToolsWithWords(edits, bounds, [tool], words)
+  const after = JSON.stringify(applied.edits)
+  const changed = before !== after
   const label = `Producer: ${tool.name}`
-  return { edits: applied.edits, label, changeCount: applied.summaries.length || 1 }
+  return {
+    edits: applied.edits,
+    label,
+    changeCount: applied.summaries.length || (changed ? 1 : 0),
+    applied: changed,
+  }
 }
 
 export function applyProducerPlanThroughStep(
