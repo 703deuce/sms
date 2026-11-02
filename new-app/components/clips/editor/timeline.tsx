@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { exportTimeMap, seekBaseMs, toBaseMs, toExportMs } from '@/lib/clips/editor/export-time'
 import { parseNudge } from '@/lib/clips/editor/timecode-nudge'
-import { readTimelineHeight, TIMELINE_MIN_H, writeTimelineHeight } from '@/lib/clips/editor/timeline-opts'
+import { readTimelineHeight, clampTimelineHeight, TIMELINE_MIN_H, writeTimelineHeight } from '@/lib/clips/editor/timeline-opts'
 import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
 import { Activity, Blend, Bookmark, Command, Keyboard, Layers, Link2, Magnet, Maximize2, Pause, Plus, Redo2, Repeat, Scissors, Square, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
 import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from 'sonner'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -881,9 +882,20 @@ export function Timeline({
   // TC2b (TL-55): resizable / collapsible timeline (per-user, localStorage; null = fit all tracks).
   const [tlHeight, setTlHeight] = useState<number | null>(null)
   const [tlCollapsed, setTlCollapsed] = useState(false)
-  useEffect(() => setTlHeight(readTimelineHeight()), [])
+  useEffect(() => {
+    const vh = typeof window === 'undefined' ? 900 : window.innerHeight
+    const stored = readTimelineHeight()
+    setTlHeight(stored == null ? null : clampTimelineHeight(stored, vh))
+  }, [])
+  useEffect(() => {
+    const onResize = () => {
+      setTlHeight((h) => (h == null ? null : clampTimelineHeight(h, window.innerHeight)))
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const setTimelineHeight = (h: number | null) => {
-    const v = h == null ? null : Math.round(Math.min(1600, Math.max(TIMELINE_MIN_H, h)))
+    const v = h == null ? null : clampTimelineHeight(h, typeof window === 'undefined' ? 900 : window.innerHeight)
     setTlHeight(v)
     writeTimelineHeight(v)
   }
@@ -2439,7 +2451,7 @@ export function Timeline({
   const totalH = RULER_H + rows.reduce((s, r) => s + LANE_H[r.lane], 0)
 
   const tbtn =
-    'inline-flex h-7 items-center gap-1 rounded px-1.5 text-[11px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40'
+    'inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-[12px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4'
 
   /** G2: fade lengths of an audio item (music defaults 0.5 s / 1 s; clips 0). */
   const fadesOf = (item: TimelineItem): { fi: number; fo: number } => {
@@ -2607,7 +2619,7 @@ export function Timeline({
       >
         {host ? (
           <span
-            className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-violet-200 px-0.5 text-[8px] font-semibold leading-[10px] text-violet-950"
+            className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-violet-200 px-0.5 text-[10px] font-semibold leading-3 text-violet-950"
             title="Compound — double-click to open"
             data-testid="timeline-group-badge"
           >
@@ -2615,7 +2627,7 @@ export function Timeline({
           </span>
         ) : inGroup ? (
           <span
-            className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-amber-400 px-0.5 text-[8px] font-semibold leading-[10px] text-black"
+            className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-amber-400 px-0.5 text-[10px] font-semibold leading-3 text-black"
             title={`Group ${grpNo} (click one = select all · Ctrl+Shift+G ungroups)`}
             data-testid="timeline-group-badge"
           >
@@ -2691,7 +2703,7 @@ export function Timeline({
             ))
           : null}
         {(item.lane === 'music' && edits.audio?.music?.loop) || (item.lane === 'sfx' && edits.audio?.sfx.find((x) => x.generationId === item.id)?.loop) ? (
-          <span className="pointer-events-none absolute right-1 top-0 z-[1] rounded bg-black/50 px-0.5 text-[9px]" data-testid="timeline-music-loop" title="Loops to fill its window">
+          <span className="pointer-events-none absolute right-1 top-0 z-[1] rounded bg-black/50 px-0.5 text-[10px]" data-testid="timeline-music-loop" title="Loops to fill its window">
             ↻
           </span>
         ) : null}
@@ -2700,14 +2712,14 @@ export function Timeline({
           <span className="pointer-events-none relative truncate px-1">{item.label}</span>
         ) : null}
         {item.lane === 'video' && w > 40 ? (
-          <span className="pointer-events-none absolute left-1 top-0 z-[1] rounded-sm bg-black/45 px-0.5 text-[9px] text-white/90">{item.label}</span>
+          <span className="pointer-events-none absolute left-1 top-0 z-[1] rounded-sm bg-black/45 px-0.5 text-[10px] text-white/90">{item.label}</span>
         ) : null}
         {item.lane === 'video' && item.srcInMs != null && item.srcOutMs != null && edits.segmentSpeeds?.length
           ? (() => {
               const s = itemSpeed(edits, item.srcInMs, item.srcOutMs)
               return s !== 1 ? (
                 <span
-                  className="pointer-events-none absolute right-1 top-0 rounded bg-black/60 px-1 text-[9px] font-semibold tabular-nums text-amber-300"
+                  className="pointer-events-none absolute right-1 top-0 rounded bg-black/60 px-1 text-[10px] font-semibold tabular-nums text-amber-300"
                   data-testid={`timeline-speed-badge-${item.id}`}
                 >
                   {speedLabel(s)}
@@ -2820,7 +2832,7 @@ export function Timeline({
       onKeyDown={onKeyDown}
       data-testid="timeline-root"
     >
-      <div className="flex flex-wrap items-center justify-between gap-1" data-testid="timeline-toolbar">
+      <div className="flex h-10 flex-nowrap items-center gap-1 overflow-x-auto border-b border-border px-2 [scrollbar-width:none]" data-testid="timeline-toolbar">
         <div className="flex items-center gap-0.5">
           {onUndo ? (
             <button type="button" className={tbtn} onClick={onUndo} disabled={!canUndo} aria-label="Undo" title="Undo (Ctrl/Cmd+Z)">
@@ -3139,8 +3151,27 @@ export function Timeline({
             title="Keyboard shortcuts (?)"
             data-testid="timeline-shortcuts"
           >
-            <Keyboard className="size-3.5" />
+            <Keyboard className="size-4" />
           </button>
+          <Popover>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  className={`${tbtn} 2xl:hidden`}
+                  aria-label="Timeline shortcuts"
+                  data-testid="timeline-help-popover"
+                >
+                  ?
+                </button>
+              }
+            />
+            <PopoverContent className="max-w-sm text-[11px] leading-4 text-muted-foreground" side="top">
+              Click to select (Shift-click for more), drag to move (up / down: another track; main clips reorder), drag edges
+              to trim. S / Ctrl+B split · Del delete · Ctrl+C/X/V/D · I/O in–out · ←/→ nudge (Shift ×10) · ↑/↓ edit points ·
+              N snapping · Space / J K L play. ◇ adds keyframes; click a cut to add a transition. ? for all shortcuts.
+            </PopoverContent>
+          </Popover>
           <button
             type="button"
             className={`${tbtn} ${envOn ? 'text-primary' : 'text-muted-foreground'}`}
@@ -3239,7 +3270,7 @@ export function Timeline({
             </button>
           ) : null}
           {liveSelected.length > 1 ? (
-            <span className="ml-1 text-[10px] text-muted-foreground" data-testid="timeline-selection-count">
+            <span className="ml-1 text-[11px] text-muted-foreground" data-testid="timeline-selection-count">
               {liveSelected.length} selected
             </span>
           ) : null}
@@ -3403,7 +3434,7 @@ export function Timeline({
         style={tlHeight ? { height: tlHeight, overflowY: 'auto' } : undefined}
         data-testid="timeline-body"
       >
-        <div className="w-[104px] shrink-0 border-r border-border/60" aria-label="Tracks">
+        <div className="w-[132px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
           {rows.map((r) => (
             <TimelineLaneHeader
@@ -3746,7 +3777,7 @@ export function Timeline({
                         <button
                           key={`src${c.id}:${c.startMs}`}
                           type="button"
-                          className={`absolute top-[5px] z-[16] h-[14px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm border px-1 text-left text-[9px] leading-[12px] text-white shadow ${
+                          className={`absolute top-[5px] z-[16] h-[14px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm border px-1 text-left text-[10px] leading-[12px] text-white shadow ${
                             c.id === selectedSourceSegmentId ? 'border-white bg-amber-500' : 'border-amber-200/70 bg-amber-600/85 hover:bg-amber-500'
                           }`}
                           style={{ left: xs(c.startMs), width: Math.max(4, xe(c.endMs) - xs(c.startMs)) }}
@@ -3889,7 +3920,7 @@ export function Timeline({
               ) : null}
               {drag?.moved ? (
                 <div
-                  className="pointer-events-none absolute -top-0.5 rounded bg-popover px-1 text-[10px] tabular-nums shadow"
+                  className="pointer-events-none absolute -top-0.5 rounded bg-popover px-1 text-[11px] tabular-nums shadow"
                   style={{ left: Math.max(0, xs(shown(drag.item).startMs)) }}
                   aria-live="polite"
                 >
@@ -3934,7 +3965,7 @@ export function Timeline({
         <span className="h-1 w-10 rounded bg-border group-hover:bg-primary/60" />
         <button
           type="button"
-          className="rounded px-1 text-[10px] text-muted-foreground hover:text-foreground"
+          className="rounded px-1 text-[11px] text-muted-foreground hover:text-foreground"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => setTlCollapsed((c) => !c)}
           aria-pressed={tlCollapsed}
@@ -3943,7 +3974,10 @@ export function Timeline({
           {tlCollapsed ? 'Show timeline' : 'Collapse'}
         </button>
       </div>
-      <p className="text-[10px] text-muted-foreground">
+      <p
+        className="mt-2 hidden border-t border-border pt-2 text-[11px] leading-4 text-muted-foreground 2xl:block"
+        data-testid="timeline-help"
+      >
         Click to select (Shift-click for more), drag to move (up / down: another track; main clips reorder), drag edges
         to trim. S / Ctrl+B split · Del delete · Ctrl+C/X/V/D · I/O in–out · ←/→ nudge (Shift ×10) · ↑/↓ edit points ·
         N snapping · Space / J K L play. ◇ adds keyframes; click a cut to add a transition. ? for all shortcuts.
@@ -4196,7 +4230,7 @@ export function Timeline({
               ) : null}
               {angles.length > 1 && editable && (range || liveSelected.some((r) => r.lane === 'video')) ? (
                 <>
-                  <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">Camera ▸</p>
+                  <p className="px-2 pt-1 text-[11px] font-medium text-muted-foreground">Camera ▸</p>
                   {angles.map((a) => (
                     <button
                       key={a.sourceId}
@@ -4221,7 +4255,7 @@ export function Timeline({
                       {a.key}. {a.label}
                     </button>
                   ))}
-                  <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">Layout ▸</p>
+                  <p className="px-2 pt-1 text-[11px] font-medium text-muted-foreground">Layout ▸</p>
                   {angles.filter((a) => a.sourceId !== 'main').slice(0, 4).map((a) => (
                     <button
                       key={`lay-${a.sourceId}`}
@@ -4268,7 +4302,7 @@ export function Timeline({
                 if (!dests.length) return null
                 return (
                   <>
-                    <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">Move to track</p>
+                    <p className="px-2 pt-1 text-[11px] font-medium text-muted-foreground">Move to track</p>
                     {dests.map((t) => (
                       <button
                         key={t.id}
@@ -4289,7 +4323,7 @@ export function Timeline({
               })()}
               {range ? (
                 <>
-                  <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">In–out range</p>
+                  <p className="px-2 pt-1 text-[11px] font-medium text-muted-foreground">In–out range</p>
                   <button
                     type="button"
                     className="block w-full rounded px-2 py-1.5 pl-4 text-left hover:bg-muted"
@@ -4454,7 +4488,7 @@ export function Timeline({
               <div className="my-1 border-t border-border" role="separator" />
             </>
           ) : null}
-          <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground">At playhead</p>
+          <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">At playhead</p>
           {onSplitLayout ? (
             <button
               type="button"
@@ -4484,7 +4518,7 @@ export function Timeline({
           {onSetLayoutMode ? (
             <>
               <div className="my-1 border-t border-border" role="separator" />
-              <p className="px-2 py-1 text-[10px] text-muted-foreground">
+              <p className="px-2 py-1 text-[11px] text-muted-foreground">
                 Layout for this segment
                 <span className="block font-normal text-foreground">Current: {segmentModeAtPlayhead.replace(/_/g, ' ')}</span>
               </p>

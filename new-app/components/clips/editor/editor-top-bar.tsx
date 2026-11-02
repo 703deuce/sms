@@ -18,6 +18,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { SidebarToggleButton } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 
 export function EditorTopBar({
@@ -67,7 +68,8 @@ export function EditorTopBar({
         : 'text-muted-foreground'
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur">
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur">
+      <SidebarToggleButton />
       <Button size="icon" variant="ghost" aria-label="Back to project" render={<Link href={backHref} />}>
         <ArrowLeft className="size-4" />
       </Button>

@@ -1,16 +1,16 @@
-import { Ban, CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { AiOutcome, CallOutcome, McTbState } from '@/lib/data'
 
 export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'muted'
 
 const toneCls: Record<Tone, string> = {
-  neutral: 'bg-secondary text-secondary-foreground ring-foreground/10',
-  info: 'bg-accent text-accent-foreground ring-primary/20',
-  success: 'bg-success/12 text-success ring-success/25',
-  warning: 'bg-warning/15 text-warning-foreground ring-warning/30',
-  danger: 'bg-destructive/10 text-destructive ring-destructive/25',
-  muted: 'bg-muted text-foreground/70 ring-foreground/8',
+  neutral: 'bg-secondary text-foreground ring-border',
+  info: 'bg-primary/20 text-primary ring-primary/40',
+  success: 'bg-success/20 text-success ring-success/40',
+  warning: 'bg-warning/20 text-warning-foreground ring-warning/40',
+  danger: 'bg-destructive/20 text-destructive ring-destructive/40',
+  muted: 'bg-secondary text-foreground ring-border',
 }
 
 const dotCls: Record<Tone, string> = {
@@ -22,26 +22,30 @@ const dotCls: Record<Tone, string> = {
   muted: 'bg-muted-foreground/50',
 }
 
+const onMediaShell = 'bg-black/70 text-white ring-1 ring-inset ring-white/15 backdrop-blur-sm'
+
 export function StatusBadge({
   tone = 'neutral',
   children,
   className,
   icon,
+  onMedia = false,
 }: {
   tone?: Tone
   children: React.ReactNode
   className?: string
   icon?: React.ReactNode
+  onMedia?: boolean
 }) {
   return (
     <span
       className={cn(
-        'inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium whitespace-nowrap ring-1 ring-inset',
-        toneCls[tone],
+        'inline-flex h-5 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium whitespace-nowrap ring-1 ring-inset',
+        onMedia ? onMediaShell : toneCls[tone],
         className,
       )}
     >
-      {icon ?? <span aria-hidden className={cn('size-1.5 rounded-full', dotCls[tone])} />}
+      {icon ?? <span aria-hidden className={cn('size-1.5 rounded-full', onMedia ? dotCls[tone] : dotCls[tone])} />}
       {children}
     </span>
   )
@@ -50,19 +54,26 @@ export function StatusBadge({
 export function ProjectStatusBadge({
   status,
   showSpinner = true,
+  onMedia = false,
 }: {
   status: string
   showSpinner?: boolean
+  onMedia?: boolean
 }) {
   const ui = CLIP_JOB_STATE[status as ClipProjectStatusUi]
   if (!ui) {
-    return <StatusBadge tone="neutral">{status}</StatusBadge>
+    return (
+      <StatusBadge tone="neutral" onMedia={onMedia}>
+        {status}
+      </StatusBadge>
+    )
   }
   const processing = !['READY', 'FAILED', 'CANCELED', 'DRAFT'].includes(status)
   if (processing) {
     return (
       <StatusBadge
         tone="info"
+        onMedia={onMedia}
         icon={showSpinner ? <Loader2 className="size-3 animate-spin" aria-hidden /> : undefined}
       >
         {ui.label}
@@ -71,19 +82,23 @@ export function ProjectStatusBadge({
   }
   if (status === 'READY') {
     return (
-      <StatusBadge tone="success" icon={<CheckCircle2 className="size-3" aria-hidden />}>
+      <StatusBadge tone="success" onMedia={onMedia} icon={<CheckCircle2 className="size-3" aria-hidden />}>
         Ready
       </StatusBadge>
     )
   }
   if (status === 'FAILED') {
     return (
-      <StatusBadge tone="danger" icon={<XCircle className="size-3" aria-hidden />}>
+      <StatusBadge tone="danger" onMedia={onMedia} icon={<XCircle className="size-3" aria-hidden />}>
         Failed
       </StatusBadge>
     )
   }
-  return <StatusBadge tone={ui.tone}>{ui.label}</StatusBadge>
+  return (
+    <StatusBadge tone={ui.tone} onMedia={onMedia}>
+      {ui.label}
+    </StatusBadge>
+  )
 }
 
 export const CALL_OUTCOME: Record<CallOutcome, { label: string; tone: Tone }> = {

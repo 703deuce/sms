@@ -70,3 +70,8 @@ export function writeTimelineHeight(h: number | null) {
     /* private mode */
   }
 }
+
+export function clampTimelineHeight(h: number, viewportH: number): number {
+  const max = Math.max(TIMELINE_MIN_H, Math.min(560, Math.round(viewportH * 0.45)))
+  return Math.min(max, Math.max(TIMELINE_MIN_H, Math.round(h)))
+}

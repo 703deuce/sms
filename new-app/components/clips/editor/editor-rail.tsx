@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Captions, Clapperboard, Eraser, Image as ImageIcon, Languages, LayoutPanelTop, Layers, Music2, Palette, Sparkles, FileText, Type, LayoutTemplate, SwatchBook, FolderOpen, SlidersHorizontal, Megaphone } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -86,6 +86,22 @@ export const EDITOR_RAIL_ITEMS = CLIP_EDITOR_RAIL_IDS.map((id) => ALL_EDITOR_RAI
   (item): item is (typeof ALL_EDITOR_RAIL_ITEMS)[number] => Boolean(item),
 )
 
+export const EDITOR_RAIL_GROUPS: { id: string; label: string; ids: EditorPanelId[] }[] = [
+  { id: 'ai', label: 'AI', ids: ['producer', 'repurpose', 'dub'] },
+  { id: 'edit', label: 'Edit', ids: ['transcript', 'cleanup', 'captions', 'text', 'layers'] },
+  { id: 'media', label: 'Media', ids: ['media', 'broll', 'audio', 'thumbnail'] },
+  { id: 'style', label: 'Style', ids: ['layout', 'templates', 'brand', 'color'] },
+  { id: 'props', label: 'Properties', ids: ['inspector'] },
+]
+
+function shortRailLabel(label: string): string {
+  if (label === 'AI Producer') return 'Producer'
+  if (label === 'Properties') return 'Props'
+  return label
+}
+
+const itemById = new Map(EDITOR_RAIL_ITEMS.map((item) => [item.id, item]))
+
 export function editorRailIcon(id: EditorPanelId) {
   return EDITOR_RAIL_ITEMS.find((r) => r.id === id)?.icon ?? FileText
 }
@@ -94,31 +110,73 @@ export function EditorRail({
   active,
   onChange,
   variant = 'vertical',
+  hiddenIds = [],
 }: {
   active: EditorPanelId
   onChange: (id: EditorPanelId) => void
   variant?: 'vertical' | 'horizontal'
+  hiddenIds?: string[]
 }) {
   const navRef = useRef<HTMLElement>(null)
   const horizontal = variant === 'horizontal'
+  const hidden = useMemo(() => new Set(hiddenIds), [hiddenIds])
+
+  const visibleItems = useMemo(
+    () => EDITOR_RAIL_ITEMS.filter((item) => !hidden.has(item.id)),
+    [hidden],
+  )
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (horizontal) return
-      const idx = EDITOR_RAIL_ITEMS.findIndex((r) => r.id === active)
+      const idx = visibleItems.findIndex((r) => r.id === active)
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        const next = EDITOR_RAIL_ITEMS[Math.min(EDITOR_RAIL_ITEMS.length - 1, idx + 1)]
+        const next = visibleItems[Math.min(visibleItems.length - 1, idx + 1)]
         if (next) onChange(next.id)
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault()
-        const prev = EDITOR_RAIL_ITEMS[Math.max(0, idx - 1)]
+        const prev = visibleItems[Math.max(0, idx - 1)]
         if (prev) onChange(prev.id)
       }
     },
-    [active, horizontal, onChange],
+    [active, horizontal, onChange, visibleItems],
   )
+
+  const renderButton = ({ id, label, icon: Icon, tone }: (typeof EDITOR_RAIL_ITEMS)[number], vertical: boolean) => {
+    const isActive = active === id
+    const btn = (
+      <button
+        type="button"
+        aria-label={label}
+        aria-current={isActive ? 'page' : undefined}
+        tabIndex={0}
+        onClick={() => onChange(id)}
+        className={cn(
+          vertical
+            ? 'relative flex h-12 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+            : 'relative grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          isActive &&
+            vertical &&
+            'bg-accent text-foreground before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary',
+          isActive && !vertical && 'bg-accent text-foreground',
+        )}
+      >
+        <Icon className={cn('size-5', isActive && tone)} aria-hidden />
+        {vertical ? (
+          <span className="max-w-full truncate text-[11px] leading-none">{shortRailLabel(label)}</span>
+        ) : null}
+      </button>
+    )
+    if (horizontal) return btn
+    return (
+      <Tooltip>
+        <TooltipTrigger render={btn} />
+        <TooltipContent side="right">{label}</TooltipContent>
+      </Tooltip>
+    )
+  }
 
   return (
     <nav
@@ -129,37 +187,23 @@ export function EditorRail({
       className={cn(
         horizontal
           ? 'flex flex-row gap-1'
-          : 'hidden w-14 shrink-0 flex-col items-center gap-1 border-l border-border bg-sidebar py-2 lg:flex',
+          : 'hidden h-full w-16 shrink-0 flex-col items-center gap-0.5 overflow-y-auto rounded-lg border border-border bg-card py-2 [scrollbar-width:thin] lg:flex',
       )}
     >
-      {EDITOR_RAIL_ITEMS.map(({ id, label, icon: Icon, tone }) => {
-        const isActive = active === id
-        const btn = (
-          <button
-            type="button"
-            aria-label={label}
-            aria-current={isActive ? 'page' : undefined}
-            tabIndex={0}
-            onClick={() => onChange(id)}
-            className={cn(
-              'relative grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              isActive &&
-                !horizontal &&
-                'bg-accent text-foreground before:absolute before:inset-y-2 before:-left-2 before:w-[3px] before:rounded-full before:bg-brand-gradient',
-              isActive && horizontal && 'bg-accent text-foreground',
-            )}
-          >
-            <Icon className={cn('size-5', isActive && tone)} aria-hidden />
-          </button>
-        )
-        if (horizontal) return <span key={id}>{btn}</span>
-        return (
-          <Tooltip key={id}>
-            <TooltipTrigger render={btn} />
-            <TooltipContent side="left">{label}</TooltipContent>
-          </Tooltip>
-        )
-      })}
+      {horizontal
+        ? visibleItems.map((item) => <span key={item.id}>{renderButton(item, false)}</span>)
+        : EDITOR_RAIL_GROUPS.map((group, gi) => {
+            const groupItems = group.ids.map((id) => itemById.get(id)).filter((item): item is (typeof EDITOR_RAIL_ITEMS)[number] => Boolean(item) && !hidden.has(item.id))
+            if (!groupItems.length) return null
+            return (
+              <div key={group.id} className="flex w-full flex-col items-center gap-0.5">
+                {gi > 0 ? <div className="my-1 h-px w-8 bg-border" aria-hidden /> : null}
+                {groupItems.map((item) => (
+                  <span key={item.id}>{renderButton(item, true)}</span>
+                ))}
+              </div>
+            )
+          })}
     </nav>
   )
 }

@@ -24,7 +24,7 @@ export type TrackHeaderActions = {
 }
 
 const btn =
-  'inline-flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40'
+  'inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 [&_svg]:size-3.5'
 
 /** CapCut-style track header: name + mute / hide / lock (only the toggles the lane supports). */
 export function TimelineLaneHeader({
@@ -55,25 +55,25 @@ export function TimelineLaneHeader({
   const tk = testKey ?? lane
   return (
     <div
-      className={`flex items-center gap-0.5 border-b border-border/40 pl-1.5 pr-1 text-[10px] font-medium text-muted-foreground ${dropTarget ? 'bg-primary/15' : ''}`}
+      className={`flex items-center gap-0.5 border-b border-border/40 pl-1.5 pr-1 text-[12px] font-medium text-muted-foreground ${dropTarget ? 'bg-primary/15' : ''}`}
       style={{ height }}
       data-testid={`timeline-lane-header-${tk}`}
     >
       <TrackName name={name} tk={tk} onRename={track?.onRename} />
       {track?.fxOn && track.onFx ? (
-        <button type="button" className={`${btn} w-auto px-0.5 text-[9px] font-semibold text-primary`} onClick={track.onFx} title="Track FX" data-testid={`timeline-track-fx-badge-${tk}`}>
+        <button type="button" className={`${btn} w-auto px-0.5 text-[11px] font-semibold text-primary`} onClick={track.onFx} title="Track FX" data-testid={`timeline-track-fx-badge-${tk}`}>
           FX
         </button>
       ) : null}
       {track?.motionOn && track.onMotion ? (
-        <button type="button" className={`${btn} w-auto px-0.5 text-[9px] font-semibold text-primary`} onClick={track.onMotion} title="Track motion" data-testid={`timeline-track-motion-badge-${tk}`}>
+        <button type="button" className={`${btn} w-auto px-0.5 text-[11px] font-semibold text-primary`} onClick={track.onMotion} title="Track motion" data-testid={`timeline-track-motion-badge-${tk}`}>
           TM
         </button>
       ) : null}
       {track ? <TrackMenu tk={tk} name={name} actions={track} /> : null}
       {lane === 'video' && onOpenCover ? (
         <button type="button" className={btn} onClick={onOpenCover} title="Cover / thumbnail" aria-label="Open cover">
-          <ImageIcon className="size-3" />
+          <ImageIcon className="size-3.5" />
         </button>
       ) : null}
       {caps.mute ? (
@@ -87,13 +87,13 @@ export function TimelineLaneHeader({
           title={`${state.muted ? 'Unmute' : 'Mute'} ${name} (preview + export)`}
           data-testid={`timeline-lane-mute-${tk}`}
         >
-          {state.muted ? <VolumeX className="size-3 text-amber-500" /> : <Volume2 className="size-3" />}
+          {state.muted ? <VolumeX className="size-3.5 text-amber-500" /> : <Volume2 className="size-3.5" />}
         </button>
       ) : null}
       {caps.solo ? (
         <button
           type="button"
-          className={`${btn} text-[9px] font-bold ${state.soloed ? 'bg-amber-500/20 text-amber-500' : ''}`}
+          className={`${btn} text-[11px] font-bold ${state.soloed ? 'bg-amber-500/20 text-amber-500' : ''}`}
           disabled={!onToggle}
           onClick={() => onToggle?.({ soloed: !state.soloed })}
           aria-pressed={Boolean(state.soloed)}
@@ -115,7 +115,7 @@ export function TimelineLaneHeader({
           title={`${state.hidden ? 'Show' : 'Hide'} ${name} (preview + export)`}
           data-testid={`timeline-lane-hide-${tk}`}
         >
-          {state.hidden ? <EyeOff className="size-3 text-amber-500" /> : <Eye className="size-3" />}
+          {state.hidden ? <EyeOff className="size-3.5 text-amber-500" /> : <Eye className="size-3.5" />}
         </button>
       ) : null}
       <button
@@ -128,7 +128,7 @@ export function TimelineLaneHeader({
         title={`${state.locked ? 'Unlock' : 'Lock'} ${name}`}
         data-testid={`timeline-lane-lock-${tk}`}
       >
-        {state.locked ? <Lock className="size-3 text-amber-500" /> : <Unlock className="size-3" />}
+        {state.locked ? <Lock className="size-3.5 text-amber-500" /> : <Unlock className="size-3.5" />}
       </button>
     </div>
   )
@@ -141,7 +141,7 @@ function TrackName({ name, tk, onRename }: { name: string; tk: string; onRename?
     return (
       <input
         autoFocus
-        className="min-w-0 flex-1 rounded border border-border bg-background px-0.5 text-[10px] text-foreground"
+        className="min-w-0 flex-1 truncate rounded border border-border bg-background px-0.5 text-[12px] text-foreground"
         value={draft}
         maxLength={40}
         aria-label="Track name"
@@ -164,7 +164,7 @@ function TrackName({ name, tk, onRename }: { name: string; tk: string; onRename?
   }
   return (
     <span
-      className="min-w-0 flex-1 truncate"
+      className="min-w-0 flex-1 truncate text-[12px] font-medium"
       title={onRename ? `${name} — double-click to rename` : name}
       data-testid={`timeline-track-name-${tk}`}
       onDoubleClick={
@@ -208,7 +208,7 @@ function TrackMenu({ tk, name, actions }: { tk: string; name: string; actions: T
         title="Track options"
         data-testid={`timeline-track-menu-${tk}`}
       >
-        <MoreHorizontal className="size-3" />
+        <MoreHorizontal className="size-3.5" />
       </button>
       {open ? (
         <div className="absolute left-0 top-5 z-50 min-w-[150px] rounded-md border border-border bg-popover p-1 text-[11px] font-normal text-foreground shadow-lg" role="menu">

@@ -52,7 +52,7 @@ export function TimelineRuler({
   }
   return (
     <div
-      className="relative cursor-col-resize select-none border-b border-border/60 text-[9px] tabular-nums text-muted-foreground"
+      className="relative cursor-col-resize select-none border-b border-border/60 text-[11px] tabular-nums text-muted-foreground"
       style={{ width: widthPx, height }}
       data-testid="timeline-ruler"
       onPointerDown={(e) => {

@@ -8,7 +8,7 @@ export function PrimaryButton({ className, ...props }: React.ComponentProps<type
     <Button
       {...props}
       className={cn(
-        'relative bg-brand-gradient text-white shadow-sm ring-1 ring-inset ring-white/15 transition-[filter,box-shadow] hover:shadow-glow hover:brightness-110 active:brightness-95 disabled:opacity-60 disabled:shadow-none',
+        'bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 active:bg-primary/85 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none',
         className,
       )}
     />

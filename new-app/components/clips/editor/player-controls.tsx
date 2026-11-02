@@ -46,16 +46,23 @@ export function PlayerControls({
   const max = Math.max(1, outputDurationMs)
   const pct = outputDurationMs > 0 ? Math.min(100, (outputMs / outputDurationMs) * 100) : 0
   return (
-    <div className="flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-lg border border-border bg-card/50 px-3 py-2 sm:gap-3">
+    <div className="flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden px-1 py-1 sm:gap-3">
       {leadingSlot}
-      <Button type="button" size="icon" variant="outline" className="shrink-0" onClick={onToggle} aria-label={playing ? 'Pause' : 'Play'}>
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="size-9 shrink-0"
+        onClick={onToggle}
+        aria-label={playing ? 'Pause' : 'Play'}
+      >
         {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
       </Button>
-      <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+      <span className="shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground">
         {formatClock(outputMs)} / {formatClock(outputDurationMs)}
       </span>
       {onMuteToggle ? (
-        <Button type="button" size="icon" variant="ghost" className="shrink-0" onClick={onMuteToggle} aria-label={muted ? 'Unmute' : 'Mute'}>
+        <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0" onClick={onMuteToggle} aria-label={muted ? 'Unmute' : 'Mute'}>
           {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
         </Button>
       ) : null}

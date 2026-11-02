@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { isClipEditRoute } from '@/lib/sidebar-nav'
 import { HelpCircle, LifeBuoy, Plug, Plus, Settings, SunMoon } from 'lucide-react'
 import { StatusBadge } from '@/components/app/status'
 import { AppBreadcrumbs } from '@/components/shell/app-breadcrumbs'
@@ -33,9 +34,12 @@ const UTILITIES = [
 ]
 
 export function AppTopBar() {
+  const pathname = usePathname()
   const router = useRouter()
   const { testMode } = useClipsWorkspace()
   const { setTheme, resolvedTheme } = useTheme()
+
+  if (isClipEditRoute(pathname ?? '')) return null
 
   return (
     <header

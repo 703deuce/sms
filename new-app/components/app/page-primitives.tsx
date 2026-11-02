@@ -26,12 +26,21 @@ import {
 } from 'lucide-react'
 import { TONE_TILE, type ToneTileKey } from '@/lib/ui/tones'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
+
+export function PageContainer({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <div className={cn('mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-6 py-6', className)} data-testid="page-container">
+      {children}
+    </div>
+  )
+}
 
 export function Page({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div className="relative">
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-grid-fade" />
-      <div className={cn('relative mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-4 py-6 md:px-6 xl:px-8 md:py-8', className)}>{children}</div>
+      <PageContainer className={cn('relative', className)}>{children}</PageContainer>
     </div>
   )
 }
@@ -77,7 +86,7 @@ export function PageHeader({
           </ol>
         </nav>
       )}
-      <header className="flex flex-col gap-4 pb-2 md:flex-row md:items-end md:justify-between">
+      <header className="flex flex-wrap items-end justify-between gap-4 pb-2">
         <div className="flex min-w-0 items-start gap-3.5">
           {Icon && (
             <div
@@ -91,14 +100,29 @@ export function PageHeader({
           )}
           <div className="min-w-0 flex flex-col gap-2">
             {eyebrow && <div className="flex flex-wrap items-center gap-2">{eyebrow}</div>}
-            <h1 className="truncate text-2xl font-semibold tracking-tight md:text-[28px]">{title}</h1>
-            {description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
+            <h1 className="truncate text-page-title tracking-tight">{title}</h1>
+            {description && <p className="max-w-prose text-sm text-muted-foreground">{description}</p>}
             {meta && <div className="flex flex-wrap items-center gap-2">{meta}</div>}
           </div>
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+        {actions && <div className="flex items-center gap-2">{actions}</div>}
       </header>
     </div>
+  )
+}
+
+export function SectionTitle({ title, action }: { title: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <h2 className="text-section-title font-semibold">{title}</h2>
+      {action}
+    </div>
+  )
+}
+
+export function CardGrid({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <div className={cn('grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4', className)}>{children}</div>
   )
 }
 
@@ -150,9 +174,9 @@ export function Panel({
   icon?: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <section className={cn('flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs text-card-foreground', className)}>
+    <section className={cn('rounded-card border border-border bg-card p-4', !title && !actions && 'flex flex-col', className)}>
       {(title || actions) && (
-        <header className="flex items-start justify-between gap-4 border-b border-border/70 bg-linear-to-b from-muted/40 to-transparent px-5 py-3.5">
+        <header className="mb-4 flex items-start justify-between gap-4 border-b border-border/70 pb-3">
           <div className="flex min-w-0 items-start gap-3">
             {icon && <IconTile icon={icon} size="sm" />}
             <div className="flex min-w-0 flex-col gap-0.5">
@@ -163,7 +187,7 @@ export function Panel({
           {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </header>
       )}
-      <div className={cn('flex-1 p-5', bodyClassName)}>{children}</div>
+      <div className={cn(!title && !actions ? undefined : 'flex-1', bodyClassName)}>{children}</div>
     </section>
   )
 }
@@ -264,14 +288,29 @@ export function EmptyState({
   action?: React.ReactNode
 }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-dashed border-border bg-card/40 px-6 py-14 text-center">
-      <div className="pointer-events-none absolute inset-0 bg-grid-fade" aria-hidden />
-      <div className="relative mx-auto grid size-14 place-items-center rounded-2xl tile-primary">
-        <Icon className="size-6" />
+    <div className="flex flex-col items-center py-12 text-center">
+      <div className="grid size-10 place-items-center rounded-lg bg-secondary">
+        <Icon className="size-5 text-foreground" />
       </div>
-      <h3 className="relative mt-4 text-base font-semibold">{title}</h3>
-      <p className="relative mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
-      {action ? <div className="relative mt-5 flex justify-center gap-2">{action}</div> : null}
+      <h3 className="mt-4 text-sm font-medium">{title}</h3>
+      <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
+      {action ? <div className="mt-5 flex justify-center gap-2">{action}</div> : null}
+    </div>
+  )
+}
+
+export function PageSkeleton({ rows = 2 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-7 w-48" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+      <CardGrid>
+        {Array.from({ length: 8 }, (_, i) => (
+          <Skeleton key={i} className="aspect-video rounded-card" />
+        ))}
+      </CardGrid>
     </div>
   )
 }
