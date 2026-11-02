@@ -33,6 +33,7 @@ import { RepurposePanel } from '@/components/clips/editor/repurpose-panel'
 import { OpenInFullVideoButton } from '@/components/clips/editor/open-in-full-video-button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FindClipsInVideoButton } from '@/components/clips/editor/find-clips-in-video-button'
+import { HighlightsListPanel } from '@/components/clips/editor/highlights-list-panel'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { clipLayoutChip, clipTypeBadge, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
@@ -616,7 +617,7 @@ export function EditorShell({
     [clipId, editorWords, edits.trim.in, edits.trim.out],
   )
 
-  const fvHighlights = useFullVideoHighlights(projectId, fullVideo, editorWords)
+
   const fvMoment = useFullVideoMomentFocus(fullVideo, bounds.clipEndMs - bounds.clipStartMs)
   const [versionsEnabled, setVersionsEnabled] = useState(true)
   const [editVersions, setEditVersions] = useState<EditVersionRow[]>([])
@@ -1347,6 +1348,16 @@ export function EditorShell({
     [mediaOffsetMs],
   )
 
+  const highlightsSeekApi = useMemo(
+    () => ({
+      seekSource,
+      timelineTb,
+      setInOut: setExportTimelineInOut,
+    }),
+    [seekSource, timelineTb, setExportTimelineInOut],
+  )
+  const fvHighlights = useFullVideoHighlights(projectId, fullVideo, editorWords, highlightsSeekApi)
+
   const seekOutput = useCallback(
     (ms: number) => {
       const preview = editorPreviewEdits(edits, editorWords)
@@ -1646,6 +1657,17 @@ export function EditorShell({
   const panelBody = (
     <>
       <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
+        {fullVideo && fvHighlights.showHighlightsList ? (
+          <HighlightsListPanel
+            picks={fvHighlights.picks}
+            ranges={fvHighlights.ranges}
+            selectedClipId={fvHighlights.selectedClipId}
+            onSelect={fvHighlights.selectAndSeek}
+            onMakeClip={(pick, range) => void fvHighlights.onMakeClip(pick, range)}
+            onMakeAll={() => void fvHighlights.onMakeAll()}
+            jobRunning={fvHighlights.isJobRunning}
+          />
+        ) : null}
         <EditorPanelErrorBoundary label="Script">
         <TranscriptPanel
           words={editorWords}
@@ -1693,8 +1715,7 @@ export function EditorShell({
             fullVideo && fvHighlights.highlightsOn
               ? (startMs, endMs) => {
                   const mid = fvHighlights.picks.find((p) => p.startMs === startMs && p.endMs === endMs)
-                  if (mid) fvHighlights.setSelectedClipId(mid.clipId)
-                  seekSource(startMs)
+                  if (mid) fvHighlights.selectAndSeek(mid.clipId)
                 }
               : undefined
           }
@@ -2212,9 +2233,13 @@ export function EditorShell({
           versionsSlot={
             <>
             {fullVideo ? (
-              <FindClipsInVideoButton projectId={projectId} durationMs={bounds.clipEndMs - bounds.clipStartMs} />
+              <FindClipsInVideoButton
+                projectId={projectId}
+                durationMs={bounds.clipEndMs - bounds.clipStartMs}
+                onStarted={fvHighlights.startedFind}
+              />
             ) : null}
-            {fullVideo && fvHighlights.hasPicks ? (
+            {fullVideo && (fvHighlights.hasPicks || fvHighlights.isJobRunning) ? (
               <>
                 <Button
                   type="button"
@@ -2600,16 +2625,20 @@ export function EditorShell({
             momentFocus={fvMoment}
             onMomentSeek={seekSource}
             highlights={
-              fullVideo && fvHighlights.highlightsOn && fvHighlights.ranges.length
+              fullVideo && fvHighlights.highlightsOn && (fvHighlights.ranges.length || fvHighlights.isJobRunning)
                 ? {
                     picks: fvHighlights.picks,
                     ranges: fvHighlights.ranges,
                     selectedClipId: fvHighlights.selectedClipId,
                     durationMs: bounds.clipEndMs - bounds.clipStartMs,
-                    onSelect: (id) => fvHighlights.setSelectedClipId(id),
+                    jobRunning: fvHighlights.isJobRunning,
+                    progress: fvHighlights.progress,
+                    onSelect: (id) => fvHighlights.selectAndSeek(id),
                     onRangeChange: fvHighlights.onRangeChange,
                     onMakeClip: (pick, range) => void fvHighlights.onMakeClip(pick, range),
                     onOpenCard: fvHighlights.onOpenCard,
+                    onSelectPrev: fvHighlights.selectPrev,
+                    onSelectNext: fvHighlights.selectNext,
                   }
                 : undefined
             }

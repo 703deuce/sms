@@ -2,9 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Sparkles } from 'lucide-react'
+import { Loader2, MoreHorizontal, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { clipsFetch, estimateCredits } from '@/lib/clips-api'
 
 /** Confirm text — credits only, never provider $ (John t371u). */
@@ -16,20 +22,21 @@ export function findClipsConfirmText(credits: number | null): string {
 
 /**
  * FV1: from a full-video project, start clip finding over the same video (transcript reused).
- * FVfix: confirms in the app's in-page dialog (same look as the Export dialog), not window.confirm.
  */
 export function FindClipsInVideoButton({
   projectId,
   durationMs,
   settings,
+  onStarted,
 }: {
   projectId: string
   durationMs: number
   settings?: unknown
+  onStarted?: () => void
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
-  const [confirm, setConfirm] = useState<{ credits: number | null } | null>(null)
+  const [confirm, setConfirm] = useState<{ credits: number | null; mode: 'highlights' | 'project' } | null>(null)
 
   useEffect(() => {
     if (!confirm) return
@@ -40,7 +47,7 @@ export function FindClipsInVideoButton({
     return () => window.removeEventListener('keydown', onKey)
   }, [confirm])
 
-  const ask = async () => {
+  const ask = async (mode: 'highlights' | 'project') => {
     if (busy) return
     setBusy(true)
     let credits: number | null = null
@@ -52,19 +59,28 @@ export function FindClipsInVideoButton({
     } finally {
       setBusy(false)
     }
-    setConfirm({ credits })
+    setConfirm({ credits, mode })
   }
 
-  const start = async () => {
-    if (busy) return
+  const run = async () => {
+    if (busy || !confirm) return
     setBusy(true)
     try {
-      const project = await clipsFetch<{ id: string }>(`/api/clips/projects/${encodeURIComponent(projectId)}/find-clips`, {
-        method: 'POST',
-        body: '{}',
-      })
-      setConfirm(null)
-      router.push(`/app/clips/${project.id}`)
+      if (confirm.mode === 'highlights') {
+        await clipsFetch<{ jobId: string; mode: 'highlights' }>(
+          `/api/clips/projects/${encodeURIComponent(projectId)}/find-clips`,
+          { method: 'POST', body: JSON.stringify({ mode: 'highlights' }) },
+        )
+        setConfirm(null)
+        onStarted?.()
+      } else {
+        const project = await clipsFetch<{ id: string }>(`/api/clips/projects/${encodeURIComponent(projectId)}/find-clips`, {
+          method: 'POST',
+          body: '{}',
+        })
+        setConfirm(null)
+        router.push(`/app/clips/${project.id}`)
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not start clip finding')
     } finally {
@@ -74,19 +90,44 @@ export function FindClipsInVideoButton({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-8 gap-1"
-        onClick={() => void ask()}
-        disabled={busy}
-        data-testid="editor-find-clips-in-video"
-        title="Find short clips in this video (opens a new clips project; this edit is kept)"
-      >
-        {busy && !confirm ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Sparkles className="size-3.5" aria-hidden />}
-        Find clips in this video
-      </Button>
+      <div className="flex items-center gap-0.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1 rounded-r-none border-r-0"
+          onClick={() => void ask('highlights')}
+          disabled={busy}
+          data-testid="editor-find-clips-in-video"
+          title="Find the best moments and show them on the timeline"
+        >
+          {busy && !confirm ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Sparkles className="size-3.5" aria-hidden />}
+          Find clips
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-l-none px-2"
+              disabled={busy}
+              aria-label="More find clips options"
+              data-testid="editor-find-clips-menu"
+            >
+              <MoreHorizontal className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              data-testid="editor-find-clips-legacy-project"
+              onClick={() => void ask('project')}
+            >
+              Cut into a new clips project
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       {confirm ? (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
@@ -118,7 +159,7 @@ export function FindClipsInVideoButton({
               <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConfirm(null)} data-testid="find-clips-cancel">
                 Cancel
               </Button>
-              <Button autoFocus type="button" size="sm" disabled={busy} onClick={() => void start()} data-testid="find-clips-start">
+              <Button autoFocus type="button" size="sm" disabled={busy} onClick={() => void run()} data-testid="find-clips-start">
                 {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
                 Find clips
               </Button>

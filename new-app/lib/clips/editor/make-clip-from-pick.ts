@@ -20,8 +20,10 @@ export async function makeClipFromPick(
 
 export type ProjectHighlightsResponse = {
   data: {
+    source?: 'find' | 'project'
     status: string
-    foundProjectId: string
+    progress?: number | null
+    foundProjectId?: string
     picks: HighlightPick[]
   } | null
 }

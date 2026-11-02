@@ -1,8 +1,10 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { HighlightPick, HighlightRange } from '@/lib/clips/editor/highlights'
 import { clampPickDrag, isPickMoved } from '@/lib/clips/editor/highlights'
+import { reasonTagLabel } from '@/lib/clips/reason-tag'
 
 export type HighlightsLaneProps = {
   durationMs: number
@@ -14,6 +16,10 @@ export type HighlightsLaneProps = {
   onRangeChange: (clipId: string, range: { startMs: number; endMs: number }) => void
   onMakeClip: (pick: HighlightPick, range: HighlightRange) => void
   onOpenCard: (pick: HighlightPick) => void
+  jobRunning?: boolean
+  progress?: number | null
+  onSelectPrev?: () => void
+  onSelectNext?: () => void
   filmstripUrl?: string | null
 }
 
@@ -27,12 +33,38 @@ export function HighlightsLane({
   onRangeChange,
   onMakeClip,
   onOpenCard,
+  jobRunning,
+  progress,
+  onSelectPrev,
+  onSelectNext,
 }: HighlightsLaneProps) {
   const xs = (ms: number) => offsetPx + ms * pxPerMs
   const selectedIndex = useMemo(
     () => ranges.findIndex((r) => r.pick.clipId === selectedClipId),
     [ranges, selectedClipId],
   )
+
+  if (jobRunning && !ranges.length) {
+    const pct = typeof progress === 'number' ? Math.round(progress) : null
+    return (
+      <div
+        className="relative flex h-9 items-center border-b border-primary/20 bg-[repeating-linear-gradient(45deg,hsl(var(--primary)/0.08)_0,hsl(var(--primary)/0.08)_8px,transparent_8px,transparent_16px)] px-3 text-[10px] text-muted-foreground"
+        data-testid="highlights-lane"
+      >
+        <span data-testid="highlights-finding-label">
+          Finding clips…{pct != null ? ` ${pct}%` : ''}
+        </span>
+      </div>
+    )
+  }
+
+  if (!jobRunning && !ranges.length) {
+    return (
+      <div className="relative flex h-9 items-center border-b border-border px-3 text-[10px] text-muted-foreground" data-testid="highlights-lane">
+        No strong moments found
+      </div>
+    )
+  }
 
   return (
     <div className="relative h-9 border-b border-primary/20 bg-primary/5" data-testid="highlights-lane">
@@ -52,7 +84,8 @@ export function HighlightsLane({
             role="button"
             tabIndex={0}
           >
-            <span className="pointer-events-none block truncate px-1">
+            <span className="pointer-events-none flex items-center gap-0.5 truncate px-1">
+              <span className="rounded bg-black/30 px-0.5 text-[8px]">{reasonTagLabel(r.pick.reasonTag).slice(0, 1)}</span>
               {r.pick.title} · {r.pick.score}
             </span>
             <button
@@ -121,23 +154,33 @@ export function HighlightsLane({
                   >
                     Make clip
                   </button>
-                  <button
-                    type="button"
-                    className="rounded border border-border px-2 py-0.5"
-                    onClick={() => onOpenCard(r.pick)}
-                  >
-                    Open card
-                  </button>
+                  {r.pick.origin !== 'find' ? (
+                    <button
+                      type="button"
+                      className="rounded border border-border px-2 py-0.5"
+                      onClick={() => onOpenCard(r.pick)}
+                    >
+                      Open card
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
           </div>
         )
       })}
-      {selectedIndex >= 0 ? (
-        <span className="absolute right-2 top-2 text-[10px] tabular-nums text-muted-foreground">
-          {selectedIndex + 1}/{ranges.length}
-        </span>
+      {ranges.length ? (
+        <div className="absolute right-2 top-1.5 flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground">
+          <button type="button" aria-label="Previous highlight" className="rounded p-0.5 hover:bg-muted" onClick={() => onSelectPrev?.()} data-testid="highlights-prev">
+            <ChevronLeft className="size-3.5" />
+          </button>
+          <span>
+            {selectedIndex >= 0 ? selectedIndex + 1 : 0}/{ranges.length}
+          </span>
+          <button type="button" aria-label="Next highlight" className="rounded p-0.5 hover:bg-muted" onClick={() => onSelectNext?.()} data-testid="highlights-next">
+            <ChevronRight className="size-3.5" />
+          </button>
+        </div>
       ) : null}
     </div>
   )

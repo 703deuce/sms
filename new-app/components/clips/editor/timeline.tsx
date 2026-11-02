@@ -431,10 +431,14 @@ export function Timeline({
     ranges: HighlightRange[]
     selectedClipId: string | null
     durationMs: number
+    jobRunning?: boolean
+    progress?: number | null
     onSelect: (clipId: string) => void
     onRangeChange: (clipId: string, range: { startMs: number; endMs: number }) => void
     onMakeClip: (pick: HighlightPick, range: HighlightRange) => void
     onOpenCard: (pick: HighlightPick) => void
+    onSelectPrev?: () => void
+    onSelectNext?: () => void
   }
   momentFocus?: FullVideoMomentFocus | null
   onMomentSeek?: (sourceMs: number) => void
@@ -3408,7 +3412,7 @@ export function Timeline({
           data-px-per-sec={Math.round(effectivePxPerSec)}
         >
           <div style={{ width: widthPx + TRACK_EXTRA_PX, paddingLeft: TRACK_OFFSET_PX, paddingRight: TRACK_EXTRA_PX - TRACK_OFFSET_PX }}>
-            {highlights && highlightLaneRanges.length ? (
+            {highlights && (highlightLaneRanges.length || highlights.jobRunning) ? (
               <HighlightsLane
                 durationMs={highlights.durationMs}
                 pxPerMs={pxPerMs}
@@ -3423,6 +3427,10 @@ export function Timeline({
                 onRangeChange={highlights.onRangeChange}
                 onMakeClip={highlights.onMakeClip}
                 onOpenCard={highlights.onOpenCard}
+                jobRunning={highlights.jobRunning}
+                progress={highlights.progress}
+                onSelectPrev={highlights.onSelectPrev}
+                onSelectNext={highlights.onSelectNext}
               />
             ) : null}
             {momentFocus ? (
