@@ -212,6 +212,26 @@ def _probe_file_duration_ms(path: Path) -> int:
     return int(round(float(out or "0") * 1000))
 
 
+def guard_stream_clip_against_media(
+    clip: dict,
+    *,
+    media_duration_ms: int,
+    vod_range_start_ms: int,
+) -> tuple[int, int] | None:
+    """
+    Return clamped absolute (start, end) ms, or None when the clip should be skipped.
+    Clips starting at/after media duration are dropped; end is clamped; <5s after clamp is dropped.
+    """
+    abs_start, abs_end, _ = clip_absolute_span_ms(clip, vod_range_start_ms)
+    if media_duration_ms > 0 and abs_start >= media_duration_ms:
+        return None
+    if media_duration_ms > 0 and abs_end > media_duration_ms:
+        abs_end = media_duration_ms
+    if abs_end - abs_start < 5000:
+        return None
+    return abs_start, abs_end
+
+
 def _clip_timeline_anchor(clip: dict, state: dict, vod_default: int) -> tuple[int, str | None, str | None]:
     ai = clip.get("aiMeta") or {}
     if isinstance(ai, str):
@@ -331,12 +351,25 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 if layout_state and not state.get("layout"):
                     state["layout"] = layout_state
                     _save_state(conn, vod_id, state)
+                media_duration_ms = int(vod.get("durationMs") or 0)
+                if local_upload and local_upload.is_file():
+                    media_duration_ms = _probe_file_duration_ms(local_upload)
+
                 if not layout_state and clips:
                     sample = td_path / "layout_sample.mp4"
                     first = clips[0]
-                    abs_fs, _, wbase = clip_absolute_span_ms(first, vod_range_start_ms)
+                    abs_fs, abs_fe, wbase = clip_absolute_span_ms(first, vod_range_start_ms)
+                    if media_duration_ms > 0:
+                        span = guard_stream_clip_against_media(
+                            first, media_duration_ms=media_duration_ms, vod_range_start_ms=vod_range_start_ms
+                        )
+                        if span:
+                            abs_fs, abs_fe = span
+                        else:
+                            abs_fs = min(abs_fs, max(0, media_duration_ms - 30_000))
+                            abs_fe = min(abs_fs + 30_000, media_duration_ms)
                     fs = max(0.0, (abs_fs - wbase) / 1000.0 - 2)
-                    fe = fs + 30
+                    fe = min(fs + 30, media_duration_ms / 1000.0 if media_duration_ms > 0 else fs + 30)
                     seg_src = layout_video or local_upload
                     layout_kind = "full_vod_url"
                     if seg_src:
@@ -385,8 +418,21 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 if streamer_tier == "more" or (ai_meta_row.get("streamer") or {}).get("render") is False:
                     continue
                 clip_id = clip["id"]
+                guarded = guard_stream_clip_against_media(
+                    clip,
+                    media_duration_ms=media_duration_ms,
+                    vod_range_start_ms=vod_range_start_ms,
+                )
+                if guarded is None:
+                    print(
+                        f"[stream_render] skip_out_of_range clip={clip_id} "
+                        f"startMs={clip.get('startMs')} endMs={clip.get('endMs')} mediaMs={media_duration_ms}",
+                        flush=True,
+                    )
+                    continue
+                abs_start, abs_end = guarded
                 anchor, clip_audio_key, clip_video_key = _clip_timeline_anchor(clip, state, vod_range_start_ms)
-                abs_start, abs_end, _span_base = clip_absolute_span_ms(clip, vod_range_start_ms)
+                _span_base = anchor
                 window_base = anchor
                 pad = SEGMENT_PAD_S
                 pad_start_s = max(0.0, vod_ms_to_media_s(abs_start, anchor) - pad)

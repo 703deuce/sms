@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 from typing import Callable
 
 from clips_worker.job_reliability import JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL
@@ -239,6 +240,11 @@ def run_job(
             _log(f"[clipper:job] not owned anymore job={job_id}; skip fail ({type(exc).__name__}: {str(exc)[:160]})")
             return
         message = cancel_message(reason) if reason else readable_job_error(exc)
+        job_type = job.get("type") or ""
+        if job_type.startswith("STREAM_"):
+            tb = traceback.format_exc()
+            tail = tb[-3000:] if len(tb) > 3000 else tb
+            _log(f"[clipper:job] traceback job={job_id} type={job_type}\n{tail}")
         fail_job(conn, job, message, post_progress_fn=post_progress_fn)
     finally:
         from clips_worker.worker_identity import worker_instance_id

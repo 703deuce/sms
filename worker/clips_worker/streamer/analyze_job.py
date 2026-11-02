@@ -43,6 +43,24 @@ from clips_worker.streamer.transcribe_stream import log_stream_transcribe_summar
 from clips_worker.streamer.usage import check_cap, job_priority, meter_vod_once
 
 
+def resolve_analyze_window_ms(vod: dict, payload: dict) -> tuple[int, int]:
+    """Clamp analyze/render window to known media duration (upload tail must not exceed file)."""
+    window_start_ms = int(
+        payload.get("rangeStartMs") if payload.get("rangeStartMs") is not None else (vod.get("rangeStartMs") or 0)
+    )
+    window_end_ms = int(
+        payload.get("rangeEndMs")
+        if payload.get("rangeEndMs") is not None
+        else (vod.get("rangeEndMs") or vod.get("durationMs") or 0)
+    )
+    real_ms = int(vod.get("durationMs") or 0)
+    if real_ms > 0 and window_end_ms > real_ms:
+        window_end_ms = real_ms
+    if window_start_ms >= window_end_ms:
+        raise RuntimeError("range_outside_media")
+    return window_start_ms, window_end_ms
+
+
 def _load_vod(conn, vod_id: str) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
@@ -137,12 +155,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
 
     settings = enrich_settings_with_clip_length(settings, payload)
 
-    window_start_ms = int(payload.get("rangeStartMs") if payload.get("rangeStartMs") is not None else (vod.get("rangeStartMs") or 0))
-    window_end_ms = int(
-        payload.get("rangeEndMs")
-        if payload.get("rangeEndMs") is not None
-        else (vod.get("rangeEndMs") or vod.get("durationMs") or 0)
-    )
+    window_start_ms, window_end_ms = resolve_analyze_window_ms(vod, payload)
     audio_key = str(payload.get("audioKey") or state.get("audioKey") or stream_audio_key(workspace_id, vod_id))
     duration_ms = max(1, window_end_ms - window_start_ms)
     window_only = bool(payload.get("windowOnly"))

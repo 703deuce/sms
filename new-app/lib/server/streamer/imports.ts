@@ -129,13 +129,25 @@ export async function createStreamerImport(
   const projectId = createId('proj')
   const vodId = createId('svod')
 
+  let uploadDurationMs: number | null = null
   if (input.uploadId) {
     const upload = await prisma.clipUpload.findFirst({
       where: { id: input.uploadId, workspaceId, status: 'COMPLETE' },
     })
     if (!upload) throw new Error('Upload not complete')
     title = upload.filename.replace(/\.[^.]+$/, '')
-    merged.rangeEndMs = upload.durationMs || merged.rangeEndMs
+    uploadDurationMs = upload.durationMs || 0
+    if (uploadDurationMs > 0) {
+      if (rangeEndMs <= rangeStartMs || rangeEndMs > uploadDurationMs) {
+        rangeStartMs = 0
+        rangeEndMs = uploadDurationMs
+      } else {
+        rangeEndMs = Math.min(rangeEndMs, uploadDurationMs)
+        rangeStartMs = Math.max(0, Math.min(rangeStartMs, Math.max(0, rangeEndMs - 1000)))
+      }
+    }
+    merged.rangeEndMs = rangeEndMs
+    merged.rangeStartMs = rangeStartMs
   }
 
   let channelId: string | null = null
@@ -209,7 +221,8 @@ export async function createStreamerImport(
         url,
         title,
         rangeStartMs,
-        rangeEndMs: rangeEndMs > rangeStartMs ? rangeEndMs : null,
+        rangeEndMs: merged.rangeEndMs > merged.rangeStartMs ? merged.rangeEndMs : uploadDurationMs,
+        durationMs: uploadDurationMs,
         triggeredBy: input.uploadId ? 'upload' : 'paste',
         attestedAt: input.attest ? new Date() : null,
         priority: 10,

@@ -30,18 +30,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ClipLengthChoice } from '@/components/clips/clip-length-choice'
-import { streamerClipLengthFields, type ClipLengthChoice as ClipLengthChoiceValue } from '@/lib/clips/clip-length'
+import {
+  streamerClipLengthFields,
+  type ClipLengthChoice as ClipLengthChoiceValue,
+} from '@/lib/clips/clip-length'
+import {
+  streamerUploadResumeAction,
+  type PendingUploadMeta,
+} from '@/lib/streamer/upload-resume'
 
 const PENDING_UPLOAD_KEY = 'streamer-upload-resume-v1'
-
-type PendingUploadMeta = { uploadId: string; filename: string; bytes: number; lastModified?: number }
-
-function fileMatchesResume(file: File, saved: PendingUploadMeta) {
-  if (file.name !== saved.filename) return false
-  if (file.size !== saved.bytes) return false
-  if (saved.lastModified != null && file.lastModified !== saved.lastModified) return false
-  return true
-}
 
 type StreamerResolveView = {
   platform: string
@@ -139,18 +137,30 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
     resumeInputRef.current?.click()
   }
 
+  const beginUploadFromFile = async (file: File) => {
+    const saved = pendingMeta
+    const action = streamerUploadResumeAction(file, saved)
+    if (action === 'replace_stale' && saved) {
+      try {
+        await cancelClipUpload(saved.uploadId)
+      } catch {
+        /* discard locally anyway */
+      }
+      clearPending()
+      startFileUpload(file)
+      return
+    }
+    const resumeId =
+      action === 'resume' ? upload?.uploadId || uploadId || saved?.uploadId : undefined
+    startFileUpload(file, resumeId || undefined)
+  }
+
   const onResumeFileChosen = (file: File | undefined) => {
     if (!file) {
       openResumePicker()
       return
     }
-    const saved = pendingMeta
-    const resumeId = upload?.uploadId || uploadId || saved?.uploadId
-    if (saved && !fileMatchesResume(file, saved)) {
-      toast.error('Choose the same file (name, size, and modified time must match).')
-      return
-    }
-    startFileUpload(file, resumeId || undefined)
+    void beginUploadFromFile(file)
   }
 
   const cancelInterruptedUpload = async () => {
@@ -352,7 +362,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
 
   const submitUpload = async () => {
     if (!uploadId) return
-    const range = buildRangePayload()
+    const range = buildRangePayload(upload?.durationMs)
     if ('error' in range) {
       toast.error(range.error)
       return
@@ -379,7 +389,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   }
 
   const showResumeCard = upload?.state === 'error'
-  const showDropzone = !upload || upload.state === 'error' ? !showResumeCard : false
+  const showDropzone = !upload || upload.state === 'error'
 
   return (
     <div className="flex flex-col gap-4">
@@ -588,7 +598,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
             onCancel={cancelInterruptedUpload}
           />
         ) : showDropzone ? (
-          <Dropzone onFile={startFileUpload} />
+          <Dropzone onFile={(file) => void beginUploadFromFile(file)} />
         ) : upload ? (
           <UploadProgressItem
             progress={upload}
