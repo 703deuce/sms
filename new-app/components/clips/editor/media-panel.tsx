@@ -12,11 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 import { MEDIA_ACCEPT, type ProjectMediaApi } from '@/components/clips/editor/use-project-media'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { speakerDisplayName } from '@/lib/clips/editor/transcript-edit'
 import type { SourceWord } from '@/lib/clips/source-words'
+import type { CropShot } from '@/lib/server/clips/clip-detail'
 import { MEDIA_DND_TYPE, mediaLanesFor, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import {
   applyMulticamSegments,
   fillActiveSpeakerGaps,
+  multicamSpeakerRows,
   patchSourceSegment,
   pruneSources,
   removeSourceSegment,
@@ -231,6 +234,7 @@ export function MediaPanel({
   media,
   edits,
   words,
+  shots = [],
   selectedVideo,
   selectedSegmentId,
   onSelectSegment,
@@ -248,6 +252,7 @@ export function MediaPanel({
   media: ProjectMediaApi
   edits: ClipEditsV2
   words: SourceWord[]
+  shots?: CropShot[]
   selectedVideo: { srcInMs: number; srcOutMs: number } | null
   selectedSegmentId: string | null
   onSelectSegment: (id: string | null) => void
@@ -277,7 +282,10 @@ export function MediaPanel({
     [media.items],
   )
   const mainItem = media.items.find((i) => i.isMain)
-  const speakers = useMemo(() => speakersInWords(words, edits.trim.in, edits.trim.out), [words, edits.trim.in, edits.trim.out])
+  const speakerRows = useMemo(
+    () => multicamSpeakerRows(words, shots, edits.trim.in, edits.trim.out),
+    [words, shots, edits.trim.in, edits.trim.out],
+  )
   const mc: ClipMulticam = edits.multicam ?? {}
   const autoCount = edits.sourceSegments?.filter((s) => s.auto).length ?? 0
 
@@ -314,6 +322,7 @@ export function MediaPanel({
       words,
       edits.trim.in,
       edits.trim.out,
+      shots,
     )
     onEdits(next)
     toast.success(
@@ -422,13 +431,15 @@ export function MediaPanel({
           <p className="text-[11px] text-muted-foreground">
             Map speakers to angles, then auto-switch only in gaps — manual cuts (keys 1–9, timeline) stay.
           </p>
-          {speakers.length ? (
-            speakers.map((spk) => (
+          {speakerRows.length ? (
+            speakerRows.map(({ id: spk, speakerNum }) => (
               <div key={spk} className="flex items-center gap-2">
-                <Label className="w-20 text-[11px]">Speaker {Number(spk) + 1}</Label>
+                <Label className="w-20 shrink-0 truncate text-[11px]" title={speakerDisplayName(edits.speakerNames, spk, speakerNum)}>
+                  {speakerDisplayName(edits.speakerNames, spk, speakerNum)}
+                </Label>
                 <Select
                   items={[{ value: 'main', label: mainItem ? `${mainItem.label} (main)` : 'Main camera' }, ...angles.map((a) => ({ value: a.refId, label: a.label }))]}
-                  value={mc.speakerSources?.[spk] ?? 'main'}
+                  value={mc.speakerSources?.[spk] ?? mc.speakerSources?.[spk === 'A' ? '0' : spk === 'B' ? '1' : spk] ?? 'main'}
                   onValueChange={(v) => typeof v === 'string' && setSpeaker(spk, v)}
                 >
                   <SelectTrigger size="sm" className="min-w-0 flex-1" data-testid={`multicam-speaker-${spk}`}>
@@ -452,7 +463,7 @@ export function MediaPanel({
             onCommit={(v) => onEdits({ ...edits, multicam: { ...mc, wideEveryMs: Math.round(v * 1000) } })} />
           <ManualAngles edits={edits} angles={angles} mainLabel={mainItem?.label} onEdits={onEdits} />
           <div className="flex flex-wrap gap-1">
-            <Button size="sm" onClick={fillGaps} disabled={!speakers.length} data-testid="multicam-fill-gaps">
+            <Button size="sm" onClick={fillGaps} disabled={!speakerRows.length} data-testid="multicam-fill-gaps">
               Auto-switch (fill gaps)
             </Button>
             {autoCount ? (

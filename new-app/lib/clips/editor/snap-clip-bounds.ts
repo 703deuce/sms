@@ -129,3 +129,32 @@ export function snapClipBoundsMs(
   if (endMs <= startMs) return pick
   return { startMs, endMs }
 }
+
+/** True when endMs is not on a sentence-final word (within pad). */
+export function clipEndMisalignedWithSentence(
+  endMs: number,
+  words: readonly SnapWord[],
+  rangeStartMs: number,
+  rangeEndMs: number,
+): boolean {
+  if (!words.length) return false
+  const sentences = buildSentenceSpans(words, rangeStartMs, rangeEndMs)
+  const eSent = sentenceForMs(sentences, endMs)
+  if (!eSent) return true
+  const lastWord = words[Math.min(words.length - 1, eSent.wordEnd)]
+  if (!lastWord) return true
+  const endsPunct = /[.?!]["')\]]*$/.test(lastWord.w.trim())
+  const snappedEnd = Math.min(rangeEndMs, eSent.endMs + END_PAD_MS)
+  return endsPunct && Math.abs(endMs - snappedEnd) > 120
+}
+
+export function repairClipBoundsIfNeeded(
+  pick: { startMs: number; endMs: number },
+  words: readonly SnapWord[],
+  rangeStartMs: number,
+  rangeEndMs: number,
+): { startMs: number; endMs: number; changed: boolean } {
+  const snapped = snapClipBoundsMs(pick, words, rangeStartMs, rangeEndMs)
+  const changed = snapped.startMs !== pick.startMs || snapped.endMs !== pick.endMs
+  return { ...snapped, changed }
+}

@@ -2057,6 +2057,7 @@ export function EditorShell({
             media={media}
             edits={edits}
             words={editorWords}
+            shots={cropShots}
             selectedVideo={selectedVideo}
             selectedSegmentId={selectedSourceSegmentId}
             onSelectSegment={setSelectedSourceSegmentId}

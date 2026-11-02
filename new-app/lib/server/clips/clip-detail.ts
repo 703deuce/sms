@@ -12,6 +12,7 @@ import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { CLIPS_EDITOR_MEDIA_TTL_SEC, createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { resolveLayers } from '@/lib/clips/layers'
 import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
+import { repairClipSentenceBoundsOnOpen } from '@/lib/server/clips/sentence-snap-clip'
 
 export type FacecamLayoutState = {
   layout?: string
@@ -162,8 +163,27 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     sourceKey ? createCachedSignedDownloadUrl(storage, sourceKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
   ])
 
-  const edits = normalizeEdits(clip.edits, bounds)
+  let edits = normalizeEdits(clip.edits, bounds)
   const words: SourceWord[] = await resolveEditorWords(storage, workspaceId, clip, projectTranscript)
+
+  let clipStartMs = clip.startMs
+  let clipEndMs = clip.endMs
+  let detailBounds = bounds
+  try {
+    const repaired = await repairClipSentenceBoundsOnOpen(
+      { id: clip.id, startMs: clip.startMs, endMs: clip.endMs, edits: clip.edits },
+      words,
+      bounds,
+    )
+    if (repaired) {
+      detailBounds = repaired.bounds
+      edits = repaired.edits
+      clipStartMs = repaired.startMs
+      clipEndMs = repaired.endMs
+    }
+  } catch (e) {
+    console.warn('[clipper:detail] sentence_snap_repair_failed', e instanceof Error ? e.message : e)
+  }
 
   let cropTrack: CropTrack | null = null
   if (cropTrackResult) {
@@ -172,9 +192,9 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
 
   let shots: CropShot[] = cropTrack?.shots?.length
     ? shotsToCropShots(cropTrack)
-    : shotsFromCropJson(cropRawResult as { shots?: CropShot[] }, clip.startMs, clip.endMs)
+    : shotsFromCropJson(cropRawResult as { shots?: CropShot[] }, clipStartMs, clipEndMs)
   if (shots.length <= 1) {
-    const inferred = inferShotsFromWords(words, clip.startMs, clip.endMs)
+    const inferred = inferShotsFromWords(words, clipStartMs, clipEndMs)
     if (inferred.length > 1) shots = inferred
   }
 
@@ -203,9 +223,9 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     media = {
       url: signedPreview,
       kind: 'composite',
-      offsetMs: clip.startMs,
-      minMs: clip.startMs,
-      maxMs: clip.endMs,
+      offsetMs: clipStartMs,
+      minMs: clipStartMs,
+      maxMs: clipEndMs,
     }
   }
 
@@ -246,14 +266,14 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       id: clip.id,
       projectId: clip.projectId,
       title: clip.title,
-      startMs: clip.startMs,
-      endMs: clip.endMs,
+      startMs: clipStartMs,
+      endMs: clipEndMs,
       score: clip.score,
-      durationMs: clip.endMs - clip.startMs,
+      durationMs: clipEndMs - clipStartMs,
       updatedAt: clip.updatedAt.toISOString(),
       editsSaveVersion: clip.editsSaveVersion,
     },
-    bounds,
+    bounds: detailBounds,
     edits,
     layers: resolveLayers(edits),
     facecamLayout,

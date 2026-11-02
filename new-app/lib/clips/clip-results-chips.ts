@@ -61,6 +61,7 @@ const LAYOUT_LABELS: Record<string, string> = {
 }
 
 const SENTENCE_REF_RE = /\(\s*s\d+(?:\s*-\s*s\d+)?\s*\)/gi
+const BARE_SEGMENT_REF_RE = /\bs\d+(?:\s*-\s*s\d+)?\b/gi
 
 /** Worker/debug titles like `00:30.0–01:20.6; hook text…` — not for card headlines. */
 const CLIP_TITLE_TIMESTAMP_PREFIX_RE =
@@ -75,7 +76,24 @@ export function isTimestampPrefixedClipTitle(text: string): boolean {
 }
 
 function stripInternalSentenceRefs(text: string): string {
-  return text.replace(SENTENCE_REF_RE, '').replace(/\s{2,}/g, ' ').trim()
+  return text
+    .replace(SENTENCE_REF_RE, '')
+    .replace(BARE_SEGMENT_REF_RE, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function looksLikeSegmentPlanningNotes(text: string): boolean {
+  const t = text.toLowerCase()
+  if (!BARE_SEGMENT_REF_RE.test(text)) return false
+  BARE_SEGMENT_REF_RE.lastIndex = 0
+  return (
+    t.includes('introduces') ||
+    t.includes('build a') ||
+    t.includes('build the') ||
+    t.includes('segment') ||
+    (text.match(BARE_SEGMENT_REF_RE)?.length ?? 0) >= 2
+  )
 }
 
 function isHedgeOrDebugSummary(text: string): boolean {
@@ -94,6 +112,7 @@ export function isInternalClipReasoningText(text: string): boolean {
   if (!raw) return true
   if (isTimestampPrefixedClipTitle(raw)) return true
   if (SENTENCE_REF_RE.test(raw)) return true
+  if (looksLikeSegmentPlanningNotes(raw)) return true
   const trimmed = stripInternalSentenceRefs(raw)
   if (!trimmed || isHedgeOrDebugSummary(trimmed)) return true
   const t = trimmed.toLowerCase()
@@ -118,9 +137,11 @@ export function clipDisplayTitle(clip: {
     return rawTitle
   }
 
-  const titleAfterStrip = stripClipTitleTimestampPrefix(rawTitle)
-  if (titleAfterStrip && !isInternalClipReasoningText(titleAfterStrip)) {
-    return titleAfterStrip.slice(0, 120)
+  if (!isInternalClipReasoningText(rawTitle)) {
+    const titleAfterStrip = stripClipTitleTimestampPrefix(stripInternalSentenceRefs(rawTitle))
+    if (titleAfterStrip && !isInternalClipReasoningText(titleAfterStrip)) {
+      return titleAfterStrip.slice(0, 120)
+    }
   }
 
   const why = clipWhySummary(meta)
