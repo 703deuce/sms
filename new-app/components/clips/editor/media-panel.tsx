@@ -503,39 +503,6 @@ export function MediaPanel({
               onSeekSource={onSeekSource}
             />
           ) : null}
-          {autoCount ? (
-            <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-dashed p-1.5 text-[11px]" data-testid="multicam-switch-markers">
-              {(edits.sourceSegments ?? [])
-                .filter((s) => s.auto)
-                .map((s) => {
-                  const src = sourceById(edits.sources, s.sourceId)
-                  return (
-                    <li key={s.id} className="flex flex-wrap items-center gap-1">
-                      <span className="tabular-nums">{formatTimecode(s.startMs)}</span>
-                      <span className="text-muted-foreground">→ {src?.label ?? s.sourceId}</span>
-                      <Button size="xs" variant="outline" className="h-6" onClick={() => onSeekSource(s.startMs)}>
-                        Jump
-                      </Button>
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        className="h-6 text-destructive"
-                        onClick={() => {
-                          const sourceSegments = (edits.sourceSegments ?? []).filter((x) => x.id !== s.id)
-                          onEdits({
-                            ...edits,
-                            sourceSegments: sourceSegments.length ? sourceSegments : undefined,
-                            sources: pruneSources(edits.sources, sourceSegments, edits.multicam, edits.inserts),
-                          })
-                        }}
-                      >
-                        Delete
-                      </Button>
-                    </li>
-                  )
-                })}
-            </ul>
-          ) : null}
         </section>
       ) : null}
     </div>

@@ -5,7 +5,16 @@ import { decodePeaksFile } from '@/lib/clips/editor/editor-assets'
 import { detectBeats, monoSamples } from '@/lib/clips/editor/beats'
 
 /** G2: `beatsMs` / `bpm` (media ms) when the hook was asked for beats (`opts.beats`). */
-export type AudioPeaks = { peaks: number[]; peaksPerSec: number; durationMs: number; beatsMs?: number[]; bpm?: number }
+export type AudioPeaks = {
+  peaks: number[]
+  peaksPerSec: number
+  durationMs: number
+  beatsMs?: number[]
+  bpm?: number
+  /** Set when `opts.beats` — for strong-beat filtering (not sent to server). */
+  beatSamples?: Float32Array
+  beatSampleRate?: number
+}
 
 const EMPTY: AudioPeaks = { peaks: [], peaksPerSec: 0, durationMs: 0 }
 
@@ -55,8 +64,21 @@ export function useAudioPeaks(
         await ctx.close()
         const p = peaksFromSamples(decoded.getChannelData(0), decoded.duration, peaksPerSec, maxBuckets)
         // G2: local beat detection on the same decode (no extra download, no API).
-        const grid = wantBeats ? detectBeats(monoSamples(decoded), decoded.sampleRate) : null
-        if (!cancelled) setState(grid ? { ...p, beatsMs: grid.beatsMs, bpm: grid.bpm } : p)
+        const mono = monoSamples(decoded)
+        const grid = wantBeats ? detectBeats(mono, decoded.sampleRate) : null
+        if (!cancelled) {
+          setState(
+            grid
+              ? {
+                  ...p,
+                  beatsMs: grid.beatsMs,
+                  bpm: grid.bpm,
+                  beatSamples: mono,
+                  beatSampleRate: decoded.sampleRate,
+                }
+              : p,
+          )
+        }
       } catch {
         if (!cancelled) setState(EMPTY)
       }

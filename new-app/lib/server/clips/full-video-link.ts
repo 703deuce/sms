@@ -16,10 +16,19 @@ export type FullVideoLink = {
   sourceMs: number
 }
 
+export type FullVideoLinkPreparing = {
+  preparing: true
+  stage: 'project' | 'clip'
+  message: string
+  projectId?: string
+}
+
+export type FullVideoLinkResult = FullVideoLink | FullVideoLinkPreparing | null
+
 export async function resolveFullVideoLink(
   workspaceId: string,
   clipId: string,
-): Promise<FullVideoLink | null> {
+): Promise<FullVideoLinkResult | null> {
   const prisma = getPrisma()
   const clip = await prisma.clip.findFirst({
     where: { id: clipId, workspaceId, deletedAt: null },
@@ -76,9 +85,16 @@ export async function resolveFullVideoLink(
     select: { id: true, title: true },
   })
   if (!fvClip) {
-    fvClip = await waitForFullVideoClip(workspaceId, fvProjectId)
+    fvClip = await waitForFullVideoClip(workspaceId, fvProjectId, 45_000)
   }
-  if (!fvClip) return null
+  if (!fvClip) {
+    return {
+      preparing: true,
+      stage: 'clip',
+      message: 'Preparing full video editor (rendering clip)…',
+      projectId: fvProjectId,
+    }
+  }
 
   const sourceMs = clip.startMs
   const momentIn = clip.startMs

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { clampPickDrag } from '@/lib/clips/editor/highlights'
+import { formatMomentMs } from '@/lib/clips/format-moment-ms'
 import { deriveClipFromEditor } from '@/lib/clips-api'
 
 export type FullVideoMomentFocus = {
@@ -89,14 +90,21 @@ export function FullVideoMomentLane({ durationMs, pxPerMs, offsetPx, focus, onSe
   const xs = (ms: number) => offsetPx + ms * pxPerMs
   const left = xs(focus.startMs)
   const w = Math.max(6, xs(focus.endMs) - left)
+  const timeLabel = `${formatMomentMs(focus.startMs)}–${formatMomentMs(focus.endMs)}`
   return (
     <div className="relative h-9 border-b border-amber-500/30 bg-amber-500/10" data-testid="full-video-moment-lane">
       <div
-        className="absolute top-1 h-7 rounded-sm border border-amber-400/80 bg-amber-500/40 text-[9px] leading-7 text-white shadow-sm"
+        className="absolute top-0.5 min-h-8 rounded-sm border border-amber-400/80 bg-amber-500/40 py-0.5 text-[9px] leading-tight text-white shadow-sm"
         style={{ left, width: w }}
         data-testid="full-video-moment-range"
       >
-        <span className="pointer-events-none block truncate px-1">{focus.title}</span>
+        <span
+          className="pointer-events-none block truncate px-1 tabular-nums"
+          data-testid="full-video-moment-times"
+        >
+          {timeLabel}
+        </span>
+        <span className="pointer-events-none block truncate px-1 opacity-80">{focus.title}</span>
         <button
           type="button"
           data-testid="moment-edge-start"

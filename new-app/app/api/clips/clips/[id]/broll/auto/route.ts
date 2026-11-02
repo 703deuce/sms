@@ -24,12 +24,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const clip = await getClipForWorkspace(workspaceId, clipId)
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    let suggestOnly = false
+    let suggestOnly = true
     try {
       const raw = await request.json()
-      suggestOnly = bodySchema.parse(raw).suggestOnly === true
+      suggestOnly = bodySchema.parse(raw).suggestOnly !== false
     } catch {
-      suggestOnly = false
+      suggestOnly = true
     }
 
     const prisma = getPrisma()

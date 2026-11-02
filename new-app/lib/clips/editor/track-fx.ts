@@ -99,8 +99,10 @@ export function normalizeTrackFxOne(raw: unknown): TrackFx | null {
   if (isAudioFxKey(track)) {
     const nr = clampLim(o.nr, FX_LIMITS.nr)
     if (nr != null) out.nr = nr
-    const nrMix = num(o.nrMix)
-    if (nr != null && nrMix != null) out.nrMix = Math.min(1, Math.max(0, r2(nrMix)))
+    if (nr != null) {
+      const nrMix = num(o.nrMix)
+      if (nrMix != null) out.nrMix = Math.min(1, Math.max(0, r2(nrMix)))
+    }
     if (o.eq && typeof o.eq === 'object') {
       const e = o.eq as Record<string, unknown>
       const eq: TrackEq = {}

@@ -473,7 +473,6 @@ export function LayoutPanel({
         })}
       </div>
       ) : null}
-      {aiExtras ? (
       <>
       <p className="text-xs text-muted-foreground">
         Shots are time ranges from auto reframe. Pick who to follow at each speaker switch; use Re-run after large transcript edits.
@@ -482,12 +481,12 @@ export function LayoutPanel({
         <div className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs" data-testid="reframe-split-fallback">
           <div>
             <p className="font-medium">Split-screen on overlap</p>
-            <p className="text-muted-foreground">When two speakers talk at once, follow both-wide on those shots (v1 crop).</p>
+            <p className="text-muted-foreground">When two speakers overlap in the transcript, use split layout on those spans.</p>
           </div>
           <Switch
             checked={Boolean(edits.layout.splitScreenFallback)}
             onCheckedChange={(on) => {
-              const next = applySplitScreenOnOverlap(edits, shots, on === true)
+              const next = applySplitScreenOnOverlap(edits, shots, words, on === true)
               if (onEditsPass) onEditsPass(next, on ? 'Reframe: split on overlap' : 'Reframe: split off')
               else onEdits?.(next)
             }}
@@ -538,7 +537,6 @@ export function LayoutPanel({
         })}
       </ul>
       </>
-      ) : null}
     </div>
   )
 }

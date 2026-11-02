@@ -741,8 +741,14 @@ export function Timeline({
   )
   const beatStrength = edits.beatSync?.strength ?? 'all'
   const cutBeatsMs = useMemo(
-    () => filterBeatsForCut(allBeatsMs, beatStrength),
-    [allBeatsMs, beatStrength],
+    () =>
+      filterBeatsForCut(
+        allBeatsMs,
+        beatStrength,
+        musicPeaks.beatSamples,
+        musicPeaks.beatSampleRate,
+      ),
+    [allBeatsMs, beatStrength, musicPeaks.beatSamples, musicPeaks.beatSampleRate],
   )
   // G2: solo — items of audio tracks silenced by another track's solo draw faded.
   const soloEdits = useMemo(() => applyAudioSolo(edits), [edits])

@@ -5,6 +5,7 @@
  */
 import type { ClipWord } from '@/lib/clips/edits'
 import { clipWordSurfaceText } from '@/lib/clips/script-editor/enrich-transcript'
+import { normalizeTranscriptJson } from '@/lib/server/clips/editor-words'
 
 export type SnapWord = { s: number; e: number; w: string; i?: number }
 
@@ -20,6 +21,23 @@ export function clipWordsToSnapWords(raw: readonly ClipWord[]): SnapWord[] {
     w: clipWordSurfaceText(w as ClipWord & Record<string, unknown>),
     i: w.i ?? w.idx ?? pos,
   }))
+}
+
+/** Server derive + tests: same surface mapping as client make-clip-from-transcript. */
+export function snapWordsFromTranscriptRaw(raw: unknown): SnapWord[] {
+  const normalized = normalizeTranscriptJson(raw)
+  return clipWordsToSnapWords(
+    normalized.map((w, i) => {
+      const surface = clipWordSurfaceText(w as ClipWord & Record<string, unknown>)
+      return surface ? { ...w, w: surface } : w
+    }),
+  )
+}
+
+function pickHasSurfaceText(words: readonly SnapWord[], pick: { startMs: number; endMs: number }): boolean {
+  const lo = pick.startMs / 1000
+  const hi = pick.endMs / 1000
+  return words.some((w) => w.e >= lo && w.s <= hi && w.w.trim().length > 0)
 }
 
 export type SentenceSpan = { startMs: number; endMs: number; wordStart: number; wordEnd: number }
@@ -72,7 +90,25 @@ function wordIndexAtMs(words: readonly SnapWord[], ms: number, edge: 'start' | '
   return 0
 }
 
-function sentenceForMs(sentences: SentenceSpan[], ms: number): SentenceSpan | null {
+function sentenceForStartMs(sentences: SentenceSpan[], ms: number): SentenceSpan | null {
+  for (let i = 0; i < sentences.length; i++) {
+    const s = sentences[i]!
+    if (s.startMs <= ms && ms < s.endMs) return s
+    if (ms === s.endMs) return sentences[i + 1] ?? s
+  }
+  let best: SentenceSpan | null = null
+  let bestD = 1e9
+  for (const s of sentences) {
+    const d = Math.min(Math.abs(ms - s.startMs), Math.abs(ms - s.endMs))
+    if (d < bestD) {
+      bestD = d
+      best = s
+    }
+  }
+  return best
+}
+
+function sentenceForEndMs(sentences: SentenceSpan[], ms: number): SentenceSpan | null {
   for (const s of sentences) {
     if (s.startMs <= ms && ms <= s.endMs) return s
   }
@@ -102,11 +138,12 @@ export function snapClipBoundsMs(
   rangeEndMs: number,
 ): { startMs: number; endMs: number } {
   if (!words.length || pick.endMs <= pick.startMs) return pick
+  if (!pickHasSurfaceText(words, pick)) return pick
   const sentences = buildSentenceSpans(words, rangeStartMs, rangeEndMs)
   let startMs = pick.startMs
   let endMs = pick.endMs
 
-  const sSent = sentenceForMs(sentences, startMs)
+  const sSent = sentenceForStartMs(sentences, startMs)
   if (sSent) {
     const wi = wordIndexAtMs(words, startMs, 'start')
     const prev = wi > 0 ? words[wi - 1]! : null
@@ -118,7 +155,7 @@ export function snapClipBoundsMs(
     startMs = Math.round(words[wi]!.s * 1000)
   }
 
-  const eSent = sentenceForMs(sentences, endMs)
+  const eSent = sentenceForEndMs(sentences, Math.max(rangeStartMs, endMs - END_PAD_MS))
   if (eSent) {
     endMs = Math.min(rangeEndMs, eSent.endMs + END_PAD_MS)
   } else {
@@ -145,7 +182,7 @@ export function clipEndMisalignedWithSentence(
   if (!words.length) return false
   const sentences = buildSentenceSpans(words, rangeStartMs, rangeEndMs)
   const probeMs = Math.max(rangeStartMs, endMs - END_PAD_MS)
-  const eSent = sentenceForMs(sentences, probeMs)
+  const eSent = sentenceForEndMs(sentences, probeMs)
   if (!eSent) return true
   const lastWord = words[Math.min(words.length - 1, eSent.wordEnd)]
   if (!lastWord) return true

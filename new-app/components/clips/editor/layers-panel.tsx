@@ -220,7 +220,7 @@ export function LayersPanel({
                 const n = Array.isArray(v) ? v[0] : v
                 setRadiusDraft(typeof n === 'number' ? n : 0)
               }}
-              onValueCommit={(v) => {
+              onValueCommitted={(v) => {
                 const n = Array.isArray(v) ? v[0] : v
                 setRadiusDraft(null)
                 setLayers(
@@ -242,7 +242,7 @@ export function LayersPanel({
                 const n = Array.isArray(v) ? v[0] : v
                 setWidthDraft(typeof n === 'number' ? n : 100)
               }}
-              onValueCommit={(v) => {
+              onValueCommitted={(v) => {
                 const n = Array.isArray(v) ? v[0] : v
                 setWidthDraft(null)
                 setLayers(

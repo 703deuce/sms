@@ -78,7 +78,9 @@ export function ProducerPanel({
       const res = await fetch(`/api/clips/clips/${clipId}/producer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dryRun ? { message: text, dryRun: true } : { message: text }),
+        body: JSON.stringify(
+          dryRun ? { message: text, dryRun: true, planOnly: true } : { message: text },
+        ),
       })
       if (!res.ok) throw new Error(await res.text())
       const reader = res.body?.getReader()
@@ -108,6 +110,9 @@ export function ProducerPanel({
               if (exists) return p
               return [...p, payload.tool]
             })
+          }
+          if (event === 'plan' && Array.isArray(payload.tools) && payload.tools.length) {
+            onPlan?.(payload.tools)
           }
           if (event === 'tools') {
             lastSummaries = payload.summaries || []

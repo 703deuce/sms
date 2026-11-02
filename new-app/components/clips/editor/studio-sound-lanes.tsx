@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
@@ -10,6 +11,43 @@ import {
   type StudioSoundLane,
 } from '@/lib/clips/editor/studio-sound-tracks'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+
+function LaneMixSlider({
+  lane,
+  mix,
+  onCommit,
+}: {
+  lane: StudioSoundLane
+  mix: number
+  onCommit: (mix: number) => void
+}) {
+  const [draft, setDraft] = useState(Math.round(mix * 100))
+  useEffect(() => {
+    setDraft(Math.round(mix * 100))
+  }, [mix])
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-[10px] text-muted-foreground">Strength</Label>
+      <p className="text-[10px] text-muted-foreground">Applies on export (no preview).</p>
+      <Slider
+        min={0}
+        max={100}
+        step={1}
+        value={[draft]}
+        onValueChange={(v) => {
+          const n = Array.isArray(v) ? v[0] : v
+          if (typeof n === 'number') setDraft(n)
+        }}
+        onValueCommitted={(v) => {
+          const n = Array.isArray(v) ? v[0] : v
+          if (typeof n === 'number') onCommit(n / 100)
+        }}
+        data-testid={`studio-sound-${lane}-mix`}
+      />
+    </div>
+  )
+}
 
 /** Q6.1: music + voiceover bus denoise (voice uses main Studio Sound block above). */
 export function StudioSoundTrackLanes({
@@ -41,17 +79,7 @@ export function StudioSoundTrackLanes({
               />
             </div>
             {state.enabled ? (
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">Strength</Label>
-                <Slider
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={[Math.round(state.mix * 100)]}
-                  onValueCommit={(v) => patchLane(lane, true, (v[0] ?? 100) / 100)}
-                  data-testid={`studio-sound-${lane}-mix`}
-                />
-              </div>
+              <LaneMixSlider lane={lane} mix={state.mix} onCommit={(m) => patchLane(lane, true, m)} />
             ) : null}
           </div>
         )

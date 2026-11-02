@@ -14,7 +14,7 @@ export function ProducerPlanList({
 }: {
   tools: ProducerToolCall[]
   busy?: boolean
-  onRunStep: (index: number) => void
+  onRunStep: (index: number) => boolean | void
   onRunAll: () => void
   onDismiss: () => void
 }) {
@@ -39,8 +39,8 @@ export function ProducerPlanList({
               disabled={busy || done.has(s.index)}
               data-testid={`producer-plan-run-${s.index}`}
               onClick={() => {
-                onRunStep(s.index)
-                markDone(s.index)
+                const ok = onRunStep(s.index)
+                if (ok !== false) markDone(s.index)
               }}
             >
               Run
