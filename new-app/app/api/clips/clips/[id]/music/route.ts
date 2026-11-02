@@ -23,7 +23,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const body = bodySchema.parse(await request.json())
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
     const edits = normalizeEdits(clip.edits, bounds)
-    const lengthMs = Math.max(3000, Math.min(300_000, outputDurationMs(edits)))
+    const lengthMs = Math.max(3000, Math.min(300_000, outputDurationMs(edits) + 1000))
 
     const prisma = getPrisma()
     const gen = await prisma.aiGeneration.create({

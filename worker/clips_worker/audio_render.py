@@ -25,9 +25,73 @@ def probe_audio_channels(path: Path) -> int:
             text=True,
             timeout=30,
         )
-        return max(1, int(out.strip()))
+        return max(1, int(float(out.strip() or "2")))
     except Exception:
         return 2
+
+
+def probe_audio_duration_s(path: Path) -> float | None:
+    try:
+        out = subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=nw=1:nk=1",
+                str(path),
+            ],
+            text=True,
+            timeout=30,
+        )
+        v = float(out.strip())
+        return v if v > 0.05 else None
+    except Exception:
+        return None
+
+
+MUSIC_LOOP_XFADE_S = 1.5
+
+
+def prepare_looped_music_bed(src: Path, play_s: float, work_dir: Path, *, xfade_s: float = MUSIC_LOOP_XFADE_S) -> Path:
+    """Extend a short bed to `play_s` with crossfaded loops (no tempo stretch)."""
+    media_s = probe_audio_duration_s(src)
+    if media_s is None or play_s <= media_s + 0.05:
+        return src
+    xd = min(max(0.05, xfade_s), media_s / 3.0, play_s / 4.0)
+    cycle = work_dir / "music_bed_cycle.wav"
+    subprocess.check_call(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-t", f"{media_s:.3f}", "-ar", "48000", str(cycle)],
+    )
+    acc = work_dir / "music_bed_acc.wav"
+    nxt = work_dir / "music_bed_next.wav"
+    subprocess.check_call(["ffmpeg", "-y", "-v", "error", "-i", str(cycle), "-c", "copy", str(acc)])
+    while (probe_audio_duration_s(acc) or 0.0) < play_s - 0.02:
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(acc),
+                "-i",
+                str(cycle),
+                "-filter_complex",
+                f"[0:a][1:a]acrossfade=d={xd:.3f}:c1=tri:c2=tri[a]",
+                "-map",
+                "[a]",
+                str(nxt),
+            ],
+        )
+        acc, nxt = nxt, acc
+    out = work_dir / "music_bed_filled.wav"
+    subprocess.check_call(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(acc), "-t", f"{play_s:.3f}", "-ar", "48000", str(out)],
+    )
+    return out
 
 
 def pan_filter(pan, ch: int) -> str:

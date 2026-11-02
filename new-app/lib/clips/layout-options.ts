@@ -1,5 +1,6 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DEFAULT_FACECAM_BOX, DEFAULT_GAMEPLAY_BOX } from '@/lib/clips/facecam-geometry'
+import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import { isLandscapeAspect, type ExportAspect } from '@/lib/clips/export-aspect'
 import { landscapeLayoutVisible } from '@/lib/clips/editor/landscape-layouts'

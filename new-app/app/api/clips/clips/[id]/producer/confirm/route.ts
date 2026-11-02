@@ -31,7 +31,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const edits = normalizeEdits(clip.edits, bounds)
 
     if (tool.name === 'generate_music') {
-      const lengthMs = outputDurationMs(edits)
+      const lengthMs = Math.max(3000, Math.min(300_000, outputDurationMs(edits) + 1000))
       const gen = await prisma.aiGeneration.create({
         data: {
           workspaceId,

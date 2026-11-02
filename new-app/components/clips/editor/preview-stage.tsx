@@ -730,6 +730,7 @@ export function PreviewStage({
       const tickFxFrame = exportFrameFor(aspect)
       const tickAdjGrades = adjustGradesAt(e, outMs)
       const gp = gradeRef.current
+      let mainChroma: ReturnType<typeof chromaParamsAt> | null = null
       if (gp) {
         gp.bank.attach(stageBoxElRef.current)
         const playPx = exportPixelSize(aspect, '1080p')
@@ -742,7 +743,8 @@ export function PreviewStage({
         stageFrame.offsetMs = mediaOffsetMs
         const mfx = e.layerFx?.length ? mainFxOf(e) : undefined
         applyLayerFx(mainFxRef.current, null, mfx, outMs, tickFxFrame.W, tickFxFrame.H)
-        const mainChroma = mfx?.key && mainKeyAllowed(e) ? chromaParamsAt(mfx.key, keyframeLocalEditFromPlayhead(e, outMs, 0)) : null
+        const mainChromaLocal = mfx?.key && mainKeyAllowed(e) ? chromaParamsAt(mfx.key, keyframeLocalEditFromPlayhead(e, outMs, 0)) : null
+        mainChroma = mainChromaLocal
         const adjGrades = tickAdjGrades
         const adjust3dStack = adjGrades
           .filter(({ layer }) => !adjustLayerHasFx(e, layer.id))
@@ -760,7 +762,7 @@ export function PreviewStage({
           }
         }
         gp.setAdjust3d(adjust3dStack.length ? adjust3dStack : null)
-        gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current), mainChroma)
+        gp.apply(mainLayerRef.current, videoGradeAt(e, src, outMs), layerMedia(mainLayerRef.current), mainChromaLocal)
         const adjSpecs = adjGrades
           .filter(({ layer }) => !adjustLayerHasFx(e, layer.id))
           .map((g) => g.spec)

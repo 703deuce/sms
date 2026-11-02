@@ -1810,6 +1810,22 @@ export function Timeline({
       : []
     return [...cuts, ...splits, ...autoSplit]
   }, [autoXfade, edits.transitions, edits.videoSplits, tb])
+  /** Real source cuts + video-split boundaries that show a transition wedge (auto-xfade or stored). */
+  const cutTransitionHandles = useMemo(() => {
+    type Site = { cutK: number | null; srcMs: number; outputMs: number }
+    const sites: Site[] = realCutIndices(tb).map((k) => ({
+      cutK: k,
+      srcMs: tb.segs[k]![0],
+      outputMs: tb.starts[k]!,
+    }))
+    const seen = new Set(sites.map((s) => s.srcMs))
+    for (const w of cutWindows) {
+      if (seen.has(w.srcMs)) continue
+      sites.push({ cutK: w.k > 0 ? w.k : null, srcMs: w.srcMs, outputMs: w.cutMs })
+      seen.add(w.srcMs)
+    }
+    return sites.sort((a, b) => a.outputMs - b.outputMs)
+  }, [cutWindows, tb])
   // E5: Video-lane segments from another source (uploads / angles / multicam), drawn over the clip.
   const sourceChips = useMemo(
     () =>
@@ -1820,11 +1836,26 @@ export function Timeline({
     [edits.sourceSegments, edits.sources, tb],
   )
   const brollWindows = useMemo(() => brollTransitionWindows(edits.broll), [edits.broll])
-  const openCutTransition = (e: React.MouseEvent, k: number) => {
+  const openCutTransition = (
+    e: React.MouseEvent,
+    site: { cutK: number | null; srcMs: number },
+  ) => {
     e.stopPropagation()
-    const [a0, a1] = tb.segs[k - 1]!
-    const [b0, b1] = tb.segs[k]!
-    setTrPop({ kind: 'cut', srcMs: b0, maxMs: Math.min(a1 - a0, b1 - b0), x: e.clientX, y: e.clientY })
+    let maxMs = 500
+    if (site.cutK != null && site.cutK > 0) {
+      const [a0, a1] = tb.segs[site.cutK - 1]!
+      const [b0, b1] = tb.segs[site.cutK]!
+      maxMs = Math.min(a1 - a0, b1 - b0)
+    } else {
+      const vsegs = videoLaneSegments(tb, edits.videoSplits)
+      const i = vsegs.findIndex((s) => s.a === site.srcMs)
+      if (i >= 1) {
+        const left = vsegs[i - 1]!
+        const right = vsegs[i]!
+        maxMs = Math.min(left.b - left.a, right.b - right.a)
+      }
+    }
+    setTrPop({ kind: 'cut', srcMs: site.srcMs, maxMs, x: e.clientX, y: e.clientY })
   }
   const openBrollTransition = (e: React.MouseEvent, item: TimelineItem, edge: 'in' | 'out') => {
     e.stopPropagation()
@@ -3619,25 +3650,22 @@ export function Timeline({
                   {lane === 'video' ? <TimelineInsertMarkers tmap={tmap} sources={edits.sources} pxPerMs={pxPerMs} /> : null}
                   {lane === 'video' && editable && !laneState(edits, 'video').locked
                     ? (() => {
-                        const cutKs = realCutIndices(tb)
-                        // E3fix: min hit area + two rows when cuts are closer than the min gap.
-                        const slots = layoutCutHandles(cutKs.map((k) => xs(tb.starts[k]!)))
-                        return cutKs.map((k, ci) => {
+                        const slots = layoutCutHandles(cutTransitionHandles.map((s) => xs(s.outputMs)))
+                        return cutTransitionHandles.map((site, ci) => {
                         const slot = slots[ci]!
-                        const srcMs = tb.segs[k]![0]
-                        const tr = transitionAtCut(tb.segs, edits.transitions, srcMs)
+                        const tr = transitionAtCut(tb.segs, edits.transitions, site.srcMs)
                         return (
                           <button
-                            key={`cut${srcMs}`}
+                            key={`cut${site.srcMs}`}
                             type="button"
                             className="group absolute z-20 inline-flex h-5 -translate-x-1/2 items-center justify-center rounded-sm focus-visible:outline-none"
                             style={{ left: slot.x, top: CUT_HANDLE_ROW_TOP_PX[slot.row], width: slot.hitW }}
                             data-row={slot.row}
                             data-hit-w={slot.hitW}
                             onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => openCutTransition(e, k)}
+                            onClick={(e) => openCutTransition(e, site)}
                             aria-label={tr ? `Transition: ${TRANSITION_INFO[tr.type].label}` : 'Add transition at this cut'}
-                            title={tr ? `${TRANSITION_INFO[tr.type].label} · ${(tr.durMs / 1000).toFixed(2)} s` : 'Add transition'}
+                            title={tr ? `${TRANSITION_INFO[tr.type].label} · ${(tr.durMs / 1000).toFixed(2)} s` : 'Add transition at this cut'}
                             data-testid="timeline-transition-handle"
                             data-src-ms={srcMs}
                             data-type={tr?.type}
