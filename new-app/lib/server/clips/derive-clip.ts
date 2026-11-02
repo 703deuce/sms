@@ -5,10 +5,9 @@ import { defaultEdits, normalizeEdits, type ClipBounds } from '@/lib/clips/edits
 import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
 import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
-import { snapClipBoundsMs, clipWordsToSnapWords } from '@/lib/clips/editor/snap-clip-bounds'
+import { snapClipBoundsMs, snapWordsFromTranscriptRaw } from '@/lib/clips/editor/snap-clip-bounds'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorageForObjectKey } from '@/lib/storage'
-import { normalizeTranscriptJson } from '@/lib/server/clips/editor-words'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { lightAutoEdit } from '@/lib/clips/light-auto-edit'
 import { clipProjectSettingsSchema } from '@/lib/clips/settings'
@@ -55,7 +54,10 @@ export async function deriveClipFromSelection(
         const storage = await getClipStorageForObjectKey(project.transcriptKey, storageDriverHint)
         raw = (await storage.getJson(project.transcriptKey)) as unknown
       }
-      const words = clipWordsToSnapWords(normalizeTranscriptJson(raw as never))
+      let words = snapWordsFromTranscriptRaw(raw)
+      if (!words.some((w) => w.w.trim()) && project.transcriptWords && project.transcriptKey) {
+        words = snapWordsFromTranscriptRaw(project.transcriptWords)
+      }
       const rangeStart = bounds.trimMinMs ?? bounds.clipStartMs
       const rangeEnd = bounds.trimMaxMs ?? bounds.clipEndMs
       const snapped = snapClipBoundsMs({ startMs: trimIn, endMs: trimOut }, words, rangeStart, rangeEnd)

@@ -4,13 +4,25 @@ import { MAX_EDITOR_WORDS_CONTEXT_MS, MAX_TRIM_EXTEND_MS } from '@/lib/clips/tri
 import { loadSourceWords, wordsInRange, type SourceWord } from '@/lib/clips/source-words'
 import type { getClipStorage } from '@/lib/storage'
 
+/** Deepgram / DB / S3 may wrap the word array. */
+export function unwrapTranscriptArray(raw: unknown): unknown {
+  if (Array.isArray(raw)) return raw
+  if (raw && typeof raw === 'object') {
+    const o = raw as Record<string, unknown>
+    for (const key of ['words', 'transcript', 'results'] as const) {
+      if (Array.isArray(o[key])) return o[key]
+    }
+  }
+  return raw
+}
+
 export function normalizeTranscriptWord(raw: unknown, pos: number): ClipWord | null {
   if (!raw || typeof raw !== 'object') return null
   const w = raw as Record<string, unknown>
-  const text = w.w ?? w.word
+  const text = w.w ?? w.word ?? w.text
   const s = w.s ?? w.start
   const e = w.e ?? w.end
-  if (typeof text !== 'string' || s == null || e == null) return null
+  if (typeof text !== 'string' || !text.trim() || s == null || e == null) return null
   const p = w.p ?? w.prob ?? w.probability
   return {
     w: text,
@@ -22,9 +34,10 @@ export function normalizeTranscriptWord(raw: unknown, pos: number): ClipWord | n
 }
 
 export function normalizeTranscriptJson(raw: unknown): ClipWord[] {
-  if (!Array.isArray(raw)) return []
+  const arr = unwrapTranscriptArray(raw)
+  if (!Array.isArray(arr)) return []
   const out: ClipWord[] = []
-  raw.forEach((item, pos) => {
+  arr.forEach((item, pos) => {
     const word = normalizeTranscriptWord(item, pos)
     if (word) out.push(word)
   })

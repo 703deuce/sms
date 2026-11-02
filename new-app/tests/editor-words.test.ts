@@ -6,6 +6,13 @@ describe('normalizeTranscriptJson', () => {
     const out = normalizeTranscriptJson([{ word: 'hey', start: 1, end: 2, probability: 0.9 }])
     expect(out[0]).toMatchObject({ w: 'hey', s: 1, e: 2 })
   })
+
+  it('accepts Deepgram text field and words envelope', () => {
+    const out = normalizeTranscriptJson({
+      words: [{ text: 'hey', start: 1, end: 2, speaker: 0 }],
+    })
+    expect(out[0]).toMatchObject({ w: 'hey', s: 1, e: 2 })
+  })
 })
 
 describe('clipWordsToAbsolute', () => {
