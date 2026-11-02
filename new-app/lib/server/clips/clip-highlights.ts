@@ -27,6 +27,16 @@ export type FullVideoHighlightsPayload = {
   }[]
 }
 
+const foundClipProjectSelect = {
+  id: true,
+  status: true,
+  settings: true,
+  transcriptKey: true,
+  createdAt: true,
+  uploadId: true,
+  upload: { select: { storageDriver: true } },
+} as const
+
 export async function getFullVideoHighlights(
   workspaceId: string,
   fullVideoProjectId: string,
@@ -45,7 +55,7 @@ export async function getFullVideoHighlights(
     await prisma.clipProject.findMany({
       where: { workspaceId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, status: true, settings: true, transcriptKey: true, storageDriver: true, createdAt: true, uploadId: true },
+      select: foundClipProjectSelect,
       take: 40,
     })
   ).find((p) => {
@@ -57,7 +67,7 @@ export async function getFullVideoHighlights(
     const candidates = await prisma.clipProject.findMany({
       where: { workspaceId, uploadId: fv.uploadId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, status: true, settings: true, transcriptKey: true, storageDriver: true, createdAt: true },
+      select: foundClipProjectSelect,
     })
     const fvCreated =
       (
@@ -110,7 +120,10 @@ export async function getFullVideoHighlights(
   })
   if (needsTag && found.transcriptKey) {
     try {
-      const storage = await getClipStorageForObjectKey(found.transcriptKey, found.storageDriver)
+      const storage = await getClipStorageForObjectKey(
+        found.transcriptKey,
+        found.upload?.storageDriver ?? null,
+      )
       const raw = await storage.getJson<unknown>(found.transcriptKey)
       const words = projectTranscriptToSourceWords(normalizeTranscriptJson(raw))
       if (words.length) rows = attachReasonTagsToClips(rows, words, found.settings)

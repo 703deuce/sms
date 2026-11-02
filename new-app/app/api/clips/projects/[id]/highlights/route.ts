@@ -10,6 +10,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const data = await getFullVideoHighlights(workspaceId, id)
     return NextResponse.json({ data })
   } catch (err) {
+    console.error(
+      '[GET /api/clips/projects/[id]/highlights]',
+      err instanceof Error ? (err.stack ?? err.message) : err,
+    )
     return jsonError(err, 500)
   }
 }

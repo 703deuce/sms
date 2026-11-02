@@ -20,6 +20,14 @@ if rg -q "${CLIPS_RE}.* error TS(2300|2440):" "$OUT"; then
   exit 1
 fi
 
+SERVER_CLIPS_RE='^lib/server/clips/.* error TS(2353|2339):'
+if rg -q "${SERVER_CLIPS_RE}" "$OUT"; then
+  rg "${SERVER_CLIPS_RE}" "$OUT" || true
+  rm -f "$OUT"
+  echo "[typecheck:clips] FAILED — invalid Prisma select/property (TS2353/TS2339) under lib/server/clips" >&2
+  exit 1
+fi
+
 # Turbopack: duplicate value imports of the same binding from one module.
 node --input-type=module -e "
 import fs from 'node:fs';
