@@ -173,6 +173,7 @@ import {
   brollTransitionWindows,
   cutTransitionWindows,
   videoSplitTransitionWindows,
+  videoSplitAutoCrossfadeWindows,
   transitionAtCut,
   setBrollTransition,
   setCutTransition,
@@ -1804,8 +1805,11 @@ export function Timeline({
   const cutWindows = useMemo(() => {
     const cuts = cutTransitionWindows(tb.segs, tb.starts, edits.transitions)
     const splits = videoSplitTransitionWindows(tb, edits.videoSplits, edits.transitions)
-    return [...cuts, ...splits]
-  }, [edits.transitions, edits.videoSplits, tb])
+    const autoSplit = autoXfade
+      ? videoSplitAutoCrossfadeWindows(tb, edits.videoSplits, edits.transitions)
+      : []
+    return [...cuts, ...splits, ...autoSplit]
+  }, [autoXfade, edits.transitions, edits.videoSplits, tb])
   // E5: Video-lane segments from another source (uploads / angles / multicam), drawn over the clip.
   const sourceChips = useMemo(
     () =>

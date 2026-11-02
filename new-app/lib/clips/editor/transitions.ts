@@ -621,6 +621,58 @@ export function cutTransitionWindows(
 }
 
 /**
+ * When auto-crossfade is on, draw the default crossfade wedge at video splits that have no stored
+ * transition (real cuts still use cutTransitionWindows).
+ */
+export function videoSplitAutoCrossfadeWindows(
+  tb: Timebase,
+  videoSplits: readonly number[] | undefined,
+  transitions: readonly CutTransition[] | undefined,
+  fps = MOTION_FPS,
+): CutWindow[] {
+  if (!videoSplits?.length) return []
+  const vsegs = videoLaneSegments(tb, videoSplits)
+  if (vsegs.length < 2) return []
+  const real = new Set(realCutIndices(tb))
+  const tol = cutMatchToleranceMs(fps)
+  const out: CutWindow[] = []
+  let lastEndFrame = 0
+  for (let i = 1; i < vsegs.length; i++) {
+    const left = vsegs[i - 1]!
+    const right = vsegs[i]!
+    const srcMs = right.a
+    const cutK = tb.segs.findIndex(([a], k) => k >= 1 && a === srcMs && real.has(k))
+    if (cutK >= 1) continue
+    if (transitions?.some((t) => Math.abs(t.srcMs - srcMs) <= tol)) continue
+    const d = Math.min(clampDur(TRANSITION_DEFAULT_MS), left.b - left.a, right.b - right.a)
+    if (d < TRANSITION_MIN_MS) continue
+    const cut = right.startMs
+    const frames = Math.max(2, Math.round((d * fps) / 1000))
+    let startFrame = Math.round(((cut - d / 2) * fps) / 1000)
+    startFrame = Math.max(startFrame, lastEndFrame, 0)
+    let n = frames
+    const maxEnd = Math.floor(((right.startMs + (right.b - right.a)) * fps) / 1000)
+    if (startFrame + n > maxEnd) n = maxEnd - startFrame
+    if (n < 2) continue
+    lastEndFrame = startFrame + n
+    out.push({
+      k: -(i + 1),
+      srcMs,
+      type: 'crossfade',
+      durMs: d,
+      cutMs: cut,
+      w0Ms: startFrame * frameMs(fps),
+      w1Ms: (startFrame + n) * frameMs(fps),
+      startFrame,
+      frames: n,
+      aEnd: left.b,
+      bStart: right.a,
+    })
+  }
+  return out
+}
+
+/**
  * Transition windows at Video-lane split points (videoSplits) when a transition is stored at that
  * source ms but the boundary is not a real cut (cutTransitionWindows only covers source jumps).
  */
