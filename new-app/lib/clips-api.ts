@@ -420,8 +420,16 @@ export function saveClipBrandTemplate(body: {
 }
 
 /** Premiere / Resolve / FCP zip — must use fetch (not anchor) so errors toast instead of saving JSON. */
+function nleZipDownloadFilename(title: string): string {
+  const base = title
+    .trim()
+    .replace(/[^\w\s-]+/g, '')
+    .replace(/\s+/g, '-')
+    .slice(0, 80)
+  return `${base || 'clip'}-nle.zip`
+}
+
 export async function downloadClipNleZip(clipId: string, title: string): Promise<void> {
-  const { nleZipDownloadFilename } = await import('@/lib/clips/export-nle-bundle')
   const res = await fetch(`/api/clips/clips/${encodeURIComponent(clipId)}/export-xml`, {
     method: 'GET',
     credentials: 'same-origin',
