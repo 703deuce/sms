@@ -566,6 +566,7 @@ export function PreviewStage({
     seekKeyRef.current = seekKey
     const seekAll = videoTimeFromSourceMs(sameSource && keepMs != null ? keepMs : edits.trim.in, mediaOffsetMs)
     wrapRef.current?.querySelectorAll('video').forEach((el) => {
+      if (el.dataset.ownClock || el.dataset.layoutPane) return
       el.muted = el !== v
       const seek = () => {
         try {
@@ -1017,6 +1018,11 @@ export function PreviewStage({
     () => segmentLayoutAtSourceMs(edits, previewSourceMs),
     [edits, previewSourceMs],
   )
+  const activeSourceSegment = useMemo(
+    () => sourceSegmentAt(edits.sourceSegments, previewSourceMs),
+    [edits.sourceSegments, previewSourceMs],
+  )
+  const mainHiddenByLayout = segmentLayoutActive ? ' invisible pointer-events-none' : ''
   const facecamBox = edits.layout.facecam?.box
   const facecamGameplay = edits.layout.facecam?.gameplay
   const facecamStackPreview =
@@ -1271,6 +1277,7 @@ export function PreviewStage({
         }}
         ref={setStageBoxEl}
         className={`relative shrink-0 overflow-hidden rounded-xl bg-black ${libassClass}`}
+        data-testid="preview-frame-box"
         data-preview-renderer={libassClass ? 'libass' : 'dom'}
         data-preview-zoom={previewZoom}
         data-preview-quality={previewQuality}
@@ -1343,8 +1350,8 @@ export function PreviewStage({
                 src={videoUrl ?? undefined}
               className={
                 pillarboxMain
-                  ? `absolute inset-0 z-[1] size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`
-                  : `absolute inset-x-0 top-1/2 z-[1] w-full -translate-y-1/2 object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`
+                  ? `absolute inset-0 z-[1] size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`
+                  : `absolute inset-x-0 top-1/2 z-[1] w-full -translate-y-1/2 object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`
               }
               playsInline
               onLoadedMetadata={() => {
@@ -1382,7 +1389,7 @@ export function PreviewStage({
                   {...corsMediaProps(videoUrl)}
                 src={videoUrl ?? undefined}
                   data-testid={composeSpec ? 'compose-video' : 'fit-top-main-video'}
-                  className={`absolute inset-x-0 z-[1] max-w-none object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+                  className={`absolute inset-x-0 z-[1] max-w-none object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                   style={{ top: videoTop, height: videoH, width: '100%' }}
                   playsInline
                   onLoadedMetadata={() => {
@@ -1403,7 +1410,7 @@ export function PreviewStage({
             ref={videoRefInner}
             {...corsMediaProps(videoUrl)}
                 src={videoUrl ?? undefined}
-            className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+            className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
             playsInline
             onCanPlay={() => setCanPlay(true)}
             onPlay={() => setPlaying(true)}
@@ -1422,7 +1429,7 @@ export function PreviewStage({
                   ref={idx === 0 ? videoRefInner : undefined}
                   {...corsMediaProps(videoUrl)}
                   src={videoUrl ?? undefined}
-                  className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+                  className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                   style={coverBoxStyle({ x: idx === 0 ? 0 : 0.5, y: 0, w: 0.5, h: 1 })}
                   playsInline
                   onCanPlay={() => setCanPlay(true)}
@@ -1460,7 +1467,7 @@ export function PreviewStage({
                       ref={idx === (faceFirst ? 1 : 0) ? videoRefInner : undefined}
                       {...corsMediaProps(videoUrl)}
                 src={videoUrl ?? undefined}
-                      className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+                      className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                       style={coverBoxStyle(panel.box)}
                       playsInline
                       onCanPlay={() => setCanPlay(true)}
@@ -1491,7 +1498,7 @@ export function PreviewStage({
                   ref={videoRefInner}
                   {...corsMediaProps(videoUrl)}
                 src={videoUrl ?? undefined}
-                  className={`max-w-none size-full object-cover ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+                  className={`max-w-none size-full object-cover ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                   style={coverBoxStyle(facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 })}
                   playsInline
                   onCanPlay={() => setCanPlay(true)}
@@ -1555,7 +1562,7 @@ export function PreviewStage({
                   ref={videoRefInner}
                   {...corsMediaProps(videoUrl)}
                 src={videoUrl ?? undefined}
-                  className={`absolute left-0 top-0 z-[1] max-w-none transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+                  className={`absolute left-0 top-0 z-[1] max-w-none transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                   style={{ position: 'absolute', left: 0, top: 0, maxWidth: 'none' }}
                   playsInline
                   onLoadedMetadata={() => {
@@ -1590,7 +1597,7 @@ export function PreviewStage({
                 {...corsMediaProps(videoUrl)}
                 src={videoUrl ?? undefined}
                 data-testid="center-crop-video"
-                className={`size-full transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'} ${edits.layout.cropBox ? '' : 'object-cover'}`}
+                className={`size-full transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'} ${edits.layout.cropBox ? '' : 'object-cover'}${mainHiddenByLayout}`}
                 style={edits.layout.cropBox ? coverBoxStyle(edits.layout.cropBox) : undefined}
                 playsInline
                 onCanPlay={() => setCanPlay(true)}
@@ -1616,7 +1623,7 @@ export function PreviewStage({
               ref={videoRefInner}
             {...corsMediaProps(videoUrl)}
                 src={videoUrl ?? undefined}
-            className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+            className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
             playsInline
             onCanPlay={() => setCanPlay(true)}
             onLoadedData={() => setCanPlay(true)}
@@ -1632,7 +1639,7 @@ export function PreviewStage({
             ref={videoRefInner}
             {...corsMediaProps(videoUrl)}
                 src={videoUrl ?? undefined}
-            className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+            className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
             playsInline
             onCanPlay={() => setCanPlay(true)}
             onLoadedData={() => setCanPlay(true)}
@@ -1645,14 +1652,15 @@ export function PreviewStage({
         {(edits.sources ?? []).map((s) => {
           const url = s.mediaType !== 'audio' ? sourceUrls?.[s.refId] : undefined
           if (!url) return null
+          const showSourceLayer = !segmentLayoutActive && activeSourceSegment?.sourceId === s.id
           return (
             <div
               key={`${s.id}:${url}`}
               ref={(el) => {
                 srcBoxRefs.current[s.id] = el
               }}
-              className="pointer-events-none absolute inset-0 overflow-hidden bg-black"
-              style={{ visibility: 'hidden' }}
+              className="pointer-events-none absolute inset-0 z-[1] overflow-hidden bg-black"
+              style={{ visibility: showSourceLayer ? 'visible' : 'hidden' }}
               data-testid="preview-source"
               data-source-id={s.id}
             >

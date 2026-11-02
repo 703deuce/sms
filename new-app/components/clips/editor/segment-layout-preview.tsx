@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, forwardRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, forwardRef, useCallback } from 'react'
 import { MAIN_ANGLE } from '@/lib/clips/editor/multicam-manual'
 import { normalizeSegmentLayout, type SourceSegmentLayout } from '@/lib/clips/editor/segment-layout'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -117,27 +117,43 @@ export function PreviewSegmentLayout({
     if (videoRefsOut) videoRefsOut.current = innerRefs.current
   })
 
+  const mediaTimeForPane = useCallback(
+    (pane: LayoutPane) => {
+      const isMain = pane.partnerId === 'main' || pane.partnerId === MAIN_ANGLE
+      const srcDef = isMain ? null : sourceById(edits.sources, pane.partnerId)
+      if (isMain) return videoTimeFromSourceMs(previewSourceMs, mediaOffsetMs)
+      if (!srcDef) return 0
+      return segmentMediaMs(seg, srcDef, previewSourceMs) / 1000
+    },
+    [edits.sources, mediaOffsetMs, previewSourceMs, seg],
+  )
+
+  const syncPaneTimes = useCallback(() => {
+    panes.forEach((pane, i) => {
+      const el = innerRefs.current[i]
+      if (!el) return
+      const t = mediaTimeForPane(pane)
+      if (Number.isFinite(t) && t >= 0 && Math.abs(el.currentTime - t) > 0.08) {
+        try {
+          el.currentTime = t
+        } catch {
+          /* metadata pending */
+        }
+      }
+      if (playing && el.paused) void el.play().catch(() => {})
+      if (!playing && !el.paused) el.pause()
+    })
+  }, [mediaTimeForPane, panes, playing])
+
+  useLayoutEffect(() => {
+    syncPaneTimes()
+  }, [syncPaneTimes])
+
   useEffect(() => {
-    const sync = () => {
-      panes.forEach((pane, i) => {
-        const el = innerRefs.current[i]
-        if (!el) return
-        const isMain = pane.partnerId === 'main' || pane.partnerId === MAIN_ANGLE
-        const srcDef = isMain ? null : sourceById(edits.sources, pane.partnerId)
-        const t = isMain
-          ? videoTimeFromSourceMs(previewSourceMs, mediaOffsetMs)
-          : srcDef
-            ? segmentMediaMs(seg, srcDef, previewSourceMs) / 1000
-            : 0
-        if (Math.abs(el.currentTime - t) > 0.12) el.currentTime = t
-        if (playing && el.paused) void el.play().catch(() => {})
-        if (!playing && !el.paused) el.pause()
-      })
-    }
-    sync()
-    const id = window.setInterval(sync, 100)
+    syncPaneTimes()
+    const id = window.setInterval(syncPaneTimes, 100)
     return () => window.clearInterval(id)
-  }, [edits.sources, mediaOffsetMs, panes, playing, previewSourceMs, seg])
+  }, [syncPaneTimes])
 
   const gridClass =
     layout.kind === 'side_by_side'
@@ -151,12 +167,13 @@ export function PreviewSegmentLayout({
   if (isPip) {
     const [bg, inset] = panes
     return (
-      <div className="pointer-events-none absolute inset-0 z-[20] overflow-hidden bg-black" data-testid={`preview-layout-${layout.kind}`}>
+      <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden bg-black" data-testid={`preview-layout-${layout.kind}`}>
         <LayoutPaneVideo
           ref={(el) => {
             innerRefs.current[0] = el
           }}
           url={partnerUrl(bg!.partnerId, edits, sourceUrls, mainVideoUrl)}
+          mediaTimeSec={mediaTimeForPane(bg!)}
           className="absolute inset-0 size-full object-cover"
           testId={bg!.testId}
         />
@@ -165,6 +182,7 @@ export function PreviewSegmentLayout({
             innerRefs.current[1] = el
           }}
           url={partnerUrl(inset!.partnerId, edits, sourceUrls, mainVideoUrl)}
+          mediaTimeSec={mediaTimeForPane(inset!)}
           className="absolute rounded border border-white/40 object-cover"
           style={{
             left: `${inset!.rect.l * 100}%`,
@@ -180,7 +198,7 @@ export function PreviewSegmentLayout({
 
   return (
     <div
-      className={cn('pointer-events-none absolute inset-0 z-[20] grid gap-px bg-black', gridClass)}
+      className={cn('pointer-events-none absolute inset-0 z-[25] grid gap-px bg-black', gridClass)}
       data-testid={`preview-layout-${layout.kind}`}
     >
       {panes.map((pane, i) => (
@@ -190,6 +208,7 @@ export function PreviewSegmentLayout({
               innerRefs.current[i] = el
             }}
             url={partnerUrl(pane.partnerId, edits, sourceUrls, mainVideoUrl)}
+            mediaTimeSec={mediaTimeForPane(pane)}
             className="size-full object-cover"
             testId={`${pane.testId}-video`}
           />
@@ -201,14 +220,35 @@ export function PreviewSegmentLayout({
 
 const LayoutPaneVideo = forwardRef<
   HTMLVideoElement,
-  { url: string | null; className?: string; style?: React.CSSProperties; testId: string }
->(function LayoutPaneVideo({ url, className, style, testId }, ref) {
+  {
+    url: string | null
+    className?: string
+    style?: React.CSSProperties
+    testId: string
+    mediaTimeSec: number
+  }
+>(function LayoutPaneVideo({ url, className, style, testId, mediaTimeSec }, ref) {
+  const seek = (el: HTMLVideoElement | null) => {
+    if (!el || !Number.isFinite(mediaTimeSec) || mediaTimeSec < 0) return
+    if (el.readyState >= 1 && Math.abs(el.currentTime - mediaTimeSec) > 0.08) {
+      try {
+        el.currentTime = mediaTimeSec
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  const setRef = (el: HTMLVideoElement | null) => {
+    if (typeof ref === 'function') ref(el)
+    else if (ref) ref.current = el
+    seek(el)
+  }
   if (!url) {
-    return <div className={cn(className, 'bg-neutral-900')} data-testid={testId} style={style} />
+    return <div className={cn(className, 'bg-neutral-900')} data-testid={testId} data-layout-pane="1" style={style} />
   }
   return (
     <video
-      ref={ref}
+      ref={setRef}
       {...corsMediaProps(url)}
       src={url}
       className={className}
@@ -218,6 +258,9 @@ const LayoutPaneVideo = forwardRef<
       preload="auto"
       data-testid={testId}
       data-own-clock="1"
+      data-layout-pane="1"
+      onLoadedData={(e) => seek(e.currentTarget)}
+      onLoadedMetadata={(e) => seek(e.currentTarget)}
     />
   )
 })
