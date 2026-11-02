@@ -9,7 +9,7 @@ run() {
   "$@"
 }
 
-echo "== verify:clips: tsc --noEmit (full scan; clip blockers enforced in typecheck:clips) =="
+echo "== verify:clips: tsc --noEmit (full scan; clip blockers in typecheck:clips) =="
 NODE_OPTIONS='--max-old-space-size=8192' npx tsc -p tsconfig.typecheck.json --noEmit || true
 
 run pnpm run verify:editor-shell-import
@@ -22,10 +22,10 @@ run pnpm run verify:migration-table-refs
 run pnpm run verify:app-route-dynamic-segments
 run pnpm run typecheck:clips
 
-echo "== verify:clips: vitest (clips merge gate; full suite: pnpm test) =="
+echo "== verify:clips: vitest (clips merge gate) =="
 bash scripts/clips-vitest-gate.sh
 
 echo "== verify:clips: next build =="
 pnpm run build
 
-echo "PASS verify:clips — tsc + guards + typecheck:clips + clips-vitest-gate + next build"
+echo "PASS verify:clips — tsc scan + guards + typecheck:clips + clips-vitest-gate + next build"
