@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
@@ -23,5 +24,9 @@ describe('editor-shell useEditorWords wiring', () => {
     expect(src).toMatch(
       /import\s*\{[^}]*\bkeepSegments\b[^}]*\}\s*from\s*['"]@\/lib\/clips\/edits['"]/,
     )
+  })
+
+  it('verify-editor-shell-import script passes (all hooks imported)', () => {
+    expect(() => execSync('node scripts/verify-editor-shell-import.mjs', { cwd: process.cwd(), stdio: 'pipe' })).not.toThrow()
   })
 })

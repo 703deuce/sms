@@ -14,6 +14,7 @@
     "build": "prisma generate --schema=prisma/schema.prisma && next build",
     "verify:clips-import-cycle": "node scripts/verify-clips-import-cycle.mjs",
     "verify:editor-shell-import": "node scripts/verify-editor-shell-import.mjs",
+    "verify:editor-hook-imports": "node scripts/verify-editor-hook-imports.mjs",
     "verify:migration-table-refs": "node scripts/verify-migration-table-refs.mjs",
     "verify:app-route-dynamic-segments": "node scripts/verify-app-route-dynamic-segments.mjs",
     "start": "node scripts/start-production.mjs",
