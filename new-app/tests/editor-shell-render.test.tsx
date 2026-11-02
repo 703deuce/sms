@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, waitFor } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { clip5f19e510Edits } from '@/tests/fixtures/clip-5f19e510-edits'
 
 vi.mock('next/font/google', () => ({
   Anton: () => ({ variable: '--font-clip-anton' }),
@@ -63,13 +64,19 @@ vi.mock('@/lib/clips-api', () => ({
   getRenderStatus: vi.fn(),
 }))
 
-vi.mock('@/components/clips/editor/use-generation', () => ({
-  useGeneration: () => ({
-    gen: null,
-    brollMedia: [],
-    refreshBroll: vi.fn(),
+vi.mock('@/components/clips/editor/use-project-media', () => ({
+  useMediaTranscripts: () => ({ transcripts: [] }),
+  useProjectMedia: () => ({
+    items: [],
+    uploads: [],
+    loading: false,
+    uploadFiles: vi.fn(),
+    refresh: vi.fn(),
   }),
+  mediaUrlFor: vi.fn(),
 }))
+
+vi.mock('@/components/clips/editor/use-generation', async (importOriginal) => importOriginal())
 
 vi.mock('@/components/clips/editor/use-dub-preview', () => ({
   useDubPreview: () => ({ dubs: [], dubLoading: false }),
@@ -156,5 +163,26 @@ describe('EditorShell render smoke', () => {
         />,
       ),
     ).not.toThrow()
+  })
+
+  it('mounts clip_5f19e510 prod fixture (useGeneration import resolves)', async () => {
+    const bounds = { clipStartMs: 0, clipEndMs: 32_000, trimMinMs: 0, trimMaxMs: 32_000 }
+    const edits = clip5f19e510Edits()
+    const view = render(
+      <EditorShell
+        projectId="proj_c6f4de920dc54c55b9d10cccf43f5348"
+        clipId="clip_5f19e510a23241c29190475d4723aa21"
+        initialTitle="Prod fixture"
+        bounds={bounds}
+        initialEdits={edits}
+        words={[{ i: 0, w: 'hello', s: 0, e: 0.5 }]}
+        cropShots={[{ startMs: 0, endMs: 32_000, speaker: 'A', cx: 30, cy: 45, w: 100, h: 100 }]}
+        cropTrack={null}
+        videoUrl="https://example.com/preview.mp4"
+      />,
+    )
+    await waitFor(() => {
+      expect(view.getAllByTestId('timeline-root').length).toBeGreaterThan(0)
+    })
   })
 })
