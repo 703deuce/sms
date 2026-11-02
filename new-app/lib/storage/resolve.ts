@@ -39,14 +39,23 @@ export async function getClipStorageForObjectKey(
 const driverByKey = new Map<string, StorageDriverName>()
 const DRIVER_MEMO_MAX = 5000
 
+/** Negative cache: both drivers missed (object may not exist yet). */
+const driverMissUntilByKey = new Map<string, number>()
+const DRIVER_MISS_TTL_MS = 7 * 60 * 1000
+
 export async function getReadableClipStorage(objectKey: string): Promise<ClipStorageDriver> {
   const hit = driverByKey.get(objectKey)
   if (hit) return getClipStorage(hit)
+  const missUntil = driverMissUntilByKey.get(objectKey)
+  if (missUntil != null && missUntil > Date.now()) {
+    return getClipStorage()
+  }
   const primary = getClipStorage()
   if (primary.name === 'supabase') return primary
   const remember = (name: StorageDriverName) => {
     if (driverByKey.size >= DRIVER_MEMO_MAX) driverByKey.clear()
     driverByKey.set(objectKey, name)
+    driverMissUntilByKey.delete(objectKey)
   }
   if ((await primary.getObjectSizeBytes(objectKey)) !== null) {
     remember(primary.name)
@@ -57,6 +66,8 @@ export async function getReadableClipStorage(objectKey: string): Promise<ClipSto
     remember('supabase')
     return legacy
   }
+  if (driverMissUntilByKey.size >= DRIVER_MEMO_MAX) driverMissUntilByKey.clear()
+  driverMissUntilByKey.set(objectKey, Date.now() + DRIVER_MISS_TTL_MS)
   return primary
 }
 
@@ -73,4 +84,5 @@ export async function createReadableSignedUrl(
 /** Test hook. */
 export function __resetReadableDriverMemo(): void {
   driverByKey.clear()
+  driverMissUntilByKey.clear()
 }

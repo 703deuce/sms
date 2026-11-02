@@ -12,6 +12,8 @@ exec pnpm exec vitest run \
   tests/ai-quality-q6-fix2.test.ts \
   tests/ai-quality-q6-fix3.test.ts \
   tests/clip-project-list-perf.test.ts \
+  tests/clip-detail-perf.test.ts \
+  tests/db-url.test.ts \
   tests/project-clips-enrich.test.ts \
   tests/editor-shell-render.test.tsx \
   tests/editor-shell-ssr.test.tsx \

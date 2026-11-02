@@ -13,12 +13,19 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 export function resolvePrismaDatabaseUrl(raw: string): string {
   try {
     const url = new URL(raw);
+    const pgbouncerModeOff = process.env.PRISMA_PGBOUNCER_MODE?.trim().toLowerCase() === "off";
     const isPooler =
       url.port === "6543" ||
       url.hostname.includes("pooler.supabase.com") ||
       url.searchParams.get("pgbouncer") === "true";
 
-    if (isPooler && url.searchParams.get("pgbouncer") !== "true") {
+    const shouldSetPgbouncer =
+      isPooler &&
+      url.port !== "5432" &&
+      !pgbouncerModeOff &&
+      url.searchParams.get("pgbouncer") !== "true";
+
+    if (shouldSetPgbouncer) {
       url.searchParams.set("pgbouncer", "true");
     }
 

@@ -1,4 +1,3 @@
-import { createHash } from 'crypto'
 import { normalizeAudioEdits, type ClipEditsAudio } from '@/lib/clips/audio'
 import { normalizeBrollItems, type BrollItem } from '@/lib/clips/broll'
 import { parseExportAspect, type ExportAspect } from '@/lib/clips/export-aspect'
@@ -749,9 +748,7 @@ export function canonicalEditsJson(edits: ClipEditsV2): string {
   return JSON.stringify(sortJson(edits))
 }
 
-export function editsVersionHash(edits: ClipEditsV2): string {
-  return createHash('sha256').update(canonicalEditsJson(edits)).digest('hex')
-}
+export { editsVersionHash } from '@/lib/clips/edits-version-hash'
 
 const VIDEO_SPLITS_MAX = 200
 

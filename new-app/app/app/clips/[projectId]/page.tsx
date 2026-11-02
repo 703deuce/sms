@@ -29,7 +29,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
   if (reserved) redirect(reserved)
   const workspaceId = await resolveWorkspaceId()
   const prisma = getPrisma()
-  const project = await prisma.clipProject.findFirst({
+  const projectP = prisma.clipProject.findFirst({
     where: { id: projectId, workspaceId },
     select: {
       id: true,
@@ -45,8 +45,43 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
       rangeStartMs: true,
       rangeEndMs: true,
       createdAt: true,
+      transcriptKey: true,
+      upload: { select: { storageDriver: true, durationMs: true } },
     },
   })
+
+  const listOpts = { skipTranscriptEnrichment: true as const }
+
+  const [project, upload, streamVod, initialClips, viewOnFullVideoUrl, liveStatus] = await Promise.all([
+    projectP,
+    projectP.then((p) =>
+      p?.uploadId
+        ? prisma.clipUpload.findUnique({
+            where: { id: p.uploadId },
+            select: { durationMs: true },
+          })
+        : Promise.resolve(p?.upload ?? null),
+    ),
+    projectP.then((p) => (p ? prisma.streamVod.findUnique({ where: { projectId: p.id } }) : null)),
+    projectP.then((p) =>
+      p?.status === 'READY'
+        ? listProjectClips(workspaceId, p.id, 'score', {
+            ...listOpts,
+            project: {
+              settings: p.settings,
+              transcriptKey: p.transcriptKey,
+              upload: p.upload ? { storageDriver: p.upload.storageDriver } : null,
+            },
+          })
+        : Promise.resolve(null),
+    ),
+    projectP.then((p) =>
+      p ? resolveViewOnFullVideoUrl(workspaceId, p.id, p.settings, p.uploadId) : Promise.resolve(null),
+    ),
+    projectP.then((p) =>
+      p && p.status !== 'READY' ? getProjectStatus(workspaceId, p.id) : Promise.resolve(null),
+    ),
+  ])
   if (!project) notFound()
   if (project.sourceKind === 't2v') {
     if (!isT2vFeatureEnabled()) redirect('/app/clips')
@@ -54,29 +89,16 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
   }
 
   const projectSettings = parseSettings(project.settings)
-  const listOpts = { skipTranscriptEnrichment: true as const }
-
-  const [upload, streamVod, initialClips, viewOnFullVideoUrl, liveStatus] = await Promise.all([
-    project.uploadId
-      ? prisma.clipUpload.findUnique({
-          where: { id: project.uploadId },
-          select: { durationMs: true },
-        })
-      : Promise.resolve(null),
-    prisma.streamVod.findUnique({ where: { projectId: project.id } }),
-    project.status === 'READY'
-      ? listProjectClips(workspaceId, project.id, 'score', listOpts)
-      : Promise.resolve(null),
-    resolveViewOnFullVideoUrl(workspaceId, project.id, project.settings, project.uploadId),
-    project.status !== 'READY' ? getProjectStatus(workspaceId, project.id) : Promise.resolve(null),
-  ])
 
   if (projectSettings.byo && project.status === 'READY' && !streamVod && initialClips?.length === 1) {
     redirect(`/app/clips/${project.id}/edit/${initialClips[0]!.id}`)
   }
 
+  const uploadDurationMs =
+    upload && 'durationMs' in upload ? upload.durationMs : project.upload?.durationMs ?? null
+
   const sourceDurationMs = projectSettings.blank
-    ? blankProjectDisplayDurationMs(project, upload?.durationMs ?? null, initialClips?.[0]?.edits)
+    ? blankProjectDisplayDurationMs(project, uploadDurationMs, initialClips?.[0]?.edits)
     : Math.max(0, project.rangeEndMs - project.rangeStartMs)
 
   const vodState =

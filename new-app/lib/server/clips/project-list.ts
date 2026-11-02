@@ -1,12 +1,47 @@
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
-import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { createReadableSignedUrl } from '@/lib/storage/resolve'
 import { listClipProjects } from '@/lib/server/clips/projects'
 import { getPrisma } from '@/lib/server/db'
+import { Prisma } from '@prisma/client'
 
 export type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 
 const THUMB_TTL = 3600
+const THUMB_FALLBACK_NEG_TTL_MS = 7 * 60 * 1000
+
+/** projectId → untilMs when a poster lookup recently returned nothing (skip repeat findFirst). */
+const thumbFallbackMissUntil = new Map<string, number>()
+
+type T2vListMetaRow = {
+  projectId: string
+  status: string
+  progress: number
+  sceneThumb: string | null
+  sceneCount: number
+}
+
+async function loadT2vListMeta(projectIds: string[]): Promise<T2vListMetaRow[]> {
+  if (!projectIds.length) return []
+  const prisma = getPrisma()
+  return prisma.$queryRaw<T2vListMetaRow[]>`
+    SELECT
+      d."projectId" AS "projectId",
+      d.status AS status,
+      d.progress AS progress,
+      COALESCE(
+        d.document->'scenes'->0->'media'->>'thumbUrl',
+        d.document->'scenes'->0->'media'->>'previewUrl'
+      ) AS "sceneThumb",
+      COALESCE(jsonb_array_length(d.document->'scenes'), 0)::int AS "sceneCount"
+    FROM t2v_drafts d
+    WHERE d."projectId" IN (${Prisma.join(projectIds)})
+  `
+}
+
+/** Test hook. */
+export function __resetThumbFallbackNegCache(): void {
+  thumbFallbackMissUntil.clear()
+}
 
 export async function listClipProjectsForPage(
   workspaceId: string,
@@ -24,46 +59,42 @@ export async function listClipProjectsForPage(
 
   const prisma = getPrisma()
   const ids = projects.map((p) => p.id)
-  const counts = await prisma.clip.groupBy({
-    by: ['projectId'],
-    where: { projectId: { in: ids }, deletedAt: null },
-    _count: { _all: true },
-  })
+  const ownerIds = [...new Set(projects.map((p) => p.createdById).filter(Boolean))]
+  const t2vProjectIds = projects.filter((p) => p.sourceKind === 't2v').map((p) => p.id)
+
+  const [counts, t2vRows, owners, publishes] = await Promise.all([
+    prisma.clip.groupBy({
+      by: ['projectId'],
+      where: { projectId: { in: ids }, deletedAt: null },
+      _count: { _all: true },
+    }),
+    loadT2vListMeta(t2vProjectIds),
+    ownerIds.length
+      ? prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+    prisma.scriptCompositionPublish.findMany({
+      where: { workspaceId, composition: { projectId: { in: ids } } },
+      select: { publishedAt: true, composition: { select: { projectId: true } } },
+    }),
+  ])
+
   const countByProject = new Map(counts.map((c) => [c.projectId, c._count._all]))
 
   const t2vByProject = new Map<
     string,
     { status: string; progress: number; sceneThumb: string | null; sceneCount: number }
   >()
-  const t2vProjectIds = projects.filter((p) => p.sourceKind === 't2v').map((p) => p.id)
-  if (t2vProjectIds.length) {
-    const drafts = await prisma.t2vDraft.findMany({
-      where: { projectId: { in: t2vProjectIds } },
-      select: { projectId: true, status: true, progress: true, document: true },
+  for (const d of t2vRows) {
+    t2vByProject.set(d.projectId, {
+      status: d.status,
+      progress: d.progress,
+      sceneThumb: d.sceneThumb,
+      sceneCount: d.sceneCount,
     })
-    for (const d of drafts) {
-      const doc = d.document as T2vDraftV1
-      const first = doc.scenes?.[0]
-      const sceneThumb = first?.media?.thumbUrl ?? first?.media?.previewUrl ?? null
-      t2vByProject.set(d.projectId, {
-        status: d.status,
-        progress: d.progress,
-        sceneThumb,
-        sceneCount: doc.scenes?.length ?? 0,
-      })
-    }
   }
 
-  const ownerIds = [...new Set(projects.map((p) => p.createdById).filter(Boolean))]
-  const owners = ownerIds.length
-    ? await prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true } })
-    : []
   const ownerNameById = new Map(owners.map((u) => [u.id, u.name]))
 
-  const publishes = await prisma.scriptCompositionPublish.findMany({
-    where: { workspaceId, composition: { projectId: { in: ids } } },
-    select: { publishedAt: true, composition: { select: { projectId: true } } },
-  })
   const publishedProjectIds = new Set(publishes.map((pub) => pub.composition.projectId))
   const publishedAtByProject = new Map<string, Date>()
   for (const pub of publishes) {
@@ -76,14 +107,21 @@ export async function listClipProjectsForPage(
     projects.map(async (p): Promise<ClipProjectListItem> => {
       let thumbKey = p.thumbKey
       if (!thumbKey) {
-        const topClip = await prisma.clip.findFirst({
-          where: { projectId: p.id, deletedAt: null, posterKey: { not: null } },
-          orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
-          select: { posterKey: true },
-        })
-        if (topClip?.posterKey) {
-          thumbKey = topClip.posterKey
-          await prisma.clipProject.update({ where: { id: p.id }, data: { thumbKey } }).catch(() => {})
+        const negUntil = thumbFallbackMissUntil.get(p.id)
+        if (negUntil == null || negUntil <= Date.now()) {
+          const topClip = await prisma.clip.findFirst({
+            where: { projectId: p.id, deletedAt: null, posterKey: { not: null } },
+            orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
+            select: { posterKey: true },
+          })
+          if (topClip?.posterKey) {
+            thumbKey = topClip.posterKey
+            thumbFallbackMissUntil.delete(p.id)
+            await prisma.clipProject.update({ where: { id: p.id }, data: { thumbKey } }).catch(() => {})
+          } else {
+            if (thumbFallbackMissUntil.size >= 5000) thumbFallbackMissUntil.clear()
+            thumbFallbackMissUntil.set(p.id, Date.now() + THUMB_FALLBACK_NEG_TTL_MS)
+          }
         }
       }
       let thumbUrl: string | null = null

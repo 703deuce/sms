@@ -2,7 +2,6 @@ import { shotsFromCropJson, inferShotsFromWords } from '@/lib/clips/crop-shots'
 import { normalizeCropTrack, shotsToCropShots, type CropTrack } from '@/lib/clips/crop-track'
 import { mergeEditsPatch, normalizeEdits, type ClipBounds, type ClipWord } from '@/lib/clips/edits'
 import { normalizeTranscriptJson, resolveEditorWords } from '@/lib/server/clips/editor-words'
-import type { SourceWord } from '@/lib/clips/source-words'
 import { clipperCapabilities } from '@/lib/server/clips/clipper-capabilities'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
@@ -44,7 +43,7 @@ export type EditorMedia = {
 
 async function loadProjectTranscript(
   storage: ReturnType<typeof getClipStorage>,
-  project: { transcriptKey: string | null; transcriptWords: unknown },
+  project: { transcriptKey: string | null },
 ): Promise<ClipWord[]> {
   if (project.transcriptKey) {
     try {
@@ -54,10 +53,6 @@ async function loadProjectTranscript(
     } catch {
       /* fall through */
     }
-  }
-  if (Array.isArray(project.transcriptWords)) {
-    const normalized = normalizeTranscriptJson(project.transcriptWords)
-    if (normalized.length) return normalized
   }
   return []
 }
@@ -109,13 +104,27 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const prisma = getPrisma()
   const project = await prisma.clipProject.findUnique({
     where: { id: clip.projectId },
-    include: { upload: true },
+    select: {
+      id: true,
+      title: true,
+      settings: true,
+      status: true,
+      transcriptKey: true,
+      proxyKey: true,
+      updatedAt: true,
+      upload: { select: { key: true, storageDriver: true } },
+    },
   })
   if (!project) return null
   const driverHint = clip.storageDriver ?? project.upload?.storageDriver ?? null
   const storage = project.transcriptKey
     ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
     : getClipStorage(driverHint)
+
+  const clipVersionHint = clip.updatedAt.toISOString()
+  const projectVersionHint = project.updatedAt.toISOString()
+  const signClip = { versionHint: clipVersionHint }
+  const signProject = { versionHint: projectVersionHint }
 
   const cropTrackKey = `ws/${workspaceId}/projects/${clip.projectId}/clips/${clip.id}/crop_track.json`
   const proxyKey = project.proxyKey
@@ -124,6 +133,22 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const sourceSegKey = clip.sourceSegKey
   const sourceSegStartMs = clip.sourceSegStartMs
   const sourceSegEndMs = clip.sourceSegEndMs
+
+  const boundsP = clipBoundsForPatch({
+    startMs: clip.startMs,
+    endMs: clip.endMs,
+    projectId: clip.projectId,
+    sourceSegKey: clip.sourceSegKey,
+    sourceSegStartMs: clip.sourceSegStartMs,
+    sourceSegEndMs: clip.sourceSegEndMs,
+    previewKey: clip.previewKey,
+  })
+  const projectTranscriptP = loadProjectTranscript(storage, project)
+  const cropTrackJsonP = storage.getJson<unknown>(cropTrackKey).catch(() => null)
+  const cropRawP = clip.cropKey ? storage.getJson(clip.cropKey).catch(() => null) : Promise.resolve(null)
+  const segmentSizeP = sourceSegKey
+    ? storage.getObjectSizeBytes(sourceSegKey).catch(() => null)
+    : Promise.resolve(null)
 
   const [
     bounds,
@@ -136,34 +161,55 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     signedPoster,
     signedProxy,
     signedSource,
+    words,
+    signedCropTrack,
+    brollMedia,
+    editorAssets,
+    signedSourceSeg,
   ] = await Promise.all([
-    clipBoundsForPatch({
-      startMs: clip.startMs,
-      endMs: clip.endMs,
-      projectId: clip.projectId,
-      sourceSegKey: clip.sourceSegKey,
-      sourceSegStartMs: clip.sourceSegStartMs,
-      sourceSegEndMs: clip.sourceSegEndMs,
-      previewKey: clip.previewKey,
-    }),
-    loadProjectTranscript(storage, project),
-    storage.getJson<unknown>(cropTrackKey).catch(() => null),
-    clip.cropKey ? storage.getJson(clip.cropKey).catch(() => null) : Promise.resolve(null),
-    sourceSegKey ? storage.getObjectSizeBytes(sourceSegKey).catch(() => null) : Promise.resolve(null),
+    boundsP,
+    projectTranscriptP,
+    cropTrackJsonP,
+    cropRawP,
+    segmentSizeP,
     prisma.streamVod.findUnique({
       where: { projectId: project.id },
       select: { chatSource: true, chatMessages: true, sourceType: true, state: true, channelId: true },
     }),
-    previewKey ? createCachedSignedDownloadUrl(storage, previewKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
-    // G4c: the poster gets the editor TTL as well — the project grid shows the same poster.jpg
-    // without CORS, and a cached no-CORS copy of that URL failed the editor's CORS-mode load.
-    clip.posterKey ? createCachedSignedDownloadUrl(storage, clip.posterKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
-    proxyKey ? createCachedSignedDownloadUrl(storage, proxyKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
-    sourceKey ? createCachedSignedDownloadUrl(storage, sourceKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
+    previewKey
+      ? createCachedSignedDownloadUrl(storage, previewKey, signClip, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
+      : Promise.resolve(null),
+    clip.posterKey
+      ? createCachedSignedDownloadUrl(storage, clip.posterKey, signClip, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
+      : Promise.resolve(null),
+    proxyKey
+      ? createCachedSignedDownloadUrl(storage, proxyKey, signProject, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
+      : Promise.resolve(null),
+    sourceKey
+      ? createCachedSignedDownloadUrl(storage, sourceKey, signProject, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
+      : Promise.resolve(null),
+    Promise.all([projectTranscriptP]).then(([pt]) => resolveEditorWords(storage, workspaceId, clip, pt)),
+    cropTrackJsonP.then((track) =>
+      track
+        ? createCachedSignedDownloadUrl(storage, cropTrackKey, signClip, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
+        : Promise.resolve(null),
+    ),
+    boundsP.then((b) => {
+      const edits = normalizeEdits(clip.edits, b)
+      return edits.broll?.length ? resolveBrollMedia(edits.broll) : Promise.resolve([])
+    }),
+    resolveEditorAssets(storage, clip.aiMeta, clipVersionHint),
+    Promise.all([segmentSizeP]).then(([size]) => {
+      const segmentExists =
+        Boolean(sourceSegKey) && sourceSegStartMs != null && size != null
+      if (!segmentExists || !sourceSegKey) return Promise.resolve(null)
+      return createCachedSignedDownloadUrl(storage, sourceSegKey, signClip, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(
+        () => null,
+      )
+    }),
   ])
 
   const edits = normalizeEdits(clip.edits, bounds)
-  const words: SourceWord[] = await resolveEditorWords(storage, workspaceId, clip, projectTranscript)
 
   const clipStartMs = clip.startMs
   const clipEndMs = clip.endMs
@@ -190,18 +236,13 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     media = { url: signedProxy, kind: 'proxy', offsetMs: 0 }
   } else if (sourceKey && signedSource) {
     media = { url: signedSource, kind: 'source', offsetMs: 0 }
-  } else if (segmentExists && sourceSegKey) {
-    const segUrl = await createCachedSignedDownloadUrl(storage, sourceSegKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(
-      () => null,
-    )
-    if (segUrl) {
-      media = {
-        url: segUrl,
-        kind: 'segment',
-        offsetMs: sourceSegStartMs,
-        minMs: sourceSegStartMs,
-        maxMs: sourceSegEndMs ?? undefined,
-      }
+  } else if (segmentExists && signedSourceSeg) {
+    media = {
+      url: signedSourceSeg,
+      kind: 'segment',
+      offsetMs: sourceSegStartMs,
+      minMs: sourceSegStartMs,
+      maxMs: sourceSegEndMs ?? undefined,
     }
   } else if (previewKey && signedPreview) {
     media = {
@@ -213,13 +254,6 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     }
   }
 
-  const signedCropTrack = cropTrack
-    ? await createCachedSignedDownloadUrl(storage, cropTrackKey).catch(() => null)
-    : null
-
-  const brollMedia = edits.broll?.length ? await resolveBrollMedia(edits.broll) : []
-  // FV2: full-video peaks + filmstrip (signed); clips have none and keep their current paths.
-  const editorAssets = await resolveEditorAssets(storage, clip.aiMeta)
   const aiMeta = (clip.aiMeta || null) as { brollIdeas?: string[] } | null
 
   const vodState =

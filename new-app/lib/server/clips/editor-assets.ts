@@ -8,9 +8,11 @@ import type { ClipStorageDriver } from '@/lib/storage/types'
 export async function resolveEditorAssets(
   storage: ClipStorageDriver,
   aiMeta: unknown,
+  versionHint?: string,
 ): Promise<EditorAssets> {
   const k = editorAssetKeys(aiMeta)
-  const sign = (key: string) => createCachedSignedDownloadUrl(storage, key).catch(() => null)
+  const signOpts = versionHint ? { versionHint } : undefined
+  const sign = (key: string) => createCachedSignedDownloadUrl(storage, key, signOpts).catch(() => null)
   const [peaksUrl, sheetUrls] = await Promise.all([
     k.peaksKey ? sign(k.peaksKey) : Promise.resolve(null),
     k.filmstrip ? Promise.all(k.filmstrip.keys.map(sign)) : Promise.resolve([] as (string | null)[]),

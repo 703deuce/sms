@@ -6,11 +6,36 @@ import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { normalizeTranscriptJson } from '@/lib/server/clips/editor-words'
 
+export type ListProjectClipsProjectContext = {
+  settings: unknown
+  transcriptKey: string | null
+  upload: { storageDriver: string | null } | null
+}
+
 export type ListProjectClipsOpts = {
   includeHidden?: boolean
   /** Skip S3 transcript download on SSR list (client API can enrich later). */
   skipTranscriptEnrichment?: boolean
+  /** When the caller already loaded project fields, skip the extra findFirst. */
+  project?: ListProjectClipsProjectContext
 }
+
+const listClipSelect = {
+  id: true,
+  projectId: true,
+  title: true,
+  reason: true,
+  startMs: true,
+  endMs: true,
+  score: true,
+  scores: true,
+  favorite: true,
+  aiMeta: true,
+  edits: true,
+  previewKey: true,
+  posterKey: true,
+  updatedAt: true,
+} as const
 
 export async function listProjectClips(
   workspaceId: string,
@@ -19,18 +44,22 @@ export async function listProjectClips(
   opts?: ListProjectClipsOpts,
 ) {
   const prisma = getPrisma()
-  const project = await prisma.clipProject.findFirst({
-    where: { id: projectId, workspaceId, deletedAt: null },
-    select: {
-      settings: true,
-      transcriptKey: true,
-      upload: { select: { storageDriver: true } },
-    },
-  })
+  let project = opts?.project ?? null
+  if (!project) {
+    project = await prisma.clipProject.findFirst({
+      where: { id: projectId, workspaceId, deletedAt: null },
+      select: {
+        settings: true,
+        transcriptKey: true,
+        upload: { select: { storageDriver: true } },
+      },
+    })
+  }
   if (!project) return null
   const clips = await prisma.clip.findMany({
     where: { projectId, deletedAt: null },
     orderBy: sort === 'timeline' ? { startMs: 'asc' } : { score: 'desc' },
+    select: listClipSelect,
   })
   const storage = getClipStorage()
   const visible = opts?.includeHidden
@@ -75,11 +104,11 @@ export async function listProjectClips(
   let projectWords: ReturnType<typeof projectTranscriptToSourceWords> | null = null
   const loadProjectWords = async () => {
     if (projectWords) return projectWords
-    if (!project.transcriptKey) return null
+    if (!project!.transcriptKey) return null
     try {
-      const driverHint = project.upload?.storageDriver ?? null
-      const tStorage = await getClipStorageForObjectKey(project.transcriptKey, driverHint)
-      const raw = await tStorage.getJson<unknown>(project.transcriptKey)
+      const driverHint = project!.upload?.storageDriver ?? null
+      const tStorage = await getClipStorageForObjectKey(project!.transcriptKey, driverHint)
+      const raw = await tStorage.getJson<unknown>(project!.transcriptKey)
       projectWords = projectTranscriptToSourceWords(normalizeTranscriptJson(raw))
       return projectWords
     } catch {

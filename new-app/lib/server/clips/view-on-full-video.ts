@@ -22,19 +22,19 @@ export async function resolveViewOnFullVideoUrl(
     if (!linked) fvId = null
   }
   if (!fvId && uploadId) {
-    const candidates = await prisma.clipProject.findMany({
-      where: { workspaceId, uploadId, deletedAt: null },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, settings: true, createdAt: true },
-    })
-    const foundCreated =
-      (
-        await prisma.clipProject.findUnique({
-          where: { id: foundProjectId },
-          select: { createdAt: true },
-        })
-      )?.createdAt ?? new Date()
-    const fv = candidates.find((p) => isFullVideoSettings(p.settings) && p.createdAt < foundCreated)
+    const [candidates, foundCreated] = await Promise.all([
+      prisma.clipProject.findMany({
+        where: { workspaceId, uploadId, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, settings: true, createdAt: true },
+      }),
+      prisma.clipProject.findUnique({
+        where: { id: foundProjectId },
+        select: { createdAt: true },
+      }),
+    ])
+    const foundCreatedAt = foundCreated?.createdAt ?? new Date()
+    const fv = candidates.find((p) => isFullVideoSettings(p.settings) && p.createdAt < foundCreatedAt)
     fvId = fv?.id ?? null
   }
   if (!fvId) return null
