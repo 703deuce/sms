@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { clipDisplayTitle, clipFallbackPickLabel, clipIsFallbackPick, clipScoreTooltipLines, clipWhySummary, isInternalClipReasoningText, sanitizeClipDescriptionText } from '@/lib/clips/clip-results-chips'
+import {
+  clipDisplayTitle,
+  clipFallbackPickLabel,
+  clipIsFallbackPick,
+  clipScoreTooltipLines,
+  clipTitleFromTranscriptWords,
+  clipWhySummary,
+  isGenericClipTitle,
+  isInternalClipReasoningText,
+  sanitizeClipDescriptionText,
+} from '@/lib/clips/clip-results-chips'
 
 describe('clip-results-chips fallback', () => {
   it('detects low_confidence and emergency reason', () => {
@@ -33,6 +43,20 @@ describe('clip display title sanitization', () => {
         aiMeta: { hook: 'Michigan Senate primary fight' },
       }),
     ).toBe('Michigan Senate primary fight')
+  })
+
+  it('falls back to transcript words when title is generic Clip', () => {
+    expect(isGenericClipTitle('Clip')).toBe(true)
+    expect(clipTitleFromTranscriptWords('Anti-Muslim rhetoric versus pushback in the primary')).toBe(
+      'Anti-Muslim rhetoric versus pushback in the',
+    )
+    expect(
+      clipDisplayTitle({
+        title: 'Clip',
+        aiMeta: {},
+        spokenFirstLine: 'Anti-Muslim rhetoric versus pushback in the Michigan Senate primary race today',
+      }),
+    ).toBe('Anti-Muslim rhetoric versus pushback in the')
   })
 
   it('sanitizes Gemini span confirms descriptions', () => {

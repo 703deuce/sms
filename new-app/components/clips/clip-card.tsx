@@ -64,7 +64,12 @@ export function ClipCard({
   const clipTypeLabel = clipTypeBadge(aiMeta)
   const people = clipPersonCount(aiMeta)
   const fallbackLabel = clipFallbackPickLabel(aiMeta, clip.reason)
-  const displayTitle = clipDisplayTitle(clip)
+  const displayTitle = clipDisplayTitle({
+    title: clip.title,
+    reason: clip.reason,
+    aiMeta: clip.aiMeta,
+    spokenFirstLine: clip.spokenFirstLine,
+  })
   const previewEdits: ClipEditsV2 | undefined =
     isStreamer && clip.edits
       ? normalizeEdits(clip.edits, { clipStartMs: clip.startMs, clipEndMs: clip.endMs })

@@ -33,6 +33,15 @@ TITLE_SCHEMA = {
 }
 
 
+def transcript_title_fallback(excerpt: str, *, max_words: int = 6, max_len: int = 60) -> str:
+    """Customer-facing title from the clip's own words when LLM / sanitizer reject a headline."""
+    words = [w for w in (excerpt or "").split() if w]
+    if not words:
+        return ""
+    short = " ".join(words[:max_words])
+    return trim_title(short, max_len)
+
+
 def trim_title(title: str, max_len: int = 60) -> str:
     s = strip_internal_sentence_refs(title)
     if len(s) <= max_len:
@@ -178,6 +187,14 @@ def ensure_short_source_hook(clip: dict, words: list[dict], source_ms: int) -> N
 def ensure_clip_title(clip: dict, words: list[dict], genre: str, *, source_ms: int | None = None) -> None:
     from clips_worker.picker.public_copy import is_internal_picker_note
 
+    def finalize() -> None:
+        ensure_short_source_hook(clip, words, source_ms or 0)
+        polish_clip_hook_and_title(clip, words)
+        if needs_title(str(clip.get("title") or "")) and excerpt:
+            fb = transcript_title_fallback(excerpt)
+            if fb:
+                clip["title"] = fb
+
     title = trim_title(str(clip.get("title") or ""))
     why = strip_internal_sentence_refs(str(clip.get("pass1_why") or ""))
     reason = strip_internal_sentence_refs(str(clip.get("reason") or ""))
@@ -193,14 +210,11 @@ def ensure_clip_title(clip: dict, words: list[dict], genre: str, *, source_ms: i
         clip["title"] = trim_title(excerpt.split(".")[0].split("?")[0] or excerpt, 60)
         if needs_title(clip["title"]):
             clip["title"] = generate_title(excerpt, genre)
-        ensure_short_source_hook(clip, words, source_ms)
-        polish_clip_hook_and_title(clip, words)
+        finalize()
         return
     if not needs_title(title):
         clip["title"] = title
-        ensure_short_source_hook(clip, words, source_ms or 0)
-        polish_clip_hook_and_title(clip, words)
+        finalize()
         return
     clip["title"] = generate_title(excerpt, genre)
-    ensure_short_source_hook(clip, words, source_ms or 0)
-    polish_clip_hook_and_title(clip, words)
+    finalize()
