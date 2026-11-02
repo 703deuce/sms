@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ClipAudioSfx } from '@/lib/clips/audio'
 import { clipsFetch } from '@/lib/clips-api'
 import type { SfxCue } from '@/components/clips/editor/use-audio-mix'
+import { isUploadMediaId } from '@/components/clips/editor/use-generation'
 import { peaksFromSamples, type AudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { detectBeats, monoSamples } from '@/lib/clips/editor/beats'
 
@@ -61,8 +62,10 @@ export function useSfxCues(
     const timers: ReturnType<typeof setTimeout>[] = []
     const load = async (id: string, attempt: number) => {
       try {
-        if (sfx.some((s) => s.generationId === id && s.uploadId)) {
-          const direct = uploadUrlsRef.current[id]
+        const row = sfx.find((s) => s.generationId === id)
+        const uploadKey = row?.uploadId ?? (isUploadMediaId(id) ? id : null)
+        if (uploadKey) {
+          const direct = uploadUrlsRef.current[id] ?? uploadUrl?.(uploadKey)
           if (!direct) return
           let pending = decodedByUrl.current.get(direct)
           if (!pending) {

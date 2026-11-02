@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { ClipAudioMusic, ClipAudioSfx, ClipEditsAudio, ClipStudioSound } from '@/lib/clips/audio'
+import { addVoiceoverClip } from '@/lib/clips/editor/recording'
 import {
   DEFAULT_DUCK_DEPTH,
   DEFAULT_MUSIC_FADE_IN_MS,
@@ -646,6 +647,13 @@ export function useEditorState(
     [setEdits, state.edits],
   )
 
+  const placeVoiceoverClip = useCallback(
+    (uploadId: string, atMs: number, durMs: number) => {
+      setEdits(addVoiceoverClip(state.edits, uploadId, atMs, durMs, () => crypto.randomUUID()))
+    },
+    [setEdits, state.edits],
+  )
+
   const updateSfx = useCallback(
     (generationId: string, patch: Partial<ClipAudioSfx>) => {
       const cur = state.edits.audio || { music: null, sfx: [] }
@@ -1038,6 +1046,7 @@ export function useEditorState(
     setMusic,
     patchMusic,
     addSfx,
+    placeVoiceoverClip,
     updateSfx,
     removeSfx,
     attachMusicGeneration,

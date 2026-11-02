@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
-import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { defaultEdits, normalizeEdits, resolveWordFixText, type ClipEditsV2 } from '@/lib/clips/edits'
 import { editorPreviewCaptionClipWords } from '@/lib/clips/editor-preview-edits'
 import { editorEditsReducer } from '@/components/clips/editor/use-editor-state'
+import { buildPreviewScripts } from '@/lib/clips/render-plan/preview-scripts'
 
 const bounds = { clipStartMs: 0, clipEndMs: 10000 }
 
@@ -17,6 +18,34 @@ describe('word fix caption preview', () => {
     expect(caps[0]?.text).toBe('Cracked')
     const preview = editorPreviewCaptionClipWords(words, edits)
     expect(preview[0]?.w).toBe('Cracked')
+  })
+
+  it('resolveWordFixText maps by wordFixMeta source time when index differs', () => {
+    const fixes = { '3': 'Cracked.' }
+    const meta = { '3': { s: 19_050, w: 'cracked.' } }
+    const w = { w: 'cracked.', s: 19.05, e: 19.4, i: 99 }
+    expect(resolveWordFixText(w, fixes, meta)).toBe('Cracked.')
+  })
+
+  it('libass preview script includes word fix text', () => {
+    const edits = normalizeEdits(
+      {
+        ...defaultEdits(bounds),
+        captions: { enabled: true, presetId: 'bold_pop', animation: 'pop', position: 'bottom', size: 6.5 },
+        wordFixes: { '2': 'Cracked.' },
+        wordFixMeta: { '2': { s: 19_000, w: 'cracked.' } },
+      },
+      bounds,
+    )
+    const caps = [{ w: 'Cracked.', s: 19, e: 19.5, i: 2, idx: 2 }]
+    const scripts = buildPreviewScripts({
+      edits: edits as unknown as Record<string, unknown>,
+      words: caps,
+      playW: 1080,
+      playH: 1920,
+      durationMs: 10_000,
+    })
+    expect(scripts.captions).toContain('Cracked.')
   })
 
   it('setWordFix uses a single pass-labeled undo step', () => {

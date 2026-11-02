@@ -66,7 +66,6 @@ import { AudioMeter, usePeakLevels } from '@/components/clips/editor/audio-meter
 import { useSfxCues } from '@/components/clips/editor/use-sfx-cues'
 import type { EditorAssets } from '@/lib/clips/editor/editor-assets'
 import { applyTimelineLaneState, arrowStepMs, brollMediaForItems, voiceMuted } from '@/lib/clips/editor/clip-timeline'
-import { useGeneration } from '@/components/clips/editor/use-generation'
 import { useStudioSoundPreview } from '@/components/clips/editor/use-studio-sound-preview'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import { ClipFillerReview } from '@/components/clips/editor/clip-filler-review'
@@ -372,6 +371,7 @@ export function EditorShell({
     patchMusic,
     setMusic,
     addSfx,
+    placeVoiceoverClip,
     updateSfx,
     removeSfx,
     setEdits,
@@ -1821,7 +1821,7 @@ export function EditorShell({
             setEdits(next)
           }}
           textVoiceover={textVoiceoverTarget}
-          addVoiceoverSfx={addSfx}
+          addVoiceover={placeVoiceoverClip}
           onCutToBeat={(every) => beatCutApi?.cut(every)}
           beatsAvailable={Boolean(beatCutApi?.hasBeats)}
         />
@@ -1890,7 +1890,7 @@ export function EditorShell({
             onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)}
             clipId={clipId}
             uploadLibraryFiles={media.uploadFiles}
-            addSfx={addSfx}
+            placeVoiceover={placeVoiceoverClip}
           />
           </EditorPanelErrorBoundary>
         </div>
