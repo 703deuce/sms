@@ -107,7 +107,7 @@ def main() -> int:
                 continue
             key, off, reason = resolved
             print(f"{cid}: source={reason} key_tail={key[-48:]} off_s={off:.3f}")
-            src_url = storage.sign_url(key)
+            src_url = storage.sign_url(key, expires_s=7200)
             src = out / f"{cid}_src.mp4"
             subprocess.check_call(
                 [

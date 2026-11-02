@@ -229,9 +229,20 @@ class Matter:
                 return {"ok": False, "error": "ffmpeg_failed", "gpu_seconds": time.time() - t0}
             with open(out, "rb") as f:
                 data = f.read()
-            urllib.request.urlopen(
-                urllib.request.Request(item["out_upload_url"], data=data, method="PUT"), timeout=600
-            )
+            try:
+                req = urllib.request.Request(
+                    item["out_upload_url"],
+                    data=data,
+                    method="PUT",
+                    headers={"Content-Type": "video/mp4"},
+                )
+                urllib.request.urlopen(req, timeout=600)
+            except urllib.error.HTTPError as exc:
+                return {
+                    "ok": False,
+                    "error": f"upload_http_{exc.code}",
+                    "gpu_seconds": time.time() - t0,
+                }
         el = time.time() - t0
         return {
             "ok": kept > 0,
