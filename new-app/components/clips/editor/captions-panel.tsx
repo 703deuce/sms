@@ -151,6 +151,7 @@ export function CaptionsPanel({
   const [vocabAutoApply, setVocabAutoApply] = useState(true)
   const [vocabFrom, setVocabFrom] = useState('')
   const [vocabTo, setVocabTo] = useState('')
+  const [vocabSpeakAs, setVocabSpeakAs] = useState('')
   const [saveOpen, setSaveOpen] = useState(false)
   const [saveName, setSaveName] = useState('')
   const [translateLang, setTranslateLang] = useState('')
@@ -254,7 +255,13 @@ export function CaptionsPanel({
         <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3" data-testid="caption-word-corrections">
           <p className="text-xs font-medium text-muted-foreground">Caption text</p>
           <p className="text-[11px] text-muted-foreground">Double-click a word to fix spelling without re-timing.</p>
-          {onWordFix && editingWordI != null ? (
+          {onWordFix && editingWordI != null ? (() => {
+            const w = words.find((x) => x.i === editingWordI)
+            const from = w?.w.trim() ?? ''
+            const replaceAllCount = from
+              ? words.filter((hit) => hit.w.trim().toLowerCase() === from.toLowerCase()).length
+              : 0
+            return (
             <Button
               type="button"
               size="sm"
@@ -262,9 +269,7 @@ export function CaptionsPanel({
               className="h-7 text-xs"
               data-testid="caption-replace-all-misheard"
               onClick={() => {
-                const w = words.find((x) => x.i === editingWordI)
                 if (!w || !onWordFix) return
-                const from = w.w.trim()
                 const to = window.prompt(`Replace every "${from}" with:`, wordDisplayText(w, edits.wordFixes))
                 if (to == null || !to.trim()) return
                 for (const hit of words) {
@@ -276,9 +281,10 @@ export function CaptionsPanel({
                 toast.success('Replaced all matches')
               }}
             >
-              Replace all like this
+              Replace all {replaceAllCount > 0 ? replaceAllCount : ''}
             </Button>
-          ) : null}
+            )
+          })() : null}
           <div className="max-h-40 overflow-y-auto text-sm leading-relaxed">
             {words.map((w) => {
               const display = wordDisplayText(w, edits.wordFixes)
@@ -358,8 +364,11 @@ export function CaptionsPanel({
         <ul className="space-y-1 text-sm">
           {vocabulary.map((row) => (
             <li key={row.from.toLowerCase()} className="flex items-center justify-between gap-2">
-              <span>
+              <span className="min-w-0 flex-1">
                 {row.from} → {row.to}
+                {row.speakAs ? (
+                  <span className="text-muted-foreground"> · speak as {row.speakAs}</span>
+                ) : null}
               </span>
               <Button
                 type="button"
@@ -374,8 +383,15 @@ export function CaptionsPanel({
           ))}
         </ul>
         <div className="flex flex-wrap gap-2">
-          <Input className="h-8 flex-1" placeholder="From" value={vocabFrom} onChange={(e) => setVocabFrom(e.target.value)} />
-          <Input className="h-8 flex-1" placeholder="To" value={vocabTo} onChange={(e) => setVocabTo(e.target.value)} />
+          <Input className="h-8 min-w-[4.5rem] flex-1" placeholder="From" value={vocabFrom} onChange={(e) => setVocabFrom(e.target.value)} />
+          <Input className="h-8 min-w-[4.5rem] flex-1" placeholder="To" value={vocabTo} onChange={(e) => setVocabTo(e.target.value)} />
+          <Input
+            className="h-8 min-w-[4.5rem] flex-1"
+            placeholder="Speak as (TTS)"
+            value={vocabSpeakAs}
+            onChange={(e) => setVocabSpeakAs(e.target.value)}
+            data-testid="vocab-speak-as-input"
+          />
           <Button
             type="button"
             size="sm"
@@ -383,13 +399,16 @@ export function CaptionsPanel({
             onClick={() => {
               const from = vocabFrom.trim()
               const to = vocabTo.trim()
+              const speakAs = vocabSpeakAs.trim()
               if (!from || !to) return
+              const entry: VocabEntry = speakAs ? { from, to, speakAs } : { from, to }
               void persistVocab([
                 ...vocabulary.filter((v) => v.from.toLowerCase() !== from.toLowerCase()),
-                { from, to },
+                entry,
               ])
               setVocabFrom('')
               setVocabTo('')
+              setVocabSpeakAs('')
             }}
           >
             Add

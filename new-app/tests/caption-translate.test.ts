@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { chunksForTranslation, linesFromTranslation } from '@/lib/clips/caption-translate'
+import { chunkNumberedLines, numberedInput } from '@/lib/clips/caption-translate-index'
 import { defaultEdits } from '@/lib/clips/edits'
 
 const bounds = { clipStartMs: 0, clipEndMs: 5000, trimMinMs: 0, trimMaxMs: 5000 }
@@ -30,5 +31,14 @@ describe('caption-translate', () => {
     }
     const chunks = chunksForTranslation(edits, [])
     expect(chunks).toEqual([{ startMs: 100, endMs: 900, text: 'Line' }])
+  })
+
+  it('numberedInput preserves line order indices', () => {
+    const numbered = numberedInput([{ text: 'a' }, { text: 'b' }])
+    expect(numbered).toEqual([
+      { i: 0, text: 'a' },
+      { i: 1, text: 'b' },
+    ])
+    expect(chunkNumberedLines(numbered, 1)).toHaveLength(2)
   })
 })

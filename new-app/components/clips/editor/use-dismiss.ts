@@ -15,7 +15,9 @@ export function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, on
       onClose()
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      if (document.querySelector('[data-testid="export-dialog"]')) return
+      onClose()
     }
     document.addEventListener('pointerdown', onPointer, true)
     document.addEventListener('keydown', onKey, true)
