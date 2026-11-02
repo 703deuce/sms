@@ -17,6 +17,18 @@ function jsonKey(edits: ClipEditsV2, key: keyof ClipEditsV2): string {
   return JSON.stringify(edits[key] ?? null)
 }
 
+/** New AI TTS / voiceover cue (upload on a Voiceover track). */
+function aiVoiceoverPlaced(prev: ClipEditsV2, next: ClipEditsV2): boolean {
+  const pa = prev.audio?.sfx ?? []
+  const na = next.audio?.sfx ?? []
+  if (na.length !== pa.length + 1) return false
+  const prevIds = new Set(pa.map((s) => s.generationId))
+  const added = na.filter((s) => !prevIds.has(s.generationId))
+  if (added.length !== 1) return false
+  const c = added[0]!
+  return Boolean(c.uploadId) && c.kind === 'audio' && (c.volume ?? 1) === 1 && (c.durMs ?? 0) >= 100
+}
+
 /** Human label for one undo step from `prev` → `next`. */
 export function describeEditsChange(prev: ClipEditsV2, next: ClipEditsV2): string {
   if (jsonKey(prev, 'cutRanges') !== jsonKey(next, 'cutRanges')) return 'Cut'
@@ -26,7 +38,10 @@ export function describeEditsChange(prev: ClipEditsV2, next: ClipEditsV2): strin
     return 'Captions'
   if (jsonKey(prev, 'textItems') !== jsonKey(next, 'textItems')) return 'Text'
   if (jsonKey(prev, 'layout') !== jsonKey(next, 'layout')) return 'Layout'
-  if (jsonKey(prev, 'audio') !== jsonKey(next, 'audio')) return 'Audio'
+  if (jsonKey(prev, 'audio') !== jsonKey(next, 'audio')) {
+    if (aiVoiceoverPlaced(prev, next)) return 'AI voiceover'
+    return 'Audio'
+  }
   if (jsonKey(prev, 'broll') !== jsonKey(next, 'broll')) return 'B-roll'
   if (jsonKey(prev, 'color') !== jsonKey(next, 'color')) return 'Color'
   for (const key of ORDER) {

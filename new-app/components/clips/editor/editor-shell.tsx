@@ -1812,6 +1812,7 @@ export function EditorShell({
           edits={edits}
           outputDurationMs={outDur}
           playheadMs={outputMs}
+          playheadAtMsRef={outputMsRef}
           playheadSourceMs={playheadSourceMs}
           uploadLibraryFiles={media.uploadFiles}
           onSuggestMusic={() => {}}

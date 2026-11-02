@@ -34,6 +34,8 @@ export function TextVoiceoverSection({
   atMs,
   uploadLibraryFiles,
   placeVoiceover,
+  /** Read playhead at click time (avoids drift while TTS/upload runs). */
+  resolvePlaceAtMs,
   compact = false,
   standalone = false,
   onTextChange,
@@ -43,6 +45,7 @@ export function TextVoiceoverSection({
   atMs: number
   uploadLibraryFiles: (files: File[]) => Promise<ProjectMediaItem[]>
   placeVoiceover: (uploadId: string, atMs: number, durMs: number) => void
+  resolvePlaceAtMs?: () => number
   compact?: boolean
   /** When true, show a line input even without a selected text item. */
   standalone?: boolean
@@ -72,9 +75,14 @@ export function TextVoiceoverSection({
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
-      previewBlobRef.current = null
     }
   }, [previewUrl])
+
+  useEffect(() => {
+    return () => {
+      previewBlobRef.current = null
+    }
+  }, [])
 
   const synthesize = async () => {
     const res = await fetch(`/api/clips/clips/${clipId}/voiceover`, {
@@ -108,6 +116,7 @@ export function TextVoiceoverSection({
 
   const placeOnTimeline = async () => {
     if (!trimmed) return
+    const placeAtMs = Math.max(0, Math.round(resolvePlaceAtMs?.() ?? atMs))
     setBusy('place')
     try {
       let blob = previewBlobRef.current
@@ -121,7 +130,7 @@ export function TextVoiceoverSection({
       const uploadId = uploaded[0]?.refId
       if (!uploadId) throw new Error('Upload failed')
       const durMs = await audioBlobDurationMs(blob)
-      placeVoiceover(uploadId, atMs, durMs)
+      placeVoiceover(uploadId, placeAtMs, durMs)
       toast.success('Voiceover placed on timeline')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Voiceover failed')
@@ -145,7 +154,7 @@ export function TextVoiceoverSection({
             placeholder="Type a line to synthesize…"
             data-testid="text-voiceover-input"
           />
-          <p className="text-[11px] text-muted-foreground">Placed on the Voice lane at the playhead.</p>
+          <p className="text-[11px] text-muted-foreground">Placed on the Voiceover lane at the playhead.</p>
         </div>
       )
     }
@@ -164,15 +173,18 @@ export function TextVoiceoverSection({
         <AiCreditBadge />
       </div>
       {standalone ? (
-        <textarea
-          className="min-h-[56px] w-full rounded border border-border bg-background p-2 text-xs"
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value)
-            onTextChange?.(e.target.value)
-          }}
-          data-testid="text-voiceover-input"
-        />
+        <>
+          <textarea
+            className="min-h-[56px] w-full rounded border border-border bg-background p-2 text-xs"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              onTextChange?.(e.target.value)
+            }}
+            data-testid="text-voiceover-input"
+          />
+          <p className="text-[11px] text-muted-foreground">Placed on the Voiceover lane at the playhead.</p>
+        </>
       ) : null}
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[120px] flex-1 space-y-1">
@@ -203,7 +215,7 @@ export function TextVoiceoverSection({
           data-testid="text-voiceover-preview"
         >
           {busy === 'preview' ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : <Play className="mr-1 size-3.5" aria-hidden />}
-          Preview
+          {busy === 'preview' ? 'Generating…' : 'Preview'}
         </Button>
         <Button
           type="button"
@@ -214,13 +226,22 @@ export function TextVoiceoverSection({
           data-testid="text-voiceover-place"
         >
           {busy === 'place' ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : null}
-          {previewUrl ? 'Regenerate & place' : 'Add to timeline'}
+          {busy === 'place'
+            ? previewUrl
+              ? 'Uploading…'
+              : 'Generating…'
+            : previewUrl
+              ? 'Place on timeline'
+              : 'Add to timeline'}
         </Button>
       </div>
       {previewUrl ? (
-        <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => audioRef.current?.play()}>
-          Replay preview
-        </Button>
+        <>
+          <p className="text-[11px] text-muted-foreground">Place uses the preview audio (one credit total).</p>
+          <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => audioRef.current?.play()}>
+            Replay preview
+          </Button>
+        </>
       ) : null}
     </div>
   )

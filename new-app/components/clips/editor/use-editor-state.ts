@@ -649,9 +649,9 @@ export function useEditorState(
 
   const placeVoiceoverClip = useCallback(
     (uploadId: string, atMs: number, durMs: number) => {
-      setEdits(addVoiceoverClip(state.edits, uploadId, atMs, durMs, () => crypto.randomUUID()))
+      setEditsPass(addVoiceoverClip(state.edits, uploadId, atMs, durMs, () => crypto.randomUUID()), 'AI voiceover')
     },
-    [setEdits, state.edits],
+    [setEditsPass, state.edits],
   )
 
   const updateSfx = useCallback(
