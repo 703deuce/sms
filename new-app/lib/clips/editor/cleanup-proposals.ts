@@ -62,6 +62,69 @@ export function mergeCutCleanupKindsForRanges(
   return Object.keys(next).length ? next : undefined
 }
 
+const CLEANUP_KIND_MERGE_PRIORITY: CleanupCutKind[] = [
+  'retake',
+  'clarity',
+  'repeat',
+  'filler',
+  'gap',
+  'manual',
+  'unknown',
+]
+
+function mergeCleanupKind(a: CleanupCutKind, b: CleanupCutKind): CleanupCutKind {
+  const ia = CLEANUP_KIND_MERGE_PRIORITY.indexOf(a)
+  const ib = CLEANUP_KIND_MERGE_PRIORITY.indexOf(b)
+  if (ia < 0) return b
+  if (ib < 0) return a
+  return ia <= ib ? a : b
+}
+
+function rangesOverlap(a: CutRange, b: CutRange): boolean {
+  const loA = Math.min(a[0], a[1])
+  const hiA = Math.max(a[0], a[1])
+  const loB = Math.min(b[0], b[1])
+  const hiB = Math.max(b[0], b[1])
+  return hiA > loB && hiB > loA
+}
+
+/**
+ * After `mergeCutRanges` coalesces cuts, proposal ids change and `pruneCutCleanupKinds` drops tags.
+ * Re-attach the best cleanup kind from any overlapping previous/applied range (never downgrade filler/repeat → manual).
+ */
+export function reconcileCutCleanupKinds(
+  meta: ClipEditsV2['cutCleanupKinds'],
+  prevCuts: CutRange[],
+  nextCuts: CutRange[],
+  applied?: { range: CutRange; kind: CleanupCutKind }[],
+): ClipEditsV2['cutCleanupKinds'] {
+  const tagged: { range: CutRange; kind: CleanupCutKind }[] = []
+  for (const r of prevCuts) {
+    const k = meta?.[proposalId(r)]
+    if (k) tagged.push({ range: r, kind: k })
+  }
+  for (const row of applied ?? []) {
+    const kind = row.kind === 'unknown' ? 'manual' : row.kind
+    tagged.push({ range: row.range, kind })
+  }
+  const next: Record<string, CutCleanupKind> = {}
+  for (const r of nextCuts) {
+    const id = proposalId(r)
+    const direct = meta?.[id]
+    if (direct && direct !== 'manual') {
+      next[id] = direct
+      continue
+    }
+    let kind: CleanupCutKind | null = direct ?? null
+    for (const src of tagged) {
+      if (!rangesOverlap(r, src.range)) continue
+      kind = kind ? mergeCleanupKind(kind, src.kind) : src.kind
+    }
+    if (kind && kind !== 'unknown') next[id] = kind
+  }
+  return Object.keys(next).length ? next : undefined
+}
+
 export function pruneCutCleanupKinds(
   meta: ClipEditsV2['cutCleanupKinds'],
   cutRanges: CutRange[],

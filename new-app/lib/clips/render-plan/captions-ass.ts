@@ -10,6 +10,7 @@ import { CAPTION_PRESETS_V2 } from '@/lib/clips/templates/registry'
 import { captionSafeWidthPx, fitCaptionLine, fitReferenceFrame, roundHalfUp } from '@/lib/clips/caption-fit'
 import { hex2, pyFixedPad, pyFloat, pyInt, pyRound, pyRoundN } from '@/lib/clips/render-plan/py'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { assFontForCaptionSample } from '@/lib/clips/caption-intl'
 import { captionAssMotionTags, captionMotionAt } from '@/lib/clips/editor/caption-keyframes'
 
 /** G3a: `ln` = manual caption line index (captionLines) — one caption per line. */
@@ -33,6 +34,7 @@ const GLOW_TAG_INNER = String.raw`\blur4\t(0,200,\blur9)\t(200,400,\blur4)`
 /** Mirror of captions_ass._ASS_FONT_FILES keys (all bundled) + _ASS_FONT_ALIASES. */
 const ASS_FONT_FILES = new Set([
   'Poppins ExtraBold', 'Anton', 'Montserrat Black', 'Bangers', 'Inter', 'Lato', 'Lato Black', 'Bebas Neue', 'Luckiest Guy', 'Archivo Black', 'Oswald',
+  'Noto Sans', 'Noto Sans Arabic', 'Noto Sans CJK JP', 'Noto Sans Devanagari', 'Noto Sans Thai',
 ])
 const ASS_FONT_ALIASES: Record<string, string> = {
   Poppins: 'Poppins ExtraBold', Anton: 'Anton', 'Montserrat Black': 'Montserrat Black', Montserrat: 'Montserrat Black',
@@ -52,6 +54,11 @@ const isDict = (v: unknown): v is Dict => typeof v === 'object' && v !== null &&
 export function resolveAssFontName(cap: Dict, preset: Preset): string {
   const raw = String(or(cap.font, preset.font, 'Poppins')).trim()
   if (cap._userFont === true && raw) return raw
+  const sample = String(cap._captionSampleText ?? '').trim()
+  if (sample) {
+    const intl = assFontForCaptionSample(sample, '')
+    if (intl && ASS_FONT_FILES.has(intl)) return intl
+  }
   const canonical = ASS_FONT_ALIASES[raw] ?? raw
   if (ASS_FONT_FILES.has(canonical)) return canonical
   return 'Poppins ExtraBold'
@@ -461,6 +468,11 @@ export function buildCaptionsAss(
   motionEdits: ClipEditsV2 | null = null,
 ): string {
   let cap = clampCaptionExportStyle(isDict(editsCaptions) ? editsCaptions : {}, playH, playW)
+  const captionSample = words
+    .map((w) => w.w)
+    .join(' ')
+    .slice(0, 400)
+  if (captionSample) cap = { ...cap, _captionSampleText: captionSample }
   const presetId = String(or(cap.presetId, cap.preset, 'bold_pop'))
   const isCp = presetId.startsWith('cp')
   if (isCp) cap = Object.fromEntries(Object.entries(cap).filter(([k]) => !CP_STALE_KEYS.includes(k)))

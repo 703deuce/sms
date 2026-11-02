@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest'
+import { buildNleCaptionsSrt, warpSrtCuesToDisplayMs } from '@/lib/clips/export-nle-captions'
+import { displayPositionMs } from '@/lib/clips/edits'
+import { buildCaptionWords } from '@/lib/clips/caption-words'
+import { captionLinesFromWords } from '@/lib/clips/editor/caption-lines'
+import { CLIP_5F19E510_BOUNDS, clip5f19e510Edits } from '@/tests/fixtures/clip-5f19e510-edits'
+
+describe('NLE captions.srt output time', () => {
+  const edits = clip5f19e510Edits()
+  const bounds = CLIP_5F19E510_BOUNDS
+  const words = [
+    { i: 0, w: 'Hi', s: 0.4, e: 0.8 },
+    { i: 1, w: 'Mid', s: 7.4, e: 7.8 },
+    { i: 2, w: 'End', s: 30.237, e: 30.6 },
+  ]
+
+  it('warps caption cues through segmentSpeeds (5f19e510)', () => {
+    const cw = buildCaptionWords(words, edits)
+    expect(cw[0]?.s_ms).toBeCloseTo(400, 0)
+    expect(cw[1]?.s_ms).toBeCloseTo(7400, 0)
+    const srt = buildNleCaptionsSrt(words, edits, bounds)
+    expect(srt).toContain('00:00:01,000')
+    expect(srt).toContain('00:00:13,800')
+    expect(srt).toContain('00:00:39,290')
+    expect(displayPositionMs(edits, 400)).toBeCloseTo(1000, 0)
+    expect(displayPositionMs(edits, 7400)).toBeCloseTo(13400, 0)
+  })
+
+  it('ignores manual captionLines timestamps and still warps from words', () => {
+    const cw = buildCaptionWords(words, edits)
+    const lines = captionLinesFromWords(cw, 2)
+    const editsWithLines = { ...edits, captionLines: lines }
+    const srt = buildNleCaptionsSrt(words, editsWithLines, bounds)
+    expect(srt).toContain('00:00:01,000')
+    expect(srt).not.toContain('00:00:00,400')
+  })
+
+  it('warpSrtCuesToDisplayMs matches displayPositionMs on edit-ms SRT', () => {
+    const cw = buildCaptionWords(words, edits)
+    const editSrt = buildSrtFromCaptionWords(cw)
+    const warped = warpSrtCuesToDisplayMs(editSrt, edits)
+    expect(warped).toContain('00:00:01,000')
+    expect(buildNleCaptionsSrt(words, edits, bounds)).toContain('00:00:01,000')
+  })
+})

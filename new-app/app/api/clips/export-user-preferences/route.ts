@@ -11,6 +11,7 @@ import { resolveWorkspaceId } from '@/lib/server/workspace'
 const vocabEntrySchema = z.object({
   from: z.string().trim().min(1).max(60),
   to: z.string().trim().min(1).max(60),
+  speakAs: z.string().trim().min(1).max(80).optional(),
 })
 
 const patchSchema = z.object({

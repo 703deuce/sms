@@ -1,7 +1,7 @@
 import type { ExportDialogPreferences } from '@/lib/clips/export-preferences'
 import { defaultExportDialogPreferences } from '@/lib/clips/export-preferences'
 
-export type VocabEntry = { from: string; to: string }
+export type VocabEntry = { from: string; to: string; /** Q4: phonetic respelling for TTS */ speakAs?: string }
 
 export type ClipExportUserPreferences = ExportDialogPreferences & {
   defaultAspect?: '9:16' | '4:5' | '1:1' | '16:9'
@@ -25,11 +25,12 @@ export function mergeVocabulary(raw: unknown): VocabEntry[] | undefined {
     if (!row || typeof row !== 'object') continue
     const from = String((row as { from?: unknown }).from ?? '').trim()
     const to = String((row as { to?: unknown }).to ?? '').trim()
+    const speakAs = String((row as { speakAs?: unknown }).speakAs ?? '').trim()
     if (from.length < 1 || from.length > 60 || to.length < 1 || to.length > 60) continue
     const key = from.toLowerCase()
     if (seen.has(key)) continue
     seen.add(key)
-    out.push({ from, to })
+    out.push(speakAs ? { from, to, speakAs: speakAs.slice(0, 80) } : { from, to })
     if (out.length >= 200) break
   }
   return out.length ? out : undefined

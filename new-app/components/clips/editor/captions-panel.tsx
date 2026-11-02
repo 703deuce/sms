@@ -254,6 +254,31 @@ export function CaptionsPanel({
         <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3" data-testid="caption-word-corrections">
           <p className="text-xs font-medium text-muted-foreground">Caption text</p>
           <p className="text-[11px] text-muted-foreground">Double-click a word to fix spelling without re-timing.</p>
+          {onWordFix && editingWordI != null ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              data-testid="caption-replace-all-misheard"
+              onClick={() => {
+                const w = words.find((x) => x.i === editingWordI)
+                if (!w || !onWordFix) return
+                const from = w.w.trim()
+                const to = window.prompt(`Replace every "${from}" with:`, wordDisplayText(w, edits.wordFixes))
+                if (to == null || !to.trim()) return
+                for (const hit of words) {
+                  if (hit.w.trim().toLowerCase() === from.toLowerCase()) {
+                    onWordFix(hit.i, to.trim(), { s: Math.round(hit.s * 1000), w: hit.w })
+                  }
+                }
+                setEditingWordI(null)
+                toast.success('Replaced all matches')
+              }}
+            >
+              Replace all like this
+            </Button>
+          ) : null}
           <div className="max-h-40 overflow-y-auto text-sm leading-relaxed">
             {words.map((w) => {
               const display = wordDisplayText(w, edits.wordFixes)

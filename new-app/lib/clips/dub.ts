@@ -9,6 +9,7 @@ export const DUB_LANGUAGES: { code: string; label: string }[] = [
   { code: 'ko', label: 'Korean' },
   { code: 'ar', label: 'Arabic' },
   { code: 'zh', label: 'Chinese' },
+  { code: 'ru', label: 'Russian' },
 ]
 
 /** ElevenLabs Dubbing v1 clean tier: $0.50 / source minute */
