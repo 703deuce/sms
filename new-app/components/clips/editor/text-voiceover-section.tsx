@@ -35,6 +35,8 @@ export function TextVoiceoverSection({
   uploadLibraryFiles,
   placeVoiceover,
   compact = false,
+  standalone = false,
+  onTextChange,
 }: {
   clipId: string
   text: string
@@ -42,13 +44,22 @@ export function TextVoiceoverSection({
   uploadLibraryFiles: (files: File[]) => Promise<ProjectMediaItem[]>
   placeVoiceover: (uploadId: string, atMs: number, durMs: number) => void
   compact?: boolean
+  /** When true, show a line input even without a selected text item. */
+  standalone?: boolean
+  onTextChange?: (next: string) => void
 }) {
   const [voiceStockId, setVoiceStockId] = useState(TTS_STOCK_VOICES[0]!.id)
   const [busy, setBusy] = useState<'preview' | 'place' | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [draft, setDraft] = useState(text)
   const previewBlobRef = useRef<Blob | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const trimmed = text.trim().slice(0, TEXT_MAX_CHARS)
+  const effectiveText = standalone ? draft : text
+  const trimmed = effectiveText.trim().slice(0, TEXT_MAX_CHARS)
+
+  useEffect(() => {
+    if (!standalone) setDraft(text)
+  }, [standalone, text])
 
   useEffect(() => {
     previewBlobRef.current = null
@@ -120,6 +131,24 @@ export function TextVoiceoverSection({
   }
 
   if (!trimmed) {
+    if (standalone) {
+      return (
+        <div className={`space-y-2 ${compact ? '' : 'rounded-md border border-border p-2'}`} data-testid="text-voiceover">
+          <p className="text-xs font-medium">AI voiceover (text to speech)</p>
+          <textarea
+            className="min-h-[72px] w-full rounded border border-border bg-background p-2 text-xs"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              onTextChange?.(e.target.value)
+            }}
+            placeholder="Type a line to synthesize…"
+            data-testid="text-voiceover-input"
+          />
+          <p className="text-[11px] text-muted-foreground">Placed on the Voice lane at the playhead.</p>
+        </div>
+      )
+    }
     return (
       <p className="text-[11px] text-muted-foreground" data-testid="text-voiceover-empty">
         Add text to generate a voiceover.
@@ -127,12 +156,24 @@ export function TextVoiceoverSection({
     )
   }
 
+  const heading = standalone ? 'AI voiceover (text to speech)' : 'Voiceover'
   return (
     <div className={`space-y-2 ${compact ? '' : 'rounded-md border border-border p-2'}`} data-testid="text-voiceover">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium">Voiceover</span>
+        <span className="text-xs font-medium">{heading}</span>
         <AiCreditBadge />
       </div>
+      {standalone ? (
+        <textarea
+          className="min-h-[56px] w-full rounded border border-border bg-background p-2 text-xs"
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            onTextChange?.(e.target.value)
+          }}
+          data-testid="text-voiceover-input"
+        />
+      ) : null}
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[120px] flex-1 space-y-1">
           <Label className="text-[11px] text-muted-foreground">Stock voice</Label>

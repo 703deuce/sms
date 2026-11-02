@@ -125,6 +125,29 @@ describe('B2 editor tools mount (no AI_EXTRAS flag)', () => {
     vi.unstubAllGlobals()
   })
 
+  it('Audio panel mounts standalone AI voiceover TTS', () => {
+    const { getByTestId } = render(
+      <AudioPanel
+        clipId="clip1"
+        edits={defaultEdits({ clipStartMs: 0, clipEndMs: 10_000 })}
+        outputDurationMs={10_000}
+        playheadMs={1200}
+        onSuggestMusic={() => {}}
+        onAttachMusic={() => {}}
+        onPatchMusic={() => {}}
+        onRemoveMusic={() => {}}
+        onAddSfx={() => {}}
+        onUpdateSfx={() => {}}
+        onRemoveSfx={() => {}}
+        onPatchStudioSound={() => {}}
+        uploadLibraryFiles={async () => [{ refId: 'u1', mediaType: 'audio', filename: 'a.mp3' }]}
+        addVoiceover={() => {}}
+      />,
+    )
+    expect(getByTestId('audio-panel-ai-voiceover')).toBeTruthy()
+    expect(getByTestId('text-voiceover-input')).toBeTruthy()
+  })
+
   it('Audio panel mounts voiceover for selected text item', () => {
     const edits = normalizeEdits(defaultEdits(bounds), bounds)
     const { getByTestId } = render(

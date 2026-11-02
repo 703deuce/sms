@@ -1,19 +1,18 @@
 import { exportPixelSize, parseExportAspect, type ExportResolution } from '@/lib/clips/export-aspect'
-import {
-  displayDurationMs,
-  normalizeEdits,
-  orderedKeepSegments,
-  type ClipBounds,
-  type ClipEditsV2,
-} from '@/lib/clips/edits'
+import { normalizeEdits, type ClipBounds } from '@/lib/clips/edits'
+import { clipEditsToNleTimelineSegments } from '@/lib/clips/export-nle-timeline'
 
 export type FcpxmlSegment = {
-  /** Timeline offset in seconds from sequence start. */
+  /** Timeline offset in seconds from sequence start (export/display time). */
   offsetSec: number
   /** In-point in source media, seconds. */
   sourceStartSec: number
-  /** Duration on timeline / source, seconds. */
+  /** Duration on the sequence timeline, seconds. */
   durationSec: number
+  /** Source media span referenced by this clip, seconds. */
+  sourceDurationSec: number
+  /** Constant speed for this span (1 = normal). */
+  speed: number
 }
 
 export type ClipFcpxmlInput = {
@@ -50,26 +49,8 @@ export function msToFcpxSeconds(ms: number): number {
   return Math.max(0, ms) / 1000
 }
 
-export function clipEditsToFcpxmlSegments(
-  edits: ClipEditsV2,
-  bounds: ClipBounds,
-): { segments: FcpxmlSegment[]; timelineDurationSec: number } {
-  const normalized = normalizeEdits(edits, bounds)
-  const keep = orderedKeepSegments(normalized)
-  const segments: FcpxmlSegment[] = []
-  let timelineOffsetMs = 0
-  for (const [startMs, endMs] of keep) {
-    const durMs = Math.max(0, endMs - startMs)
-    if (durMs < 40) continue
-    segments.push({
-      offsetSec: msToFcpxSeconds(timelineOffsetMs),
-      sourceStartSec: msToFcpxSeconds(startMs),
-      durationSec: msToFcpxSeconds(durMs),
-    })
-    timelineOffsetMs += durMs
-  }
-  const timelineDurationSec = msToFcpxSeconds(displayDurationMs(normalized))
-  return { segments, timelineDurationSec }
+export function clipEditsToFcpxmlSegments(edits: unknown, bounds: ClipBounds) {
+  return clipEditsToNleTimelineSegments(normalizeEdits(edits, bounds), bounds)
 }
 
 export function buildClipTimelineFcpxml(input: ClipFcpxmlInput): string {
@@ -83,15 +64,21 @@ export function buildClipTimelineFcpxml(input: ClipFcpxmlInput): string {
   const src = escapeXml(input.sourceMediaHref)
   const sourceDuration = fcpxTimeSeconds(input.sourceDurationSec)
   const sequenceDuration = fcpxTimeSeconds(
-    input.segments.reduce((max, s) => Math.max(max, s.offsetSec + s.durationSec), 0) ||
-      input.sourceDurationSec,
+    Math.max(
+      input.segments.reduce((max, s) => Math.max(max, s.offsetSec + s.durationSec), 0),
+      input.segments.length ? 0 : input.sourceDurationSec,
+    ) || input.sourceDurationSec,
   )
 
   const spineClips = input.segments
-    .map(
-      (seg, i) =>
-        `            <asset-clip name="${title} ${i + 1}" ref="r2" offset="${fcpxTimeSeconds(seg.offsetSec)}" start="${fcpxTimeSeconds(seg.sourceStartSec)}" duration="${fcpxTimeSeconds(seg.durationSec)}" />`,
-    )
+    .map((seg, i) => {
+      const speed = seg.speed && Math.abs(seg.speed - 1) > 0.001 ? seg.speed : 1
+      const timeMap =
+        speed !== 1
+          ? `\n              <timeMap>\n                <timept time="0s" value="0s" interp="linear"/>\n                <timept time="${fcpxTimeSeconds(seg.durationSec)}" value="${fcpxTimeSeconds(seg.sourceDurationSec)}" interp="linear"/>\n              </timeMap>`
+          : ''
+      return `            <asset-clip name="${title} ${i + 1}" ref="r2" offset="${fcpxTimeSeconds(seg.offsetSec)}" start="${fcpxTimeSeconds(seg.sourceStartSec)}" duration="${fcpxTimeSeconds(seg.durationSec)}">${timeMap}\n            </asset-clip>`
+    })
     .join('\n')
 
   return `<?xml version="1.0" encoding="UTF-8"?>

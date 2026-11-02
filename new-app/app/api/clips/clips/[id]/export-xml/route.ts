@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { buildSrtFromCaptionWords, normalizeEdits } from '@/lib/clips/edits'
-import { buildCaptionWords } from '@/lib/clips/caption-words'
+import { buildNleCaptionsSrt } from '@/lib/clips/export-nle-captions'
 import {
   buildNleExportFileMap,
   nleZipDownloadFilename,
@@ -26,9 +25,9 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
-    const words = await loadClipSourceWords(clip)
     const edits = normalizeEdits(clip.edits, bounds)
-    const srt = buildSrtFromCaptionWords(buildCaptionWords(words, edits))
+    const words = await loadClipSourceWords(clip)
+    const srt = buildNleCaptionsSrt(words, clip.edits, bounds)
     const uploadName = clip.project?.upload?.filename?.trim()
     const sourceMediaFilename = uploadName
       ? pathBasename(uploadName.replace(/\\/g, '/'))

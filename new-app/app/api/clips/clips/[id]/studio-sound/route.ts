@@ -133,6 +133,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       },
     })
   } catch (err) {
-    return jsonError(err, 400)
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('Not found') || msg.includes('No source media')) {
+      return jsonError(err, 400)
+    }
+    return jsonError(err, 500)
   }
 }

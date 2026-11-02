@@ -328,6 +328,18 @@ export function AudioPanel({
           ) : null}
         </div>
       ) : null}
+      {uploadLibraryFiles && addVoiceover && !textVoiceover ? (
+        <section data-testid="audio-panel-ai-voiceover">
+          <TextVoiceoverSection
+            clipId={clipId}
+            text=""
+            atMs={playheadMs}
+            uploadLibraryFiles={uploadLibraryFiles}
+            placeVoiceover={addVoiceover}
+            standalone
+          />
+        </section>
+      ) : null}
       {textVoiceover && uploadLibraryFiles && addVoiceover ? (
         <section data-testid="audio-panel-voiceover">
           <TextVoiceoverSection
