@@ -65,6 +65,8 @@ export type ClipMulticam = {
   speakerSources?: Record<string, string>
   minHoldMs?: number
   wideEveryMs?: number
+  /** Default audio for new manual angle segments (main / angle mic / mix). */
+  audioDefault?: SourceAudio
 }
 
 export const SOURCE_SEG_MIN_MS = 100
@@ -196,10 +198,12 @@ export function normalizeMulticam(raw: unknown): ClipMulticam | undefined {
   }
   const minHoldMs = clampR(o.minHoldMs, MULTICAM_MIN_HOLD_RANGE)
   const wideEveryMs = clampR(o.wideEveryMs, MULTICAM_WIDE_EVERY_RANGE)
+  const audioDefault = AUDIO_MODES.has(o.audioDefault as SourceAudio) ? (o.audioDefault as SourceAudio) : undefined
   const res: ClipMulticam = {
     ...(Object.keys(map).length ? { speakerSources: map } : {}),
     ...(minHoldMs !== undefined ? { minHoldMs } : {}),
     ...(wideEveryMs !== undefined ? { wideEveryMs } : {}),
+    ...(audioDefault ? { audioDefault } : {}),
   }
   return Object.keys(res).length ? res : undefined
 }

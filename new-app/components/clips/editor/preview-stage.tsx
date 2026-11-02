@@ -1010,6 +1010,13 @@ export function PreviewStage({
     facecamBox &&
     !cropPreview &&
     !letterboxPreview
+  const splitLayoutPreview =
+    Boolean(videoUrl) &&
+    !compositePreview &&
+    (layoutMode === 'split' || layoutMode === 'split_debate') &&
+    !cropPreview &&
+    !letterboxPreview &&
+    !fitTopPreview
   const facecamPipPreview =
     Boolean(videoUrl) &&
     !compositePreview &&
@@ -1383,6 +1390,33 @@ export function PreviewStage({
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
           />
+        ) : splitLayoutPreview && videoUrl ? (
+          <div className="flex size-full flex-col overflow-hidden" data-testid="preview-split-layout">
+            {[0, 1].map((idx) => (
+              <div
+                key={idx}
+                className="relative w-full overflow-hidden"
+                style={{ height: '50%' }}
+                data-testid={`preview-split-pane-${idx}`}
+              >
+                <video
+                  ref={idx === 0 ? videoRefInner : undefined}
+                  {...corsMediaProps(videoUrl)}
+                  src={videoUrl ?? undefined}
+                  className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+                  style={coverBoxStyle({ x: idx === 0 ? 0 : 0.5, y: 0, w: 0.5, h: 1 })}
+                  playsInline
+                  onCanPlay={() => setCanPlay(true)}
+                  onLoadedData={() => setCanPlay(true)}
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                />
+              </div>
+            ))}
+            <p className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/50 px-1 text-[9px] text-white/80">
+              Approximate split preview
+            </p>
+          </div>
         ) : facecamStackPreview && facecamBox ? (
           (() => {
             const split = edits.layout.facecam?.split ?? 0.4

@@ -20,6 +20,7 @@ import {
   upsertSource,
   SOURCE_SEG_MIN_MS,
   type ClipMediaSource,
+  type SourceAudio,
   type SourceSegment,
 } from '@/lib/clips/editor/sources'
 
@@ -73,6 +74,14 @@ function ensureSynced(edits: ClipEditsV2, src: ClipMediaSource): ClipMediaSource
   return upsertSource(edits.sources, { ...(own ?? src), syncMs: (own ?? src).syncMs ?? 0 }).sources
 }
 
+function defaultSegmentAudio(edits: ClipEditsV2, src: ClipMediaSource): Pick<SourceSegment, 'audio'> {
+  const d = edits.multicam?.audioDefault
+  if (d === 'main' || d === 'source' || d === 'mix') {
+    if (src.mediaType === 'video' || src.mediaType === 'image') return { audio: d }
+  }
+  return {}
+}
+
 /** Angle over a main-source span [startMs, endMs) (timeline section / transcript range). */
 export function setAngleForRange(
   edits: ClipEditsV2,
@@ -97,7 +106,7 @@ export function setAngleForRange(
     sourceId,
     startMs: s,
     endMs: e,
-    ...(src.mediaType === 'audio' ? { audio: 'source' as const } : {}),
+    ...(src.mediaType === 'audio' ? { audio: 'source' as const } : defaultSegmentAudio(edits, src)),
   }
   return { ...edits, sources, sourceSegments: setSourceSegment(edits.sourceSegments, seg, sources) }
 }

@@ -50,6 +50,11 @@ export function LayoutQuickPicker({
               }}
             >
               {opt.title}
+              {opt.beta ? (
+                <span className="ml-1 rounded bg-muted px-1 py-0 text-[9px] font-normal uppercase text-muted-foreground">
+                  Beta
+                </span>
+              ) : null}
             </Button>
           )
         })}

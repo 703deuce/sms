@@ -20,10 +20,10 @@ export type LayoutOption = {
 export const LAYOUT_OPTIONS: LayoutOption[] = [
   { id: 'auto', title: 'Auto variety', hint: 'Rotate layouts per clip rank.' },
   { id: 'speaker_follow', title: 'Speaker follow', hint: 'Single active speaker.', exportPicker: true },
-  { id: 'dynamic', title: 'Dynamic', hint: 'Director picks per scene.' },
-  { id: 'split', title: 'Two-speaker split', hint: 'Stacked two-person layout.', exportPicker: true },
-  { id: 'grid3', title: 'Grid 3-up', hint: 'Three speakers visible.' },
-  { id: 'grid4', title: 'Grid 4-up', hint: 'Four speakers visible.' },
+  { id: 'dynamic', title: 'Dynamic', hint: 'Director picks per scene.', beta: true },
+  { id: 'split', title: 'Two-speaker split', hint: 'Stacked two-person layout.', exportPicker: true, beta: true },
+  { id: 'grid3', title: 'Grid 3-up', hint: 'Three speakers visible.', beta: true },
+  { id: 'grid4', title: 'Grid 4-up', hint: 'Four speakers visible.', beta: true },
   {
     id: 'fit_blur',
     title: 'Fit with blur',

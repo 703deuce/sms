@@ -495,6 +495,8 @@ export function MediaPanel({
             onCommit={(v) => onEdits({ ...edits, multicam: { ...mc, minHoldMs: Math.round(v * 1000) } })} />
           <SliderRow label="Wide shot every" value={(mc.wideEveryMs ?? 45_000) / 1000} min={5} max={120} step={5} unit=" s" testId="multicam-wide"
             onCommit={(v) => onEdits({ ...edits, multicam: { ...mc, wideEveryMs: Math.round(v * 1000) } })} />
+          <MulticamAudioDefault edits={edits} mc={mc} onEdits={onEdits} />
+          <MulticamSyncAll angles={angles} media={media} />
           <ManualAngles edits={edits} angles={angles} mainLabel={mainItem?.label} onEdits={onEdits} />
           <div className="flex flex-wrap gap-1">
             <Button size="sm" onClick={fillGaps} disabled={!speakerRows.length} data-testid="multicam-fill-gaps">
@@ -533,6 +535,95 @@ function AngleFilmstripPreview({ item }: { item: ProjectMediaItem | undefined })
   return (
     <div className="relative h-8 w-24 shrink-0 overflow-hidden rounded border border-border/60" data-testid="multicam-angle-filmstrip">
       <TimelineFilmstrip fromMs={0} toMs={3000} widthPx={96} heightPx={32} pxPerMs={96 / 3000} frames={frames} stillUrl={item.mediaType === 'image' ? url : null} />
+    </div>
+  )
+}
+
+function MulticamAudioDefault({
+  edits,
+  mc,
+  onEdits,
+}: {
+  edits: ClipEditsV2
+  mc: ClipMulticam
+  onEdits: (next: ClipEditsV2) => void
+}) {
+  const value = mc.audioDefault ?? 'main'
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-[11px]" data-testid="multicam-audio-default">
+      <Label className="shrink-0">Switch audio</Label>
+      <Select
+        items={[
+          { value: 'main', label: 'Main mic' },
+          { value: 'source', label: 'Angle mic' },
+          { value: 'mix', label: 'Mix' },
+        ]}
+        value={value}
+        onValueChange={(v) => {
+          if (v !== 'main' && v !== 'source' && v !== 'mix') return
+          onEdits({ ...edits, multicam: { ...mc, audioDefault: v } })
+        }}
+      >
+        <SelectTrigger size="sm" className="h-7 min-w-[7rem]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="main">Main mic</SelectItem>
+          <SelectItem value="source">Angle mic</SelectItem>
+          <SelectItem value="mix">Mix</SelectItem>
+        </SelectContent>
+      </Select>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7"
+        data-testid="multicam-audio-apply-all"
+        onClick={() => {
+          const audio = mc.audioDefault ?? 'main'
+          const segs = edits.sourceSegments?.map((s) => ({ ...s, audio }))
+          onEdits({ ...edits, multicam: { ...mc, audioDefault: audio }, sourceSegments: segs })
+        }}
+      >
+        Apply to all switches
+      </Button>
+    </div>
+  )
+}
+
+function MulticamSyncAll({ angles, media }: { angles: ProjectMediaItem[]; media: ProjectMediaApi }) {
+  const [progress, setProgress] = useState<string | null>(null)
+  const targets = angles.filter((a) => a.mediaType === 'video' && a.syncMs == null)
+  if (!targets.length) return null
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        className="h-7"
+        disabled={Boolean(progress)}
+        data-testid="multicam-sync-all"
+        onClick={() => {
+          void (async () => {
+            let i = 0
+            for (const item of targets) {
+              i += 1
+              setProgress(`${i}/${targets.length}`)
+              try {
+                await media.syncAudio(item.id)
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : 'Sync failed')
+                break
+              }
+            }
+            setProgress(null)
+          })()
+        }}
+      >
+        Sync all angles
+      </Button>
+      {progress ? <span className="text-[10px] text-muted-foreground">{progress}</span> : null}
     </div>
   )
 }

@@ -114,6 +114,8 @@ import {
 } from '@/lib/clips/editor/vocab-apply'
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
+import { MulticamAngleGrid } from '@/components/clips/editor/multicam-angle-grid'
+import { switchAngleAt, multicamAngles } from '@/lib/clips/editor/multicam-manual'
 import { useFullVideoHighlights } from '@/components/clips/editor/use-full-video-highlights'
 import { useFullVideoMomentFocus } from '@/components/clips/editor/full-video-moment-focus'
 import { snapTranscriptSelectionMs } from '@/lib/clips/editor/make-clip-from-transcript'
@@ -817,6 +819,18 @@ export function EditorShell({
   const angleSources = useMemo(
     () => media.items.filter((i) => i.mediaType === 'video' && !i.isMain && (i.ref === 'take' || i.syncMs != null)).map(sourceFromItem),
     [media.items],
+  )
+  const [multicamGridOn, setMulticamGridOn] = useState(false)
+  useEffect(() => {
+    try {
+      setMulticamGridOn(localStorage.getItem('transovo.multicam.grid') === '1')
+    } catch {
+      /* private mode */
+    }
+  }, [])
+  const multicamGridEligible = useMemo(
+    () => multicamAngles(edits, angleSources).length >= 2,
+    [edits, angleSources],
   )
   const mediaItems = media.items
   const musicUploadId = edits.audio?.music?.uploadId ?? null
@@ -2329,9 +2343,10 @@ export function EditorShell({
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_56px_minmax(0,380px)] xl:grid-cols-[minmax(0,1fr)_56px_minmax(0,420px)]">
         <section className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-x-hidden overflow-y-auto p-2 sm:p-3 md:p-4">
           <div className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4">
+            <div className="flex w-full max-w-full items-stretch justify-center gap-2">
             <div
               ref={previewFrameRef}
-              className="relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
+              className="relative h-full max-h-full min-w-0 flex-1 w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
               style={{ aspectRatio: aspectStyle }}
             >
             {(edits.layout.shotOverrides?.length ?? 0) > 0 ? (
@@ -2417,6 +2432,27 @@ export function EditorShell({
               >
                 −
               </button>
+              {multicamGridEligible ? (
+                <button
+                  type="button"
+                  className={previewChipButtonClass(multicamGridOn ? 'ring-2 ring-primary' : undefined)}
+                  data-testid="preview-multicam-grid-toggle"
+                  title="Show all camera angles beside the preview"
+                  onClick={() => {
+                    setMulticamGridOn((on) => {
+                      const next = !on
+                      try {
+                        localStorage.setItem('transovo.multicam.grid', next ? '1' : '0')
+                      } catch {
+                        /* private mode */
+                      }
+                      return next
+                    })
+                  }}
+                >
+                  Angles
+                </button>
+              ) : null}
               {previewFrameW >= 320 ? (
                 <div className="relative">
                   <button
@@ -2544,6 +2580,25 @@ export function EditorShell({
               enabled={studioPreviewActive}
             />
             </EditorPanelErrorBoundary>
+            </div>
+            {multicamGridOn && multicamGridEligible ? (
+              <div className="hidden w-full max-w-[min(40%,320px)] shrink-0 md:block">
+                <MulticamAngleGrid
+                  edits={edits}
+                  library={angleSources}
+                  sourceUrls={sourceUrls}
+                  mainVideoUrl={videoUrl}
+                  playheadSourceMs={playheadSourceMs}
+                  playing={playing}
+                  onSwitchAngle={(sourceId) =>
+                    setEditsPass(
+                      switchAngleAt(edits, playheadSourceMs, sourceId, angleSources),
+                      'Camera angle',
+                    )
+                  }
+                />
+              </div>
+            ) : null}
             </div>
           </div>
           {pickerWhy || detectedLayout || clipTypeLabel ? (
