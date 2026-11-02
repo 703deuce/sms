@@ -156,7 +156,7 @@ export function ThumbnailPanel({
         trimOut={trimOut ?? edits.trim.out}
         aspect={aspect}
         defaultTitle={defaultTitle}
-        onPicked={(thumbnailId) => onEdits({ ...edits, thumbnailId })}
+        onPicked={(thumbnailId) => void setCover(thumbnailId)}
       />
       <div className="border-t pt-3">
         <p className="mb-2 text-xs font-semibold text-muted-foreground">AI covers</p>

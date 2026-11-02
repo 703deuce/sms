@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { assembleMainSelects, SELECT_HANDLE_MS, hitToSelectPayload } from '@/lib/clips/editor/project-selects'
-import { defaultEdits } from '@/lib/clips/edits'
+import { defaultEdits, outputDurationMs } from '@/lib/clips/edits'
 import { snapTranscriptSelectionMs } from '@/lib/clips/editor/make-clip-from-transcript'
 import { FREE_THUMB_OVERLAY_PRESETS } from '@/lib/clips/editor/free-thumbnail'
 import { clampPickDrag } from '@/lib/clips/editor/highlights'
@@ -81,6 +81,41 @@ describe('Q5 TB-12 project selects', () => {
       ],
     )
     expect(out?.sectionOrder?.[0]).toEqual([20_000 - SELECT_HANDLE_MS, 22_000 + SELECT_HANDLE_MS])
+  })
+
+  it('two short main selects yield ~2s output (handles + min span, gaps cut)', () => {
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 60_000 })
+    const out = assembleMainSelects(
+      edits,
+      [
+        {
+          id: 'a',
+          sourceId: 'main',
+          kind: 'main',
+          label: 'A',
+          startMs: 1000,
+          endMs: 1300,
+          snippet: null,
+          sortOrder: 0,
+        },
+        {
+          id: 'b',
+          sourceId: 'main',
+          kind: 'main',
+          label: 'B',
+          startMs: 5000,
+          endMs: 5300,
+          snippet: null,
+          sortOrder: 1,
+        },
+      ],
+      { sourceDurationMs: 60_000 },
+    )
+    expect(out).not.toBeNull()
+    const dur = outputDurationMs(out!)
+    // Each block: (end+500)-(start-500) => 1300ms; gap 1800–4500 removed => ~2600ms (not full trim span).
+    expect(dur).toBeGreaterThanOrEqual(2000)
+    expect(dur).toBeLessThanOrEqual(2800)
   })
 })
 

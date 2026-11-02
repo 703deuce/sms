@@ -10,6 +10,12 @@ import { assembleSelectsOnEdits } from '@/lib/clips/editor/project-selects'
 import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { clipsFetch } from '@/lib/clips-api'
 
+function formatSelectMs(ms: number): string {
+  const s = Math.floor(ms / 1000)
+  const m = Math.floor(s / 60)
+  return `${m}:${String(s % 60).padStart(2, '0')}`
+}
+
 export function ProjectSelectsBin({
   projectId,
   edits,
@@ -25,6 +31,7 @@ export function ProjectSelectsBin({
 }) {
   const [items, setItems] = useState<ProjectSelectRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [removing, setRemoving] = useState<Set<string>>(() => new Set())
 
   const refresh = useCallback(async () => {
     try {
@@ -42,6 +49,10 @@ export function ProjectSelectsBin({
   }, [refresh])
 
   const remove = async (id: string) => {
+    if (removing.has(id)) return
+    const prev = items
+    setRemoving((s) => new Set(s).add(id))
+    setItems((list) => list.filter((r) => r.id !== id))
     try {
       const res = await clipsFetch<{ items: ProjectSelectRow[] }>(
         `/api/clips/projects/${projectId}/selects?selectId=${encodeURIComponent(id)}`,
@@ -49,7 +60,14 @@ export function ProjectSelectsBin({
       )
       setItems(res.items ?? [])
     } catch (e) {
+      setItems(prev)
       toast.error(e instanceof Error ? e.message : 'Could not remove')
+    } finally {
+      setRemoving((s) => {
+        const n = new Set(s)
+        n.delete(id)
+        return n
+      })
     }
   }
 
@@ -105,9 +123,18 @@ export function ProjectSelectsBin({
             >
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{row.label}</div>
-                <div className="text-muted-foreground">{row.snippet ?? ''}</div>
+                <div className="tabular-nums text-muted-foreground" data-testid="project-select-range">
+                  {formatSelectMs(row.startMs)}–{formatSelectMs(row.endMs)}
+                </div>
+                {row.snippet ? <div className="text-muted-foreground">{row.snippet}</div> : null}
               </div>
-              <Button type="button" size="xs" variant="ghost" onClick={() => void remove(row.id)}>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                disabled={removing.has(row.id)}
+                onClick={() => void remove(row.id)}
+              >
                 ×
               </Button>
             </li>

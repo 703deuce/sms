@@ -40,13 +40,19 @@ export async function deriveClipFromSelection(
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({
     where: { id: parent.projectId, workspaceId },
-    select: { transcriptKey: true, storageDriver: true, transcriptWords: true, settings: true },
+    select: {
+      transcriptKey: true,
+      transcriptWords: true,
+      settings: true,
+      upload: { select: { storageDriver: true } },
+    },
   })
+  const storageDriverHint = parent.storageDriver ?? project?.upload?.storageDriver ?? null
   if (project?.transcriptKey || project?.transcriptWords) {
     try {
       let raw = project.transcriptWords
       if (project.transcriptKey) {
-        const storage = await getClipStorageForObjectKey(project.transcriptKey, project.storageDriver)
+        const storage = await getClipStorageForObjectKey(project.transcriptKey, storageDriverHint)
         raw = (await storage.getJson(project.transcriptKey)) as unknown
       }
       const words = clipWordsToSnapWords(normalizeTranscriptJson(raw as never))
