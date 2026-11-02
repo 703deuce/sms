@@ -91,6 +91,19 @@ export function useFullVideoHighlights(
     setStatus(data.status)
     setProgress(typeof data.progress === 'number' ? data.progress : null)
     setPicks(data.picks)
+    const jobActiveNow = Boolean(data.status && JOB_ACTIVE.has(data.status))
+    const gotPicks = data.picks.length > 0
+    if (gotPicks || jobActiveNow) {
+      setHighlightsOn((prev) => {
+        if (prev) return prev
+        try {
+          localStorage.setItem(`transovo.highlights.${projectId}`, '1')
+        } catch {
+          /* private mode */
+        }
+        return true
+      })
+    }
     setRanges((prev) => {
       if (!prev.length) return highlightRangesFromPicks(data.picks)
       const byId = new Map(prev.map((r) => [r.pick.clipId, r]))

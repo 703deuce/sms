@@ -88,7 +88,8 @@ def persist_find_result(
             "version": 1,
             "finishedAt": finished_at,
             "picks": picks,
-        }
+        },
+        "find": {"progress": 100, "stage": "done"},
     }
     with conn.cursor() as cur:
         cur.execute(

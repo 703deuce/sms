@@ -63,6 +63,48 @@ describe('getFullVideoHighlights find preference', () => {
     expect(res?.picks[0]?.origin).toBe('find')
   })
 
+  it('prefers FIND picks over a newer found-clips project with no clips', async () => {
+    vi.resetModules()
+    const { latestFindClips } = await import('@/lib/server/clips/find-clips-job')
+    vi.mocked(latestFindClips).mockResolvedValueOnce({
+      jobId: 'job_find',
+      status: 'DONE',
+      createdAt: new Date('2026-01-01'),
+      progress: 55,
+      picks: [
+        {
+          clipId: 'fp_job_find_0',
+          title: 'Visual',
+          startMs: 3600,
+          endMs: 32000,
+          score: 77,
+          reasonTag: 'visual',
+          why: null,
+          findJobId: 'job_find',
+          origin: 'find',
+        },
+      ],
+    } as never)
+    findFirst.mockResolvedValue({ id: 'fv1', uploadId: 'up', settings: { fullVideo: true } })
+    findMany.mockResolvedValueOnce([
+      {
+        id: 'clips_proj',
+        status: 'READY',
+        settings: { v: 2, fromFullVideoProjectId: 'fv1' },
+        createdAt: new Date('2026-02-01'),
+        transcriptKey: null,
+        uploadId: 'up',
+        upload: null,
+      },
+    ])
+    const { getFullVideoHighlights } = await import('@/lib/server/clips/clip-highlights')
+    const res = await getFullVideoHighlights('ws', 'fv1')
+    expect(res?.source).toBe('find')
+    expect(res?.progress).toBe(100)
+    expect(res?.picks).toHaveLength(1)
+    expect(clipFindMany).not.toHaveBeenCalled()
+  })
+
   it('does not select storageDriver on clipProject (column lives on upload/clip only)', async () => {
     vi.resetModules()
     findFirst.mockResolvedValue({ id: 'fv1', uploadId: 'up', settings: { fullVideo: true } })

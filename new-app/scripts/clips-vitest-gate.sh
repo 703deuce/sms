@@ -25,4 +25,7 @@ exec pnpm exec vitest run \
   tests/g2-beats.test.ts \
   tests/derive-clip.test.ts \
   tests/make-clip-snap-eb785762.test.ts \
-  tests/full-video-link.test.ts
+  tests/full-video-link.test.ts \
+  tests/find-clips-highlights.test.ts \
+  tests/use-full-video-highlights.test.tsx \
+  tests/multicam-angle-grid.test.tsx

@@ -12,6 +12,7 @@
  * optional "auto-switch to active speaker" pass that fills only the remaining gaps.
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { canonicalEditsJson } from '@/lib/clips/edits'
 import { sourceToOutputSnapped, type Timebase } from '@/lib/clips/editor/clip-timeline'
 import {
   setSourceSegment,
@@ -128,7 +129,8 @@ export function switchAngleAt(
     if (s.startMs > t + SOURCE_SEG_MIN_MS / 2 && s.startMs < end) end = s.startMs
     if (s.startMs <= t && s.endMs > t + SOURCE_SEG_MIN_MS / 2 && s.endMs < end) end = s.endMs
   }
-  return setAngleForRange(edits, t, end, sourceId, library)
+  const next = setAngleForRange(edits, t, end, sourceId, library)
+  return canonicalEditsJson(edits) === canonicalEditsJson(next) ? edits : next
 }
 
 /** Manual sync offset nudge (default one frame at 30 fps) on top of the audio auto-sync. */

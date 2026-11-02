@@ -86,11 +86,24 @@ export async function getFullVideoHighlights(
     findJob &&
     (!found || findJob.createdAt >= found.createdAt)
 
-  if (findIsNewer && findJob) {
+  const preferFindJob =
+    findJob &&
+    (findJob.picks.length > 0 ||
+      findJob.status === 'QUEUED' ||
+      findJob.status === 'RUNNING' ||
+      findIsNewer)
+
+  if (preferFindJob && findJob) {
+    const progress =
+      findJob.status === 'DONE'
+        ? 100
+        : typeof findJob.progress === 'number'
+          ? findJob.progress
+          : null
     return {
       source: 'find',
       status: findJob.status,
-      progress: findJob.progress,
+      progress,
       picks: findJob.picks,
     }
   }

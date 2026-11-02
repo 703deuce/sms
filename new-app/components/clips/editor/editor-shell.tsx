@@ -2253,7 +2253,7 @@ export function EditorShell({
                 onStarted={fvHighlights.startedFind}
               />
             ) : null}
-            {fullVideo && (fvHighlights.hasPicks || fvHighlights.isJobRunning) ? (
+            {fullVideo ? (
               <>
                 <Button
                   type="button"
@@ -2264,7 +2264,7 @@ export function EditorShell({
                 >
                   Highlights
                 </Button>
-                {fvHighlights.highlightsOn ? (
+                {fvHighlights.highlightsOn && fvHighlights.hasPicks ? (
                   <Button
                     type="button"
                     size="sm"

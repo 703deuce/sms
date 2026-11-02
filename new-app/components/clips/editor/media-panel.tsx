@@ -593,7 +593,7 @@ function MulticamAudioDefault({
 
 function MulticamSyncAll({ angles, media }: { angles: ProjectMediaItem[]; media: ProjectMediaApi }) {
   const [progress, setProgress] = useState<string | null>(null)
-  const targets = angles.filter((a) => a.mediaType === 'video' && a.syncMs == null)
+  const targets = angles.filter((a) => a.mediaType === 'video')
   if (!targets.length) return null
   return (
     <div className="flex flex-wrap items-center gap-2">

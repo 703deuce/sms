@@ -18,4 +18,14 @@ describe('multicam angle grid logic', () => {
     const next = switchAngleAt({ ...edits, sources: library }, 2000, 'a1', library)
     expect(next.sourceSegments?.some((s) => s.sourceId === 'a1' && s.startMs === 2000)).toBe(true)
   })
+
+  it('switchAngleAt at 0 cuts to angle and repeats are no-ops (no spurious undo)', () => {
+    const library = [{ id: 'a1', ref: 'upload' as const, refId: 'u1', mediaType: 'video' as const, syncMs: 0 }]
+    const base = defaultEdits({ clipStartMs: 0, clipEndMs: 60_000 })
+    const edits = { ...base, sources: library }
+    const once = switchAngleAt(edits, 0, 'a1', library)
+    expect(once.sourceSegments?.some((s) => s.sourceId === 'a1' && s.startMs === 0)).toBe(true)
+    const again = switchAngleAt(once, 0, 'a1', library)
+    expect(again).toBe(once)
+  })
 })
