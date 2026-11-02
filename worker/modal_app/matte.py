@@ -14,6 +14,8 @@ import modal
 from modal_app.app import app
 from modal_app.images import MODAL_MAX_CONTAINERS, models
 
+MATTE_GPU = os.environ.get("MODAL_MATTE_GPU", os.environ.get("MODAL_GPU", "T4"))
+
 RVM_SHA = "53d74c6826735f01f4406b5ca9075eee27bec094"
 RVM_RELEASE = "https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0.0/"
 RVM_WEIGHTS = {
@@ -88,7 +90,7 @@ def downsample_ratio(w: int, h: int, quality: str) -> float:
 
 @app.cls(
     image=matte_image,
-    gpu="L4",
+    gpu=MATTE_GPU,
     timeout=900,
     volumes={MODELS_MOUNT: models},
     min_containers=0,

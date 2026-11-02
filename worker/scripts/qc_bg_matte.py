@@ -15,6 +15,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 CLIPS = ["clip_5f19e510a23241c29190475d4723aa21", "clip_d46c686b0a234a17985d8e369b00bee9"]
 L4 = 0.000222
 CAP_USD = 1.00
+MATTE_REMOTE_TIMEOUT_S = float(os.environ.get("QC_BG_MATTE_REMOTE_TIMEOUT_S", "300"))
+
+
+def _matte_remote(matter_cls, payload: dict, timeout_s: float = MATTE_REMOTE_TIMEOUT_S) -> dict:
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        fut = pool.submit(lambda: matter_cls().matte.remote(payload))
+        try:
+            return fut.result(timeout=timeout_s)
+        except FuturesTimeoutError as exc:
+            raise TimeoutError(
+                f"Matter.matte remote exceeded {timeout_s:.0f}s "
+                f"(check `modal app logs {os.environ.get('MODAL_APP_NAME', 'transovo-gpu')}` for GPU scheduling)"
+            ) from exc
 
 
 def _resolve_clip_source(cur, clip_id: str) -> tuple[str, float, str] | None:
@@ -72,7 +87,7 @@ def main() -> int:
     ap.add_argument("--qualities", default="standard,detail")
     a = ap.parse_args()
     modal_env = os.environ.get("MODAL_ENVIRONMENT", "main")
-    print(f"modal_env={modal_env}")
+    print(f"modal_env={modal_env} matte_remote_timeout_s={MATTE_REMOTE_TIMEOUT_S}")
     import modal
     import psycopg2
 
@@ -121,19 +136,24 @@ def main() -> int:
                     return 1
                 up_key = f"qc/ef24/{cid}_{q}_{int(time.time())}.mp4"
                 t0 = time.time()
-                r = Matter().matte.remote(
-                    {
-                        "src_url": src_url,
-                        "start_s": off,
-                        "dur_s": a.seconds,
-                        "preroll_s": 0.0,
-                        "fps": 30,
-                        "short_side": 1080,
-                        "quality": q,
-                        "median": True,
-                        "out_upload_url": _upload_signed_put_url(up_key),
-                    }
-                )
+                try:
+                    r = _matte_remote(
+                        Matter,
+                        {
+                            "src_url": src_url,
+                            "start_s": off,
+                            "dur_s": a.seconds,
+                            "preroll_s": 0.0,
+                            "fps": 30,
+                            "short_side": 1080,
+                            "quality": q,
+                            "median": True,
+                            "out_upload_url": _upload_signed_put_url(up_key),
+                        },
+                    )
+                except TimeoutError as exc:
+                    print(f"{cid} {q}: TIMEOUT {exc}")
+                    return 1
                 wall = time.time() - t0
                 if not r.get("ok"):
                     print(f"{cid} {q}: FAILED {r}")
