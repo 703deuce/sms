@@ -939,8 +939,13 @@ def merge_stream_moments(moments: list[dict], overlap_s: float, *, mode: str = "
                             led.merged_into(str(m["cf_id"]), str(k["cf_id"]), "peak_dedupe_iou")
                     break
         else:
-            if any(abs(peak - float(k.get("peak_s") or 0)) < overlap_s for k in kept):
-                drop_reason = "peak_within_overlap_window"
+            for k in kept:
+                k_start = int(float(k.get("start_s", 0)) * 1000)
+                k_end = int(float(k.get("end_s", 0)) * 1000)
+                iou = span_iou_ms(start_ms, end_ms, k_start, k_end)
+                if abs(peak - float(k.get("peak_s") or 0)) < overlap_s and iou > 0.3:
+                    drop_reason = f"peak_within_overlap_window iou={iou:.3f}"
+                    break
         if merge_winner is not None or drop_reason:
             if drop_reason and not merge_winner:
                 from clips_worker.decision_log import decision_log
@@ -986,6 +991,77 @@ def merge_stream_moments(moments: list[dict], overlap_s: float, *, mode: str = "
         stitched.append(cur)
         i += 1
     return stitched
+
+
+def fill_stream_picks_floor_from_archive(
+    picks: list,
+    archive: list[dict],
+    *,
+    duration_s: float,
+    settings: dict | None = None,
+) -> list:
+    """Streamer-only: raise pick count toward min_moments_for_video using real signal archive rows."""
+    from clips_worker.clipfind.fair_rank import span_iou_ms
+    from clips_worker.picker.cleanup import GAMING_AUTO_MAX_MS
+    from clips_worker.streamer.fusion import FusionPick
+
+    need = min_moments_for_video(int(duration_s))
+    if len(picks) >= need or not archive:
+        return picks
+    duration_ms = int(max(1.0, float(duration_s)) * 1000)
+    streamer = (settings or {}).get("streamer") if isinstance((settings or {}).get("streamer"), dict) else {}
+    genre_gaming = str(streamer.get("genre") or "").lower() == "gaming"
+
+    def existing_spans() -> list[tuple[int, int]]:
+        return [(int(p.start_ms), int(p.end_ms)) for p in picks]
+
+    spans = existing_spans()
+    ranked = sorted(archive, key=lambda r: -float(r.get("score") or 0))
+    added = 0
+    for row in ranked:
+        if len(picks) >= need:
+            break
+        start = int(row.get("startMs") or row.get("start_ms") or 0)
+        end = int(row.get("endMs") or row.get("end_ms") or 0)
+        if end <= start:
+            continue
+        start = max(0, min(start, duration_ms - 1000))
+        end = min(end, duration_ms)
+        if end - start < 15_000:
+            continue
+        ct = str(row.get("content_type") or "").lower()
+        if (ct == "gaming" or genre_gaming) and end - start > GAMING_AUTO_MAX_MS:
+            peak = int(row.get("peakMs") or row.get("peak_ms") or (start + end) // 2)
+            end = min(end, peak + 10_000)
+            start = max(start, end - GAMING_AUTO_MAX_MS)
+        if end - start < 15_000:
+            continue
+        if any(span_iou_ms(start, end, a, b) >= 0.35 for a, b in spans):
+            continue
+        peak_ms = int(row.get("peakMs") or row.get("peak_ms") or (start + end) // 2)
+        peak_ms = max(start, min(peak_ms, end - 1))
+        title = str(row.get("title") or "Highlight")[:120]
+        score = int(float(row.get("score") or 0) * 100) if float(row.get("score") or 0) <= 1 else int(row.get("score") or 0)
+        picks.append(
+            FusionPick(
+                start_ms=start,
+                end_ms=end,
+                title=title,
+                hook=title[:120],
+                score=score,
+                scores={"total": score},
+                ai_meta={
+                    "streamer": {"tier": "primary", "render": True, "floor_fill": True},
+                    "clipfind": {"archive_floor": True},
+                },
+                peak_ms=peak_ms,
+            )
+        )
+        spans.append((start, end))
+        added += 1
+    if added:
+        print(f"[clipper:pick] stream_floor_fill added={added}", flush=True)
+    return picks
 
 
 def resolve_video_picker_stream_ranges(duration_ms: int) -> list[tuple[int, int]]:

@@ -547,6 +547,14 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 from clips_worker.clipfind.flags import clipfind_fallback
 
                 clipfind_fallback("stream_validate", type(exc).__name__, exc=exc)
+            from clips_worker.video_picker import fill_stream_picks_floor_from_archive
+
+            picks = fill_stream_picks_floor_from_archive(
+                picks,
+                list(signals_payload.get("candidates") or []),
+                duration_s=duration_ms / 1000.0,
+                settings=settings,
+            )
             log_pick_stage(
                 "stream",
                 want=want,
