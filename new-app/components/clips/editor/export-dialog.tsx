@@ -577,13 +577,13 @@ export function ExportDialog({
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !exportLocked) {
-        e.preventDefault()
-        onClose()
-      }
+      if (e.key !== 'Escape' || exportLocked) return
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [open, exportLocked, onClose])
 
   if (!open) return null

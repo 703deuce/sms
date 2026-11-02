@@ -15,10 +15,8 @@ export function nleCaptionDisplayMs(edits: ClipEditsV2, editMs: number): number 
 }
 
 /**
- * Build grouped caption lines in edit ms, then warp to export/display time.
- * Manual `captionLines` override burned caption text in renders but stay on the edit clock until
- * export post (worker `warp_srt`). NLE zip captions must use the same display clock as fcpxml /
- * premiere.xml — always from transcript words + displayPositionMs, not raw captionLines timestamps.
+ * Build grouped caption lines for NLE zip captions.srt (export/display clock).
+ * Manual captionLines keep user text; times are edit ms warped through displayPositionMs.
  */
 export function buildNleCaptionsSrt(
   words: CaptionSourceWord[],
@@ -26,6 +24,14 @@ export function buildNleCaptionsSrt(
   bounds: ClipBounds,
 ): string {
   const normalized = normalizeEdits(edits, bounds)
+  if (normalized.captionLines?.length) {
+    const lines = normalized.captionLines.map((l) => ({
+      ...l,
+      startMs: nleCaptionDisplayMs(normalized, l.startMs),
+      endMs: nleCaptionDisplayMs(normalized, l.endMs),
+    }))
+    return captionLinesToSrt(lines)
+  }
   const captionWords = buildCaptionWords(words, normalized)
   const wpl = normalized.captions?.wordsPerLine ?? 2
   const grouped = captionLinesFromWords(captionWords, wpl).map((l) => ({

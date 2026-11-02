@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildNleCaptionsSrt, warpSrtCuesToDisplayMs } from '@/lib/clips/export-nle-captions'
-import { displayPositionMs } from '@/lib/clips/edits'
+import { buildSrtFromCaptionWords, displayPositionMs } from '@/lib/clips/edits'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
-import { captionLinesFromWords } from '@/lib/clips/editor/caption-lines'
 import { CLIP_5F19E510_BOUNDS, clip5f19e510Edits } from '@/tests/fixtures/clip-5f19e510-edits'
 
 describe('NLE captions.srt output time', () => {
@@ -26,12 +25,16 @@ describe('NLE captions.srt output time', () => {
     expect(displayPositionMs(edits, 7400)).toBeCloseTo(13400, 0)
   })
 
-  it('ignores manual captionLines timestamps and still warps from words', () => {
-    const cw = buildCaptionWords(words, edits)
-    const lines = captionLinesFromWords(cw, 2)
-    const editsWithLines = { ...edits, captionLines: lines }
+  it('uses manual captionLines text with displayPositionMs warp', () => {
+    const editsWithLines = {
+      ...edits,
+      captionLines: [{ id: 'cl_custom', text: 'Merged custom cue', startMs: 400, endMs: 7800 }],
+    }
     const srt = buildNleCaptionsSrt(words, editsWithLines, bounds)
+    expect(srt).toContain('Merged custom cue')
+    expect(srt).not.toContain('Hi Mid')
     expect(srt).toContain('00:00:01,000')
+    expect(srt).toContain('00:00:13,800')
     expect(srt).not.toContain('00:00:00,400')
   })
 

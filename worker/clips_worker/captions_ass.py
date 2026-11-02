@@ -27,6 +27,7 @@ if not (_V3_FONTS / "Poppins-ExtraBold.ttf").is_file():
 _T6_FONTS = Path(__file__).resolve().parent.parent / "v3" / "fonts" / "t6"
 if not (_T6_FONTS / "Lato.ttf").is_file():
     _T6_FONTS = Path(__file__).resolve().parent.parent / "prototype" / "v3" / "fonts" / "t6"
+_INTL_FONTS = _V3_FONTS / "intl"
 _ASS_FONT_FILES: dict[str, Path] = {
     "Poppins ExtraBold": _V3_FONTS / "Poppins-ExtraBold.ttf",
     "Anton": _V3_FONTS / "Anton-Regular.ttf",
@@ -41,6 +42,11 @@ _ASS_FONT_FILES: dict[str, Path] = {
     "Luckiest Guy": _T6_FONTS / "LuckiestGuy.ttf",
     "Archivo Black": _T6_FONTS / "ArchivoBlack.ttf",
     "Oswald": _T6_FONTS / "Oswald.ttf",
+    "Noto Sans": _INTL_FONTS / "NotoSans-Regular.ttf",
+    "Noto Sans Arabic": _INTL_FONTS / "NotoSansArabic-Regular.ttf",
+    "Noto Sans Devanagari": _INTL_FONTS / "NotoSansDevanagari-Regular.ttf",
+    "Noto Sans Thai": _INTL_FONTS / "NotoSansThai-Regular.ttf",
+    "Noto Sans CJK JP": _INTL_FONTS / "NotoSansCJK.ttc",
 }
 _ASS_FONT_ALIASES: dict[str, str] = {
     "Poppins": "Poppins ExtraBold",
@@ -63,6 +69,15 @@ def resolve_ass_font_name(edits_captions: dict, preset: dict) -> str:
         raw = str(edits_captions.get("font") or "").strip()
         if raw:
             return raw
+    sample = str(edits_captions.get("_captionSampleText") or "").strip()
+    if sample:
+        from clips_worker.caption_intl import ass_font_for_sample
+
+        intl = ass_font_for_sample(sample)
+        if intl:
+            path = _ASS_FONT_FILES.get(intl)
+            if path and path.is_file():
+                return intl
     raw = str(edits_captions.get("font") or preset.get("font") or "Poppins").strip()
     canonical = _ASS_FONT_ALIASES.get(raw, raw)
     path = _ASS_FONT_FILES.get(canonical)
@@ -515,7 +530,11 @@ def build_ass(
     play_h: int = 1280,
     edits: dict | None = None,
 ) -> None:
-    edits_captions = clamp_caption_export_style(edits_captions if isinstance(edits_captions, dict) else {}, play_h, play_w)
+    base_caps = edits_captions if isinstance(edits_captions, dict) else {}
+    sample = " ".join(str(w.get("w") or "") for w in words)[:400]
+    if sample:
+        base_caps = {**base_caps, "_captionSampleText": sample}
+    edits_captions = clamp_caption_export_style(base_caps, play_h, play_w)
     preset_id = str(edits_captions.get("presetId") or edits_captions.get("preset") or "bold_pop")
     if preset_id.startswith("cp"):
         edits_captions = cp_effective_captions(edits_captions)

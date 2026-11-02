@@ -1502,6 +1502,11 @@ export function EditorShell({
       }
       if (isEditableTarget(e.target)) return
       if (e.key === 'Escape') {
+        if (exportOpen) {
+          setExportOpen(false)
+          e.preventDefault()
+          return
+        }
         if (!document.fullscreenElement) {
           onCanvasSelect(null)
           e.preventDefault()
@@ -1541,7 +1546,7 @@ export function EditorShell({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [deleteSelection, edits, onCanvasSelect, outDur, outputMs, redo, undo, shuttle, stopShuttle])
+  }, [deleteSelection, edits, exportOpen, onCanvasSelect, outDur, outputMs, redo, undo, shuttle, stopShuttle])
 
   useEffect(() => {
     const t = setTimeout(() => {

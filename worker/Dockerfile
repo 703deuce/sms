@@ -5,6 +5,7 @@ ARG GIT_COMMIT=unknown
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsm6 libxext6 libglib2.0-0 libegl1 libgl1 libgles2 libegl-mesa0 libgl1-mesa-dri curl build-essential \
     fontconfig ca-certificates fonts-noto-color-emoji \
+    fonts-noto-core fonts-noto-cjk fonts-noto-arabic fonts-noto-extra \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -40,7 +41,17 @@ RUN set -eux; \
     fc-match -f '%{file}\n' 'Poppins ExtraBold' | grep -q Poppins-ExtraBold.ttf; \
     fc-match -f '%{file}\n' 'DejaVu Sans:bold' | grep -q DejaVuSans-Bold.ttf; \
     test -s /app/v3/fonts/Montserrat-Black.ttf; \
-    test -s /app/v3/fonts/t6/Bangers.ttf
+    test -s /app/v3/fonts/t6/Bangers.ttf; \
+    mkdir -p /app/v3/fonts/intl; \
+    for want in NotoSans-Regular.ttf NotoSansArabic-Regular.ttf NotoSansDevanagari-Regular.ttf NotoSansThai-Regular.ttf; do \
+      src=$(find /usr/share/fonts -name "$want" 2>/dev/null | head -1); \
+      test -n "$src" && cp "$src" /app/v3/fonts/intl/; \
+    done; \
+    cjk=$(find /usr/share/fonts -name 'NotoSansCJK-Regular.ttc' 2>/dev/null | head -1); \
+    test -n "$cjk" && cp "$cjk" /app/v3/fonts/intl/NotoSansCJK.ttc; \
+    for f in /app/v3/fonts/intl/*; do test -f "$f" && ln -sf "$f" /app/v3/fonts/; done; \
+    test -s /app/v3/fonts/intl/NotoSansArabic-Regular.ttf; \
+    test -s /app/v3/fonts/intl/NotoSansCJK.ttc
 COPY worker/prototype /app/prototype
 COPY worker/scripts/download-models.sh /tmp/download-models.sh
 RUN chmod +x /tmp/download-models.sh && bash /tmp/download-models.sh /app/v3
@@ -69,6 +80,7 @@ RUN pip install --no-cache-dir pytest \
         /app/tests/test_reframe_person_det.py /app/tests/test_polish_render_sync.py \
         /app/tests/test_zoom_filtergraph_valid.py /app/tests/test_worker_fonts.py \
         /app/tests/test_export_sfx.py /app/tests/test_loop_friendly_trim.py \
+        /app/tests/test_asr_keyterms.py /app/tests/test_q4_intl_captions.py \
         /app/tests/test_audio_first_ingest.py /app/tests/test_stream_render_segment_checkpoint.py \
         && REQUIRE_GL=1 python /app/scripts/gen_transition_shaders.py \
         && REQUIRE_GL=1 python -m pytest -q /app/tests/test_shader_transitions.py
