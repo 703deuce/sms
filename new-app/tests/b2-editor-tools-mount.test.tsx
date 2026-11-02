@@ -117,7 +117,7 @@ describe('B2 editor tools mount (no AI_EXTRAS flag)', () => {
         onSelect={vi.fn()}
         clipId="clip1"
         uploadLibraryFiles={vi.fn(async () => [{ refId: 'up1', ref: 'upload', id: 'm1', label: 'x', mediaType: 'audio' }])}
-        addSfx={vi.fn()}
+        placeVoiceover={vi.fn()}
       />,
     )
     fireEvent.click(getByTestId('text-voiceover-preview'))
@@ -143,7 +143,7 @@ describe('B2 editor tools mount (no AI_EXTRAS flag)', () => {
         onPatchStudioSound={vi.fn()}
         textVoiceover={{ text: 'Narration line', atMs: 800 }}
         uploadLibraryFiles={vi.fn(async () => [])}
-        addVoiceoverSfx={vi.fn()}
+        addVoiceover={vi.fn()}
       />,
     )
     expect(getByTestId('audio-panel-voiceover')).toBeTruthy()

@@ -1023,10 +1023,36 @@ export function applyWordFixesByIndex<T extends ClipWord>(words: T[], fixes: Rec
   })
 }
 
-export function wordDisplayText(w: ClipWord, fixes: Record<string, string>): string {
+export function resolveWordFixText(
+  w: ClipWord,
+  fixes: Record<string, string>,
+  fixMeta?: Record<string, WordFixMetaEntry>,
+): string {
   const key = wordKey(w)
   if (key !== undefined && fixes[String(key)] !== undefined) return fixes[String(key)]
+  if (fixMeta && Object.keys(fixMeta).length) {
+    const ws = Math.round(w.s * 1000)
+    let bestKey: string | null = null
+    let bestDt = 60
+    for (const [fk, meta] of Object.entries(fixMeta)) {
+      if (!meta || typeof meta.s !== 'number') continue
+      const dt = Math.abs(meta.s - ws)
+      if (dt < bestDt) {
+        bestDt = dt
+        bestKey = fk
+      }
+    }
+    if (bestKey && fixes[bestKey] !== undefined) return fixes[bestKey]
+  }
   return w.w
+}
+
+export function wordDisplayText(
+  w: ClipWord,
+  fixes: Record<string, string>,
+  fixMeta?: Record<string, WordFixMetaEntry>,
+): string {
+  return resolveWordFixText(w, fixes, fixMeta)
 }
 
 export function isWordCut(w: ClipWord, cutRanges: CutRange[]): boolean {

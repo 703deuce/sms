@@ -6,6 +6,7 @@
  */
 import { buildCaptionsAss, type AssWord } from '@/lib/clips/render-plan/captions-ass'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { resolveWordFixText } from '@/lib/clips/edits'
 import { hookAssForEdits } from '@/lib/clips/render-plan/hook-ass'
 import { buildTextItemsAss } from '@/lib/clips/render-plan/text-items-ass'
 import { layerFxOf } from '@/lib/clips/editor/layer-fx'
@@ -93,10 +94,22 @@ export function buildPreviewScripts(o: PreviewScriptInput): PreviewScripts {
   const cap = (e.captions ?? {}) as Dict
   let captions: string | null = null
   if (cap.enabled !== false && o.words.length) {
+    const clipEdits = o.edits as ClipEditsV2
+    const fixes = clipEdits.wordFixes ?? {}
+    const fixMeta = clipEdits.wordFixMeta
     // G3afix: manual caption lines carry `ln` (one caption per line — G3a dropped it here, so the
     // preview re-chunked them by words per line) plus their cue breaks and <i>/<b>.
     const words: AssWord[] = o.words.map((w, i) => {
-      const a: AssWord = { w: String(w.w ?? ''), s: w.s, e: w.e, i: w.idx ?? i, spk: w.spk ?? 0 }
+      const idx = w.idx ?? i
+      const clipWord = {
+        w: String(w.w ?? ''),
+        s: w.s,
+        e: w.e,
+        i: idx,
+        idx,
+      }
+      const fixed = resolveWordFixText(clipWord, fixes, fixMeta)
+      const a: AssWord = { w: fixed, s: w.s, e: w.e, i: idx, spk: w.spk ?? 0 }
       if (typeof w.ln === 'number') a.ln = w.ln
       if (w.br) a.br = true
       if (w.it) a.it = true

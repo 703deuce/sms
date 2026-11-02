@@ -5,12 +5,27 @@ import { Loader2, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { ClipAudioSfx } from '@/lib/clips/edits'
 import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { TTS_STOCK_VOICES } from '@/lib/clips/tts-voices'
 import { AiCreditBadge } from '@/components/clips/ui/ai-credit-badge'
 import { TEXT_MAX_CHARS } from '@/lib/clips/editor/text-items'
 import { toast } from 'sonner'
+
+async function audioBlobDurationMs(blob: Blob): Promise<number> {
+  const url = URL.createObjectURL(blob)
+  try {
+    return await new Promise((resolve, reject) => {
+      const audio = new Audio(url)
+      audio.addEventListener('loadedmetadata', () => {
+        const ms = Math.round(audio.duration * 1000)
+        resolve(Number.isFinite(ms) && ms > 0 ? ms : 1600)
+      })
+      audio.addEventListener('error', () => reject(new Error('Could not read audio duration')))
+    })
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
 
 /** B1/NEXT: ElevenLabs stock voice TTS for a text item (preview + place on timeline). */
 export function TextVoiceoverSection({
@@ -18,14 +33,14 @@ export function TextVoiceoverSection({
   text,
   atMs,
   uploadLibraryFiles,
-  addSfx,
+  placeVoiceover,
   compact = false,
 }: {
   clipId: string
   text: string
   atMs: number
   uploadLibraryFiles: (files: File[]) => Promise<ProjectMediaItem[]>
-  addSfx: (item: ClipAudioSfx) => void
+  placeVoiceover: (uploadId: string, atMs: number, durMs: number) => void
   compact?: boolean
 }) {
   const [voiceStockId, setVoiceStockId] = useState(TTS_STOCK_VOICES[0]!.id)
@@ -94,7 +109,8 @@ export function TextVoiceoverSection({
       const uploaded = await uploadLibraryFiles([file])
       const uploadId = uploaded[0]?.refId
       if (!uploadId) throw new Error('Upload failed')
-      addSfx({ generationId: uploadId, uploadId, atMs, kind: 'audio', volume: 1 })
+      const durMs = await audioBlobDurationMs(blob)
+      placeVoiceover(uploadId, atMs, durMs)
       toast.success('Voiceover placed on timeline')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Voiceover failed')

@@ -1,4 +1,4 @@
-import { orderedKeepSegments, remapTime, wordKey, type ClipEditsV2, type CutRange } from '@/lib/clips/edits'
+import { orderedKeepSegments, remapTime, resolveWordFixText, type ClipEditsV2, type CutRange } from '@/lib/clips/edits'
 
 function remapTimeEnd(tMs: number, segs: [number, number][]): number | null {
   let acc = 0
@@ -54,10 +54,12 @@ export function buildCaptionWords(words: CaptionSourceWord[], edits: ClipEditsV2
     const outS = remapTime(clampStart, segs)
     const outE = remapTimeEnd(clampEnd, segs)
     if (outS === null || outE === null || outE <= outS) continue
-    const key = wordKey(w as { i?: number; idx?: number })
-    const rawText = key !== undefined ? edits.wordFixes[String(key)] ?? w.w : w.w
-    const text = typeof rawText === 'string' ? rawText : String(rawText ?? '')
-    if (!text.trim()) continue
+    const text = resolveWordFixText(
+      { w: w.w, s: w.s, e: w.e, i: w.i, idx: (w as { idx?: number }).idx },
+      edits.wordFixes,
+      edits.wordFixMeta,
+    )
+    if (!String(text ?? '').trim()) continue
     out.push({
       i: w.i,
       text,

@@ -45,7 +45,7 @@ export function AudioPanel({
   onPatchExportAudio,
   uploadLibraryFiles,
   textVoiceover,
-  addVoiceoverSfx,
+  addVoiceover,
   onCutToBeat,
   beatsAvailable = false,
 }: {
@@ -73,7 +73,7 @@ export function AudioPanel({
   uploadLibraryFiles?: (files: File[]) => Promise<ProjectMediaItem[]>
   /** Selected plain text item — stock TTS (same as Text panel). */
   textVoiceover?: { text: string; atMs: number } | null
-  addVoiceoverSfx?: (item: ClipAudioSfx) => void
+  addVoiceover?: (uploadId: string, atMs: number, durMs: number) => void
   /** Wired from timeline beat detection (Cut to beat). */
   onCutToBeat?: (every: 1 | 2 | 4) => void
   beatsAvailable?: boolean
@@ -282,21 +282,30 @@ export function AudioPanel({
             return
           }
           const priorId = (next.generationId ?? studio?.generationId ?? '').trim()
-          onPatchStudioSound({
-            enabled: true,
-            mix: next.mix,
-            generationId: priorId,
-          })
-          if (!priorId || studioGen.failed) {
-            studioEnqueueRef.current = false
-            if (onStartStudioSound) {
-              onStartStudioSound()
-            } else {
-              void enqueueStudioSound().catch(() => {
-                studioEnqueueRef.current = false
-                toast.error('Could not start Studio Sound')
-              })
-            }
+          if (studio?.enabled && Math.abs((studio.mix ?? DEFAULT_STUDIO_SOUND_MIX) - next.mix) > 0.001) {
+            onPatchStudioSound({
+              enabled: true,
+              mix: next.mix,
+              generationId: priorId || studio.generationId,
+            })
+            return
+          }
+          if (priorId && !studioGen.failed) {
+            onPatchStudioSound({
+              enabled: true,
+              mix: next.mix,
+              generationId: priorId,
+            })
+            return
+          }
+          studioEnqueueRef.current = false
+          if (onStartStudioSound) {
+            onStartStudioSound()
+          } else {
+            void enqueueStudioSound().catch(() => {
+              studioEnqueueRef.current = false
+              toast.error('Could not start Studio Sound')
+            })
           }
         }}
         onRetryEnqueue={() => {
@@ -319,14 +328,14 @@ export function AudioPanel({
           ) : null}
         </div>
       ) : null}
-      {textVoiceover && uploadLibraryFiles && addVoiceoverSfx ? (
+      {textVoiceover && uploadLibraryFiles && addVoiceover ? (
         <section data-testid="audio-panel-voiceover">
           <TextVoiceoverSection
             clipId={clipId}
             text={textVoiceover.text}
             atMs={textVoiceover.atMs}
             uploadLibraryFiles={uploadLibraryFiles}
-            addSfx={addVoiceoverSfx}
+            placeVoiceover={addVoiceover}
           />
         </section>
       ) : null}

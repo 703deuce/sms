@@ -118,10 +118,13 @@ export function CaptionOverlay({
     () =>
       captionChunkFit(
         fitCfg,
-        lineWords.map((w, i) => ({ w: wordDisplayText(w, edits.wordFixes), i: wordKey(w) ?? lineStart + i })),
+        lineWords.map((w, i) => ({
+          w: wordDisplayText(w, edits.wordFixes, edits.wordFixMeta),
+          i: wordKey(w) ?? lineStart + i,
+        })),
         new Set(cap.emphasis ?? []),
       ),
-    [cap.emphasis, fitCfg, lineStart, lineWords],
+    [cap.emphasis, fitCfg, lineStart, lineWords, edits.wordFixes, edits.wordFixMeta],
   )
   const lineRows = useMemo(() => {
     const cuts = [0, ...lineFit.breaks, lineWords.length]
@@ -232,9 +235,9 @@ export function CaptionOverlay({
         const idx = wordKey(w) ?? globalIdx
         const emoji = showEmojis ? captionEmojiForWord(w, globalIdx, emojiMap) : undefined
         // E3fix2: like the export (captions_ass.disp_words), sentence case restarts at each chunk.
-        const prevWord = i > 0 ? wordDisplayText(lineWords[i - 1]!, edits.wordFixes) : undefined
+        const prevWord = i > 0 ? wordDisplayText(lineWords[i - 1]!, edits.wordFixes, edits.wordFixMeta) : undefined
         const sentenceStart = caseMode === 'sentence' && isSentenceBoundary(prevWord)
-        const displayWord = wordDisplayText(w, edits.wordFixes)
+        const displayWord = wordDisplayText(w, edits.wordFixes, edits.wordFixMeta)
         const text = formatCaptionWord(displayWord, caseMode, sentenceStart) + (emoji && !hasEmojiMap ? ` ${emoji}` : '')
         const strokeW = preset.outlineW
         const scaledStroke = previewCaptionStrokePx(strokeW, boxHeightPx, exportPlayH)

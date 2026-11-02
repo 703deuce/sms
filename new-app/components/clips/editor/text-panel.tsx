@@ -50,7 +50,6 @@ import { TextAnimSection } from '@/components/clips/editor/text-anim-section'
 import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 import { toast } from 'sonner'
 import { placeOnFreeTrack } from '@/lib/clips/editor/tracks'
-import type { ClipAudioSfx } from '@/lib/clips/audio'
 import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { TextVoiceoverSection } from '@/components/clips/editor/text-voiceover-section'
 
@@ -126,7 +125,7 @@ export function TextPanel({
   onLive,
   clipId,
   uploadLibraryFiles,
-  addSfx,
+  placeVoiceover,
 }: {
   edits: ClipEditsV2
   /** pushHistory=false folds the change into the current undo step (E4fix coalescing). */
@@ -139,7 +138,7 @@ export function TextPanel({
   onLive?: (e: ClipEditsV2 | null) => void
   clipId?: string
   uploadLibraryFiles?: (files: File[]) => Promise<ProjectMediaItem[]>
-  addSfx?: (item: ClipAudioSfx) => void
+  placeVoiceover?: (uploadId: string, atMs: number, durMs: number) => void
 }) {
   const items = edits.textItems ?? []
   const sel = items.find((t) => t.id === selectedId) ?? null
@@ -410,13 +409,13 @@ export function TextPanel({
                 inputRef={textRef}
                 onCommit={(text) => patch({ text, marks: remapMarks(sel.text, text, sel.marks) }, 'text')}
               />
-              {clipId && uploadLibraryFiles && addSfx && sel && !sel.kind ? (
+              {clipId && uploadLibraryFiles && placeVoiceover && sel && !sel.kind ? (
                 <TextVoiceoverSection
                   clipId={clipId}
                   text={sel.text}
                   atMs={sel.startMs}
                   uploadLibraryFiles={uploadLibraryFiles}
-                  addSfx={addSfx}
+                  placeVoiceover={placeVoiceover}
                 />
               ) : null}
             </>
