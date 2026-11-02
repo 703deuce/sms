@@ -50,6 +50,10 @@ def resolve_clip_export_source(ctx: dict) -> tuple[str | None, int, str]:
     if upload and _object_exists(str(upload)):
         return str(upload), 0, "upload"
 
+    proxy = ctx.get("proxyKey")
+    if proxy and _object_exists(str(proxy)):
+        return str(proxy), 0, "proxyKey"
+
     preview = ctx.get("previewKey")
     if preview and _object_exists(str(preview)):
         return str(preview), int(ctx.get("startMs") or 0), "previewKey_composite"

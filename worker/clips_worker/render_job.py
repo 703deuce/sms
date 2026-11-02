@@ -188,7 +188,7 @@ def load_render_context(conn, render_id: str) -> dict:
                    r."aspectRatio", r.resolution,
                    c."startMs", c."endMs", c."previewKey", c."cropKey", c.edits, c."projectId",
                    c."sourceSegKey", c."sourceSegStartMs", c."sourceSegEndMs", c."aiMeta",
-                   p.settings, p."transcriptKey", p."transcriptWords", u.key AS source_key
+                   p.settings, p."transcriptKey", p."transcriptWords", p."proxyKey", u.key AS source_key
             FROM clip_renders r
             JOIN clips c ON c.id = r."clipId"
             JOIN clip_projects p ON p.id = c."projectId"

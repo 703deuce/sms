@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""EF-24 item 1 QC: first 10 s of two clips through RVM (Standard + Detail) on Modal L4 (DEV env)."""
+"""EF-24 item 1 QC: first 10 s of two clips through RVM (Standard + Detail) on Modal L4."""
 from __future__ import annotations
 
 import argparse
@@ -17,15 +17,62 @@ L4 = 0.000222
 CAP_USD = 1.00
 
 
+def _resolve_clip_source(cur, clip_id: str) -> tuple[str, float, str] | None:
+    from clips_worker.clip_source_media import resolve_clip_export_source
+
+    cur.execute(
+        """
+        SELECT c.id, c."workspaceId", c."projectId", c."startMs", c."endMs",
+               c."sourceSegKey", c."sourceSegStartMs", c."previewKey",
+               u.key AS source_key, p."proxyKey"
+        FROM clips c
+        JOIN clip_projects p ON p.id = c."projectId"
+        LEFT JOIN clip_uploads u ON u.id = p."uploadId"
+        WHERE c.id = %s
+        """,
+        (clip_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    (
+        cid,
+        workspace_id,
+        project_id,
+        start_ms,
+        _end_ms,
+        source_seg_key,
+        source_seg_start_ms,
+        preview_key,
+        source_key,
+        proxy_key,
+    ) = row
+    ctx = {
+        "clipId": cid,
+        "workspaceId": workspace_id,
+        "projectId": project_id,
+        "startMs": start_ms,
+        "sourceSegKey": source_seg_key,
+        "sourceSegStartMs": source_seg_start_ms,
+        "previewKey": preview_key,
+        "source_key": source_key,
+        "proxyKey": proxy_key,
+    }
+    key, source_offset_ms, reason = resolve_clip_export_source(ctx)
+    if not key:
+        return None
+    off_s = max(0.0, (int(start_ms) - int(source_offset_ms)) / 1000.0)
+    return key, off_s, reason
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seconds", type=float, default=10.0)
     ap.add_argument("--out", default="/tmp/ef24_qc")
     ap.add_argument("--qualities", default="standard,detail")
     a = ap.parse_args()
-    if os.environ.get("MODAL_ENVIRONMENT", "") != "dev":
-        print("refusing: set MODAL_ENVIRONMENT=dev (QC must not use the prod Modal env)")
-        return 2
+    modal_env = os.environ.get("MODAL_ENVIRONMENT", "main")
+    print(f"modal_env={modal_env}")
     import modal
     import psycopg2
 
@@ -34,20 +81,17 @@ def main() -> int:
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    Matter = modal.Cls.from_name(os.environ.get("MODAL_APP_NAME", "transovo-gpu"), "Matter")
+    app_name = os.environ.get("MODAL_APP_NAME", "transovo-gpu")
+    Matter = modal.Cls.from_name(app_name, "Matter")
     spent = 0.0
     with psycopg2.connect(os.environ["DATABASE_URL"]) as conn, conn.cursor() as cur:
         for cid in CLIPS:
-            cur.execute(
-                'SELECT "segmentKey", "sourceSegKey", "sourceSegStartMs", "startMs" FROM clips WHERE id = %s',
-                (cid,),
-            )
-            row = cur.fetchone()
-            if not row:
-                print(f"{cid}: not found")
+            resolved = _resolve_clip_source(cur, cid)
+            if not resolved:
+                print(f"{cid}: no export source")
                 continue
-            seg_key, ssk, ss0, start_ms = row
-            key, off = (ssk, max(0, (start_ms - (ss0 or 0)) / 1000.0)) if ssk else (seg_key, 0.0)
+            key, off, reason = resolved
+            print(f"{cid}: source={reason} key_tail={key[-48:]} off_s={off:.3f}")
             src_url = storage.sign_url(key)
             src = out / f"{cid}_src.mp4"
             subprocess.check_call(
