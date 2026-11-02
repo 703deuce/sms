@@ -85,5 +85,15 @@ export function useEditorWords(
       .finally(() => setWordsLoading(false))
   }, [clipId, contextMs, trim.in, trim.out])
 
-  return { words, wordsLoading }
+  return { words, wordsLoading, reloadWords: () => {
+    const trimSnap = { in: trim.in, out: trim.out }
+    const ctxSnap = contextRef.current
+    setWordsLoading(true)
+    return fetchClipEditorWords(clipId, trimSnap, ctxSnap)
+      .then((data) => {
+        setWords(data.words)
+        wordsRef.current = data.words
+      })
+      .finally(() => setWordsLoading(false))
+  } }
 }

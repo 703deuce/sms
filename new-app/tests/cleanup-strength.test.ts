@@ -21,6 +21,8 @@ describe('cleanup-strength', () => {
 
   it('light strength only um/uh family', () => {
     expect(fillerEligibleAtStrength('uh', 'lexicon', 'light', new Set())).toBe(true)
+    expect(fillerEligibleAtStrength('Uh,', 'lexicon', 'light', new Set())).toBe(true)
+    expect(fillerEligibleAtStrength('um,', 'lexicon', 'normal', new Set())).toBe(true)
     expect(fillerEligibleAtStrength('hmm', 'lexicon', 'light', new Set())).toBe(false)
     expect(fillerEligibleAtStrength('hmm', 'repeat', 'normal', new Set())).toBe(true)
   })

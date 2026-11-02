@@ -42,7 +42,12 @@ import {
   writeEditorAutosaveDraft,
 } from '@/lib/clips/editor-autosave-draft'
 import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
-import { mergeCleanupCutRanges } from '@/lib/clips/editor/cleanup-proposals'
+import {
+  mergeCleanupCutRanges,
+  mergeCutCleanupKindsForRanges,
+  pruneCutCleanupKinds,
+  type CleanupProposal,
+} from '@/lib/clips/editor/cleanup-proposals'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { mergeEditsThreeWay } from '@/lib/clips/edits-merge'
@@ -410,11 +415,28 @@ export function useEditorState(
   }, [])
 
   const addCleanupCuts = useCallback(
-    (ranges: CutRange[], passLabel?: string) => {
+    (input: CutRange[] | CleanupProposal[], passLabel?: string) => {
+      const proposals: CleanupProposal[] = Array.isArray(input)
+        ? input.length && typeof input[0] === 'object' && input[0] != null && 'range' in (input[0] as object)
+          ? (input as CleanupProposal[])
+          : (input as CutRange[]).map((range) => ({
+              id: `${range[0]}:${range[1]}`,
+              kind: 'manual' as const,
+              range,
+              label: 'Cut',
+            }))
+        : []
+      const ranges = proposals.map((p) => p.range)
       if (!ranges.length) return
       const spans = wordSpans()
       const cuts = mergeCleanupCutRanges(editsRef.current.cutRanges, ranges, spans)
-      const nextEdits = { ...editsRef.current, cutRanges: cuts }
+      const cutCleanupKinds = mergeCutCleanupKindsForRanges(
+        editsRef.current.cutCleanupKinds,
+        ranges,
+        proposals.map((p) => (p.kind === 'unknown' ? 'manual' : p.kind)),
+      )
+      const prunedKinds = pruneCutCleanupKinds(cutCleanupKinds, cuts)
+      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds: prunedKinds }
       if (editsEqual(editsRef.current, nextEdits)) return
       const rippled = rippleFrom(editsRef.current, nextEdits)
       editsRef.current = rippled
@@ -431,8 +453,11 @@ export function useEditorState(
   )
 
   const applyCleanupCut = useCallback(
-    (range: CutRange, passLabel?: string) => {
-      addCleanupCuts([range], passLabel)
+    (range: CutRange, passLabel?: string, kind?: CleanupProposal['kind']) => {
+      addCleanupCuts(
+        [{ id: `${range[0]}:${range[1]}`, kind: kind ?? 'manual', range, label: passLabel ?? 'Cut' }],
+        passLabel,
+      )
     },
     [addCleanupCuts],
   )
@@ -503,8 +528,10 @@ export function useEditorState(
   const restoreCutRange = useCallback(
     (range: CutRange) => {
       const cuts = subtractRangeFromCuts(state.edits.cutRanges, range)
-      if (editsEqual(state.edits, { ...state.edits, cutRanges: cuts })) return
-      setEdits({ ...state.edits, cutRanges: cuts })
+      const cutCleanupKinds = pruneCutCleanupKinds(state.edits.cutCleanupKinds, cuts)
+      const next = { ...state.edits, cutRanges: cuts, cutCleanupKinds }
+      if (editsEqual(state.edits, next)) return
+      setEdits(next)
     },
     [setEdits, state.edits],
   )

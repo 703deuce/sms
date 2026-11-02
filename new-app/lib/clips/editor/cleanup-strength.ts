@@ -1,5 +1,9 @@
 /** AI_QUALITY Q1 cleanup strength presets (TB-04/05). */
 
+import { gapHasLoudProgramAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
+import { wordEligibleForOptInSingle } from '@/lib/clips/editor/filler-opt-in'
+import { normalizeToken } from '@/lib/clips/script-editor/enrich-transcript'
+
 export type CleanupStrength = 'light' | 'normal' | 'aggressive'
 
 export const DEFAULT_CLEANUP_STRENGTH: CleanupStrength = 'normal'
@@ -36,7 +40,7 @@ export function fillerEligibleAtStrength(
   strength: FillerStrengthFilter,
   enabledOptIn: ReadonlySet<string>,
 ): boolean {
-  const t = wordText.trim().toLowerCase()
+  const t = normalizeToken(wordText)
   if (!t) return false
   if (wordEligibleForOptInSingle(wordText, enabledOptIn)) return true
   if (strength === 'light') {
@@ -62,9 +66,6 @@ export function isProtectedFromCleanup(word: {
   if (typeof word.conf === 'number' && word.conf > 0 && word.conf < 0.45) return true
   return false
 }
-
-import { gapHasLoudProgramAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
-import { wordEligibleForOptInSingle } from '@/lib/clips/editor/filler-opt-in'
 
 export function gapHasSpeechEnergy(
   gapStartMs: number,

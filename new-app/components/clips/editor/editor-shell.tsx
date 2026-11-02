@@ -442,10 +442,7 @@ export function EditorShell({
   const onApplyCleanupPass = useCallback(
     (proposals: CleanupProposal[], label: string) => {
       logEditorDecision('cleanup_pass', { clipId, label, count: proposals.length })
-      applyCleanupCuts(
-        proposals.map((p) => p.range),
-        label,
-      )
+      applyCleanupCuts(proposals, label)
     },
     [applyCleanupCuts, clipId],
   )
@@ -457,7 +454,7 @@ export function EditorShell({
         kind: proposal.kind,
         range: proposal.range,
       })
-      applyCleanupCut(proposal.range, singleCleanupApplyLabel(proposal))
+      applyCleanupCut(proposal.range, singleCleanupApplyLabel(proposal), proposal.kind)
     },
     [applyCleanupCut, clipId],
   )
@@ -579,7 +576,7 @@ export function EditorShell({
   }, [])
 
   const editorWordsContextMs = showSurrounding ? SHOW_SURROUNDING_CONTEXT_MS : undefined
-  const { words: clipEditorWords, wordsLoading } = useEditorWords(
+  const { words: clipEditorWords, wordsLoading, reloadWords } = useEditorWords(
     clipId,
     words,
     bounds,
@@ -1691,6 +1688,7 @@ export function EditorShell({
             onCommitTrim={setTrim}
             onAuditionChange={setAuditionEdits}
             onSeek={seekSource}
+            onReloadWords={reloadWords}
           />
         </EditorPanelErrorBoundary>
       </div>

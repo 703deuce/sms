@@ -1,13 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
-import { clipsFetch, retranscribeProject } from '@/lib/clips-api'
+import { clipsFetch, getProjectStatus, retranscribeProject } from '@/lib/clips-api'
 import {
   appliedCutProposals,
   auditionEditsForProposals,
@@ -25,6 +25,7 @@ import { nudgeTrimIn, nudgeTrimOut } from '@/lib/clips/editor/nudge'
 import type { ClipBounds } from '@/lib/clips/edits'
 import { findRetakes, retakeGroupWithKeepIndex, type RetakeGroup } from '@/lib/clips/editor/retakes'
 import { cleanupPassLabel } from '@/lib/clips/editor/history-labels'
+import { excerptPartsForCutRange } from '@/lib/clips/editor/cleanup-text'
 import {
   DEFAULT_CLEANUP_STRENGTH,
   OPT_IN_FILLER_WORDS,
@@ -59,6 +60,7 @@ export function CleanupPanel({
   onCommitTrim,
   onAuditionChange,
   onSeek,
+  onReloadWords,
 }: {
   clipId: string
   projectId: string
@@ -75,6 +77,8 @@ export function CleanupPanel({
   onCommitTrim: (trim: { in: number; out: number }) => void
   onAuditionChange: (edits: ClipEditsV2 | null) => void
   onSeek: (sourceMs: number) => void
+  /** Refetch clip transcript after re-transcribe completes. */
+  onReloadWords?: () => Promise<void> | void
 }) {
   const [auditionIds, setAuditionIds] = useState<Set<string>>(new Set())
   const [retakeBusy, setRetakeBusy] = useState(false)
@@ -197,7 +201,7 @@ export function CleanupPanel({
         const { startMs, endMs } = wordSourceMs(w)
         return { w: w.w, s: startMs / 1000, e: endMs / 1000 }
       })
-      let groups = findRetakes(retakeWords)
+      let groups = findRetakes(retakeWords, edits.cutRanges ?? [])
       if (!groups.length) {
         toast.message('No retakes found')
         setRetakeExtras([])
@@ -231,6 +235,33 @@ export function CleanupPanel({
     } finally {
       setRetakeBusy(false)
     }
+  }
+
+  useEffect(() => {
+    if (!retakeGroups.length) return
+    setRetakeExtras(retakeProposals(retakeGroups, edits.cutRanges ?? []))
+  }, [edits.cutRanges, retakeGroups])
+
+  const pollRetranscribeUntilReady = async () => {
+    const deadline = Date.now() + 15 * 60 * 1000
+    while (Date.now() < deadline) {
+      await new Promise((r) => window.setTimeout(r, 4000))
+      try {
+        const st = await getProjectStatus(projectId)
+        if (st.status === 'READY' && st.wordCount > 0) {
+          await onReloadWords?.()
+          toast.success('Re-transcribe complete — transcript updated.')
+          return
+        }
+        if (st.status === 'FAILED') {
+          toast.error(st.error ?? 'Re-transcribe failed')
+          return
+        }
+      } catch {
+        /* keep polling */
+      }
+    }
+    toast.message('Re-transcribe still running — we will keep your page open; try Refresh if words look stale.')
   }
 
   const runClarity = async () => {
@@ -373,7 +404,10 @@ export function CleanupPanel({
           onClick={() => {
             setRetranscribeBusy(true)
             void retranscribeProject(projectId)
-              .then(() => toast.success('Re-transcribe queued — reload when the project is ready.'))
+              .then(() => {
+                toast.message('Re-transcribe queued — updating when ready…')
+                return pollRetranscribeUntilReady()
+              })
               .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not queue re-transcribe'))
               .finally(() => setRetranscribeBusy(false))
           }}
@@ -435,7 +469,9 @@ export function CleanupPanel({
               </Button>
             ) : null}
           </div>
-          {retakeGroups.map((group, gi) => (
+          {retakeGroups.map((group, gi) => {
+            const groupProposal = retakeProposals([group], edits.cutRanges ?? [])[0]
+            return (
             <div key={gi} className="space-y-1 rounded bg-muted/40 p-2 text-xs">
               {group.attempts.map((a, ai) => (
                 <div key={ai} className="flex items-center justify-between gap-2">
@@ -456,7 +492,6 @@ export function CleanupPanel({
                         onClick={() => {
                           const next = retakeGroupWithKeepIndex(group, ai)
                           setRetakeGroups((rows) => rows.map((g, ix) => (ix === gi ? next : g)))
-                          setRetakeExtras(retakeProposals([next], edits.cutRanges ?? []))
                         }}
                       >
                         Keep this take
@@ -465,8 +500,20 @@ export function CleanupPanel({
                   </div>
                 </div>
               ))}
+              {groupProposal ? (
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    data-testid="retake-apply-group"
+                    onClick={() => onApplyProposal(groupProposal)}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              ) : null}
             </div>
-          ))}
+          )})}
         </div>
       ) : null}
 
@@ -483,6 +530,7 @@ export function CleanupPanel({
               <ProposalRow
                 key={p.id}
                 proposal={p}
+                orderedWords={orderedWords}
                 auditioning={auditionIds.has(p.id)}
                 onAudition={() => toggleAudition(p)}
                 onPreview={() => previewCutAudition(p)}
@@ -523,27 +571,57 @@ export function CleanupPanel({
           {applied.some((p) => p.kind === 'filler' || p.kind === 'repeat' || p.kind === 'gap' || p.kind === 'retake' || p.kind === 'clarity') ? (
             <div className="flex flex-wrap gap-2 pt-2">
               {applied.some((p) => p.kind === 'filler') ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('filler')}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="cleanup-restore-fillers"
+                  onClick={() => restoreAllOfKind('filler')}
+                >
                   Restore fillers
                 </Button>
               ) : null}
               {applied.some((p) => p.kind === 'repeat') ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('repeat')}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="cleanup-restore-repeats"
+                  onClick={() => restoreAllOfKind('repeat')}
+                >
                   Restore repeats
                 </Button>
               ) : null}
               {applied.some((p) => p.kind === 'gap') ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('gap')}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="cleanup-restore-gaps"
+                  onClick={() => restoreAllOfKind('gap')}
+                >
                   Restore gaps
                 </Button>
               ) : null}
               {applied.some((p) => p.kind === 'retake') ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('retake')}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="cleanup-restore-retakes"
+                  onClick={() => restoreAllOfKind('retake')}
+                >
                   Restore retakes
                 </Button>
               ) : null}
               {applied.some((p) => p.kind === 'clarity') ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('clarity')}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="cleanup-restore-clarity"
+                  onClick={() => restoreAllOfKind('clarity')}
+                >
                   Restore clarity
                 </Button>
               ) : null}
@@ -557,6 +635,7 @@ export function CleanupPanel({
 
 function ProposalRow({
   proposal,
+  orderedWords,
   auditioning,
   onAudition,
   onPreview,
@@ -565,6 +644,7 @@ function ProposalRow({
   testId,
 }: {
   proposal: CleanupProposal
+  orderedWords: ReturnType<typeof editorWordsForClipFillerReview>
   auditioning: boolean
   onAudition: () => void
   onPreview: () => void
@@ -572,14 +652,31 @@ function ProposalRow({
   onApply: () => void
   testId?: string
 }) {
+  const clarityParts =
+    proposal.kind === 'clarity' ? excerptPartsForCutRange(orderedWords, proposal.range) : null
+  const clarityReason = proposal.kind === 'clarity' ? proposal.label.replace(/^Clarity · /, '').split(' — ')[0] : null
+
   return (
     <div
       className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs"
       data-testid={testId}
     >
       <span className="line-clamp-3 min-w-0 flex-1">
-        {proposal.label}
-        {proposal.kind !== 'clarity' ? ` · ${proposal.kind}` : ''}
+        {proposal.kind === 'clarity' && clarityParts ? (
+          <>
+            <span className="font-medium">Clarity · {clarityReason}</span>
+            <span className="text-muted-foreground">
+              {clarityParts.before ? ` …${clarityParts.before} ` : ' '}
+              <span className="line-through decoration-destructive/80">{clarityParts.removed}</span>
+              {clarityParts.after ? ` ${clarityParts.after}…` : null}
+            </span>
+          </>
+        ) : (
+          <>
+            {proposal.label}
+            {proposal.kind !== 'clarity' ? ` · ${proposal.kind}` : ''}
+          </>
+        )}
       </span>
       <div className="flex flex-wrap gap-1">
         <Button type="button" size="sm" variant="outline" onClick={onPreview} data-testid="cleanup-preview-cut">
