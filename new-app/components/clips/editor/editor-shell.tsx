@@ -361,6 +361,7 @@ export function EditorShell({
     applyWordFixesBatch,
     restoreWord,
     restoreCutRange,
+    restoreCutRanges,
     setLayoutMode,
     setShotOverride,
     setTrim: setTrimRaw,
@@ -457,6 +458,21 @@ export function EditorShell({
       applyCleanupCut(proposal.range, singleCleanupApplyLabel(proposal), proposal.kind)
     },
     [applyCleanupCut, clipId],
+  )
+
+  const onRestoreCleanupPass = useCallback(
+    (proposals: CleanupProposal[], label: string) => {
+      logEditorDecision('cleanup_restore_pass', {
+        clipId,
+        label,
+        count: proposals.length,
+      })
+      restoreCutRanges(
+        proposals.map((p) => p.range),
+        label,
+      )
+    },
+    [clipId, restoreCutRanges],
   )
 
   const onRestoreCleanupProposal = useCallback(
@@ -1685,6 +1701,7 @@ export function EditorShell({
             onApplyProposal={onApplyCleanupProposal}
             onApplyPass={onApplyCleanupPass}
             onRestoreProposal={onRestoreCleanupProposal}
+            onRestorePass={onRestoreCleanupPass}
             onCommitTrim={setTrim}
             onAuditionChange={setAuditionEdits}
             onSeek={seekSource}
