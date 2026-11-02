@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
-MAX_ASR_KEYTERMS = 50
-MAX_TERM_LEN = 60
+log = logging.getLogger(__name__)
+
+# Shared cap for Deepgram boost lists (Nova-3 keyterm / legacy keywords).
+MAX_ASR_KEYTERMS = 100
+MAX_TERM_LEN = 100
 
 
 def normalize_keyterms(raw: Any) -> list[str]:
@@ -14,7 +18,7 @@ def normalize_keyterms(raw: Any) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for item in raw:
-        term = str(item or "").strip().replace("\n", " ")
+        term = " ".join(str(item or "").strip().split())
         if len(term) < 2 or len(term) > MAX_TERM_LEN:
             continue
         key = term.lower()
@@ -38,7 +42,7 @@ def keyterms_from_vocabulary_prefs(prefs: dict | None) -> list[str]:
     for row in vocab:
         if not isinstance(row, dict):
             continue
-        term = str(row.get("to") or row.get("from") or "").strip()
+        term = " ".join(str(row.get("to") or row.get("from") or "").strip().split())
         if len(term) < 2 or len(term) > MAX_TERM_LEN:
             continue
         key = term.lower()
@@ -67,7 +71,10 @@ def load_workspace_asr_keyterms(conn, workspace_id: str, user_id: str) -> list[s
         return []
     prefs = row[0]
     if isinstance(prefs, str):
-        prefs = json.loads(prefs)
+        try:
+            prefs = json.loads(prefs)
+        except json.JSONDecodeError:
+            return []
     return keyterms_from_vocabulary_prefs(prefs if isinstance(prefs, dict) else None)
 
 
@@ -83,5 +90,13 @@ def keyterms_for_project(conn, project: dict) -> list[str]:
         return from_settings
     user_id = str(project.get("createdById") or "dev")
     ws = str(project.get("workspaceId") or "")
-    loaded = load_workspace_asr_keyterms(conn, ws, user_id)
-    return loaded
+    return load_workspace_asr_keyterms(conn, ws, user_id)
+
+
+def safe_keyterms_for_project(conn, project: dict) -> list[str]:
+    """Fail open: vocabulary / DB must never block transcription."""
+    try:
+        return keyterms_for_project(conn, project)
+    except Exception as exc:
+        log.warning("asr_keyterms_unavailable err=%s", type(exc).__name__)
+        return []

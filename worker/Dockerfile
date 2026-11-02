@@ -44,12 +44,12 @@ RUN set -eux; \
     test -s /app/v3/fonts/t6/Bangers.ttf; \
     mkdir -p /app/v3/fonts/intl; \
     for want in NotoSans-Regular.ttf NotoSansArabic-Regular.ttf NotoSansDevanagari-Regular.ttf NotoSansThai-Regular.ttf; do \
-      src=$$(find /usr/share/fonts -name "$$want" 2>/dev/null | head -1); \
-      test -n "$$src" && cp "$$src" /app/v3/fonts/intl/; \
+      src=$(find /usr/share/fonts -name "$want" 2>/dev/null | head -1); \
+      test -n "$src" && cp "$src" /app/v3/fonts/intl/; \
     done; \
-    cjk=$$(find /usr/share/fonts -name 'NotoSansCJK-Regular.ttc' 2>/dev/null | head -1); \
-    test -n "$$cjk" && cp "$$cjk" /app/v3/fonts/intl/NotoSansCJK.ttc; \
-    for f in /app/v3/fonts/intl/*; do test -f "$$f" && ln -sf "$$f" /app/v3/fonts/; done; \
+    cjk=$(find /usr/share/fonts -name 'NotoSansCJK-Regular.ttc' 2>/dev/null | head -1); \
+    test -n "$cjk" && cp "$cjk" /app/v3/fonts/intl/NotoSansCJK.ttc; \
+    for f in /app/v3/fonts/intl/*; do test -f "$f" && ln -sf "$f" /app/v3/fonts/; done; \
     test -s /app/v3/fonts/intl/NotoSansArabic-Regular.ttf; \
     test -s /app/v3/fonts/intl/NotoSansCJK.ttc
 COPY worker/prototype /app/prototype

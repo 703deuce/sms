@@ -89,12 +89,27 @@ def _extract_words_from_payload(payload: dict[str, Any]) -> list[dict]:
     raise DeepgramTranscribeError("malformed_transcript_no_words")
 
 
+def _effective_listen_model(model: str | None) -> str:
+    return (model or deepgram_model()).strip() or DEFAULT_MODEL
+
+
+def deepgram_boost_param_name(model: str | None) -> str | None:
+    """Nova-3 uses ``keyterm``; legacy Nova/enhanced/base use ``keywords``."""
+    m = _effective_listen_model(model).lower()
+    if m.startswith("nova-3"):
+        return "keyterm"
+    if m.startswith("nova-2") or m.startswith("nova") or m in ("enhanced", "base"):
+        return "keywords"
+    return None
+
+
 def _listen_params(model: str | None = None, language: str | None = "en", keyterms: list[str] | None = None) -> str:
     from urllib.parse import urlencode
 
     lang = (language or "en").strip().lower() if language is not None else "en"
+    eff_model = _effective_listen_model(model)
     params: dict[str, str] = {
-        "model": (model or deepgram_model()).strip() or DEFAULT_MODEL,
+        "model": eff_model,
         "smart_format": "true",
         "punctuate": "true",
         "diarize": "true",
@@ -109,24 +124,28 @@ def _listen_params(model: str | None = None, language: str | None = "en", keyter
     else:
         params["language"] = lang
     pairs: list[tuple[str, str]] = list(params.items())
-    for term in normalize_listen_keyterms(keyterms):
-        pairs.append(("keyterm", term))
+    boost = deepgram_boost_param_name(eff_model)
+    if boost:
+        for term in normalize_listen_keyterms(keyterms):
+            pairs.append((boost, term))
     return urlencode(pairs)
 
 
 def normalize_listen_keyterms(raw: list[str] | None) -> list[str]:
+    from clips_worker.asr_keyterms import MAX_ASR_KEYTERMS, MAX_TERM_LEN
+
     out: list[str] = []
     seen: set[str] = set()
     for item in raw or []:
-        term = str(item or "").strip()
-        if len(term) < 2 or len(term) > 100:
+        term = " ".join(str(item or "").strip().split())
+        if len(term) < 2 or len(term) > MAX_TERM_LEN:
             continue
         key = term.lower()
         if key in seen:
             continue
         seen.add(key)
         out.append(term)
-        if len(out) >= 50:
+        if len(out) >= MAX_ASR_KEYTERMS:
             break
     return out
 
