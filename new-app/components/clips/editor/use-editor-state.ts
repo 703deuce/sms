@@ -45,6 +45,7 @@ import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/w
 import {
   mergeCleanupCutRanges,
   mergeCutCleanupKindsForRanges,
+  reconcileCutCleanupKinds,
   pruneCutCleanupKinds,
   type CleanupProposal,
 } from '@/lib/clips/editor/cleanup-proposals'
@@ -429,14 +430,20 @@ export function useEditorState(
       const ranges = proposals.map((p) => p.range)
       if (!ranges.length) return
       const spans = wordSpans()
-      const cuts = mergeCleanupCutRanges(editsRef.current.cutRanges, ranges, spans)
-      const cutCleanupKinds = mergeCutCleanupKindsForRanges(
+      const prevCuts = editsRef.current.cutRanges ?? []
+      const cuts = mergeCleanupCutRanges(prevCuts, ranges, spans)
+      const tagged = mergeCutCleanupKindsForRanges(
         editsRef.current.cutCleanupKinds,
         ranges,
         proposals.map((p) => (p.kind === 'unknown' ? 'manual' : p.kind)),
       )
-      const prunedKinds = pruneCutCleanupKinds(cutCleanupKinds, cuts)
-      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds: prunedKinds }
+      const cutCleanupKinds = reconcileCutCleanupKinds(
+        tagged,
+        prevCuts,
+        cuts,
+        proposals.map((p) => ({ range: p.range, kind: p.kind })),
+      )
+      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds }
       if (editsEqual(editsRef.current, nextEdits)) return
       const rippled = rippleFrom(editsRef.current, nextEdits)
       editsRef.current = rippled

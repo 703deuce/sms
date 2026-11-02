@@ -217,6 +217,18 @@ export function TextVoiceoverSection({
           {busy === 'preview' ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : <Play className="mr-1 size-3.5" aria-hidden />}
           {busy === 'preview' ? 'Generating…' : 'Preview'}
         </Button>
+        {previewUrl ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busy != null}
+            onClick={() => void runPreview()}
+            data-testid="text-voiceover-regenerate"
+          >
+            Regenerate
+          </Button>
+        ) : null}
         <Button
           type="button"
           size="sm"

@@ -218,6 +218,13 @@ export function CleanupPanel({
   )
   const proposedGaps = useMemo(() => proposed.filter((row) => row.kind === 'gap'), [proposed])
 
+  const retakeRemovalMs = useMemo(() => {
+    return retakeProposals(retakeGroups, edits.cutRanges ?? []).reduce(
+      (sum, p) => sum + Math.abs(p.range[1] - p.range[0]),
+      0,
+    )
+  }, [retakeGroups, edits.cutRanges])
+
   const runRetakes = async () => {
     setRetakeBusy(true)
     try {
@@ -504,7 +511,14 @@ export function CleanupPanel({
       {retakeGroups.length ? (
         <div className="space-y-2 rounded-md border border-border p-2" data-testid="retake-review">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-medium">Retake groups</p>
+            <div>
+              <p className="text-xs font-medium">Retake groups</p>
+              {retakeRemovalMs > 0 ? (
+                <p className="text-[11px] text-muted-foreground" data-testid="retake-total-removal">
+                  Would remove {formatTimecode(retakeRemovalMs)} total
+                </p>
+              ) : null}
+            </div>
             {retakeUnverified ? (
               <span className="text-xs text-amber-600 dark:text-amber-400" data-testid="retake-unverified">
                 Unverified — review each take before applying
@@ -515,6 +529,16 @@ export function CleanupPanel({
             const groupProposal = retakeProposals([group], edits.cutRanges ?? [])[0]
             return (
             <div key={gi} className="space-y-1 rounded bg-muted/40 p-2 text-xs">
+              {groupProposal ? (
+                <div className="flex items-center gap-2 pb-1">
+                  <span
+                    className="rounded bg-muted px-1.5 py-0.5 font-mono tabular-nums text-[10px]"
+                    data-testid="retake-cut-range"
+                  >
+                    {formatTimecode(groupProposal.range[0])}–{formatTimecode(groupProposal.range[1])}
+                  </span>
+                </div>
+              ) : null}
               {group.attempts.map((a, ai) => (
                 <div key={ai} className="flex items-center justify-between gap-2">
                   <span className={ai === group.keepIndex ? 'font-semibold text-foreground' : 'text-muted-foreground'}>

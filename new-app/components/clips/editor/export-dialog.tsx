@@ -572,10 +572,29 @@ export function ExportDialog({
   const headlineLayer = layerSummary.find((l) => l.id === 'headline' && l.type === 'headline')
   const stickerLayer = layerSummary.find((l) => l.type === 'sticker' && l.kind === 'follow_cta')
 
+  const exportLocked = busy || nleExportBusy
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !exportLocked) {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, exportLocked, onClose])
+
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !exportLocked) onClose()
+      }}
+    >
       <div
         role="dialog"
         aria-modal="true"

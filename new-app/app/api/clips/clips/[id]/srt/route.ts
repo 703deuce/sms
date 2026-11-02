@@ -1,6 +1,6 @@
+import { normalizeEdits } from '@/lib/clips/edits'
+import { buildNleCaptionsSrt } from '@/lib/clips/export-nle-captions'
 import { NextResponse } from 'next/server'
-import { buildSrtFromCaptionWords, normalizeEdits } from '@/lib/clips/edits'
-import { buildCaptionWords } from '@/lib/clips/caption-words'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { loadClipSourceWords } from '@/lib/server/clips/transcript'
@@ -15,7 +15,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
     const words = await loadClipSourceWords(clip)
     const edits = normalizeEdits(clip.edits, bounds)
-    const srt = buildSrtFromCaptionWords(buildCaptionWords(words, edits))
+    const srt = buildNleCaptionsSrt(words, edits, bounds)
     return new NextResponse(srt, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',

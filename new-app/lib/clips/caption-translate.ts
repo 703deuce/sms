@@ -4,9 +4,8 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { captionLinesFromWords, type CaptionLine } from '@/lib/clips/editor/caption-lines'
 import type { SourceWord } from '@/lib/clips/source-words'
 
-export const TRANSLATE_CAPTION_LANGUAGES = DUB_LANGUAGES.filter((l) =>
-  ['es', 'fr', 'de', 'pt', 'it'].includes(l.code),
-)
+/** TX-26: editable translated caption tracks (expanded Q4 language set). */
+export const TRANSLATE_CAPTION_LANGUAGES = DUB_LANGUAGES
 
 export type CaptionTranslateChunk = { startMs: number; endMs: number; text: string }
 
