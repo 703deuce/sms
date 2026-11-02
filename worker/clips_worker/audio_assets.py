@@ -101,6 +101,21 @@ def _with_play_len(fx: dict | None, path: Path, trim: tuple[int, int | None]) ->
     return {**fx, "play_ms": dur}
 
 
+def _maybe_auto_loop_music(music: dict, music_meta: dict, music_path: Path, edits: dict) -> None:
+    if music_meta.get("loop"):
+        return
+    from clips_worker.timeline_lanes import music_window, output_duration_ms
+
+    dur_ms = output_duration_ms(edits)
+    win = music_window({**music, **music_meta}, dur_ms)
+    if not win:
+        return
+    play_ms = win["endMs"] - win["startMs"]
+    mlen = _media_len_ms(music_path)
+    if mlen and mlen + 80 < play_ms:
+        music_meta["loop"] = True
+
+
 def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = None) -> dict:
     audio = edits.get("audio") or {}
     music = audio.get("music")
@@ -129,6 +144,7 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
                 }
                 if music_meta.get("pan") is not None:
                     music_meta["pan_ch"] = _channels(up)
+                _maybe_auto_loop_music(music, music_meta, up, edits)
     elif music and music.get("generationId"):
         with conn.cursor() as cur:
             cur.execute('SELECT "storageKey" FROM ai_generations WHERE id=%s', (music["generationId"],))
@@ -150,6 +166,7 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
             }
             if music_meta.get("pan") is not None:
                 music_meta["pan_ch"] = _channels(music_path)
+            _maybe_auto_loop_music(music, music_meta, music_path, edits)
 
     sfx_paths: list[tuple[Path, int, float]] = []
     sfx_ids: list[str] = []  # G1b3: parallel to sfx_paths (generationId → `sfx:<id>` envelope)

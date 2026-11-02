@@ -58,6 +58,9 @@ import { normalizeTimelineOpts, type TimelineOpts } from '@/lib/clips/editor/tim
 
 export type CutRange = [number, number]
 
+/** Persisted cleanup kind per cut range id (`startMs:endMs`) for restore-by-type labels. */
+export type CutCleanupKind = 'filler' | 'repeat' | 'gap' | 'retake' | 'clarity' | 'manual'
+
 export type FacecamBox = { x: number; y: number; w: number; h: number }
 
 export type ClipLayoutFacecam = {
@@ -72,6 +75,8 @@ export type ClipEditsV2 = {
   v: 2
   trim: { in: number; out: number }
   cutRanges: CutRange[]
+  /** Cleanup kind keyed by `${lo}:${hi}` for each applied cut (restore-by-type). */
+  cutCleanupKinds?: Record<string, CutCleanupKind>
   wordFixes: Record<string, string>
   /** Stable source-time + original text for export parity when word indices differ. */
   wordFixMeta?: Record<string, WordFixMetaEntry>
@@ -340,6 +345,17 @@ function normalizeWordFixMeta(
   return Object.keys(out).length ? out : undefined
 }
 
+const CUT_CLEANUP_KINDS = new Set<CutCleanupKind>(['filler', 'repeat', 'gap', 'retake', 'clarity', 'manual'])
+
+function normalizeCutCleanupKinds(raw: unknown): Record<string, CutCleanupKind> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const out: Record<string, CutCleanupKind> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === 'string' && CUT_CLEANUP_KINDS.has(v as CutCleanupKind)) out[k] = v as CutCleanupKind
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 function normalizeCaptions(
   raw: unknown,
   base: ClipEditsV2['captions'],
@@ -601,6 +617,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     v: 2,
     trim,
     cutRanges: sanitizeCutRangesForTrim(rawCuts, trim.in, trim.out),
+    cutCleanupKinds: normalizeCutCleanupKinds(o.cutCleanupKinds),
     wordFixes: (o.wordFixes as Record<string, string>) || {},
     wordFixMeta: normalizeWordFixMeta(o.wordFixMeta, (o.wordFixes as Record<string, string>) || {}),
     captions: normalizeCaptions(o.captions, base.captions),

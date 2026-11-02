@@ -64,6 +64,43 @@ def test_music_window_extends_end_within_fade_out():
 
 
 @pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="no ffmpeg")
+def test_short_bed_loops_with_crossfade_through_clip_end():
+    """38.7 s bed on a 41 s window: music stays up through ~40 s, fades out at the end."""
+    from clips_worker.audio_render import export_ducked_music_stem, prepare_looped_music_bed, probe_audio_duration_s
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        video = d / "v.mp4"
+        raw = d / "bed.wav"
+        _silent_video(video, 41.0)
+        _tone(raw, 38.7, 440)
+        filled = prepare_looped_music_bed(raw, 41.0, d)
+        assert (probe_audio_duration_s(filled) or 0) >= 40.9
+        stem = d / "music_stem.wav"
+        win = music_window(
+            {"generationId": "m", "startMs": 0, "endMs": 38700, "inMs": 0, "fadeOutMs": 3000},
+            41000,
+        )
+        export_ducked_music_stem(
+            video,
+            filled,
+            stem,
+            length_s=41.0,
+            volume=1.0,
+            duck_depth=0.0,
+            fade_in_s=0.5,
+            fade_out_s=3.0,
+            music_window=win,
+        )
+        mid = _rms(stem, 37.0, 38.0)
+        at40 = _rms(stem, 39.8, 40.2)
+        tail = _rms(stem, 40.85, 40.98)
+        assert mid > -35.0, mid
+        assert at40 > -42.0, at40
+        assert tail < -55.0, tail
+
+
+@pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="no ffmpeg")
 def test_music_fade_envelope_trimmed_from_long_source():
     """10 s output clip, 60 s source, fade in 2 s / fade out 3 s, in-point at 5 s media."""
     with tempfile.TemporaryDirectory() as td:

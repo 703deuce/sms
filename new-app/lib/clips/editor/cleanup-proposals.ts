@@ -1,4 +1,4 @@
-import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
+import type { ClipEditsV2, CutCleanupKind, CutRange } from '@/lib/clips/edits'
 import { mergeCutRanges, subtractRangeFromCuts } from '@/lib/clips/edits'
 import { listClipGapHits } from '@/lib/clips/gap-shorten'
 import { gapHitIsRmsQuiet, gapShortenCutRangeWithAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
@@ -30,7 +30,49 @@ export type CleanupProposal = {
 }
 
 export function proposalId(range: CutRange): string {
-  return `${range[0]}:${range[1]}`
+  const lo = Math.min(range[0], range[1])
+  const hi = Math.max(range[0], range[1])
+  return `${lo}:${hi}`
+}
+
+export function kindForAppliedCut(
+  range: CutRange,
+  edits: Pick<ClipEditsV2, 'cutCleanupKinds'>,
+  orderedWords: EditorWord[],
+  deletedSet: Set<string>,
+): CleanupCutKind {
+  const id = proposalId(range)
+  const stored = edits.cutCleanupKinds?.[id]
+  if (stored && stored !== 'manual') return stored
+  const inferred = classifyCut(range, orderedWords, deletedSet)
+  return inferred === 'unknown' ? stored ?? 'manual' : inferred
+}
+
+export function mergeCutCleanupKindsForRanges(
+  prev: ClipEditsV2['cutCleanupKinds'],
+  ranges: CutRange[],
+  kinds: CleanupCutKind[],
+): ClipEditsV2['cutCleanupKinds'] {
+  const next: Record<string, CutCleanupKind> = { ...(prev ?? {}) }
+  for (let i = 0; i < ranges.length; i++) {
+    const kind = kinds[i]
+    if (!kind) continue
+    next[proposalId(ranges[i]!)] = kind
+  }
+  return Object.keys(next).length ? next : undefined
+}
+
+export function pruneCutCleanupKinds(
+  meta: ClipEditsV2['cutCleanupKinds'],
+  cutRanges: CutRange[],
+): ClipEditsV2['cutCleanupKinds'] {
+  if (!meta) return undefined
+  const live = new Set(cutRanges.map((r) => proposalId(r)))
+  const next: Record<string, CutCleanupKind> = {}
+  for (const [k, v] of Object.entries(meta)) {
+    if (live.has(k)) next[k] = v
+  }
+  return Object.keys(next).length ? next : undefined
 }
 
 function rangeCoversWord(range: CutRange, word: EditorWord, slackMs = 25): boolean {
@@ -241,19 +283,24 @@ export function appliedCutProposals(
 ): CleanupProposal[] {
   const out: CleanupProposal[] = []
   for (const range of edits.cutRanges) {
-    const kind = classifyCut(range, orderedWords, deletedSet)
+    const kind = kindForAppliedCut(range, edits, orderedWords, deletedSet)
+    const label =
+      kind === 'gap'
+        ? 'Shortened pause'
+        : kind === 'repeat'
+          ? 'Repeat removed'
+          : kind === 'filler'
+            ? 'Filler removed'
+            : kind === 'retake'
+              ? 'Retake removed'
+              : kind === 'clarity'
+                ? 'Clarity edit'
+                : 'Cut'
     out.push({
       id: proposalId(range),
-      kind: kind === 'unknown' ? 'manual' : kind,
+      kind,
       range,
-      label:
-        kind === 'gap'
-          ? 'Shortened pause'
-          : kind === 'repeat'
-            ? 'Repeat removed'
-            : kind === 'filler'
-              ? 'Filler removed'
-              : 'Cut',
+      label,
     })
   }
   return out

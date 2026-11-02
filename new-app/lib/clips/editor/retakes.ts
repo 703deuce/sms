@@ -13,6 +13,67 @@ const MIN_SHARED_PREFIX_WORDS = 2
 
 const RETAKE_STOP = new Set(['um', 'uh', 'er', 'ah', 'hmm', 'mm', 'like', 'so', 'and', 'the', 'a', 'i'])
 
+/** Tokens too weak to anchor a retake pairing on their own. */
+const RETAKE_WEAK = new Set([
+  'you',
+  'know',
+  'it',
+  'its',
+  "it's",
+  'just',
+  'we',
+  'this',
+  'that',
+  'gonna',
+  'see',
+  'how',
+  'is',
+  'are',
+  'was',
+  'were',
+  'have',
+  'has',
+  'got',
+  'and',
+  'or',
+  'but',
+  'so',
+  'with',
+  'for',
+  'the',
+  'a',
+  'an',
+  'i',
+  'my',
+  'our',
+  'your',
+  'they',
+  'their',
+  'to',
+  'of',
+  'in',
+  'on',
+  'at',
+  'as',
+  'be',
+  'do',
+  'did',
+  'will',
+  'would',
+  'can',
+  'could',
+  'uh',
+  'um',
+  'man',
+  'well',
+  'yeah',
+  'yes',
+  'no',
+  'okay',
+  'ok',
+  'right',
+])
+
 function gapMs(a: RetakeWord, b: RetakeWord): number {
   return Math.max(0, b.s * 1000 - a.e * 1000)
 }
@@ -37,6 +98,13 @@ function sharedPrefixLen(a: string[], b: string[]): number {
   let k = 0
   while (k < n && a[k] === b[k]) k += 1
   return k
+}
+
+function prefixStrongEnough(tokens: string[], prefixLen: number): boolean {
+  if (prefixLen < MIN_SHARED_PREFIX_WORDS) return false
+  const head = tokens.slice(0, prefixLen)
+  const strong = head.filter((t) => t.length >= 4 && !RETAKE_WEAK.has(t))
+  return strong.length >= 1 || prefixLen >= 4
 }
 
 export function splitSentences(words: RetakeWord[]): RetakeWord[][] {
@@ -82,11 +150,15 @@ function sentencesMatch(a: RetakeWord[], b: RetakeWord[]): boolean {
   const ta = contentTokens(a)
   const tb = contentTokens(b)
   if (ta.length < 3 || tb.length < 3) return false
-  if (sharedPrefixLen(ta, tb) >= MIN_SHARED_PREFIX_WORDS) return true
+  const prefix = sharedPrefixLen(ta, tb)
+  if (prefix >= MIN_SHARED_PREFIX_WORDS && prefixStrongEnough(ta, prefix)) return true
   const headA = ta.slice(0, 3)
   const headB = tb.slice(0, 3)
-  if (headA.length >= 3 && headA.every((t, i) => t === headB[i])) return true
-  return tokenSimilarity(ta, tb) >= 0.72
+  if (headA.length >= 3 && headA.every((t, i) => t === headB[i]) && prefixStrongEnough(ta, 3)) return true
+  if (prefix >= MIN_SHARED_PREFIX_WORDS && tokenSimilarity(ta, tb) >= 0.72 && prefixStrongEnough(ta, prefix)) {
+    return true
+  }
+  return false
 }
 
 function attemptFromSentence(sentence: RetakeWord[]): RetakeAttempt {
@@ -139,7 +211,80 @@ function falseStartGroups(words: RetakeWord[]): RetakeGroup[] {
   return out
 }
 
-export function findRetakes(words: RetakeWord[]): RetakeGroup[] {
+function attemptSpanKey(group: RetakeGroup): string {
+  return group.attempts.map((a) => `${a.startMs}:${a.endMs}`).join('|')
+}
+
+function dedupeRetakeGroups(groups: RetakeGroup[]): RetakeGroup[] {
+  const seen = new Set<string>()
+  const out: RetakeGroup[] = []
+  for (const g of groups) {
+    const key = attemptSpanKey(g)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(g)
+  }
+  return out
+}
+
+function collapseRetakeGroups(groups: RetakeGroup[]): RetakeGroup[] {
+  const out: RetakeGroup[] = []
+  for (const g of groups) {
+    const keep = g.attempts[g.keepIndex]!
+    const keepKey = `${keep.startMs}:${keep.endMs}`
+    const existing = out.find((o) => {
+      const ok = o.attempts[o.keepIndex]!
+      return `${ok.startMs}:${ok.endMs}` === keepKey
+    })
+    if (existing) {
+      const rangeA = retakeCutRange(existing, [])
+      const rangeB = retakeCutRange(g, [])
+      const cutA = rangeA ? rangeA[1] - rangeA[0] : 0
+      const cutB = rangeB ? rangeB[1] - rangeB[0] : 0
+      if (cutB > cutA) {
+        const ix = out.indexOf(existing)
+        out[ix] = g
+      }
+      continue
+    }
+    out.push(g)
+  }
+  return out
+}
+
+function capRetakeGroups(groups: RetakeGroup[], max: number, existingCuts: CutRange[]): RetakeGroup[] {
+  const scored = groups
+    .map((g) => ({ g, cut: retakeCutRange(g, existingCuts) }))
+    .filter((x): x is { g: RetakeGroup; cut: CutRange } => x.cut != null)
+    .sort((a, b) => b.cut[1] - b.cut[0] - (a.cut[1] - a.cut[0]))
+  const out: RetakeGroup[] = []
+  for (const { g, cut } of scored) {
+    if (out.length >= max) break
+    const overlaps = out.some((o) => {
+      const oc = retakeCutRange(o, existingCuts)
+      if (!oc) return false
+      return Math.max(cut[0], oc[0]) < Math.min(cut[1], oc[1])
+    })
+    if (!overlaps) out.push(g)
+  }
+  return out
+}
+
+function filterRetakeGroups(groups: RetakeGroup[], existingCuts: CutRange[]): RetakeGroup[] {
+  const filtered = collapseRetakeGroups(dedupeRetakeGroups(groups)).filter((g) => {
+    if (g.attempts.length < 2) return false
+    const first = g.attempts[0]!
+    const keep = g.attempts[g.keepIndex]!
+    if (keep.startMs - first.startMs > MAX_RETAKE_WINDOW_S * 1000) return false
+    const cut = retakeCutRange(g, existingCuts)
+    if (!cut) return false
+    if (cut[1] - cut[0] < 400) return false
+    return true
+  })
+  return capRetakeGroups(filtered, 6, existingCuts)
+}
+
+export function findRetakes(words: RetakeWord[], existingCuts: CutRange[] = []): RetakeGroup[] {
   const sentences = splitSentences(words)
   if (sentences.length < 2) return falseStartGroups(words)
 
@@ -178,7 +323,7 @@ export function findRetakes(words: RetakeWord[]): RetakeGroup[] {
     const attempts = idxs.map((ix) => attemptFromSentence(sentences[ix]!))
     groups.push({ attempts, keepIndex: attempts.length - 1 })
   }
-  return [...groups, ...falseStartGroups(words)]
+  return filterRetakeGroups([...groups, ...falseStartGroups(words)], existingCuts)
 }
 
 function isRangeFullyCut(range: CutRange, cuts: CutRange[]): boolean {

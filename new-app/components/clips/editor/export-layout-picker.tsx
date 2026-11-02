@@ -1,5 +1,6 @@
 'use client'
 
+import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import { Button } from '@/components/ui/button'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'

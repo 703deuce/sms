@@ -25,6 +25,7 @@ import {
   isCustomAspect,
   type ExportAspect,
 } from '@/lib/clips/export-aspect'
+import { withCanvasBg } from '@/lib/clips/canvas-bg'
 import { FIT_BLUR_LABELS, FIT_BLUR_STRENGTHS, fitBlurStrength } from '@/lib/clips/fit-blur'
 import type { CropShot, FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import {

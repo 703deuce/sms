@@ -74,7 +74,8 @@ export function enrichTranscriptWords(words: ClipWord[], opts?: EnrichOpts): Enr
     if (token && SCRIPT_FILLER_LEXICON.has(token)) {
       row.isFiller = true
       row.fillerKind = 'lexicon'
-    } else if (markRepeated && i > 0) {
+    }
+    if (markRepeated && i > 0) {
       const prevToken = normalizeToken(
         clipWordSurfaceText(words[i - 1] as ClipWord & Record<string, unknown>),
       )
