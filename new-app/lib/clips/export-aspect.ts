@@ -9,7 +9,7 @@ export const CUSTOM_ASPECT_MAX = 3840
 export const CUSTOM_ASPECT_MAX_RATIO = 4
 
 /** Bump when ffmpeg audio mix / duck / fade behavior changes (invalidates cached exports). */
-export const CLIP_AUDIO_RENDER_REV = 'au33-v1'
+export const CLIP_AUDIO_RENDER_REV = 'au34-v1'
 
 /** Worker deploy SHA (12 chars) — set CLIPS_WORKER_GIT_SHA on web + worker so cache keys match. */
 export function clipsWorkerGitShaForRenderCache(): string {

@@ -22,6 +22,7 @@ describe('slide clip_5f19e510 transcript cuts', () => {
 
     const s = slideEdit(ctx(e), { lane: 'video', id: 'seg:4641' }, 300)
     expect(s).not.toBeNull()
+    expect(s!.cutRanges).toEqual(e.cutRanges)
     for (const w of words) {
       const row = editorWordsForClipFillerReview('clip_5f19', [w], s!, CLIP_5F19E510_BOUNDS)[0]!
       expect(editorWordDeletedByCuts(row, s!.cutRanges, s!)).toBe(false)

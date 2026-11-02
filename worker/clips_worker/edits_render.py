@@ -1809,7 +1809,10 @@ def render_edited_clip(
         caption_src = muted_out
         print("[clipper:timeline] voice_muted", flush=True)
     meta = (audio_assets or {}).get("music_meta") or {}
-    music_win = _music_window(meta, int(round(length_s * 1000))) if meta else None
+    music_edits = (edits.get("audio") or {}).get("music") or {}
+    music_win = (
+        _music_window({**music_edits, **meta}, int(round(length_s * 1000))) if meta else None
+    )
     from clips_worker.motion import volume_expr as _volume_expr
 
     music_env = _volume_expr(edits, "music", origin_s=(music_win or {}).get("startMs", 0) / 1000.0)
