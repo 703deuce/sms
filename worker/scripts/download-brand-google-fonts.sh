@@ -18,16 +18,15 @@ download() {
   test -s "$out"
 }
 
-# google/fonts raw paths (static TTF)
-BASE="https://github.com/google/fonts/raw/main"
-download "$BASE/ofl/roboto/static/Roboto-Bold.ttf" "$DEST/Roboto-Bold.ttf"
-download "$BASE/ofl/playfairdisplay/static/PlayfairDisplay-Bold.ttf" "$DEST/PlayfairDisplay-Bold.ttf"
-download "$BASE/ofl/playfairdisplay/static/PlayfairDisplay-Regular.ttf" "$DEST/PlayfairDisplay-Regular.ttf"
+download \
+  "https://raw.githubusercontent.com/googlefonts/roboto-2/main/src/hinted/Roboto-Bold.ttf" \
+  "$DEST/Roboto-Bold.ttf"
+download \
+  "https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf" \
+  "$DEST/PlayfairDisplay-wght.ttf"
 
-# Symlink / copy into worker v3 dirs used by captions_ass (if not already pinned elsewhere)
-for f in Roboto-Bold.ttf PlayfairDisplay-Bold.ttf PlayfairDisplay-Regular.ttf; do
-  cp -f "$DEST/$f" "$V3/t6/$f" 2>/dev/null || cp -f "$DEST/$f" "$V3/fonts/$f"
-done
+cp -f "$DEST/Roboto-Bold.ttf" "$V3/t6/Roboto-Bold.ttf"
+cp -f "$DEST/PlayfairDisplay-wght.ttf" "$V3/t6/PlayfairDisplay-wght.ttf"
 
 if command -v fc-cache >/dev/null 2>&1; then
   fc-cache -f "$DEST" || fc-cache -f

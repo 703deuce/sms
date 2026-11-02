@@ -43,7 +43,7 @@ _ASS_FONT_FILES: dict[str, Path] = {
     "Archivo Black": _T6_FONTS / "ArchivoBlack.ttf",
     "Oswald": _T6_FONTS / "Oswald.ttf",
     "Roboto Bold": _T6_FONTS / "Roboto-Bold.ttf",
-    "Playfair Display Bold": _T6_FONTS / "PlayfairDisplay-Bold.ttf",
+    "Playfair Display Bold": _T6_FONTS / "PlayfairDisplay-wght.ttf",
     "Noto Sans": _INTL_FONTS / "NotoSans-Regular.ttf",
     "Noto Sans Arabic": _INTL_FONTS / "NotoSansArabic-Regular.ttf",
     "Noto Sans Devanagari": _INTL_FONTS / "NotoSansDevanagari-Regular.ttf",
