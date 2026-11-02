@@ -112,7 +112,7 @@ def run_thumbnail_job(conn, job: dict, post_progress) -> None:
                         clip_id,
                         task_id,
                         prompt,
-                        json.dumps({"aspect": aspect, "variant": i, "sourceFrameMs": source_ms}),
+                        json.dumps({"aspect": aspect, "variant": i, "sourceFrameMs": source_ms, "imageRefUrl": image_url}),
                     ),
                 )
                 cur.execute(

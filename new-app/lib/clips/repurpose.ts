@@ -48,18 +48,52 @@ export function buildTimestampedLines(
   return lines
 }
 
+export function normalizeChapterTimeline(
+  chapters: { outMs: number; label: string }[],
+  lengthMs: number,
+): { outMs: number; label: string }[] {
+  if (!chapters.length || lengthMs < 1000) return chapters
+  const maxOut = Math.max(...chapters.map((c) => c.outMs))
+  if (maxOut > lengthMs * 1.05) return chapters
+  if (maxOut <= Math.max(120, lengthMs / 20)) {
+    return chapters.map((c) => ({ ...c, outMs: Math.round(c.outMs * 1000) }))
+  }
+  return chapters
+}
+
+export function coerceChapterOutMs(value: number, lengthMs: number): number {
+  if (!Number.isFinite(value)) return 0
+  const v = Math.round(value)
+  if (lengthMs >= 60_000 && v > 0 && v <= Math.max(600, lengthMs / 1000 + 5)) {
+    return v * 1000
+  }
+  return v
+}
+
 export function normalizeChapters(
-  raw: { chapters?: { line?: number; label?: string }[] },
+  raw: { chapters?: { line?: number; label?: string; startMs?: number; start?: number; outMs?: number }[] },
   lines: TimestampedLine[],
   lengthMs: number,
 ): { chapters: { outMs: number; label: string }[] } | { error: string } {
   const rawCh = raw.chapters ?? []
   const mapped: { outMs: number; label: string }[] = []
   for (const ch of rawCh) {
+    const label = String(ch.label ?? '').trim().slice(0, 60) || 'Chapter'
+    if (typeof ch.outMs === 'number' && Number.isFinite(ch.outMs)) {
+      mapped.push({ outMs: coerceChapterOutMs(ch.outMs, lengthMs), label })
+      continue
+    }
+    if (typeof ch.startMs === 'number' && Number.isFinite(ch.startMs)) {
+      mapped.push({ outMs: coerceChapterOutMs(ch.startMs, lengthMs), label })
+      continue
+    }
+    if (typeof ch.start === 'number' && Number.isFinite(ch.start)) {
+      mapped.push({ outMs: coerceChapterOutMs(ch.start, lengthMs), label })
+      continue
+    }
     const idx = typeof ch.line === 'number' ? ch.line : Number(ch.line)
     const line = lines.find((l) => l.line === idx) ?? lines[idx]
     if (!line) continue
-    const label = String(ch.label ?? '').trim().slice(0, 60) || 'Chapter'
     mapped.push({ outMs: line.outMs, label })
   }
   if (mapped.length && mapped[0]!.outMs !== 0) {
@@ -76,7 +110,7 @@ export function normalizeChapters(
     if (out.length >= 12) break
   }
   if (out.length < 3) return { error: "Couldn't find chapters — try again" }
-  return { chapters: out }
+  return { chapters: normalizeChapterTimeline(out, lengthMs) }
 }
 
 export function normalizeShowNotes(raw: {

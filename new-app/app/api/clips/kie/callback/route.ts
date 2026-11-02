@@ -10,6 +10,7 @@ import { KIE_IMAGE_COST_USD_2K, parseResultImageUrl } from '@/lib/server/ai/kie-
 import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
 import { mp4BufferToJpegPoster } from '@/lib/server/clips/kie-poster'
+import { retryFailedThumbnailGeneration } from '@/lib/server/clips/thumbnail-retry'
 import { getClipStorage } from '@/lib/storage'
 
 export async function POST(request: Request) {
@@ -31,6 +32,10 @@ export async function POST(request: Request) {
     const state = record.state?.toLowerCase()
 
     if (state === 'fail') {
+      if (gen.kind === 'THUMBNAIL') {
+        const retried = await retryFailedThumbnailGeneration(prisma, gen)
+        if (retried) return NextResponse.json({ ok: true })
+      }
       await prisma.aiGeneration.update({
         where: { id: gen.id },
         data: { status: 'FAILED', error: record.failMsg || record.failCode || 'KIE failed' },

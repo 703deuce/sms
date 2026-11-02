@@ -223,8 +223,13 @@ export function ThumbnailPanel({
                 Image failed to load
               </div>
             ) : (
-              <div className="mb-2 flex h-24 items-center justify-center rounded bg-muted text-xs" title={t.error ?? undefined}>
-                {t.status === 'FAILED' ? 'Failed' : t.status === 'READY' ? 'Loading…' : 'Rendering…'}
+              <div className="mb-2 flex h-24 flex-col items-center justify-center gap-1 rounded bg-muted px-2 text-xs" title={t.error ?? undefined}>
+                <span>{t.status === 'FAILED' ? 'Failed' : t.status === 'READY' ? 'Loading…' : 'Rendering…'}</span>
+                {t.status === 'FAILED' ? (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void generate()}>
+                    Retry
+                  </Button>
+                ) : null}
               </div>
             )}
             <p className="text-xs text-muted-foreground">{t.titleText || 'Thumbnail'}</p>

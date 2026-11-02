@@ -1,12 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Copy, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { clipsFetch } from '@/lib/clips-api'
 import { editsVersionHash, outputDurationMs, type ClipEditsV2 } from '@/lib/clips/edits'
-import { chaptersToMarkers, formatYoutubeChapters } from '@/lib/clips/repurpose'
+import { formatMomentMs } from '@/lib/clips/format-moment-ms'
+import {
+  chaptersToMarkers,
+  formatYoutubeChapters,
+  normalizeChapterTimeline,
+} from '@/lib/clips/repurpose'
 import { ClipPostCopy } from '@/components/clips/clip-post-copy'
 
 type RepurposeMeta = {
@@ -21,11 +26,13 @@ export function RepurposePanel({
   edits,
   aiMeta,
   onCommitEdits,
+  onSeekOutputMs,
 }: {
   clipId: string
   edits: ClipEditsV2
   aiMeta?: unknown
   onCommitEdits: (next: ClipEditsV2) => void
+  onSeekOutputMs?: (ms: number) => void
 }) {
   const lengthMs = outputDurationMs(edits)
   const minOk = lengthMs >= 120_000
@@ -35,7 +42,11 @@ export function RepurposePanel({
   const [chapters, setChapters] = useState(stored?.chapters)
   const [showNotes, setShowNotes] = useState(stored?.showNotes)
   const [busy, setBusy] = useState<'chapters' | 'notes' | null>(null)
-  const chapterRows = chapters ?? stored?.chapters
+  const chapterRows = useMemo(() => {
+    const raw = chapters ?? stored?.chapters
+    if (!raw?.length) return undefined
+    return normalizeChapterTimeline(raw, lengthMs)
+  }, [chapters, stored?.chapters, lengthMs])
   const noteRows = showNotes ?? stored?.showNotes
 
   const run = async (kind: 'chapters' | 'show_notes') => {
@@ -113,7 +124,13 @@ export function RepurposePanel({
           <ul className="mt-2 space-y-1 text-xs">
             {chapterRows.map((c) => (
               <li key={c.outMs}>
-                {Math.floor(c.outMs / 1000)}s — {c.label}
+                <button
+                  type="button"
+                  className="text-left hover:underline"
+                  onClick={() => onSeekOutputMs?.(c.outMs)}
+                >
+                  {formatMomentMs(c.outMs)} — {c.label}
+                </button>
               </li>
             ))}
           </ul>

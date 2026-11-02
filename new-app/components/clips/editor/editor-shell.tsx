@@ -2256,7 +2256,13 @@ export function EditorShell({
       {panelMounted('repurpose') ? (
         <div className={panel === 'repurpose' ? undefined : 'hidden'} aria-hidden={panel !== 'repurpose'}>
           <EditorPanelErrorBoundary label="Repurpose">
-            <RepurposePanel clipId={clipId} edits={edits} aiMeta={aiMeta} onCommitEdits={setEdits} />
+            <RepurposePanel
+              clipId={clipId}
+              edits={edits}
+              aiMeta={aiMeta}
+              onCommitEdits={setEdits}
+              onSeekOutputMs={(ms) => seekOutput(ms)}
+            />
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
