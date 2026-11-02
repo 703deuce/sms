@@ -221,6 +221,7 @@ export function EditorShell({
   streamChannelId = null,
   fullVideo = false,
   editorAssets = null,
+  onEditorMediaError,
 }: {
   projectId: string
   projectTitle?: string
@@ -253,6 +254,8 @@ export function EditorShell({
   fullVideo?: boolean
   /** FV2: signed full-video editor assets (peaks + filmstrip sprite); null for clips. */
   editorAssets?: EditorAssets | null
+  /** STREAMER_editor_fix1: fall back to segment / preview when primary media 404s. */
+  onEditorMediaError?: () => void
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
@@ -2519,6 +2522,7 @@ export function EditorShell({
               channelDisplay={streamChannelDisplay}
               chatPreviewEnabled={streamChatAvailable}
               media={editorMedia}
+              onEditorMediaError={onEditorMediaError}
               audition={auditionEdits ? { edits: auditionEdits } : null}
               safeZoneVisible={safeZoneVisible}
               onStickerMove={onStickerMove}

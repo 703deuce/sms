@@ -11,6 +11,10 @@ import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { CLIPS_EDITOR_MEDIA_TTL_SEC, createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { resolveLayers } from '@/lib/clips/layers'
 import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
+import {
+  resolveEditorClipMedia,
+  streamerPrefersClipSegmentMedia,
+} from '@/lib/server/clips/editor-clip-media'
 
 export type FacecamLayoutState = {
   layout?: string
@@ -197,6 +201,10 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const segmentSizeP = sourceSegKey
     ? storage.getObjectSizeBytes(sourceSegKey).catch(() => null)
     : Promise.resolve(null)
+  const uploadSourceSizeP =
+    sourceSegKey && sourceKey
+      ? storage.getObjectSizeBytes(sourceKey).catch(() => null)
+      : Promise.resolve(null)
 
   const [
     bounds,
@@ -204,6 +212,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     cropTrackResult,
     cropRawResult,
     segmentSize,
+    uploadSourceSize,
     streamVod,
     signedPreview,
     signedPoster,
@@ -220,6 +229,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     cropTrackJsonP,
     cropRawP,
     segmentSizeP,
+    uploadSourceSizeP,
     prisma.streamVod.findUnique({
       where: { projectId: project.id },
       select: { chatSource: true, chatMessages: true, sourceType: true, state: true, channelId: true },
@@ -281,35 +291,41 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const segmentExists =
     Boolean(sourceSegKey) && sourceSegStartMs != null && segmentSize != null
 
-  let media: EditorMedia | null = null
-  if (proxyKey && signedProxy) {
-    media = { url: signedProxy, kind: 'proxy', offsetMs: 0 }
-  } else if (sourceKey && signedSource) {
-    media = { url: signedSource, kind: 'source', offsetMs: 0 }
-  } else if (segmentExists && signedSourceSeg) {
-    media = {
-      url: signedSourceSeg,
-      kind: 'segment',
-      offsetMs: sourceSegStartMs,
-      minMs: sourceSegStartMs,
-      maxMs: sourceSegEndMs ?? undefined,
-    }
-  } else if (previewKey && signedPreview) {
-    media = {
-      url: signedPreview,
-      kind: 'composite',
-      offsetMs: clipStartMs,
-      minMs: clipStartMs,
-      maxMs: clipEndMs,
-    }
-  }
-
-  const aiMeta = (clip.aiMeta || null) as { brollIdeas?: string[] } | null
-
   const vodState =
     streamVod?.state && typeof streamVod.state === 'object' && !Array.isArray(streamVod.state)
       ? (streamVod.state as Record<string, unknown>)
       : null
+  const bulkyStoragePurged = vodState?.bulkyStoragePurged === true
+  const preferClipSegment = streamerPrefersClipSegmentMedia({
+    hasStreamVod: Boolean(streamVod),
+    bulkyStoragePurged,
+    proxyKey,
+    sourceSegKey,
+  })
+  const uploadSourcePresent =
+    preferClipSegment || Boolean(streamVod)
+      ? uploadSourceSize != null && uploadSourceSize > 0
+      : true
+
+  const media = resolveEditorClipMedia({
+    proxyKey,
+    signedProxy,
+    sourceKey: sourceKey ?? null,
+    signedSource,
+    uploadSourcePresent,
+    preferClipSegment,
+    segmentExists,
+    signedSourceSeg,
+    sourceSegStartMs,
+    sourceSegEndMs,
+    previewKey,
+    signedPreview,
+    clipStartMs,
+    clipEndMs,
+  })
+
+  const aiMeta = (clip.aiMeta || null) as { brollIdeas?: string[] } | null
+
   const vodChatMeta =
     vodState?.chatMeta && typeof vodState.chatMeta === 'object' && !Array.isArray(vodState.chatMeta)
       ? (vodState.chatMeta as {
@@ -351,7 +367,8 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       preview: signedPreview,
       poster: signedPoster,
       proxy: signedProxy,
-      source: signedSource,
+      source: preferClipSegment && segmentExists ? null : signedSource,
+      segment: signedSourceSeg,
       cropTrack: signedCropTrack,
     },
     media,
@@ -370,6 +387,8 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     brollMedia,
     editorAssets,
     streamChannelId: streamVod?.channelId ?? null,
+    sourceSegStartMs,
+    sourceSegEndMs,
   }
   console.info('[clipper:detail] ms', { clipId, total: Date.now() - detailStartedAt })
   return payload

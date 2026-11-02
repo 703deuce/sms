@@ -286,6 +286,7 @@ function TplThumb({ item }: { item: CatalogItem }) {
           currentTimeSec={0.5}
           boxHeightPx={320}
           outputDurationSec={3}
+          staticPreview
         />
       </div>
     )

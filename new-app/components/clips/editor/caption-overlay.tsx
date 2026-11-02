@@ -51,6 +51,7 @@ export function CaptionOverlay({
   boxHeightPx,
   outputDurationSec = 1,
   templateCaptionRect,
+  staticPreview = false,
 }: {
   words: ClipWord[]
   currentTimeSec: number
@@ -62,6 +63,8 @@ export function CaptionOverlay({
    * (worker `_t6_caption_edits`: \an2, MarginV = playH − (y + h)), ignoring the preset position.
    */
   templateCaptionRect?: { y: number; h: number; playH: number } | null
+  /** Preset cards / catalog thumbs: show full sample text (no typewriter char slice at t≈0). */
+  staticPreview?: boolean
 }) {
   const t6Caps = t6CaptionPresetsEnabled()
   const cap = effectiveCaptionEdits(edits.captions ?? {}, t6Caps)
@@ -301,7 +304,7 @@ export function CaptionOverlay({
         }
 
         let content = text
-        if (animation === 'typewriter' && active) {
+        if (animation === 'typewriter' && active && !staticPreview) {
           const progress = Math.min(1, (currentTimeSec - w.s) / Math.max(0.05, w.e - w.s))
           const n = Math.max(1, Math.floor(text.length * progress))
           content = text.slice(0, n)
@@ -356,6 +359,7 @@ export function CaptionMiniPreview({ preset, label = 'CLIP' }: { preset: Caption
         edits={edits}
         boxHeightPx={64}
         outputDurationSec={2}
+        staticPreview
       />
     </div>
   )

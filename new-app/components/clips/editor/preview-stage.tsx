@@ -2,7 +2,7 @@
 
 import './libass-preview.css'
 
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type SyntheticEvent } from 'react'
 import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
 import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
@@ -158,6 +158,7 @@ export function PreviewStage({
   onPreviewPanChange,
   onPreviewZoomChange,
   onFitPercent,
+  onEditorMediaError,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -202,6 +203,7 @@ export function PreviewStage({
   onPreviewPanChange?: (pan: { x: number; y: number }) => void
   onPreviewZoomChange?: (zoom: PreviewZoom) => void
   onFitPercent?: (pct: number) => void
+  onEditorMediaError?: () => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -213,6 +215,17 @@ export function PreviewStage({
   const aspect = edits.aspectRatio ?? '9:16'
   const layoutMode = previewLayoutMode(edits)
   const mediaOffsetMs = media?.offsetMs ?? 0
+  const mainVideoMediaProps = useMemo(() => {
+    const cors = corsMediaProps(videoUrl)
+    const corsOnError = cors.onError
+    return {
+      ...cors,
+      onError: (e: SyntheticEvent<HTMLVideoElement, Event>) => {
+        corsOnError?.(e as { currentTarget: EventTarget })
+        onEditorMediaError?.()
+      },
+    }
+  }, [videoUrl, onEditorMediaError])
   const compositePreview = media?.kind === 'composite'
   // T6.3: in template mode the primary <video> belongs to TemplateStage (panel 0). The legacy
   // layout-mode code below (speaker-crop rAF transform, style resets) must not touch it: with
@@ -1346,7 +1359,7 @@ export function PreviewStage({
             <video
               key={`preview-main-${layoutMode}`}
               ref={videoRefInner}
-              {...corsMediaProps(videoUrl)}
+              {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
               className={
                 pillarboxMain
@@ -1386,7 +1399,7 @@ export function PreviewStage({
                 <video
                   key={`preview-main-${layoutMode}`}
                   ref={videoRefInner}
-                  {...corsMediaProps(videoUrl)}
+                  {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
                   data-testid={composeSpec ? 'compose-video' : 'fit-top-main-video'}
                   className={`absolute inset-x-0 z-[1] max-w-none object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
@@ -1408,7 +1421,7 @@ export function PreviewStage({
         ) : fitTopPreview && videoUrl ? (
           <video
             ref={videoRefInner}
-            {...corsMediaProps(videoUrl)}
+            {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
             className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
             playsInline
@@ -1427,7 +1440,7 @@ export function PreviewStage({
               >
                 <video
                   ref={idx === 0 ? videoRefInner : undefined}
-                  {...corsMediaProps(videoUrl)}
+                  {...mainVideoMediaProps}
                   src={videoUrl ?? undefined}
                   className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                   style={coverBoxStyle({ x: idx === 0 ? 0 : 0.5, y: 0, w: 0.5, h: 1 })}
@@ -1465,7 +1478,7 @@ export function PreviewStage({
                     <video
                       key={`stack-${idx}-${layoutMode}`}
                       ref={idx === (faceFirst ? 1 : 0) ? videoRefInner : undefined}
-                      {...corsMediaProps(videoUrl)}
+                      {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
                       className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                       style={coverBoxStyle(panel.box)}
@@ -1496,7 +1509,7 @@ export function PreviewStage({
               <div className="relative size-full overflow-hidden">
                 <video
                   ref={videoRefInner}
-                  {...corsMediaProps(videoUrl)}
+                  {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
                   className={`max-w-none size-full object-cover ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                   style={coverBoxStyle(facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 })}
@@ -1520,7 +1533,7 @@ export function PreviewStage({
                   }
                 >
                   <video
-                    {...corsMediaProps(videoUrl)}
+                    {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
                     className="max-w-none"
                     style={coverBoxStyle(facecamBox)}
@@ -1560,7 +1573,7 @@ export function PreviewStage({
                 <video
                   key={`preview-main-${layoutMode}`}
                   ref={videoRefInner}
-                  {...corsMediaProps(videoUrl)}
+                  {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
                   className={`absolute left-0 top-0 z-[1] max-w-none transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                   style={{ position: 'absolute', left: 0, top: 0, maxWidth: 'none' }}
@@ -1594,7 +1607,7 @@ export function PreviewStage({
               <video
                 key={`preview-main-${layoutMode}`}
                 ref={videoRefInner}
-                {...corsMediaProps(videoUrl)}
+                {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
                 data-testid="center-crop-video"
                 className={`size-full transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'} ${edits.layout.cropBox ? '' : 'object-cover'}${mainHiddenByLayout}`}
@@ -1621,7 +1634,7 @@ export function PreviewStage({
           <>
             <video
               ref={videoRefInner}
-            {...corsMediaProps(videoUrl)}
+            {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
             className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
             playsInline
@@ -1637,7 +1650,7 @@ export function PreviewStage({
         ) : videoUrl ? (
           <video
             ref={videoRefInner}
-            {...corsMediaProps(videoUrl)}
+            {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
             className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
             playsInline
@@ -1708,7 +1721,7 @@ export function PreviewStage({
         {videoUrl && edits.splitEdits?.length ? (
           <video
             ref={splitAudioRef}
-            {...corsMediaProps(videoUrl)}
+            {...mainVideoMediaProps}
             src={videoUrl}
             className="hidden"
             data-testid="preview-split-audio"
