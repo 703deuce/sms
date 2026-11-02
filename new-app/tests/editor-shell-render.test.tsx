@@ -100,7 +100,11 @@ vi.mock('@/components/clips/editor/use-studio-sound-preview', () => ({
 }))
 
 vi.mock('@/components/clips/editor/use-editor-words', () => ({
-  useEditorWords: () => ({ words: [{ i: 0, w: 'hello', s: 0, e: 500 }], loading: false }),
+  useEditorWords: () => ({
+    words: [{ i: 0, w: 'hello', s: 0, e: 500 }],
+    wordsLoading: false,
+    reloadWords: vi.fn(),
+  }),
 }))
 
 vi.mock('@/lib/clips/video-playback', () => ({

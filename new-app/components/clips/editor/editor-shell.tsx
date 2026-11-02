@@ -525,26 +525,6 @@ export function EditorShell({
     [applyCleanupCut],
   )
 
-  const handleDeriveClip = useCallback(
-    async (trimIn: number, trimOut: number, deriveTitle?: string) => {
-      setPendingDerivedClipId('pending')
-      try {
-        const snapped = snapTranscriptSelectionMs(trimIn, trimOut, editorWords, edits.trim.in, edits.trim.out)
-        const data = await deriveClipFromEditor(clipId, {
-          trimIn: snapped.trimIn,
-          trimOut: snapped.trimOut,
-          title: deriveTitle?.trim() || snapped.title,
-        })
-        setPendingDerivedClipId(data.clipId)
-        toast.success('New clip created from selection')
-      } catch (e) {
-        setPendingDerivedClipId(null)
-        toast.error(e instanceof Error ? e.message : 'Could not create clip')
-      }
-    },
-    [clipId, editorWords, edits.trim.in, edits.trim.out],
-  )
-
   const toggleLoopFriendly = useCallback(() => {
     setEdits({ ...edits, loopFriendlyEnd: !(edits.loopFriendlyEnd ?? false) })
   }, [edits, setEdits])
@@ -617,6 +597,27 @@ export function EditorShell({
     () => mergeMediaWords(clipEditorWords, { sources: editSources, sourceSegments: editSourceSegments }, mediaTranscripts.transcripts),
     [clipEditorWords, editSources, editSourceSegments, mediaTranscripts.transcripts],
   )
+
+  const handleDeriveClip = useCallback(
+    async (trimIn: number, trimOut: number, deriveTitle?: string) => {
+      setPendingDerivedClipId('pending')
+      try {
+        const snapped = snapTranscriptSelectionMs(trimIn, trimOut, editorWords, edits.trim.in, edits.trim.out)
+        const data = await deriveClipFromEditor(clipId, {
+          trimIn: snapped.trimIn,
+          trimOut: snapped.trimOut,
+          title: deriveTitle?.trim() || snapped.title,
+        })
+        setPendingDerivedClipId(data.clipId)
+        toast.success('New clip created from selection')
+      } catch (e) {
+        setPendingDerivedClipId(null)
+        toast.error(e instanceof Error ? e.message : 'Could not create clip')
+      }
+    },
+    [clipId, editorWords, edits.trim.in, edits.trim.out],
+  )
+
   const fvHighlights = useFullVideoHighlights(projectId, fullVideo, editorWords)
   const fvMoment = useFullVideoMomentFocus(fullVideo, bounds.clipEndMs - bounds.clipStartMs)
   const [versionsEnabled, setVersionsEnabled] = useState(true)
