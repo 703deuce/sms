@@ -11,6 +11,12 @@ import { loadSourceWords, wordsInRange } from '../new-app/lib/clips/source-words
 import { editorWordsForClipFillerReview } from '../new-app/lib/clips/editor/filler-review-words'
 import { fillerProposals } from '../new-app/lib/clips/editor/cleanup-proposals'
 import { findRetakes } from '../new-app/lib/clips/editor/retakes'
+import {
+  appliedCutProposals,
+  applyProposalsToEdits,
+  clarityProposals,
+  retakeProposals,
+} from '../new-app/lib/clips/editor/cleanup-proposals'
 import { defaultEdits, normalizeEdits, type ClipWord } from '../new-app/lib/clips/edits'
 
 function normalizeTranscriptJson(raw: unknown): ClipWord[] {
@@ -86,4 +92,33 @@ const umUh = ordered.filter((w) => /^(um|uh)/i.test(w.text.trim()))
 console.log(`\n=== um/uh tokens in editor words (${umUh.length}) ===`)
 for (const w of umUh) {
   console.log(`${w.t0Ms}-${w.t1Ms}ms raw="${w.text}" kind=${w.fillerKind} isFiller=${w.isFiller}`)
+}
+
+const wordSpans = scoped.map((w) => ({ s: w.s ?? 0, e: w.e ?? 0, w: w.w }))
+const normalFillers = fillerProposals(ordered, deletedSet, { strength: 'normal', enabledOptInFillers: new Set() })
+const retakeGroups = findRetakes(
+  scoped.map((w) => ({ w: w.w, s: w.s ?? 0, e: w.e ?? 0 })),
+  [],
+)
+const retakes = retakeProposals(retakeGroups, edits.cutRanges)
+const applied = applyProposalsToEdits(edits, [...normalFillers, ...retakes], wordSpans)
+const restored = appliedCutProposals(applied, ordered, deletedSet)
+console.log(`\n=== restore-by-type (normal fillers + retakes applied, ${restored.length} cuts) ===`)
+let removedMs = 0
+for (const p of restored) {
+  const [a, b] = p.range
+  removedMs += b - a
+  console.log(`${p.kind}\t${a}-${b}ms\t${p.label}`)
+}
+console.log(`total_removed_ms=${removedMs} (~${(removedMs / 1000).toFixed(1)}s)`)
+
+console.log(`\n=== clarity cards (illustrative — API-backed in prod editor) ===`)
+const clarityItems: { range: [number, number]; reason: string }[] = restored
+  .filter((p) => p.kind === 'filler' || p.kind === 'repeat')
+  .slice(0, 8)
+  .map((p) => ({ range: p.range, reason: p.kind === 'repeat' ? 'repeat' : 'filler' }))
+const clarity = clarityProposals(clarityItems, ordered)
+for (const p of clarity) {
+  const [a, b] = p.range
+  console.log(`${p.kind}\t${a}-${b}ms\t${p.label}`)
 }

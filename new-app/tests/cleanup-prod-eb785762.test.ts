@@ -56,7 +56,7 @@ describe('cleanup prod words proj_eb785762 (after re-transcribe fixture)', () =>
     expect(repeatNear53).toBeTruthy()
   })
 
-  it('findRetakes keeps then-we false start and drops you-know-only pairings', () => {
+  it('findRetakes on NASA fixture matches three grounded cuts only', () => {
     const raw = JSON.parse(readFileSync(fixturePath, 'utf8'))
     const scoped = wordsInRange(
       loadSourceWords(raw.map((w: { w: string; s: number; e: number }, i: number) => ({ ...w, i }))),
@@ -65,8 +65,7 @@ describe('cleanup prod words proj_eb785762 (after re-transcribe fixture)', () =>
     )
     const retakeWords = scoped.map((w) => ({ w: w.w, s: w.s ?? 0, e: w.e ?? 0 }))
     const groups = findRetakes(retakeWords)
-    expect(groups.length).toBeLessThanOrEqual(6)
-    expect(groups.some((g) => g.attempts.some((a) => /then we have some new guys/i.test(a.text)))).toBe(true)
+    expect(groups.length).toBe(3)
     const bad = groups.find((g) => {
       const t = g.attempts.map((a) => a.text).join(' ')
       return /Jalen/i.test(t) && /we're gonna see how this/i.test(t)

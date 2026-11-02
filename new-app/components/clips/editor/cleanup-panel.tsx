@@ -84,6 +84,7 @@ export function CleanupPanel({
   const [retakeBusy, setRetakeBusy] = useState(false)
   const [retakeExtras, setRetakeExtras] = useState<CleanupProposal[]>([])
   const [retakeGroups, setRetakeGroups] = useState<RetakeGroup[]>([])
+  const [retakeUnverified, setRetakeUnverified] = useState(false)
   const [clarityRows, setClarityRows] = useState<CleanupProposal[]>([])
   const [clarityLoading, setClarityLoading] = useState(false)
   const [clarityEmpty, setClarityEmpty] = useState<string | null>(null)
@@ -206,8 +207,10 @@ export function CleanupPanel({
         toast.message('No retakes found')
         setRetakeExtras([])
         setRetakeGroups([])
+        setRetakeUnverified(false)
         return
       }
+      setRetakeUnverified(false)
       if (aiExtras) {
         try {
           const res = await clipsFetch<{ confirmed: boolean[] | null }>(
@@ -220,11 +223,13 @@ export function CleanupPanel({
               }),
             },
           )
-          if (res.confirmed?.length) {
+          if (res.confirmed === null) {
+            setRetakeUnverified(true)
+          } else if (res.confirmed.length) {
             groups = groups.filter((_, i) => res.confirmed![i] !== false)
           }
         } catch {
-          /* keep deterministic groups */
+          setRetakeUnverified(true)
         }
       }
       const props = retakeProposals(groups, edits.cutRanges ?? [])
@@ -458,7 +463,12 @@ export function CleanupPanel({
         <div className="space-y-2 rounded-md border border-border p-2" data-testid="retake-review">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-medium">Retake groups</p>
-            {retakeExtras.length ? (
+            {retakeUnverified ? (
+              <span className="text-xs text-amber-600 dark:text-amber-400" data-testid="retake-unverified">
+                Unverified — review each take before applying
+              </span>
+            ) : null}
+            {retakeExtras.length && !retakeUnverified ? (
               <Button
                 type="button"
                 size="sm"
