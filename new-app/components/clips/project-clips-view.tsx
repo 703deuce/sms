@@ -32,6 +32,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ProjectSpeechSelectsPanel } from '@/components/clips/project-speech-selects-panel'
 import { defaultEdits } from '@/lib/clips/edits'
+import { shouldClientEnrichReadyClips } from '@/lib/clips/project-clips-enrich'
 
 type ProjectStatusPayload = {
   status: string
@@ -144,6 +145,21 @@ export function ProjectClipsView({
       /* ignore */
     }
   }, [projectId])
+
+  useEffect(() => {
+    if (!shouldClientEnrichReadyClips(initialStatus, initialClips)) return
+    let cancelled = false
+    void listProjectClips(projectId, 'score')
+      .then((data) => {
+        if (!cancelled) setClips(data.clips as ClipCardData[])
+      })
+      .catch(() => {
+        /* keep SSR clip list */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [initialStatus, initialClips, projectId])
 
   const readyFromServer = initialStatus === 'READY' && initialClips != null
   const [status, setStatus] = useState(initialStatus)

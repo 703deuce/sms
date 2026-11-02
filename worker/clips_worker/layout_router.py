@@ -202,6 +202,8 @@ _VALID_EDITOR_LAYOUT_MODES = frozenset(
         "dynamic",
         "auto",
         "screen_pip",
+        "facecam_stack",
+        "facecam_pip",
     }
 )
 

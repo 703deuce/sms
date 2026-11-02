@@ -18,40 +18,16 @@ export async function listDriveProjects(
   const view = opts.view ?? 'recent'
 
   if (view === 'trash') {
-    await prisma.clipProject.findMany({
-      where: { workspaceId, deletedAt: { not: null } },
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-      select: { id: true },
-    })
     return listClipProjectsForPage(workspaceId, { q: opts.q, status: opts.status, limit: 100, trash: true })
   }
 
   const folderId = opts.folderId === 'root' ? null : opts.folderId ?? null
 
-  const where: Record<string, unknown> = {
-    workspaceId,
-    deletedAt: null,
-    folderId,
-  }
-
-  if (view === 'owned' && opts.userId) {
-    where.createdById = opts.userId
-  }
-
-  const orderBy =
-    opts.sort === 'name'
-      ? { title: 'asc' as const }
-      : opts.sort === 'created'
-        ? { createdAt: 'desc' as const }
-        : { lastViewedAt: 'desc' as const }
-
-  await prisma.clipProject.findMany({ where, orderBy, take: 1 })
-
   return listClipProjectsForPage(workspaceId, {
     q: opts.q,
     status: opts.status,
     limit: 80,
+    folderId,
   })
 }
 

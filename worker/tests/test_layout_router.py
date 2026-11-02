@@ -109,3 +109,18 @@ def test_editor_layout_mapping_and_per_clip_override():
     merged = speakercrop_settings_from_edits(base, edits)
     assert merged["layout"] == "grid3"
     assert speakercrop_settings_from_edits(base, {"layout": {"mode": "speaker_follow"}})["layout"] == "auto"
+
+
+def test_normalize_layout_segments_keeps_facecam_modes():
+    edits = {
+        "trim": {"in": 0, "out": 10_000},
+        "layout": {
+            "mode": "speaker_follow",
+            "layoutSegments": [
+                {"startMs": 0, "endMs": 5000, "mode": "facecam_stack"},
+                {"startMs": 5000, "endMs": 10_000, "mode": "facecam_pip"},
+            ],
+        },
+    }
+    segs = normalize_layout_segments(edits)
+    assert [s["mode"] for s in segs] == ["facecam_stack", "facecam_pip"]

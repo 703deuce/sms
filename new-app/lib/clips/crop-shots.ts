@@ -106,7 +106,7 @@ export function inferShotsFromWords(
       let lab = spkToLabel.get(spk)
       if (!lab) {
         const idx = spkToLabel.size
-        lab = idx === 0 ? 'A' : idx === 1 ? 'B' : String.fromCharCode(65 + idx)
+        lab = idx % 2 === 0 ? 'A' : 'B'
         spkToLabel.set(spk, lab)
       }
       return lab

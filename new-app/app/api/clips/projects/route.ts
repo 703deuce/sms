@@ -21,6 +21,7 @@ export async function GET(request: Request) {
       q: url.searchParams.get('q') || undefined,
       status: url.searchParams.get('status') || undefined,
       limit: Number(url.searchParams.get('limit') || 50),
+      includeSettingsAndWords: true,
     })
     return NextResponse.json({ data: { projects: data.map(serializeProject) } })
   } catch (err) {

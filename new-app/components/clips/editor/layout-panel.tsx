@@ -173,7 +173,8 @@ export function LayoutPanel({
     const trimOut = edits.trim.out
     return overlappingSpeakerRangesFromWords(words, trimIn, trimOut)
   }, [edits.trim.in, edits.trim.out, words])
-  const splitOverlapHint = splitScreenOverlapMessage(splitOverlapPreview)
+  const splitOverlapAllowed = reframeV2Enabled || aiExtras
+  const splitOverlapHint = splitOverlapAllowed ? splitScreenOverlapMessage(splitOverlapPreview) : null
   return (
     <div className="flex flex-col gap-4">
       {appliedLayoutLabel ? (
@@ -487,7 +488,11 @@ export function LayoutPanel({
         Shots are time ranges from auto reframe. Pick who to follow at each speaker switch; use Re-run after large transcript edits.
       </p>
       {onEdits && shots.length ? (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs" data-testid="reframe-split-fallback">
+        <div
+          className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs"
+          data-testid="reframe-split-fallback"
+          title={!splitOverlapAllowed ? LAYOUT_BETA_DISABLED_TOOLTIP : undefined}
+        >
           <div>
             <p className="font-medium">Split-screen when speakers overlap or trade quickly</p>
             <p className="text-muted-foreground">Uses split layout on spans where two speakers overlap or alternate within ~0.7 s.</p>
@@ -498,8 +503,10 @@ export function LayoutPanel({
             ) : null}
           </div>
           <Switch
+            disabled={!splitOverlapAllowed}
             checked={Boolean(edits.layout.splitScreenFallback)}
             onCheckedChange={(on) => {
+              if (!splitOverlapAllowed) return
               const next = applySplitScreenOnOverlap(edits, shots, words, on === true)
               if (onEditsPass) onEditsPass(next, on ? 'Reframe: split on overlap' : 'Reframe: split off')
               else onEdits?.(next)

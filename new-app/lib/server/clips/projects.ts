@@ -36,6 +36,14 @@ export const clipProjectListSelect = {
 
 export type ClipProjectListRow = Prisma.ClipProjectGetPayload<{ select: typeof clipProjectListSelect }>
 
+export const clipProjectApiListSelect = {
+  ...clipProjectListSelect,
+  settings: true,
+  transcriptWords: true,
+} as const satisfies Prisma.ClipProjectSelect
+
+export type ClipProjectApiListRow = Prisma.ClipProjectGetPayload<{ select: typeof clipProjectApiListSelect }>
+
 function mergeDefaultBrandSettings(
   baseSettings: ClipProjectSettings,
   brandRow: ClipBrandTemplate,
@@ -66,6 +74,8 @@ export async function listClipProjects(
     limit?: number
     trash?: boolean
     folderId?: string | null
+    /** Dev API GET /api/clips/projects — includes settings + transcriptWords for serializeProject. */
+    includeSettingsAndWords?: boolean
   },
 ) {
   const prisma = getPrisma()
@@ -95,7 +105,7 @@ export async function listClipProjects(
     where,
     orderBy: { createdAt: 'desc' },
     take: opts.limit ?? 50,
-    select: clipProjectListSelect,
+    select: opts.includeSettingsAndWords ? clipProjectApiListSelect : clipProjectListSelect,
   })
 }
 

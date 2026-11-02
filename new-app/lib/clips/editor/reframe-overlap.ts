@@ -40,7 +40,8 @@ export function overlappingSpeakerRangesFromWords(
   const push = (a: number, b: number) => {
     const startMs = Math.max(rangeStartMs, Math.min(a, b))
     const endMs = Math.min(rangeEndMs, Math.max(a, b))
-    if (endMs - startMs >= MIN_SPAN_MS) ranges.push({ startMs, endMs })
+    if (endMs <= startMs) return
+    ranges.push({ startMs, endMs })
   }
   for (let i = 0; i < labeled.length; i++) {
     const wi = labeled[i]!
