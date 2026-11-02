@@ -346,7 +346,7 @@ export function CaptionsPanel({
                   {fixed && onResetWordFix ? (
                     <button
                       type="button"
-                      className="text-[10px] text-primary"
+                      className="text-[11px] text-primary"
                       onClick={() => onResetWordFix(w.i)}
                     >
                       Reset
@@ -724,7 +724,7 @@ export function CaptionsPanel({
       {outputMs != null && onEdits && onSeekOutput ? (
         <section className="space-y-1 rounded-lg border border-border p-3" data-testid="caption-keyframes">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motion keyframes</p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             Offset and scale burned captions on the output timeline (preview and export use the same ASS tags).
           </p>
           <KeyframeInspector
@@ -791,7 +791,7 @@ export function CaptionsPanel({
           ))}
           {userFonts.fonts.length ? (
             <>
-              <div className="px-2 py-1.5 text-[10px] font-semibold uppercase text-muted-foreground">Your fonts</div>
+              <div className="px-2 py-1.5 text-[11px] font-semibold uppercase text-muted-foreground">Your fonts</div>
               {userFonts.fonts.map((f) => (
                 <SelectItem key={f.id} value={`user:${f.id}`} data-testid={`caption-font-user-${f.id}`}>
                   {f.family}

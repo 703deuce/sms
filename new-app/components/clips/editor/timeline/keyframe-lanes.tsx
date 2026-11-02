@@ -38,7 +38,7 @@ export function KeyframeLanes({
 
   if (!rows.length) {
     return (
-      <p className="w-full text-[10px] text-muted-foreground" data-testid="kf-lanes-empty">
+      <p className="w-full text-[11px] text-muted-foreground" data-testid="kf-lanes-empty">
         No keyframes yet
       </p>
     )
@@ -51,7 +51,7 @@ export function KeyframeLanes({
         const keys = track.points.filter((p) => p.tMs >= span.fromMs && p.tMs <= span.toMs)
         return (
           <div key={prop} className="flex w-full items-center gap-1">
-            <span className="w-[62px] truncate text-[10px] text-muted-foreground">{PROP_SPECS[prop].label}</span>
+            <span className="w-[62px] truncate text-[11px] text-muted-foreground">{PROP_SPECS[prop].label}</span>
             <div
               className="relative h-3.5 flex-1 rounded bg-muted/40"
               data-testid={`kf-lane-${prop}`}

@@ -51,7 +51,7 @@ export function LayoutQuickPicker({
             >
               {opt.title}
               {opt.beta ? (
-                <span className="ml-1 rounded bg-muted px-1 py-0 text-[9px] font-normal uppercase text-muted-foreground">
+                <span className="ml-1 rounded bg-muted px-1 py-0 text-[11px] font-normal uppercase text-muted-foreground">
                   Beta
                 </span>
               ) : null}
@@ -62,7 +62,7 @@ export function LayoutQuickPicker({
       {!facecamLayout?.facecam &&
       !edits.layout.facecam?.box &&
       EXPORT_LAYOUT_OPTIONS.some((o) => o.needsFacecam) ? (
-        <p className="mt-1 text-[10px] text-muted-foreground">No facecam detected for this clip</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">No facecam detected for this clip</p>
       ) : null}
     </div>
   )

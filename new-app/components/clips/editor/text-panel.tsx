@@ -401,7 +401,7 @@ export function TextPanel({
                 >
                   <Italic className="size-3.5" aria-hidden />
                 </button>
-                <span className="text-[10px] text-muted-foreground">Select letters first, or it applies to all</span>
+                <span className="text-[11px] text-muted-foreground">Select letters first, or it applies to all</span>
               </div>
               <TextContent
                 key={sel.id}

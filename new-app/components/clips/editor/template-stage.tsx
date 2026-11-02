@@ -225,7 +225,7 @@ export function TemplateStage({
         <CanvasBgFill bg={canvasBg} imageUrl={canvasBgImageUrl} />
       ) : null}
       {lowResWarning ? (
-        <div className="absolute left-1 top-1 z-20 rounded bg-black/70 px-2 py-0.5 text-[10px] text-amber-200">
+        <div className="absolute left-1 top-1 z-20 rounded bg-black/70 px-2 py-0.5 text-[11px] text-amber-200">
           Low-res source (480p): facecam will be soft
         </div>
       ) : null}

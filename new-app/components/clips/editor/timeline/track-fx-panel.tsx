@@ -60,7 +60,7 @@ export function TrackFxPanel({
       <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate font-semibold">{label} · Track FX</span>
         <Toggle on={Boolean(cur.bypass)} label="Bypass" onChange={(v) => set({ bypass: v ? true : undefined })} testId="track-fx-bypass" />
-        <Button size="xs" variant="ghost" className="h-6 px-1.5 text-[10px]" disabled={readOnly || !fx} onClick={() => onChange(null)} data-testid="track-fx-reset">
+        <Button size="xs" variant="ghost" className="h-6 px-1.5 text-[11px]" disabled={readOnly || !fx} onClick={() => onChange(null)} data-testid="track-fx-reset">
           Reset
         </Button>
         <button type="button" className="rounded p-0.5 hover:bg-muted" onClick={onClose} aria-label="Close track FX">
@@ -86,14 +86,14 @@ export function TrackFxPanel({
                     onCommit={(v) => set({ nrMix: v / 100 })}
                     testId="track-fx-nr-mix"
                   />
-                  <p className="text-[10px] text-muted-foreground">Applied on export (the preview can't denoise live).</p>
+                  <p className="text-[11px] text-muted-foreground">Applied on export (the preview can't denoise live).</p>
                 </>
               ) : null}
               <Toggle on={cur.deess != null} label="De-ess" onChange={(v) => set({ deess: v ? FX_LIMITS.deess[2] : undefined })} testId="track-fx-deess" />
               {cur.deess != null ? (
                 <>
                   <SliderRow label="Intensity" value={cur.deess} min={0} max={100} unit="%" onCommit={(v) => set({ deess: v })} testId="track-fx-deess-amount" />
-                  <p className="text-[10px] text-muted-foreground">De-ess and Noise reduction apply on export only.</p>
+                  <p className="text-[11px] text-muted-foreground">De-ess and Noise reduction apply on export only.</p>
                 </>
               ) : null}
               <div className="space-y-1">
@@ -173,14 +173,14 @@ export function TrackFxPanel({
                       type="button"
                       role="radio"
                       aria-checked={cur.lufs === l}
-                      className={`rounded border px-1.5 py-0.5 text-[10px] ${cur.lufs === l ? 'border-primary bg-primary/10' : 'border-border'}`}
+                      className={`rounded border px-1.5 py-0.5 text-[11px] ${cur.lufs === l ? 'border-primary bg-primary/10' : 'border-border'}`}
                       onClick={() => set({ lufs: l })}
                       data-testid={`track-fx-lufs-${-l}`}
                     >
                       {l} LUFS
                     </button>
                   ))}
-                  {fxKey === 'voice' ? <p className="w-full text-[10px] text-muted-foreground">Voice loudness is matched on export; the preview plays it unchanged.</p> : null}
+                  {fxKey === 'voice' ? <p className="w-full text-[11px] text-muted-foreground">Voice loudness is matched on export; the preview plays it unchanged.</p> : null}
                 </div>
               ) : null}
               <Toggle on={cur.limit != null} label="Limiter" onChange={(v) => set({ limit: v ? FX_LIMITS.limit[2] : undefined })} testId="track-fx-limit" />
@@ -198,16 +198,16 @@ function OverlayColor({ spec, onSpec }: { spec: ColorSpec | undefined; onSpec: (
   const done = (n: ColorSpec) => onSpec(n.preset || (n.adjust && Object.values(n.adjust).some(Boolean)) ? n : undefined)
   return (
     <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
-      <p className="text-[10px] text-muted-foreground">One look for every clip on this track (clips with their own look keep it).</p>
+      <p className="text-[11px] text-muted-foreground">One look for every clip on this track (clips with their own look keep it).</p>
       <div className="flex flex-wrap gap-1">
-        <button type="button" className={`rounded border px-1.5 py-0.5 text-[10px] ${!s.preset ? 'border-primary' : 'border-border'}`} onClick={() => done({ ...s, preset: undefined })}>
+        <button type="button" className={`rounded border px-1.5 py-0.5 text-[11px] ${!s.preset ? 'border-primary' : 'border-border'}`} onClick={() => done({ ...s, preset: undefined })}>
           None
         </button>
         {COLOR_PRESET_IDS.map((id) => (
           <button
             key={id}
             type="button"
-            className={`rounded border px-1.5 py-0.5 text-[10px] ${s.preset === id ? 'border-primary bg-primary/10' : 'border-border'}`}
+            className={`rounded border px-1.5 py-0.5 text-[11px] ${s.preset === id ? 'border-primary bg-primary/10' : 'border-border'}`}
             onClick={() => done({ ...s, preset: id })}
             data-testid={`track-fx-color-${id}`}
           >

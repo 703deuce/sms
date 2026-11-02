@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { PageHeader } from '@/components/app/page-primitives'
+import { Page, PageHeader } from '@/components/app/page-primitives'
 import { Button } from '@/components/ui/button'
 import { ProjectStatusBadge } from '@/components/app/status'
 import { ProjectsAutoRefresh } from '@/components/clips/projects-auto-refresh'
@@ -28,7 +28,7 @@ export default async function ScriptEditorHubPage() {
   )
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl px-6 py-6">
+    <Page>
       <ProjectsAutoRefresh enabled={anyProcessing} />
       <PageHeader
         title="Editor"
@@ -67,6 +67,6 @@ export default async function ScriptEditorHubPage() {
           ))}
         </ul>
       )}
-    </div>
+    </Page>
   )
 }

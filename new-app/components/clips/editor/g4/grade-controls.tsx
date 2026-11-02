@@ -166,7 +166,7 @@ export function CurvesEditor({ spec, onLive, onCommit, disabled }: Edit) {
           />
         ))}
       </svg>
-      <p className="text-[10px] text-muted-foreground">Click to add a point (up to {CURVE_MAX_POINTS}), drag to shape, double-click to remove.</p>
+      <p className="text-[11px] text-muted-foreground">Click to add a point (up to {CURVE_MAX_POINTS}), drag to shape, double-click to remove.</p>
     </div>
   )
 }
@@ -237,7 +237,7 @@ function WheelPad({ id, spec, onLive, onCommit, disabled }: Edit & { id: WheelId
           style={{ left: `${(cur.x * 0.5 + 0.5) * 100}%`, top: `${(0.5 - cur.y * 0.5) * 100}%` }}
         />
       </div>
-      <span className="text-[10px] text-muted-foreground">{WHEEL_LABEL[id]}</span>
+      <span className="text-[11px] text-muted-foreground">{WHEEL_LABEL[id]}</span>
       <div className="w-full">
         <SliderRow
           label="Level"

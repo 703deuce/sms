@@ -81,7 +81,7 @@ export function EditorTopBar({
       />
       <span className={cn('shrink-0', saveTone)} aria-live="polite">
         {optimisticPending && saveState !== 'saving' ? (
-          <Badge variant="outline" className="mr-2 h-6 text-[10px] font-normal">
+          <Badge variant="outline" className="mr-2 h-6 text-[11px] font-normal">
             Pending save
           </Badge>
         ) : null}

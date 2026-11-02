@@ -45,7 +45,7 @@ export function TimelineShortcutsSheet({ open, onClose }: { open: boolean; onClo
                     <span>{r.label}</span>
                     <span className="flex shrink-0 gap-1">
                       {r.keys.map((k) => (
-                        <kbd key={k} className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-[10px]">
+                        <kbd key={k} className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-[11px]">
                           {k}
                         </kbd>
                       ))}

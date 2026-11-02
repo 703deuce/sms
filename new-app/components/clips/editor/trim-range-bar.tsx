@@ -50,7 +50,7 @@ export function TrimRangeBar({
   return (
     <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3" data-testid="trim-range-bar">
       <p className="text-xs font-medium text-muted-foreground">Trim range</p>
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         Limits {minInMs}–{maxOutMs} ms
         {bounds.trimMinMs != null ? ' (media bounds applied)' : ''}
       </p>
@@ -93,7 +93,7 @@ function TrimEdgeRow({
 }) {
   return (
     <div className="flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1">
-      <span className="w-8 text-[10px] font-medium">{label}</span>
+      <span className="w-8 text-[11px] font-medium">{label}</span>
       <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={`Nudge ${label} earlier`} onClick={() => onNudge(-NUDGE_MS)}>
         <ChevronLeft className="size-4" />
       </Button>
@@ -111,7 +111,7 @@ function TrimEdgeRow({
       <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={`Nudge ${label} later`} onClick={() => onNudge(NUDGE_MS)}>
         <ChevronRight className="size-4" />
       </Button>
-      <span className="w-14 text-right text-[10px] tabular-nums text-muted-foreground">{(ms / 1000).toFixed(2)}s</span>
+      <span className="w-14 text-right text-[11px] tabular-nums text-muted-foreground">{(ms / 1000).toFixed(2)}s</span>
     </div>
   )
 }

@@ -24,7 +24,7 @@ import { FIT_BLUR_LABELS, FIT_BLUR_STRENGTHS, fitBlurStrength, type FitBlurStren
 import { toast } from 'sonner'
 
 const chipClass =
-  'rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15 disabled:cursor-not-allowed disabled:opacity-50'
+  'rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white ring-1 ring-white/15 disabled:cursor-not-allowed disabled:opacity-50'
 
 /** CV09fix2: preview chip label (full or compact). */
 export function canvasBgChipLabel(edits: ClipEditsV2, narrow?: boolean): string {
@@ -181,7 +181,7 @@ export function CanvasBackgroundControls({
           type="button"
           disabled={readOnly}
           aria-pressed={activeType === t}
-          className={`flex-1 rounded px-1 py-1 text-[10px] font-medium disabled:opacity-40 ${activeType === t ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+          className={`flex-1 rounded px-1 py-1 text-[11px] font-medium disabled:opacity-40 ${activeType === t ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
           onClick={() => commitType(t)}
         >
           {CANVAS_BG_LABELS[t]}
@@ -220,7 +220,7 @@ export function CanvasBackgroundControls({
                 onClick={() => commitColor(sw)}
               />
             ))}
-            <label className="flex aspect-square cursor-pointer items-center justify-center rounded border border-dashed border-border text-[9px] text-muted-foreground">
+            <label className="flex aspect-square cursor-pointer items-center justify-center rounded border border-dashed border-border text-[11px] text-muted-foreground">
               Custom
               <input
                 type="color"
@@ -291,7 +291,7 @@ export function CanvasBackgroundControls({
             <button
               type="button"
               disabled={readOnly || uploading}
-              className="flex h-14 flex-col items-center justify-center rounded border border-dashed border-border text-[10px] text-muted-foreground"
+              className="flex h-14 flex-col items-center justify-center rounded border border-dashed border-border text-[11px] text-muted-foreground"
               onClick={() => fileRef.current?.click()}
             >
               {uploading ? 'Uploading…' : 'Upload'}

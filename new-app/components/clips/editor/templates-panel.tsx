@@ -128,7 +128,7 @@ export function TemplatesPanel({
                 >
                   {o.name}
                 </span>
-                <span className="text-[10px] text-white/60">{o.kind === 'cp' ? 'Caption preset v2' : 'Classic'}</span>
+                <span className="text-[11px] text-white/60">{o.kind === 'cp' ? 'Caption preset v2' : 'Classic'}</span>
               </button>
             )
           })}
@@ -200,7 +200,7 @@ export function TemplatesPanel({
                 <Sparkles className="size-3" aria-hidden />
                 {l.name}
               </span>
-              <span className="block truncate text-[10px] text-muted-foreground">
+              <span className="block truncate text-[11px] text-muted-foreground">
                 {t6Templates ? l.layoutTemplate : l.layoutMode.replace('_', ' ')} · {t6Captions ? l.caption : l.captionFallback}
                 {l.color ? ` · ${COLOR_PRESETS[l.color]?.label ?? l.color}` : ''}
               </span>

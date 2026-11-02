@@ -1,6 +1,7 @@
 import { DriveHome } from '@/components/drive/drive-home'
 import { DriveProjectsSync } from '@/components/drive/drive-projects-sync'
 import { ProjectsAutoRefresh } from '@/components/clips/projects-auto-refresh'
+import { PageContainer } from '@/components/app/page-primitives'
 import { getClipsDriveFolders, getClipsDriveProjects, getClipsWorkspaceId } from '@/lib/server/clips/drive-data'
 import { isClipProjectProcessing } from '@/lib/clips/project-processing'
 import { promiseWithTimeout } from '@/lib/server/promise-timeout'
@@ -34,10 +35,10 @@ export default async function ClipsProjectsPage({
   const anyProcessing = projects.some((p) => isClipProjectProcessing(p.status))
 
   return (
-    <div className="p-4 md:p-6">
+    <PageContainer>
       <DriveProjectsSync projects={projects} />
       <ProjectsAutoRefresh enabled={anyProcessing} />
       <DriveHome initialProjects={projects} folders={folders} q={q} status={status} kind={kind} showAll={view === 'all'} />
-    </div>
+    </PageContainer>
   )
 }

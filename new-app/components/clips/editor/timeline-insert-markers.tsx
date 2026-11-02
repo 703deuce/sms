@@ -36,7 +36,7 @@ export function TimelineInsertMarkers({
             data-export-start-ms={w.startMs}
             data-dur-ms={w.durMs}
           >
-            <span className="m-0.5 whitespace-nowrap rounded-sm bg-violet-600 px-1 text-[9px] leading-[12px] text-white shadow" data-testid="timeline-insert-label">
+            <span className="m-0.5 whitespace-nowrap rounded-sm bg-violet-600 px-1 text-[11px] leading-[12px] text-white shadow" data-testid="timeline-insert-label">
               {label} +{(w.durMs / 1000).toFixed(1)}s
             </span>
           </div>

@@ -102,7 +102,7 @@ export function StockAudioPicker({
     <div className="space-y-2" data-testid="stock-audio-picker">
       {kind === 'sfx' ? (
         <span
-          className="inline-flex rounded border border-border/80 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+          className="inline-flex rounded border border-border/80 bg-muted/40 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
           data-testid="stock-sfx-license-badge"
         >
           CC0 · Kenney
@@ -151,7 +151,7 @@ export function StockAudioPicker({
                   {h.genre ? `${h.genre} · ` : ''}
                   {h.durationS}s {h.bpm ? `· ${h.bpm} BPM` : ''}
                 </div>
-                <span className="text-[10px]">{h.license === 'cc0' ? 'CC0' : 'AI-generated'}</span>
+                <span className="text-[11px]">{h.license === 'cc0' ? 'CC0' : 'AI-generated'}</span>
               </div>
               <div className="flex shrink-0 gap-1">
                 <audio src={h.previewUrl} controls className="h-6 max-w-[100px]" />
@@ -173,7 +173,7 @@ export function StockAudioPicker({
         </div>
       ) : null}
       {kind === 'music' && hasMusicBed ? (
-        <p className="text-[10px] text-muted-foreground">Music bed exists — new music adds as SFX at the playhead.</p>
+        <p className="text-[11px] text-muted-foreground">Music bed exists — new music adds as SFX at the playhead.</p>
       ) : null}
     </div>
   )

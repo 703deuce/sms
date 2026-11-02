@@ -157,7 +157,7 @@ export function PropertiesPanel({
     <div className="space-y-3 p-3" data-testid="properties-panel" data-target={target ?? ''}>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="truncate text-sm font-semibold">{target ? label : 'Properties'}</h2>
-        {target ? <span className="text-[10px] text-muted-foreground">Edits at the playhead</span> : null}
+        {target ? <span className="text-[11px] text-muted-foreground">Edits at the playhead</span> : null}
       </div>
       <div className="flex gap-0.5 rounded-md border border-border p-0.5" role="tablist" aria-label="Properties">
         {TABS.map((t) => {
@@ -385,7 +385,7 @@ function VideoTab({
               <ArrowDownToLine className="size-3" aria-hidden /> To back
             </button>
           </div>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {moves.front || moves.back
               ? `Re-stacks this ${kind === 'broll' ? 'B-roll' : 'text'} among the ones it overlaps in time.`
               : `Nothing overlaps this ${kind === 'broll' ? 'B-roll' : 'text'} in time.`}{' '}

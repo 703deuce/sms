@@ -217,7 +217,7 @@ export function ClipRecorderBar({
                 </Select>
               </>
             ) : null}
-            <span className="text-[10px] text-muted-foreground">System audio when the browser offers it</span>
+            <span className="text-[11px] text-muted-foreground">System audio when the browser offers it</span>
           </>
         ) : mode === 'camera' ? (
           <>
@@ -300,7 +300,7 @@ export function ClipRecorderBar({
               <ScrollText className="size-4" />
             </Button>
             <Popover>
-              <PopoverTrigger render={<Button variant="link" className="h-7 px-1 text-[10px]">Script</Button>} />
+              <PopoverTrigger render={<Button variant="link" className="h-7 px-1 text-[11px]">Script</Button>} />
               <PopoverContent className="w-80 p-3" align="end">
                 <p className="text-xs font-semibold">Paste your script</p>
                 <textarea

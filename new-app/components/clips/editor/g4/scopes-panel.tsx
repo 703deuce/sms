@@ -236,7 +236,7 @@ export function ScopesPanel({
           </Button>
         </div>
       </div>
-      <p className="text-[10px] text-muted-foreground">Scopes show the main video at the playhead with its grade and adjustment layers (B-roll and effects not included).</p>
+      <p className="text-[11px] text-muted-foreground">Scopes show the main video at the playhead with its grade and adjustment layers (B-roll and effects not included).</p>
     </div>
   )
 }

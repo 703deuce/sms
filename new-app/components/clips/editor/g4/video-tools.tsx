@@ -87,7 +87,7 @@ export function StabilizeControl({
       {amount != null ? (
         <SliderRow label="Strength" value={amount} min={1} max={100} disabled={readOnly} testId="stabilize-amount" onCommit={(v) => set(v)} />
       ) : null}
-      <p className="text-[10px] text-muted-foreground" data-testid="stabilize-note">
+      <p className="text-[11px] text-muted-foreground" data-testid="stabilize-note">
         Smooths camera shake of this Video item on export (the preview shows the original). Stronger settings zoom in
         slightly to hide the moving edges.
       </p>
@@ -122,8 +122,8 @@ export function ReverseControl({
       >
         {reversed ? 'Reversed' : 'Play backwards'}
       </button>
-      <p className="text-[10px] text-muted-foreground">Sound is muted while reversed.</p>
-      {tooLong ? <p className="text-[10px] text-muted-foreground">Split it under 60 s to reverse.</p> : null}
+      <p className="text-[11px] text-muted-foreground">Sound is muted while reversed.</p>
+      {tooLong ? <p className="text-[11px] text-muted-foreground">Split it under 60 s to reverse.</p> : null}
     </div>
   )
 }
@@ -265,11 +265,11 @@ export function SceneSplitSection({
         </div>
       ) : null}
       {msg ? (
-        <p className="text-[10px] text-muted-foreground" data-testid="scene-split-msg">
+        <p className="text-[11px] text-muted-foreground" data-testid="scene-split-msg">
           {msg}
         </p>
       ) : null}
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         Finds shot changes in this browser (no credits) and splits the Video lane there after you confirm; each part can then be
         trimmed, deleted or graded on its own.
       </p>
@@ -357,7 +357,7 @@ export function BlurRegionsSection({
             </button>
           </div>
           {sel.mode === 'faces' ? (
-            <p className="text-[10px] text-muted-foreground" data-testid="blur-faces-note">
+            <p className="text-[11px] text-muted-foreground" data-testid="blur-faces-note">
               Every face in this time range is found and blurred on export (on-device face detector, no credits). The preview
               shows the mask below as a stand-in; it is also used if no face detector is available.
             </p>
@@ -417,11 +417,11 @@ export function BlurRegionsSection({
             />
           ))}
           {mask.keys?.length ? (
-            <p className="text-[10px] text-muted-foreground">{mask.keys.length} mask key(s): sliders edit the key at the playhead.</p>
+            <p className="text-[11px] text-muted-foreground">{mask.keys.length} mask key(s): sliders edit the key at the playhead.</p>
           ) : null}
         </div>
       ) : (
-        <p className="text-[10px] text-muted-foreground">Blur a face, plate or screen on the main video. Add keys while moving the playhead to follow it.</p>
+        <p className="text-[11px] text-muted-foreground">Blur a face, plate or screen on the main video. Add keys while moving the playhead to follow it.</p>
       )}
     </Section>
   )
@@ -455,14 +455,14 @@ export function MainVideoTools({
         {videoItem ? (
           <StabilizeControl edits={edits} srcInMs={videoItem.srcInMs} srcOutMs={videoItem.srcOutMs} onCommit={onCommit} readOnly={readOnly} />
         ) : (
-          <p className="text-[10px] text-muted-foreground">Select a Video item on the timeline to stabilize it.</p>
+          <p className="text-[11px] text-muted-foreground">Select a Video item on the timeline to stabilize it.</p>
         )}
       </Section>
       <Section title="Reverse" testId="video-reverse-section">
         {videoItem ? (
           <ReverseControl edits={edits} srcInMs={videoItem.srcInMs} srcOutMs={videoItem.srcOutMs} onCommit={onCommit} readOnly={readOnly} />
         ) : (
-          <p className="text-[10px] text-muted-foreground">Select a Video item on the timeline to reverse it.</p>
+          <p className="text-[11px] text-muted-foreground">Select a Video item on the timeline to reverse it.</p>
         )}
       </Section>
       <SceneSplitSection edits={edits} onCommit={onCommit} onSeekOutput={onSeekOutput} readOnly={readOnly} videoItem={videoItem} />
@@ -552,7 +552,7 @@ export function MediaSceneSplit({
           ))}
         </div>
       ) : null}
-      {msg ? <p className="text-[10px] text-muted-foreground" data-testid="media-scene-split-msg">{msg}</p> : null}
+      {msg ? <p className="text-[11px] text-muted-foreground" data-testid="media-scene-split-msg">{msg}</p> : null}
     </div>
   )
 }

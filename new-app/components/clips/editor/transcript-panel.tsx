@@ -413,7 +413,7 @@ export function TranscriptPanel({
     return (
       <span
         key={`gap-${range[0]}-${range[1]}`}
-        className="mx-0.5 inline-flex items-center gap-1 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] text-amber-900 dark:text-amber-100"
+        className="mx-0.5 inline-flex items-center gap-1 rounded bg-amber-500/15 px-1 py-0.5 text-[11px] text-amber-900 dark:text-amber-100"
       >
         <span className="line-through decoration-amber-600/80">{pauseLabel}</span>
         {onRestoreCutRange ? (
@@ -554,7 +554,7 @@ export function TranscriptPanel({
         {cut ? (
           <button
             type="button"
-            className="ml-0.5 text-[10px] font-medium text-primary"
+            className="ml-0.5 text-[11px] font-medium text-primary"
             onClick={() => {
               if (cutRange && onRestoreCutRange) onRestoreCutRange(cutRange)
               else onRestoreWord(w)
@@ -565,7 +565,7 @@ export function TranscriptPanel({
         ) : surroundingRunRestoreMs.has(w.i) ? (
           <button
             type="button"
-            className="ml-0.5 text-[10px] font-medium text-primary"
+            className="ml-0.5 text-[11px] font-medium text-primary"
             onClick={() => onExtendTrim(surroundingRunRestoreMs.get(w.i)!)}
           >
             Restore
@@ -862,7 +862,7 @@ export function TranscriptPanel({
                 nodes.push(
                   <div
                     key={`divider-${blockIndex}`}
-                    className="my-2 block w-full border-t border-dashed border-muted-foreground/40 pt-2 text-[10px] uppercase tracking-wide text-muted-foreground"
+                    className="my-2 block w-full border-t border-dashed border-muted-foreground/40 pt-2 text-[11px] uppercase tracking-wide text-muted-foreground"
                   >
                     Moved section
                   </div>,
@@ -889,7 +889,7 @@ export function TranscriptPanel({
                 nodes.push(
                   <span
                     key={`rm-${run.range[0]}`}
-                    className="mx-0.5 inline-flex items-center gap-1 rounded bg-destructive/10 px-1 py-0.5 text-[10px] text-muted-foreground"
+                    className="mx-0.5 inline-flex items-center gap-1 rounded bg-destructive/10 px-1 py-0.5 text-[11px] text-muted-foreground"
                     data-testid="transcript-removed-run"
                   >
                     ⋯ {run.words.length} word{run.words.length === 1 ? '' : 's'} removed
@@ -1008,7 +1008,7 @@ export function TranscriptPanel({
           aria-label="Script selection"
           data-testid="transcript-ctx-menu"
         >
-          <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">Camera ▸</p>
+          <p className="px-2 pt-1 text-[11px] font-medium text-muted-foreground">Camera ▸</p>
           {angles.map((ang) => (
             <button
               key={ang.sourceId}

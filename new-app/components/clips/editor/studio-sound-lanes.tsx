@@ -28,8 +28,8 @@ function LaneMixSlider({
 
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">Strength</Label>
-      <p className="text-[10px] text-muted-foreground">Applies on export (no preview).</p>
+      <Label className="text-[11px] text-muted-foreground">Strength</Label>
+      <p className="text-[11px] text-muted-foreground">Applies on export (no preview).</p>
       <Slider
         min={0}
         max={100}

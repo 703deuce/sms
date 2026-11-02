@@ -314,7 +314,7 @@ export function BrollPanel({
                 ))}
               </ul>
               {pendingRejected.length ? (
-                <p className="text-[10px] text-muted-foreground">{pendingRejected.length} skipped (60 s repeat rule)</p>
+                <p className="text-[11px] text-muted-foreground">{pendingRejected.length} skipped (60 s repeat rule)</p>
               ) : null}
               <div className="flex gap-2">
                 <Button size="sm" onClick={acceptPending} data-testid="broll-accept-suggestions">

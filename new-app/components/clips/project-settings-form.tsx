@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Panel } from '@/components/app/page-primitives'
+import { BetaBadge } from '@/components/ui/badge'
 import { CaptionPresetPicker } from '@/components/clips/caption-preset-picker'
 import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import { clipAspectRatios, clipLayoutModes, type ClipProjectSettings } from '@/lib/clips/settings'
@@ -126,6 +127,7 @@ export function ProjectSettingsForm({
             {clipLayoutModes.map((layout) => {
               const beta = isClipLayoutBeta(layout)
               const disabled = beta && !reframeV2Enabled
+              const label = LAYOUT_LABELS[layout] ?? layout
               return (
               <button
                 key={layout}
@@ -133,13 +135,15 @@ export function ProjectSettingsForm({
                 disabled={disabled}
                 onClick={() => onChange({ ...settings, layout })}
                 className={cn(
-                  'rounded-lg border px-3 py-2 text-sm surface',
+                  'min-w-0 h-auto min-h-9 whitespace-normal text-left px-3 py-2 text-[13px] leading-tight rounded-lg border surface',
                   settings.layout === layout ? 'border-primary' : 'border-border',
                   disabled && 'opacity-50',
                 )}
               >
-                {LAYOUT_LABELS[layout]}
-                {beta ? ' (beta)' : ''}
+                <span className="inline-flex flex-wrap items-center gap-1">
+                  {label.replace(/\s*\(beta\)\s*$/i, '')}
+                  {beta ? <BetaBadge /> : null}
+                </span>
               </button>
               )
             })}

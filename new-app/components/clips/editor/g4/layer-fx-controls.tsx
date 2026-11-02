@@ -135,7 +135,7 @@ export function LayerFxControls({
   return (
     <div className="space-y-4" data-testid="layer-fx">
       {fxTargetOf(target) === 'text' ? (
-        <p className="text-[10px] text-muted-foreground">Up to 6 text items can use masks or blends.</p>
+        <p className="text-[11px] text-muted-foreground">Up to 6 text items can use masks or blends.</p>
       ) : null}
       {features.mask ? (
       <section className="space-y-1.5" data-testid="layer-fx-mask">
@@ -208,7 +208,7 @@ export function LayerFxControls({
                 </button>
               ) : null}
             </div>
-            {keyed ? <p className="text-[10px] text-muted-foreground">{mask.keys!.length} mask key(s): sliders edit the key at the playhead.</p> : null}
+            {keyed ? <p className="text-[11px] text-muted-foreground">{mask.keys!.length} mask key(s): sliders edit the key at the playhead.</p> : null}
           </>
         ) : null}
       </section>
@@ -216,7 +216,7 @@ export function LayerFxControls({
       {features.key ? (
       <section className="space-y-1.5" data-testid="layer-fx-key">
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Chroma key</h3>
-        {keyDisabled ? <p className="text-[10px] text-muted-foreground">{keyDisabled}</p> : null}
+        {keyDisabled ? <p className="text-[11px] text-muted-foreground">{keyDisabled}</p> : null}
         <div className="flex flex-wrap items-center gap-1.5">
           <button type="button" className={`${btn} ${key ? on : ''}`} aria-pressed={Boolean(key)} disabled={readOnly || keyOff} onClick={() => patch({ key: key ? undefined : DEFAULT_KEY })} data-testid="layer-fx-key-toggle">
             {key ? 'On' : 'Off'}
@@ -273,7 +273,7 @@ export function LayerFxControls({
                 </button>
               ) : null}
             </div>
-            {chromaKeyed ? <p className="text-[10px] text-muted-foreground">{key!.keys!.length} chroma key(s): sliders edit the key at the playhead.</p> : null}
+            {chromaKeyed ? <p className="text-[11px] text-muted-foreground">{key!.keys!.length} chroma key(s): sliders edit the key at the playhead.</p> : null}
           </>
         ) : null}
       </section>
@@ -310,7 +310,7 @@ export function LayerFxControls({
           >
             {fx?.reverse ? 'Reversed' : 'Play backwards'}
           </button>
-          {tooLong ? <p className="text-[10px] text-muted-foreground">Only the first {REVERSE_MAX_MS / 1000} s are reversed on export.</p> : null}
+          {tooLong ? <p className="text-[11px] text-muted-foreground">Only the first {REVERSE_MAX_MS / 1000} s are reversed on export.</p> : null}
         </section>
       ) : null}
     </div>

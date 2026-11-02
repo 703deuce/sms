@@ -426,10 +426,10 @@ export function CleanupPanel({
             </Button>
           ))}
         </div>
-        <p className="text-[10px] text-muted-foreground">Opt-in fillers (never cut unless checked):</p>
+        <p className="text-[11px] text-muted-foreground">Opt-in fillers (never cut unless checked):</p>
         <div className="flex flex-wrap gap-3">
           {OPT_IN_FILLER_WORDS.map((word) => (
-            <label key={word} className="flex items-center gap-1 text-[10px]">
+            <label key={word} className="flex items-center gap-1 text-[11px]">
               <Checkbox
                 checked={enabledOptIn.has(word)}
                 onCheckedChange={(on) => {
@@ -532,7 +532,7 @@ export function CleanupPanel({
               {groupProposal ? (
                 <div className="flex items-center gap-2 pb-1">
                   <span
-                    className="rounded bg-muted px-1.5 py-0.5 font-mono tabular-nums text-[10px]"
+                    className="rounded bg-muted px-1.5 py-0.5 font-mono tabular-nums text-[11px]"
                     data-testid="retake-cut-range"
                   >
                     {formatTimecode(groupProposal.range[0])}–{formatTimecode(groupProposal.range[1])}
@@ -634,7 +634,7 @@ export function CleanupPanel({
                   onClick={() => seekToProposal(p)}
                 >
                   <span
-                    className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono tabular-nums text-[10px] text-foreground"
+                    className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono tabular-nums text-[11px] text-foreground"
                     data-testid="cleanup-applied-time"
                   >
                     {formatTimecode(proposalOutputMs(p))}
@@ -754,7 +754,7 @@ function ProposalRow({
         onClick={onSeekMain}
       >
         <span
-          className="mt-0.5 shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono tabular-nums text-[10px] text-foreground"
+          className="mt-0.5 shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono tabular-nums text-[11px] text-foreground"
           data-testid="cleanup-proposal-time"
         >
           {formatTimecode(outputTimeMs)}

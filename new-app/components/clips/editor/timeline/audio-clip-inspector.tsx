@@ -77,7 +77,7 @@ export function AudioClipInspector({
     if (v < 0) return `L${Math.abs(v)}`
     return `R${v}`
   }
-  const label = 'text-[10px] text-muted-foreground'
+  const label = 'text-[11px] text-muted-foreground'
   const num =
     'h-6 w-14 rounded border border-border bg-background px-1 text-[11px] tabular-nums disabled:opacity-50'
   return (

@@ -1629,7 +1629,7 @@ export function Timeline({
         }}
       >
         Group as takes
-        {takesDisabledHint ? <span className="block text-[10px] text-muted-foreground">{takesDisabledHint}</span> : null}
+        {takesDisabledHint ? <span className="block text-[11px] text-muted-foreground">{takesDisabledHint}</span> : null}
       </button>
       {editable && selTakeGroupId ? (
         <div
@@ -2572,7 +2572,7 @@ export function Timeline({
     return (
       <div
         key={refKey(item)}
-        className={`absolute top-0.5 overflow-hidden rounded-[3px] text-[10px] leading-4 text-white ${
+        className={`absolute top-0.5 overflow-hidden rounded-[3px] text-[11px] leading-4 text-white ${
           host ? 'bg-violet-600' : LANE_COLORS[item.lane]
         } ${isSel ? 'ring-2 ring-white ring-offset-1 ring-offset-primary' : ''} ${faded ? 'opacity-40' : ''} ${
           dimmed ? 'pointer-events-none opacity-30' : ''
@@ -2619,7 +2619,7 @@ export function Timeline({
       >
         {host ? (
           <span
-            className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-violet-200 px-0.5 text-[10px] font-semibold leading-3 text-violet-950"
+            className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-violet-200 px-0.5 text-[11px] font-semibold leading-3 text-violet-950"
             title="Compound — double-click to open"
             data-testid="timeline-group-badge"
           >
@@ -2627,7 +2627,7 @@ export function Timeline({
           </span>
         ) : inGroup ? (
           <span
-            className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-amber-400 px-0.5 text-[10px] font-semibold leading-3 text-black"
+            className="pointer-events-none absolute right-0.5 top-0.5 z-[3] rounded-sm bg-amber-400 px-0.5 text-[11px] font-semibold leading-3 text-black"
             title={`Group ${grpNo} (click one = select all · Ctrl+Shift+G ungroups)`}
             data-testid="timeline-group-badge"
           >
@@ -2703,7 +2703,7 @@ export function Timeline({
             ))
           : null}
         {(item.lane === 'music' && edits.audio?.music?.loop) || (item.lane === 'sfx' && edits.audio?.sfx.find((x) => x.generationId === item.id)?.loop) ? (
-          <span className="pointer-events-none absolute right-1 top-0 z-[1] rounded bg-black/50 px-0.5 text-[10px]" data-testid="timeline-music-loop" title="Loops to fill its window">
+          <span className="pointer-events-none absolute right-1 top-0 z-[1] rounded bg-black/50 px-0.5 text-[11px]" data-testid="timeline-music-loop" title="Loops to fill its window">
             ↻
           </span>
         ) : null}
@@ -2712,14 +2712,14 @@ export function Timeline({
           <span className="pointer-events-none relative truncate px-1">{item.label}</span>
         ) : null}
         {item.lane === 'video' && w > 40 ? (
-          <span className="pointer-events-none absolute left-1 top-0 z-[1] rounded-sm bg-black/45 px-0.5 text-[10px] text-white/90">{item.label}</span>
+          <span className="pointer-events-none absolute left-1 top-0 z-[1] rounded-sm bg-black/45 px-0.5 text-[11px] text-white/90">{item.label}</span>
         ) : null}
         {item.lane === 'video' && item.srcInMs != null && item.srcOutMs != null && edits.segmentSpeeds?.length
           ? (() => {
               const s = itemSpeed(edits, item.srcInMs, item.srcOutMs)
               return s !== 1 ? (
                 <span
-                  className="pointer-events-none absolute right-1 top-0 rounded bg-black/60 px-1 text-[10px] font-semibold tabular-nums text-amber-300"
+                  className="pointer-events-none absolute right-1 top-0 rounded bg-black/60 px-1 text-[11px] font-semibold tabular-nums text-amber-300"
                   data-testid={`timeline-speed-badge-${item.id}`}
                 >
                   {speedLabel(s)}
@@ -3135,7 +3135,7 @@ export function Timeline({
           ) : null}
           <button
             type="button"
-            className={`${tbtn} w-auto px-1 text-[10px] ${pacingOpen ? 'text-primary' : 'text-muted-foreground'}`}
+            className={`${tbtn} w-auto px-1 text-[11px] ${pacingOpen ? 'text-primary' : 'text-muted-foreground'}`}
             onClick={() => setPacingOpen((v) => !v)}
             aria-pressed={pacingOpen}
             title="Pacing check: long static shots, slivers, tiny gaps"
@@ -3199,7 +3199,7 @@ export function Timeline({
           </button>
           <button
             type="button"
-            className={`${tbtn} w-auto px-1 text-[10px] ${markerPanel ? 'text-primary' : 'text-muted-foreground'}`}
+            className={`${tbtn} w-auto px-1 text-[11px] ${markerPanel ? 'text-primary' : 'text-muted-foreground'}`}
             onClick={() => setMarkerPanel((v) => (v ? null : { focusId: null }))}
             aria-pressed={Boolean(markerPanel)}
             title="Marker list: labels, colors, chapters, Copy chapters"
@@ -3235,7 +3235,7 @@ export function Timeline({
                 role="radio"
                 aria-checked={previewRate === r}
                 onClick={() => setPreviewRate(r)}
-                className={`h-6 px-1 text-[10px] tabular-nums ${previewRate === r ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+                className={`h-6 px-1 text-[11px] tabular-nums ${previewRate === r ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
                 data-testid={`timeline-preview-rate-${r}`}
               >
                 {r}×
@@ -3253,7 +3253,7 @@ export function Timeline({
             <Command className="size-3.5" />
           </button>
           {range ? (
-            <span className="ml-1 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] tabular-nums text-primary" data-testid="timeline-inout-chip">
+            <span className="ml-1 rounded bg-primary/15 px-1.5 py-0.5 text-[11px] tabular-nums text-primary" data-testid="timeline-inout-chip">
               In {(range[0] / 1000).toFixed(2)} – Out {(range[1] / 1000).toFixed(2)} s
             </span>
           ) : null}
@@ -3777,7 +3777,7 @@ export function Timeline({
                         <button
                           key={`src${c.id}:${c.startMs}`}
                           type="button"
-                          className={`absolute top-[5px] z-[16] h-[14px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm border px-1 text-left text-[10px] leading-[12px] text-white shadow ${
+                          className={`absolute top-[5px] z-[16] h-[14px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm border px-1 text-left text-[11px] leading-[12px] text-white shadow ${
                             c.id === selectedSourceSegmentId ? 'border-white bg-amber-500' : 'border-amber-200/70 bg-amber-600/85 hover:bg-amber-500'
                           }`}
                           style={{ left: xs(c.startMs), width: Math.max(4, xe(c.endMs) - xs(c.startMs)) }}
@@ -3846,7 +3846,7 @@ export function Timeline({
                               key={id}
                               type="button"
                               data-testid="timeline-word"
-                              className={`pointer-events-auto absolute top-0 h-[16px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-0.5 text-left text-[10px] leading-4 text-white shadow-[inset_-1px_0_0_rgba(0,0,0,0.45)] ${bg}`}
+                              className={`pointer-events-auto absolute top-0 h-[16px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-0.5 text-left text-[11px] leading-4 text-white shadow-[inset_-1px_0_0_rgba(0,0,0,0.45)] ${bg}`}
                               style={{ left, width: w }}
                               onPointerDown={(ev) => ev.stopPropagation()}
                               onClick={(ev) => {

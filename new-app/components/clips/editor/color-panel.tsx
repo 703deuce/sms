@@ -376,7 +376,7 @@ export function ColorPanel({
       {outputMs != null && onSeekOutput ? (
         <section className="space-y-1" data-testid="color-keyframes">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Keyframes</p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             A keyframed value replaces the slider while the track exists
             {target.kind === 'segment' ? ' (Video items share the whole-video track)' : ''}.
           </p>
@@ -413,7 +413,7 @@ export function ColorPanel({
         <FxControls {...ctl} />
         {outputMs != null && onSeekOutput ? (
           <div className="mt-2 space-y-1" data-testid="fx-keyframes">
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               Keyframe effect amounts (steps of {FX_KEY_QUANT}); a keyframed amount replaces the slider while the track exists.
             </p>
             <KeyframeInspector
@@ -445,7 +445,7 @@ export function ColorPanel({
       <Collapsible id="scopes" title="Scopes · Auto · White balance" open={open.scopes} onToggle={toggle}>
         <ScopesPanel edits={edits} spec={spec} mode={target.kind === 'broll' ? 'none' : isAdjust ? 'adjust' : 'source'} onCommit={(s) => commit(s)} />
       </Collapsible>
-      {isAdjust ? <p className="text-[10px] text-muted-foreground">HSL and LUTs are per clip (not on adjustment layers).</p> : null}
+      {isAdjust ? <p className="text-[11px] text-muted-foreground">HSL and LUTs are per clip (not on adjustment layers).</p> : null}
     </div>
   )
 }

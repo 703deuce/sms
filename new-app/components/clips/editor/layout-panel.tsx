@@ -228,7 +228,7 @@ export function LayoutPanel({
             <div className="space-y-2 pt-1">
               <div className="flex flex-wrap items-end gap-2">
                 <div>
-                  <Label className="text-[10px] text-muted-foreground">W</Label>
+                  <Label className="text-[11px] text-muted-foreground">W</Label>
                   <input
                     type="number"
                     min={240}
@@ -249,7 +249,7 @@ export function LayoutPanel({
                   ↔
                 </Button>
                 <div>
-                  <Label className="text-[10px] text-muted-foreground">H</Label>
+                  <Label className="text-[11px] text-muted-foreground">H</Label>
                   <input
                     type="number"
                     min={240}

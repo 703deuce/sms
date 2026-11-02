@@ -102,7 +102,7 @@ export function PacingPanel({
               <button type="button" className="flex flex-1 items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-muted" onClick={() => onSeekOutput(f.startMs)}>
                 <span
                   className={cn(
-                    'rounded px-1 text-[9px] font-semibold uppercase',
+                    'rounded px-1 text-[11px] font-semibold uppercase',
                     f.kind === 'static' ? 'bg-amber-500/20 text-amber-600' : f.kind === 'sliver' ? 'bg-red-500/20 text-red-600' : 'bg-sky-500/20 text-sky-600',
                   )}
                 >

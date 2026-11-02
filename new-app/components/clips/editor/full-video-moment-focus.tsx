@@ -94,7 +94,7 @@ export function FullVideoMomentLane({ durationMs, pxPerMs, offsetPx, focus, onSe
   return (
     <div className="relative h-9 border-b border-amber-500/30 bg-amber-500/10" data-testid="full-video-moment-lane">
       <div
-        className="absolute top-0.5 min-h-8 rounded-sm border border-amber-400/80 bg-amber-500/40 py-0.5 text-[9px] leading-tight text-white shadow-sm"
+        className="absolute top-0.5 min-h-8 rounded-sm border border-amber-400/80 bg-amber-500/40 py-0.5 text-[11px] leading-tight text-white shadow-sm"
         style={{ left, width: w }}
         data-testid="full-video-moment-range"
       >
@@ -156,7 +156,7 @@ export function FullVideoMomentLane({ durationMs, pxPerMs, offsetPx, focus, onSe
           }}
         />
         <div
-          className="absolute left-0 top-full z-20 mt-1 flex gap-1 rounded-md border border-border bg-popover p-2 text-[10px] shadow-md"
+          className="absolute left-0 top-full z-20 mt-1 flex gap-1 rounded-md border border-border bg-popover p-2 text-[11px] shadow-md"
           data-testid="full-video-moment-popover"
         >
           <button

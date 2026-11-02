@@ -20,6 +20,7 @@ import { toast } from 'sonner'
 import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 import { useSoloRecordingEnabled, useRecordingEnabled } from '@/lib/recording/use-recording-enabled'
 import { PrimaryButton } from '@/components/app/primary-button'
+import { PageHeader } from '@/components/app/page-primitives'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -324,10 +325,18 @@ export function DriveHome({
         </PrimaryButton>
       </div>
 
+      <PageHeader
+        title={pageView === 'trash' ? 'Trash' : pageView === 'recents' ? 'Recent projects' : 'Home'}
+        description={
+          pageView === 'trash'
+            ? 'Projects you removed from the library.'
+            : 'Upload a long video, start from a template, or open a recent project.'
+        }
+      />
+
+      {pageView === 'home' ? (
       <div className="mx-auto max-w-[800px] text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {pageView === 'trash' ? 'Trash' : 'What do you want to make?'}
-        </h1>
+        <h2 className="sr-only">What do you want to make?</h2>
         <div className="mt-6 rounded-xl border border-input bg-card p-4 text-left">
           <textarea
             className="min-h-[72px] w-full resize-none bg-transparent text-[15px] outline-none"
@@ -395,6 +404,7 @@ export function DriveHome({
           ))}
         </div>
       </div>
+      ) : null}
 
       <div className="mt-10">
         <div className="mb-3 flex flex-wrap items-center gap-2">

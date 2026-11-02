@@ -74,7 +74,7 @@ export function ExportHeadlinePreview({
           </div>
         ) : null}
         <div
-          className="absolute inset-x-1 rounded-sm bg-zinc-900/90 text-center text-[8px] text-zinc-500"
+          className="absolute inset-x-1 rounded-sm bg-zinc-900/90 text-center text-[11px] text-zinc-500"
           style={{ top: videoTop, height: videoH }}
           data-testid="export-mini-video-label"
         >
@@ -92,14 +92,14 @@ export function ExportHeadlinePreview({
           >
             {showBadge ? (
               <span
-                className="shrink-0 rounded px-1 py-0 text-[7px] font-bold text-white"
+                className="shrink-0 rounded px-1 py-0 text-[11px] font-bold text-white"
                 style={{ backgroundColor: badgeColor }}
               >
                 {(platform || 'twitch').toUpperCase()}
               </span>
             ) : null}
             {channelUrl ? (
-              <span className="truncate text-[7px] font-bold uppercase text-white/95">
+              <span className="truncate text-[11px] font-bold uppercase text-white/95">
                 {channelUrl.replace(/^https?:\/\//, '')}
               </span>
             ) : null}

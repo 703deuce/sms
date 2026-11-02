@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
+import { PageContainer, PageHeader } from '@/components/app/page-primitives'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { Dropzone } from '@/components/clips/dropzone'
 import { BlankProjectCard } from '@/components/clips/blank-project-card'
@@ -24,7 +25,7 @@ import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/cli
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
 import { StreamerImportPanel } from '@/components/streamer/streamer-import-panel'
 import { classifyImportUrl } from '@/lib/clips/import-url'
-import { Clapperboard, Globe, Link2, Loader2, Plus, Radio, UploadCloud } from 'lucide-react'
+import { Clapperboard, Globe, Link2, Loader2, Radio, UploadCloud } from 'lucide-react'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -199,17 +200,11 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   const testMode = featuresAllUnlocked()
 
   return (
-    <div className="p-4 md:p-6">
-      <header className="mb-6">
-        <div className="flex items-center gap-2">
-          <Plus className="size-5 text-brand" aria-hidden />
-          <h1 className="text-xl font-semibold">New project</h1>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Upload a file, import from Google Drive or Dropbox
-          {isT2vFeatureEnabled() ? ', or start an AI Video project' : ''}.
-        </p>
-      </header>
+    <PageContainer>
+      <PageHeader
+        title="New project"
+        description={`Upload a file, import from Google Drive or Dropbox${isT2vFeatureEnabled() ? ', or start an AI Video project' : ''}.`}
+      />
       {tab === 'upload' ? (
         <fieldset className="mb-6 flex flex-col gap-2 border-0 p-0 sm:flex-row" data-testid="new-project-intent">
           <legend className="sr-only">Project type</legend>
@@ -392,8 +387,11 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
             </div>
           )}
         </div>
-        <div className="flex min-h-0 flex-col gap-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-5.5rem)] lg:self-start">
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1" data-testid="new-project-settings-scroll">
+        <div className="flex min-h-0 flex-col gap-4 pb-6 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-5.5rem)] lg:self-start">
+          <div
+            className="min-h-0 flex-1 overflow-y-auto scroll-pb-6 pb-6 pr-1"
+            data-testid="new-project-settings-scroll"
+          >
             <ProjectSettingsForm
               settings={settings}
               onChange={setSettings}
@@ -432,7 +430,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           </div>
         </div>
       </div>
-    </div>
+    </PageContainer>
   )
 }
 

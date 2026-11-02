@@ -112,7 +112,7 @@ function AngleTile({
       )}
       onClick={(e) => onSwitch({ shiftKey: e.shiftKey })}
     >
-      <span className="absolute left-1 top-1 z-10 rounded bg-black/60 px-1 font-mono text-[10px] text-white">
+      <span className="absolute left-1 top-1 z-10 rounded bg-black/60 px-1 font-mono text-[11px] text-white">
         {angle.key}
       </span>
       {isAudio ? (
@@ -125,11 +125,11 @@ function AngleTile({
       ) : url ? (
         <video ref={videoRef} src={url} muted playsInline className="size-full object-cover" />
       ) : (
-        <div className="flex size-full items-center justify-center bg-muted text-[10px] text-muted-foreground">
+        <div className="flex size-full items-center justify-center bg-muted text-[11px] text-muted-foreground">
           <ImageIcon className="size-4" aria-hidden />
         </div>
       )}
-      <span className="absolute bottom-0 inset-x-0 truncate bg-black/50 px-1 text-[9px] text-white">{angle.label}</span>
+      <span className="absolute bottom-0 inset-x-0 truncate bg-black/50 px-1 text-[11px] text-white">{angle.label}</span>
     </button>
   )
 }

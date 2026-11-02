@@ -74,7 +74,7 @@ export function HighlightsListPanel({
                   <p className="text-muted-foreground">
                     {formatTimecode(range.startMs)}–{formatTimecode(range.endMs)}
                   </p>
-                  <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px]">
+                  <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[11px]">
                     {reasonTagLabel(pick.reasonTag)}
                   </span>
                 </div>

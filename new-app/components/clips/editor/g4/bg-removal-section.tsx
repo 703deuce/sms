@@ -47,7 +47,7 @@ export function BgRemovalSection({
         </button>
       </div>
       {blocked ? (
-        <p className="text-[10px] text-muted-foreground" data-testid="bg-removal-blocked">
+        <p className="text-[11px] text-muted-foreground" data-testid="bg-removal-blocked">
           {blocked}
         </p>
       ) : null}
@@ -130,7 +130,7 @@ export function BgRemovalSection({
           />
         </>
       ) : null}
-      <p className="text-[10px] text-muted-foreground" data-testid="bg-removal-note">
+      <p className="text-[11px] text-muted-foreground" data-testid="bg-removal-note">
         Applied on export (the preview shows the original). Works on people; pets and objects count as background.
       </p>
     </div>

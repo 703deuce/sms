@@ -112,7 +112,7 @@ export function ItemSpeedControl({
               {label}
             </button>
           ))}
-          <span className="w-full text-[10px] text-muted-foreground" data-testid="item-speed-smooth-note">
+          <span className="w-full text-[11px] text-muted-foreground" data-testid="item-speed-smooth-note">
             {edits.smoothSlowmo
               ? 'Rendered on export for every slowed item; the preview repeats frames. Optical flow falls back to blending above 1080p or for more than 30 s of slow motion.'
               : 'Slowed footage repeats frames; blending or optical flow fills the gaps on export.'}

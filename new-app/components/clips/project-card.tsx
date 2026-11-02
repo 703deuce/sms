@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { Clock, Film, Loader2, Plus, Sparkles } from 'lucide-react'
+import { Clapperboard, Clock, Film, Loader2, Plus, Radio, Sparkles } from 'lucide-react'
 import { CLIP_JOB_STATE, type ClipProjectStatusUi, ProjectStatusBadge } from '@/components/app/status'
+import { Badge } from '@/components/ui/badge'
 import { DurationChip } from '@/components/clips/ui/duration-chip'
 import { relativeTime } from '@/lib/clips/format'
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
@@ -34,11 +35,14 @@ export function ProjectCard({
   const overlayLabel = t2vLabel ?? statusUi?.label ?? stageLabel
   const { clipCount, thumbUrl, durationMs, t2vSceneCount } = project
   const href = t2vProjectHref(project)
+  const displayThumb = thumbUrl ?? project.sourceThumbUrl ?? null
+  const isDraft = project.status === 'DRAFT'
+  const KindIcon = isT2v ? Clapperboard : project.sourceUrl ? Radio : Film
 
   return (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-xl border border-border bg-card shadow-xs transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md',
+        'group relative overflow-hidden rounded-card border border-border bg-card transition hover:border-foreground/20',
         selected && 'ring-2 ring-primary',
       )}
     >
@@ -59,19 +63,30 @@ export function ProjectCard({
         className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
       <div className="relative aspect-video bg-muted">
-        {thumbUrl ? (
-          <img src={thumbUrl} alt="" className="size-full object-cover" />
+        {displayThumb ? (
+          <img src={displayThumb} alt="" className="size-full object-cover" />
         ) : (
-          <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-secondary to-card bg-[length:24px_24px] bg-[image:linear-gradient(to_right,oklch(0.5_0_0/0.04)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.5_0_0/0.04)_1px,transparent_1px)]">
-            <Film className="size-8 text-muted-foreground" aria-hidden />
+          <div
+            className="absolute inset-0 grid place-items-center bg-gradient-to-br from-secondary to-card"
+            data-testid="project-thumb-placeholder"
+          >
+            <div className="flex flex-col items-center gap-2 px-3 text-center">
+              <span className="grid size-10 place-items-center rounded-lg bg-background/60">
+                <KindIcon className="size-6 text-muted-foreground" aria-hidden />
+              </span>
+              <p className="text-[13px] font-medium">{isDraft ? 'Draft' : 'No preview yet'}</p>
+              <p className="text-xs text-muted-foreground">
+                {isDraft ? 'Add media to start' : 'No preview yet'}
+              </p>
+            </div>
           </div>
         )}
-        <div className="absolute left-2 top-2 z-10 flex flex-wrap gap-1">
-          <ProjectKindBadge kind={isT2v ? 'video' : 'clips'} />
+        <div className="absolute left-2 top-2 z-10 flex gap-1.5">
+          <ProjectKindBadge kind={isT2v ? 'video' : 'clips'} onMedia />
           {!isT2v || !t2vLabel ? (
-            <ProjectStatusBadge status={project.status} showSpinner={false} />
+            <ProjectStatusBadge status={project.status} showSpinner={false} onMedia />
           ) : (
-            <span className="rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">{t2vLabel}</span>
+            <Badge variant="onMedia">{t2vLabel}</Badge>
           )}
         </div>
         {durationMs > 0 && !processing && (
@@ -86,7 +101,7 @@ export function ProjectCard({
             <span className="mt-2 text-center text-xs font-medium leading-snug text-white">{overlayLabel}</span>
             <ProjectCardQueueHint projectId={project.id} processing={processing} />
             {stageLabel.toLowerCase() !== overlayLabel.toLowerCase() ? (
-              <span className="mt-0.5 text-center text-[10px] text-white/80 capitalize">{stageLabel}</span>
+              <span className="mt-0.5 text-center text-[11px] text-white/80 capitalize">{stageLabel}</span>
             ) : null}
           </div>
         )}

@@ -22,25 +22,25 @@ export function MediaTranscribeControl({ media, item }: { media: ProjectMediaApi
   const tr = media.transcripts?.find((t) => t.refId === item.refId)
   if (tr?.status === 'done') {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" data-testid="media-transcript-done" title="Words join the transcript where this clip's own sound plays">
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground" data-testid="media-transcript-done" title="Words join the transcript where this clip's own sound plays">
         <Captions className="size-3" />
         {tr.words.length} words
       </span>
     )
   }
   if (tr && (tr.status === 'queued' || tr.status === 'running')) {
-    return <span className="text-[10px] text-muted-foreground" data-testid="media-transcript-running">Transcribing…</span>
+    return <span className="text-[11px] text-muted-foreground" data-testid="media-transcript-running">Transcribing…</span>
   }
   if (estimate) {
     return (
-      <div className="flex w-full flex-wrap items-center gap-1 rounded bg-muted/60 p-1 text-[10px]" data-testid="media-transcribe-confirm">
+      <div className="flex w-full flex-wrap items-center gap-1 rounded bg-muted/60 p-1 text-[11px]" data-testid="media-transcribe-confirm">
         <span className="min-w-0 flex-1">
           Transcribe {estimate.durationKnown && estimate.durationMs ? formatMediaDuration(estimate.durationMs) : 'this clip'} for{' '}
           <strong data-testid="media-transcribe-cost">{creditsLabel(estimate.credits)}</strong>?
         </span>
         <Button
           size="xs"
-          className="h-6 px-1.5 text-[10px]"
+          className="h-6 px-1.5 text-[11px]"
           disabled={busy}
           data-testid="media-transcribe-run"
           onClick={async () => {
@@ -57,7 +57,7 @@ export function MediaTranscribeControl({ media, item }: { media: ProjectMediaApi
         >
           Transcribe
         </Button>
-        <Button size="xs" variant="ghost" className="h-6 px-1.5 text-[10px]" onClick={() => setEstimate(null)}>
+        <Button size="xs" variant="ghost" className="h-6 px-1.5 text-[11px]" onClick={() => setEstimate(null)}>
           Cancel
         </Button>
       </div>
@@ -67,7 +67,7 @@ export function MediaTranscribeControl({ media, item }: { media: ProjectMediaApi
     <Button
       size="xs"
       variant="ghost"
-      className="h-6 px-1.5 text-[10px]"
+      className="h-6 px-1.5 text-[11px]"
       disabled={busy}
       data-testid="media-transcribe"
       title={tr?.status === 'failed' ? `Last try failed: ${tr.error ?? 'error'}` : 'See the cost, then transcribe this clip'}

@@ -131,11 +131,11 @@ export function ColorMatchSection({
           </button>
         ) : null}
       </div>
-      <p className="text-[10px] text-muted-foreground" data-testid="color-match-ref">
+      <p className="text-[11px] text-muted-foreground" data-testid="color-match-ref">
         {ref ? `Reference: ${ref.label}` : 'Pick a frame of the clip whose look you want, press Use as reference, then select the clip to change.'}
       </p>
       {msg ? (
-        <p className="text-[10px] text-muted-foreground" data-testid="color-match-msg">
+        <p className="text-[11px] text-muted-foreground" data-testid="color-match-msg">
           {msg}
         </p>
       ) : null}

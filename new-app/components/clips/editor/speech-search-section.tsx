@@ -135,7 +135,7 @@ export function SpeechSearchSection({
       ) : null}
       {untranscribedItems.slice(0, 3).map((item) => (
         <div key={item.id} className="flex items-center gap-1">
-          <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">{item.label}</span>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{item.label}</span>
           <MediaTranscribeControl media={media} item={item} />
         </div>
       ))}
@@ -150,7 +150,7 @@ export function SpeechSearchSection({
               <div className="truncate font-medium">{hit.label}</div>
               <div className="text-muted-foreground">{hit.snippet}</div>
               {hit.kind === 'main' && !mainInsideTrim(hit) ? (
-                <span className="text-[10px] text-amber-600">Outside this clip</span>
+                <span className="text-[11px] text-amber-600">Outside this clip</span>
               ) : null}
             </div>
             <div className="flex shrink-0 flex-col gap-1">

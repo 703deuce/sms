@@ -145,7 +145,7 @@ export function TransitionPopover({
   const stepDur = (delta: number) => commitDur(durMs + delta)
   const left = typeof window === 'undefined' ? anchor.x : Math.max(8, Math.min(anchor.x - 150, window.innerWidth - 316))
   const top = typeof window === 'undefined' ? anchor.y : Math.max(8, Math.min(anchor.y - 330, window.innerHeight - 340))
-  const tile = 'flex flex-col items-center gap-0.5 rounded p-1 text-[9px] leading-tight hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  const tile = 'flex flex-col items-center gap-0.5 rounded p-1 text-[11px] leading-tight hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
   const pickerTransitions = brollEdge ? TRANSITIONS.filter((t) => !CUT_ONLY_TRANSITIONS.has(t.type)) : TRANSITIONS
   return (
     <div
@@ -180,7 +180,7 @@ export function TransitionPopover({
           if (!tiles.length) return null
           return (
           <div key={g}>
-            <p className="px-1 text-[9px] uppercase tracking-wide text-muted-foreground">{g}</p>
+            <p className="px-1 text-[11px] uppercase tracking-wide text-muted-foreground">{g}</p>
             <div className="grid grid-cols-5 gap-0.5">
               {tiles.map((t) => {
                 const active = value?.type === t.type
@@ -205,7 +205,7 @@ export function TransitionPopover({
         })}
       </div>
       <div className="mt-2 flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-[11px] text-muted-foreground">
           Duration
         </span>
         <button
@@ -243,7 +243,7 @@ export function TransitionPopover({
         >
           +
         </button>
-        <span className="w-10 text-right text-[10px] tabular-nums" data-testid="transition-duration-label">
+        <span className="w-10 text-right text-[11px] tabular-nums" data-testid="transition-duration-label">
           {(durMs / 1000).toFixed(2)}s
         </span>
       </div>

@@ -2470,14 +2470,14 @@ export function EditorShell({
                 >
             {(edits.layout.shotOverrides?.length ?? 0) > 0 ? (
               <span
-                className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15"
+                className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white ring-1 ring-white/15"
                 aria-hidden
               >
                 Manual framing
               </span>
             ) : edits.layout.mode === 'auto' || edits.layout.mode === 'dynamic' ? (
               <span
-                className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15"
+                className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white ring-1 ring-white/15"
                 aria-hidden
               >
                 AI reframing
@@ -2582,12 +2582,12 @@ export function EditorShell({
               {pickerWhy || detectedLayout || clipTypeLabel ? (
                 <div className="hidden max-w-xl space-y-1 px-1 2xl:block">
               {clipTypeLabel ? (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   <span className="font-medium text-foreground">Clip type:</span> {clipTypeLabel}
                 </p>
               ) : null}
               {detectedLayout ? (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   <span className="font-medium text-foreground">Detected layout:</span> {detectedLayout}
                 </p>
               ) : null}

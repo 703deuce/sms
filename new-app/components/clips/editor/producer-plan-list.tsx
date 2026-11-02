@@ -31,7 +31,7 @@ export function ProducerPlanList({
       <ol className="max-h-40 space-y-1 overflow-y-auto">
         {steps.map((s) => (
           <li key={s.index} className="flex flex-wrap items-center gap-2 rounded border border-border/60 bg-background px-2 py-1">
-            <span className="font-mono text-[10px] text-muted-foreground">{s.index + 1}</span>
+            <span className="font-mono text-[11px] text-muted-foreground">{s.index + 1}</span>
             <span className="min-w-0 flex-1 truncate">{s.name}</span>
             <Button
               size="xs"

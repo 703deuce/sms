@@ -81,7 +81,7 @@ export function KeyframeInspector({
       data-target={target}
       aria-label={`Keyframes · ${label}`}
     >
-      <span className="text-[10px] font-medium text-muted-foreground">{label}</span>
+      <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
       {props.map((p) => (
         <PropRow
           key={p}
@@ -98,7 +98,7 @@ export function KeyframeInspector({
       {span ? (
         <button
           type="button"
-          className="text-[10px] text-muted-foreground hover:text-foreground"
+          className="text-[11px] text-muted-foreground hover:text-foreground"
           onClick={() => setLanesOpen((o) => !o)}
           aria-expanded={lanesOpen}
           data-testid="kf-lanes-toggle"
@@ -202,7 +202,7 @@ function PropRow({
         className="h-6 w-14 rounded border border-border bg-background px-1 text-right tabular-nums"
         data-testid={`kf-value-${prop}`}
       />
-      <span className="w-3 text-[10px] text-muted-foreground">{spec.unit}</span>
+      <span className="w-3 text-[11px] text-muted-foreground">{spec.unit}</span>
       <button
         type="button"
         className={btn}
@@ -258,7 +258,7 @@ function PropRow({
                 disabled={readOnly}
                 title={EASE_LABELS[e]}
                 onClick={() => !on && onCommit(setKeyframeEase(edits, target, prop, here.tMs, e))}
-                className={`h-6 px-1 text-[9px] ${on ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+                className={`h-6 px-1 text-[11px] ${on ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
                 data-testid={`kf-ease-${prop}-${e}`}
               >
                 {EASE_SHORT[e]}
@@ -272,7 +272,7 @@ function PropRow({
             disabled={readOnly}
             title="Custom curve"
             onClick={() => setGraphOpen((o) => !o)}
-            className={`h-6 px-1 text-[9px] ${here.bz ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            className={`h-6 px-1 text-[11px] ${here.bz ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
             data-testid={`kf-ease-${prop}-curve`}
           >
             <Spline className="size-3" />

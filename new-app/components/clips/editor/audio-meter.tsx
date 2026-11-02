@@ -81,7 +81,7 @@ export function AudioMeter({
         </div>
       ))}
       {!voiceMetered ? (
-        <span className="max-w-[4.5rem] text-[9px] leading-tight text-muted-foreground">voice not metered</span>
+        <span className="max-w-[4.5rem] text-[11px] leading-tight text-muted-foreground">voice not metered</span>
       ) : null}
     </div>
   )

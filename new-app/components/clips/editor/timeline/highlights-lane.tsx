@@ -48,7 +48,7 @@ export function HighlightsLane({
     const pct = typeof progress === 'number' ? Math.round(progress) : null
     return (
       <div
-        className="relative flex h-9 items-center border-b border-primary/20 bg-[repeating-linear-gradient(45deg,hsl(var(--primary)/0.08)_0,hsl(var(--primary)/0.08)_8px,transparent_8px,transparent_16px)] px-3 text-[10px] text-muted-foreground"
+        className="relative flex h-9 items-center border-b border-primary/20 bg-[repeating-linear-gradient(45deg,hsl(var(--primary)/0.08)_0,hsl(var(--primary)/0.08)_8px,transparent_8px,transparent_16px)] px-3 text-[11px] text-muted-foreground"
         data-testid="highlights-lane"
       >
         <span data-testid="highlights-finding-label">
@@ -60,7 +60,7 @@ export function HighlightsLane({
 
   if (!jobRunning && !ranges.length) {
     return (
-      <div className="relative flex h-9 items-center border-b border-border px-3 text-[10px] text-muted-foreground" data-testid="highlights-lane">
+      <div className="relative flex h-9 items-center border-b border-border px-3 text-[11px] text-muted-foreground" data-testid="highlights-lane">
         No strong moments found
       </div>
     )
@@ -76,7 +76,7 @@ export function HighlightsLane({
           <div
             key={r.pick.clipId}
             data-testid="highlight-range"
-            className={`absolute top-1 h-7 rounded-sm border text-[9px] leading-7 text-white shadow-sm ${
+            className={`absolute top-1 h-7 rounded-sm border text-[11px] leading-7 text-white shadow-sm ${
               selected ? 'border-white bg-primary/80' : 'border-primary/40 bg-primary/50'
             }`}
             style={{ left, width: w }}
@@ -85,7 +85,7 @@ export function HighlightsLane({
             tabIndex={0}
           >
             <span className="pointer-events-none flex items-center gap-0.5 truncate px-1">
-              <span className="rounded bg-black/30 px-0.5 text-[8px]">{reasonTagLabel(r.pick.reasonTag).slice(0, 1)}</span>
+              <span className="rounded bg-black/30 px-0.5 text-[11px]">{reasonTagLabel(r.pick.reasonTag).slice(0, 1)}</span>
               {r.pick.title} · {r.pick.score}
             </span>
             <button
@@ -141,7 +141,7 @@ export function HighlightsLane({
             {selected ? (
               <div
                 data-testid="highlight-popover"
-                className="absolute left-0 top-full z-20 mt-1 min-w-[180px] rounded-md border border-border bg-popover p-2 text-[10px] text-foreground shadow-md"
+                className="absolute left-0 top-full z-20 mt-1 min-w-[180px] rounded-md border border-border bg-popover p-2 text-[11px] text-foreground shadow-md"
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="line-clamp-2 text-muted-foreground">{r.pick.why || r.pick.title}</p>
@@ -170,7 +170,7 @@ export function HighlightsLane({
         )
       })}
       {ranges.length ? (
-        <div className="absolute right-2 top-1.5 flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground">
+        <div className="absolute right-2 top-1.5 flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
           <button type="button" aria-label="Previous highlight" className="rounded p-0.5 hover:bg-muted" onClick={() => onSelectPrev?.()} data-testid="highlights-prev">
             <ChevronLeft className="size-3.5" />
           </button>

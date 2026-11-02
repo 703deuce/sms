@@ -42,4 +42,5 @@ exec pnpm exec vitest run \
   tests/ui/app-sidebar-nav.test.tsx \
   tests/ui/editor-shell-grid.test.tsx \
   tests/ui/brand-template-open.test.tsx \
+  tests/ui/brand-editor-open.test.tsx \
   tests/ui/visual-guards.test.ts

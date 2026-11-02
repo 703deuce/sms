@@ -38,7 +38,7 @@ export function ExportLayoutPicker({
         {exportLayoutHint(value)}
       </p>
       {!facecamLayout?.facecam && !edits.layout.facecam?.box ? (
-        <p className="text-[10px] text-muted-foreground">No facecam detected for this clip</p>
+        <p className="text-[11px] text-muted-foreground">No facecam detected for this clip</p>
       ) : null}
       <div className="mt-1 flex flex-wrap gap-2">
         {options.map((opt) => {

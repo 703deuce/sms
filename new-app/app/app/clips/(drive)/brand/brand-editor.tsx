@@ -62,12 +62,13 @@ export function BrandEditor({
   const router = useRouter()
   const [tab, setTab] = useState<'kit' | 'templates'>(initialTemplateId ? 'kit' : initialTab)
   const [editingId, setEditingId] = useState<string | null>(initialTemplateId ?? null)
-  const [name, setName] = useState('Default brand')
+  const [name, setName] = useState('')
   const [settings, setSettings] = useState<BrandTemplateSettings | null>(null)
   const [logoKey, setLogoKey] = useState<string | null>(null)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [useDefault, setUseDefault] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const wmFileRef = useRef<HTMLInputElement>(null)
   const [headingFont, setHeadingFont] = useState<string | null>('Inter')
@@ -86,27 +87,50 @@ export function BrandEditor({
   }
 
   useEffect(() => {
+    setEditingId(initialTemplateId ?? null)
+    setTab(initialTemplateId ? 'kit' : initialTab)
+  }, [initialTemplateId, initialTab])
+
+  useEffect(() => {
+    let active = true
+    if (editingId) setName('')
     const q = editingId ? `?id=${encodeURIComponent(editingId)}` : ''
-    void clipsFetch<{ template: BrandRow | null; logoUrl: string | null }>(`/api/clips/brand${q}`).then(async (d) => {
-      if (d.template) {
-        const t = d.template
-        setName(t.name)
-        setSettings(t.settings)
-        setLogoKey(t.logoKey)
-        setUseDefault(t.isDefault)
-        setHeadingFont(t.headingFont ?? 'Inter')
-        setCaptionFont(t.captionFont ?? 'Inter')
-        setPalette(Array.isArray(t.palette) && t.palette.length ? t.palette : ['#111827', '#FACC15'])
-        setWatermarkKey(t.watermarkKey)
-        setWatermarkPosition((t.watermarkPosition ?? 'BR') as BrandWatermarkPosition)
-        setWatermarkSizePct(typeof t.watermarkSizePct === 'number' ? t.watermarkSizePct : 12)
-        setWatermarkOpacity(typeof t.watermarkOpacity === 'number' ? t.watermarkOpacity : 0.8)
-        setWatermarkUrl(t.watermarkKey ? await signAsset(t.watermarkKey) : null)
-      } else {
-        setSettings(defaultBrandSettings())
-      }
-      setLogoUrl(d.logoUrl)
-    })
+    setLoading(true)
+    void clipsFetch<{ template: BrandRow | null; logoUrl: string | null }>(`/api/clips/brand${q}`)
+      .then(async (d) => {
+        if (!active) return
+        if (d.template) {
+          const t = d.template
+          setName(t.name)
+          setSettings(t.settings)
+          setLogoKey(t.logoKey)
+          setUseDefault(t.isDefault)
+          setHeadingFont(t.headingFont ?? 'Inter')
+          setCaptionFont(t.captionFont ?? 'Inter')
+          setPalette(Array.isArray(t.palette) && t.palette.length ? t.palette : ['#111827', '#FACC15'])
+          setWatermarkKey(t.watermarkKey)
+          setWatermarkPosition((t.watermarkPosition ?? 'BR') as BrandWatermarkPosition)
+          setWatermarkSizePct(typeof t.watermarkSizePct === 'number' ? t.watermarkSizePct : 12)
+          setWatermarkOpacity(typeof t.watermarkOpacity === 'number' ? t.watermarkOpacity : 0.8)
+          setWatermarkUrl(t.watermarkKey ? await signAsset(t.watermarkKey) : null)
+        } else {
+          setName('')
+          setSettings(defaultBrandSettings())
+        }
+        setLogoUrl(d.logoUrl)
+      })
+      .catch(() => {
+        if (!active) return
+        toast.error('Could not open brand template')
+        setEditingId(null)
+        router.replace('/app/clips/brand')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
   }, [editingId])
 
   const save = async () => {
@@ -190,6 +214,9 @@ export function BrandEditor({
     )
   }
 
+  const displayName = name || (!editingId ? 'Default brand' : '…')
+  const kitBusy = loading && tab === 'kit'
+
   const cap = settings.captionPreset || {}
   const captionOpts = captionStyleOptions(true)
 
@@ -202,7 +229,7 @@ export function BrandEditor({
           className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
         >
           <span>
-            Editing “{name}”
+            Editing “{displayName}”
           </span>
           <Button
             type="button"
@@ -227,7 +254,17 @@ export function BrandEditor({
               'rounded-md px-3 py-1.5 text-sm capitalize',
               tab === t ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground',
             )}
-            onClick={() => setTab(t)}
+            onClick={() => {
+              const next = t
+              setTab(next)
+              if (next === 'templates') {
+                router.replace('/app/clips/brand?tab=templates')
+              } else if (editingId) {
+                router.replace(`/app/clips/brand?id=${encodeURIComponent(editingId)}`)
+              } else {
+                router.replace('/app/clips/brand')
+              }
+            }}
           >
             {t === 'kit' ? 'Kit' : 'Templates'}
           </button>
@@ -279,10 +316,14 @@ export function BrandEditor({
         </div>
       ) : (
     <div className="grid gap-6 lg:grid-cols-2">
+      {kitBusy ? (
+        <PageSkeleton rows={1} />
+      ) : (
+      <>
       <Panel title="Brand kit" description="Logo, colors, and default caption style for new projects." className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="brand-name">Template name</Label>
-          <Input id="brand-name" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input id="brand-name" value={name || (!editingId ? 'Default brand' : '')} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor="brand-default">Use as default for new projects</Label>
@@ -300,7 +341,7 @@ export function BrandEditor({
               if (f) void uploadLogo(f)
             }}
           />
-          {logoKey && <p className="text-[10px] text-muted-foreground">{logoKey}</p>}
+          {logoKey && <p className="text-[11px] text-muted-foreground">{logoKey}</p>}
         </div>
         <div className="space-y-2">
           <Label>Logo position</Label>
@@ -428,7 +469,7 @@ export function BrandEditor({
           </div>
           <div className="flex flex-wrap gap-2">
             {palette.map((c, i) => (
-              <label key={i} className="flex flex-col items-center gap-1 text-[10px]">
+              <label key={i} className="flex flex-col items-center gap-1 text-[11px]">
                 <input
                   type="color"
                   value={c}
@@ -481,7 +522,7 @@ export function BrandEditor({
                   type="button"
                   aria-label={cell.label}
                   className={cn(
-                    'size-8 rounded border text-[9px] uppercase',
+                    'size-8 rounded border text-[11px] uppercase',
                     watermarkPosition === cell.id ? 'border-primary bg-primary/15 text-primary' : 'border-border',
                   )}
                   onClick={() => setWatermarkPosition(cell.id)}
@@ -520,6 +561,9 @@ export function BrandEditor({
 
         <PrimaryButton size="sm" disabled={busy} onClick={() => void save()}>Save brand kit</PrimaryButton>
       </Panel>
+      </>
+      )}
+      {!kitBusy ? (
       <Panel title="Live preview" description="Caption, logo, and watermark on a 9:16 frame." className="flex justify-center">
       <div className="relative aspect-[9/16] w-full max-w-sm overflow-hidden rounded-xl border border-border bg-black shadow-lg ring-1 ring-white/10">
         <CaptionOverlay
@@ -562,6 +606,7 @@ export function BrandEditor({
         ) : null}
       </div>
       </Panel>
+      ) : null}
     </div>
       )}
     </div>

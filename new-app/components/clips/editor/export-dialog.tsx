@@ -722,7 +722,7 @@ export function ExportDialog({
               Premiere / Resolve / FCP (zip)
             </Button>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">
+          <p className="mt-1 text-[11px] text-muted-foreground">
             FCPXML 1.10 + Premiere xmeml, captions .srt, and README with relink steps (uses your upload filename).
           </p>
         </div>

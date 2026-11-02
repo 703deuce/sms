@@ -77,9 +77,9 @@ export function CommandPalette({ open, commands, onClose }: { open: boolean; com
                 onClick={() => run(c)}
                 data-testid="command-palette-item"
               >
-                <span className="w-16 shrink-0 text-[10px] uppercase text-muted-foreground">{c.group}</span>
+                <span className="w-16 shrink-0 text-[11px] uppercase text-muted-foreground">{c.group}</span>
                 <span className="flex-1">{c.label}</span>
-                {c.keys ? <kbd className="rounded border border-border px-1 text-[10px] text-muted-foreground">{c.keys}</kbd> : null}
+                {c.keys ? <kbd className="rounded border border-border px-1 text-[11px] text-muted-foreground">{c.keys}</kbd> : null}
               </button>
             ))
           ) : (

@@ -1,21 +1,19 @@
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 export function ProjectKindBadge({
   kind,
   className,
+  onMedia = false,
 }: {
   kind: 'video' | 'clips'
   className?: string
+  onMedia?: boolean
 }) {
   if (kind !== 'video') return null
   return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-violet-700 dark:text-violet-300',
-        className,
-      )}
-    >
+    <Badge variant={onMedia ? 'onMedia' : 'secondary'} className={cn('font-semibold tracking-wide', className)}>
       AI Video
-    </span>
+    </Badge>
   )
 }

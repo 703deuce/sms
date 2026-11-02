@@ -73,7 +73,7 @@ export function ClipsProjectsNav({ active = false }: { active?: boolean }) {
             isActive={active}
             aria-current={active ? 'page' : undefined}
             data-nav-id="home"
-            className="relative h-9 gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground"
+            className="relative h-9 gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground [&>span:last-child]:whitespace-nowrap [&>span:last-child]:overflow-visible"
             render={<Link href="/app/clips" />}
           >
             <House className="size-5" strokeWidth={1.75} />

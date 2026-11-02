@@ -65,7 +65,7 @@ export function FacecamLayoutControls({
       <div className="grid grid-cols-2 gap-2 text-xs">
         {(['x', 'y', 'w', 'h'] as const).map((key) => (
           <div key={key} className="space-y-1">
-            <Label className="text-[10px] uppercase text-muted-foreground">Face {key}</Label>
+            <Label className="text-[11px] uppercase text-muted-foreground">Face {key}</Label>
             <Slider
               min={0}
               max={100}

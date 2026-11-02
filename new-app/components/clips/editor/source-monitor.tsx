@@ -184,7 +184,7 @@ export function SourceMonitor({
                 <p key={ln.i0} className="flex gap-1.5">
                   <button
                     type="button"
-                    className="shrink-0 tabular-nums text-[10px] text-muted-foreground hover:text-foreground"
+                    className="shrink-0 tabular-nums text-[11px] text-muted-foreground hover:text-foreground"
                     title="Select this line"
                     onClick={() => {
                       setMarks({ inMs: null, outMs: null })

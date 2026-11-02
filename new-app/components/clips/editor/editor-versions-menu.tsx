@@ -168,7 +168,7 @@ function EditorVersionsMenuInner({
       data-testid={`versions-row-${v.id}`}
     >
       <span className="text-sm font-medium">{v.name}</span>
-      <span className="text-[10px] text-muted-foreground">{relativeTime(v.createdAt)}</span>
+      <span className="text-[11px] text-muted-foreground">{relativeTime(v.createdAt)}</span>
       <span className="mt-1 flex gap-1">
         <Button
           type="button"

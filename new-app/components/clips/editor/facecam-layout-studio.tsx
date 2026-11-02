@@ -303,7 +303,7 @@ export function FacecamLayoutStudio({
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No preview</div>
           )}
           {wholeFrameHint ? (
-            <p className="pointer-events-none absolute bottom-2 inset-x-2 z-10 text-center text-[10px] text-white/90 drop-shadow">
+            <p className="pointer-events-none absolute bottom-2 inset-x-2 z-10 text-center text-[11px] text-white/90 drop-shadow">
               {t6PersonFraming
                 ? 'Framing follows the detected person (whole frame when nobody is detected).'
                 : 'Whole frame is used.'}
@@ -537,7 +537,7 @@ function BoxOverlay({
           onPointerCancel={onPointerUp}
         />
       ))}
-      <span className="pointer-events-none absolute left-1 top-0.5 z-[1] text-[10px] font-medium text-white drop-shadow">
+      <span className="pointer-events-none absolute left-1 top-0.5 z-[1] text-[11px] font-medium text-white drop-shadow">
         {label}
       </span>
     </div>

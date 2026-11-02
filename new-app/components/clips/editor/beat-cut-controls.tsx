@@ -29,20 +29,20 @@ export function BeatCutControls({
   return (
     <div className="space-y-2" data-testid="audio-beat-cut">
       <Label className="text-xs font-medium">Beats</Label>
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         Detected on music in the timeline. Cuts the video segment at the playhead (or selected B-roll) to beat marks.
       </p>
       {analyzing ? (
-        <p className="text-[10px] text-muted-foreground" data-testid="audio-beat-cut-status">
+        <p className="text-[11px] text-muted-foreground" data-testid="audio-beat-cut-status">
           Analyzing beats…
         </p>
       ) : beatCount > 0 ? (
-        <p className="text-[10px] tabular-nums text-muted-foreground" data-testid="audio-beat-cut-status">
+        <p className="text-[11px] tabular-nums text-muted-foreground" data-testid="audio-beat-cut-status">
           {bpm ? `≈${Math.round(bpm)} BPM · ` : ''}
           {beatCount} beat{beatCount === 1 ? '' : 's'} ({strengthLabel})
         </p>
       ) : (
-        <p className="text-[10px] text-muted-foreground" data-testid="audio-beat-cut-status">
+        <p className="text-[11px] text-muted-foreground" data-testid="audio-beat-cut-status">
           Add music on the timeline to detect beats.
         </p>
       )}
@@ -70,7 +70,7 @@ export function BeatCutControls({
               onCheckedChange={(on) => onStrengthChange(on ? 'strong' : 'all')}
               data-testid="audio-beat-strong-only"
             />
-            <Label htmlFor="beat-strong-only" className="text-[10px] font-normal">
+            <Label htmlFor="beat-strong-only" className="text-[11px] font-normal">
               Strong beats only
             </Label>
           </div>

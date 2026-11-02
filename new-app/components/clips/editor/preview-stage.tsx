@@ -1439,7 +1439,7 @@ export function PreviewStage({
                 />
               </div>
             ))}
-            <p className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/50 px-1 text-[9px] text-white/80">
+            <p className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/50 px-1 text-[11px] text-white/80">
               Approximate split preview
             </p>
           </div>
@@ -1630,7 +1630,7 @@ export function PreviewStage({
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
             />
-            <p className="pointer-events-none absolute bottom-2 inset-x-2 z-[30] rounded bg-black/55 px-2 py-1 text-center text-[10px] text-white/90">
+            <p className="pointer-events-none absolute bottom-2 inset-x-2 z-[30] rounded bg-black/55 px-2 py-1 text-center text-[11px] text-white/90">
               Framing preview is approximate until auto-reframe runs
             </p>
           </>
@@ -1830,7 +1830,7 @@ export function PreviewStage({
         <ColorLookDefs specs={lookSpecs} />
         {exportOnlyNote(edits) ? (
           <div
-            className="pointer-events-none absolute bottom-2 left-2 z-[60] max-w-[80%] rounded bg-black/70 px-2 py-0.5 text-[10px] text-white"
+            className="pointer-events-none absolute bottom-2 left-2 z-[60] max-w-[80%] rounded bg-black/70 px-2 py-0.5 text-[11px] text-white"
             data-testid="preview-export-processing"
           >
             {exportOnlyNote(edits)}
@@ -1838,7 +1838,7 @@ export function PreviewStage({
         ) : null}
         {gradeNotice || shaderNotice ? (
           <div
-            className="pointer-events-none absolute left-2 top-2 z-[60] max-w-[80%] rounded bg-black/70 px-2 py-0.5 text-[10px] text-white"
+            className="pointer-events-none absolute left-2 top-2 z-[60] max-w-[80%] rounded bg-black/70 px-2 py-0.5 text-[11px] text-white"
             data-testid="preview-grade-notice"
           >
             {[gradeNotice, shaderNotice].filter(Boolean).join(' ')}
@@ -1961,7 +1961,7 @@ export function PreviewStage({
         {edits.blurRegions?.some((r) => r.mode === 'faces') ? (
           <p
             ref={blurChipRef}
-            className="pointer-events-none absolute right-2 top-2 z-[30] rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white/85"
+            className="pointer-events-none absolute right-2 top-2 z-[30] rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white/85"
             style={{ visibility: 'hidden' }}
             data-testid="blur-export-chip"
             title="Every face in this range is found and blurred on export; the preview blurs the mask area as a stand-in"
@@ -1971,7 +1971,7 @@ export function PreviewStage({
         ) : null}
         {libassFailed ? (
           <p
-            className="pointer-events-none absolute left-2 top-2 z-[30] rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white/85"
+            className="pointer-events-none absolute left-2 top-2 z-[30] rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white/85"
             data-testid="libass-fallback-chip"
             title={`Text preview fell back to the approximate renderer (${libassFailed})`}
           >

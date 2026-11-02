@@ -68,3 +68,28 @@ describe('visual guards', () => {
     }
   })
 })
+
+describe('editor chrome text floor (UI_fix2)', () => {
+  function walkEditor(dir: string, out: string[] = []): string[] {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name)
+      if (name === 'node_modules') continue
+      const st = statSync(p)
+      if (st.isDirectory()) walkEditor(p, out)
+      else if (/\.tsx?$/.test(name)) out.push(p)
+    }
+    return out
+  }
+
+  it('no sub-11px arbitrary text classes in editor chrome paths', () => {
+    const roots = [join(ROOT, 'components/clips/editor')]
+    const bad = /text-\[(6|7|8|9|10)px\]/
+    for (const root of roots) {
+      for (const f of walkEditor(root)) {
+        const rel = f.replace(`${ROOT}/`, '')
+        const t = readFileSync(f, 'utf8')
+        expect(t, rel).not.toMatch(bad)
+      }
+    }
+  })
+})

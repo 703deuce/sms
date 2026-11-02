@@ -47,7 +47,7 @@ export function TimelineMarkers({
           }}
         >
           <span
-            className="flex h-3 min-w-2 items-center rounded-sm px-0.5 text-[8px] font-semibold leading-none text-white shadow"
+            className="flex h-3 min-w-2 items-center rounded-sm px-0.5 text-[11px] font-semibold leading-none text-white shadow"
             style={{ background: MARKER_HEX[m.color] }}
           >
             {m.chapter ? 'Ch' : ''}

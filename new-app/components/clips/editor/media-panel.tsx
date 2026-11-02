@@ -163,10 +163,10 @@ export function MediaLibraryGrid({
               <div className="relative">
                 <MediaThumb item={item} className={compact ? 'h-12 w-full' : undefined} />
                 {item.durationMs ? (
-                  <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 text-[10px] text-white">{dur(item.durationMs)}</span>
+                  <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 text-[11px] text-white">{dur(item.durationMs)}</span>
                 ) : null}
                 {item.ref === 'take' || item.syncMs != null ? (
-                  <span className="absolute left-0.5 top-0.5 rounded bg-black/70 px-1 text-[10px] text-white" title="Synced to the main video">
+                  <span className="absolute left-0.5 top-0.5 rounded bg-black/70 px-1 text-[11px] text-white" title="Synced to the main video">
                     {item.isMain ? 'Main' : item.syncStatus === 'clock' ? 'Rooms sync' : item.syncStatus === 'low_confidence' ? 'Sync ?' : 'Synced'}
                   </span>
                 ) : null}
@@ -187,22 +187,22 @@ export function MediaLibraryGrid({
               </div>
               <div className="flex flex-wrap gap-1">
                 {fits.map((lane) => (
-                  <Button key={lane} size="xs" variant="outline" className="h-6 px-1.5 text-[10px]" onClick={() => onAdd(item, lane)} data-testid={`media-add-${lane}`}>
+                  <Button key={lane} size="xs" variant="outline" className="h-6 px-1.5 text-[11px]" onClick={() => onAdd(item, lane)} data-testid={`media-add-${lane}`}>
                     <Plus className="size-3" />
                     {LANE_LABEL[lane]}
                   </Button>
                 ))}
                 {canReplace && onReplaceSelected && fits.includes('video') ? (
-                  <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[10px]" onClick={() => onReplaceSelected(item)} data-testid="media-use-for-selected">
+                  <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[11px]" onClick={() => onReplaceSelected(item)} data-testid="media-use-for-selected">
                     Use for selected
                   </Button>
                 ) : null}
                 {onInsert && fits.includes('video') ? (
                   <>
-                    <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[10px]" onClick={() => onInsert(item, 'insert')} title="Insert at the playhead — everything after it moves right" data-testid="media-insert">
+                    <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[11px]" onClick={() => onInsert(item, 'insert')} title="Insert at the playhead — everything after it moves right" data-testid="media-insert">
                       Insert
                     </Button>
-                    <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[10px]" onClick={() => onInsert(item, 'append')} title="Add to the end of the clip" data-testid="media-append">
+                    <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[11px]" onClick={() => onInsert(item, 'append')} title="Add to the end of the clip" data-testid="media-append">
                       Append
                     </Button>
                   </>
@@ -212,7 +212,7 @@ export function MediaLibraryGrid({
                   <Button
                     size="xs"
                     variant="ghost"
-                    className="h-6 px-1.5 text-[10px]"
+                    className="h-6 px-1.5 text-[11px]"
                     disabled={item.syncStatus === 'queued'}
                     onClick={() => void media.syncAudio(item.id).catch((e) => toast.error(e instanceof Error ? e.message : 'Sync failed'))}
                     title="Line this angle up with the main video by its audio"
@@ -632,7 +632,7 @@ function MulticamSyncAll({ angles, media }: { angles: ProjectMediaItem[]; media:
       >
         Sync all angles
       </Button>
-      {progress ? <span className="text-[10px] text-muted-foreground">{progress}</span> : null}
+      {progress ? <span className="text-[11px] text-muted-foreground">{progress}</span> : null}
     </div>
   )
 }

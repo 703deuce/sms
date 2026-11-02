@@ -73,7 +73,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
 }
 
 const navButtonClass =
-  'relative h-9 gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:inset-y-2 data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary'
+  'relative h-9 gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:inset-y-2 data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary [&>span:last-child]:whitespace-nowrap [&>span:last-child]:overflow-visible'
 
 function NavItemRow({ item, active }: { item: SidebarNavItem; active: boolean }) {
   const Icon = ICONS[item.icon]
