@@ -47,7 +47,13 @@ import { applyProducerPlanStep } from '@/lib/clips/editor/producer-plan'
 import type { ClipWord } from '@/lib/clips/edits'
 import type { ProducerToolCall } from '@/lib/clips/edits-reducer'
 import { TemplateLayoutPanel } from '@/components/clips/editor/template-layout-panel'
-import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
+import { t6CaptionPresetsEnabled, t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
+import {
+  applyCatalogToken,
+  applyLayoutPackPayload,
+  fetchLayoutPackPayload,
+  parseApplyToken,
+} from '@/lib/clips/templates/apply-from-hub'
 import { speedAtSource } from '@/lib/clips/editor/speed'
 import type { TimelineItem } from '@/lib/clips/editor/clip-timeline'
 import type { KeyframeTarget } from '@/lib/clips/editor/keyframes'
@@ -298,6 +304,7 @@ export function EditorShell({
     targetGapSec: 0.35,
   })
   const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
+  const pendingApplyDone = useRef(false)
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const selectPanel = useCallback((id: EditorPanelId) => {
@@ -1000,6 +1007,63 @@ export function EditorShell({
     }[]
   >([])
   const outDur = editorPreviewDurationMs(edits, editorWords)
+
+  useEffect(() => {
+    if (pendingApplyDone.current || typeof window === 'undefined') return
+    const u = new URL(window.location.href)
+    const fromUrl = u.searchParams.get('apply')
+    let tokenRaw = fromUrl
+    if (!tokenRaw) {
+      try {
+        tokenRaw = localStorage.getItem('transovo.pendingApply')
+        if (tokenRaw) localStorage.removeItem('transovo.pendingApply')
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!tokenRaw) return
+    const token = parseApplyToken(tokenRaw)
+    if (!token) return
+    pendingApplyDone.current = true
+    void (async () => {
+      let payload = null
+      if (token.kind === 'layout_pack') {
+        payload = await fetchLayoutPackPayload(token.id)
+        if (!payload) toast.error('Layout pack not found')
+      }
+      const starterOpts = {
+        t6Templates: t6TemplatesEnabled(),
+        t6Captions: t6CaptionPresetsEnabled(),
+        durationMs: outDur,
+        newId: () => `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+      }
+      const e0 = editsRef.current
+      let nextEdits = e0
+      if (token.kind === 'layout_pack') {
+        if (payload) nextEdits = applyLayoutPackPayload(e0, payload)
+      } else {
+        nextEdits = applyCatalogToken(e0, token, {
+          facecamLayout,
+          playheadSourceMs,
+          mediaLibrary: media.items,
+          starterOpts,
+        }).edits
+      }
+      setEdits(nextEdits)
+      if (token.kind === 'layout_pack' && payload) toast.success('Layout pack applied')
+      if (token.kind === 'look_feature' && token.id === 'bg_removal') {
+        setCanvasSel({ target: 'video', label: 'Video' })
+        selectPanel('inspector')
+      }
+      if (fromUrl) {
+        u.searchParams.delete('apply')
+        window.history.replaceState(null, '', `${u.pathname}${u.search}${u.hash}`)
+      }
+    })()
+    // One-shot: consume ?apply= / pendingApply when the editor shell mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // G4a: a deleted / undone adjustment layer drops the Color target back to the whole video.
   useEffect(() => {
     if (colorTarget.kind === 'adjust' && !edits.adjustLayers?.some((l) => l.id === colorTarget.id)) setColorTarget({ kind: 'video' })
@@ -2030,6 +2094,10 @@ export function EditorShell({
             durationMs={outDur}
             brandTemplates={brandTemplates}
             onApplyBrand={applyBrandTemplateById}
+            onOpenBgRemoval={() => {
+              setCanvasSel({ target: 'video', label: 'Video' })
+              selectPanel('inspector')
+            }}
             layoutSlot={
               t6TemplatesEnabled() ? (
                 <TemplateLayoutPanel

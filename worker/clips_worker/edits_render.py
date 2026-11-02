@@ -784,15 +784,18 @@ def _legacy_compose(
     branded = work_dir / "branded.mp4"
     brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else None
     logo_key = brand.get("logoKey") if brand else None
-    if logo_key:
-        from clips_worker.brand_render import apply_brand_logo
+    from clips_worker.brand_render import apply_brand_logo, apply_brand_watermark
 
-        apply_brand_logo(caption_src, branded, logo_key, brand, work_dir)
-        shutil.copy(branded, out_mp4)
-    elif int(cap_edits.get("enabled", True)):
-        shutil.copy(final, out_mp4)
-    else:
-        shutil.copy(caption_src, out_mp4)
+    current = caption_src
+    if int(cap_edits.get("enabled", True)):
+        current = final
+    if logo_key and brand:
+        apply_brand_logo(current, branded, logo_key, brand, work_dir)
+        current = branded
+    wm_out = work_dir / "branded_wm.mp4"
+    if brand and apply_brand_watermark(current, wm_out, brand, work_dir):
+        current = wm_out
+    shutil.copy(current, out_mp4)
 
     ho = edits.get("hookOverlay") if isinstance(edits.get("hookOverlay"), dict) else None
     if ho and ho.get("enabled") and isinstance(ctx.get("t6_spec"), dict) and _t6_headline_on(edits):

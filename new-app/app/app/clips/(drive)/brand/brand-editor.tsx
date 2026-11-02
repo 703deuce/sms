@@ -11,12 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
-import { CAPTION_PRESETS, presetSlugToId } from '@/lib/clips/caption-presets'
 import { clipsFetch } from '@/lib/clips-api'
 import { BrandTemplatesManager } from '@/components/clips/brand-templates-manager'
 import { defaultBrandSettings, type BrandTemplateSettings } from '@/lib/clips/brand'
+import { BRAND_STARTERS } from '@/lib/clips/brand-starters'
+import { captionStyleOptions } from '@/lib/clips/editor/starter-templates'
+import { cn } from '@/lib/utils'
 
-export function BrandEditor() {
+export function BrandEditor({ initialTab = 'kit' }: { initialTab?: 'kit' | 'templates' }) {
+  const [tab, setTab] = useState<'kit' | 'templates'>(initialTab)
   const [name, setName] = useState('Default brand')
   const [settings, setSettings] = useState<BrandTemplateSettings | null>(null)
   const [logoKey, setLogoKey] = useState<string | null>(null)
@@ -78,8 +81,63 @@ export function BrandEditor() {
   if (!settings) return <p className="p-4 text-sm text-muted-foreground">Loading…</p>
 
   const cap = settings.captionPreset || {}
+  const captionOpts = captionStyleOptions(true)
 
   return (
+    <div className="space-y-6">
+      <div className="flex gap-2 border-b pb-2">
+        {(['kit', 'templates'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            className={cn(
+              'rounded-md px-3 py-1.5 text-sm capitalize',
+              tab === t ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground',
+            )}
+            onClick={() => setTab(t)}
+          >
+            {t === 'kit' ? 'Kit' : 'Templates'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'templates' ? (
+        <div className="space-y-8">
+          <BrandTemplatesManager />
+          <section data-testid="brand-starter-kits">
+            <h2 className="mb-3 text-sm font-semibold">Starter kits</h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {BRAND_STARTERS.map((s) => (
+                <article key={s.id} className="rounded-xl border p-3">
+                  <p className="font-medium">{s.name}</p>
+                  <div className="mt-2 flex gap-1">
+                    {(s.columns.palette ?? []).slice(0, 5).map((c) => (
+                      <span key={c} className="size-4 rounded-full border" style={{ background: c }} />
+                    ))}
+                  </div>
+                  <Button
+                    size="sm"
+                    className="mt-3"
+                    type="button"
+                    onClick={() => {
+                      void fetch('/api/clips/brand/templates', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: s.name, settings: s.settings, ...s.columns }),
+                      }).then(async (res) => {
+                        if (!res.ok) throw new Error('save_failed')
+                        toast.success('Added to Brand templates')
+                      }).catch(() => toast.error('Could not save template'))
+                    }}
+                  >
+                    Use
+                  </Button>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : (
     <div className="grid gap-6 lg:grid-cols-2">
       <Panel title="Brand kit" description="Logo, colors, and default caption style for new projects." className="space-y-4">
         <div className="space-y-2">
@@ -148,13 +206,13 @@ export function BrandEditor() {
           />
         </div>
         <p className="text-xs font-medium pt-2">Default captions</p>
-        <div className="grid grid-cols-2 gap-2">
-          {CAPTION_PRESETS.slice(0, 4).map((p) => {
-            const id = presetSlugToId(p.slug)
+        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+          {captionOpts.map((p) => {
+            const id = p.id
             const active = cap.presetId === id
             return (
               <button
-                key={p.slug}
+                key={id}
                 type="button"
                 className={`rounded border p-2 text-left text-xs ${active ? 'border-primary' : 'border-border'}`}
                 onClick={() =>
@@ -162,11 +220,7 @@ export function BrandEditor() {
                     ...settings,
                     captionPreset: {
                       presetId: id,
-                      animation: p.animation,
-                      size: p.sizePct,
-                      position: p.position,
-                      case: p.case,
-                      wordsPerLine: p.wordsPerLine,
+                      position: cap.position ?? 'bottom',
                     },
                   })
                 }
@@ -222,7 +276,8 @@ export function BrandEditor() {
         )}
       </div>
       </Panel>
-      <BrandTemplatesManager />
+    </div>
+      )}
     </div>
   )
 }

@@ -52,6 +52,8 @@ RUN set -eux; \
     for f in /app/v3/fonts/intl/*; do test -f "$f" && ln -sf "$f" /app/v3/fonts/; done; \
     test -s /app/v3/fonts/intl/NotoSansArabic-Regular.ttf; \
     test -s /app/v3/fonts/intl/NotoSansCJK.ttc
+COPY worker/scripts/download-brand-google-fonts.sh /tmp/download-brand-google-fonts.sh
+RUN chmod +x /tmp/download-brand-google-fonts.sh && bash /tmp/download-brand-google-fonts.sh /usr/share/fonts/truetype/transovo-brand /app/v3
 COPY worker/prototype /app/prototype
 COPY worker/scripts/download-models.sh /tmp/download-models.sh
 RUN chmod +x /tmp/download-models.sh && bash /tmp/download-models.sh /app/v3

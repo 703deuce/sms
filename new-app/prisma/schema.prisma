@@ -515,6 +515,7 @@ model Workspace {
   streamUsage                            StreamUsage[]
   clipMontages                           ClipMontage[]
   clipBrandTemplates                     ClipBrandTemplate[]
+  layoutPacks                            LayoutPack[]
   captionPresets                         CaptionPreset[]
   clipRenders                            ClipRender[]
   clipRenderShareLinks                   ClipRenderShareLink[]
@@ -9898,6 +9899,20 @@ model CaptionPreset {
   @@map("caption_presets")
 }
 
+model LayoutPack {
+  id          String    @id
+  workspaceId String
+  name        String
+  aspect      String    @default("9:16")
+  payload     Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("layout_packs")
+}
+
 model ClipBrandTemplate {
   id             String   @id
   workspaceId    String
@@ -9906,6 +9921,14 @@ model ClipBrandTemplate {
   logoKey        String?
   introVideoKey  String?
   outroVideoKey  String?
+  headingFont       String?
+  captionFont       String?
+  palette           Json?
+  watermarkKey      String?
+  watermarkPosition String?  @default("BR")
+  watermarkOpacity  Float?   @default(0.5)
+  watermarkSizePct  Float?   @default(10)
+  aspectOverrides   Json?
   isDefault      Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

@@ -1,7 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { Sparkles } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { byId as CLASSIC_BY_ID } from '@/lib/clips/caption-presets'
 import { captionFontStack } from '@/lib/clips/caption-fonts'
@@ -16,6 +19,9 @@ import {
 } from '@/lib/clips/editor/starter-templates'
 import { newTextItem, normalizeTextItems, TEXT_PRESETS } from '@/lib/clips/editor/text-items'
 import { t6CaptionPresetsEnabled, t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
+import { bgRemovalUiEnabled } from '@/lib/clips/editor/bg-removal'
+import { layoutPackFromEdits } from '@/lib/clips/layout-packs'
+import type { ExportAspect } from '@/lib/clips/export-aspect'
 
 function Section({ title, count, children, testId }: { title: string; count?: number; children: ReactNode; testId: string }) {
   return (
@@ -46,6 +52,7 @@ export function TemplatesPanel({
   onApplyBrand,
   playheadMs,
   durationMs,
+  onOpenBgRemoval,
 }: {
   edits: ClipEditsV2
   onEdits: (e: ClipEditsV2) => void
@@ -55,16 +62,49 @@ export function TemplatesPanel({
   onApplyBrand: (id: string) => void
   playheadMs: number
   durationMs: number
+  onOpenBgRemoval?: () => void
 }) {
+  const pathname = usePathname()
   const t6Templates = t6TemplatesEnabled()
   const t6Captions = t6CaptionPresetsEnabled()
   const inv = templateInventory(t6Templates, t6Captions)
   const captionOpts = captionStyleOptions(t6Captions)
   const brandId = (edits.brand as { templateId?: string } | undefined)?.templateId
   const newId = () => `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
+  const returnTo = encodeURIComponent(pathname)
+  const aspect = (edits.aspectRatio ?? '9:16') as ExportAspect
+
+  const saveLayoutPack = async () => {
+    const name = window.prompt('Name this layout pack')
+    if (!name?.trim()) return
+    try {
+      const payload = layoutPackFromEdits(edits, aspect)
+      const res = await fetch('/api/clips/layout-packs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), payload }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'save_failed')
+      toast.success('Layout pack saved')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save layout pack')
+    }
+  }
 
   return (
     <div className="space-y-5 p-3 text-sm" data-testid="templates-panel">
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={`/app/clips/templates?tab=layouts&returnTo=${returnTo}`}
+          className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+        >
+          Browse all templates →
+        </Link>
+        <button type="button" className="text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={() => void saveLayoutPack()}>
+          Save layout…
+        </button>
+      </div>
       <Section title="Layouts" count={inv.layouts} testId="templates-layouts">
         {layoutSlot}
       </Section>
@@ -167,6 +207,16 @@ export function TemplatesPanel({
             </button>
           ))}
         </div>
+        {bgRemovalUiEnabled() ? (
+          <button
+            type="button"
+            className={cn(tile(false), 'mt-2 w-full')}
+            data-testid="templates-bg-removal"
+            onClick={() => onOpenBgRemoval?.()}
+          >
+            Remove background
+          </button>
+        ) : null}
       </Section>
     </div>
   )

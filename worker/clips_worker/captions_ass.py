@@ -42,6 +42,8 @@ _ASS_FONT_FILES: dict[str, Path] = {
     "Luckiest Guy": _T6_FONTS / "LuckiestGuy.ttf",
     "Archivo Black": _T6_FONTS / "ArchivoBlack.ttf",
     "Oswald": _T6_FONTS / "Oswald.ttf",
+    "Roboto Bold": _T6_FONTS / "Roboto-Bold.ttf",
+    "Playfair Display Bold": _T6_FONTS / "PlayfairDisplay-Bold.ttf",
     "Noto Sans": _INTL_FONTS / "NotoSans-Regular.ttf",
     "Noto Sans Arabic": _INTL_FONTS / "NotoSansArabic-Regular.ttf",
     "Noto Sans Devanagari": _INTL_FONTS / "NotoSansDevanagari-Regular.ttf",
@@ -61,6 +63,8 @@ _ASS_FONT_ALIASES: dict[str, str] = {
     "Luckiest Guy": "Luckiest Guy",
     "Archivo Black": "Archivo Black",
     "Oswald": "Oswald",
+    "Roboto": "Roboto Bold",
+    "Playfair Display": "Playfair Display Bold",
 }
 
 

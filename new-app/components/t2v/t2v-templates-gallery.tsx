@@ -11,6 +11,19 @@ import type { T2vAspect } from '@/lib/t2v/types'
 import { cn } from '@/lib/utils'
 import { Loader2 } from 'lucide-react'
 
+const CATEGORY_CARD: Record<
+  T2vTemplateCategory,
+  { gradient: string; blurb: string }
+> = {
+  explainer: { gradient: 'from-sky-700 via-blue-900 to-indigo-950', blurb: 'Clear chapters and on-screen labels' },
+  listicle: { gradient: 'from-violet-700 via-purple-900 to-fuchsia-950', blurb: 'Numbered beats and punchy cuts' },
+  promo: { gradient: 'from-rose-600 via-orange-700 to-amber-900', blurb: 'Product hooks and bold typography' },
+  news: { gradient: 'from-red-800 via-zinc-900 to-black', blurb: 'Lower-thirds and headline rhythm' },
+  tutorial: { gradient: 'from-emerald-700 via-teal-900 to-cyan-950', blurb: 'Step-by-step screen-led flow' },
+  quote: { gradient: 'from-stone-600 via-zinc-800 to-neutral-950', blurb: 'Pull quotes on cinematic frames' },
+  story: { gradient: 'from-pink-700 via-purple-900 to-slate-950', blurb: 'Narrative arcs and soft transitions' },
+}
+
 const CATEGORIES: Array<T2vTemplateCategory | 'all'> = [
   'all',
   'explainer',
@@ -24,7 +37,7 @@ const CATEGORIES: Array<T2vTemplateCategory | 'all'> = [
 
 const ASPECTS: Array<T2vAspect | 'all'> = ['all', '16:9', '9:16', '1:1', '4:5']
 
-export function T2vTemplatesGallery({ draftId }: { draftId?: string }) {
+export function T2vTemplatesGallery({ draftId, embedded }: { draftId?: string; embedded?: boolean }) {
   const [templates, setTemplates] = useState<T2vTemplateListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [category, setCategory] = useState<T2vTemplateCategory | 'all'>('all')
@@ -83,11 +96,13 @@ export function T2vTemplatesGallery({ draftId }: { draftId?: string }) {
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 p-4 md:p-6">
-      <header>
-        <h1 className="text-xl font-semibold">Video templates</h1>
-        <p className="text-sm text-muted-foreground">Apply look, music and transitions — your script stays as-is.</p>
-      </header>
+    <div className={cn('mx-auto flex max-w-5xl flex-col gap-6', embedded ? 'p-0' : 'p-4 md:p-6')}>
+      {!embedded ? (
+        <header>
+          <h1 className="text-xl font-semibold">Video templates</h1>
+          <p className="text-sm text-muted-foreground">Apply look, music and transitions — your script stays as-is.</p>
+        </header>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <Input className="max-w-xs" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
         {CATEGORIES.map((c) => (
@@ -120,23 +135,38 @@ export function T2vTemplatesGallery({ draftId }: { draftId?: string }) {
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((t) => (
+          {filtered.map((t) => {
+            const card = CATEGORY_CARD[t.category]
+            return (
             <article key={t.id} className="overflow-hidden rounded-xl border border-border">
               <button type="button" className="block w-full text-left" onClick={() => setPreview(t)}>
-                <div className="flex aspect-video items-center justify-center bg-muted text-xs text-muted-foreground">
-                  {t.thumbUrl ? (
-                    <img src={t.thumbUrl} alt="" className="size-full object-cover" />
-                  ) : (
-                    <span>Preview coming soon</span>
+                <div
+                  className={cn(
+                    'relative flex min-h-[140px] flex-col justify-between bg-gradient-to-br p-4 text-left text-white',
+                    card.gradient,
                   )}
+                >
+                  {t.thumbUrl ? (
+                    <img src={t.thumbUrl} alt="" className="absolute inset-0 size-full object-cover opacity-40" />
+                  ) : null}
+                  <div className="relative z-10 space-y-1">
+                    <span className="inline-flex rounded-full bg-black/35 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                      {t.category}
+                    </span>
+                    <p className="text-base font-semibold leading-snug">{t.name}</p>
+                    <p className="text-xs text-white/80 line-clamp-2">{t.description?.trim() || card.blurb}</p>
+                  </div>
+                  <span className="relative z-10 mt-3 inline-flex w-fit rounded-md bg-black/40 px-2 py-0.5 text-[10px] font-medium">
+                    {t.aspect}
+                  </span>
                 </div>
-                <div className="p-3">
+                <div className="p-3 sm:hidden">
                   <p className="text-sm font-medium">{t.name}</p>
                   <p className="text-xs capitalize text-muted-foreground">{t.category} · {t.aspect}</p>
                 </div>
               </button>
             </article>
-          ))}
+          )})}
         </div>
       )}
       {preview ? (

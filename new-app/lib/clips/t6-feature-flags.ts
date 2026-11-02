@@ -1,4 +1,4 @@
-/** T6 feature flags — all default OFF in production until explicitly enabled. */
+/** T6 feature flags — default ON unless env or project override opts out (`0`). */
 export type T6ProjectSettings = {
   templates?: boolean
   captions?: boolean
@@ -24,14 +24,14 @@ export function t6TemplatesEnabled(settings?: { t6?: T6ProjectSettings } | null)
   const o = t6ProjectOverride(settings, 'templates')
   if (o === true) return true
   if (o === false) return false
-  return process.env.NEXT_PUBLIC_T6_TEMPLATES === '1'
+  return process.env.NEXT_PUBLIC_T6_TEMPLATES !== '0'
 }
 
 export function t6CaptionPresetsEnabled(settings?: { t6?: T6ProjectSettings } | null): boolean {
   const o = t6ProjectOverride(settings, 'captions')
   if (o === true) return true
   if (o === false) return false
-  return process.env.NEXT_PUBLIC_T6_CAPTION_PRESETS === '1'
+  return process.env.NEXT_PUBLIC_T6_CAPTION_PRESETS !== '0'
 }
 
 export function t6TitleAutoEnabled(settings?: { t6?: T6ProjectSettings } | null): boolean {

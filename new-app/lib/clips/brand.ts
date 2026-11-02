@@ -57,6 +57,14 @@ export type ClipBrandEdits = {
   outroVideoKey?: string
   useIntro?: boolean
   useOutro?: boolean
+  headingFont?: string
+  captionFont?: string
+  palette?: string[]
+  watermarkKey?: string
+  watermarkPosition?: 'TL' | 'TR' | 'BL' | 'BR' | 'C'
+  watermarkOpacity?: number
+  watermarkSizePct?: number
+  aspectOverrides?: Record<string, { logoPosition?: string; captionY?: number }>
 }
 
 export function defaultBrandSettings(): BrandTemplateSettings {
@@ -96,8 +104,23 @@ export function brandEditsFromProjectBrand(brand: Record<string, unknown> | null
     outroVideoKey: brand.outroVideoKey as string | undefined,
     useIntro: brand.useIntro !== false && Boolean(brand.introVideoKey),
     useOutro: brand.useOutro !== false && Boolean(brand.outroVideoKey),
+    headingFont: typeof brand.headingFont === 'string' ? brand.headingFont : undefined,
+    captionFont: typeof brand.captionFont === 'string' ? brand.captionFont : undefined,
+    palette: Array.isArray(brand.palette) ? (brand.palette as string[]) : undefined,
+    watermarkKey: brand.watermarkKey as string | undefined,
+    watermarkPosition: brand.watermarkPosition as ClipBrandEdits['watermarkPosition'],
+    watermarkOpacity: typeof brand.watermarkOpacity === 'number' ? brand.watermarkOpacity : undefined,
+    watermarkSizePct: typeof brand.watermarkSizePct === 'number' ? brand.watermarkSizePct : undefined,
+    aspectOverrides: brand.aspectOverrides as ClipBrandEdits['aspectOverrides'],
   }
-  if (!out.logoKey && !out.introVideoKey && !out.outroVideoKey && !out.templateId) return undefined
+  if (
+    !out.logoKey &&
+    !out.introVideoKey &&
+    !out.outroVideoKey &&
+    !out.templateId &&
+    !out.watermarkKey
+  )
+    return undefined
   return out
 }
 

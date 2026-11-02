@@ -200,6 +200,16 @@ export function isItemActive(item: NavItem, pathname: string, searchParams?: URL
     if (item.href.includes('tab=templates')) {
       return searchParams?.get('tab') === 'templates'
     }
+    if (pathname === '/app/clips/templates') {
+      if (item.href.includes('tab=ai-video')) return searchParams?.get('tab') === 'ai-video'
+      if (item.href.includes('sub=mine')) {
+        return (searchParams?.get('tab') ?? 'layouts') === 'layouts' && searchParams?.get('sub') === 'mine'
+      }
+      if (item.href === '/app/clips/templates' || item.href.startsWith('/app/clips/templates?tab=layouts')) {
+        const tab = searchParams?.get('tab') ?? 'layouts'
+        return tab === 'layouts' && !searchParams?.get('sub')
+      }
+    }
     if (item.href.includes('view=workspaces')) {
       return searchParams?.get('view') === 'workspaces'
     }

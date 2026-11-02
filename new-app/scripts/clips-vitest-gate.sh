@@ -35,4 +35,6 @@ exec pnpm exec vitest run \
   tests/preview-segment-layout.test.tsx \
   tests/ef24-bg-removal-edits.test.ts \
   tests/ef24-no-rvm-in-web.test.ts \
+  tests/clips/layout-packs.test.ts \
+  tests/clips/templates-catalog.test.ts \
   tests/highlights-fetch-unwrap.test.ts

@@ -29,12 +29,10 @@ const MULTI_VIDEO_LAYOUTS = new Set([
   'two_up',
 ])
 
-/** NEXT_PUBLIC_* is inlined at build time; default OFF. */
+/** NEXT_PUBLIC_* is inlined at build time; default ON unless opt-out. */
 export function bgRemovalUiEnabled(): boolean {
-  return (
-    process.env.NEXT_PUBLIC_CLIP_EDITOR_BG_REMOVAL === '1' ||
-    process.env.NEXT_PUBLIC_CLIP_EDITOR_BG_REMOVAL === 'true'
-  )
+  const v = process.env.NEXT_PUBLIC_CLIP_EDITOR_BG_REMOVAL
+  return v !== '0' && v !== 'false'
 }
 
 const num = (v: unknown, lo: number, hi: number, d: number) =>

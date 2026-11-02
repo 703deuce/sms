@@ -121,7 +121,7 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
   const mediaLibraryItem: NavItem = { title: 'Media library', href: '/app/clips/media', icon: Images }
   const layoutPacksItem: NavItem = {
     title: 'Layout packs',
-    href: '/app/clips?view=layouts',
+    href: '/app/clips/templates?tab=layouts&sub=mine',
     icon: LayoutTemplate,
   }
 
@@ -148,12 +148,15 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
   const t2vItems: NavItem[] = t2vEnabled
     ? [
         { title: 'New AI Video', href: '/app/clips/video/new', icon: Video },
-        { title: 'Templates', href: '/app/clips/video/templates', icon: LayoutTemplate },
+        { title: 'Templates', href: '/app/clips/templates?tab=ai-video', icon: LayoutTemplate },
         { title: 'AI Video projects', href: '/app/clips?kind=video', icon: Film },
       ]
     : []
 
+  const templatesNavItem: NavItem = { title: 'Templates', href: '/app/clips/templates', icon: LayoutTemplate }
+
   const sharedItems: NavItem[] = [
+    templatesNavItem,
     { title: 'Brand kit', href: '/app/clips/brand', icon: Palette },
     {
       title: 'Brand templates',

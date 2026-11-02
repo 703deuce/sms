@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { brandTemplateSettingsSchema, defaultBrandSettings } from '@/lib/clips/brand'
+import { brandKitColumnsSchema } from '@/lib/clips/brand-kit'
 import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { createId } from '@/lib/supabase/id'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 
-const postSchema = z.object({
-  name: z.string().min(1).max(120),
-  duplicateFromId: z.string().optional(),
-  settings: brandTemplateSettingsSchema.partial().optional(),
-  logoKey: z.string().nullable().optional(),
-})
+const postSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    duplicateFromId: z.string().optional(),
+    settings: brandTemplateSettingsSchema.partial().optional(),
+    logoKey: z.string().nullable().optional(),
+  })
+  .merge(brandKitColumnsSchema)
 
 export async function GET() {
   try {
@@ -37,6 +40,7 @@ export async function POST(request: Request) {
     let logoKey: string | null = null
     let introVideoKey: string | null = null
     let outroVideoKey: string | null = null
+    const cols = brandKitColumnsSchema.parse(body)
     if (body.duplicateFromId) {
       const src = await prisma.clipBrandTemplate.findFirst({
         where: { id: body.duplicateFromId, workspaceId },
@@ -61,6 +65,14 @@ export async function POST(request: Request) {
         introVideoKey,
         outroVideoKey,
         isDefault: false,
+        headingFont: cols.headingFont ?? null,
+        captionFont: cols.captionFont ?? null,
+        palette: cols.palette ? toPrismaJson(cols.palette) : undefined,
+        watermarkKey: cols.watermarkKey ?? null,
+        watermarkPosition: cols.watermarkPosition ?? null,
+        watermarkOpacity: cols.watermarkOpacity ?? null,
+        watermarkSizePct: cols.watermarkSizePct ?? null,
+        aspectOverrides: cols.aspectOverrides ? toPrismaJson(cols.aspectOverrides) : undefined,
       },
     })
     return NextResponse.json({ data: { template: row } })

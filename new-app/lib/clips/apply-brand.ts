@@ -3,6 +3,7 @@ import {
   type BrandTemplateSettings,
   type ClipBrandEdits,
 } from '@/lib/clips/brand'
+import type { BrandKitColumns } from '@/lib/clips/brand-kit'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { applyTemplateV3ToEdits } from '@/lib/clips/layers-template'
 import { parseTemplateV3 } from '@/lib/clips/layers'
@@ -13,13 +14,23 @@ export type BrandTemplatePayload = {
   introVideoKey?: string | null
   outroVideoKey?: string | null
   settings: BrandTemplateSettings
-}
+} & Partial<BrandKitColumns>
 
 export function applyBrandTemplateToEdits(
   edits: ClipEditsV2,
   template: BrandTemplatePayload,
 ): ClipEditsV2 {
   const settings = brandTemplateSettingsSchema.parse(template.settings)
+  const kitBrand: Partial<ClipBrandEdits> = {
+    headingFont: template.headingFont ?? undefined,
+    captionFont: template.captionFont ?? undefined,
+    palette: template.palette ?? undefined,
+    watermarkKey: template.watermarkKey ?? undefined,
+    watermarkPosition: template.watermarkPosition ?? undefined,
+    watermarkOpacity: template.watermarkOpacity ?? undefined,
+    watermarkSizePct: template.watermarkSizePct ?? undefined,
+    aspectOverrides: template.aspectOverrides ?? undefined,
+  }
   const t3 = settings.templateV3 ?? parseTemplateV3(settings)
   if (t3) {
     // E1fix: the v3 path used to return the layers only, so `brand.templateId` was never written
@@ -31,6 +42,7 @@ export function applyBrandTemplateToEdits(
     const rowLogo = template.logoKey ?? undefined
     const brand: ClipBrandEdits = {
       ...prev,
+      ...kitBrand,
       templateId: template.id ?? prev.templateId,
       ...(!hasLogoLayer && rowLogo
         ? {
@@ -63,11 +75,13 @@ export function applyBrandTemplateToEdits(
     outroVideoKey: template.outroVideoKey ?? undefined,
     useIntro: Boolean(template.introVideoKey),
     useOutro: Boolean(template.outroVideoKey),
+    ...kitBrand,
   }
   const captions = {
     ...edits.captions,
     enabled: edits.captions?.enabled !== false,
     ...settings.captionPreset,
+    ...(kitBrand.captionFont ? { font: kitBrand.captionFont } : {}),
     colors: {
       ...edits.captions?.colors,
       a: settings.primaryColor,

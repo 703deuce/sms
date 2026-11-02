@@ -93,6 +93,12 @@ export const STARTER_LOOKS: StarterLook[] = [
   { id: 'chat_punch', name: 'Chatting punch', layoutTemplate: 'C2', layoutMode: 'speaker_follow', caption: 'cp1', captionFallback: 'bold_pop', textPreset: 'outline_yellow', color: 'vivid' },
   { id: 'cinematic', name: 'Cinematic', layoutTemplate: 'I1', layoutMode: 'fit_blur', caption: 'cp9', captionFallback: 'minimal', textPreset: 'tall_clean', color: 'teal_orange' },
   { id: 'retro', name: 'Retro', layoutTemplate: 'C1', layoutMode: 'speaker_follow', caption: 'cp7', captionFallback: 'typewriter', textPreset: 'label_red', color: 'vintage' },
+  { id: 'neon_gamer', name: 'Neon gamer', layoutTemplate: 'G3', layoutMode: 'facecam_pip', caption: 'cp13', captionFallback: 'neon', textPreset: 'comic', color: 'vivid' },
+  { id: 'news_desk', name: 'News desk', layoutTemplate: 'C4', layoutMode: 'fit_top', caption: 'cp15', captionFallback: 'lower_third', textPreset: 'label_red' },
+  { id: 'edu_explainer', name: 'Explainer', layoutTemplate: 'C6', layoutMode: 'screen_pip', caption: 'cp16', captionFallback: 'clean_white', textPreset: 'title_white_on_black' },
+  { id: 'hype_reel', name: 'Hype reel', layoutTemplate: 'I5', layoutMode: 'speaker_follow', caption: 'cp17', captionFallback: 'heavy_outline', textPreset: 'outline_yellow', color: 'vivid' },
+  { id: 'soft_story', name: 'Soft story', layoutTemplate: 'I2', layoutMode: 'fit_blur', caption: 'cp18', captionFallback: 'minimal', textPreset: 'shadow_soft', color: 'warm' },
+  { id: 'emoji_chat', name: 'Emoji chat', layoutTemplate: 'C3', layoutMode: 'speaker_follow', caption: 'cp14', captionFallback: 'word_pop', textPreset: 'outline_yellow' },
 ]
 
 export type StarterApplyOpts = {
