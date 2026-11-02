@@ -62,7 +62,7 @@ export function ProjectCard({
         {thumbUrl ? (
           <img src={thumbUrl} alt="" className="size-full object-cover" />
         ) : (
-          <div className="absolute inset-0 grid place-items-center bg-brand-gradient/20 bg-[length:24px_24px] bg-[image:linear-gradient(to_right,oklch(0.5_0_0/0.04)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.5_0_0/0.04)_1px,transparent_1px)]">
+          <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-secondary to-card bg-[length:24px_24px] bg-[image:linear-gradient(to_right,oklch(0.5_0_0/0.04)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.5_0_0/0.04)_1px,transparent_1px)]">
             <Film className="size-8 text-muted-foreground" aria-hidden />
           </div>
         )}

@@ -264,7 +264,7 @@ export function DriveHome({
   return (
     <div
       className={cn(
-        'mx-auto max-w-[1188px] rounded-xl border border-border bg-card p-6 md:p-12',
+        'mx-auto flex flex-col gap-8',
         dragOver && 'border-2 border-dashed border-primary bg-primary/5',
       )}
       data-testid="drive-home"

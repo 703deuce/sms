@@ -171,7 +171,7 @@ export function ThumbnailPanel({
         value={titleOverride}
         onChange={(e) => setTitleOverride(e.target.value)}
       />
-      <p className="text-xs text-muted-foreground">About $0.18 (3 × 2K images + vision)</p>
+      <p className="text-xs text-muted-foreground">About 0.18 credits (3 × 2K images + vision)</p>
       <Button size="sm" disabled={busy || generating} onClick={() => void generate()} data-testid="cover-generate">
         {busy || generating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
         {generating ? 'Generating…' : 'Generate'}

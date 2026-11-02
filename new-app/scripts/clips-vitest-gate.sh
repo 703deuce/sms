@@ -37,4 +37,9 @@ exec pnpm exec vitest run \
   tests/ef24-no-rvm-in-web.test.ts \
   tests/clips/layout-packs.test.ts \
   tests/clips/templates-catalog.test.ts \
-  tests/highlights-fetch-unwrap.test.ts
+  tests/highlights-fetch-unwrap.test.ts \
+  tests/ui/sidebar-nav-model.test.ts \
+  tests/ui/app-sidebar-nav.test.tsx \
+  tests/ui/editor-shell-grid.test.tsx \
+  tests/ui/brand-template-open.test.tsx \
+  tests/ui/visual-guards.test.ts

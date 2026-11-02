@@ -12,6 +12,7 @@ import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 
 const patchSchema = z
   .object({
+    id: z.string().optional(),
     name: z.string().min(1).max(120).optional(),
     isDefault: z.boolean().optional(),
     logoKey: z.string().nullable().optional(),
@@ -19,14 +20,20 @@ const patchSchema = z
   })
   .merge(brandKitColumnsSchema)
 
-export async function GET() {
+export async function GET(req: Request = new Request('http://local/api/clips/brand')) {
   try {
     const workspaceId = await resolveWorkspaceId()
     const prisma = getPrisma()
-    const row = await prisma.clipBrandTemplate.findFirst({
-      where: { workspaceId, isDefault: true },
-      orderBy: { updatedAt: 'desc' },
-    })
+    const id = new URL(req.url).searchParams.get('id')
+    const row = id
+      ? await prisma.clipBrandTemplate.findFirst({ where: { id, workspaceId } })
+      : await prisma.clipBrandTemplate.findFirst({
+          where: { workspaceId, isDefault: true },
+          orderBy: { updatedAt: 'desc' },
+        })
+    if (id && !row) {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 })
+    }
     const storage = getClipStorage()
     const logoUrl =
       row?.logoKey ? await storage.createSignedDownloadUrl(row.logoKey, 3600).catch(() => null) : null
@@ -42,6 +49,58 @@ export async function PUT(request: Request) {
     const body = patchSchema.parse(await request.json())
     const cols = brandKitColumnsSchema.parse(body)
     const prisma = getPrisma()
+    const targetId = body.id
+
+    if (targetId) {
+      const existing = await prisma.clipBrandTemplate.findFirst({ where: { id: targetId, workspaceId } })
+      if (!existing) {
+        return NextResponse.json({ error: 'not_found' }, { status: 404 })
+      }
+      const settings = brandTemplateSettingsSchema.parse({
+        ...defaultBrandSettings(),
+        ...(existing.settings as object),
+        ...(body.settings || {}),
+      })
+      const row = await prisma.$transaction(async (tx) => {
+        if (body.isDefault === true) {
+          await tx.clipBrandTemplate.updateMany({
+            where: { workspaceId, id: { not: targetId } },
+            data: { isDefault: false },
+          })
+        }
+        return tx.clipBrandTemplate.update({
+          where: { id: targetId },
+          data: {
+            name: body.name ?? existing.name,
+            settings,
+            logoKey: body.logoKey === undefined ? existing.logoKey : body.logoKey,
+            isDefault: body.isDefault ?? existing.isDefault,
+            headingFont: cols.headingFont === undefined ? existing.headingFont : cols.headingFont,
+            captionFont: cols.captionFont === undefined ? existing.captionFont : cols.captionFont,
+            palette:
+              cols.palette === undefined
+                ? existing.palette
+                : cols.palette
+                  ? toPrismaJson(cols.palette)
+                  : null,
+            watermarkKey: cols.watermarkKey === undefined ? existing.watermarkKey : cols.watermarkKey,
+            watermarkPosition:
+              cols.watermarkPosition === undefined ? existing.watermarkPosition : cols.watermarkPosition,
+            watermarkOpacity: cols.watermarkOpacity === undefined ? existing.watermarkOpacity : cols.watermarkOpacity,
+            watermarkSizePct:
+              cols.watermarkSizePct === undefined ? existing.watermarkSizePct : cols.watermarkSizePct,
+            aspectOverrides:
+              cols.aspectOverrides === undefined
+                ? existing.aspectOverrides
+                : cols.aspectOverrides
+                  ? toPrismaJson(cols.aspectOverrides)
+                  : null,
+          },
+        })
+      })
+      return NextResponse.json({ data: { template: row } })
+    }
+
     let row = await prisma.clipBrandTemplate.findFirst({
       where: { workspaceId, isDefault: true },
     })

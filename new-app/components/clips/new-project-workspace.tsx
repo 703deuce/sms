@@ -160,7 +160,9 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
         return
       }
       const project = await createProject({ uploadId, settings: payloadSettings })
-      router.push(`/app/clips/${project.id}`)
+      const open =
+        projectIntent === 'byo' || projectIntent === 'full' ? '?open=editor' : ''
+      router.push(`/app/clips/${project.id}${open}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create project')
     } finally {
@@ -390,39 +392,44 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-4 lg:sticky lg:top-20 lg:self-start">
-          <ProjectSettingsForm
-            settings={settings}
-            onChange={setSettings}
-            durationMs={durationMs}
-            uploadState={upload?.state}
-            reframeV2Enabled={reframeV2Enabled}
-            byoMode={projectIntent !== 'find'}
-          />
-          {estimate && tab === 'upload' && projectIntent === 'find' && (
-            <p className="text-xs text-muted-foreground">
-              {testMode
-                ? `Test mode · est. ${estimate.credits} credits`
-                : `Est. ${estimate.credits} credits`}
-            </p>
-          )}
-          {tab === 'upload' ? (
-            <PrimaryButton
-              disabled={!uploadId || upload?.state !== 'complete' || submitting}
-              onClick={() => void submitUpload()}
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
-                  Creating project…
-                </>
-              ) : projectIntent !== 'find' ? (
-                'Start'
-              ) : (
-                'Get clips'
-              )}
-            </PrimaryButton>
-          ) : null}
+        <div className="flex min-h-0 flex-col gap-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-5.5rem)] lg:self-start">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1" data-testid="new-project-settings-scroll">
+            <ProjectSettingsForm
+              settings={settings}
+              onChange={setSettings}
+              durationMs={durationMs}
+              uploadState={upload?.state}
+              reframeV2Enabled={reframeV2Enabled}
+              byoMode={projectIntent !== 'find'}
+            />
+          </div>
+          <div className="shrink-0 border-t border-border pt-3">
+            {estimate && tab === 'upload' && projectIntent === 'find' && (
+              <p className="mb-3 text-xs text-muted-foreground">
+                {testMode
+                  ? `Test mode · est. ${estimate.credits} credits`
+                  : `Est. ${estimate.credits} credits`}
+              </p>
+            )}
+            {tab === 'upload' ? (
+              <PrimaryButton
+                className="w-full"
+                disabled={!uploadId || upload?.state !== 'complete' || submitting}
+                onClick={() => void submitUpload()}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                    Creating project…
+                  </>
+                ) : projectIntent !== 'find' ? (
+                  'Start'
+                ) : (
+                  'Get clips'
+                )}
+              </PrimaryButton>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

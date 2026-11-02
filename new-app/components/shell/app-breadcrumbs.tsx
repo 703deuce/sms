@@ -15,6 +15,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBreadcrumbTitles } from '@/components/shell/breadcrumb-context'
 import { Button } from '@/components/ui/button'
+import { clipsProjectId } from '@/lib/sidebar-nav'
 
 export function AppBreadcrumbs() {
   const pathname = usePathname()
@@ -27,7 +28,15 @@ export function AppBreadcrumbs() {
     crumbs.push({ label: 'Projects' })
   } else if (pathname === '/app/clips/new') {
     crumbs.push({ label: 'Projects', href: '/app/clips' }, { label: 'New project' })
-  } else if (pathname.match(/^\/app\/clips\/[^/]+$/) && !pathname.includes('/edit/')) {
+  } else if (pathname.startsWith('/app/clips/templates') || pathname.startsWith('/app/clips/video/templates')) {
+    crumbs.push({ label: 'Templates' })
+  } else if (pathname.startsWith('/app/clips/media')) {
+    crumbs.push({ label: 'Media' })
+  } else if (pathname === '/app/clips/trash') {
+    crumbs.push({ label: 'Projects', href: '/app/clips' }, { label: 'Trash' })
+  } else if (pathname === '/app/editor') {
+    crumbs.push({ label: 'Editor' })
+  } else if (clipsProjectId(pathname) && /^\/app\/clips\/[^/]+$/.test(pathname)) {
     crumbs.push({ label: 'Projects', href: '/app/clips' })
     crumbs.push({ label: titles.project || '…' })
   } else if (pathname.includes('/edit/')) {

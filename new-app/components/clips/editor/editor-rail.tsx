@@ -86,8 +86,10 @@ export const EDITOR_RAIL_ITEMS = CLIP_EDITOR_RAIL_IDS.map((id) => ALL_EDITOR_RAI
   (item): item is (typeof ALL_EDITOR_RAIL_ITEMS)[number] => Boolean(item),
 )
 
+const dubOnRail = CLIP_EDITOR_RAIL_IDS.includes('dub')
+
 export const EDITOR_RAIL_GROUPS: { id: string; label: string; ids: EditorPanelId[] }[] = [
-  { id: 'ai', label: 'AI', ids: ['producer', 'repurpose', 'dub'] },
+  { id: 'ai', label: 'AI', ids: dubOnRail ? ['repurpose', 'dub'] : ['repurpose'] },
   { id: 'edit', label: 'Edit', ids: ['transcript', 'cleanup', 'captions', 'text', 'layers'] },
   { id: 'media', label: 'Media', ids: ['media', 'broll', 'audio', 'thumbnail'] },
   { id: 'style', label: 'Style', ids: ['layout', 'templates', 'brand', 'color'] },

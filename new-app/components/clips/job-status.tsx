@@ -301,7 +301,7 @@ export function JobStatus({
             />
             <Progress
               value={isClipWaitingForWorker(status, stage, progress, waitingForWorker) ? 0 : progress}
-              className="h-2 [&_[data-slot=progress-indicator]]:bg-brand-gradient"
+              className="h-2 [&_[data-slot=progress-indicator]]:bg-primary"
               aria-label="Processing progress"
             />
             <p className="flex items-center gap-2 text-sm text-muted-foreground">

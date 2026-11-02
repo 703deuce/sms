@@ -71,6 +71,7 @@ export function ClipsProjectsNav({ active = false }: { active?: boolean }) {
           <SidebarMenuButton
             tooltip="Home"
             isActive={active}
+            aria-current={active ? 'page' : undefined}
             data-nav-id="home"
             className="relative h-9 gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground"
             render={<Link href="/app/clips" />}

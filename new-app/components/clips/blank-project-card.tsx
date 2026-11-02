@@ -23,7 +23,7 @@ export function BlankProjectCard() {
     setBusy(true)
     try {
       const p = await createBlankProject({ blank: { aspectRatio: aspect } })
-      router.push(`/app/clips/${p.id}`)
+      router.push(`/app/clips/${p.id}?open=editor`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create the project')
       setBusy(false)

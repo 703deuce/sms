@@ -89,7 +89,7 @@ function NavItemRow({ item, active }: { item: SidebarNavItem; active: boolean })
           <Link href={item.href} prefetch={HEAVY_NAV_HREF_NO_PREFETCH.has(item.href) ? false : undefined} />
         }
       >
-        <Icon className="size-5" strokeWidth={1.75} />
+        <Icon className="size-5" />
         <span>{item.label}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>

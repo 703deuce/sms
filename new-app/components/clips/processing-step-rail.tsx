@@ -39,7 +39,7 @@ export function ProcessingStepRail({ steps, current }: { steps: string[]; curren
                   className={cn(
                     'relative grid size-9 place-items-center rounded-full ring-1 ring-inset',
                     done && 'bg-success/15 text-success ring-success/30',
-                    active && 'bg-brand-gradient text-white ring-white/20 shadow-glow',
+                    active && 'bg-primary text-primary-foreground ring-primary/20',
                     pending && 'bg-muted text-muted-foreground ring-border',
                   )}
                 >

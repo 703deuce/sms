@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { PrimaryButton } from '@/components/app/primary-button'
-import { Panel } from '@/components/app/page-primitives'
+import { PageContainer, PageHeader, PageSkeleton, Panel } from '@/components/app/page-primitives'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -51,8 +52,16 @@ type BrandRow = {
   watermarkSizePct: number | null
 }
 
-export function BrandEditor({ initialTab = 'kit' }: { initialTab?: 'kit' | 'templates' }) {
-  const [tab, setTab] = useState<'kit' | 'templates'>(initialTab)
+export function BrandEditor({
+  initialTab = 'kit',
+  initialTemplateId = null,
+}: {
+  initialTab?: 'kit' | 'templates'
+  initialTemplateId?: string | null
+}) {
+  const router = useRouter()
+  const [tab, setTab] = useState<'kit' | 'templates'>(initialTemplateId ? 'kit' : initialTab)
+  const [editingId, setEditingId] = useState<string | null>(initialTemplateId ?? null)
   const [name, setName] = useState('Default brand')
   const [settings, setSettings] = useState<BrandTemplateSettings | null>(null)
   const [logoKey, setLogoKey] = useState<string | null>(null)
@@ -77,7 +86,8 @@ export function BrandEditor({ initialTab = 'kit' }: { initialTab?: 'kit' | 'temp
   }
 
   useEffect(() => {
-    void clipsFetch<{ template: BrandRow | null; logoUrl: string | null }>('/api/clips/brand').then(async (d) => {
+    const q = editingId ? `?id=${encodeURIComponent(editingId)}` : ''
+    void clipsFetch<{ template: BrandRow | null; logoUrl: string | null }>(`/api/clips/brand${q}`).then(async (d) => {
       if (d.template) {
         const t = d.template
         setName(t.name)
@@ -97,7 +107,7 @@ export function BrandEditor({ initialTab = 'kit' }: { initialTab?: 'kit' | 'temp
       }
       setLogoUrl(d.logoUrl)
     })
-  }, [])
+  }, [editingId])
 
   const save = async () => {
     if (!settings) return
@@ -106,6 +116,7 @@ export function BrandEditor({ initialTab = 'kit' }: { initialTab?: 'kit' | 'temp
       await clipsFetch('/api/clips/brand', {
         method: 'PUT',
         body: JSON.stringify({
+          id: editingId ?? undefined,
           name,
           settings,
           logoKey,
@@ -171,12 +182,41 @@ export function BrandEditor({ initialTab = 'kit' }: { initialTab?: 'kit' | 'temp
     setPalette((prev) => (prev.length >= 5 ? prev : [...prev, '#38bdf8']))
   }
 
-  if (!settings) return <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+  if (!settings) {
+    return (
+      <PageContainer>
+        <PageSkeleton />
+      </PageContainer>
+    )
+  }
 
   const cap = settings.captionPreset || {}
   const captionOpts = captionStyleOptions(true)
 
   return (
+    <PageContainer>
+      <PageHeader title="Brand kit" description="Logo, colors, captions, and watermark for exports." />
+      {editingId ? (
+        <div
+          data-testid="brand-editing-banner"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
+        >
+          <span>
+            Editing “{name}”
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setEditingId(null)
+              router.replace('/app/clips/brand')
+            }}
+          >
+            Back to default
+          </Button>
+        </div>
+      ) : null}
     <div className="space-y-6">
       <div className="flex gap-2 border-b pb-2">
         {(['kit', 'templates'] as const).map((t) => (
@@ -196,7 +236,14 @@ export function BrandEditor({ initialTab = 'kit' }: { initialTab?: 'kit' | 'temp
 
       {tab === 'templates' ? (
         <div className="space-y-8">
-          <BrandTemplatesManager />
+          <BrandTemplatesManager
+            activeId={editingId}
+            onOpen={(id) => {
+              setEditingId(id)
+              setTab('kit')
+              router.replace(`/app/clips/brand?id=${encodeURIComponent(id)}`)
+            }}
+          />
           <section data-testid="brand-starter-kits">
             <h2 className="mb-3 text-sm font-semibold">Starter kits</h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -518,5 +565,6 @@ export function BrandEditor({ initialTab = 'kit' }: { initialTab?: 'kit' | 'temp
     </div>
       )}
     </div>
+    </PageContainer>
   )
 }

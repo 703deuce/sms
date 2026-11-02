@@ -271,28 +271,6 @@ function Sidebar({
   )
 }
 
-export function useSidebarOptional() {
-  return React.useContext(SidebarContext)
-}
-
-export function SidebarToggleButton({ className }: { className?: string }) {
-  const ctx = useSidebarOptional()
-  if (!ctx) return null
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className={cn("size-8", className)}
-      aria-label="Toggle sidebar"
-      data-testid="sidebar-toggle"
-      onClick={ctx.toggleSidebar}
-    >
-      <PanelLeft className="size-4" />
-    </Button>
-  )
-}
-
 function SidebarTrigger({
   className,
   onClick,
@@ -765,5 +743,4 @@ export {
   SidebarTrigger,
   useSidebar,
   useSidebarOptional,
-  SidebarContext,
 }

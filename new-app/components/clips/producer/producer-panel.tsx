@@ -168,7 +168,7 @@ export function ProducerPanel({
               </div>
             ) : (
               <div key={i} className="flex gap-2.5">
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand-gradient">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary">
                   <Sparkles className="size-3.5 text-white" aria-hidden />
                 </span>
                 <p className="max-w-[85%] rounded-2xl rounded-tl-md bg-muted px-3.5 py-2 text-sm">{m.content}</p>
@@ -177,7 +177,7 @@ export function ProducerPanel({
           )}
           {busy && (
             <div className="flex gap-2.5" aria-live="polite">
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand-gradient">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary">
                 <Sparkles className="size-3.5 text-white" aria-hidden />
               </span>
               <p className="inline-flex items-center gap-2 rounded-2xl rounded-tl-md bg-muted px-3.5 py-2 text-sm text-muted-foreground">

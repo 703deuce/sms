@@ -15,6 +15,8 @@ import { captionFontStack } from '@/lib/clips/caption-fonts'
 import { defaultEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { captionPresetPatch } from '@/lib/clips/editor/starter-templates'
 import { buildTemplateCatalog, type CatalogItem, type CatalogTab } from '@/lib/clips/templates/catalog'
+import { PageContainer, PageHeader, Panel, SectionTitle, CardGrid } from '@/components/app/page-primitives'
+import { BetaBadge, Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 type HubTab = CatalogTab | 'ai-video'
@@ -146,11 +148,8 @@ export function TemplatesHub({
   const tabs = aiVideo ? TABS : TABS.filter((t) => t.id !== 'ai-video')
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 md:p-6">
-      <header>
-        <h1 className="text-xl font-semibold">Templates</h1>
-        <p className="text-sm text-muted-foreground">Layouts, captions, looks, brand starters, and AI video styles.</p>
-      </header>
+    <PageContainer>
+      <PageHeader title="Templates" description="Layouts, captions, looks, brand starters, and AI video styles." />
 
       <div className="flex flex-wrap gap-2" role="tablist">
         {tabs.map((t) => (
@@ -235,18 +234,21 @@ export function TemplatesHub({
                 <div className="flex flex-1 flex-col gap-2 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium leading-tight">{item.name}</p>
-                    {item.badge ? (
-                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">{item.badge}</span>
+                    {item.badge === 'Beta' ? (
+                      <BetaBadge />
+                    ) : item.badge ? (
+                      <Badge variant="secondary">{item.badge}</Badge>
                     ) : null}
                   </div>
-                  <PrimaryButton
-                    size="sm"
-                    className="mt-auto w-full"
-                    disabled={Boolean(item.disabled)}
-                    onClick={() => useItem(item)}
-                  >
-                    Use
-                  </PrimaryButton>
+                  {item.disabled ? (
+                    <Button variant="secondary" size="sm" className="mt-auto w-full" disabled title={item.disabled}>
+                      Coming soon
+                    </Button>
+                  ) : (
+                    <PrimaryButton size="sm" className="mt-auto w-full" onClick={() => useItem(item)}>
+                      Use
+                    </PrimaryButton>
+                  )}
                 </div>
               </article>
             ))}
@@ -263,7 +265,7 @@ export function TemplatesHub({
           .
         </p>
       ) : null}
-    </div>
+    </PageContainer>
   )
 }
 

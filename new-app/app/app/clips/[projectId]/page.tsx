@@ -23,8 +23,15 @@ function reservedProjectSlugRedirects(): Record<string, string> {
 
 export const metadata = { title: 'Project · Clips' }
 
-export default async function ClipProjectPage({ params }: { params: Promise<{ projectId: string }> }) {
+export default async function ClipProjectPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ projectId: string }>
+  searchParams: Promise<{ open?: string }>
+}) {
   const { projectId } = await params
+  const sp = await searchParams
   const reserved = reservedProjectSlugRedirects()[projectId]
   if (reserved) redirect(reserved)
   const workspaceId = await resolveWorkspaceId()
@@ -90,7 +97,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
 
   const projectSettings = parseSettings(project.settings)
 
-  if (projectSettings.byo && project.status === 'READY' && !streamVod && initialClips?.length === 1) {
+  if (projectSettings.byo && project.status === 'READY' && !streamVod && initialClips?.length === 1 && sp.open === 'editor') {
     redirect(`/app/clips/${project.id}/edit/${initialClips[0]!.id}`)
   }
 
