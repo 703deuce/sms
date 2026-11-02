@@ -166,6 +166,55 @@ def write_fit_blur_crop_track(video: Path, crop_out: Path, clip_start_ms: int) -
     crop_out.write_text(json.dumps(track, separators=(",", ":")))
 
 
+def _burn_preview_captions(
+    out_mp4: Path,
+    words_path: Path,
+    settings: dict,
+    edits: dict | None,
+    work_dir: Path,
+    play_w: int,
+    play_h: int,
+    *,
+    seam_captions: bool = False,
+    stack_split: float = 0.4,
+    facecam_position: str = "top",
+) -> None:
+    """Burn the same captions the speakercrop path burns, for previews made outside it."""
+    caps = dict((edits or {}).get("captions") or settings.get("captions") or {})
+    if caps.get("enabled") is False:
+        return
+    words = json.loads(words_path.read_text())
+    if not words:
+        return
+    if seam_captions and isinstance(caps, dict):
+        from clips_worker.clip_layout_render import caption_edits_for_seam
+
+        caps = caption_edits_for_seam(
+            caps,
+            play_h=play_h,
+            stack_split=stack_split,
+            facecam_position=facecam_position,
+        )
+    from clips_worker.edits_render import burn_captions
+
+    tmp = work_dir / "preview_caps_in.mp4"
+    shutil.copyfile(out_mp4, tmp)
+    try:
+        burn_captions(
+            tmp,
+            words,
+            out_mp4,
+            work_dir,
+            edits_captions=caps,
+            play_w=play_w,
+            play_h=play_h,
+            edits=edits,
+        )
+    except Exception as exc:
+        shutil.copyfile(tmp, out_mp4)
+        print(f"[reframe] preview_caption_burn_failed err={type(exc).__name__}", flush=True)
+
+
 def reframe_clip_preview(
     clip_file: Path,
     out_mp4: Path,
@@ -209,6 +258,7 @@ def reframe_clip_preview(
         w, h = aspect_size(aspect, "720p")
         ffmpeg_fit_export(clip_file, out_mp4, w, h)
         write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
+        _burn_preview_captions(out_mp4, words_path, reframe_settings, edits, work_dir, w, h)
         return out_mp4, "fit_blur", reframe_settings
 
     if layout_mode in ("facecam_stack", "facecam_pip", "screen_pip") and edits and not motion_subject:
@@ -221,6 +271,21 @@ def reframe_clip_preview(
             res = apply_per_clip_layout(clip_file, work_dir, edits, play_w=w, play_h=h)
             if res.applied:
                 shutil.copyfile(res.path, out_mp4)
+                layout_ed = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+                fc_meta = layout_ed.get("facecam") if isinstance(layout_ed.get("facecam"), dict) else {}
+                fc_pos = str(fc_meta.get("position") or fc_meta.get("facecamPosition") or "top")
+                _burn_preview_captions(
+                    out_mp4,
+                    words_path,
+                    reframe_settings,
+                    edits,
+                    work_dir,
+                    w,
+                    h,
+                    seam_captions=bool(res.seam_captions),
+                    stack_split=float(res.stack_split),
+                    facecam_position=fc_pos,
+                )
                 return out_mp4, layout_mode, reframe_settings
         except Exception as exc:
             print(f"[reframe] stack_preview_failed mode={layout_mode} err={type(exc).__name__}", flush=True)
