@@ -146,6 +146,14 @@ def fit_top_headline_band_filters(
     return f"[bg0]drawbox=x=0:y={y}:w={play_w}:h={h_box}:color={fill}:t=fill[bg1]"
 
 
+def fit_top_fg_scale_crop_filter(play_w: int, vid_h: int) -> str:
+    """Scale+crop for the fit_top video band (increase fill, center crop)."""
+    return (
+        f"scale={play_w}:{vid_h}:force_original_aspect_ratio=increase,"
+        f"crop={play_w}:{vid_h}:(iw-{play_w})/2:(ih-{vid_h})/2"
+    )
+
+
 def _fit_top_base(
     src: Path,
     stage: Path,
@@ -172,8 +180,7 @@ def _fit_top_base(
     )
     fc = (
         f"{canvas_bg_from_input('0:v', 'bgfull', play_w, play_h, canvas_bg_spec, blur_strength, 'ftbg')};"
-        f"[0:v]scale={play_w}:{vid_h}:force_original_aspect_ratio=decrease,"
-        f"crop={play_w}:{vid_h}:(iw-{play_w})/2:(ih-{vid_h})/2[fg];"
+        f"[0:v]{fit_top_fg_scale_crop_filter(play_w, vid_h)}[fg];"
         f"color=c=black:s={play_w}x{play_h}:d={dur:.3f}[base];"
         f"[base][bgfull]overlay=0:0[bg0];"
         f"{band};"

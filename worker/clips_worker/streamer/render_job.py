@@ -243,6 +243,19 @@ def _clip_timeline_anchor(clip: dict, state: dict, vod_default: int) -> tuple[in
     return anchor, str(audio_key) if audio_key else None, str(video_key) if video_key else None
 
 
+def mark_project_failed(conn, project_id: str, error: str | None = None) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE clip_projects
+            SET status = 'FAILED', stage = 'failed', progress = 0, error = %s, "updatedAt" = NOW()
+            WHERE id = %s
+            """,
+            (error, project_id),
+        )
+    conn.commit()
+
+
 def run_stream_render_job(conn, job: dict, post_progress) -> None:
     payload = job.get("payload") or {}
     if isinstance(payload, str):
@@ -276,6 +289,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     total = len(clips)
     clips_ready = sum(1 for c in clips if c.get("previewKey"))
+    render_attempts = 0
+    render_successes = 0
     local_upload: Path | None = None
     render_started = time.time()
 
@@ -456,7 +471,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
 
                 eff_audio_key = clip_audio_key or audio_key
                 audio_path = _audio_path_for_key(str(eff_audio_key))
-                with stage_span("clip_render", heartbeat=True, clip_index=idx, clip_id=clip_id):
+                render_attempts += 1
+                try:
                     with stage_span("segment_download", heartbeat=True):
                         _fetch_segment_mp4(
                             clip,
@@ -661,10 +677,26 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                         vod_id=vod_id,
                     )
 
+                    render_successes += 1
                     clips_ready += 1
                     _render_progress(clips_ready)
+                except Exception as exc:
+                    err_line = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+                    print(
+                        f"[streamer:render] clip_render_failed clip={clip_id} err={err_line}",
+                        flush=True,
+                    )
+                    continue
 
             # end clip loop
+
+    if render_attempts > 0 and render_successes == 0:
+        mark_project_failed(conn, project_id, "All clip renders failed")
+        post_progress(
+            job["id"],
+            {"projectStatus": "FAILED", "stage": "failed", "progress": 0, "jobStatus": "FAILED"},
+        )
+        return
 
     mark_project_ready(conn, project_id)
     enqueue_stream_cleanup_job(
