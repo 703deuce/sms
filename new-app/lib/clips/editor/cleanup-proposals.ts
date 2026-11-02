@@ -14,10 +14,13 @@ import {
   isProtectedFromCleanup,
   type CleanupStrength,
 } from '@/lib/clips/editor/cleanup-strength'
+import { optInPhraseAt } from '@/lib/clips/editor/filler-opt-in'
+import { excerptForCutRange } from '@/lib/clips/editor/cleanup-text'
+import { normalizeToken } from '@/lib/clips/script-editor/enrich-transcript'
 import type { RetakeGroup } from '@/lib/clips/editor/retakes'
 import { retakeCutRange } from '@/lib/clips/editor/retakes'
 
-export type CleanupCutKind = 'filler' | 'gap' | 'manual' | 'unknown' | 'retake' | 'clarity'
+export type CleanupCutKind = 'filler' | 'repeat' | 'gap' | 'manual' | 'unknown' | 'retake' | 'clarity'
 
 export type CleanupProposal = {
   id: string
@@ -55,6 +58,7 @@ export function classifyCut(
   for (let i = 0; i < orderedWords.length; i++) {
     const w = orderedWords[i]
     if (deletedSet.has(w.id)) continue
+    if (w.isFiller && w.fillerKind === 'repeat' && rangeCoversWord(range, w)) return 'repeat'
     if (w.isFiller && rangeCoversWord(range, w)) return 'filler'
   }
   for (let i = 1; i < orderedWords.length; i++) {
@@ -79,14 +83,67 @@ export function fillerProposals(
   const strength = opts?.strength ?? DEFAULT_CLEANUP_STRENGTH
   const enabledOptIn = opts?.enabledOptInFillers ?? new Set<string>()
   const hits = listFillerHits(orderedWords, deletedSet, opts)
+  const usedIndices = new Set<number>()
   const out: CleanupProposal[] = []
-  for (const h of hits) {
+
+  for (let i = 0; i < orderedWords.length; i++) {
+    if (usedIndices.has(i) || deletedSet.has(orderedWords[i]!.id)) continue
+    const phraseHit = optInPhraseAt(orderedWords, i, deletedSet, enabledOptIn)
+    if (phraseHit) {
+      const first = orderedWords[i]!
+      const last = orderedWords[phraseHit.endIndex]!
+      if (isProtectedFromCleanup(first) || isProtectedFromCleanup(last)) continue
+      const raw: CutRange = [first.t0Ms, last.t1Ms]
+      for (let k = i; k <= phraseHit.endIndex; k++) usedIndices.add(k)
+      out.push({
+        id: proposalId(raw),
+        kind: 'filler',
+        range: raw,
+        label: phraseHit.phrase,
+      })
+      continue
+    }
+  }
+
+  for (let i = 0; i < orderedWords.length; i++) {
+    if (usedIndices.has(i)) continue
+    const w = orderedWords[i]!
+    if (deletedSet.has(w.id)) continue
+    const h = hits.find((x) => x.index === i)
+    if (!h) continue
     if (isProtectedFromCleanup(h.word)) continue
     if (!fillerEligibleAtStrength(h.word.text, h.word.fillerKind, strength, enabledOptIn)) continue
+
+    if (h.word.fillerKind === 'repeat') {
+      let j = i
+      const token = normalizeToken(h.word.text)
+      while (j + 1 < orderedWords.length) {
+        const n = orderedWords[j + 1]!
+        if (deletedSet.has(n.id) || usedIndices.has(j + 1)) break
+        if (!n.isFiller || n.fillerKind !== 'repeat') break
+        if (normalizeToken(n.text) !== token) break
+        j += 1
+      }
+      for (let k = i; k <= j; k++) usedIndices.add(k)
+      const raw: CutRange = [orderedWords[i]!.t0Ms, orderedWords[j]!.t1Ms]
+      const snippet = orderedWords
+        .slice(i, j + 1)
+        .map((x) => x.text.trim())
+        .join(' ')
+      out.push({
+        id: proposalId(raw),
+        kind: 'repeat',
+        range: raw,
+        label: `repeat · "${snippet}"`,
+      })
+      continue
+    }
+
     const raw: CutRange = [h.word.t0Ms, h.word.t1Ms]
+    usedIndices.add(i)
     out.push({
       id: proposalId(raw),
-      kind: 'filler' as const,
+      kind: 'filler',
       range: raw,
       label: h.word.text.trim() || 'filler',
     })
@@ -117,13 +174,21 @@ export function retakeProposals(
 
 export function clarityProposals(
   items: { range: CutRange; reason: string }[],
+  orderedWords?: EditorWord[],
 ): CleanupProposal[] {
-  return items.map(({ range, reason }) => ({
-    id: proposalId(range),
-    kind: 'clarity' as const,
-    range,
-    label: `Clarity · ${reason}`,
-  }))
+  return items.map(({ range, reason }) => {
+    const excerpt =
+      orderedWords && orderedWords.length > 0
+        ? excerptForCutRange(orderedWords, range)
+        : null
+    const detail = excerpt ? `${reason} — "${excerpt}"` : reason
+    return {
+      id: proposalId(range),
+      kind: 'clarity' as const,
+      range,
+      label: `Clarity · ${detail}`,
+    }
+  })
 }
 
 export function gapProposals(
@@ -181,7 +246,14 @@ export function appliedCutProposals(
       id: proposalId(range),
       kind: kind === 'unknown' ? 'manual' : kind,
       range,
-      label: kind === 'gap' ? 'Shortened pause' : kind === 'filler' ? 'Filler removed' : 'Cut',
+      label:
+        kind === 'gap'
+          ? 'Shortened pause'
+          : kind === 'repeat'
+            ? 'Repeat removed'
+            : kind === 'filler'
+              ? 'Filler removed'
+              : 'Cut',
     })
   }
   return out

@@ -38,6 +38,7 @@ export function describeEditsChange(prev: ClipEditsV2, next: ClipEditsV2): strin
 export function cleanupPassLabel(kind: string, count: number): string {
   const names: Record<string, string> = {
     filler: 'Remove fillers',
+    repeat: 'Remove repeats',
     gap: 'Shorten gaps',
     retake: 'Remove retakes',
     clarity: 'Edit for clarity',
@@ -48,4 +49,21 @@ export function cleanupPassLabel(kind: string, count: number): string {
   }
   const head = names[kind] ?? 'Cleanup'
   return `${head} · ${count} cut${count === 1 ? '' : 's'}`
+}
+
+export function singleCleanupApplyLabel(proposal: { kind: string }): string {
+  switch (proposal.kind) {
+    case 'retake':
+      return 'Remove retake'
+    case 'repeat':
+      return 'Remove repeat'
+    case 'filler':
+      return 'Remove filler'
+    case 'gap':
+      return 'Shorten gap'
+    case 'clarity':
+      return 'Edit for clarity'
+    default:
+      return 'Cut'
+  }
 }

@@ -15,6 +15,7 @@ vi.mock('@/lib/clips-api', () => ({
   clipsFetch: vi.fn(() => Promise.resolve({ channels: [] })),
   exportClipWithOptions: vi.fn(),
   getRenderStatus: vi.fn(),
+  retranscribeProject: vi.fn(() => Promise.resolve({ ok: true, jobId: 'j1', status: 'QUEUED' })),
 }))
 
 vi.mock('@/lib/clips/export-preferences-sync', () => ({
@@ -78,6 +79,7 @@ describe('editor render smoke', () => {
         render(
           <CleanupPanel
             clipId="clip_test"
+            projectId="proj_test"
             bounds={bounds}
             edits={edits}
             words={[]}

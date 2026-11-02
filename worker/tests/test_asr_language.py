@@ -11,6 +11,7 @@ def _params(language=None, model=None):
 def test_listen_params_default_matches_english():
     p = _params("en")
     assert p.get("language") == ["en"]
+    assert p.get("filler_words") == ["true"]
     assert "detect_language" not in p
 
 

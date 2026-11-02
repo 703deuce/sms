@@ -16,6 +16,7 @@ vi.mock('@/lib/clips-api', () => ({
     }
     return Promise.resolve({})
   }),
+  retranscribeProject: vi.fn(() => Promise.resolve({ ok: true, jobId: 'job1', status: 'QUEUED' })),
 }))
 
 vi.mock('sonner', () => ({
@@ -36,6 +37,7 @@ describe('B2 editor tools mount (no AI_EXTRAS flag)', () => {
     const { getByTestId } = render(
       <CleanupPanel
         clipId="clip1"
+        projectId="proj1"
         bounds={bounds}
         edits={edits}
         words={words}
@@ -61,6 +63,7 @@ describe('B2 editor tools mount (no AI_EXTRAS flag)', () => {
     const { getByTestId, findByText } = render(
       <CleanupPanel
         clipId="clip1"
+        projectId="proj1"
         bounds={bounds}
         edits={edits}
         words={words}

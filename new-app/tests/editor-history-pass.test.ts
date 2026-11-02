@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { editorEditsReducer } from '@/components/clips/editor/use-editor-state'
 import { defaultEdits } from '@/lib/clips/edits'
-import { cleanupPassLabel } from '@/lib/clips/editor/history-labels'
+import { cleanupPassLabel, singleCleanupApplyLabel } from '@/lib/clips/editor/history-labels'
 
 const bounds = { clipStartMs: 0, clipEndMs: 60_000 }
 
@@ -23,5 +23,9 @@ describe('editor history pass labels', () => {
     const undone = editorEditsReducer(after, { type: 'undo' })
     expect(undone.edits.cutRanges).toEqual([])
     expect(undone.pastLabels).toEqual([])
+  })
+
+  it('single retake apply uses Remove retake label', () => {
+    expect(singleCleanupApplyLabel({ kind: 'retake' })).toBe('Remove retake')
   })
 })

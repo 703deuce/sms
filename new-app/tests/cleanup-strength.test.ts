@@ -16,6 +16,7 @@ describe('cleanup-strength', () => {
   it('opt-in fillers excluded unless enabled', () => {
     expect(fillerEligibleAtStrength('like', 'lexicon', DEFAULT_CLEANUP_STRENGTH, new Set())).toBe(false)
     expect(fillerEligibleAtStrength('like', 'lexicon', 'aggressive', new Set(['like']))).toBe(true)
+    expect(fillerEligibleAtStrength('you', 'lexicon', 'aggressive', new Set(['you know']))).toBe(false)
   })
 
   it('light strength only um/uh family', () => {

@@ -10,6 +10,11 @@ from clips_worker.gpu.base import TranscribeReq
 from clips_worker.storage import sign_url, upload_file
 from clips_worker.transcribe_provider import TranscribeMeta, transcribe_audio_request
 
+# Q4 verbatim / disfluency-preserving ASR (Deepgram filler_words + Whisper initial prompt).
+VERBATIM_ASR_INITIAL_PROMPT = (
+    "Um, uh, er, ah, like, you know, I mean. Verbatim transcript with disfluencies and filler words."
+)
+
 
 def _extract_opus_16k(src: Path, dest: Path) -> None:
     from clips_worker.audio_extract import audio_extract_cmd
@@ -44,9 +49,20 @@ def transcribe_video_file(
             audio_key = f"ws/{workspace_id}/projects/{project_id}/audio.opus"
             upload_file(audio_key, opus, "audio/opus")
             url = sign_url(audio_key)
-            req = TranscribeReq(audio_url=url, audio_path=str(opus), model=model, language=lang)
+            req = TranscribeReq(
+                audio_url=url,
+                audio_path=str(opus),
+                model=model,
+                language=lang,
+                initial_prompt=VERBATIM_ASR_INITIAL_PROMPT,
+            )
         else:
-            req = TranscribeReq(audio_path=str(opus), model=model, language=lang)
+            req = TranscribeReq(
+                audio_path=str(opus),
+                model=model,
+                language=lang,
+                initial_prompt=VERBATIM_ASR_INITIAL_PROMPT,
+            )
 
         res, meta = transcribe_audio_request(conn, req, workspace_id, project_id)
     return res.words, meta

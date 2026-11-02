@@ -5,6 +5,10 @@ import { defaultEdits, normalizeEdits } from '@/lib/clips/edits'
 import { CleanupPanel } from '@/components/clips/editor/cleanup-panel'
 import { Timeline } from '@/components/clips/editor/timeline'
 
+vi.mock('@/lib/clips-api', () => ({
+  retranscribeProject: vi.fn(() => Promise.resolve({ ok: true, jobId: 'j1', status: 'QUEUED' })),
+}))
+
 const bounds = { clipStartMs: 5000, clipEndMs: 15_000, trimMinMs: 0, trimMaxMs: 30_000 }
 const words = [{ i: 0, w: 'hi', s: 6, e: 6.5 }]
 
@@ -20,6 +24,7 @@ describe('AI cut ticks', () => {
     const { getByTestId } = render(
       <CleanupPanel
         clipId="c1"
+        projectId="proj1"
         bounds={bounds}
         edits={edits}
         words={words}

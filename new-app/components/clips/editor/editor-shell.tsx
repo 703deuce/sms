@@ -77,6 +77,7 @@ import { DEFAULT_STUDIO_SOUND_MIX, normalizeAudioEdits } from '@/lib/clips/audio
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { CleanupPanel } from '@/components/clips/editor/cleanup-panel'
 import type { CleanupProposal } from '@/lib/clips/editor/cleanup-proposals'
+import { singleCleanupApplyLabel } from '@/lib/clips/editor/history-labels'
 import { deriveClipFromEditor } from '@/lib/clips-api'
 import { LayersPanel } from '@/components/clips/editor/layers-panel'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
@@ -456,7 +457,7 @@ export function EditorShell({
         kind: proposal.kind,
         range: proposal.range,
       })
-      applyCleanupCut(proposal.range)
+      applyCleanupCut(proposal.range, singleCleanupApplyLabel(proposal))
     },
     [applyCleanupCut, clipId],
   )
@@ -1676,6 +1677,7 @@ export function EditorShell({
         <EditorPanelErrorBoundary label="Cleanup">
           <CleanupPanel
             clipId={clipId}
+            projectId={projectId}
             bounds={bounds}
             edits={edits}
             words={editorWords}

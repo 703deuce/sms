@@ -103,6 +103,7 @@ def _listen_params(model: str | None = None, language: str | None = "en") -> str
     }
     if lang in ("", "en"):
         params["language"] = "en"
+        params["filler_words"] = "true"
     elif lang == "auto":
         params["detect_language"] = "true"
     else:

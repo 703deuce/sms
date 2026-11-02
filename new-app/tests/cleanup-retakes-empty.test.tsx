@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 
 vi.mock('@/lib/clips-api', () => ({
   clipsFetch: vi.fn(() => Promise.resolve({})),
+  retranscribeProject: vi.fn(() => Promise.resolve({ ok: true, jobId: 'j1', status: 'QUEUED' })),
 }))
 
 vi.mock('sonner', () => ({
@@ -28,6 +29,7 @@ describe('cleanup retakes empty message', () => {
     const { getByTestId } = render(
       <CleanupPanel
         clipId="clip1"
+        projectId="proj1"
         bounds={bounds}
         edits={edits}
         words={words}
