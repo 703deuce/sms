@@ -18,8 +18,14 @@
  * Mirrored by worker clips_worker/media_sources.py.
  */
 import { buildAutoMulticamScenes } from '@/lib/clips/script-editor/multicam-scenes'
+import {
+  remapSpeakerSourceMap,
+  speakersInTranscript,
+  transcriptSpeakerIdForWord,
+} from '@/lib/clips/editor/transcript-speakers'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
+import type { CropShot } from '@/lib/server/clips/clip-detail'
 
 export type MediaType = 'video' | 'image' | 'audio'
 export type MediaRef = 'upload' | 'take'
@@ -314,10 +320,22 @@ export function pruneSources(
 
 export type MulticamWord = { s: number; e: number; spk?: number; i?: number }
 
+function alternateWideSourceId(
+  map: Record<string, string>,
+  known: Set<string>,
+  activeSpeakerKey?: string,
+): string | null {
+  const mapped = [...new Set(Object.values(map).filter((v) => v && v !== 'main' && known.has(v)))]
+  if (!mapped.length) return null
+  const active = activeSpeakerKey ? map[activeSpeakerKey] : undefined
+  if (!active || active === 'main') return mapped[0]!
+  return mapped.find((id) => id !== active) ?? mapped[0]!
+}
+
 /**
  * Speaker-switched segments over MAIN SOURCE [rangeStartMs, rangeEndMs) (the clip's keep window).
  * Switch points are the first word of each scene (word start, ms), so cuts land on the diarization
- * boundary. 'grid' (wide / overlap / short turn) and unmapped speakers stay on the main camera.
+ * boundary. Periodic wide (`grid`) uses a mapped non-main angle (even with one diarized speaker).
  */
 export function buildMulticamSegments(
   words: readonly MulticamWord[],
@@ -325,21 +343,27 @@ export function buildMulticamSegments(
   rangeEndMs: number,
   multicam: ClipMulticam | undefined,
   sources: readonly ClipMediaSource[] | undefined,
+  shots: readonly CropShot[] = [],
 ): SourceSegment[] {
-  const map = multicam?.speakerSources ?? {}
+  const speakerIds = speakersInTranscript(words as MulticamWord[], shots, rangeStartMs, rangeEndMs).map((s) => s.id)
+  const map = remapSpeakerSourceMap(multicam?.speakerSources, speakerIds) ?? {}
   const inRange = words
     .filter((w) => w.e * 1000 > rangeStartMs && w.s * 1000 < rangeEndMs)
     .sort((a, b) => a.s - b.s)
   if (!inRange.length) return []
-  const editorWords: EditorWord[] = inRange.map((w, k) => ({
-    id: `w${w.i ?? k}`,
-    index: k,
-    t0Ms: Math.round(w.s * 1000),
-    t1Ms: Math.round(w.e * 1000),
-    text: '',
-    speakerId: `spk:${w.spk ?? 0}`,
-  }))
+  const editorWords: EditorWord[] = inRange.map((w, k) => {
+    const spk = transcriptSpeakerIdForWord(w, shots)
+    return {
+      id: `w${w.i ?? k}`,
+      index: k,
+      t0Ms: Math.round(w.s * 1000),
+      t1Ms: Math.round(w.e * 1000),
+      text: '',
+      speakerId: `spk:${spk}`,
+    }
+  })
   const startById = new Map(editorWords.map((w) => [w.id, w.t0Ms]))
+  const wordById = new Map(editorWords.map((w) => [w.id, w]))
   const scenes = buildAutoMulticamScenes(editorWords, {
     ...(multicam?.minHoldMs ? { minHoldMs: multicam.minHoldMs } : {}),
     ...(multicam?.wideEveryMs ? { wideEveryMs: multicam.wideEveryMs } : {}),
@@ -350,10 +374,21 @@ export function buildMulticamSegments(
     const a = Math.max(rangeStartMs, k === 0 ? rangeStartMs : startById.get(sc.startWordId) ?? rangeStartMs)
     const nextStart = k + 1 < scenes.length ? startById.get(scenes[k + 1]!.startWordId) : undefined
     const b = Math.min(rangeEndMs, nextStart ?? rangeEndMs)
+    if (b - a < SOURCE_SEG_MIN_MS) return
+
+    if (sc.layoutId === 'grid:alt') {
+      const w = wordById.get(sc.startWordId)
+      const spkKey = w?.speakerId.replace(/^spk:/, '') ?? speakerIds[0]
+      const sourceId = alternateWideSourceId(map, known, spkKey)
+      if (!sourceId) return
+      out.push({ id: `mc_wide_${a}`, sourceId, startMs: a, endMs: b, audio: 'main', auto: true })
+      return
+    }
+
     if (!sc.layoutId.startsWith('speaker:')) return
     const spk = sc.layoutId.slice('speaker:'.length)
     const sourceId = map[spk]
-    if (!sourceId || sourceId === 'main' || !known.has(sourceId) || b - a < SOURCE_SEG_MIN_MS) return
+    if (!sourceId || sourceId === 'main' || !known.has(sourceId)) return
     out.push({ id: `mc_${a}`, sourceId, startMs: a, endMs: b, audio: 'main', auto: true })
   })
   return out
@@ -393,23 +428,37 @@ export function fillActiveSpeakerGaps(
   words: readonly MulticamWord[],
   rangeStartMs: number,
   rangeEndMs: number,
+  shots: readonly CropShot[] = [],
 ): { edits: ClipEditsV2; generated: SourceSegment[] } {
+  const speakerIds = speakersInTranscript(words as MulticamWord[], shots, rangeStartMs, rangeEndMs).map((s) => s.id)
   const multicam = edits.multicam
+    ? { ...edits.multicam, speakerSources: remapSpeakerSourceMap(edits.multicam.speakerSources, speakerIds) }
+    : edits.multicam
   const sources = edits.sources
-  const generated = buildMulticamSegments(words, rangeStartMs, rangeEndMs, multicam, sources)
+  const generated = buildMulticamSegments(words, rangeStartMs, rangeEndMs, multicam, sources, shots)
   const sourceSegments = applyMulticamSegments(edits.sourceSegments, generated, rangeStartMs, rangeEndMs, sources)
-  return { edits: { ...edits, sourceSegments }, generated }
+  return { edits: { ...edits, multicam, sourceSegments }, generated }
 }
 
-/** Speakers present in the words (for the speaker → camera map), most talkative first. */
+/** Speakers present in the words (numeric diarization ids when shots are absent). */
 export function speakersInWords(words: readonly MulticamWord[], rangeStartMs: number, rangeEndMs: number): string[] {
   const talk = new Map<string, number>()
   for (const w of words) {
     if (w.e * 1000 <= rangeStartMs || w.s * 1000 >= rangeEndMs) continue
-    const k = String(w.spk ?? 0)
+    const k = transcriptSpeakerIdForWord(w, [])
     talk.set(k, (talk.get(k) ?? 0) + (w.e - w.s))
   }
   return [...talk.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k)
+}
+
+/** Speakers for the Media panel map (transcript ids + display order). */
+export function multicamSpeakerRows(
+  words: readonly MulticamWord[],
+  shots: readonly CropShot[],
+  rangeStartMs: number,
+  rangeEndMs: number,
+) {
+  return speakersInTranscript(words as MulticamWord[], shots, rangeStartMs, rangeEndMs)
 }
 
 // ---------------------------------------------------------------------------
