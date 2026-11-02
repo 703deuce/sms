@@ -130,6 +130,10 @@ def main() -> int:
                     str(src),
                 ]
             )
+            scratch_key = f"qc/ef24/{cid}_win_{int(time.time())}.mp4"
+            storage.upload_file(scratch_key, src, "video/mp4")
+            modal_src_url = storage.sign_url(scratch_key, expires_s=7200)
+            modal_start_s = 0.0
             for q in a.qualities.split(","):
                 if spent >= CAP_USD * 0.8:
                     print(f"stop: spent ${spent:.3f} ≥ 80% of ${CAP_USD}")
@@ -140,8 +144,8 @@ def main() -> int:
                     r = _matte_remote(
                         Matter,
                         {
-                            "src_url": src_url,
-                            "start_s": off,
+                            "src_url": modal_src_url,
+                            "start_s": modal_start_s,
                             "dur_s": a.seconds,
                             "preroll_s": 0.0,
                             "fps": 30,

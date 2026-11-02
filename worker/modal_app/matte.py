@@ -126,10 +126,24 @@ class Matter:
 
     @modal.method()
     def matte(self, item: dict) -> dict:
+        t0 = time.time()
+        try:
+            return self._matte_impl(item, t0)
+        except Exception as exc:
+            import urllib.error
+
+            if isinstance(exc, urllib.error.HTTPError):
+                return {"ok": False, "error": f"http_{exc.code}", "gpu_seconds": time.time() - t0}
+            return {
+                "ok": False,
+                "error": f"{type(exc).__name__}:{str(exc)[:160]}",
+                "gpu_seconds": time.time() - t0,
+            }
+
+    def _matte_impl(self, item: dict, t0: float) -> dict:
         import numpy as np
         import torch
 
-        t0 = time.time()
         cold = (t0 - getattr(self, "_boot_at", t0)) < 3.0
         quality = "detail" if item.get("quality") == "detail" else "standard"
         fps = float(item.get("fps") or 30)
