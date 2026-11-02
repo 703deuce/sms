@@ -7,15 +7,13 @@ import {
   zipNleExportFiles,
 } from '@/lib/clips/export-nle-bundle'
 import { jsonError } from '@/lib/server/api-error'
-import { AuthRequiredError, requireAuthenticatedUser } from '@/lib/server/auth/session'
 import { getPrisma } from '@/lib/server/db'
 import { loadClipSourceWords } from '@/lib/server/clips/transcript'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { basename as pathBasename } from 'node:path/posix'
 
-export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuthenticatedUser(request)
     const { id } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const prisma = getPrisma()
@@ -54,7 +52,6 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       },
     })
   } catch (err) {
-    if (err instanceof AuthRequiredError) return jsonError(err, 401)
     return jsonError(err, 500)
   }
 }

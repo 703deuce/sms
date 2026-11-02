@@ -22,7 +22,7 @@ import { displayDurationMs, outputDurationMs, normalizeEditSpeed, type ClipEdits
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import { can } from '@/lib/billing/entitlements'
-import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
+import { clipsFetch, downloadClipNleZip, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
 import { exportRequestMatchesClipPreview } from '@/lib/clips/export-preview-reuse'
 import {
   EXPORT_PLATFORM_IDS,
@@ -188,11 +188,21 @@ export function ExportDialog({
   const [exportSfx, setExportSfx] = useState<ExportSfxMode>('off')
   const sfxBundled = exportSfxBundledAssetsAvailable()
   const [savedChannels, setSavedChannels] = useState<ClipUserStreamerChannelRow[]>([])
+  const [nleExportBusy, setNleExportBusy] = useState(false)
 
   const refreshChannels = () => {
     void clipsFetch<{ channels: ClipUserStreamerChannelRow[] }>('/api/clips/my-channels')
       .then((data) => setSavedChannels(data.channels))
       .catch(() => {})
+  }
+
+  const onDownloadNlePack = () => {
+    if (nleExportBusy) return
+    setNleExportBusy(true)
+    void downloadClipNleZip(clipId, title)
+      .then(() => toast.success('NLE pack downloaded'))
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'NLE export failed'))
+      .finally(() => setNleExportBusy(false))
   }
 
   useEffect(() => {
@@ -685,13 +695,8 @@ export function ExportDialog({
               size="sm"
               variant="outline"
               data-testid="export-xml-download"
-              render={
-                <a
-                  href={`/api/clips/clips/${clipId}/export-xml`}
-                  download
-                />
-              }
-              nativeButton={false}
+              disabled={nleExportBusy}
+              onClick={onDownloadNlePack}
             >
               Premiere / Resolve / FCP (zip)
             </Button>

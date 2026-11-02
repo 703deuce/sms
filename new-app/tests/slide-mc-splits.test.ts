@@ -11,6 +11,8 @@ describe('slide clip_5f19e510 (split @4641, cut @29215–29695)', () => {
     const e = clip5f19e510Edits()
     const s = slideEdit(ctx(e), { lane: 'video', id: 'seg:4641' }, 300)
     expect(s).not.toBeNull()
+    expect(s!.transitions?.length).toBe(e.transitions?.length ?? 0)
+    expect(s!.transitions?.[0]?.type).toBe('spin')
     expect(s!.videoSplits).toEqual([4941])
     expect(s!.cutRanges).toEqual([[29_515, 29_995]])
     expect(s!.transitions).toEqual([{ type: 'spin', durMs: 1000, srcMs: 29_995 }])
