@@ -147,7 +147,7 @@ describe('G2 second song on the Music lane', () => {
     expect(second.edits?.audio?.music?.uploadId).toBe('upl_a')
     expect(second.message).toMatch(/Music 2/)
     const cue = second.edits!.audio!.sfx.find((s) => s.uploadId === 'upl_b')!
-    expect(cue).toMatchObject({ atMs: 2000, durMs: 8000, volume: 0.25, fadeInMs: 500, fadeOutMs: 1000, duckDepth: 0.7 })
+    expect(cue).toMatchObject({ atMs: 2000, durMs: 8000, volume: 0.5, fadeInMs: 500, fadeOutMs: 1000, duckDepth: 0.55 })
     const t2 = trackIdOf(second.edits!, 'audio', cue.generationId)
     expect(trackLabel(second.edits!, t2)).toBe('Music 2')
     // Overlapping third song → Music 3; a later one fits back on Music 2.

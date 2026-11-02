@@ -41,7 +41,7 @@ describe('G2fix: songs on Music N tracks are music clips', () => {
   it('Music button: the 2nd song is kind music, labelled Music, ducked with music defaults', () => {
     const { edits } = twoSongs()
     const cue = edits.audio!.sfx[0]!
-    expect(cue).toMatchObject({ kind: 'music', volume: 0.25, fadeInMs: 500, fadeOutMs: 1000, duckDepth: 0.7 })
+    expect(cue).toMatchObject({ kind: 'music', volume: 0.5, fadeInMs: 500, fadeOutMs: 1000, duckDepth: 0.55 })
     expect(audioClipKindOf(edits, cue.generationId)).toBe('music')
     const item = buildTimelineItems({ edits, previewEdits: edits }).sfx[0]!
     expect(item.label).toBe('Music')
@@ -53,7 +53,7 @@ describe('G2fix: songs on Music N tracks are music clips', () => {
     const dropped = addMediaToLane(edits, tb, song('upl_c', 20_000), 'sfx', 15_000, () => 'x').edits!
     const onMusic = placeAddedOnTrack(edits, dropped, 'sfx', music2)
     const c = onMusic.audio!.sfx.find((s) => s.uploadId === 'upl_c')!
-    expect(c).toMatchObject({ kind: 'music', volume: 0.25, duckDepth: 0.7, fadeInMs: 500 })
+    expect(c).toMatchObject({ kind: 'music', volume: 0.5, duckDepth: 0.55, fadeInMs: 500 })
     // Dropped on the plain SFX lane: an SFX, no ducking by default.
     const plain = placeAddedOnTrack(edits, dropped, 'sfx', undefined).audio!.sfx.find((s) => s.uploadId === 'upl_c')!
     expect(plain.kind).toBeUndefined()

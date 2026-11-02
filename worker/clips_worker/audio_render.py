@@ -236,32 +236,44 @@ def _windowed(window: dict | None, L: float) -> tuple[float, float, float] | Non
     return start, max(0.1, end - start), in_s
 
 
+def _music_fade_seconds(ln: float, fi: float, fo: float, *, clamp_half: bool) -> tuple[float, float]:
+    """Fade in/out seconds on a play length `ln` (mirrors TS `fadeGain` / `musicFadeAt`)."""
+    if clamp_half:
+        fi = min(fi, ln / 2)
+        fo = min(fo, ln / 2)
+    return max(0.0, fi), max(0.0, fo)
+
+
 def music_chain(
     idx: int, L: float, V: float, FI: float, FO: float, window: dict | None, label: str,
     envelope: str | None = None,
     pan: int | None = None,
     pan_ch: int = 2,
 ) -> str:
-    """Music bed filter: legacy (0..L) or E2 windowed (atrim in-point, fades on the window, adelay).
-    envelope (E3): `volume` expression in OUTPUT seconds (motion.volume_expr with the window origin)."""
+    """Music bed filter: trim to the output window, then volume + fades on local t=0 (like `clip_fade`).
+    Legacy whole-clip beds fade over [0, FI] and [ln-FO, ln] without clamping; windowed beds clamp
+    each fade to half the window length. envelope (E3): motion volume in OUTPUT seconds."""
     w = _windowed(window, L)
     env = f",volume='{envelope}':eval=frame" if envelope else ""
     pf = pan_filter(pan, pan_ch)
     if w is None:
-        return (
-            f"[{idx}:a]volume={V:.4f},"
-            f"afade=t=in:d={FI:.3f},afade=t=out:st={max(0, L - FO):.3f}:d={FO:.3f},"
-            f"atrim=0:{L:.3f},asetpts=PTS-STARTPTS{env}{pf}[{label}]"
-        )
-    start, ln, in_s = w
-    fi = min(FI, ln / 2)
-    fo = min(FO, ln / 2)
+        start, ln, in_s = 0.0, L, 0.0
+        fi, fo = _music_fade_seconds(ln, FI, FO, clamp_half=False)
+    else:
+        start, ln, in_s = w
+        fi, fo = _music_fade_seconds(ln, FI, FO, clamp_half=True)
+    trim = f"atrim=start={in_s:.3f}:end={in_s + ln:.3f}," if in_s > 0.0005 else f"atrim=0:{ln:.3f},"
+    fades = ""
+    if fi > 0.0005:
+        fades += f"afade=t=in:st=0:d={fi:.3f},"
+    if fo > 0.0005:
+        fades += f"afade=t=out:st={max(0.0, ln - fo):.3f}:d={fo:.3f},"
     delay_ms = int(round(start * 1000))
-    return (
-        f"[{idx}:a]atrim=start={in_s:.3f}:end={in_s + ln:.3f},asetpts=PTS-STARTPTS,volume={V:.4f},"
-        f"afade=t=in:d={fi:.3f},afade=t=out:st={max(0, ln - fo):.3f}:d={fo:.3f},"
-        f"adelay={delay_ms}|{delay_ms},apad=whole_dur={L:.3f}{env}{pf}[{label}]"
-    )
+    pad = ""
+    if start > 0.0005 or ln < L - 0.0005:
+        pad = f"adelay={delay_ms}|{delay_ms},apad=whole_dur={L:.3f},"
+    body = f"{trim}asetpts=PTS-STARTPTS,volume={V:.4f},{fades}{pad}".rstrip(",")
+    return f"[{idx}:a]{body}{env}{pf}[{label}]"
 
 
 def sfx_input_args(path: Path, sfx_fx: list | None, i: int) -> list[str]:

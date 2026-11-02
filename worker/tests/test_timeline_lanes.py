@@ -48,3 +48,10 @@ def test_no_lane_state_is_identity():
 def test_music_window_defaults():
     assert music_window({"generationId": "m"}, 12000) == {"startMs": 0, "endMs": 12000, "inMs": 0}
     assert music_window(None, 12000) is None
+
+
+def test_music_window_extends_short_end_within_fade_out():
+    assert music_window(
+        {"generationId": "m", "startMs": 0, "endMs": 38700, "inMs": 0, "fadeOutMs": 3000},
+        41000,
+    ) == {"startMs": 0, "endMs": 41000, "inMs": 0}

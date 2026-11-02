@@ -22,6 +22,7 @@ import { rippleMarkers } from '@/lib/clips/editor/markers'
 import { magnetOn, rippleOverlaysOn } from '@/lib/clips/editor/timeline-opts'
 import { GAP_SOURCE_ID, INSERT_MAX_MS, INSERT_MIN_MS, MAX_INSERTS } from '@/lib/clips/editor/inserts'
 import type { ClipAudioMusic, ClipAudioSfx } from '@/lib/clips/audio'
+import { DEFAULT_MUSIC_FADE_OUT_MS } from '@/lib/clips/audio'
 import { BROLL_MIN_MS, type BrollItem } from '@/lib/clips/broll'
 import {
   mergeCutRanges,
@@ -259,8 +260,14 @@ export function musicWindow(music: ClipAudioMusic | null | undefined, durationMs
   const dur = Math.max(0, durationMs)
   const startMs = clamp(Math.round(music.startMs ?? 0), 0, Math.max(0, dur - MUSIC_MIN_MS))
   const rawEnd = music.endMs == null ? dur : Math.round(music.endMs)
-  const endMs = clamp(rawEnd, Math.min(dur, startMs + MUSIC_MIN_MS), dur)
-  return { startMs, endMs, inMs: Math.max(0, Math.round(music.inMs ?? 0)) }
+  let endMs = clamp(rawEnd, Math.min(dur, startMs + MUSIC_MIN_MS), dur)
+  const inMs = Math.max(0, Math.round(music.inMs ?? 0))
+  // AU-33: extend to clip end when the bed stops ≤ fadeOut before the tail (export fade parity).
+  if (startMs <= 0 && inMs <= 0 && endMs < dur) {
+    const fadeOutMs = Math.max(0, Math.round(music.fadeOutMs ?? DEFAULT_MUSIC_FADE_OUT_MS))
+    if (dur - endMs <= fadeOutMs + 50) endMs = dur
+  }
+  return { startMs, endMs, inMs: inMs }
 }
 
 // ---------------------------------------------------------------------------
