@@ -5,6 +5,7 @@ import { ProjectClipsView } from '@/components/clips/project-clips-view'
 import { listProjectClips } from '@/lib/server/clips/clips'
 import { resolveViewOnFullVideoUrl } from '@/lib/server/clips/view-on-full-video'
 import { blankProjectDisplayDurationMs, parseSettings } from '@/lib/server/clips/projects'
+import { isFullVideoSettings } from '@/lib/clips/full-video'
 import { getProjectStatus } from '@/lib/server/clips/jobs'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -129,6 +130,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         viewOnFullVideoUrl={viewOnFullVideoUrl}
         asrLanguage={projectSettings.asrLanguage}
         editorProjectId={projectSettings.fromFullVideoProjectId ?? project.id}
+        projectHasUpload={Boolean(project.uploadId && !isFullVideoSettings(projectSettings))}
       />
     </Page>
   )

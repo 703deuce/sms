@@ -44,6 +44,7 @@ export function ClipCard({
   cardAspect = '9:16' as ExportAspect,
   selected = false,
   onToggleSelect,
+  projectHasUpload = false,
 }: {
   clip: ClipCardData
   projectId: string
@@ -53,6 +54,7 @@ export function ClipCard({
   cardAspect?: ExportAspect
   selected?: boolean
   onToggleSelect?: () => void
+  projectHasUpload?: boolean
 }) {
   const router = useRouter()
   const [thumbBusy, setThumbBusy] = useState(false)
@@ -370,7 +372,7 @@ export function ClipCard({
           <Button size="sm" variant="outline" disabled={thumbBusy} onClick={() => void makeThumbnail()}>
             Make thumbnail
           </Button>
-          <OpenInFullVideoButton clipId={clip.id} />
+          <OpenInFullVideoButton clipId={clip.id} hasUpload={projectHasUpload} />
           {onHidden ? (
             <Button size="sm" variant="ghost" disabled={hideBusy} onClick={() => void hideClip()}>
               <ThumbsDown className="mr-1 size-3.5" aria-hidden />

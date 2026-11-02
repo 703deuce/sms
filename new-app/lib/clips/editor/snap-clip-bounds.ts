@@ -25,29 +25,34 @@ export function clipWordsToSnapWords(raw: readonly ClipWord[]): SnapWord[] {
 export type SentenceSpan = { startMs: number; endMs: number; wordStart: number; wordEnd: number }
 
 export function buildSentenceSpans(words: readonly SnapWord[], rangeStartMs: number, rangeEndMs: number): SentenceSpan[] {
-  const slice = words.filter((w) => w.e * 1000 >= rangeStartMs && w.s * 1000 <= rangeEndMs)
+  type Indexed = { w: SnapWord; gi: number }
+  const slice: Indexed[] = []
+  for (let gi = 0; gi < words.length; gi++) {
+    const w = words[gi]!
+    if (w.e * 1000 >= rangeStartMs && w.s * 1000 <= rangeEndMs) slice.push({ w, gi })
+  }
   if (!slice.length) return []
   const out: SentenceSpan[] = []
-  let buf: SnapWord[] = []
-  let bufStartIdx = 0
-  const flush = (endIdx: number) => {
+  let buf: Indexed[] = []
+  let bufStartSliceIdx = 0
+  const flush = (endSliceIdx: number) => {
     if (!buf.length) return
     out.push({
-      startMs: Math.round(buf[0]!.s * 1000),
-      endMs: Math.round(buf[buf.length - 1]!.e * 1000),
-      wordStart: bufStartIdx,
-      wordEnd: endIdx,
+      startMs: Math.round(buf[0]!.w.s * 1000),
+      endMs: Math.round(buf[buf.length - 1]!.w.e * 1000),
+      wordStart: slice[bufStartSliceIdx]!.gi,
+      wordEnd: slice[endSliceIdx]!.gi,
     })
-    bufStartIdx = endIdx + 1
+    bufStartSliceIdx = endSliceIdx + 1
     buf = []
   }
   for (let i = 0; i < slice.length; i++) {
-    const w = slice[i]!
-    const prev = i > 0 ? slice[i - 1]! : null
+    const w = slice[i]!.w
+    const prev = i > 0 ? slice[i - 1]!.w : null
     const gapMs = prev ? (w.s - prev.e) * 1000 : 0
     const prevEndsSentence = prev ? /[.?!]["')\]]*$/.test(prev.w.trim()) : false
     if (buf.length && (gapMs > SENTENCE_GAP_MS || prevEndsSentence)) flush(i - 1)
-    buf.push(w)
+    buf.push(slice[i]!)
   }
   if (buf.length) flush(slice.length - 1)
   return out
@@ -139,7 +144,8 @@ export function clipEndMisalignedWithSentence(
 ): boolean {
   if (!words.length) return false
   const sentences = buildSentenceSpans(words, rangeStartMs, rangeEndMs)
-  const eSent = sentenceForMs(sentences, endMs)
+  const probeMs = Math.max(rangeStartMs, endMs - END_PAD_MS)
+  const eSent = sentenceForMs(sentences, probeMs)
   if (!eSent) return true
   const lastWord = words[Math.min(words.length - 1, eSent.wordEnd)]
   if (!lastWord) return true

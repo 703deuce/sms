@@ -28,6 +28,7 @@ export function ClipGrid({
   cardAspect = '9:16' as ExportAspect,
   selectedIds,
   onToggleSelect,
+  projectHasUpload = false,
 }: {
   clips: ClipCardData[]
   projectId: string
@@ -37,6 +38,7 @@ export function ClipGrid({
   cardAspect?: ExportAspect
   selectedIds?: Set<string>
   onToggleSelect?: (clipId: string) => void
+  projectHasUpload?: boolean
 }) {
   return (
     <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -51,6 +53,7 @@ export function ClipGrid({
           cardAspect={cardAspect}
           selected={selectedIds?.has(c.id) ?? false}
           onToggleSelect={onToggleSelect ? () => onToggleSelect(c.id) : undefined}
+          projectHasUpload={projectHasUpload}
         />
       ))}
     </div>

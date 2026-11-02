@@ -105,6 +105,7 @@ export function ProjectClipsView({
   viewOnFullVideoUrl = null,
   asrLanguage,
   editorProjectId,
+  projectHasUpload = false,
 }: {
   projectId: string
   projectTitle: string
@@ -125,6 +126,8 @@ export function ProjectClipsView({
   asrLanguage?: ClipProjectSettings['asrLanguage']
   /** Full-video project id for editor link (defaults to route projectId). */
   editorProjectId?: string | null
+  /** CL-05: clip cards can open moment in full video when the project has an upload. */
+  projectHasUpload?: boolean
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
   const router = useRouter()
@@ -585,6 +588,7 @@ export function ProjectClipsView({
                   onHidden={onClipHidden}
                   isStreamer={isStreamer}
                   cardAspect={exportAspect}
+                  projectHasUpload={projectHasUpload}
                   selectedIds={isStreamer ? undefined : selectedClipIds}
                   onToggleSelect={
                     isStreamer
