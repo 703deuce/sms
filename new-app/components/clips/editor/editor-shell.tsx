@@ -2571,6 +2571,7 @@ export function EditorShell({
                     clipRec.arm(m)
                     if (m === 'voiceover') selectPanel('media')
                   }}
+                  onOpenAiVoiceover={() => selectPanel('audio')}
                 />
               ) : (
                 <ClipRecordMenu disabled disabledReason="Recording needs a secure origin and microphone access" onPick={() => undefined} />

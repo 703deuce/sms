@@ -9,8 +9,8 @@ import {
 import { defaultEdits } from '@/lib/clips/edits'
 
 describe('export-xml fcpxml', () => {
-  it('maps keep segments to timeline offsets', () => {
-    const bounds = { clipStartMs: 10_000, clipEndMs: 25_000 }
+  it('maps keep segments to display timeline offsets', () => {
+    const bounds = { clipStartMs: 0, clipEndMs: 25_000, trimMinMs: 0, trimMaxMs: 25_000 }
     const edits = defaultEdits(bounds)
     edits.trim.in = 0
     edits.trim.out = 5_000
@@ -18,8 +18,9 @@ describe('export-xml fcpxml', () => {
     const { segments } = clipEditsToFcpxmlSegments(edits, bounds)
     expect(segments.length).toBe(2)
     expect(segments[0]?.offsetSec).toBe(0)
+    expect(segments[0]?.sourceStartSec).toBe(0)
+    expect(segments[1]?.sourceStartSec).toBe(msToFcpxSeconds(2500))
     expect(segments[1]?.offsetSec).toBe(msToFcpxSeconds(1500))
-    expect(segments[0]?.sourceStartSec).toBe(msToFcpxSeconds(10_000))
   })
 
   it('emits fcpxml document with asset clips', () => {
@@ -27,7 +28,7 @@ describe('export-xml fcpxml', () => {
       title: 'Test clip',
       sourceMediaHref: 'file:///media/source.mp4',
       sourceDurationSec: 12,
-      segments: [{ offsetSec: 0, sourceStartSec: 1, durationSec: 3 }],
+      segments: [{ offsetSec: 0, sourceStartSec: 1, durationSec: 3, sourceDurationSec: 3, speed: 1 }],
       fps: 30,
       width: 1080,
       height: 1920,

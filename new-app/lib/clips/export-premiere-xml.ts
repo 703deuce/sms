@@ -42,8 +42,13 @@ function clipItemsXml(
       const durFrames = secToFrames(seg.durationSec, fps)
       const startFrames = secToFrames(seg.offsetSec, fps)
       const inFrames = secToFrames(seg.sourceStartSec, fps)
+      const outFrames = inFrames + secToFrames(seg.sourceDurationSec, fps)
       const endFrames = startFrames + durFrames
-      const outFrames = inFrames + durFrames
+      const speed = seg.speed && Math.abs(seg.speed - 1) > 0.001 ? seg.speed : 1
+      const speedNote =
+        speed !== 1
+          ? `\n            <comments>Transovo speed ${speed}× (timeline ${durFrames}f, source ${outFrames - inFrames}f)</comments>`
+          : ''
       return `          <clipitem id="clipitem-${i + 1}">
             <name>${escapeXml(title)} ${i + 1}</name>
             <duration>${durFrames}</duration>
@@ -54,7 +59,7 @@ function clipItemsXml(
             <start>${startFrames}</start>
             <end>${endFrames}</end>
             <in>${inFrames}</in>
-            <out>${outFrames}</out>
+            <out>${outFrames}</out>${speedNote}
             <file id="${fileId}"/>
           </clipitem>`
     })
@@ -87,7 +92,7 @@ export function buildPremiereXmlFromClipEdits(opts: {
     segments.length > 0
       ? clipItemsXml(segments, opts.title.trim() || 'Transovo clip', opts.sourceMediaFilename, opts.sourceMediaHref, fps)
       : clipItemsXml(
-          [{ offsetSec: 0, sourceStartSec: 0, durationSec: timelineDurationSec }],
+          [{ offsetSec: 0, sourceStartSec: 0, durationSec: timelineDurationSec, sourceDurationSec: timelineDurationSec, speed: 1 }],
           opts.title.trim() || 'Transovo clip',
           opts.sourceMediaFilename,
           opts.sourceMediaHref,

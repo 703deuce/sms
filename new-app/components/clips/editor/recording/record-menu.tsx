@@ -15,10 +15,13 @@ export function ClipRecordMenu({
   disabled,
   disabledReason,
   onPick,
+  onOpenAiVoiceover,
 }: {
   disabled?: boolean
   disabledReason?: string
   onPick: (mode: ClipRecorderMode) => void
+  /** Opens Audio panel AI TTS (not mic recorder). */
+  onOpenAiVoiceover?: () => void
 }) {
   const btn = (
     <Button
@@ -47,9 +50,15 @@ export function ClipRecordMenu({
     <DropdownMenu>
       <DropdownMenuTrigger render={btn} />
       <DropdownMenuContent align="start">
+        {onOpenAiVoiceover ? (
+          <DropdownMenuItem onClick={() => onOpenAiVoiceover()} data-testid="record-ai-voiceover">
+            <Mic className="mr-2 size-4" />
+            AI voiceover (text to speech)
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onClick={() => onPick('voiceover')} data-testid="record-voiceover">
           <Mic className="mr-2 size-4" />
-          Voiceover
+          Record voiceover (mic)
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onPick('camera')} data-testid="record-camera">
           <Video className="mr-2 size-4" />

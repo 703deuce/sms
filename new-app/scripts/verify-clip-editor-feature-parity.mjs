@@ -26,6 +26,8 @@ const MOUNTS = [
   { name: 'Music suggest', testId: 'audio-music-suggest', inFiles: ['audio-panel.tsx'] },
   { name: 'SFX Kenney badge', testId: 'stock-sfx-license-badge', inFiles: ['stock-audio-picker.tsx'] },
   { name: 'Cut to beat (audio panel)', testId: 'audio-beat-cut', inFiles: ['beat-cut-controls.tsx', 'audio-panel.tsx'] },
+  { name: 'AI voiceover (text to speech)', testId: 'audio-panel-ai-voiceover', inFiles: ['audio-panel.tsx'] },
+  { name: 'Record AI voiceover menu', testId: 'record-ai-voiceover', inFiles: ['recording/record-menu.tsx'] },
   { name: 'Export share from dialog', testId: 'export-share-open-dialog', inFiles: ['export-dialog.tsx'] },
   { name: 'Export NLE zip', testId: 'export-xml-download', inFiles: ['export-dialog.tsx'] },
   { name: 'Export stems (visible)', testId: 'export-stems-main', inFiles: ['export-dialog.tsx'] },
@@ -44,6 +46,9 @@ for (const m of MOUNTS) {
 }
 
 const shellSrc = readClip('editor-shell.tsx')
+if (!shellSrc.includes('onOpenAiVoiceover')) {
+  errors.push('editor-shell.tsx: wire Record menu AI voiceover (onOpenAiVoiceover)')
+}
 const forbiddenShellImports = [
   'script-clarity-panel',
   'script-retakes-panel',
