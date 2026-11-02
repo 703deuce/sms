@@ -18,16 +18,17 @@ export async function makeClipFromPick(
   return { clipId: res.clipId, navigated: 'derived' }
 }
 
-export type ProjectHighlightsResponse = {
-  data: {
-    source?: 'find' | 'project'
-    status: string
-    progress?: number | null
-    foundProjectId?: string
-    picks: HighlightPick[]
-  } | null
-}
+export type ProjectHighlightsPayload = {
+  source?: 'find' | 'project'
+  status: string
+  progress?: number | null
+  foundProjectId?: string
+  picks: HighlightPick[]
+} | null
 
+/** GET /api/clips/projects/:id/highlights — `clipsFetch` already unwraps `{ data: payload }`. */
 export function fetchProjectHighlights(projectId: string) {
-  return clipsFetch<ProjectHighlightsResponse>(`/api/clips/projects/${projectId}/highlights`)
+  return clipsFetch<NonNullable<ProjectHighlightsPayload>>(
+    `/api/clips/projects/${encodeURIComponent(projectId)}/highlights`,
+  )
 }

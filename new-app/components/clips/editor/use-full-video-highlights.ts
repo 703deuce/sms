@@ -75,8 +75,7 @@ export function useFullVideoHighlights(
 
   const load = useCallback(async () => {
     if (!fullVideo) return
-    const res = await fetchProjectHighlights(projectId)
-    const data = res.data
+    const data = await fetchProjectHighlights(projectId).catch(() => null)
     if (!data) {
       setPicks([])
       setRanges([])

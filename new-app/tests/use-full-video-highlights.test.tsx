@@ -37,11 +37,10 @@ describe('useFullVideoHighlights', () => {
 
   it('auto-enables highlights lane when find picks load (no prior toggle)', async () => {
     fetchProjectHighlights.mockResolvedValue({
-      data: {
-        source: 'find',
-        status: 'DONE',
-        progress: 100,
-        picks: [
+      source: 'find',
+      status: 'DONE',
+      progress: 100,
+      picks: [
           {
             clipId: 'fp_job_0',
             title: 'Moment',
@@ -54,7 +53,6 @@ describe('useFullVideoHighlights', () => {
             findJobId: 'job_1',
           },
         ],
-      },
     })
 
     const { result, unmount } = renderHook(() => useFullVideoHighlights('proj_fv', true, []))
@@ -71,7 +69,10 @@ describe('useFullVideoHighlights', () => {
 
   it('shows finding state while FIND_CLIPS job is RUNNING', async () => {
     fetchProjectHighlights.mockResolvedValue({
-      data: { source: 'find', status: 'RUNNING', progress: 55, picks: [] },
+      source: 'find',
+      status: 'RUNNING',
+      progress: 55,
+      picks: [],
     })
 
     const { result, unmount } = renderHook(() => useFullVideoHighlights('proj_fv', true, []))
