@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -181,8 +182,10 @@ def reframe_clip_preview(
     workspace_id: str | None = None,
     project_id: str | None = None,
     clip_id: str | None = None,
+    edits: dict | None = None,
 ) -> tuple[Path, str, dict]:
     """Pick speaker-follow vs fit-blur based on sustained face presence."""
+    from clips_worker.layout_router import editor_layout_to_worker, editor_mode_uses_static_fit_blur
     from clips_worker.subject_reframe import has_face_and_speech, write_motion_crop_track
 
     reframe_settings = dict(settings)
@@ -197,11 +200,9 @@ def reframe_clip_preview(
     ).lower()
     if isinstance(settings.get("layout"), str):
         layout_mode = str(settings.get("layoutMode") or settings.get("layout") or "speaker_follow").lower()
-    needs_speaker_reframe = motion_subject or bool(settings.get("autoZoom"))
-    if layout_mode in ("fit_blur", "fit_top", "fit", "center_crop", "full_frame", "fill"):
-        needs_speaker_reframe = False
 
-    if not needs_speaker_reframe:
+    static_fit = editor_mode_uses_static_fit_blur(layout_mode) or layout_mode == "fit"
+    if static_fit and not motion_subject:
         from clips_worker.render_clip import aspect_size, ffmpeg_fit_export
 
         aspect = str(settings.get("aspectRatio") or "9:16")
@@ -210,7 +211,23 @@ def reframe_clip_preview(
         write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
         return out_mp4, "fit_blur", reframe_settings
 
-    if has_face_and_speech(clip_file, clip_words):
+    if layout_mode in ("facecam_stack", "facecam_pip", "screen_pip") and edits and not motion_subject:
+        from clips_worker.clip_layout_render import apply_per_clip_layout
+        from clips_worker.render_clip import aspect_size
+
+        aspect = str(settings.get("aspectRatio") or "9:16")
+        w, h = aspect_size(aspect, "720p")
+        try:
+            res = apply_per_clip_layout(clip_file, work_dir, edits, play_w=w, play_h=h)
+            if res.applied:
+                shutil.copyfile(res.path, out_mp4)
+                return out_mp4, layout_mode, reframe_settings
+        except Exception as exc:
+            print(f"[reframe] stack_preview_failed mode={layout_mode} err={type(exc).__name__}", flush=True)
+
+    worker_layout = editor_layout_to_worker(layout_mode)
+    reframe_settings = {**reframe_settings, "layout": worker_layout}
+    if worker_layout == "fill" or has_face_and_speech(clip_file, clip_words):
         rendered = run_speakercrop(
             clip_file,
             out_mp4,
@@ -228,7 +245,8 @@ def reframe_clip_preview(
         )
         if render_meta.get("layoutRouteShadow"):
             ai_meta["layoutRouteShadow"] = render_meta["layoutRouteShadow"]
-        return rendered, crop_method, reframe_settings
+        out_method = "center_crop" if worker_layout == "fill" else "speaker_follow"
+        return rendered, out_method, reframe_settings
 
     preserve_crop_track = False
     if motion_subject:
@@ -763,6 +781,10 @@ def run_m4_pipeline(
                             flush=True,
                         )
 
+                from clips_worker.clip_layout_policy import FIT_VARIETY_MODES_FROM, fit_blur_variety_indices
+
+                variety_fit_idx = fit_blur_variety_indices(picks)
+
                 def build_clip_row_from_pick(pick: dict, idx: int, clip_id: str | None = None) -> dict:
                     sk_pick = _span_key(int(pick["start_ms"]), int(pick["end_ms"]))
                     clip_id = clip_id or head_render_state.get("clip_id_by_span", {}).get(sk_pick)
@@ -797,8 +819,15 @@ def run_m4_pipeline(
                         clip_id=clip_id,
                     )
                     layout_ed = edits_final.get("layout") if isinstance(edits_final.get("layout"), dict) else {}
+                    if idx in variety_fit_idx and str(layout_ed.get("mode") or "") in FIT_VARIETY_MODES_FROM:
+                        edits_final["layout"] = {**layout_ed, "mode": "full_frame", "autoVariety": "fit_blur_1in5"}
+                        layout_ed = edits_final["layout"]
                     final_mode = str(layout_ed.get("mode") or resolved_layout)
-                    clip_settings = {**settings, "layout": resolved_layout, "layoutMode": final_mode}
+                    clip_settings = {
+                        **settings,
+                        "layout": layout_ed if layout_ed else {"mode": final_mode},
+                        "layoutMode": final_mode,
+                    }
                     rendered, crop_method, _reframe_settings = reframe_clip_preview(
                         clip_file,
                         out_mp4,
@@ -814,6 +843,7 @@ def run_m4_pipeline(
                         workspace_id=workspace_id,
                         project_id=project_id,
                         clip_id=clip_id,
+                        edits=edits_final,
                     )
                     poster = td_path / f"poster_{idx}.jpg"
                     poster_jpg(rendered, poster)
@@ -1101,6 +1131,7 @@ def run_m4_pipeline(
                         cid = head_render_state.get("clip_id_by_span", {}).get(sk)
                         return build_clip_row_from_pick(pick, idx, clip_id=cid)
 
+                    variety_fit_idx = fit_blur_variety_indices(picks)
                     index_order = sorted(
                         range(len(picks)),
                         key=lambda i: -float(picks[i].get("score") or 0),
@@ -1218,8 +1249,10 @@ def run_m4_pipeline(
                         print(
                             f"[clipper:speed] project={project_id} phase=first_clip_card_ms="
                             f"{int((time.monotonic() - pipeline_t0) * 1000)}",
-                            flush=True,
-                        )
+                    flush=True,
+                )
+
+                variety_fit_idx = fit_blur_variety_indices(picks)
 
                 def build_clip_row(idx: int) -> dict | None:
                     pick = picks[idx]
@@ -1255,8 +1288,15 @@ def run_m4_pipeline(
                         clip_id=clip_id,
                     )
                     layout_ed = edits_final.get("layout") if isinstance(edits_final.get("layout"), dict) else {}
+                    if idx in variety_fit_idx and str(layout_ed.get("mode") or "") in FIT_VARIETY_MODES_FROM:
+                        edits_final["layout"] = {**layout_ed, "mode": "full_frame", "autoVariety": "fit_blur_1in5"}
+                        layout_ed = edits_final["layout"]
                     final_mode = str(layout_ed.get("mode") or resolved_layout)
-                    clip_settings = {**settings, "layout": resolved_layout, "layoutMode": final_mode}
+                    clip_settings = {
+                        **settings,
+                        "layout": layout_ed if layout_ed else {"mode": final_mode},
+                        "layoutMode": final_mode,
+                    }
                     rendered, crop_method, _reframe_settings = reframe_clip_preview(
                         clip_file,
                         out_mp4,
@@ -1272,6 +1312,7 @@ def run_m4_pipeline(
                         workspace_id=workspace_id,
                         project_id=project_id,
                         clip_id=clip_id,
+                        edits=edits_final,
                     )
                     poster = td_path / f"poster_{idx}.jpg"
                     poster_jpg(rendered, poster)
@@ -1315,6 +1356,7 @@ def run_m4_pipeline(
                         "aiMeta": ai_meta_out,
                     }
 
+                variety_fit_idx = fit_blur_variety_indices(picks)
                 index_order = sorted(range(len(picks)), key=lambda i: -float(picks[i].get("score") or 0))
                 with stage_span("reframe", heartbeat=True, clips=len(picks)):
                     clip_rows = run_bounded_indexed_pool(

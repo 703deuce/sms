@@ -11,6 +11,19 @@ from clips_worker.target_clip_len import ABS_MIN_MS, ClipLengthPolicy, resolve_c
 
 # Shortest shipped clip (Opus parity).
 MIN_SHIPPED_CLIP_MS = ABS_MIN_MS
+GAMING_AUTO_MAX_MS = 45_000
+
+
+def _overlaps_gaming_moment(lo: int, hi: int, visual_moments, range_start_ms: int) -> bool:
+    from clips_worker.video_picker import moment_abs_span_ms
+
+    for m in visual_moments or []:
+        if str(m.get("content_type") or "") != "gaming":
+            continue
+        s, e = moment_abs_span_ms(m, range_start_ms)
+        if max(0, min(hi, e) - max(lo, s)) >= 0.5 * max(1, min(hi - lo, e - s)):
+            return True
+    return False
 
 
 def _gemini_score_for_pick(pick: dict, visual_moments: list[dict], range_start_ms: int) -> float | None:
@@ -168,6 +181,14 @@ def finalize_picks(
             pick_row.get("length_max_ms")
             or length_policy.effective_max_duration_ms(pick_row, range_end_ms)
         )
+        if length_policy.mode == "auto" and _overlaps_gaming_moment(
+            int(sentences[pick_row["start_sentence"]].start_ms),
+            int(sentences[pick_row["end_sentence"]].end_ms),
+            visual_moments,
+            range_start_ms,
+        ):
+            max_ms = min(max_ms, GAMING_AUTO_MAX_MS)
+            pick_row["length_max_ms"] = max_ms
         if max_ms < MIN_SHIPPED_CLIP_MS:
             dropped_cannot_min += 1
             picker_info(

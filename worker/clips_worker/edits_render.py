@@ -376,11 +376,19 @@ def _maybe_static_fit_blur_crop_track(
     return track
 
 
+def _track_is_all_wide(p: Path) -> bool:
+    try:
+        x0 = json.loads(p.read_text()).get("x0") or []
+        return bool(x0) and all(int(v) < 0 for v in x0)
+    except Exception:
+        return False
+
+
 def _preview_crop_track_for_export(edits: dict, preview_crop_track: Path | None) -> Path | None:
     dom_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
     if editor_mode_uses_static_fit_blur(dom_mode):
         return None
-    if preview_crop_track is not None and preview_crop_track.is_file():
+    if preview_crop_track is not None and preview_crop_track.is_file() and not _track_is_all_wide(preview_crop_track):
         return preview_crop_track
     return None
 
@@ -426,7 +434,7 @@ def run_speakercrop_layout_timeline(
 
         if editor_mode_uses_static_fit_blur(dom_mode):
             crop_track = _maybe_static_fit_blur_crop_track(clip_src, work_dir, clip_start_ms, dom_mode)
-        elif preview_crop_track is not None and preview_crop_track.is_file():
+        elif preview_crop_track is not None and preview_crop_track.is_file() and not _track_is_all_wide(preview_crop_track):
             crop_track = preview_crop_track
         else:
             crop_track = None

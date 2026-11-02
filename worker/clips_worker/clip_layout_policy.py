@@ -104,6 +104,27 @@ HEADLINE_OFF_SPLIT_MODES = frozenset(
     {"split", "grid3", "grid4", "dynamic", "screen_pip", "split_debate", "grid", "two_up"}
 )
 
+FIT_VARIETY_MODES_FROM = ("speaker_follow", "center_crop", "auto", "")
+
+
+def fit_blur_variety_indices(picks: list[dict]) -> set[int]:
+    """Opus-style: most clips full-bleed; ~1 in 5 shows the Full frame (fit+blur) look.
+    Never the top-scored clip; none when <=3 clips. Prefers wide / lower-ranked, non-gaming picks."""
+    n = len(picks)
+    if n <= 3:
+        return set()
+    k = max(1, round(n / 5))
+    score = lambda i: float(picks[i].get("final", picks[i].get("score")) or 0)
+    top = max(range(n), key=score)
+
+    def is_gaming(p: dict) -> bool:
+        vm = (p.get("aiMeta") or {}).get("videoMoment") or {}
+        return str(p.get("content_type") or vm.get("content_type") or "") == "gaming"
+
+    cand = [i for i in range(n) if i != top and not is_gaming(picks[i])]
+    cand.sort(key=lambda i: (not bool((picks[i].get("aiMeta") or {}).get("wideShot")), score(i)))
+    return set(cand[:k])
+
 
 def headline_default_off(edits: dict, clip_type: str | None = None) -> bool:
     layout = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
@@ -206,7 +227,7 @@ def apply_clip_type_layout_to_edits(
 
     if ct == "irl":
         layout = dict(edits.get("layout") or {})
-        layout["mode"] = "fit_blur" if headline_on else "center_crop"
+        layout["mode"] = "fit_blur" if headline_on else "speaker_follow"
         out = apply_channel_clip_type_layout(
             {**edits, "layout": layout},
             clip_type=ct,
@@ -220,7 +241,7 @@ def apply_clip_type_layout_to_edits(
             "clip_type_policy",
             clip_type=ct,
             layout_mode=str(layout.get("mode") or "speaker_follow"),
-            reason="irl_headline_fit_blur" if headline_on else "irl_no_headline_center_crop",
+            reason="irl_headline_fit_blur" if headline_on else "irl_no_headline_speaker_follow",
         )
         return out
 

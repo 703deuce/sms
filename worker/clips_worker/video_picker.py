@@ -29,6 +29,7 @@ from clips_worker.video_picker_prompt import (
 )
 
 _MIN_MOMENT_S = 5.0
+GAMING_AUTO_MAX_SPAN_S = 45.0
 _TIME_EPS_S = 0.35
 _TIME_RE = re.compile(r"^(?:(\d+):)?(\d{1,2}):(\d{1,2}(?:\.\d+)?)$|^(\d+(?:\.\d+)?)s?$")
 
@@ -628,6 +629,23 @@ def validate_and_normalize_moments(
                     end_s_after=end,
                     max_span_s=max_span_s,
                 )
+        ct = str(row.get("content_type") or "").strip().lower()
+        if ct == "gaming" and (max_span_s is None or max_span_s >= 90) and end - start > GAMING_AUTO_MAX_SPAN_S:
+            ns, ne = start, end
+            end = min(end, peak + 10.0)
+            start = max(start, end - GAMING_AUTO_MAX_SPAN_S)
+            peak = _clamp(peak, start, end - 0.001)
+            hook = _clamp(hook, start, peak)
+            trim_applied = True
+            decision_log(
+                "normalize",
+                "gaming_span_trim",
+                start_s_before=ns,
+                end_s_before=ne,
+                start_s_after=start,
+                end_s_after=end,
+                cap_s=GAMING_AUTO_MAX_SPAN_S,
+            )
         if not (start <= hook <= peak < end):
             from clips_worker.clipfind.flags import clipfind_flag
 
@@ -1782,6 +1800,8 @@ def watch_video_file(
         max_attempts = video_picker_max_model_attempts()
         model_attempts = 0
         moments_before_shortfall: list[dict] | None = None
+        shortfall_reasks = 1
+        prior_moments: list[dict] = []
 
         def _wall_exceeded() -> bool:
             return time.monotonic() - wall_start > max_wall_s
@@ -2039,6 +2059,8 @@ def watch_video_file(
                     max_span_s=max_span,
                 )
                 meta["normalize_rejects"] = normalize_rejects
+                if prior_moments:
+                    moments = prior_moments + moments
                 moments_before_dedupe = len(moments)
                 moments = dedupe_overlapping_video_picker_moments(moments, stage="dedupe")
                 if not moments:
@@ -2069,6 +2091,24 @@ def watch_video_file(
                 moments = dedupe_overlapping_video_picker_moments(moments, stage="dedupe_reassess")
                 min_need = int(meta.get("min_moments") or min_moments_for_video(int(duration_s)))
                 if len(moments) < min_need:
+                    if shortfall_reasks > 0 and model_attempts + 1 < max_attempts and not _wall_exceeded():
+                        shortfall_reasks -= 1
+                        moments_before_shortfall = prior_moments = list(moments)
+                        decision_log(
+                            "video_picker",
+                            "retry",
+                            reason="below_min_moments",
+                            have=len(moments),
+                            need=min_need,
+                        )
+                        picked = "; ".join(f"{m['start_s']:.1f}-{m['end_s']:.1f}s" for m in moments)
+                        user_text = user_text_base + (
+                            f"\n\nRETRY: Already picked: {picked}. Return ONLY NEW real, complete moments of at least 15 seconds "
+                            "elsewhere in the video that overlap none of these by more than a third. Weaker is fine; score honestly. "
+                            "Never repeat or re-trim a picked span. If nothing real is left, return an empty list."
+                        )
+                        parsed_ok = None
+                        continue
                     decision_log(
                         "video_picker",
                         "shortfall_accepted",

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 
-_LENGTH_RULE_AUTO = """Auto: the user did not pick a length. Use the shortest duration that keeps the complete moment, setup through payoff and reaction, up to 90 seconds. Typical lengths (gaming and reactions about 30 seconds, talking, IRL and roleplay about 60) are suggestions, never caps. A 55 second firefight stays 55 seconds."""
+_LENGTH_RULE_AUTO = """Auto: the user did not pick a length. Use the shortest duration that keeps the complete moment, setup through payoff and reaction, up to 90 seconds. Typical lengths (gaming and reactions about 30 seconds, talking, IRL and roleplay about 60) are suggestions, never caps. Gaming clips are at most 45 seconds: start at the final fight and end on the outcome and reaction. If a gaming sequence is longer, return the tightest complete part, and return an earlier separate beat as its own moment."""
 
 _LENGTH_RULE_FIXED = """The user picked a maximum of {target_len_s} seconds. Every clip must be {target_len_s} seconds or shorter. Use the shortest duration that keeps the complete moment; do not stretch a short moment to fill the limit. If a moment is longer than the limit, return the tightest complete part that fits (for example the final fight through the outcome) and describe what was left out in unverified. If no complete version fits, skip it."""
 
@@ -119,12 +119,12 @@ _MIN_MOMENTS_PER_CHUNK_CAP = 24
 
 
 def min_moments_for_video(video_len_s: int) -> int:
-    """Shortfall floor: ~1 per 45–60s (min 2); long streams keep 6+."""
+    """Shortfall floor: >=6 (1.5/min) for short uploads, never more than one 15 s clip per 15 s; long streams unchanged."""
     video_len_s = max(1, int(video_len_s))
     if video_len_s >= 20 * 60:
         return max(6, min(_MIN_MOMENTS_PER_CHUNK_CAP, int(round(video_len_s / 50.0))))
-    per_minute = max(2, int((video_len_s + 52) // 53))
-    return min(_MIN_MOMENTS_PER_CHUNK_CAP, per_minute)
+    need = max(6, math.ceil(1.5 * video_len_s / 60))
+    return min(need, max(1, video_len_s // 15), _MIN_MOMENTS_PER_CHUNK_CAP)
 
 
 def min_moments_rule_description(video_len_s: int) -> str:
@@ -132,7 +132,7 @@ def min_moments_rule_description(video_len_s: int) -> str:
     need = min_moments_for_video(video_len_s)
     if video_len_s >= 20 * 60:
         return f"long_stream duration_s={video_len_s} need>={need} (~1/50s, floor 6)"
-    return f"duration_s={video_len_s} need>={need} (~1/53s, min 2)"
+    return f"duration_s={video_len_s} need>={need} (max(6, 1.5/min), <= len/15)"
 
 
 def discovery_density_guidance(video_len_s: int) -> str:
