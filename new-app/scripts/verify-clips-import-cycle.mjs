@@ -30,8 +30,13 @@ if (r.stdout) process.stdout.write(r.stdout)
 if (r.stderr) process.stderr.write(r.stderr)
 
 if (r.status !== 0) {
-  console.error('[verify:clips-import-cycle] FAIL — circular dependency detected (see above)')
+  console.error('[verify:clips-import-cycle] FAIL — madge exited', r.status)
   process.exit(r.status ?? 1)
+}
+const found = r.stdout?.match(/Found (\d+) circular dependencies/)
+if (found && Number(found[1]) > 0) {
+  console.error(`[verify:clips-import-cycle] FAIL — ${found[1]} circular dependencies (see above)`)
+  process.exit(1)
 }
 
 console.log('[verify:clips-import-cycle] PASS — no cycles in lib/clips or components/clips')

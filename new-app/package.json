@@ -24,6 +24,7 @@
     "verify:clip-editor-feature-parity": "node scripts/verify-clip-editor-feature-parity.mjs",
     "verify:clips-editor-eslint": "node scripts/verify-clips-editor-eslint.mjs",
     "verify:editor-shell-hook-order": "node scripts/verify-editor-shell-hook-order.mjs",
+    "verify:clips": "bash scripts/verify-clips.sh",
     "test:phone": "node scripts/test-phone-runtime-logic.mjs && node scripts/test-phone-recording-resolve.mjs && node scripts/test-phone-complete.mjs",
     "test:power-dialer-engine": "npx tsx scripts/test-power-dialer-engine.ts",
     "test:power-dialer-phase3": "npx tsx scripts/test-power-dialer-phase3.ts",
