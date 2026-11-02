@@ -29,11 +29,10 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 matte_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04", add_python="3.11")
     .apt_install("ffmpeg", "git")
-    .pip_install(
-        "torch==2.4.1",
-        "torchvision==0.19.1",
-        "numpy<2",
-        extra_index_url="https://download.pytorch.org/whl/cu124",
+    .pip_install("numpy<2")
+    .run_commands(
+        "pip install --no-cache-dir torch==2.4.1 torchvision==0.19.1 "
+        "--index-url https://download.pytorch.org/whl/cu124"
     )
     .run_commands(
         "git clone https://github.com/PeterL1n/RobustVideoMatting /opt/rvm",

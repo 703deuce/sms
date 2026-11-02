@@ -154,6 +154,9 @@ def main() -> int:
                 except TimeoutError as exc:
                     print(f"{cid} {q}: TIMEOUT {exc}")
                     return 1
+                except Exception as exc:
+                    print(f"{cid} {q}: FAILED {type(exc).__name__}: {exc}")
+                    return 1
                 wall = time.time() - t0
                 if not r.get("ok"):
                     print(f"{cid} {q}: FAILED {r}")
