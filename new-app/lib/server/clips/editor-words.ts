@@ -1,6 +1,5 @@
 import type { ClipWord } from '@/lib/clips/edits'
-import { mergeClipWordsWithProjectTranscript } from '@/lib/clips/editor-words-merge'
-import { MAX_EDITOR_WORDS_CONTEXT_MS, MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
+import { dedupeAdjacentEditorWords } from '@/lib/clips/editor-words-dedupe'
 import { loadSourceWords, wordsInRange, type SourceWord } from '@/lib/clips/source-words'
 import type { getClipStorage } from '@/lib/storage'
 
@@ -110,32 +109,14 @@ export async function resolveEditorWords(
 
   if (clipRaw.length) {
     const absolute = clipWordsToAbsolute(clipRaw, clip.startMs, clip.endMs)
-    const clipLoaded = loadSourceWords(absolute)
-    if (projectTranscript.length) {
-      const projectLoaded = loadSourceWords(projectTranscript)
-      const extendMs =
-        opts?.contextMs != null && Number.isFinite(opts.contextMs)
-          ? Math.min(MAX_EDITOR_WORDS_CONTEXT_MS, Math.max(0, Math.floor(opts.contextMs)))
-          : MAX_TRIM_EXTEND_MS
-      return mergeClipWordsWithProjectTranscript(
-        clipLoaded,
-        projectLoaded,
-        clip.startMs,
-        clip.endMs,
-        extendMs,
-        opts?.trimInMs != null && opts?.trimOutMs != null
-          ? { startMs: opts.trimInMs, endMs: opts.trimOutMs }
-          : undefined,
-        opts?.trimLimits,
-      )
-    }
+    const clipLoaded = dedupeAdjacentEditorWords(loadSourceWords(absolute))
     return clipLoaded
   }
 
   if (projectTranscript.length) {
     const projectWords = loadSourceWords(projectTranscript)
     const sliced = wordsInRange(projectWords, clip.startMs, clip.endMs)
-    if (sliced.length) return sliced
+    if (sliced.length) return dedupeAdjacentEditorWords(sliced)
     return []
   }
 
