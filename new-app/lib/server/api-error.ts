@@ -14,6 +14,13 @@ export function formatApiErrorMessage(err: unknown): string {
 
 export function jsonError(err: unknown, status = 500) {
   const message = formatApiErrorMessage(err)
+  const authStatus =
+    err && typeof err === 'object' && 'status' in err && typeof (err as { status?: number }).status === 'number'
+      ? (err as { status: number }).status
+      : null
+  if (authStatus === 401 || authStatus === 403) {
+    return NextResponse.json({ error: message }, { status: authStatus })
+  }
   const code = err instanceof ZodError ? 400 : status >= 500 ? status : 400
   return NextResponse.json({ error: message }, { status: code })
 }

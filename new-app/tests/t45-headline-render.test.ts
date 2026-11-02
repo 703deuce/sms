@@ -14,6 +14,7 @@ describe('T4.5 render cache version', () => {
     const hash = renderVersionHash('abc', '9:16', '720p')
     expect(hash).toBe(`${CLIP_RENDER_PIPELINE_REV}:abc:9:16:720p`)
     expect(hash).not.toBe('t47-v1:abc:9:16:720p')
+    expect(hash).toContain('t48-au33-v1')
   })
 })
 

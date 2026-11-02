@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { normalizeEdits } from '@/lib/clips/edits'
 import { buildNleCaptionsSrt } from '@/lib/clips/export-nle-captions'
 import {
   buildNleExportFileMap,
@@ -6,13 +7,15 @@ import {
   zipNleExportFiles,
 } from '@/lib/clips/export-nle-bundle'
 import { jsonError } from '@/lib/server/api-error'
+import { AuthRequiredError, requireAuthenticatedUser } from '@/lib/server/auth/session'
 import { getPrisma } from '@/lib/server/db'
 import { loadClipSourceWords } from '@/lib/server/clips/transcript'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { basename as pathBasename } from 'node:path/posix'
 
-export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
+    await requireAuthenticatedUser(request)
     const { id } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const prisma = getPrisma()
@@ -27,7 +30,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
     const edits = normalizeEdits(clip.edits, bounds)
     const words = await loadClipSourceWords(clip)
-    const srt = buildNleCaptionsSrt(words, clip.edits, bounds)
+    const srt = buildNleCaptionsSrt(words, edits, bounds)
     const uploadName = clip.project?.upload?.filename?.trim()
     const sourceMediaFilename = uploadName
       ? pathBasename(uploadName.replace(/\\/g, '/'))
@@ -38,7 +41,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       sourceMediaFilename,
       clipStartMs: clip.startMs,
       clipEndMs: clip.endMs,
-      edits: clip.edits,
+      edits,
       bounds,
       srt,
     })
@@ -51,6 +54,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       },
     })
   } catch (err) {
+    if (err instanceof AuthRequiredError) return jsonError(err, 401)
     return jsonError(err, 500)
   }
 }
