@@ -137,6 +137,15 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
     }
   }
   const clipCount = await prisma.clip.count({ where: { projectId, deletedAt: null } })
+  let primaryClipId: string | null = null
+  if (clipCount > 0) {
+    const first = await prisma.clip.findFirst({
+      where: { projectId, deletedAt: null },
+      orderBy: { startMs: 'asc' },
+      select: { id: true },
+    })
+    primaryClipId = first?.id ?? null
+  }
   let clipsWithPreview = 0
   if (
     clipCount > 0 &&
@@ -161,6 +170,7 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
     etaSec,
     wordCount: Array.isArray(project.transcriptWords) ? (project.transcriptWords as unknown[]).length : 0,
     clipCount,
+    primaryClipId,
     clipsReady,
     clipsTotal,
     chunkDone: typeof sp.chunkDone === 'number' ? sp.chunkDone : undefined,

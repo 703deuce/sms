@@ -127,6 +127,8 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         scriptEditorEnabled={isScriptEditorFeatureEnabled()}
         byoProject={Boolean(projectSettings.byo)}
         viewOnFullVideoUrl={viewOnFullVideoUrl}
+        asrLanguage={projectSettings.asrLanguage}
+        editorProjectId={projectSettings.fromFullVideoProjectId ?? project.id}
       />
     </Page>
   )

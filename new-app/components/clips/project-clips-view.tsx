@@ -20,6 +20,7 @@ import { ClipTemplateProjectActions } from '@/components/clips/clip-template-pro
 import { mergeMonotonicProjectPoll } from '@/lib/clips/eta-poll'
 import { clipsFetch, getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
 import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
+import { buildOpenInEditorHref, openInEditorLinkLabel } from '@/lib/clips/project-editor-link'
 import type { ClipProjectSettings } from '@/lib/clips/settings'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -34,6 +35,7 @@ type ProjectStatusPayload = {
   status: string
   error?: string | null
   clipCount?: number
+  primaryClipId?: string | null
   clipsReady?: number
   clipsTotal?: number
   etaSec?: number
@@ -99,6 +101,8 @@ export function ProjectClipsView({
   scriptEditorEnabled = false,
   byoProject = false,
   viewOnFullVideoUrl = null,
+  asrLanguage,
+  editorProjectId,
 }: {
   projectId: string
   projectTitle: string
@@ -116,6 +120,9 @@ export function ProjectClipsView({
   scriptEditorEnabled?: boolean
   byoProject?: boolean
   viewOnFullVideoUrl?: string | null
+  asrLanguage?: ClipProjectSettings['asrLanguage']
+  /** Full-video project id for editor link (defaults to route projectId). */
+  editorProjectId?: string | null
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
   const router = useRouter()
@@ -144,6 +151,7 @@ export function ProjectClipsView({
   const [clipsReady, setClipsReady] = useState(0)
   const [clipsTotal, setClipsTotal] = useState(0)
   const [selectedClipIds, setSelectedClipIds] = useState<Set<string>>(() => new Set())
+  const [pollPrimaryClipId, setPollPrimaryClipId] = useState<string | null>(null)
 
   const refreshClipsList = useCallback(async () => {
     const data = await listProjectClips(projectId, 'score')
@@ -219,9 +227,23 @@ export function ProjectClipsView({
   }, [initialStatus, readyHydrated, hydrateReady])
 
   useEffect(() => {
-    if (!byoProject || !readyHydrated || clips.length !== 1) return
-    router.replace(`/app/clips/${projectId}/edit/${clips[0]!.id}`)
-  }, [byoProject, readyHydrated, clips, projectId, router])
+    if (!byoProject) return
+    const clipId = clips[0]?.id ?? pollPrimaryClipId
+    if (!clipId) return
+    if (status !== 'READY' && !readyHydrated) return
+    router.replace(`/app/clips/${projectId}/edit/${clipId}`)
+  }, [byoProject, readyHydrated, status, clips, pollPrimaryClipId, projectId, router])
+
+  const onByoReadyFromPoll = useCallback(
+    (payload: { primaryClipId?: string | null }) => {
+      if (payload.primaryClipId) setPollPrimaryClipId(payload.primaryClipId)
+      void hydrateReady({ status: 'READY', clipCount: 1 }).catch(() => {
+        setStatus('READY')
+        setReadyHydrated(true)
+      })
+    },
+    [hydrateReady],
+  )
 
   const terminalRef = useRef(readyFromServer || ['READY', 'FAILED', 'CANCELED'].includes(initialStatus))
   const pollSnapshotRef = useRef({
@@ -265,6 +287,9 @@ export function ProjectClipsView({
         setProgressStage(merged.stage)
         if (typeof data.clipsTotal === 'number') setClipsTotal(data.clipsTotal)
         if (typeof data.clipsReady === 'number') setClipsReady(data.clipsReady)
+        if (typeof data.primaryClipId === 'string' && data.primaryClipId) {
+          setPollPrimaryClipId(data.primaryClipId)
+        }
         const liveClipCount = data.clipCount ?? 0
         if (liveClipCount > 0 || (data.clipsReady ?? 0) > 0) {
           try {
@@ -276,7 +301,12 @@ export function ProjectClipsView({
         const next = merged.status
         if (next === 'READY') {
           terminalRef.current = true
-          await hydrateReady(data)
+          try {
+            await hydrateReady(data)
+          } catch {
+            setStatus('READY')
+            setReadyHydrated(true)
+          }
           return
         }
         if (next === 'FAILED' || next === 'CANCELED') {
@@ -312,6 +342,15 @@ export function ProjectClipsView({
       ? `${error} The upstream model was overloaded (503). Use Retry to re-queue with backoff.`
       : error || 'Something went wrong while processing this project.')
 
+  const processingEditorHref =
+    byoProject && !showResults && pollPrimaryClipId
+      ? buildOpenInEditorHref({
+          routeProjectId: projectId,
+          editorProjectId,
+          clipId: pollPrimaryClipId,
+        })
+      : null
+
   return (
     <ClipperSurfaceErrorBoundary surface="Project clips">
     <>
@@ -329,6 +368,15 @@ export function ProjectClipsView({
                 render={<Link href={viewOnFullVideoUrl} />}
               >
                 View on full video
+              </Button>
+            ) : processingEditorHref ? (
+              <Button
+                size="sm"
+                variant="outline"
+                data-testid="open-in-editor-header"
+                render={<Link href={processingEditorHref} />}
+              >
+                {openInEditorLinkLabel(asrLanguage)}
               </Button>
             ) : null}
             {showResults && scriptEditorEnabled ? (
@@ -406,6 +454,9 @@ export function ProjectClipsView({
               initialEtaSec={initialEtaSec}
               fromLink={fromLink}
               byo={byoProject}
+              asrLanguage={asrLanguage}
+              editorProjectId={editorProjectId}
+              onReady={byoProject ? onByoReadyFromPoll : undefined}
             />
           ) : null}
           {showProgressiveClips ? (

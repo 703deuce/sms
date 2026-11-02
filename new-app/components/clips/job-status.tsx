@@ -30,6 +30,9 @@ import { formatClipProgressStage } from '@/lib/clips/progress-stage'
 import { cancelProject, getProjectStatus, retryProject } from '@/lib/clips-api'
 import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
 import type { ClipProjectStatusUi } from '@/components/app/status'
+import Link from 'next/link'
+import { buildOpenInEditorHref, openInEditorLinkLabel } from '@/lib/clips/project-editor-link'
+import type { ClipProjectSettings } from '@/lib/clips/settings'
 
 const STEPS_UPLOAD = ['Upload', 'Transcribe', 'Scan scenes', 'Find clips', 'Reframe & caption', 'Ready']
 const STEPS_IMPORT = ['Importing', 'Transcribe', 'Scan scenes', 'Find clips', 'Reframe & caption', 'Ready']
@@ -69,6 +72,9 @@ export function JobStatus({
   mode,
   fromLink,
   byo = false,
+  asrLanguage,
+  editorProjectId,
+  onReady,
 }: {
   projectId: string
   initialStatus?: string
@@ -78,6 +84,9 @@ export function JobStatus({
   mode?: 'talking' | 'anything' | 'captions'
   fromLink?: boolean
   byo?: boolean
+  asrLanguage?: ClipProjectSettings['asrLanguage']
+  editorProjectId?: string | null
+  onReady?: (payload: { primaryClipId?: string | null }) => void
 }) {
   const [status, setStatus] = useState(initialStatus || 'QUEUED')
   const [progress, setProgress] = useState(initialProgress)
@@ -99,6 +108,7 @@ export function JobStatus({
   const [waitingForWorker, setWaitingForWorker] = useState(false)
   const [queueAhead, setQueueAhead] = useState<number | undefined>()
   const [queuedElapsedSec, setQueuedElapsedSec] = useState(0)
+  const [primaryClipId, setPrimaryClipId] = useState<string | null>(null)
 
   useEffect(() => {
     let stop = false
@@ -135,6 +145,12 @@ export function JobStatus({
         setWaitingForWorker(Boolean(data.waitingForWorker))
         setQueueAhead(data.queueAhead)
         setQueuedElapsedSec(data.queuedElapsedSec ?? 0)
+        if (typeof data.primaryClipId === 'string' && data.primaryClipId) {
+          setPrimaryClipId(data.primaryClipId)
+        }
+        if (merged.status === 'READY') {
+          onReady?.({ primaryClipId: data.primaryClipId ?? null })
+        }
         if (['READY', 'FAILED', 'CANCELED'].includes(merged.status)) return
         failStreak = 0
       } catch {
@@ -149,7 +165,16 @@ export function JobStatus({
     return () => {
       stop = true
     }
-  }, [projectId])
+  }, [projectId, onReady])
+
+  const editorHref =
+    status === 'READY' && byo
+      ? buildOpenInEditorHref({
+          routeProjectId: projectId,
+          editorProjectId,
+          clipId: primaryClipId,
+        })
+      : null
 
   useEffect(() => {
     if (!waitingForWorker) return
@@ -306,6 +331,23 @@ export function JobStatus({
             </AlertDialog>
           </>
         )}
+        {status === 'READY' && byo ? (
+          <div className="flex flex-col gap-3" data-testid="byo-processing-ready">
+            <p className="text-sm text-muted-foreground">Transcription is complete. Opening the editor…</p>
+            {editorHref ? (
+              <Button
+                size="sm"
+                className="self-start"
+                data-testid="open-in-editor-processing"
+                render={<Link href={editorHref} />}
+              >
+                {openInEditorLinkLabel(asrLanguage)}
+              </Button>
+            ) : (
+              <p className="text-sm text-muted-foreground">Preparing your clip…</p>
+            )}
+          </div>
+        ) : null}
       </div>
     </Panel>
   )
