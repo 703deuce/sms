@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from clips_worker.asr_keyterms import keyterms_for_project
 from clips_worker.gpu.base import TranscribeReq
 from clips_worker.storage import sign_url, upload_file
 from clips_worker.transcribe_provider import TranscribeMeta, transcribe_audio_request
@@ -45,6 +46,7 @@ def transcribe_video_file(
         if asr in ("", None):
             asr = "en"
         lang = "auto" if asr == "auto" else asr
+        keyterms = keyterms_for_project(conn, project)
         if provider_name == "modal":
             audio_key = f"ws/{workspace_id}/projects/{project_id}/audio.opus"
             upload_file(audio_key, opus, "audio/opus")
@@ -55,6 +57,7 @@ def transcribe_video_file(
                 model=model,
                 language=lang,
                 initial_prompt=VERBATIM_ASR_INITIAL_PROMPT,
+                keyterms=keyterms,
             )
         else:
             req = TranscribeReq(
@@ -62,6 +65,7 @@ def transcribe_video_file(
                 model=model,
                 language=lang,
                 initial_prompt=VERBATIM_ASR_INITIAL_PROMPT,
+                keyterms=keyterms,
             )
 
         res, meta = transcribe_audio_request(conn, req, workspace_id, project_id)

@@ -12,6 +12,7 @@ class TranscribeReq:
     language: str | None = None
     initial_prompt: str | None = None
     model: str | None = None
+    keyterms: list[str] | None = None
 
 
 @dataclass
