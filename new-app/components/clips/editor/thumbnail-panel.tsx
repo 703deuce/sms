@@ -16,6 +16,7 @@ import {
 } from '@/lib/clips/editor/cover-jobs'
 import { toast } from 'sonner'
 import { FreeFrameThumbnailPicker } from '@/components/clips/editor/free-frame-thumbnail-picker'
+import { corsMediaProps, onMediaCorsError } from '@/components/clips/editor/g4/media-cors'
 
 type ThumbRow = {
   id: string

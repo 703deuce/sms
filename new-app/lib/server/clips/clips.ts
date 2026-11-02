@@ -52,7 +52,8 @@ export async function listProjectClips(
     if (projectWords) return projectWords
     if (!project.transcriptKey) return null
     try {
-      const tStorage = await getClipStorageForObjectKey(project.transcriptKey, project.storageDriver)
+      const driverHint = project.upload?.storageDriver ?? null
+      const tStorage = await getClipStorageForObjectKey(project.transcriptKey, driverHint)
       const raw = await tStorage.getJson<unknown>(project.transcriptKey)
       projectWords = projectTranscriptToSourceWords(normalizeTranscriptJson(raw))
       return projectWords
