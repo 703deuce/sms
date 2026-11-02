@@ -97,6 +97,7 @@ export function getProjectStatus(projectId: string) {
     chunkDone?: number
     chunkTotal?: number
     clipCount?: number
+    primaryClipId?: string | null
     clipsReady?: number
     clipsTotal?: number
     waitingForWorker?: boolean
