@@ -195,31 +195,29 @@ export function isItemActive(item: NavItem, pathname: string, searchParams?: URL
     return pathname === item.href || pathname.startsWith(`${item.href}/`)
   }
   if (item.href.includes('?')) {
-    const base = item.href.split('?')[0]
+    const [base, queryString] = item.href.split('?')
     if (pathname !== base) return false
-    if (item.href.includes('tab=templates')) {
-      return searchParams?.get('tab') === 'templates'
+    const hrefParams = new URLSearchParams(queryString ?? '')
+    for (const [key, val] of hrefParams.entries()) {
+      if (searchParams?.get(key) !== val) return false
     }
-    if (pathname === '/app/clips/templates') {
-      if (item.href.includes('tab=ai-video')) return searchParams?.get('tab') === 'ai-video'
-      if (item.href.includes('sub=mine')) {
-        return (searchParams?.get('tab') ?? 'layouts') === 'layouts' && searchParams?.get('sub') === 'mine'
-      }
-      if (item.href === '/app/clips/templates' || item.href.startsWith('/app/clips/templates?tab=layouts')) {
-        const tab = searchParams?.get('tab') ?? 'layouts'
-        return tab === 'layouts' && !searchParams?.get('sub')
-      }
-    }
-    if (item.href.includes('view=workspaces')) {
-      return searchParams?.get('view') === 'workspaces'
-    }
-    if (item.href.includes('view=layouts')) {
-      return searchParams?.get('view') === 'layouts'
-    }
-    return pathname === base
+    return true
+  }
+  if (item.href === '/app/clips/templates') {
+    return pathname === '/app/clips/templates' || pathname.startsWith('/app/clips/templates/')
+  }
+  if (item.href === '/app/clips/brand') {
+    return pathname === '/app/clips/brand' || pathname.startsWith('/app/clips/brand/')
   }
   if (item.exact) return pathname === item.href
-  return pathname === item.href || pathname.startsWith(`${item.href}/`)
+  if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
+    if (item.href === '/app/clips') {
+      if (searchParams?.get('kind') === 'video') return false
+      if (searchParams?.get('view') === 'workspaces') return false
+    }
+    return true
+  }
+  return false
 }
 
 export function groupItems(items: NavItem[]) {

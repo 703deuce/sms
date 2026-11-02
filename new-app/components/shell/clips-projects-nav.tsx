@@ -7,14 +7,15 @@ import {
   ChevronRight,
   Clock,
   Folder,
-  Home,
+  House,
   Share2,
   Trash2,
 } from 'lucide-react'
 import { NewFolderDialog } from '@/components/drive/new-folder-dialog'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import {
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -45,7 +46,7 @@ function subActive(
   return false
 }
 
-export function ClipsProjectsNav() {
+export function ClipsProjectsNav({ active = false }: { active?: boolean }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { folders } = useClipsFolders(true)
@@ -67,31 +68,25 @@ export function ClipsProjectsNav() {
     <Collapsible open={open} onOpenChange={onOpenChange} className="group/projects">
       <SidebarMenu>
         <SidebarMenuItem>
-          <CollapsibleTrigger className="flex w-full items-center rounded-md outline-hidden focus-visible:ring-2 ring-sidebar-ring">
-            <SidebarMenuButton
-              tooltip="Projects"
-              isActive={libraryActive}
-              className="h-8 flex-1 gap-2 text-sm"
-              type="button"
-            >
-              <ChevronRight
-                className={cn('size-4 shrink-0 transition-transform', open && 'rotate-90')}
-              />
-              <span className="flex-1 text-left">Projects</span>
-              <NewFolderDialog variant="sidebar" />
-            </SidebarMenuButton>
-          </CollapsibleTrigger>
+          <SidebarMenuButton
+            tooltip="Home"
+            isActive={active}
+            data-nav-id="home"
+            className="relative h-9 gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground"
+            render={<Link href="/app/clips" />}
+          >
+            <House className="size-5" strokeWidth={1.75} />
+            <span>Home</span>
+          </SidebarMenuButton>
+          <SidebarMenuAction
+            aria-label="Show filters"
+            data-testid="home-filters-toggle"
+            onClick={() => onOpenChange(!open)}
+          >
+            <ChevronRight className={cn('size-4 transition-transform', open && 'rotate-90')} />
+          </SidebarMenuAction>
           <CollapsibleContent>
             <SidebarMenuSub>
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton
-                  isActive={subActive(pathname, searchParams, { path: '/app/clips' })}
-                  render={<Link href="/app/clips" />}
-                >
-                  <Home className="size-3.5" />
-                  <span>Home</span>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
               <SidebarMenuSubItem>
                 <SidebarMenuSubButton
                   isActive={subActive(pathname, searchParams, { path: '/app/clips', view: 'recents' })}
@@ -132,6 +127,7 @@ export function ClipsProjectsNav() {
               ))}
             </SidebarMenuSub>
           </CollapsibleContent>
+          <NewFolderDialog variant="sidebar" />
         </SidebarMenuItem>
       </SidebarMenu>
     </Collapsible>
