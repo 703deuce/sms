@@ -256,7 +256,7 @@ export function T2vCreateWorkspace() {
   }
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="mx-auto grid w-full max-w-[880px] gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="space-y-6">
         <div className="flex flex-wrap items-end justify-end gap-2">
           <Link href="/app/clips/video/templates" className="text-sm text-primary">

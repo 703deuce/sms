@@ -152,7 +152,10 @@ export function SoloRecordClient() {
         recordLabel="Start recording"
       />
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6">
+      <div className="mx-auto flex w-full max-w-[960px] flex-1 flex-col items-center gap-4 p-6">
+        <div className="flex aspect-video w-full max-w-[960px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 text-sm text-muted-foreground">
+          Camera / screen preview
+        </div>
         {importing ? (
           <p className="text-sm text-muted-foreground">Uploading and starting clip processing…</p>
         ) : (

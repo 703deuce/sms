@@ -12,6 +12,7 @@
  * No React imports, so lib/clips/edits.ts can use it.
  */
 import { normAnim, normLayerAnim, type TextAnim } from '@/lib/clips/render-plan/text-anim'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { normMarks, safeFamily, userFontId, type TextMark } from '@/lib/clips/render-plan/text-rich'
 import {
   PROGRESS_H_MAX,
@@ -371,6 +372,17 @@ function itemWindow(playheadMs: number, clipEndMs: number, lenMs = TEXT_DEFAULT_
   const end = Math.max(TEXT_MIN_MS, Math.floor(clipEndMs))
   const a = Math.max(0, Math.min(Math.round(playheadMs), end - TEXT_MIN_MS))
   return [a, Math.min(end, a + lenMs)]
+}
+
+/** Offset % position when stacking overlays at the same spot (+24px steps at 1920 reference). */
+export function offsetNewOverlayPosition(edits: ClipEditsV2, x: number, y: number): [number, number] {
+  const step = (24 / 1920) * 100
+  const items = edits.textItems ?? []
+  let n = 0
+  for (const it of items) {
+    if (Math.abs(it.x - x) < 0.05 && Math.abs(it.y - y) < 0.05) n++
+  }
+  return [x + n * step, y + n * step]
 }
 
 /** G3b: a library shape at the playhead (centred, 400 × 400 px@1920 unless the shape wants a bar). */

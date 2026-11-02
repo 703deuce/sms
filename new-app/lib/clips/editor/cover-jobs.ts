@@ -93,5 +93,5 @@ export function stableCoverItems<T extends CoverItemRow>(items: T[], cache: Cove
 export function coverImageClass(aspect: string | null | undefined): string {
   return aspect === '9:16'
     ? 'mx-auto mb-2 aspect-[9/16] max-h-72 w-auto rounded bg-muted object-contain'
-    : 'mb-2 aspect-video w-full rounded bg-muted object-cover'
+    : 'mb-2 aspect-video w-full rounded bg-muted object-contain'
 }

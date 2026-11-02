@@ -16,7 +16,7 @@ export function exportActionLabel(format: DeliverFormat, encoders?: string[]): s
   if (f === 'gif') return 'Export GIF'
   if (f === 'png') return 'Export PNG'
   if (f === 'mp3') return 'Export MP3'
-  if (f === 'm4a') return 'Export audio'
+  if (f === 'm4a') return 'Export Audio (M4A)'
   if (f === 'wav') return 'Export WAV'
   if (f === 'flac') return 'Export FLAC'
   if (f === 'mov') return 'Export MOV'

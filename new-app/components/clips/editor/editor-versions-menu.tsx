@@ -21,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 export type EditVersionRow = {
   id: string
@@ -320,8 +321,8 @@ export function EditorLayoutMenu({
   children: React.ReactNode
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
+    <Popover>
+      <PopoverTrigger
         render={
           <Button type="button" size="sm" variant="outline" className="gap-1" data-testid="layout-menu">
             Layout
@@ -329,9 +330,9 @@ export function EditorLayoutMenu({
           </Button>
         }
       />
-      <DropdownMenuContent align="end" className="max-w-sm p-3">
+      <PopoverContent align="end" side="bottom" collisionPadding={16} className="max-w-[min(100vw-1rem,22rem)] p-3">
         {children}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   )
 }

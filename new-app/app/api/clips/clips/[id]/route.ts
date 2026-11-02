@@ -79,13 +79,17 @@ async function casUpdateEdits(
 }
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params
   try {
-    const { id } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const data = await getClipEditorPayload(workspaceId, id)
     if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({ data })
   } catch (err) {
+    console.error('[clipper:get]', {
+      clipId: id,
+      error: err instanceof Error ? err.message : String(err),
+    })
     return jsonError(err, 500)
   }
 }

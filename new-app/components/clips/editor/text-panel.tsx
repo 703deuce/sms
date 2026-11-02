@@ -20,6 +20,7 @@ import {
   LINE_HEIGHT_MIN,
   marksToFlags,
   newProgressItem,
+  offsetNewOverlayPosition,
   newShapeItem,
   newStickerItem,
   newTemplateItems,
@@ -207,7 +208,11 @@ export function TextPanel({
     onEdits(placeOnFreeTrack(built, 'text', placed.map((t) => t.id), a, b))
     onSelect(made[made.length - 1]!.id)
   }
-  const addShape = (type: string) => addItems([newShapeItem(newId()(), type, playheadMs, durationMs)])
+  const addShape = (type: string) => {
+    const base = newShapeItem(newId()(), type, playheadMs, durationMs)
+    const [x, y] = offsetNewOverlayPosition(edits, base.x, base.y)
+    addItems([{ ...base, x, y }])
+  }
   const addSticker = (sid: string) => addItems([newStickerItem(newId()(), sid, playheadMs, durationMs)])
   const addProgress = () => addItems([newProgressItem(newId()(), durationMs)])
 
