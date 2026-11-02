@@ -83,8 +83,28 @@ function stripInternalSentenceRefs(text: string): string {
     .trim()
 }
 
+const INTERNAL_PLANNING_RE =
+  /\b(span confirms|pass-1|pass 1|gemini['']s?\s+\d|score_detail|two-sided critique)\b/i
+const NUMERIC_SPAN_RE = /\d+\.?\d*\s*[-–—]\s*\d+\.?\d*\s*span/i
+const LOWERCASE_FRAGMENT_TITLE_RE =
+  /^(introduces|builds?|explores|discusses|covers|compares|argues|highlights|breaks down)\s+[a-z]/i
+
+function looksTruncatedPlanningTitle(text: string): boolean {
+  const t = text.trim()
+  if (t.length < 72) return false
+  if (/[.?!]["')\]]\s*$/.test(t)) return false
+  const words = t.split(/\s+/)
+  const last = words[words.length - 1] ?? ''
+  if (last.length <= 3 && !/[.?!]/.test(last)) return true
+  return /,\s*(and|or)\s+[a-z]{1,3}$/i.test(t) || /\b(between|and|the|di)$/i.test(last)
+}
+
 function looksLikeSegmentPlanningNotes(text: string): boolean {
   const t = text.toLowerCase()
+  if (INTERNAL_PLANNING_RE.test(text)) return true
+  if (NUMERIC_SPAN_RE.test(text)) return true
+  if (LOWERCASE_FRAGMENT_TITLE_RE.test(text.trim())) return true
+  if (looksTruncatedPlanningTitle(text)) return true
   if (!BARE_SEGMENT_REF_RE.test(text)) return false
   BARE_SEGMENT_REF_RE.lastIndex = 0
   return (
@@ -120,8 +140,20 @@ export function isInternalClipReasoningText(text: string): boolean {
     t.startsWith('the laugh at') ||
     t.includes('may mark') ||
     t.includes('excited delivery at') ||
+    t.includes('span confirms') ||
+    t.includes('two-sided critique') ||
+    (/\bpass-?1\b/.test(t) && t.includes('segment')) ||
     (/\bat s\d+/i.test(raw) && (t.includes(' and ') || t.includes(' may ')))
   )
+}
+
+/** Customer-facing description lines — same leak rules as titles. */
+export function sanitizeClipDescriptionText(text: string): string | null {
+  const raw = text.trim()
+  if (!raw || isInternalClipReasoningText(raw)) return null
+  const cleaned = stripClipTitleTimestampPrefix(stripInternalSentenceRefs(raw))
+  if (!cleaned || isInternalClipReasoningText(cleaned) || isHedgeOrDebugSummary(cleaned)) return null
+  return cleaned
 }
 
 /** Customer-facing title for grids/cards — never raw timestamp-prefixed picker strings. */
@@ -164,15 +196,14 @@ export function clipDisplayTitle(clip: {
 export function clipWhySummary(meta: ClipAiMeta | null | undefined): string | null {
   if (!meta) return null
   if (typeof meta.videoWhy === 'string' && meta.videoWhy.trim()) {
-    const v = stripInternalSentenceRefs(meta.videoWhy.trim())
-    if (v && !isHedgeOrDebugSummary(v) && !isInternalClipReasoningText(v)) return v
+    const v = sanitizeClipDescriptionText(meta.videoWhy.trim())
+    if (v) return v
   }
-  const candidates = [meta.hook, meta.score_detail]
+  const candidates = [meta.hook, meta.score_detail, meta.pass1_why]
   for (const c of candidates) {
     if (typeof c !== 'string') continue
-    const trimmed = stripInternalSentenceRefs(c.trim())
-    if (!trimmed || isHedgeOrDebugSummary(trimmed)) continue
-    return trimmed
+    const trimmed = sanitizeClipDescriptionText(c.trim())
+    if (trimmed) return trimmed
   }
   return null
 }
@@ -194,9 +225,10 @@ export function clipScoreTooltipLines(clip: {
   })
   const lines: string[] = [`Score ${clip.score}`, reasonTagLabel(tag)]
   const why = clipWhySummary(meta)
-  if (!why && clip.reason && !isInternalClipReasoningText(clip.reason)) {
-    const r = clip.reason.trim()
-    if (r) lines.push(r)
+  const reason = clip.reason?.trim()
+  if (reason) {
+    const cleanedReason = sanitizeClipDescriptionText(reason)
+    if (cleanedReason && !FALLBACK_REASON_RE.test(cleanedReason)) lines.push(cleanedReason)
   } else if (why) {
     lines.push(why)
   }

@@ -369,7 +369,7 @@ export function Timeline({
   onCutSection?: () => void
   onSetLayoutMode?: (mode: ClipEditsV2['layout']['mode']) => void
   /** E2: every timeline edit is ONE call (= one undo step in useEditorState). Omit for read-only. */
-  onCommitEdits?: (next: ClipEditsV2, pushHistory?: boolean) => void
+  onCommitEdits?: (next: ClipEditsV2, pushHistory?: boolean, passLabel?: string) => void
   onUndo?: () => void
   onRedo?: () => void
   canUndo?: boolean
@@ -971,8 +971,8 @@ export function Timeline({
     commit(next)
     return true
   }
-  const commit = (next: ClipEditsV2 | null, pushHistory = true) => {
-    if (next && onCommitEdits) onCommitEdits(next, pushHistory)
+  const commit = (next: ClipEditsV2 | null, pushHistory = true, passLabel?: string) => {
+    if (next && onCommitEdits) onCommitEdits(next, pushHistory, passLabel)
   }
   /** Source ms of a cut near the playhead, context-menu click, or the selected video clip's nearest edge. */
   const cutSrcForJl = (outMs = playheadMs): number | null =>
@@ -2107,7 +2107,7 @@ export function Timeline({
         if (!state.moved || Math.abs(delta) < 0.5) return
         const ref = { lane: item.lane, id: item.id }
         const next = slideEdit(ctx, ref, delta)
-        if (next) return commit(next)
+        if (next) return commit(next, true, 'Slide')
         if (item.lane === 'video' && slideMainNeedsMiddleSegment(ctx, ref)) {
           toast.message('Slide needs a middle main-video clip with neighbours on both sides', { id: 'timeline-slide' })
         } else {

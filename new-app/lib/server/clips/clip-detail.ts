@@ -12,7 +12,6 @@ import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { CLIPS_EDITOR_MEDIA_TTL_SEC, createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { resolveLayers } from '@/lib/clips/layers'
 import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
-import { repairClipSentenceBoundsOnOpen } from '@/lib/server/clips/sentence-snap-clip'
 
 export type FacecamLayoutState = {
   layout?: string
@@ -163,27 +162,12 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     sourceKey ? createCachedSignedDownloadUrl(storage, sourceKey, undefined, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null) : Promise.resolve(null),
   ])
 
-  let edits = normalizeEdits(clip.edits, bounds)
+  const edits = normalizeEdits(clip.edits, bounds)
   const words: SourceWord[] = await resolveEditorWords(storage, workspaceId, clip, projectTranscript)
 
-  let clipStartMs = clip.startMs
-  let clipEndMs = clip.endMs
-  let detailBounds = bounds
-  try {
-    const repaired = await repairClipSentenceBoundsOnOpen(
-      { id: clip.id, startMs: clip.startMs, endMs: clip.endMs, edits: clip.edits },
-      words,
-      bounds,
-    )
-    if (repaired) {
-      detailBounds = repaired.bounds
-      edits = repaired.edits
-      clipStartMs = repaired.startMs
-      clipEndMs = repaired.endMs
-    }
-  } catch (e) {
-    console.warn('[clipper:detail] sentence_snap_repair_failed', e instanceof Error ? e.message : e)
-  }
+  const clipStartMs = clip.startMs
+  const clipEndMs = clip.endMs
+  const detailBounds = bounds
 
   let cropTrack: CropTrack | null = null
   if (cropTrackResult) {

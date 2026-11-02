@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { MAX_ANGLES, multicamAngles, setAngleForRange } from '@/lib/clips/editor/multicam-manual'
 import { fillActiveSpeakerGaps, segmentAudio, type ClipMediaSource } from '@/lib/clips/editor/sources'
+import { editorEditsReducer } from '@/components/clips/editor/use-editor-state'
 
 const bounds = { clipStartMs: 0, clipEndMs: 20000, trimMinMs: 0, trimMaxMs: 40000 }
 const base = (patch: Partial<ClipEditsV2> = {}): ClipEditsV2 => ({ ...normalizeEdits(defaultEdits(bounds), bounds), ...patch })
@@ -50,5 +51,30 @@ describe('MC batch 3', () => {
     for (const g of next.sourceSegments?.filter((s) => s.auto) ?? []) {
       expect(g.endMs <= 8000 || g.startMs >= 12000).toBe(true)
     }
+  })
+
+  it('MC-08: auto camera cuts is one named undo step', () => {
+    const cam: ClipMediaSource = { id: 'u2', ref: 'upload', refId: 'u2', mediaType: 'video', label: 'B', syncMs: 0 }
+    const e = base({
+      sources: [cam],
+      multicam: { speakerSources: { '0': 'u2' }, minHoldMs: 500, wideEveryMs: 120_000 },
+    })
+    const words = [
+      { s: 0, e: 2, spk: 0, i: 0 },
+      { s: 2, e: 5, spk: 0, i: 1 },
+      { s: 6, e: 9, spk: 0, i: 2 },
+    ]
+    const { edits: next } = fillActiveSpeakerGaps(e, words, 0, 20000)
+    const initial = {
+      edits: e,
+      past: [] as ClipEditsV2[],
+      pastLabels: [] as (string | undefined)[],
+      future: [] as ClipEditsV2[],
+      saveState: 'saved' as const,
+      producerStrip: null,
+    }
+    const after = editorEditsReducer(initial, { type: 'pass', edits: next, label: 'Auto camera cuts' })
+    expect(after.pastLabels).toEqual(['Auto camera cuts'])
+    expect(after.past).toHaveLength(1)
   })
 })

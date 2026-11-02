@@ -376,6 +376,7 @@ export function EditorShell({
     updateSfx,
     removeSfx,
     setEdits,
+    setEditsPass,
     hydrateEdits,
     layers,
     setLayers,
@@ -427,6 +428,14 @@ export function EditorShell({
       jumpHistory={jumpHistory}
       disabled={!canUndo && !canRedo}
     />
+  )
+
+  const commitTimelineEdits = useCallback(
+    (next: ClipEditsV2, pushHistory = true, passLabel?: string) => {
+      if (passLabel) setEditsPass(next, passLabel)
+      else setEdits(next, pushHistory)
+    },
+    [setEdits, setEditsPass],
   )
 
   const onApplyCleanupPass = useCallback(
@@ -2065,6 +2074,7 @@ export function EditorShell({
             onAdd={(item, lane) => onAddMedia(item, lane)}
             onReplaceSelected={onReplaceSelected}
             onEdits={setEdits}
+            onEditsPass={setEditsPass}
             playheadSourceMs={playheadSourceMs}
             onSeekSource={seekSource}
             monitorRequest={monitorRequest}
@@ -2464,7 +2474,7 @@ export function EditorShell({
               setLayoutModeAtSource(playheadSourceMs, mode)
             }}
             onBrollChange={(id, patch) => updateBrollItem(id, patch)}
-            onCommitEdits={setEdits}
+            onCommitEdits={commitTimelineEdits}
             onUndo={undo}
             onRedo={redo}
             canUndo={canUndo}
