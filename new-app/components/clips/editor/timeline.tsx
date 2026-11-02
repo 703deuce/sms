@@ -3667,7 +3667,7 @@ export function Timeline({
                             aria-label={tr ? `Transition: ${TRANSITION_INFO[tr.type].label}` : 'Add transition at this cut'}
                             title={tr ? `${TRANSITION_INFO[tr.type].label} · ${(tr.durMs / 1000).toFixed(2)} s` : 'Add transition at this cut'}
                             data-testid="timeline-transition-handle"
-                            data-src-ms={srcMs}
+                            data-src-ms={site.srcMs}
                             data-type={tr?.type}
                           >
                             <span
