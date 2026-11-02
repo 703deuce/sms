@@ -5,6 +5,7 @@ import { Timeline } from '@/components/clips/editor/timeline'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { rollMainEdit } from '@/lib/clips/editor/trim-tools'
+import { clip5f19e510Edits } from '@/tests/fixtures/clip-5f19e510-edits'
 
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), message: vi.fn() }),
@@ -97,15 +98,16 @@ describe('TL roll / slide pointer path', () => {
     expect(onCommitEdits.mock.calls.at(-1)![1]).toBe(true)
   })
 
-  it('slide on MC-style middle clip (4640–29210 ms) commits exact split deltas', () => {
-    const e = edits({ videoSplits: [4640, 29210], trim: { in: 0, out: 31520 } })
+  it('slide on prod clip_5f19e510 middle clip commits split + cut delta', () => {
+    const e = clip5f19e510Edits()
     const { getByTestId, getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
     fireEvent.keyDown(getByTestId('timeline-scroll'), { key: 'u' })
     const mid = getAllByTestId('timeline-item-video')[1]!
     drag(mid, 300 * pxPerMs())
     expect(onCommitEdits).toHaveBeenCalledTimes(1)
     const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
-    expect(next.videoSplits).toEqual([4940, 29510])
+    expect(next.videoSplits).toEqual([4941])
+    expect(next.cutRanges).toEqual([[29_515, 29_995]])
     expect(onCommitEdits.mock.calls[0]![1]).toBe(true)
   })
 

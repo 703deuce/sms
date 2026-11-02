@@ -29,7 +29,8 @@ import {
   type OpCtx,
   type TimelineItem,
 } from '@/lib/clips/editor/clip-timeline'
-import { setSplitEdit, splitEditAt, splitOffsets, SPLIT_MAX_MS, SPLIT_MIN_PIECE_MS, moveSplitKey } from '@/lib/clips/editor/split-edits'
+import { setSplitEdit, splitEditAt, splitOffsets, SPLIT_MAX_MS, SPLIT_MIN_PIECE_MS, moveSplitKey, remapSplitEdits } from '@/lib/clips/editor/split-edits'
+import { remapCutTransitions } from '@/lib/clips/editor/transitions'
 import { TEXT_MIN_MS, type TextItem } from '@/lib/clips/editor/text-items'
 
 export type TrimTool = 'select' | 'roll' | 'slide' | 'slip' | 'blade' | 'hand'
@@ -123,16 +124,18 @@ export function slideMainClip(ctx: OpCtx, a: number, deltaMs: number): ClipEdits
   if (cur.a < prev.b || nxt.a < cur.b) return null
   const deltaMsSrc =
     Math.abs(deltaMs) < 1 ? 0 : Math.round(outputToSource(tb, cur.startMs + deltaMs) - outputToSource(tb, cur.startMs))
-  const slideDelta = Math.abs(deltaMsSrc) >= 1 ? deltaMsSrc : Math.round(deltaMs)
+  let d = Math.abs(deltaMsSrc) >= 1 ? deltaMsSrc : Math.round(deltaMs)
   const gapBefore = cur.a - prev.b
   const gapAfter = nxt.a - cur.b
+  const splitSet = new Set(ctx.edits.videoSplits ?? [])
+  const splitLeft = gapBefore === 0 && splitSet.has(cur.a)
+  const cutRight = nxt.a > cur.b + (gapAfter > 0 ? 0 : 0) && nxt.a > cur.b
+  const splitRight = gapAfter === 0 && (splitSet.has(cur.b) || splitSet.has(nxt.a))
+
   // Contiguous videoSplits (no cut gaps): move both split points together — same middle length, neighbours adjust.
   if (gapBefore === 0 && gapAfter === 0) {
-    const splitSet = new Set(ctx.edits.videoSplits ?? [])
     const rightSplit = splitSet.has(cur.b) ? cur.b : nxt.a
     if (!splitSet.has(cur.a) || (!splitSet.has(cur.b) && !splitSet.has(nxt.a))) return null
-    let d = Math.round(slideDelta)
-    // Neighbour min lengths: clip1 ends at cur.a+d, clip3 starts at rightSplit+d.
     d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - cur.a)
     d = Math.min(d, nxt.b - VIDEO_MIN_SEG_MS - rightSplit)
     if (!d) return null
@@ -144,21 +147,66 @@ export function slideMainClip(ctx: OpCtx, a: number, deltaMs: number): ClipEdits
     if (Math.abs(nt.durationMs - tb.durationMs) > 1) return null
     return nextEdits
   }
-  let d = Math.round(slideDelta)
-  d = Math.min(d, cur.a - prev.b) // gap1 can't go negative
-  d = Math.max(d, cur.b - nxt.a)
-  d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - prev.b)
-  d = Math.min(d, nxt.b - VIDEO_MIN_SEG_MS - nxt.a)
+
+  if (splitLeft) {
+    d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - cur.a)
+    d = Math.min(d, cur.b - VIDEO_MIN_SEG_MS - cur.a)
+  } else {
+    d = Math.min(d, cur.a - prev.b)
+    d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - prev.b)
+  }
+
+  if (cutRight) {
+    d = Math.min(d, nxt.b - VIDEO_MIN_SEG_MS - nxt.a)
+    d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - (splitLeft ? cur.a : prev.b))
+    if (!splitLeft) d = Math.max(d, cur.b - nxt.a)
+  } else if (splitRight) {
+    const rightSplit = splitSet.has(cur.b) ? cur.b : nxt.a
+    d = Math.min(d, nxt.b - VIDEO_MIN_SEG_MS - rightSplit)
+    d = Math.max(d, cur.a + VIDEO_MIN_SEG_MS - cur.b)
+  } else {
+    d = Math.min(d, cur.a - prev.b)
+    d = Math.max(d, cur.b - nxt.a)
+    d = Math.max(d, prev.a + VIDEO_MIN_SEG_MS - prev.b)
+    d = Math.min(d, nxt.b - VIDEO_MIN_SEG_MS - nxt.a)
+  }
+
   if (!d) return null
-  const nextEdits = applyCutsEdits(ctx.edits, (c) =>
-    moveGap(moveGap(c, [prev.b, cur.a], [prev.b + d, cur.a]), [cur.b, nxt.a], [cur.b, nxt.a + d]),
-  )
+
+  let nextEdits: ClipEditsV2 = ctx.edits
+
+  if (splitLeft) {
+    const moved = [...splitSet].map((s) => (s === cur.a ? cur.a + d : s)).sort((x, y) => x - y)
+    nextEdits = { ...nextEdits, videoSplits: moved }
+    nextEdits = moveSplitKey(nextEdits, cur.a, cur.a + d)
+  } else if (prev.b < cur.a) {
+    nextEdits = applyCutsEdits(nextEdits, (c) => moveGap(c, [prev.b, cur.a], [prev.b + d, cur.a]))
+  }
+
+  if (cutRight) {
+    nextEdits = applyCutsEdits(nextEdits, (c) => moveGap(c, [cur.b, nxt.a], [cur.b + d, nxt.a + d]))
+    nextEdits = moveSplitKey(nextEdits, nxt.a, nxt.a + d)
+  } else if (splitRight) {
+    const rightSplit = splitSet.has(cur.b) ? cur.b : nxt.a
+    const moved = [...splitSet].map((s) => (s === rightSplit ? rightSplit + d : s)).sort((x, y) => x - y)
+    nextEdits = { ...nextEdits, videoSplits: moved }
+    nextEdits = moveSplitKey(nextEdits, rightSplit, rightSplit + d)
+  } else if (cur.b < nxt.a) {
+    nextEdits = applyCutsEdits(nextEdits, (c) => moveGap(c, [cur.b, nxt.a], [cur.b, nxt.a + d]))
+  }
+
   const nt = timebaseFor(nextEdits)
   if (Math.abs(nt.durationMs - tb.durationMs) > 1) return null
-  // The clip's content keeps its source range and lands d later (a closed gap merges segments).
-  const ns = nt.segs.findIndex(([x, y]) => x <= cur.a && cur.b <= y)
-  if (ns < 0 || Math.abs(nt.starts[ns]! + (cur.a - nt.segs[ns]![0]) - (cur.startMs + d)) > 1) return null
-  return moveSplitKey(nextEdits, nxt.a, nxt.a + d)
+  const ns = nt.segs.findIndex(([x, y]) => x <= cur.a + d && cur.b + d <= y)
+  if (ns < 0) return null
+  nextEdits = {
+    ...nextEdits,
+    transitions: remapCutTransitions(nextEdits.transitions, tb.segs, nt.segs),
+    splitEdits: remapSplitEdits(nextEdits.splitEdits, tb.segs, nt.segs),
+  }
+  const vsAfter = videoLaneSegments(nt, nextEdits.videoSplits)
+  if (vsAfter.length !== vs.length) return null
+  return nextEdits
 }
 
 /** True when slide on main video needs a middle segment with neighbours on both sides. */
