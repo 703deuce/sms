@@ -135,6 +135,38 @@ def test_music_fade_envelope_trimmed_from_long_source():
 
 
 @pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="no ffmpeg")
+def test_music_fade_out_finishes_at_clip_end_when_bed_end_short():
+    """38700 ms bed on 41 s clip: fade-out ramps 38–41 s (not hard cut ~39 s)."""
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        video = d / "v.mp4"
+        music = d / "music.wav"
+        stem = d / "music_stem.wav"
+        _silent_video(video, 41.0)
+        _tone(music, 60.0)
+        win = {"startMs": 0, "endMs": 38700, "inMs": 0}
+        export_ducked_music_stem(
+            video,
+            music,
+            stem,
+            length_s=41.0,
+            volume=1.0,
+            duck_depth=0.0,
+            fade_in_s=2.0,
+            fade_out_s=3.0,
+            music_window=win,
+        )
+        r37 = _rms(stem, 37.0, 37.08)
+        r38 = _rms(stem, 38.0, 38.08)
+        r39 = _rms(stem, 39.0, 39.08)
+        r40 = _rms(stem, 40.0, 40.08)
+        r405 = _rms(stem, 40.5, 40.58)
+        assert r38 > r40 + 8.0, (r38, r40)
+        assert r39 > r405 + 6.0, (r39, r405)
+        assert r37 > r405 + 3.0, (r37, r405)
+
+
+@pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="no ffmpeg")
 def test_full_mix_matches_voice_plus_music_stems():
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)

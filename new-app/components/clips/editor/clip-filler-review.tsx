@@ -59,7 +59,10 @@ export function ClipFillerReview({
     [clipId, words, edits.trim.in, edits.trim.out, edits.cutRanges, clipBounds],
   )
   const cutRanges = edits.cutRanges ?? []
-  const deletedSet = useMemo(() => deletedEditorWordIds(orderedWords, cutRanges), [orderedWords, cutRanges])
+  const deletedSet = useMemo(
+    () => deletedEditorWordIds(orderedWords, cutRanges, edits),
+    [orderedWords, cutRanges, edits],
+  )
 
   const fillerHits = useMemo(
     () =>

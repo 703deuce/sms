@@ -323,16 +323,34 @@ def music_chain(
     if w is None:
         start, ln, in_s = 0.0, L, 0.0
         fi, fo = _music_fade_seconds(ln, FI, FO, clamp_half=False)
-    else:
-        start, ln, in_s = w
-        fi, fo = _music_fade_seconds(ln, FI, FO, clamp_half=True)
-    trim = f"atrim=start={in_s:.3f}:end={in_s + ln:.3f}," if in_s > 0.0005 else f"atrim=0:{ln:.3f},"
+        trim = f"atrim=0:{ln:.3f}," if in_s <= 0.0005 else f"atrim=start={in_s:.3f}:end={in_s + ln:.3f},"
+        fades = ""
+        if fi > 0.0005:
+            fades += f"afade=t=in:st=0:d={fi:.3f},"
+        if fo > 0.0005:
+            fades += f"afade=t=out:st={max(0.0, ln - fo):.3f}:d={fo:.3f},"
+        body = f"{trim}asetpts=PTS-STARTPTS,volume={V:.4f},{fades}".rstrip(",")
+        return f"[{idx}:a]{body}{env}{pf}[{label}]"
+
+    start, ln, in_s = w
+    fi, fo = _music_fade_seconds(ln, FI, FO, clamp_half=True)
+    trim = f"atrim=0:{ln:.3f}," if in_s <= 0.0005 else f"atrim=start={in_s:.3f}:end={in_s + ln:.3f},"
+    delay_ms = int(round(start * 1000))
+    tail_pad = (
+        start <= 0.0005
+        and in_s <= 0.0005
+        and ln < L - 0.0005
+        and (L - ln) <= FO + 0.05
+    )
+    if tail_pad and fo > 0.0005:
+        # AU-33: short bed end — fade on full clip length (same as music_window extend-to-dur).
+        return music_chain(idx, L, V, FI, FO, None, label, envelope, pan, pan_ch)
+
     fades = ""
     if fi > 0.0005:
         fades += f"afade=t=in:st=0:d={fi:.3f},"
     if fo > 0.0005:
         fades += f"afade=t=out:st={max(0.0, ln - fo):.3f}:d={fo:.3f},"
-    delay_ms = int(round(start * 1000))
     pad = ""
     if start > 0.0005 or ln < L - 0.0005:
         pad = f"adelay={delay_ms}|{delay_ms},apad=whole_dur={L:.3f},"

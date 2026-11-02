@@ -89,6 +89,36 @@ const NUMERIC_SPAN_RE = /\d+\.?\d*\s*[-–—]\s*\d+\.?\d*\s*span/i
 const LOWERCASE_FRAGMENT_TITLE_RE =
   /^(introduces|builds?|explores|discusses|covers|compares|argues|highlights|breaks down)\s+[a-z]/i
 
+const GENERIC_CLIP_TITLES = new Set(['clip', 'clip moment', 'untitled', 'coverage_span', 'fallback_full_span'])
+
+/** Placeholder picker titles — treat like missing headline. */
+export function isGenericClipTitle(text: string | null | undefined): boolean {
+  const t = (text || '').trim().toLowerCase()
+  if (!t) return true
+  return GENERIC_CLIP_TITLES.has(t)
+}
+
+const CLIP_TITLE_MAX_WORDS = 6
+
+/** Short headline from spoken transcript (first words, trimmed at a word boundary). */
+export function clipTitleFromTranscriptWords(
+  text: string | null | undefined,
+  maxWords: number = CLIP_TITLE_MAX_WORDS,
+  maxLen = 120,
+): string | null {
+  const raw = (text || '').trim()
+  if (!raw) return null
+  const cleaned = stripClipTitleTimestampPrefix(stripInternalSentenceRefs(raw))
+  if (!cleaned || isInternalClipReasoningText(cleaned)) return null
+  const words = cleaned.split(/\s+/).filter(Boolean)
+  if (!words.length) return null
+  let title = words.slice(0, maxWords).join(' ')
+  if (title.length > maxLen) {
+    title = title.slice(0, maxLen).replace(/\s+\S*$/, '').trim()
+  }
+  return title.length >= 3 ? title : null
+}
+
 function looksTruncatedPlanningTitle(text: string): boolean {
   const t = text.trim()
   if (t.length < 72) return false
@@ -161,17 +191,27 @@ export function clipDisplayTitle(clip: {
   title: string
   reason?: string | null
   aiMeta?: unknown
+  spokenFirstLine?: string | null
 }): string {
   const meta = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as ClipAiMeta
   const rawTitle = clip.title.trim()
 
-  if (rawTitle && !isTimestampPrefixedClipTitle(rawTitle) && !isInternalClipReasoningText(rawTitle)) {
+  if (
+    rawTitle &&
+    !isGenericClipTitle(rawTitle) &&
+    !isTimestampPrefixedClipTitle(rawTitle) &&
+    !isInternalClipReasoningText(rawTitle)
+  ) {
     return rawTitle
   }
 
   if (!isInternalClipReasoningText(rawTitle)) {
     const titleAfterStrip = stripClipTitleTimestampPrefix(stripInternalSentenceRefs(rawTitle))
-    if (titleAfterStrip && !isInternalClipReasoningText(titleAfterStrip)) {
+    if (
+      titleAfterStrip &&
+      !isInternalClipReasoningText(titleAfterStrip) &&
+      !isGenericClipTitle(titleAfterStrip)
+    ) {
       return titleAfterStrip.slice(0, 120)
     }
   }
@@ -187,8 +227,11 @@ export function clipDisplayTitle(clip: {
 
   if (typeof meta.hook === 'string') {
     const hook = stripClipTitleTimestampPrefix(meta.hook.trim())
-    if (hook && !isInternalClipReasoningText(hook)) return hook.slice(0, 120)
+    if (hook && !isInternalClipReasoningText(hook) && !isGenericClipTitle(hook)) return hook.slice(0, 120)
   }
+
+  const fromTranscript = clipTitleFromTranscriptWords(clip.spokenFirstLine)
+  if (fromTranscript) return fromTranscript
 
   return 'Clip'
 }

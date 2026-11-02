@@ -1,8 +1,10 @@
 import { Skeleton } from '@/components/ui/skeleton'
+import { ClipsDriveLoadingTimeout } from '@/components/drive/clips-drive-loading-timeout'
 
 export default function ClipsDriveLoading() {
   return (
     <div className="p-4 md:p-6">
+      <ClipsDriveLoadingTimeout />
       <Skeleton className="mb-4 h-8 w-48" />
       <div className="flex flex-wrap gap-2 pb-4">
         <Skeleton className="h-9 w-64" />

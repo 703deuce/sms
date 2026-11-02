@@ -1,4 +1,5 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { orderedKeepSegments } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
 import { enrichTranscriptWords } from '@/lib/clips/script-editor/enrich-transcript'
@@ -17,26 +18,39 @@ export function editorWordsForClipFillerReview(
   return toEditorWords(`clip:${clipId}`, enriched)
 }
 
-export function editorWordDeletedByCuts(word: EditorWord, cutRanges: [number, number][]): boolean {
+export function editorWordDeletedByCuts(
+  word: EditorWord,
+  cutRanges: [number, number][],
+  edits?: Pick<ClipEditsV2, 'trim' | 'cutRanges' | 'sectionOrder'>,
+): boolean {
+  if (edits?.trim) {
+    const mid = (word.t0Ms + word.t1Ms) / 2
+    const keeps = orderedKeepSegments({ ...edits, cutRanges } as ClipEditsV2)
+    if (keeps.some(([a, b]) => mid >= a && mid <= b)) return false
+  }
   return cutRanges.some(([a, b]) => word.t0Ms < b && word.t1Ms > a)
+}
+
+export function deletedEditorWordIds(
+  words: EditorWord[],
+  cutRanges: [number, number][],
+  edits?: Pick<ClipEditsV2, 'trim' | 'cutRanges' | 'sectionOrder'>,
+): Set<string> {
+  const set = new Set<string>()
+  for (const w of words) {
+    if (editorWordDeletedByCuts(w, cutRanges, edits)) set.add(w.id)
+  }
+  return set
 }
 
 /** Count lexicon/repeat fillers in trim (used for clip filler review; 0 may be legit on cleaned clips). */
 export function countClipFillerHitsInTrim(
   clipId: string,
   words: SourceWord[],
-  edits: Pick<ClipEditsV2, 'trim' | 'cutRanges'>,
+  edits: Pick<ClipEditsV2, 'trim' | 'cutRanges' | 'sectionOrder'>,
   clipBounds?: { clipStartMs: number; clipEndMs: number },
 ): number {
   const ordered = editorWordsForClipFillerReview(clipId, words, edits, clipBounds)
-  const deleted = deletedEditorWordIds(ordered, edits.cutRanges ?? [])
+  const deleted = deletedEditorWordIds(ordered, edits.cutRanges ?? [], edits)
   return listFillerHits(ordered, deleted, { avoidHarshCuts: false }).length
-}
-
-export function deletedEditorWordIds(words: EditorWord[], cutRanges: [number, number][]): Set<string> {
-  const set = new Set<string>()
-  for (const w of words) {
-    if (editorWordDeletedByCuts(w, cutRanges)) set.add(w.id)
-  }
-  return set
 }

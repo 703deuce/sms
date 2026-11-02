@@ -101,8 +101,8 @@ export function CleanupPanel({
     [clipId, words, edits.trim.in, edits.trim.out, edits.cutRanges, clipBounds],
   )
   const deletedSet = useMemo(
-    () => deletedEditorWordIds(orderedWords, edits.cutRanges ?? []),
-    [orderedWords, edits.cutRanges],
+    () => deletedEditorWordIds(orderedWords, edits.cutRanges ?? [], edits),
+    [orderedWords, edits.cutRanges, edits.trim, edits.sectionOrder],
   )
   const scopedWords = useMemo(
     () => sourceWordsForClipEditing(words, edits, clipBounds),

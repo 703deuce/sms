@@ -87,6 +87,7 @@ export function clipTitleForExport(clip: {
   title: string
   reason?: string | null
   aiMeta?: unknown
+  spokenFirstLine?: string | null
 }): string {
   const meta = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as Record<string, unknown>
   const post = meta.postCopy as { hookText?: string } | undefined

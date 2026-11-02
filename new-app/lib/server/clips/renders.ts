@@ -1,6 +1,7 @@
 import { editsVersionHash, type ClipEditsV2 } from '@/lib/clips/edits'
 import { type ExportAspect, type ExportResolution, exportPixelSize, renderVersionHash } from '@/lib/clips/export-aspect'
-import { deliverExt, isDefaultDeliver, stableDeliverJson, type ExportDeliver } from '@/lib/clips/export-deliver'
+import { deliverExt, isDefaultDeliver, type ExportDeliver } from '@/lib/clips/export-deliver'
+import { clipRenderHashMaterial } from '@/lib/clips/render-cache-key'
 import { resolveComposeSpec } from '@/lib/clips/compose-spec'
 import { composeSpecV1Enabled } from '@/lib/clips/compose-spec-flags'
 import { exportFilename } from '@/lib/server/clips/clips'
@@ -188,10 +189,8 @@ export async function enqueueRenderClip(
     ? resolveComposeSpec(opts.edits, playW, playH)
     : null
   const editsHash = editsVersionHash(opts.edits)
-  let hashMaterial = composeSpec ? `${editsHash}:${JSON.stringify(composeSpec)}` : editsHash
-  if (opts.deliver && !isDefaultDeliver(opts.deliver)) {
-    hashMaterial += `:${stableDeliverJson(opts.deliver)}`
-  }
+  const stemsRequested = Boolean(opts.deliver?.stems)
+  const hashMaterial = clipRenderHashMaterial(editsHash, { composeSpec, deliver: opts.deliver })
   const hash = renderVersionHash(hashMaterial, opts.aspect, targetRes)
   const fmt = opts.deliver && !isDefaultDeliver(opts.deliver) ? deliverExt(opts.deliver) : 'mp4'
   const existing = await prisma.clipRender.findFirst({
@@ -199,13 +198,32 @@ export async function enqueueRenderClip(
     orderBy: { createdAt: 'desc' },
   })
   if (existing?.outputKey) {
-    const storage = getClipStorage()
-    const filename = existing.filename || exportFilename(opts.title)
-    return {
-      render: existing,
-      downloadUrl: await createCachedSignedDownloadUrl(storage, existing.outputKey, { downloadFilename: filename }),
-      filename,
-      reused: true,
+    if (stemsRequested && !existing.stemsKey) {
+      /* force fresh encode — cached row predates stems or worker stem pack */
+    } else {
+      const storage = getClipStorage()
+      const filename = existing.filename || exportFilename(opts.title)
+      let stemsDownloadUrl: string | null = null
+      let stemsFilename: string | null = null
+      if (existing.stemsKey) {
+        stemsFilename = `${filename.replace(/\.[^.]+$/, '') || 'clip'}.stems.zip`
+        try {
+          stemsDownloadUrl = await createCachedSignedDownloadUrl(storage, existing.stemsKey, {
+            downloadFilename: stemsFilename,
+            versionHint: `render:${existing.id}:stems`,
+          })
+        } catch {
+          stemsDownloadUrl = null
+        }
+      }
+      return {
+        render: existing,
+        downloadUrl: await createCachedSignedDownloadUrl(storage, existing.outputKey, { downloadFilename: filename }),
+        filename,
+        stemsDownloadUrl,
+        stemsFilename,
+        reused: true,
+      }
     }
   }
 

@@ -4,4 +4,6 @@
 def test_render_pipeline_version():
     from clips_worker.render_pipeline import RENDER_PIPELINE_VERSION
 
-    assert RENDER_PIPELINE_VERSION == "t47-v2"
+    from clips_worker.build_info import clips_worker_git_sha_short
+
+    assert RENDER_PIPELINE_VERSION == f"t48-au34-v1-{clips_worker_git_sha_short()}"

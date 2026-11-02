@@ -205,4 +205,8 @@ docker images clips-worker --format '{{.Repository}}:{{.Tag}} {{.ID}}' | awk -v 
 echo "[deploy-worker] done"
 REMOTE
 
+echo "[deploy-worker] sync CLIPS_WORKER_GIT_SHA → Coolify web env (render cache invalidation)"
+ssh "$HOST" "GIT_SHA=${GIT_COMMIT} bash -s" < "${REPO_ROOT}/scripts/coolify-set-clips-worker-git-sha-web.sh" || \
+  echo "[deploy-worker] WARN: could not sync CLIPS_WORKER_GIT_SHA to web (set manually + restart web)" >&2
+
 echo "[deploy-worker] complete (${REF} → clips-worker:latest on ${HOST})"
