@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { StudioSoundControls } from '@/components/script-editor/studio-sound-controls'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,7 @@ export function AudioPanel({
   outputDurationMs,
   playheadMs,
   playheadSourceMs,
+  playheadAtMsRef,
   onSuggestMusic,
   onAttachMusic,
   onPatchMusic,
@@ -54,6 +55,8 @@ export function AudioPanel({
   outputDurationMs: number
   playheadMs: number
   playheadSourceMs?: number
+  /** Live output playhead — used when placing AI voiceover so async TTS does not drift. */
+  playheadAtMsRef?: RefObject<number>
   onSuggestMusic: (prompt: string) => void
   onAttachMusic: (generationId: string) => void
   onPatchMusic: (patch: { volume?: number; duckDepth?: number }) => void
@@ -79,6 +82,10 @@ export function AudioPanel({
   beatsAvailable?: boolean
 }) {
   const [prompt, setPrompt] = useState('')
+  const resolveVoiceoverAtMs = useCallback(
+    () => playheadAtMsRef?.current ?? playheadMs,
+    [playheadAtMsRef, playheadMs],
+  )
   const [instrumental, setInstrumental] = useState(true)
   const [busy, setBusy] = useState(false)
   const [customSfx, setCustomSfx] = useState('')
@@ -334,6 +341,7 @@ export function AudioPanel({
             clipId={clipId}
             text=""
             atMs={playheadMs}
+            resolvePlaceAtMs={resolveVoiceoverAtMs}
             uploadLibraryFiles={uploadLibraryFiles}
             placeVoiceover={addVoiceover}
             standalone

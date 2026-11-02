@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { describeEditsChange } from '@/lib/clips/editor/history-labels'
+import { addVoiceoverClip } from '@/lib/clips/editor/recording'
 
 const bounds = { clipStartMs: 0, clipEndMs: 10_000, trimMinMs: 0, trimMaxMs: 10_000 }
 
@@ -43,6 +44,12 @@ describe('describeEditsChange', () => {
     const a = base()
     const b = { ...a, audio: { ...a.audio, musicVolume: 0.5 } }
     expect(describeEditsChange(a, b)).toBe('Audio')
+  })
+
+  it('labels AI voiceover placement', () => {
+    const a = base()
+    const b = addVoiceoverClip(a, 'upl_v', 5000, 2000, () => 'x')
+    expect(describeEditsChange(a, b)).toBe('AI voiceover')
   })
 
   it('labels broll', () => {
