@@ -42,6 +42,9 @@ import { TextPanel } from '@/components/clips/editor/text-panel'
 import { TemplatesPanel } from '@/components/clips/editor/templates-panel'
 import { ColorPanel, type ColorTarget } from '@/components/clips/editor/color-panel'
 import { ProducerPopover } from '@/components/clips/editor/producer-popover'
+import { applyProducerPlanStep } from '@/lib/clips/editor/producer-plan'
+import type { ClipWord } from '@/lib/clips/edits'
+import type { ProducerToolCall } from '@/lib/clips/edits-reducer'
 import { TemplateLayoutPanel } from '@/components/clips/editor/template-layout-panel'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import { speedAtSource } from '@/lib/clips/editor/speed'
@@ -1729,9 +1732,11 @@ export function EditorShell({
           shots={cropShots}
           onMode={onLayoutMode}
           onShotFocus={setShotOverride}
+          onSeekShot={seekSource}
           onRerunReframe={() => void requestClipReframe(clipId)}
           onApplyBrand={() => void applyBrand()}
           onEdits={setEdits}
+          onEditsPass={setEditsPass}
           reframeV2Enabled={reframeV2Enabled}
           appliedLayoutLabel={clipLayoutChip(aiMeta as ClipAiMeta | null)}
           clipId={clipId}
@@ -1865,6 +1870,7 @@ export function EditorShell({
           addVoiceover={placeVoiceoverClip}
           onCutToBeat={(every) => beatCutApi?.cut(every)}
           beatsAvailable={Boolean(beatCutApi?.hasBeats)}
+          onBeatSyncPass={setEditsPass}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -1883,6 +1889,10 @@ export function EditorShell({
             onRemoveBroll={removeBroll}
             onBrollMedia={mergeBrollMedia}
             onFlushEdits={() => void flushSave()}
+            onAcceptBrollSuggestions={(items) => {
+              const cur = edits.broll ?? []
+              setEditsPass({ ...edits, broll: [...cur, ...items] }, 'Accept B-roll')
+            }}
             uploadSlot={
               <MediaLibraryGrid media={media} filter="visual" lanes={['broll']} onAdd={(item, lane) => onAddMedia(item, lane)} compact />
             }
@@ -2221,6 +2231,11 @@ export function EditorShell({
           onAccept={(next, before, n) => applyProducerPatch(next, before, n)}
           onUndo={undo}
           onPendingPaidChange={setProducerPendingPaid}
+          words={clipEditorWords as ClipWord[]}
+          onRunPlanStep={(index, tools: ProducerToolCall[]) => {
+            const res = applyProducerPlanStep(edits, bounds, clipEditorWords as ClipWord[], tools, index)
+            if (res) setEditsPass(res.edits, res.label)
+          }}
         />
       </EditorPanelErrorBoundary>
       <ClipFillerReview

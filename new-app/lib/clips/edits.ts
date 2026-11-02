@@ -141,6 +141,8 @@ export type ClipEditsV2 = {
     userPicked?: boolean
     /** E6: blurred-background strength for fit/blur fills (default strong; lib/clips/fit-blur.ts). */
     blurStrength?: FitBlurStrength
+    /** Q6.2 AI-02: auto split-screen (both-wide) on overlapping speaker shots (v1 crop path). */
+    splitScreenFallback?: boolean
     template?: {
       id?: string
       auto?: boolean
@@ -173,6 +175,8 @@ export type ClipEditsV2 = {
   speed?: 1.1 | 1.25 | 1.5
   /** Loop quiet room tone under EDL gap segments on export. */
   roomTone?: boolean
+  /** Q6.4 AU-20: beat-cut grid filter (default all beats). */
+  beatSync?: { strength?: 'all' | 'strong' }
   /** Fingerprint of last auto-applied vocabulary (sha1 hex). */
   vocabApplied?: string
   /** Editor / export preview aspect: preset or custom:WxH (even, 240–3840). Defaults to 9:16. */
@@ -269,6 +273,13 @@ export type ClipBounds = {
 }
 
 export type WordFixMetaEntry = { s: number; w: string }
+
+function normalizeBeatSync(raw: unknown): ClipEditsV2['beatSync'] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const s = (raw as { strength?: unknown }).strength
+  if (s === 'strong') return { strength: 'strong' }
+  return undefined
+}
 
 export function defaultEdits(bounds: ClipBounds): ClipEditsV2 {
   return {
@@ -630,6 +641,8 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       cropBox: normalizeNormBox((layoutRaw as { cropBox?: unknown }).cropBox),
       userPicked: (layoutRaw as { userPicked?: boolean }).userPicked === true ? true : undefined,
       blurStrength: normalizeFitBlurStrength((layoutRaw as { blurStrength?: unknown }).blurStrength),
+      splitScreenFallback:
+        (layoutRaw as { splitScreenFallback?: unknown }).splitScreenFallback === true ? true : undefined,
       template: normalizeLayoutTemplate((layoutRaw as { template?: unknown }).template),
     },
     aspectRatio,
@@ -699,6 +712,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     disabledItems: normalizeDisabledItems(o.disabledItems),
     groups: normalizeGroups(o.groups),
     timelineOpts: normalizeTimelineOpts(o.timelineOpts),
+    beatSync: normalizeBeatSync(o.beatSync),
     speakerNames: normalizeSpeakerNames(o.speakerNames),
   }
   // G1c: take groups reference the normalized B-roll ids.

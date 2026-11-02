@@ -600,12 +600,17 @@ export function useEditorState(
   const setShotOverride = useCallback(
     (i: number, focus: 'auto' | 'A' | 'B' | 'both') => {
       const rest = state.edits.layout.shotOverrides.filter((s) => s.i !== i)
-      setEdits({
-        ...state.edits,
-        layout: { ...state.edits.layout, shotOverrides: [...rest, { i, focus }] },
-      })
+      const label =
+        focus === 'auto' ? 'Reframe: auto shot' : focus === 'both' ? 'Reframe: split-wide' : `Reframe: speaker ${focus}`
+      setEditsPass(
+        {
+          ...state.edits,
+          layout: { ...state.edits.layout, shotOverrides: [...rest, { i, focus }] },
+        },
+        label,
+      )
     },
-    [setEdits, state.edits],
+    [setEditsPass, state.edits],
   )
 
   const setCaptions = useCallback(
@@ -674,9 +679,9 @@ export function useEditorState(
       const nextAudio = { ...cur, studioSound: studio }
       const next = { ...state.edits, audio: nextAudio }
       if (editsEqual(state.edits, next)) return
-      setEdits(next)
+      setEditsPass(next, 'Studio Sound: voice')
     },
-    [setEdits, state.edits],
+    [setEditsPass, state.edits],
   )
 
   const setMusic = useCallback(

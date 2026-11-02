@@ -21,6 +21,7 @@ import { creditsLabel, musicCredits } from '@/lib/clips/credit-cost'
 import { toast } from 'sonner'
 import { StockAudioPicker } from '@/components/clips/editor/stock-audio-picker'
 import { BeatCutControls } from '@/components/clips/editor/beat-cut-controls'
+import { StudioSoundTrackLanes } from '@/components/clips/editor/studio-sound-lanes'
 import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { TextVoiceoverSection } from '@/components/clips/editor/text-voiceover-section'
 import type { ClipAudioSfx } from '@/lib/clips/edits'
@@ -49,6 +50,7 @@ export function AudioPanel({
   addVoiceover,
   onCutToBeat,
   beatsAvailable = false,
+  onBeatSyncPass,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -80,6 +82,7 @@ export function AudioPanel({
   /** Wired from timeline beat detection (Cut to beat). */
   onCutToBeat?: (every: 1 | 2 | 4) => void
   beatsAvailable?: boolean
+  onBeatSyncPass?: (next: ClipEditsV2, label: string) => void
 }) {
   const [prompt, setPrompt] = useState('')
   const resolveVoiceoverAtMs = useCallback(
@@ -335,6 +338,7 @@ export function AudioPanel({
           ) : null}
         </div>
       ) : null}
+      {onBeatSyncPass ? <StudioSoundTrackLanes edits={edits} onLanePass={onBeatSyncPass} /> : null}
       {uploadLibraryFiles && addVoiceover && !textVoiceover ? (
         <section data-testid="audio-panel-ai-voiceover">
           <TextVoiceoverSection
@@ -498,7 +502,23 @@ export function AudioPanel({
           </ul>
         </div>
         {onCutToBeat ? (
-          <BeatCutControls disabled={!beatsAvailable} onCut={onCutToBeat} />
+          <BeatCutControls
+            disabled={!beatsAvailable}
+            onCut={onCutToBeat}
+            strength={edits.beatSync?.strength ?? 'all'}
+            onStrengthChange={
+              onBeatSyncPass
+                ? (strength) =>
+                    onBeatSyncPass(
+                      {
+                        ...edits,
+                        beatSync: strength === 'strong' ? { strength: 'strong' } : undefined,
+                      },
+                      strength === 'strong' ? 'Beat sync: strong only' : 'Beat sync: all beats',
+                    )
+                : undefined
+            }
+          />
         ) : null}
       </section>
     </div>

@@ -106,7 +106,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         const applied = runProducerOnClip(edits, bounds, enrichedTools, words, llm.reply, userMessage)
 
         send('message', { role: 'assistant', content: applied.reply ?? llm.reply })
-        send('tools', { summaries: applied.summaries, pendingPaid: applied.pendingPaid })
+        send('tools', {
+          summaries: applied.summaries,
+          pendingPaid: applied.pendingPaid,
+          plan: enrichedTools,
+        })
         send('edits', { edits: applied.edits, changeCount: applied.changeCount })
 
         const prisma = getPrisma()

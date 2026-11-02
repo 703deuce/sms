@@ -21,6 +21,7 @@ export function ProducerPanel({
   onUndo: _onUndo,
   dryRun = false,
   onProposal,
+  onPlan,
   costLabel,
   onPendingPaidChange,
 }: {
@@ -33,6 +34,8 @@ export function ProducerPanel({
   dryRun?: boolean
   /** E4: receives the proposed edits instead of onApplyEdits (Preview / Accept / Undo outside). */
   onProposal?: (edits: ClipEditsV2, changeCount: number, before: ClipEditsV2, summaries: string[]) => void
+  /** Q6.6: bounded tool steps before accept. */
+  onPlan?: (tools: import('@/lib/clips/edits-reducer').ProducerToolCall[]) => void
   /** E4: cost line for a paid tool card (credits only — EP1g), shown before Generate. */
   costLabel?: (tool: { name: string; args: Record<string, unknown> }) => string
   /** E4: paid tools awaiting Generate / Skip (top-bar ✨ dot). */
@@ -110,6 +113,7 @@ export function ProducerPanel({
             lastSummaries = payload.summaries || []
             setSummaries(payload.summaries || [])
             setPendingPaid(payload.pendingPaid || [])
+            if (Array.isArray(payload.plan) && payload.plan.length) onPlan?.(payload.plan)
           }
           if (event === 'edits' && payload.edits) {
             const n = Number(payload.changeCount ?? 0)

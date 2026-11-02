@@ -1,6 +1,6 @@
 'use client'
 
-import { MAIN_ANGLE, SYNC_NUDGE_MS, multicamAngles, nudgeSync, resetSync } from '@/lib/clips/editor/multicam-manual'
+import { MulticamReviewPanel } from '@/components/clips/editor/multicam-review-panel'
 import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
 import { useMemo, useRef, useState } from 'react'
 import { AudioLines, Film, Image as ImageIcon, Plus, RefreshCw, Upload, Video, X } from 'lucide-react'
@@ -40,6 +40,7 @@ import { ProjectSelectsBin, useProjectSelectsActions } from '@/components/clips/
 import { SourceMonitor, type MonitorRequest } from '@/components/clips/editor/source-monitor'
 import type { Timebase } from '@/lib/clips/editor/clip-timeline'
 import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
+import { MAIN_ANGLE, SYNC_NUDGE_MS, multicamAngles, nudgeSync, resetSync } from '@/lib/clips/editor/multicam-manual'
 
 const LANE_LABEL: Record<MediaDropLane, string> = { video: 'Video', broll: 'B-roll', music: 'Music', sfx: 'SFX' }
 /** 'visual' = video + images (B-roll Upload tab). */
@@ -493,6 +494,15 @@ export function MediaPanel({
               </Button>
             ) : null}
           </div>
+          {onEditsPass ? (
+            <MulticamReviewPanel
+              edits={edits}
+              angles={angles}
+              mainLabel={mainItem?.label}
+              onEditsPass={onEditsPass}
+              onSeekSource={onSeekSource}
+            />
+          ) : null}
           {autoCount ? (
             <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-dashed p-1.5 text-[11px]" data-testid="multicam-switch-markers">
               {(edits.sourceSegments ?? [])

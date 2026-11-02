@@ -28,6 +28,7 @@ import {
 import { withCanvasBg } from '@/lib/clips/canvas-bg'
 import { FIT_BLUR_LABELS, FIT_BLUR_STRENGTHS, fitBlurStrength } from '@/lib/clips/fit-blur'
 import type { CropShot, FacecamLayoutState } from '@/lib/server/clips/clip-detail'
+import { applySplitScreenOnOverlap } from '@/lib/clips/editor/reframe-overlap'
 import {
   ClipShortenGapsPanel,
   type ClipGapToolSettings,
@@ -45,6 +46,7 @@ export function LayoutPanel({
   onApplyBrand,
   onEdits,
   reframeV2Enabled = false,
+  onEditsPass,
   appliedLayoutLabel = null,
   clipId,
   words = [],
@@ -68,6 +70,7 @@ export function LayoutPanel({
   mediaOffsetMs = 0,
   aiMeta = null,
   peaksUrl = null,
+  onSeekShot,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -77,8 +80,10 @@ export function LayoutPanel({
   ) => void
   onShotFocus: (i: number, focus: 'auto' | 'A' | 'B' | 'both') => void
   onRerunReframe: (shotIndex: number) => void
+  onSeekShot?: (sourceMs: number) => void
   onApplyBrand?: () => void
   onEdits?: (edits: ClipEditsV2) => void
+  onEditsPass?: (edits: ClipEditsV2, label: string) => void
   reframeV2Enabled?: boolean
   /** Runtime layout from reframe (read-only inspector). */
   appliedLayoutLabel?: string | null
@@ -471,8 +476,24 @@ export function LayoutPanel({
       {aiExtras ? (
       <>
       <p className="text-xs text-muted-foreground">
-        Shots are time ranges from auto reframe. Pick who to follow per shot; use Re-run after large transcript edits.
+        Shots are time ranges from auto reframe. Pick who to follow at each speaker switch; use Re-run after large transcript edits.
       </p>
+      {onEdits && shots.length ? (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs" data-testid="reframe-split-fallback">
+          <div>
+            <p className="font-medium">Split-screen on overlap</p>
+            <p className="text-muted-foreground">When two speakers talk at once, follow both-wide on those shots (v1 crop).</p>
+          </div>
+          <Switch
+            checked={Boolean(edits.layout.splitScreenFallback)}
+            onCheckedChange={(on) => {
+              const next = applySplitScreenOnOverlap(edits, shots, on === true)
+              if (onEditsPass) onEditsPass(next, on ? 'Reframe: split on overlap' : 'Reframe: split off')
+              else onEdits?.(next)
+            }}
+          />
+        </div>
+      ) : null}
       <ul className="divide-y divide-border rounded-lg border border-border">
         {shots.length === 0 ? (
           <li className="p-3 text-sm text-muted-foreground">No shot list yet — save or re-run reframe to load segments.</li>
@@ -481,11 +502,15 @@ export function LayoutPanel({
           const focus =
             edits.layout.shotOverrides.find((s) => s.i === i)?.focus ?? 'auto'
           return (
-            <li key={i} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+            <li key={i} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm" data-testid={`reframe-shot-${i}`}>
               <div>
-                <p className="font-medium">
+                <button
+                  type="button"
+                  className="text-left font-medium underline-offset-2 hover:underline"
+                  onClick={() => onSeekShot?.(shot.startMs)}
+                >
                   {(shot.startMs / 1000).toFixed(1)}s – {(shot.endMs / 1000).toFixed(1)}s (source)
-                </p>
+                </button>
                 <p className="text-xs text-muted-foreground">Auto speaker {shot.speaker}</p>
               </div>
               <div className="flex items-center gap-2 text-xs">

@@ -134,6 +134,7 @@ import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coales
 import { audioClipKindOf } from '@/lib/clips/editor/audio-kind'
 import { beatsToOutput } from '@/lib/clips/editor/beats'
 import { autoCutOverlays, beatSplitsForSegment } from '@/lib/clips/editor/beat-autocut'
+import { filterBeatsForCut } from '@/lib/clips/editor/strong-beats'
 import { DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS } from '@/lib/clips/audio'
 import { useDismiss } from '@/components/clips/editor/use-dismiss'
 import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
@@ -738,6 +739,11 @@ export function Timeline({
     () => [...new Set(Object.values(beatMarks).flat())].sort((a, b) => a - b),
     [beatMarks],
   )
+  const beatStrength = edits.beatSync?.strength ?? 'all'
+  const cutBeatsMs = useMemo(
+    () => filterBeatsForCut(allBeatsMs, beatStrength),
+    [allBeatsMs, beatStrength],
+  )
   // G2: solo — items of audio tracks silenced by another track's solo draw faded.
   const soloEdits = useMemo(() => applyAudioSolo(edits), [edits])
   const editable = Boolean(onCommitEdits)
@@ -745,7 +751,7 @@ export function Timeline({
   const [selected, setSelected] = useState<ItemRef[]>([])
   const applyBeatCut = useCallback(
     (every: 1 | 2 | 4) => {
-      if (!onCommitEdits || !allBeatsMs.length) return
+      if (!onCommitEdits || !cutBeatsMs.length) return
       let next = edits
       let skipped = 0
       const brollRefs = selected.filter((r) => r.lane === 'broll')
@@ -753,7 +759,7 @@ export function Timeline({
         const picked = brollRefs
           .map((r) => (next.broll ?? []).find((b) => b.id === r.id))
           .filter(Boolean) as BrollItem[]
-        const { items, skipped: sk } = autoCutOverlays(picked, allBeatsMs, every, () => null)
+        const { items, skipped: sk } = autoCutOverlays(picked, cutBeatsMs, every, () => null)
         skipped += sk.length
         const byId = new Map(items.map((i) => [i.id, i]))
         next = {
@@ -773,7 +779,7 @@ export function Timeline({
               srcIn: seg.a,
               srcOut: seg.b,
             },
-            allBeatsMs,
+            cutBeatsMs,
             every,
             (o) => outputToSource(tb, o),
             next.videoSplits ?? [],
@@ -781,11 +787,11 @@ export function Timeline({
           next = { ...next, videoSplits: splits }
         }
       }
-      onCommitEdits(next)
+      onCommitEdits(next, true, 'Cut to beat')
       if (skipped) toast.message(`${skipped} overlay(s) past the last beat — unchanged`)
       else toast.success('Cut to beat')
     },
-    [allBeatsMs, edits, onCommitEdits, outputMs, selected, tb],
+    [cutBeatsMs, edits, onCommitEdits, outputMs, selected, tb],
   )
   useEffect(() => {
     registerBeatCut?.({ cut: applyBeatCut, hasBeats })

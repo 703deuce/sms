@@ -32,6 +32,7 @@ export function BrollPanel({
   onRemoveBroll,
   onBrollMedia,
   onFlushEdits,
+  onAcceptBrollSuggestions,
   uploadSlot,
 }: {
   clipId: string
@@ -45,11 +46,14 @@ export function BrollPanel({
   onRemoveBroll: (id: string) => void
   onBrollMedia: (rows: BrollMediaRow[]) => void
   onFlushEdits?: () => void
+  onAcceptBrollSuggestions?: (items: BrollItem[]) => void
   /** E5: "Upload" tab — the project media library (same uploads as the Media panel). */
   uploadSlot?: React.ReactNode
 }) {
   const [mode, setMode] = useState<'stock' | 'ai' | 'upload'>('stock')
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [pendingAuto, setPendingAuto] = useState<BrollItem[]>([])
+  const [pendingRejected, setPendingRejected] = useState<{ item: BrollItem; reason: string }[]>([])
   const [suggestions, setSuggestions] = useState<{ atMs: number; durationS: number; prompt: string }[]>([])
   const [manualAi, setManualAi] = useState({
     prompt: aiMeta?.brollIdeas?.[0] || '',
@@ -112,27 +116,39 @@ export function BrollPanel({
         attempted?: number
         placed?: number
         queriesUsed?: string[]
-      }>(`/api/clips/clips/${clipId}/broll/auto`, { method: 'POST', body: '{}' })
-      const attempted = data.attempted ?? data.items?.length ?? 0
-      const placed = data.placed ?? data.items?.length ?? 0
+        rejected?: { item: BrollItem; reason: string }[]
+        suggestOnly?: boolean
+      }>(`/api/clips/clips/${clipId}/broll/auto`, {
+        method: 'POST',
+        body: JSON.stringify({ suggestOnly: true }),
+      })
       if (!data.items?.length) {
-        toast.error(data.message || 'No B-roll placements found')
+        toast.error(data.message || 'No B-roll suggestions')
+        setPendingAuto([])
+        setPendingRejected(data.rejected ?? [])
         return
       }
       if (data.media?.length) onBrollMedia(data.media)
-      if (data.mergedBroll !== undefined) {
-        if (onSetBroll) onSetBroll(data.mergedBroll)
-        else onMergeBroll(data.mergedBroll, true)
-      } else {
-        onMergeBroll(data.items, true)
-      }
-      onFlushEdits?.()
-      toast.success(`Placed ${placed} B-roll clip${placed === 1 ? '' : 's'}`)
+      setPendingAuto(data.items)
+      setPendingRejected(data.rejected ?? [])
+      toast.success(`${data.items.length} suggestion(s) — accept to place on timeline`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Auto B-roll failed')
     } finally {
       setBusy(false)
     }
+  }
+
+  const acceptPending = () => {
+    if (!pendingAuto.length) return
+    if (onAcceptBrollSuggestions) {
+      onAcceptBrollSuggestions(pendingAuto)
+    } else {
+      onMergeBroll(pendingAuto)
+    }
+    setPendingAuto([])
+    onFlushEdits?.()
+    toast.success('B-roll placed on timeline')
   }
 
   const suggest = async () => {
@@ -241,9 +257,32 @@ export function BrollPanel({
         <div data-testid="broll-upload-tab">{uploadSlot}</div>
       ) : mode === 'stock' ? (
         <>
-          <Button size="sm" onClick={() => void autoBroll()} disabled={busy}>
-            {busy ? 'Placing B-roll…' : 'Auto B-roll'}
+          <Button size="sm" onClick={() => void autoBroll()} disabled={busy} data-testid="broll-auto-suggest">
+            {busy ? 'Suggesting B-roll…' : 'Suggest auto B-roll'}
           </Button>
+          {pendingAuto.length ? (
+            <div className="space-y-2 rounded-md border border-dashed p-2 text-xs" data-testid="broll-pending-suggestions">
+              <p className="font-medium">{pendingAuto.length} pending — nothing on timeline until you accept</p>
+              <ul className="max-h-32 space-y-1 overflow-y-auto">
+                {pendingAuto.map((item) => (
+                  <li key={item.id} className="tabular-nums text-muted-foreground">
+                    {msLabel(item.startMs)}–{msLabel(item.endMs)}
+                  </li>
+                ))}
+              </ul>
+              {pendingRejected.length ? (
+                <p className="text-[10px] text-muted-foreground">{pendingRejected.length} skipped (60 s repeat rule)</p>
+              ) : null}
+              <div className="flex gap-2">
+                <Button size="sm" onClick={acceptPending} data-testid="broll-accept-suggestions">
+                  Accept all
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setPendingAuto([])}>
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <ul className="space-y-2">
             {(edits.broll || []).map((item) => {
               const m = mediaById.get(item.id)

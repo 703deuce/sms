@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { Check, Eye, EyeOff, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ProducerPanel } from '@/components/clips/producer/producer-panel'
+import { ProducerPlanList } from '@/components/clips/editor/producer-plan-list'
 import type { ClipBounds, ClipEditsV2 } from '@/lib/clips/edits'
+import type { ClipWord } from '@/lib/clips/edits'
+import type { ProducerToolCall } from '@/lib/clips/edits-reducer'
 import { formatToolCost, producerToolCost } from '@/lib/clips/producer-cost'
 import { appliedProducerSummaries } from '@/lib/clips/producer-honesty'
 
@@ -28,6 +31,8 @@ export function ProducerPopover({
   onAccept,
   onUndo,
   onPendingPaidChange,
+  words = [],
+  onRunPlanStep,
 }: {
   open: boolean
   onClose: () => void
@@ -39,9 +44,12 @@ export function ProducerPopover({
   onAccept: (edits: ClipEditsV2, before: ClipEditsV2, changeCount: number) => void
   onUndo: () => void
   onPendingPaidChange?: (n: number) => void
+  words?: ClipWord[]
+  onRunPlanStep?: (index: number, tools: ProducerToolCall[]) => void
 }) {
   const [proposal, setProposal] = useState<ProducerProposal | null>(null)
   const [previewing, setPreviewing] = useState(false)
+  const [planTools, setPlanTools] = useState<ProducerToolCall[] | null>(null)
 
   const discard = useCallback(() => {
     setProposal(null)
@@ -97,6 +105,22 @@ export function ProducerPopover({
           <X className="size-4" />
         </Button>
       </div>
+      {planTools?.length ? (
+        <ProducerPlanList
+          tools={planTools}
+          onRunStep={(index) => onRunPlanStep?.(index, planTools)}
+          onRunAll={() => {
+            if (proposal) {
+              onAudition(null)
+              onAccept(proposal.edits, proposal.before, proposal.changeCount)
+              setProposal(null)
+              setPreviewing(false)
+            }
+            setPlanTools(null)
+          }}
+          onDismiss={() => setPlanTools(null)}
+        />
+      ) : null}
       {proposal ? (
         <div className="space-y-2 border-b bg-primary/5 px-3 py-2 text-xs" data-testid="producer-proposal">
           <p className="font-medium">
@@ -152,6 +176,7 @@ export function ProducerPopover({
             setPreviewing(false)
             onAudition(null)
           }}
+          onPlan={(tools) => setPlanTools(tools)}
           costLabel={costLabel}
           onPendingPaidChange={onPendingPaidChange}
         />
