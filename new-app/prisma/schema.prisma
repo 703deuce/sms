@@ -507,6 +507,7 @@ model Workspace {
   clipUploads                            ClipUpload[]
   clipProjects                           ClipProject[]
   clipProjectFolders                     ClipProjectFolder[]
+  clipProjectSelects                     ClipProjectSelect[]
   recordingSessions                      RecordingSession[]
   streamChannels                         StreamChannel[]
   streamVods                             StreamVod[]
@@ -8903,6 +8904,7 @@ model ClipProject {
   t2vDraft           T2vDraft?
   projectMedia       ClipProjectMedia[]
   mediaTranscripts   ClipMediaTranscript[]
+  speechSelects      ClipProjectSelect[]
 
   /// Partial unique index `clip_projects_workspace_t2v_hub_title` on ("workspaceId", title)
   /// WHERE title = '__t2v_workspace_jobs__' AND "deletedAt" IS NULL — see migration
@@ -10025,6 +10027,27 @@ model ClipThumbnail {
   @@index([clipId])
   @@index([workspaceId])
   @@map("clip_thumbnails")
+}
+
+model ClipProjectSelect {
+  id          String      @id
+  workspaceId String
+  projectId   String
+  sourceId    String
+  kind        String
+  label       String
+  startMs     Int
+  endMs       Int
+  snippet     String?
+  sortOrder   Int
+  createdAt   DateTime    @default(now())
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, sortOrder])
+  @@index([workspaceId])
+  @@map("clip_project_selects")
 }
 
 model ProducerThread {

@@ -98,7 +98,7 @@ export function TranscriptPanel({
   onExtendTrim: (sourceMs: number) => void
   onToggleEmphasis?: (wordIndex: number) => void
   onRestoreCutRange?: (range: CutRange) => void
-  onSaveAsNewClip?: (trimIn: number, trimOut: number) => void | Promise<void>
+  onSaveAsNewClip?: (trimIn: number, trimOut: number, title?: string) => void | Promise<void>
   selectionRef: React.MutableRefObject<TranscriptSelection | null>
   applyWordFixesBatch?: (
     fixes: Record<string, string>,
@@ -811,19 +811,22 @@ export function TranscriptPanel({
           <Button
             size="sm"
             variant="secondary"
+            data-testid="transcript-make-clip"
+            disabled={selStart === null || selEnd === null}
             onClick={() => {
-              const trimIn =
-                selStart != null && selEnd != null
-                  ? Math.min(selStart, selEnd)
-                  : edits.trim.in
-              const trimOut =
-                selStart != null && selEnd != null
-                  ? Math.max(selStart, selEnd)
-                  : edits.trim.out
-              void onSaveAsNewClip(trimIn, trimOut)
+              if (selStart == null || selEnd == null) return
+              const trimIn = Math.min(selStart, selEnd)
+              const trimOut = Math.max(selStart, selEnd)
+              const title = selectionWords()
+                .map((w) => wordDisplayText(w, edits.wordFixes))
+                .join(' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 120)
+              void onSaveAsNewClip(trimIn, trimOut, title || undefined)
             }}
           >
-            Save as new clip
+            Make clip
           </Button>
         ) : null}
       </div>

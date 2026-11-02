@@ -20,6 +20,7 @@ export function SpeechSearchSection({
   playheadSourceMs,
   onSeekSource,
   onEdits,
+  onAddToSelects,
 }: {
   projectId: string
   edits: ClipEditsV2
@@ -27,6 +28,7 @@ export function SpeechSearchSection({
   playheadSourceMs: number
   onSeekSource: (sourceMs: number) => void
   onEdits: (next: ClipEditsV2) => void
+  onAddToSelects?: (hit: SpeechSearchHit) => void | Promise<void>
 }) {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -151,22 +153,35 @@ export function SpeechSearchSection({
                 <span className="text-[10px] text-amber-600">Outside this clip</span>
               ) : null}
             </div>
-            {hit.kind === 'main' ? (
-              mainInsideTrim(hit) ? (
+            <div className="flex shrink-0 flex-col gap-1">
+              {onAddToSelects ? (
                 <Button
                   type="button"
                   size="xs"
-                  variant="outline"
-                  onClick={() => onSeekSource(Math.round(hit.startS * 1000))}
+                  variant="secondary"
+                  data-testid="speech-search-add-select"
+                  onClick={() => void onAddToSelects(hit)}
                 >
-                  Go
+                  Add to selects
                 </Button>
-              ) : null
-            ) : (
-              <Button type="button" size="xs" variant="outline" onClick={() => insertHit(hit)}>
-                Insert at playhead
-              </Button>
-            )}
+              ) : null}
+              {hit.kind === 'main' ? (
+                mainInsideTrim(hit) ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    onClick={() => onSeekSource(Math.round(hit.startS * 1000))}
+                  >
+                    Go
+                  </Button>
+                ) : null
+              ) : (
+                <Button type="button" size="xs" variant="outline" onClick={() => insertHit(hit)}>
+                  Insert at playhead
+                </Button>
+              )}
+            </div>
           </li>
         ))}
       </ul>

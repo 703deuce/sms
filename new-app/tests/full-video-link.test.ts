@@ -19,6 +19,8 @@ describe('resolveFullVideoLink', () => {
     mockFindFirst
       .mockResolvedValueOnce({
         startMs: 5000,
+        endMs: 9000,
+        title: 'Test clip',
         project: {
           uploadId: 'up_1',
           settings: {
@@ -42,5 +44,6 @@ describe('resolveFullVideoLink', () => {
     const link = await resolveFullVideoLink('ws', 'clip_a')
     expect(link?.projectId).toBe('proj_fv')
     expect(link?.url).toContain('t=5000')
+    expect(link?.url).toContain('fromClip=')
   })
 })

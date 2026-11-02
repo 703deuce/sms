@@ -111,6 +111,8 @@ import {
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { useFullVideoHighlights } from '@/components/clips/editor/use-full-video-highlights'
+import { useFullVideoMomentFocus } from '@/components/clips/editor/full-video-moment-focus'
+import { snapTranscriptSelectionMs } from '@/lib/clips/editor/make-clip-from-transcript'
 import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
 import type { ProjectMediaApi } from '@/components/clips/editor/use-project-media'
 import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
@@ -524,7 +526,12 @@ export function EditorShell({
     async (trimIn: number, trimOut: number, deriveTitle?: string) => {
       setPendingDerivedClipId('pending')
       try {
-        const data = await deriveClipFromEditor(clipId, { trimIn, trimOut, title: deriveTitle })
+        const snapped = snapTranscriptSelectionMs(trimIn, trimOut, editorWords, edits.trim.in, edits.trim.out)
+        const data = await deriveClipFromEditor(clipId, {
+          trimIn: snapped.trimIn,
+          trimOut: snapped.trimOut,
+          title: deriveTitle?.trim() || snapped.title,
+        })
         setPendingDerivedClipId(data.clipId)
         toast.success('New clip created from selection')
       } catch (e) {
@@ -532,7 +539,7 @@ export function EditorShell({
         toast.error(e instanceof Error ? e.message : 'Could not create clip')
       }
     },
-    [clipId],
+    [clipId, editorWords, edits.trim.in, edits.trim.out],
   )
 
   const toggleLoopFriendly = useCallback(() => {
@@ -608,6 +615,7 @@ export function EditorShell({
     [clipEditorWords, editSources, editSourceSegments, mediaTranscripts.transcripts],
   )
   const fvHighlights = useFullVideoHighlights(projectId, fullVideo, editorWords)
+  const fvMoment = useFullVideoMomentFocus(fullVideo, bounds.clipEndMs - bounds.clipStartMs)
   const [versionsEnabled, setVersionsEnabled] = useState(true)
   const [editVersions, setEditVersions] = useState<EditVersionRow[]>([])
   const vocabMountRef = useRef(false)
@@ -1892,7 +1900,15 @@ export function EditorShell({
       {panelMounted('thumbnail') ? (
         <div className={panel === 'thumbnail' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'thumbnail'} data-testid="editor-panel-thumbnail">
           <EditorPanelErrorBoundary label="Cover">
-          <ThumbnailPanel clipId={clipId} edits={edits} onEdits={setEdits} />
+          <ThumbnailPanel
+            clipId={clipId}
+            edits={edits}
+            onEdits={setEdits}
+            videoUrl={videoUrl}
+            trimIn={edits.trim.in}
+            trimOut={edits.trim.out}
+            defaultTitle={title}
+          />
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
@@ -2104,6 +2120,7 @@ export function EditorShell({
             timebase={timelineTb}
             playheadOutMs={outputMs}
             playheadOutMsRef={outputMsRef}
+            sourceDurationMs={bounds.trimMaxMs ?? bounds.clipEndMs}
           />
           </EditorPanelErrorBoundary>
         </div>
@@ -2528,6 +2545,8 @@ export function EditorShell({
             playheadOutMsRef={outputMsRef}
             transcriptSelectionRef={selectionRef}
             registerBeatCut={registerBeatCut}
+            momentFocus={fvMoment}
+            onMomentSeek={seekSource}
             highlights={
               fullVideo && fvHighlights.highlightsOn && fvHighlights.ranges.length
                 ? {
