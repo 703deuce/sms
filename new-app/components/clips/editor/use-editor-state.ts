@@ -527,13 +527,37 @@ export function useEditorState(
 
   const restoreCutRange = useCallback(
     (range: CutRange) => {
-      const cuts = subtractRangeFromCuts(state.edits.cutRanges, range)
-      const cutCleanupKinds = pruneCutCleanupKinds(state.edits.cutCleanupKinds, cuts)
-      const next = { ...state.edits, cutRanges: cuts, cutCleanupKinds }
-      if (editsEqual(state.edits, next)) return
+      const cuts = subtractRangeFromCuts(editsRef.current.cutRanges, range)
+      const cutCleanupKinds = pruneCutCleanupKinds(editsRef.current.cutCleanupKinds, cuts)
+      const next = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds }
+      if (editsEqual(editsRef.current, next)) return
       setEdits(next)
     },
-    [setEdits, state.edits],
+    [setEdits],
+  )
+
+  const restoreCutRanges = useCallback(
+    (ranges: CutRange[], passLabel?: string) => {
+      if (!ranges.length) return
+      let cuts = editsRef.current.cutRanges ?? []
+      for (const range of ranges) {
+        cuts = subtractRangeFromCuts(cuts, range)
+      }
+      const cutCleanupKinds = pruneCutCleanupKinds(editsRef.current.cutCleanupKinds, cuts)
+      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds }
+      if (editsEqual(editsRef.current, nextEdits)) return
+      const rippled = rippleFrom(editsRef.current, nextEdits)
+      editsRef.current = rippled
+      bumpLocalRevision()
+      setHistoryReady(true)
+      if (passLabel) {
+        dispatch({ type: 'pass', edits: rippled, label: passLabel })
+        return
+      }
+      if (rippled !== nextEdits) dispatch({ type: 'set', edits: rippled })
+      else dispatch({ type: 'addCuts', cutRanges: cuts })
+    },
+    [bumpLocalRevision, rippleFrom],
   )
 
   const setLayoutMode = useCallback(
@@ -1059,6 +1083,7 @@ export function useEditorState(
     applyWordFixesBatch,
     restoreWord,
     restoreCutRange,
+    restoreCutRanges,
     setLayoutMode,
     setShotOverride,
     setTrim,

@@ -24,7 +24,9 @@ import { TrimRangeBar } from '@/components/clips/editor/trim-range-bar'
 import { nudgeTrimIn, nudgeTrimOut } from '@/lib/clips/editor/nudge'
 import type { ClipBounds } from '@/lib/clips/edits'
 import { findRetakes, retakeGroupWithKeepIndex, type RetakeGroup } from '@/lib/clips/editor/retakes'
-import { cleanupPassLabel } from '@/lib/clips/editor/history-labels'
+import { cleanupPassLabel, cleanupRestorePassLabel } from '@/lib/clips/editor/history-labels'
+import { orderedKeepSegments, remapTime } from '@/lib/clips/edits'
+import { formatTimecode } from '@/lib/clips/format'
 import { excerptPartsForCutRange } from '@/lib/clips/editor/cleanup-text'
 import {
   DEFAULT_CLEANUP_STRENGTH,
@@ -57,6 +59,7 @@ export function CleanupPanel({
   onApplyProposal,
   onApplyPass,
   onRestoreProposal,
+  onRestorePass,
   onCommitTrim,
   onAuditionChange,
   onSeek,
@@ -74,6 +77,7 @@ export function CleanupPanel({
   onApplyProposal: (proposal: CleanupProposal) => void
   onApplyPass?: (proposals: CleanupProposal[], label: string) => void
   onRestoreProposal: (proposal: CleanupProposal) => void
+  onRestorePass?: (proposals: CleanupProposal[], label: string) => void
   onCommitTrim: (trim: { in: number; out: number }) => void
   onAuditionChange: (edits: ClipEditsV2 | null) => void
   onSeek: (sourceMs: number) => void
@@ -192,8 +196,27 @@ export function CleanupPanel({
   }
 
   const restoreAllOfKind = (kind: CleanupProposal['kind']) => {
-    for (const p of applied.filter((row) => row.kind === kind)) onRestoreProposal(p)
+    const rows = applied.filter((row) => row.kind === kind)
+    if (!rows.length) return
+    const label = cleanupRestorePassLabel(kind, rows.length)
+    if (onRestorePass) onRestorePass(rows, label)
+    else for (const p of rows) onRestoreProposal(p)
   }
+
+  const proposalOutputMs = (p: CleanupProposal) => {
+    const segs = orderedKeepSegments(edits)
+    return remapTime(p.range[0], segs) ?? Math.max(0, p.range[0] - bounds.clipStartMs)
+  }
+
+  const seekToProposal = (p: CleanupProposal) => {
+    onSeek(Math.max(bounds.clipStartMs, p.range[0]))
+  }
+
+  const proposedFillers = useMemo(
+    () => proposed.filter((row) => row.kind === 'filler' || row.kind === 'repeat'),
+    [proposed],
+  )
+  const proposedGaps = useMemo(() => proposed.filter((row) => row.kind === 'gap'), [proposed])
 
   const runRetakes = async () => {
     setRetakeBusy(true)
@@ -324,6 +347,35 @@ export function CleanupPanel({
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-medium">Cleanup</h3>
       </div>
+
+      <div
+        className="sticky top-0 z-10 -mx-3 flex flex-wrap gap-2 border-b border-border bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+        data-testid="cleanup-bulk-actions"
+      >
+        {proposedFillers.length ? (
+          <Button type="button" size="sm" variant="secondary" onClick={applyAllFillers}>
+            Accept all fillers
+            <FreeToolBadge className="ml-1.5" />
+          </Button>
+        ) : null}
+        {proposedGaps.length ? (
+          <Button type="button" size="sm" variant="secondary" onClick={() => applyAllOfKind('gap')}>
+            Accept all gaps
+            <FreeToolBadge className="ml-1.5" />
+          </Button>
+        ) : null}
+        {retakeExtras.length && !retakeUnverified ? (
+          <Button type="button" size="sm" data-testid="retake-apply-all-sticky" onClick={() => applyAllOfKind('retake')}>
+            Apply all retakes
+          </Button>
+        ) : null}
+        {clarityRows.length ? (
+          <Button type="button" size="sm" data-testid="clarity-apply-all-sticky" onClick={applyAllClarity}>
+            Apply all clarity
+          </Button>
+        ) : null}
+      </div>
+
       <TrimRangeBar bounds={bounds} trim={edits.trim} onCommitTrim={onCommitTrim} />
       {edits.trim.in !== bounds.clipStartMs || edits.trim.out !== bounds.clipEndMs ? (
         <Button
@@ -385,16 +437,6 @@ export function CleanupPanel({
               {word}
             </label>
           ))}
-        </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button type="button" size="sm" variant="secondary" onClick={applyAllFillers}>
-            Accept all fillers
-            <FreeToolBadge className="ml-1.5" />
-          </Button>
-          <Button type="button" size="sm" variant="secondary" onClick={() => applyAllOfKind('gap')}>
-            Accept all gaps
-            <FreeToolBadge className="ml-1.5" />
-          </Button>
         </div>
       </div>
 
@@ -468,16 +510,6 @@ export function CleanupPanel({
                 Unverified — review each take before applying
               </span>
             ) : null}
-            {retakeExtras.length && !retakeUnverified ? (
-              <Button
-                type="button"
-                size="sm"
-                data-testid="retake-apply-all"
-                onClick={() => applyAllOfKind('retake')}
-              >
-                Apply all retakes
-              </Button>
-            ) : null}
           </div>
           {retakeGroups.map((group, gi) => {
             const groupProposal = retakeProposals([group], edits.cutRanges ?? [])[0]
@@ -540,8 +572,10 @@ export function CleanupPanel({
               <ProposalRow
                 key={p.id}
                 proposal={p}
+                outputTimeMs={proposalOutputMs(p)}
                 orderedWords={orderedWords}
                 auditioning={auditionIds.has(p.id)}
+                onSeekMain={() => seekToProposal(p)}
                 onAudition={() => toggleAudition(p)}
                 onPreview={() => previewCutAudition(p)}
                 onSkip={() => setSkippedIds((s) => new Set(s).add(p.id))}
@@ -566,11 +600,26 @@ export function CleanupPanel({
             <p className="text-xs text-muted-foreground">No cuts applied yet.</p>
           ) : (
             applied.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
-                <span>
-                  {p.label} · {p.kind}
-                </span>
-                <div className="flex gap-1">
+              <div
+                key={p.id}
+                className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs"
+              >
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left hover:opacity-90"
+                  onClick={() => seekToProposal(p)}
+                >
+                  <span
+                    className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono tabular-nums text-[10px] text-foreground"
+                    data-testid="cleanup-applied-time"
+                  >
+                    {formatTimecode(proposalOutputMs(p))}
+                  </span>
+                  <span className="line-clamp-2">
+                    {p.label} · {p.kind}
+                  </span>
+                </button>
+                <div className="flex shrink-0 gap-1">
                   <Button type="button" size="sm" variant="ghost" onClick={() => onRestoreProposal(p)}>
                     Restore
                   </Button>
@@ -645,8 +694,10 @@ export function CleanupPanel({
 
 function ProposalRow({
   proposal,
+  outputTimeMs,
   orderedWords,
   auditioning,
+  onSeekMain,
   onAudition,
   onPreview,
   onSkip,
@@ -654,8 +705,10 @@ function ProposalRow({
   testId,
 }: {
   proposal: CleanupProposal
+  outputTimeMs: number
   orderedWords: ReturnType<typeof editorWordsForClipFillerReview>
   auditioning: boolean
+  onSeekMain: () => void
   onAudition: () => void
   onPreview: () => void
   onSkip: () => void
@@ -671,7 +724,18 @@ function ProposalRow({
       className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs"
       data-testid={testId}
     >
-      <span className="line-clamp-3 min-w-0 flex-1">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-start gap-2 text-left hover:opacity-90"
+        onClick={onSeekMain}
+      >
+        <span
+          className="mt-0.5 shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono tabular-nums text-[10px] text-foreground"
+          data-testid="cleanup-proposal-time"
+        >
+          {formatTimecode(outputTimeMs)}
+        </span>
+        <span className="line-clamp-3 min-w-0 flex-1">
         {proposal.kind === 'clarity' && clarityParts ? (
           <>
             <span className="font-medium">Clarity · {clarityReason}</span>
@@ -688,6 +752,7 @@ function ProposalRow({
           </>
         )}
       </span>
+      </button>
       <div className="flex flex-wrap gap-1">
         <Button type="button" size="sm" variant="outline" onClick={onPreview} data-testid="cleanup-preview-cut">
           Preview 2s

@@ -66,6 +66,18 @@ export function cleanupPassLabel(kind: string, count: number): string {
   return `${head} · ${count} cut${count === 1 ? '' : 's'}`
 }
 
+export function cleanupRestorePassLabel(kind: string, count: number): string {
+  const names: Record<string, string> = {
+    filler: 'Restore fillers',
+    repeat: 'Restore repeats',
+    gap: 'Restore gaps',
+    retake: 'Restore retakes',
+    clarity: 'Restore clarity',
+  }
+  const head = names[kind] ?? 'Restore'
+  return `${head} · ${count} cut${count === 1 ? '' : 's'}`
+}
+
 export function singleCleanupApplyLabel(proposal: { kind: string }): string {
   switch (proposal.kind) {
     case 'retake':
