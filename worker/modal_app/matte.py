@@ -13,6 +13,7 @@ import modal
 
 from modal_app.app import app
 from modal_app.images import MODAL_MAX_CONTAINERS, models
+from modal_app.rvm_params import WARMUP_OUTPUT_FRAMES, downsample_ratio
 
 MATTE_GPU = os.environ.get("MODAL_MATTE_GPU", os.environ.get("MODAL_GPU", "T4"))
 
@@ -78,13 +79,6 @@ def _out_size(w: int, h: int, short_side: int) -> tuple[int, int]:
     s = min(w, h)
     k = min(1.0, short_side / float(s))
     return max(2, int(round(w * k / 2)) * 2), max(2, int(round(h * k / 2)) * 2)
-
-
-def downsample_ratio(w: int, h: int, quality: str) -> float:
-    r = min(1.0, 512.0 / max(w, h))
-    if quality == "detail":
-        r = min(1.0, r * 1.5)
-    return round(r, 3)
 
 
 @app.cls(
@@ -153,9 +147,8 @@ class Matter:
         sw, sh = _probe(item["src_url"])
         w, h = _out_size(sw, sh, int(item.get("short_side") or 1080))
         n_pre = int(round(pre * fps))
-        resets = {n_pre + int(round(float(t) * fps)) for t in (item.get("reset_at_s") or [])}
         net = self._net(quality)
-        ratio = downsample_ratio(w, h, quality)
+        ratio = float(downsample_ratio(w, h))
         frame_bytes = w * h * 3
         data = b""
         with tempfile.TemporaryDirectory() as td:
@@ -210,33 +203,43 @@ class Matter:
                 ],
                 stdin=subprocess.PIPE,
             )
-            rec = [None] * 4
+            rec: list = [None, None, None, None]
             prev: list = []
             i = kept = 0
             alpha_sum = 0.0
+
+            def _infer(src_t):
+                nonlocal rec
+                _fgr, pha, r1, r2, r3, r4 = net(src_t, *rec, downsample_ratio=ratio)
+                rec = [r1, r2, r3, r4]
+                return pha[0, 0].float()
+
             with torch.no_grad():
                 while True:
                     buf = dec.stdout.read(frame_bytes)
                     if len(buf) < frame_bytes:
                         break
-                    if i in resets:
-                        rec = [None] * 4
-                        prev = []
                     src = torch.frombuffer(bytearray(buf), dtype=torch.uint8).cuda()
                     src = src.view(h, w, 3).permute(2, 0, 1).unsqueeze(0).half().div_(255)
-                    _fgr, pha, *rec = net(src, *rec, downsample_ratio=ratio)
-                    a = pha[0, 0].float()
-                    if item.get("median", True) and len(prev) == 2:
-                        med = torch.median(torch.stack([prev[0], prev[1], a]), dim=0).values
-                        a_out = torch.where((a - prev[1]).abs() < 0.08, med, a)
-                    else:
-                        a_out = a
-                    prev = (prev + [a])[-2:]
                     if i >= n_pre:
+                        out_idx = i - n_pre
+                        if out_idx < WARMUP_OUTPUT_FRAMES:
+                            _infer(src)
+                            a = _infer(src)
+                        else:
+                            a = _infer(src)
+                        if item.get("median", True) and len(prev) == 2:
+                            med = torch.median(torch.stack([prev[0], prev[1], a]), dim=0).values
+                            a_out = torch.where((a - prev[1]).abs() < 0.08, med, a)
+                        else:
+                            a_out = a
+                        prev = (prev + [a])[-2:]
                         u8 = (a_out.clamp(0, 1) * 255.0 + 0.5).to(torch.uint8).cpu().numpy()
                         enc.stdin.write(np.ascontiguousarray(u8).tobytes())
                         alpha_sum += float(a_out.mean())
                         kept += 1
+                    else:
+                        _infer(src)
                     i += 1
             enc.stdin.close()
             if enc.wait() != 0 or dec.wait() != 0:
