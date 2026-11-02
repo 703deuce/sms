@@ -7,14 +7,15 @@ export type RetakeAttempt = { startMs: number; endMs: number; text: string }
 export type RetakeGroup = { attempts: RetakeAttempt[]; keepIndex: number }
 
 const SENTENCE_END = /[.!?]["']?$/
-const MAX_RETAKE_WINDOW_S = 10
-const MAX_RETAKE_CUT_MS = 15_000
-const MIN_SHARED_PREFIX_WORDS = 2
+const MAX_RETAKE_WINDOW_MS = 4500
+const MAX_RETAKE_CUT_MS = 4000
+const MIN_RETAKE_CUT_MS = 250
+const MAX_RETAKE_GROUPS = 6
 
-const RETAKE_STOP = new Set(['um', 'uh', 'er', 'ah', 'hmm', 'mm', 'like', 'so', 'and', 'the', 'a', 'i'])
+const FILLER = new Set(['um', 'uh', 'er', 'ah', 'hmm', 'mm'])
 
-/** Tokens too weak to anchor a retake pairing on their own. */
-const RETAKE_WEAK = new Set([
+/** Tokens too weak to anchor a phrase repeat on their own. */
+const WEAK = new Set([
   'you',
   'know',
   'it',
@@ -62,8 +63,6 @@ const RETAKE_WEAK = new Set([
   'would',
   'can',
   'could',
-  'uh',
-  'um',
   'man',
   'well',
   'yeah',
@@ -74,9 +73,9 @@ const RETAKE_WEAK = new Set([
   'right',
 ])
 
-function gapMs(a: RetakeWord, b: RetakeWord): number {
-  return Math.max(0, b.s * 1000 - a.e * 1000)
-}
+const TRUNC_END = /(\.\.\.|…|—)$/
+const TRUNC_WORD = /(\.\.\.|…|—|-)$/
+const HARD_PUNCT = /[.!?,;:]$/
 
 function normalizeToken(raw: string): string {
   return raw
@@ -85,129 +84,182 @@ function normalizeToken(raw: string): string {
     .trim()
 }
 
-function sentenceTokens(words: RetakeWord[]): string[] {
-  return words.map((w) => normalizeToken(w.w)).filter(Boolean)
+function msFromS(s: number): number {
+  return Math.round(s * 1000)
 }
 
-function contentTokens(words: RetakeWord[]): string[] {
-  return sentenceTokens(words).filter((t) => !RETAKE_STOP.has(t))
+function gapMs(a: RetakeWord, b: RetakeWord): number {
+  return Math.max(0, b.s * 1000 - a.e * 1000)
 }
 
-function sharedPrefixLen(a: string[], b: string[]): number {
-  const n = Math.min(a.length, b.length)
-  let k = 0
-  while (k < n && a[k] === b[k]) k += 1
-  return k
-}
+type StreamTok = { t: string; wi: number; wf: number }
 
-function prefixStrongEnough(tokens: string[], prefixLen: number): boolean {
-  if (prefixLen < MIN_SHARED_PREFIX_WORDS) return false
-  const head = tokens.slice(0, prefixLen)
-  const strong = head.filter((t) => t.length >= 4 && !RETAKE_WEAK.has(t))
-  return strong.length >= 1 || prefixLen >= 4
-}
-
-export function splitSentences(words: RetakeWord[]): RetakeWord[][] {
-  if (!words.length) return []
-  const sentences: RetakeWord[][] = []
-  let cur: RetakeWord[] = []
-  for (let i = 0; i < words.length; i++) {
-    const w = words[i]!
-    if (cur.length && gapMs(cur[cur.length - 1]!, w) >= 700) {
-      if (sentenceTokens(cur).length >= 3) sentences.push(cur)
-      cur = []
+function buildTokenStream(words: RetakeWord[]): StreamTok[] {
+  const toks: StreamTok[] = []
+  for (let wi = 0; wi < words.length; wi++) {
+    const w = words[wi]!
+    const t = normalizeToken(w.w)
+    if (!t || FILLER.has(t)) continue
+    const prev = toks[toks.length - 1]
+    if (
+      prev &&
+      prev.t === t &&
+      gapMs(words[prev.wi]!, w) < 500 &&
+      !SENTENCE_END.test(words[prev.wi]!.w.trim())
+    ) {
+      toks[toks.length - 1] = { t, wi, wf: prev.wf }
+      continue
     }
-    cur.push(w)
-    const endPunct = SENTENCE_END.test(w.w.trim())
-    if (endPunct) {
-      if (sentenceTokens(cur).length >= 3) sentences.push(cur)
-      cur = []
-    }
+    toks.push({ t, wi, wf: wi })
   }
-  if (cur.length && sentenceTokens(cur).length >= 3) sentences.push(cur)
-  return sentences
+  return toks
 }
 
-function lcsLen(a: string[], b: string[]): number {
-  const m = a.length
-  const n = b.length
-  const dp = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0))
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (a[i - 1] === b[j - 1]) dp[i]![j] = dp[i - 1]![j - 1]! + 1
-      else dp[i]![j] = Math.max(dp[i - 1]![j]!, dp[i]![j - 1]!)
-    }
-  }
-  return dp[m]![n]!
+function textSlice(words: RetakeWord[], fromWi: number, toWiExclusive: number): string {
+  return words
+    .slice(fromWi, Math.min(words.length, toWiExclusive))
+    .map((w) => w.w)
+    .join(' ')
 }
 
-function tokenSimilarity(a: string[], b: string[]): number {
-  if (!a.length || !b.length) return 0
-  return lcsLen(a, b) / Math.max(a.length, b.length)
+function keptEndWi(words: RetakeWord[], toks: StreamTok[], fromTok: number, spanToks: number): number {
+  const lastTok = toks[fromTok + spanToks - 1]
+  if (!lastTok) return fromTok
+  return Math.min(words.length, lastTok.wi + 1)
 }
 
-function sentencesMatch(a: RetakeWord[], b: RetakeWord[]): boolean {
-  const ta = contentTokens(a)
-  const tb = contentTokens(b)
-  if (ta.length < 3 || tb.length < 3) return false
-  const prefix = sharedPrefixLen(ta, tb)
-  if (prefix >= MIN_SHARED_PREFIX_WORDS && prefixStrongEnough(ta, prefix)) return true
-  const headA = ta.slice(0, 3)
-  const headB = tb.slice(0, 3)
-  if (headA.length >= 3 && headA.every((t, i) => t === headB[i]) && prefixStrongEnough(ta, 3)) return true
-  if (prefix >= MIN_SHARED_PREFIX_WORDS && tokenSimilarity(ta, tb) >= 0.72 && prefixStrongEnough(ta, prefix)) {
-    return true
+function abandonHasHardPunct(words: RetakeWord[], fromWi: number, toWiExclusive: number): boolean {
+  for (let i = fromWi; i < toWiExclusive && i < words.length; i++) {
+    const raw = words[i]!.w.trim()
+    if (FILLER.has(normalizeToken(raw))) continue
+    if (HARD_PUNCT.test(raw) && !TRUNC_WORD.test(raw)) return true
   }
   return false
 }
 
-function attemptFromSentence(sentence: RetakeWord[]): RetakeAttempt {
-  const startMs = Math.round(sentence[0]!.s * 1000)
-  const endMs = Math.round(sentence[sentence.length - 1]!.e * 1000)
-  return { startMs, endMs, text: sentence.map((w) => w.w).join(' ') }
+function candidateToGroup(
+  words: RetakeWord[],
+  abandonStartMs: number,
+  keepStartMs: number,
+  keepEndWi: number,
+): RetakeGroup | null {
+  if (keepStartMs <= abandonStartMs) return null
+  const cutMs = keepStartMs - abandonStartMs
+  if (cutMs < MIN_RETAKE_CUT_MS || cutMs > MAX_RETAKE_CUT_MS) return null
+  if (keepStartMs - abandonStartMs > MAX_RETAKE_WINDOW_MS) return null
+  const abandonFromWi = words.findIndex((w) => msFromS(w.s) >= abandonStartMs - 1)
+  const fromWi = abandonFromWi >= 0 ? abandonFromWi : 0
+  return {
+    attempts: [
+      {
+        startMs: abandonStartMs,
+        endMs: keepStartMs,
+        text: textSlice(words, fromWi, words.findIndex((w) => msFromS(w.s) >= keepStartMs) || keepEndWi),
+      },
+      {
+        startMs: keepStartMs,
+        endMs: msFromS(words[Math.min(words.length - 1, keepEndWi - 1)]?.e ?? words[words.length - 1]!.e),
+        text: textSlice(
+          words,
+          words.findIndex((w) => msFromS(w.s) >= keepStartMs - 1),
+          keepEndWi,
+        ),
+      },
+    ],
+    keepIndex: 1,
+  }
 }
 
-function sentenceStartS(sentence: RetakeWord[]): number {
-  return sentence[0]?.s ?? 0
-}
-
-function falseStartGroups(words: RetakeWord[]): RetakeGroup[] {
-  const sentences = splitSentences(words)
+function detectRetakeGroups(words: RetakeWord[]): RetakeGroup[] {
+  if (words.length < 4) return []
+  const toks = buildTokenStream(words)
+  if (toks.length < 4) return []
   const out: RetakeGroup[] = []
-  for (const sentence of sentences) {
-    const tokens = sentenceTokens(sentence)
-    if (tokens.length < 5) continue
 
-    const pushSplit = (splitTokenIndex: number) => {
-      if (splitTokenIndex < 2 || splitTokenIndex > tokens.length - 3) return
-      const firstWords = sentence.slice(0, splitTokenIndex)
-      const secondWords = sentence.slice(splitTokenIndex)
-      if (sentenceTokens(firstWords).length >= 2 && sentenceTokens(secondWords).length >= 3) {
-        out.push({
-          attempts: [attemptFromSentence(firstWords), attemptFromSentence(secondWords)],
-          keepIndex: 1,
-        })
+  const S = (wi: number) => msFromS(words[wi]!.s)
+
+  // Rule A — immediate phrase repeat (word-index spans)
+  for (let p = 0; p < toks.length; p++) {
+    let matched = false
+    for (let k = 4; k >= 2; k--) {
+      const q = p + k
+      if (q + k > toks.length) continue
+      let ok = true
+      for (let i = 0; i < k; i++) {
+        if (toks[p + i]!.t !== toks[q + i]!.t) ok = false
       }
+      if (!ok) continue
+      const strong = toks.slice(p, p + k).some((x) => x.t.length >= 4 && !WEAK.has(x.t))
+      if (!strong && k < 3) continue
+      const fromWi = toks[p]!.wf
+      const toWi = toks[q]!.wf
+      if (abandonHasHardPunct(words, fromWi, toWi)) continue
+      const keepStart = S(toks[q]!.wf)
+      const keepEnd = keptEndWi(words, toks, q, k)
+      const g = candidateToGroup(words, S(toks[p]!.wf), keepStart, keepEnd)
+      if (g) out.push(g)
+      matched = true
+      break
     }
+    if (matched) continue
+  }
 
-    const head = tokens.slice(0, 3)
-    for (let i = 3; i <= tokens.length - 3; i++) {
-      const slice = tokens.slice(i, i + 3)
-      if (head.every((t, j) => t === slice[j])) {
-        pushSplit(i)
-        break
-      }
-    }
-
-    for (let i = 1; i < tokens.length - 3; i++) {
-      for (let j = i + 1; j < tokens.length - 2; j++) {
-        if (tokens[i] === tokens[j] && tokens[i + 1] === tokens[j + 1]) {
-          pushSplit(j)
-          break
-        }
-      }
+  // Rule B — truncated restart (… / — / ...)
+  for (let t = 0; t < toks.length - 1; t++) {
+    const truncWi = toks[t]!.wi
+    if (!TRUNC_END.test(words[truncWi]!.w.trim()) && !TRUNC_WORD.test(words[truncWi]!.w.trim())) continue
+    const q = t + 1
+    if (words[toks[q]!.wi].s - words[truncWi].e > 1.5) continue
+    for (let p = Math.max(0, t - 3); p <= t; p++) {
+      if (toks[p]!.t !== toks[q]!.t) continue
+      const keepStart = S(toks[q]!.wf)
+      const keepEnd = Math.min(words.length, toks[q]!.wi + 6)
+      const g = candidateToGroup(words, S(toks[p]!.wf), keepStart, keepEnd)
+      if (g) out.push(g)
+      break
     }
   }
+
+  // Rule C — adjacent sentences, shared head (any length after stream split)
+  const sents: number[][] = []
+  let cur: number[] = []
+  for (let ti = 0; ti < toks.length; ti++) {
+    cur.push(ti)
+    const wi = toks[ti]!.wi
+    if (SENTENCE_END.test(words[wi]!.w.trim()) || TRUNC_END.test(words[wi]!.w.trim())) {
+      sents.push(cur)
+      cur = []
+    }
+  }
+  if (cur.length) sents.push(cur)
+
+  for (let i = 0; i + 1 < sents.length; i++) {
+    const a = sents[i]!
+    const b = sents[i + 1]!
+    if (!a.length || !b.length) continue
+    let k = 0
+    while (k < a.length && k < b.length && toks[a[k]!]!.t === toks[b[k]!]!.t) k++
+    if (k < 3) continue
+    const aLastWi = toks[a[a.length - 1]!]!.wi
+    if (TRUNC_END.test(words[aLastWi]!.w.trim()) || TRUNC_WORD.test(words[aLastWi]!.w.trim())) continue
+    const bFirstWf = toks[b[0]!]!.wf
+    const bFirstWi = toks[b[0]!]!.wi
+    if (words[bFirstWi].s - words[aLastWi].e > 1.5) continue
+    let startTi = a[0]!
+    const prevS = sents[i - 1]
+    if (prevS && prevS.length <= 2) {
+      const prevLastWi = toks[prevS[prevS.length - 1]!]!.wi
+      if (TRUNC_END.test(words[prevLastWi]!.w.trim()) || TRUNC_WORD.test(words[prevLastWi]!.w.trim())) {
+        startTi = prevS[0]!
+      }
+    }
+    const abandonStart = S(toks[startTi]!.wf)
+    const keepStart = S(bFirstWf)
+    const keepEnd = Math.min(words.length, toks[b[b.length - 1]!]!.wi + 1)
+    const g = candidateToGroup(words, abandonStart, keepStart, keepEnd)
+    if (g) out.push(g)
+  }
+
   return out
 }
 
@@ -227,7 +279,7 @@ function dedupeRetakeGroups(groups: RetakeGroup[]): RetakeGroup[] {
   return out
 }
 
-function collapseRetakeGroups(groups: RetakeGroup[]): RetakeGroup[] {
+function collapseRetakeGroups(groups: RetakeGroup[], existingCuts: CutRange[]): RetakeGroup[] {
   const out: RetakeGroup[] = []
   for (const g of groups) {
     const keep = g.attempts[g.keepIndex]!
@@ -237,11 +289,11 @@ function collapseRetakeGroups(groups: RetakeGroup[]): RetakeGroup[] {
       return `${ok.startMs}:${ok.endMs}` === keepKey
     })
     if (existing) {
-      const rangeA = retakeCutRange(existing, [])
-      const rangeB = retakeCutRange(g, [])
-      const cutA = rangeA ? rangeA[1] - rangeA[0] : 0
-      const cutB = rangeB ? rangeB[1] - rangeB[0] : 0
-      if (cutB > cutA) {
+      const rangeA = retakeCutRange(existing, existingCuts)
+      const rangeB = retakeCutRange(g, existingCuts)
+      const cutA = rangeA ? rangeA[1] - rangeA[0] : Number.MAX_SAFE_INTEGER
+      const cutB = rangeB ? rangeB[1] - rangeB[0] : Number.MAX_SAFE_INTEGER
+      if (cutB < cutA) {
         const ix = out.indexOf(existing)
         out[ix] = g
       }
@@ -256,7 +308,7 @@ function capRetakeGroups(groups: RetakeGroup[], max: number, existingCuts: CutRa
   const scored = groups
     .map((g) => ({ g, cut: retakeCutRange(g, existingCuts) }))
     .filter((x): x is { g: RetakeGroup; cut: CutRange } => x.cut != null)
-    .sort((a, b) => b.cut[1] - b.cut[0] - (a.cut[1] - a.cut[0]))
+    .sort((a, b) => a.cut[1] - a.cut[0] - (b.cut[1] - b.cut[0]))
   const out: RetakeGroup[] = []
   for (const { g, cut } of scored) {
     if (out.length >= max) break
@@ -271,59 +323,43 @@ function capRetakeGroups(groups: RetakeGroup[], max: number, existingCuts: CutRa
 }
 
 function filterRetakeGroups(groups: RetakeGroup[], existingCuts: CutRange[]): RetakeGroup[] {
-  const filtered = collapseRetakeGroups(dedupeRetakeGroups(groups)).filter((g) => {
+  const filtered = collapseRetakeGroups(dedupeRetakeGroups(groups), existingCuts).filter((g) => {
     if (g.attempts.length < 2) return false
-    const first = g.attempts[0]!
-    const keep = g.attempts[g.keepIndex]!
-    if (keep.startMs - first.startMs > MAX_RETAKE_WINDOW_S * 1000) return false
     const cut = retakeCutRange(g, existingCuts)
     if (!cut) return false
-    if (cut[1] - cut[0] < 400) return false
+    const len = cut[1] - cut[0]
+    if (len < MIN_RETAKE_CUT_MS || len > MAX_RETAKE_CUT_MS) return false
+    const first = g.attempts[0]!
+    const keep = g.attempts[g.keepIndex]!
+    if (keep.startMs - first.startMs > MAX_RETAKE_WINDOW_MS) return false
     return true
   })
-  return capRetakeGroups(filtered, 6, existingCuts)
+  return capRetakeGroups(filtered, MAX_RETAKE_GROUPS, existingCuts)
 }
 
 export function findRetakes(words: RetakeWord[], existingCuts: CutRange[] = []): RetakeGroup[] {
-  const sentences = splitSentences(words)
-  if (sentences.length < 2) return falseStartGroups(words)
+  return filterRetakeGroups(detectRetakeGroups(words), existingCuts)
+}
 
-  const parent = sentences.map((_, i) => i)
-  const find = (i: number): number => {
-    if (parent[i] === i) return i
-    parent[i] = find(parent[i]!)
-    return parent[i]!
-  }
-  const unite = (a: number, b: number) => {
-    const ra = find(a)
-    const rb = find(b)
-    if (ra !== rb) parent[rb] = ra
-  }
-
-  for (let i = 0; i < sentences.length; i++) {
-    const startS = sentenceStartS(sentences[i]!)
-    for (let j = i + 1; j < sentences.length; j++) {
-      if (sentenceStartS(sentences[j]!) - startS > MAX_RETAKE_WINDOW_S) break
-      if (sentencesMatch(sentences[i]!, sentences[j]!)) unite(i, j)
+/** Legacy helper — splits on punctuation / long gaps (used in tests). */
+export function splitSentences(words: RetakeWord[]): RetakeWord[][] {
+  if (!words.length) return []
+  const sentences: RetakeWord[][] = []
+  let cur: RetakeWord[] = []
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]!
+    if (cur.length && gapMs(cur[cur.length - 1]!, w) >= 700) {
+      if (cur.length >= 1) sentences.push(cur)
+      cur = []
+    }
+    cur.push(w)
+    if (SENTENCE_END.test(w.w.trim()) || TRUNC_END.test(w.w.trim())) {
+      if (cur.length >= 1) sentences.push(cur)
+      cur = []
     }
   }
-
-  const buckets = new Map<number, number[]>()
-  for (let i = 0; i < sentences.length; i++) {
-    const root = find(i)
-    const list = buckets.get(root) ?? []
-    list.push(i)
-    buckets.set(root, list)
-  }
-
-  const groups: RetakeGroup[] = []
-  for (const idxs of buckets.values()) {
-    if (idxs.length < 2) continue
-    idxs.sort((a, b) => a - b)
-    const attempts = idxs.map((ix) => attemptFromSentence(sentences[ix]!))
-    groups.push({ attempts, keepIndex: attempts.length - 1 })
-  }
-  return filterRetakeGroups([...groups, ...falseStartGroups(words)], existingCuts)
+  if (cur.length) sentences.push(cur)
+  return sentences
 }
 
 function isRangeFullyCut(range: CutRange, cuts: CutRange[]): boolean {

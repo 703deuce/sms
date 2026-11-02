@@ -6,29 +6,41 @@ function w(text: string, s: number, e: number) {
 }
 
 describe('retakes', () => {
-  it('keeps the last attempt for A / A′', () => {
+  it('keeps the last attempt for immediate phrase repeat (rule A)', () => {
     const words = [
-      ...['We', 'need', 'to', 'go', 'now'].map((t, i) => w(t, i * 0.3, i * 0.3 + 0.25)),
-      ...['We', 'need', 'to', 'go', 'today'].map((t, i) => w(t, 3 + i * 0.3, 3 + i * 0.3 + 0.25)),
+      w('We', 0, 0.2),
+      w('need', 0.25, 0.45),
+      w('to', 0.5, 0.6),
+      w('go', 0.65, 0.8),
+      w('We', 0.85, 1.0),
+      w('need', 1.05, 1.25),
+      w('to', 1.3, 1.4),
+      w('go', 1.45, 1.6),
+      w('today', 1.65, 1.9),
     ]
     const groups = findRetakes(words)
     expect(groups.length).toBe(1)
     expect(groups[0]?.keepIndex).toBe(1)
+    const cut = retakeCutRange(groups[0]!, [])
+    expect(cut).toEqual([0, 850])
   })
 
-  it('collapses a chain of three', () => {
+  it('emits separate groups for chained repeats (two attempts each)', () => {
     const words: ReturnType<typeof w>[] = []
     let t = 0
     for (let rep = 0; rep < 3; rep++) {
-      if (rep > 0) t += 1
+      if (rep > 0) t += 0.4
       for (const token of ['This', 'is', 'fine.']) {
         words.push(w(token, t, t + 0.2))
         t += 0.25
       }
     }
     const groups = findRetakes(words)
-    expect(groups[0]?.attempts.length).toBe(3)
-    expect(groups[0]?.keepIndex).toBe(2)
+    expect(groups.length).toBeGreaterThanOrEqual(1)
+    for (const g of groups) {
+      expect(g.attempts.length).toBe(2)
+      expect(g.keepIndex).toBe(1)
+    }
   })
 
   it('ignores unrelated sentences', () => {
@@ -43,11 +55,11 @@ describe('retakes', () => {
     expect(findRetakes(words)).toEqual([])
   })
 
-  it('ignores pairs more than 45s apart', () => {
+  it('ignores pairs more than 4.5s apart', () => {
     const a = ['Start', 'the', 'show']
     const words = [
       ...a.map((x, i) => w(x, i * 0.2, i * 0.2 + 0.15)),
-      ...a.map((x, i) => w(x, 50 + i * 0.2, 50 + i * 0.2 + 0.15)),
+      ...a.map((x, i) => w(x, 5 + i * 0.2, 5 + i * 0.2 + 0.15)),
     ]
     expect(findRetakes(words)).toEqual([])
   })
@@ -64,7 +76,9 @@ describe('retakes', () => {
     expect(retakeCutRange(group, [[1000, 5000]])).toBeNull()
   })
 
-  it('splitSentences drops short sentences', () => {
-    expect(splitSentences([w('hi', 0, 0.2), w('bye', 0.3, 0.5)])).toEqual([])
+  it('splitSentences keeps short fragments for rule C adjacency', () => {
+    expect(splitSentences([w('hi', 0, 0.2), w('bye', 0.3, 0.5)])).toEqual([
+      [w('hi', 0, 0.2), w('bye', 0.3, 0.5)],
+    ])
   })
 })

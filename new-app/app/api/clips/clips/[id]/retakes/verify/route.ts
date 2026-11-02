@@ -54,7 +54,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       })
       const parsed = JSON.parse(text) as { confirmed?: boolean[] }
       const confirmed = (parsed.confirmed ?? []).slice(0, body.groups.length)
-      while (confirmed.length < body.groups.length) confirmed.push(true)
+      if (confirmed.length !== body.groups.length) {
+        return NextResponse.json({ data: { confirmed: null } })
+      }
       return NextResponse.json({ data: { confirmed } })
     } catch {
       return NextResponse.json({ data: { confirmed: null } })
