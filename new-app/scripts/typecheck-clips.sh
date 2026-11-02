@@ -3,6 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 CLIPS_RE='^(components/clips|lib/clips|app/app/clips|app/api/clips|lib/server/clips)/'
+SHELL_UI_RE='^(components/shell/|components/ui/sidebar\.tsx)'
 OUT="$(mktemp)"
 NODE_OPTIONS='--max-old-space-size=8192' npx tsc -p tsconfig.typecheck.json --noEmit --pretty false >"$OUT" 2>&1 || true
 
@@ -13,10 +14,24 @@ if rg -q "${CLIPS_RE}.* error TS(2304|2552):" "$OUT"; then
   exit 1
 fi
 
+if rg -q "${SHELL_UI_RE}.* error TS(2304|2552):" "$OUT"; then
+  rg "${SHELL_UI_RE}.* error TS(2304|2552):" "$OUT" || true
+  rm -f "$OUT"
+  echo "[typecheck:clips] FAILED — Cannot find name (TS2304/TS2552) under components/shell or components/ui/sidebar.tsx" >&2
+  exit 1
+fi
+
 if rg -q "${CLIPS_RE}.* error TS(2300|2440):" "$OUT"; then
   rg "${CLIPS_RE}.* error TS(2300|2440):" "$OUT" || true
   rm -f "$OUT"
   echo "[typecheck:clips] FAILED — duplicate identifier (TS2300/TS2440) under clips paths" >&2
+  exit 1
+fi
+
+if rg -q "${SHELL_UI_RE}.* error TS(2300|2440):" "$OUT"; then
+  rg "${SHELL_UI_RE}.* error TS(2300|2440):" "$OUT" || true
+  rm -f "$OUT"
+  echo "[typecheck:clips] FAILED — duplicate identifier (TS2300/TS2440) under components/shell or components/ui/sidebar.tsx" >&2
   exit 1
 fi
 
@@ -32,7 +47,7 @@ fi
 node --input-type=module -e "
 import fs from 'node:fs';
 import path from 'node:path';
-const roots = ['components/clips', 'lib/clips', 'app/api/clips', 'lib/server/clips'];
+const roots = ['components/clips', 'lib/clips', 'app/api/clips', 'lib/server/clips', 'components/shell'];
 const files = [];
 for (const r of roots) {
   const p = path.join(process.cwd(), r);
@@ -81,4 +96,4 @@ process.exit(failed ? 1 : 0);
 }
 
 rm -f "$OUT"
-echo "[typecheck:clips] ok"
+echo "[typecheck:clips] ok (clips paths + components/shell/** + components/ui/sidebar.tsx via tsconfig.typecheck.json; see tsconfig.clips-shell-ui.json for focused include list)"

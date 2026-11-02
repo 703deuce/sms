@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.typecheck.json",
+  "include": [
+    "components/ui/sidebar.tsx",
+    "components/shell/**/*.ts",
+    "components/shell/**/*.tsx"
+  ]
+}

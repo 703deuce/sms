@@ -73,6 +73,14 @@ GitHub master push
   → Verify /api/health and smoke tests
 ```
 
+**Post-deploy (mandatory after web push):** from repo root or `new-app/`:
+
+```bash
+bash new-app/scripts/post-deploy-web-check.sh "$(git rev-parse HEAD)"
+```
+
+Requires `/app/clips` HTTP status **not** `500` and `/api/health` `ok`. Optionally pass the pushed SHA to assert `commitSha`. Within ~1 minute of cutover, on the Coolify host grep web container logs for `ReferenceError` / `TypeError` (see script output for the one-liner).
+
 A successful `git push` is **step 1**, not done.
 
 ## First task in a session: discover production state
