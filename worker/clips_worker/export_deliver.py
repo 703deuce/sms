@@ -239,7 +239,11 @@ _EXT = {
 
 
 def deliver(src: Path, work: Path, deliver_spec: dict, srt_body: str | None) -> tuple[Path, str, str]:
-    fmt = deliver_spec.get("format") or "mp4"
+    spec = dict(deliver_spec)
+    fmt = spec.get("format") or "mp4"
+    if fmt == "mp3" and not encoder_available("libmp3lame"):
+        spec["format"] = "m4a"
+        fmt = "m4a"
     ext, ctype = _EXT.get(fmt, ("mp4", "video/mp4"))
     out = work / f"deliver.{ext}"
     srt_p = None
@@ -252,12 +256,10 @@ def deliver(src: Path, work: Path, deliver_spec: dict, srt_body: str | None) -> 
         if srt_p:
             srt_p.write_text(srt_body, encoding="utf-8")
 
-    vcodec = "libx265" if deliver_spec.get("codec") == "hevc" else "libx264"
-    if fmt in ("mp4", "mov") and deliver_spec.get("codec") == "hevc" and not encoder_available("libx265"):
+    vcodec = "libx265" if spec.get("codec") == "hevc" else "libx264"
+    if fmt in ("mp4", "mov") and spec.get("codec") == "hevc" and not encoder_available("libx265"):
         raise RuntimeError("Export format not available: libx265")
-    if fmt == "mp3" and not encoder_available("libmp3lame"):
-        raise RuntimeError("Export format not available: libmp3lame")
 
-    cmd = deliver_cmd(src, out, deliver_spec, srt_path=srt_p)
+    cmd = deliver_cmd(src, out, spec, srt_path=srt_p)
     subprocess.check_call(cmd)
     return out, ext, ctype

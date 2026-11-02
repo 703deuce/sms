@@ -786,7 +786,7 @@ def _legacy_compose(
         from clips_worker.caption_lines import caption_line_render_words
 
         burn_words = caption_line_render_words(edits) or caption_words
-    if int(cap_edits.get("enabled", True)):
+    if int(cap_edits.get("enabled", True)) and not bool((ctx.get("settings") or {}).get("deliverSoftSubs")):
         burn_captions(caption_src, burn_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h, edits=edits)
         caption_src = final
     branded = work_dir / "branded.mp4"

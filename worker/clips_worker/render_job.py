@@ -522,6 +522,8 @@ def _run_render_clip_job_body(
     preview_key = ctx["previewKey"]
     compose_spec = payload.get("composeSpec") if isinstance(payload.get("composeSpec"), dict) else None
     deliver_spec = normalize_deliver(payload.get("deliver"))
+    if deliver_spec and deliver_spec.get("softSubs"):
+        settings = {**settings, "deliverSoftSubs": True}
     if deliver_spec and deliver_spec.get("targetResolution") in ("1440p", "2160p"):
         resolution = "1080p"
         settings = {**settings, "exportResolution": resolution}

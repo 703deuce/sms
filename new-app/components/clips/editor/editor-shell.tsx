@@ -3010,6 +3010,7 @@ export function EditorShell({
         onClose={() => setExportOpen(false)}
         timelineInOut={exportTimelineInOut}
         playheadMs={outputMs}
+        posterUrl={posterUrl}
       />
       </ClipperSurfaceErrorBoundary>
       <Dialog open={!!replaceBrollId} onOpenChange={(o) => !o && setReplaceBrollId(null)}>

@@ -443,7 +443,7 @@ class RenderProgress:
         return {
             "step": max(1, step),
             "steps": steps,
-            "step_pct": int(round(cur_frac * 100)) if cur_heavy else None,
+            "step_pct": int(round(frac * 100)) if cur_heavy else None,
             "progress": progress,
             "frac": round(frac, 4),
             "eta_s": eta,

@@ -13,6 +13,8 @@ import {
   monotonicPct,
   type ExportRenderDetail,
 } from '@/lib/clips/editor/export-progress-text'
+import { exportActionLabel, effectiveAudioDeliverFormat, exportDownloadLabel, audioFormatOptionLabel } from '@/lib/clips/export-format-labels'
+import { defaultExportDialogState } from '@/lib/clips/export-dialog-defaults'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -109,6 +111,7 @@ export function ExportDialog({
   fullVideo = false,
   timelineInOut = null,
   playheadMs = 0,
+  posterUrl = null,
 }: {
   clipId: string
   title: string
@@ -135,6 +138,7 @@ export function ExportDialog({
   timelineInOut?: InOut | null
   /** Playhead output ms (still frame export). */
   playheadMs?: number
+  posterUrl?: string | null
   open: boolean
   onClose: () => void
 }) {
@@ -147,6 +151,7 @@ export function ExportDialog({
     can('', 'export_1080p') ? '1080p' : '720p',
   )
   const [deliverFormat, setDeliverFormat] = useState<DeliverFormat>('mp4')
+  const [encoders, setEncoders] = useState<string[]>([])
   const [codec, setCodec] = useState<DeliverCodec>('h264')
   const [quality, setQuality] = useState<DeliverQuality>('standard')
   const [deliverFps, setDeliverFps] = useState<DeliverFps>('source')
@@ -214,6 +219,10 @@ export function ExportDialog({
     }
     if (exportPrefsInitializedRef.current) return
     refreshChannels()
+    void fetch('/api/clips/export/capabilities')
+      .then((r) => r.json())
+      .then((j) => setEncoders(Array.isArray(j.encoders) ? j.encoders : []))
+      .catch(() => setEncoders([]))
     void loadMergedExportDialogPreferences().then((prefs) => {
       setRemoveDeadAir(Boolean(edits.silenceTrim?.enabled))
       setAlsoSrt(prefs.alsoSrt)
@@ -232,8 +241,15 @@ export function ExportDialog({
         }
         onAspectChange?.(a)
       } else {
-        setAspect(prefs.defaultAspect ?? edits.aspectRatio ?? '9:16')
-        if (!resolutionTouchedRef.current && prefs.defaultResolution) setResolution(prefs.defaultResolution)
+        const clipDefaults = defaultExportDialogState(edits)
+        setAspect(clipDefaults.aspect)
+        onAspectChange?.(clipDefaults.aspect)
+        if (!resolutionTouchedRef.current) {
+          setResolution(clipDefaults.resolution ?? (can('', 'export_1080p') ? '1080p' : '720p'))
+        }
+        if (onLayoutModeChange && clipDefaults.layoutMode !== layoutMode) {
+          onLayoutModeChange(clipDefaults.layoutMode)
+        }
       }
       if (edits.exportTemplate) {
         const url =
@@ -435,6 +451,11 @@ export function ExportDialog({
     inFlightResolution,
     selectedResolution,
   })
+  const exportCtaLabel =
+    exportButton.label === 'Export MP4'
+      ? exportActionLabel(deliverFormat, encoders)
+      : exportButton.label
+  const downloadCtaLabel = exportDownloadLabel(deliverFormat, encoders)
   const startExport = async () => {
     if (exportButton.disabled) return
     exportClickedRef.current = true
@@ -487,7 +508,7 @@ export function ExportDialog({
         removeDeadAir,
         exportSfx,
         edits: exportEdits,
-        ...(exportPlatform === 'none' && deliverFormat !== 'mp4' ? { format: deliverFormat } : {}),
+        ...(exportPlatform === 'none' && deliverFormat !== 'mp4' ? { format: effectiveAudioDeliverFormat(deliverFormat, encoders) } : {}),
         ...(exportPlatform === 'none' &&
         (deliverFormat === 'mp4' || deliverFormat === 'mov') &&
         codec !== 'h264'
@@ -602,7 +623,7 @@ export function ExportDialog({
         aria-modal="true"
         aria-labelledby="export-dialog-title"
         className={cn(
-          'max-h-[min(90dvh,100%)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-xl border border-border bg-background p-4 shadow-lg focus:outline-none sm:max-h-[90dvh] sm:rounded-xl',
+          'max-h-[min(800px,90dvh)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-t-xl border border-border bg-background p-4 shadow-lg focus:outline-none sm:max-h-[800px] sm:rounded-xl',
           exportSurfaceClassName,
         )}
         data-testid="export-dialog"
@@ -615,10 +636,25 @@ export function ExportDialog({
             <h2 id="export-dialog-title" className="text-lg font-semibold">Export clip</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {resolution}
-              {edits.captions?.enabled === false ? ' · captions off' : ' · captions burned in'}
+              {softSubs
+                ? ' · soft subtitles'
+                : edits.captions?.enabled === false
+                  ? ' · captions off'
+                  : ' · captions burned in'}
             </p>
           </div>
         </div>
+        {posterUrl ? (
+          <div className="mt-3 flex justify-center rounded-lg border bg-black/80 p-2" data-testid="export-dialog-preview">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={posterUrl}
+              alt=""
+              className="max-h-36 max-w-full object-contain"
+              style={{ aspectRatio: aspect.replace(':', '/') }}
+            />
+          </div>
+        ) : null}
         <div className="mt-3">
           <p className="text-xs font-medium">Platform preset</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -1173,10 +1209,10 @@ export function ExportDialog({
                 exportButton.blockedByInFlight ? 'This clip is already rendering — wait for it to finish' : undefined
               }
             >
-              {exportButton.label}
+              {exportCtaLabel}
             </Button>
           ) : (
-            <Button render={<a href={downloadUrl} download={filename} />}>Download MP4</Button>
+            <Button render={<a href={downloadUrl} download={filename} />}>{downloadCtaLabel}</Button>
           )}
           {stemsDownloadUrl ? (
             <Button

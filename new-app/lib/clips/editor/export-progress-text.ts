@@ -1,4 +1,4 @@
-/** FV4a: the export dialog's status line, from real worker progress (ffmpeg output time). */
+import { alignStepPctWithOverall } from '@/lib/clips/export-progress-steps'
 
 export type ExportRenderDetail = { step: number; steps: number; stepPct: number | null }
 
@@ -49,9 +49,13 @@ export function formatExportProgressLine(input: {
   if (input.status === 'QUEUED') return 'Queued for rendering…'
   let line = `Rendering export…${input.progress != null ? ` ${input.progress}%` : ''}`
   const d = input.detail
+  let stepPct = d?.stepPct ?? null
+  if (d && input.progress != null && stepPct != null) {
+    stepPct = alignStepPctWithOverall(input.progress, stepPct, d.steps, d.step)
+  }
   if (d && d.steps > 1) {
     line += ` · step ${Math.min(d.step, d.steps)} of ~${d.steps}`
-    if (d.stepPct != null) line += ` (${d.stepPct}%)`
+    if (stepPct != null) line += ` (${stepPct}%)`
   } else if (input.phase && input.phase !== 'render_clip') {
     line += ` (${input.phase.replace(/_/g, ' ')})`
   }
