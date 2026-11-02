@@ -67,7 +67,7 @@ def test_ffmpeg_burns_intl_caption_without_error(text, font):
         fontsdir = V3 / "fonts"
         if not fontsdir.is_dir():
             fontsdir = font_path.parent
-        vf = f"ass={ass}:fontsdir={fontsdir}".replace(":", r"\,")
+        vf = f"ass={ass}:fontsdir={fontsdir}".replace(",", r"\,")
         subprocess.check_call(
             [
                 "ffmpeg",
