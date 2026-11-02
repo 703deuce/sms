@@ -10,6 +10,7 @@ JOB_TYPES: tuple[str, ...] = (
     "STREAM_CLEANUP",
     "STREAM_MONTAGE",
     "STREAM_AUTOPULL",
+    "FIND_CLIPS",
     "PROCESS_PROJECT",
     "REPLACE_CLIP",
     "RENDER_CLIP",

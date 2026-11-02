@@ -10,6 +10,27 @@ import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { projectWordsKey } from '@/lib/storage'
 
 /**
+ * Clip-finding settings for a full-video source (shared by legacy "· clips" project + FIND_CLIPS job).
+ */
+export function findClipSettingsFor(
+  src: { id: string; settings: unknown; rangeEndMs: number | null },
+  upload: { durationMs: number | null },
+) {
+  const prev = clipProjectSettingsSchema.safeParse(src.settings)
+  const keep = prev.success ? prev.data : defaultClipSettings()
+  return withAutoContentDetection(
+    defaultClipSettings({
+      captions: keep.captions,
+      brandTemplateId: keep.brandTemplateId,
+      brand: keep.brand,
+      rangeStartMs: 0,
+      rangeEndMs: upload.durationMs || src.rangeEndMs || 0,
+      fromFullVideoProjectId: src.id,
+    }),
+  )
+}
+
+/**
  * FV1 "Find clips in this video": a normal clip-finding project over the same upload. The full
  * video's transcript is copied onto the new project, so the worker's resume path
  * (resolve_transcript_for_job) skips ASR — no second transcription. The 720p playback proxy (if the
@@ -24,19 +45,7 @@ export async function createFindClipsProjectFromFullVideo(workspaceId: string, p
   const upload = await prisma.clipUpload.findFirst({ where: { id: src.uploadId, workspaceId, status: 'COMPLETE' } })
   if (!upload) throw new Error('Upload not complete')
 
-  const prev = clipProjectSettingsSchema.safeParse(src.settings)
-  const keep = prev.success ? prev.data : defaultClipSettings()
-  // Clip-finding defaults (vertical shorts), keeping the user's captions + brand choices.
-  const settings = withAutoContentDetection(
-    defaultClipSettings({
-      captions: keep.captions,
-      brandTemplateId: keep.brandTemplateId,
-      brand: keep.brand,
-      rangeStartMs: 0,
-      rangeEndMs: upload.durationMs || src.rangeEndMs || 0,
-      fromFullVideoProjectId: src.id,
-    }),
-  )
+  const settings = findClipSettingsFor(src, upload)
   const newId = createId('proj')
   const transcriptWords = Array.isArray(src.transcriptWords) && src.transcriptWords.length ? src.transcriptWords : undefined
   const project = await prisma.clipProject.create({

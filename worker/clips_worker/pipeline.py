@@ -512,6 +512,7 @@ def run_m4_pipeline(
     job: dict | None = None,
     local_src: Path | None = None,
     local_audio_wav: Path | None = None,
+    find_only: bool = False,
 ) -> None:
     settings = project.get("settings") or {}
     if isinstance(settings, str):
@@ -534,7 +535,7 @@ def run_m4_pipeline(
     mode = normalize_content_mode(settings.get("mode"))
     bind_clipfind(
         workspace_id=str(workspace_id),
-        job_type="PROCESS_PROJECT",
+        job_type="FIND_CLIPS" if find_only else "PROCESS_PROJECT",
         job_id=str(job_id),
         project_id=str(project_id),
     )
@@ -926,7 +927,7 @@ def run_m4_pipeline(
                         picker_settings,
                         range_start,
                         range_end,
-                        on_headstart_picks=on_headstart,
+                        on_headstart_picks=None if find_only else on_headstart,
                         picker_cache=picker_cache,
                         on_picker_checkpoint=_checkpoint_picker,
                     )
@@ -947,6 +948,13 @@ def run_m4_pipeline(
                     )
                 from clips_worker.pipeline_plan import plan_or_finish_empty
 
+                if find_only:
+                    from clips_worker.find_clips_job import noop_mark_project_ready, persist_find_result
+
+                    _mark_ready = noop_mark_project_ready
+                else:
+                    _mark_ready = mark_project_ready
+
                 planned = plan_or_finish_empty(
                     conn,
                     project_id,
@@ -954,11 +962,16 @@ def run_m4_pipeline(
                     post_progress,
                     picks,
                     picker_message,
-                    mark_project_ready=mark_project_ready,
+                    mark_project_ready=_mark_ready,
                 )
                 if planned is None:
+                    if find_only:
+                        persist_find_result(conn, job_id, [], words=words, settings=settings)
                     return
                 picks = planned
+                if find_only:
+                    persist_find_result(conn, job_id, picks, words=words, settings=settings)
+                    return
                 try:
                     from clips_worker.clipfind.c2_seams import validate_frozen_upload_picks
                     from clips_worker.target_clip_len import resolve_clip_length_policy
@@ -1108,6 +1121,13 @@ def run_m4_pipeline(
             if not talking_render_done:
                 from clips_worker.pipeline_plan import plan_or_finish_empty
 
+                if find_only:
+                    from clips_worker.find_clips_job import noop_mark_project_ready, persist_find_result
+
+                    _mark_ready_nt = noop_mark_project_ready
+                else:
+                    _mark_ready_nt = mark_project_ready
+
                 planned = plan_or_finish_empty(
                     conn,
                     project_id,
@@ -1115,11 +1135,16 @@ def run_m4_pipeline(
                     post_progress,
                     picks,
                     picker_message,
-                    mark_project_ready=mark_project_ready,
+                    mark_project_ready=_mark_ready_nt,
                 )
                 if planned is None:
+                    if find_only:
+                        persist_find_result(conn, job_id, [], words=words, settings=settings)
                     return
                 picks = planned
+                if find_only:
+                    persist_find_result(conn, job_id, picks, words=words, settings=settings)
+                    return
                 try:
                     from clips_worker.clipfind.c2_seams import validate_frozen_upload_picks
                     from clips_worker.target_clip_len import resolve_clip_length_policy

@@ -129,4 +129,69 @@ describe('deriveClipFromSelection', () => {
       'b2',
     )
   })
+
+  it('uses targetProjectId when upload matches', async () => {
+    vi.mocked(getClipForWorkspace).mockResolvedValue({
+      id: 'clip_parent',
+      workspaceId: 'ws_1',
+      projectId: 'proj_fv',
+      title: 'Parent',
+      startMs: 0,
+      endMs: 10_000,
+      edits: {},
+      scores: {},
+      score: 1,
+    } as never)
+    createMock.mockResolvedValue({ id: 'clip_child' })
+    projectFindFirst
+      .mockResolvedValueOnce({
+        transcriptKey: null,
+        transcriptWords: null,
+        upload: null,
+        settings: defaultSettings,
+      })
+      .mockResolvedValueOnce({ id: 'proj_clips', uploadId: 'up1' })
+      .mockResolvedValueOnce({ uploadId: 'up1' })
+
+    await deriveClipFromSelection(
+      'ws_1',
+      'clip_parent',
+      { trimIn: 1000, trimOut: 5000 },
+      { targetProjectId: 'proj_clips', score: 77 },
+    )
+    expect(createMock.mock.calls[0][0].data.projectId).toBe('proj_clips')
+    expect(createMock.mock.calls[0][0].data.score).toBe(77)
+  })
+
+  it('rejects target with different upload', async () => {
+    vi.mocked(getClipForWorkspace).mockResolvedValue({
+      id: 'clip_parent',
+      workspaceId: 'ws_1',
+      projectId: 'proj_fv',
+      title: 'Parent',
+      startMs: 0,
+      endMs: 10_000,
+      edits: {},
+      scores: {},
+      score: 1,
+    } as never)
+    projectFindFirst
+      .mockResolvedValueOnce({
+        transcriptKey: null,
+        transcriptWords: null,
+        upload: null,
+        settings: defaultSettings,
+      })
+      .mockResolvedValueOnce({ id: 'proj_bad', uploadId: 'up2' })
+      .mockResolvedValueOnce({ uploadId: 'up1' })
+
+    await expect(
+      deriveClipFromSelection(
+        'ws_1',
+        'clip_parent',
+        { trimIn: 1000, trimOut: 5000 },
+        { targetProjectId: 'proj_bad' },
+      ),
+    ).rejects.toThrow(/same upload/)
+  })
 })

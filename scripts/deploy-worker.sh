@@ -100,7 +100,7 @@ r.execute(\"\"\"
   SELECT count(*) FROM clip_jobs
   WHERE status = 'RUNNING'
     AND type IN (
-      'PROCESS_PROJECT', 'REPLACE_CLIP', 'IMPORT_URL', 'STREAM_IMPORT',
+      'FIND_CLIPS', 'PROCESS_PROJECT', 'REPLACE_CLIP', 'IMPORT_URL', 'STREAM_IMPORT',
       'RENDER_CLIP', 'RENDER_SCRIPT_COMPOSITION', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL'
     )
     AND \"lockedAt\" > NOW() - interval '15 minutes'

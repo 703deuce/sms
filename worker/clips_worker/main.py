@@ -539,6 +539,12 @@ def handle_import_url(conn, job: dict) -> None:
     _mark_job_done(conn, job["id"])
 
 
+def handle_find_clips_entry(conn, job: dict) -> None:
+    from clips_worker.find_clips_job import handle_find_clips
+
+    handle_find_clips(conn, job)
+
+
 DISPATCH: dict[str, object] = {
     "IMPORT_URL": handle_import_url,
     "STREAM_IMPORT": handle_stream_import,
@@ -548,6 +554,7 @@ DISPATCH: dict[str, object] = {
     "STREAM_CLEANUP": handle_stream_cleanup,
     "STREAM_MONTAGE": handle_stream_montage,
     "STREAM_AUTOPULL": handle_stream_autopull,
+    "FIND_CLIPS": handle_find_clips_entry,
     "PROCESS_PROJECT": process_job,
     "REPLACE_CLIP": handle_replace_clip,
     "RENDER_CLIP": handle_render_clip,

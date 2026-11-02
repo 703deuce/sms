@@ -11,6 +11,8 @@ export type HighlightPick = {
   score: number
   reasonTag: ReasonTag
   why: string | null
+  origin?: 'find' | 'clip'
+  findJobId?: string
 }
 
 export type HighlightRange = {

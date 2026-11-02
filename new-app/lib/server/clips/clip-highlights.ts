@@ -10,8 +10,10 @@ import { getClipStorageForObjectKey } from '@/lib/storage'
 import { normalizeTranscriptJson } from '@/lib/server/clips/editor-words'
 
 export type FullVideoHighlightsPayload = {
+  source: 'find' | 'project'
   status: string
-  foundProjectId: string
+  progress?: number | null
+  foundProjectId?: string
   picks: {
     clipId: string
     title: string
@@ -20,6 +22,8 @@ export type FullVideoHighlightsPayload = {
     score: number
     reasonTag: ReasonTag
     why: string | null
+    origin?: 'find' | 'clip'
+    findJobId?: string
   }[]
 }
 
@@ -33,6 +37,9 @@ export async function getFullVideoHighlights(
     select: { id: true, uploadId: true, settings: true },
   })
   if (!fv || !isFullVideoSettings(fv.settings)) return null
+
+  const { latestFindClips } = await import('@/lib/server/clips/find-clips-job')
+  const findJob = await latestFindClips(fullVideoProjectId)
 
   let found = (
     await prisma.clipProject.findMany({
@@ -63,6 +70,19 @@ export async function getFullVideoHighlights(
       candidates.find(
         (p) => !isFullVideoSettings(p.settings) && p.createdAt > fvCreated,
       ) ?? null
+  }
+
+  const findIsNewer =
+    findJob &&
+    (!found || findJob.createdAt >= found.createdAt)
+
+  if (findIsNewer && findJob) {
+    return {
+      source: 'find',
+      status: findJob.status,
+      progress: findJob.progress,
+      picks: findJob.picks,
+    }
   }
 
   if (!found) return null
@@ -114,8 +134,9 @@ export async function getFullVideoHighlights(
       score: c.score,
       reasonTag: tag,
       why: why ? why.slice(0, 200) : null,
+      origin: 'clip' as const,
     }
   })
 
-  return { status: found.status, foundProjectId: found.id, picks }
+  return { source: 'project', status: found.status, foundProjectId: found.id, picks }
 }

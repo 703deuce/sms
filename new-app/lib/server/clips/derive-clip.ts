@@ -22,6 +22,7 @@ export async function deriveClipFromSelection(
   workspaceId: string,
   parentClipId: string,
   input: DeriveClipInput,
+  opts?: { targetProjectId?: string; score?: number; aiMeta?: Record<string, unknown> },
 ) {
   const parent = await getClipForWorkspace(workspaceId, parentClipId)
   if (!parent) return null
@@ -103,16 +104,40 @@ export async function deriveClipFromSelection(
     input.title?.trim().slice(0, 120) ||
     `${parent.title.slice(0, 80)} (${Math.round((trim.out - trim.in) / 1000)}s)`
 
+  let targetProjectId = parent.projectId
+  if (opts?.targetProjectId) {
+    const target = await prisma.clipProject.findFirst({
+      where: { id: opts.targetProjectId, workspaceId, deletedAt: null },
+      select: { id: true, uploadId: true },
+    })
+    if (!target) throw new Error('Target project not found')
+    const parentProject = await prisma.clipProject.findFirst({
+      where: { id: parent.projectId, workspaceId },
+      select: { uploadId: true },
+    })
+    if (!parentProject?.uploadId || target.uploadId !== parentProject.uploadId) {
+      throw new Error('Target project must share the same upload')
+    }
+    targetProjectId = target.id
+  }
+
+  const childScore = opts?.score ?? parent.score
+  const aiMetaOut = {
+    ...(typeof parent.aiMeta === 'object' && parent.aiMeta ? parent.aiMeta : {}),
+    derivedFromClipId: parentClipId,
+    ...(opts?.aiMeta ?? {}),
+  }
+
   await prisma.clip.create({
     data: {
       id: childId,
       workspaceId,
-      projectId: parent.projectId,
+      projectId: targetProjectId,
       title,
       reason: 'derived',
       startMs: trim.in,
       endMs: trim.out,
-      score: parent.score,
+      score: childScore,
       scores: parent.scores ?? {},
       cropKey: parent.cropKey,
       wordsKey: parent.wordsKey,
@@ -123,12 +148,9 @@ export async function deriveClipFromSelection(
       sourceSegStartMs: parent.sourceSegStartMs,
       sourceSegEndMs: parent.sourceSegEndMs,
       edits: toPrismaJson(childEdits),
-      aiMeta: toPrismaJson({
-        ...(typeof parent.aiMeta === 'object' && parent.aiMeta ? parent.aiMeta : {}),
-        derivedFromClipId: parentClipId,
-      }),
+      aiMeta: toPrismaJson(aiMetaOut),
     },
   })
 
-  return { clipId: childId, projectId: parent.projectId, edits: childEdits }
+  return { clipId: childId, projectId: targetProjectId, edits: childEdits }
 }
