@@ -57,8 +57,8 @@ export type ClipEditsAudio = {
   studioSound?: ClipStudioSound | null
 }
 
-export const DEFAULT_MUSIC_VOLUME = 0.25
-export const DEFAULT_DUCK_DEPTH = 0.7
+export const DEFAULT_MUSIC_VOLUME = 0.5
+export const DEFAULT_DUCK_DEPTH = 0.55
 export const DEFAULT_MUSIC_FADE_IN_MS = 500
 export const DEFAULT_MUSIC_FADE_OUT_MS = 1000
 export const DEFAULT_SFX_VOLUME = 0.8

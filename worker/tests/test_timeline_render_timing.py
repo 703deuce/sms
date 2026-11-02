@@ -103,7 +103,7 @@ def test_music_window_filter_legacy_string_unchanged():
         music_window={"startMs": 0, "endMs": 6000, "inMs": 0},
     )
     assert legacy == full_window
-    assert "[1:a]volume=0.2500,afade=t=in:d=0.500" in legacy
+    assert "[1:a]atrim=0:6.000,asetpts=PTS-STARTPTS,volume=0.2500,afade=t=in:st=0:d=0.500" in legacy
 
 
 def test_music_window_timing_and_voice_mute():

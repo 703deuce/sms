@@ -176,6 +176,15 @@ def music_window(music: dict | None, duration_ms: int) -> dict | None:
     end = dur if raw_end is None else int(round(float(raw_end)))
     end = max(min(dur, start + MUSIC_MIN_MS), min(end, dur))
     in_ms = max(0, int(round(float(music.get("inMs") or 0))))
+    # AU-33: if the bed is anchored at 0 but endMs stops short of the clip by ≤ fadeOut, extend to
+    # the clip end so export fade-out ramps to silence at the clip tail (not a hard cut early).
+    if start <= 0 and in_ms <= 0 and end < dur:
+        try:
+            fade_out_ms = max(0, int(round(float(music.get("fadeOutMs") or 1000))))
+        except (TypeError, ValueError):
+            fade_out_ms = 1000
+        if dur - end <= fade_out_ms + 50:
+            end = dur
     return {"startMs": start, "endMs": end, "inMs": in_ms}
 
 

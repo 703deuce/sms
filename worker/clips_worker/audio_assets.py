@@ -117,8 +117,8 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
             else:
                 music_path = up
                 music_meta = {
-                    "volume": float(music.get("volume", 0.25)),
-                    "duckDepth": float(music.get("duckDepth", 0.7)),
+                    "volume": float(music.get("volume", 0.5)),
+                    "duckDepth": float(music.get("duckDepth", 0.55)),
                     "fadeInMs": int(music.get("fadeInMs", 500)),
                     "fadeOutMs": int(music.get("fadeOutMs", 1000)),
                     "startMs": music.get("startMs"),
@@ -137,8 +137,8 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
             music_path = work_dir / "music.mp3"
             download_object(row[0], music_path)
             music_meta = {
-                "volume": float(music.get("volume", 0.25)),
-                "duckDepth": float(music.get("duckDepth", 0.7)),
+                "volume": float(music.get("volume", 0.5)),
+                "duckDepth": float(music.get("duckDepth", 0.55)),
                 "fadeInMs": int(music.get("fadeInMs", 500)),
                 "fadeOutMs": int(music.get("fadeOutMs", 1000)),
                 # E2 timeline window (output ms); absent = whole clip from media 0.

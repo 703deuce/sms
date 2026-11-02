@@ -76,6 +76,13 @@ describe('lanes', () => {
       inMs: 0,
     })
   })
+  it('extends music end to clip tail when within fadeOut (AU-33)', () => {
+    expect(musicWindow({ generationId: 'm', startMs: 0, endMs: 38700, fadeOutMs: 3000 }, 41000)).toEqual({
+      startMs: 0,
+      endMs: 41000,
+      inMs: 0,
+    })
+  })
 })
 
 describe('operations map onto the edits model', () => {
