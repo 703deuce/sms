@@ -123,6 +123,7 @@ docker build -f worker/Dockerfile --build-arg GIT_COMMIT="${GIT_COMMIT}" -t clip
 docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 -m compileall -q /app/clips_worker
 docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 -c 'import clips_worker.main'
 docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 scripts/run_worker_lint.py
+docker run --rm clips-worker:gate python3 -m ruff check clips_worker/pipeline.py --select F821,F823
 docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 scripts/deploy_smoke.py
 docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 -c '
 import os, psycopg2

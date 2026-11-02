@@ -783,7 +783,7 @@ def run_m4_pipeline(
 
                 from clips_worker.clip_layout_policy import FIT_VARIETY_MODES_FROM, fit_blur_variety_indices
 
-                variety_fit_idx = fit_blur_variety_indices(picks)
+                variety_fit_idx: set[int] = set()  # filled once picks exist (see later assignments)
 
                 def build_clip_row_from_pick(pick: dict, idx: int, clip_id: str | None = None) -> dict:
                     sk_pick = _span_key(int(pick["start_ms"]), int(pick["end_ms"]))
@@ -1131,7 +1131,7 @@ def run_m4_pipeline(
                         cid = head_render_state.get("clip_id_by_span", {}).get(sk)
                         return build_clip_row_from_pick(pick, idx, clip_id=cid)
 
-                    variety_fit_idx = fit_blur_variety_indices(picks)
+                    variety_fit_idx = set(fit_blur_variety_indices(picks))
                     index_order = sorted(
                         range(len(picks)),
                         key=lambda i: -float(picks[i].get("score") or 0),
@@ -1249,10 +1249,10 @@ def run_m4_pipeline(
                         print(
                             f"[clipper:speed] project={project_id} phase=first_clip_card_ms="
                             f"{int((time.monotonic() - pipeline_t0) * 1000)}",
-                    flush=True,
-                )
+                            flush=True,
+                        )
 
-                variety_fit_idx = fit_blur_variety_indices(picks)
+                variety_fit_idx = set(fit_blur_variety_indices(picks))
 
                 def build_clip_row(idx: int) -> dict | None:
                     pick = picks[idx]
@@ -1356,7 +1356,7 @@ def run_m4_pipeline(
                         "aiMeta": ai_meta_out,
                     }
 
-                variety_fit_idx = fit_blur_variety_indices(picks)
+                variety_fit_idx = set(fit_blur_variety_indices(picks))
                 index_order = sorted(range(len(picks)), key=lambda i: -float(picks[i].get("score") or 0))
                 with stage_span("reframe", heartbeat=True, clips=len(picks)):
                     clip_rows = run_bounded_indexed_pool(

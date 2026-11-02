@@ -9,9 +9,10 @@ from clips_worker.video_picker_coverage import compute_uncovered_spans
 from clips_worker.video_picker_prompt import min_moments_for_video, min_moments_rule_description
 
 
-def test_min_moments_180s_need_four():
-    assert min_moments_for_video(180) == 4
-    assert "need>=4" in min_moments_rule_description(180)
+def test_min_moments_180s_need_six():
+    # CLIPS_OPUS_fix1 2a: short uploads floor max(6, 1.5/min), not ~1/53s min 2.
+    assert min_moments_for_video(180) == 6
+    assert "need>=6" in min_moments_rule_description(180)
 
 
 def test_min_moments_long_stream_floor_six():

@@ -39,6 +39,16 @@ def test_fit_blur_variety_indices_excludes_gaming():
     assert 1 not in idx
 
 
+def test_pipeline_import_and_variety_helper():
+    import clips_worker.pipeline  # noqa: F401
+
+    assert fit_blur_variety_indices([]) == set()
+    four = [_pick(0.9), _pick(0.8), _pick(0.7), _pick(0.6)]
+    assert len(fit_blur_variety_indices(four)) == 1
+    five = [_pick(0.9 - i * 0.1) for i in range(5)]
+    assert len(fit_blur_variety_indices(five)) == 1
+
+
 def test_min_moments_for_video_226s():
     assert min_moments_for_video(226) == 6
 
