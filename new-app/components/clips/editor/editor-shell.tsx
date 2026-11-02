@@ -1740,8 +1740,8 @@ export function EditorShell({
     toast.success('Auto template applied')
   }, [edits, setEdits, streamerSide])
 
-  const renderInspectorPropertiesPanel = () =>
-    panelMounted('inspector') ? (
+  const renderInspectorPropertiesPanel = (force = false) =>
+    force || panelMounted('inspector') ? (
       <EditorPanelErrorBoundary label="Properties">
         <PropertiesPanel
           edits={edits}
@@ -2849,7 +2849,7 @@ export function EditorShell({
                 </div>
                 <ScrollArea className="min-h-0 flex-1">
                   <div className="p-4" data-testid="editor-panel-inspector">
-                    {renderInspectorPropertiesPanel()}
+                    {renderInspectorPropertiesPanel(true)}
                   </div>
                 </ScrollArea>
               </>
