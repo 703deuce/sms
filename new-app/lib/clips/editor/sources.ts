@@ -23,6 +23,7 @@ import {
   speakersInTranscript,
   transcriptSpeakerIdForWord,
 } from '@/lib/clips/editor/transcript-speakers'
+import { normalizeSegmentLayout, type SourceSegmentLayout } from '@/lib/clips/editor/segment-layout'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
@@ -58,6 +59,8 @@ export type SourceSegment = {
   fit?: SourceFit
   /** Created by multicam auto-switch (regenerating replaces only these). */
   auto?: true
+  /** Multi-angle composite (side-by-side / stack / PiP / 2×2 grid). Export: media_sources.build_sources_filtergraph. */
+  layout?: SourceSegmentLayout
 }
 
 export type ClipMulticam = {
@@ -155,6 +158,7 @@ export function normalizeSourceSegments(
     if (src.mediaType === 'audio' && o.auto === true) continue
     if (b - a < SOURCE_SEG_MIN_MS || a < 0) continue
     const inMs = int(o.inMs)
+    const layout = normalizeSegmentLayout(o.layout, sources, src.id)
     out.push({
       id,
       sourceId: src.id,
@@ -165,6 +169,7 @@ export function normalizeSourceSegments(
       ...(src.mediaType === 'audio' ? { audio: 'source' as const } : {}),
       ...(o.fit === 'contain' ? { fit: 'contain' as const } : {}),
       ...(o.auto === true ? { auto: true as const } : {}),
+      ...(layout ? { layout } : {}),
     })
   }
   out.sort((x, y) => x.startMs - y.startMs)
@@ -280,7 +285,7 @@ export function removeSourceSegment(segs: readonly SourceSegment[] | undefined, 
 export function patchSourceSegment(
   segs: readonly SourceSegment[] | undefined,
   id: string,
-  patch: Partial<Pick<SourceSegment, 'audio' | 'fit' | 'inMs' | 'startMs' | 'endMs'>>,
+  patch: Partial<Pick<SourceSegment, 'audio' | 'fit' | 'inMs' | 'startMs' | 'endMs' | 'layout'>>,
   sources: readonly ClipMediaSource[] | undefined,
 ): SourceSegment[] | undefined {
   const cur = (segs ?? []).find((s) => s.id === id)

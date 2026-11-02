@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { render, waitFor, cleanup } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
@@ -130,7 +130,14 @@ describe('EditorShell render smoke', () => {
     vi.clearAllMocks()
   })
 
-  it('mounts with regular fixture edits (useEditorState + shell imports resolve)', () => {
+  afterEach(async () => {
+    cleanup()
+    await new Promise<void>((resolve) => {
+      setImmediate(() => resolve())
+    })
+  })
+
+  it('mounts with regular fixture edits (useEditorState + shell imports resolve)', async () => {
     const edits = loadFixture('regular.json')
     const { getByTestId } = render(
       <EditorShell
@@ -147,6 +154,9 @@ describe('EditorShell render smoke', () => {
     )
     expect(getByTestId('layout-quick-picker')).toBeTruthy()
     expect(getByTestId('versions-menu')).toBeTruthy()
+    await waitFor(() => {
+      expect(document.body).toBeTruthy()
+    })
   })
 
   it('mounts BYO clip fixture (source media, no crop track, no preview)', () => {

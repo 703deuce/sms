@@ -26,6 +26,70 @@ _ID_RE = re.compile(r"^[A-Za-z0-9_:.~-]{1,120}$")
 _UPLOAD_RE = re.compile(r"^[A-Za-z0-9_-]{1,120}$")
 _MEDIA_TYPES = ("video", "image", "audio")
 _AUDIO_MODES = ("main", "source", "mix")
+_LAYOUT_KINDS = frozenset({"side_by_side", "stack", "pip", "grid"})
+_PIP_CORNERS = frozenset({"TL", "TR", "BL", "BR"})
+
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return min(hi, max(lo, v))
+
+
+def _resolve_with_id(raw, sources: dict, own_id: str) -> str | None:
+    if raw in ("main", MAIN_ANGLE):
+        return "main"
+    s = _safe_id(raw)
+    if not s or s == own_id:
+        return None
+    return s if s in sources else None
+
+
+MAIN_ANGLE = "main"
+
+
+def _normalize_segment_layout(raw, sources: dict, own_source_id: str) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    kind = raw.get("kind")
+    if kind not in _LAYOUT_KINDS:
+        return None
+    with_id = raw.get("withSourceId")
+    if with_id == MAIN_ANGLE:
+        with_res = "main"
+    else:
+        with_res = _resolve_with_id(with_id, sources, own_source_id)
+    if not with_res:
+        return None
+    split = _clamp(float(raw.get("split") if raw.get("split") is not None else 0.5), 0.3, 0.7)
+    pip_scale = _clamp(float(raw.get("pipScale") if raw.get("pipScale") is not None else 0.3), 0.2, 0.45)
+    corner = raw.get("pipCorner") if raw.get("pipCorner") in _PIP_CORNERS else "BR"
+    out: dict = {"kind": kind, "withSourceId": with_res, "split": split}
+    w2 = _resolve_with_id(raw.get("withSourceId2"), sources, own_source_id) if raw.get("withSourceId2") is not None else None
+    if raw.get("withSourceId2") == MAIN_ANGLE:
+        w2 = "main"
+    w3 = _resolve_with_id(raw.get("withSourceId3"), sources, own_source_id) if raw.get("withSourceId3") is not None else None
+    if raw.get("withSourceId3") == MAIN_ANGLE:
+        w3 = "main"
+    if kind == "grid" and not w2:
+        return None
+    if w2:
+        out["withSourceId2"] = w2
+    if w3:
+        out["withSourceId3"] = w3
+    if kind == "pip":
+        out["pipCorner"] = corner
+        out["pipScale"] = pip_scale
+    return out
+
+
+def _layout_extra_source_ids(layout: dict | None) -> list[str]:
+    if not layout:
+        return []
+    ids: list[str] = []
+    for key in ("withSourceId", "withSourceId2", "withSourceId3"):
+        v = layout.get(key)
+        if v and v != "main":
+            ids.append(str(v))
+    return ids
 
 
 def _int(v) -> int | None:
@@ -106,6 +170,9 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
             seg["fit"] = "contain"
         if r.get("auto") is True:
             seg["auto"] = True
+        layout = _normalize_segment_layout(r.get("layout"), by_id, src["id"])
+        if layout:
+            seg["layout"] = layout
         out.append(seg)
     out.sort(key=lambda s: s["startMs"])
     clean: list[dict] = []
@@ -158,8 +225,7 @@ def source_windows(edits: dict, window_start_ms: int, window_end_ms: int) -> lis
         hi = min(window_end_ms, s["endMs"])
         if hi - lo < 1:
             continue
-        out.append(
-            {
+        row = {
                 "id": s["id"],
                 "sourceId": s["sourceId"],
                 "t0Ms": lo - window_start_ms,
@@ -169,7 +235,12 @@ def source_windows(edits: dict, window_start_ms: int, window_end_ms: int) -> lis
                 "fit": s.get("fit") or "cover",
                 "mediaType": src["mediaType"],
             }
-        )
+        if s.get("layout"):
+            row["layout"] = s["layout"]
+            row["windowStartMs"] = lo
+            row["windowEndMs"] = hi
+            row["segment"] = s
+        out.append(row)
     return out
 
 
@@ -210,6 +281,10 @@ def referenced_media(edits: dict) -> list[tuple[str, str]]:
         src = by_id.get(s["sourceId"])
         if src:
             refs.append((src["ref"], src["refId"]))
+            for extra_id in _layout_extra_source_ids(s.get("layout")):
+                ex = by_id.get(extra_id)
+                if ex:
+                    refs.append((ex["ref"], ex["refId"]))
     for b in edits.get("broll") or []:
         if isinstance(b, dict) and b.get("source") == "upload" and _UPLOAD_RE.match(str(b.get("uploadId") or "")):
             refs.append(("upload", str(b["uploadId"])))
@@ -325,6 +400,186 @@ def still_to_video(image: Path, out: Path, duration_s: float, fps: float = 30.0)
     return out
 
 
+def _layout_pane_chain(
+    *,
+    label: str,
+    width: int,
+    height: int,
+    pw: int,
+    ph: int,
+    fit: str,
+    fps: float,
+    in_idx: int | None,
+    main_lo_s: float,
+    dur: float,
+    media_in_ms: int,
+) -> tuple[str, int | None]:
+    """Return (filter chain ending in [label], updated in_idx). in_idx None => slice from [0:v]."""
+    vf = fit_filter(fit, pw, ph)
+    if in_idx is None:
+        chain = (
+            f"[0:v]trim=start={main_lo_s:.3f}:end={main_lo_s + dur:.3f},setpts=PTS-STARTPTS,"
+            f"fps={fps:g},{vf},format=yuv420p[{label}]"
+        )
+        return chain, in_idx
+    chain = (
+        f"[{in_idx}:v]trim=0:{dur:.3f},setpts=PTS-STARTPTS,fps={fps:g},{vf},format=yuv420p[{label}]"
+    )
+    return chain, in_idx
+
+
+def _append_layout_composite(
+    i: int,
+    w: dict,
+    layout: dict,
+    *,
+    parts: list[str],
+    inputs: list[str],
+    in_idx: int,
+    width: int,
+    height: int,
+    fps: float,
+    t0: float,
+    t1: float,
+    dur: float,
+    primary_v_in: int,
+    edits: dict,
+    media: dict[str, Path],
+) -> tuple[int, str]:
+    """Build composite filter for one window; returns (new_in_idx, s_label)."""
+    kind = layout["kind"]
+    split = float(layout.get("split") or 0.5)
+    lo_s = w["windowStartMs"] / 1000.0
+    by_id = {s["id"]: s for s in normalize_media_sources(edits.get("sources")) or []}
+    seg = w.get("segment") or {}
+
+    def resolve_pane(source_id: str) -> tuple[int | None, str]:
+        nonlocal in_idx
+        fit = w.get("fit") or "cover"
+        if source_id == "main":
+            return None, fit
+        src = by_id.get(source_id)
+        p = media_path_for(edits, source_id, media)
+        if not src or not p:
+            return None, fit
+        inputs.extend(
+            [
+                "-ss",
+                f"{segment_media_ms(seg, src, w['windowStartMs']) / 1000.0:.3f}",
+                "-t",
+                f"{dur + 0.25:.3f}",
+                "-i",
+                str(p),
+            ]
+        )
+        idx = in_idx
+        in_idx += 1
+        return idx, fit
+
+    s_lbl = f"s{i}"
+    if kind == "side_by_side":
+        parts.append(
+            f"[{primary_v_in}:v]trim=0:{dur:.3f},setpts=PTS-STARTPTS,fps={fps:g},"
+            f"{fit_filter(w.get('fit') or 'cover', width // 2, height)},format=yuv420p[p{i}a]"
+        )
+        v_in_b, fit_b = resolve_pane(layout["withSourceId"])
+        chain_b, _ = _layout_pane_chain(
+            label=f"p{i}b",
+            width=width,
+            height=height,
+            pw=width // 2,
+            ph=height,
+            fit=fit_b,
+            fps=fps,
+            in_idx=v_in_b,
+            main_lo_s=lo_s,
+            dur=dur,
+            media_in_ms=int(w["windowStartMs"]),
+        )
+        parts.append(chain_b)
+        parts.append(f"[p{i}a][p{i}b]hstack=inputs=2[{s_lbl}]")
+    elif kind == "stack":
+        parts.append(
+            f"[{primary_v_in}:v]trim=0:{dur:.3f},setpts=PTS-STARTPTS,fps={fps:g},"
+            f"{fit_filter(w.get('fit') or 'cover', width, int(height * split))},format=yuv420p[p{i}t]"
+        )
+        v_in_b, fit_b = resolve_pane(layout["withSourceId"])
+        chain_b, _ = _layout_pane_chain(
+            label=f"p{i}b",
+            width=width,
+            height=height,
+            pw=width,
+            ph=int(height * (1 - split)),
+            fit=fit_b,
+            fps=fps,
+            in_idx=v_in_b,
+            main_lo_s=lo_s,
+            dur=dur,
+            media_in_ms=int(w["windowStartMs"]),
+        )
+        parts.append(chain_b)
+        parts.append(f"[p{i}t][p{i}b]vstack=inputs=2[{s_lbl}]")
+    elif kind == "pip":
+        parts.append(
+            f"[{primary_v_in}:v]trim=0:{dur:.3f},setpts=PTS-STARTPTS,fps={fps:g},"
+            f"{fit_filter(w.get('fit') or 'cover', width, height)},format=yuv420p[p{i}bg]"
+        )
+        scale = float(layout.get("pipScale") or 0.3)
+        corner = layout.get("pipCorner") or "BR"
+        v_in_b, fit_b = resolve_pane(layout["withSourceId"])
+        pw = max(2, int(width * scale))
+        chain_b, _ = _layout_pane_chain(
+            label=f"p{i}in",
+            width=width,
+            height=height,
+            pw=pw,
+            ph=max(2, int(height * scale)),
+            fit=fit_b,
+            fps=fps,
+            in_idx=v_in_b,
+            main_lo_s=lo_s,
+            dur=dur,
+            media_in_ms=int(w["windowStartMs"]),
+        )
+        parts.append(chain_b)
+        margin = 24
+        x = margin if corner in ("TL", "BL") else f"main_w-overlay_w-{margin}"
+        y = margin if corner in ("TL", "TR") else f"main_h-overlay_h-{margin}"
+        parts.append(f"[p{i}bg][p{i}in]overlay=x={x}:y={y}[{s_lbl}]")
+    elif kind == "grid":
+        ids = [w["sourceId"], layout["withSourceId"], layout.get("withSourceId2"), layout.get("withSourceId3")]
+        cells = [x for x in ids if x][:4]
+        while len(cells) < 4:
+            cells.append("main")
+        for ci, sid in enumerate(cells):
+            lbl = f"g{i}{ci}"
+            if sid == w["sourceId"]:
+                parts.append(
+                    f"[{primary_v_in}:v]trim=0:{dur:.3f},setpts=PTS-STARTPTS,fps={fps:g},"
+                    f"{fit_filter(w.get('fit') or 'cover', width // 2, height // 2)},format=yuv420p[{lbl}]"
+                )
+            else:
+                v_in_c, fit_c = resolve_pane(sid)
+                chain_c, _ = _layout_pane_chain(
+                    label=lbl,
+                    width=width,
+                    height=height,
+                    pw=width // 2,
+                    ph=height // 2,
+                    fit=fit_c,
+                    fps=fps,
+                    in_idx=v_in_c,
+                    main_lo_s=lo_s,
+                    dur=dur,
+                    media_in_ms=int(w["windowStartMs"]),
+                )
+                parts.append(chain_c)
+        parts.append(f"[g{i}0][g{i}1]hstack=inputs=2[gt{i}0]")
+        parts.append(f"[g{i}2][g{i}3]hstack=inputs=2[gt{i}1]")
+        parts.append(f"[gt{i}0][gt{i}1]vstack=inputs=2[{s_lbl}]")
+    return in_idx, s_lbl
+
+
 def build_sources_filtergraph(
     windows: list[dict],
     paths: list[Path],
@@ -335,6 +590,8 @@ def build_sources_filtergraph(
     main_has_audio: bool,
     source_has_audio: list[bool],
     base_duration_s: float = 0.0,
+    edits: dict | None = None,
+    media: dict[str, Path] | None = None,
 ) -> tuple[list[str], str, str, str | None]:
     """Inputs (after the base at index 0), filter_complex, video label, audio label (None = copy)."""
     inputs: list[str] = []
@@ -378,20 +635,42 @@ def build_sources_filtergraph(
                      f"{fit_filter(w['fit'], width, height)},format=yuv420p")
             v_in = in_idx
             in_idx += 1
-        parts.append(f"{chain},setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
-        nxt = f"vb{i + 1}"
-        parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
-        cur = nxt
-        mode = w["audio"]
-        if mode in ("source", "mix") and w["mediaType"] == "video" and source_has_audio[i]:
-            ms = int(round(t0 * 1000))
-            audio_parts.append(
-                f"[{v_in}:a]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
-                f"aformat=sample_fmts=fltp:channel_layouts=stereo,adelay={ms}|{ms}[sa{i}]"
-            )
-            a_labels.append(f"[sa{i}]")
-        if mode == "source":
-            mute.append(f"between(t,{t0:.3f},{t1:.3f})")
+            layout = w.get("layout")
+            if layout and edits and media:
+                in_idx, s_lbl = _append_layout_composite(
+                    i,
+                    w,
+                    layout,
+                    parts=parts,
+                    inputs=inputs,
+                    in_idx=in_idx,
+                    width=width,
+                    height=height,
+                    fps=fps,
+                    t0=t0,
+                    t1=t1,
+                    dur=dur,
+                    primary_v_in=v_in,
+                    edits=edits,
+                    media=media,
+                )
+                parts.append(f"[{s_lbl}]setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
+            else:
+                parts.append(f"{chain},setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
+            nxt = f"vb{i + 1}"
+            parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
+            cur = nxt
+            mode = w["audio"]
+            if mode in ("source", "mix") and w["mediaType"] == "video" and source_has_audio[i]:
+                ms = int(round(t0 * 1000))
+                audio_parts.append(
+                    f"[{v_in}:a]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
+                    f"aformat=sample_fmts=fltp:channel_layouts=stereo,adelay={ms}|{ms}[sa{i}]"
+                )
+                a_labels.append(f"[sa{i}]")
+            if mode == "source":
+                mute.append(f"between(t,{t0:.3f},{t1:.3f})")
+            continue
     alabel: str | None = None
     if (mute or a_labels) and main_has_audio:
         main = "[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo"
@@ -449,6 +728,8 @@ def apply_full_render_sources(
         main_has_audio=has_audio_stream(full_render),
         source_has_audio=[(w["mediaType"] == "audio" or has_audio_stream(p)) for w, p in zip(usable, paths)],
         base_duration_s=(clip_end_ms - clip_start_ms) / 1000.0,
+        edits=edits,
+        media=media,
     )
     out = Path(work_dir) / "full_render_sources.mp4"
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(full_render), *inputs, "-filter_complex", fc,

@@ -96,6 +96,7 @@ const LibassPreviewLayers = lazy(() =>
   import('@/components/clips/editor/libass-overlay').then((m) => ({ default: m.LibassPreviewLayers })),
 )
 import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt } from '@/lib/clips/editor/sources'
+import type { SourceSegmentLayout } from '@/lib/clips/editor/segment-layout'
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
@@ -338,6 +339,7 @@ export function PreviewStage({
   // G1a: output ms of the frame on screen (canvas gestures key at the playhead).
   const outMsRef = useRef(0)
   const [stageBoxEl, setStageBoxEl] = useState<HTMLDivElement | null>(null)
+  const [previewSourceMs, setPreviewSourceMs] = useState(0)
   const stageBoxElRef = useRef<HTMLDivElement | null>(null)
   stageBoxElRef.current = stageBoxEl
   const libassSubsRef = useRef(new Set<(ms: number) => void>())
@@ -951,6 +953,7 @@ export function PreviewStage({
         }
       }
       onTickRef.current({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
+      setPreviewSourceMs(src)
 
       const { w: boxW, h: boxH } = boxSizeRef.current
       if (v && !t6TemplateActiveRef.current && track && usesSpeakerCropPreview(e, track) && boxH > 0 && Array.isArray(track.shots) && track.shots.length > 0) {
@@ -1665,6 +1668,44 @@ export function PreviewStage({
             </div>
           )
         })}
+        {(() => {
+          const layoutSeg = sourceSegmentAt(edits.sourceSegments, previewSourceMs)
+          const layout = layoutSeg?.layout
+          if (!layout) return null
+          const gridClass =
+            layout.kind === 'side_by_side'
+              ? 'grid-cols-2 grid-rows-1'
+              : layout.kind === 'stack'
+                ? 'grid-cols-1 grid-rows-2'
+                : layout.kind === 'grid'
+                  ? 'grid-cols-2 grid-rows-2'
+                  : 'grid-cols-1 grid-rows-1'
+          return (
+            <div
+              className={`pointer-events-none absolute inset-0 z-[25] grid gap-px bg-black/80 ${gridClass}`}
+              data-testid={`preview-layout-${layout.kind}`}
+            >
+              <div className="relative min-h-0 min-w-0 bg-black" data-testid="preview-layout-pane-0" />
+              <div className="relative min-h-0 min-w-0 bg-black" data-testid="preview-layout-pane-1" />
+              {layout.kind === 'grid' ? (
+                <>
+                  <div className="relative min-h-0 min-w-0 bg-black" data-testid="preview-layout-pane-2" />
+                  <div className="relative min-h-0 min-w-0 bg-black" data-testid="preview-layout-pane-3" />
+                </>
+              ) : null}
+              {layout.kind === 'pip' ? (
+                <div
+                  className="absolute z-10 aspect-video w-[30%] rounded border border-white/40 bg-black/90"
+                  data-testid="preview-layout-pip-inset"
+                  style={{
+                    ...(layout.pipCorner === 'TL' || layout.pipCorner === 'BL' ? { left: 12 } : { right: 12 }),
+                    ...(layout.pipCorner === 'TL' || layout.pipCorner === 'TR' ? { top: 12 } : { bottom: 12 }),
+                  }}
+                />
+              ) : null}
+            </div>
+          )
+        })()}
         <InsertPlayback videoRef={videoRefInner} edits={edits} words={words} sourceUrls={sourceUrls} mediaOffsetMs={mediaOffsetMs} />
         {videoUrl && edits.splitEdits?.length ? (
           <video

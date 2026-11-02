@@ -15,6 +15,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { canonicalEditsJson } from '@/lib/clips/edits'
 import { sourceToOutputSnapped, type Timebase } from '@/lib/clips/editor/clip-timeline'
 import {
+  isMainPlaceholder,
   setSourceSegment,
   sourceById,
   sourceSegmentAt,
@@ -131,6 +132,27 @@ export function switchAngleAt(
   }
   const next = setAngleForRange(edits, t, end, sourceId, library)
   return canonicalEditsJson(edits) === canonicalEditsJson(next) ? edits : next
+}
+
+/** Composite layout on an existing angle segment over [startMs, endMs). layout=null clears layout. */
+export function setLayoutForRange(
+  edits: ClipEditsV2,
+  startMs: number,
+  endMs: number,
+  layout: import('@/lib/clips/editor/segment-layout').SourceSegmentLayout | null,
+  library: readonly ClipMediaSource[] = [],
+): ClipEditsV2 {
+  const s = Math.max(edits.trim.in, Math.round(startMs))
+  const e = Math.min(edits.trim.out, Math.round(endMs))
+  if (e - s < SOURCE_SEG_MIN_MS) return edits
+  const hit = (edits.sourceSegments ?? []).find(
+    (seg) => seg.startMs <= s + 1 && seg.endMs >= e - 1 && !isMainPlaceholder(seg),
+  )
+  if (!findSource(edits, hit.sourceId, library)) return edits
+  const { layout: _drop, ...rest } = hit
+  const nextSeg = layout ? { ...hit, layout } : (rest as SourceSegment)
+  const others = (edits.sourceSegments ?? []).filter((x) => x.id !== hit.id)
+  return { ...edits, sourceSegments: setSourceSegment(others, nextSeg, edits.sources) }
 }
 
 /** Manual sync offset nudge (default one frame at 30 fps) on top of the audio auto-sync. */

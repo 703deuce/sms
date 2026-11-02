@@ -124,7 +124,7 @@ import { EnvelopeLine } from '@/components/clips/editor/timeline/envelope-line'
 import { addEnvelopePoint, deleteEnvelopePoint, envelopeFor, envelopePoints, moveEnvelopePoint } from '@/lib/clips/editor/envelopes'
 import { PROP_SPECS } from '@/lib/clips/editor/motion-schema'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
-import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, setAngleForSourceSpan, sourceSpanFromTranscriptSelection, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
+import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, setAngleForSourceSpan, setLayoutForRange, sourceSpanFromTranscriptSelection, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
 import type { TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import { CUT_HANDLE_ROW_TOP_PX, layoutCutHandles } from '@/lib/clips/editor/cut-handle-layout'
 import { useAudioPeaks, type AudioPeaks } from '@/components/clips/editor/use-audio-peaks'
@@ -4202,6 +4202,42 @@ export function Timeline({
                       }}
                     >
                       {a.key}. {a.label}
+                    </button>
+                  ))}
+                  <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">Layout ▸</p>
+                  {angles.filter((a) => a.sourceId !== 'main').slice(0, 4).map((a) => (
+                    <button
+                      key={`lay-${a.sourceId}`}
+                      type="button"
+                      className="block w-full rounded px-2 py-1.5 pl-4 text-left hover:bg-muted"
+                      role="menuitem"
+                      data-testid={`timeline-ctx-layout-sbs-${a.sourceId}`}
+                      onClick={() => {
+                        let next = edits
+                        const spans: [number, number][] = range
+                          ? [range]
+                          : liveSelected
+                              .filter((r) => r.lane === 'video')
+                              .map((r) => lanes.video.find((i) => i.id === r.id))
+                              .filter(Boolean)
+                              .map((i) => [i!.startMs, i!.endMs] as [number, number])
+                        for (const [a0, b0] of spans) {
+                          next = setAngleForOutputRange(next, tb, a0, b0, a.sourceId, angleSources)
+                        }
+                        const active = angleAt(next, range ? range[0] : liveOutMs)
+                        const other = angles.find((x) => x.sourceId !== active)?.sourceId ?? 'main'
+                        next = setLayoutForRange(
+                          next,
+                          next.trim.in,
+                          next.trim.out,
+                          { kind: 'side_by_side', withSourceId: other, split: 0.5 },
+                          angleSources,
+                        )
+                        commit(next)
+                        setCtxMenu(null)
+                      }}
+                    >
+                      Side by side · {a.label}
                     </button>
                   ))}
                 </>

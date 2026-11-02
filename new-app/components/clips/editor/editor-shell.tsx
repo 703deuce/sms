@@ -115,7 +115,7 @@ import {
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { MulticamAngleGrid } from '@/components/clips/editor/multicam-angle-grid'
-import { switchAngleAt, multicamAngles } from '@/lib/clips/editor/multicam-manual'
+import { angleAt, setLayoutForRange, switchAngleAt, multicamAngles } from '@/lib/clips/editor/multicam-manual'
 import { useFullVideoHighlights } from '@/components/clips/editor/use-full-video-highlights'
 import { useFullVideoMomentFocus } from '@/components/clips/editor/full-video-moment-focus'
 import { snapTranscriptSelectionMs } from '@/lib/clips/editor/make-clip-from-transcript'
@@ -2590,12 +2590,28 @@ export function EditorShell({
                   mainVideoUrl={videoUrl}
                   playheadSourceMs={playheadSourceMs}
                   playing={playing}
-                  onSwitchAngle={(sourceId) =>
-                    setEditsPass(
-                      switchAngleAt(edits, playheadSourceMs, sourceId, angleSources),
-                      'Camera angle',
-                    )
-                  }
+                  onSwitchAngle={(sourceId, opts) => {
+                    const library = angleSources
+                    if (opts?.shiftKey) {
+                      const active = angleAt(edits, playheadSourceMs)
+                      setEditsPass(
+                        setLayoutForRange(
+                          switchAngleAt(edits, playheadSourceMs, sourceId, library),
+                          playheadSourceMs,
+                          edits.trim.out,
+                          {
+                            kind: 'side_by_side',
+                            withSourceId: active === sourceId ? 'main' : active,
+                            split: 0.5,
+                          },
+                          library,
+                        ),
+                        'Side by side',
+                      )
+                      return
+                    }
+                    setEditsPass(switchAngleAt(edits, playheadSourceMs, sourceId, library), 'Camera angle')
+                  }}
                 />
               </div>
             ) : null}

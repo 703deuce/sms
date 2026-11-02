@@ -23,7 +23,7 @@ export function MulticamAngleGrid({
   mainVideoUrl: string | null
   playheadSourceMs: number
   playing: boolean
-  onSwitchAngle: (sourceId: string) => void
+  onSwitchAngle: (sourceId: string, opts?: { shiftKey?: boolean }) => void
 }) {
   const angles = useMemo(() => multicamAngles(edits, library).slice(0, 9), [edits, library])
   const activeId = angleAt(edits, playheadSourceMs)
@@ -46,7 +46,7 @@ export function MulticamAngleGrid({
           playheadSourceMs={playheadSourceMs}
           playing={playing}
           active={a.sourceId === activeId}
-          onSwitch={() => onSwitchAngle(a.sourceId)}
+          onSwitch={(opts) => onSwitchAngle(a.sourceId, opts)}
         />
       ))}
     </div>
@@ -72,7 +72,7 @@ function AngleTile({
   playheadSourceMs: number
   playing: boolean
   active: boolean
-  onSwitch: () => void
+  onSwitch: (opts?: { shiftKey?: boolean }) => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const src = angle.sourceId === MAIN_ANGLE ? undefined : sourceById(edits.sources, angle.sourceId) ?? library.find((s) => s.id === angle.sourceId)
@@ -110,7 +110,7 @@ function AngleTile({
         'relative aspect-video overflow-hidden rounded border text-left',
         active ? 'ring-2 ring-primary border-primary' : 'border-border/60 hover:border-primary/40',
       )}
-      onClick={onSwitch}
+      onClick={(e) => onSwitch({ shiftKey: e.shiftKey })}
     >
       <span className="absolute left-1 top-1 z-10 rounded bg-black/60 px-1 font-mono text-[10px] text-white">
         {angle.key}
