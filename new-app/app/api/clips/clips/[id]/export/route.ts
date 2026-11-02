@@ -288,6 +288,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           downloadUrl: result.downloadUrl,
           filename: result.filename,
           download: result.filename,
+          stemsDownloadUrl: result.stemsDownloadUrl ?? null,
+          stemsFilename: result.stemsFilename ?? null,
           watermark,
           projectId: clip.projectId,
           status: 'READY',

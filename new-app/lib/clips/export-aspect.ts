@@ -8,8 +8,18 @@ export const CUSTOM_ASPECT_MIN = 240
 export const CUSTOM_ASPECT_MAX = 3840
 export const CUSTOM_ASPECT_MAX_RATIO = 4
 
+/** Bump when ffmpeg audio mix / duck / fade behavior changes (invalidates cached exports). */
+export const CLIP_AUDIO_RENDER_REV = 'au33-v1'
+
+/** Worker deploy SHA (12 chars) — set CLIPS_WORKER_GIT_SHA on web + worker so cache keys match. */
+export function clipsWorkerGitShaForRenderCache(): string {
+  const raw = process.env.CLIPS_WORKER_GIT_SHA?.trim()
+  if (!raw || raw === 'unknown') return 'unknown'
+  return raw.slice(0, 12)
+}
+
 /** Bump when export compositor / worker render behavior changes (invalidates READY render reuse). */
-export const CLIP_RENDER_PIPELINE_REV = 't47-v2'
+export const CLIP_RENDER_PIPELINE_REV = `t48-${CLIP_AUDIO_RENDER_REV}-${clipsWorkerGitShaForRenderCache()}`
 
 const PRESET_PARTS: Record<PresetAspect, [number, number]> = {
   '9:16': [9, 16],
