@@ -30,4 +30,5 @@ exec pnpm exec vitest run \
   tests/use-full-video-highlights.test.tsx \
   tests/multicam-angle-grid.test.tsx \
   tests/multicam-layouts.test.ts \
+  tests/multicam-segment-layout-controls.test.tsx \
   tests/highlights-fetch-unwrap.test.ts

@@ -145,14 +145,34 @@ export function setLayoutForRange(
   const s = Math.max(edits.trim.in, Math.round(startMs))
   const e = Math.min(edits.trim.out, Math.round(endMs))
   if (e - s < SOURCE_SEG_MIN_MS) return edits
-  const hit = (edits.sourceSegments ?? []).find(
-    (seg) => seg.startMs <= s + 1 && seg.endMs >= e - 1 && !isMainPlaceholder(seg),
-  )
+  const hit = sourceSegmentAt(edits.sourceSegments, s)
+  if (!hit) return edits
   if (!findSource(edits, hit.sourceId, library)) return edits
   const { layout: _drop, ...rest } = hit
   const nextSeg = layout ? { ...hit, layout } : (rest as SourceSegment)
   const others = (edits.sourceSegments ?? []).filter((x) => x.id !== hit.id)
   return { ...edits, sourceSegments: setSourceSegment(others, nextSeg, edits.sources) }
+}
+
+/** OUTPUT-ms range → layout on each overlapping manual angle segment (source ms). */
+export function setLayoutForOutputRange(
+  edits: ClipEditsV2,
+  tb: Timebase,
+  outA: number,
+  outB: number,
+  layout: import('@/lib/clips/editor/segment-layout').SourceSegmentLayout | null,
+  library: readonly ClipMediaSource[] = [],
+): ClipEditsV2 {
+  let next = edits
+  tb.segs.forEach(([a, b], i) => {
+    const o0 = tb.starts[i]!
+    const lo = Math.max(outA, o0)
+    const hi = Math.min(outB, o0 + (b - a))
+    if (hi - lo >= SOURCE_SEG_MIN_MS) {
+      next = setLayoutForRange(next, a + (lo - o0), a + (hi - o0), layout, library)
+    }
+  })
+  return next
 }
 
 /** Manual sync offset nudge (default one frame at 30 fps) on top of the audio auto-sync. */

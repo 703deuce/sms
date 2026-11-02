@@ -115,7 +115,8 @@ import {
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { MulticamAngleGrid } from '@/components/clips/editor/multicam-angle-grid'
-import { angleAt, setLayoutForRange, switchAngleAt, multicamAngles } from '@/lib/clips/editor/multicam-manual'
+import { switchAngleAt, multicamAngles } from '@/lib/clips/editor/multicam-manual'
+import { sideBySideAfterAngleSwitch } from '@/components/clips/editor/multicam-segment-layout-controls'
 import { useFullVideoHighlights } from '@/components/clips/editor/use-full-video-highlights'
 import { useFullVideoMomentFocus } from '@/components/clips/editor/full-video-moment-focus'
 import { snapTranscriptSelectionMs } from '@/lib/clips/editor/make-clip-from-transcript'
@@ -2593,19 +2594,10 @@ export function EditorShell({
                   onSwitchAngle={(sourceId, opts) => {
                     const library = angleSources
                     if (opts?.shiftKey) {
-                      const active = angleAt(edits, playheadSourceMs)
+                      const library = angleSources
+                      const switched = switchAngleAt(edits, playheadSourceMs, sourceId, library)
                       setEditsPass(
-                        setLayoutForRange(
-                          switchAngleAt(edits, playheadSourceMs, sourceId, library),
-                          playheadSourceMs,
-                          edits.trim.out,
-                          {
-                            kind: 'side_by_side',
-                            withSourceId: active === sourceId ? 'main' : active,
-                            split: 0.5,
-                          },
-                          library,
-                        ),
+                        sideBySideAfterAngleSwitch(switched, playheadSourceMs, sourceId, library),
                         'Side by side',
                       )
                       return

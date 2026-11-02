@@ -1672,38 +1672,12 @@ export function PreviewStage({
           const layoutSeg = sourceSegmentAt(edits.sourceSegments, previewSourceMs)
           const layout = layoutSeg?.layout
           if (!layout) return null
-          const gridClass =
-            layout.kind === 'side_by_side'
-              ? 'grid-cols-2 grid-rows-1'
-              : layout.kind === 'stack'
-                ? 'grid-cols-1 grid-rows-2'
-                : layout.kind === 'grid'
-                  ? 'grid-cols-2 grid-rows-2'
-                  : 'grid-cols-1 grid-rows-1'
           return (
             <div
-              className={`pointer-events-none absolute inset-0 z-[25] grid gap-px bg-black/80 ${gridClass}`}
+              className="pointer-events-none absolute inset-0 z-[25] rounded-sm ring-1 ring-inset ring-white/25"
               data-testid={`preview-layout-${layout.kind}`}
-            >
-              <div className="relative min-h-0 min-w-0 bg-black" data-testid="preview-layout-pane-0" />
-              <div className="relative min-h-0 min-w-0 bg-black" data-testid="preview-layout-pane-1" />
-              {layout.kind === 'grid' ? (
-                <>
-                  <div className="relative min-h-0 min-w-0 bg-black" data-testid="preview-layout-pane-2" />
-                  <div className="relative min-h-0 min-w-0 bg-black" data-testid="preview-layout-pane-3" />
-                </>
-              ) : null}
-              {layout.kind === 'pip' ? (
-                <div
-                  className="absolute z-10 aspect-video w-[30%] rounded border border-white/40 bg-black/90"
-                  data-testid="preview-layout-pip-inset"
-                  style={{
-                    ...(layout.pipCorner === 'TL' || layout.pipCorner === 'BL' ? { left: 12 } : { right: 12 }),
-                    ...(layout.pipCorner === 'TL' || layout.pipCorner === 'TR' ? { top: 12 } : { bottom: 12 }),
-                  }}
-                />
-              ) : null}
-            </div>
+              aria-hidden
+            />
           )
         })()}
         <InsertPlayback videoRef={videoRefInner} edits={edits} words={words} sourceUrls={sourceUrls} mediaOffsetMs={mediaOffsetMs} />

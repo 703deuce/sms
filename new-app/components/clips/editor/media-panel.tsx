@@ -1,6 +1,7 @@
 'use client'
 
 import { MulticamReviewPanel } from '@/components/clips/editor/multicam-review-panel'
+import { MulticamSegmentLayoutControls } from '@/components/clips/editor/multicam-segment-layout-controls'
 import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
 import { useMemo, useRef, useState } from 'react'
 import { AudioLines, Film, Image as ImageIcon, Plus, RefreshCw, Upload, Video, X } from 'lucide-react'
@@ -41,8 +42,7 @@ import { ProjectSelectsBin, useProjectSelectsActions } from '@/components/clips/
 import { SourceMonitor, type MonitorRequest } from '@/components/clips/editor/source-monitor'
 import type { Timebase } from '@/lib/clips/editor/clip-timeline'
 import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
-import { MAIN_ANGLE, SYNC_NUDGE_MS, multicamAngles, nudgeSync, resetSync, setLayoutForRange } from '@/lib/clips/editor/multicam-manual'
-import { LAYOUT_KIND_LABEL, type SegmentLayoutKind } from '@/lib/clips/editor/segment-layout'
+import { MAIN_ANGLE, SYNC_NUDGE_MS, multicamAngles, nudgeSync, resetSync } from '@/lib/clips/editor/multicam-manual'
 
 const LANE_LABEL: Record<MediaDropLane, string> = { video: 'Video', broll: 'B-roll', music: 'Music', sfx: 'SFX' }
 /** 'visual' = video + images (B-roll Upload tab). */
@@ -292,6 +292,7 @@ export function MediaPanel({
       ),
     [media.items],
   )
+  const angleLibrary = useMemo(() => angles.map(sourceFromItem), [angles])
   const mainItem = media.items.find((i) => i.isMain)
   const speakerRows = useMemo(
     () => multicamSpeakerRows(words, shots, edits.trim.in, edits.trim.out),
@@ -391,6 +392,13 @@ export function MediaPanel({
           else onEdits(next)
         }}
       />
+      <MulticamSegmentLayoutControls
+        edits={edits}
+        library={angleLibrary}
+        playheadSourceMs={playheadSourceMs}
+        onEdits={onEdits}
+        onEditsPass={onEditsPass}
+      />
       {seg ? (
         <section className="space-y-2 rounded-md border p-2" data-testid="media-segment-editor">
           <div className="flex items-center justify-between text-xs">
@@ -417,55 +425,6 @@ export function MediaPanel({
               </Button>
             ))}
           </div>
-          {segSource?.mediaType === 'video' ? (
-            <div className="flex flex-wrap items-center gap-1" data-testid="media-seg-layout">
-              <Label className="w-12 text-[11px]">Layout</Label>
-              <Select
-                items={[
-                  { value: 'none', label: 'Full frame' },
-                  ...(['side_by_side', 'stack', 'pip', 'grid'] as const).map((k) => ({
-                    value: k,
-                    label: LAYOUT_KIND_LABEL[k],
-                  })),
-                ]}
-                value={seg.layout?.kind ?? 'none'}
-                onValueChange={(v) => {
-                  if (typeof v !== 'string') return
-                  const library = angles.map(sourceFromItem)
-                  if (v === 'none') {
-                    onEdits(setLayoutForRange(edits, seg.startMs, seg.endMs, null, library))
-                    return
-                  }
-                  const other = library.find((s) => s.id !== seg.sourceId)
-                  const withSourceId = other?.id ?? 'main'
-                  const kind = v as SegmentLayoutKind
-                  onEdits(
-                    setLayoutForRange(
-                      edits,
-                      seg.startMs,
-                      seg.endMs,
-                      kind === 'grid'
-                        ? { kind, withSourceId, withSourceId2: 'main' }
-                        : { kind, withSourceId },
-                      library,
-                    ),
-                  )
-                }}
-              >
-                <SelectTrigger size="sm" className="h-7 min-w-[8rem]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Full frame</SelectItem>
-                  {(['side_by_side', 'stack', 'pip', 'grid'] as const).map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {LAYOUT_KIND_LABEL[k]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : null}
           <div className="flex flex-wrap gap-1">
             <Button size="xs" variant="outline" disabled={playheadSourceMs <= seg.startMs + 100 || playheadSourceMs >= seg.endMs} onClick={() => patchSeg({ endMs: Math.round(playheadSourceMs) })}>
               End at playhead

@@ -16,6 +16,26 @@ describe('multicam segment layouts', () => {
     expect(ok?.split).toBe(0.7)
   })
 
+  it('setLayoutForRange attaches layout when endMs is trim.out (segment at playhead only)', () => {
+    const bounds = { clipStartMs: 0, clipEndMs: 60_000, trimMinMs: 0, trimMaxMs: 60_000 }
+    let edits = defaultEdits(bounds)
+    edits = {
+      ...edits,
+      trim: { in: 0, out: 32_000 },
+      sources: library,
+      sourceSegments: [{ id: 's1', sourceId: 'a1', startMs: 5000, endMs: 15_000 }],
+    }
+    const next = setLayoutForRange(
+      edits,
+      8000,
+      edits.trim.out,
+      { kind: 'side_by_side', withSourceId: 'a2', split: 0.5 },
+      library,
+    )
+    const seg = normalizeSourceSegments(next.sourceSegments, library)?.[0]
+    expect(seg?.layout?.kind).toBe('side_by_side')
+  })
+
   it('setLayoutForRange attaches layout to active segment', () => {
     const bounds = { clipStartMs: 0, clipEndMs: 60_000 }
     let edits = defaultEdits(bounds)

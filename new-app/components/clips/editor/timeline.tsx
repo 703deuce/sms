@@ -124,7 +124,7 @@ import { EnvelopeLine } from '@/components/clips/editor/timeline/envelope-line'
 import { addEnvelopePoint, deleteEnvelopePoint, envelopeFor, envelopePoints, moveEnvelopePoint } from '@/lib/clips/editor/envelopes'
 import { PROP_SPECS } from '@/lib/clips/editor/motion-schema'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
-import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, setAngleForSourceSpan, setLayoutForRange, sourceSpanFromTranscriptSelection, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
+import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, setAngleForSourceSpan, setLayoutForOutputRange, sourceSpanFromTranscriptSelection, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
 import type { TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import { CUT_HANDLE_ROW_TOP_PX, layoutCutHandles } from '@/lib/clips/editor/cut-handle-layout'
 import { useAudioPeaks, type AudioPeaks } from '@/components/clips/editor/use-audio-peaks'
@@ -2384,6 +2384,23 @@ export function Timeline({
     }
   }, [ctxMenu])
 
+  useLayoutEffect(() => {
+    if (!ctxMenu || !menuRef.current) return
+    const el = menuRef.current
+    const pad = 8
+    const rect = el.getBoundingClientRect()
+    let x = ctxMenu.x
+    let y = ctxMenu.y
+    if (rect.right > window.innerWidth - pad) x = Math.max(pad, window.innerWidth - rect.width - pad)
+    if (rect.left < pad) x = pad
+    if (rect.bottom > window.innerHeight - pad) y = Math.max(pad, window.innerHeight - rect.height - pad)
+    if (rect.top < pad) y = pad
+    if (x !== ctxMenu.x || y !== ctxMenu.y) {
+      el.style.left = `${x}px`
+      el.style.top = `${y}px`
+    }
+  }, [ctxMenu])
+
   const segmentModeAtPlayhead = layoutModeAtSourceMs(edits, outputToSource(tb, playheadMs))
   const layoutModes: ClipEditsV2['layout']['mode'][] = [
     'speaker_follow',
@@ -3955,7 +3972,7 @@ export function Timeline({
       {ctxMenu ? (
         <div
           ref={menuRef}
-          className="fixed z-50 min-w-[200px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg"
+          className="fixed z-50 max-h-[min(70vh,calc(100vh-16px))] min-w-[200px] overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-lg"
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           role="menu"
           aria-label="Timeline segment actions"
@@ -4223,16 +4240,17 @@ export function Timeline({
                               .map((i) => [i!.startMs, i!.endMs] as [number, number])
                         for (const [a0, b0] of spans) {
                           next = setAngleForOutputRange(next, tb, a0, b0, a.sourceId, angleSources)
+                          const active = angleAt(next, a0)
+                          const withSourceId = active === a.sourceId ? 'main' : a.sourceId
+                          next = setLayoutForOutputRange(
+                            next,
+                            tb,
+                            a0,
+                            b0,
+                            { kind: 'side_by_side', withSourceId, split: 0.5 },
+                            angleSources,
+                          )
                         }
-                        const active = angleAt(next, range ? range[0] : liveOutMs)
-                        const other = angles.find((x) => x.sourceId !== active)?.sourceId ?? 'main'
-                        next = setLayoutForRange(
-                          next,
-                          next.trim.in,
-                          next.trim.out,
-                          { kind: 'side_by_side', withSourceId: other, split: 0.5 },
-                          angleSources,
-                        )
                         commit(next)
                         setCtxMenu(null)
                       }}
