@@ -95,6 +95,7 @@ import type { LibassClock, LibassStatusFn } from '@/components/clips/editor/liba
 const LibassPreviewLayers = lazy(() =>
   import('@/components/clips/editor/libass-overlay').then((m) => ({ default: m.LibassPreviewLayers })),
 )
+import { PreviewSegmentLayout, segmentLayoutAtSourceMs } from '@/components/clips/editor/segment-layout-preview'
 import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt } from '@/lib/clips/editor/sources'
 import type { SourceSegmentLayout } from '@/lib/clips/editor/segment-layout'
 
@@ -674,6 +675,13 @@ export function PreviewStage({
       // segment's sound mode mutes / unmutes the main and the source element (export: media_sources).
       const sseg = sourceSegmentAt(e.sourceSegments, src)
       const ssrc = sseg ? sourceById(e.sources, sseg.sourceId) : undefined
+      const activeLayout = segmentLayoutAtSourceMs(e, src)
+      if (activeLayout) {
+        for (const s of e.sources ?? []) {
+          const box = srcBoxRefs.current[s.id]
+          if (box) box.style.visibility = 'hidden'
+        }
+      } else {
       for (const s of e.sources ?? []) {
         const box = srcBoxRefs.current[s.id]
         const el = srcElRefs.current[s.id]
@@ -700,6 +708,7 @@ export function PreviewStage({
           }
         }
       }
+      }
       const tbNow = timebaseFor(playbackEdits)
       const splitSrc = splitAudioSrcAt(splitPlanFor(playbackEdits, tbNow.segs), outMs)
       const sa = splitAudioRef.current
@@ -716,7 +725,7 @@ export function PreviewStage({
         } else if (!sa.paused) sa.pause()
       }
       const muteMain =
-        Boolean(sseg && segmentAudio(sseg, ssrc) === 'source') ||
+        Boolean(!activeLayout && sseg && segmentAudio(sseg, ssrc) === 'source') ||
         (Boolean(v) && splitSrc != null) ||
         (Boolean(v) && (e.videoReverse?.length ? reversedSourceMs(e, src) != null : false))
       if (v && muteMain && !srcMutedMainRef.current) {
@@ -1004,11 +1013,16 @@ export function PreviewStage({
 
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const previewOutDurMs = useMemo(() => outputDurationFromEdits(previewEdits), [previewEdits])
+  const segmentLayoutActive = useMemo(
+    () => segmentLayoutAtSourceMs(edits, previewSourceMs),
+    [edits, previewSourceMs],
+  )
   const facecamBox = edits.layout.facecam?.box
   const facecamGameplay = edits.layout.facecam?.gameplay
   const facecamStackPreview =
     Boolean(videoUrl) &&
     !compositePreview &&
+    !segmentLayoutActive &&
     layoutMode === 'facecam_stack' &&
     facecamBox &&
     !cropPreview &&
@@ -1016,6 +1030,7 @@ export function PreviewStage({
   const splitLayoutPreview =
     Boolean(videoUrl) &&
     !compositePreview &&
+    !segmentLayoutActive &&
     (layoutMode === 'split' || layoutMode === 'split_debate') &&
     !cropPreview &&
     !letterboxPreview &&
@@ -1023,6 +1038,7 @@ export function PreviewStage({
   const facecamPipPreview =
     Boolean(videoUrl) &&
     !compositePreview &&
+    !segmentLayoutActive &&
     layoutMode === 'facecam_pip' &&
     facecamBox &&
     !cropPreview &&
@@ -1668,18 +1684,18 @@ export function PreviewStage({
             </div>
           )
         })}
-        {(() => {
-          const layoutSeg = sourceSegmentAt(edits.sourceSegments, previewSourceMs)
-          const layout = layoutSeg?.layout
-          if (!layout) return null
-          return (
-            <div
-              className="pointer-events-none absolute inset-0 z-[25] rounded-sm ring-1 ring-inset ring-white/25"
-              data-testid={`preview-layout-${layout.kind}`}
-              aria-hidden
-            />
-          )
-        })()}
+        {segmentLayoutActive ? (
+          <PreviewSegmentLayout
+            edits={edits}
+            seg={segmentLayoutActive.seg}
+            layout={segmentLayoutActive.layout}
+            previewSourceMs={previewSourceMs}
+            sourceUrls={sourceUrls}
+            mainVideoUrl={videoUrl}
+            mediaOffsetMs={mediaOffsetMs}
+            playing={playing}
+          />
+        ) : null}
         <InsertPlayback videoRef={videoRefInner} edits={edits} words={words} sourceUrls={sourceUrls} mediaOffsetMs={mediaOffsetMs} />
         {videoUrl && edits.splitEdits?.length ? (
           <video

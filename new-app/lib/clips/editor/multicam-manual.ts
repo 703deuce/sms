@@ -25,6 +25,7 @@ import {
   type SourceAudio,
   type SourceSegment,
 } from '@/lib/clips/editor/sources'
+import { normalizeSegmentLayout } from '@/lib/clips/editor/segment-layout'
 
 export const MAIN_ANGLE = 'main'
 /** MC-09: up to 18 angles in the UI; hotkeys stay 1–9 (CapCut-style). */
@@ -148,8 +149,10 @@ export function setLayoutForRange(
   const hit = sourceSegmentAt(edits.sourceSegments, s)
   if (!hit) return edits
   if (!findSource(edits, hit.sourceId, library)) return edits
+  const normalized = layout ? normalizeSegmentLayout(layout, edits.sources, hit.sourceId) : null
+  if (layout && !normalized) return edits
   const { layout: _drop, ...rest } = hit
-  const nextSeg = layout ? { ...hit, layout } : (rest as SourceSegment)
+  const nextSeg = normalized ? { ...hit, layout: normalized } : (rest as SourceSegment)
   const others = (edits.sourceSegments ?? []).filter((x) => x.id !== hit.id)
   return { ...edits, sourceSegments: setSourceSegment(others, nextSeg, edits.sources) }
 }

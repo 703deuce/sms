@@ -31,4 +31,6 @@ exec pnpm exec vitest run \
   tests/multicam-angle-grid.test.tsx \
   tests/multicam-layouts.test.ts \
   tests/multicam-segment-layout-controls.test.tsx \
+  tests/multicam-layout-partners.test.ts \
+  tests/preview-segment-layout.test.tsx \
   tests/highlights-fetch-unwrap.test.ts
