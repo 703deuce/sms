@@ -111,6 +111,15 @@ def _maybe_auto_loop_music(music: dict, music_meta: dict, music_path: Path, edit
     if not win:
         return
     play_ms = win["endMs"] - win["startMs"]
+    raw_end = music.get("endMs")
+    if raw_end is not None:
+        try:
+            end_i = int(round(float(raw_end)))
+        except (TypeError, ValueError):
+            end_i = None
+        if end_i is not None and end_i + 80 < play_ms:
+            music_meta["loop"] = True
+            return
     mlen = _media_len_ms(music_path)
     if mlen and mlen + 80 < play_ms:
         music_meta["loop"] = True

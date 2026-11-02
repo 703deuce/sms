@@ -55,9 +55,16 @@ def probe_audio_duration_s(path: Path) -> float | None:
 MUSIC_LOOP_XFADE_S = 1.5
 
 
-def prepare_looped_music_bed(src: Path, play_s: float, work_dir: Path, *, xfade_s: float = MUSIC_LOOP_XFADE_S) -> Path:
+def prepare_looped_music_bed(
+    src: Path,
+    play_s: float,
+    work_dir: Path,
+    *,
+    xfade_s: float = MUSIC_LOOP_XFADE_S,
+    cycle_s: float | None = None,
+) -> Path:
     """Extend a short bed to `play_s` with crossfaded loops (no tempo stretch)."""
-    media_s = probe_audio_duration_s(src)
+    media_s = cycle_s if cycle_s is not None and cycle_s > 0.05 else probe_audio_duration_s(src)
     if media_s is None or play_s <= media_s + 0.05:
         return src
     xd = min(max(0.05, xfade_s), media_s / 3.0, play_s / 4.0)

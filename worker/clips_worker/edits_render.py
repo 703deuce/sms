@@ -1833,12 +1833,22 @@ def render_edited_clip(
     if sfx_fx is not None and len(sfx_fx) != len(sfx_paths):
         sfx_fx = None
     music_loop = bool(meta.get("loop"))
+    music_cfg = (edits.get("audio") or {}).get("music") or {}
+    cycle_s = None
+    if music_cfg.get("endMs") is not None:
+        try:
+            cycle_s = max(
+                0.1,
+                (int(round(float(music_cfg["endMs"]))) - int(round(float(music_cfg.get("inMs") or 0)))) / 1000.0,
+            )
+        except (TypeError, ValueError):
+            cycle_s = None
     if music_path and music_win and music_loop:
         from clips_worker.audio_render import prepare_looped_music_bed
         from pathlib import Path as _Path
 
         play_s = (music_win["endMs"] - music_win["startMs"]) / 1000.0
-        filled = prepare_looped_music_bed(_Path(music_path), play_s, work_dir)
+        filled = prepare_looped_music_bed(_Path(music_path), play_s, work_dir, cycle_s=cycle_s)
         if filled != _Path(music_path):
             music_path = filled
             music_loop = False
