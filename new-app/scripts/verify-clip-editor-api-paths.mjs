@@ -60,9 +60,11 @@ for (const p of REQUIRED) {
 }
 
 const exportDialog = fs.readFileSync(path.join(editorDir, 'export-dialog.tsx'), 'utf8')
-const hrefMatch = exportDialog.match(/href=\{[`'"]\/api\/clips\/[^`'"]+export-xml[`'"]\}/)
-if (!hrefMatch || !hrefMatch[0].includes('/api/clips/clips/${clipId}/export-xml')) {
-  errors.push('export-dialog NLE href must use /api/clips/clips/${clipId}/export-xml')
+if (!exportDialog.includes('downloadClipNleZip')) {
+  errors.push('export-dialog NLE download must use downloadClipNleZip (authed fetch + blob save)')
+}
+if (/href=\{[`'"]\/api\/clips\/[^`'"]+export-xml[`'"]\}/.test(exportDialog)) {
+  errors.push('export-dialog must not use raw href to export-xml (saves 401 JSON as export-xml.json)')
 }
 
 if (errors.length) {

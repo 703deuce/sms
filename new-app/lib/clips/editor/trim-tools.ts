@@ -206,7 +206,7 @@ export function slideMainClip(ctx: OpCtx, a: number, deltaMs: number): ClipEdits
   }
   const vsAfter = videoLaneSegments(nt, nextEdits.videoSplits)
   if (vsAfter.length !== vs.length) return null
-  return { ...nextEdits, cutRanges: ctx.edits.cutRanges ?? nextEdits.cutRanges }
+  return nextEdits
 }
 
 /** True when slide on main video needs a middle segment with neighbours on both sides. */

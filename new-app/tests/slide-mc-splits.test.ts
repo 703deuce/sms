@@ -7,10 +7,29 @@ import { clip5f19e510Edits } from '@/tests/fixtures/clip-5f19e510-edits'
 describe('slide clip_5f19e510 (split @4641, cut @29215–29695)', () => {
   const ctx = (e: ReturnType<typeof clip5f19e510Edits>) => ({ edits: e, previewEdits: e })
 
+  it('slideMainClip moves both clip edges by d and keeps spin on moved cut end', () => {
+    const e = clip5f19e510Edits()
+    const d = 300
+    const s = slideMainClip(ctx(e), 4641, d)
+    expect(s).not.toBeNull()
+    expect(s!.transitions?.length).toBe(e.transitions?.length ?? 0)
+    expect(s!.transitions?.[0]?.type).toBe('spin')
+    expect(s!.transitions?.[0]?.durMs).toBe(1000)
+    expect(s!.cutRanges).toEqual([[29_215 + d, 29_695 + d]])
+    expect(s!.transitions?.[0]?.srcMs).toBe(29_695 + d)
+    expect(s!.videoSplits).toEqual([4641 + d])
+    const vs = videoLaneSegments(timebaseFor(s!), s!.videoSplits)
+    expect(vs[1]!.a).toBe(4641 + d)
+    expect(vs[1]!.b).toBe(29_215 + d)
+    expect(vs[2]!.a).toBe(29_695 + d)
+  })
+
   it('slide middle clip +300 source ms moves split and cut range, keeps 3 clips', () => {
     const e = clip5f19e510Edits()
     const s = slideEdit(ctx(e), { lane: 'video', id: 'seg:4641' }, 300)
     expect(s).not.toBeNull()
+    expect(s!.transitions?.length).toBe(e.transitions?.length ?? 0)
+    expect(s!.transitions?.[0]?.type).toBe('spin')
     expect(s!.videoSplits).toEqual([4941])
     expect(s!.cutRanges).toEqual([[29_515, 29_995]])
     expect(s!.transitions).toEqual([{ type: 'spin', durMs: 1000, srcMs: 29_995 }])
