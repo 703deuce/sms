@@ -36,6 +36,8 @@ export function normalizeLayoutSegments(
     'dynamic',
     'auto',
     'screen_pip',
+    'facecam_stack',
+    'facecam_pip',
   ])
   const segs: LayoutSegment[] = []
   for (const row of raw) {

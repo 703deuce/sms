@@ -101,6 +101,7 @@ export async function buildAutoBrollItems(
         startMs,
         endMs,
         placement: 'auto',
+        stockQuery: query,
       })
       occupied.push({ startMs, endMs })
       queriesUsed.push(query)

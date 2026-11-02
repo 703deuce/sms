@@ -298,6 +298,10 @@ export function BrollPanel({
                     data-testid={`broll-pending-${item.id}`}
                   >
                     <span className="min-w-0 flex-1">
+                      {item.stockQuery ? (
+                        <span className="text-foreground">{item.stockQuery}</span>
+                      ) : null}
+                      {item.stockQuery ? ' · ' : null}
                       {msLabel(item.startMs)}–{msLabel(item.endMs)}
                     </span>
                     <Button size="xs" variant="secondary" onClick={() => acceptOne(item)} data-testid={`broll-accept-${item.id}`}>

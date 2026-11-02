@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Scissors } from 'lucide-react'
 import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
   layoutOptionDisabled,
   layoutPickPayload,
+  LAYOUT_BETA_DISABLED_TOOLTIP,
   visibleLayoutOptions,
 } from '@/lib/clips/layout-options'
 import {
@@ -28,7 +29,7 @@ import {
 import { withCanvasBg } from '@/lib/clips/canvas-bg'
 import { FIT_BLUR_LABELS, FIT_BLUR_STRENGTHS, fitBlurStrength } from '@/lib/clips/fit-blur'
 import type { CropShot, FacecamLayoutState } from '@/lib/server/clips/clip-detail'
-import { applySplitScreenOnOverlap } from '@/lib/clips/editor/reframe-overlap'
+import { applySplitScreenOnOverlap, overlappingSpeakerRangesFromWords, splitScreenOverlapMessage } from '@/lib/clips/editor/reframe-overlap'
 import {
   ClipShortenGapsPanel,
   type ClipGapToolSettings,
@@ -167,6 +168,12 @@ export function LayoutPanel({
   const export1080 = customAspectToken(customW, customH)
     ? exportPixelSize(customAspectToken(customW, customH)!, '1080p')
     : null
+  const splitOverlapPreview = useMemo(() => {
+    const trimIn = edits.trim.in
+    const trimOut = edits.trim.out
+    return overlappingSpeakerRangesFromWords(words, trimIn, trimOut)
+  }, [edits.trim.in, edits.trim.out, words])
+  const splitOverlapHint = splitScreenOverlapMessage(splitOverlapPreview)
   return (
     <div className="flex flex-col gap-4">
       {appliedLayoutLabel ? (
@@ -448,12 +455,14 @@ export function LayoutPanel({
         {layoutOptions.map((l) => {
           const beta = isClipLayoutBeta(l.id)
           const disabled = layoutOptionDisabled(l, { facecamLayout, reframeV2Enabled, aiExtras })
+          const betaDisabled = disabled && beta && !reframeV2Enabled && !aiExtras
           const selected = edits.layout.mode === l.id && !disabled
           return (
           <button
             key={l.id}
             type="button"
             disabled={disabled}
+            title={betaDisabled ? LAYOUT_BETA_DISABLED_TOOLTIP : undefined}
             onClick={() => {
               if (disabled) return
               const payload = layoutPickPayload(l.id, facecamLayout, edits)
@@ -480,8 +489,13 @@ export function LayoutPanel({
       {onEdits && shots.length ? (
         <div className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs" data-testid="reframe-split-fallback">
           <div>
-            <p className="font-medium">Split-screen on overlap</p>
-            <p className="text-muted-foreground">When two speakers overlap in the transcript, use split layout on those spans.</p>
+            <p className="font-medium">Split-screen when speakers overlap or trade quickly</p>
+            <p className="text-muted-foreground">Uses split layout on spans where two speakers overlap or alternate within ~0.7 s.</p>
+            {splitOverlapHint ? (
+              <p className="mt-1 text-foreground/80" data-testid="reframe-split-overlap-hint">
+                {splitOverlapHint}
+              </p>
+            ) : null}
           </div>
           <Switch
             checked={Boolean(edits.layout.splitScreenFallback)}

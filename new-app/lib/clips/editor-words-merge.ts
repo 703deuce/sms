@@ -27,7 +27,11 @@ export function mergeClipWordsWithProjectTranscript(
   if (!clipWords.length) return fromProject
   const byIndex = new Map<number, SourceWord>()
   for (const w of fromProject) byIndex.set(w.i, w)
-  for (const w of clipWords) byIndex.set(w.i, w)
+  for (const w of clipWords) {
+    const projectPeer = byIndex.get(w.i)
+    const spk = w.spk ?? projectPeer?.spk
+    byIndex.set(w.i, spk != null && w.spk == null ? { ...w, spk } : w)
+  }
   return [...byIndex.values()].sort((a, b) => a.s - b.s || a.i - b.i)
 }
 

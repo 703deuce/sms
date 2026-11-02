@@ -6,41 +6,59 @@ import type { CropShot } from '@/lib/server/clips/clip-detail'
 import type { LayoutSegment } from '@/lib/clips/layout-segments'
 import type { SourceWord } from '@/lib/clips/source-words'
 
-const ALT_MS = 1500
+/** Min merged span length; also filters rapid back-and-forth micro-spans. */
+const MIN_SPAN_MS = 1500
+/** Max gap between words from different speakers to count as quick back-and-forth. */
+const ALT_GAP_MS = 700
+const MERGE_GAP_MS = 80
 
 export type OverlapRange = { startMs: number; endMs: number }
+
+export type OverlapDetectReason = 'ok' | 'no_speaker_labels' | 'no_overlap'
+
+export type OverlapDetectResult = { ranges: OverlapRange[]; reason: OverlapDetectReason }
+
+function wordSpeaker(w: SourceWord): number | undefined {
+  if (w.spk == null || !Number.isFinite(w.spk)) return undefined
+  return w.spk
+}
 
 /** Word-timeline overlap: different speakers on overlapping words, or rapid A/B alternation. */
 export function overlappingSpeakerRangesFromWords(
   words: readonly SourceWord[],
   rangeStartMs: number,
   rangeEndMs: number,
-): OverlapRange[] {
+): OverlapDetectResult {
   const inRange = words
     .filter((w) => w.e * 1000 > rangeStartMs && w.s * 1000 < rangeEndMs)
     .sort((a, b) => a.s - b.s)
+  const labeled = inRange.filter((w) => wordSpeaker(w) !== undefined)
+  if (!labeled.length) {
+    return { ranges: [], reason: 'no_speaker_labels' }
+  }
   const ranges: OverlapRange[] = []
   const push = (a: number, b: number) => {
     const startMs = Math.max(rangeStartMs, Math.min(a, b))
     const endMs = Math.min(rangeEndMs, Math.max(a, b))
-    if (endMs - startMs >= 200) ranges.push({ startMs, endMs })
+    if (endMs - startMs >= MIN_SPAN_MS) ranges.push({ startMs, endMs })
   }
-  for (let i = 0; i < inRange.length; i++) {
-    const wi = inRange[i]!
-    const si = wi.spk ?? 0
+  for (let i = 0; i < labeled.length; i++) {
+    const wi = labeled[i]!
+    const si = wordSpeaker(wi)!
     const ai = Math.round(wi.s * 1000)
     const bi = Math.round(wi.e * 1000)
-    for (let j = i + 1; j < inRange.length; j++) {
-      const wj = inRange[j]!
+    for (let j = i + 1; j < labeled.length; j++) {
+      const wj = labeled[j]!
       const aj = Math.round(wj.s * 1000)
       if (aj >= bi) break
-      const sj = wj.spk ?? 0
+      const sj = wordSpeaker(wj)!
       if (si !== sj) push(ai, Math.max(bi, Math.round(wj.e * 1000)))
     }
-    const next = inRange[i + 1]
-    if (next && (next.spk ?? 0) !== si) {
+    const next = labeled[i + 1]
+    const nextSpk = next ? wordSpeaker(next) : undefined
+    if (next && nextSpk !== undefined && nextSpk !== si) {
       const gap = Math.round(next.s * 1000) - bi
-      if (gap >= 0 && gap < ALT_MS) {
+      if (gap >= 0 && gap <= ALT_GAP_MS) {
         push(ai, Math.round(next.e * 1000))
       }
     }
@@ -49,11 +67,19 @@ export function overlappingSpeakerRangesFromWords(
   const merged: OverlapRange[] = []
   for (const r of ranges) {
     const prev = merged[merged.length - 1]
-    if (prev && r.startMs <= prev.endMs + 80) {
+    if (prev && r.startMs <= prev.endMs + MERGE_GAP_MS) {
       prev.endMs = Math.max(prev.endMs, r.endMs)
     } else merged.push({ ...r })
   }
-  return merged
+  const final = merged.filter((r) => r.endMs - r.startMs >= MIN_SPAN_MS)
+  return { ranges: final, reason: final.length ? 'ok' : 'no_overlap' }
+}
+
+export function splitScreenOverlapMessage(result: OverlapDetectResult): string {
+  if (result.reason === 'no_speaker_labels') return 'Transcript has no speaker labels'
+  if (result.reason === 'no_overlap') return 'No overlapping or back-and-forth speech found'
+  const n = result.ranges.length
+  return n === 1 ? '1 split span added' : `${n} split spans added`
 }
 
 export function shotIndicesForRange(shots: readonly CropShot[], startMs: number, endMs: number): number[] {
@@ -154,7 +180,7 @@ export function applySplitScreenOnOverlap(
     }
   }
 
-  const ranges = overlappingSpeakerRangesFromWords(words, trimIn, trimOut)
+  const { ranges } = overlappingSpeakerRangesFromWords(words, trimIn, trimOut)
   const shotIdx = new Set<number>()
   for (const r of ranges) {
     for (const i of shotIndicesForRange(shots, r.startMs, r.endMs)) shotIdx.add(i)

@@ -9,8 +9,10 @@ import { normLayerAnim, type TextAnim } from '@/lib/clips/render-plan/text-anim'
  */
 /** G3b: `anim` = in / out / loop presets on the layer (whole-layer; worker motion.layer_anim). */
 type BrollTransitions = { transitionIn?: TransitionSpec; transitionOut?: TransitionSpec; anim?: TextAnim }
+type BrollStockMeta = { stockQuery?: string }
 export type BrollItem =
-  | ({ id: string; source: 'stock'; assetId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions)
+  | ({ id: string; source: 'stock'; assetId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions &
+      BrollStockMeta)
   | ({ id: string; source: 'ai'; generationId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions)
   /** E5: the user's own upload from the project media library (`still` = image, held for the span). */
   | ({ id: string; source: 'upload'; uploadId: string; still?: true; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions)
@@ -68,7 +70,16 @@ export function normalizeBrollItems(raw: unknown, clipDurationMs: number): Broll
     const tIn = normalizeTransitionSpec(o.transitionIn)
     const tOut = normalizeTransitionSpec(o.transitionOut)
     const anim = normLayerAnim(o.anim)
-    const extra = { ...(inMs ? { inMs } : {}), ...(tIn ? { transitionIn: tIn } : {}), ...(tOut ? { transitionOut: tOut } : {}), ...(anim ? { anim } : {}) }
+    const stockQuery =
+      typeof o.stockQuery === 'string' && o.stockQuery.trim() ? o.stockQuery.trim().slice(0, 120) : undefined
+    const queryExtra = stockQuery ? { stockQuery } : {}
+    const extra = {
+      ...(inMs ? { inMs } : {}),
+      ...(tIn ? { transitionIn: tIn } : {}),
+      ...(tOut ? { transitionOut: tOut } : {}),
+      ...(anim ? { anim } : {}),
+      ...queryExtra,
+    }
     if (source === 'ai') {
       const generationId = String(o.generationId ?? '')
       if (!generationId) continue

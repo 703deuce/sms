@@ -105,6 +105,9 @@ export function layoutOptionDisabled(
   return false
 }
 
+/** Shown when a beta layout is disabled (REFRAME_V2 off and AI extras off). */
+export const LAYOUT_BETA_DISABLED_TOOLTIP = 'Requires multi-person reframe (beta)'
+
 export function layoutPickPayload(
   mode: LayoutOptionId,
   facecamLayout: FacecamLayoutState | null,

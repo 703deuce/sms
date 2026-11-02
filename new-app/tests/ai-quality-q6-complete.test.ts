@@ -16,15 +16,15 @@ const bounds = { clipStartMs: 0, clipEndMs: 60_000 }
 describe('Q6-complete batch', () => {
   it('B2 reframe: word overlap → split layoutSegments (not shot-only both-wide)', () => {
     const words: SourceWord[] = [
-      { s: 0, e: 2, text: 'hi', spk: 0 },
-      { s: 1.5, e: 4, text: 'yo', spk: 1 },
+      { s: 0, e: 3, w: 'hi', spk: 0, i: 0 },
+      { s: 1.5, e: 4.5, w: 'yo', spk: 1, i: 1 },
     ]
     const shots: CropShot[] = [
       { startMs: 0, endMs: 2000, speaker: 'A' },
       { startMs: 2000, endMs: 4000, speaker: 'B' },
     ]
     expect(overlappingSpeakerShotIndices(shots)).toEqual([])
-    expect(overlappingSpeakerRangesFromWords(words, 0, 60_000).length).toBeGreaterThan(0)
+    expect(overlappingSpeakerRangesFromWords(words, 0, 60_000).ranges.length).toBeGreaterThan(0)
     const base = normalizeEdits(defaultEdits(bounds), bounds)
     const on = applySplitScreenOnOverlap(base, shots, words, true)
     expect(on.layout.layoutSegments?.some((s) => s.mode === 'split' && s.auto)).toBe(true)

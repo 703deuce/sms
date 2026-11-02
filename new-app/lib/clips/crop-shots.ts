@@ -101,8 +101,19 @@ export function inferShotsFromWords(
     })
   }
   if (hasSpk) {
+    const spkToLabel = new Map<number, string>()
+    const labelForSpk = (spk: number): string => {
+      let lab = spkToLabel.get(spk)
+      if (!lab) {
+        const idx = spkToLabel.size
+        lab = idx === 0 ? 'A' : idx === 1 ? 'B' : String.fromCharCode(65 + idx)
+        spkToLabel.set(spk, lab)
+      }
+      return lab
+    }
     for (const w of inClip) {
-      const label = w.spk === 1 ? 'B' : 'A'
+      if (w.spk == null || !Number.isFinite(w.spk)) continue
+      const label = labelForSpk(w.spk)
       const t = Math.round(w.s * 1000)
       if (label !== cur && t > segStart + 600) {
         push(t, cur)

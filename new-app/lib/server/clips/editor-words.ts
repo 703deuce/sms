@@ -24,12 +24,16 @@ export function normalizeTranscriptWord(raw: unknown, pos: number): ClipWord | n
   const e = w.e ?? w.end
   if (typeof text !== 'string' || !text.trim() || s == null || e == null) return null
   const p = w.p ?? w.prob ?? w.probability
+  const spkRaw = w.spk ?? w.speaker
+  const spkNum = spkRaw != null ? Number(spkRaw) : NaN
+  const spk = Number.isFinite(spkNum) ? spkNum : undefined
   return {
     w: text,
     s: Number(s),
     e: Number(e),
     p: p != null ? Number(p) : undefined,
     i: typeof w.i === 'number' ? w.i : pos,
+    ...(spk !== undefined ? { spk } : {}),
   }
 }
 

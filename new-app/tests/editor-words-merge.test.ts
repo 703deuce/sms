@@ -31,4 +31,11 @@ describe('mergeClipWordsWithProjectTranscript', () => {
     const before = merged.find((w) => w.w === 'before')
     expect(before?.s).toBe(7)
   })
+
+  it('backfills spk on clip words from project transcript index', () => {
+    const clipOnly = loadSourceWords([{ w: 'mid', s: 15, e: 16, i: 5 }])
+    const project = loadSourceWords([{ w: 'mid', s: 15, e: 16, spk: 1, i: 5 }])
+    const merged = mergeClipWordsWithProjectTranscript(clipOnly, project, clipStart, clipEnd)
+    expect(merged.find((w) => w.i === 5)?.spk).toBe(1)
+  })
 })

@@ -43,8 +43,8 @@ describe('Q6-fix2 batch', () => {
 
   it('split-screen subtracts base range so split mode wins at overlap', () => {
     const words: SourceWord[] = [
-      { s: 1, e: 3, text: 'a', spk: 0 },
-      { s: 2, e: 4, text: 'b', spk: 1 },
+      { s: 1, e: 4, w: 'a', spk: 0, i: 0 },
+      { s: 2, e: 5, w: 'b', spk: 1, i: 1 },
     ]
     const shots: CropShot[] = [
       { startMs: 0, endMs: 2000, speaker: 'A' },
@@ -59,8 +59,8 @@ describe('Q6-fix2 batch', () => {
     )
     const on = applySplitScreenOnOverlap(base, shots, words, true)
     const ranges = overlappingSpeakerRangesFromWords(words, 0, 60_000)
-    expect(ranges.length).toBeGreaterThan(0)
-    const probeMs = Math.round(((ranges[0]!.startMs + ranges[0]!.endMs) / 2))
+    expect(ranges.ranges.length).toBeGreaterThan(0)
+    const probeMs = Math.round(((ranges.ranges[0]!.startMs + ranges.ranges[0]!.endMs) / 2))
     expect(layoutModeAtSourceMs(on, probeMs)).toBe('split')
     const off = applySplitScreenOnOverlap(on, shots, words, false)
     expect(off.layout.layoutSegments?.some((s) => s.auto)).toBeFalsy()

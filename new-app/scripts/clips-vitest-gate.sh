@@ -9,6 +9,8 @@ exec pnpm exec vitest run \
   tests/ai-quality-q5-selects-route.test.ts \
   tests/ai-quality-q5-full-video-link.test.ts \
   tests/ai-quality-q6.test.ts \
+  tests/ai-quality-q6-fix2.test.ts \
+  tests/ai-quality-q6-fix3.test.ts \
   tests/editor-shell-render.test.tsx \
   tests/editor-shell-ssr.test.tsx \
   tests/editor-shell-use-editor-words.test.ts \

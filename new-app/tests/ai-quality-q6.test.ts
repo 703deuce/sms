@@ -20,14 +20,14 @@ describe('AI_QUALITY Q6 libs', () => {
 
   it('6.2 overlap words → split layout segments when fallback on', () => {
     const words: SourceWord[] = [
-      { s: 0, e: 2, text: 'a', spk: 0 },
-      { s: 1.5, e: 4, text: 'b', spk: 1 },
+      { s: 0, e: 3, w: 'a', spk: 0, i: 0 },
+      { s: 1.5, e: 4.5, w: 'b', spk: 1, i: 1 },
     ]
     const shots: CropShot[] = [
       { startMs: 0, endMs: 2000, speaker: 'A' },
       { startMs: 1500, endMs: 4000, speaker: 'B' },
     ]
-    expect(overlappingSpeakerRangesFromWords(words, 0, 60_000).length).toBeGreaterThan(0)
+    expect(overlappingSpeakerRangesFromWords(words, 0, 60_000).ranges.length).toBeGreaterThan(0)
     const base = normalizeEdits(defaultEdits(bounds), bounds)
     const next = applySplitScreenOnOverlap(base, shots, words, true)
     expect(next.layout.splitScreenFallback).toBe(true)
