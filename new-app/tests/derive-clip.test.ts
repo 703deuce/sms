@@ -12,9 +12,11 @@ vi.mock('@/lib/server/clips/clip-patch-bounds', () => ({
 }))
 
 const createMock = vi.fn()
+const projectFindFirst = vi.fn()
 vi.mock('@/lib/server/db', () => ({
   getPrisma: () => ({
     clip: { create: createMock },
+    clipProject: { findFirst: projectFindFirst },
   }),
 }))
 
@@ -39,6 +41,23 @@ describe('deriveClipFromSelection', () => {
       score: 1,
     } as never)
     createMock.mockResolvedValue({ id: 'clip_child' })
+    projectFindFirst.mockResolvedValue({
+      transcriptKey: null,
+      transcriptWords: null,
+      settings: {
+        v: 2,
+        mode: 'auto',
+        genre: 'auto',
+        clipLength: 'auto',
+        clipLenMode: 'auto',
+        targetClipLenS: null,
+        rangeStartMs: 0,
+        rangeEndMs: 0,
+        layout: 'speaker_follow',
+        aspectRatio: '9:16',
+        autoZoom: false,
+      },
+    })
 
     const result = await deriveClipFromSelection('ws_1', 'clip_parent', {
       trimIn: 1000,

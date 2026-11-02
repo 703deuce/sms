@@ -10,6 +10,8 @@ import { getPrisma } from '@/lib/server/db'
 import { getClipStorageForObjectKey } from '@/lib/storage'
 import { normalizeTranscriptJson } from '@/lib/server/clips/editor-words'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
+import { lightAutoEdit } from '@/lib/clips/light-auto-edit'
+import { clipProjectSettingsSchema } from '@/lib/clips/settings'
 
 export type DeriveClipInput = {
   trimIn: number
@@ -38,7 +40,7 @@ export async function deriveClipFromSelection(
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({
     where: { id: parent.projectId, workspaceId },
-    select: { transcriptKey: true, storageDriver: true, transcriptWords: true },
+    select: { transcriptKey: true, storageDriver: true, transcriptWords: true, settings: true },
   })
   if (project?.transcriptKey || project?.transcriptWords) {
     try {
@@ -72,7 +74,8 @@ export async function deriveClipFromSelection(
 
   const newBounds: ClipBounds = { clipStartMs: trim.in, clipEndMs: trim.out }
   const parentEdits = normalizeEdits(parent.edits, bounds)
-  const childEdits = normalizeEdits(
+  const projectSettings = clipProjectSettingsSchema.safeParse(project?.settings)
+  let childEdits = normalizeEdits(
     {
       ...defaultEdits(newBounds),
       captions: parentEdits.captions,
@@ -83,6 +86,9 @@ export async function deriveClipFromSelection(
     },
     newBounds,
   )
+  if (projectSettings.success) {
+    childEdits = lightAutoEdit(childEdits, { autoZoom: projectSettings.data.autoZoom })
+  }
 
   const childId = createId('clip')
   const title =

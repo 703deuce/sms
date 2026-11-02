@@ -51,11 +51,17 @@ export async function resolveFullVideoLink(
   const fvClip = await prisma.clip.findFirst({
     where: { projectId: fvProjectId, workspaceId, deletedAt: null },
     orderBy: { startMs: 'asc' },
-    select: { id: true },
+    select: { id: true, title: true },
   })
   if (!fvClip) return null
 
   const sourceMs = clip.startMs
-  const url = `/app/clips/${fvProjectId}/edit/${fvClip.id}?t=${sourceMs}`
+  const momentIn = clip.startMs
+  const momentOut = clip.endMs
+  const title = encodeURIComponent(clip.title.slice(0, 80))
+  const url =
+    `/app/clips/${fvProjectId}/edit/${fvClip.id}?t=${sourceMs}` +
+    `&fromClip=${encodeURIComponent(clipId)}` +
+    `&momentIn=${momentIn}&momentOut=${momentOut}&momentTitle=${title}`
   return { projectId: fvProjectId, clipId: fvClip.id, url, sourceMs }
 }

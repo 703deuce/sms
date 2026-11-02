@@ -29,7 +29,8 @@ import { MontageProgress } from '@/components/streamer/montage-progress'
 import { Clapperboard, Film, FileText, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
+import { ProjectSpeechSelectsPanel } from '@/components/clips/project-speech-selects-panel'
+import { defaultEdits } from '@/lib/clips/edits'
 
 type ProjectStatusPayload = {
   status: string
@@ -541,6 +542,33 @@ export function ProjectClipsView({
               />
             ) : (
               <>
+                {!isStreamer && status === 'READY' ? (
+                  <ProjectSpeechSelectsPanel
+                    projectId={projectId}
+                    editorHref={
+                      clips[0]
+                        ? `/app/clips/${editorProjectId ?? projectId}/edit/${clips[0]!.id}?panel=media`
+                        : viewOnFullVideoUrl
+                          ? `${viewOnFullVideoUrl.split('?')[0]}?panel=media`
+                          : null
+                    }
+                    stubEdits={defaultEdits({
+                      clipStartMs: 0,
+                      clipEndMs: Math.max(1000, sourceDurationMs || 60_000),
+                    })}
+                    mediaStub={
+                      {
+                        items: [],
+                        transcripts: [],
+                        refresh: async () => {},
+                        uploadFile: async () => {
+                          throw new Error('upload unavailable')
+                        },
+                        syncAudio: async () => {},
+                      } as import('@/components/clips/editor/use-project-media').ProjectMediaApi
+                    }
+                  />
+                ) : null}
                 {!isStreamer ? (
                   <ClipResultsToolbar
                     projectId={projectId}

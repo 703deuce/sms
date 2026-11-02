@@ -15,7 +15,7 @@ import {
   type CoverUrlCache,
 } from '@/lib/clips/editor/cover-jobs'
 import { toast } from 'sonner'
-import { corsMediaProps, onMediaCorsError } from '@/components/clips/editor/g4/media-cors'
+import { FreeFrameThumbnailPicker } from '@/components/clips/editor/free-frame-thumbnail-picker'
 
 type ThumbRow = {
   id: string
@@ -32,10 +32,18 @@ export function ThumbnailPanel({
   clipId,
   edits,
   onEdits,
+  videoUrl = null,
+  trimIn,
+  trimOut,
+  defaultTitle,
 }: {
   clipId: string
   edits: ClipEditsV2
   onEdits: (edits: ClipEditsV2) => void
+  videoUrl?: string | null
+  trimIn?: number
+  trimOut?: number
+  defaultTitle?: string
 }) {
   const [aspect, setAspect] = useState<'9:16' | '16:9'>('9:16')
   const [titleOverride, setTitleOverride] = useState('')
@@ -140,6 +148,18 @@ export function ThumbnailPanel({
 
   return (
     <div className="space-y-3 p-3 text-sm">
+      <FreeFrameThumbnailPicker
+        clipId={clipId}
+        videoUrl={videoUrl}
+        trimIn={trimIn ?? edits.trim.in}
+        trimOut={trimOut ?? edits.trim.out}
+        aspect={aspect}
+        defaultTitle={defaultTitle}
+        onPicked={(thumbnailId) => onEdits({ ...edits, thumbnailId })}
+      />
+      <div className="border-t pt-3">
+        <p className="mb-2 text-xs font-semibold text-muted-foreground">AI covers</p>
+      </div>
       <div className="flex gap-2">
         <Button size="sm" variant={aspect === '9:16' ? 'default' : 'outline'} onClick={() => setAspect('9:16')}>9:16</Button>
         <Button size="sm" variant={aspect === '16:9' ? 'default' : 'outline'} onClick={() => setAspect('16:9')}>16:9</Button>

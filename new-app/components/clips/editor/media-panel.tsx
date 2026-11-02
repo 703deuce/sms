@@ -36,6 +36,7 @@ import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-films
 import { MediaTranscribeControl } from '@/components/clips/editor/media-transcribe-control'
 import { InsertsSection } from '@/components/clips/editor/media-inserts-section'
 import { SpeechSearchSection } from '@/components/clips/editor/speech-search-section'
+import { ProjectSelectsBin, useProjectSelectsActions } from '@/components/clips/editor/project-selects-bin'
 import { SourceMonitor, type MonitorRequest } from '@/components/clips/editor/source-monitor'
 import type { Timebase } from '@/lib/clips/editor/clip-timeline'
 import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
@@ -248,6 +249,7 @@ export function MediaPanel({
   timebase,
   playheadOutMs = 0,
   playheadOutMsRef,
+  sourceDurationMs,
 }: {
   projectId: string
   media: ProjectMediaApi
@@ -270,8 +272,11 @@ export function MediaPanel({
   timebase?: Timebase
   playheadOutMs?: number
   playheadOutMsRef?: import('react').MutableRefObject<number>
+  sourceDurationMs?: number
 }) {
   const [filter, setFilter] = useState<Filter>('all')
+  const [selectsTick, setSelectsTick] = useState(0)
+  const addToSelects = useProjectSelectsActions(projectId, () => setSelectsTick((n) => n + 1))
   const seg = edits.sourceSegments?.find((s) => s.id === selectedSegmentId) ?? null
   const segSource = seg ? sourceById(edits.sources, seg.sourceId) : undefined
 
@@ -359,6 +364,18 @@ export function MediaPanel({
         playheadSourceMs={playheadSourceMs}
         onSeekSource={onSeekSource}
         onEdits={onEdits}
+        onAddToSelects={addToSelects}
+      />
+      <ProjectSelectsBin
+        key={selectsTick}
+        projectId={projectId}
+        edits={edits}
+        mediaItems={media.items}
+        sourceDurationMs={sourceDurationMs}
+        onAssemble={(next, label) => {
+          if (onEditsPass) onEditsPass(next, label)
+          else onEdits(next)
+        }}
       />
       {seg ? (
         <section className="space-y-2 rounded-md border p-2" data-testid="media-segment-editor">

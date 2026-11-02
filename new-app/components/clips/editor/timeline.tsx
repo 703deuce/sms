@@ -13,6 +13,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { wordDisplayText } from '@/lib/clips/edits'
 import { clampTrimWithMediaBounds } from '@/lib/clips/trim-bounds'
 import { HighlightsLane } from '@/components/clips/editor/timeline/highlights-lane'
+import { FullVideoMomentLane, type FullVideoMomentFocus } from '@/components/clips/editor/full-video-moment-focus'
 import {
   picksToLaneRanges,
   type HighlightPick,
@@ -344,6 +345,8 @@ export function Timeline({
   onArmVoiceover,
   onOpenTextVoiceover,
   highlights,
+  momentFocus = null,
+  onMomentSeek,
   playheadOutMsRef,
   transcriptSelectionRef,
   registerBeatCut,
@@ -428,6 +431,8 @@ export function Timeline({
     onMakeClip: (pick: HighlightPick, range: HighlightRange) => void
     onOpenCard: (pick: HighlightPick) => void
   }
+  momentFocus?: FullVideoMomentFocus | null
+  onMomentSeek?: (sourceMs: number) => void
   /** Live timeline playhead (output ms); ref updates on scrub before React state. */
   playheadOutMsRef?: React.MutableRefObject<number>
   /** Script word selection — keys 1–9 apply camera to this span instead of the playhead cut. */
@@ -3341,6 +3346,15 @@ export function Timeline({
                 onRangeChange={highlights.onRangeChange}
                 onMakeClip={highlights.onMakeClip}
                 onOpenCard={highlights.onOpenCard}
+              />
+            ) : null}
+            {momentFocus ? (
+              <FullVideoMomentLane
+                durationMs={mediaMaxMs != null && mediaMinMs != null ? mediaMaxMs - mediaMinMs : highlights?.durationMs ?? span}
+                pxPerMs={pxPerMs}
+                offsetPx={TRACK_OFFSET_PX}
+                focus={momentFocus}
+                onSeek={(ms) => onMomentSeek?.(ms)}
               />
             ) : null}
             <div
