@@ -38,9 +38,7 @@ export function fillerEligibleAtStrength(
 ): boolean {
   const t = wordText.trim().toLowerCase()
   if (!t) return false
-  if (OPT_IN_FILLER_WORDS.some((p) => t === p || t.startsWith(`${p} `))) {
-    return enabledOptIn.has(t.split(/\s+/)[0] ?? t)
-  }
+  if (wordEligibleForOptInSingle(wordText, enabledOptIn)) return true
   if (strength === 'light') {
     return /^(um+|uh+|er+|ah+)$/i.test(t) && (fillerKind === 'lexicon' || fillerKind === 'repeat' || !fillerKind)
   }
@@ -66,6 +64,7 @@ export function isProtectedFromCleanup(word: {
 }
 
 import { gapHasLoudProgramAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
+import { wordEligibleForOptInSingle } from '@/lib/clips/editor/filler-opt-in'
 
 export function gapHasSpeechEnergy(
   gapStartMs: number,

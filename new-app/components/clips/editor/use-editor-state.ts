@@ -431,8 +431,8 @@ export function useEditorState(
   )
 
   const applyCleanupCut = useCallback(
-    (range: CutRange) => {
-      addCleanupCuts([range])
+    (range: CutRange, passLabel?: string) => {
+      addCleanupCuts([range], passLabel)
     },
     [addCleanupCuts],
   )

@@ -96,6 +96,12 @@ export function enrichTranscriptWords(words: ClipWord[], opts?: EnrichOpts): Enr
       out[i + 1].isFiller = true
       out[i + 1].fillerKind = 'lexicon'
     }
+    if (a === 'i' && b === 'mean') {
+      out[i].isFiller = true
+      out[i].fillerKind = 'lexicon'
+      out[i + 1].isFiller = true
+      out[i + 1].fillerKind = 'lexicon'
+    }
   }
 
   return out

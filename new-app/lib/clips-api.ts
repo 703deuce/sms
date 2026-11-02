@@ -86,6 +86,13 @@ export function listProjects(params?: { q?: string; status?: string }) {
   return clipsFetch<{ projects: unknown[] }>(`/api/clips/projects${suffix}`)
 }
 
+export function retranscribeProject(projectId: string) {
+  return clipsFetch<{ ok: boolean; jobId: string; status: string }>(
+    `/api/clips/projects/${projectId}/retranscribe`,
+    { method: 'POST', body: '{}' },
+  )
+}
+
 export function getProjectStatus(projectId: string) {
   return clipsFetch<{
     status: string

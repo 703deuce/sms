@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
-import { clipsFetch } from '@/lib/clips-api'
+import { clipsFetch, retranscribeProject } from '@/lib/clips-api'
 import {
   appliedCutProposals,
   auditionEditsForProposals,
@@ -45,6 +45,7 @@ import { AiCreditBadge } from '@/components/clips/ui/ai-credit-badge'
 
 export function CleanupPanel({
   clipId,
+  projectId,
   bounds,
   edits,
   words,
@@ -60,6 +61,7 @@ export function CleanupPanel({
   onSeek,
 }: {
   clipId: string
+  projectId: string
   bounds: ClipBounds
   edits: ClipEditsV2
   words: SourceWord[]
@@ -84,6 +86,7 @@ export function CleanupPanel({
   const [strength, setStrength] = useState<CleanupStrength>(DEFAULT_CLEANUP_STRENGTH)
   const [enabledOptIn, setEnabledOptIn] = useState<Set<string>>(new Set())
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set())
+  const [retranscribeBusy, setRetranscribeBusy] = useState(false)
 
   const clipBounds = useMemo(
     () => ({ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }),
@@ -147,6 +150,16 @@ export function CleanupPanel({
   const previewCutAudition = (p: CleanupProposal) => {
     onSeek(Math.max(bounds.clipStartMs, p.range[0] - 1000))
     onAuditionChange(auditionEditsForProposals(edits, [p], wordSpans))
+  }
+
+  const applyAllFillers = () => {
+    const rows = proposed.filter((row) => row.kind === 'filler' || row.kind === 'repeat')
+    if (!rows.length) return
+    if (onApplyPass) onApplyPass(rows, cleanupPassLabel('filler', rows.length))
+    else for (const p of rows) onApplyProposal(p)
+    setSkippedIds(new Set())
+    setAuditionIds(new Set())
+    onAuditionChange(null)
   }
 
   const applyAllOfKind = (kind: CleanupProposal['kind']) => {
@@ -233,6 +246,7 @@ export function CleanupPanel({
           range: [p.startMs, p.endMs] as [number, number],
           reason: p.reason,
         })),
+        orderedWords,
       )
       setClarityRows(props)
       if (!props.length) setClarityEmpty('Nothing to tighten')
@@ -337,7 +351,7 @@ export function CleanupPanel({
           ))}
         </div>
         <div className="flex flex-wrap gap-2 pt-1">
-          <Button type="button" size="sm" variant="secondary" onClick={() => applyAllOfKind('filler')}>
+          <Button type="button" size="sm" variant="secondary" onClick={applyAllFillers}>
             Accept all fillers
             <FreeToolBadge className="ml-1.5" />
           </Button>
@@ -346,6 +360,27 @@ export function CleanupPanel({
             <FreeToolBadge className="ml-1.5" />
           </Button>
         </div>
+      </div>
+
+      <div className="rounded-md border border-border p-2 text-xs text-muted-foreground">
+        <p className="mb-2">Missing um/uh in the script? Re-run ASR with disfluencies preserved (Deepgram filler_words).</p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={retranscribeBusy}
+          data-testid="retranscribe-verbatim"
+          onClick={() => {
+            setRetranscribeBusy(true)
+            void retranscribeProject(projectId)
+              .then(() => toast.success('Re-transcribe queued — reload when the project is ready.'))
+              .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not queue re-transcribe'))
+              .finally(() => setRetranscribeBusy(false))
+          }}
+        >
+          {retranscribeBusy ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : null}
+          Re-transcribe (verbatim)
+        </Button>
       </div>
 
       <div className="space-y-2 rounded-md border border-border p-2" data-testid="cleanup-ai-tools">
@@ -485,20 +520,33 @@ export function CleanupPanel({
               </div>
             ))
           )}
-          {applied.some((p) => p.kind === 'filler' || p.kind === 'gap') ? (
+          {applied.some((p) => p.kind === 'filler' || p.kind === 'repeat' || p.kind === 'gap' || p.kind === 'retake' || p.kind === 'clarity') ? (
             <div className="flex flex-wrap gap-2 pt-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('filler')}>
-                Restore all fillers
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('gap')}>
-                Restore all gaps
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('retake')}>
-                Restore all retakes
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('clarity')}>
-                Restore all clarity
-              </Button>
+              {applied.some((p) => p.kind === 'filler') ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('filler')}>
+                  Restore fillers
+                </Button>
+              ) : null}
+              {applied.some((p) => p.kind === 'repeat') ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('repeat')}>
+                  Restore repeats
+                </Button>
+              ) : null}
+              {applied.some((p) => p.kind === 'gap') ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('gap')}>
+                  Restore gaps
+                </Button>
+              ) : null}
+              {applied.some((p) => p.kind === 'retake') ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('retake')}>
+                  Restore retakes
+                </Button>
+              ) : null}
+              {applied.some((p) => p.kind === 'clarity') ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => restoreAllOfKind('clarity')}>
+                  Restore clarity
+                </Button>
+              ) : null}
             </div>
           ) : null}
         </TabsContent>
@@ -529,8 +577,9 @@ function ProposalRow({
       className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs"
       data-testid={testId}
     >
-      <span>
-        {proposal.label} · {proposal.kind}
+      <span className="line-clamp-3 min-w-0 flex-1">
+        {proposal.label}
+        {proposal.kind !== 'clarity' ? ` · ${proposal.kind}` : ''}
       </span>
       <div className="flex flex-wrap gap-1">
         <Button type="button" size="sm" variant="outline" onClick={onPreview} data-testid="cleanup-preview-cut">
