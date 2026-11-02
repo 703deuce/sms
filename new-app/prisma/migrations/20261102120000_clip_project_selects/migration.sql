@@ -25,4 +25,4 @@ CREATE INDEX "clip_project_selects_workspaceId_idx" ON "clip_project_selects"("w
 ALTER TABLE "clip_project_selects" ADD CONSTRAINT "clip_project_selects_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "clip_projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "clip_project_selects" ADD CONSTRAINT "clip_project_selects_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "clip_project_selects" ADD CONSTRAINT "clip_project_selects_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
