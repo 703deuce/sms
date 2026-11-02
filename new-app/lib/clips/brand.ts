@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { CSSProperties } from 'react'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { templateV3Schema } from '@/lib/clips/layers'
@@ -46,6 +47,8 @@ export const brandTemplateSettingsSchema = z.object({
 
 export type BrandTemplateSettings = z.infer<typeof brandTemplateSettingsSchema>
 
+export type BrandWatermarkPosition = 'TL' | 'TC' | 'TR' | 'ML' | 'C' | 'MR' | 'BL' | 'BC' | 'BR'
+
 export type ClipBrandEdits = {
   templateId?: string
   logoKey?: string
@@ -61,7 +64,7 @@ export type ClipBrandEdits = {
   captionFont?: string
   palette?: string[]
   watermarkKey?: string
-  watermarkPosition?: 'TL' | 'TR' | 'BL' | 'BR' | 'C'
+  watermarkPosition?: BrandWatermarkPosition
   watermarkOpacity?: number
   watermarkSizePct?: number
   aspectOverrides?: Record<string, { logoPosition?: string; captionY?: number }>
@@ -127,7 +130,7 @@ export function brandEditsFromProjectBrand(brand: Record<string, unknown> | null
 export function brandOverlayExpr(
   brand: ClipBrandEdits,
   videoW: number,
-  videoH: number,
+  _videoH: number,
 ): { x: string; y: string; scale: string; opacity: number } {
   const margin = 24
   const sizePct = (brand.logoSizePct ?? 12) / 100
@@ -147,4 +150,42 @@ export function brandOverlayExpr(
     scale: `${scaleW}:-1`,
     opacity: brand.logoOpacity ?? 0.9,
   }
+}
+
+const PREVIEW_MARGIN_PX = 12
+
+/** CSS overlay for brand logo / watermark in the editor preview (matches brand_render margin + width %). */
+export function brandImageOverlayPreviewStyle(
+  pos: string | undefined,
+  sizePct: number | undefined,
+  opacity: number | undefined,
+): CSSProperties {
+  const p = (pos ?? 'BR') as BrandWatermarkPosition
+  const m = PREVIEW_MARGIN_PX
+  const style: CSSProperties = {
+    position: 'absolute',
+    zIndex: 10,
+    opacity: opacity ?? 0.8,
+    width: `${sizePct ?? 12}%`,
+    maxWidth: '45%',
+    pointerEvents: 'none',
+  }
+  let tx = ''
+  let ty = ''
+  if (p === 'TL' || p === 'ML' || p === 'BL') style.left = m
+  if (p === 'TR' || p === 'MR' || p === 'BR') style.right = m
+  if (p === 'TC' || p === 'C' || p === 'BC') {
+    style.left = '50%'
+    tx = '-50%'
+  }
+  if (p === 'TL' || p === 'TC' || p === 'TR') style.top = m
+  if (p === 'BL' || p === 'BC' || p === 'BR') style.bottom = m
+  if (p === 'ML' || p === 'C' || p === 'MR') {
+    style.top = '50%'
+    ty = '-50%'
+  }
+  if (tx || ty) {
+    style.transform = `translate(${tx || '0'}, ${ty || '0'})`
+  }
+  return style
 }

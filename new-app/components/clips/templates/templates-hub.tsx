@@ -8,16 +8,13 @@ import { Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
-import { TemplateStage } from '@/components/clips/editor/template-stage'
+import { CatalogTplThumb } from '@/lib/clips/templates/catalog-thumb'
 import { T2vTemplatesGallery } from '@/components/t2v/t2v-templates-gallery'
 import { BRAND_STARTERS } from '@/lib/clips/brand-starters'
 import { captionFontStack } from '@/lib/clips/caption-fonts'
 import { defaultEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { captionPresetPatch } from '@/lib/clips/editor/starter-templates'
-import { resolveTemplateGeometry } from '@/lib/clips/templates/geometry'
-import { signalsOrDefaults } from '@/lib/clips/templates/signals'
 import { buildTemplateCatalog, type CatalogItem, type CatalogTab } from '@/lib/clips/templates/catalog'
-import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
 import { cn } from '@/lib/utils'
 
 type HubTab = CatalogTab | 'ai-video'
@@ -48,6 +45,10 @@ export function TemplatesHub({
   const router = useRouter()
   const myRef = useRef<HTMLElement>(null)
   const [tab, setTab] = useState<HubTab>(initialTab)
+
+  useEffect(() => {
+    setTab(initialTab)
+  }, [initialTab])
   const [packs, setPacks] = useState<LayoutPackRow[]>([])
   const [packsLoading, setPacksLoading] = useState(false)
 
@@ -267,16 +268,8 @@ export function TemplatesHub({
 }
 
 function TplThumb({ item }: { item: CatalogItem }) {
-  if (item.kind === 'layout_template') {
-    const t = T6_TEMPLATES_BY_ID[item.id]
-    if (t) {
-      const spec = resolveTemplateGeometry(t, signalsOrDefaults(null), defaultEdits(PREVIEW_BOUNDS), 1080, 1920)
-      return (
-        <div className="aspect-[9/16] max-h-44 w-full bg-black">
-          <TemplateStage spec={spec} staticPoster />
-        </div>
-      )
-    }
+  if (item.kind === 'layout' || item.kind === 'layout_template' || item.kind === 'multicam') {
+    return <CatalogTplThumb item={item} />
   }
   if (item.kind === 'caption') {
     let edits: ClipEditsV2 = defaultEdits(PREVIEW_BOUNDS)

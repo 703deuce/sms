@@ -16,8 +16,10 @@ export default async function ClipsTemplatesPage({
   const tab = (['layouts', 'captions', 'looks', 'brand', 'ai-video'] as Tab[]).includes(sp.tab as Tab)
     ? (sp.tab as Tab)
     : 'layouts'
+  const sub = sp.sub === 'mine' ? 'mine' : ''
   return (
     <TemplatesHub
+      key={`${tab}:${sub}`}
       initialTab={tab}
       sub={sp.sub === 'mine' ? 'mine' : undefined}
       returnTo={sp.returnTo}

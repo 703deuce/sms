@@ -210,8 +210,11 @@ export function TemplatesPanel({
         {bgRemovalUiEnabled() ? (
           <button
             type="button"
-            className={cn(tile(false), 'mt-2 w-full')}
-            data-testid="templates-bg-removal"
+            className={cn(
+              tile(false),
+              'mt-2 inline-flex w-full items-center justify-center gap-2 border-primary/30 bg-primary/5 font-medium',
+            )}
+            data-testid="bg-remove-toggle"
             onClick={() => onOpenBgRemoval?.()}
           >
             Remove background

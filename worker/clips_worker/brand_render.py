@@ -26,15 +26,26 @@ def aspect_key(w: int, h: int) -> str:
 
 
 def _xy(pos: str, margin: int = MARGIN) -> tuple[str, str]:
-    if pos == "TL":
+    p = str(pos or "TR").upper()
+    if p == "TL":
         return str(margin), str(margin)
-    if pos == "BL":
-        return str(margin), f"main_h-overlay_h-{margin}"
-    if pos == "BR":
-        return f"main_w-overlay_w-{margin}", f"main_h-overlay_h-{margin}"
-    if pos == "C":
+    if p == "TC":
+        return "(main_w-overlay_w)/2", str(margin)
+    if p == "TR":
+        return f"main_w-overlay_w-{margin}", str(margin)
+    if p == "ML":
+        return str(margin), "(main_h-overlay_h)/2"
+    if p == "C":
         return "(main_w-overlay_w)/2", "(main_h-overlay_h)/2"
-    return f"main_w-overlay_w-{margin}", str(margin)  # TR
+    if p == "MR":
+        return f"main_w-overlay_w-{margin}", "(main_h-overlay_h)/2"
+    if p == "BL":
+        return str(margin), f"main_h-overlay_h-{margin}"
+    if p == "BC":
+        return "(main_w-overlay_w)/2", f"main_h-overlay_h-{margin}"
+    if p == "BR":
+        return f"main_w-overlay_w-{margin}", f"main_h-overlay_h-{margin}"
+    return f"main_w-overlay_w-{margin}", str(margin)
 
 
 def _probe_duration(video: Path) -> float:

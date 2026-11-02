@@ -40,7 +40,7 @@ export function BgRemovalSection({
           type="button"
           className={`${btn} ${enabled ? on : ''}`}
           disabled={readOnly || !!blocked}
-          data-testid="bg-removal-on"
+          data-testid="bg-remove-toggle"
           onClick={() => !enabled && set({ ...(cur ?? BG_DEFAULT), enabled: true })}
         >
           Remove background
