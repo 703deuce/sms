@@ -33,4 +33,6 @@ exec pnpm exec vitest run \
   tests/multicam-segment-layout-controls.test.tsx \
   tests/multicam-layout-partners.test.ts \
   tests/preview-segment-layout.test.tsx \
+  tests/ef24-bg-removal-edits.test.ts \
+  tests/ef24-no-rvm-in-web.test.ts \
   tests/highlights-fetch-unwrap.test.ts

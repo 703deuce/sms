@@ -6,8 +6,6 @@ import json
 import logging
 import shutil
 import subprocess
-import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -167,6 +165,7 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         # E5b: inserts lengthen the export.
         and not edits.get("inserts")
         and not canvas_bg_changes_frames(edits)
+        and not ((edits.get("bgRemoval") or {}).get("enabled") is True)
     )
 
 
@@ -404,6 +403,7 @@ def run_speakercrop_layout_timeline(
     project_id: str | None = None,
     clip_id: str | None = None,
     preview_crop_track: Path | None = None,
+    capture_crop_track: Path | None = None,
 ) -> Path:
     """Export speakercrop honoring per-segment layout modes when they differ."""
     from clips_worker.clip_layout_render import speakercrop_settings_band_height
@@ -430,6 +430,9 @@ def run_speakercrop_layout_timeline(
             crop_track = preview_crop_track
         else:
             crop_track = None
+        preserve = bool(crop_track)
+        if crop_track is None and capture_crop_track is not None:
+            crop_track = capture_crop_track
         run_speakercrop(
             clip_src,
             out_mp4,
@@ -441,7 +444,7 @@ def run_speakercrop_layout_timeline(
             render_id=render_id,
             render_meta=render_meta,
             crop_track_out=crop_track,
-            preserve_existing_crop_track=bool(crop_track),
+            preserve_existing_crop_track=preserve,
             conn=conn,
             workspace_id=workspace_id,
             project_id=project_id,
@@ -1609,6 +1612,12 @@ def render_edited_clip(
         clip_start_ms=clip_start_ms,
     )
 
+    from clips_worker.bg_removal import bg_removal_active
+
+    bgr = bg_removal_active(edits) if (conn is not None and workspace_id and project_id and clip_id) else None
+    main_track = work_dir / "main_crop_track.json"
+    pct = _preview_crop_track_for_export(edits, preview_crop_track)
+
     full_render = work_dir / "full_render.mp4"
     settings_nc = json.loads(json.dumps(sc_settings))
     if not isinstance(settings_nc, dict):
@@ -1664,7 +1673,8 @@ def render_edited_clip(
             workspace_id=workspace_id,
             project_id=project_id,
             clip_id=clip_id,
-            preview_crop_track=_preview_crop_track_for_export(edits, preview_crop_track),
+            preview_crop_track=pct,
+            capture_crop_track=(main_track if bgr else None),
         )
         stage("speakercrop_nc_done")
 
@@ -1704,6 +1714,78 @@ def render_edited_clip(
         keyed = work_dir / "keyed.mp4"
         full_render = apply_full_render_key(pre_color, full_render, keyed, edits, work_dir)
         stage("main_key_done")
+
+    if bgr and not use_spec and not facecam_applied:
+        from clips_worker.bg_matte_job import MatteSkip, ensure_matte, reframe_matte_like_main
+        from clips_worker.main_fx import apply_full_render_matte
+
+        def _bg_upload_path(upload_id: str | None, mwd: Path) -> Path | None:
+            if not upload_id or not conn or not workspace_id or not project_id:
+                return None
+            from clips_worker.media_sources import load_media_assets
+
+            stub = {"canvasBg": {"type": "image", "imageId": upload_id}}
+            media = load_media_assets(conn, stub, mwd, workspace_id, project_id)
+            return media.get(upload_id)
+
+        try:
+            matte, gen_id = ensure_matte(
+                conn,
+                clip_src,
+                work_dir,
+                workspace_id=workspace_id,
+                project_id=project_id,
+                clip_id=clip_id,
+                quality=bgr["quality"],
+                stage=stage,
+            )
+            track = pct if (pct is not None and pct.is_file()) else (main_track if main_track.is_file() else None)
+            if track is None:
+                raise MatteSkip("no_crop_track")
+            mwd = work_dir / "bgm"
+            mwd.mkdir(exist_ok=True)
+
+            def _replay(src: Path, dst: Path) -> None:
+                run_speakercrop_layout_timeline(
+                    src,
+                    dst,
+                    w_reframe,
+                    settings_nc,
+                    edits,
+                    mwd,
+                    clip_start_ms,
+                    clip_end_ms,
+                    shot_overrides=shot_overrides,
+                    render_id=render_id,
+                    render_meta=None,
+                    conn=None,
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    clip_id=clip_id,
+                    preview_crop_track=track,
+                )
+
+            m_full = reframe_matte_like_main(matte, clip_src, mwd / "matte_full.mp4", mwd, _replay)
+            if edits.get("videoReverse"):
+                from clips_worker.video_reverse import apply_full_render_reverse
+
+                m_full = apply_full_render_reverse(m_full, edits, clip_start_ms, clip_end_ms, mwd)
+            bg_img = None
+            if bgr["background"]["type"] == "image":
+                bg_img = _bg_upload_path(bgr["background"].get("uploadId"), mwd)
+            full_render = apply_full_render_matte(
+                full_render, m_full, work_dir / "bg_matted.mp4", edits, bgr, bg_img
+            )
+            if render_meta is not None:
+                render_meta["bg_matte_generation_id"] = gen_id
+            stage("bg_matte_done", generationId=gen_id)
+        except MatteSkip as e:
+            stage("bg_matte_skipped", reason=e.code)
+            if render_meta is not None:
+                w = list(render_meta.get("warnings") or [])
+                if "bg_removal_unavailable" not in w:
+                    w.append("bg_removal_unavailable")
+                render_meta["warnings"] = w
 
     if render_meta is not None:
         # E5b: exact keep segments (source ms) for the insert splice after the export post-step.

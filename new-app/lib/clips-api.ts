@@ -354,6 +354,7 @@ export function getRenderStatus(renderId: string) {
     phase?: string | null
     etaSec?: number | null
     detail?: { step: number; steps: number; stepPct: number | null } | null
+    warnings?: string[]
   }>(`/api/clips/renders/${renderId}`)
 }
 

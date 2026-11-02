@@ -183,6 +183,7 @@ export function ExportDialog({
   const [renderPhase, setRenderPhase] = useState<string | null>(null)
   const [renderEtaSec, setRenderEtaSec] = useState<number | null>(null)
   const [renderDetail, setRenderDetail] = useState<ExportRenderDetail | null>(null)
+  const [exportWarnings, setExportWarnings] = useState<string[]>([])
   const [exportPlatform, setExportPlatform] = useState<ExportPlatformId | 'none'>('none')
   const [exportTemplate, setExportTemplate] = useState<ClipExportTemplate | undefined>(edits.exportTemplate)
   const [exportSfx, setExportSfx] = useState<ExportSfxMode>('off')
@@ -374,6 +375,7 @@ export function ExportDialog({
         if (r.phase) setRenderPhase(r.phase)
         setRenderEtaSec(typeof r.etaSec === 'number' ? r.etaSec : null)
         setRenderDetail(r.detail ?? null)
+        setExportWarnings(Array.isArray(r.warnings) ? r.warnings : [])
         logEditorDecision('export_progress', {
           clipId,
           renderId,
@@ -1106,6 +1108,11 @@ export function ExportDialog({
           onChannelsRefresh={refreshChannels}
         />
         <MediaCredits clipId={clipId} edits={edits} />
+        {status === 'READY' && exportWarnings.includes('bg_removal_unavailable') ? (
+          <p className="mt-2 text-sm text-amber-800 dark:text-amber-200" data-testid="export-bg-removal-warning">
+            Background removal couldn&apos;t run — exported without it.
+          </p>
+        ) : null}
         {status === 'READY' && !downloadUrl && (
           <p className="mt-3 text-sm" role="status" aria-live="polite" data-testid="export-finalizing">
             Finalizing download link…

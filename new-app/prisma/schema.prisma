@@ -9952,6 +9952,7 @@ enum GenerationKind {
   STUDIO_SOUND
   TTS_VOICE
   AI_IMAGE
+  BG_MATTE
 }
 
 enum GenerationStatus {

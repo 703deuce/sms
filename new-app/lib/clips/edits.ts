@@ -9,6 +9,7 @@ import { normalizeExportTemplate, type ClipExportTemplate } from '@/lib/clips/ex
 import { isSpeechLevelingEnabled } from '@/lib/clips/speech-leveling'
 import { normalizeFitBlurStrength, type FitBlurStrength } from '@/lib/clips/fit-blur'
 import { canvasBgChangesFrames, normalizeCanvasBg, type CanvasBg } from '@/lib/clips/canvas-bg'
+import { normalizeBgRemoval, type BgRemoval } from '@/lib/clips/editor/bg-removal'
 import { normalizeTimelineLanes, type TimelineLanesState } from '@/lib/clips/editor/timeline-lane-state'
 import { normalizeTracks, type Track } from '@/lib/clips/editor/tracks'
 import {
@@ -260,6 +261,8 @@ export type ClipEditsV2 = {
   timelineOpts?: TimelineOpts
   /** CV-09: fill behind fitted video (letterbox/pillarbox). Missing = legacy. */
   canvasBg?: CanvasBg
+  /** EF-24/29: background removal / blur background (export; RVM matte on Modal) — lib/clips/editor/bg-removal.ts. */
+  bgRemoval?: BgRemoval
   /** TBE (TB-08): Script speaker display names keyed by speaker label ('A','B'…). Editor-only; worker ignores. */
   speakerNames?: Record<string, string>
 }
@@ -570,6 +573,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.groups?.length) payload.groups = null
   if (!edits.timelineOpts) payload.timelineOpts = null
   if (!edits.canvasBg) payload.canvasBg = null
+  if (!edits.bgRemoval) payload.bgRemoval = null
   if (!edits.speakerNames) payload.speakerNames = null
   return payload
 }
@@ -691,6 +695,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     videoReverse: normalizeVideoReverse(o.videoReverse),
     blurRegions: normalizeBlurRegions(o.blurRegions),
     canvasBg: normalizeCanvasBg(o.canvasBg),
+    bgRemoval: normalizeBgRemoval(o.bgRemoval),
     ...normalizeSourceFields(o),
     vocabApplied:
       typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
@@ -819,6 +824,7 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     !edits.takes?.length &&
     !edits.trackMotion?.length &&
     !edits.disabledItems?.length && // TC1: deactivated items are not rendered.
+    !edits.bgRemoval?.enabled &&
     !canvasBgChangesFrames(edits)
   )
 }

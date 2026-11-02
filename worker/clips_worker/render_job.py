@@ -926,5 +926,9 @@ def _run_render_clip_job_body(
         _clear_stale_project_render_error(conn, str(ctx.get("projectId") or ""))
         if render_meta.get("fit_fallback"):
             merge_job_fit_fallback_payload(conn, job["id"], str(render_meta.get("speakercrop_tail") or ""))
+        if render_meta.get("warnings"):
+            from clips_worker.render_export_warnings import merge_job_export_warnings
+
+            merge_job_export_warnings(conn, job["id"], list(render_meta["warnings"]))
         post_progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})
         _export_stage_log(render_id, "done", t_job, {"sizeBytes": size})

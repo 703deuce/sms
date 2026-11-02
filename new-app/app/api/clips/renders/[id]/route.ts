@@ -26,7 +26,15 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     // newest-by-clip job reported the other export's percentage.
     const activeJob =
       render.status === 'READY' || render.status === 'FAILED'
-        ? null
+        ? await prisma.clipJob.findFirst({
+            where: {
+              clipId: render.clipId,
+              type: 'RENDER_CLIP',
+              payload: { path: ['renderId'], equals: render.id },
+            },
+            orderBy: { finishedAt: 'desc' },
+            select: { payload: true },
+          })
         : ((await prisma.clipJob.findFirst({
             where: { ...activeWhere, payload: { path: ['renderId'], equals: render.id } },
             orderBy: { createdAt: 'desc' },
@@ -41,6 +49,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       clipperWatchdog?: { phase?: string; progress?: number }
       renderEtaSeconds?: number | null
       renderDetail?: unknown
+      warnings?: string[]
     } | null
     const wd = jobPayload?.clipperWatchdog
     const filename = render.filename || exportFilename(clip?.title || 'clip')
@@ -111,6 +120,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
         etaSec: typeof jobPayload?.renderEtaSeconds === 'number' ? jobPayload.renderEtaSeconds : null,
         // FV4a: real progress detail (step k of ~N, % of the current pass) from the worker.
         detail: render.status === 'RENDERING' ? readRenderDetail(jobPayload?.renderDetail) : null,
+        warnings: Array.isArray(jobPayload?.warnings) ? jobPayload!.warnings : [],
       },
     })
   } catch (err) {

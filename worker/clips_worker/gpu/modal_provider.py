@@ -116,3 +116,22 @@ class ModalProvider:
                 )
             )
         return out
+
+    def matte(self, items: list[dict]) -> list[dict]:
+        """EF-24: RVM matte chunks on Modal `Matter` (ordered)."""
+        from clips_worker.gpu.modal_inflight import ModalInflight
+
+        if not items:
+            return []
+        timeout_s = max(60.0, float(os.environ.get("MODAL_MATTE_TIMEOUT_SEC", "600")))
+        import modal
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
+        Cls = modal.Cls.from_name(APP_NAME, "Matter")
+        with ModalInflight():
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(lambda: list(Cls().matte.map(items, order_outputs=True)))
+                try:
+                    return fut.result(timeout=timeout_s)
+                except FuturesTimeoutError as exc:
+                    raise TimeoutError(f"modal matte exceeded {timeout_s:.0f}s ({len(items)} chunks)") from exc

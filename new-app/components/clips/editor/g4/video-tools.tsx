@@ -27,6 +27,8 @@ import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 import { maskKeyMs, setMaskGeom, toggleMaskKey } from './layer-fx-controls'
 import { stageFrame } from './grade-preview'
 import { scanSceneCuts } from './scene-scan'
+import { BgRemovalSection } from './bg-removal-section'
+import { bgRemovalUiEnabled } from '@/lib/clips/editor/bg-removal'
 
 const btn =
   'inline-flex h-7 items-center gap-1 rounded border border-border px-2 text-[11px] hover:bg-muted disabled:pointer-events-none disabled:opacity-35'
@@ -444,6 +446,11 @@ export function MainVideoTools({
 }) {
   return (
     <div className="space-y-4" data-testid="main-video-tools">
+      {bgRemovalUiEnabled() ? (
+        <Section title="Remove background" testId="bg-removal-section">
+          <BgRemovalSection edits={edits} onCommit={onCommit} readOnly={readOnly} />
+        </Section>
+      ) : null}
       <Section title="Stabilize" testId="stabilize-section">
         {videoItem ? (
           <StabilizeControl edits={edits} srcInMs={videoItem.srcInMs} srcOutMs={videoItem.srcOutMs} onCommit={onCommit} readOnly={readOnly} />

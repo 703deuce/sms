@@ -111,6 +111,73 @@ def apply_full_render_key(pre_color: Path, graded: Path, out: Path, edits: dict,
     return out
 
 
+def apply_full_render_matte(
+    graded: Path, matte: Path, out: Path, edits: dict, bgr: dict, bg_image: Path | None = None
+) -> Path:
+    """EF-24/29: composite the subject (graded × refined matte) over blur / color / image."""
+    from clips_worker.bg_removal import BLUR_UNIT, refine_params
+
+    w, h, dur = probe_size_duration(graded)
+    fps = 30
+    short = min(w, h)
+    sigma, lo, hi = refine_params(float(bgr["refine"]["feather"]), float(bgr["refine"]["choke"]), short)
+    rng = max(1e-3, hi - lo)
+    soft = f",gblur=sigma={sigma:.3f}" if sigma > 0.05 else ""
+    alpha = (
+        f"[1:v]setpts=PTS-STARTPTS,fps={fps},scale={w}:{h}:flags=bilinear,format=gray{soft},"
+        f"lut=y='clip((val-{lo * 255:.3f})*{1.0 / rng:.6f},0,255)'[ma]"
+    )
+    bg = bgr["background"]
+    extra: list[str] = []
+    if bg["type"] == "blur":
+        s = max(1.0, float(bg.get("amount", 50)) / 100.0 * BLUR_UNIT * short)
+        bgf = f"[bgsrc]gblur=sigma={s:.3f}:steps=2,format=yuv420p[bg]"
+        head = f"[0:v]format=yuv420p,split=2[fg][bgsrc];{alpha};{bgf};"
+    elif bg["type"] == "image" and bg_image is not None:
+        extra = ["-loop", "1", "-i", str(bg_image)]
+        bgf = (
+            f"[2:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,fps={fps},"
+            f"format=yuv420p[bg];[bgsrc]nullsink"
+        )
+        head = f"[0:v]format=yuv420p,split=2[fg][bgsrc];{alpha};{bgf};"
+    else:
+        hexv = bg.get("color") or "000000"
+        bgf = f"color=c=0x{hexv}:s={w}x{h}:r={fps}:d={dur:.3f}[bg]"
+        head = f"[0:v]format=yuv420p[fg];{alpha};{bgf};"
+    fc = (
+        f"{head}"
+        f"[fg][ma]alphamerge[fga];[bg][fga]overlay=0:0:shortest=1:format=auto,format=yuv420p[vout]"
+    )
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-v",
+        "error",
+        "-i",
+        str(graded),
+        "-i",
+        str(matte),
+        *extra,
+        "-filter_complex",
+        fc,
+        "-map",
+        "[vout]",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "18",
+        "-c:a",
+        "copy",
+        str(out),
+    ]
+    subprocess.check_call(cmd)
+    return out
+
+
 def apply_main_mask(src: Path, out: Path, edits: dict, w: int, h: int, work_dir: Path) -> bool:
     lfx = layer_fx_for(edits, "video")
     mask = lfx.get("mask")
