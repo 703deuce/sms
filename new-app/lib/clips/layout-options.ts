@@ -1,6 +1,7 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DEFAULT_FACECAM_BOX, DEFAULT_GAMEPLAY_BOX } from '@/lib/clips/facecam-geometry'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
+import { layoutModeDisabledReason } from '@/lib/clips/layout-mode-availability'
 import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import { isLandscapeAspect, type ExportAspect } from '@/lib/clips/export-aspect'
 import { landscapeLayoutVisible } from '@/lib/clips/editor/landscape-layouts'
@@ -98,11 +99,30 @@ export function layoutMiniPreviewLabel(mode: LayoutOptionId | undefined): string
 
 export function layoutOptionDisabled(
   opt: LayoutOption,
-  ctx: { facecamLayout: FacecamLayoutState | null; reframeV2Enabled: boolean; aiExtras: boolean },
+  ctx: {
+    facecamLayout: FacecamLayoutState | null
+    reframeV2Enabled: boolean
+    aiExtras: boolean
+    words?: { spk?: number | null }[]
+    contentType?: string | null
+  },
 ): boolean {
+  if (layoutModeDisabledReason(opt.id, ctx)) return true
   if (opt.disabled) return !ctx.aiExtras
   if (isClipLayoutBeta(opt.id) && !ctx.reframeV2Enabled) return !ctx.aiExtras
   return false
+}
+
+export function layoutOptionDisabledTooltip(
+  opt: LayoutOption,
+  ctx: Parameters<typeof layoutOptionDisabled>[1],
+): string | undefined {
+  const batch = layoutModeDisabledReason(opt.id, ctx)
+  if (batch) return batch
+  if (layoutOptionDisabled(opt, ctx) && isClipLayoutBeta(opt.id) && !ctx.reframeV2Enabled && !ctx.aiExtras) {
+    return LAYOUT_BETA_DISABLED_TOOLTIP
+  }
+  return undefined
 }
 
 /** Shown when a beta layout is disabled (REFRAME_V2 off and AI extras off). */

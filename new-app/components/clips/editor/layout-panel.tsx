@@ -13,6 +13,7 @@ import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
   layoutOptionDisabled,
+  layoutOptionDisabledTooltip,
   layoutPickPayload,
   LAYOUT_BETA_DISABLED_TOOLTIP,
   visibleLayoutOptions,
@@ -455,7 +456,8 @@ export function LayoutPanel({
       <div className="grid gap-2 sm:grid-cols-2">
         {layoutOptions.map((l) => {
           const beta = isClipLayoutBeta(l.id)
-          const disabled = layoutOptionDisabled(l, { facecamLayout, reframeV2Enabled, aiExtras })
+          const disabled = layoutOptionDisabled(l, { facecamLayout, reframeV2Enabled, aiExtras, words, contentType: clipType })
+          const disabledTip = layoutOptionDisabledTooltip(l, { facecamLayout, reframeV2Enabled, aiExtras, words, contentType: clipType })
           const betaDisabled = disabled && beta && !reframeV2Enabled && !aiExtras
           const selected = edits.layout.mode === l.id && !disabled
           return (
@@ -463,7 +465,7 @@ export function LayoutPanel({
             key={l.id}
             type="button"
             disabled={disabled}
-            title={betaDisabled ? LAYOUT_BETA_DISABLED_TOOLTIP : undefined}
+            title={disabledTip ?? (betaDisabled ? LAYOUT_BETA_DISABLED_TOOLTIP : undefined)}
             onClick={() => {
               if (disabled) return
               const payload = layoutPickPayload(l.id, facecamLayout, edits)
