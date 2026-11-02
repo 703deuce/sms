@@ -15,7 +15,10 @@ export function serializeUpload(row: ClipUpload) {
   }
 }
 
-export function serializeProject(row: ClipProject) {
+export function serializeProject(row: Pick<ClipProject, 'id' | 'title' | 'status' | 'stage' | 'progress' | 'error' | 'rangeStartMs' | 'rangeEndMs' | 'uploadId' | 'transcriptKey' | 'createdAt' | 'updatedAt'> & {
+  settings?: ClipProject['settings']
+  transcriptWords?: ClipProject['transcriptWords']
+}) {
   return {
     id: row.id,
     title: row.title,
@@ -23,13 +26,16 @@ export function serializeProject(row: ClipProject) {
     stage: row.stage,
     progress: row.progress,
     error: row.error,
-    settings: row.settings,
+    settings: row.settings ?? {},
     rangeStartMs: row.rangeStartMs,
     rangeEndMs: row.rangeEndMs,
     uploadId: row.uploadId,
     transcriptKey: row.transcriptKey,
-    hasTranscript: Boolean(row.transcriptWords),
-    wordCount: Array.isArray(row.transcriptWords) ? (row.transcriptWords as unknown[]).length : 0,
+    hasTranscript: Boolean(row.transcriptKey ?? row.transcriptWords),
+    wordCount:
+      row.transcriptWords != null && Array.isArray(row.transcriptWords)
+        ? (row.transcriptWords as unknown[]).length
+        : 0,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     capabilities: clipperCapabilities(),

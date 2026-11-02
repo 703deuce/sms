@@ -1,4 +1,4 @@
-import type { ClipProjectStatus } from '@prisma/client'
+import type { ClipProjectStatus, Prisma } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { isT2vFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import { getPrisma } from '@/lib/server/db'
@@ -9,6 +9,32 @@ import { assertFullVideoUploadDuration, sourceAspectRatio } from '@/lib/clips/fu
 import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { projectWordsKey, storageDriverName, uploadSourceKey } from '@/lib/storage'
 import type { ClipBrandTemplate } from '@prisma/client'
+
+/** List/dashboard query — excludes heavy `transcriptWords` JSON (was ~32kB/project in HTML). */
+export const clipProjectListSelect = {
+  id: true,
+  workspaceId: true,
+  title: true,
+  uploadId: true,
+  sourceUrl: true,
+  rangeStartMs: true,
+  rangeEndMs: true,
+  status: true,
+  stage: true,
+  progress: true,
+  error: true,
+  transcriptKey: true,
+  thumbKey: true,
+  createdAt: true,
+  updatedAt: true,
+  createdById: true,
+  folderId: true,
+  deletedAt: true,
+  sourceKind: true,
+  lastViewedAt: true,
+} as const satisfies Prisma.ClipProjectSelect
+
+export type ClipProjectListRow = Prisma.ClipProjectGetPayload<{ select: typeof clipProjectListSelect }>
 
 function mergeDefaultBrandSettings(
   baseSettings: ClipProjectSettings,
@@ -69,6 +95,7 @@ export async function listClipProjects(
     where,
     orderBy: { createdAt: 'desc' },
     take: opts.limit ?? 50,
+    select: clipProjectListSelect,
   })
 }
 

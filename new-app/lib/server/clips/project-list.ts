@@ -1,6 +1,6 @@
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
-import { getClipStorage } from '@/lib/storage'
+import { createReadableSignedUrl } from '@/lib/storage/resolve'
 import { listClipProjects } from '@/lib/server/clips/projects'
 import { getPrisma } from '@/lib/server/db'
 
@@ -72,9 +72,8 @@ export async function listClipProjectsForPage(
     if (!prev || pub.publishedAt > prev) publishedAtByProject.set(pid, pub.publishedAt)
   }
 
-  const storage = getClipStorage()
   return Promise.all(
-    projects.map(async (p) => {
+    projects.map(async (p): Promise<ClipProjectListItem> => {
       let thumbKey = p.thumbKey
       if (!thumbKey) {
         const topClip = await prisma.clip.findFirst({
@@ -90,14 +89,33 @@ export async function listClipProjectsForPage(
       let thumbUrl: string | null = null
       if (thumbKey) {
         try {
-          thumbUrl = await storage.createSignedDownloadUrl(thumbKey, THUMB_TTL)
+          thumbUrl = await createReadableSignedUrl(thumbKey, THUMB_TTL)
         } catch {
           thumbUrl = null
         }
       }
       const t2v = t2vByProject.get(p.id)
       return {
-        ...p,
+        id: p.id,
+        workspaceId: p.workspaceId,
+        title: p.title,
+        uploadId: p.uploadId,
+        sourceUrl: p.sourceUrl,
+        rangeStartMs: p.rangeStartMs,
+        rangeEndMs: p.rangeEndMs,
+        status: p.status,
+        stage: p.stage,
+        progress: p.progress,
+        error: p.error,
+        transcriptKey: p.transcriptKey,
+        thumbKey: p.thumbKey,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        createdById: p.createdById,
+        folderId: p.folderId,
+        deletedAt: p.deletedAt,
+        sourceKind: p.sourceKind,
+        lastViewedAt: p.lastViewedAt,
         clipCount: countByProject.get(p.id) ?? 0,
         durationMs: Math.max(0, p.rangeEndMs - p.rangeStartMs),
         thumbUrl: thumbUrl ?? t2v?.sceneThumb ?? null,

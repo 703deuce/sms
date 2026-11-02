@@ -312,14 +312,7 @@ def _upload_s3(object_key: str, path: Path, content_type: str | None) -> None:
     )
 
 
-def sign_url(object_key: str, expires_s: int = 3600) -> str:
-    if _uses_s3_api():
-        client = _s3_client()
-        return client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": storage_bucket(), "Key": object_key},
-            ExpiresIn=expires_s,
-        )
+def _supabase_sign_url(object_key: str, expires_s: int = 3600) -> str:
     base = env("SUPABASE_URL").rstrip("/")
     token = env("SUPABASE_SERVICE_ROLE_KEY")
     bucket = storage_bucket()
@@ -344,6 +337,27 @@ def sign_url(object_key: str, expires_s: int = 3600) -> str:
     if signed.startswith("http"):
         return signed
     return f"{base}/storage/v1{signed}"
+
+
+def sign_url(object_key: str, expires_s: int = 3600) -> str:
+    if _uses_s3_api():
+        try:
+            _s3_object_meta(object_key)
+        except ClientError as exc:
+            if _s3_missing_key(exc):
+                log.warning(
+                    "[clips:storage] sign_url s3 miss key=%s, trying supabase fallback",
+                    object_key,
+                )
+                return _supabase_sign_url(object_key, expires_s)
+            raise
+        client = _s3_client()
+        return client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": storage_bucket(), "Key": object_key},
+            ExpiresIn=expires_s,
+        )
+    return _supabase_sign_url(object_key, expires_s)
 
 
 def _http_error_summary(exc: urllib.error.HTTPError) -> str:

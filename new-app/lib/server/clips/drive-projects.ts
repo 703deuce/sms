@@ -18,14 +18,13 @@ export async function listDriveProjects(
   const view = opts.view ?? 'recent'
 
   if (view === 'trash') {
-    const rows = await prisma.clipProject.findMany({
+    await prisma.clipProject.findMany({
       where: { workspaceId, deletedAt: { not: null } },
       orderBy: { updatedAt: 'desc' },
       take: 100,
+      select: { id: true },
     })
-    return listClipProjectsForPage(workspaceId, { q: opts.q, status: opts.status, limit: 100 }).then((items) =>
-      items.filter((p) => rows.some((r) => r.id === p.id)),
-    )
+    return listClipProjectsForPage(workspaceId, { q: opts.q, status: opts.status, limit: 100, trash: true })
   }
 
   const folderId = opts.folderId === 'root' ? null : opts.folderId ?? null

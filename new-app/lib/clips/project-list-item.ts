@@ -1,6 +1,6 @@
-import type { ClipProject } from '@prisma/client'
+import type { ClipProjectListRow } from '@/lib/server/clips/projects'
 
-export type ClipProjectListItem = ClipProject & {
+export type ClipProjectListItem = ClipProjectListRow & {
   clipCount: number
   thumbUrl: string | null
   durationMs: number

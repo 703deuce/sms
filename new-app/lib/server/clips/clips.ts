@@ -6,14 +6,27 @@ import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { normalizeTranscriptJson } from '@/lib/server/clips/editor-words'
 
+export type ListProjectClipsOpts = {
+  includeHidden?: boolean
+  /** Skip S3 transcript download on SSR list (client API can enrich later). */
+  skipTranscriptEnrichment?: boolean
+}
+
 export async function listProjectClips(
   workspaceId: string,
   projectId: string,
   sort: 'score' | 'timeline' = 'score',
-  opts?: { includeHidden?: boolean },
+  opts?: ListProjectClipsOpts,
 ) {
   const prisma = getPrisma()
-  const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId, deletedAt: null } })
+  const project = await prisma.clipProject.findFirst({
+    where: { id: projectId, workspaceId, deletedAt: null },
+    select: {
+      settings: true,
+      transcriptKey: true,
+      upload: { select: { storageDriver: true } },
+    },
+  })
   if (!project) return null
   const clips = await prisma.clip.findMany({
     where: { projectId, deletedAt: null },
@@ -25,23 +38,35 @@ export async function listProjectClips(
     : clips.filter((c) => !isClipUserHidden(c.aiMeta))
 
   let rows = await Promise.all(
-    visible.map(async (c) => ({
-      id: c.id,
-      projectId: c.projectId,
-      title: c.title,
-      reason: c.reason,
-      startMs: c.startMs,
-      endMs: c.endMs,
-      score: c.score,
-      scores: c.scores,
-      favorite: c.favorite,
-      durationMs: c.endMs - c.startMs,
-      previewUrl: c.previewKey ? await createCachedSignedDownloadUrl(storage, c.previewKey) : null,
-      posterUrl: c.posterKey ? await createCachedSignedDownloadUrl(storage, c.posterKey) : null,
-      aiMeta: c.aiMeta,
-      edits: c.edits,
-    })),
+    visible.map(async (c) => {
+      const versionHint = c.updatedAt.toISOString()
+      const signOpts = { versionHint }
+      const [previewUrl, posterUrl] = await Promise.all([
+        c.previewKey ? createCachedSignedDownloadUrl(storage, c.previewKey, signOpts) : Promise.resolve(null),
+        c.posterKey ? createCachedSignedDownloadUrl(storage, c.posterKey, signOpts) : Promise.resolve(null),
+      ])
+      return {
+        id: c.id,
+        projectId: c.projectId,
+        title: c.title,
+        reason: c.reason,
+        startMs: c.startMs,
+        endMs: c.endMs,
+        score: c.score,
+        scores: c.scores,
+        favorite: c.favorite,
+        durationMs: c.endMs - c.startMs,
+        previewUrl,
+        posterUrl,
+        aiMeta: c.aiMeta,
+        edits: c.edits,
+      }
+    }),
   )
+
+  if (opts?.skipTranscriptEnrichment) {
+    return rows
+  }
 
   const needsTag = rows.some((c) => {
     const m = c.aiMeta as { reasonTag?: string } | null
