@@ -7,7 +7,6 @@ import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/re
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import inventory from '@/lib/clips/editor/layout-control-inventory.generated.json'
-import { prepareFullEditorInventory, assertInventoryDom } from './layout-inventory-harness'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 
@@ -280,14 +279,5 @@ describe('layout inventory (Phase 1–2 guard)', () => {
     fireEvent.click(ui.getByTestId('transcript-more-menu'))
     const missing = PHASE2_DOM_IDS.filter((id) => !ui.queryAllByTestId(id).length)
     expect(missing).toEqual([])
-  })
-
-  it.skip(`full live DOM ${inventory.count}/${inventory.count} (happy-dom mocks — expand clipsFetch fixtures)`, async () => {
-    vi.stubGlobal('innerWidth', 1680)
-    const ui = renderShell()
-    await waitFor(() => expect(ui.getByTestId('timeline-root')).toBeTruthy())
-    prepareFullEditorInventory(ui)
-    const missing = assertInventoryDom(ui, inventory.entries)
-    expect(missing, `${missing.length} missing — e.g. ${missing.slice(0, 24).join(', ')}`).toEqual([])
   })
 })
