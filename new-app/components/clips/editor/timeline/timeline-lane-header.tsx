@@ -164,7 +164,7 @@ function TrackName({ name, tk, onRename }: { name: string; tk: string; onRename?
   }
   return (
     <span
-      className="min-w-0 flex-1 truncate text-[12px] font-medium"
+      className="min-w-[96px] max-w-[6.5rem] flex-1 truncate text-[12px] font-medium"
       title={onRename ? `${name} — double-click to rename` : name}
       data-testid={`timeline-track-name-${tk}`}
       onDoubleClick={

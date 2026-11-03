@@ -1,0 +1,4661 @@
+{
+  "generatedAt": "2026-11-03T21:40:41.053Z",
+  "count": 665,
+  "entries": [
+    {
+      "testId": "ai-cut-tick",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "aspect-custom",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "aspect-custom-h",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "aspect-custom-swap",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "aspect-custom-w",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "assemble-selects",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "audio-beat-cut",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-beat-cut-run",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-beat-cut-select",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-beat-cut-status",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-beat-strong-only",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-clip-bpm",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-clip-duck",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-clip-duck-depth",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-clip-fade-in",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-clip-fade-out",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-clip-fit",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-clip-inspector",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-clip-loop",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-clip-volume",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-library",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-music-generate",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-music-prompt",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-music-sfx-mix",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-music-suggest",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-panel-ai-voiceover",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "audio-panel-voiceover",
+      "discover": {
+        "kind": "rail",
+        "label": "Audio"
+      }
+    },
+    {
+      "testId": "badge-text",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "bg-kind-blur",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "bg-kind-none",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "bg-removal",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "bg-removal-background",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "bg-removal-blocked",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "bg-removal-note",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "bg-removal-off",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "bg-removal-quality",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "bg-remove-toggle",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-add",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-delete",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-editor",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-export-chip",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-faces-note",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-go-start",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-invert",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-key",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-mode-faces",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-mode-manual",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-set-end",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "blur-set-start",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "brand-template-select",
+      "discover": {
+        "kind": "rail",
+        "label": "Brand"
+      }
+    },
+    {
+      "testId": "broll-accept-suggestions",
+      "discover": {
+        "kind": "rail",
+        "label": "B-roll"
+      }
+    },
+    {
+      "testId": "broll-auto-empty",
+      "discover": {
+        "kind": "rail",
+        "label": "B-roll"
+      }
+    },
+    {
+      "testId": "broll-auto-suggest",
+      "discover": {
+        "kind": "rail",
+        "label": "B-roll"
+      }
+    },
+    {
+      "testId": "broll-panel-thumb",
+      "discover": {
+        "kind": "rail",
+        "label": "B-roll"
+      }
+    },
+    {
+      "testId": "broll-pending-suggestions",
+      "discover": {
+        "kind": "rail",
+        "label": "B-roll"
+      }
+    },
+    {
+      "testId": "broll-tab-upload",
+      "discover": {
+        "kind": "rail",
+        "label": "B-roll"
+      }
+    },
+    {
+      "testId": "broll-upload-tab",
+      "discover": {
+        "kind": "rail",
+        "label": "B-roll"
+      }
+    },
+    {
+      "testId": "canvas-bg-apply-all",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-bg-controls",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-crop-toggle",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-direct-handles",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-float-toolbar",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-guide-x",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-guide-y",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-handle-rotate",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-handle-scale",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-layout-menu",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-layout-menu-backdrop",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-selection-box",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-selection-overlay",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-tb-flip-h",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-tb-flip-v",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-tb-reset",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-tb-rotate-left",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-tb-rotate-right",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "canvas-text-editor",
+      "discover": {
+        "kind": "canvas",
+        "note": "Preview canvas selection"
+      }
+    },
+    {
+      "testId": "caption-custom-presets",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-drag-box",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-floating-emoji",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-font",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-font-file",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-font-msg",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-font-upload",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-keyframes",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-layouts",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-line",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-add",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-clear",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-file",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-from-auto",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-import",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-import-append",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-import-cancel",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-import-choice",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-import-replace",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-list",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-msg",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-panel",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-rechunk",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-rechunk-toggle",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-lines-type",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-progress-bar",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-replace-all-misheard",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-row",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-scale-handle",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "captions-translate",
+      "discover": {
+        "kind": "rail",
+        "label": "Captions"
+      }
+    },
+    {
+      "testId": "caption-vocabulary",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "caption-word-corrections",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "center-crop-video",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "clarity-apply-all",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "clarity-apply-all-sticky",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "clarity-run",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "cleanup-ai-tools",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "cleanup-applied-time",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "cleanup-bulk-actions",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "cleanup-preview-cut",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "cleanup-proposal-time",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "cleanup-restore-clarity",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "cleanup-restore-fillers",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "cleanup-restore-gaps",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "cleanup-restore-repeats",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "cleanup-restore-retakes",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "clip-audio-panel",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "clip-export-audio",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "color-add-adjust-layer",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-adjust-layer-delete",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-adjust-layer-info",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-apply-all",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-auto",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-curve-canvas",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-curve-reset",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-curves",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-filter-none",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-fx",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-fx-clear",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-fx-presets",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-hsl",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-keyframes",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-look-defs",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-lut",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-lut-error",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-lut-file",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-lut-import",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-lut-none",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-match",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-match-apply",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-match-clear",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-match-msg",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-match-ref",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-match-set-ref",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-panel",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-reset",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-reset-all",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-scope-canvas",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-scope-error",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-scope-frame",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-scope-refresh",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-scopes",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-target",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-wb-pick",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "color-wheels",
+      "discover": {
+        "kind": "rail",
+        "label": "Color"
+      }
+    },
+    {
+      "testId": "command-palette",
+      "discover": {
+        "kind": "click",
+        "openTestId": "timeline-palette"
+      }
+    },
+    {
+      "testId": "command-palette-input",
+      "discover": {
+        "kind": "click",
+        "openTestId": "timeline-palette"
+      }
+    },
+    {
+      "testId": "command-palette-item",
+      "discover": {
+        "kind": "click",
+        "openTestId": "timeline-palette"
+      }
+    },
+    {
+      "testId": "compact-timeline-toggle",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "cover-generate",
+      "discover": {
+        "kind": "rail",
+        "label": "Cover"
+      }
+    },
+    {
+      "testId": "cover-generating",
+      "discover": {
+        "kind": "rail",
+        "label": "Cover"
+      }
+    },
+    {
+      "testId": "cover-img",
+      "discover": {
+        "kind": "rail",
+        "label": "Cover"
+      }
+    },
+    {
+      "testId": "cover-img-failed",
+      "discover": {
+        "kind": "rail",
+        "label": "Cover"
+      }
+    },
+    {
+      "testId": "editor-find-clips-in-video",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-find-clips-legacy-project",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-find-clips-menu",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-grid",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-highlights-toggle",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-history-button",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-history-panel",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-history-row",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-panel-backdrop",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-panel-brand",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-panel-broll",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-panel-color",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-panel-dub",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-panel-inspector",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-panel-media",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-panel-templates",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-panel-text",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-panel-thumbnail",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-rail",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-shell-root",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "editor-timeline-wrap",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "export-audio-format",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-bg-removal-warning",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-codec",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-dialog",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-dialog-preview",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-finalizing",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-format",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-fps",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-layout-hint",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-layout-picker",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-mini-video-label",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-mp4-button",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-other-resolution-note",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-poll-warning",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-quality",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-range",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-share-open-dialog",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-soft-subs",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-stems",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-stems-download",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-stems-main",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-title-style",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "export-xml-download",
+      "discover": {
+        "kind": "export",
+        "note": "Export dialog"
+      }
+    },
+    {
+      "testId": "find-clips-cancel",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "find-clips-dialog",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "find-clips-dialog-text",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "find-clips-start",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "follow-sticker-layer",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "free-frame-thumbnail",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "free-thumb-overlay-text",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "free-thumb-save",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "full-video-moment-lane",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "full-video-moment-popover",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "full-video-moment-range",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "full-video-moment-times",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "fx-keyframes",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "headline-placement-note",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlight-edge-end",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlight-edge-start",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlight-make-all",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlight-make-clip",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlight-popover",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlight-range",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlights-finding-label",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlights-lane",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlights-list-make-all",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlights-list-panel",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlights-list-row",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlights-next",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "highlights-prev",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "hook-overlay-section",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "inspector-replace-media",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "item-speed",
+      "discover": {
+        "kind": "selection",
+        "note": "Selected clip"
+      }
+    },
+    {
+      "testId": "item-speed-bars",
+      "discover": {
+        "kind": "selection",
+        "note": "Selected clip"
+      }
+    },
+    {
+      "testId": "item-speed-curve-custom",
+      "discover": {
+        "kind": "selection",
+        "note": "Selected clip"
+      }
+    },
+    {
+      "testId": "item-speed-curves",
+      "discover": {
+        "kind": "selection",
+        "note": "Selected clip"
+      }
+    },
+    {
+      "testId": "item-speed-smooth",
+      "discover": {
+        "kind": "selection",
+        "note": "Selected clip"
+      }
+    },
+    {
+      "testId": "item-speed-smooth-note",
+      "discover": {
+        "kind": "selection",
+        "note": "Selected clip"
+      }
+    },
+    {
+      "testId": "item-speed-value",
+      "discover": {
+        "kind": "selection",
+        "note": "Selected clip"
+      }
+    },
+    {
+      "testId": "keyframe-inspector",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "kf-lane-key",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "kf-lanes",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "kf-lanes-empty",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "kf-lanes-toggle",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-blend",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-key",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-key-blue",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-key-clear-keys",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-key-color",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-key-green",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-key-kf",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-key-toggle",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-mask",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-mask-clear-keys",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-mask-invert",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-mask-key",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-mask-none",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-reverse",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layer-fx-reverse-toggle",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "layout-blur-strength",
+      "discover": {
+        "kind": "rail",
+        "label": "Polish"
+      }
+    },
+    {
+      "testId": "layout-menu",
+      "discover": {
+        "kind": "rail",
+        "label": "Polish"
+      }
+    },
+    {
+      "testId": "layout-quick-picker",
+      "discover": {
+        "kind": "rail",
+        "label": "Polish"
+      }
+    },
+    {
+      "testId": "legacy-headline-style-row",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "libass-fallback-chip",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "libass-layer",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "main-video-tools",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "marker-chapter",
+      "discover": {
+        "kind": "click",
+        "openTestId": "timeline-markers-list"
+      }
+    },
+    {
+      "testId": "marker-copy-chapters",
+      "discover": {
+        "kind": "click",
+        "openTestId": "timeline-markers-list"
+      }
+    },
+    {
+      "testId": "marker-delete",
+      "discover": {
+        "kind": "click",
+        "openTestId": "timeline-markers-list"
+      }
+    },
+    {
+      "testId": "marker-label",
+      "discover": {
+        "kind": "click",
+        "openTestId": "timeline-markers-list"
+      }
+    },
+    {
+      "testId": "marker-list",
+      "discover": {
+        "kind": "click",
+        "openTestId": "timeline-markers-list"
+      }
+    },
+    {
+      "testId": "marker-row",
+      "discover": {
+        "kind": "click",
+        "openTestId": "timeline-markers-list"
+      }
+    },
+    {
+      "testId": "media-append",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-dropzone",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-insert",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-insert-remove",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-insert-row",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-inserts",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-insert-words",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-item",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-library",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-multicam",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-panel",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-scene-split-apply",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-scene-split-detect",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-scene-split-msg",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-scene-split-progress",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-segment-editor",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-seg-remove",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-sync-audio",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-transcribe",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-transcribe-confirm",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-transcribe-cost",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-transcribe-run",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-transcript-done",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-transcript-running",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-upload-button",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-upload-row",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "media-use-for-selected",
+      "discover": {
+        "kind": "rail",
+        "label": "Media"
+      }
+    },
+    {
+      "testId": "moment-edge-end",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "moment-edge-start",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "moment-make-clip",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "motion-path",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "multicam-angle-filmstrip",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "multicam-angle-filmstrip-empty",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "multicam-angle-grid",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "multicam-audio-apply-all",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "multicam-audio-default",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "multicam-clear-auto",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "multicam-fill-gaps",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "multicam-manual",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "multicam-review",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "multicam-sync-all",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "open-in-full-video",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "pacing-clean",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "pacing-close",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "pacing-fix",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "pacing-fix-all",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "pacing-flags",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "pacing-panel",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "preview-adjust",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-adjust-fx",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-blur-canvas",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-blur-region",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-broll",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-broll-fx",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-broll-layer",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-canvas-backdrop",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-canvas-bg-chip",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-chip-row",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-export-processing",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-frame-box",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-fullscreen",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-grade-notice",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-hook-overlay",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-insert",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-main-fx",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-main-kf",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-main-layer",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-meter-toggle",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-multicam-grid-toggle",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-quality",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-quality-auto",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-quality-full",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-quality-half",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-reverse",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-safe-zone",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-shape",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-source",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-split-audio",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-split-layout",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-text-block",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-text-fx",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-text-item",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-text-line",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-transition-a",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-transition-b",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-transition-color",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-under",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-vu",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-zoom-fit",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-zoom-in",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-zoom-label",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "preview-zoom-out",
+      "discover": {
+        "kind": "previewView",
+        "note": "Preview View menu"
+      }
+    },
+    {
+      "testId": "producer-accept",
+      "discover": {
+        "kind": "producer",
+        "note": "AI Producer"
+      }
+    },
+    {
+      "testId": "producer-discard",
+      "discover": {
+        "kind": "producer",
+        "note": "AI Producer"
+      }
+    },
+    {
+      "testId": "producer-plan",
+      "discover": {
+        "kind": "producer",
+        "note": "AI Producer"
+      }
+    },
+    {
+      "testId": "producer-plan-run-all",
+      "discover": {
+        "kind": "producer",
+        "note": "AI Producer"
+      }
+    },
+    {
+      "testId": "producer-popover",
+      "discover": {
+        "kind": "producer",
+        "note": "AI Producer"
+      }
+    },
+    {
+      "testId": "producer-popover-close",
+      "discover": {
+        "kind": "producer",
+        "note": "AI Producer"
+      }
+    },
+    {
+      "testId": "producer-preview",
+      "discover": {
+        "kind": "producer",
+        "note": "AI Producer"
+      }
+    },
+    {
+      "testId": "producer-proposal",
+      "discover": {
+        "kind": "producer",
+        "note": "AI Producer"
+      }
+    },
+    {
+      "testId": "producer-undo-strip",
+      "discover": {
+        "kind": "producer",
+        "note": "AI Producer"
+      }
+    },
+    {
+      "testId": "project-select-range",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "project-select-row",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "project-selects-bin",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "properties-animation",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-crop-mode",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-empty",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-flip-h",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-flip-v",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-key-all",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-kf-delete",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-kf-list",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-kf-seek",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-order-back",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-order-backward",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-order-forward",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-order-front",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-panel",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-reset-crop",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-reset-transform",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-rotate-left",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-rotate-right",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "properties-video",
+      "discover": {
+        "kind": "rail",
+        "label": "Properties"
+      }
+    },
+    {
+      "testId": "record-ai-voiceover",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "record-camera",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "recorder-bar",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "recorder-bubble",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "recorder-mute-preview",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "recorder-place",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "recorder-stop",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "recorder-teleprompter",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "recorder-teleprompter-text",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "record-menu",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "record-screen",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "record-voiceover",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "reframe-split-fallback",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "reframe-split-overlap-hint",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "replace-media-dialog",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "repurpose-chapters-copy-yt",
+      "discover": {
+        "kind": "rail",
+        "label": "Repurpose"
+      }
+    },
+    {
+      "testId": "repurpose-chapters-generate",
+      "discover": {
+        "kind": "rail",
+        "label": "Repurpose"
+      }
+    },
+    {
+      "testId": "repurpose-chapters-markers",
+      "discover": {
+        "kind": "rail",
+        "label": "Repurpose"
+      }
+    },
+    {
+      "testId": "repurpose-notes-copy",
+      "discover": {
+        "kind": "rail",
+        "label": "Repurpose"
+      }
+    },
+    {
+      "testId": "repurpose-notes-generate",
+      "discover": {
+        "kind": "rail",
+        "label": "Repurpose"
+      }
+    },
+    {
+      "testId": "repurpose-tab",
+      "discover": {
+        "kind": "rail",
+        "label": "Repurpose"
+      }
+    },
+    {
+      "testId": "reset-ai-cut",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "retake-apply-all-sticky",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "retake-apply-group",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "retake-cut-range",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "retake-review",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "retake-run",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "retake-total-removal",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "retake-unverified",
+      "discover": {
+        "kind": "rail",
+        "label": "Cleanup"
+      }
+    },
+    {
+      "testId": "retranscribe-verbatim",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "scene-split-apply",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "scene-split-cancel",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "scene-split-detect",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "scene-split-list",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "scene-split-msg",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "scene-split-progress",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "scene-split-scope",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor-insert",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor-item",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor-line",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor-mark-in",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor-mark-out",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor-media",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor-overwrite",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor-range",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor-transcript",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "source-monitor-word",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "speech-search-add-select",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "speech-search-hit",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "speech-search-input",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "speech-search-no-matches",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "speech-search-section",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "stabilize",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "stabilize-note",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "stabilize-off",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "stabilize-on",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "stack-divider",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "stock-audio-add",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "stock-audio-hit",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "stock-audio-picker",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "stock-audio-preset",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "stock-audio-search",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "stock-sfx-license-badge",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "studio-snap-detected",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "studio-sound-slow",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "studio-sound-track-lanes",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "studio-template-preview",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "template-family",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "template-pip",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "templates-panel",
+      "discover": {
+        "kind": "rail",
+        "label": "Templates"
+      }
+    },
+    {
+      "testId": "template-stage",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "template-title",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "template-title-text",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "text-add",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-add-progress",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-align",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-anim",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-anim-loop-type",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-bold",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-box",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-content",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-delete",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-font",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-font-delete",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-font-file",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-font-msg",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-font-upload",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-gradient",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-gradient-dir",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-inspector",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-italic",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-list",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-panel",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-progress-track",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-shadow",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-shapes",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-shape-title",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-stickers",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-stroke",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-templates",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-upper",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-voiceover",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-voiceover-empty",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-voiceover-input",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-voiceover-place",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-voiceover-preview",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-voiceover-regenerate",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "text-voiceover-voice",
+      "discover": {
+        "kind": "rail",
+        "label": "Text"
+      }
+    },
+    {
+      "testId": "timeline-add-marker",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-add-track",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-add-track-voiceover",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-auto-xfade",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-auto-xfade-region",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-beat",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-beat-cut",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-beats",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-body",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-broll-transition-region",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-collapse",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-compound",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-compound-banner",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-compound",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-group",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-insert-gap",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-j-cut",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-l-cut",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-marker",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-open-compound",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-paste",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-paste-attributes",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-range-delete",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-range-select",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-replace-gap",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-toggle-enabled",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-uncompound",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-ungroup",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-ctx-voiceover",
+      "discover": {
+        "kind": "ctx",
+        "note": "Clip context menu"
+      }
+    },
+    {
+      "testId": "timeline-delete",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-detach-audio",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-envelope",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-envelope-hit",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-envelope-line",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-envelope-point",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-envelopes",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-fade-shade",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-filmstrip",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-filmstrip-still",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-filmstrip-tile",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-freeze",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-gap",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-group-badge",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-help",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-help-popover",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-inout-chip",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-inout-range",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-insert-label",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-insert-marker",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-insert-shade",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-j-cut",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-jl-word-edge",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-join",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-join-next",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-join-prev",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-join-selected",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-keyframe",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-l-cut",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-link-overlays",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-loop",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-magnet",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-marker",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-markers-list",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-marquee",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-music-loop",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-nudge",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-pacing",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-palette",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-playhead",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-preview-rate",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-reorder-marker",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-replace-media",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-resize",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-root",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-ruler",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-scroll",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-selection-count",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-shortcuts",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-shortcuts-sheet",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-snap",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-snap-guide",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-source-filmstrip",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-source-segment",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-speed-slot",
+      "discover": {
+        "kind": "selection",
+        "note": "Selected clip"
+      }
+    },
+    {
+      "testId": "timeline-split",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-split-stereo",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-takes-menu",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-toolbar",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-toolbar-takes-submenu",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-tools",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-track",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-transition-handle",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-transition-region",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-trim-end",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-trim-start",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-video-roll-boundary",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-waveform",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-word",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-xfade-tracks",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-zoom-controls",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-zoom-fit",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-zoom-in",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-zoom-label",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-zoom-out",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "timeline-zoom-slider",
+      "discover": {
+        "kind": "timelineChrome",
+        "note": "Timeline toolbar / More menu"
+      }
+    },
+    {
+      "testId": "track-fx-reset",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "track-fx-vfx",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "track-motion-animate",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "track-motion-close",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "track-motion-panel-main",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "track-motion-reset",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "transcript-build-from-transcript",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-chunk",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-ctx-menu",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-find-replace",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-follow",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-ignore",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-make-clip",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-para-break",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-removed-run",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-restore-all",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-restore-selection",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-show-deleted",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-show-surrounding",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-speaker-chip",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-speaker-input",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transcript-visual-moment",
+      "discover": {
+        "kind": "rail",
+        "label": "Script"
+      }
+    },
+    {
+      "testId": "transition-apply-all",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "transition-duration",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "transition-duration-dec",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "transition-duration-inc",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "transition-duration-label",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "transition-pixel",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "transition-popover",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "transition-remove",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "transition-shader",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "transition-tile-none",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "trim-range-bar",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "versions-auto-toggle",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "versions-delete-confirm",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "versions-delete-dialog",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "versions-empty-item",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "versions-menu",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "versions-menu-failed",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "versions-restore-original",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "versions-save-dialog",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "versions-save-item",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "versions-save-submit",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "video-reverse-toggle",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    },
+    {
+      "testId": "vocab-speak-as-input",
+      "discover": {
+        "kind": "always",
+        "note": "Shell default"
+      }
+    }
+  ]
+}
