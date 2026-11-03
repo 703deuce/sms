@@ -2,6 +2,8 @@ import type { CSSProperties } from 'react'
 import type { FacecamBox } from '@/lib/clips/edits'
 import { stackHeights } from '@/lib/streamer/layout-math'
 
+export { stackHeights }
+
 export const DEFAULT_FACECAM_BOX: FacecamBox = { x: 0.02, y: 0.02, w: 0.32, h: 0.28 }
 export const DEFAULT_GAMEPLAY_BOX: FacecamBox = { x: 0, y: 0, w: 1, h: 1 }
 
