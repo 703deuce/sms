@@ -92,7 +92,11 @@ export function EditorLayout(props: {
 
   return (
     <div
-      className={cn(compact ? EDITOR_GRID.rootCompact : EDITOR_GRID.root, 'relative')}
+      className={cn(
+        compact ? EDITOR_GRID.rootCompact : EDITOR_GRID.root,
+        hidePanelColumn && !compact && 'xl:grid-cols-[64px_minmax(0,1fr)] 2xl:grid-cols-[64px_minmax(0,1fr)]',
+        'relative',
+      )}
       style={panelStyle}
       data-testid="editor-grid"
       data-band={band}
@@ -126,7 +130,12 @@ export function EditorLayout(props: {
           />
         ) : null}
       </section>
-      <section data-region="preview" className={EDITOR_GRID.preview}>{props.preview}</section>
+      <section
+        data-region="preview"
+        className={cn(EDITOR_GRID.preview, hidePanelColumn && 'xl:col-start-2 2xl:col-start-2')}
+      >
+        {props.preview}
+      </section>
       {compact ? null : (
         <aside
           data-region="properties"
@@ -135,7 +144,15 @@ export function EditorLayout(props: {
           {props.properties}
         </aside>
       )}
-      <section data-region="timeline" className={EDITOR_GRID.timeline}>{props.timeline}</section>
+      <section
+        data-region="timeline"
+        className={cn(
+          EDITOR_GRID.timeline,
+          hidePanelColumn && 'h-16 max-h-16 overflow-hidden rounded-lg border border-border bg-card shadow-none',
+        )}
+      >
+        {props.timeline}
+      </section>
     </div>
   )
 }

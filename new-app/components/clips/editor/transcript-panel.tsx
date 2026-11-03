@@ -648,7 +648,10 @@ export function TranscriptPanel({
 
   return (
     <div
-      className={cn('flex flex-col', compactToolbar ? 'h-full min-h-0 gap-2 p-3' : 'gap-3 p-3')}
+      className={cn(
+        'flex flex-col',
+        compactToolbar ? 'h-full min-h-0 gap-2 p-3' : largeScript ? 'h-full min-h-0 gap-3 p-4' : 'gap-3 p-3',
+      )}
       aria-busy={wordsLoading}
     >
       {wordsLoading ? (
@@ -1065,7 +1068,8 @@ export function TranscriptPanel({
         className={cn(
           'overflow-y-auto text-sm leading-relaxed',
           compactToolbar ? 'min-h-0 flex-1' : 'max-h-[min(50vh,420px)]',
-          largeScript && 'max-h-none flex-1 text-[17px] leading-[1.65] [&_span]:max-w-[80ch]',
+          largeScript && 'max-h-none flex-1 text-[17px] leading-[1.65]',
+          largeScript && '[&_[data-testid=transcript-chunk]]:max-w-[80ch]',
         )}
         onWheel={bumpFollowPause}
         onTouchStart={bumpFollowPause}

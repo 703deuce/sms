@@ -21,6 +21,8 @@ import {
   type ClipEditorLayoutView,
 } from '@/lib/clips/editor/editor-layout-view'
 import { EditorLayoutViewSwitch, ScriptViewWaveStrip } from '@/components/clips/editor/script-view-chrome'
+import { ScriptViewMainSplit } from '@/components/clips/editor/script-view-main-split'
+import { useScriptViewSplit } from '@/lib/clips/editor/use-script-view-split'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { EditorLayout, useEditorBand, aspectCssToNumber } from '@/components/clips/editor/editor-layout'
 import { CanvasLayoutMenu } from '@/components/clips/editor/canvas-layout-menu'
@@ -358,6 +360,7 @@ export function EditorShell({
     setLayoutView(view)
     writeClipEditorLayoutView(view)
   }, [])
+  const { transcriptPct: scriptSplitPct, persist: persistScriptSplit } = useScriptViewSplit()
   const selectPanel = useCallback((id: EditorPanelId) => {
     setPanel(id)
     const group = panelToRailGroup(id)
@@ -1943,21 +1946,20 @@ export function EditorShell({
       </EditorPanelErrorBoundary>
     ) : null
 
-  const panelBody = (
+  const renderTranscriptPanel = (options: { compactToolbar?: boolean; largeScript?: boolean }) => (
     <>
-      <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
-        {fullVideo && fvHighlights.showHighlightsList ? (
-          <HighlightsListPanel
-            picks={fvHighlights.picks}
-            ranges={fvHighlights.ranges}
-            selectedClipId={fvHighlights.selectedClipId}
-            onSelect={fvHighlights.selectAndSeek}
-            onMakeClip={(pick, range) => void fvHighlights.onMakeClip(pick, range)}
-            onMakeAll={() => void fvHighlights.onMakeAll()}
-            jobRunning={fvHighlights.isJobRunning}
-          />
-        ) : null}
-        <EditorPanelErrorBoundary label="Script">
+      {fullVideo && fvHighlights.showHighlightsList ? (
+        <HighlightsListPanel
+          picks={fvHighlights.picks}
+          ranges={fvHighlights.ranges}
+          selectedClipId={fvHighlights.selectedClipId}
+          onSelect={fvHighlights.selectAndSeek}
+          onMakeClip={(pick, range) => void fvHighlights.onMakeClip(pick, range)}
+          onMakeAll={() => void fvHighlights.onMakeAll()}
+          jobRunning={fvHighlights.isJobRunning}
+        />
+      ) : null}
+      <EditorPanelErrorBoundary label="Script">
         <TranscriptPanel
           words={editorWords}
           wordsLoading={wordsLoading}
@@ -2000,7 +2002,8 @@ export function EditorShell({
           }}
           highlightWordIdx={fullVideo && fvHighlights.highlightsOn ? fvHighlights.highlightWordIdx : undefined}
           momentRows={fullVideo && fvHighlights.highlightsOn ? fvHighlights.momentRows : undefined}
-          compactToolbar
+          compactToolbar={options.compactToolbar}
+          largeScript={options.largeScript}
           onSelectRange={
             fullVideo && fvHighlights.highlightsOn
               ? (startMs, endMs) => {
@@ -2010,7 +2013,14 @@ export function EditorShell({
               : undefined
           }
         />
-        </EditorPanelErrorBoundary>
+      </EditorPanelErrorBoundary>
+    </>
+  )
+
+  const panelBody = (
+    <>
+      <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
+        {renderTranscriptPanel({ compactToolbar: true })}
       </div>
       <div className={panel === 'cleanup' ? undefined : 'hidden'} aria-hidden={panel !== 'cleanup'}>
         <EditorPanelErrorBoundary label="Cleanup">
@@ -2396,6 +2406,449 @@ export function EditorShell({
     </>
   )
 
+  function PreviewColumn() {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-2 sm:p-3">
+        <div
+          className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4 [container-type:size]"
+        >
+          <div
+            ref={previewFrameRef}
+            className="relative max-h-full min-w-0 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
+            style={{
+              aspectRatio: aspectStyle,
+              width: `min(100%, calc(100cqh * ${aspectCssToNumber(previewAspect)}))`,
+            }}
+            onContextMenu={(e) => {
+              if ((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]')) return
+              e.preventDefault()
+              // FIX2 R4: viewport coords. The menu is portaled + position:fixed.
+              setLayoutCtx({ x: e.clientX, y: e.clientY })
+            }}
+          >
+      {(edits.layout.shotOverrides?.length ?? 0) > 0 ? (
+        <span
+          className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white ring-1 ring-white/15"
+          aria-hidden
+        >
+          Manual framing
+        </span>
+      ) : edits.layout.mode === 'auto' || edits.layout.mode === 'dynamic' ? (
+        <span
+          className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white ring-1 ring-white/15"
+          aria-hidden
+        >
+          AI reframing
+        </span>
+      ) : null}
+      {pendingDerivedClipId ? (
+        <Badge className="absolute right-2 top-2 z-10" variant="secondary">
+          {pendingDerivedClipId === 'pending' ? 'Creating clip…' : 'New clip saved'}
+        </Badge>
+      ) : null}
+      <EditorPanelErrorBoundary label="Preview">
+      <PreviewStage
+        videoUrl={videoUrl}
+        posterUrl={posterUrl}
+        edits={renderEdits}
+        canvasBgImageUrl={
+          edits.canvasBg?.type === 'image' && edits.canvasBg.imageId
+            ? uploadUrlFor(edits.canvasBg.imageId)
+            : null
+        }
+        mainVideoSize={mainVideoSize}
+        previewQuality={previewQuality}
+        previewZoom={previewZoom}
+        previewPan={previewPan}
+        onPreviewPanChange={setPreviewPan}
+        onPreviewZoomChange={setPreviewZoom}
+        onFitPercent={setFitPct}
+        words={editorWords}
+        previewWords={previewWords}
+        brandLogoUrl={brandLogoUrl}
+        cropTrack={cropTrack}
+        brollMedia={previewBrollMedia}
+        sourceUrls={sourceUrls}
+        videoRef={videoRef}
+        onTick={onTick}
+        channelDisplay={streamChannelDisplay}
+        chatPreviewEnabled={streamChatAvailable}
+        media={editorMedia}
+        onEditorMediaError={onEditorMediaError}
+        audition={auditionEdits ? { edits: auditionEdits } : null}
+        safeZoneVisible={safeZoneVisible}
+        onStickerMove={onStickerMove}
+        onPipCornerChange={
+          edits.layout.mode === 'facecam_pip' && edits.layout.facecam?.box ? onPipCornerChange : undefined
+        }
+        aiMeta={aiMeta as Record<string, unknown> | null}
+        selectedTextId={panel === 'text' ? selectedTextId : null}
+        canvas={{
+          baseEdits: edits,
+          selected: canvasSel?.target ?? null,
+          onSelect: onCanvasSelect,
+          onCommit: onCanvasCommit,
+          cropMode,
+          onCropModeChange: setCropMode,
+        }}
+      />
+      {studioPreviewLoading ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-black/45"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs font-medium text-white">
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            Studio Sound preview…
+          </span>
+        </div>
+      ) : null}
+      <StudioSoundPreview
+        videoRef={videoRef}
+        isolatedUrl={studioGen.downloadUrl}
+        mix={studioSound?.mix ?? 0.35}
+        enabled={studioPreviewActive}
+      />
+      </EditorPanelErrorBoundary>
+      {layoutCtx ? (
+        <CanvasLayoutMenu x={layoutCtx.x} y={layoutCtx.y} onClose={() => setLayoutCtx(null)}>
+          <p className="px-1 pb-1 text-xs font-medium text-muted-foreground">This scene (from the playhead)</p>
+          <div className="mb-2 grid grid-cols-2 gap-1">
+            {EXPORT_LAYOUT_OPTIONS.filter(
+              (o) =>
+                !layoutOptionDisabled(o, {
+                  facecamLayout: facecamLayout ?? null,
+                  reframeV2Enabled,
+                  aiExtras: clipEditorAiExtrasEnabled(),
+                }),
+            ).map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                role="menuitem"
+                className="min-h-8 rounded px-2 py-1.5 text-left leading-tight hover:bg-muted"
+                onClick={() => {
+                  setLayoutModeAtSource(playheadSourceMs, o.id)
+                  setLayoutCtx(null)
+                }}
+              >
+                {o.title}
+              </button>
+            ))}
+          </div>
+          <div className="my-2 h-px bg-border" role="separator" />
+          <p className="px-1 pb-1 text-xs font-medium text-muted-foreground">Whole clip</p>
+          <LayoutQuickPicker
+            value={edits.layout.mode}
+            edits={edits}
+            facecamLayout={facecamLayout}
+            reframeV2Enabled={reframeV2Enabled}
+            onPick={(mode, facecam) => {
+              onLayoutPick(mode, facecam)
+              setLayoutCtx(null)
+            }}
+          />
+        </CanvasLayoutMenu>
+      ) : null}
+      {multicamGridOn && multicamGridEligible ? (
+        <div className="absolute right-3 top-3 z-10 hidden w-[min(28%,240px)] xl:block">
+          <MulticamAngleGrid
+            edits={edits}
+            library={angleSources}
+            sourceUrls={sourceUrls}
+            mainVideoUrl={videoUrl}
+            playheadSourceMs={playheadSourceMs}
+            playing={playing}
+            onSwitchAngle={(sourceId, opts) => {
+              const library = angleSources
+              if (opts?.shiftKey) {
+                const library = angleSources
+                const switched = switchAngleAt(edits, playheadSourceMs, sourceId, library)
+                setEditsPass(
+                  sideBySideAfterAngleSwitch(switched, playheadSourceMs, sourceId, library),
+                  'Side by side',
+                )
+                return
+              }
+              setEditsPass(switchAngleAt(edits, playheadSourceMs, sourceId, library), 'Camera angle')
+            }}
+          />
+        </div>
+      ) : null}
+          </div>
+        </div>
+        {pickerWhy || detectedLayout || clipTypeLabel ? (
+          <div className="hidden max-w-xl space-y-1 px-1 2xl:block">
+        {clipTypeLabel ? (
+          <p className="text-[11px] text-muted-foreground">
+            <span className="font-medium text-foreground">Clip type:</span> {clipTypeLabel}
+          </p>
+        ) : null}
+        {detectedLayout ? (
+          <p className="text-[11px] text-muted-foreground">
+            <span className="font-medium text-foreground">Detected layout:</span> {detectedLayout}
+          </p>
+        ) : null}
+        {pickerWhy ? (
+          <p className="line-clamp-2 text-xs text-muted-foreground" title={pickerWhy}>{pickerWhy}</p>
+        ) : null}
+      </div>
+          ) : null}
+        <div className="min-w-0 shrink-0 space-y-2 border-t border-border pt-2">
+          <PreviewTransportStrip
+            recordSlot={
+              recordDevicesOk ? (
+                <ClipRecordMenu
+                  onPick={(m) => {
+                    clipRec.arm(m)
+                    if (m === 'voiceover') selectPanel('media')
+                  }}
+                  onOpenAiVoiceover={() => selectPanel('audio')}
+                />
+              ) : (
+                <ClipRecordMenu disabled disabledReason="Recording needs a secure origin and microphone access" onPick={() => undefined} />
+              )
+            }
+            viewSummary={`Loop ${edits.loopFriendlyEnd === false ? 'off' : 'on'} · ${previewQuality === 'auto' ? 'Auto' : previewQuality}`}
+            viewMenuBody={
+              <div className="flex flex-col gap-2" data-testid="preview-chip-row">
+                <button type="button" className={previewChipButtonClass()} onClick={toggleLoopFriendly}>
+                  Loop trim {edits.loopFriendlyEnd === false ? 'off' : 'on'}
+                </button>
+                <Select
+                  value={previewQuality}
+                  onValueChange={(v) => {
+                    if (v === 'auto' || v === 'full' || v === 'half') {
+                      setPreviewQuality(v)
+                      writePreviewQuality(v)
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    className={cn(previewChipButtonClass(), 'h-auto w-full gap-1 border-0 px-2 py-1 shadow-none')}
+                    data-testid="preview-quality"
+                    title="Preview only — export is unaffected"
+                  >
+                    <SelectValue>
+                      Quality: {previewQuality === 'auto' ? 'Auto' : previewQuality === 'full' ? 'Full' : 'Half'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto" data-testid="preview-quality-auto">
+                      Auto
+                    </SelectItem>
+                    <SelectItem value="full" data-testid="preview-quality-full">
+                      Full
+                    </SelectItem>
+                    <SelectItem value="half" data-testid="preview-quality-half">
+                      Half
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className={previewChipButtonClass()}
+                    data-testid="preview-zoom-out"
+                    title="Zoom out"
+                    onClick={() => setPreviewZoom((z) => nextZoom(z, -1, fitPct))}
+                  >
+                    −
+                  </button>
+                  {multicamGridEligible ? (
+                    <button
+                      type="button"
+                      className={previewChipButtonClass(multicamGridOn ? 'ring-2 ring-primary' : undefined)}
+                      data-testid="preview-multicam-grid-toggle"
+                      title="Show all camera angles beside the preview"
+                      onClick={() => {
+                        setMulticamGridOn((on) => {
+                          const next = !on
+                          try {
+                            localStorage.setItem('transovo.multicam.grid', next ? '1' : '0')
+                          } catch {
+                            /* private mode */
+                          }
+                          return next
+                        })
+                      }}
+                    >
+                      Angles
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className={previewChipButtonClass()}
+                    data-testid="preview-zoom-in"
+                    title="Zoom in"
+                    onClick={() => setPreviewZoom((z) => nextZoom(z, 1, fitPct))}
+                  >
+                    +
+                  </button>
+                </div>
+                {previewFrameW >= 320 ? (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className={previewChipButtonClass()}
+                      data-testid="preview-zoom-label"
+                      onClick={() => setZoomMenuOpen((o) => !o)}
+                    >
+                      {previewZoom === 'fit' ? `Fit · ${fitPct}%` : `${previewZoom}%`}
+                    </button>
+                    {zoomMenuOpen ? (
+                      <div className="absolute left-0 top-full z-[60] mt-1 flex flex-col rounded-md border border-border bg-popover p-1 shadow-md">
+                        <button
+                          type="button"
+                          className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                          data-testid="preview-zoom-fit"
+                          onClick={() => {
+                            setPreviewZoom('fit')
+                            setPreviewPan({ x: 0, y: 0 })
+                            setZoomMenuOpen(false)
+                          }}
+                        >
+                          Fit
+                        </button>
+                        {[25, 50, 75, 100, 150, 200].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                            data-testid={`preview-zoom-${n}`}
+                            onClick={() => {
+                              setPreviewZoom(n as PreviewZoom)
+                              setZoomMenuOpen(false)
+                            }}
+                          >
+                            {n}%
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <CanvasBackgroundChip
+                  edits={edits}
+                  media={media}
+                  projectId={projectId}
+                  clipId={clipId}
+                  visible={canvasBgChipVisible}
+                  compositeLocked={compositePreviewClip}
+                  readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+                  onCommit={(next) => setEdits(next)}
+                  narrow={previewFrameW < 320}
+                />
+                <button
+                  type="button"
+                  className={previewChipButtonClass(meterOn ? 'ring-2 ring-primary' : undefined)}
+                  data-testid="preview-meter-toggle"
+                  onClick={() => setMeterOn((v) => !v)}
+                >
+                  Meter {meterOn ? 'on' : 'off'}
+                </button>
+              </div>
+            }
+            transportSlot={
+              clipRec.armed ? null : (
+                <>
+                  <PlayerControls
+                    playing={playing}
+                    outputMs={transportClockMs}
+                    outputDurationMs={displayDur}
+                    onToggle={() => void togglePlay()}
+                    onScrub={seekDisplay}
+                    showScrubber={false}
+                    muted={playerMuted}
+                    volume={playerVolume}
+                    onMuteToggle={() => {
+                      const v = videoRef.current
+                      if (!v) return
+                      const next = !playerMuted
+                      setPlayerMuted(next)
+                      v.muted = next
+                      if (!next) {
+                        v.volume = playerVolume / 100
+                        void playWithSound(v)
+                      }
+                    }}
+                    onVolumeChange={(pct) => {
+                      setPlayerVolume(pct)
+                      const v = videoRef.current
+                      if (v) {
+                        v.volume = pct / 100
+                        if (pct > 0) {
+                          v.muted = false
+                          setPlayerMuted(false)
+                        }
+                      }
+                    }}
+                    meterSlot={meterOn ? <AudioMeter levels={peakLevels} voiceMetered={audioMeter.voiceMetered} /> : null}
+                  />
+                  <button
+                    type="button"
+                    className={previewChipButtonClass()}
+                    onClick={() => {
+                      const box = previewFrameRef.current
+                      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+                      else void box?.requestFullscreen?.().catch(() => {})
+                    }}
+                    title="Full-screen preview (Esc to leave)"
+                    aria-label="Full screen"
+                    data-testid="preview-fullscreen"
+                  >
+                    Full screen
+                  </button>
+                </>
+              )
+            }
+          />
+          {clipRec.armed ? (
+          <ClipRecorderBar
+          mode={clipRec.mode}
+          recording={clipRec.recording}
+          countdown={clipRec.countdown}
+          recSeconds={clipRec.recSeconds}
+          cameras={clipRec.cameras}
+          mics={clipRec.mics}
+          cameraId={clipRec.cameraId}
+          micId={clipRec.micId}
+          onCameraId={clipRec.setCameraId}
+          onMicId={clipRec.setMicId}
+          countdownEnabled={clipRec.countdownEnabled}
+          onCountdownEnabled={clipRec.setCountdownEnabled}
+          mutePreview={clipRec.mutePreview}
+          onMutePreview={clipRec.setMutePreview}
+          placeMode={clipRec.placeMode}
+          onPlaceMode={clipRec.setPlaceMode}
+          bubbleOn={clipRec.bubbleOn}
+          onBubbleOn={clipRec.setBubbleOn}
+          bubbleCorner={clipRec.bubbleCorner}
+          onBubbleCorner={clipRec.setBubbleCorner}
+          bubbleSize={clipRec.bubbleSize}
+          onBubbleSize={clipRec.setBubbleSize}
+          analysers={clipRec.analysers}
+          previewStream={clipRec.previewStream}
+          teleprompterOpen={teleprompterOpen}
+          onTeleprompterOpen={setTeleprompterOpen}
+          scriptText={teleprompterScript}
+          onScriptText={saveTeleprompterScript}
+          onUseTranscript={() =>
+          saveTeleprompterScript(editorWords.map((w) => w.word).join(' '))
+          }
+          teleprompterPlaying={clipRec.teleprompterPlaying}
+          onDisarm={clipRec.disarm}
+          onStart={() => void beginClipRecording()}
+          onStop={() => void clipRec.stopRecording()}
+          onCancel={() => void clipRec.cancelRecording()}
+          />
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       data-testid="editor-shell-root"
@@ -2604,444 +3057,20 @@ export function EditorShell({
             </>
           }
           preview={
-            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-2 sm:p-3">
-              <div
-                className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4 [container-type:size]"
-              >
-                <div
-                  ref={previewFrameRef}
-                  className="relative max-h-full min-w-0 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
-                  style={{
-                    aspectRatio: aspectStyle,
-                    width: `min(100%, calc(100cqh * ${aspectCssToNumber(previewAspect)}))`,
-                  }}
-                  onContextMenu={(e) => {
-                    if ((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]')) return
-                    e.preventDefault()
-                    // FIX2 R4: viewport coords. The menu is portaled + position:fixed.
-                    setLayoutCtx({ x: e.clientX, y: e.clientY })
-                  }}
-                >
-            {(edits.layout.shotOverrides?.length ?? 0) > 0 ? (
-              <span
-                className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white ring-1 ring-white/15"
-                aria-hidden
-              >
-                Manual framing
-              </span>
-            ) : edits.layout.mode === 'auto' || edits.layout.mode === 'dynamic' ? (
-              <span
-                className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white ring-1 ring-white/15"
-                aria-hidden
-              >
-                AI reframing
-              </span>
-            ) : null}
-            {pendingDerivedClipId ? (
-              <Badge className="absolute right-2 top-2 z-10" variant="secondary">
-                {pendingDerivedClipId === 'pending' ? 'Creating clip…' : 'New clip saved'}
-              </Badge>
-            ) : null}
-            <EditorPanelErrorBoundary label="Preview">
-            <PreviewStage
-              videoUrl={videoUrl}
-              posterUrl={posterUrl}
-              edits={renderEdits}
-              canvasBgImageUrl={
-                edits.canvasBg?.type === 'image' && edits.canvasBg.imageId
-                  ? uploadUrlFor(edits.canvasBg.imageId)
-                  : null
-              }
-              mainVideoSize={mainVideoSize}
-              previewQuality={previewQuality}
-              previewZoom={previewZoom}
-              previewPan={previewPan}
-              onPreviewPanChange={setPreviewPan}
-              onPreviewZoomChange={setPreviewZoom}
-              onFitPercent={setFitPct}
-              words={editorWords}
-              previewWords={previewWords}
-              brandLogoUrl={brandLogoUrl}
-              cropTrack={cropTrack}
-              brollMedia={previewBrollMedia}
-              sourceUrls={sourceUrls}
-              videoRef={videoRef}
-              onTick={onTick}
-              channelDisplay={streamChannelDisplay}
-              chatPreviewEnabled={streamChatAvailable}
-              media={editorMedia}
-              onEditorMediaError={onEditorMediaError}
-              audition={auditionEdits ? { edits: auditionEdits } : null}
-              safeZoneVisible={safeZoneVisible}
-              onStickerMove={onStickerMove}
-              onPipCornerChange={
-                edits.layout.mode === 'facecam_pip' && edits.layout.facecam?.box ? onPipCornerChange : undefined
-              }
-              aiMeta={aiMeta as Record<string, unknown> | null}
-              selectedTextId={panel === 'text' ? selectedTextId : null}
-              canvas={{
-                baseEdits: edits,
-                selected: canvasSel?.target ?? null,
-                onSelect: onCanvasSelect,
-                onCommit: onCanvasCommit,
-                cropMode,
-                onCropModeChange: setCropMode,
-              }}
-            />
-            {studioPreviewLoading ? (
-              <div
-                className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-black/45"
-                role="status"
-                aria-live="polite"
-              >
-                <span className="flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs font-medium text-white">
-                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                  Studio Sound preview…
-                </span>
-              </div>
-            ) : null}
-            <StudioSoundPreview
-              videoRef={videoRef}
-              isolatedUrl={studioGen.downloadUrl}
-              mix={studioSound?.mix ?? 0.35}
-              enabled={studioPreviewActive}
-            />
-            </EditorPanelErrorBoundary>
-            {layoutCtx ? (
-              <CanvasLayoutMenu x={layoutCtx.x} y={layoutCtx.y} onClose={() => setLayoutCtx(null)}>
-                <p className="px-1 pb-1 text-xs font-medium text-muted-foreground">This scene (from the playhead)</p>
-                <div className="mb-2 grid grid-cols-2 gap-1">
-                  {EXPORT_LAYOUT_OPTIONS.filter(
-                    (o) =>
-                      !layoutOptionDisabled(o, {
-                        facecamLayout: facecamLayout ?? null,
-                        reframeV2Enabled,
-                        aiExtras: clipEditorAiExtrasEnabled(),
-                      }),
-                  ).map((o) => (
-                    <button
-                      key={o.id}
-                      type="button"
-                      role="menuitem"
-                      className="min-h-8 rounded px-2 py-1.5 text-left leading-tight hover:bg-muted"
-                      onClick={() => {
-                        setLayoutModeAtSource(playheadSourceMs, o.id)
-                        setLayoutCtx(null)
-                      }}
-                    >
-                      {o.title}
-                    </button>
-                  ))}
-                </div>
-                <div className="my-2 h-px bg-border" role="separator" />
-                <p className="px-1 pb-1 text-xs font-medium text-muted-foreground">Whole clip</p>
-                <LayoutQuickPicker
-                  value={edits.layout.mode}
-                  edits={edits}
-                  facecamLayout={facecamLayout}
-                  reframeV2Enabled={reframeV2Enabled}
-                  onPick={(mode, facecam) => {
-                    onLayoutPick(mode, facecam)
-                    setLayoutCtx(null)
-                  }}
-                />
-              </CanvasLayoutMenu>
-            ) : null}
-            {multicamGridOn && multicamGridEligible ? (
-              <div className="absolute right-3 top-3 z-10 hidden w-[min(28%,240px)] xl:block">
-                <MulticamAngleGrid
-                  edits={edits}
-                  library={angleSources}
-                  sourceUrls={sourceUrls}
-                  mainVideoUrl={videoUrl}
-                  playheadSourceMs={playheadSourceMs}
-                  playing={playing}
-                  onSwitchAngle={(sourceId, opts) => {
-                    const library = angleSources
-                    if (opts?.shiftKey) {
-                      const library = angleSources
-                      const switched = switchAngleAt(edits, playheadSourceMs, sourceId, library)
-                      setEditsPass(
-                        sideBySideAfterAngleSwitch(switched, playheadSourceMs, sourceId, library),
-                        'Side by side',
-                      )
-                      return
-                    }
-                    setEditsPass(switchAngleAt(edits, playheadSourceMs, sourceId, library), 'Camera angle')
-                  }}
-                />
-              </div>
-            ) : null}
-                </div>
-              </div>
-              {pickerWhy || detectedLayout || clipTypeLabel ? (
-                <div className="hidden max-w-xl space-y-1 px-1 2xl:block">
-              {clipTypeLabel ? (
-                <p className="text-[11px] text-muted-foreground">
-                  <span className="font-medium text-foreground">Clip type:</span> {clipTypeLabel}
-                </p>
-              ) : null}
-              {detectedLayout ? (
-                <p className="text-[11px] text-muted-foreground">
-                  <span className="font-medium text-foreground">Detected layout:</span> {detectedLayout}
-                </p>
-              ) : null}
-              {pickerWhy ? (
-                <p className="line-clamp-2 text-xs text-muted-foreground" title={pickerWhy}>{pickerWhy}</p>
-              ) : null}
-            </div>
-          ) : null}
-              <div className="min-w-0 shrink-0 space-y-2 border-t border-border pt-2">
-                <PreviewTransportStrip
-                  recordSlot={
-                    recordDevicesOk ? (
-                      <ClipRecordMenu
-                        onPick={(m) => {
-                          clipRec.arm(m)
-                          if (m === 'voiceover') selectPanel('media')
-                        }}
-                        onOpenAiVoiceover={() => selectPanel('audio')}
-                      />
-                    ) : (
-                      <ClipRecordMenu disabled disabledReason="Recording needs a secure origin and microphone access" onPick={() => undefined} />
-                    )
-                  }
-                  viewSummary={`Loop ${edits.loopFriendlyEnd === false ? 'off' : 'on'} · ${previewQuality === 'auto' ? 'Auto' : previewQuality}`}
-                  viewMenuBody={
-                    <div className="flex flex-col gap-2" data-testid="preview-chip-row">
-                      <button type="button" className={previewChipButtonClass()} onClick={toggleLoopFriendly}>
-                        Loop trim {edits.loopFriendlyEnd === false ? 'off' : 'on'}
-                      </button>
-                      <Select
-                        value={previewQuality}
-                        onValueChange={(v) => {
-                          if (v === 'auto' || v === 'full' || v === 'half') {
-                            setPreviewQuality(v)
-                            writePreviewQuality(v)
-                          }
-                        }}
-                      >
-                        <SelectTrigger
-                          className={cn(previewChipButtonClass(), 'h-auto w-full gap-1 border-0 px-2 py-1 shadow-none')}
-                          data-testid="preview-quality"
-                          title="Preview only — export is unaffected"
-                        >
-                          <SelectValue>
-                            Quality: {previewQuality === 'auto' ? 'Auto' : previewQuality === 'full' ? 'Full' : 'Half'}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="auto" data-testid="preview-quality-auto">
-                            Auto
-                          </SelectItem>
-                          <SelectItem value="full" data-testid="preview-quality-full">
-                            Full
-                          </SelectItem>
-                          <SelectItem value="half" data-testid="preview-quality-half">
-                            Half
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className={previewChipButtonClass()}
-                          data-testid="preview-zoom-out"
-                          title="Zoom out"
-                          onClick={() => setPreviewZoom((z) => nextZoom(z, -1, fitPct))}
-                        >
-                          −
-                        </button>
-                        {multicamGridEligible ? (
-                          <button
-                            type="button"
-                            className={previewChipButtonClass(multicamGridOn ? 'ring-2 ring-primary' : undefined)}
-                            data-testid="preview-multicam-grid-toggle"
-                            title="Show all camera angles beside the preview"
-                            onClick={() => {
-                              setMulticamGridOn((on) => {
-                                const next = !on
-                                try {
-                                  localStorage.setItem('transovo.multicam.grid', next ? '1' : '0')
-                                } catch {
-                                  /* private mode */
-                                }
-                                return next
-                              })
-                            }}
-                          >
-                            Angles
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className={previewChipButtonClass()}
-                          data-testid="preview-zoom-in"
-                          title="Zoom in"
-                          onClick={() => setPreviewZoom((z) => nextZoom(z, 1, fitPct))}
-                        >
-                          +
-                        </button>
-                      </div>
-                      {previewFrameW >= 320 ? (
-                        <div className="relative">
-                          <button
-                            type="button"
-                            className={previewChipButtonClass()}
-                            data-testid="preview-zoom-label"
-                            onClick={() => setZoomMenuOpen((o) => !o)}
-                          >
-                            {previewZoom === 'fit' ? `Fit · ${fitPct}%` : `${previewZoom}%`}
-                          </button>
-                          {zoomMenuOpen ? (
-                            <div className="absolute left-0 top-full z-[60] mt-1 flex flex-col rounded-md border border-border bg-popover p-1 shadow-md">
-                              <button
-                                type="button"
-                                className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                                data-testid="preview-zoom-fit"
-                                onClick={() => {
-                                  setPreviewZoom('fit')
-                                  setPreviewPan({ x: 0, y: 0 })
-                                  setZoomMenuOpen(false)
-                                }}
-                              >
-                                Fit
-                              </button>
-                              {[25, 50, 75, 100, 150, 200].map((n) => (
-                                <button
-                                  key={n}
-                                  type="button"
-                                  className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                                  data-testid={`preview-zoom-${n}`}
-                                  onClick={() => {
-                                    setPreviewZoom(n as PreviewZoom)
-                                    setZoomMenuOpen(false)
-                                  }}
-                                >
-                                  {n}%
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      <CanvasBackgroundChip
-                        edits={edits}
-                        media={media}
-                        projectId={projectId}
-                        clipId={clipId}
-                        visible={canvasBgChipVisible}
-                        compositeLocked={compositePreviewClip}
-                        readOnly={Boolean(edits.timelineLanes?.video?.locked)}
-                        onCommit={(next) => setEdits(next)}
-                        narrow={previewFrameW < 320}
-                      />
-                      <button
-                        type="button"
-                        className={previewChipButtonClass(meterOn ? 'ring-2 ring-primary' : undefined)}
-                        data-testid="preview-meter-toggle"
-                        onClick={() => setMeterOn((v) => !v)}
-                      >
-                        Meter {meterOn ? 'on' : 'off'}
-                      </button>
-                    </div>
-                  }
-                  transportSlot={
-                    clipRec.armed ? null : (
-                      <>
-                        <PlayerControls
-                          playing={playing}
-                          outputMs={transportClockMs}
-                          outputDurationMs={displayDur}
-                          onToggle={() => void togglePlay()}
-                          onScrub={seekDisplay}
-                          showScrubber={false}
-                          muted={playerMuted}
-                          volume={playerVolume}
-                          onMuteToggle={() => {
-                            const v = videoRef.current
-                            if (!v) return
-                            const next = !playerMuted
-                            setPlayerMuted(next)
-                            v.muted = next
-                            if (!next) {
-                              v.volume = playerVolume / 100
-                              void playWithSound(v)
-                            }
-                          }}
-                          onVolumeChange={(pct) => {
-                            setPlayerVolume(pct)
-                            const v = videoRef.current
-                            if (v) {
-                              v.volume = pct / 100
-                              if (pct > 0) {
-                                v.muted = false
-                                setPlayerMuted(false)
-                              }
-                            }
-                          }}
-                          meterSlot={meterOn ? <AudioMeter levels={peakLevels} voiceMetered={audioMeter.voiceMetered} /> : null}
-                        />
-                        <button
-                          type="button"
-                          className={previewChipButtonClass()}
-                          onClick={() => {
-                            const box = previewFrameRef.current
-                            if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
-                            else void box?.requestFullscreen?.().catch(() => {})
-                          }}
-                          title="Full-screen preview (Esc to leave)"
-                          aria-label="Full screen"
-                          data-testid="preview-fullscreen"
-                        >
-                          Full screen
-                        </button>
-                      </>
-                    )
-                  }
-                />
-                {clipRec.armed ? (
-                <ClipRecorderBar
-                mode={clipRec.mode}
-                recording={clipRec.recording}
-                countdown={clipRec.countdown}
-                recSeconds={clipRec.recSeconds}
-                cameras={clipRec.cameras}
-                mics={clipRec.mics}
-                cameraId={clipRec.cameraId}
-                micId={clipRec.micId}
-                onCameraId={clipRec.setCameraId}
-                onMicId={clipRec.setMicId}
-                countdownEnabled={clipRec.countdownEnabled}
-                onCountdownEnabled={clipRec.setCountdownEnabled}
-                mutePreview={clipRec.mutePreview}
-                onMutePreview={clipRec.setMutePreview}
-                placeMode={clipRec.placeMode}
-                onPlaceMode={clipRec.setPlaceMode}
-                bubbleOn={clipRec.bubbleOn}
-                onBubbleOn={clipRec.setBubbleOn}
-                bubbleCorner={clipRec.bubbleCorner}
-                onBubbleCorner={clipRec.setBubbleCorner}
-                bubbleSize={clipRec.bubbleSize}
-                onBubbleSize={clipRec.setBubbleSize}
-                analysers={clipRec.analysers}
-                previewStream={clipRec.previewStream}
-                teleprompterOpen={teleprompterOpen}
-                onTeleprompterOpen={setTeleprompterOpen}
-                scriptText={teleprompterScript}
-                onScriptText={saveTeleprompterScript}
-                onUseTranscript={() =>
-                saveTeleprompterScript(editorWords.map((w) => w.word).join(' '))
+            layoutView === 'script' ? (
+              <ScriptViewMainSplit
+                transcriptPct={scriptSplitPct}
+                onTranscriptPctChange={persistScriptSplit}
+                transcript={
+                  <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-1">
+                    {renderTranscriptPanel({ largeScript: true })}
+                  </div>
                 }
-                teleprompterPlaying={clipRec.teleprompterPlaying}
-                onDisarm={clipRec.disarm}
-                onStart={() => void beginClipRecording()}
-                onStop={() => void clipRec.stopRecording()}
-                onCancel={() => void clipRec.cancelRecording()}
-                />
-                ) : null}
-              </div>
-            </div>
+                preview={<PreviewColumn />}
+              />
+            ) : (
+              <PreviewColumn />
+            )
           }
           properties={
             !compact && band === 'wide' ? (
