@@ -161,6 +161,14 @@ import { mediaUrlFor, useMediaTranscripts, useProjectMedia } from '@/components/
 import { CanvasBackgroundChip, CanvasBackgroundSection } from '@/components/clips/editor/canvas-background'
 import { PreviewChipRow, previewChipButtonClass } from '@/components/clips/editor/preview-chip-row'
 import { PreviewTransportStrip } from '@/components/clips/editor/preview-transport-strip'
+import { EditorProjectMenu } from '@/components/clips/editor/editor-project-menu'
+import {
+  ScriptViewToolDrawer,
+  ScriptViewToolRail,
+  SCRIPT_VIEW_TOOL_PANELS,
+  type ScriptViewToolPanelId,
+} from '@/components/clips/editor/script-view-tool-rail'
+import { TimelineShortcutsSheet } from '@/components/clips/editor/timeline/shortcuts-sheet'
 import { canvasBgRelevant } from '@/lib/clips/canvas-bg'
 import { aspectCss } from '@/lib/clips/export-aspect'
 import {
@@ -354,13 +362,15 @@ export function EditorShell({
   const timelineVisible = !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
-  const [scriptPropsOpen, setScriptPropsOpen] = useState(false)
+  const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
+  const [editorShortcutsOpen, setEditorShortcutsOpen] = useState(false)
   useEffect(() => {
     setLayoutView(readClipEditorLayoutView())
   }, [])
   const setLayoutViewPersist = useCallback((view: ClipEditorLayoutView) => {
     setLayoutView(view)
     writeClipEditorLayoutView(view)
+    if (view !== 'script') setScriptToolPanel(null)
   }, [])
   const { transcriptPct: scriptSplitPct, persist: persistScriptSplit } = useScriptViewSplit()
   const selectPanel = useCallback((id: EditorPanelId) => {
@@ -371,6 +381,19 @@ export function EditorShell({
       setMobilePanelOpen(true)
     }
   }, [band])
+  const toggleScriptTool = useCallback(
+    (id: ScriptViewToolPanelId) => {
+      setScriptToolPanel((prev) => {
+        const next = prev === id ? null : id
+        if (next) {
+          setVisitedPanels((v) => (v.has(next) ? v : new Set([...v, next])))
+          selectPanel(next)
+        }
+        return next
+      })
+    },
+    [selectPanel],
+  )
   const selectRailGroup = useCallback(
     (groupId: EditorRailGroupId) => {
       const group = editorRailGroups(clipEditorAiExtrasEnabled()).find((g) => g.id === groupId)
@@ -2034,12 +2057,14 @@ export function EditorShell({
     </>
   )
 
-  const panelBody = (
+  const renderSidePanels = (scope: EditorPanelId | null) => {
+    const on = (id: EditorPanelId) => (scope != null ? scope === id : panel === id)
+    return (
     <>
-      <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
+      <div className={on('transcript') ? undefined : 'hidden'} aria-hidden={!on('transcript')}>
         {renderTranscriptPanel({ compactToolbar: true })}
       </div>
-      <div className={panel === 'cleanup' ? undefined : 'hidden'} aria-hidden={panel !== 'cleanup'}>
+      <div className={on('cleanup') ? undefined : 'hidden'} aria-hidden={!on('cleanup')}>
         <EditorPanelErrorBoundary label="Cleanup">
           <CleanupPanel
             clipId={clipId}
@@ -2062,7 +2087,7 @@ export function EditorShell({
           />
         </EditorPanelErrorBoundary>
       </div>
-      <div className={panel === 'layout' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'layout'}>
+      <div className={on('layout') ? 'p-3' : 'hidden'} aria-hidden={!on('layout')}>
         <EditorPanelErrorBoundary label="Layout">
         <LayoutPanel
           edits={edits}
@@ -2107,7 +2132,7 @@ export function EditorShell({
         />
         </EditorPanelErrorBoundary>
       </div>
-      <div className={panel === 'layers' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'layers'}>
+      <div className={on('layers') ? 'p-3' : 'hidden'} aria-hidden={!on('layers')}>
         <EditorPanelErrorBoundary label="Layers">
           <LayoutQuickPicker
             value={edits.layout.mode}
@@ -2148,7 +2173,7 @@ export function EditorShell({
           </div>
         </EditorPanelErrorBoundary>
       </div>
-      <div className={panel === 'captions' ? undefined : 'hidden'} aria-hidden={panel !== 'captions'}>
+      <div className={on('captions') ? undefined : 'hidden'} aria-hidden={!on('captions')}>
         <EditorPanelErrorBoundary label="Captions">
         <CaptionsPanel
           clipId={clipId}
@@ -2175,7 +2200,7 @@ export function EditorShell({
         />
         </EditorPanelErrorBoundary>
       </div>
-      <div className={panel === 'audio' ? undefined : 'hidden'} aria-hidden={panel !== 'audio'}>
+      <div className={on('audio') ? undefined : 'hidden'} aria-hidden={!on('audio')}>
         <EditorPanelErrorBoundary label="Audio">
         <AudioPanel
           clipId={clipId}
@@ -2215,7 +2240,7 @@ export function EditorShell({
         </EditorPanelErrorBoundary>
       </div>
       {panelMounted('broll') ? (
-        <div className={panel === 'broll' ? undefined : 'hidden'} aria-hidden={panel !== 'broll'} data-testid="editor-panel-broll">
+        <div className={on('broll') ? undefined : 'hidden'} aria-hidden={!on('broll')} data-testid="editor-panel-broll">
           <EditorPanelErrorBoundary label="B-roll">
           <BrollPanel
             clipId={clipId}
@@ -2269,14 +2294,14 @@ export function EditorShell({
         </div>
       ) : null}
       {panelMounted('brand') ? (
-        <div className={panel === 'brand' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'brand'} data-testid="editor-panel-brand">
+        <div className={on('brand') ? 'p-3' : 'hidden'} aria-hidden={!on('brand')} data-testid="editor-panel-brand">
           <EditorPanelErrorBoundary label="Brand">
           <BrandPanel edits={edits} onEdits={setEdits} />
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
       {panelMounted('thumbnail') ? (
-        <div className={panel === 'thumbnail' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'thumbnail'} data-testid="editor-panel-thumbnail">
+        <div className={on('thumbnail') ? 'p-3' : 'hidden'} aria-hidden={!on('thumbnail')} data-testid="editor-panel-thumbnail">
           <EditorPanelErrorBoundary label="Cover">
           <ThumbnailPanel
             clipId={clipId}
@@ -2291,7 +2316,7 @@ export function EditorShell({
         </div>
       ) : null}
       {aiExtras && panelMounted('dub') ? (
-        <div className={panel === 'dub' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'dub'} data-testid="editor-panel-dub">
+        <div className={on('dub') ? 'p-3' : 'hidden'} aria-hidden={!on('dub')} data-testid="editor-panel-dub">
           <EditorPanelErrorBoundary label="Dub">
           <DubPanel
             clipId={clipId}
@@ -2305,7 +2330,7 @@ export function EditorShell({
         </div>
       ) : null}
       {panelMounted('text') ? (
-        <div className={panel === 'text' ? undefined : 'hidden'} aria-hidden={panel !== 'text'} data-testid="editor-panel-text">
+        <div className={on('text') ? undefined : 'hidden'} aria-hidden={!on('text')} data-testid="editor-panel-text">
           <EditorPanelErrorBoundary label="Text">
           <TextPanel
             edits={edits}
@@ -2323,7 +2348,7 @@ export function EditorShell({
         </div>
       ) : null}
       {panelMounted('templates') ? (
-        <div className={panel === 'templates' ? undefined : 'hidden'} aria-hidden={panel !== 'templates'} data-testid="editor-panel-templates">
+        <div className={on('templates') ? undefined : 'hidden'} aria-hidden={!on('templates')} data-testid="editor-panel-templates">
           <EditorPanelErrorBoundary label="Templates">
           <TemplatesPanel
             edits={edits}
@@ -2359,13 +2384,13 @@ export function EditorShell({
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
-      {band !== 'wide' && panelMounted('inspector') ? (
-        <div className={panel === 'inspector' ? undefined : 'hidden'} aria-hidden={panel !== 'inspector'} data-testid="editor-panel-inspector">
-          {renderInspectorPropertiesPanel()}
+      {(scope === 'inspector' || (band !== 'wide' && panelMounted('inspector'))) ? (
+        <div className={on('inspector') ? undefined : 'hidden'} aria-hidden={!on('inspector')} data-testid="editor-panel-inspector">
+          {renderInspectorPropertiesPanel(scope === 'inspector' || band !== 'wide')}
         </div>
       ) : null}
       {panelMounted('color') ? (
-        <div className={panel === 'color' ? undefined : 'hidden'} aria-hidden={panel !== 'color'} data-testid="editor-panel-color">
+        <div className={on('color') ? undefined : 'hidden'} aria-hidden={!on('color')} data-testid="editor-panel-color">
           <EditorPanelErrorBoundary label="Color">
           <ColorPanel
               edits={edits}
@@ -2381,7 +2406,7 @@ export function EditorShell({
         </div>
       ) : null}
       {panelMounted('repurpose') ? (
-        <div className={panel === 'repurpose' ? undefined : 'hidden'} aria-hidden={panel !== 'repurpose'}>
+        <div className={on('repurpose') ? undefined : 'hidden'} aria-hidden={!on('repurpose')}>
           <EditorPanelErrorBoundary label="Repurpose">
             <RepurposePanel
               clipId={clipId}
@@ -2394,7 +2419,7 @@ export function EditorShell({
         </div>
       ) : null}
       {panelMounted('media') ? (
-        <div className={panel === 'media' ? undefined : 'hidden'} aria-hidden={panel !== 'media'} data-testid="editor-panel-media">
+        <div className={on('media') ? undefined : 'hidden'} aria-hidden={!on('media')} data-testid="editor-panel-media">
           <EditorPanelErrorBoundary label="Media">
           <MediaPanel
             projectId={projectId}
@@ -2422,6 +2447,8 @@ export function EditorShell({
       ) : null}
     </>
   )
+  }
+  const panelBody = renderSidePanels(null)
 
   const previewColumnContent = (
       <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 overflow-hidden p-2 sm:p-3">
@@ -2898,6 +2925,40 @@ export function EditorShell({
           backHref={`/app/clips/${projectId}`}
           title={title}
           onTitleChange={setTitle}
+          titleMenuSlot={
+            <EditorProjectMenu
+              title={title}
+              onTitleChange={setTitle}
+              actions={{
+                newProject: { kind: 'link', label: 'New project', href: '/app/clips/new' },
+                openProjects: { kind: 'link', label: 'Open projects', href: '/app/clips' },
+                rename: { kind: 'button', label: 'Rename', onClick: () => undefined },
+                versionsHistory: {
+                  kind: 'button',
+                  label: 'Versions / History',
+                  onClick: () => {
+                    document.querySelector<HTMLElement>('[data-testid="versions-menu"]')?.click()
+                  },
+                  disabled: !versionsEnabled,
+                },
+                projectSettings: {
+                  kind: 'button',
+                  label: 'Project settings',
+                  onClick: () => {
+                    if (layoutView === 'script') toggleScriptTool('inspector')
+                    else selectPanel('inspector')
+                  },
+                },
+                export: { kind: 'button', label: 'Export…', onClick: () => setExportOpen(true) },
+                keyboardShortcuts: {
+                  kind: 'button',
+                  label: 'Keyboard shortcuts',
+                  onClick: () => setEditorShortcutsOpen(true),
+                },
+                backToProjects: { kind: 'link', label: 'Back to projects', href: `/app/clips/${projectId}` },
+              }}
+            />
+          }
           saveState={saveState}
           optimisticPending={saveState === 'dirty'}
           canUndo={canUndo}
@@ -3098,11 +3159,23 @@ export function EditorShell({
                   onTranscriptPctChange={persistScriptSplit}
                   className="flex-1"
                   transcript={
-                    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-1">
+                    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-2">
                       {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
                     </div>
                   }
-                  preview={previewColumnContent}
+                  preview={
+                    <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden" data-testid="script-view-preview-stack">
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{previewColumnContent}</div>
+                      <ScriptViewToolDrawer
+                        open={scriptToolPanel != null}
+                        title={SCRIPT_VIEW_TOOL_PANELS.find((p) => p.id === scriptToolPanel)?.label ?? 'Panel'}
+                        onClose={() => setScriptToolPanel(null)}
+                      >
+                        {scriptToolPanel ? renderSidePanels(scriptToolPanel) : null}
+                      </ScriptViewToolDrawer>
+                      <ScriptViewToolRail active={scriptToolPanel} onToggle={toggleScriptTool} />
+                    </div>
+                  }
                 />
               </div>
             ) : (
@@ -3250,28 +3323,7 @@ export function EditorShell({
       >
         <PanelRightOpen className="size-5" />
       </Button>
-      {layoutView === 'script' ? (
-        <>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="fixed right-4 top-16 z-40 hidden shadow-md 2xl:flex"
-            data-testid="editor-properties-drawer-toggle"
-            onClick={() => setScriptPropsOpen(true)}
-          >
-            Properties
-          </Button>
-          <Dialog open={scriptPropsOpen} onOpenChange={setScriptPropsOpen}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Properties</DialogTitle>
-              </DialogHeader>
-              <ScrollArea className="max-h-[70vh]">{renderInspectorPropertiesPanel(true)}</ScrollArea>
-            </DialogContent>
-          </Dialog>
-        </>
-      ) : null}
+      <TimelineShortcutsSheet open={editorShortcutsOpen} onClose={() => setEditorShortcutsOpen(false)} />
       <ClipperSurfaceErrorBoundary surface="Export">
         <ExportDialog
         clipId={clipId}

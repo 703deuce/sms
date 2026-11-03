@@ -25,6 +25,7 @@ export function EditorTopBar({
   backHref,
   title,
   onTitleChange,
+  titleMenuSlot,
   saveState,
   optimisticPending = false,
   canUndo,
@@ -45,6 +46,8 @@ export function EditorTopBar({
   backHref: string
   title: string
   onTitleChange: (t: string) => void
+  /** When set, replaces the clip title input (File menu). */
+  titleMenuSlot?: React.ReactNode
   saveState: 'saved' | 'saving' | 'dirty' | 'error'
   optimisticPending?: boolean
   canUndo: boolean
@@ -76,12 +79,14 @@ export function EditorTopBar({
       <Button size="icon" variant="ghost" aria-label="Back to project" render={<Link href={backHref} />}>
         <ArrowLeft className="size-4" />
       </Button>
-      <Input
-        className="h-9 max-w-md border-transparent bg-transparent text-base font-semibold shadow-none hover:border-input focus-visible:border-input"
-        value={title}
-        onChange={(e) => onTitleChange(e.target.value)}
-        aria-label="Clip title"
-      />
+      {titleMenuSlot ?? (
+        <Input
+          className="h-9 max-w-md border-transparent bg-transparent text-base font-semibold shadow-none hover:border-input focus-visible:border-input"
+          value={title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          aria-label="Clip title"
+        />
+      )}
       <span className={cn('shrink-0', saveTone)} aria-live="polite">
         {optimisticPending && saveState !== 'saving' ? (
           <Badge variant="outline" className="mr-2 h-6 text-[11px] font-normal">
