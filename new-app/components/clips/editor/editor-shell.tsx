@@ -4,7 +4,17 @@ import { Anton, Montserrat, Poppins } from 'next/font/google'
 import { addFontVarsToBody, clipDisplayFontVars } from '@/components/clips/editor/clip-editor-fonts'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
-import { EditorRail, EDITOR_RAIL_ITEMS, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
+import { EditorRail, clipEditorRailIds, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
+import {
+  clipEditorLeftPanelIds,
+  editorRailGroups,
+  panelToRailGroup,
+  readRailGroupTab,
+  writeRailGroupTab,
+  type EditorRailGroupId,
+} from '@/lib/clips/editor/editor-rail-navigation'
+import { useEditorPanelWidth } from '@/lib/clips/editor/use-editor-panel-width'
+import { PropertiesProjectSettings } from '@/components/clips/editor/properties-project-settings'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { EditorLayout, useEditorBand, aspectCssToNumber } from '@/components/clips/editor/editor-layout'
 import { CanvasLayoutMenu } from '@/components/clips/editor/canvas-layout-menu'
@@ -12,7 +22,7 @@ import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, PanelRightOpen } from 'lucide-react'
+import { Loader2, Megaphone, PanelRightOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClipBounds } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -332,12 +342,24 @@ export function EditorShell({
     })
   }, [])
   const timelineVisible = !compact || timelineOpen
+  const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const selectPanel = useCallback((id: EditorPanelId) => {
     setPanel(id)
+    const group = panelToRailGroup(id)
+    if (group) writeRailGroupTab(group.id, id)
     if (band === 'mobile' || band === 'compact') {
       setMobilePanelOpen(true)
     }
   }, [band])
+  const selectRailGroup = useCallback(
+    (groupId: EditorRailGroupId) => {
+      const group = editorRailGroups(clipEditorAiExtrasEnabled()).find((g) => g.id === groupId)
+      if (!group) return
+      const fallback = group.tabs[0]!.id
+      selectPanel(readRailGroupTab(groupId, fallback))
+    },
+    [selectPanel],
+  )
   useEffect(() => {
     if (band === 'wide' && panel === 'inspector') {
       setPanel('transcript')
@@ -348,7 +370,7 @@ export function EditorShell({
   // G4cfix2: every B2 medium on the editor route in CORS mode (+ recovery of pre-hydration failures).
   useEffect(() => watchEditorMediaCors(typeof document === 'undefined' ? null : document.body), [])
   useEffect(() => {
-    if (!EDITOR_RAIL_ITEMS.some((item) => item.id === panel)) {
+    if (!clipEditorLeftPanelIds(clipEditorAiExtrasEnabled()).includes(panel)) {
       setPanel('transcript')
     }
   }, [panel])
@@ -1702,6 +1724,8 @@ export function EditorShell({
 
   const TabIcon = editorRailIcon(panel)
   const meta = TAB_META[panel] ?? { label: panel, hint: '' }
+  const activeRailGroup = panelToRailGroup(panel, aiExtras)
+  const panelTabs = activeRailGroup?.tabs ?? []
   const previewAspect = edits.aspectRatio ?? '9:16'
   useEffect(() => {
     setPreviewZoom('fit')
@@ -1808,6 +1832,35 @@ export function EditorShell({
           onOpenTextPanel={() => selectPanel('text')}
           onOpenCaptionsPanel={() => selectPanel('captions')}
           onOpenLayoutPanel={() => selectPanel('layout')}
+          projectSettingsSlot={
+            <PropertiesProjectSettings
+              edits={edits}
+              durationMs={outDur}
+              layoutSlot={
+                <LayoutQuickPicker
+                  value={edits.layout.mode}
+                  edits={edits}
+                  facecamLayout={facecamLayout}
+                  reframeV2Enabled={reframeV2Enabled}
+                  onPick={onLayoutPick}
+                />
+              }
+              canvasBgSlot={
+                <CanvasBackgroundSection
+                  edits={edits}
+                  media={media}
+                  projectId={projectId}
+                  clipId={clipId}
+                  compositeLocked={compositePreviewClip}
+                  readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+                  onCommit={(next) => setEdits(next)}
+                />
+              }
+              onOpenTextPanel={() => selectPanel('text')}
+              onOpenCaptionsPanel={() => selectPanel('captions')}
+              onOpenLayoutPanel={() => selectPanel('layout')}
+            />
+          }
           speedSlot={
             selVideoSeg ? (
               <ItemSpeedControl
@@ -1932,6 +1985,7 @@ export function EditorShell({
           }}
           highlightWordIdx={fullVideo && fvHighlights.highlightsOn ? fvHighlights.highlightWordIdx : undefined}
           momentRows={fullVideo && fvHighlights.highlightsOn ? fvHighlights.momentRows : undefined}
+          compactToolbar
           onSelectRange={
             fullVideo && fvHighlights.highlightsOn
               ? (startMs, endMs) => {
@@ -2378,6 +2432,16 @@ export function EditorShell({
                 onStarted={fvHighlights.startedFind}
               />
             ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant={panel === 'repurpose' ? 'default' : 'outline'}
+              data-testid="editor-repurpose-open"
+              onClick={() => selectPanel('repurpose')}
+            >
+              <Megaphone className="mr-1.5 size-4" aria-hidden />
+              Repurpose
+            </Button>
             {fullVideo ? (
               <>
                 <Button
@@ -2470,32 +2534,52 @@ export function EditorShell({
           compact={compact}
           panelOpen={mobilePanelOpen}
           onClosePanel={() => setMobilePanelOpen(false)}
+          panelWidthPx={panelWidthPx}
+          onPanelWidthChange={persistPanelWidth}
           rail={
             <>
-              <EditorMobileRail active={panel} onChange={selectPanel} />
+              <EditorMobileRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
               <div className="hidden min-h-0 lg:block">
-                <EditorRail
-                  active={panel}
-                  onChange={selectPanel}
-                  hiddenIds={band === 'wide' ? ['inspector'] : []}
-                />
+                <EditorRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
               </div>
             </>
           }
           panel={
             <>
-              <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
-                <TabIcon className="size-4 text-muted-foreground" aria-hidden />
-                <h2 className="text-sm font-semibold">{meta.label}</h2>
-                <span className="ml-auto text-xs text-muted-foreground">{meta.hint}</span>
-                {band === 'mobile' || band === 'compact' ? (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setMobilePanelOpen(false)}>
-                    Close
-                  </Button>
+              <div className="flex min-h-12 shrink-0 flex-col justify-center gap-2 border-b border-border px-3 py-2">
+                <div className="flex h-9 items-center gap-2">
+                  <TabIcon className="size-4 text-muted-foreground" aria-hidden />
+                  <h2 className="text-sm font-semibold">{meta.label}</h2>
+                  <span className="ml-auto hidden text-xs text-muted-foreground sm:inline">{meta.hint}</span>
+                  {band === 'mobile' || band === 'compact' ? (
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setMobilePanelOpen(false)}>
+                      Close
+                    </Button>
+                  ) : null}
+                </div>
+                {panelTabs.length > 1 ? (
+                  <div className="flex gap-1 rounded-md border border-border/80 bg-muted/30 p-0.5" role="tablist" aria-label="Panel tabs">
+                    {panelTabs.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={panel === t.id}
+                        data-testid={`editor-panel-tab-${t.id}`}
+                        className={cn(
+                          'flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors',
+                          panel === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                        )}
+                        onClick={() => selectPanel(t.id)}
+                      >
+                        {t.tabLabel}
+                      </button>
+                    ))}
+                  </div>
                 ) : null}
               </div>
               <ScrollArea className="min-h-0 flex-1">
-                <div className="p-4">{panelBody}</div>
+                <div className={cn(panel === 'transcript' || panel === 'repurpose' ? 'p-0' : 'p-4')}>{panelBody}</div>
               </ScrollArea>
             </>
           }

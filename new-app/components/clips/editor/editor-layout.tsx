@@ -1,5 +1,6 @@
 'use client'
-import { useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useRef, type ReactNode } from 'react'
+import { useSyncExternalStore } from 'react'
 import { cn } from '@/lib/utils'
 
 export type EditorBand = 'mobile' | 'compact' | 'desktop' | 'wide'
@@ -19,14 +20,14 @@ export const EDITOR_GRID = {
   root: 'grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
     'lg:grid-cols-[64px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto] ' +
-    'xl:grid-cols-[64px_minmax(280px,340px)_minmax(0,1fr)] ' +
-    '2xl:grid-cols-[64px_minmax(300px,360px)_minmax(0,1fr)_minmax(280px,320px)]',
+    'xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)] ' +
+    '2xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)_minmax(280px,320px)]',
   /** FIX2 R7: compact clip editor, no 4th (Properties) column at 2xl. */
   rootCompact: 'grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
     'lg:grid-cols-[64px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto] ' +
-    'xl:grid-cols-[64px_minmax(280px,340px)_minmax(0,1fr)] ' +
-    '2xl:grid-cols-[64px_minmax(300px,360px)_minmax(0,1fr)]',
+    'xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)] ' +
+    '2xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)]',
   rail: 'min-h-0 lg:row-span-2 lg:col-start-1 lg:row-start-1',
   panelMobile: 'max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:max-h-[70dvh] max-lg:rounded-t-xl max-lg:border-t',
   panelCompact: 'lg:max-xl:absolute lg:max-xl:inset-y-1 lg:max-xl:left-[68px] lg:max-xl:z-30 lg:max-xl:w-[340px] lg:max-xl:shadow-2xl',
@@ -49,13 +50,47 @@ export function EditorLayout(props: {
   timeline: ReactNode
   /** FIX2 R7: compact clip editor (no Properties column). */
   compact?: boolean
+  /** Phase 2b: resizable left panel width (px), xl+ docked column. */
+  panelWidthPx?: number
+  onPanelWidthChange?: (px: number) => void
 }) {
-  const { band, panelOpen } = props
+  const { band, panelOpen, panelWidthPx, onPanelWidthChange } = props
   const compact = props.compact === true
   const overlay = band === 'mobile' || band === 'compact'
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null)
+
+  const onResizePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (!onPanelWidthChange || panelWidthPx == null) return
+      e.preventDefault()
+      dragRef.current = { startX: e.clientX, startW: panelWidthPx }
+      const onMove = (ev: PointerEvent) => {
+        const st = dragRef.current
+        if (!st) return
+        onPanelWidthChange(st.startW + (ev.clientX - st.startX))
+      }
+      const onUp = () => {
+        dragRef.current = null
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [onPanelWidthChange, panelWidthPx],
+  )
+
+  const panelStyle =
+    panelWidthPx != null
+      ? ({
+          ['--editor-panel-w' as string]: `${panelWidthPx}px`,
+        } as React.CSSProperties)
+      : undefined
+
   return (
     <div
       className={cn(compact ? EDITOR_GRID.rootCompact : EDITOR_GRID.root, 'relative')}
+      style={panelStyle}
       data-testid="editor-grid"
       data-band={band}
       data-compact={compact ? 'true' : undefined}
@@ -67,9 +102,18 @@ export function EditorLayout(props: {
       <section
         data-region="panel"
         hidden={overlay && !panelOpen}
-        className={cn(EDITOR_GRID.panel, EDITOR_GRID.panelMobile, EDITOR_GRID.panelCompact, EDITOR_GRID.panelDocked)}
+        className={cn(EDITOR_GRID.panel, EDITOR_GRID.panelMobile, EDITOR_GRID.panelCompact, EDITOR_GRID.panelDocked, 'relative')}
       >
         {props.panel}
+        {onPanelWidthChange && panelWidthPx != null && !overlay ? (
+          <button
+            type="button"
+            aria-label="Resize panel"
+            data-testid="editor-panel-resize-handle"
+            className="absolute -right-1 top-0 z-10 hidden h-full w-2 cursor-col-resize touch-none xl:block"
+            onPointerDown={onResizePointerDown}
+          />
+        ) : null}
       </section>
       <section data-region="preview" className={EDITOR_GRID.preview}>{props.preview}</section>
       {compact ? null : <aside data-region="properties" className={EDITOR_GRID.properties}>{props.properties}</aside>}

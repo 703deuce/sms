@@ -135,6 +135,7 @@ export function PropertiesPanel({
   onOpenTextPanel,
   onOpenCaptionsPanel,
   onOpenLayoutPanel,
+  projectSettingsSlot,
 }: {
   edits: ClipEditsV2
   target: KeyframeTarget | null
@@ -158,6 +159,8 @@ export function PropertiesPanel({
   onOpenTextPanel?: () => void
   onOpenCaptionsPanel?: () => void
   onOpenLayoutPanel?: () => void
+  /** Phase 2c: project settings when nothing is selected. */
+  projectSettingsSlot?: ReactNode
 }) {
   const avail = tabsFor(target)
   const [tab, setTab] = useState<PropertiesTab>('video')
@@ -198,6 +201,9 @@ export function PropertiesPanel({
         })}
       </div>
       {!target ? (
+        projectSettingsSlot ? (
+          <div data-testid="properties-empty">{projectSettingsSlot}</div>
+        ) : (
         <div
           className="flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/80 bg-muted/30 px-4 py-8 text-center"
           data-testid="properties-empty"
@@ -224,6 +230,7 @@ export function PropertiesPanel({
             </Button>
           </div>
         </div>
+        )
       ) : tab === 'video' && avail.video == null ? (
         <>
           <VideoTab
