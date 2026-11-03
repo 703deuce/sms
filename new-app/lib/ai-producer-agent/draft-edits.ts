@@ -38,7 +38,7 @@ export class DraftEditsBuilder {
         transitions: (plan.transitions ?? []).map((t) => ({
           at: t.atSegment,
           type: t.type,
-        })) as ClipEditsV2['transitions'],
+        })) as unknown as ClipEditsV2['transitions'],
         textItems: (plan.text ?? []) as ClipEditsV2['textItems'],
       },
       this.bounds,

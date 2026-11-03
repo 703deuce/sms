@@ -35,7 +35,7 @@ export async function enqueueAiProducerAnalyzeJob(input: {
 export async function waitForClipJobDone(jobId: string, timeoutMs = 1_200_000) {
   const prisma = getPrisma()
   const started = Date.now()
-  while Date.now() - started < timeoutMs) {
+  while (Date.now() - started < timeoutMs) {
     const job = await prisma.clipJob.findUnique({ where: { id: jobId } })
     if (!job) throw new Error('job_missing')
     if (job.status === 'DONE') return job

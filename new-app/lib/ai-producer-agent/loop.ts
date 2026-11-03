@@ -13,6 +13,7 @@ import { AI_PRODUCER_AGENT_MAX_STEPS } from '@/lib/ai-producer-agent/flags'
 import { createAiProducerOutputProject } from '@/lib/server/ai-producer-agent/create-output-project'
 import { enqueueAiProducerAnalyzeJob, waitForClipJobDone } from '@/lib/server/ai-producer-agent/enqueue-analyze'
 import { resolveAiProducerSources } from '@/lib/server/ai-producer-agent/resolve-sources'
+import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import type { AiProducerRunConfig, AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { verifyEdlCaptionSync } from '@/lib/clips/cuts-quality/edl-invariant'
@@ -164,8 +165,8 @@ export async function runAiProducerAgentLoop(runId: string) {
       phase: 'done',
       resultProjectId: created.projectId,
       resultClipId: created.clipId,
-      draftEdits: draft as object,
-      producerNotes: { plan, hardIssues: hard, replans },
+      draftEdits: toPrismaJson(draft),
+      producerNotes: toPrismaJson({ plan, hardIssues: hard, replans }),
       finishedAt: new Date(),
     },
   })
