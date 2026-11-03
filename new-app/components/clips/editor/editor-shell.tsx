@@ -7,6 +7,7 @@ import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview
 import { EditorRail, EDITOR_RAIL_ITEMS, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { EditorLayout, useEditorBand, aspectCssToNumber } from '@/components/clips/editor/editor-layout'
+import { CanvasLayoutMenu } from '@/components/clips/editor/canvas-layout-menu'
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
@@ -153,6 +154,7 @@ import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { SHOW_SURROUNDING_CONTEXT_MS, editorWindowMs } from '@/lib/clips/trim-bounds'
+import { readTimelineOpen, writeTimelineOpen } from '@/lib/clips/editor/compact-editor'
 import { addMediaToLane, placeAddedOnTrack, replaceBrollMedia, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { ClipRecordMenu } from '@/components/clips/editor/recording/record-menu'
 import { ClipRecorderBar } from '@/components/clips/editor/recording/recorder-bar'
@@ -223,6 +225,7 @@ export function EditorShell({
   fullVideo = false,
   editorAssets = null,
   onEditorMediaError,
+  compact = false,
 }: {
   projectId: string
   projectTitle?: string
@@ -257,6 +260,8 @@ export function EditorShell({
   editorAssets?: EditorAssets | null
   /** STREAMER_editor_fix1: fall back to segment / preview when primary media 404s. */
   onEditorMediaError?: () => void
+  /** FIX2 R7: compact (Opus-style) clip editor: no Properties column, the timeline is collapsible (closed by default). */
+  compact?: boolean
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
@@ -313,6 +318,19 @@ export function EditorShell({
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const band = useEditorBand()
+  // FIX2 R7: read localStorage after mount (no SSR/hydration mismatch)
+  const [timelineOpen, setTimelineOpen] = useState(false)
+  useEffect(() => {
+    if (compact) setTimelineOpen(readTimelineOpen(typeof window === 'undefined' ? null : window.localStorage))
+  }, [compact])
+  const toggleTimeline = useCallback(() => {
+    setTimelineOpen((o) => {
+      const next = !o
+      writeTimelineOpen(typeof window === 'undefined' ? null : window.localStorage, next)
+      return next
+    })
+  }, [])
+  const timelineVisible = !compact || timelineOpen
   const selectPanel = useCallback((id: EditorPanelId) => {
     setPanel(id)
     if (band === 'mobile' || band === 'compact') {
@@ -2448,6 +2466,7 @@ export function EditorShell({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <EditorLayout
           band={band}
+          compact={compact}
           panelOpen={mobilePanelOpen}
           onClosePanel={() => setMobilePanelOpen(false)}
           rail={
@@ -2494,8 +2513,8 @@ export function EditorShell({
                   onContextMenu={(e) => {
                     if ((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]')) return
                     e.preventDefault()
-                    const r = e.currentTarget.getBoundingClientRect()
-                    setLayoutCtx({ x: e.clientX - r.left, y: e.clientY - r.top })
+                    // FIX2 R4: viewport coords. The menu is portaled + position:fixed.
+                    setLayoutCtx({ x: e.clientX, y: e.clientY })
                   }}
                 >
             {(edits.layout.shotOverrides?.length ?? 0) > 0 ? (
@@ -2584,54 +2603,44 @@ export function EditorShell({
             />
             </EditorPanelErrorBoundary>
             {layoutCtx ? (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onPointerDown={() => setLayoutCtx(null)}
-                  onKeyDown={(e) => e.key === 'Escape' && setLayoutCtx(null)}
-                />
-                <div
-                  data-testid="canvas-layout-menu"
-                  role="menu"
-                  className="absolute z-50 w-60 rounded-md border bg-popover p-2 text-sm shadow-lg"
-                  style={{ left: layoutCtx.x, top: layoutCtx.y }}
-                >
-                  <p className="px-1 pb-1 text-xs text-muted-foreground">This scene (from the playhead)</p>
-                  <div className="mb-2 grid grid-cols-2 gap-1">
-                    {EXPORT_LAYOUT_OPTIONS.filter(
-                      (o) =>
-                        !layoutOptionDisabled(o, {
-                          facecamLayout: facecamLayout ?? null,
-                          reframeV2Enabled,
-                          aiExtras: clipEditorAiExtrasEnabled(),
-                        }),
-                    ).map((o) => (
-                      <button
-                        key={o.id}
-                        type="button"
-                        className="rounded px-2 py-1 text-left hover:bg-muted"
-                        onClick={() => {
-                          setLayoutModeAtSource(playheadSourceMs, o.id)
-                          setLayoutCtx(null)
-                        }}
-                      >
-                        {o.title}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="px-1 pb-1 text-xs text-muted-foreground">Whole clip</p>
-                  <LayoutQuickPicker
-                    value={edits.layout.mode}
-                    edits={edits}
-                    facecamLayout={facecamLayout}
-                    reframeV2Enabled={reframeV2Enabled}
-                    onPick={(mode, facecam) => {
-                      onLayoutPick(mode, facecam)
-                      setLayoutCtx(null)
-                    }}
-                  />
+              <CanvasLayoutMenu x={layoutCtx.x} y={layoutCtx.y} onClose={() => setLayoutCtx(null)}>
+                <p className="px-1 pb-1 text-xs font-medium text-muted-foreground">This scene (from the playhead)</p>
+                <div className="mb-2 grid grid-cols-2 gap-1">
+                  {EXPORT_LAYOUT_OPTIONS.filter(
+                    (o) =>
+                      !layoutOptionDisabled(o, {
+                        facecamLayout: facecamLayout ?? null,
+                        reframeV2Enabled,
+                        aiExtras: clipEditorAiExtrasEnabled(),
+                      }),
+                  ).map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      role="menuitem"
+                      className="min-h-8 rounded px-2 py-1.5 text-left leading-tight hover:bg-muted"
+                      onClick={() => {
+                        setLayoutModeAtSource(playheadSourceMs, o.id)
+                        setLayoutCtx(null)
+                      }}
+                    >
+                      {o.title}
+                    </button>
+                  ))}
                 </div>
-              </>
+                <div className="my-2 h-px bg-border" role="separator" />
+                <p className="px-1 pb-1 text-xs font-medium text-muted-foreground">Whole clip</p>
+                <LayoutQuickPicker
+                  value={edits.layout.mode}
+                  edits={edits}
+                  facecamLayout={facecamLayout}
+                  reframeV2Enabled={reframeV2Enabled}
+                  onPick={(mode, facecam) => {
+                    onLayoutPick(mode, facecam)
+                    setLayoutCtx(null)
+                  }}
+                />
+              </CanvasLayoutMenu>
             ) : null}
             {multicamGridOn && multicamGridEligible ? (
               <div className="absolute right-3 top-3 z-10 hidden w-[min(28%,240px)] xl:block">
@@ -2920,7 +2929,7 @@ export function EditorShell({
             </div>
           }
           properties={
-            band === 'wide' ? (
+            !compact && band === 'wide' ? (
               <>
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
                   <h2 className="text-sm font-semibold">Properties</h2>
@@ -2934,6 +2943,19 @@ export function EditorShell({
             ) : null
           }
           timeline={
+          <>
+          {compact ? (
+            <button
+              type="button"
+              data-testid="compact-timeline-toggle"
+              aria-expanded={timelineOpen}
+              className="flex h-8 w-full items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+              onClick={toggleTimeline}
+            >
+              {timelineOpen ? 'Hide timeline' : 'Show timeline'}
+            </button>
+          ) : null}
+          <div className={cn('min-h-0', !timelineVisible && 'hidden')} data-testid="editor-timeline-wrap">
           <Timeline
             angleSources={angleSources}
             edits={edits}
@@ -3013,6 +3035,8 @@ export function EditorShell({
                 : undefined
             }
           />
+          </div>
+          </>
           }
         />
       </div>

@@ -32,6 +32,12 @@ _MIN_MOMENT_S = 5.0
 GAMING_AUTO_MAX_SPAN_S = 60.0
 
 
+def shortfall_reasks_for(skip_edge_reassess: bool) -> int:
+    """FIX2 R2: edge-reassess calls (skip_edge_reassess=True) look at a short window and always fall below
+    min_moments_for_video; re-asking them cost serial model calls (proj_7346) for no gain."""
+    return 0 if skip_edge_reassess else 1
+
+
 def _score_0_100(raw) -> int:
     """FIX1 (S.1/G7): normalise 0–1, 0–10 and 0–100 scales to 0–100 (a 7.5/10 used to become 7)."""
     try:
@@ -1902,7 +1908,7 @@ def watch_video_file(
         max_attempts = video_picker_max_model_attempts()
         model_attempts = 0
         moments_before_shortfall: list[dict] | None = None
-        shortfall_reasks = 1
+        shortfall_reasks = shortfall_reasks_for(skip_edge_reassess)
         prior_moments: list[dict] = []
 
         def _wall_exceeded() -> bool:

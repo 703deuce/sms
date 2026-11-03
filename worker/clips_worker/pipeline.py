@@ -15,6 +15,7 @@ from pathlib import Path
 import psycopg2
 
 from clips_worker.clip_progress import reframe_progress_payload
+from clips_worker.picker_progress import PickerProgressTicker, picker_tick_payload
 from clips_worker.overlap_policy import PICK_OVERLAP_RATIO
 
 from clips_worker.anything_picker import pick_anything_clips
@@ -105,8 +106,8 @@ def insert_clips_batch(conn, rows: list[dict]) -> int:
     return inserted
 
 
-def write_fit_blur_crop_track(video: Path, crop_out: Path, clip_start_ms: int) -> None:
-    """Static wide crop track (x0=-1) for fit-blur fallback."""
+def _probe_video_basics(video: Path) -> tuple[int, int, float, int]:
+    """(width, height, fps, duration_ms) via ffprobe."""
     import subprocess as sp
 
     out = sp.check_output(
@@ -150,6 +151,12 @@ def write_fit_blur_crop_track(video: Path, crop_out: Path, clip_start_ms: int) -
         )
         * 1000
     )
+    return w, h, fps, dur_ms
+
+
+def write_fit_blur_crop_track(video: Path, crop_out: Path, clip_start_ms: int) -> None:
+    """Static wide crop track (x0=-1) for fit-blur fallback."""
+    w, h, fps, dur_ms = _probe_video_basics(video)
     n = max(1, int(dur_ms / 1000 * fps))
     track = {
         "v": 1,
@@ -164,6 +171,57 @@ def write_fit_blur_crop_track(video: Path, crop_out: Path, clip_start_ms: int) -
         "shots": [{"start_ms": clip_start_ms, "end_ms": clip_start_ms + dur_ms, "spk": "A"}],
     }
     crop_out.write_text(json.dumps(track, separators=(",", ":")))
+
+
+def facecam_box_from_edits(edits: dict | None) -> dict | None:
+    """FIX2 R6: normalized facecam box {x,y,w,h} from edits.layout.facecam.box, or None."""
+    if not isinstance(edits, dict):
+        return None
+    layout = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+    fc = layout.get("facecam") if isinstance(layout.get("facecam"), dict) else {}
+    box = fc.get("box") if isinstance(fc.get("box"), dict) else None
+    if not box:
+        return None
+    try:
+        x, y, bw, bh = (float(box["x"]), float(box["y"]), float(box["w"]), float(box["h"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+    if bw <= 0 or bh <= 0 or bw > 1.0001 or bh > 1.0001:
+        return None
+    return {"x": x, "y": y, "w": bw, "h": bh}
+
+
+def write_facecam_crop_track(video: Path, crop_out: Path, clip_start_ms: int, box: dict) -> None:
+    """FIX2 R6: static 9:16 speaker-follow track centred on the facecam (so Speaker follow shows the face)."""
+    w, h, fps, dur_ms = _probe_video_basics(video)
+    cw = min(w, int(round(h * 9 / 16)))
+    cw -= cw % 2
+    cx = (float(box["x"]) + float(box["w"]) / 2.0) * w
+    x0 = int(max(0, min(w - cw, round(cx - cw / 2.0))))
+    n = max(1, int(dur_ms / 1000 * fps))
+    track = {
+        "v": 1,
+        "W": w,
+        "H": h,
+        "cw": cw,
+        "fps": fps,
+        "t0_ms": clip_start_ms,
+        "x0": [x0] * n,
+        "x0_A": [x0] * n,
+        "x0_B": [x0] * n,
+        "shots": [{"start_ms": clip_start_ms, "end_ms": clip_start_ms + dur_ms, "spk": "A"}],
+    }
+    crop_out.write_text(json.dumps(track, separators=(",", ":")))
+    print(f"[reframe] facecam_crop_track W={w} cw={cw} x0={x0}", flush=True)
+
+
+def write_preview_crop_track(video: Path, crop_out: Path, clip_start_ms: int, edits: dict | None) -> None:
+    """FIX2 R6: facecam-centred track when the edits carry a facecam box, else the fit-blur track."""
+    box = facecam_box_from_edits(edits)
+    if box is not None:
+        write_facecam_crop_track(video, crop_out, clip_start_ms, box)
+    else:
+        write_fit_blur_crop_track(video, crop_out, clip_start_ms)
 
 
 def _burn_preview_captions(
@@ -284,7 +342,7 @@ def reframe_clip_preview(
             )
             if t_ok and isinstance(t_meta.get("t6_spec"), dict):
                 shutil.copyfile(t_src, out_mp4)
-                write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
+                write_preview_crop_track(clip_file, crop_track_path, clip_start_ms, edits)
                 cap_src = dict((edits.get("captions") or settings.get("captions") or {}))
                 cap_edits = {**edits, "captions": _t6_caption_edits(cap_src, t_meta["t6_spec"], h)}
                 _burn_preview_captions(out_mp4, words_path, reframe_settings, cap_edits, work_dir, w, h)
@@ -315,6 +373,7 @@ def reframe_clip_preview(
             res = apply_per_clip_layout(clip_file, work_dir, edits, play_w=w, play_h=h)
             if res.applied:
                 shutil.copyfile(res.path, out_mp4)
+                write_preview_crop_track(clip_file, crop_track_path, clip_start_ms, edits)
                 layout_ed = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
                 fc_meta = layout_ed.get("facecam") if isinstance(layout_ed.get("facecam"), dict) else {}
                 fc_pos = str(fc_meta.get("position") or fc_meta.get("facecamPosition") or "top")
@@ -831,11 +890,11 @@ def run_m4_pipeline(
                     conn.commit()
                 post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
             else:
+                # FIX2 R2: one post WITH etaSeconds; PickerProgressTicker keeps it decaying during the picker.
                 post_progress(
                     job_id,
-                    {"projectStatus": "FINDING_CLIPS", "stage": "finding_clips", "progress": 52, "jobStatus": "RUNNING"},
+                    picker_tick_payload(0.0, max(0.0, (range_end - range_start) / 1000.0), clips_render_concurrency()),
                 )
-                post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_pass1", "progress": 52, "jobStatus": "RUNNING"})
                 pick0 = time.monotonic()
                 render_conc = clips_render_concurrency()
                 rendered_spans = set(existing_segments)
@@ -1137,7 +1196,12 @@ def run_m4_pipeline(
                     )
 
                 picker_settings = {**settings, "sourceVideoPath": str(src)}
-                with stage_span("picker", heartbeat=True):
+                with stage_span("picker", heartbeat=True), PickerProgressTicker(
+                    job_id,
+                    post_progress,
+                    max(0.0, (range_end - range_start) / 1000.0),
+                    render_conc,
+                ):
                     picks, picker_message = pick_talking_clips(
                         words,
                         str(audio_wav),

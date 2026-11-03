@@ -28,6 +28,10 @@ WHOLE_FRAME_LAYOUTS = ("irl_world", "no_person")
 MIN_SCENE_S = 2.0
 #: at most this many scenes per clip (model output is capped too).
 MAX_SCENES = 6
+#: FIX2 R5: no layout switch in a clip's first/last seconds (a 3 s tail flip read as a glitch). An edge scene
+#: shorter than max(EDGE_NO_SWITCH_S, EDGE_NO_SWITCH_FRAC * clip duration) joins its neighbour.
+EDGE_NO_SWITCH_S = 4.0
+EDGE_NO_SWITCH_FRAC = 0.15
 #: a person box is grown by this fraction before YuNet faces are matched to it.
 REFINE_PAD = 0.15
 #: AI facecam box -> CV rectangle snap needs this IoU (backstop only).
@@ -166,6 +170,15 @@ def normalize_scene_map(raw: Any, duration_s: float) -> list[dict]:
         keep["start_s"], keep["end_s"] = min(keep["start_s"], drop["start_s"]), max(keep["end_s"], drop["end_s"])
         del out[i]
         out = _merge_same(out)
+    # FIX2 R5: no switch in the first / last edge window
+    edge_s = max(EDGE_NO_SWITCH_S, EDGE_NO_SWITCH_FRAC * dur)
+    while len(out) > 1 and (out[-1]["end_s"] - out[-1]["start_s"]) < edge_s:
+        out[-2]["end_s"] = out[-1]["end_s"]
+        del out[-1]
+    while len(out) > 1 and (out[0]["end_s"] - out[0]["start_s"]) < edge_s:
+        out[1]["start_s"] = out[0]["start_s"]
+        del out[0]
+    out = _merge_same(out)
     while len(out) > MAX_SCENES:
         i = min(range(len(out)), key=lambda k: out[k]["end_s"] - out[k]["start_s"])
         j = i - 1 if i > 0 else 1

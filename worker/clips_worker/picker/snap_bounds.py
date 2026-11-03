@@ -31,7 +31,7 @@ FILLERS = {
     "wow",
     "oh",
 }
-PAD_START_S = 0.15
+PAD_START_S = 0.25  # FIX2 R5: ASR onsets lag the real attack; capped by the previous word end (see _preroll_start_ms)
 PAD_END_S = 0.5
 # FIX1: answer/reaction words that are fillers at a START but the payoff at an END.
 _END_KEEP = {"no", "yes", "yeah", "yep", "right", "exactly", "okay", "ok", "sure", "totally", "wow", "oh"}
@@ -276,16 +276,35 @@ def _pad_end_to_next_word(words: list[dict], we: int, end_ms: int, pad_ms: int, 
     return min(range_end_ms, max(end_ms, min(end_ms + pad_ms, nxt)))
 
 
+def _preroll_start_ms(words: list[dict], wi: int, range_start_ms: int, pad_start_ms: int) -> int:
+    """FIX2 R5: start just before the first substantive word, never inside the previous word.
+
+    Dead air / a filler right before the word -> exact onset (FIX1 rule, pinned by
+    test_start_after_dead_air_does_not_include_silence_pad). Otherwise pre-roll by ``pad_start_ms``,
+    stopping 20 ms after the previous word ends.
+    """
+    w_s = int(words[wi]["s"] * 1000)
+    prev_end_ms = int(words[wi - 1]["e"] * 1000) if wi > 0 else range_start_ms
+    if wi > 0 and _is_filler_token(words[wi - 1]["w"]):
+        return w_s
+    if w_s - prev_end_ms >= int(LEADING_DEAD_AIR_S * 1000):
+        return w_s
+    floor_ms = prev_end_ms + 20 if wi > 0 else range_start_ms
+    return min(w_s, max(range_start_ms, floor_ms, w_s - pad_start_ms))
+
+
 def _snap_ms_out_of_words(
     words: list[dict], start_ms: int, end_ms: int, range_start_ms: int, range_end_ms: int
 ) -> tuple[int, int]:
     """FIX1: never start or end inside a spoken word (after visual anchors / reaction tail / revert moved a bound)."""
-    for w in words:
+    for i, w in enumerate(words):
         ws, wend = int(w["s"] * 1000), int(w["e"] * 1000)
         if ws < start_ms < wend:
             start_ms = max(range_start_ms, ws)
         if ws < end_ms < wend:
-            end_ms = min(range_end_ms, wend + 120)
+            # FIX2 R5: finish the word (+120 ms tail) but never run into the next word's onset.
+            nxt = int(words[i + 1]["s"] * 1000) - 20 if i + 1 < len(words) else range_end_ms
+            end_ms = min(range_end_ms, max(wend, min(wend + 120, nxt)))
     return start_ms, end_ms
 
 
@@ -383,16 +402,7 @@ def snap_bounds(
     pad_start_ms = int(PAD_START_S * 1000)
     pad_end_ms = int(PAD_END_S * 1000)
     if substantive_wi < len(words):
-        w_s = int(words[substantive_wi]["s"] * 1000)
-        prev_end_ms = int(words[substantive_wi - 1]["e"] * 1000) if substantive_wi > 0 else range_start_ms
-        dead_air_before = w_s - prev_end_ms >= int(LEADING_DEAD_AIR_S * 1000)
-        prev_is_filler = substantive_wi > 0 and _is_filler_token(words[substantive_wi - 1]["w"])
-        if prev_is_filler or dead_air_before:
-            start_ms = w_s
-        else:
-            start_ms = max(range_start_ms, w_s - pad_start_ms)
-            if _word_index_at_ms(words, start_ms, "start") < substantive_wi:
-                start_ms = w_s
+        start_ms = _preroll_start_ms(words, substantive_wi, range_start_ms, pad_start_ms)  # FIX2 R5
     else:
         start_ms = max(range_start_ms, int(start_ms - pad_start_ms))
     end_ms = _pad_end_to_next_word(words, we, int(end_ms), pad_end_ms, range_end_ms)

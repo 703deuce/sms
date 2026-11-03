@@ -234,6 +234,12 @@ export function CanvasSelectionOverlay({
     const down = (ev: PointerEvent) => {
       if (ev.button !== 0 || editing) return
       const target = ev.target as Element | null
+      // FIX2 R3: caption / stack direct handles own this gesture. This native listener runs BEFORE their
+      // React onPointerDown (React listens at the root), so bail here or the video gets selected + dragged.
+      if (target?.closest('[data-canvas-direct]')) {
+        onSelect(null)
+        return
+      }
       if (target?.closest(SKIP)) return
       const p = pointIn(ev)
       if (!p) return
@@ -306,6 +312,7 @@ export function CanvasSelectionOverlay({
     if (!box) return
     const dbl = (ev: MouseEvent) => {
       if (readOnly) return
+      if ((ev.target as Element | null)?.closest('[data-canvas-direct]')) return
       const p = pointIn(ev)
       if (!p) return
       const hit = hitTest(p)

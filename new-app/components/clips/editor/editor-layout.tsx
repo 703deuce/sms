@@ -21,6 +21,12 @@ export const EDITOR_GRID = {
     'lg:grid-cols-[64px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto] ' +
     'xl:grid-cols-[64px_minmax(280px,340px)_minmax(0,1fr)] ' +
     '2xl:grid-cols-[64px_minmax(300px,360px)_minmax(0,1fr)_minmax(280px,320px)]',
+  /** FIX2 R7: compact clip editor, no 4th (Properties) column at 2xl. */
+  rootCompact: 'grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
+    'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
+    'lg:grid-cols-[64px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto] ' +
+    'xl:grid-cols-[64px_minmax(280px,340px)_minmax(0,1fr)] ' +
+    '2xl:grid-cols-[64px_minmax(300px,360px)_minmax(0,1fr)]',
   rail: 'min-h-0 lg:row-span-2 lg:col-start-1 lg:row-start-1',
   panelMobile: 'max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:max-h-[70dvh] max-lg:rounded-t-xl max-lg:border-t',
   panelCompact: 'lg:max-xl:absolute lg:max-xl:inset-y-1 lg:max-xl:left-[68px] lg:max-xl:z-30 lg:max-xl:w-[340px] lg:max-xl:shadow-2xl',
@@ -41,11 +47,19 @@ export function EditorLayout(props: {
   preview: ReactNode
   properties: ReactNode
   timeline: ReactNode
+  /** FIX2 R7: compact clip editor (no Properties column). */
+  compact?: boolean
 }) {
   const { band, panelOpen } = props
+  const compact = props.compact === true
   const overlay = band === 'mobile' || band === 'compact'
   return (
-    <div className={cn(EDITOR_GRID.root, 'relative')} data-testid="editor-grid" data-band={band}>
+    <div
+      className={cn(compact ? EDITOR_GRID.rootCompact : EDITOR_GRID.root, 'relative')}
+      data-testid="editor-grid"
+      data-band={band}
+      data-compact={compact ? 'true' : undefined}
+    >
       <div data-region="rail" className={EDITOR_GRID.rail}>{props.rail}</div>
       {overlay && panelOpen ? (
         <button type="button" aria-label="Close panel" className={EDITOR_GRID.backdrop} onClick={props.onClosePanel} data-testid="editor-panel-backdrop" />
@@ -58,7 +72,7 @@ export function EditorLayout(props: {
         {props.panel}
       </section>
       <section data-region="preview" className={EDITOR_GRID.preview}>{props.preview}</section>
-      <aside data-region="properties" className={EDITOR_GRID.properties}>{props.properties}</aside>
+      {compact ? null : <aside data-region="properties" className={EDITOR_GRID.properties}>{props.properties}</aside>}
       <section data-region="timeline" className={EDITOR_GRID.timeline}>{props.timeline}</section>
     </div>
   )

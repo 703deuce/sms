@@ -132,11 +132,15 @@ export function ProjectSettingsForm({
               <button
                 key={layout}
                 type="button"
+                aria-pressed={settings.layout === layout}
+                data-selected={settings.layout === layout ? 'true' : undefined}
                 disabled={disabled}
                 onClick={() => onChange({ ...settings, layout })}
                 className={cn(
                   'min-w-0 h-auto min-h-9 whitespace-normal text-left px-3 py-2 text-[13px] leading-tight rounded-lg border surface',
-                  settings.layout === layout ? 'border-primary' : 'border-border',
+                  settings.layout === layout
+                    ? 'border-primary bg-accent text-accent-foreground ring-1 ring-primary font-medium'
+                    : 'border-border',
                   disabled && 'opacity-50',
                 )}
               >

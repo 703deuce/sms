@@ -111,6 +111,7 @@ export function EditorClipShell(props: {
         fullVideo={props.fullVideo}
         editorAssets={props.editorAssets}
         onEditorMediaError={onPrimaryMediaError}
+        compact={!props.fullVideo}
       />
     </ClipperSurfaceErrorBoundary>
   )

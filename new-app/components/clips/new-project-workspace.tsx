@@ -14,7 +14,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createProject, createProjectFromLink, estimateCredits } from '@/lib/clips-api'
 import { validateImportUrlForSubmit, YOUTUBE_UNSUPPORTED_MSG } from '@/lib/clips/import-url'
-import { defaultClipSettings, TOOL_PRESET_MAP, type ClipProjectSettings } from '@/lib/clips/settings'
+import { defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
+import { initialNewProjectSettings } from '@/lib/clips/new-project-initial'
 import { BYO_DURATION_ERROR } from '@/lib/clips/byo-project'
 import {
   FULL_VIDEO_DURATION_ERROR,
@@ -38,10 +39,8 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   // FV1: /app/clips/new?intent=full opens "Edit a full video" (Home links here).
   const fullIntentParam = params.get('intent') === 'full'
   const initial = useMemo(() => {
-    if (fullIntentParam) return defaultClipSettings({ byo: true, fullVideo: true, aspectRatio: '16:9' })
-    const base = defaultClipSettings()
-    if (preset && TOOL_PRESET_MAP[preset]) return defaultClipSettings(TOOL_PRESET_MAP[preset])
-    return base
+    // FIX2 R1: default layout = Auto variety (see lib/clips/new-project-initial.ts)
+    return initialNewProjectSettings(preset, Boolean(fullIntentParam))
   }, [preset, fullIntentParam])
 
   const tabParam = params.get('tab')
