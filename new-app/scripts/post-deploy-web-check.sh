@@ -28,6 +28,19 @@ if [[ -n "$EXPECTED_SHA" ]]; then
   echo "commitSha matches $EXPECTED_SHA"
 fi
 
+echo "== post-deploy: exactly one running web container (Coolify) =="
+if ssh -o BatchMode=yes -o ConnectTimeout=12 coolify-server \
+  'c=$(docker ps --filter name=ds8s3hjin60qs6g7s0iqkixs --format "{{.Names}}" | wc -l); echo "$c"; docker ps --filter name=ds8s3hjin60qs6g7s0iqkixs --format "{{.Names}}\t{{.Image}}"' 2>/dev/null; then
+  COUNT="$(ssh -o BatchMode=yes coolify-server 'docker ps --filter name=ds8s3hjin60qs6g7s0iqkixs --format "{{.Names}}" | wc -l' 2>/dev/null | tr -d ' ')"
+  if [[ "$COUNT" != "1" ]]; then
+    echo "FAIL: expected 1 running web container, got $COUNT (stale containers cause /_next/static 404s)" >&2
+    exit 1
+  fi
+  echo "running web containers: $COUNT"
+else
+  echo "WARN: could not SSH to coolify-server — verify single web container manually"
+fi
+
 echo "== post-deploy: grep web container logs (first minute ReferenceError/TypeError) =="
 echo "Run on Coolify host if needed:"
 echo "  ssh coolify-server 'docker logs --since 1m \$(docker ps -q --filter label=coolify.applicationId=1 | head -1) 2>&1 | rg \"ReferenceError|TypeError\" || true'"

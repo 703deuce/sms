@@ -44,6 +44,7 @@ import { editorPreviewDurationMs, editorPreviewEdits } from '@/lib/clips/editor-
 import { seedEditorExportTemplate } from '@/lib/clips/editor-export-template-seed'
 import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { exportTimeMap, toExportMs } from '@/lib/clips/editor/export-time'
+import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { sourceMsToEditorMs } from '@/lib/clips/editor/source-ms-to-editor'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
@@ -2967,7 +2968,6 @@ export function EditorShell({
           onRedo={redo}
           historySlot={historyPanel}
           onExport={() => setExportOpen(true)}
-          layoutSlot={<OpenInFullVideoButton clipId={clipId} />}
           onRetrySave={() => {
             void flushSave()
           }}
@@ -2979,15 +2979,18 @@ export function EditorShell({
             <EditorLayoutViewSwitch value={layoutView} onChange={setLayoutViewPersist} />
           }
           layoutSlot={
-            <EditorLayoutMenu>
-              <LayoutQuickPicker
-                value={edits.layout.mode}
-                edits={edits}
-                facecamLayout={facecamLayout}
-                reframeV2Enabled={reframeV2Enabled}
-                onPick={onLayoutPick}
-              />
-            </EditorLayoutMenu>
+            <>
+              <OpenInFullVideoButton clipId={clipId} />
+              <EditorLayoutMenu>
+                <LayoutQuickPicker
+                  value={edits.layout.mode}
+                  edits={edits}
+                  facecamLayout={facecamLayout}
+                  reframeV2Enabled={reframeV2Enabled}
+                  onPick={onLayoutPick}
+                />
+              </EditorLayoutMenu>
+            </>
           }
           versionsSlot={
             <>
