@@ -2,10 +2,17 @@
 
 import { useCallback, useMemo, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Captions, Clapperboard, Eraser, Image as ImageIcon, Languages, LayoutPanelTop, Layers, Music2, Palette, Sparkles, FileText, Type, LayoutTemplate, SwatchBook, FolderOpen, SlidersHorizontal, Megaphone } from 'lucide-react'
+import { Captions, Eraser, FileText, FolderOpen, Image as ImageIcon, Languages, LayoutPanelTop, Layers, LayoutTemplate, Megaphone, Music2, Palette, SlidersHorizontal, Sparkles, SwatchBook, Type, Clapperboard } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
+import {
+  clipEditorLeftPanelIds,
+  editorRailGroups,
+  panelToRailGroup,
+  readRailGroupTab,
+  type EditorRailGroupId,
+} from '@/lib/clips/editor/editor-rail-navigation'
 
 export type EditorPanelId =
   | 'producer'
@@ -26,35 +33,10 @@ export type EditorPanelId =
   | 'repurpose'
   | 'inspector'
 
-/**
- * Clip editor rail, top to bottom. The launch items keep their positions; re-hooked tools are appended
- * below Audio (B-roll, Brand, Cover). Dub (paid AI voice) only with NEXT_PUBLIC_CLIP_EDITOR_AI_EXTRAS=1.
- * AI Producer stays off the rail (E4: ✨ top-bar pop-over). E4 appends Text, Templates, Color; E5 appends
- * Media (uploads, Rooms angles, multicam) last.
- */
+/** Left-column panels (legacy helper — prefer editorRailGroups). */
 export function clipEditorRailIds(aiExtras: boolean = clipEditorAiExtrasEnabled()): EditorPanelId[] {
-  return [
-    'transcript',
-    'cleanup',
-    'layout',
-    'layers',
-    'captions',
-    'audio',
-    'broll',
-    'brand',
-    'thumbnail',
-    ...(aiExtras ? (['dub'] as EditorPanelId[]) : []),
-    'text',
-    'templates',
-    'color',
-    'media',
-    'repurpose',
-    // G1a: selection-driven Properties inspector (canvas / timeline selection opens it).
-    'inspector',
-  ]
+  return clipEditorLeftPanelIds(aiExtras)
 }
-
-const CLIP_EDITOR_RAIL_IDS: EditorPanelId[] = clipEditorRailIds()
 
 const ALL_EDITOR_RAIL_ITEMS: {
   id: EditorPanelId
@@ -81,80 +63,90 @@ const ALL_EDITOR_RAIL_ITEMS: {
   { id: 'inspector', label: 'Properties', icon: SlidersHorizontal },
 ]
 
-/** Ordered by CLIP_EDITOR_RAIL_IDS (not ALL_EDITOR_RAIL_ITEMS) so existing items never move. */
-export const EDITOR_RAIL_ITEMS = CLIP_EDITOR_RAIL_IDS.map((id) => ALL_EDITOR_RAIL_ITEMS.find((item) => item.id === id)).filter(
-  (item): item is (typeof ALL_EDITOR_RAIL_ITEMS)[number] => Boolean(item),
+export const EDITOR_RAIL_ITEMS = ALL_EDITOR_RAIL_ITEMS.filter((item) =>
+  clipEditorLeftPanelIds(true).includes(item.id),
 )
 
-const dubOnRail = CLIP_EDITOR_RAIL_IDS.includes('dub')
+/** @deprecated Phase 2 uses editorRailGroups — kept for tests referencing group shape. */
+export const EDITOR_RAIL_GROUPS: { id: string; label: string; ids: EditorPanelId[] }[] = editorRailGroups().map((g) => ({
+  id: g.id,
+  label: g.label,
+  ids: g.tabs.map((t) => t.id),
+}))
 
-export const EDITOR_RAIL_GROUPS: { id: string; label: string; ids: EditorPanelId[] }[] = [
-  { id: 'ai', label: 'AI', ids: dubOnRail ? ['repurpose', 'dub'] : ['repurpose'] },
-  { id: 'edit', label: 'Edit', ids: ['transcript', 'cleanup', 'captions', 'text', 'layers'] },
-  { id: 'media', label: 'Media', ids: ['media', 'broll', 'audio', 'thumbnail'] },
-  { id: 'style', label: 'Style', ids: ['layout', 'templates', 'brand', 'color'] },
-  { id: 'props', label: 'Properties', ids: ['inspector'] },
-]
-
-function shortRailLabel(label: string): string {
-  if (label === 'AI Producer') return 'Producer'
-  if (label === 'Properties') return 'Props'
-  return label
-}
-
-const itemById = new Map(EDITOR_RAIL_ITEMS.map((item) => [item.id, item]))
+const itemById = new Map(ALL_EDITOR_RAIL_ITEMS.map((item) => [item.id, item]))
 
 export function editorRailIcon(id: EditorPanelId) {
-  return EDITOR_RAIL_ITEMS.find((r) => r.id === id)?.icon ?? FileText
+  const group = panelToRailGroup(id)
+  if (group) return group.icon
+  return itemById.get(id)?.icon ?? FileText
 }
 
 export function EditorRail({
   active,
   onChange,
+  onSelectGroup,
   variant = 'vertical',
   hiddenIds = [],
 }: {
   active: EditorPanelId
   onChange: (id: EditorPanelId) => void
+  /** When set, group clicks resolve last-used tab per group. */
+  onSelectGroup?: (groupId: EditorRailGroupId) => void
   variant?: 'vertical' | 'horizontal'
   hiddenIds?: string[]
 }) {
   const navRef = useRef<HTMLElement>(null)
   const horizontal = variant === 'horizontal'
   const hidden = useMemo(() => new Set(hiddenIds), [hiddenIds])
+  const groups = useMemo(() => editorRailGroups(), [])
+  const activeGroupId = panelToRailGroup(active)?.id ?? null
 
-  const visibleItems = useMemo(
-    () => EDITOR_RAIL_ITEMS.filter((item) => !hidden.has(item.id)),
-    [hidden],
+  const visibleGroups = useMemo(() => groups.filter((g) => g.tabs.some((t) => !hidden.has(t.id))), [groups, hidden])
+
+  const pickGroup = useCallback(
+    (groupId: EditorRailGroupId) => {
+      if (onSelectGroup) {
+        onSelectGroup(groupId)
+        return
+      }
+      const group = groups.find((g) => g.id === groupId)
+      if (!group) return
+      const fallback = group.tabs[0]!.id
+      onChange(readRailGroupTab(groupId, fallback))
+    },
+    [groups, onChange, onSelectGroup],
   )
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (horizontal) return
-      const idx = visibleItems.findIndex((r) => r.id === active)
+      const idx = visibleGroups.findIndex((g) => g.id === activeGroupId)
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        const next = visibleItems[Math.min(visibleItems.length - 1, idx + 1)]
-        if (next) onChange(next.id)
+        const next = visibleGroups[Math.min(visibleGroups.length - 1, idx + 1)]
+        if (next) pickGroup(next.id)
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault()
-        const prev = visibleItems[Math.max(0, idx - 1)]
-        if (prev) onChange(prev.id)
+        const prev = visibleGroups[Math.max(0, idx - 1)]
+        if (prev) pickGroup(prev.id)
       }
     },
-    [active, horizontal, onChange, visibleItems],
+    [activeGroupId, horizontal, pickGroup, visibleGroups],
   )
 
-  const renderButton = ({ id, label, icon: Icon, tone }: (typeof EDITOR_RAIL_ITEMS)[number], vertical: boolean) => {
-    const isActive = active === id
+  const renderGroupButton = (group: (typeof groups)[number], vertical: boolean) => {
+    const isActive = activeGroupId === group.id || (group.id === 'script' && active === 'repurpose')
+    const Icon = group.icon
     const btn = (
       <button
         type="button"
-        aria-label={label}
+        aria-label={group.label}
         aria-current={isActive ? 'page' : undefined}
         tabIndex={0}
-        onClick={() => onChange(id)}
+        data-testid={`editor-rail-group-${group.id}`}
+        onClick={() => pickGroup(group.id)}
         className={cn(
           vertical
             ? 'relative flex h-12 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -165,17 +157,15 @@ export function EditorRail({
           isActive && !vertical && 'bg-accent text-foreground',
         )}
       >
-        <Icon className={cn('size-5', isActive && tone)} aria-hidden />
-        {vertical ? (
-          <span className="max-w-full truncate text-[11px] leading-none">{shortRailLabel(label)}</span>
-        ) : null}
+        <Icon className="size-5" aria-hidden />
+        {vertical ? <span className="max-w-full truncate text-[11px] leading-none">{group.label}</span> : null}
       </button>
     )
     if (horizontal) return btn
     return (
       <Tooltip>
         <TooltipTrigger render={btn} />
-        <TooltipContent side="right">{label}</TooltipContent>
+        <TooltipContent side="right">{group.label}</TooltipContent>
       </Tooltip>
     )
   }
@@ -192,20 +182,12 @@ export function EditorRail({
           : 'hidden h-full w-16 shrink-0 flex-col items-center gap-0.5 overflow-y-auto rounded-lg border border-border bg-card py-2 [scrollbar-width:thin] lg:flex',
       )}
     >
-      {horizontal
-        ? visibleItems.map((item) => <span key={item.id}>{renderButton(item, false)}</span>)
-        : EDITOR_RAIL_GROUPS.map((group, gi) => {
-            const groupItems = group.ids.map((id) => itemById.get(id)).filter((item): item is (typeof EDITOR_RAIL_ITEMS)[number] => Boolean(item) && !hidden.has(item.id))
-            if (!groupItems.length) return null
-            return (
-              <div key={group.id} className="flex w-full flex-col items-center gap-0.5">
-                {gi > 0 ? <div className="my-1 h-px w-8 bg-border" aria-hidden /> : null}
-                {groupItems.map((item) => (
-                  <span key={item.id}>{renderButton(item, true)}</span>
-                ))}
-              </div>
-            )
-          })}
+      {visibleGroups.map((group, gi) => (
+        <div key={group.id} className="flex w-full flex-col items-center gap-0.5">
+          {gi > 0 && !horizontal ? <div className="my-1 h-px w-8 bg-border" aria-hidden /> : null}
+          {renderGroupButton(group, !horizontal)}
+        </div>
+      ))}
     </nav>
   )
 }

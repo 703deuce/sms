@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Scissors, Search, Undo2, User, EyeOff, RotateCcw, Pencil } from 'lucide-react'
+import { Scissors, Search, Undo2, User, EyeOff, RotateCcw, Pencil, MoreHorizontal } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +33,16 @@ import {
   speakerDisplayName,
 } from '@/lib/clips/editor/transcript-edit'
 import { clipsFetch } from '@/lib/clips-api'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 import type { VisualMomentRow } from '@/lib/clips/editor/highlights'
@@ -84,6 +94,7 @@ export function TranscriptPanel({
   highlightWordIdx,
   momentRows,
   onSelectRange,
+  compactToolbar = false,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -119,6 +130,8 @@ export function TranscriptPanel({
   highlightWordIdx?: Set<number>
   momentRows?: VisualMomentRow[]
   onSelectRange?: (startMs: number, endMs: number) => void
+  /** Phase 2b: single-row find + overflow menu; transcript fills panel height. */
+  compactToolbar?: boolean
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
@@ -631,10 +644,166 @@ export function TranscriptPanel({
   }
 
   return (
-    <div className="flex flex-col gap-3 p-3" aria-busy={wordsLoading}>
+    <div
+      className={cn('flex flex-col', compactToolbar ? 'h-full min-h-0 gap-2 p-3' : 'gap-3 p-3')}
+      aria-busy={wordsLoading}
+    >
       {wordsLoading ? (
         <p className="text-xs text-muted-foreground" role="status">Updating transcript for extended trim…</p>
       ) : null}
+      {compactToolbar ? (
+        <div className="flex shrink-0 items-center gap-2" data-testid="transcript-find-replace">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              ref={findInputRef}
+              className="h-8 pl-8"
+              placeholder="Find…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Find in transcript"
+            />
+          </div>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{phraseMatches.length} matches</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 px-2"
+            disabled={!phraseMatches.length}
+            aria-label="Previous match"
+            onClick={() => {
+              if (!phraseMatches.length) return
+              const next = (safeMatchIndex - 1 + phraseMatches.length) % phraseMatches.length
+              setMatchIndex(next)
+              onSeek(phraseMatches[next]!.startMs)
+            }}
+          >
+            ◀
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 px-2"
+            disabled={!phraseMatches.length}
+            aria-label="Next match"
+            onClick={() => {
+              if (!phraseMatches.length) return
+              const next = (safeMatchIndex + 1) % phraseMatches.length
+              setMatchIndex(next)
+              onSeek(phraseMatches[next]!.startMs)
+            }}
+          >
+            ▶
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button type="button" size="sm" variant="outline" className="h-8 w-8 px-0" data-testid="transcript-more-menu" aria-label="More transcript actions">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Find & replace</DropdownMenuLabel>
+                <div className="px-2 pb-2">
+                  <Input
+                    className="h-8"
+                    placeholder="Replace…"
+                    value={replace}
+                    onChange={(e) => setReplace(e.target.value)}
+                    aria-label="Replace with"
+                  />
+                </div>
+                <DropdownMenuItem disabled={!activeMatch} onClick={applyReplaceCurrent}>
+                  Replace
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!phraseMatches.length} onClick={applyReplaceAll}>
+                  Replace all
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAddToVocab((v) => !v)}>
+                  {addToVocab ? '✓ ' : ''}Add to my vocabulary
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>View</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => onShowSurroundingChange?.(!showSurrounding)}>
+                  {showSurrounding ? '✓ ' : ''}Show surrounding
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setShowDeleted((v) => {
+                      const next = !v
+                      persist('transovo.script.showDeleted', next)
+                      return next
+                    })
+                  }}
+                >
+                  {showDeleted ? '✓ ' : ''}Show deleted
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setFollow((v) => {
+                      const next = !v
+                      persist('transovo.script.follow', next)
+                      return next
+                    })
+                  }}
+                >
+                  {follow ? '✓ ' : ''}Follow playhead
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Cuts & selection</DropdownMenuLabel>
+                <DropdownMenuItem disabled>{cutCount} cuts</DropdownMenuItem>
+                {cutCount > 0 && onSetEdits ? (
+                  <DropdownMenuItem onClick={restoreAll}>Restore all cuts</DropdownMenuItem>
+                ) : null}
+                {reorderActive && onPatchSectionOrder ? (
+                  <DropdownMenuItem onClick={() => onPatchSectionOrder(undefined)}>Reset order</DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onClick={deleteSelection}>Delete selection</DropdownMenuItem>
+                {onBuildFromTranscript ? (
+                  <DropdownMenuItem onClick={onBuildFromTranscript}>Build from transcript</DropdownMenuItem>
+                ) : null}
+                {onPatchSectionOrder && mediaKind !== 'composite' ? (
+                  <>
+                    <DropdownMenuItem disabled={selStart === null} onClick={() => moveSection('up')}>
+                      Move up
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={selStart === null} onClick={() => moveSection('down')}>
+                      Move down
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+                {onSaveAsNewClip ? (
+                  <DropdownMenuItem
+                    disabled={selStart === null || selEnd === null}
+                    onClick={() => {
+                      if (selStart == null || selEnd == null) return
+                      const trimIn = Math.min(selStart, selEnd)
+                      const trimOut = Math.max(selStart, selEnd)
+                      const title = selectionWords()
+                        .map((w) => wordDisplayText(w, edits.wordFixes))
+                        .join(' ')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .slice(0, 120)
+                      void onSaveAsNewClip(trimIn, trimOut, title || undefined)
+                    }}
+                  >
+                    Make clip
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : (
       <div className="flex flex-col gap-2" data-testid="transcript-find-replace">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[120px] flex-1">
@@ -758,6 +927,7 @@ export function TranscriptPanel({
           </div>
         </div>
       </div>
+      )}
       {selStart !== null && selEnd !== null && (
         <div className="flex w-fit gap-1 rounded-lg border border-border bg-popover p-1 shadow-md">
           <Button size="sm" variant="ghost" className="h-8 gap-1" onClick={deleteSelection}>
@@ -820,6 +990,7 @@ export function TranscriptPanel({
             : null}
         </div>
       )}
+      {!compactToolbar ? (
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={deleteSelection}>Delete selection</Button>
         {onBuildFromTranscript ? (
@@ -885,9 +1056,13 @@ export function TranscriptPanel({
           </Button>
         ) : null}
       </div>
+      ) : null}
       <div
         ref={scrollRef}
-        className="max-h-[min(50vh,420px)] overflow-y-auto text-sm leading-relaxed"
+        className={cn(
+          'overflow-y-auto text-sm leading-relaxed',
+          compactToolbar ? 'min-h-0 flex-1' : 'max-h-[min(50vh,420px)]',
+        )}
         onWheel={bumpFollowPause}
         onTouchStart={bumpFollowPause}
         onScroll={bumpFollowPause}

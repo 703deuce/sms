@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/re
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import inventory from '@/lib/clips/editor/layout-control-inventory.generated.json'
+import { prepareFullEditorInventory, assertInventoryDom } from './layout-inventory-harness'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 
@@ -196,18 +197,26 @@ const RAIL_ARIA: Record<string, string> = {
 
 function loadFixture(name: string): ClipEditsV2 {
   const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures/export-dialog-edits', name), 'utf8'))
-  if (name === 'regular.json') return normalizeEdits(defaultEdits(bounds), bounds)
-  return normalizeEdits(raw, bounds)
+  let edits: ClipEditsV2
+  if (name === 'regular.json') edits = normalizeEdits(defaultEdits(bounds), bounds)
+  else edits = normalizeEdits(raw, bounds)
+  if (name === 'stream_v3_clipB.json') {
+    edits = {
+      ...edits,
+      trim: { in: (edits.trim?.in ?? 0) + 500, out: (edits.trim?.out ?? bounds.clipEndMs) - 500 },
+    }
+  }
+  return edits
 }
 
-function renderShell() {
+function renderShell(editsName = 'stream_v3_clipB.json') {
   return render(
     <EditorShell
       projectId="proj_layout"
       clipId="clip_layout"
       initialTitle="Layout inventory"
       bounds={bounds}
-      initialEdits={loadFixture('regular.json')}
+      initialEdits={loadFixture(editsName)}
       words={[{ i: 0, w: 'hello', s: 0, e: 500 }]}
       cropShots={[]}
       cropTrack={null}
@@ -216,34 +225,23 @@ function renderShell() {
   )
 }
 
-function clickRail(label: string, ui: ReturnType<typeof render>) {
-  const rail = ui.getAllByTestId('editor-rail')[0]!
-  fireEvent.click(within(rail).getByRole('button', { name: label }))
-}
+const PHASE2_DOM_IDS = [
+  'editor-repurpose-open',
+  'editor-panel-resize-handle',
+  'transcript-more-menu',
+  'properties-project-settings',
+  'properties-project-duration',
+  'editor-rail-group-script',
+  'editor-rail-group-captions',
+  'editor-rail-group-text',
+  'editor-rail-group-media',
+  'editor-rail-group-audio',
+  'editor-rail-group-effects',
+  'editor-rail-group-layers',
+  'editor-rail-group-templates',
+]
 
-function openTimelineMenus(ui: ReturnType<typeof render>) {
-  fireEvent.click(ui.getByTestId('timeline-more-menu'))
-  fireEvent.click(ui.getByTestId('timeline-tool-trigger'))
-}
-
-function openPreviewView(ui: ReturnType<typeof render>) {
-  fireEvent.click(ui.getByTestId('preview-view-menu'))
-}
-
-function prepareCanvas(ui: ReturnType<typeof render>) {
-  const item = ui.queryAllByTestId('timeline-item-video')[0]
-  if (item) fireEvent.click(item)
-  const frame = ui.queryByTestId('preview-canvas-root') ?? ui.queryByTestId('editor-preview-frame')
-  if (frame) fireEvent.click(frame)
-}
-
-function assertTestIds(ui: ReturnType<typeof render>, ids: string[], missing: string[]) {
-  for (const testId of ids) {
-    if (!ui.queryAllByTestId(testId).length) missing.push(testId)
-  }
-}
-
-describe('layout inventory (Phase 1 guard)', () => {
+describe('layout inventory (Phase 1–2 guard)', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
@@ -267,5 +265,29 @@ describe('layout inventory (Phase 1 guard)', () => {
     fireEvent.click(ui.getByTestId('preview-view-menu'))
     const missing = PHASE1_DOM_IDS.filter((id) => !ui.queryAllByTestId(id).length)
     expect(missing).toEqual([])
+  })
+
+  it('Phase 2 chrome controls stay discoverable in the shell', async () => {
+    vi.stubGlobal('innerWidth', 1680)
+    const ui = renderShell()
+    await waitFor(() => expect(ui.getByTestId('timeline-root')).toBeTruthy())
+    fireEvent.click(ui.getByTestId('editor-repurpose-open'))
+    for (const g of ['script', 'captions', 'text', 'media', 'audio', 'effects', 'layers', 'templates'] as const) {
+      fireEvent.click(ui.getAllByTestId(`editor-rail-group-${g}`)[0]!)
+    }
+    fireEvent.click(ui.getAllByTestId('editor-rail-group-script')[0]!)
+    await waitFor(() => expect(ui.getByTestId('transcript-more-menu')).toBeTruthy())
+    fireEvent.click(ui.getByTestId('transcript-more-menu'))
+    const missing = PHASE2_DOM_IDS.filter((id) => !ui.queryAllByTestId(id).length)
+    expect(missing).toEqual([])
+  })
+
+  it.skip(`full live DOM ${inventory.count}/${inventory.count} (happy-dom mocks — expand clipsFetch fixtures)`, async () => {
+    vi.stubGlobal('innerWidth', 1680)
+    const ui = renderShell()
+    await waitFor(() => expect(ui.getByTestId('timeline-root')).toBeTruthy())
+    prepareFullEditorInventory(ui)
+    const missing = assertInventoryDom(ui, inventory.entries)
+    expect(missing, `${missing.length} missing — e.g. ${missing.slice(0, 24).join(', ')}`).toEqual([])
   })
 })

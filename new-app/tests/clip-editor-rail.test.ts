@@ -1,28 +1,44 @@
 import { describe, expect, it } from 'vitest'
-import { EDITOR_RAIL_ITEMS, clipEditorRailIds } from '@/components/clips/editor/editor-rail'
+import { clipEditorRailIds, EDITOR_RAIL_GROUPS } from '@/components/clips/editor/editor-rail'
+import { clipEditorRailGroupIds, editorRailGroups } from '@/lib/clips/editor/editor-rail-navigation'
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 
-const LAUNCH = ['transcript', 'cleanup', 'layout', 'layers', 'captions', 'audio']
-// E4: appended after every existing item so nothing moves; E5 appends Media after them.
-const E4 = ['text', 'templates', 'color', 'media']
-// G1a: Properties inspector appended last.
-const G1A = ['repurpose', 'inspector']
-
 describe('clip editor rail', () => {
-  it('keeps the launch items first and in place, then appends re-hooked tools', () => {
-    expect(EDITOR_RAIL_ITEMS.map((i) => i.id)).toEqual([...LAUNCH, 'broll', 'brand', 'thumbnail', ...E4, ...G1A])
+  it('exposes eight rail groups with expected tabs (Phase 2)', () => {
+    expect(clipEditorRailGroupIds()).toEqual([
+      'script',
+      'captions',
+      'text',
+      'media',
+      'audio',
+      'effects',
+      'layers',
+      'templates',
+    ])
+    const media = editorRailGroups(false).find((g) => g.id === 'media')
+    expect(media?.tabs.map((t) => t.id)).toEqual(['media', 'broll', 'thumbnail'])
+    const effects = editorRailGroups(false).find((g) => g.id === 'effects')
+    expect(effects?.tabs.map((t) => t.id)).toEqual(['color', 'layout'])
   })
 
-  it('shows Dub only with AI extras on', () => {
-    expect(clipEditorRailIds(false)).not.toContain('dub')
-    expect(clipEditorRailIds(true)).toEqual([...LAUNCH, 'broll', 'brand', 'thumbnail', 'dub', ...E4, ...G1A])
+  it('left panels include repurpose but not producer or inspector', () => {
+    expect(clipEditorRailIds(false)).toContain('repurpose')
+    expect(clipEditorRailIds(false)).not.toContain('producer')
+    expect(clipEditorRailIds(false)).not.toContain('inspector')
   })
 
-  it('never puts AI Producer on the rail', () => {
-    expect(clipEditorRailIds(true)).not.toContain('producer')
+  it('shows Dub tab under Audio only with AI extras on', () => {
+    const audioOff = editorRailGroups(false).find((g) => g.id === 'audio')
+    expect(audioOff?.tabs.map((t) => t.id)).toEqual(['audio'])
+    const audioOn = editorRailGroups(true).find((g) => g.id === 'audio')
+    expect(audioOn?.tabs.map((t) => t.id)).toEqual(['audio', 'dub'])
   })
 
-  it('every rail item has a header label', () => {
+  it('every left-panel id has a header label', () => {
     for (const id of clipEditorRailIds(true)) expect(TAB_META[id]?.label).toBeTruthy()
+  })
+
+  it('EDITOR_RAIL_GROUPS mirrors navigation groups', () => {
+    expect(EDITOR_RAIL_GROUPS.length).toBe(8)
   })
 })
