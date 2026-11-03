@@ -95,6 +95,7 @@ export function TranscriptPanel({
   momentRows,
   onSelectRange,
   compactToolbar = false,
+  largeScript = false,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -132,6 +133,8 @@ export function TranscriptPanel({
   onSelectRange?: (startMs: number, endMs: number) => void
   /** Phase 2b: single-row find + overflow menu; transcript fills panel height. */
   compactToolbar?: boolean
+  /** Phase 3 script view: larger transcript typography in the main split. */
+  largeScript?: boolean
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
@@ -1062,6 +1065,7 @@ export function TranscriptPanel({
         className={cn(
           'overflow-y-auto text-sm leading-relaxed',
           compactToolbar ? 'min-h-0 flex-1' : 'max-h-[min(50vh,420px)]',
+          largeScript && 'max-h-none flex-1 text-[17px] leading-[1.65] [&_span]:max-w-[80ch]',
         )}
         onWheel={bumpFollowPause}
         onTouchStart={bumpFollowPause}

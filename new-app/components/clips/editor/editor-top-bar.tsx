@@ -40,6 +40,7 @@ export function EditorTopBar({
   pendingPaidCount = 0,
   layoutSlot,
   versionsSlot,
+  layoutViewSlot,
 }: {
   backHref: string
   title: string
@@ -59,6 +60,8 @@ export function EditorTopBar({
   pendingPaidCount?: number
   layoutSlot?: React.ReactNode
   versionsSlot?: React.ReactNode
+  /** Phase 3: Script | Timeline segmented control (left of AI Producer). */
+  layoutViewSlot?: React.ReactNode
 }) {
   const saveTone =
     saveState === 'error'
@@ -162,6 +165,7 @@ export function EditorTopBar({
         </Tooltip>
         {historySlot}
         <Separator orientation="vertical" className="mx-1 h-6" />
+        {layoutViewSlot}
         {onOpenProducer ? (
           <Button
             type="button"
