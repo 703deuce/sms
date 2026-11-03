@@ -5,6 +5,7 @@ import type { ClipBounds } from '@/lib/clips/edits'
 import { trimNeedsEditorWordsRefetch } from '@/lib/clips/editor-words-merge'
 import { MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
 import { clipWordsToAbsolute } from '@/lib/server/clips/editor-words'
+import { fetchClipEditorWords } from '@/lib/clips-api'
 import type { SourceWord } from '@/lib/clips/source-words'
 
 function absoluteEditorWords(words: SourceWord[], bounds: ClipBounds): SourceWord[] {
