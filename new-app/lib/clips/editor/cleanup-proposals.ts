@@ -19,6 +19,14 @@ import { excerptForCutRange } from '@/lib/clips/editor/cleanup-text'
 import { normalizeToken } from '@/lib/clips/script-editor/enrich-transcript'
 import type { RetakeGroup } from '@/lib/clips/editor/retakes'
 import { retakeCutRange } from '@/lib/clips/editor/retakes'
+import {
+  framesFromSamples,
+  refineCutBoundary,
+  type RmsFrame,
+} from '@/lib/clips/cuts-quality/cut-boundary-refine'
+import { isDefaultRemovableFiller } from '@/lib/clips/cuts-quality/filler-classifier'
+import type { CutQualityMeta } from '@/lib/clips/cuts-quality/types'
+import { pauseMiddleRemovalRange, gapKeptForMotion } from '@/lib/clips/cuts-quality/pause-shorten'
 
 export type CleanupCutKind = 'filler' | 'repeat' | 'gap' | 'manual' | 'unknown' | 'retake' | 'clarity'
 
@@ -27,6 +35,60 @@ export type CleanupProposal = {
   kind: CleanupCutKind
   range: CutRange
   label: string
+  quality?: CutQualityMeta
+}
+
+export function mergeCutQualityMetaForRanges(
+  prev: ClipEditsV2['cutQualityMeta'],
+  ranges: CutRange[],
+  metas: (CutQualityMeta | undefined)[],
+): ClipEditsV2['cutQualityMeta'] {
+  const next = { ...(prev ?? {}) }
+  for (let i = 0; i < ranges.length; i++) {
+    const m = metas[i]
+    if (!m) continue
+    next[proposalId(ranges[i]!)] = m
+  }
+  return Object.keys(next).length ? next : undefined
+}
+
+export function pruneCutQualityMeta(
+  meta: ClipEditsV2['cutQualityMeta'],
+  cutRanges: CutRange[],
+): ClipEditsV2['cutQualityMeta'] {
+  if (!meta) return undefined
+  const live = new Set(cutRanges.map((r) => proposalId(r)))
+  const next: NonNullable<ClipEditsV2['cutQualityMeta']> = {}
+  for (const [k, v] of Object.entries(meta)) {
+    if (live.has(k)) next[k] = v
+  }
+  return Object.keys(next).length ? next : undefined
+}
+
+function refineFillerRange(
+  raw: CutRange,
+  orderedWords: EditorWord[],
+  wordIndex: number,
+  rmsSamples?: GapRmsSample[] | null,
+): { range: CutRange; quality?: CutQualityMeta } {
+  if (!rmsSamples?.length) return { range: raw }
+  const prev = orderedWords[wordIndex - 1]
+  const w = orderedWords[wordIndex]!
+  const next = orderedWords[wordIndex + 1]
+  const frames: RmsFrame[] = framesFromSamples(
+    rmsSamples.map((s) => ({ tMs: s.tMs, rms: s.rms })),
+  )
+  const { range, meta } = refineCutBoundary({
+    frames,
+    reason: 'filler',
+    neighbors: {
+      prevEndMs: prev ? prev.t1Ms : null,
+      wordStartMs: w.t0Ms,
+      wordEndMs: w.t1Ms,
+      nextStartMs: next ? next.t0Ms : null,
+    },
+  })
+  return { range, quality: meta }
 }
 
 export function proposalId(range: CutRange): string {
@@ -183,6 +245,7 @@ export function fillerProposals(
     avoidHarshCuts?: boolean
     strength?: CleanupStrength
     enabledOptInFillers?: ReadonlySet<string>
+    rmsSamples?: GapRmsSample[] | null
   },
 ): CleanupProposal[] {
   const strength = opts?.strength ?? DEFAULT_CLEANUP_STRENGTH
@@ -218,6 +281,14 @@ export function fillerProposals(
     if (!h) continue
     if (isProtectedFromCleanup(h.word)) continue
     if (!fillerEligibleAtStrength(h.word.text, h.word.fillerKind, strength, enabledOptIn)) continue
+    if (
+      h.word.fillerKind === 'lexicon' &&
+      strength === 'normal' &&
+      !isDefaultRemovableFiller(h.word, orderedWords, i, deletedSet) &&
+      !enabledOptIn.has(normalizeToken(h.word.text))
+    ) {
+      continue
+    }
 
     if (h.word.fillerKind === 'repeat') {
       let j = i
@@ -245,12 +316,14 @@ export function fillerProposals(
     }
 
     const raw: CutRange = [h.word.t0Ms, h.word.t1Ms]
+    const refined = refineFillerRange(raw, orderedWords, i, opts?.rmsSamples)
     usedIndices.add(i)
     out.push({
-      id: proposalId(raw),
+      id: proposalId(refined.range),
       kind: 'filler',
-      range: raw,
+      range: refined.range,
       label: h.word.text.trim() || 'filler',
+      quality: refined.quality,
     })
   }
   return out
@@ -308,23 +381,29 @@ export function gapProposals(
     wordSpans?: { s: number; e: number }[]
     strength?: CleanupStrength
     rmsSamples?: GapRmsSample[] | null
+    motionSamples?: { tMs: number; lumaDiff: number }[] | null
   },
 ): CleanupProposal[] {
   const preset = opts.strength ? gapPresetForStrength(opts.strength) : null
   const minGapMs = preset?.minGapMs ?? opts.minGapMs
   const targetGapMs = preset?.targetGapMs ?? opts.targetGapMs
   const hits = listClipGapHits(orderedWords, cutRanges, { ...opts, minGapMs, targetGapMs, rmsSamples: opts.rmsSamples })
-  return hits.map((hit) => {
-    const range =
-      gapShortenCutRangeWithAudio(
-        hit.prevWord.t1Ms,
-        hit.word.t0Ms,
-        hit.gapMs,
-        targetGapMs,
-        opts.rmsSamples ?? null,
-        opts.wordSpans,
-      ) ?? null
-    if (!range) return null
+  return hits
+    .map((hit) => {
+      if (gapKeptForMotion(opts.motionSamples?.filter((s) => s.tMs >= hit.prevWord.t1Ms && s.tMs <= hit.word.t0Ms))) {
+        return null
+      }
+      const range =
+        gapShortenCutRangeWithAudio(
+          hit.prevWord.t1Ms,
+          hit.word.t0Ms,
+          hit.gapMs,
+          targetGapMs,
+          opts.rmsSamples ?? null,
+          opts.wordSpans,
+        ) ??
+        pauseMiddleRemovalRange(hit.prevWord.t1Ms, hit.word.t0Ms, hit.gapMs, targetGapMs)
+      if (!range) return null
     const normalized =
       opts.wordSpans?.length != null && opts.wordSpans.length > 0
         ? normalizeCleanupCutRange(range, opts.wordSpans) ?? range
@@ -334,6 +413,12 @@ export function gapProposals(
       kind: 'gap' as const,
       range: normalized,
       label: `${(hit.gapMs / 1000).toFixed(1)}s pause`,
+      quality: {
+        srcStartMs: normalized[0],
+        srcEndMs: normalized[1],
+        confidence: 'ready',
+        reason: 'gap_shorten',
+      },
     }
   })
     .filter((p): p is CleanupProposal => p != null)

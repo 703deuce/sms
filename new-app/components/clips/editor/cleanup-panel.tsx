@@ -130,8 +130,8 @@ export function CleanupPanel({
   )
 
   const filler = useMemo(
-    () => fillerProposals(orderedWords, deletedSet, { strength, enabledOptInFillers: enabledOptIn }),
-    [orderedWords, deletedSet, strength, enabledOptIn],
+    () => fillerProposals(orderedWords, deletedSet, { strength, enabledOptInFillers: enabledOptIn, rmsSamples }),
+    [orderedWords, deletedSet, strength, enabledOptIn, rmsSamples],
   )
   const gaps = useMemo(
     () =>
@@ -162,7 +162,11 @@ export function CleanupPanel({
   }
 
   const applyAllFillers = () => {
-    const rows = proposed.filter((row) => row.kind === 'filler' || row.kind === 'repeat')
+    const rows = proposed.filter(
+      (row) =>
+        (row.kind === 'filler' || row.kind === 'repeat') &&
+        row.quality?.confidence !== 'needs_review',
+    )
     if (!rows.length) return
     if (onApplyPass) onApplyPass(rows, cleanupPassLabel('filler', rows.length))
     else for (const p of rows) onApplyProposal(p)
@@ -172,7 +176,9 @@ export function CleanupPanel({
   }
 
   const applyAllOfKind = (kind: CleanupProposal['kind']) => {
-    const rows = proposed.filter((row) => row.kind === kind)
+    const rows = proposed.filter(
+      (row) => row.kind === kind && row.quality?.confidence !== 'needs_review',
+    )
     if (!rows.length) return
     if (kind === 'gap') {
       const sourceDur = Math.max(1, bounds.trimMaxMs - bounds.trimMinMs)

@@ -45,6 +45,8 @@ import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/w
 import {
   mergeCleanupCutRanges,
   mergeCutCleanupKindsForRanges,
+  mergeCutQualityMetaForRanges,
+  pruneCutQualityMeta,
   reconcileCutCleanupKinds,
   pruneCutCleanupKinds,
   type CleanupProposal,
@@ -443,7 +445,12 @@ export function useEditorState(
         cuts,
         proposals.map((p) => ({ range: p.range, kind: p.kind })),
       )
-      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds }
+      const cutQualityMeta = mergeCutQualityMetaForRanges(
+        editsRef.current.cutQualityMeta,
+        ranges,
+        proposals.map((p) => p.quality),
+      )
+      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds, cutQualityMeta }
       if (editsEqual(editsRef.current, nextEdits)) return
       const rippled = rippleFrom(editsRef.current, nextEdits)
       editsRef.current = rippled
@@ -536,7 +543,8 @@ export function useEditorState(
     (range: CutRange) => {
       const cuts = subtractRangeFromCuts(editsRef.current.cutRanges, range)
       const cutCleanupKinds = pruneCutCleanupKinds(editsRef.current.cutCleanupKinds, cuts)
-      const next = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds }
+      const cutQualityMeta = pruneCutQualityMeta(editsRef.current.cutQualityMeta, cuts)
+      const next = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds, cutQualityMeta }
       if (editsEqual(editsRef.current, next)) return
       setEdits(next)
     },
@@ -551,7 +559,8 @@ export function useEditorState(
         cuts = subtractRangeFromCuts(cuts, range)
       }
       const cutCleanupKinds = pruneCutCleanupKinds(editsRef.current.cutCleanupKinds, cuts)
-      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds }
+      const cutQualityMeta = pruneCutQualityMeta(editsRef.current.cutQualityMeta, cuts)
+      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds, cutQualityMeta }
       if (editsEqual(editsRef.current, nextEdits)) return
       const rippled = rippleFrom(editsRef.current, nextEdits)
       editsRef.current = rippled

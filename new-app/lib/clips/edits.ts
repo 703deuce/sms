@@ -77,6 +77,11 @@ export type ClipEditsV2 = {
   cutRanges: CutRange[]
   /** Cleanup kind keyed by `${lo}:${hi}` for each applied cut (restore-by-type). */
   cutCleanupKinds?: Record<string, CutCleanupKind>
+  /** CUTS_QUALITY1: refined edges + confidence per cut id. */
+  cutQualityMeta?: Record<
+    string,
+    { srcStartMs: number; srcEndMs: number; confidence: 'ready' | 'needs_review'; reason: string }
+  >
   wordFixes: Record<string, string>
   /** Stable source-time + original text for export parity when word indices differ. */
   wordFixMeta?: Record<string, WordFixMetaEntry>
@@ -369,6 +374,24 @@ function normalizeCutCleanupKinds(raw: unknown): Record<string, CutCleanupKind> 
   return Object.keys(out).length ? out : undefined
 }
 
+function normalizeCutQualityMeta(
+  raw: unknown,
+): ClipEditsV2['cutQualityMeta'] {
+  if (!raw || typeof raw !== 'object') return undefined
+  const out: NonNullable<ClipEditsV2['cutQualityMeta']> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== 'object') continue
+    const row = v as Record<string, unknown>
+    const srcStartMs = Number(row.srcStartMs)
+    const srcEndMs = Number(row.srcEndMs)
+    const confidence = row.confidence === 'needs_review' ? 'needs_review' : row.confidence === 'ready' ? 'ready' : null
+    const reason = typeof row.reason === 'string' ? row.reason.slice(0, 240) : ''
+    if (!Number.isFinite(srcStartMs) || !Number.isFinite(srcEndMs) || !confidence) continue
+    out[k] = { srcStartMs: Math.round(srcStartMs), srcEndMs: Math.round(srcEndMs), confidence, reason }
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 function normalizeCaptions(
   raw: unknown,
   base: ClipEditsV2['captions'],
@@ -633,6 +656,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     trim,
     cutRanges: sanitizeCutRangesForTrim(rawCuts, trim.in, trim.out),
     cutCleanupKinds: normalizeCutCleanupKinds(o.cutCleanupKinds),
+    cutQualityMeta: normalizeCutQualityMeta(o.cutQualityMeta),
     wordFixes: (o.wordFixes as Record<string, string>) || {},
     wordFixMeta: normalizeWordFixMeta(o.wordFixMeta, (o.wordFixes as Record<string, string>) || {}),
     captions: normalizeCaptions(o.captions, base.captions),
