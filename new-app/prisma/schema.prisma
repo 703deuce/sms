@@ -8939,6 +8939,56 @@ model T2vDraft {
   @@map("t2v_drafts")
 }
 
+model AiProducerAgentRun {
+  id               String   @id
+  workspaceId      String
+  status           String   @default("queued")
+  phase            String?
+  genre            String   @default("irl_just_chatting")
+  outputType       String
+  platform         String   @default("tiktok")
+  instruction      String?
+  config           Json     @default("{}")
+  sourceSnapshot   Json     @default("[]")
+  resultProjectId  String?
+  resultClipId     String?
+  draftEdits       Json?
+  producerNotes    Json?
+  error            String?
+  costUsdEstimated Float?
+  geminiUsd        Float?
+  lunaTokensIn     Int      @default(0)
+  lunaTokensOut    Int      @default(0)
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  finishedAt       DateTime?
+  steps            AiProducerAgentStep[]
+
+  @@index([workspaceId, createdAt])
+  @@map("ai_producer_agent_runs")
+}
+
+model AiProducerAgentStep {
+  id             String             @id
+  runId          String
+  run            AiProducerAgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  stepIndex      Int
+  phase          String?
+  tool           String
+  argsSummary    String?
+  resultSummary  String?
+  durationMs     Int?
+  tokensIn       Int?
+  tokensOut      Int?
+  estUsd         Float?
+  error          String?
+  createdAt      DateTime           @default(now())
+
+  @@index([runId, stepIndex])
+  @@map("ai_producer_agent_steps")
+}
+
 model T2vVoiceClip {
   id            String   @id
   workspaceId   String

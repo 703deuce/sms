@@ -27,7 +27,15 @@ JOB_TYPES: tuple[str, ...] = (
     "T2V_SCENE_AI_VIDEO",
     "MEDIA_SYNC",
     "MEDIA_TRANSCRIBE",
+    "AI_PRODUCER_AGENT_ANALYZE",
 )
+
+
+def bind_ai_producer_agent_dispatch(dispatch: dict) -> None:
+    """Hook worker handlers from the new module (called from main after DISPATCH is built)."""
+    from clips_worker.ai_producer_agent.bootstrap import register_dispatch
+
+    register_dispatch(dispatch)
 
 
 def job_types_sql_in() -> str:

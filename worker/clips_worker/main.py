@@ -16,7 +16,7 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from clips_worker.job_types import job_types_sql_in
+from clips_worker.job_types import bind_ai_producer_agent_dispatch, job_types_sql_in
 from clips_worker.streamer.job_failure import terminal_failure_progress_payload
 from clips_worker.streamer.lanes import lane_types_sql_in, worker_lane
 from clips_worker.pipeline import extract_wav_for_picker, run_m4_pipeline
@@ -663,6 +663,8 @@ DISPATCH["T2V_VOICE_CLONE"] = handle_t2v_voice_clone
 DISPATCH["T2V_SCENE_AI_IMAGE"] = handle_t2v_scene_ai_image
 DISPATCH["T2V_SCENE_AI_VIDEO"] = handle_t2v_scene_ai_video
 
+bind_ai_producer_agent_dispatch(DISPATCH)
+
 
 def main() -> None:
     from clips_worker.startup_check import validate_worker_env
@@ -763,9 +765,20 @@ def _poll_loop(dsn: str) -> None:
                     continue
                 idle_polls = 0
                 log(f"claimed job={job['id']} type={job.get('type')} lane={worker_lane()}")
+                from clips_worker.ai_producer_agent.feature_gate import (
+                    AI_PRODUCER_AGENT_JOB_TYPES,
+                    ai_producer_agent_enabled,
+                )
                 from clips_worker.t2v.feature_gate import T2V_JOB_TYPES, ai_video_enabled
 
                 job_type = job.get("type") or ""
+                if job_type in AI_PRODUCER_AGENT_JOB_TYPES and not ai_producer_agent_enabled():
+                    from clips_worker.job_contract import fail_job
+
+                    msg = "ai_producer_agent_disabled"
+                    log(f"[ai-producer-agent:feature-gate] refusing job id={job['id']} type={job_type}")
+                    fail_job(conn, job, msg, post_progress_fn=post_progress)
+                    continue
                 if job_type in T2V_JOB_TYPES and not ai_video_enabled():
                     from clips_worker.job_contract import fail_job
 

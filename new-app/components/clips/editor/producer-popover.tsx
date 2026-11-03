@@ -10,6 +10,8 @@ import type { ClipWord } from '@/lib/clips/edits'
 import type { ProducerToolCall } from '@/lib/clips/edits-reducer'
 import { formatToolCost, producerToolCost } from '@/lib/clips/producer-cost'
 import { appliedProducerSummaries } from '@/lib/clips/producer-honesty'
+import { aiProducerAgentPublicEnabled } from '@/lib/ai-producer-agent/flags'
+import { NewEditEntry } from '@/components/ai-producer-agent/new-edit-entry'
 
 export type ProducerProposal = { edits: ClipEditsV2; changeCount: number; before: ClipEditsV2; summaries: string[] }
 
@@ -97,10 +99,15 @@ export function ProducerPopover({
       data-testid="producer-popover"
     >
       <div className="flex items-center justify-between border-b px-3 py-2">
-        <p className="flex items-center gap-1.5 text-sm font-semibold">
-          <Sparkles className="size-4 text-lane-ai" aria-hidden />
-          AI Producer
-        </p>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <Sparkles className="size-4 text-lane-ai" aria-hidden />
+            AI Producer
+          </p>
+          {aiProducerAgentPublicEnabled() ? (
+            <NewEditEntry sources={[{ sourceId: clipId, kind: 'clip', clipId }]} />
+          ) : null}
+        </div>
         <Button size="icon-sm" variant="ghost" aria-label="Close" onClick={onClose} data-testid="producer-popover-close">
           <X className="size-4" />
         </Button>

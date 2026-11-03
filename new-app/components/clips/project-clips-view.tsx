@@ -18,6 +18,7 @@ import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import { ExportAllDialog } from '@/components/clips/export-all-dialog'
 import { ClipResultsToolbar } from '@/components/clips/clip-results-toolbar'
 import { ClipTemplateProjectActions } from '@/components/clips/clip-template-project-actions'
+import { ProjectClipsNewEditAction } from '@/components/ai-producer-agent/project-clips-new-edit-action'
 import { mergeMonotonicProjectPoll } from '@/lib/clips/eta-poll'
 import { clipsFetch, getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
 import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
@@ -403,6 +404,9 @@ export function ProjectClipsView({
               >
                 {openInEditorLinkLabel(asrLanguage)}
               </Button>
+            ) : null}
+            {showResults ? (
+              <ProjectClipsNewEditAction projectId={projectId} clipIds={clips.map((c) => c.id)} />
             ) : null}
             {showResults && scriptEditorEnabled ? (
             <Button
