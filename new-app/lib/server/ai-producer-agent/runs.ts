@@ -7,7 +7,9 @@ import type { AiProducerOutputType } from '@/lib/ai-producer-agent/types'
 import { AI_PRODUCER_AGENT_GEMINI_USD_CAP } from '@/lib/ai-producer-agent/flags'
 import { AI_PRODUCER_MAX_EDITS_PER_RUN } from '@/lib/ai-producer-agent/prompts'
 import { defaultTargetLengthS } from '@/lib/ai-producer-agent/decide'
-import { runAiProducerAgentLoop } from '@/lib/ai-producer-agent/loop'
+import { runAiProducerAgent } from '@/lib/ai-producer-agent/orchestrator'
+import { enqueueAiProducerRunJob } from '@/lib/server/ai-producer-agent/enqueue-run'
+import { resolveAiProducerSources } from '@/lib/server/ai-producer-agent/resolve-sources'
 import type { AiProducerRunConfig, AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
 
 export type CreateAiProducerRunInput = {
@@ -24,7 +26,7 @@ export type CreateAiProducerRunInput = {
 
 export async function assertNoConcurrentRun(workspaceId: string) {
   const active = await getPrisma().aiProducerAgentRun.findFirst({
-    where: { workspaceId, status: { in: ['queued', 'running', 'planning', 'applying'] } },
+    where: { workspaceId, status: { in: ['queued', 'running', 'planning', 'applying', 'capped'] } },
     select: { id: true },
   })
   if (active) throw new Error('ai_producer_agent_run_in_progress')
@@ -67,8 +69,25 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
       createdById: userId,
     },
   })
-  void runAiProducerAgentLoop(row.id).catch((err) => {
-    console.error('[ai-producer-agent] loop failed', row.id, err)
+  const anchorProjectId = input.sources[0]?.projectId
+  try {
+    const resolved = await resolveAiProducerSources(workspaceId, input.sources)
+    const pid = resolved[0]?.projectId
+    if (pid) await enqueueAiProducerRunJob(row.id, pid)
+  } catch {
+    if (anchorProjectId) await enqueueAiProducerRunJob(row.id, anchorProjectId).catch(() => null)
+  }
+  queueMicrotask(() => {
+    runAiProducerAgent(row.id).catch(async (err) => {
+      await getPrisma().aiProducerAgentRun.update({
+        where: { id: row.id },
+        data: {
+          status: 'failed',
+          error: String((err as Error)?.message ?? err).slice(0, 2000),
+          finishedAt: new Date(),
+        },
+      })
+    })
   })
   return row
 }

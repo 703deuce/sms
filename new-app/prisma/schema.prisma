@@ -8952,6 +8952,7 @@ model AiProducerAgentRun {
   sourceSnapshot   Json     @default("[]")
   resultProjectId  String?
   resultClipId     String?
+  outputProjectIds Json     @default("[]")
   draftEdits       Json?
   producerNotes    Json?
   error            String?

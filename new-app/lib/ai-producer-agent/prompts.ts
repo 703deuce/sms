@@ -61,7 +61,7 @@ function platformTargetSection(platform: string): string {
  */
 export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
   const base = readText(PROMPTS_ROOT, 'system.md')
-  const core = readText(RULEPACK_ROOT, 'core.md') || readText(RULEPACK_ROOT, 'core-source.md')
+  const core = readText(RULEPACK_ROOT, 'core-source.md') || readText(RULEPACK_ROOT, 'core.md')
   const genre =
     ctx.genre === 'irl_just_chatting'
       ? readText(RULEPACK_ROOT, 'irl_just_chatting.md')

@@ -11,3 +11,6 @@ def register_dispatch(dispatch: dict[str, Callable[..., Any]]) -> None:
     from clips_worker.ai_producer_agent.job import handle_ai_producer_agent_analyze
 
     dispatch["AI_PRODUCER_AGENT_ANALYZE"] = handle_ai_producer_agent_analyze
+    from clips_worker.ai_producer_agent.run_job import handle_ai_producer_agent_run
+
+    dispatch["AI_PRODUCER_AGENT_RUN"] = handle_ai_producer_agent_run

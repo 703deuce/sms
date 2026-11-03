@@ -8,6 +8,7 @@ export async function logAiProducerStep(input: {
   stepIndex: number
   phase?: string
   tool: string
+  kind?: 'luna' | 'tool' | 'validate' | 'system'
   argsSummary?: string
   resultSummary?: string
   durationMs?: number
@@ -32,4 +33,17 @@ export async function logAiProducerStep(input: {
       error: input.error?.slice(0, 2000),
     },
   })
+}
+
+export function redactArgs(args: unknown): unknown {
+  if (args == null || typeof args !== 'object') return args
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(args as Record<string, unknown>)) {
+    if (typeof v === 'string' && (v.includes('?') || v.includes('X-Amz'))) {
+      out[k] = v.split('?')[0] + '?…'
+    } else {
+      out[k] = v
+    }
+  }
+  return out
 }

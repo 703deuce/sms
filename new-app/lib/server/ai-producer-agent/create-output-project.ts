@@ -1,36 +1,62 @@
 import 'server-only'
 
-import { duplicateClipProjects } from '@/lib/server/clips/drive-projects'
+import type { Prisma } from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
-import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
-import type { ClipBounds, ClipEditsV2 } from '@/lib/clips/edits'
-import type { AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
+import { createId } from '@/lib/supabase/id'
 
-export async function createAiProducerOutputProject(
-  workspaceId: string,
-  sources: AiProducerSourceRef[],
-  edits: ClipEditsV2,
-  title: string,
-): Promise<{ projectId: string; clipId: string }> {
-  const primary = sources[0]
-  if (!primary?.projectId) throw new Error('source_project_required')
-  const [newProjectId] = await duplicateClipProjects(workspaceId, [primary.projectId])
-  if (!newProjectId) throw new Error('duplicate_failed')
-  await getPrisma().clipProject.update({
-    where: { id: newProjectId },
-    data: { title, status: 'READY', stage: 'ready', progress: 100 },
+export async function createAiProducerOutputProject(a: {
+  workspaceId: string
+  createdById: string
+  runId: string
+  title: string
+  sourceProjectId: string
+  clipStartMs: number
+  clipEndMs: number
+}): Promise<{ projectId: string; clipId: string }> {
+  const prisma = getPrisma()
+  const p = await prisma.clipProject.findFirstOrThrow({
+    where: { id: a.sourceProjectId, workspaceId: a.workspaceId, deletedAt: null },
   })
-  const clip = await getPrisma().clip.findFirst({
-    where: { projectId: newProjectId, deletedAt: null },
-    orderBy: { createdAt: 'asc' },
+  const projectId = createId('proj')
+  const clipId = createId('clip')
+  await prisma.$transaction(async (tx) => {
+    await tx.clipProject.create({
+      data: {
+        id: projectId,
+        workspaceId: a.workspaceId,
+        createdById: a.createdById,
+        title: a.title,
+        uploadId: p.uploadId,
+        sourceUrl: p.sourceUrl,
+        settings: { ...((p.settings ?? {}) as object), aiProducerRunId: a.runId } as Prisma.InputJsonValue,
+        rangeStartMs: p.rangeStartMs,
+        rangeEndMs: p.rangeEndMs,
+        status: p.status,
+        stage: p.stage,
+        progress: p.progress,
+        transcriptKey: p.transcriptKey,
+        transcriptWords: p.transcriptWords ?? undefined,
+        proxyKey: p.proxyKey,
+        thumbKey: p.thumbKey,
+        folderId: p.folderId,
+      },
+    })
+    await tx.clip.create({
+      data: {
+        id: clipId,
+        projectId,
+        workspaceId: a.workspaceId,
+        title: a.title,
+        reason: 'ai_producer',
+        startMs: a.clipStartMs,
+        endMs: a.clipEndMs,
+        edits: {},
+        editsSaveVersion: 0,
+        aiMeta: { aiProducerRunId: a.runId },
+        score: 0,
+        scores: {},
+      },
+    })
   })
-  if (!clip) throw new Error('clip_missing')
-  const bounds: ClipBounds = {
-    clipStartMs: clip.startMs,
-    clipEndMs: clip.endMs,
-    trimMinMs: 0,
-    trimMaxMs: Math.max(clip.endMs, clip.startMs + 1000),
-  }
-  await writeClipEditsOrThrow(clip.id, bounds, clip.editsSaveVersion, () => edits)
-  return { projectId: newProjectId, clipId: clip.id }
+  return { projectId, clipId }
 }

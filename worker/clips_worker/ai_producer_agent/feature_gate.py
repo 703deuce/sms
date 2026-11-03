@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-AI_PRODUCER_AGENT_JOB_TYPES = frozenset({"AI_PRODUCER_AGENT_ANALYZE"})
+AI_PRODUCER_AGENT_JOB_TYPES = frozenset({"AI_PRODUCER_AGENT_ANALYZE", "AI_PRODUCER_AGENT_RUN"})
 
 
 def ai_producer_agent_enabled() -> bool:

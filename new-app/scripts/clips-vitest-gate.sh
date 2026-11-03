@@ -48,4 +48,7 @@ exec pnpm exec vitest run \
   tests/ai-producer-agent/flags-and-validate.test.ts \
   tests/ai-producer-agent/editability.test.ts \
   tests/ai-producer-agent/system-prompt.test.ts \
-  tests/ai-producer-agent/mount-flag-off.test.tsx
+  tests/ai-producer-agent/mount-flag-off.test.tsx \
+  tests/ai-producer-agent/orchestrator.mock-luna.test.ts \
+  tests/ai-producer-agent/validate.items.test.ts \
+  tests/ai-producer-agent/editability.items.test.ts

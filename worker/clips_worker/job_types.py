@@ -28,6 +28,7 @@ JOB_TYPES: tuple[str, ...] = (
     "MEDIA_SYNC",
     "MEDIA_TRANSCRIBE",
     "AI_PRODUCER_AGENT_ANALYZE",
+    "AI_PRODUCER_AGENT_RUN",
 )
 
 

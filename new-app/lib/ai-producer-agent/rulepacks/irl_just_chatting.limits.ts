@@ -9,4 +9,8 @@ export const IRL_JC_LIMITS = {
   preRollMs: 200,
   postRollMs: 300,
   memeSfxDefault: 'subtle' as const,
+  maxZoomsPer10s: 3,
+  sfxSubtleMax: 2,
+  sfxMemeMax: 6,
+  maxTextItems: 8,
 }

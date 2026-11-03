@@ -33,9 +33,14 @@ export function RunProgress({ runId, onDone }: { runId: string; onDone?: () => v
     }
   }, [runId])
 
-  const done = run?.status === 'ready' || run?.status === 'failed' || run?.status === 'canceled'
+  const done =
+    run?.status === 'ready' ||
+    run?.status === 'done' ||
+    run?.status === 'capped' ||
+    run?.status === 'failed' ||
+    run?.status === 'canceled'
   useEffect(() => {
-    if (done && run?.status === 'ready') onDone?.()
+    if (done && (run?.status === 'ready' || run?.status === 'done' || run?.status === 'capped')) onDone?.()
   }, [done, onDone, run?.status])
 
   const editorHref =

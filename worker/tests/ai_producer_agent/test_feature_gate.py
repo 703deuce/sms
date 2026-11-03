@@ -13,4 +13,4 @@ def test_feature_gate_off_by_default(monkeypatch):
 
 
 def test_job_types_set():
-    assert "AI_PRODUCER_AGENT_ANALYZE" in AI_PRODUCER_AGENT_JOB_TYPES
+    assert "AI_PRODUCER_AGENT_RUN" in AI_PRODUCER_AGENT_JOB_TYPES

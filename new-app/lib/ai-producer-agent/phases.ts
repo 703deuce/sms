@@ -1,0 +1,10 @@
+export type AiProducerPhase =
+  | 'ingest'
+  | 'inventory'
+  | 'decide'
+  | 'plan'
+  | 'validate'
+  | 'apply'
+  | 'preview_render'
+  | 'self_review'
+  | 'finish'
