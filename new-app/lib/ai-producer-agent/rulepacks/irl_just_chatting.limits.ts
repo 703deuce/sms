@@ -4,6 +4,8 @@ export const IRL_JC_LIMITS = {
   singlePayoffMinS: 8,
   montageShortTargetS: [30, 60] as [number, number],
   montageLongMaxS: 600,
+  storyTargetS: [45, 90] as [number, number],
+  storyHardMaxS: 600,
   preRollMs: 200,
   postRollMs: 300,
   memeSfxDefault: 'subtle' as const,

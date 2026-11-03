@@ -3,7 +3,9 @@ import 'server-only'
 import { getPrisma } from '@/lib/server/db'
 import { DraftEditsBuilder } from '@/lib/ai-producer-agent/draft-edits'
 import { logAiProducerStep } from '@/lib/ai-producer-agent/log'
-import { loadRulepackSections, assertGenreSupported } from '@/lib/ai-producer-agent/rulepacks/index'
+import { buildAgentSystemPromptForModel } from '@/lib/ai-producer-agent/prompts'
+import { resolveAutoOutputType, defaultTargetLengthS } from '@/lib/ai-producer-agent/decide'
+import { assertGenreSupported } from '@/lib/ai-producer-agent/rulepacks/index'
 import { validateEditPlan, validateHardIssues } from '@/lib/ai-producer-agent/validate'
 import type { EditPlanJson } from '@/lib/ai-producer-agent/types'
 import type { ClipBounds } from '@/lib/clips/edits'
@@ -16,7 +18,8 @@ import { normalizeEdits } from '@/lib/clips/edits'
 import { verifyEdlCaptionSync } from '@/lib/clips/cuts-quality/edl-invariant'
 
 function planFromMoments(
-  run: { genre: string; outputType: string; platform: string; instruction: string | null },
+  run: { genre: string; platform: string; instruction: string | null },
+  resolvedOutputType: EditPlanJson['outputType'],
   config: AiProducerRunConfig,
   sources: AiProducerSourceRef[],
   moments: Array<Record<string, unknown>>,
@@ -28,7 +31,7 @@ function planFromMoments(
   const srcOutMs = Math.round(endS * 1000)
   return {
     genre: run.genre,
-    outputType: run.outputType as EditPlanJson['outputType'],
+    outputType: resolvedOutputType,
     platform: run.platform,
     targetLengthS: config.targetLengthS,
     story: String(top.what_happened ?? run.instruction ?? 'Auto plan from top moment'),
@@ -60,9 +63,10 @@ export async function runAiProducerAgentLoop(runId: string) {
 
   await prisma.aiProducerAgentRun.update({ where: { id: runId }, data: { status: 'running', phase: 'ingest' } })
   const config = (run.config ?? {}) as AiProducerRunConfig
+  let configMut: AiProducerRunConfig = { ...config }
   const sourcesRaw = (run.sourceSnapshot ?? []) as AiProducerSourceRef[]
   assertGenreSupported(run.genre)
-  loadRulepackSections({ genre: run.genre, outputType: run.outputType as 'single_payoff' | 'montage', platform: run.platform })
+  const userOutputType = run.outputType as 'single_payoff' | 'montage' | 'story' | 'auto'
   const sources = await resolveAiProducerSources(run.workspaceId, sourcesRaw)
   await bump('ingest', 'ingest', `${sources.length} sources`)
 
@@ -75,7 +79,7 @@ export async function runAiProducerAgentLoop(runId: string) {
     projectId: anchorProjectId,
     mode: 'inventory',
     sources,
-    targetClipLenS: config.targetLengthS?.[1] ?? 30,
+    targetClipLenS: configMut.targetLengthS?.[1] ?? 30,
   })
   await bump('find_moments', 'inventory', `job ${job.id}`)
   const finished = await waitForClipJobDone(job.id).catch(() => null)
@@ -94,13 +98,41 @@ export async function runAiProducerAgentLoop(runId: string) {
     ]
   }
 
+  const resolvedType: EditPlanJson['outputType'] =
+    userOutputType === 'auto'
+      ? resolveAutoOutputType({
+          instruction: run.instruction,
+          momentCount: moments.length,
+          multiSource: sources.length > 1,
+        })
+      : userOutputType
+  if (userOutputType === 'auto') {
+    await bump('decide_output_type', 'decide', resolvedType)
+    configMut = {
+      ...configMut,
+      resolvedOutputType: resolvedType,
+      targetLengthS: defaultTargetLengthS(resolvedType),
+    }
+    await prisma.aiProducerAgentRun.update({
+      where: { id: runId },
+      data: { config: configMut as object },
+    })
+  }
+
+  buildAgentSystemPromptForModel({
+    genre: run.genre,
+    outputType: userOutputType,
+    resolvedOutputType: resolvedType,
+    platform: run.platform as 'tiktok' | 'shorts' | 'reels',
+  })
+
   await prisma.aiProducerAgentRun.update({ where: { id: runId }, data: { phase: 'plan' } })
-  let plan = planFromMoments(run, config, sources, moments)
+  let plan = planFromMoments(run, resolvedType, configMut, sources, moments)
   let hard = validateHardIssues(validateEditPlan(plan))
   let replans = 0
   while (hard.length && replans < 2) {
     replans += 1
-    plan = planFromMoments(run, config, sources, moments.slice(replans))
+    plan = planFromMoments(run, resolvedType, configMut, sources, moments.slice(replans))
     hard = validateHardIssues(validateEditPlan(plan))
   }
   await bump('validate_plan', 'plan', hard.length ? `hard=${hard.length}` : 'ok')
@@ -117,7 +149,7 @@ export async function runAiProducerAgentLoop(runId: string) {
   const draft = normalizeEdits(builder.edits, bounds)
   const inv = verifyEdlCaptionSync([], draft)
   if (!inv.ok) throw new Error(`edl_invariant:caption=${inv.captionMismatches},dur=${inv.durationMismatchMs}`)
-  const title = `AI Producer: ${run.outputType} · ${sources[0]?.title ?? 'edit'} · ${new Date().toISOString().slice(0, 10)}`
+  const title = `AI Producer: ${resolvedType} · ${sources[0]?.title ?? 'edit'} · ${new Date().toISOString().slice(0, 10)}`
   const created = await createAiProducerOutputProject(run.workspaceId, sources, draft, title)
   const roundTrip = normalizeEdits(draft, bounds)
   if (JSON.stringify(roundTrip) !== JSON.stringify(draft)) {

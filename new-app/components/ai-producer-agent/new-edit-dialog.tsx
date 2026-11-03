@@ -33,7 +33,7 @@ export function NewEditDialog({
   onOpenChange: (open: boolean) => void
   defaultSources: NewEditDialogSource[]
 }) {
-  const [outputType, setOutputType] = useState<'single_payoff' | 'montage'>('single_payoff')
+  const [outputType, setOutputType] = useState<'single_payoff' | 'montage' | 'story' | 'auto'>('auto')
   const [platform, setPlatform] = useState<'tiktok' | 'shorts' | 'reels'>('tiktok')
   const [instruction, setInstruction] = useState('')
   const [runId, setRunId] = useState<string | null>(null)
@@ -101,10 +101,14 @@ export function NewEditDialog({
                 <select
                   className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                   value={outputType}
-                  onChange={(e) => setOutputType(e.target.value as 'single_payoff' | 'montage')}
+                  onChange={(e) =>
+                    setOutputType(e.target.value as 'single_payoff' | 'montage' | 'story' | 'auto')
+                  }
                 >
+                  <option value="auto">Auto (decide from footage)</option>
                   <option value="single_payoff">Single setup → payoff</option>
                   <option value="montage">Montage</option>
+                  <option value="story">Story (multi-beat / sources)</option>
                 </select>
               </div>
               <div className="space-y-1">

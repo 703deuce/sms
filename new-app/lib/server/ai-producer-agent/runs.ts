@@ -3,13 +3,16 @@ import 'server-only'
 import type { Prisma } from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
+import type { AiProducerOutputType } from '@/lib/ai-producer-agent/types'
 import { AI_PRODUCER_AGENT_GEMINI_USD_CAP } from '@/lib/ai-producer-agent/flags'
+import { AI_PRODUCER_MAX_EDITS_PER_RUN } from '@/lib/ai-producer-agent/prompts'
+import { defaultTargetLengthS } from '@/lib/ai-producer-agent/decide'
 import { runAiProducerAgentLoop } from '@/lib/ai-producer-agent/loop'
 import type { AiProducerRunConfig, AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
 
 export type CreateAiProducerRunInput = {
   sources: AiProducerSourceRef[]
-  outputType: 'single_payoff' | 'montage'
+  outputType: AiProducerOutputType
   genre?: string
   platform?: 'tiktok' | 'shorts' | 'reels'
   targetLengthS?: [number, number]
@@ -31,12 +34,23 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
   await assertNoConcurrentRun(workspaceId)
   const genre = input.genre ?? 'irl_just_chatting'
   if (genre !== 'irl_just_chatting') throw new Error('genre_not_supported')
+  const resolvedForConfig =
+    input.outputType === 'auto' ? 'single_payoff' : input.outputType === 'story' ? 'story' : input.outputType
   const config: AiProducerRunConfig = {
-    targetLengthS: input.targetLengthS ?? (input.outputType === 'montage' ? [30, 60] : [15, 30]),
-    music: input.music ?? (input.outputType === 'montage' ? 'library' : 'none'),
+    targetLengthS:
+      input.targetLengthS ??
+      (resolvedForConfig === 'montage'
+        ? [30, 60]
+        : resolvedForConfig === 'story'
+          ? defaultTargetLengthS('story')
+          : [15, 30]),
+    music:
+      input.music ??
+      (resolvedForConfig === 'montage' || resolvedForConfig === 'story' ? 'library' : 'none'),
     memeSfx: input.memeSfx ?? 'subtle',
     exportOnFinish: Boolean(input.exportOnFinish),
     geminiUsdCap: AI_PRODUCER_AGENT_GEMINI_USD_CAP,
+    maxEditsPerRun: AI_PRODUCER_MAX_EDITS_PER_RUN,
   }
   const id = createId('aprun')
   const row = await getPrisma().aiProducerAgentRun.create({

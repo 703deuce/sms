@@ -9,12 +9,17 @@ export type AiProducerSourceRef = {
   title?: string
 }
 
+export type AiProducerOutputType = 'single_payoff' | 'montage' | 'story' | 'auto'
+
 export type AiProducerRunConfig = {
   targetLengthS: [number, number]
   music: 'none' | 'library'
   memeSfx: 'off' | 'subtle' | 'meme'
   exportOnFinish: boolean
   geminiUsdCap: number
+  /** Set when user chose auto and the DECIDE step picked a concrete type. */
+  resolvedOutputType?: 'single_payoff' | 'montage' | 'story'
+  maxEditsPerRun?: number
 }
 
 export type EditPlanSegment = {
@@ -26,9 +31,16 @@ export type EditPlanSegment = {
   rules?: string[]
 }
 
+export type EditPlanBrokenRule = {
+  ruleId: string
+  reason: string
+  /** Only DEFAULT or HEURISTIC may appear here; HARD must never be listed as broken. */
+  severity?: 'DEFAULT' | 'HEURISTIC'
+}
+
 export type EditPlanJson = {
   genre: string
-  outputType: 'single_payoff' | 'montage'
+  outputType: 'single_payoff' | 'montage' | 'story'
   platform: string
   targetLengthS: [number, number]
   story: string
@@ -44,4 +56,5 @@ export type EditPlanJson = {
   sfx?: unknown[]
   speed?: unknown[]
   selfReviewExpectations?: string[]
+  brokenRules?: EditPlanBrokenRule[]
 }

@@ -9,8 +9,28 @@ export type ValidateContext = {
 
 export type ValidateIssue = { ruleId: string; message: string; hard: boolean }
 
-export function validateEditPlan(plan: EditPlanJson, ctx: ValidateContext = {}): ValidateIssue[] {
+/** Rule IDs that must never appear in plan.brokenRules (HARD only). */
+export const HARD_RULE_ID_PREFIXES = ['CORE-', 'CUT-WORD', 'CUT-LAUGH', 'SEG-01', 'LEN-01', 'LEN-02'] as const
+
+export function isHardRuleId(ruleId: string): boolean {
+  return HARD_RULE_ID_PREFIXES.some((p) => ruleId.startsWith(p) || ruleId === p)
+}
+
+export function validateBrokenRules(plan: EditPlanJson): ValidateIssue[] {
   const issues: ValidateIssue[] = []
+  for (const br of plan.brokenRules ?? []) {
+    if (!br.reason?.trim()) {
+      issues.push({ ruleId: br.ruleId, message: 'broken rule requires reason', hard: true })
+    }
+    if (isHardRuleId(br.ruleId) || br.ruleId.includes('HARD')) {
+      issues.push({ ruleId: br.ruleId, message: 'HARD rules cannot be broken', hard: true })
+    }
+  }
+  return issues
+}
+
+export function validateEditPlan(plan: EditPlanJson, ctx: ValidateContext = {}): ValidateIssue[] {
+  const issues: ValidateIssue[] = [...validateBrokenRules(plan)]
   const [minLen, maxLen] = plan.targetLengthS ?? IRL_JC_LIMITS.singlePayoffTargetS
   const totalMs = plan.segments.reduce((acc, seg) => acc + Math.max(0, seg.srcOutMs - seg.srcInMs), 0)
   const totalS = totalMs / 1000
@@ -22,8 +42,14 @@ export function validateEditPlan(plan: EditPlanJson, ctx: ValidateContext = {}):
       issues.push({ ruleId: 'LEN-02', message: 'clip exceeds hard max', hard: true })
     }
   }
+  if (plan.outputType === 'story' && totalS > IRL_JC_LIMITS.storyHardMaxS) {
+    issues.push({ ruleId: 'LEN-STORY', message: 'story exceeds hard max', hard: true })
+  }
+  const citedSoft = new Set((plan.brokenRules ?? []).map((b) => b.ruleId))
   if (totalS < minLen * 0.5 || totalS > maxLen * 2) {
-    issues.push({ ruleId: 'LEN-03', message: 'length outside target band', hard: false })
+    if (!citedSoft.has('LEN-03')) {
+      issues.push({ ruleId: 'LEN-03', message: 'length outside target band', hard: false })
+    }
   }
   for (const seg of plan.segments) {
     if (seg.srcOutMs - seg.srcInMs < 400) {
