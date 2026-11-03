@@ -297,11 +297,8 @@ def ffmpeg_concat_segments(src: Path, dest: Path, segs_sec: list[tuple[float, fl
             f"[0:a]atrim=start={a}:end={b},asetpts=PTS-STARTPTS,"
             f"afade=t=in:d={xf}:curve=exp,afade=t=out:st={max(0, dur - xf):.3f}:d={xf}:curve=exp[a{i}]"
         )
-    if len(segs_sec) == 2:
-        fc = ";".join(parts) + f";[v0][a0][v1][a1]acrossfade=d={xf}:c1=exp:c2=exp[v][a]"
-    else:
-        concat_in = "".join(f"[v{i}][a{i}]" for i in range(len(segs_sec)))
-        fc = ";".join(parts) + f";{concat_in}concat=n={len(segs_sec)}:v=1:a=1[v][a]"
+    concat_in = "".join(f"[v{i}][a{i}]" for i in range(len(segs_sec)))
+    fc = ";".join(parts) + f";{concat_in}concat=n={len(segs_sec)}:v=1:a=1[v][a]"
     subprocess.check_call(
         [
             "ffmpeg",

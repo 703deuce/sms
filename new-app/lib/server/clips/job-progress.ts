@@ -10,6 +10,22 @@ function isCanceledTerminal(storedJobStatus: string, jobError?: string | null): 
   return false
 }
 
+/** Jobs whose terminal failure must not touch clip_projects (export-only). */
+export const EXPORT_RENDER_JOB_TYPES = new Set([
+  'RENDER_CLIP',
+  'RENDER_SCRIPT_COMPOSITION',
+  'RENDER_EXPORT',
+])
+
+export function skipClipProjectPatchForWorkerProgress(input: {
+  jobType?: string
+  projectSourceKind?: string | null
+}): boolean {
+  if (input.jobType === 'MUSIC' && input.projectSourceKind === 't2v') return true
+  if (input.jobType && EXPORT_RENDER_JOB_TYPES.has(input.jobType)) return true
+  return false
+}
+
 async function isLatestT2vAssembleJob(projectId: string, jobId: string): Promise<boolean> {
   const prisma = getPrisma()
   const latest = await prisma.clipJob.findFirst({
@@ -83,8 +99,10 @@ export async function applyWorkerJobProgress(input: {
     return
   }
 
-  const skipProjectPatch =
-    input.jobType === 'MUSIC' && input.projectSourceKind === 't2v'
+  const skipProjectPatch = skipClipProjectPatchForWorkerProgress({
+    jobType: input.jobType,
+    projectSourceKind: input.projectSourceKind,
+  })
 
   const projectPatch: Record<string, unknown> = {}
   if (!skipProjectPatch) {

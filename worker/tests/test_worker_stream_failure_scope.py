@@ -21,3 +21,9 @@ def test_stream_analyze_failure_still_fails_project():
 def test_stream_montage_failure_does_not_fail_project():
     payload = terminal_failure_progress_payload("STREAM_MONTAGE", "montage blew up")
     assert payload == {"jobStatus": "FAILED"}
+
+
+def test_render_clip_failure_does_not_fail_project():
+    payload = terminal_failure_progress_payload("RENDER_CLIP", "Export format not available: libmp3lame")
+    assert payload["jobStatus"] == "FAILED"
+    assert "projectStatus" not in payload

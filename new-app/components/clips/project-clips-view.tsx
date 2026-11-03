@@ -161,7 +161,9 @@ export function ProjectClipsView({
     }
   }, [initialStatus, initialClips, projectId])
 
-  const readyFromServer = initialStatus === 'READY' && initialClips != null
+  const readyFromServer =
+    (initialStatus === 'READY' && initialClips != null) ||
+    (initialStatus === 'FAILED' && initialClips != null && initialClips.length > 0)
   const [status, setStatus] = useState(initialStatus)
   const [clips, setClips] = useState<ClipCardData[]>(initialClips ?? [])
   const [montagePollKey, setMontagePollKey] = useState(0)
@@ -353,7 +355,9 @@ export function ProjectClipsView({
     stage: progressStage,
   })
   const desc = pageDescription(status, error, clips.length)
-  const showResults = status === 'READY' && readyHydrated
+  const showResults =
+    (status === 'READY' && readyHydrated) ||
+    (status === 'FAILED' && readyHydrated && clips.length > 0)
   const processing = !showResults && status !== 'FAILED' && status !== 'CANCELED'
   const showProgressiveClips =
     processing && (clips.length > 0 || clipsTotal > 0 || clipsReady > 0)
@@ -449,7 +453,7 @@ export function ProjectClipsView({
           </div>
         }
       />
-      {status === 'FAILED' ? (
+      {status === 'FAILED' && !showResults ? (
         <Panel title="Project" description="This upload could not be processed.">
           <ProjectFailedAlert
             errorMessage={failedMsg}
@@ -460,6 +464,24 @@ export function ProjectClipsView({
                 onClick={() => retryProcessing()}
               >
                 {failureCopy?.retryLabel ?? 'Retry processing'}
+              </Button>
+            }
+          />
+        </Panel>
+      ) : status === 'FAILED' && showResults ? (
+        <Panel title="Export issue" description="Your clips are still here — only a download/export failed.">
+          <ProjectFailedAlert
+            errorMessage={failedMsg}
+            retryAction={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setError(null)
+                  setStatus('READY')
+                }}
+              >
+                Dismiss
               </Button>
             }
           />

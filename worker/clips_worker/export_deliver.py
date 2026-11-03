@@ -195,18 +195,26 @@ def deliver_cmd(
     return cmd
 
 
+def parse_ffmpeg_encoders_list(text: str) -> set[str]:
+    """Parse `ffmpeg -encoders` lines: flag column is e.g. AV..... not ending in '.'"""
+    import re
+
+    enc: set[str] = set()
+    pat = re.compile(r"^\s*([VAS][.A-Z]{5})\s+(\S+)")
+    for line in text.splitlines():
+        m = pat.match(line)
+        if m:
+            enc.add(m.group(2))
+    return enc
+
+
 @lru_cache(maxsize=1)
 def _encoders() -> set[str]:
     try:
         out = subprocess.check_output(["ffmpeg", "-hide_banner", "-encoders"], text=True, stderr=subprocess.STDOUT)
     except Exception:
         return set()
-    enc = set()
-    for line in out.splitlines():
-        parts = line.split()
-        if len(parts) >= 2 and parts[0].endswith("."):
-            enc.add(parts[1])
-    return enc
+    return parse_ffmpeg_encoders_list(out)
 
 
 def encoder_available(name: str) -> bool:

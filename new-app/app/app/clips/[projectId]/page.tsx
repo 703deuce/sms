@@ -70,9 +70,22 @@ export default async function ClipProjectPage({
         : Promise.resolve(p?.upload ?? null),
     ),
     projectP.then((p) => (p ? prisma.streamVod.findUnique({ where: { projectId: p.id } }) : null)),
-    projectP.then((p) =>
-      p?.status === 'READY'
-        ? listProjectClips(workspaceId, p.id, 'score', {
+    projectP.then(async (p) => {
+      if (!p) return null
+      if (p.status === 'READY') {
+        return listProjectClips(workspaceId, p.id, 'score', {
+          ...listOpts,
+          project: {
+            settings: p.settings,
+            transcriptKey: p.transcriptKey,
+            upload: p.upload ? { storageDriver: p.upload.storageDriver } : null,
+          },
+        })
+      }
+      if (p.status === 'FAILED') {
+        const n = await prisma.clip.count({ where: { projectId: p.id, deletedAt: null } })
+        if (n > 0) {
+          return listProjectClips(workspaceId, p.id, 'score', {
             ...listOpts,
             project: {
               settings: p.settings,
@@ -80,8 +93,10 @@ export default async function ClipProjectPage({
               upload: p.upload ? { storageDriver: p.upload.storageDriver } : null,
             },
           })
-        : Promise.resolve(null),
-    ),
+        }
+      }
+      return null
+    }),
     projectP.then((p) =>
       p ? resolveViewOnFullVideoUrl(workspaceId, p.id, p.settings, p.uploadId) : Promise.resolve(null),
     ),

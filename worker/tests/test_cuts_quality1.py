@@ -18,10 +18,11 @@ def test_filler_touching_next_needs_review():
     assert "valley" in note or note != "ready"
 
 
-def test_concat_uses_ten_ms_exp_fades():
+def test_concat_uses_concat_not_acrossfade_on_video():
     import inspect
     from clips_worker import edits_render
 
     src = inspect.getsource(edits_render.ffmpeg_concat_segments)
+    assert "acrossfade" not in src
+    assert "concat=n=" in src
     assert "curve=exp" in src
-    assert "0.01" in src
