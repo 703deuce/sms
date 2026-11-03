@@ -41,7 +41,7 @@ Base audit: `96d3291530720da7f740a30057a2455ee04e4a4b`. Spec: `AI_PRODUCER_V1_fi
 - [x] No `void` runner: `runs.ts:80-91`.
 - [x] Output only on new projects: `create-output-project.ts` (no duplicate).
 - [ ] Prod Luna tool loop with real API key — not exercised in CI (mocked in tests).
-- [ ] Coolify deploy SHA — fill after push watch.
+- [x] Coolify deploy: `GET https://transovo.ai/api/health` → `commitSha` **809caf599233710c1b5da3cefb8f8c81381e63a1** (container `ds8s3hjin60qs6g7s0iqkixs-20261103T012021`).
 
 ## Honest gap list
 
