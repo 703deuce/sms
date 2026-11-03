@@ -132,7 +132,10 @@ export function EditorLayout(props: {
       </section>
       <section
         data-region="preview"
-        className={cn(EDITOR_GRID.preview, hidePanelColumn && 'xl:col-start-2 2xl:col-start-2')}
+        className={cn(
+          EDITOR_GRID.preview,
+          hidePanelColumn && 'xl:col-start-2 2xl:col-start-2 flex min-h-0 min-w-0 flex-1 flex-col',
+        )}
       >
         {props.preview}
       </section>

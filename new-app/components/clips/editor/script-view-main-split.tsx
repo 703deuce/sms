@@ -2,18 +2,24 @@
 
 import { useCallback, useRef, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import { clampScriptSplitPct } from '@/lib/clips/editor/use-script-view-split'
+import {
+  clampScriptSplitPct,
+  SCRIPT_SPLIT_MIN_PX_TRANSCRIPT,
+  SCRIPT_SPLIT_MIN_PX_PREVIEW,
+} from '@/lib/clips/editor/use-script-view-split'
 
 export function ScriptViewMainSplit({
   transcriptPct,
   onTranscriptPctChange,
   transcript,
   preview,
+  className,
 }: {
   transcriptPct: number
   onTranscriptPctChange: (pct: number) => void
   transcript: ReactNode
   preview: ReactNode
+  className?: string
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ startX: number; startPct: number; width: number } | null>(null)
@@ -44,16 +50,19 @@ export function ScriptViewMainSplit({
   )
 
   const pct = clampScriptSplitPct(transcriptPct)
+  const previewPct = 1 - pct
 
   return (
     <div
       ref={rootRef}
-      className="flex h-full min-h-0 w-full min-w-0 overflow-hidden rounded-lg"
+      className={cn('flex h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden rounded-lg', className)}
       data-testid="script-view-main-split"
     >
       <div
         className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-l-lg border border-border bg-card"
-        style={{ flex: `0 0 ${pct * 100}%` }}
+        style={{
+          flex: `${pct} 1 ${SCRIPT_SPLIT_MIN_PX_TRANSCRIPT}px`,
+        }}
         data-testid="script-view-transcript-pane"
       >
         {transcript}
@@ -69,7 +78,11 @@ export function ScriptViewMainSplit({
         onPointerDown={onHandlePointerDown}
       />
       <div
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-r-lg bg-panel"
+        className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-r-lg bg-panel"
+        style={{
+          flex: `${previewPct} 1 ${SCRIPT_SPLIT_MIN_PX_PREVIEW}px`,
+          minWidth: SCRIPT_SPLIT_MIN_PX_PREVIEW,
+        }}
         data-testid="script-view-preview-pane"
       >
         {preview}

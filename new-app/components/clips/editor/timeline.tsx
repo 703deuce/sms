@@ -2386,6 +2386,12 @@ export function Timeline({
         toast.message(`${LANE_LABELS[lockedClickRef.current]} lane is locked`, { id: 'timeline-locked' })
       }
     } else if (k === 'Escape') {
+      if (helpOpen) {
+        e.preventDefault()
+        e.stopPropagation()
+        setHelpOpen(false)
+        return
+      }
       if (openCompound) {
         e.preventDefault()
         e.stopPropagation()
@@ -3041,21 +3047,6 @@ export function Timeline({
       <button type="button" className="sr-only" data-testid="timeline-help-popover" onClick={() => setHelpOpen(true)}>
         Open shortcuts
       </button>
-      {inspected ? (
-        <KeyframeInspector
-          edits={edits}
-          target={inspected.target}
-          label={inspected.item.label}
-          localMs={keyframeLocalEditFromPlayhead(edits, playheadMs, inspected.origin)}
-          onCommit={(next) => commit(next)}
-          onSeekLocal={(t) => onSeekOutput(inspected.origin + t)}
-          readOnly={!editable || refLocked(edits, inspected.item)}
-          span={{
-            fromMs: inspected.item.startMs - inspected.origin,
-            toMs: inspected.item.endMs - inspected.origin,
-          }}
-        />
-      ) : null}
       {pacingOpen ? (
         <PacingPanel edits={edits} tb={tb} onSeekOutput={onSeekOutput} onCommit={commit} onClose={() => setPacingOpen(false)} readOnly={!editable} />
       ) : null}
@@ -3126,11 +3117,31 @@ export function Timeline({
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
       {tlCollapsed ? null : (
       <div
-        className="flex min-w-0 rounded-lg border border-border bg-card/30"
+        className="relative flex min-w-0 rounded-lg border border-border bg-card/30"
         // TC3 (d): a set height is the height — taller than all tracks leaves empty space below.
         style={tlHeight ? { height: tlHeight, overflowY: 'auto' } : undefined}
         data-testid="timeline-body"
       >
+        {inspected ? (
+          <div
+            className="absolute inset-x-0 top-0 z-40 max-h-[min(240px,45%)] overflow-y-auto border-b border-border bg-card shadow-md"
+            data-testid="keyframe-inspector-overlay"
+          >
+            <KeyframeInspector
+              edits={edits}
+              target={inspected.target}
+              label={inspected.item.label}
+              localMs={keyframeLocalEditFromPlayhead(edits, playheadMs, inspected.origin)}
+              onCommit={(next) => commit(next)}
+              onSeekLocal={(t) => onSeekOutput(inspected.origin + t)}
+              readOnly={!editable || refLocked(edits, inspected.item)}
+              span={{
+                fromMs: inspected.item.startMs - inspected.origin,
+                toMs: inspected.item.endMs - inspected.origin,
+              }}
+            />
+          </div>
+        ) : null}
         <div className="min-w-[160px] w-[160px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
           {rows.map((r) => (

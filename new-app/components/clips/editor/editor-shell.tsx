@@ -22,7 +22,9 @@ import {
 } from '@/lib/clips/editor/editor-layout-view'
 import { EditorLayoutViewSwitch, ScriptViewWaveStrip } from '@/components/clips/editor/script-view-chrome'
 import { ScriptViewMainSplit } from '@/components/clips/editor/script-view-main-split'
+import { ScriptViewWaveform } from '@/components/clips/editor/script-view-waveform'
 import { useScriptViewSplit } from '@/lib/clips/editor/use-script-view-split'
+import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { EditorLayout, useEditorBand, aspectCssToNumber } from '@/components/clips/editor/editor-layout'
 import { CanvasLayoutMenu } from '@/components/clips/editor/canvas-layout-menu'
@@ -1496,6 +1498,10 @@ export function EditorShell({
   }, [])
 
   const mediaOffsetMs = editorMedia?.offsetMs ?? 0
+  const scriptVoicePeaks = useAudioPeaks(videoUrl, 40, 12_000, {
+    peaksUrl: editorAssets?.peaksUrl ?? null,
+    skipDecode: Boolean(editorAssets?.fullVideo),
+  })
 
   const seekSource = useCallback(
     (sourceMs: number) => {
@@ -1683,6 +1689,7 @@ export function EditorShell({
       }
       if (isEditableTarget(e.target)) return
       if (e.key === 'Escape') {
+        if (document.querySelector('[data-testid="timeline-shortcuts-sheet"]')) return
         if (exportOpen) {
           setExportOpen(false)
           e.preventDefault()
@@ -2004,6 +2011,11 @@ export function EditorShell({
           momentRows={fullVideo && fvHighlights.highlightsOn ? fvHighlights.momentRows : undefined}
           compactToolbar={options.compactToolbar}
           largeScript={options.largeScript}
+          beatsAvailable={Boolean(beatCutApi?.hasBeats)}
+          beatsAnalyzing={Boolean(beatCutApi?.analyzing)}
+          beatCount={beatCutApi?.beatCount ?? 0}
+          beatBpm={beatCutApi?.bpm}
+          onCutToBeat={beatCutApi ? (every) => beatCutApi.cut(every) : undefined}
           onSelectRange={
             fullVideo && fvHighlights.highlightsOn
               ? (startMs, endMs) => {
@@ -2406,9 +2418,8 @@ export function EditorShell({
     </>
   )
 
-  function PreviewColumn() {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-2 sm:p-3">
+  const previewColumnContent = (
+      <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 overflow-hidden p-2 sm:p-3">
         <div
           className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4 [container-type:size]"
         >
@@ -2846,8 +2857,7 @@ export function EditorShell({
           ) : null}
         </div>
       </div>
-    )
-  }
+  )
 
   return (
     <div
@@ -3058,18 +3068,21 @@ export function EditorShell({
           }
           preview={
             layoutView === 'script' ? (
-              <ScriptViewMainSplit
-                transcriptPct={scriptSplitPct}
-                onTranscriptPctChange={persistScriptSplit}
-                transcript={
-                  <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-1">
-                    {renderTranscriptPanel({ largeScript: true })}
-                  </div>
-                }
-                preview={<PreviewColumn />}
-              />
+              <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                <ScriptViewMainSplit
+                  transcriptPct={scriptSplitPct}
+                  onTranscriptPctChange={persistScriptSplit}
+                  className="flex-1"
+                  transcript={
+                    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-1">
+                      {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+                    </div>
+                  }
+                  preview={previewColumnContent}
+                />
+              </div>
             ) : (
-              <PreviewColumn />
+              previewColumnContent
             )
           }
           properties={
@@ -3093,6 +3106,18 @@ export function EditorShell({
               outputMs={outputMs}
               onSeekOutput={seekOutput}
               onShowTimeline={() => setLayoutViewPersist('timeline')}
+              waveformSlot={
+                <ScriptViewWaveform
+                  peaks={scriptVoicePeaks}
+                  edits={edits}
+                  trimInMs={edits.trim.in}
+                  trimOutMs={edits.trim.out}
+                  mediaOffsetMs={mediaOffsetMs}
+                  outputDurationMs={outDur}
+                  outputMs={outputMs}
+                  onSeekOutput={seekOutput}
+                />
+              }
             />
           ) : (
           <>

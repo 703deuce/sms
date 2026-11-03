@@ -9,6 +9,6 @@ describe('script view split', () => {
   it('clamps split ratio', () => {
     expect(clampScriptSplitPct(0.1)).toBe(0.35)
     expect(clampScriptSplitPct(0.55)).toBe(0.55)
-    expect(clampScriptSplitPct(0.95)).toBe(0.75)
+    expect(clampScriptSplitPct(0.95)).toBe(0.7)
   })
 })

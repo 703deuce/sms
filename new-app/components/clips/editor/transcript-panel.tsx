@@ -96,6 +96,11 @@ export function TranscriptPanel({
   onSelectRange,
   compactToolbar = false,
   largeScript = false,
+  beatsAvailable = false,
+  beatsAnalyzing = false,
+  beatCount = 0,
+  beatBpm,
+  onCutToBeat,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -135,6 +140,11 @@ export function TranscriptPanel({
   compactToolbar?: boolean
   /** Phase 3 script view: larger transcript typography in the main split. */
   largeScript?: boolean
+  beatsAvailable?: boolean
+  beatsAnalyzing?: boolean
+  beatCount?: number
+  beatBpm?: number
+  onCutToBeat?: (every: 1 | 2 | 4) => void
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
@@ -761,6 +771,61 @@ export function TranscriptPanel({
                 >
                   {follow ? '✓ ' : ''}Follow playhead
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={angles.length <= 1}
+                  title={angles.length <= 1 ? 'Add another camera angle in Media to switch angles from the script.' : undefined}
+                  data-testid="transcript-view-angles"
+                  onClick={() => {
+                    if (angles.length <= 1) return
+                  }}
+                >
+                  Angles{angles.length <= 1 ? ' (one camera)' : ''}
+                </DropdownMenuItem>
+                {angles.length > 1
+                  ? angles.map((ang) => (
+                      <DropdownMenuItem
+                        key={ang.sourceId}
+                        className="pl-6"
+                        data-testid={`transcript-menu-angle-${ang.sourceId}`}
+                        onClick={() => angleSelection(ang.sourceId)}
+                      >
+                        {ang.key}. {ang.label}
+                      </DropdownMenuItem>
+                    ))
+                  : null}
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Beats</DropdownMenuLabel>
+                <DropdownMenuItem disabled={!beatsAvailable && !beatsAnalyzing} data-testid="transcript-beats-toggle">
+                  {beatsAnalyzing
+                    ? 'Analyzing beats…'
+                    : beatsAvailable
+                      ? `♪ Beats detected${beatBpm ? ` · ≈${Math.round(beatBpm)} BPM` : ''}${beatCount ? ` · ${beatCount}` : ''}`
+                      : 'Beats (add music on the timeline)'}
+                </DropdownMenuItem>
+                {onCutToBeat ? (
+                  <div className="px-2 py-1">
+                    <select
+                      className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs disabled:opacity-50"
+                      data-testid="transcript-beat-cut"
+                      disabled={!beatsAvailable || beatsAnalyzing}
+                      defaultValue=""
+                      onChange={(e) => {
+                        const v = e.target.value
+                        e.target.value = ''
+                        if (v === '1' || v === '2' || v === '4') onCutToBeat(Number(v) as 1 | 2 | 4)
+                      }}
+                    >
+                      <option value="" disabled>
+                        Cut to beat
+                      </option>
+                      <option value="1">Every beat</option>
+                      <option value="2">Every 2 beats</option>
+                      <option value="4">Every 4 beats</option>
+                    </select>
+                  </div>
+                ) : null}
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
@@ -979,6 +1044,44 @@ export function TranscriptPanel({
             <Undo2 className="size-3.5" />
             Clear
           </Button>
+          {onBuildFromTranscript ? (
+            <Button size="sm" variant="ghost" className="h-8" onClick={onBuildFromTranscript} data-testid="transcript-float-build">
+              Build from transcript
+            </Button>
+          ) : null}
+          {onPatchSectionOrder && mediaKind !== 'composite' ? (
+            <>
+              <Button size="sm" variant="ghost" className="h-8" disabled={selStart === null} onClick={() => moveSection('up')}>
+                Move up
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8" disabled={selStart === null} onClick={() => moveSection('down')}>
+                Move down
+              </Button>
+            </>
+          ) : null}
+          {onSaveAsNewClip ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8"
+              disabled={selStart === null || selEnd === null}
+              data-testid="transcript-float-make-clip"
+              onClick={() => {
+                if (selStart == null || selEnd == null) return
+                const trimIn = Math.min(selStart, selEnd)
+                const trimOut = Math.max(selStart, selEnd)
+                const title = selectionWords()
+                  .map((w) => wordDisplayText(w, edits.wordFixes))
+                  .join(' ')
+                  .replace(/\s+/g, ' ')
+                  .trim()
+                  .slice(0, 120)
+                void onSaveAsNewClip(trimIn, trimOut, title || undefined)
+              }}
+            >
+              Make clip
+            </Button>
+          ) : null}
           {angles.length > 1
             ? angles.map((ang) => (
                 <Button
