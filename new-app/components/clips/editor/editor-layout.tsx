@@ -53,8 +53,11 @@ export function EditorLayout(props: {
   /** Phase 2b: resizable left panel width (px), xl+ docked column. */
   panelWidthPx?: number
   onPanelWidthChange?: (px: number) => void
+  /** Phase 3: Descript-style script view hides the docked side panel column. */
+  hidePanelColumn?: boolean
+  hidePropertiesColumn?: boolean
 }) {
-  const { band, panelOpen, panelWidthPx, onPanelWidthChange } = props
+  const { band, panelOpen, panelWidthPx, onPanelWidthChange, hidePanelColumn, hidePropertiesColumn } = props
   const compact = props.compact === true
   const overlay = band === 'mobile' || band === 'compact'
   const dragRef = useRef<{ startX: number; startW: number } | null>(null)
@@ -94,6 +97,7 @@ export function EditorLayout(props: {
       data-testid="editor-grid"
       data-band={band}
       data-compact={compact ? 'true' : undefined}
+      data-script-view={hidePanelColumn ? 'true' : undefined}
     >
       <div data-region="rail" className={EDITOR_GRID.rail}>{props.rail}</div>
       {overlay && panelOpen ? (
@@ -102,7 +106,14 @@ export function EditorLayout(props: {
       <section
         data-region="panel"
         hidden={overlay && !panelOpen}
-        className={cn(EDITOR_GRID.panel, EDITOR_GRID.panelMobile, EDITOR_GRID.panelCompact, EDITOR_GRID.panelDocked, 'relative')}
+        className={cn(
+          EDITOR_GRID.panel,
+          EDITOR_GRID.panelMobile,
+          EDITOR_GRID.panelCompact,
+          EDITOR_GRID.panelDocked,
+          'relative',
+          hidePanelColumn && 'max-xl:hidden xl:hidden',
+        )}
       >
         {props.panel}
         {onPanelWidthChange && panelWidthPx != null && !overlay ? (
@@ -116,7 +127,14 @@ export function EditorLayout(props: {
         ) : null}
       </section>
       <section data-region="preview" className={EDITOR_GRID.preview}>{props.preview}</section>
-      {compact ? null : <aside data-region="properties" className={EDITOR_GRID.properties}>{props.properties}</aside>}
+      {compact ? null : (
+        <aside
+          data-region="properties"
+          className={cn(EDITOR_GRID.properties, hidePropertiesColumn && '2xl:hidden')}
+        >
+          {props.properties}
+        </aside>
+      )}
       <section data-region="timeline" className={EDITOR_GRID.timeline}>{props.timeline}</section>
     </div>
   )

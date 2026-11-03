@@ -15,6 +15,12 @@ import {
 } from '@/lib/clips/editor/editor-rail-navigation'
 import { useEditorPanelWidth } from '@/lib/clips/editor/use-editor-panel-width'
 import { PropertiesProjectSettings } from '@/components/clips/editor/properties-project-settings'
+import {
+  readClipEditorLayoutView,
+  writeClipEditorLayoutView,
+  type ClipEditorLayoutView,
+} from '@/lib/clips/editor/editor-layout-view'
+import { EditorLayoutViewSwitch, ScriptViewWaveStrip } from '@/components/clips/editor/script-view-chrome'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { EditorLayout, useEditorBand, aspectCssToNumber } from '@/components/clips/editor/editor-layout'
 import { CanvasLayoutMenu } from '@/components/clips/editor/canvas-layout-menu'
@@ -343,6 +349,15 @@ export function EditorShell({
   }, [])
   const timelineVisible = !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
+  const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
+  const [scriptPropsOpen, setScriptPropsOpen] = useState(false)
+  useEffect(() => {
+    setLayoutView(readClipEditorLayoutView())
+  }, [])
+  const setLayoutViewPersist = useCallback((view: ClipEditorLayoutView) => {
+    setLayoutView(view)
+    writeClipEditorLayoutView(view)
+  }, [])
   const selectPanel = useCallback((id: EditorPanelId) => {
     setPanel(id)
     const group = panelToRailGroup(id)
@@ -2412,6 +2427,9 @@ export function EditorShell({
           producerOpen={producerOpen}
           producerStrip={producerStrip ? { changeCount: producerStrip.changeCount, onUndo: undo } : null}
           pendingPaidCount={producerPendingPaid}
+          layoutViewSlot={
+            <EditorLayoutViewSwitch value={layoutView} onChange={setLayoutViewPersist} />
+          }
           layoutSlot={
             <EditorLayoutMenu>
               <LayoutQuickPicker
@@ -2536,6 +2554,8 @@ export function EditorShell({
           onClosePanel={() => setMobilePanelOpen(false)}
           panelWidthPx={panelWidthPx}
           onPanelWidthChange={persistPanelWidth}
+          hidePanelColumn={layoutView === 'script'}
+          hidePropertiesColumn={layoutView === 'script'}
           rail={
             <>
               <EditorMobileRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
@@ -3038,6 +3058,14 @@ export function EditorShell({
             ) : null
           }
           timeline={
+          layoutView === 'script' ? (
+            <ScriptViewWaveStrip
+              durationMs={outDur}
+              outputMs={outputMs}
+              onSeekOutput={seekOutput}
+              onShowTimeline={() => setLayoutViewPersist('timeline')}
+            />
+          ) : (
           <>
           {compact ? (
             <button
@@ -3132,7 +3160,7 @@ export function EditorShell({
           />
           </div>
           </>
-          }
+          )}
         />
       </div>
       <Button
@@ -3144,6 +3172,28 @@ export function EditorShell({
       >
         <PanelRightOpen className="size-5" />
       </Button>
+      {layoutView === 'script' ? (
+        <>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="fixed right-4 top-16 z-40 hidden shadow-md 2xl:flex"
+            data-testid="editor-properties-drawer-toggle"
+            onClick={() => setScriptPropsOpen(true)}
+          >
+            Properties
+          </Button>
+          <Dialog open={scriptPropsOpen} onOpenChange={setScriptPropsOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Properties</DialogTitle>
+              </DialogHeader>
+              <ScrollArea className="max-h-[70vh]">{renderInspectorPropertiesPanel(true)}</ScrollArea>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : null}
       <ClipperSurfaceErrorBoundary surface="Export">
         <ExportDialog
         clipId={clipId}
