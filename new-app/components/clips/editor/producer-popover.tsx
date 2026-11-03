@@ -99,15 +99,13 @@ export function ProducerPopover({
       data-testid="producer-popover"
     >
       <div className="flex items-center justify-between border-b px-3 py-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <p className="flex items-center gap-1.5 text-sm font-semibold">
-            <Sparkles className="size-4 text-lane-ai" aria-hidden />
-            AI Producer
-          </p>
-          {aiProducerAgentPublicEnabled() ? (
-            <NewEditEntry sources={[{ sourceId: clipId, kind: 'clip', clipId }]} />
-          ) : null}
-        </div>
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          <Sparkles className="size-4 text-lane-ai" aria-hidden />
+          AI Producer
+        </p>
+        {aiProducerAgentPublicEnabled() && (
+          <NewEditEntry sources={[{ sourceId: clipId, kind: 'clip', clipId }]} />
+        )}
         <Button size="icon-sm" variant="ghost" aria-label="Close" onClick={onClose} data-testid="producer-popover-close">
           <X className="size-4" />
         </Button>

@@ -405,9 +405,9 @@ export function ProjectClipsView({
                 {openInEditorLinkLabel(asrLanguage)}
               </Button>
             ) : null}
-            {showResults ? (
+            {showResults && (
               <ProjectClipsNewEditAction projectId={projectId} clipIds={clips.map((c) => c.id)} />
-            ) : null}
+            )}
             {showResults && scriptEditorEnabled ? (
             <Button
               size="sm"

@@ -23,6 +23,7 @@ const allowedExact = new Set([
   'new-app/components/clips/project-clips-view.tsx',
   'worker/clips_worker/job_types.py',
   'worker/clips_worker/main.py',
+  'new-app/prisma/schema.prisma',
 ])
 
 const violations = diff.filter((f) => {

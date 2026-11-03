@@ -44,4 +44,8 @@ exec pnpm exec vitest run \
   tests/ui/editor-wide-properties-empty.test.tsx \
   tests/ui/brand-template-open.test.tsx \
   tests/ui/brand-editor-open.test.tsx \
-  tests/ui/visual-guards.test.ts
+  tests/ui/visual-guards.test.ts \
+  tests/ai-producer-agent/flags-and-validate.test.ts \
+  tests/ai-producer-agent/editability.test.ts \
+  tests/ai-producer-agent/system-prompt.test.ts \
+  tests/ai-producer-agent/mount-flag-off.test.tsx
