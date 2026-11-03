@@ -278,7 +278,7 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
               onClick={() => p.toggleOpt('magnet')}
               aria-pressed={p.magnet}
               aria-label="Main track magnet"
-              title="Main track magnet"
+              title="Main track magnet (timeline option)"
               data-testid="timeline-magnet"
             >
               <span className="text-[10px] font-semibold">M</span>
@@ -289,7 +289,7 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
               onClick={() => p.toggleOpt('rippleOverlays')}
               aria-pressed={p.linkOn}
               aria-label="Link overlays to the main track"
-              title="Link overlays"
+              title="Link overlays (ripple with main)"
               data-testid="timeline-link-overlays"
             >
               <Link2 />
@@ -299,6 +299,7 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
               className={toggleBtn(p.autoXfade)}
               onClick={() => p.setAutoXfade((v) => !v)}
               aria-pressed={p.autoXfade}
+              aria-label="Auto-crossfade on overlap"
               title="Auto-crossfade on overlap"
               data-testid="timeline-auto-xfade"
             >

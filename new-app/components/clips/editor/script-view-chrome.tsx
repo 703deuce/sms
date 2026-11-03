@@ -34,22 +34,31 @@ export function ScriptViewWaveStrip({
         aria-valuemax={durationMs}
         aria-valuenow={outputMs}
         tabIndex={0}
-        onClick={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect()
-          const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
-          onSeekOutput(Math.round(x * durationMs))
-        }}
+        onClick={
+          waveformSlot
+            ? undefined
+            : (e) => {
+                const rect = e.currentTarget.getBoundingClientRect()
+                const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+                onSeekOutput(Math.round(x * durationMs))
+              }
+        }
         onKeyDown={(e) => {
           if (e.key === 'ArrowLeft') onSeekOutput(Math.max(0, outputMs - 500))
           if (e.key === 'ArrowRight') onSeekOutput(Math.min(durationMs, outputMs + 500))
         }}
       >
-        {waveformSlot ? <div className="absolute inset-0 overflow-hidden rounded-md opacity-80">{waveformSlot}</div> : null}
-        <div
-          className="pointer-events-none absolute inset-y-0 w-0.5 bg-primary shadow-sm"
-          style={{ left: `${pct}%` }}
-          data-testid="script-view-playhead"
-        />
+        {waveformSlot ? (
+          <div className="absolute inset-0 overflow-hidden rounded-md">{waveformSlot}</div>
+        ) : (
+          <>
+            <div
+              className="pointer-events-none absolute inset-y-0 w-0.5 bg-primary shadow-sm"
+              style={{ left: `${pct}%` }}
+              data-testid="script-view-playhead"
+            />
+          </>
+        )}
       </div>
     </div>
   )
@@ -76,7 +85,9 @@ export function EditorLayoutViewSwitch({
           data-testid={`editor-layout-view-${mode}`}
           className={cn(
             'rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors',
-            value === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            value === mode
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
           )}
           aria-pressed={value === mode}
           onClick={() => onChange(mode)}
