@@ -215,6 +215,16 @@ def _burn_preview_captions(
         print(f"[reframe] preview_caption_burn_failed err={type(exc).__name__}", flush=True)
 
 
+def _variety_fit_indices(picks: list) -> set[int]:
+    """FIX1: the 1-in-5 fit_blur 'variety' flip (04d3671ab2) is opt-in. It turned good facecam/speaker
+    clips into tiny-video-in-blur. Enable with CLIP_FIT_VARIETY=1."""
+    if os.environ.get("CLIP_FIT_VARIETY") != "1":
+        return set()
+    from clips_worker.clip_layout_policy import fit_blur_variety_indices
+
+    return set(fit_blur_variety_indices(picks))
+
+
 def reframe_clip_preview(
     clip_file: Path,
     out_mp4: Path,
@@ -249,6 +259,40 @@ def reframe_clip_preview(
     ).lower()
     if isinstance(settings.get("layout"), str):
         layout_mode = str(settings.get("layoutMode") or settings.get("layout") or "speaker_follow").lower()
+
+    # FIX1 (A): one source of truth. If the edits carry a T6 template, the preview is rendered by the SAME
+    # function export uses (edits_render._apply_facecam_or_pip_layout) so editor == preview == export.
+    from clips_worker.t6_flags import t6_render_template_enabled
+
+    if edits and t6_render_template_enabled(settings, edits):
+        from clips_worker.edits_render import _apply_facecam_or_pip_layout, _t6_caption_edits
+        from clips_worker.render_clip import aspect_size
+
+        aspect = str(settings.get("aspectRatio") or "9:16")
+        w, h = aspect_size(aspect, "720p")
+        try:
+            t_src, t_ok, t_meta = _apply_facecam_or_pip_layout(
+                clip_file,
+                work_dir,
+                edits,
+                {**settings, "aiMeta": ai_meta},
+                play_w=w,
+                play_h=h,
+                conn=conn,
+                clip_id=clip_id,
+                clip_start_ms=clip_start_ms,
+            )
+            if t_ok and isinstance(t_meta.get("t6_spec"), dict):
+                shutil.copyfile(t_src, out_mp4)
+                write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
+                cap_src = dict((edits.get("captions") or settings.get("captions") or {}))
+                cap_edits = {**edits, "captions": _t6_caption_edits(cap_src, t_meta["t6_spec"], h)}
+                _burn_preview_captions(out_mp4, words_path, reframe_settings, cap_edits, work_dir, w, h)
+                tid = str(((edits.get("layout") or {}).get("template") or {}).get("id") or "")
+                print(f"[reframe] t6_preview template={tid}", flush=True)
+                return out_mp4, layout_mode, reframe_settings
+        except Exception as exc:
+            print(f"[reframe] t6_preview_failed err={type(exc).__name__}", flush=True)
 
     static_fit = editor_mode_uses_static_fit_blur(layout_mode) or layout_mode == "fit"
     if static_fit and not motion_subject:
@@ -314,7 +358,9 @@ def reframe_clip_preview(
         return rendered, out_method, reframe_settings
 
     preserve_crop_track = False
-    if motion_subject:
+    if motion_subject or worker_layout not in ("fit", "fit_blur", "full_frame"):
+        # FIX1 (A.3): speaker_follow/auto without detected face+speech (IRL walking, scenery) follows the
+        # subject; motion track says "wide" -> fit_blur exactly as before.
         wide = write_motion_crop_track(
             clip_file,
             crop_track_path,
@@ -476,6 +522,42 @@ def streamer_initial_clip_edits(
     return edits
 
 
+# FIX1 (H5): one facecam detection per gaming upload run, reused by the other clips of that run.
+_FC_REUSE_LOCK = threading.Lock()
+_FC_REUSE: dict[str, dict] = {}
+
+
+def _fc_reuse_key(work_dir: Path | None, meta: dict | None) -> str | None:
+    if os.environ.get("CLIPS_UPLOAD_FACECAM_REUSE", "1") != "1" or work_dir is None:
+        return None
+    if str((meta or {}).get("uploadProjectMajorityType") or "") != "gaming":
+        return None
+    return str(Path(work_dir).parent)  # = the run's td_path (work_dir = td_path / f"reframe_work_{idx}")
+
+
+def _known_project_facecam(work_dir: Path | None, meta: dict | None) -> dict | None:
+    key = _fc_reuse_key(work_dir, meta)
+    if key is None:
+        return None
+    with _FC_REUSE_LOCK:
+        return _FC_REUSE.get(key)
+
+
+def _remember_project_facecam(work_dir: Path | None, meta: dict | None, fc_layout: dict | None) -> None:
+    from clips_worker.clip_finalize import FACECAM_CONFIRMED
+
+    key = _fc_reuse_key(work_dir, meta)
+    if key is None or not isinstance(fc_layout, dict) or not isinstance(fc_layout.get("facecam"), dict):
+        return
+    if float(fc_layout.get("confidence") or 0) < FACECAM_CONFIRMED:
+        return
+    with _FC_REUSE_LOCK:
+        if key not in _FC_REUSE:
+            if len(_FC_REUSE) >= 16:
+                _FC_REUSE.pop(next(iter(_FC_REUSE)))
+            _FC_REUSE[key] = fc_layout
+
+
 def _upload_clip_inputs(
     edits: dict,
     clip_file: Path,
@@ -502,7 +584,7 @@ def _upload_clip_inputs(
         section_activity=meta.get("sectionActivity"),
         moment_iou=float(meta.get("videoMomentMatchIou") or 0.0),
         majority=str(meta.get("uploadProjectMajorityType") or stream_majority or "irl"),
-        known_facecam_layout=None,
+        known_facecam_layout=_known_project_facecam(work_dir, meta),
         fallback_archetype=str(meta.get("archetype") or ""),
         channel_clip_type_layouts=None,
         dense_candidate=dense_candidate_from_meta(meta),
@@ -545,6 +627,7 @@ def _regular_clip_type_and_layout(
     from clips_worker.clip_layout_policy import apply_headline_layout_default
 
     edits = apply_headline_layout_default(edits, str(type_info.get("clipType") or ""))
+    _remember_project_facecam(work_dir, (pick or {}).get("aiMeta"), fc_layout)
     return edits, type_info, fc_layout
 
 
@@ -565,7 +648,9 @@ def _finalize_regular_clip_edits(
     from clips_worker.clip_finalize import finalize_clip_edits
 
     wd = work_dir or clip_file.parent
-    return finalize_clip_edits(_upload_clip_inputs(edits, clip_file, pick, settings, wd, clip_words, clip_id))
+    out = finalize_clip_edits(_upload_clip_inputs(edits, clip_file, pick, settings, wd, clip_words, clip_id))
+    _remember_project_facecam(wd, (pick or {}).get("aiMeta"), out[2])
+    return out
 
 
 def mark_project_ready(conn, project_id: str, error: str | None = None) -> None:
@@ -791,6 +876,43 @@ def run_m4_pipeline(
                             return cached
                     return None
 
+                def _with_final_pick_scores(cached: dict, pick: dict) -> dict:
+                    """FIX1 (G7): a headstart row reused for a final pick takes the final score/title/aiMeta
+                    (pass1 0–1 heuristic vs pass2 0–100 scale), in memory AND in the already-persisted DB row."""
+                    pmeta = pick.get("aiMeta") or {}
+                    cmeta = dict(cached.get("aiMeta") or {})
+                    for k in ("scoring", "score_detail", "archetype", "pass1_why", "low_confidence", "hook", "signals_pick"):
+                        if k in pmeta:
+                            cmeta[k] = pmeta[k]
+                    out = {**cached, "aiMeta": cmeta}
+                    if pick.get("score") is not None:
+                        out["score"] = int(round(float(pick["score"])))  # clips.score is an int column
+                    if pick.get("scores") is not None:
+                        out["scores"] = pick["scores"]
+                    if pick.get("title"):
+                        out["title"] = pick["title"]
+                    if pick.get("reason"):
+                        out["reason"] = pick["reason"]
+                    cid = out.get("id")
+                    if cid:
+                        try:
+                            with psycopg2.connect(dsn) as up_conn, up_conn.cursor() as cur:
+                                cur.execute(
+                                    'UPDATE clips SET score=%s, scores=%s::jsonb, "aiMeta"=%s::jsonb, title=%s, '
+                                    'reason=%s, "updatedAt"=NOW() WHERE id=%s',
+                                    (
+                                        out.get("score"),
+                                        json.dumps(out.get("scores") or {}),
+                                        json.dumps(cmeta),
+                                        out.get("title"),
+                                        out.get("reason"),
+                                        cid,
+                                    ),
+                                )
+                        except Exception as exc:
+                            print(f"[clipper:g7] score_refresh_failed clip={cid} err={type(exc).__name__}", flush=True)
+                    return out
+
                 def _overlap_existing_locked(start_ms: int, end_ms: int) -> bool:
                     """Caller must hold span_lock (non-reentrant threading.Lock)."""
                     for a0, a1 in rendered_spans:
@@ -831,7 +953,7 @@ def run_m4_pipeline(
                     post_progress(
                         job_id,
                         reframe_progress_payload(
-                            clip_index, clips_total, reframe_started_at, render_conc, clips_ready=ready
+                            ready - 1, clips_total, reframe_started_at, render_conc, clips_ready=ready
                         ),
                     )
                     print(
@@ -1132,7 +1254,7 @@ def run_m4_pipeline(
                         post_progress(
                             job_id,
                             reframe_progress_payload(
-                                idx, clip_total, reframe_started_at, render_conc, clips_ready=clips_ready_count
+                                clips_ready_count, clip_total, reframe_started_at, render_conc, clips_ready=clips_ready_count
                             ),
                         )
 
@@ -1156,7 +1278,7 @@ def run_m4_pipeline(
                         if cached is not None:
                             cmeta = cached.get("aiMeta") or {}
                             if cmeta.get("typeSource") == "classify":
-                                return cached
+                                return _with_final_pick_scores(cached, pick)
                             from clips_worker.clip_type import resolve_upload_clip_type
 
                             pmeta = pick.get("aiMeta") or {}
@@ -1181,7 +1303,7 @@ def run_m4_pipeline(
                                 return build_clip_row_from_pick(
                                     pick, idx, clip_id=str(cached.get("id") or "")
                                 )
-                            return cached
+                            return _with_final_pick_scores(cached, pick)
                         if not _mark_span(pick["start_ms"], pick["end_ms"]):
                             decision_log(
                                 "render",
@@ -1196,7 +1318,7 @@ def run_m4_pipeline(
                         cid = head_render_state.get("clip_id_by_span", {}).get(sk)
                         return build_clip_row_from_pick(pick, idx, clip_id=cid)
 
-                    variety_fit_idx = set(fit_blur_variety_indices(picks))
+                    variety_fit_idx = _variety_fit_indices(picks)
                     index_order = sorted(
                         range(len(picks)),
                         key=lambda i: -float(picks[i].get("score") or 0),
@@ -1284,7 +1406,7 @@ def run_m4_pipeline(
                 def on_reframe_start(idx: int, clip_total: int) -> None:
                     post_progress(
                         job_id,
-                        reframe_progress_payload(idx, clip_total, reframe_started_at, render_conc, clips_ready=clips_ready_count),
+                        reframe_progress_payload(clips_ready_count, clip_total, reframe_started_at, render_conc, clips_ready=clips_ready_count),
                     )
 
                 def on_reframe_complete(idx: int, row: dict | None) -> None:
@@ -1317,7 +1439,7 @@ def run_m4_pipeline(
                             flush=True,
                         )
 
-                variety_fit_idx = set(fit_blur_variety_indices(picks))
+                variety_fit_idx = _variety_fit_indices(picks)
 
                 def build_clip_row(idx: int) -> dict | None:
                     pick = picks[idx]
@@ -1421,7 +1543,7 @@ def run_m4_pipeline(
                         "aiMeta": ai_meta_out,
                     }
 
-                variety_fit_idx = set(fit_blur_variety_indices(picks))
+                variety_fit_idx = _variety_fit_indices(picks)
                 index_order = sorted(range(len(picks)), key=lambda i: -float(picks[i].get("score") or 0))
                 with stage_span("reframe", heartbeat=True, clips=len(picks)):
                     clip_rows = run_bounded_indexed_pool(

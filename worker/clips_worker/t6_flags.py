@@ -55,3 +55,18 @@ def t6_log_fallback(stage: str, exc: BaseException) -> None:
         decision_log("t6", "fallback", stage=stage, err=type(exc).__name__)
     except Exception:
         pass
+
+
+def t6_render_template_enabled(settings: dict | None, edits: dict | None) -> bool:
+    """FIX1: a clip whose edits carry a template renders THAT template (editor parity),
+    unless the project explicitly disabled templates or T6_TEMPLATES=0."""
+    s = settings if isinstance(settings, dict) else {}
+    t6 = s.get("t6") if isinstance(s.get("t6"), dict) else {}
+    if t6.get("templates") is False or os.environ.get("T6_TEMPLATES") == "0":
+        return False
+    if t6_templates_enabled(settings):
+        return True
+    ed = edits if isinstance(edits, dict) else {}
+    layout = ed.get("layout") if isinstance(ed.get("layout"), dict) else {}
+    tmpl = layout.get("template") if isinstance(layout.get("template"), dict) else {}
+    return bool(str(tmpl.get("id") or "").strip())

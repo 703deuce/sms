@@ -581,10 +581,15 @@ export function useEditorState(
       mode: ClipEditsV2['layout']['mode'],
       facecam?: ClipEditsV2['layout']['facecam'],
     ) => {
+      // FIX1 (G8): an explicit Layout pick replaces the auto template (template would otherwise win in editor + render).
+      const { template: _droppedTemplate, ...layoutRest } = state.edits.layout as typeof state.edits.layout & {
+        template?: unknown
+      }
+      void _droppedTemplate
       let next: ClipEditsV2 = {
         ...state.edits,
         layout: {
-          ...state.edits.layout,
+          ...layoutRest,
           mode,
           userPicked: true,
           layoutSegments: defaultLayoutSegments(state.edits.trim.in, state.edits.trim.out, mode),

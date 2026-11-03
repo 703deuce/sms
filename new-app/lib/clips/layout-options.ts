@@ -109,7 +109,7 @@ export function layoutOptionDisabled(
 ): boolean {
   if (layoutModeDisabledReason(opt.id, ctx)) return true
   if (opt.disabled) return !ctx.aiExtras
-  if (isClipLayoutBeta(opt.id) && !ctx.reframeV2Enabled) return !ctx.aiExtras
+  // FIX1 (E.3): split/grid3/grid4/dynamic render in preview + export; only the content checks above may disable them.
   return false
 }
 

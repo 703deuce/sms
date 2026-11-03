@@ -43,6 +43,26 @@ from clips_worker.streamer.transcribe_stream import log_stream_transcribe_summar
 from clips_worker.streamer.usage import check_cap, job_priority, meter_vod_once
 
 
+def _media_start_ms(payload: dict, window_start_ms: int, state: dict | None, window_end_ms: int | None = None) -> int:
+    """FIX1 (B.4d): absolute stream ms of the analysed file's t=0. An explicit 0 is valid; the recorded
+    HLS-window start (``vodStartMs`` measured by fetch_window) beats the requested start."""
+    v = (payload or {}).get("mediaStartMs")
+    if v is not None:
+        return int(v)
+    windows = (state or {}).get("windows") or {}
+    cands = [windows.get(str(window_end_ms))] if window_end_ms is not None else []
+    cands += [w for w in windows.values() if isinstance(w, dict)]
+    for w in cands:
+        if not isinstance(w, dict) or w.get("vodStartMs") is None:
+            continue
+        try:
+            if w is cands[0] or int(w.get("requestedStartMs")) == int(window_start_ms):
+                return int(w["vodStartMs"])
+        except (TypeError, ValueError):
+            continue
+    return int(window_start_ms)
+
+
 def resolve_analyze_window_ms(vod: dict, payload: dict) -> tuple[int, int]:
     """Clamp analyze/render window to known media duration (upload tail must not exceed file)."""
     window_start_ms = int(
@@ -416,7 +436,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 from clips_worker.clipfind.c3_seams import rebase_viewer_clips
 
                 viewer_clips = rebase_viewer_clips(
-                    viewer_clips, int(payload.get("mediaStartMs") or window_start_ms)
+                    viewer_clips, _media_start_ms(payload, window_start_ms, state, window_end_ms)
                 )
             except Exception as exc:
                 from clips_worker.clipfind.flags import clipfind_fallback
@@ -516,7 +536,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                         scratch=scratch,
                         state=state,
                         chat_messages=chat_messages,
-                        time_offset_ms=int(payload.get("mediaStartMs") or window_start_ms),
+                        time_offset_ms=_media_start_ms(payload, window_start_ms, state, window_end_ms),
                     )
             except Exception as exc:
                 from clips_worker.clipfind.flags import clipfind_fallback
@@ -600,7 +620,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
 
             render_id: str | None = None
             clip_rows = []
-            time_offset_ms = int(payload.get("mediaStartMs") or window_start_ms)
+            time_offset_ms = _media_start_ms(payload, window_start_ms, state, window_end_ms)
             streamer_settings = settings.get("streamer") if isinstance(settings.get("streamer"), dict) else {}
             genre = str(streamer_settings.get("genre") or "stream")
             from clips_worker.clip_type import (

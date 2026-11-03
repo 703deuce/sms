@@ -8,7 +8,7 @@ from clips_worker.t6_registry import TEMPLATES
 
 LANE_FALLBACK = {
     "gaming": "G4",
-    "irl": "I3",
+    "irl": "I5",
     "just_chatting": "C6",
     "podcast": "C6",
 }
@@ -130,6 +130,20 @@ def fit_score(t: dict, s: dict) -> float:
     return score
 
 
+def _talking_fallback(s: dict, lane: str) -> str | None:
+    """FIX1 (H1): talking lanes never fall back to blur when people are on camera:
+    2+ people -> I6 Split People (split), 1 -> C2 Active Speaker (speaker_follow)."""
+    if lane not in ("just_chatting", "podcast"):
+        return None
+    faces = s.get("faces") if isinstance(s.get("faces"), list) else []
+    n = max(len(faces), int(s.get("person_count") or 0))
+    if n >= 2 and "I6" in TEMPLATES:
+        return "I6"
+    if n >= 1 and "C2" in TEMPLATES:
+        return "C2"
+    return None
+
+
 def pick_template(
     s: dict,
     clip: dict,
@@ -142,7 +156,7 @@ def pick_template(
     """``only`` (T6.7 scene map): restrict to the templates that fit the scene's layout."""
     lane = str(s.get("clip_type") or "irl")
     if float(s.get("type_conf") or 0.0) < 0.6:
-        return LANE_FALLBACK.get(lane, "I3"), "low_conf"
+        return _talking_fallback(s, lane) or LANE_FALLBACK.get(lane, "I5"), "low_conf"
     cands = [
         tid
         for tid, t in TEMPLATES.items()
@@ -157,7 +171,7 @@ def pick_template(
             if tid in TEMPLATES and in_family(TEMPLATES[tid], lane) and not _uses_any_structure(TEMPLATES[tid], lane)
         ]
     if not cands:
-        return LANE_FALLBACK.get(lane, "I3"), "no_eligible"
+        return _talking_fallback(s, lane) or LANE_FALLBACK.get(lane, "I5"), "no_eligible"
     cap = max(1, int((batch_size * 0.4) + 0.999))
     scored: list[tuple[float, str]] = []
     for tid in cands:

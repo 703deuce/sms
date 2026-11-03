@@ -2932,7 +2932,10 @@ export function Timeline({
           <button
             type="button"
             className={tbtn}
-            onClick={() => insertGap()}
+            onClick={(e) => {
+              insertGap()
+              e.currentTarget.blur() // FIX1 (G11): Space must not re-trigger Gap
+            }}
             disabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
             aria-label="Insert gap at playhead"
             title="Insert gap: 1 s of black + silence at the playhead (lengthens the video; set the length under Media → Inserted clips)"

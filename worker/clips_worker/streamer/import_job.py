@@ -576,6 +576,20 @@ def _ingest_twitch_hls_window(
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    # FIX1 (B.4d): keep audio aligned with the window's t=0 (= vodStartMs) when audio starts after video.
+    from clips_worker.streamer.media_probe import audio_lead_ms
+
+    _lead = audio_lead_ms(wm.path)
+    if _lead > 20:
+        _padded = cache_dir / "window.pad.opus"
+        subprocess.check_call(
+            ["ffmpeg", "-y", "-i", str(audio_path), "-af", f"adelay={_lead}:all=1",
+             "-c:a", "libopus", "-b:a", "24k", str(_padded)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        _padded.replace(audio_path)
+    print(f"[streamer:import] window_audio_lead vod={vod_id} leadMs={_lead}", flush=True)
     video_path = cache_dir / "window.mp4"
     subprocess.check_call(
         [

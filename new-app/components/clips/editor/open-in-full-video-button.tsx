@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { clipsFetch } from '@/lib/clips-api'
@@ -39,24 +40,32 @@ function clearPersisted(clipId: string) {
   }
 }
 
-export function OpenInFullVideoButton({ clipId, hasUpload = true }: { clipId: string; hasUpload?: boolean }) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [progress, setProgress] = useState<string | null>(() => readPersisted(clipId))
+/** FIX1 (F8): click-only (no hover prefetch: the route creates projects), navigate as soon as the link resolves. */
+export function useOpenInFullVideo(clipId: string, hasUpload = true) {
+  const router = useRouter()
+  const [progress, setProgress] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const startedRef = useRef(false)
+  const aliveRef = useRef(true)
+
+  useEffect(() => {
+    aliveRef.current = true
+    return () => {
+      aliveRef.current = false
+      if (pollRef.current) clearTimeout(pollRef.current)
+    }
+  }, [])
 
   const load = useCallback(
-    async (attempt = 0) => {
-      if (!hasUpload) return
-      setLoading(true)
+    async (attempt: number) => {
       try {
         const data = await clipsFetch<FullVideoLinkData | null>(`/api/clips/clips/${clipId}/full-video-link`)
+        if (!aliveRef.current) return
         if (data && 'url' in data && data.url) {
-          setUrl(data.url)
-          setProgress(null)
           clearPersisted(clipId)
+          setProgress(null)
           setLoading(false)
+          router.push(data.url)
           return
         }
         if (data && 'preparing' in data && data.preparing) {
@@ -66,66 +75,46 @@ export function OpenInFullVideoButton({ clipId, hasUpload = true }: { clipId: st
           pollRef.current = setTimeout(() => void load(attempt + 1), Math.min(2500 + attempt * 200, 8000))
           return
         }
-        setProgress(null)
         clearPersisted(clipId)
+        setProgress(null)
         setLoading(false)
       } catch {
+        if (!aliveRef.current) return
         setProgress(null)
         setLoading(false)
       }
     },
-    [clipId, hasUpload],
+    [clipId, router],
   )
 
-  const ensureLoad = useCallback(() => {
-    if (!hasUpload || startedRef.current) return
-    startedRef.current = true
-    if (!progress) setProgress(readPersisted(clipId))
+  const open = useCallback(() => {
+    if (!hasUpload || loading) return
+    setLoading(true)
+    setProgress(readPersisted(clipId) ?? 'Opening…')
     void load(0)
-  }, [clipId, hasUpload, load, progress])
+  }, [clipId, hasUpload, load, loading])
 
-  useEffect(
-    () => () => {
-      if (pollRef.current) clearTimeout(pollRef.current)
-    },
-    [],
-  )
+  return { loading, progress, open }
+}
 
+export function OpenInFullVideoButton({ clipId, hasUpload = true }: { clipId: string; hasUpload?: boolean }) {
+  const { loading, progress, open } = useOpenInFullVideo(clipId, hasUpload)
   if (!hasUpload) return null
-
-  const label = url
-    ? 'Open in full video'
-    : loading
-      ? progress || 'Preparing full video…'
-      : 'Open in full video'
-
   return (
     <Button
+      type="button"
       size="sm"
       variant="outline"
-      asChild={Boolean(url)}
-      disabled={loading && !url}
+      disabled={loading}
       data-testid="open-in-full-video"
       title={progress ?? undefined}
-      onPointerEnter={ensureLoad}
-      onFocus={ensureLoad}
       onClick={(e) => {
-        if (url) return
-        e.preventDefault()
-        ensureLoad()
+        e.stopPropagation()
+        open()
       }}
     >
-      {url ? (
-        <a href={url} target="_blank" rel="noopener noreferrer">
-          <ExternalLink className="mr-1 size-3.5" aria-hidden />
-          Open in full video
-        </a>
-      ) : (
-        <span className="max-w-[220px] truncate">
-          <ExternalLink className="mr-1 size-3.5 shrink-0" aria-hidden />
-          {label}
-        </span>
-      )}
+      <ExternalLink className="mr-1 size-3.5 shrink-0" aria-hidden />
+      <span className="max-w-[220px] truncate">{loading ? progress || 'Opening…' : 'Open in full video'}</span>
     </Button>
   )
 }

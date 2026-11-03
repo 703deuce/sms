@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 
-_LENGTH_RULE_AUTO = """Auto: the user did not pick a length. Use the shortest duration that keeps the complete moment, setup through payoff and reaction, up to 90 seconds. Typical lengths (gaming and reactions about 30 seconds, talking, IRL and roleplay about 60) are suggestions, never caps. Gaming clips are at most 45 seconds: start at the final fight and end on the outcome and reaction. If a gaming sequence is longer, return the tightest complete part, and return an earlier separate beat as its own moment."""
+_LENGTH_RULE_AUTO = """Auto: the user did not pick a length. Use the shortest duration that keeps the complete moment, setup through payoff and reaction, up to 90 seconds. Typical lengths (gaming and reactions about 30 seconds, talking, IRL and roleplay about 60) are suggestions, never caps. A 55 second firefight stays 55 seconds."""
 
 _LENGTH_RULE_FIXED = """The user picked a maximum of {target_len_s} seconds. Every clip must be {target_len_s} seconds or shorter. Use the shortest duration that keeps the complete moment; do not stretch a short moment to fill the limit. If a moment is longer than the limit, return the tightest complete part that fits (for example the final fight through the outcome) and describe what was left out in unverified. If no complete version fits, skip it."""
 
@@ -124,6 +124,8 @@ def min_moments_for_video(video_len_s: int) -> int:
     if video_len_s >= 20 * 60:
         return max(6, min(_MIN_MOMENTS_PER_CHUNK_CAP, int(round(video_len_s / 50.0))))
     need = max(6, math.ceil(1.5 * video_len_s / 60))
+    if video_len_s > 300:
+        need = max(6, int((video_len_s + 52) // 53))  # FIX1: pre-04d3671ab2 rate for long uploads
     return min(need, max(1, video_len_s // 15), _MIN_MOMENTS_PER_CHUNK_CAP)
 
 
@@ -167,13 +169,11 @@ def _coverage_time_parts(video_len_s: int, need: int) -> str:
 def full_coverage_user_suffix(video_len_s: int) -> str:
     dur = float(max(1, int(video_len_s)))
     need = min_moments_for_video(int(video_len_s))
-    parts = _coverage_time_parts(int(video_len_s), need)
     return (
-        f"FULL COVERAGE: return AT LEAST {need} moments for this {dur:.1f}s clip. "
-        "Every section you list in sections[] must contain at least one moment. "
-        "Cover the whole clip; as a guide, include your best moment from each of these parts: "
-        f"{parts}. If a part has nothing great, still return its best candidate and give it an honest "
-        "(lower) score; do not inflate scores to fill the count."
+        f"COVERAGE: return at least {need} moments for this {dur:.1f}s video, chosen purely on quality, of ANY type "
+        "(funny, hype, emotional, gameplay action such as kills, clutches, wins and fails, insight). Do not favour talk "
+        "over action. Do not spread picks evenly over time; strong moments may cluster. Score weak ones honestly (lower); "
+        "do not inflate scores to fill the count."
     )
 
 

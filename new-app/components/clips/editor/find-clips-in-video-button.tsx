@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Loader2, MoreHorizontal, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
@@ -128,7 +129,7 @@ export function FindClipsInVideoButton({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {confirm ? (
+      {confirm && typeof document !== 'undefined' ? createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
           onMouseDown={(e) => {
@@ -165,7 +166,8 @@ export function FindClipsInVideoButton({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   )

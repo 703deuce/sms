@@ -110,7 +110,18 @@ export async function applyWorkerJobProgress(input: {
     let projectStage = input.stage
     if (input.jobStatus === 'DONE' && projectStage === 'done') projectStage = 'ready'
     if (projectStage !== undefined) projectPatch.stage = projectStage
-    if (input.progress !== undefined) projectPatch.progress = input.progress
+    if (input.progress !== undefined) {
+      // FIX1 (F3/G4): monotonic within a job; a fresh job (stored QUEUED) or a failure may reset.
+      if (input.storedJobStatus === 'QUEUED' || input.jobStatus === 'FAILED') {
+        projectPatch.progress = input.progress
+      } else {
+        const cur = await prisma.clipProject.findUnique({
+          where: { id: input.projectId },
+          select: { progress: true },
+        })
+        projectPatch.progress = Math.max(Number(cur?.progress ?? 0), Math.round(Number(input.progress)))
+      }
+    }
     if (input.error !== undefined) {
       projectPatch.error = sanitizeClipProjectErrorForUser(input.error)
     }

@@ -56,6 +56,7 @@ import { applyMotionFrame, ensureClone, syncClone } from '@/components/clips/edi
 import { HookOverlayPreview } from '@/components/clips/editor/hook-overlay-preview'
 import { TextItemsPreview } from '@/components/clips/editor/text-items-preview'
 import { CanvasSelectionOverlay, type CanvasLayerDom } from '@/components/clips/editor/canvas-selection-overlay'
+import { CanvasDirectHandles } from '@/components/clips/editor/canvas-direct-handles'
 import { orderedStack } from '@/lib/clips/editor/layer-props'
 import type { KeyframeTarget } from '@/lib/clips/editor/keyframes'
 import { ColorLookDefs, lookFilterCss, usedSpecs } from '@/components/clips/editor/color-look-defs'
@@ -291,6 +292,10 @@ export function PreviewStage({
   const panDragRef = useRef<{ x0: number; y0: number; px: number; py: number; btn: number } | null>(null)
   const [playing, setPlaying] = useState(false)
   const [canPlay, setCanPlay] = useState(false)
+  const seekPendingRef = useRef(false)
+  const markReady = useCallback(() => {
+    if (!seekPendingRef.current) setCanPlay(true) // FIX1 (G10): never reveal before the trim seek lands
+  }, [])
   const [captionTimeSec, setCaptionTimeSec] = useState(0)
   // T6.7: scene segment under the playhead (-1 = one template). Only changes at a boundary.
   const [sceneSeg, setSceneSeg] = useState(-1)
@@ -558,7 +563,7 @@ export function PreviewStage({
       return
     }
     const v0 = videoRefInner.current
-    setCanPlay(Boolean(v0 && v0.readyState >= 2))
+    setCanPlay(false) // FIX1 (G10): decided below, after seekAll is known
     logEditorDecision('preview_ready', {
       mode: layoutMode,
       readyState: v0?.readyState ?? 0,
@@ -578,12 +583,18 @@ export function PreviewStage({
     const sameSource = seekKeyRef.current === seekKey
     seekKeyRef.current = seekKey
     const seekAll = videoTimeFromSourceMs(sameSource && keepMs != null ? keepMs : edits.trim.in, mediaOffsetMs)
+    const needsSeek = Boolean(v0 && Math.abs(v0.currentTime - Math.max(seekAll, 0.04)) > 0.04)
+    seekPendingRef.current = needsSeek
+    if (v0 && v0.readyState >= 2 && !needsSeek) setCanPlay(true)
+    if (v0 && needsSeek) {
+      v0.addEventListener('seeked', () => { seekPendingRef.current = false; setCanPlay(true) }, { once: true })
+    }
     wrapRef.current?.querySelectorAll('video').forEach((el) => {
       if (el.dataset.ownClock || el.dataset.layoutPane) return
       el.muted = el !== v
       const seek = () => {
         try {
-          if (Number.isFinite(seekAll) && seekAll >= 0) el.currentTime = seekAll
+          if (Number.isFinite(seekAll) && seekAll >= 0) el.currentTime = Math.max(seekAll, 0.04)
         } catch {
           /* metadata not ready */
         }
@@ -1340,7 +1351,7 @@ export function PreviewStage({
               (media?.height ?? 1080) < 720 &&
               templatePreview.panels.some((p) => p.src.w < 0.5 && p.dest.h > templatePreview.playH * 0.3)
             }
-            onReady={() => setCanPlay(true)}
+            onReady={markReady}
           />
         ) : letterboxPreview ? (
           <>
@@ -1372,8 +1383,8 @@ export function PreviewStage({
                 const b = blurRef.current
                 if (v && b) b.currentTime = v.currentTime
               }}
-              onCanPlay={() => setCanPlay(true)}
-              onLoadedData={() => setCanPlay(true)}
+              onCanPlay={markReady}
+              onLoadedData={markReady}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
             />
@@ -1410,8 +1421,8 @@ export function PreviewStage({
                     const b = blurRef.current
                     if (v && b) b.currentTime = v.currentTime
                   }}
-                  onCanPlay={() => setCanPlay(true)}
-                  onLoadedData={() => setCanPlay(true)}
+                  onCanPlay={markReady}
+                  onLoadedData={markReady}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
                 />
@@ -1425,7 +1436,7 @@ export function PreviewStage({
                 src={videoUrl ?? undefined}
             className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
             playsInline
-            onCanPlay={() => setCanPlay(true)}
+            onCanPlay={markReady}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
           />
@@ -1445,8 +1456,8 @@ export function PreviewStage({
                   className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                   style={coverBoxStyle({ x: idx === 0 ? 0 : 0.5, y: 0, w: 0.5, h: 1 })}
                   playsInline
-                  onCanPlay={() => setCanPlay(true)}
-                  onLoadedData={() => setCanPlay(true)}
+                  onCanPlay={markReady}
+                  onLoadedData={markReady}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
                 />
@@ -1483,8 +1494,8 @@ export function PreviewStage({
                       className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                       style={coverBoxStyle(panel.box)}
                       playsInline
-                      onCanPlay={() => setCanPlay(true)}
-                      onLoadedData={() => setCanPlay(true)}
+                      onCanPlay={markReady}
+                      onLoadedData={markReady}
                       onPlay={() => setPlaying(true)}
                       onPause={() => setPlaying(false)}
                     />
@@ -1514,8 +1525,8 @@ export function PreviewStage({
                   className={`max-w-none size-full object-cover ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
                   style={coverBoxStyle(facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 })}
                   playsInline
-                  onCanPlay={() => setCanPlay(true)}
-                  onLoadedData={() => setCanPlay(true)}
+                  onCanPlay={markReady}
+                  onLoadedData={markReady}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
                 />
@@ -1583,8 +1594,8 @@ export function PreviewStage({
                     const b = blurRef.current
                     if (v && b) b.currentTime = v.currentTime
                   }}
-                  onCanPlay={() => setCanPlay(true)}
-                  onLoadedData={() => setCanPlay(true)}
+                  onCanPlay={markReady}
+                  onLoadedData={markReady}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
                 />
@@ -1613,8 +1624,8 @@ export function PreviewStage({
                 className={`size-full transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'} ${edits.layout.cropBox ? '' : 'object-cover'}${mainHiddenByLayout}`}
                 style={edits.layout.cropBox ? coverBoxStyle(edits.layout.cropBox) : undefined}
                 playsInline
-                onCanPlay={() => setCanPlay(true)}
-                onLoadedData={() => setCanPlay(true)}
+                onCanPlay={markReady}
+                onLoadedData={markReady}
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
               />
@@ -1638,8 +1649,8 @@ export function PreviewStage({
                 src={videoUrl ?? undefined}
             className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
             playsInline
-            onCanPlay={() => setCanPlay(true)}
-            onLoadedData={() => setCanPlay(true)}
+            onCanPlay={markReady}
+            onLoadedData={markReady}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
             />
@@ -1654,8 +1665,8 @@ export function PreviewStage({
                 src={videoUrl ?? undefined}
             className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
             playsInline
-            onCanPlay={() => setCanPlay(true)}
-            onLoadedData={() => setCanPlay(true)}
+            onCanPlay={markReady}
+            onLoadedData={markReady}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
           />
@@ -1969,6 +1980,17 @@ export function PreviewStage({
             cropMode={canvas.cropMode}
             onCropModeChange={canvas.onCropModeChange}
             readOnly={Boolean(audition)}
+          />
+        ) : null}
+        {canvas && !compositePreview && box.w > 0 ? (
+          <CanvasDirectHandles
+            baseEdits={canvas.baseEdits}
+            box={stageBoxEl}
+            getOutMs={getOutMs}
+            onCommit={canvas.onCommit}
+            readOnly={Boolean(audition) || canvas.cropMode}
+            stack={Boolean(facecamStackPreview && facecamBox)}
+            stackTopFrac={headlineBandTopFrac}
           />
         ) : null}
         {edits.blurRegions?.some((r) => r.mode === 'faces') ? (

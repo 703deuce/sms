@@ -954,7 +954,13 @@ def analyze_clip(video_path: str, words: list[dict] | None, cfg: DirectorCfg, *,
     if cfg.force == "fill":
         cfg = DirectorCfg(**{**cfg.__dict__, "force": None})
         st, path = viterbi_layout(post, visible, cfg, cuts)
-        path = np.array([i if st[i][0] == "single" else next(k for k, s in enumerate(st) if s == ("single", 0)) for i in path])
+        # FIX1: fill = single crop on the MOST-SEEN person (was always person 0, often undetected -> centre crop).
+        _cnt = [int(np.sum(~np.isnan(np.asarray(x, dtype=float)))) for x in xs]
+        _p_fill = int(np.argmax(_cnt)) if _cnt else 0
+        _fill_idx = next((k for k, s in enumerate(st) if s == ("single", _p_fill)), None)
+        if _fill_idx is None:
+            _fill_idx = next(k for k, s in enumerate(st) if s == ("single", 0))
+        path = np.array([i if st[i][0] == "single" else _fill_idx for i in path])
     else:
         st, path = viterbi_layout(post, visible, cfg, cuts)
     segs = path_segments(st, path, T)
@@ -966,10 +972,27 @@ def analyze_clip(video_path: str, words: list[dict] | None, cfg: DirectorCfg, *,
     seg_of = np.searchsorted([s["start_s"] for s in segs], ft, side="right") - 1
     cw = int(round(H * out_w / out_h)) // 2 * 2
     tgt = np.full(nfr, W / 2.0)
+    _last = None
+    _first_set = None
     for i in range(nfr):
         sg = segs[seg_of[i]]
-        if sg["layout"] == "single" and not np.isnan(fx[sg["slots"][0], i]):
-            tgt[i] = fx[sg["slots"][0], i]
+        if sg["layout"] != "single":
+            continue
+        v = fx[sg["slots"][0], i]
+        if np.isnan(v):
+            # FIX1: slot person not seen -> hold the last face; else the only other visible face; never jump to centre.
+            alt = [fx[j, i] for j in range(fx.shape[0]) if not np.isnan(fx[j, i])]
+            v = _last if _last is not None else (alt[0] if len(alt) == 1 else np.nan)
+        if not np.isnan(v):
+            tgt[i] = v
+            _last = float(v)
+            if _first_set is None:
+                _first_set = i
+    if _first_set is not None and _first_set > 0:
+        # seed smooth_path on the first real face instead of the frame centre
+        for i in range(_first_set):
+            if segs[seg_of[i]]["layout"] == "single":
+                tgt[i] = tgt[_first_set]
     resets = [i for i in range(1, nfr) if seg_of[i] != seg_of[i - 1]]
     cx = smooth_path(tgt, fps, frame_w=W, resets=resets)
     x0 = np.clip(cx - cw / 2, 0, W - cw).astype(int)

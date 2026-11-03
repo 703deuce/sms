@@ -74,10 +74,12 @@ export function clipWordsToAbsolute(
   const clipLenMs = clipEndMs - clipStartMs
   const maxEndMs = Math.max(...words.map((w) => w.e * 1000))
   const minStartMs = Math.min(...words.map((w) => w.s * 1000))
+  // FIX1 (B): relative = fits [0, clipLen]; if it ALSO fits the absolute span (clip near the start),
+  // pick whichever origin the first word is closer to (relative words start ~0, absolute ~clipStart).
+  const fitsRelative = minStartMs >= -500 && maxEndMs <= clipLenMs + 2000
+  const fitsAbsolute = minStartMs >= clipStartMs - 1000 && maxEndMs <= clipEndMs + 2000
   const looksRelative =
-    maxEndMs <= clipLenMs + 2000 &&
-    minStartMs >= -500 &&
-    maxEndMs < clipStartMs - 250
+    fitsRelative && (!fitsAbsolute || Math.abs(minStartMs) < Math.abs(minStartMs - clipStartMs))
   if (!looksRelative) return words
   const offsetSec = clipStartMs / 1000
   return words.map((w) => ({ ...w, s: w.s + offsetSec, e: w.e + offsetSec }))

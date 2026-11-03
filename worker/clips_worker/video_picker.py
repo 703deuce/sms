@@ -29,7 +29,22 @@ from clips_worker.video_picker_prompt import (
 )
 
 _MIN_MOMENT_S = 5.0
-GAMING_AUTO_MAX_SPAN_S = 45.0
+GAMING_AUTO_MAX_SPAN_S = 60.0
+
+
+def _score_0_100(raw) -> int:
+    """FIX1 (S.1/G7): normalise 0–1, 0–10 and 0–100 scales to 0–100 (a 7.5/10 used to become 7)."""
+    try:
+        v = float(raw or 0)
+    except (TypeError, ValueError):
+        return 0
+    if v <= 1.0:
+        v *= 100.0
+    elif v <= 10.0:
+        v *= 10.0
+    return max(0, min(100, int(round(v))))
+
+
 _TIME_EPS_S = 0.35
 _TIME_RE = re.compile(r"^(?:(\d+):)?(\d{1,2}):(\d{1,2}(?:\.\d+)?)$|^(\d+(?:\.\d+)?)s?$")
 
@@ -1041,7 +1056,7 @@ def fill_stream_picks_floor_from_archive(
         peak_ms = int(row.get("peakMs") or row.get("peak_ms") or (start + end) // 2)
         peak_ms = max(start, min(peak_ms, end - 1))
         title = str(row.get("title") or "Highlight")[:120]
-        score = int(float(row.get("score") or 0) * 100) if float(row.get("score") or 0) <= 1 else int(row.get("score") or 0)
+        score = _score_0_100(row.get("score"))
         picks.append(
             FusionPick(
                 start_ms=start,
@@ -1771,6 +1786,9 @@ def watch_video_file(
         "target_clip_len_s": target_clip_len_s,
     }
     if not video_picker_enabled():
+        meta["error"] = "video_picker_disabled"
+        meta["degraded"] = "transcript_only"
+        print(f"[clipper:video_picker] WARN degraded=transcript_only reason=disabled chunk={chunk_label}", flush=True)
         return [], meta
     if not video_path.is_file() or video_path.stat().st_size < 1024:
         from clips_worker.picker.picker_errors import log_picker_error
@@ -1778,6 +1796,8 @@ def watch_video_file(
         msg = f"video_picker input missing or too small path={video_path.name}"
         log_picker_error("gemini", msg, None)
         meta["error"] = msg
+        meta["degraded"] = "transcript_only"
+        print(f"[clipper:video_picker] WARN degraded=transcript_only reason=input_missing chunk={chunk_label}", flush=True)
         return [], meta
     t0 = stage_begin("video_picker", chunk=chunk_label)
     from clips_worker.picker.picker_errors import gemini_error_log_fields, log_picker_error
@@ -1790,6 +1810,12 @@ def watch_video_file(
             log_picker_error("gemini", err_msg, status, quota=quota)
             logged = True
         meta["error"] = err_msg[:200]
+        meta["degraded"] = "transcript_only"
+        print(
+            f"[clipper:video_picker] ERROR degraded=transcript_only chunk={chunk_label} status={status} "
+            f"err={err_msg[:240]}",
+            flush=True,
+        )
         if status is not None:
             meta["status"] = status
         if quota:

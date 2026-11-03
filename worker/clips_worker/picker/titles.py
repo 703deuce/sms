@@ -42,6 +42,34 @@ def transcript_title_fallback(excerpt: str, *, max_words: int = 6, max_len: int 
     return trim_title(short, max_len)
 
 
+_DANGLING_TAIL = {
+    "a", "an", "the", "and", "or", "but", "to", "of", "in", "on", "at", "for", "with", "so",
+    "i", "you", "we", "my", "your", "is", "was", "it", "that", "this", "just", "like",
+}
+
+
+def _strip_dangling_tail(title: str) -> str:
+    """FIX1 (G6): never end a title on a function word ('...went to the')."""
+    ws = (title or "").split()
+    while len(ws) > 2 and ws[-1].lower().strip(".,!?;:'\"") in _DANGLING_TAIL:
+        ws.pop()
+    return " ".join(ws).rstrip(",;:") if ws else (title or "")
+
+
+def _looks_like_description(title: str) -> bool:
+    """FIX1 (H3): AI description sentences are long, end with a period, and often name the model."""
+    t = (title or "").strip()
+    n = len(t.split())
+    return n >= 11 or (n >= 7 and t.endswith(".")) or t.lower().startswith(("gemini", "the visual", "the streamer"))
+
+
+def _weak_title(title: str) -> bool:
+    """FIX1 (H3): 'Chill', 'Good. Good.', 'Yeah, Nice' -- fewer than 2 distinct content words."""
+    ws = {w.lower().strip(".,!?;:'\"") for w in (title or "").split()}
+    ws -= {"", "yeah", "yes", "no", "ok", "okay", "good", "nice", "bro", "oh", "wow", "chill", "lol", "what"}
+    return len(ws) < 2
+
+
 def trim_title(title: str, max_len: int = 60) -> str:
     s = strip_internal_sentence_refs(title)
     if len(s) <= max_len:
@@ -202,14 +230,20 @@ def ensure_clip_title(clip: dict, words: list[dict], genre: str, *, source_ms: i
         title = ""
     if is_internal_picker_note(title):
         title = ""
+    if title and (_looks_like_description(title) or (reason and title.rstrip(".") in reason) or _weak_title(title)):
+        title = ""  # FIX1 (H3): description sentence / weak quote -> regenerate from the clip
     if is_internal_picker_note(reason) and not clip.get("hook"):
         clip.pop("reason", None)
     s, e = int(clip["start_ms"]), int(clip["end_ms"])
     excerpt = _clip_word_excerpt(words, s, e)
     if source_ms is not None and source_ms <= SHORT_SOURCE_MAX_MS and excerpt:
-        clip["title"] = trim_title(excerpt.split(".")[0].split("?")[0] or excerpt, 60)
-        if needs_title(clip["title"]):
-            clip["title"] = generate_title(excerpt, genre)
+        if title and not needs_title(title):
+            # FIX1 (G6): keep a usable LLM headline; only fall back to the transcript when there is none.
+            clip["title"] = title
+        else:
+            clip["title"] = _strip_dangling_tail(trim_title(excerpt.split(".")[0].split("?")[0] or excerpt, 60))
+            if needs_title(clip["title"]):
+                clip["title"] = generate_title(excerpt, genre)
         finalize()
         return
     if not needs_title(title):

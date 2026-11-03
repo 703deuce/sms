@@ -285,7 +285,10 @@ def ffmpeg_concat_segments(src: Path, dest: Path, segs_sec: list[tuple[float, fl
     if len(segs_sec) == 1:
         a, b = segs_sec[0]
         subprocess.check_call(
-            ["ffmpeg", "-y", "-v", "error", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", str(src), "-c", "copy", str(dest)],
+            [
+                "ffmpeg", "-y", "-v", "error", "-i", str(src), "-ss", f"{a:.3f}", "-to", f"{b:.3f}",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", str(dest),
+            ],
         )
         return
     xf = 0.01  # CUTS_QUALITY1: 10 ms equal-power crossfade at segment joins
@@ -1255,12 +1258,12 @@ def _apply_facecam_or_pip_layout(
     clip_id: str | None = None,
     clip_start_ms: int = 0,
 ) -> tuple[Path, bool, dict]:
-    from clips_worker.t6_flags import t6_log_fallback, t6_templates_enabled
+    from clips_worker.t6_flags import t6_log_fallback, t6_render_template_enabled
 
     layout_ed = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
     tmpl = layout_ed.get("template") if isinstance(layout_ed.get("template"), dict) else {}
     tmpl_id = str(tmpl.get("id") or "").strip()
-    if t6_templates_enabled(settings) and tmpl_id:
+    if t6_render_template_enabled(settings, edits) and tmpl_id:
         try:
             from clips_worker.t6_geometry import resolve_template_geometry
             from clips_worker.t6_registry import TEMPLATES
@@ -1420,6 +1423,21 @@ def _split_audio_secs(edits: dict, segs_sec, clip_start_ms: int, clip_end_ms: in
     ]
 
 
+def _clamp_edits_to_clip_span(edits: dict, clip_start_ms: int, clip_end_ms: int) -> dict:
+    """FIX1 (B): video segments are clamped to the cut span; clamp trim the same way so captions match."""
+    trim = edits.get("trim") if isinstance(edits.get("trim"), dict) else None
+    if not trim:
+        return edits
+    tin = int(trim.get("in", clip_start_ms))
+    tout = int(trim.get("out", clip_end_ms))
+    nin = max(clip_start_ms, min(tin, clip_end_ms))
+    nout = min(clip_end_ms, max(tout, nin))
+    if (nin, nout) == (tin, tout):
+        return edits
+    print(f"[export:trim_clamped] in={tin}->{nin} out={tout}->{nout} span={clip_start_ms}-{clip_end_ms}", flush=True)
+    return {**edits, "trim": {**trim, "in": nin, "out": nout}}
+
+
 def render_edited_clip(
     clip_src: Path,
     out_mp4: Path,
@@ -1443,6 +1461,7 @@ def render_edited_clip(
 ) -> tuple[Path, list[dict], str]:
     t0 = time.perf_counter()
     rid = render_id or "unknown"
+    edits = _clamp_edits_to_clip_span(edits, int(clip_start_ms), int(clip_end_ms))
     if conn is not None and workspace_id:
         from clips_worker.user_fonts import prepare_user_fonts, used_font_ids
 

@@ -64,6 +64,22 @@ export function clampTrimWithMediaBounds(
   return next
 }
 
+/** FIX1 (E.2): Opus-style editor window around the clip (the timeline never spans the whole source). */
+export const EDITOR_PAD_BEFORE_MS = 90_000
+export const EDITOR_PAD_AFTER_MS = 60_000
+
+export function editorWindowMs(
+  mediaMin: number | undefined,
+  mediaMax: number | undefined,
+  clipStartMs: number,
+  clipEndMs: number,
+  before = EDITOR_PAD_BEFORE_MS,
+  after = EDITOR_PAD_AFTER_MS,
+): { min: number | undefined; max: number | undefined } {
+  if (mediaMin == null || mediaMax == null) return { min: mediaMin, max: mediaMax }
+  return { min: Math.max(mediaMin, clipStartMs - before), max: Math.min(mediaMax, clipEndMs + after) }
+}
+
 export function expandedSourceCutMs(
   clipStartMs: number,
   clipEndMs: number,

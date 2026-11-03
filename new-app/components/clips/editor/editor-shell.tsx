@@ -112,6 +112,7 @@ import {
   keepSegments,
 } from '@/lib/clips/edits'
 import { LayoutQuickPicker } from '@/components/clips/editor/layout-quick-picker'
+import { EXPORT_LAYOUT_OPTIONS, layoutOptionDisabled } from '@/lib/clips/layout-options'
 import type { StickerLayer } from '@/lib/clips/layers'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
 import {
@@ -151,7 +152,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
-import { SHOW_SURROUNDING_CONTEXT_MS } from '@/lib/clips/trim-bounds'
+import { SHOW_SURROUNDING_CONTEXT_MS, editorWindowMs } from '@/lib/clips/trim-bounds'
 import { addMediaToLane, placeAddedOnTrack, replaceBrollMedia, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { ClipRecordMenu } from '@/components/clips/editor/recording/record-menu'
 import { ClipRecorderBar } from '@/components/clips/editor/recording/recorder-bar'
@@ -365,6 +366,15 @@ export function EditorShell({
   const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 })
   const [fitPct, setFitPct] = useState(100)
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
+  const [layoutCtx, setLayoutCtx] = useState<{ x: number; y: number } | null>(null)
+  useEffect(() => {
+    if (!layoutCtx) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLayoutCtx(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [layoutCtx])
   const selectionRef = useRef<TranscriptSelection | null>(null)
   const seededExportTemplateRef = useRef(false)
   const {
@@ -601,6 +611,8 @@ export function EditorShell({
   }, [])
 
   const editorWordsContextMs = showSurrounding ? SHOW_SURROUNDING_CONTEXT_MS : undefined
+  // FIX1 (E.2): one window for the timeline + trim clamp (timeline.tsx clampTrimWithMediaBounds, line 476).
+  const editorWin = editorWindowMs(editorMedia?.minMs, editorMedia?.maxMs, bounds.clipStartMs, bounds.clipEndMs)
   const { words: clipEditorWords, wordsLoading, reloadWords } = useEditorWords(
     clipId,
     words,
@@ -2479,6 +2491,12 @@ export function EditorShell({
                     aspectRatio: aspectStyle,
                     width: `min(100%, calc(100cqh * ${aspectCssToNumber(previewAspect)}))`,
                   }}
+                  onContextMenu={(e) => {
+                    if ((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]')) return
+                    e.preventDefault()
+                    const r = e.currentTarget.getBoundingClientRect()
+                    setLayoutCtx({ x: e.clientX - r.left, y: e.clientY - r.top })
+                  }}
                 >
             {(edits.layout.shotOverrides?.length ?? 0) > 0 ? (
               <span
@@ -2565,6 +2583,56 @@ export function EditorShell({
               enabled={studioPreviewActive}
             />
             </EditorPanelErrorBoundary>
+            {layoutCtx ? (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onPointerDown={() => setLayoutCtx(null)}
+                  onKeyDown={(e) => e.key === 'Escape' && setLayoutCtx(null)}
+                />
+                <div
+                  data-testid="canvas-layout-menu"
+                  role="menu"
+                  className="absolute z-50 w-60 rounded-md border bg-popover p-2 text-sm shadow-lg"
+                  style={{ left: layoutCtx.x, top: layoutCtx.y }}
+                >
+                  <p className="px-1 pb-1 text-xs text-muted-foreground">This scene (from the playhead)</p>
+                  <div className="mb-2 grid grid-cols-2 gap-1">
+                    {EXPORT_LAYOUT_OPTIONS.filter(
+                      (o) =>
+                        !layoutOptionDisabled(o, {
+                          facecamLayout: facecamLayout ?? null,
+                          reframeV2Enabled,
+                          aiExtras: clipEditorAiExtrasEnabled(),
+                        }),
+                    ).map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        className="rounded px-2 py-1 text-left hover:bg-muted"
+                        onClick={() => {
+                          setLayoutModeAtSource(playheadSourceMs, o.id)
+                          setLayoutCtx(null)
+                        }}
+                      >
+                        {o.title}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="px-1 pb-1 text-xs text-muted-foreground">Whole clip</p>
+                  <LayoutQuickPicker
+                    value={edits.layout.mode}
+                    edits={edits}
+                    facecamLayout={facecamLayout}
+                    reframeV2Enabled={reframeV2Enabled}
+                    onPick={(mode, facecam) => {
+                      onLayoutPick(mode, facecam)
+                      setLayoutCtx(null)
+                    }}
+                  />
+                </div>
+              </>
+            ) : null}
             {multicamGridOn && multicamGridEligible ? (
               <div className="absolute right-3 top-3 z-10 hidden w-[min(28%,240px)] xl:block">
                 <MulticamAngleGrid
@@ -2882,10 +2950,10 @@ export function EditorShell({
             onTrimChange={setTrim}
             clipStartMs={bounds.clipStartMs}
             clipEndMs={bounds.clipEndMs}
-            mediaMinMs={editorMedia?.minMs}
-            mediaMaxMs={editorMedia?.maxMs}
-            trimMinMs={bounds.trimMinMs}
-            trimMaxMs={bounds.trimMaxMs}
+            mediaMinMs={editorWin.min}
+            mediaMaxMs={editorWin.max}
+            trimMinMs={bounds.trimMinMs != null && editorWin.min != null ? Math.max(bounds.trimMinMs, editorWin.min) : bounds.trimMinMs}
+            trimMaxMs={bounds.trimMaxMs != null && editorWin.max != null ? Math.min(bounds.trimMaxMs, editorWin.max) : bounds.trimMaxMs}
             onSplitLayout={() => splitLayoutAtSource(playheadSourceMs)}
             onCutSection={() => cutSectionAtSource(playheadSourceMs)}
             onSetLayoutMode={(mode) => {

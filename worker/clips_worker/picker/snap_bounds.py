@@ -33,6 +33,8 @@ FILLERS = {
 }
 PAD_START_S = 0.15
 PAD_END_S = 0.5
+# FIX1: answer/reaction words that are fillers at a START but the payoff at an END.
+_END_KEEP = {"no", "yes", "yeah", "yep", "right", "exactly", "okay", "ok", "sure", "totally", "wow", "oh"}
 MAX_EXTEND_S = 8.0
 SENTENCE_EXTEND_MAX_S = 3.0
 GAP_SENTENCE_END_S = 0.4
@@ -268,6 +270,25 @@ def _apply_visual_boundary_anchors(
     return start_ms, end_ms
 
 
+def _pad_end_to_next_word(words: list[dict], we: int, end_ms: int, pad_ms: int, range_end_ms: int) -> int:
+    """FIX1: keep a short tail after the last spoken word, but never run into the next word."""
+    nxt = int(words[we + 1]["s"] * 1000) - 20 if 0 <= we < len(words) - 1 else range_end_ms
+    return min(range_end_ms, max(end_ms, min(end_ms + pad_ms, nxt)))
+
+
+def _snap_ms_out_of_words(
+    words: list[dict], start_ms: int, end_ms: int, range_start_ms: int, range_end_ms: int
+) -> tuple[int, int]:
+    """FIX1: never start or end inside a spoken word (after visual anchors / reaction tail / revert moved a bound)."""
+    for w in words:
+        ws, wend = int(w["s"] * 1000), int(w["e"] * 1000)
+        if ws < start_ms < wend:
+            start_ms = max(range_start_ms, ws)
+        if ws < end_ms < wend:
+            end_ms = min(range_end_ms, wend + 120)
+    return start_ms, end_ms
+
+
 def snap_bounds(
     clip: dict[str, Any],
     words: list[dict],
@@ -331,7 +352,7 @@ def snap_bounds(
             before_end=before[1],
         )
         return clip
-    while we > wi and _is_filler_token(words[we]["w"]):
+    while we > wi and _is_filler_token(words[we]["w"]) and _norm_token(words[we]["w"]) not in _END_KEEP:
         we -= 1
 
     last_final = _sentence_final_word_index_at_or_before(words, we)
@@ -374,12 +395,7 @@ def snap_bounds(
                 start_ms = w_s
     else:
         start_ms = max(range_start_ms, int(start_ms - pad_start_ms))
-    end_ms = int(end_ms + pad_end_ms)
-    end_ms = min(range_end_ms, end_ms)
-    we_end = _word_index_at_ms(words, end_ms, "end")
-    if not _is_sentence_final_word(words, we_end):
-        we_end = _sentence_final_word_index_at_or_before(words, we_end)
-    end_ms = min(range_end_ms, int(words[we_end]["e"] * 1000))
+    end_ms = _pad_end_to_next_word(words, we, int(end_ms), pad_end_ms, range_end_ms)
     if end_ms <= start_ms:
         start_ms, end_ms = before
 
@@ -411,12 +427,15 @@ def snap_bounds(
 
             clipfind_fallback("snap_reaction_tail", type(exc).__name__, exc=exc)
 
+    start_ms, end_ms = _snap_ms_out_of_words(words, start_ms, end_ms, range_start_ms, range_end_ms)
     clip["start_ms"] = start_ms
     clip["end_ms"] = end_ms
 
     overlap = _span_overlap_ratio(start_ms, end_ms, before[0], before[1])
     if overlap < SNAP_MIN_OVERLAP_RATIO or (end_ms - start_ms) < SNAP_MIN_SPAN_MS:
-        clip["start_ms"], clip["end_ms"] = before[0], before[1]
+        clip["start_ms"], clip["end_ms"] = _snap_ms_out_of_words(
+            words, int(before[0]), int(before[1]), range_start_ms, range_end_ms
+        )
         picker_info(
             "snap_reverted",
             reason="low_overlap_or_short",

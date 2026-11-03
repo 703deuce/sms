@@ -134,7 +134,7 @@ def download_video(
     if workdir:
         cmd.extend(["-P", workdir])
     if section:
-        cmd.extend(["--download-sections", section])
+        cmd.extend(["--download-sections", section, "--force-keyframes-at-cuts"])  # FIX1 (B.4d): t=0 == section start
     cmd.append(url)
     run_ytdlp(cmd, progress_cb, step="Downloading video")
 
@@ -174,6 +174,6 @@ def download_audio(
     if workdir:
         cmd.extend(["-P", workdir])
     if section:
-        cmd.extend(["--download-sections", section])
+        cmd.extend(["--download-sections", section, "--force-keyframes-at-cuts"])  # FIX1 (B.4d): t=0 == section start
     cmd.append(url)
     run_ytdlp(cmd, progress_cb, step="Downloading audio")

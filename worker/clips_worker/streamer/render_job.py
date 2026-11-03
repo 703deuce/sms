@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -237,7 +238,11 @@ def _clip_timeline_anchor(clip: dict, state: dict, vod_default: int) -> tuple[in
     if isinstance(ai, str):
         ai = json.loads(ai) if ai else {}
     sm = ai.get("streamer") or {}
-    anchor = int(sm.get("vodRangeStartMs") or state.get("vodStartMs") or vod_default)
+    # FIX1 (B.4): 0 is a valid anchor; match clip_timeline.clip_vod_range_start_ms (is not None).
+    _a = sm.get("vodRangeStartMs")
+    if _a is None:
+        _a = state.get("vodStartMs")
+    anchor = int(_a if _a is not None else vod_default)
     audio_key = sm.get("windowAudioKey") or state.get("audioKey")
     video_key = sm.get("windowVideoKey") or sm.get("captureVideoKey") or state.get("windowCaptureVideoKey")
     return anchor, str(audio_key) if audio_key else None, str(video_key) if video_key else None
@@ -604,25 +609,46 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                             render_stack_mp4(clip_file, out_mp4, clip_layout)
                             rendered = out_mp4
                         else:
-                            from clips_worker.streamer.layout.stream_preview_render import (
-                                render_stream_clip_preview,
-                            )
+                            # FIX1 (S.2): stream clips use the upload reframe (templates, speaker follow, captions).
+                            rendered = None
+                            if os.environ.get("STREAM_SHARED_REFRAME", "1") == "1":
+                                try:
+                                    from clips_worker.pipeline import reframe_clip_preview
 
-                            render_stream_clip_preview(
-                                clip_file,
-                                out_mp4,
-                                edits=clip_edits,
-                                settings=settings,
-                                clip_words=clip_words,
-                                work_dir=td_path / f"render_{clip_id}",
-                                clip_start_ms=abs_start,
-                                clip_end_ms=abs_end,
-                                conn=conn,
-                                project_id=project_id,
-                                clip_id=clip_id,
-                                vod_id=vod_id,
-                            )
-                            rendered = out_mp4
+                                    _wd = td_path / f"render_{clip_id}"
+                                    _wd.mkdir(parents=True, exist_ok=True)
+                                    rendered, _m, _rs = reframe_clip_preview(
+                                        clip_file, out_mp4, words_path,
+                                        {**settings, "layoutMode": edits_layout_mode},
+                                        _wd, int(abs_start), crop_track, ai_meta,
+                                        motion_subject=False, clip_index=idx, conn=conn,
+                                        workspace_id=workspace_id, project_id=project_id,
+                                        clip_id=clip_id, edits=clip_edits,
+                                    )
+                                except Exception as exc:
+                                    print(f"[streamer:render] shared_reframe_failed clip={clip_id} "
+                                          f"err={type(exc).__name__}: {str(exc)[:200]} -> stream renderer", flush=True)
+                                    rendered = None
+                            if rendered is None:
+                                from clips_worker.streamer.layout.stream_preview_render import (
+                                    render_stream_clip_preview,
+                                )
+
+                                render_stream_clip_preview(
+                                    clip_file,
+                                    out_mp4,
+                                    edits=clip_edits,
+                                    settings=settings,
+                                    clip_words=clip_words,
+                                    work_dir=td_path / f"render_{clip_id}",
+                                    clip_start_ms=abs_start,
+                                    clip_end_ms=abs_end,
+                                    conn=conn,
+                                    project_id=project_id,
+                                    clip_id=clip_id,
+                                    vod_id=vod_id,
+                                )
+                                rendered = out_mp4
                     ai_streamer = dict((ai_meta.get("streamer") or {}))
                     edits_mode = str((clip_edits.get("layout") or {}).get("mode") or "fit_top")
                     ai_streamer["layout"] = {
@@ -630,6 +656,9 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                         "mode": edits_mode,
                         "editorMode": edits_mode,
                     }
+                    # FIX1 (B.4): words.json is relative to abs_start; store the span in the same absolute origin.
+                    ai_streamer["clipTimesAbsolute"] = True
+                    ai_streamer["vodRangeStartMs"] = int(anchor)
                     poster = td_path / f"poster_{clip_id}.jpg"
                     poster_jpg(rendered, poster)
                     keys = clip_keys(workspace_id, project_id, clip_id)
@@ -650,6 +679,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                                 UPDATE clips SET
                                   "previewKey"=%s, "posterKey"=%s, "wordsKey"=%s, "cropKey"=%s,
                                   "sourceSegKey"=%s, "sourceSegStartMs"=%s, "sourceSegEndMs"=%s,
+                                  "startMs"=%s, "endMs"=%s,
                                   "aiMeta"=%s::jsonb,
                                   edits=%s::jsonb, "updatedAt"=NOW()
                                 WHERE id=%s
@@ -662,6 +692,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                                     seg_key,
                                     true_start_abs_ms,
                                     true_end_ms,
+                                    int(abs_start),
+                                    int(abs_end),
                                     json.dumps(ai_meta),
                                     json.dumps(clip_edits),
                                     clip_id,
@@ -669,13 +701,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                             )
                         conn.commit()
 
-                    delete_clip_source_segment(
-                        workspace_id,
-                        project_id,
-                        clip_id,
-                        seg_key,
-                        vod_id=vod_id,
-                    )
+                    # FIX1 (B.4): the editor/export play sourceSegKey (trim/extend within the segment); retention
+                    # cleanup deletes it later. Deleting here left editor + export pointing at a missing object.
 
                     render_successes += 1
                     clips_ready += 1

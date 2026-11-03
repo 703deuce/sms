@@ -28,11 +28,17 @@ import { clipReasonTag } from '@/lib/clips/reason-tag'
 import { clipCardAspectClass } from '@/lib/clips/card-aspect'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { ClipPostCopy } from '@/components/clips/clip-post-copy'
-import { OpenInFullVideoButton } from '@/components/clips/editor/open-in-full-video-button'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { CLIP_PREVIEW_EXPORT_ASPECT } from '@/lib/clips/export-preview-reuse'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
-import { ThumbsDown, EyeOff, Mic, Eye, Sparkles } from 'lucide-react'
+import { ThumbsDown, EyeOff, Mic, Eye, Sparkles, MoreHorizontal } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useOpenInFullVideo } from '@/components/clips/editor/open-in-full-video-button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export function ClipCard({
@@ -57,6 +63,7 @@ export function ClipCard({
   projectHasUpload?: boolean
 }) {
   const router = useRouter()
+  const openFull = useOpenInFullVideo(clip.id, projectHasUpload)
   const [thumbBusy, setThumbBusy] = useState(false)
   const [hideBusy, setHideBusy] = useState(false)
   const [downloadBusy, setDownloadBusy] = useState(false)
@@ -102,15 +109,16 @@ export function ClipCard({
   const hideClip = async () => {
     if (!onHidden) return
     setHideBusy(true)
+    const tid = toast.loading('Hiding clip…')
     try {
       await clipsFetch(`/api/clips/clips/${clip.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ hidden: true, disliked: true }),
       })
-      toast.success('Clip hidden — finding a replacement…')
+      toast.success('Clip hidden — finding a replacement…', { id: tid })
       onHidden(clip.id)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not hide clip')
+      toast.error(e instanceof Error ? e.message : 'Could not hide clip', { id: tid })
     } finally {
       setHideBusy(false)
     }
@@ -333,29 +341,21 @@ export function ClipCard({
         {isStreamer && !streamerReasons.length ? (
           <p className="text-[10px] text-muted-foreground">No signal chips (chat or replay may be unavailable).</p>
         ) : null}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-nowrap items-center gap-1.5" data-testid="clip-card-actions">
           <Button
             size="sm"
             variant="default"
+            className="h-8 shrink-0"
             render={<Link href={editorHref} prefetch={false} />}
             onClick={(e) => e.stopPropagation()}
           >
             Edit
           </Button>
-          {isScriptEditorEnabled() ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              data-testid="edit-in-script-editor"
-              render={<Link href={`/app/clips/${projectId}/script?clipId=${clip.id}`} />}
-            >
-              Script editor
-            </Button>
-          ) : null}
           <Button
             type="button"
             size="sm"
             variant="outline"
+            className="h-8 shrink-0"
             disabled={downloadBusy || (!clip.previewUrl && !clip.posterUrl)}
             title={!clip.previewUrl && !clip.posterUrl ? 'Preview still processing' : undefined}
             onClick={(e) => {
@@ -365,16 +365,51 @@ export function ClipCard({
           >
             {downloadBusy ? 'Exporting…' : 'Download'}
           </Button>
-          <Button size="sm" variant="outline" disabled={thumbBusy} onClick={() => void makeThumbnail()}>
-            Make thumbnail
-          </Button>
-          <OpenInFullVideoButton clipId={clip.id} hasUpload={projectHasUpload} />
-          {onHidden ? (
-            <Button size="sm" variant="ghost" disabled={hideBusy} onClick={() => void hideClip()}>
-              <ThumbsDown className="mr-1 size-3.5" aria-hidden />
-              Not for me
-            </Button>
-          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 p-0"
+                  aria-label="More actions"
+                  data-testid="clip-card-more"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              }
+            >
+              <MoreHorizontal className="size-4" aria-hidden />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled={thumbBusy} onClick={() => void makeThumbnail()}>
+                Make thumbnail
+              </DropdownMenuItem>
+              {projectHasUpload ? (
+                <DropdownMenuItem
+                  data-testid="open-in-full-video"
+                  disabled={openFull.loading}
+                  onClick={() => openFull.open()}
+                >
+                  {openFull.loading ? openFull.progress || 'Preparing full video…' : 'Open in full video'}
+                </DropdownMenuItem>
+              ) : null}
+              {isScriptEditorEnabled() ? (
+                <DropdownMenuItem
+                  data-testid="edit-in-script-editor"
+                  onClick={() => router.push(`/app/clips/${projectId}/script?clipId=${clip.id}`)}
+                >
+                  Script editor
+                </DropdownMenuItem>
+              ) : null}
+              {onHidden ? (
+                <DropdownMenuItem disabled={hideBusy} onClick={() => void hideClip()}>
+                  <ThumbsDown className="mr-1 size-3.5" aria-hidden />
+                  Not for me
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </article>
