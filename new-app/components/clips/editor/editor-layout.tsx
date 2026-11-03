@@ -28,14 +28,34 @@ export const EDITOR_GRID = {
     'lg:grid-cols-[64px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto] ' +
     'xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)] ' +
     '2xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)]',
+  /** Phase 3 script view: two columns only (rail + main) — no panel/properties grid slots. */
+  rootScript:
+    'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
+    'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
+    'lg:grid-cols-[64px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto] ' +
+    'xl:grid-cols-[64px_minmax(0,1fr)] ' +
+    '2xl:grid-cols-[64px_minmax(0,1fr)]',
   rail: 'min-h-0 lg:row-span-2 lg:col-start-1 lg:row-start-1',
   panelMobile: 'max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:max-h-[70dvh] max-lg:rounded-t-xl max-lg:border-t',
   panelCompact: 'lg:max-xl:absolute lg:max-xl:inset-y-1 lg:max-xl:left-[68px] lg:max-xl:z-30 lg:max-xl:w-[340px] lg:max-xl:shadow-2xl',
   panelDocked: 'xl:relative xl:col-start-2 xl:row-start-1',
+  /** Script view: panel column not in grid (display none at xl+). */
+  panelScriptHidden: 'hidden max-xl:hidden xl:hidden',
   panel: 'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card',
-  preview: 'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg bg-panel lg:col-start-2 lg:row-start-1 xl:col-start-3',
-  properties: 'hidden min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card 2xl:flex 2xl:col-start-4 2xl:row-start-1',
-  timeline: 'col-span-full min-h-0 overflow-y-auto rounded-lg border border-border bg-card max-h-[clamp(160px,45dvh,560px)] lg:col-[2/-1] lg:row-start-2',
+  preview:
+    'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg bg-panel lg:col-start-2 lg:row-start-1 xl:col-start-3 2xl:col-start-3',
+  /** Script view main column (spans former panel + preview width). */
+  previewScript:
+    'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-panel lg:col-start-2 lg:row-start-1 xl:col-start-2 2xl:col-start-2',
+  properties:
+    'hidden min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card 2xl:flex 2xl:col-start-4 2xl:row-start-1',
+  /** Script view: properties column absent (do not merge with properties + 2xl:hidden). */
+  propertiesHidden: 'hidden',
+  timeline:
+    'col-span-full min-h-0 overflow-y-auto rounded-lg border border-border bg-card max-h-[clamp(160px,45dvh,560px)] lg:col-[2/-1] lg:row-start-2',
+  /** Script view: fixed wave strip row (not full timeline max-height). */
+  timelineScript:
+    'col-span-full h-16 min-h-16 max-h-16 shrink-0 overflow-hidden rounded-lg border border-border bg-card lg:col-[2/-1] lg:row-start-2',
   backdrop: 'fixed inset-0 z-30 bg-black/50 lg:max-xl:bg-black/30 xl:hidden',
 } as const
 
@@ -59,6 +79,7 @@ export function EditorLayout(props: {
 }) {
   const { band, panelOpen, panelWidthPx, onPanelWidthChange, hidePanelColumn, hidePropertiesColumn } = props
   const compact = props.compact === true
+  const scriptView = hidePanelColumn === true
   const overlay = band === 'mobile' || band === 'compact'
   const dragRef = useRef<{ startX: number; startW: number } | null>(null)
 
@@ -84,24 +105,30 @@ export function EditorLayout(props: {
   )
 
   const panelStyle =
-    panelWidthPx != null
+    panelWidthPx != null && !scriptView
       ? ({
           ['--editor-panel-w' as string]: `${panelWidthPx}px`,
         } as React.CSSProperties)
       : undefined
 
+  const rootClass = scriptView
+    ? EDITOR_GRID.rootScript
+    : compact
+      ? EDITOR_GRID.rootCompact
+      : EDITOR_GRID.root
+  const previewClass = scriptView ? EDITOR_GRID.previewScript : EDITOR_GRID.preview
+  const timelineClass = scriptView ? EDITOR_GRID.timelineScript : EDITOR_GRID.timeline
+  const propertiesClass =
+    compact || hidePropertiesColumn ? EDITOR_GRID.propertiesHidden : EDITOR_GRID.properties
+
   return (
     <div
-      className={cn(
-        compact ? EDITOR_GRID.rootCompact : EDITOR_GRID.root,
-        hidePanelColumn && !compact && 'xl:grid-cols-[64px_minmax(0,1fr)] 2xl:grid-cols-[64px_minmax(0,1fr)]',
-        'relative',
-      )}
+      className={rootClass}
       style={panelStyle}
       data-testid="editor-grid"
       data-band={band}
       data-compact={compact ? 'true' : undefined}
-      data-script-view={hidePanelColumn ? 'true' : undefined}
+      data-script-view={scriptView ? 'true' : undefined}
     >
       <div data-region="rail" className={EDITOR_GRID.rail}>{props.rail}</div>
       {overlay && panelOpen ? (
@@ -114,13 +141,12 @@ export function EditorLayout(props: {
           EDITOR_GRID.panel,
           EDITOR_GRID.panelMobile,
           EDITOR_GRID.panelCompact,
-          EDITOR_GRID.panelDocked,
+          scriptView ? EDITOR_GRID.panelScriptHidden : EDITOR_GRID.panelDocked,
           'relative',
-          hidePanelColumn && 'max-xl:hidden xl:hidden',
         )}
       >
         {props.panel}
-        {onPanelWidthChange && panelWidthPx != null && !overlay ? (
+        {onPanelWidthChange && panelWidthPx != null && !overlay && !scriptView ? (
           <button
             type="button"
             aria-label="Resize panel"
@@ -130,30 +156,15 @@ export function EditorLayout(props: {
           />
         ) : null}
       </section>
-      <section
-        data-region="preview"
-        className={cn(
-          EDITOR_GRID.preview,
-          hidePanelColumn && 'xl:col-start-2 2xl:col-start-2 flex min-h-0 min-w-0 flex-1 flex-col',
-        )}
-      >
+      <section data-region="preview" className={previewClass}>
         {props.preview}
       </section>
       {compact ? null : (
-        <aside
-          data-region="properties"
-          className={cn(EDITOR_GRID.properties, hidePropertiesColumn && '2xl:hidden')}
-        >
+        <aside data-region="properties" className={propertiesClass}>
           {props.properties}
         </aside>
       )}
-      <section
-        data-region="timeline"
-        className={cn(
-          EDITOR_GRID.timeline,
-          hidePanelColumn && 'h-16 max-h-16 overflow-hidden rounded-lg border border-border bg-card shadow-none',
-        )}
-      >
+      <section data-region="timeline" className={timelineClass}>
         {props.timeline}
       </section>
     </div>

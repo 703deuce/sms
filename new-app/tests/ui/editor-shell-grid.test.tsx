@@ -23,8 +23,14 @@ describe('editor shell grid', () => {
     expect(EDITOR_GRID.root).toContain('min-h-0')
     expect(EDITOR_GRID.root).toContain('overflow-hidden')
     expect(EDITOR_GRID.root).toContain('lg:grid-rows-[minmax(0,1fr)_auto]')
-    expect(EDITOR_GRID.root).toContain('xl:grid-cols-[64px_minmax(280px,340px)_minmax(0,1fr)]')
-    expect(EDITOR_GRID.root).toContain('2xl:grid-cols-[64px_minmax(300px,360px)_minmax(0,1fr)_minmax(280px,320px)]')
+    expect(EDITOR_GRID.root).toContain('xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)]')
+    expect(EDITOR_GRID.root).toContain('2xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)_minmax(280px,320px)]')
+    expect(EDITOR_GRID.rootScript).toContain('xl:grid-cols-[64px_minmax(0,1fr)]')
+    expect(EDITOR_GRID.rootScript).not.toContain('var(--editor-panel-w')
+    expect(EDITOR_GRID.previewScript).toContain('xl:col-start-2')
+    expect(EDITOR_GRID.previewScript).not.toContain('xl:col-start-3')
+    expect(EDITOR_GRID.timelineScript).toContain('h-16')
+    expect(EDITOR_GRID.timelineScript).not.toContain('max-h-[clamp')
     expect(EDITOR_GRID.properties).toContain('hidden')
     expect(EDITOR_GRID.properties).toContain('2xl:flex')
     expect(EDITOR_GRID.timeline).toContain('max-h-[clamp(160px,45dvh,560px)]')
@@ -76,6 +82,33 @@ describe('editor shell grid', () => {
       />,
     )
     expect(container.querySelector('[data-testid="editor-panel-backdrop"]')).toBeTruthy()
+  })
+  it('EditorLayout script view grid tokens (no Tailwind override conflicts)', () => {
+    const { container } = render(
+      <EditorLayout
+        band="desktop"
+        rail={<span>r</span>}
+        panel={<span>p</span>}
+        panelOpen
+        onClosePanel={() => {}}
+        preview={<span>v</span>}
+        properties={<span>i</span>}
+        timeline={<span data-testid="script-timeline-slot">t</span>}
+        hidePanelColumn
+        hidePropertiesColumn
+      />,
+    )
+    const root = container.querySelector('[data-testid="editor-grid"]')
+    expect(root?.getAttribute('data-script-view')).toBe('true')
+    const rootClass = root?.className ?? ''
+    expect(rootClass).toContain('xl:grid-cols-[64px_minmax(0,1fr)]')
+    expect(rootClass).not.toContain('var(--editor-panel-w')
+    const previewClass = container.querySelector('[data-region="preview"]')?.className ?? ''
+    expect(previewClass).toContain('xl:col-start-2')
+    expect(previewClass).not.toContain('xl:col-start-3')
+    const timelineClass = container.querySelector('[data-region="timeline"]')?.className ?? ''
+    expect(timelineClass).toContain('h-16')
+    expect(timelineClass).not.toContain('max-h-[clamp')
   })
   it('clampTimelineHeight', () => {
     expect(clampTimelineHeight(5000, 800)).toBe(360)
