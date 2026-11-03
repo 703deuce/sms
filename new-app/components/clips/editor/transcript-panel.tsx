@@ -1185,7 +1185,7 @@ export function TranscriptPanel({
       >
         <div
           className={cn(
-            largeScript && 'mx-auto w-full max-w-[80ch] px-4 py-3 text-[17px] leading-[1.65]',
+            largeScript && 'w-full max-w-[68ch] px-6 py-3 text-[17px] leading-[1.65]',
           )}
         >
         {!visible.length ? (
