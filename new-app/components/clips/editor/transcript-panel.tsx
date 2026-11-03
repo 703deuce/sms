@@ -1169,10 +1169,9 @@ export function TranscriptPanel({
       <div
         ref={scrollRef}
         className={cn(
-          'overflow-y-auto text-sm leading-relaxed',
+          'overflow-y-auto',
           compactToolbar ? 'min-h-0 flex-1' : 'max-h-[min(50vh,420px)]',
-          largeScript && 'max-h-none flex-1 text-[17px] leading-[1.65]',
-          largeScript && '[&_[data-testid=transcript-chunk]]:max-w-[80ch]',
+          largeScript ? 'max-h-none flex-1' : 'text-sm leading-relaxed',
         )}
         onWheel={bumpFollowPause}
         onTouchStart={bumpFollowPause}
@@ -1184,6 +1183,11 @@ export function TranscriptPanel({
           setCtxMenu({ x: e.clientX, y: e.clientY })
         }}
       >
+        <div
+          className={cn(
+            largeScript && 'mx-auto w-full max-w-[80ch] px-4 py-3 text-[17px] leading-[1.65]',
+          )}
+        >
         {!visible.length ? (
           <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
             No transcript words for this clip yet. They appear after processing finishes.
@@ -1339,6 +1343,7 @@ export function TranscriptPanel({
           )
         })
         )}
+        </div>
       </div>
       {ctxMenu && angles.length > 1 && onSetEdits ? (
         <div

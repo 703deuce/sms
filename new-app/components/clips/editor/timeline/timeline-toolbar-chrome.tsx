@@ -343,33 +343,35 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
               <div role="group" aria-label="Takes" data-testid="timeline-takes-menu">
                 {p.editable ? p.takesMenuBody : null}
               </div>
-              {p.hasBeats ? (
-                <DropdownMenuItem onClick={() => p.setBeatsOn((v) => !v)} data-testid="timeline-beats">
-                  ♪ Beats {p.beatsOn ? '✓' : ''}
-                </DropdownMenuItem>
-              ) : null}
-              {p.hasBeats && p.editable ? (
-                <div className="px-2 py-1">
-                  <select
-                    className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs"
-                    data-testid="timeline-beat-cut"
-                    defaultValue=""
-                    onChange={(e) => {
-                      const v = e.target.value
-                      e.target.value = ''
-                      if (v === '1' || v === '2' || v === '4') p.applyBeatCut(Number(v) as 1 | 2 | 4)
-                    }}
-                  >
-                    <option value="" disabled>
-                      Cut to beat
-                    </option>
-                    <option value="1">Every beat</option>
-                    <option value="2">Every 2 beats</option>
-                    <option value="4">Every 4 beats</option>
-                  </select>
-                  <FreeToolBadge />
-                </div>
-              ) : null}
+              <DropdownMenuItem
+                disabled={!p.hasBeats}
+                title={p.hasBeats ? undefined : 'Add music first'}
+                onClick={() => p.hasBeats && p.setBeatsOn((v) => !v)}
+                data-testid="timeline-beats"
+              >
+                ♪ Beats {p.beatsOn ? '✓' : ''}
+              </DropdownMenuItem>
+              <div className="px-2 py-1" title={p.hasBeats ? undefined : 'Add music first'}>
+                <select
+                  className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs disabled:opacity-50"
+                  data-testid="timeline-beat-cut"
+                  disabled={!p.hasBeats || !p.editable}
+                  defaultValue=""
+                  onChange={(e) => {
+                    const v = e.target.value
+                    e.target.value = ''
+                    if (v === '1' || v === '2' || v === '4') p.applyBeatCut(Number(v) as 1 | 2 | 4)
+                  }}
+                >
+                  <option value="" disabled>
+                    Cut to beat
+                  </option>
+                  <option value="1">Every beat</option>
+                  <option value="2">Every 2 beats</option>
+                  <option value="4">Every 4 beats</option>
+                </select>
+                <FreeToolBadge />
+              </div>
               <DropdownMenuItem onClick={p.onDuplicateFreeze}>
                 <Pause className="size-4" />
                 Freeze frame
