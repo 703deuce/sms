@@ -32,7 +32,7 @@ import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, Megaphone, PanelRightOpen } from 'lucide-react'
+import { Loader2, Maximize2, Megaphone, PanelRightOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClipBounds } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -44,7 +44,7 @@ import { editorPreviewDurationMs, editorPreviewEdits } from '@/lib/clips/editor-
 import { seedEditorExportTemplate } from '@/lib/clips/editor-export-template-seed'
 import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { exportTimeMap, toExportMs } from '@/lib/clips/editor/export-time'
-import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
+import { sourceMsToEditorMs } from '@/lib/clips/editor/source-ms-to-editor'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { EditorHistoryPanel } from '@/components/clips/editor/history-panel'
@@ -401,6 +401,8 @@ export function EditorShell({
   }, [panel])
   const panelMounted = (id: EditorPanelId) => panel === id || visitedPanels.has(id)
   const [outputMs, setOutputMs] = useState(0)
+  const outputMsRef = useRef(0)
+  outputMsRef.current = outputMs
   const [playing, setPlaying] = useState(false)
   const [playerMuted, setPlayerMuted] = useState(false)
   const [playerVolume, setPlayerVolume] = useState(100)
@@ -1505,13 +1507,18 @@ export function EditorShell({
 
   const seekSource = useCallback(
     (sourceMs: number) => {
+      const preview = editorPreviewEdits(edits, editorWords)
+      const tb = timebaseFor(preview)
+      const { ms: outMs } = sourceMsToEditorMs(tb, sourceMs)
+      outputMsRef.current = outMs
+      setOutputMs(outMs)
       const v = videoRef.current
       if (!v) return
       const resume = keepPlayStateAcrossSeek(v)
       v.currentTime = videoTimeFromSourceMs(sourceMs, mediaOffsetMs)
       resume()
     },
-    [mediaOffsetMs],
+    [edits, editorWords, mediaOffsetMs],
   )
 
   const highlightsSeekApi = useMemo(
@@ -1621,8 +1628,6 @@ export function EditorShell({
   // G1b: J / K / L shuttle. L plays (again: 2× / 4× / 8×), J plays backward (again: faster), K
   // stops. Above 1× and backward the preview scrubs frame by frame (no sound), like a jog wheel.
   const shuttleRef = useRef({ dir: 0 as -1 | 0 | 1, rate: 1, raf: 0, ms: 0, last: 0 })
-  const outputMsRef = useRef(outputMs)
-  outputMsRef.current = outputMs
   const seekOutputRef = useRef(seekOutput)
   seekOutputRef.current = seekOutput
   const outDurRef = useRef(outDur)
@@ -2608,6 +2613,7 @@ export function EditorShell({
           ) : null}
         <div className="min-w-0 shrink-0 space-y-2 border-t border-border pt-2">
           <PreviewTransportStrip
+            compact={layoutView === 'script' || previewFrameW < 560}
             recordSlot={
               recordDevicesOk ? (
                 <ClipRecordMenu
@@ -2687,7 +2693,17 @@ export function EditorShell({
                     >
                       Angles
                     </button>
-                  ) : null}
+                  ) : (
+                    <button
+                      type="button"
+                      className={previewChipButtonClass()}
+                      data-testid="preview-multicam-grid-toggle"
+                      disabled
+                      title="Needs 2+ angles"
+                    >
+                      Angles
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={previewChipButtonClass()}
@@ -2797,21 +2813,29 @@ export function EditorShell({
                     }}
                     meterSlot={meterOn ? <AudioMeter levels={peakLevels} voiceMetered={audioMeter.voiceMetered} /> : null}
                   />
-                  <button
-                    type="button"
-                    className={previewChipButtonClass()}
-                    onClick={() => {
-                      const box = previewFrameRef.current
-                      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
-                      else void box?.requestFullscreen?.().catch(() => {})
-                    }}
-                    title="Full-screen preview (Esc to leave)"
-                    aria-label="Full screen"
-                    data-testid="preview-fullscreen"
-                  >
-                    Full screen
-                  </button>
                 </>
+              )
+            }
+            fullscreenSlot={
+              clipRec.armed ? null : (
+                <button
+                  type="button"
+                  className={previewChipButtonClass()}
+                  onClick={() => {
+                    const box = previewFrameRef.current
+                    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+                    else void box?.requestFullscreen?.().catch(() => {})
+                  }}
+                  title="Full-screen preview (Esc to leave)"
+                  aria-label="Full screen"
+                  data-testid="preview-fullscreen"
+                >
+                  {layoutView === 'script' || previewFrameW < 560 ? (
+                    <Maximize2 className="size-4" aria-hidden />
+                  ) : (
+                    'Full screen'
+                  )}
+                </button>
               )
             }
           />
