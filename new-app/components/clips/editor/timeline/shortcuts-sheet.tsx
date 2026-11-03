@@ -56,6 +56,11 @@ export function TimelineShortcutsSheet({ open, onClose }: { open: boolean; onClo
             </section>
           ))}
         </div>
+        <p className="mt-4 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-foreground">
+          Click to select (Shift-click for more), drag to move (up / down: another track; main clips reorder), drag edges to trim.
+          S / Ctrl+B split · Del delete · Ctrl+C/X/V/D · I/O in–out · ←/→ nudge (Shift ×10) · ↑/↓ edit points · N snapping · Space / J K L play.
+          ◇ adds keyframes; click a cut to add a transition.
+        </p>
       </div>
     </div>
   )

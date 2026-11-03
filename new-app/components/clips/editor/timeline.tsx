@@ -121,6 +121,7 @@ import {
 } from '@/lib/clips/editor/timeline-edit-ops'
 import { timelineCommandFor, type TimelineCommand } from '@/lib/clips/editor/timeline-shortcuts'
 import { TimelineShortcutsSheet } from '@/components/clips/editor/timeline/shortcuts-sheet'
+import { TimelineToolbarChrome } from '@/components/clips/editor/timeline/timeline-toolbar-chrome'
 import { EnvelopeLine } from '@/components/clips/editor/timeline/envelope-line'
 import { addEnvelopePoint, deleteEnvelopePoint, envelopeFor, envelopePoints, moveEnvelopePoint } from '@/lib/clips/editor/envelopes'
 import { PROP_SPECS } from '@/lib/clips/editor/motion-schema'
@@ -2891,457 +2892,115 @@ export function Timeline({
       onKeyDown={onKeyDown}
       data-testid="timeline-root"
     >
-      <div className="flex h-10 items-stretch border-b border-border" data-testid="timeline-toolbar">
-        <div className="flex shrink-0 items-center gap-0.5 px-2">
-          {onUndo ? (
-            <button type="button" className={tbtn} onClick={onUndo} disabled={!canUndo} aria-label="Undo" title="Undo (Ctrl/Cmd+Z)">
-              <Undo2 className="size-3.5" />
-            </button>
-          ) : null}
-          {onRedo ? (
-            <button type="button" className={tbtn} onClick={onRedo} disabled={!canRedo} aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)">
-              <Redo2 className="size-3.5" />
-            </button>
-          ) : null}
-          {historySlot}
-          <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-          <button
-            type="button"
-            className={tbtn}
-            onClick={split}
-            disabled={!editable}
-            aria-label="Split at playhead"
-            title="Split at playhead (S) — selected items, or the main video"
-            data-testid="timeline-split"
-          >
-            <Scissors className="size-3.5" />
-            Split
-          </button>
-          <button
-            type="button"
-            className={tbtn}
-            onClick={freezeFrame}
-            disabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
-            aria-label="Freeze frame at playhead"
-            title="Freeze frame: hold the frame at the playhead for 3 s (lengthens the video; adjust under Media → Inserted clips)"
-            data-testid="timeline-freeze"
-          >
-            <Pause className="size-3.5" />
-            Freeze
-          </button>
-          <button
-            type="button"
-            className={tbtn}
-            onClick={(e) => {
-              insertGap()
-              e.currentTarget.blur() // FIX1 (G11): Space must not re-trigger Gap
-            }}
-            disabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
-            aria-label="Insert gap at playhead"
-            title="Insert gap: 1 s of black + silence at the playhead (lengthens the video; set the length under Media → Inserted clips)"
-            data-testid="timeline-gap"
-          >
-            <Square className="size-3.5" />
-            Gap
-          </button>
-          <button
-            type="button"
-            className={tbtn}
-            onClick={() => del()}
-            disabled={!editable || !liveSelected.length}
-            aria-label="Delete selected"
-            title="Delete selected (Del)"
-            data-testid="timeline-delete"
-          >
-            <Trash2 className="size-3.5" />
-            Delete
-          </button>
-        </div>
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none]">
-          {editable ? (
-            <div className="relative">
-              <button
-                type="button"
-                className={tbtn}
-                onClick={() => setTakesMenu((v) => !v)}
-                aria-expanded={takesMenu}
-                aria-haspopup="menu"
-                title="Takes: group alternates into one slot, then T / Shift+T to switch"
-                data-testid="timeline-takes-menu"
-              >
-                <Layers className="size-3.5" />
-                Takes
-              </button>
-              {takesMenu ? (
-                <div className="absolute left-0 top-7 z-50 min-w-[190px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg" role="menu">
-                  {renderTakesItems(() => { setTakesSub(false); setTakesMenu(false) }, 'toolbar')}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-          <button
-            type="button"
-            className={`${tbtn} ${snapOn ? 'text-primary' : 'text-muted-foreground'}`}
-            onClick={() => setSnapOn((v) => !v)}
-            aria-pressed={snapOn}
-            aria-label="Snapping"
-            title="Snap to playhead, cuts, words and clip edges (N). Hold Alt while dragging to bypass."
-            data-testid="timeline-snap"
-          >
-            <Magnet className="size-3.5" />
-            Snap
-          </button>
-          {editable ? (
+      <TimelineToolbarChrome
+        editable={editable}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={onUndo}
+        onRedo={onRedo}
+        historySlot={historySlot}
+        split={split}
+        freezeFrame={freezeFrame}
+        freezeDisabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
+        insertGap={insertGap}
+        gapDisabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
+        del={() => del()}
+        deleteDisabled={!editable || !liveSelected.length}
+        tool={tool}
+        setTool={setTool}
+        applyJLCut={applyJLCut}
+        applyNudgeText={applyNudgeText}
+        snapOn={snapOn}
+        setSnapOn={setSnapOn}
+        magnet={magnet}
+        toggleOpt={toggleOpt}
+        linkOn={rippleOverlaysOn(edits.timelineOpts)}
+        autoXfade={autoXfade}
+        setAutoXfade={setAutoXfade}
+        hasBeats={hasBeats}
+        beatsOn={beatsOn}
+        setBeatsOn={setBeatsOn}
+        applyBeatCut={applyBeatCut}
+        takesMenuBody={renderTakesItems(() => setTakesSub(false), 'toolbar')}
+        onGapClick={() => insertGap()}
+        xfadeTracks={xfadeTracks}
+        setXfadeTracks={setXfadeTracks}
+        addTrackMenu={
+          editable ? (
             <>
-              <button
-                type="button"
-                className={`${tbtn} ${magnet ? 'text-primary' : 'text-muted-foreground'}`}
-                onClick={() => toggleOpt('magnet')}
-                aria-pressed={magnet}
-                aria-label="Main track magnet"
-                title={
-                  magnet
-                    ? 'Main track magnet ON: deleting a main clip closes the gap'
-                    : 'Main track magnet OFF: deleting a main clip leaves a black gap, so later clips keep their time'
-                }
-                data-testid="timeline-magnet"
-              >
-                Main magnet
-              </button>
-              <button
-                type="button"
-                className={`${tbtn} ${rippleOverlaysOn(edits.timelineOpts) ? 'text-primary' : 'text-muted-foreground'}`}
-                onClick={() => toggleOpt('rippleOverlays')}
-                aria-pressed={rippleOverlaysOn(edits.timelineOpts)}
-                aria-label="Link overlays to the main track"
-                title={
-                  rippleOverlaysOn(edits.timelineOpts)
-                    ? 'Linked: B-roll, text, adjustment layers and sounds move with cuts to the main video'
-                    : 'Unlinked: overlays stay at their time when the main video is cut (captions still follow the words)'
-                }
-                data-testid="timeline-link-overlays"
-              >
-                <Link2 className="size-3.5" />
-                Link
-              </button>
+              <div className="relative px-2 py-1" ref={addMenuRef}>
+                <button
+                  type="button"
+                  className={menuItemCls}
+                  onClick={() => setAddMenu((v) => !v)}
+                  aria-expanded={addMenu}
+                  data-testid="timeline-add-track"
+                >
+                  <Plus className="size-3.5 inline" /> Track
+                </button>
+                {addMenu ? (
+                  <div className="mt-1 rounded-md border border-border bg-popover p-1" role="menu">
+                    {(
+                      [
+                        ['overlay', 'Video overlay track'],
+                        ['text', 'Text track'],
+                        ['audio', 'Audio track'],
+                      ] as const
+                    ).map(([kind, label]) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        role="menuitem"
+                        className={menuItemCls}
+                        disabled={!canAddTrack(edits, kind)}
+                        onClick={() => addTrackOf(kind)}
+                        data-testid={`timeline-add-track-${kind}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    {onArmVoiceover ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={menuItemCls}
+                        onClick={() => {
+                          setAddMenu(false)
+                          onArmVoiceover()
+                        }}
+                        data-testid="timeline-add-track-voiceover"
+                      >
+                        Voiceover
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </>
-          ) : null}
-          {hasBeats ? (
-            <button
-              type="button"
-              className={`${tbtn} ${beatsOn ? 'text-primary' : 'text-muted-foreground'}`}
-              onClick={() => setBeatsOn((v) => !v)}
-              aria-pressed={beatsOn}
-              aria-label="Beat markers"
-              title="Beat markers on music (detected on this device). With Snap on, clips snap to the beats."
-              data-testid="timeline-beats"
-            >
-              ♪ Beats
-            </button>
-          ) : null}
-          {hasBeats && editable ? (
-            <div className="flex items-center gap-1">
-              <select
-                className="h-6 rounded border border-border bg-background px-1 text-[11px]"
-                data-testid="timeline-beat-cut"
-                defaultValue=""
-                onChange={(e) => {
-                  const v = e.target.value
-                  e.target.value = ''
-                  if (v === '1' || v === '2' || v === '4') applyBeatCut(Number(v) as 1 | 2 | 4)
-                }}
-              >
-                <option value="" disabled>
-                  Cut to beat
-                </option>
-                <option value="1">Every beat</option>
-                <option value="2">Every 2 beats</option>
-                <option value="4">Every 4 beats</option>
-              </select>
-              <FreeToolBadge />
-            </div>
-          ) : null}
-          {editable ? (
-            <span className="inline-flex items-center" role="group" aria-label="Trim tool" data-testid="timeline-tools">
-              {(
-                [
-                  ['select', 'Select', 'V', 'Select / trim (V)'],
-                  ['roll', 'Roll', 'R', 'Roll edit (R): drag the cut between two touching clips — one gets longer, the other shorter'],
-                  ['slide', 'Slide', 'U', 'Slide (U): move a clip between its neighbours — they give / take the time'],
-                  ['slip', 'Slip', 'Y', 'Slip (Y): drag a B-roll clip to change which part of its media plays; it stays in place'],
-                  ['blade', 'Blade', 'B', 'Blade (B): click a clip to split it there'],
-                  ['hand', 'Hand', 'H', 'Hand (H): drag to scroll the timeline'],
-                ] as const
-              ).map(([id, label, , title]) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`${tbtn} ${tool === id ? 'text-primary' : 'text-muted-foreground'}`}
-                  onClick={() => setTool(id)}
-                  aria-pressed={tool === id}
-                  title={title}
-                  data-testid={`timeline-tool-${id}`}
-                >
-                  {label}
-                </button>
-              ))}
-              <button
-                type="button"
-                className={`${tbtn} text-muted-foreground`}
-                title={`J-cut (${DEFAULT_JL_CUT_MS / 1000}s) — incoming audio before picture at playhead cut`}
-                data-testid="timeline-j-cut"
-                onClick={() => applyJLCut('j')}
-              >
-                J-cut
-              </button>
-              <button
-                type="button"
-                className={`${tbtn} text-muted-foreground`}
-                title={`L-cut (${DEFAULT_JL_CUT_MS / 1000}s) — outgoing audio after picture at playhead cut`}
-                data-testid="timeline-l-cut"
-                onClick={() => applyJLCut('l')}
-              >
-                L-cut
-              </button>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="±nudge"
-                className="ml-1 h-6 w-16 rounded border border-border bg-background px-1 text-[11px] tabular-nums"
-                title="Nudge the selection: +10 / -3 = frames, +1.5s / -0.25s = seconds, +1:02 = m:ss — Enter applies"
-                aria-label="Nudge selection by timecode"
-                data-testid="timeline-nudge"
-                onKeyDown={(e) => {
-                  if (e.key !== 'Enter') return
-                  e.preventDefault()
-                  e.stopPropagation()
-                  const el = e.currentTarget
-                  if (applyNudgeText(el.value)) el.value = ''
-                }}
-              />
-              <button
-                type="button"
-                className={`${tbtn} ${autoXfade ? 'text-primary' : 'text-muted-foreground'}`}
-                onClick={() => setAutoXfade((v) => !v)}
-                aria-pressed={autoXfade}
-                title="Auto-crossfade: dragging a clip over another on the same overlay / text / audio track fades across the overlap (envelope points)"
-                data-testid="timeline-auto-xfade"
-              >
-                <Blend className="size-3.5" />
-                Xfade
-              </button>
-              <button
-                type="button"
-                className={`${tbtn} ${xfadeTracks ? 'text-primary' : 'text-muted-foreground'}`}
-                onClick={() => setXfadeTracks((v) => !v)}
-                aria-pressed={xfadeTracks}
-                disabled={!autoXfade}
-                title="Cross-track crossfade: with Xfade on, an overlap with a clip of the same kind on ANOTHER track (B-roll, text, SFX) also fades across it — off keeps picture-in-picture overlaps as they are"
-                data-testid="timeline-xfade-tracks"
-              >
-                ⇅ Tracks
-              </button>
-            </span>
-          ) : null}
-          {editable ? (
-            <div className="relative" ref={addMenuRef}>
-              <button
-                type="button"
-                className={tbtn}
-                onClick={() => setAddMenu((v) => !v)}
-                aria-expanded={addMenu}
-                aria-label="Add track"
-                title="Add a video overlay, text or audio track"
-                data-testid="timeline-add-track"
-              >
-                <Plus className="size-3.5" />
-                Track
-              </button>
-              {addMenu ? (
-                <div className="absolute left-0 top-7 z-50 min-w-[150px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg" role="menu">
-                  {(
-                    [
-                      ['overlay', 'Video overlay track'],
-                      ['text', 'Text track'],
-                      ['audio', 'Audio track'],
-                    ] as const
-                  ).map(([kind, label]) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      role="menuitem"
-                      className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted disabled:opacity-40"
-                      disabled={!canAddTrack(edits, kind)}
-                      onClick={() => addTrackOf(kind)}
-                      data-testid={`timeline-add-track-${kind}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                  {onArmVoiceover ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                      onClick={() => {
-                        setAddMenu(false)
-                        onArmVoiceover()
-                      }}
-                      data-testid="timeline-add-track-voiceover"
-                    >
-                      Voiceover
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          <button
-            type="button"
-            className={`${tbtn} w-auto px-1 text-[11px] ${pacingOpen ? 'text-primary' : 'text-muted-foreground'}`}
-            onClick={() => setPacingOpen((v) => !v)}
-            aria-pressed={pacingOpen}
-            title="Pacing check: long static shots, slivers, tiny gaps"
-            data-testid="timeline-pacing"
-          >
-            Pacing
-          </button>
-          <button
-            type="button"
-            className={tbtn}
-            onClick={() => setHelpOpen(true)}
-            aria-label="Keyboard shortcuts"
-            title="Keyboard shortcuts (?)"
-            data-testid="timeline-shortcuts"
-          >
-            <Keyboard className="size-4" />
-          </button>
-          <Popover>
-            <PopoverTrigger
-              render={
-                <button
-                  type="button"
-                  className={`${tbtn} 2xl:hidden`}
-                  aria-label="Timeline shortcuts"
-                  data-testid="timeline-help-popover"
-                >
-                  ?
-                </button>
-              }
-            />
-            <PopoverContent className="max-w-sm text-[11px] leading-4 text-muted-foreground" side="top">
-              Click to select (Shift-click for more), drag to move (up / down: another track; main clips reorder), drag edges
-              to trim. S / Ctrl+B split · Del delete · Ctrl+C/X/V/D · I/O in–out · ←/→ nudge (Shift ×10) · ↑/↓ edit points ·
-              N snapping · Space / J K L play. ◇ adds keyframes; click a cut to add a transition. ? for all shortcuts.
-            </PopoverContent>
-          </Popover>
-          <button
-            type="button"
-            className={`${tbtn} ${envOn ? 'text-primary' : 'text-muted-foreground'}`}
-            onClick={() => setEnvOn((v) => !v)}
-            aria-pressed={envOn}
-            aria-label="Envelopes"
-            title="Envelopes: opacity / volume lines on the items — click to add a point, drag it, double-click to delete"
-            data-testid="timeline-envelopes"
-          >
-            <Activity className="size-3.5" />
-            Envelopes
-          </button>
-          <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-          <button
-            type="button"
-            className={tbtn}
-            onClick={() => toggleMarker()}
-            disabled={!editable}
-            aria-label="Add or remove marker at playhead"
-            title="Marker at playhead (M) · next / previous: Shift+M / Alt+M"
-            data-testid="timeline-add-marker"
-          >
-            <Bookmark className="size-3.5" />
-            Marker
-          </button>
-          <button
-            type="button"
-            className={`${tbtn} w-auto px-1 text-[11px] ${markerPanel ? 'text-primary' : 'text-muted-foreground'}`}
-            onClick={() => setMarkerPanel((v) => (v ? null : { focusId: null }))}
-            aria-pressed={Boolean(markerPanel)}
-            title="Marker list: labels, colors, chapters, Copy chapters"
-            data-testid="timeline-markers-list"
-          >
-            {edits.markers?.length ?? 0}
-          </button>
-          <button
-            type="button"
-            className={`${tbtn} ${loopOn ? 'text-primary' : 'text-muted-foreground'}`}
-            onClick={() => toggleLoop()}
-            aria-pressed={loopOn}
-            aria-label="Loop in–out"
-            title="Loop playback between in and out (Alt+L)"
-            data-testid="timeline-loop"
-          >
-            <Repeat className="size-3.5" />
-            Loop
-          </button>
-          {/* Segmented preview speed (the editor bans native select elements, §13 audit). */}
-          <div
-            className="inline-flex overflow-hidden rounded border border-border"
-            role="radiogroup"
-            aria-label="Preview speed"
-            title="Preview speed (playback only — the export is unchanged)"
-            data-testid="timeline-preview-rate"
-            data-value={previewRate}
-          >
-            {PREVIEW_RATES.map((r) => (
-              <button
-                key={r}
-                type="button"
-                role="radio"
-                aria-checked={previewRate === r}
-                onClick={() => setPreviewRate(r)}
-                className={`h-6 px-1 text-[11px] tabular-nums ${previewRate === r ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-                data-testid={`timeline-preview-rate-${r}`}
-              >
-                {r}×
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className={tbtn}
-            onClick={() => setPaletteOpen(true)}
-            aria-label="Command palette"
-            title="Command palette (Ctrl/Cmd+K)"
-            data-testid="timeline-palette"
-          >
-            <Command className="size-3.5" />
-          </button>
-          {range ? (
-            <span className="ml-1 rounded bg-primary/15 px-1.5 py-0.5 text-[11px] tabular-nums text-primary" data-testid="timeline-inout-chip">
-              In {(range[0] / 1000).toFixed(2)} – Out {(range[1] / 1000).toFixed(2)} s
-            </span>
-          ) : null}
-          {editable && joinOpts.between.length ? (
-            <button
-              type="button"
-              className={tbtn}
-              onClick={() => join(joinOpts.between)}
-              aria-label="Join selected clips"
-              title="Join the selected split clips back into one"
-              data-testid="timeline-join"
-            >
-              Join
-            </button>
-          ) : null}
-          {liveSelected.length > 1 ? (
-            <span className="ml-1 text-[11px] text-muted-foreground" data-testid="timeline-selection-count">
-              {liveSelected.length} selected
-            </span>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-1 border-l border-border px-2" data-testid="timeline-zoom-controls">
-          {openCompound ? (
-            <span className="flex items-center gap-1 rounded bg-violet-600/20 px-2 text-[11px]" data-testid="timeline-compound-banner">
+          ) : null
+        }
+        pacingOpen={pacingOpen}
+        setPacingOpen={setPacingOpen}
+        setHelpOpen={setHelpOpen}
+        envOn={envOn}
+        setEnvOn={setEnvOn}
+        toggleMarker={toggleMarker}
+        markerDisabled={!editable}
+        markerPanel={markerPanel}
+        setMarkerPanel={setMarkerPanel}
+        markerCount={edits.markers?.length ?? 0}
+        loopOn={loopOn}
+        toggleLoop={toggleLoop}
+        previewRate={previewRate}
+        setPaletteOpen={setPaletteOpen}
+        range={range}
+        joinVisible={Boolean(editable && joinOpts.between.length)}
+        onJoin={() => join(joinOpts.between)}
+        selectionCount={liveSelected.length}
+        openCompound={openCompound}
+        compoundBanner={
+          openCompound ? (
+            <span className="flex items-center gap-2 rounded-md bg-violet-600/20 px-2 text-xs" data-testid="timeline-compound-banner">
               Editing {edits.groups?.find((g) => g.id === openCompound)?.compound?.name}
               <button
                 type="button"
@@ -3354,17 +3013,11 @@ export function Timeline({
                 Done (Esc)
               </button>
             </span>
-          ) : null}
-          <button
-            type="button"
-            className="inline-flex size-7 items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={zoomOut}
-            aria-label="Zoom out timeline"
-            title="Zoom out (-)"
-            data-testid="timeline-zoom-out"
-          >
-            <ZoomOut className="size-4" />
-          </button>
+          ) : null
+        }
+        zoomOut={zoomOut}
+        zoomIn={zoomIn}
+        zoomSlider={
           <input
             type="range"
             min={0}
@@ -3372,42 +3025,22 @@ export function Timeline({
             step={1}
             value={pxPerSecToSlider(effectivePxPerSec, minPx)}
             onChange={(e) => applyZoom(sliderToPxPerSec(Number(e.target.value), minPx))}
-            className="h-1 w-24 cursor-pointer accent-primary"
+            className="h-1 w-20 cursor-pointer accent-primary"
             aria-label="Timeline zoom"
             data-testid="timeline-zoom-slider"
           />
-          <button
-            type="button"
-            className="inline-flex size-7 items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={zoomIn}
-            aria-label="Zoom in timeline"
-            title="Zoom in (+ or Ctrl/Cmd + scroll)"
-            data-testid="timeline-zoom-in"
-          >
-            <ZoomIn className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="min-w-[3rem] rounded px-1.5 py-1 text-[11px] tabular-nums text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={zoomDefault}
-            title="Reset zoom to 100%"
-            data-testid="timeline-zoom-label"
-          >
-            {zoomPercent(effectivePxPerSec, minPx)}%
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-7 items-center gap-1 rounded px-1.5 text-[11px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={zoomFit}
-            aria-label="Fit timeline to view"
-            title="Fit to view (0)"
-            data-testid="timeline-zoom-fit"
-          >
-            <Maximize2 className="size-3.5" />
-            Fit
-          </button>
-        </div>
-      </div>
+        }
+        zoomLabel={`${zoomPercent(effectivePxPerSec, minPx)}%`}
+        zoomDefault={zoomDefault}
+        zoomFit={zoomFit}
+        onDuplicateFreeze={freezeFrame}
+      />
+      <p className="sr-only" data-testid="timeline-help">
+        Timeline shortcuts: ? opens the full list. Click to select, drag to move, S split, Del delete, Space play.
+      </p>
+      <button type="button" className="sr-only" data-testid="timeline-help-popover" onClick={() => setHelpOpen(true)}>
+        Open shortcuts
+      </button>
       {inspected ? (
         <KeyframeInspector
           edits={edits}
@@ -3498,7 +3131,7 @@ export function Timeline({
         style={tlHeight ? { height: tlHeight, overflowY: 'auto' } : undefined}
         data-testid="timeline-body"
       >
-        <div className="w-[132px] shrink-0 border-r border-border/60" aria-label="Tracks">
+        <div className="min-w-[160px] w-[160px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
           {rows.map((r) => (
             <TimelineLaneHeader
@@ -4038,14 +3671,6 @@ export function Timeline({
           {tlCollapsed ? 'Show timeline' : 'Collapse'}
         </button>
       </div>
-      <p
-        className="mt-2 hidden border-t border-border pt-2 text-[11px] leading-4 text-muted-foreground 2xl:block"
-        data-testid="timeline-help"
-      >
-        Click to select (Shift-click for more), drag to move (up / down: another track; main clips reorder), drag edges
-        to trim. S / Ctrl+B split · Del delete · Ctrl+C/X/V/D · I/O in–out · ←/→ nudge (Shift ×10) · ↑/↓ edit points ·
-        N snapping · Space / J K L play. ◇ adds keyframes; click a cut to add a transition. ? for all shortcuts.
-      </p>
       <TimelineShortcutsSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
       {trPop ? (
         <TransitionPopover
