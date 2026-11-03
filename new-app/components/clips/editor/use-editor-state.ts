@@ -488,7 +488,14 @@ export function useEditorState(
         delete fixMeta[key]
       } else {
         fixes[key] = text.trim()
-        if (meta) fixMeta[key] = { s: meta.s, w: meta.w }
+        if (meta) {
+          fixMeta[key] = { s: meta.s, w: meta.w }
+        } else if (fixMeta[key]) {
+          // Keep stable source-time anchor when only the replacement text changes.
+        } else {
+          const w = wordsRef.current.find((x) => x.i === index)
+          if (w) fixMeta[key] = { s: Math.round(w.s * 1000), w: w.w }
+        }
       }
       const next: ClipEditsV2 = {
         ...state.edits,

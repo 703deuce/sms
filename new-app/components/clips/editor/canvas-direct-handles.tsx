@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent } from 'react'
 import type { ClipEditsV2, FacecamBox } from '@/lib/clips/edits'
 import { findTrack, setPropertyAt, trackValueAt } from '@/lib/clips/editor/keyframes'
-import { stackPanelStyles } from '@/lib/clips/facecam-geometry'
+import { stackHeights, stackPanelStyles } from '@/lib/clips/facecam-geometry'
 import { captionDragBoxStyle, captionDragDelta, rectChanged, toRectLike, type RectLike } from '@/lib/clips/editor/caption-drag-rect'
 
 type Props = {
@@ -100,7 +100,9 @@ export function CanvasDirectHandles({ baseEdits, box, getOutMs, onCommit, readOn
       const bodyTop = r.top + r.height * stackTopFrac
       const y = clamp((e.clientY - bodyTop) / (r.height * (1 - stackTopFrac)), 0, 1)
       const faceFirst = (d.start.layout.facecam?.position ?? 'top') !== 'bottom'
-      next = withFacecam(d.start, { split: clamp(faceFirst ? y : 1 - y, 0.2, 0.7) })
+      const raw = faceFirst ? y : 1 - y
+      const splitClamped = Math.max(0.25, Math.min(0.5, raw))
+      next = withFacecam(d.start, { split: splitClamped })
     } else if (d.kind === 'pan-face' || d.kind === 'pan-game') {
       const fc = d.start.layout.facecam
       const key = d.kind === 'pan-face' ? 'box' : 'gameplay'

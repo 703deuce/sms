@@ -11,6 +11,8 @@ def finalize_clip_ai_meta(
     out = {**(pick.get("aiMeta") or {}), **reframe_meta}
     if pick.get("hook") and not out.get("hook"):
         out["hook"] = pick.get("hook")
+    if pick.get("pickerTrace"):
+        out["pickerTrace"] = pick["pickerTrace"]
     out["cropMethod"] = crop_method
     out["layoutResolved"] = resolved_layout
     shadow = out.get("layoutRouteShadow")

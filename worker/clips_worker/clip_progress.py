@@ -11,9 +11,7 @@ REFRAME_ETA_SEC_PER_CLIP = 65
 def reframe_eta_seconds(completed: int, total: int, started_at: float, concurrency: int) -> int:
     if total <= 0:
         return 0
-    measured = eta_seconds(completed, total, started_at)
-    if measured is not None:
-        return measured
+    # FIX3: stable planned wall (measured per-clip rate jittered 16–21s in QA).
     remaining = max(0, total - completed)
     conc = max(1, concurrency)
     return int((remaining / conc) * REFRAME_ETA_SEC_PER_CLIP)

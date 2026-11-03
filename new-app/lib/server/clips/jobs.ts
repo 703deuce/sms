@@ -61,9 +61,7 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
       const previousStageKey =
         typeof sp.lastEtaStageKey === 'string' ? sp.lastEtaStageKey : undefined
       if (workerEta > 0 && etaUpdatedAt) {
-        const ageSec = Math.max(0, Math.floor((Date.now() - new Date(etaUpdatedAt).getTime()) / 1000))
-        const aged = Math.max(0, workerEta - ageSec)
-        etaSec = clampEtaBetweenPolls(aged, previousPollEta, stageKey, previousStageKey)
+        etaSec = clampEtaBetweenPolls(workerEta, previousPollEta, stageKey, previousStageKey)
       } else if (workerEta > 0) {
         etaSec = clampEtaBetweenPolls(workerEta, previousPollEta, stageKey, previousStageKey)
       } else if (!isStreamer) {

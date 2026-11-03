@@ -7,37 +7,22 @@ import time
 from typing import Any, Callable
 
 from clips_worker.clip_progress import REFRAME_ETA_SEC_PER_CLIP, picker_progress_payload
+from clips_worker.pipeline_eta import estimated_clip_count, picker_budget_s, upload_pipeline_eta_seconds
 
 PICKER_TICK_S = 10.0
-PICKER_BUDGET_MIN_S = 120
-PICKER_BUDGET_PER_25MIN_S = 180
 PICKER_OVERRUN_FLOOR_S = 15
 PICKER_STAGE = "finding_clips"
 
 
-def picker_budget_s(source_s: float) -> int:
-    """Expected picker wall time. proj_7346: 3:46 source -> 129 s; ~25 min interview -> ~180 s."""
-    return max(PICKER_BUDGET_MIN_S, int(round(PICKER_BUDGET_PER_25MIN_S * max(0.0, float(source_s)) / 1500.0)))
-
-
-def estimated_clip_count(source_s: float) -> int:
-    """Mirror of new-app lib/clips/project-eta.ts estimatedClipCount (3..12)."""
-    if source_s <= 0:
-        return 4
-    return min(12, max(3, int(round(float(source_s) / 1500.0 * 4))))
-
-
 def picker_eta_seconds(elapsed_s: float, source_s: float, render_concurrency: int) -> int:
-    budget = picker_budget_s(source_s)
-    picker_left = max(PICKER_OVERRUN_FLOOR_S, int(budget - max(0.0, elapsed_s)))
-    tail = math.ceil(estimated_clip_count(source_s) / max(1, int(render_concurrency))) * REFRAME_ETA_SEC_PER_CLIP
-    return int(picker_left + tail)
+    return upload_pipeline_eta_seconds(elapsed_s, source_s, render_concurrency)
 
 
 def picker_tick_payload(elapsed_s: float, source_s: float, render_concurrency: int) -> dict:
     budget = picker_budget_s(source_s)
     progress = 52 + min(2, int(3 * max(0.0, elapsed_s) / budget))
-    return picker_progress_payload(PICKER_STAGE, progress, picker_eta_seconds(elapsed_s, source_s, render_concurrency))
+    eta = picker_eta_seconds(elapsed_s, source_s, render_concurrency)
+    return picker_progress_payload(PICKER_STAGE, progress, eta)
 
 
 class PickerProgressTicker:

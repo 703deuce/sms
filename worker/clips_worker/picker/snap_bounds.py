@@ -36,8 +36,11 @@ PAD_END_S = 0.5
 # FIX1: answer/reaction words that are fillers at a START but the payoff at an END.
 _END_KEEP = {"no", "yes", "yeah", "yep", "right", "exactly", "okay", "ok", "sure", "totally", "wow", "oh"}
 MAX_EXTEND_S = 8.0
-SENTENCE_EXTEND_MAX_S = 3.0
+SENTENCE_EXTEND_MAX_S = 6.0
 GAP_SENTENCE_END_S = 0.4
+# FIX3: end on punctuation or a pause ≥ this after the last word of a complete sentence.
+SENTENCE_END_PAUSE_S = 0.35
+MAX_SENTENCE_COMPLETE_EXTEND_S = 6.0
 LEADING_DEAD_AIR_S = 0.3
 GREETING_WINDOW_MS = 1500
 
@@ -293,6 +296,363 @@ def _preroll_start_ms(words: list[dict], wi: int, range_start_ms: int, pad_start
     return min(w_s, max(range_start_ms, floor_ms, w_s - pad_start_ms))
 
 
+def _last_word_index_at_or_before(words: list[dict], end_ms: int) -> int:
+    idx = _word_index_at_ms(words, end_ms, "end")
+    return max(0, min(idx, len(words) - 1))
+
+
+def _word_index_at_picked_end(words: list[dict], picked_end_ms: int) -> int:
+    """Word the video pick ends on (closest word end to ``picked_end_ms``, not the next onset)."""
+    best_i = -1
+    best_dt = 10**9
+    for i, w in enumerate(words):
+        ws = int(w["s"] * 1000)
+        we = int(w["e"] * 1000)
+        if ws > picked_end_ms + 80:
+            break
+        if ws <= picked_end_ms + 80 and we >= picked_end_ms - 80:
+            dt = abs(we - picked_end_ms)
+            if dt < best_dt:
+                best_dt = dt
+                best_i = i
+    if best_i >= 0:
+        return best_i
+    return _last_word_index_at_or_before(words, picked_end_ms)
+
+
+def _clip_end_is_complete(words: list[dict], end_ms: int) -> bool:
+    """True when end sits on sentence-final punctuation or after a ≥ SENTENCE_END_PAUSE_S pause."""
+    if not words:
+        return True
+    we = _last_word_index_at_or_before(words, end_ms)
+    w = words[we]
+    wend = int(w["e"] * 1000)
+    tail_allow = int(PAD_END_S * 1000) + 200
+    if end_ms > wend + tail_allow:
+        # End sits in dead air / next sentence without landing on a final word.
+        if we + 1 < len(words) and int(words[we + 1]["s"] * 1000) < end_ms:
+            return False
+    if _is_sentence_final_word(words, we):
+        return True
+    if we + 1 < len(words):
+        gap = words[we + 1]["s"] - w["e"]
+        if gap >= SENTENCE_END_PAUSE_S and end_ms <= wend + tail_allow:
+            return True
+    return False
+
+
+def _sentence_final_end_ms(words: list[dict], we: int, range_end_ms: int, pad_end_ms: int) -> int:
+    """End timestamp just after the last word of a complete sentence (word end + safe tail)."""
+    end_ms = int(words[we]["e"] * 1000)
+    return _pad_end_to_next_word(words, we, end_ms, pad_end_ms, range_end_ms)
+
+
+def _find_sentence_end_forward(
+    words: list[dict],
+    from_we: int,
+    *,
+    from_ms: int,
+    cap_ms: int,
+) -> tuple[int, int] | None:
+    """Next sentence-complete end at or after ``from_we``, within ``cap_ms``."""
+    for j in range(from_we, len(words)):
+        wend = int(words[j]["e"] * 1000)
+        if wend > cap_ms:
+            break
+        if _is_sentence_final_word(words, j):
+            return j, wend
+        if j + 1 < len(words) and words[j + 1]["s"] - words[j]["e"] >= SENTENCE_END_PAUSE_S:
+            return j, wend
+    return None
+
+
+def _find_sentence_end_backward(
+    words: list[dict],
+    before_we: int,
+    *,
+    floor_ms: int,
+) -> tuple[int, int] | None:
+    """Previous sentence-complete end strictly before ``before_we`` (exclude the dangling word)."""
+    for j in range(max(0, before_we - 1), -1, -1):
+        wend = int(words[j]["e"] * 1000)
+        if wend < floor_ms:
+            break
+        if _is_sentence_final_word(words, j):
+            return j, wend
+        if j + 1 < len(words) and words[j + 1]["s"] - words[j]["e"] >= SENTENCE_END_PAUSE_S:
+            return j, wend
+    return None
+
+
+def _start_is_transcript_sentence_start(words: list[dict], sentences: list[Sentence], start_ms: int) -> bool:
+    if not words:
+        return True
+    wi = _word_index_at_ms(words, start_ms, "start")
+    if wi < 0:
+        return False
+    w_s = int(words[wi]["s"] * 1000)
+    if start_ms > w_s + 120:
+        return False
+    s = _sentence_at_ms(sentences, start_ms)
+    if s is None:
+        return True
+    sent_start = _advance_to_substantive_start(sentences, s)
+    first_wi = _word_index_at_ms(words, sent_start, "start")
+    if first_wi < 0:
+        return abs(start_ms - sent_start) <= 150
+    return wi == first_wi or abs(w_s - sent_start) <= 150
+
+
+def _find_sentence_start_backward(
+    words: list[dict],
+    sentences: list[Sentence],
+    start_ms: int,
+    *,
+    floor_ms: int,
+    max_shift_ms: int,
+) -> int | None:
+    """Move start earlier to the nearest sentence start (up to ``max_shift_ms``)."""
+    lo = max(floor_ms, start_ms - max_shift_ms)
+    s = _sentence_at_ms(sentences, start_ms)
+    if s is None:
+        return None
+    idx = _sentence_list_index(sentences, s)
+    for i in range(idx, -1, -1):
+        st = _advance_to_substantive_start(sentences, sentences[i])
+        if st < lo:
+            break
+        if st <= start_ms:
+            wi = _word_index_at_ms(words, st, "start")
+            if wi >= 0:
+                return int(words[wi]["s"] * 1000)
+            return st
+    return None
+
+
+def _find_sentence_start_forward(
+    words: list[dict],
+    sentences: list[Sentence],
+    start_ms: int,
+    *,
+    cap_ms: int,
+    max_shift_ms: int,
+) -> int | None:
+    """Move start later to the next sentence start (up to ``max_shift_ms``)."""
+    hi = min(cap_ms, start_ms + max_shift_ms)
+    s = _sentence_at_ms(sentences, start_ms)
+    if s is None:
+        return None
+    idx = _sentence_list_index(sentences, s)
+    for i in range(idx, len(sentences)):
+        st = _advance_to_substantive_start(sentences, sentences[i])
+        if st > hi:
+            break
+        if st >= start_ms:
+            wi = _word_index_at_ms(words, st, "start")
+            if wi >= 0:
+                return int(words[wi]["s"] * 1000)
+            return st
+    return None
+
+
+def _start_in_dead_air_before_substantive(
+    words: list[dict], sentences: list[Sentence], start_ms: int
+) -> bool:
+    """True when start sits in silence before the next sentence (FIX1 dead-air rule applies)."""
+    s = _sentence_at_ms(sentences, start_ms)
+    if s is None:
+        return False
+    if start_ms <= s.end_ms:
+        return False
+    sub = _advance_to_substantive_start(sentences, s)
+    for nx in sentences:
+        if nx.start_ms > s.end_ms:
+            sub = _advance_to_substantive_start(sentences, nx)
+            break
+    return start_ms < sub - 80
+
+
+def _apply_transcript_final_check(
+    clip: dict[str, Any],
+    words: list[dict],
+    sentences: list[Sentence],
+    start_ms: int,
+    end_ms: int,
+    *,
+    range_start_ms: int,
+    range_end_ms: int,
+    length_limit_ms: int,
+    substantive_wi: int,
+    picked_start_ms: int,
+    picked_end_ms: int,
+) -> tuple[int, int]:
+    """FIX3: last pass — transcript + video bounds must agree on sentence-complete edges."""
+    try:
+        from clips_worker.picker.decision_trace import trace_step
+    except Exception:
+
+        def trace_step(*_a, **_k):  # type: ignore[misc]
+            return None
+
+    if not words:
+        return start_ms, end_ms
+
+    pad_start_ms = int(PAD_START_S * 1000)
+    pad_end_ms = int(PAD_END_S * 1000)
+    max_shift = int(MAX_SENTENCE_COMPLETE_EXTEND_S * 1000)
+    end_cap = min(length_limit_ms, range_end_ms, picked_end_ms + max_shift)
+
+    # Anchor on the video/LLM pick end, not an earlier snap that pulled back to a prior sentence.
+    anchor_end = max(end_ms, picked_end_ms)
+    pick_we = _word_index_at_picked_end(words, picked_end_ms)
+    we = pick_we
+    end_ms = anchor_end
+    last_final = _sentence_final_word_index_at_or_before(words, we)
+    pick_end_incomplete = not _is_sentence_final_word(words, we)
+
+    if pick_end_incomplete:
+        fwd_cap = min(end_cap, int(picked_end_ms + SENTENCE_EXTEND_MAX_S * 1000))
+        sent = _sentence_at_ms(sentences, int(words[we]["s"] * 1000))
+        sent_first_wi = (
+            _word_index_at_ms(words, _advance_to_substantive_start(sentences, sent), "start") if sent is not None else -1
+        )
+        hold_continue = False
+        if last_final >= 0 and last_final < we and sent_first_wi >= 0 and we == sent_first_wi:
+            gap_new = float(words[we]["s"]) - float(words[last_final]["e"])
+            tok = _norm_token(words[sent_first_wi]["w"])
+            hold_continue = gap_new < GAP_SENTENCE_END_S and tok not in {"i", "a", "the"}
+
+        use_forward = True
+        if last_final >= 0 and last_final < we and not _is_sentence_final_word(words, we):
+            if sent_first_wi >= 0 and we > sent_first_wi:
+                use_forward = False
+            elif not hold_continue:
+                use_forward = False
+
+        fwd = None
+        if use_forward:
+            fwd = _find_sentence_end_forward(words, we, from_ms=end_ms, cap_ms=fwd_cap)
+        if fwd is not None:
+            we, end_ms = fwd
+            end_ms = _sentence_final_end_ms(words, we, range_end_ms, pad_end_ms)
+            trace_step(
+                clip,
+                "transcript_end_forward",
+                reason="video_end_mid_sentence",
+                afterEnd=end_ms,
+                lastWord=words[we]["w"],
+            )
+        else:
+            back = _find_sentence_end_backward(
+                words,
+                we,
+                floor_ms=range_start_ms,
+            )
+            if back is not None:
+                we, end_ms = back
+                end_ms = _sentence_final_end_ms(words, we, range_end_ms, pad_end_ms)
+                trace_step(
+                    clip,
+                    "transcript_end_backward",
+                    reason="video_end_mid_sentence_no_forward_room",
+                    afterEnd=end_ms,
+                    lastWord=words[we]["w"],
+                )
+
+    if not _start_in_dead_air_before_substantive(words, sentences, picked_start_ms) and not _start_is_transcript_sentence_start(
+        words, sentences, start_ms
+    ):
+        new_start = _find_sentence_start_backward(
+            words,
+            sentences,
+            start_ms,
+            floor_ms=range_start_ms,
+            max_shift_ms=max_shift,
+        )
+        if new_start is not None and new_start < start_ms:
+            start_ms = new_start
+            substantive_wi = _word_index_at_ms(words, start_ms, "start")
+            trace_step(
+                clip,
+                "transcript_start_backward",
+                reason="video_start_mid_sentence",
+                afterStart=start_ms,
+            )
+        else:
+            new_start = _find_sentence_start_forward(
+                words,
+                sentences,
+                start_ms,
+                cap_ms=min(length_limit_ms, range_end_ms),
+                max_shift_ms=max_shift,
+            )
+            if new_start is not None:
+                start_ms = new_start
+                substantive_wi = _word_index_at_ms(words, start_ms, "start")
+                trace_step(
+                    clip,
+                    "transcript_start_forward",
+                    reason="video_start_mid_sentence",
+                    afterStart=start_ms,
+                )
+
+    start_ms = _align_start_to_sentence_start(words, sentences, start_ms, range_start_ms)
+    wi = substantive_wi if 0 <= substantive_wi < len(words) else _word_index_at_ms(words, start_ms, "start")
+    if wi >= 0:
+        start_ms = _preroll_start_ms(words, wi, range_start_ms, pad_start_ms)
+    end_ms = _sentence_final_end_ms(words, we, range_end_ms, pad_end_ms)
+    start_ms, end_ms = _snap_ms_out_of_words(words, start_ms, end_ms, range_start_ms, range_end_ms)
+
+    if not _clip_end_is_complete(words, end_ms):
+        trace_step(clip, "transcript_end_still_incomplete", reason="limits_blocked", afterEnd=end_ms)
+    return start_ms, end_ms
+
+
+def _extend_end_to_complete_sentence(
+    words: list[dict],
+    we: int,
+    end_ms: int,
+    *,
+    limit_ms: int,
+    range_end_ms: int,
+    max_extend_s: float = MAX_SENTENCE_COMPLETE_EXTEND_S,
+) -> tuple[int, int]:
+    """Walk forward up to ``max_extend_s`` until the clip ends on a complete sentence."""
+    if not words:
+        return we, end_ms
+    extend_cap = min(limit_ms, range_end_ms, end_ms + int(max_extend_s * 1000))
+    we0, end0 = we, end_ms
+    for j in range(we, len(words)):
+        if int(words[j]["e"] * 1000) > extend_cap:
+            break
+        we = j
+        end_ms = int(words[we]["e"] * 1000)
+        if _is_sentence_final_word(words, we):
+            break
+        if we + 1 < len(words) and words[we + 1]["s"] - words[we]["e"] >= SENTENCE_END_PAUSE_S:
+            break
+    if not _clip_end_is_complete(words, end_ms) and we0 == we and end0 == end_ms:
+        return we, end_ms
+    return we, end_ms
+
+
+def _align_start_to_sentence_start(
+    words: list[dict],
+    sentences: list[Sentence],
+    start_ms: int,
+    range_start_ms: int,
+) -> int:
+    """Start at the first substantive word of the sentence containing (or following) the pick."""
+    s = _sentence_at_ms(sentences, start_ms)
+    if s is None:
+        return start_ms
+    start_ms = _advance_to_substantive_start(sentences, s)
+    wi = _word_index_at_ms(words, start_ms, "start")
+    if 0 <= wi < len(words):
+        return int(words[wi]["s"] * 1000)
+    return max(range_start_ms, start_ms)
+
+
 def _snap_ms_out_of_words(
     words: list[dict], start_ms: int, end_ms: int, range_start_ms: int, range_end_ms: int
 ) -> tuple[int, int]:
@@ -378,11 +738,18 @@ def snap_bounds(
     if we < len(words) and not _is_sentence_final_word(words, we):
         if we + 1 < len(words) and words[we + 1]["s"] - words[we]["e"] >= GAP_SENTENCE_END_S:
             we = last_final
-    if _is_sentence_final_word(words, we):
+    # FIX3: if the pick extends past a completed sentence into a new fragment, do not pull back yet —
+    # transcript final check will extend forward from the pick anchor.
+    pick_we = _last_word_index_at_or_before(words, picked_end_ms)
+    if pick_we > last_final and int(words[pick_we]["s"] * 1000) >= int(words[last_final]["e"] * 1000):
+        we = pick_we
+        end_ms = max(int(end_ms), int(words[we]["e"] * 1000), int(picked_end_ms))
+    elif _is_sentence_final_word(words, we):
         end_ms = int(words[we]["e"] * 1000)
     elif _new_incomplete_sentence_after(words, we, last_final):
-        we = last_final
-        end_ms = int(words[we]["e"] * 1000)
+        if not (pick_we > last_final and int(words[pick_we]["s"] * 1000) >= int(words[last_final]["e"] * 1000)):
+            we = last_final
+            end_ms = int(words[we]["e"] * 1000)
     else:
         extend_limit = int(picked_end_ms + SENTENCE_EXTEND_MAX_S * 1000)
         extend_limit = min(extend_limit, length_limit, range_end_ms)
@@ -437,23 +804,68 @@ def snap_bounds(
 
             clipfind_fallback("snap_reaction_tail", type(exc).__name__, exc=exc)
 
-    start_ms, end_ms = _snap_ms_out_of_words(words, start_ms, end_ms, range_start_ms, range_end_ms)
+    length_limit = _length_limit_ms(clip, range_end_ms)
+    start_ms, end_ms = _apply_transcript_final_check(
+        clip,
+        words,
+        sentences,
+        start_ms,
+        end_ms,
+        range_start_ms=range_start_ms,
+        range_end_ms=range_end_ms,
+        length_limit_ms=length_limit,
+        substantive_wi=substantive_wi,
+        picked_start_ms=before[0],
+        picked_end_ms=picked_end_ms,
+    )
     clip["start_ms"] = start_ms
     clip["end_ms"] = end_ms
 
-    overlap = _span_overlap_ratio(start_ms, end_ms, before[0], before[1])
-    if overlap < SNAP_MIN_OVERLAP_RATIO or (end_ms - start_ms) < SNAP_MIN_SPAN_MS:
-        clip["start_ms"], clip["end_ms"] = _snap_ms_out_of_words(
-            words, int(before[0]), int(before[1]), range_start_ms, range_end_ms
+    try:
+        from clips_worker.picker.decision_trace import trace_step
+
+        trace_step(
+            clip,
+            "snap_bounds",
+            beforeStart=before[0],
+            beforeEnd=before[1],
+            afterStart=start_ms,
+            afterEnd=end_ms,
         )
+    except Exception:
+        pass
+
+    overlap = _span_overlap_ratio(start_ms, end_ms, before[0], before[1])
+    span_short = (end_ms - start_ms) < SNAP_MIN_SPAN_MS
+    incomplete = not _clip_end_is_complete(words, end_ms)
+    if overlap < SNAP_MIN_OVERLAP_RATIO or incomplete:
+        rs, re = int(before[0]), int(before[1])
+        wi_r = _word_index_at_ms(words, rs, "start", window_lo_ms=max(range_start_ms, rs - SNAP_WORD_WINDOW_MS))
+        we_r = _word_index_at_ms(words, re, "end", window_hi_ms=min(range_end_ms, re + SNAP_WORD_WINDOW_MS))
+        if wi_r >= 0 and we_r >= 0:
+            rs, re = _apply_transcript_final_check(
+                clip,
+                words,
+                sentences,
+                rs,
+                re,
+                range_start_ms=range_start_ms,
+                range_end_ms=range_end_ms,
+                length_limit_ms=length_limit,
+                substantive_wi=wi_r,
+                picked_start_ms=before[0],
+                picked_end_ms=before[1],
+            )
+            clip["start_ms"], clip["end_ms"] = rs, re
         picker_info(
             "snap_reverted",
-            reason="low_overlap_or_short",
+            reason="low_overlap_or_incomplete",
             before_start=before[0],
             before_end=before[1],
-            after_start=start_ms,
-            after_end=end_ms,
+            after_start=clip["start_ms"],
+            after_end=clip["end_ms"],
             overlap=round(overlap, 3),
+            span_short=span_short,
         )
         return clip
 

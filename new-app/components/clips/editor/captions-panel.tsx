@@ -698,6 +698,7 @@ export function CaptionsPanel({
         Size ({cap.size ?? preset.sizePct}% of video height)
       </label>
       <Slider
+        className="w-full min-w-[140px]"
         min={3}
         max={10}
         step={0.5}

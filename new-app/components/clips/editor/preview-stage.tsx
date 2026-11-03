@@ -10,7 +10,11 @@ import { normalizeEditSpeed, orderedKeepSegments } from '@/lib/clips/edits'
 import { fitBlurCssFilter, fitBlurStrength } from '@/lib/clips/fit-blur'
 import { resolveCanvasBg } from '@/lib/clips/canvas-bg'
 import { CanvasBgFill } from '@/components/clips/editor/canvas-bg-fill'
-import { editorPreviewCaptionClipWords, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
+import {
+  applyWordFixesToPreviewClipWords,
+  editorPreviewCaptionClipWords,
+  editorPreviewEdits,
+} from '@/lib/clips/editor-preview-edits'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import { editorTemplateSegmentIndex, editorTemplateSpec } from '@/lib/clips/templates/editor-spec'
@@ -45,7 +49,7 @@ import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTim
 import { InsertPlayback } from '@/components/clips/editor/insert-playback'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
-import { coverBoxStyle, stackPanelStyles } from '@/lib/clips/facecam-geometry'
+import { coverBoxStyle, stackHeights, stackPanelStyles } from '@/lib/clips/facecam-geometry'
 import { hookTextDuplicatesCaptions } from '@/lib/clips/hook-duplicate'
 import { fitTopHeadlineLines } from '@/lib/clips/fit-top-headline-lines'
 import { overlayLayout } from '@/lib/clips/stream-overlay-layout'
@@ -1074,13 +1078,17 @@ export function PreviewStage({
     !cropPreview &&
     !letterboxPreview
   const captionWords = useMemo(() => {
+    const capEdits = lookEdits as ClipEditsV2
     // G3a: manual caption lines win over any preview word list (export: edits_render burn_words).
-    if (previewWords?.length && !edits.captionLines?.length) return previewWords.map((w) => ({
-      ...w,
-      w: typeof w.w === 'string' ? w.w : String(w.w ?? ''),
-    }))
-    return editorPreviewCaptionClipWords(words, edits)
-  }, [previewWords, words, edits])
+    if (previewWords?.length && !capEdits.captionLines?.length) {
+      const normalized = previewWords.map((w) => ({
+        ...w,
+        w: typeof w.w === 'string' ? w.w : String(w.w ?? ''),
+      }))
+      return applyWordFixesToPreviewClipWords(normalized, capEdits)
+    }
+    return editorPreviewCaptionClipWords(words, capEdits)
+  }, [previewWords, words, lookEdits])
   // E6: same rule as the export (worker hook_duplicate.py) — a hook that is the opening spoken
   // line is not drawn over captions showing those words.
   const hookDupesCaptions =
@@ -1472,20 +1480,24 @@ export function PreviewStage({
             const split = edits.layout.facecam?.split ?? 0.4
             const position = edits.layout.facecam?.position ?? 'top'
             const { faceFrac, gameFrac, faceFirst } = stackPanelStyles(split, position)
+            const { faceH, gameH } = stackHeights(split)
             const gameBox = facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 }
             const panels = faceFirst
               ? [
-                  { box: facecamBox, h: `${faceFrac * 100}%` },
-                  { box: gameBox, h: `${gameFrac * 100}%` },
+                  { box: facecamBox, fr: faceH },
+                  { box: gameBox, fr: gameH },
                 ]
               : [
-                  { box: gameBox, h: `${gameFrac * 100}%` },
-                  { box: facecamBox, h: `${faceFrac * 100}%` },
+                  { box: gameBox, fr: gameH },
+                  { box: facecamBox, fr: faceH },
                 ]
             const stackBody = (
-              <div className="flex size-full flex-col overflow-hidden">
+              <div
+                className="grid size-full overflow-hidden"
+                style={{ gridTemplateRows: panels.map((p) => `${p.fr}fr`).join(' ') }}
+              >
                 {panels.map((panel, idx) => (
-                  <div key={idx} className="relative w-full overflow-hidden" style={{ height: panel.h }}>
+                  <div key={idx} className="relative min-h-0 w-full overflow-hidden">
                     <video
                       key={`stack-${idx}-${layoutMode}`}
                       ref={idx === (faceFirst ? 1 : 0) ? videoRefInner : undefined}
@@ -1913,6 +1925,7 @@ export function PreviewStage({
             currentTimeSec={captionTimeSec}
             edits={edits as ClipEditsV2}
             boxHeightPx={box.h}
+            outputMs={Math.round(captionTimeSec * 1000)}
             outputDurationSec={outputDurationFromEdits(previewEdits) / 1000}
             templateCaptionRect={
               templatePreview?.captionRect

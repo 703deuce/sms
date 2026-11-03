@@ -26,4 +26,24 @@ describe('CaptionOverlay word fix preview', () => {
     expect(line?.textContent).toContain('Cracked.')
     expect(line?.textContent).not.toMatch(/\bcracked\./)
   })
+
+  it('renders word-fix replacement text (bro → though)', () => {
+    const edits = normalizeEdits(
+      {
+        ...defaultEdits(bounds),
+        captions: { enabled: true, presetId: 'bold_pop', animation: 'none', position: 'bottom', size: 6.5, wordsPerLine: 4 },
+        wordFixes: { '2': 'though' },
+        wordFixMeta: { '2': { s: 1000, w: 'bro' } },
+      },
+      bounds,
+    )
+    const source = [{ w: 'bro', s: 1, e: 1.35, i: 2 }]
+    const words = editorPreviewCaptionClipWords(source, edits)
+    const { container } = render(
+      <CaptionOverlay words={words} currentTimeSec={1.1} edits={edits} boxHeightPx={640} outputDurationSec={30} />,
+    )
+    const line = container.querySelector('[data-testid="caption-line"]')
+    expect(line?.textContent).toMatch(/though/i)
+    expect(line?.textContent).not.toMatch(/\bbro\b/i)
+  })
 })

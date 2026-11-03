@@ -2,7 +2,7 @@ import type { CaptionSourceWord } from '@/lib/clips/caption-words'
 import { buildCaptionWords, captionWordsToClipWords, wordMidMs } from '@/lib/clips/caption-words'
 import { captionLineClipWords } from '@/lib/clips/editor/caption-lines'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
-import { normalizeSectionOrder, outputDurationMs } from '@/lib/clips/edits'
+import { normalizeSectionOrder, outputDurationMs, resolveWordFixText } from '@/lib/clips/edits'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { reversePieces } from '@/lib/clips/editor/video-reverse'
 import { applyLoopFriendlyTrimToEdits } from '@/lib/clips/loop-friendly-trim'
@@ -49,4 +49,15 @@ export function editorPreviewCaptionClipWords(
   // G3a: manual caption lines replace the transcript words in the captions (export: edits_render).
   if (previewEdits.captionLines?.length) return captionLineClipWords(previewEdits.captionLines)
   return captionWordsToClipWords(buildCaptionWords(filtered, previewEdits))
+}
+
+/** Dub / alternate word lists still honor transcript wordFixes + wordFixMeta (preview + export parity). */
+export function applyWordFixesToPreviewClipWords(words: ClipWord[], edits: ClipEditsV2): ClipWord[] {
+  const fixes = edits.wordFixes ?? {}
+  const fixMeta = edits.wordFixMeta
+  if (!Object.keys(fixes).length) return words
+  return words.map((w) => ({
+    ...w,
+    w: resolveWordFixText(w, fixes, fixMeta),
+  }))
 }

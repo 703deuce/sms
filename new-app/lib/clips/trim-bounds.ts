@@ -1,9 +1,15 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 
-/** Match worker `MAX_TRIM_EXTEND_MS` — export may include extra source beyond AI clip bounds. */
+/** Match worker legacy 8s cap (tests); editor/export use asymmetric pads below. */
 export const MAX_TRIM_EXTEND_MS = 8000
 export const SHOW_SURROUNDING_CONTEXT_MS = 60_000
 export const MAX_EDITOR_WORDS_CONTEXT_MS = 120_000
+
+/** FIX1/3: Opus-style padding around the AI clip window. */
+export const EDITOR_PAD_BEFORE_MS = 90_000
+export const EDITOR_PAD_AFTER_MS = 60_000
+export const MAX_TRIM_EXTEND_BEFORE_MS = EDITOR_PAD_BEFORE_MS
+export const MAX_TRIM_EXTEND_AFTER_MS = EDITOR_PAD_AFTER_MS
 
 export function extendedTrimLimits(
   clipStartMs: number,
@@ -14,12 +20,12 @@ export function extendedTrimLimits(
     return { minInMs: limits.minMs, maxOutMs: limits.maxMs }
   }
   return {
-    minInMs: Math.max(0, clipStartMs - MAX_TRIM_EXTEND_MS),
-    maxOutMs: clipEndMs + MAX_TRIM_EXTEND_MS,
+    minInMs: Math.max(0, clipStartMs - MAX_TRIM_EXTEND_BEFORE_MS),
+    maxOutMs: clipEndMs + MAX_TRIM_EXTEND_AFTER_MS,
   }
 }
 
-/** Clamp editor trim handles to the 8s extend window on each side of the AI clip. */
+/** Clamp editor trim handles to the extend window on each side of the AI clip. */
 export function clampTrimToExtendedBounds(
   clipStartMs: number,
   clipEndMs: number,
@@ -63,10 +69,6 @@ export function clampTrimWithMediaBounds(
   }
   return next
 }
-
-/** FIX1 (E.2): Opus-style editor window around the clip (the timeline never spans the whole source). */
-export const EDITOR_PAD_BEFORE_MS = 90_000
-export const EDITOR_PAD_AFTER_MS = 60_000
 
 export function editorWindowMs(
   mediaMin: number | undefined,

@@ -364,38 +364,39 @@ export function FacecamLayoutStudio({
               />
             </div>
           ) : videoUrl && stackPreview ? (
-            <>
-              <div
-                className="absolute inset-x-0 overflow-hidden"
-                style={{ top: 0, height: `${stackPreview.faceFrac * 100}%` }}
-              >
-                <video
-                  {...corsMediaProps(videoUrl)}
-              src={videoUrl}
-                  className="h-full w-full"
-                  style={coverBoxStyle(faceBox)}
-                  muted
-                  playsInline
-                  preload="auto"
-                  onLoadedMetadata={(e) => seekVideoToClip(e, sourceTimeSec)}
-                />
-              </div>
-              <div
-                className="absolute inset-x-0 overflow-hidden"
-                style={{ bottom: 0, height: `${stackPreview.gameFrac * 100}%` }}
-              >
-                <video
-                  {...corsMediaProps(videoUrl)}
-              src={videoUrl}
-                  className="h-full w-full"
-                  style={coverBoxStyle(gameBox)}
-                  muted
-                  playsInline
-                  preload="auto"
-                  onLoadedMetadata={(e) => seekVideoToClip(e, sourceTimeSec)}
-                />
-              </div>
-            </>
+            (() => {
+              const { faceH, gameH } = stackHeights(split)
+              const rows = stackPreview.faceFirst
+                ? [
+                    { box: faceBox, fr: faceH },
+                    { box: gameBox, fr: gameH },
+                  ]
+                : [
+                    { box: gameBox, fr: gameH },
+                    { box: faceBox, fr: faceH },
+                  ]
+              return (
+                <div
+                  className="absolute inset-0 grid overflow-hidden"
+                  style={{ gridTemplateRows: rows.map((r) => `${r.fr}fr`).join(' ') }}
+                >
+                  {rows.map((row, idx) => (
+                    <div key={idx} className="relative min-h-0 overflow-hidden">
+                      <video
+                        {...corsMediaProps(videoUrl)}
+                        src={videoUrl}
+                        className="h-full w-full"
+                        style={coverBoxStyle(row.box)}
+                        muted
+                        playsInline
+                        preload="auto"
+                        onLoadedMetadata={(e) => seekVideoToClip(e, sourceTimeSec)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )
+            })()
           ) : videoUrl ? (
             <video
               {...corsMediaProps(videoUrl)}

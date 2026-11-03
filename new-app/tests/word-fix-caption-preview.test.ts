@@ -48,6 +48,31 @@ describe('word fix caption preview', () => {
     expect(scripts.captions).toContain('Cracked.')
   })
 
+  it('word text fix updates rendered preview caption words (bro → though)', () => {
+    const edits = normalizeEdits(
+      {
+        ...defaultEdits(bounds),
+        captions: { enabled: true, presetId: 'bold_pop', animation: 'pop', position: 'bottom', size: 6.5 },
+        wordFixes: { '7': 'though' },
+        wordFixMeta: { '7': { s: 1000, w: 'bro' } },
+      },
+      bounds,
+    )
+    const words = [{ w: 'bro', s: 1, e: 1.35, i: 7 }]
+    const preview = editorPreviewCaptionClipWords(words, edits)
+    expect(preview.map((w) => w.w)).toContain('though')
+    expect(preview.map((w) => w.w)).not.toContain('bro')
+    const scripts = buildPreviewScripts({
+      edits: edits as unknown as Record<string, unknown>,
+      words: preview,
+      playW: 1080,
+      playH: 1920,
+      durationMs: 10_000,
+    })
+    expect(scripts.captions).toMatch(/though/i)
+    expect(scripts.captions).not.toMatch(/\bbro\b/i)
+  })
+
   it('setWordFix uses a single pass-labeled undo step', () => {
     const base = normalizeEdits(defaultEdits(bounds), bounds)
     let state = {

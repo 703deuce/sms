@@ -200,6 +200,15 @@ def finalize_picks(
             lo, hi = float(laugh_tail[0]), float(laugh_tail[1])
             end_ms += int(((lo + hi) / 2) * 1000)
         pick = {**pick_row, "start_ms": start_ms, "end_ms": end_ms}
+        from clips_worker.picker.decision_trace import finalize_trace, init_pick_trace
+
+        init_pick_trace(
+            pick,
+            reason=str(pick.get("reason") or pick.get("hook") or ""),
+            raw_start_ms=int(start_ms),
+            raw_end_ms=int(end_ms),
+            score=pick.get("final", pick.get("score")),
+        )
         if visual_moments:
             gs = _gemini_score_for_pick(pick, visual_moments, range_start_ms)
             if gs is not None and pick.get("gemini_score") is None:
@@ -245,6 +254,7 @@ def finalize_picks(
 
             clipfind_fallback("finalize_refine", type(exc).__name__, exc=exc)
         snap_bounds(pick, words, sentences, range_start_ms, range_end_ms)
+        finalize_trace(pick)
         extend_pick_to_min_duration(
             pick,
             sentences,

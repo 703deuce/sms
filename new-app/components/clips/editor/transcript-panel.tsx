@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Scissors, Search, Undo2, User, EyeOff, RotateCcw } from 'lucide-react'
+import { Scissors, Search, Undo2, User, EyeOff, RotateCcw, Pencil } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -93,7 +93,7 @@ export function TranscriptPanel({
   edits: ClipEditsV2
   onSeek: (sourceMs: number) => void
   onAddCut: (range: [number, number]) => void
-  onWordFix: (index: number, text: string) => void
+  onWordFix: (index: number, text: string, meta?: { s: number; w: string }) => void
   onRestoreWord: (word: SourceWord) => void
   onExtendTrim: (sourceMs: number) => void
   onToggleEmphasis?: (wordIndex: number) => void
@@ -370,6 +370,46 @@ export function TranscriptPanel({
     return endMs >= edits.trim.in && startMs <= edits.trim.out
   }
 
+  const wordFixMetaFor = (w: SourceWord) => ({ s: Math.round(w.s * 1000), w: w.w })
+
+  const commitWordFix = (w: SourceWord, text: string) => {
+    onWordFix(w.i, text, wordFixMetaFor(w))
+  }
+
+  const beginWordEdit = (w: SourceWord) => {
+    if (mutedWordForEdit(w)) return
+    wordFixCommittedRef.current = false
+    setEditingI(w.i)
+  }
+
+  const mutedWordForEdit = (w: SourceWord) => {
+    const { midMs } = wordSourceMs(w)
+    const muted = !inTrim(w)
+    const surrounding = showSurrounding && muted && !isWordCut(w, edits.cutRanges)
+    return surrounding || (muted && !showSurrounding)
+  }
+
+  useEffect(() => {
+    if (!panelActive || editingI != null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+      const t = e.target as HTMLElement
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
+      if (selStart === null || selEnd === null) return
+      const lo = Math.min(selStart, selEnd)
+      const hi = Math.max(selStart, selEnd)
+      const picked = visible.filter((w) => {
+        const { startMs, endMs } = wordSourceMs(w)
+        return startMs >= lo && endMs <= hi && inTrim(w) && !isWordCut(w, edits.cutRanges)
+      })
+      if (picked.length !== 1) return
+      e.preventDefault()
+      beginWordEdit(picked[0]!)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [panelActive, editingI, selStart, selEnd, visible, edits.cutRanges, edits.trim.in, edits.trim.out, showSurrounding])
+
   const surroundingRunRestoreMs = useMemo(() => {
     const edges = new Map<number, number>()
     if (!showSurrounding) return edges
@@ -441,7 +481,7 @@ export function TranscriptPanel({
     const { startMs, endMs, midMs } = wordSourceMs(w)
     const cutRange = wordCutRange(w)
     const cut = Boolean(cutRange) || isWordCut(w, edits.cutRanges)
-    const display = wordDisplayText(w, edits.wordFixes)
+    const display = wordDisplayText(w, edits.wordFixes, edits.wordFixMeta)
     const ignored = isWordIgnored(w.i, edits.wordFixes)
     const active = activeI === w.i
     const isFiller = FILLER_RE.test(display.trim())
@@ -466,7 +506,7 @@ export function TranscriptPanel({
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 wordFixCommittedRef.current = true
-                onWordFix(w.i, e.currentTarget.value)
+                commitWordFix(w, e.currentTarget.value)
                 setEditingI(null)
               }
               if (e.key === 'Escape') setEditingI(null)
@@ -477,7 +517,7 @@ export function TranscriptPanel({
                 setEditingI(null)
                 return
               }
-              onWordFix(w.i, e.target.value)
+              commitWordFix(w, e.target.value)
               setEditingI(null)
             }}
           />
@@ -498,7 +538,7 @@ export function TranscriptPanel({
           data-ignored={ignored && !cut ? '1' : undefined}
           data-surrounding={surrounding ? '1' : undefined}
           data-highlight={pickHighlight ? '1' : undefined}
-          className={`rounded px-0.5 transition hover:bg-accent cursor-text ${
+          className={`rounded px-1 py-0.5 transition hover:bg-accent cursor-text min-h-7 inline-flex items-center ${
             active ? 'bg-[#FFD400]/35' : ''
           } ${
             cut
@@ -510,6 +550,7 @@ export function TranscriptPanel({
             edits.captions?.emphasis?.includes(w.i) ? 'underline decoration-dotted decoration-lane-ai' : ''
           }`}
           onClick={(e) => {
+            if (e.detail > 1) return
             if (surrounding) {
               onExtendTrim(Math.round(midMs))
               return
@@ -518,7 +559,7 @@ export function TranscriptPanel({
               if (window.confirm('Extend clip to here?')) onExtendTrim(Math.round(midMs))
               return
             }
-            if (edits.captions?.keywordHighlight && onToggleEmphasis) {
+            if (e.altKey && edits.captions?.keywordHighlight && onToggleEmphasis) {
               onToggleEmphasis(w.i)
             }
             if (e.shiftKey && selStart !== null) {
@@ -534,13 +575,13 @@ export function TranscriptPanel({
           }}
           onDoubleClick={(e) => {
             e.preventDefault()
-            if (muted) return
+            e.stopPropagation()
+            if (mutedWordForEdit(w)) return
             if (ignored) {
-              onWordFix(w.i, '')
+              commitWordFix(w, '')
               return
             }
-            setEditingI(w.i)
-            wordFixCommittedRef.current = false
+            beginWordEdit(w)
           }}
         >
           {ignored ? (
@@ -551,6 +592,20 @@ export function TranscriptPanel({
             display
           )}
         </button>
+        {selected && !cut && !muted && !surrounding ? (
+          <button
+            type="button"
+            className="ml-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-accent"
+            title="Edit word (Enter)"
+            aria-label="Edit word"
+            onClick={(e) => {
+              e.stopPropagation()
+              beginWordEdit(w)
+            }}
+          >
+            <Pencil className="h-3 w-3 text-muted-foreground" />
+          </button>
+        ) : null}
         {cut ? (
           <button
             type="button"

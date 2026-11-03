@@ -1,7 +1,8 @@
 """Allow export trim to extend slightly beyond the AI clip window on the source timeline."""
 from __future__ import annotations
 
-MAX_TRIM_EXTEND_MS = 8000
+MAX_TRIM_EXTEND_BEFORE_MS = 90_000
+MAX_TRIM_EXTEND_AFTER_MS = 60_000
 
 
 def export_trim_limits_ms(
@@ -18,7 +19,7 @@ def export_trim_limits_ms(
     if "_composite" in preview or preview.endswith("/composite.mp4"):
         return clip_start_ms, clip_end_ms
     if source_reason == "upload":
-        hi = upload_duration_ms if upload_duration_ms and upload_duration_ms > 0 else clip_end_ms + MAX_TRIM_EXTEND_MS
+        hi = upload_duration_ms if upload_duration_ms and upload_duration_ms > 0 else clip_end_ms + MAX_TRIM_EXTEND_AFTER_MS
         return 0, hi
     if source_reason in ("sourceSegKey", "canonical_source_seg"):
         return int(ctx.get("sourceSegStartMs") or clip_start_ms), int(ctx.get("sourceSegEndMs") or clip_end_ms)
@@ -38,8 +39,8 @@ def expanded_source_cut_ms(
     if limits is not None:
         lo_ms, hi_ms = int(limits[0]), int(limits[1])
     else:
-        lo_ms = max(0, clip_start_ms - MAX_TRIM_EXTEND_MS)
-        hi_ms = clip_end_ms + MAX_TRIM_EXTEND_MS
+        lo_ms = max(0, clip_start_ms - MAX_TRIM_EXTEND_BEFORE_MS)
+        hi_ms = clip_end_ms + MAX_TRIM_EXTEND_AFTER_MS
     cut_start = max(lo_ms, min(clip_start_ms, tin))
     cut_end = min(hi_ms, max(clip_end_ms, tout))
     if cut_end <= cut_start:

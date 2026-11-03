@@ -6,7 +6,7 @@ import { Fragment, useMemo, useRef, useEffect } from 'react'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { wordDisplayText, wordKey } from '@/lib/clips/edits'
 import { activeCaptionWordIndex, captionEmojiForWord, previewCaptionWordIndex } from '@/lib/clips/caption-overlay-active'
-import { logEditorDecision } from '@/lib/clips/editor-decision-log'
+import { captionMotionAt } from '@/lib/clips/editor/caption-keyframes'
 import { resolveCaptionPreset, type CaptionPreset } from '@/lib/clips/caption-presets'
 import { effectiveCaptionEdits, resolveT6CaptionPreset } from '@/lib/clips/caption-v2-bridge'
 import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
@@ -52,12 +52,14 @@ export function CaptionOverlay({
   outputDurationSec = 1,
   templateCaptionRect,
   staticPreview = false,
+  outputMs,
 }: {
   words: ClipWord[]
   currentTimeSec: number
   edits: ClipEditsV2
   boxHeightPx: number
   outputDurationSec?: number
+  outputMs?: number
   /**
    * E4fix: T6 template mode — the export bottom-anchors captions at the template captionRect
    * (worker `_t6_caption_edits`: \an2, MarginV = playH − (y + h)), ignoring the preset position.
@@ -95,6 +97,8 @@ export function CaptionOverlay({
   const assScale = boxHeightPx > 0 ? boxHeightPx / exportPlayH : 1
   const emRatio = assEmPerFontsize(fitCfg.font)
   const fontSize = Math.max(12, ((boxHeightPx * fitCfg.fontsize) / fitCfg.refH) * emRatio)
+  const motion = outputMs != null ? captionMotionAt(edits, outputMs) : { xPct: 0, yPct: 0, scalePct: 100 }
+  const motionScale = Math.max(0.5, Math.min(2, motion.scalePct / 100))
   const colors = cap.colors
   const emphasis = new Set(cap.emphasis ?? [])
 
@@ -216,6 +220,8 @@ export function CaptionOverlay({
         fontWeight: captionFontWeight(captionFont, preset.weight),
         maxWidth: `${captionSafeWidthPct(aspect)}%`,
         marginInline: 'auto',
+        transform: `translate(${motion.xPct}%, ${-motion.yPct}%) scale(${motionScale})`,
+        transformOrigin: '50% 100%',
         ...posStyle,
       }}
       data-testid="caption-line"
