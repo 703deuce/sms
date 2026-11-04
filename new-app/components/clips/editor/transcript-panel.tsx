@@ -72,6 +72,7 @@ function speakerOrder(visible: SourceWord[], shots: CropShot[]) {
 export function TranscriptPanel({
   words,
   wordsLoading = false,
+  wordsLoadingReason,
   shots,
   edits,
   onSeek,
@@ -116,6 +117,7 @@ export function TranscriptPanel({
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
+  wordsLoadingReason?: 'initial' | 'extended' | 'context' | 'reload' | null
   clipStartMs?: number
   clipEndMs?: number
   shots: CropShot[]
@@ -866,7 +868,7 @@ export function TranscriptPanel({
       aria-busy={wordsLoading}
     >
       {wordsLoading ? (
-        <p className="text-xs text-muted-foreground" role="status">Updating transcript for extended trim…</p>
+        <p className="text-xs text-muted-foreground" role="status">{wordsLoadingReason === 'extended' ? 'Updating transcript for extended trim…' : wordsLoadingReason === 'context' ? 'Loading surrounding transcript…' : 'Loading transcript…'}</p>
       ) : null}
       {compactToolbar ? (!documentView || documentFindOpen) && (
         <div className={cn("flex shrink-0 gap-2", documentView ? "flex-col" : "items-center")} data-testid="transcript-find-replace">
