@@ -299,7 +299,11 @@ export function TranscriptPanel({
   useEffect(() => {
     if (!findRequestSeq || (!panelActive && !documentView)) return
     if (documentView) setDocumentFindOpen(true)
-    // The compact document search is conditionally mounted, so focus after that render.
+  }, [findRequestSeq, panelActive, documentView])
+
+  useEffect(() => {
+    if ((!panelActive && !documentView) || (documentView && !documentFindOpen)) return
+    // The compact document search mounts only after its state becomes open.
     const frame = requestAnimationFrame(() => findInputRef.current?.focus())
     return () => cancelAnimationFrame(frame)
   }, [findRequestSeq, panelActive, documentView, documentFindOpen])
