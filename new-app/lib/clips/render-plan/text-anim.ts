@@ -5,8 +5,10 @@
  */
 import { pyRound } from '@/lib/clips/render-plan/py'
 
-export const TEXT_ANIM_IN_TYPES = ['fade', 'pop', 'zoom', 'slide_up', 'slide_down', 'slide_left', 'slide_right', 'typewriter'] as const
-export const TEXT_ANIM_BLOCK_ONLY = ['zoom', 'slide_up', 'slide_down', 'slide_left', 'slide_right'] as const
+export const TEXT_ANIM_IN_TYPES = ['fade', 'pop', 'zoom', 'slide_up', 'slide_down', 'slide_left', 'slide_right', 'typewriter', 'bounce_in', 'zoom_out'] as const
+export const TEXT_ANIM_BLOCK_ONLY = ['zoom', 'slide_up', 'slide_down', 'slide_left', 'slide_right', 'bounce_in', 'zoom_out'] as const
+/** EFFECTS1: text-only types (layers fall back to fade, same as py TEXT_ONLY). */
+export const TEXT_ONLY_ANIM: ReadonlySet<string> = new Set(['typewriter', 'bounce_in', 'zoom_out'])
 export const TEXT_ANIM_UNITS = ['block', 'line', 'word', 'char'] as const
 export const TEXT_ANIM_LOOP_TYPES = ['pulse', 'bounce', 'wiggle', 'flicker'] as const
 export type TextAnimType = (typeof TEXT_ANIM_IN_TYPES)[number]
@@ -54,7 +56,7 @@ export function normAnim(raw: unknown): TextAnim | null {
 }
 
 /** G3b: layers (B-roll / images / shapes / stickers / progress bars) take the block presets only. */
-export const LAYER_ANIM_TYPES = TEXT_ANIM_IN_TYPES.filter((t) => t !== 'typewriter')
+export const LAYER_ANIM_TYPES = TEXT_ANIM_IN_TYPES.filter((t) => !TEXT_ONLY_ANIM.has(t))
 
 /** G3b: in / out / loop for a non-text layer — whole-layer presets, typewriter → fade (py norm_layer_anim). */
 export function normLayerAnim(raw: unknown): TextAnim | null {
@@ -63,7 +65,7 @@ export function normLayerAnim(raw: unknown): TextAnim | null {
   const out: TextAnim = {}
   for (const edge of ['in', 'out'] as const) {
     const e = a[edge]
-    if (e) out[edge] = { type: e.type === 'typewriter' ? 'fade' : e.type, unit: 'block', durMs: e.durMs }
+    if (e) out[edge] = { type: TEXT_ONLY_ANIM.has(e.type) ? 'fade' : e.type, unit: 'block', durMs: e.durMs }
   }
   if (a.loop) out.loop = a.loop
   return Object.keys(out).length ? out : null
@@ -114,6 +116,10 @@ export function blockState(type: string, p0: number): Block {
       return { op: e, sc: 1.0, dx: (1.0 - e) * SLIDE_X_PCT, dy: 0.0 }
     case 'slide_right':
       return { op: e, sc: 1.0, dx: -(1.0 - e) * SLIDE_X_PCT, dy: 0.0 }
+    case 'bounce_in':
+      return { op: clamp01(p * 3.0), sc: 1.0, dx: 0.0, dy: (easeBack(p) - 1.0) * 12.0 }
+    case 'zoom_out':
+      return { op: e, sc: 1.6 - 0.6 * e, dx: 0.0, dy: 0.0 }
     default:
       return { op: 1.0, sc: 1.0, dx: 0.0, dy: 0.0 }
   }

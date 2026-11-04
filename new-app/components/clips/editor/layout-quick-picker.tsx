@@ -10,6 +10,11 @@ import {
   type LayoutOptionId,
 } from '@/lib/clips/layout-options'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
+import { isLandscapeAspect } from '@/lib/clips/export-aspect'
+
+/** EFFECTS1: on 16:9 the export renders only these layouts differently (worker landscape_layout). */
+const LANDSCAPE_ACTIVE = new Set<string>(['full_frame', 'center_crop'])
+const LANDSCAPE_HINT = 'Vertical layouts: on a 16:9 project this looks the same as Full frame. Change Aspect to 9:16 or 1:1 to use it.'
 
 export function LayoutQuickPicker({
   value,
@@ -28,13 +33,16 @@ export function LayoutQuickPicker({
 }) {
   const aiExtras = clipEditorAiExtrasEnabled()
   const ctx = { facecamLayout, reframeV2Enabled, aiExtras }
+  const landscape = isLandscapeAspect(edits.aspectRatio ?? '9:16')
+  const shown = landscape && !LANDSCAPE_ACTIVE.has(value) ? 'full_frame' : value
   return (
     <div className={className} data-testid="layout-quick-picker">
       <p className="mb-1.5 text-xs font-medium text-muted-foreground">Layout</p>
       <div className="flex flex-wrap gap-1.5">
         {EXPORT_LAYOUT_OPTIONS.map((opt) => {
-          const disabled = layoutOptionDisabled(opt, ctx)
-          const selected = value === opt.id && !disabled
+          const landscapeOff = landscape && !LANDSCAPE_ACTIVE.has(opt.id)
+          const disabled = layoutOptionDisabled(opt, ctx) || landscapeOff
+          const selected = shown === opt.id && !disabled
           return (
             <Button
               key={opt.id}
@@ -42,7 +50,9 @@ export function LayoutQuickPicker({
               size="sm"
               variant={selected ? 'default' : 'outline'}
               disabled={disabled}
-              title={disabled && opt.needsFacecam ? 'No facecam detected for this clip' : opt.hint}
+              title={
+                landscapeOff ? LANDSCAPE_HINT : disabled && opt.needsFacecam ? 'No facecam detected for this clip' : opt.hint
+              }
               onClick={() => {
                 if (disabled) return
                 const payload = layoutPickPayload(opt.id, facecamLayout, edits)
@@ -59,6 +69,11 @@ export function LayoutQuickPicker({
           )
         })}
       </div>
+      {landscape ? (
+        <p className="mt-1 text-[11px] text-muted-foreground" data-testid="layout-landscape-hint">
+          16:9 project: greyed layouts only change vertical (9:16) or square exports. Change Aspect to use them.
+        </p>
+      ) : null}
       {!facecamLayout?.facecam &&
       !edits.layout.facecam?.box &&
       EXPORT_LAYOUT_OPTIONS.some((o) => o.needsFacecam) ? (

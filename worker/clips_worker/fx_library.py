@@ -18,8 +18,36 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-FX2_KEYS = ("pixelate", "blur", "glow", "rgbsplit", "glitch", "shake", "flicker", "scanlines")
+FX2_KEYS = ("pixelate", "blur", "glow", "rgbsplit", "glitch", "shake", "flicker", "scanlines",
+            "mono", "sepia", "invert", "mirror", "zoom")
 HASH_A, HASH_B, HASH_M = 1103, 7919, 997
+
+# EFFECTS1 colour looks (TS fx-library monoMatrix / sepiaMatrix / invertLinear / zoomSize).
+LUMA_709 = (0.2126, 0.7152, 0.0722)
+SEPIA_M = (0.393, 0.769, 0.189, 0.349, 0.686, 0.168, 0.272, 0.534, 0.131)
+
+
+def _mix_identity(target, v: int) -> list[float]:
+    a = v / 100
+    return [(1 - a) * (1 if i % 4 == 0 else 0) + a * t for i, t in enumerate(target)]
+
+
+def mono_matrix(v: int) -> list[float]:
+    return _mix_identity(LUMA_709 * 3, v)
+
+
+def sepia_matrix(v: int) -> list[float]:
+    return _mix_identity(SEPIA_M, v)
+
+
+def zoom_size(v: int, w: int, h: int) -> tuple[int, int]:
+    z = 1 + v / 100 * 0.5
+    return 2 * math.ceil(w * z / 2), 2 * math.ceil(h * z / 2)
+
+
+def _ccm(m: list[float]) -> str:
+    k = ("rr", "rg", "rb", "gr", "gg", "gb", "br", "bg", "bb")
+    return "colorchannelmixer=" + ":".join(f"{n}={x:.6f}" for n, x in zip(k, m))
 
 
 def unit(w: int, h: int) -> float:
@@ -175,6 +203,19 @@ def pre_parts(cur: str, fx: dict, w: int, h: int, tag: str, en: str) -> tuple[li
             base = f"{tag}o{i}"
         parts.append(f"[{base}]format=gbrp[{tag}gt]")
         cur = f"{tag}gt"
+    # EFFECTS1: mono → sepia → invert.
+    if fx.get("mono"):
+        parts.append(f"[{cur}]{_ccm(mono_matrix(int(fx['mono'])))}{en}[{tag}mo]")
+        cur = f"{tag}mo"
+    if fx.get("sepia"):
+        parts.append(f"[{cur}]{_ccm(sepia_matrix(int(fx['sepia'])))}{en}[{tag}se]")
+        cur = f"{tag}se"
+    if fx.get("invert"):
+        a = int(fx["invert"]) / 100
+        parts.append(f"[{cur}]split[{tag}i0][{tag}i1]")
+        parts.append(f"[{tag}i1]negate[{tag}i2]")
+        parts.append(f"[{tag}i2][{tag}i0]blend=all_mode=normal:all_opacity={a:.4f}{en}[{tag}iv]")
+        cur = f"{tag}iv"
     return parts, cur
 
 
@@ -200,15 +241,30 @@ def post_parts(cur: str, fx: dict, w: int, h: int, work_dir: Path, tag: str, en:
 
 def shake_parts(cur: str, fx: dict, w: int, h: int, tag: str, en: str) -> tuple[list[str], str]:
     """shake (last): scale up + per-block crop, overlaid (timeline enable) on the unshaken frame."""
+    gparts: list[str] = []
+    zv, mv = int(fx.get("zoom") or 0), int(fx.get("mirror") or 0)
+    if zv or mv:
+        chain = []
+        if zv:
+            zw, zh = zoom_size(zv, w, h)
+            chain.append(f"scale={zw}:{zh}:flags=bilinear,crop={w}:{h}:{(zw - w) // 2}:{(zh - h) // 2}")
+        if mv:
+            chain.append("hflip")
+        gparts += [
+            f"[{cur}]split[{tag}z0][{tag}z1]",
+            f"[{tag}z1]{','.join(chain)}[{tag}z2]",
+            f"[{tag}z0][{tag}z2]overlay=0:0:format=gbrp{en}[{tag}zm]",
+        ]
+        cur = f"{tag}zm"
     if not fx.get("shake"):
-        return [], cur
+        return gparts, cur
     v = int(fx["shake"])
     sw, sh = shake_size(v, w, h)
     a = shake_pad(v, w, h)
     k = f"floor({_F}/2)"
     ox = _round(f"({_h(k, 6)}*2-1)*{a}")
     oy = _round(f"({_h(k, 7)}*2-1)*{a}")
-    parts = [
+    parts = gparts + [
         f"[{cur}]split[{tag}k0][{tag}k1]",
         f"[{tag}k1]scale={sw}:{sh}:flags=bilinear,crop={w}:{h}:'{(sw - w) // 2}+{ox}':'{(sh - h) // 2}+{oy}'[{tag}k2]",
         f"[{tag}k0][{tag}k2]overlay=0:0{en}[{tag}sk]",

@@ -110,7 +110,9 @@ function clamp(n: number, lo: number, hi: number) {
 
 /** Preview layout matches export: landscape aspects force fit (blur / letterbox). */
 export function previewLayoutMode(e: ClipEditsV2): string {
-  return isLandscapeAspect(e.aspectRatio) ? 'fit' : (e.layout?.mode ?? 'speaker_follow')
+  // EFFECTS1: landscape mirrors worker landscape_layout (center_crop → fill; everything else → fit).
+  if (isLandscapeAspect(e.aspectRatio)) return e.layout?.mode === 'center_crop' ? 'center_crop' : 'fit'
+  return e.layout?.mode ?? 'speaker_follow'
 }
 
 function usesSpeakerCropPreview(edits: ClipEditsV2, track: CropTrack | null): boolean {

@@ -37,6 +37,8 @@ export const IN_LABEL: Record<TextAnimType, string> = {
   slide_left: 'Slide left',
   slide_right: 'Slide right',
   typewriter: 'Typewriter',
+  bounce_in: 'Bounce',
+  zoom_out: 'Zoom out',
 }
 /** G3afix: an out slide is named (and stored) by the direction it leaves in — text-anim OUT_MOTION. */
 export const OUT_LABEL: Record<TextAnimType, string> = { ...IN_LABEL, slide_up: 'Slide up (exit up)', slide_down: 'Slide down (exit down)', slide_left: 'Slide left (exit left)', slide_right: 'Slide right (exit right)' }

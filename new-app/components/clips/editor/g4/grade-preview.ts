@@ -14,7 +14,7 @@ import { GRID, hasPointwiseV2, needs3d } from '@/lib/clips/editor/color-grade'
 import { GradeFilterBank } from './grade-filters'
 import { GradeMirrors, type GlKey, type Media } from './grade-gl'
 import { lutFor } from './lut-cache'
-import { shakeCss } from '@/lib/clips/editor/fx-library'
+import { geomCss } from '@/lib/clips/editor/fx-library'
 
 const MAX_GRIDS = 24
 
@@ -130,7 +130,7 @@ export class GradePreview {
   shake(specs: (ColorSpec | null | undefined)[]): string {
     const { w, h } = this.bank.play
     return specs
-      .map((s) => shakeCss(s?.fx?.shake ?? 0, w, h, this.bank.frame))
+      .map((s) => geomCss(s?.fx, w, h, this.bank.frame))
       .filter(Boolean)
       .join(' ')
   }
