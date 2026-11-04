@@ -157,7 +157,7 @@ export function EditorLayout(props: {
         <button type="button" aria-label="Close panel" className={EDITOR_GRID.backdrop} onClick={props.onClosePanel} data-testid="editor-panel-backdrop" />
       ) : null}
       {!scriptView ? (
-      <section
+        <section
         data-region="panel"
         hidden={dock ? !panelOpen : overlay && !panelOpen}
         data-dock={dock ? 'true' : undefined}
@@ -168,7 +168,7 @@ export function EditorLayout(props: {
           dock ? null : scriptView ? EDITOR_GRID.panelScriptHidden : EDITOR_GRID.panelDocked,
           'relative',
         )}
-      >
+        >
         {props.panel}
         {onPanelWidthChange && panelWidthPx != null && !overlay && !scriptView && !dock ? (
           <button
@@ -179,7 +179,7 @@ export function EditorLayout(props: {
             onPointerDown={onResizePointerDown}
           />
         ) : null}
-      </section>
+        </section>
       ) : null}
       <section data-region="preview" className={previewClass}>
         {props.preview}
