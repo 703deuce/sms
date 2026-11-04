@@ -2158,9 +2158,11 @@ export function EditorShell({
     const on = (id: EditorPanelId) => (scope != null ? scope === id : panel === id)
     return (
     <>
-      <div className={on('transcript') ? undefined : 'hidden'} aria-hidden={!on('transcript')}>
-        {renderTranscriptPanel({ compactToolbar: true })}
-      </div>
+      {scope == null || scope === 'transcript' ? (
+        <div className={on('transcript') ? undefined : 'hidden'} aria-hidden={!on('transcript')}>
+          {renderTranscriptPanel({ compactToolbar: true })}
+        </div>
+      ) : null}
       <div className={on('cleanup') ? undefined : 'hidden'} aria-hidden={!on('cleanup')}>
         <EditorPanelErrorBoundary label="Cleanup">
           <CleanupPanel
@@ -2559,7 +2561,8 @@ export function EditorShell({
     </>
   )
   }
-  const panelBody = renderSidePanels(null)
+  // Script tools are owned by ScriptViewMainSplit; never construct the legacy panel tree there.
+  const panelBody = layoutView === 'script' ? null : renderSidePanels(null)
 
   const previewColumnContent = (
       <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden px-2 pb-1 pt-2">
