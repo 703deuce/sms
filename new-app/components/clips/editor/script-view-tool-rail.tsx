@@ -38,7 +38,7 @@ export function ScriptViewToolTabs({
 }) {
   return (
     <nav
-      className="flex min-h-12 min-w-0 shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-card px-2 py-1 [scrollbar-width:thin]"
+      className="grid min-w-0 shrink-0 grid-cols-5 gap-0.5 border-b border-border bg-card px-1.5 py-1 sm:grid-cols-6"
       aria-label="Script workspace tools"
       data-testid="script-view-tool-tabs"
     >
@@ -48,7 +48,7 @@ export function ScriptViewToolTabs({
         aria-pressed={active == null}
         data-testid="script-tool-transcript"
         className={cn(
-          'flex h-9 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-muted',
+          'flex min-h-10 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-1 text-[10px] leading-none font-medium hover:bg-muted',
           active == null && 'bg-primary/15 text-primary',
         )}
       >
@@ -63,7 +63,7 @@ export function ScriptViewToolTabs({
           aria-pressed={active === id}
           data-testid={`script-tool-${id}`}
           className={cn(
-            'flex h-9 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-muted',
+            'flex min-h-10 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-1 text-[10px] leading-none font-medium hover:bg-muted',
             active === id && 'bg-primary/15 text-primary',
           )}
         >
