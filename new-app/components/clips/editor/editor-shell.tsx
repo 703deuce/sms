@@ -48,6 +48,7 @@ import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { sourceMsToEditorMs } from '@/lib/clips/editor/source-ms-to-editor'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
+import { EditorMenuBar, type EditorMenu } from '@/components/clips/editor/editor-menu-bar'
 import { EditorHistoryPanel } from '@/components/clips/editor/history-panel'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { CaptionLinesPanel } from '@/components/clips/editor/caption-lines-panel'
@@ -61,7 +62,7 @@ import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { clipLayoutChip, clipTypeBadge, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
-import { Timeline } from '@/components/clips/editor/timeline'
+import { Timeline, type TimelineMenuCommand } from '@/components/clips/editor/timeline'
 import { TextPanel } from '@/components/clips/editor/text-panel'
 import { TemplatesPanel } from '@/components/clips/editor/templates-panel'
 import { ColorPanel, type ColorTarget } from '@/components/clips/editor/color-panel'
@@ -366,6 +367,8 @@ export function EditorShell({
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
   const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
   const [editorShortcutsOpen, setEditorShortcutsOpen] = useState(false)
+  /** MENUBAR1: last top-menu command for the Timeline (seq bumps on every click). */
+  const [timelineMenuCmd, setTimelineMenuCmd] = useState<{ cmd: TimelineMenuCommand; seq: number } | null>(null)
   useEffect(() => {
     setLayoutView(readClipEditorLayoutView())
   }, [])
@@ -2952,6 +2955,256 @@ export function EditorShell({
       </div>
   )
 
+  // MENUBAR1: top menu bar. Every item calls an EXISTING handler / panel; conditional items are greyed with a hint.
+  const runTimelineMenu = (cmd: TimelineMenuCommand) => {
+    if (layoutView !== 'timeline') setLayoutViewPersist('timeline')
+    setTimelineMenuCmd((prev) => ({ cmd, seq: (prev?.seq ?? 0) + 1 }))
+  }
+  const runPalette = (id: string) => runTimelineMenu({ kind: 'palette', id })
+  const openToolPanel = (id: EditorPanelId) => {
+    if (layoutView === 'script' && SCRIPT_VIEW_TOOL_PANELS.some((p) => p.id === id)) {
+      const sid = id as ScriptViewToolPanelId
+      setVisitedPanels((v) => (v.has(sid) ? v : new Set([...v, sid])))
+      selectPanel(sid)
+      setScriptToolPanel(sid)
+      return
+    }
+    if (layoutView === 'script') setLayoutViewPersist('timeline')
+    selectPanel(id)
+  }
+  const scrollToTestId = (testId: string) => {
+    window.setTimeout(() => {
+      document.querySelector<HTMLElement>(`[data-testid="${testId}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 150)
+  }
+  /** Select the main video (same as clicking it on the canvas) and open Properties at its video tools. */
+  const openVideoTools = (testId: string) => {
+    onCanvasSelect('video')
+    if (layoutView === 'script') openToolPanel('inspector')
+    else if (band !== 'wide') selectPanel('inspector')
+    scrollToTestId(testId)
+  }
+  const openVersions = () => {
+    document.querySelector<HTMLElement>('[data-testid="versions-menu"]')?.click()
+  }
+  const openProjectSettings = () => {
+    if (layoutView === 'script') toggleScriptTool('inspector')
+    else selectPanel('inspector')
+  }
+  const needSel = canvasSel ? null : 'Select a clip first'
+  const needBroll = canvasSel?.target.startsWith('broll:') ? null : 'Select a B-roll clip first'
+  const needFull = fullVideo ? null : 'Available on full-length videos'
+  const editorMenus: EditorMenu[] = [
+    {
+      id: 'file',
+      label: 'File',
+      groups: [
+        {
+          items: [
+            { id: 'new-project', label: 'New project', onSelect: () => window.location.assign('/app/clips/new') },
+            { id: 'open-projects', label: 'Open projects', onSelect: () => window.location.assign('/app/clips') },
+            { id: 'versions', label: 'Versions / History', onSelect: openVersions, disabledHint: versionsEnabled ? null : 'Unavailable' },
+            { id: 'project-settings', label: 'Project settings', onSelect: openProjectSettings },
+          ],
+        },
+        {
+          items: [
+            { id: 'export', label: 'Export video…', shortcut: '⌘E', onSelect: () => setExportOpen(true) },
+            { id: 'export-other', label: 'Export audio, stems, subtitles, XML…', onSelect: () => setExportOpen(true) },
+            { id: 'cover', label: 'Cover / thumbnail', onSelect: () => openToolPanel('thumbnail') },
+          ],
+        },
+        { items: [{ id: 'back', label: 'Back to projects', onSelect: () => window.location.assign(`/app/clips/${projectId}`) }] },
+      ],
+    },
+    {
+      id: 'edit',
+      label: 'Edit',
+      groups: [
+        {
+          items: [
+            { id: 'undo', label: 'Undo', shortcut: '⌘Z', onSelect: undo, disabledHint: canUndo ? null : 'Nothing to undo' },
+            { id: 'redo', label: 'Redo', shortcut: '⇧⌘Z', onSelect: redo, disabledHint: canRedo ? null : 'Nothing to redo' },
+          ],
+        },
+        {
+          items: [
+            { id: 'cut', label: 'Cut', onSelect: () => runPalette('cut'), disabledHint: needSel },
+            { id: 'copy', label: 'Copy', onSelect: () => runPalette('copy'), disabledHint: needSel },
+            { id: 'paste', label: 'Paste at playhead', onSelect: () => runPalette('paste') },
+            { id: 'paste-attrs', label: 'Paste attributes', onSelect: () => runPalette('pasteAttrs'), disabledHint: needSel },
+            { id: 'duplicate', label: 'Duplicate', onSelect: () => runPalette('duplicate'), disabledHint: needSel },
+            { id: 'delete', label: 'Delete selected', onSelect: () => runPalette('delete'), disabledHint: needSel },
+          ],
+        },
+        {
+          items: [
+            {
+              id: 'find-replace',
+              label: 'Find & replace in script',
+              onSelect: () => {
+                if (layoutView !== 'script') selectPanel('transcript')
+                scrollToTestId('transcript-find-replace')
+              },
+            },
+            { id: 'marker', label: 'Add / remove marker', shortcut: 'M', onSelect: () => runPalette('marker') },
+            { id: 'marker-list', label: 'Markers & chapters…', onSelect: () => runPalette('markerList') },
+            { id: 'next-take', label: 'Next take', onSelect: () => runPalette('nextTake') },
+          ],
+        },
+        {
+          label: 'Range',
+          items: [
+            { id: 'mark-in', label: 'Mark in', shortcut: 'I', onSelect: () => runPalette('markIn') },
+            { id: 'mark-out', label: 'Mark out', shortcut: 'O', onSelect: () => runPalette('markOut') },
+            { id: 'clear-io', label: 'Clear in / out', onSelect: () => runPalette('clearIO') },
+            { id: 'range-delete', label: 'Delete in–out range', onSelect: () => runPalette('rangeDel') },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'view',
+      label: 'View',
+      groups: [
+        {
+          items: [
+            { id: 'view-script', label: 'Script view', onSelect: () => setLayoutViewPersist('script'), disabledHint: layoutView === 'script' ? 'Current view' : null },
+            { id: 'view-timeline', label: 'Timeline view', onSelect: () => setLayoutViewPersist('timeline'), disabledHint: layoutView === 'timeline' ? 'Current view' : null },
+          ],
+        },
+        {
+          items: [
+            { id: 'safe-zone', label: safeZoneVisible ? 'Hide safe zone' : 'Show safe zone', onSelect: () => setSafeZoneVisible(!safeZoneVisible) },
+            { id: 'zoom-fit', label: 'Zoom timeline to fit', shortcut: '0', onSelect: () => runPalette('zoomFit') },
+            { id: 'zoom-in', label: 'Zoom timeline in', shortcut: '+', onSelect: () => runPalette('zoomIn') },
+            { id: 'zoom-out', label: 'Zoom timeline out', shortcut: '−', onSelect: () => runPalette('zoomOut') },
+          ],
+        },
+        {
+          items: [
+            {
+              id: 'highlights',
+              label: fullVideo && fvHighlights.highlightsOn ? 'Hide highlights lane' : 'Show highlights lane',
+              onSelect: () => fvHighlights.persistToggle(!fvHighlights.highlightsOn),
+              disabledHint: needFull,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'clip',
+      label: 'Clip',
+      groups: [
+        {
+          items: [
+            { id: 'split', label: 'Split at playhead', shortcut: 'S', onSelect: () => runPalette('split') },
+            { id: 'freeze', label: 'Freeze frame', onSelect: () => runPalette('freeze') },
+            { id: 'trim-start', label: 'Trim start to playhead', onSelect: () => runPalette('trimStart') },
+            { id: 'trim-end', label: 'Trim end to playhead', onSelect: () => runPalette('trimEnd') },
+            { id: 'speed', label: 'Speed…', onSelect: () => runPalette('speed') },
+            { id: 'gap', label: 'Insert gap at playhead', onSelect: () => runPalette('gap') },
+            { id: 'replace-gap', label: 'Replace clip with gap', onSelect: () => runPalette('replaceGap'), disabledHint: needSel },
+            { id: 'toggle-enabled', label: 'Disable / enable clip', onSelect: () => runPalette('toggleEnabled'), disabledHint: needSel },
+          ],
+        },
+        {
+          items: [
+            { id: 'j-cut', label: 'J-cut (audio leads)', onSelect: () => runTimelineMenu({ kind: 'jCut' }) },
+            { id: 'l-cut', label: 'L-cut (audio trails)', onSelect: () => runTimelineMenu({ kind: 'lCut' }) },
+            { id: 'group', label: 'Group', onSelect: () => runPalette('group'), disabledHint: needSel },
+            { id: 'ungroup', label: 'Ungroup', onSelect: () => runPalette('ungroup'), disabledHint: needSel },
+            { id: 'compound', label: 'Create compound clip', onSelect: () => runPalette('compound'), disabledHint: needSel },
+            { id: 'uncompound', label: 'Uncompound', onSelect: () => runPalette('uncompound'), disabledHint: needSel },
+          ],
+        },
+        {
+          label: 'Video tools',
+          items: [
+            { id: 'transform', label: 'Transform & crop', onSelect: () => openVideoTools('properties-panel') },
+            { id: 'blur', label: 'Blur faces / regions', onSelect: () => openVideoTools('blur-add') },
+            { id: 'bg-removal', label: 'Background removal', onSelect: () => openVideoTools('bg-removal') },
+            { id: 'color', label: 'Color & effects', onSelect: () => openToolPanel('color') },
+            { id: 'layers', label: 'Layers, masks & chroma key', onSelect: () => openToolPanel('layers') },
+            { id: 'layout', label: 'Layout & aspect ratio', onSelect: () => openToolPanel('layout') },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'audio',
+      label: 'Audio',
+      groups: [
+        {
+          items: [
+            { id: 'music', label: 'Music, SFX & AI music', onSelect: () => openToolPanel('audio') },
+            { id: 'beats', label: 'Beats & cut to beat', onSelect: () => openToolPanel('audio') },
+            { id: 'voiceover', label: 'Record voiceover', onSelect: () => clipRec.arm('voiceover') },
+            { id: 'add-audio-track', label: 'Add audio track', onSelect: () => runPalette('addAudio') },
+          ],
+        },
+        {
+          items: [
+            { id: 'detach-audio', label: 'Detach audio', onSelect: () => runTimelineMenu({ kind: 'detachAudio' }), disabledHint: needBroll },
+            { id: 'j-cut-audio', label: 'J-cut / L-cut (split audio)', onSelect: () => runTimelineMenu({ kind: 'jCut' }) },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'tools',
+      label: 'Tools',
+      groups: [
+        {
+          items: [
+            { id: 'cleanup', label: 'Clean up (fillers, gaps, retakes)', onSelect: () => openToolPanel('cleanup') },
+            { id: 'pacing', label: 'Pacing check', onSelect: () => runPalette('pacing') },
+            { id: 'producer', label: 'AI Producer', onSelect: () => setProducerOpen(true) },
+            { id: 'captions', label: 'Captions & translate', onSelect: () => openToolPanel('captions') },
+            { id: 'repurpose', label: 'Repurpose (chapters, show notes)', onSelect: () => openToolPanel('repurpose') },
+          ],
+        },
+        {
+          items: [
+            {
+              id: 'find-clips',
+              label: 'Find clips in video',
+              onSelect: () => document.querySelector<HTMLElement>('[data-testid="editor-find-clips-in-video"]')?.click(),
+              disabledHint: needFull,
+            },
+            {
+              id: 'make-all-highlights',
+              label: 'Make clips from all highlights',
+              onSelect: () => void fvHighlights.onMakeAll(),
+              disabledHint: needFull ?? (fvHighlights.highlightsOn && fvHighlights.hasPicks ? null : 'Turn on highlights first'),
+            },
+          ],
+        },
+        {
+          items: [
+            { id: 'media', label: 'Media library', onSelect: () => openToolPanel('media') },
+            { id: 'broll', label: 'B-roll', onSelect: () => openToolPanel('broll') },
+            { id: 'templates', label: 'Templates', onSelect: () => openToolPanel('templates') },
+            { id: 'brand', label: 'Brand kit', onSelect: () => openToolPanel('brand') },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'help',
+      label: 'Help',
+      groups: [
+        {
+          items: [
+            { id: 'shortcuts', label: 'Keyboard shortcuts', shortcut: '?', onSelect: () => setEditorShortcutsOpen(true) },
+            { id: 'palette', label: 'Search all tools', shortcut: '⌘K', onSelect: () => runTimelineMenu({ kind: 'openPalette' }) },
+          ],
+        },
+      ],
+    },
+  ]
+
   return (
     <div
       data-testid="editor-shell-root"
@@ -2978,18 +3231,13 @@ export function EditorShell({
                 versionsHistory: {
                   kind: 'button',
                   label: 'Versions / History',
-                  onClick: () => {
-                    document.querySelector<HTMLElement>('[data-testid="versions-menu"]')?.click()
-                  },
+                  onClick: openVersions,
                   disabled: !versionsEnabled,
                 },
                 projectSettings: {
                   kind: 'button',
                   label: 'Project settings',
-                  onClick: () => {
-                    if (layoutView === 'script') toggleScriptTool('inspector')
-                    else selectPanel('inspector')
-                  },
+                  onClick: openProjectSettings,
                 },
                 export: { kind: 'button', label: 'Export…', onClick: () => setExportOpen(true) },
                 keyboardShortcuts: {
@@ -3018,6 +3266,9 @@ export function EditorShell({
           pendingPaidCount={producerPendingPaid}
           layoutViewSlot={
             <EditorLayoutViewSwitch value={layoutView} onChange={setLayoutViewPersist} />
+          }
+          menuBarSlot={
+            <EditorMenuBar menus={editorMenus} onOpenSearch={() => runTimelineMenu({ kind: 'openPalette' })} />
           }
           layoutSlot={
             <>
@@ -3049,8 +3300,8 @@ export function EditorShell({
               data-testid="editor-repurpose-open"
               onClick={() => selectPanel('repurpose')}
             >
-              <Megaphone className="mr-1.5 size-4" aria-hidden />
-              Repurpose
+              <Megaphone className="size-4 2xl:mr-1.5" aria-hidden />
+              <span className="sr-only 2xl:not-sr-only">Repurpose</span>
             </Button>
             {fullVideo ? (
               <>
@@ -3199,7 +3450,7 @@ export function EditorShell({
             layoutView === 'script' ? (
               <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                 <ScriptViewMainSplit
-                  transcriptPct={scriptSplitPct}
+                  transcriptPct={scriptToolPanel != null ? Math.min(scriptSplitPct, 30) : scriptSplitPct}
                   onTranscriptPctChange={persistScriptSplit}
                   className="flex-1"
                   transcript={
@@ -3333,6 +3584,7 @@ export function EditorShell({
             playheadOutMsRef={outputMsRef}
             transcriptSelectionRef={selectionRef}
             registerBeatCut={registerBeatCut}
+            menuCommand={timelineMenuCmd}
             momentFocus={fvMoment}
             onMomentSeek={seekSource}
             highlights={

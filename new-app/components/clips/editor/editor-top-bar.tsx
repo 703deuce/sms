@@ -42,6 +42,7 @@ export function EditorTopBar({
   layoutSlot,
   versionsSlot,
   layoutViewSlot,
+  menuBarSlot,
 }: {
   backHref: string
   title: string
@@ -65,6 +66,8 @@ export function EditorTopBar({
   versionsSlot?: React.ReactNode
   /** Phase 3: Script | Timeline segmented control (left of AI Producer). */
   layoutViewSlot?: React.ReactNode
+  /** MENUBAR1: File · Edit · View · Clip · Audio · Tools · Help + search (left, after save state). */
+  menuBarSlot?: React.ReactNode
 }) {
   const saveTone =
     saveState === 'error'
@@ -118,6 +121,12 @@ export function EditorTopBar({
           </Button>
         )}
       </span>
+      {menuBarSlot ? (
+        <>
+          <Separator orientation="vertical" className="mx-1 hidden h-6 lg:block" />
+          {menuBarSlot}
+        </>
+      ) : null}
       {producerStrip && producerStrip.changeCount > 0 ? (
         <div
           data-testid="producer-undo-strip"

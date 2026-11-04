@@ -315,6 +315,14 @@ const NO_SOURCES: readonly ClipMediaSource[] = []
 /** FV4b: motion panel key for the main picture's slot (not a track id; never stored in trackMotion). */
 const MAIN_MOTION_KEY = '__main__'
 
+/** MENUBAR1: top menu bar → the SAME handlers as the command palette / clip right-click menu. */
+export type TimelineMenuCommand =
+  | { kind: 'palette'; id: string }
+  | { kind: 'openPalette' }
+  | { kind: 'jCut' }
+  | { kind: 'lCut' }
+  | { kind: 'detachAudio' }
+
 export function Timeline({
   edits,
   words,
@@ -368,6 +376,7 @@ export function Timeline({
   playheadOutMsRef,
   transcriptSelectionRef,
   registerBeatCut,
+  menuCommand = null,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -461,6 +470,8 @@ export function Timeline({
   transcriptSelectionRef?: React.MutableRefObject<TranscriptSelection | null>
   /** Lets Audio panel invoke the same Cut to beat handler as the timeline toolbar. */
   registerBeatCut?: (api: BeatCutRegisterApi | null) => void
+  /** MENUBAR1: a new `seq` runs `cmd` once (also right after mount, when the menu switched to Timeline view). */
+  menuCommand?: { cmd: TimelineMenuCommand; seq: number } | null
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -1840,6 +1851,41 @@ export function Timeline({
     { id: 'help', group: 'Timeline', label: 'Keyboard shortcuts', keys: '?', run: () => setHelpOpen(true) },
     ...(onOpenExport ? [{ id: 'export', group: 'File', label: 'Export', keys: `${mk}E`, run: onOpenExport }] : []),
   ]
+  // MENUBAR1: run a top-menu command with the existing palette commands / applyJLCut / detachBrollAudio.
+  const menuSeqRef = useRef(0)
+  useEffect(() => {
+    if (!menuCommand || menuCommand.seq === menuSeqRef.current) return
+    menuSeqRef.current = menuCommand.seq
+    const c = menuCommand.cmd
+    if (c.kind === 'openPalette') {
+      setPaletteOpen(true)
+      return
+    }
+    if (c.kind === 'jCut' || c.kind === 'lCut') {
+      applyJLCut(c.kind === 'jCut' ? 'j' : 'l')
+      return
+    }
+    if (c.kind === 'detachAudio') {
+      const sel = liveSelected.length === 1 && liveSelected[0]!.lane === 'broll' ? liveSelected[0]! : null
+      if (!editable || !sel || !canDetachAudio(edits, sel.id)) {
+        toast.message('Select a B-roll clip that has sound first', { id: 'timeline-menu' })
+        return
+      }
+      const r = detachBrollAudio(edits, sel.id)
+      if (r) {
+        commit(r.edits)
+        setSelected([{ lane: 'sfx', id: r.id }])
+      }
+      return
+    }
+    const pc = paletteCommands.find((p) => p.id === c.id)
+    if (!pc || pc.disabled) {
+      toast.message('Not available right now', { id: 'timeline-menu' })
+      return
+    }
+    pc.run()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuCommand?.seq])
   const addTrackOf = (kind: TrackKind, above?: string) => {
     const r = addTrack(edits, kind, { above })
     if (!r) {
