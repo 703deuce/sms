@@ -2269,6 +2269,12 @@ export function EditorShell({
                 selectPanel('captions')
                 return
               }
+              if (kind === 'sticker' || kind === 'badge' || kind === 'headline' || kind === 'hook') {
+                // These legacy overlay controls live in the expanded layer-design section.
+                // Do not send a nonexistent text selection to the timeline.
+                setCanvasSel(null)
+                return
+              }
               const target: KeyframeTarget = kind === 'video' ? 'video' : kind === 'broll' ? `broll:${id}` : `text:${id}`
               setCanvasSel({ target, label: kind === 'video' ? 'Main video' : kind === 'broll' ? 'B-roll' : 'Text' })
               setTimelineSelReq((prev) => ({
