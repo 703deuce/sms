@@ -113,6 +113,36 @@ describe('E2 multi-track timeline', () => {
     expect(getByTestId('timeline-lane-header-voice')).toBeTruthy()
   })
 
+  it('C5 keeps moment actions inside the moment header instead of covering the time ruler', () => {
+    const ui = setup(edits(), {
+      momentFocus: {
+        fromClipId: 'source-clip', startMs: 2000, endMs: 12000, title: 'Selected moment',
+        onRangeChange: vi.fn(), onMakeClip: vi.fn(),
+      },
+      onMomentSeek: vi.fn(),
+    })
+    const bar = ui.getByTestId('full-video-moment-lane')
+    const controls = ui.getByTestId('full-video-moment-popover')
+    expect(controls.parentElement).toBe(bar)
+    expect(controls.className).not.toContain('top-full')
+    expect(ui.getByTestId('timeline-ruler')).toBeTruthy()
+    expect(ui.getByTestId('moment-make-clip')).toBeTruthy()
+  })
+
+  it('N7 shows editable volume envelopes on Video/Voice when the menu is enabled', () => {
+    const ui = setup()
+    expect(ui.queryByTestId('timeline-envelope')).toBeNull()
+    fireEvent.click(ui.getByTestId('timeline-more-menu'))
+    fireEvent.click(ui.getByTestId('timeline-envelopes'))
+    const video = ui.getAllByTestId('timeline-item-video')[0]!
+    const voice = ui.getAllByTestId('timeline-item-voice')[0]!
+    expect(video.querySelector('[data-testid="timeline-envelope"][data-kind="volume"]')).toBeTruthy()
+    expect(voice.querySelector('[data-testid="timeline-envelope"][data-kind="volume"]')).toBeTruthy()
+    const line = video.querySelector('[data-testid="timeline-envelope-line"]') as SVGPolylineElement
+    expect(line.getAttribute('points')).toBeTruthy()
+    expect(line.getAttribute('stroke-width')).toBe('2.5')
+  })
+
   it('C1 keeps lane viewport exactly as tall as its tracks, not a stretched empty region', () => {
     const ui = setup()
     const trackHeight = parseFloat(ui.getByTestId('timeline-track').style.height)
