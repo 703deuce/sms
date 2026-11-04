@@ -7,7 +7,7 @@ describe('editor grid container sizing', () => {
     const el = document.createElement('div')
     applyEditorGridSizing(el, 1366)
     expect(el.style.getPropertyValue('--editor-tools-w')).toBe('273px')
-    expect(el.style.getPropertyValue('--editor-props-w')).toBe('232px')
+    expect(el.style.getPropertyValue('--editor-props-w')).toBe('220px')
     expect(el.style.getPropertyValue('--editor-props-visible')).toBe('flex')
 
     applyEditorGridSizing(el, 1093)

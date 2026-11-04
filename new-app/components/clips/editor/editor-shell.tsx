@@ -390,8 +390,8 @@ export function EditorShell({
       const open = readTimelineDockPanelOpen(storage)
       setDockPanelOpen(open)
       if (open) setPanel((p) => (p === 'inspector' || p === 'transcript' ? 'captions' : p))
-    } else if (layoutView === 'script') {
-      setPanel((p) => (p === 'transcript' ? p : p === 'inspector' ? 'transcript' : p))
+    } else if (layoutView === 'script' && band !== 'mobile') {
+      setPanel((p) => (p === 'transcript' || p === 'inspector' ? p : 'transcript'))
     }
   }, [layoutView, band])
   const setLayoutViewPersist = useCallback(
@@ -432,7 +432,7 @@ export function EditorShell({
     [selectPanel],
   )
   useEffect(() => {
-    if (band === 'wide' && panel === 'inspector' && layoutView !== 'timeline' && !dockTools) {
+    if (band === 'wide' && panel === 'inspector' && layoutView !== 'timeline' && layoutView !== 'script' && !dockTools) {
       setPanel('transcript')
     }
   }, [band, panel, layoutView, dockTools])
@@ -3497,8 +3497,12 @@ export function EditorShell({
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {(() => {
-          const scrollTimelineProperties = () => {
+          const scrollEditorProperties = () => {
             document.querySelector<HTMLElement>('[data-region="properties"]')?.scrollIntoView({ block: 'nearest' })
+          }
+          const focusScriptPropertiesTab = () => {
+            scrollEditorProperties()
+            setPanel('inspector')
           }
           const scriptWorkspaceTabStrip = (
             <div className="shrink-0 rounded-t-lg border-b border-border bg-card/80 p-1" data-testid="script-workspace-tabs">
@@ -3509,6 +3513,7 @@ export function EditorShell({
                 onSelectGroup={selectRailGroup}
                 leadingTabs={[{ panelId: 'transcript', label: 'Script', icon: FileText }]}
                 includePropertiesTab
+                onPropertiesTab={focusScriptPropertiesTab}
               />
             </div>
           )
@@ -3536,7 +3541,7 @@ export function EditorShell({
                   }
                   onSelectGroup={dockSelectGroup}
                   includePropertiesTab
-                  onPropertiesTab={scrollTimelineProperties}
+                  onPropertiesTab={scrollEditorProperties}
                 />
               </div>
             </div>
@@ -3592,22 +3597,22 @@ export function EditorShell({
               {toolPanelScrollBody}
             </>
           )
+          const scriptShowsTranscript =
+            panel === 'transcript' || (layoutView === 'script' && panel === 'inspector')
           const scriptWorkspaceColumn = (
             <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
               <div className="hidden shrink-0 lg:block">{scriptWorkspaceTabStrip}</div>
-              {panel === 'transcript' ? (
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2">
-                  {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
-                </div>
-              ) : panel === 'inspector' ? (
-                <ScrollArea className="min-h-0 flex-1">
-                  <div className="p-4" data-testid="editor-panel-inspector">
-                    {renderInspectorPropertiesPanel(true)}
-                  </div>
-                </ScrollArea>
-              ) : (
-                toolPanelBody
-              )}
+              <div
+                className={cn(
+                  'flex min-h-0 flex-1 flex-col overflow-hidden p-2',
+                  !scriptShowsTranscript && 'hidden',
+                )}
+                aria-hidden={!scriptShowsTranscript}
+                data-testid="script-workspace-transcript"
+              >
+                {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+              </div>
+              {!scriptShowsTranscript ? toolPanelBody : null}
             </div>
           )
           return (
@@ -3619,7 +3624,7 @@ export function EditorShell({
           panelWidthPx={panelWidthPx}
           onPanelWidthChange={persistPanelWidth}
           hidePanelColumn={layoutView === 'script' && band !== 'mobile'}
-          hidePropertiesColumn={layoutView === 'script'}
+          hidePropertiesColumn={layoutView === 'script' ? band === 'mobile' || band === 'compact' : false}
           dockTools={dockTimelineTools}
           rail={
             <>
@@ -3656,7 +3661,7 @@ export function EditorShell({
             )
           }
           properties={
-            dockTools || (!compact && band === 'wide') ? (
+            dockTools || layoutView === 'script' || (!compact && band === 'wide') ? (
               <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden">
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
                   <h2 className="text-sm font-semibold">Properties</h2>

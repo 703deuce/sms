@@ -34,7 +34,7 @@ export const EDITOR_GRID = {
   rootScript:
     'relative isolate grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[minmax(0,1fr)_var(--editor-timeline-row-h,168px)] ' +
-    'lg:grid-cols-[minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_var(--editor-timeline-row-h,168px)]',
+    'lg:grid-cols-[minmax(0,1fr)_auto] lg:grid-rows-[minmax(0,1fr)_var(--editor-timeline-row-h,168px)]',
   /** Script view: keep the mobile rail, hide the desktop rail. */
   railScript: 'min-h-0 lg:hidden',
   rail: 'min-h-0 lg:row-span-2 lg:col-start-1 lg:row-start-1',
@@ -51,7 +51,9 @@ export const EDITOR_GRID = {
     'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-panel lg:col-start-1 lg:row-start-1',
   properties:
     'hidden min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card 2xl:flex 2xl:col-start-4 2xl:row-start-1',
-  /** Script view: properties column absent (do not merge with properties + 2xl:hidden). */
+  /** Script view: Properties peer column (same contract as timeline dock). */
+  propertiesScript:
+    'relative isolate z-0 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-2 lg:row-start-1 lg:w-[var(--editor-props-w,clamp(200px,17vw,300px))] lg:min-h-0 lg:[display:var(--editor-props-visible,flex)]',
   propertiesHidden: 'hidden',
   timeline:
     'col-span-full min-h-0 overflow-y-auto rounded-lg border border-border bg-card max-h-[clamp(160px,45dvh,560px)] lg:col-[2/-1] lg:row-start-2',
@@ -159,9 +161,11 @@ export function EditorLayout(props: {
       : EDITOR_GRID.timeline
   const propertiesClass = dock
     ? EDITOR_GRID.propertiesDock
-    : compact || hidePropertiesColumn
-      ? EDITOR_GRID.propertiesHidden
-      : EDITOR_GRID.properties
+    : scriptView && !hidePropertiesColumn
+      ? EDITOR_GRID.propertiesScript
+      : compact || hidePropertiesColumn
+        ? EDITOR_GRID.propertiesHidden
+        : EDITOR_GRID.properties
 
   return (
     <div
@@ -229,10 +233,13 @@ export function EditorLayout(props: {
       <section data-region="preview" className={previewClass}>
         {props.preview}
       </section>
-      {compact && !dock ? null : (
+      {compact && !dock && !scriptView ? null : (
         <aside
           data-region="properties"
-          className={cn(propertiesClass, dock && 'lg:[display:var(--editor-props-visible,flex)]')}
+          className={cn(
+            propertiesClass,
+            (dock || (scriptView && !hidePropertiesColumn)) && 'lg:[display:var(--editor-props-visible,flex)]',
+          )}
         >
           {props.properties}
         </aside>
