@@ -547,19 +547,44 @@ export const TITLE_TEMPLATES: TitleTemplate[] = [
 export function newTemplateItems(templateId: string, mkId: () => string, playheadMs: number, clipEndMs: number): TextItem[] {
   const tpl = TITLE_TEMPLATES.find((t) => t.id === templateId)
   if (!tpl) return []
-  const [a, b] = itemWindow(playheadMs, clipEndMs)
+  const [a] = itemWindow(playheadMs, clipEndMs)
+  // E9: the last delayed part must still get its full play duration. The old
+  // shared 3s window clamped late countdown numbers to the same end frame.
   return tpl.parts.map(({ delayMs, durMs, ...p }) => {
-    const s = Math.min(b - TEXT_MIN_MS, a + (delayMs ?? 0))
+    const s = Math.min(Math.max(0, clipEndMs - TEXT_MIN_MS), a + (delayMs ?? 0))
+    const end = Math.min(clipEndMs, s + Math.max(TEXT_MIN_MS, durMs ?? TEXT_DEFAULT_MS))
     const parsed = p.kind ? null : parseInlineMarks(p.text)
     return {
       ...p,
       ...(parsed ? { text: parsed.text, ...(parsed.marks.length ? { marks: parsed.marks } : {}) } : {}),
       id: mkId(),
       startMs: Math.max(a, s),
-      endMs: durMs ? Math.min(b, Math.max(a, s) + Math.max(TEXT_MIN_MS, durMs)) : b,
+      endMs: end,
       style: { ...p.style },
     } as TextItem
   })
+}
+
+/** E9: keep a newly added template's parts together and move the entire group
+ * away from other text at this playhead; never flatten their deliberately
+ * different relative positions or their staggered entrance times. */
+export function placeTemplateGroupInClearSpace(existing: readonly TextItem[], group: TextItem[]): TextItem[] {
+  if (!group.length) return group
+  const overlapsTime = (a: TextItem, b: TextItem) => a.startMs < b.endMs && b.startMs < a.endMs
+  const near = (a: TextItem, b: TextItem) =>
+    Math.abs(a.x - b.x) < 13 && Math.abs(a.y - b.y) < 10
+  for (let step = 0; step < 14; step++) {
+    const dx = step % 3 === 0 ? 0 : step % 3 === 1 ? -18 : 18
+    const dy = step === 0 ? 0 : (Math.ceil(step / 3) * 12) * (step % 2 ? -1 : 1)
+    const candidate = group.map(it => ({
+      ...it,
+      x: Math.max(10, Math.min(90, it.x + dx)),
+      y: Math.max(10, Math.min(90, it.y + dy)),
+    }))
+    if (candidate.every(it => existing.every(old => !overlapsTime(it, old) || !near(it, old)))) return candidate
+  }
+  // When there is no fully clear slot, still offset the new group visibly.
+  return group.map(it => ({ ...it, x: Math.min(90, it.x + 18), y: Math.min(90, it.y + 12) }))
 }
 
 /** `<b>` / `<i>` inline tags → plain text + marks (used by templates only). */

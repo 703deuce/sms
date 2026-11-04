@@ -27,7 +27,7 @@ import {
   type OpCtx,
   type TimelineItem,
 } from '@/lib/clips/editor/clip-timeline'
-import { addGapAt } from '@/lib/clips/editor/inserts'
+import { addGapAt, GAP_SOURCE_ID } from '@/lib/clips/editor/inserts'
 import type { ColorSpec } from '@/lib/clips/editor/color'
 import { setBrollFx, type LayerFx } from '@/lib/clips/editor/layer-fx'
 import type { KeyframeTarget, KeyframeTrack, LayerProp } from '@/lib/clips/editor/motion-schema'
@@ -391,6 +391,35 @@ export function moveVideoSegmentWithGap(ctx: OpCtx, segId: string, beforeId: str
   const nextPreview = { ...ctx.previewEdits, sectionOrder: next.sectionOrder }
   const inserts = addGapAt(next.inserts, timebaseFor(nextPreview).segs, moved.startMs, newGapId(), duration)
   return inserts ? { ...next, inserts } : null
+}
+
+/**
+ * B1 retest: a Magnet-off main clip can be shifted within its reorder slot.
+ * Inserting a real gap at its source boundary moves the video/linked voice in export
+ * time without changing section order. A left drag consumes an existing gap at
+ * that boundary; without one the clip cannot overlap the preceding main video.
+ */
+export function shiftVideoSegmentWithinSlot(ctx: OpCtx, segId: string, deltaMs: number): ClipEditsV2 | null {
+  const item = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits }).video.find(v => v.id === segId)
+  if (!item || item.srcInMs == null || refLocked(ctx.edits, { lane: 'video', id: segId })) return null
+  const delta = Math.round(deltaMs)
+  if (Math.abs(delta) < 1) return null
+  const inserts = ctx.edits.inserts ?? []
+  // Gap inserts are anchored to a source coordinate and displayed before the clip at that point.
+  const atSrcMs = item.srcInMs
+  const existing = inserts.filter(ins => !ins.append && ins.atSrcMs === atSrcMs && ins.sourceId === GAP_SOURCE_ID)
+  if (delta < 0) {
+    const gap = existing[existing.length - 1]
+    if (!gap) return null
+    const newDuration = gap.durMs + delta
+    return { ...ctx.edits, inserts: inserts.flatMap(ins =>
+      ins.id !== gap.id ? [ins] : newDuration >= 100 ? [{ ...ins, durMs: newDuration }] : []) }
+  }
+  const gap = existing[existing.length - 1]
+  if (gap) return { ...ctx.edits, inserts: inserts.map(ins =>
+    ins.id === gap.id ? { ...ins, durMs: Math.min(600_000, ins.durMs + delta) } : ins) }
+  const next = addGapAt(inserts, timebaseFor(ctx.previewEdits).segs, item.startMs, newGapId(), delta)
+  return next ? { ...ctx.edits, inserts: next } : null
 }
 
 /** Main-track reorder drop slot from the POINTER position (output ms). null = after last. */

@@ -60,6 +60,7 @@ import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { RepurposePanel } from '@/components/clips/editor/repurpose-panel'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FindClipsInVideoButton } from '@/components/clips/editor/find-clips-in-video-button'
+import { OpenInFullVideoButton } from '@/components/clips/editor/open-in-full-video-button'
 import { HighlightsListPanel } from '@/components/clips/editor/highlights-list-panel'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
@@ -505,6 +506,7 @@ export function EditorShell({
     historyPast,
     historyPastLabels,
     historyFuture,
+    historyFutureLabels,
     canUndo,
     canRedo,
     saveState,
@@ -585,6 +587,7 @@ export function EditorShell({
       historyPast={historyPast}
       historyPastLabels={historyPastLabels}
       historyFuture={historyFuture}
+      historyFutureLabels={historyFutureLabels}
       jumpHistory={jumpHistory}
       disabled={!canUndo && !canRedo}
     />
@@ -738,7 +741,7 @@ export function EditorShell({
   const editorWordsContextMs = showSurrounding ? SHOW_SURROUNDING_CONTEXT_MS : undefined
   // FIX1 (E.2): one window for the timeline + trim clamp (timeline.tsx clampTrimWithMediaBounds, line 476).
   const editorWin = editorWindowMs(editorMedia?.minMs, editorMedia?.maxMs, bounds.clipStartMs, bounds.clipEndMs)
-  const { words: clipEditorWords, wordsLoading, reloadWords } = useEditorWords(
+  const { words: clipEditorWords, wordsLoading, loadingReason, reloadWords } = useEditorWords(
     clipId,
     words,
     bounds,
@@ -2107,6 +2110,7 @@ export function EditorShell({
         <TranscriptPanel
           words={editorWords}
           wordsLoading={wordsLoading}
+          wordsLoadingReason={loadingReason}
           clipStartMs={bounds.clipStartMs}
           clipEndMs={bounds.clipEndMs}
           shots={cropShots}
@@ -2358,7 +2362,11 @@ export function EditorShell({
           onAttachMusic={attachMusicGeneration}
           onPatchMusic={patchMusic}
           onRemoveMusic={() => setMusic(null)}
-          onAddSfx={(generationId, atMs) => addSfx({ generationId, atMs, volume: 0.8 })}
+          onAddSfx={(generationId, atMs) => {
+            addSfx({ generationId, atMs, volume: 0.8 })
+            setTimelineSelReq((prev) => ({ lane: 'sfx', id: generationId, seq: (prev?.seq ?? 0) + 1 }))
+            setCanvasSel({ target: `sfx:${generationId}`, label: 'Sound effect' })
+          }}
           onUpdateSfx={updateSfx}
           onRemoveSfx={removeSfx}
           onPatchStudioSound={patchStudioSound}
@@ -2501,10 +2509,6 @@ export function EditorShell({
             durationMs={outDur}
             brandTemplates={brandTemplates}
             onApplyBrand={applyBrandTemplateById}
-            onOpenBgRemoval={() => {
-              setCanvasSel({ target: 'video', label: 'Video' })
-              selectPanel('inspector')
-            }}
             layoutSlot={
               t6TemplatesEnabled() ? (
                 <TemplateLayoutPanel
@@ -3442,7 +3446,7 @@ export function EditorShell({
                 durationMs={bounds.clipEndMs - bounds.clipStartMs}
                 onStarted={fvHighlights.startedFind}
               />
-            ) : null
+            ) : <OpenInFullVideoButton clipId={clipId} />
           }
         />
       {/* File > Versions / History and the project menu keep the full version manager accessible without a top-bar button. */}
@@ -3672,7 +3676,7 @@ export function EditorShell({
               <div className="flex h-full min-h-0 min-w-0" data-testid="unified-tools-content">
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-testid="unified-inspector-body">
                   <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/70 px-3">
-                    <h2 className="truncate text-sm font-semibold">{panel === 'transcript' ? 'Inspector' : (TAB_META[panel]?.label ?? 'Tools')}</h2>
+                    <h2 className="truncate text-sm font-semibold">{panel === 'transcript' ? 'Properties' : (TAB_META[panel]?.label ?? 'Tools')}</h2>
                   </div>
                   {panelTabs.length > 1 ? (
                     <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/70 p-1" role="tablist" aria-label="Tool categories">
@@ -3691,11 +3695,9 @@ export function EditorShell({
                     </div>
                   ) : null}
                   <ScrollArea className="min-h-0 flex-1">
-                    {panel === 'transcript' ? (
-                      <p className="p-4 text-sm leading-relaxed text-muted-foreground">Select a tool on the right to edit its settings. The transcript stays beside the video.</p>
-                    ) : (
-                      <div className="p-3">{renderSidePanels(panel)}</div>
-                    )}
+                    <div className="p-3">
+                      {panel === 'transcript' ? renderInspectorPropertiesPanel(true) : renderSidePanels(panel)}
+                    </div>
                   </ScrollArea>
                 </div>
                 <EditorInspectorToolRail

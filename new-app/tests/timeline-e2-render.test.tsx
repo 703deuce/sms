@@ -113,6 +113,46 @@ describe('E2 multi-track timeline', () => {
     expect(getByTestId('timeline-lane-header-voice')).toBeTruthy()
   })
 
+  it('C5 keeps moment actions inside the moment header instead of covering the time ruler', () => {
+    const ui = setup(edits(), {
+      momentFocus: {
+        fromClipId: 'source-clip', startMs: 2000, endMs: 12000, title: 'Selected moment',
+        onRangeChange: vi.fn(), onMakeClip: vi.fn(),
+      },
+      onMomentSeek: vi.fn(),
+    })
+    const bar = ui.getByTestId('full-video-moment-lane')
+    const controls = ui.getByTestId('full-video-moment-popover')
+    expect(controls.parentElement).toBe(bar)
+    expect(controls.className).not.toContain('top-full')
+    expect(ui.getByTestId('timeline-ruler')).toBeTruthy()
+    expect(ui.getByTestId('moment-make-clip')).toBeTruthy()
+  })
+
+  it('N7 shows editable volume envelopes on Video/Voice when the menu is enabled', () => {
+    const ui = setup()
+    expect(ui.queryByTestId('timeline-envelope')).toBeNull()
+    fireEvent.click(ui.getByTestId('timeline-more-menu'))
+    fireEvent.click(ui.getByTestId('timeline-envelopes'))
+    const video = ui.getAllByTestId('timeline-item-video')[0]!
+    const voice = ui.getAllByTestId('timeline-item-voice')[0]!
+    expect(video.querySelector('[data-testid="timeline-envelope"][data-kind="volume"]')).toBeTruthy()
+    expect(voice.querySelector('[data-testid="timeline-envelope"][data-kind="volume"]')).toBeTruthy()
+    const line = video.querySelector('[data-testid="timeline-envelope-line"]') as SVGPolylineElement
+    expect(line.getAttribute('points')).toBeTruthy()
+    expect(line.getAttribute('stroke-width')).toBe('2.5')
+  })
+
+  it('C1 keeps lane viewport exactly as tall as its tracks, not a stretched empty region', () => {
+    const ui = setup()
+    const trackHeight = parseFloat(ui.getByTestId('timeline-track').style.height)
+    const body = ui.getByTestId('timeline-body')
+    expect(parseFloat(body.style.height)).toBe(trackHeight)
+    expect(body.style.flex).toBe('0 1 auto')
+    expect(ui.getAllByTestId('timeline-lane-video')).toHaveLength(1)
+    expect(ui.getByTestId('timeline-add-track-row')).toBeTruthy()
+  })
+
   it('B-roll bars sit at their OUTPUT time after a cut (old timeline drew them on the source span)', () => {
     const { broll, pxPerMs } = setup()
     expect(parseFloat(broll('b1').style.left)).toBeCloseTo(5000 * pxPerMs(), 3)
@@ -168,6 +208,25 @@ describe('E2 multi-track timeline', () => {
       expect(next.sectionOrder).toEqual([[9000, 20000], [0, 9000]])
       expect(next.inserts).toEqual(expect.arrayContaining([
         expect.objectContaining({ sourceId: 'gap', durMs: 9000 }),
+      ]))
+    } finally {
+      localStorage.removeItem('transovo.timeline.magnet')
+    }
+  })
+
+  it('B1 retest: short Magnet-off drag commits a real gap instead of no-op', () => {
+    localStorage.setItem('transovo.timeline.magnet', '0')
+    try {
+      const e = edits({ cutRanges: [], videoSplits: [9000] })
+      const ui = setup(e)
+      const last = ui.getAllByTestId('timeline-item-video')[1]!
+      const track = ui.getByTestId('timeline-track')
+      const actualPxPerMs = parseFloat(track.style.width) / Number(track.getAttribute('data-duration-ms'))
+      drag(last, 1200 * actualPxPerMs)
+      expect(ui.onCommitEdits).toHaveBeenCalledTimes(1)
+      const next = ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2
+      expect(next.inserts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ sourceId: 'gap', atSrcMs: 9000, durMs: 1200 }),
       ]))
     } finally {
       localStorage.removeItem('transovo.timeline.magnet')
@@ -296,6 +355,53 @@ describe('E2 multi-track timeline', () => {
     act(() => fireEvent.pointerUp(window, { clientX: 100 - 2000 * pxPerMs(), pointerId: 1 }))
     expect((onCommitEdits.mock.calls[0]![0] as ClipEditsV2).trim.out).toBe(18000)
     expect(parseFloat(getByTestId('timeline-track').style.width)).toBeGreaterThanOrEqual(widthBefore)
+  })
+
+  it('N2 blocks single-letter commands and Space after canvas Ctrl+A until the next click', () => {
+    const ui = setup()
+    fireEvent.keyDown(ui.getByTestId('timeline-scroll'), { key: 'a', code: 'KeyA', ctrlKey: true })
+    const prior = ui.onCommitEdits.mock.calls.length
+    for (const key of ['h', 'e', 'l', 'l', 'o', ' ', 'i', 's']) {
+      fireEvent.keyDown(window, { key, code: key === ' ' ? 'Space' : undefined })
+    }
+    expect(ui.onCommitEdits).toHaveBeenCalledTimes(prior)
+    expect(ui.onSeekOutput).not.toHaveBeenCalled()
+    fireEvent.pointerDown(ui.getByTestId('timeline-root'), { button: 0 })
+    fireEvent.keyDown(window, { key: 's', code: 'KeyS' })
+    expect(ui.onCommitEdits.mock.calls.length).toBeGreaterThan(prior)
+  })
+
+  it('B2 allows an unselected end trim and clamps live geometry and commit at the media limit', () => {
+    const ui = setup()
+    const last = ui.getAllByTestId('timeline-item-video').at(-1)!
+    expect(last.getAttribute('data-selected')).toBeNull()
+    const handle = last.querySelector('[data-testid="timeline-trim-end"]')!
+    const dx = 35_000 * ui.pxPerMs()
+    act(() => fireEvent.pointerDown(handle, { button: 0, clientX: 100, pointerId: 91 }))
+    act(() => fireEvent.pointerMove(window, { clientX: 100 + dx, pointerId: 91 }))
+    expect(Number(last.getAttribute('data-end-ms'))).toBeLessThanOrEqual(39000)
+    act(() => fireEvent.pointerUp(window, { clientX: 100 + dx, pointerId: 91 }))
+    expect((ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2).trim.out).toBe(40000)
+  })
+
+  it('B2 hit-tests an unselected clip body within eight pixels of its edge', () => {
+    const ui = setup()
+    const last = ui.getAllByTestId('timeline-item-video').at(-1)!
+    expect(last.getAttribute('data-selected')).toBeNull()
+    const rect = { x: 0, y: 0, top: 0, bottom: 50, left: 0, right: 200, width: 200, height: 50, toJSON: () => ({}) }
+    Object.defineProperty(last, 'getBoundingClientRect', { configurable: true, value: () => rect })
+    act(() => fireEvent.pointerDown(last, { button: 0, clientX: 195, pointerId: 32 }))
+    act(() => fireEvent.pointerMove(window, { clientX: 195 - 500 * ui.pxPerMs(), pointerId: 32 }))
+    act(() => fireEvent.pointerUp(window, { clientX: 195 - 500 * ui.pxPerMs(), pointerId: 32 }))
+    expect((ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2).trim.out).toBe(19500)
+  })
+
+  it('B2 left trim can start on an unselected clip', () => {
+    const ui = setup()
+    const first = ui.getAllByTestId('timeline-item-video')[0]!
+    const handle = first.querySelector('[data-testid="timeline-trim-start"]')!
+    drag(handle, 1000 * ui.pxPerMs())
+    expect((ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2).trim.in).toBe(1000)
   })
 
   it('without onCommitEdits the lanes are read-only', () => {

@@ -20,16 +20,19 @@ function buildRows(
   past: ClipEditsV2[],
   pastLabels: (string | undefined)[],
   future: ClipEditsV2[],
+  futureLabels: (string | undefined)[],
 ): Row[] {
   const rows: Row[] = []
   for (let i = future.length - 1; i >= 0; i--) {
     rows.push({
       kind: 'future',
-      label: describeEditsChange(i === 0 ? edits : future[i - 1]!, future[i]!),
+      label: futureLabels[i]?.trim() || describeEditsChange(i === 0 ? edits : future[i - 1]!, future[i]!),
       steps: i + 1,
     })
   }
-  rows.push({ kind: 'current', label: 'Current' })
+  rows.push({ kind: 'current', label: past.length
+    ? `Current · ${pastLabels[past.length - 1]?.trim() || describeEditsChange(past[past.length - 1]!, edits)}`
+    : 'Original clip · No edits yet' })
   for (let i = past.length - 1; i >= 0; i--) {
     const steps = -(past.length - i)
     const prev = past[i]!
@@ -45,6 +48,7 @@ export function EditorHistoryPanel({
   historyPast,
   historyPastLabels,
   historyFuture,
+  historyFutureLabels,
   jumpHistory,
   disabled,
 }: {
@@ -52,12 +56,13 @@ export function EditorHistoryPanel({
   historyPast: ClipEditsV2[]
   historyPastLabels?: (string | undefined)[]
   historyFuture: ClipEditsV2[]
+  historyFutureLabels?: (string | undefined)[]
   jumpHistory: (steps: number) => void
   disabled?: boolean
 }) {
   const rows = useMemo(
-    () => buildRows(edits, historyPast, historyPastLabels ?? [], historyFuture),
-    [edits, historyPast, historyPastLabels, historyFuture],
+    () => buildRows(edits, historyPast, historyPastLabels ?? [], historyFuture, historyFutureLabels ?? []),
+    [edits, historyPast, historyPastLabels, historyFuture, historyFutureLabels],
   )
 
   return (

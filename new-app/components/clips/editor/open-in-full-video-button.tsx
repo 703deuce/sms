@@ -114,7 +114,7 @@ export function OpenInFullVideoButton({ clipId, hasUpload = true }: { clipId: st
       }}
     >
       <ExternalLink className="mr-1 size-3.5 shrink-0" aria-hidden />
-      <span className="max-w-[220px] truncate max-[1499px]:sr-only">{loading ? progress || 'Opening…' : 'Open in full video'}</span>
+      <span className="max-w-[220px] truncate text-xs">{loading ? progress || 'Opening…' : 'Open in full video'}</span>
     </Button>
   )
 }

@@ -126,8 +126,10 @@ export function UnifiedEditorWorkspace({
   }
 
   const mode: TimelineDisplay = focus ? 'focus' : timelineView === 'script' ? 'compact' : 'expanded'
+  // C4: Focus keeps the player visible and divides the entire workspace between
+  // a larger preview and the tracks; hiding the preview left a dead zone on laptops.
   const gridRows = focus
-    ? 'minmax(0,1fr)'
+    ? 'minmax(0, 0.9fr) 9px minmax(0, 1.1fr)'
     : timelineHidden ? 'minmax(0,1fr) 0px 32px'
     : timelineCollapsed && timelineView === 'timeline' ? 'minmax(0,1fr) 9px 112px'
     : timelineView === 'script'
@@ -187,19 +189,19 @@ export function UnifiedEditorWorkspace({
       >
         <div
           ref={workspaceRef}
-          className={cn('min-h-0 min-w-0 overflow-hidden', focus ? 'flex flex-col' : 'grid')}
-          style={focus ? undefined : { gridTemplateRows: gridRows }}
+          className="grid min-h-0 min-w-0 overflow-hidden"
+          style={{ gridTemplateRows: gridRows }}
           data-testid="unified-main-workspace"
           data-timeline-mode={mode}
         >
           <section
-            className={cn('min-h-0 min-w-0 overflow-hidden rounded-md border border-border/70 bg-panel', focus && 'hidden')}
+            className="min-h-0 min-w-0 overflow-hidden rounded-md border border-border/70 bg-panel"
             data-testid="unified-upper-workspace"
-            aria-hidden={focus}
+            aria-hidden={false}
           >
             {main}
           </section>
-          {!focus ? (
+          {(
             <div className="flex min-h-0 items-center justify-center border-y border-border/50 bg-background" data-testid="unified-workspace-toolbar">
 
               <button
@@ -212,14 +214,14 @@ export function UnifiedEditorWorkspace({
                   if (e.key === 'ArrowUp') { e.preventDefault(); persistTimelinePct(timelinePct + 3) }
                   if (e.key === 'ArrowDown') { e.preventDefault(); persistTimelinePct(timelinePct - 3) }
                 }}
-                disabled={timelineView === 'script'}
+                disabled={timelineView === 'script' || focus}
                 className="flex h-2 w-24 cursor-row-resize items-center justify-center text-muted-foreground/70 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
               >
                 <GripHorizontal className="size-3" />
               </button>
             </div>
-          ) : null}
-          <section className={cn('min-h-0 min-w-0 overflow-hidden rounded-md border border-border/70 bg-card', focus && 'flex-1')} data-testid="unified-timeline-region">
+          )}
+          <section className="min-h-0 min-w-0 overflow-hidden rounded-md border border-border/70 bg-card" data-testid="unified-timeline-region">
             {timeline}
           </section>
         </div>

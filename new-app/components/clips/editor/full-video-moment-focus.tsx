@@ -155,26 +155,17 @@ export function FullVideoMomentLane({ durationMs, pxPerMs, offsetPx, focus, onSe
             window.addEventListener('pointerup', up)
           }}
         />
-        <div
-          className="absolute left-0 top-full z-20 mt-1 flex gap-1 rounded-md border border-border bg-popover p-2 text-[11px] shadow-md"
-          data-testid="full-video-moment-popover"
-        >
-          <button
-            type="button"
-            className="rounded bg-primary px-2 py-0.5 text-primary-foreground"
-            data-testid="moment-make-clip"
-            onClick={() => focus.onMakeClip()}
-          >
-            Make clip
-          </button>
-          <button
-            type="button"
-            className="rounded border border-border px-2 py-0.5"
-            onClick={() => onSeek(focus.startMs)}
-          >
-            Seek
-          </button>
-        </div>
+      </div>
+      {/* C5: controls belong inside the moment HEADER lane. The previous
+          top-full popover obscured the ruler immediately below it. */}
+      <div
+        className="absolute right-1 top-1 z-20 flex gap-1 rounded border border-border bg-popover/90 p-0.5 text-[11px] shadow-sm"
+        data-testid="full-video-moment-popover"
+      >
+        <button type="button" className="rounded bg-primary px-2 py-0.5 text-primary-foreground"
+          data-testid="moment-make-clip" onClick={() => focus.onMakeClip()}>Make clip</button>
+        <button type="button" className="rounded border border-border px-2 py-0.5"
+          onClick={() => onSeek(focus.startMs)}>Seek</button>
       </div>
     </div>
   )

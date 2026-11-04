@@ -37,16 +37,25 @@ jobs:
         run: |
           pnpm exec vitest run \
             tests/a1-transcript-cut-map.test.ts \
+            tests/clip-timeline.test.ts \
+            tests/timeline-e2-render.test.tsx \
             tests/c1-laptop-lanes.test.ts \
             tests/clip-timeline.test.ts \
             tests/editor-state-ripple.test.tsx \
             tests/clip-filler-review-lifecycle.test.tsx \
             tests/unified-editor-workspace.test.tsx \
+            tests/history-labels.test.ts \
+            tests/bg-removal-section-preview.test.tsx \
+            tests/editor-words-refetch.test.ts \
+            tests/use-editor-words-source-time.test.tsx \
             tests/text-template-panel-add.test.tsx \
+            tests/g1a-canvas-ui.test.tsx \
             tests/layers-actual-stack.test.tsx \
             tests/preview-stage-e3.test.tsx \
             tests/e8-caption-size-parity.test.ts \
-            tests/ef24-bg-removal-edits.test.ts
+            tests/ef24-bg-removal-edits.test.ts \
+            tests/stock-audio-picker-placement.test.tsx \
+            tests/batch5-template-full-video.test.tsx
 
   captions-worker-regression:
     runs-on: ubuntu-latest

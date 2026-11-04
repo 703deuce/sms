@@ -41,7 +41,9 @@ export function EnvelopeLine({
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [live, setLive] = useState<{ from: number; t: number; v: number } | null>(null)
   const pts = live ? points.map((p) => (p.tMs === live.from ? { ...p, tMs: live.t, v: live.v } : p)) : points
-  const pad = 3
+  // N7: 100% volume was drawn 3px from the clip top under its label/edge.
+  // Keep both extremes inside a visible, hittable band.
+  const pad = Math.min(10, Math.max(4, heightPx / 4))
   const yOf = (v: number) => pad + (1 - (v - min) / Math.max(1e-6, max - min)) * (heightPx - 2 * pad)
   const vOf = (y: number) => min + (1 - (y - pad) / Math.max(1, heightPx - 2 * pad)) * (max - min)
   const xOf = (t: number) => (t - fromLocalMs) * pxPerMs
@@ -54,11 +56,11 @@ export function EnvelopeLine({
     const r = svgRef.current!.getBoundingClientRect()
     return { t: toLocal(e.clientX - r.left), v: vOf(e.clientY - r.top) }
   }
-  const color = kind === 'volume' ? 'stroke-emerald-200' : 'stroke-yellow-300'
+  const color = kind === 'volume' ? 'stroke-emerald-300' : 'stroke-yellow-300'
   return (
     <svg
       ref={svgRef}
-      className="absolute inset-0 z-[11] overflow-visible"
+      className="absolute inset-0 z-[12] overflow-visible pointer-events-auto"
       width={widthPx}
       height={heightPx}
       data-testid="timeline-envelope"
@@ -68,7 +70,7 @@ export function EnvelopeLine({
       <polyline
         points={line}
         className={`fill-none ${color}`}
-        strokeWidth={1.5}
+        strokeWidth={2.5}
         data-testid="timeline-envelope-line"
         style={{ pointerEvents: 'none' }}
       />
@@ -76,7 +78,7 @@ export function EnvelopeLine({
       <polyline
         points={line}
         className="fill-none stroke-transparent"
-        strokeWidth={9}
+        strokeWidth={12}
         style={{ cursor: readOnly ? 'default' : 'copy', pointerEvents: readOnly ? 'none' : 'stroke' }}
         data-testid="timeline-envelope-hit"
         onPointerDown={(e) => {

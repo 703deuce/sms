@@ -14,6 +14,7 @@ JOB_TYPES: tuple[str, ...] = (
     "PROCESS_PROJECT",
     "REPLACE_CLIP",
     "RENDER_CLIP",
+    "BG_MATTE_PREVIEW",
     "REFRAME_CROP",
     "MUSIC",
     "THUMBNAIL",

@@ -50,4 +50,34 @@ describe('TextPanel multi-part templates', () => {
       expect(onSelect).toHaveBeenCalledOnce()
     })
   }
+  it('E9: countdown parts start at exactly the playhead and remain sequential for a full second', () => {
+    const onEdits = vi.fn()
+    const ui = render(<TextPanel edits={defaultEdits({ clipStartMs: 0, clipEndMs: 60_000 })}
+      onEdits={onEdits} playheadMs={3000} durationMs={60000} selectedId={null} onSelect={vi.fn()} />)
+    fireEvent.click(ui.getByTestId('text-template-c_cd_321'))
+    const parts = onEdits.mock.calls[0]![0].textItems
+    expect(parts.map((t: { startMs: number }) => t.startMs)).toEqual([3000, 4000, 5000])
+    expect(parts.map((t: { endMs: number }) => t.endMs)).toEqual([4000, 5000, 6000])
+    expect(parts.every((t: { style: { size: number } }) => t.style.size >= 200)).toBe(true)
+  })
+
+  it('E9: consecutive quote templates are visibly separated as intact groups', () => {
+    const initial = defaultEdits({ clipStartMs: 0, clipEndMs: 60_000 })
+    const log: typeof initial[] = []
+    function Editor() {
+      const [edits, setEdits] = useState(initial)
+      return <TextPanel edits={edits} playheadMs={3000} durationMs={60_000}
+        selectedId={null} onSelect={vi.fn()} onEdits={(next) => { log.push(next); setEdits(next) }} />
+    }
+    const ui = render(<Editor />)
+    fireEvent.click(ui.getByTestId('text-template-c_qs_quote'))
+    fireEvent.click(ui.getByTestId('text-template-c_qs_quote'))
+    const first = log[0]!.textItems!
+    const second = log[1]!.textItems!.filter(t => !first.some(old => old.id === t.id))
+    expect(second).toHaveLength(3)
+    expect(second[1]!.x !== first[1]!.x || second[1]!.y !== first[1]!.y).toBe(true)
+    expect(second[1]!.style.size).toBeGreaterThan(100)
+    expect(second[0]!.y - second[1]!.y).toBe(first[0]!.y - first[1]!.y)
+  })
+
 })

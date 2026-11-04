@@ -62,6 +62,11 @@ export function trimNeedsEditorWordsRefetch(
       : undefined
   const { minInMs, maxOutMs } = extendedTrimLimits(bounds.clipStartMs, bounds.clipEndMs, limits)
   if (trim.in < minInMs || trim.out > maxOutMs) return false
+  // N5: a normal clip may begin/end in silence. Missing words at those
+  // edges are not evidence of an extended trim and must not start a refetch.
+  // Still fetch a genuinely missing transcript (no words at all).
+  if (!words.length) return true
+  if (trim.in >= bounds.clipStartMs && trim.out <= bounds.clipEndMs) return false
   const span = wordTimelineBoundsMs(words)
   if (!span) return true
   if (trim.in < span.minMs - slackMs) return true

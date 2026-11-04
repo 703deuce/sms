@@ -29,32 +29,69 @@ export function BgRemovalSection({
   const bg = cur?.background
   const [renderStatus, setRenderStatus] = useState<'idle' | 'queued' | 'rendering'>('idle')
   const [mattePreview, setMattePreview] = useState<{ state: string; url: string | null }>({ state: 'idle', url: null })
+  const [retryToken, setRetryToken] = useState(0)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   useEffect(() => {
-    if (!enabled || !clipId) { setRenderStatus('idle'); setMattePreview({ state: 'idle', url: null }); return }
+    if (!enabled || !clipId) {
+      setRenderStatus('idle')
+      setMattePreview({ state: 'idle', url: null })
+      return
+    }
     let gone = false
+    const endpoint = `/api/clips/clips/${encodeURIComponent(clipId)}/bg-matte`
+    const quality = cur?.quality === 'detail' ? 'detail' : 'standard'
+    setMattePreview({ state: 'queued', url: null })
+    // E2: create (or reuse) a real 6s mask job as soon as removal is enabled.
+    // This sample is provided at 0 user credits, independent of export billing.
+    const start = async () => {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quality }),
+        })
+        const payload = await res.json() as { data?: { state?: string; url?: string | null }; error?: string }
+        if (gone) return
+        if (!res.ok) {
+          setMattePreview({ state: 'failed', url: null })
+          setPreviewError(payload.error || 'Unable to queue matte preview')
+          return
+        }
+        setPreviewError(null)
+        setMattePreview({ state: payload.data?.state ?? 'queued', url: payload.data?.url ?? null })
+      } catch {
+        if (!gone) {
+          setMattePreview({ state: 'failed', url: null })
+          setPreviewError('Could not connect to the preview worker')
+        }
+      }
+    }
     const check = async () => {
       try {
-        const res = await fetch(`/api/clips/clips/${encodeURIComponent(clipId)}/active-render`)
-        if (!res.ok) return
-        const payload = await res.json() as { data?: { render?: { status?: string } | null } }
-        if (gone) return
-        const status = payload.data?.render?.status
-        setRenderStatus(status === 'RENDERING' ? 'rendering' : status === 'QUEUED' ? 'queued' : 'idle')
-      } catch { /* Status is advisory; export handling owns failures and retries. */ }
+        const res = await fetch(`${endpoint}?quality=${quality}`, { cache: 'no-store' })
+        if (res.ok) {
+          const payload = await res.json() as { data?: { state?: string; url?: string | null } }
+          if (!gone) {
+            const next = { state: payload.data?.state ?? 'idle', url: payload.data?.url ?? null }
+            setMattePreview((prev) => prev.state === next.state && prev.url === next.url ? prev : next)
+          }
+        }
+      } catch { /* Keep last known status. User can retry a failed generation. */ }
       try {
-        const url = `/api/clips/clips/${encodeURIComponent(clipId)}/bg-matte?quality=${cur?.quality === 'detail' ? 'detail' : 'standard'}`
-        const res = await fetch(url, { cache: 'no-store' })
-        if (!res.ok) return
-        const payload = await res.json() as { data?: { state?: string; url?: string | null } }
-        if (gone) return
-        const next = { state: payload.data?.state ?? 'idle', url: payload.data?.url ?? null }
-        setMattePreview((prev) => prev.state === next.state && prev.url === next.url ? prev : next)
-      } catch { /* Cached matte lookup is optional; do not interrupt editing. */ }
+        const res = await fetch(`/api/clips/clips/${encodeURIComponent(clipId)}/active-render`)
+        if (res.ok) {
+          const payload = await res.json() as { data?: { render?: { status?: string } | null } }
+          if (!gone) {
+            const status = payload.data?.render?.status
+            setRenderStatus(status === 'RENDERING' ? 'rendering' : status === 'QUEUED' ? 'queued' : 'idle')
+          }
+        }
+      } catch { /* Export progress is independent of the matte preview. */ }
     }
-    void check()
-    const interval = window.setInterval(() => { void check() }, 4000)
+    void start().then(() => { if (!gone) void check() })
+    const interval = window.setInterval(() => { void check() }, 3000)
     return () => { gone = true; window.clearInterval(interval) }
-  }, [clipId, enabled, cur?.quality])
+  }, [clipId, enabled, cur?.quality, retryToken])
   return (
     <div className="space-y-1.5" data-testid="bg-removal">
       <div className="flex items-center gap-1.5">
@@ -164,15 +201,19 @@ export function BgRemovalSection({
       <p className="text-[11px] text-muted-foreground" role="status" data-testid="bg-removal-note">
         {!enabled ? 'Off. Enable Remove background to include a person matte in your export.'
           : mattePreview.state === 'ready' && mattePreview.url ? 'Subject matte ready. Inspect the genuine mask below; the worker composites it during export.'
-          : mattePreview.state === 'processing' ? 'Generating person matte on the worker…'
-          : mattePreview.state === 'failed' ? 'Matte generation failed. Retry the export or check the worker logs.'
+          : mattePreview.state === 'processing' ? 'Generating a 6-second person matte preview (0 credits)…'
+          : mattePreview.state === 'failed' ? (previewError || 'Matte preview generation failed. Retry below.')
+          : mattePreview.state === 'queued' ? 'Person matte preview queued (0 credits)…'
           : renderStatus === 'rendering' ? 'Export rendering; preparing the person matte…'
           : renderStatus === 'queued' ? 'Background matte queued with the export worker…'
-          : 'Enabled. Start an export to generate the person matte; the live video preview remains unchanged until processing.'}
+          : 'Person matte preview will generate automatically (0 credits).'}
       </p>
+      {enabled && mattePreview.state === 'failed' && clipId ? (
+        <button type="button" className={btn} onClick={() => { setPreviewError(null); setRetryToken(v => v + 1) }} data-testid="bg-matte-retry">Retry matte preview · 0 credits</button>
+      ) : null}
       {enabled && mattePreview.url ? (
         <div className="space-y-1 rounded-md border border-border/60 p-2" data-testid="bg-matte-preview">
-          <p className="text-[11px] font-medium">Person matte preview (grayscale mask)</p>
+          <p className="text-[11px] font-medium">Person matte preview (6-second grayscale mask)</p>
           <video src={mattePreview.url} controls muted playsInline preload="metadata" className="max-h-40 w-full rounded bg-black object-contain" aria-label="Generated person matte preview" />
           <p className="text-[10px] text-muted-foreground">White keeps the person; black replaces the background. The final background and other layers are composited on export.</p>
         </div>
