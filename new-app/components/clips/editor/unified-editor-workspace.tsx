@@ -162,11 +162,13 @@ export function UnifiedEditorWorkspace({
           data-testid="unified-main-workspace"
           data-timeline-mode={mode}
         >
-          {!focus ? (
-            <section className="min-h-0 min-w-0 overflow-hidden rounded-md border border-border/70 bg-panel" data-testid="unified-upper-workspace">
-              {main}
-            </section>
-          ) : null}
+          <section
+            className={cn('min-h-0 min-w-0 overflow-hidden rounded-md border border-border/70 bg-panel', focus && 'hidden')}
+            data-testid="unified-upper-workspace"
+            aria-hidden={focus}
+          >
+            {main}
+          </section>
           {!focus ? (
             <button
               type="button"
