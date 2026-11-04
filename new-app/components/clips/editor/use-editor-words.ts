@@ -38,28 +38,36 @@ export function useEditorWords(
 
     const trimSnap = { in: trim.in, out: trim.out }
     const ctxSnap = contextRef.current
-    const handle = window.setTimeout(() => {
-      if (!trimNeedsEditorWordsRefetch(wordsRef.current, trimSnap, bounds, 250, extendMs)) return
+    let active = true
+    const load = () => {
+      if (!active || !trimNeedsEditorWordsRefetch(wordsRef.current, trimSnap, bounds, 250, extendMs)) return
       setWordsLoading(true)
       void fetchClipEditorWords(clipId, trimSnap, ctxSnap)
         .then((data) => {
           if (
+            !active ||
             lastTrimRef.current.in !== trimSnap.in ||
             lastTrimRef.current.out !== trimSnap.out ||
             contextRef.current !== ctxSnap
-          ) {
-            return
-          }
+          ) return
           setWords(data.words)
           wordsRef.current = data.words
         })
         .catch(() => {
-          /* keep prior words; transcript panel still shows best-effort slice */
+          /* retain prior words and let the user retry if loading fails */
         })
-        .finally(() => setWordsLoading(false))
-    }, 280)
+        .finally(() => { if (active) setWordsLoading(false) })
+    }
+    // No initial words means a transcript is absent: fetch immediately instead of
+    // waiting for a trim-drag debounce. Extended trims with existing words still debounce.
+    const delay = wordsRef.current.length ? 280 : 0
+    const handle = delay ? window.setTimeout(load, delay) : null
+    if (!delay) load()
 
-    return () => window.clearTimeout(handle)
+    return () => {
+      active = false
+      if (handle != null) window.clearTimeout(handle)
+    }
   }, [
     clipId,
     bounds.clipStartMs,
