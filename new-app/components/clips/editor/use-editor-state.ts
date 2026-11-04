@@ -467,8 +467,16 @@ export function useEditorState(
         dispatch({ type: 'pass', edits: rippled, label: passLabel })
         return
       }
-      // SCRIPT_DOC5: always store the full edit (cutRanges + cutCleanupKinds + cutQualityMeta) as one undo step.
-      dispatch({ type: 'set', edits: rippled })
+      // D1: source words are available here (not in persisted edits). Store the
+      // deleted phrase with the undo snapshot instead of guessing it later.
+      const removedWords = ranges.flatMap(([a, b]) => spans
+        .filter(w => w.s * 1000 >= a - 1 && w.e * 1000 <= b + 1)
+        .map(w => w.w)).filter(Boolean)
+      const phrase = removedWords.length && removedWords.length <= 12
+        ? removedWords.join(' ').slice(0, 72) : ''
+      dispatch({ type: 'pass', edits: rippled, label: phrase
+        ? `Deleted “${phrase}”`
+        : ranges.length === 1 ? 'Deleted transcript segment' : `Deleted ${ranges.length} transcript segments` })
     },
     [bumpLocalRevision, clipId, rippleFrom, wordSpans],
   )
