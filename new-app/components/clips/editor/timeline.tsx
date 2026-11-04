@@ -947,10 +947,10 @@ export function Timeline({
     return () => window.removeEventListener('resize', onResize)
   }, [])
   // TIMELINE_LAYOUT5: keyframe strip under the toolbar is on demand (same controls live in Properties > Transform).
-  const [kfStripOn, setKfStripOn] = useState(false)
+  const [kfStripOn, setKfStripOn] = useState(true)
   useEffect(() => {
     try {
-      const s = window.localStorage.getItem('clips.timeline.kfStrip')
+      const s = window.localStorage.getItem('clips.timeline.kfStrip.v2')
       setKfStripOn(s == null ? true : s === '1')
     } catch {
       /* ignore */
@@ -959,7 +959,7 @@ export function Timeline({
   const toggleKfStrip = () =>
     setKfStripOn((v) => {
       try {
-        window.localStorage.setItem('clips.timeline.kfStrip', v ? '0' : '1')
+        window.localStorage.setItem('clips.timeline.kfStrip.v2', v ? '0' : '1')
       } catch {
         /* ignore */
       }

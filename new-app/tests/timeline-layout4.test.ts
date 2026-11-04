@@ -3,14 +3,13 @@ import { EDITOR_GRID } from '@/components/clips/editor/editor-layout'
 import { clampLaneH, LANE_H_DEFAULT, laneHeights, sanitizeLaneHeights } from '@/lib/clips/editor/lane-heights'
 
 describe('TIMELINE_LAYOUT5 tab strip on top of the tools card', () => {
-  it('strip above tools card in column 1; preview/properties span both rows; no 4th column; timeline row 3', () => {
-    expect(EDITOR_GRID.railDock).toContain('lg:col-start-1')
-    expect(EDITOR_GRID.railDock).toContain('lg:row-start-1')
-    expect(EDITOR_GRID.panelDock).toContain('lg:row-start-2')
+  it('tools card spans column 1; preview/properties span both rows; timeline row 2', () => {
+    expect(EDITOR_GRID.toolsDock).toContain('lg:col-start-1')
+    expect(EDITOR_GRID.toolsDockPanel).toContain('flex-1')
     expect(EDITOR_GRID.previewDock).toContain('lg:row-span-2')
     expect(EDITOR_GRID.propertiesDock).toContain('lg:row-span-2')
-    expect(EDITOR_GRID.timelineDock).toContain('lg:row-start-3')
-    expect(EDITOR_GRID.rootDock).not.toContain('_auto_auto]')
+    expect(EDITOR_GRID.timelineDock).toContain('lg:row-start-2')
+    expect(EDITOR_GRID.rootDock).toContain('lg:grid-rows-[minmax(0,1fr)_auto]')
   })
   it('timeline dock does not scroll itself (only the timeline body scrolls)', () => {
     expect(EDITOR_GRID.timelineDock).not.toContain('overflow-y-auto')
