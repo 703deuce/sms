@@ -50,6 +50,7 @@ import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-
 import { exportTimeMap, toExportMs } from '@/lib/clips/editor/export-time'
 import { sourceToOutput, timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { sourceMsToEditorMs } from '@/lib/clips/editor/source-ms-to-editor'
+import { transcriptCutForSelection } from '@/lib/clips/editor/transcript-cut-map'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { EditorMenuBar, type EditorMenu } from '@/components/clips/editor/editor-menu-bar'
@@ -1705,28 +1706,13 @@ export function EditorShell({
   const deleteSelection = useCallback(() => {
     const sel = selectionRef.current
     if (!sel || sel.startMs === sel.endMs) return
-    const a = Math.min(sel.startMs, sel.endMs)
-    const b = Math.max(sel.startMs, sel.endMs)
-    const selected = editorWords.filter((w) => {
-      const { startMs, endMs } = wordSourceMs(w)
-      return endMs > a && startMs < b
-    })
-    if (!selected.length) return
-    const wa = wordSourceMs(selected[0]!)
-    const wb = wordSourceMs(selected[selected.length - 1]!)
-    const cutStart = Math.round(wa.startMs)
-    const cutEnd = Math.round(wb.endMs)
-    // A1: a selection must map to an actual kept source segment, never silently snap to
-    // output zero (the bug where a 0:44 transcript cut showed a join at 0:00).
-    const tb = timebaseFor(editorPreviewEdits(edits, editorWords))
-    const at = sourceToOutput(tb, cutStart)
-    const beforeEnd = sourceToOutput(tb, Math.max(cutStart, cutEnd - 1))
-    if (cutEnd <= cutStart || at == null || beforeEnd == null || cutStart < edits.trim.in || cutEnd > edits.trim.out) {
+    const cut = transcriptCutForSelection(edits, editorWords, sel.startMs, sel.endMs)
+    if (!cut) {
       toast.error('Selected words are outside the editable video. Select words inside the clip and retry.')
       return
     }
-    applyCleanupCut([cutStart, cutEnd], `Cut transcript at ${(at / 1000).toFixed(1)}s`)
-    toast.success(`Cut ${((cutEnd - cutStart) / 1000).toFixed(1)}s from the video`, {
+    applyCleanupCut(cut.range, `Cut transcript at ${(cut.atOutputMs / 1000).toFixed(1)}s`)
+    toast.success(`Cut ${((cut.range[1] - cut.range[0]) / 1000).toFixed(1)}s from the video`, {
       description: 'Removed from the preview, the Timeline (✂ marks the join) and the export. ⌘Z to undo.',
     })
     sel.clear()
