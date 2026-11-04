@@ -33,6 +33,7 @@ export function ClipFillerReview({
   words,
   edits,
   open,
+  playing = false,
   onOpenChange,
   onApplyProposal,
   onSeek,
@@ -43,6 +44,7 @@ export function ClipFillerReview({
   edits: ClipEditsV2
   clipBounds?: { clipStartMs: number; clipEndMs: number }
   open: boolean
+  playing?: boolean
   onOpenChange: (open: boolean) => void
   onApplyProposal: (proposal: CleanupProposal) => void
   onSeek: (sourceMs: number) => void
@@ -84,22 +86,23 @@ export function ClipFillerReview({
       lastPreviewedCursor.current = null
       return
     }
-    // Undo and caption updates may recalculate hits: do not keep rewinding live playback.
-    if (lastPreviewedCursor.current === fillerCursor) return
+    // Review is not a transport controller: never interrupt playback to preview a hit.
+    if (playing || lastPreviewedCursor.current === fillerCursor) return
     lastPreviewedCursor.current = fillerCursor
     const hit = fillerHits[fillerCursor]
     if (hit) onSeek(hit.word.t0Ms)
-  }, [open, fillerCursor, fillerHits, onSeek])
+  }, [open, playing, fillerCursor, fillerHits, onSeek])
 
   useEffect(() => {
     if (!open) return
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
+      event.stopPropagation()
       onOpenChange(false)
     }
-    window.addEventListener('keydown', onEscape)
-    return () => window.removeEventListener('keydown', onEscape)
+    window.addEventListener('keydown', onEscape, { capture: true })
+    return () => window.removeEventListener('keydown', onEscape, { capture: true })
   }, [open, onOpenChange])
 
   const applyHits = useCallback(
