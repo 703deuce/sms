@@ -19,7 +19,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     if (Number.isFinite(contextMs)) opts.contextMs = contextMs
     const data = await getClipEditorWords(workspaceId, id, Object.keys(opts).length ? opts : undefined)
     if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    return NextResponse.json(data)
+    // clipsFetch unwraps the standard { data } envelope; returning data bare strands the editor with no words.
+    return NextResponse.json({ data })
   } catch (err) {
     return jsonError(err, 500)
   }
