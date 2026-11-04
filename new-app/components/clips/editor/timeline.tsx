@@ -1033,6 +1033,8 @@ export function Timeline({
   const previewRate = useSyncExternalStore(subscribePreviewRate, getPreviewRate, () => 1)
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const speedSlotRef = useRef<HTMLDivElement | null>(null)
+  // TIMELINE_LAYOUT2: the speed / curve panel is a small chip until opened.
+  const [speedOpen, setSpeedOpen] = useState(false)
   const [speedFocusSeq, setSpeedFocusSeq] = useState(0)
   const trackAreaRef = useRef<HTMLDivElement | null>(null)
   const rows = useMemo(() => timelineRows(edits), [edits])
@@ -1460,6 +1462,7 @@ export function Timeline({
     })()
     if (!v || !editable) return false
     setSelected([v])
+    setSpeedOpen(true)
     setSpeedFocusSeq((n) => n + 1)
     return true
   }
@@ -3154,9 +3157,19 @@ export function Timeline({
       {singleSel && singleSel.lane === 'video' && singleSel.srcInMs != null && singleSel.srcOutMs != null && editable ? (
         <div
           ref={speedSlotRef}
-          className="absolute bottom-5 right-2 z-40 max-w-[min(560px,92%)] rounded-md border border-border bg-card/95 p-1 shadow-lg"
+          className="absolute bottom-1 right-2 z-40 flex max-w-[min(560px,92%)] flex-col items-end gap-1"
           data-testid="timeline-speed-slot"
         >
+          <button
+            type="button"
+            className="rounded-full border border-border bg-card/95 px-2 py-0.5 text-[11px] font-medium shadow hover:bg-muted"
+            onClick={() => setSpeedOpen((o) => !o)}
+            aria-expanded={speedOpen}
+            data-testid="timeline-speed-chip"
+          >
+            Speed {speedOpen ? '▾' : '▸'}
+          </button>
+          <div className={speedOpen ? 'order-first rounded-md border border-border bg-card/95 p-1 shadow-lg' : 'hidden'}>
           <ItemSpeedControl
             edits={edits}
             srcInMs={singleSel.srcInMs}
@@ -3164,6 +3177,7 @@ export function Timeline({
             onCommit={(next) => commit(next)}
             readOnly={laneState(edits, 'video').locked}
           />
+          </div>
         </div>
       ) : null}
       {markerPanel ? (
@@ -3180,6 +3194,26 @@ export function Timeline({
         </div>
       ) : null}
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
+      {inspected && !tlCollapsed ? (
+        <div
+          className="max-h-[96px] shrink-0 overflow-y-auto rounded-md border border-border bg-card"
+          data-testid="keyframe-inspector-overlay"
+        >
+          <KeyframeInspector
+            edits={edits}
+            target={inspected.target}
+            label={inspected.item.label}
+            localMs={keyframeLocalEditFromPlayhead(edits, playheadMs, inspected.origin)}
+            onCommit={(next) => commit(next)}
+            onSeekLocal={(t) => onSeekOutput(inspected.origin + t)}
+            readOnly={!editable || refLocked(edits, inspected.item)}
+            span={{
+              fromMs: inspected.item.startMs - inspected.origin,
+              toMs: inspected.item.endMs - inspected.origin,
+            }}
+          />
+        </div>
+      ) : null}
       {tlCollapsed ? null : (
       <div
         className="relative flex min-w-0 rounded-lg border border-border bg-card/30"
@@ -3187,26 +3221,6 @@ export function Timeline({
         style={tlHeight ? { height: tlHeight, overflowY: 'auto' } : undefined}
         data-testid="timeline-body"
       >
-        {inspected ? (
-          <div
-            className="absolute inset-x-0 top-0 z-40 max-h-[min(240px,45%)] overflow-y-auto border-b border-border bg-card shadow-md"
-            data-testid="keyframe-inspector-overlay"
-          >
-            <KeyframeInspector
-              edits={edits}
-              target={inspected.target}
-              label={inspected.item.label}
-              localMs={keyframeLocalEditFromPlayhead(edits, playheadMs, inspected.origin)}
-              onCommit={(next) => commit(next)}
-              onSeekLocal={(t) => onSeekOutput(inspected.origin + t)}
-              readOnly={!editable || refLocked(edits, inspected.item)}
-              span={{
-                fromMs: inspected.item.startMs - inspected.origin,
-                toMs: inspected.item.endMs - inspected.origin,
-              }}
-            />
-          </div>
-        ) : null}
         <div className="min-w-[160px] w-[160px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
           {rows.map((r) => (
