@@ -2058,6 +2058,7 @@ export function EditorShell({
             <>
               <MainVideoTools
                 edits={edits}
+                clipId={clipId}
                 videoItem={selVideoSeg ? { srcInMs: selVideoSeg.srcInMs, srcOutMs: selVideoSeg.srcOutMs } : null}
                 outputMs={outputMs}
                 durationMs={outDur}
