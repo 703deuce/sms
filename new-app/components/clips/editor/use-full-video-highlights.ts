@@ -73,6 +73,33 @@ export function useFullVideoHighlights(
 
   const turnOn = useCallback(() => persistToggle(true), [persistToggle])
 
+  // SCRIPT_DOC5: the results list can be closed; closed stays closed across reloads until Find clips runs again.
+  const listKey = `transovo.highlightsList.${projectId}`
+  const [listDismissed, setListDismissed] = useState(false)
+  useEffect(() => {
+    try {
+      setListDismissed(localStorage.getItem(listKey) === 'hidden')
+    } catch {
+      /* private mode */
+    }
+  }, [listKey])
+  const dismissList = useCallback(() => {
+    setListDismissed(true)
+    try {
+      localStorage.setItem(listKey, 'hidden')
+    } catch {
+      /* private mode */
+    }
+  }, [listKey])
+  const reopenList = useCallback(() => {
+    setListDismissed(false)
+    try {
+      localStorage.removeItem(listKey)
+    } catch {
+      /* private mode */
+    }
+  }, [listKey])
+
   const load = useCallback(async () => {
     if (!fullVideo) return
     const data = await fetchProjectHighlights(projectId).catch(() => null)
@@ -92,7 +119,13 @@ export function useFullVideoHighlights(
     setPicks(data.picks)
     const jobActiveNow = Boolean(data.status && JOB_ACTIVE.has(data.status))
     const gotPicks = data.picks.length > 0
-    if (gotPicks || jobActiveNow) {
+    let userChoseOff = false
+    try {
+      userChoseOff = localStorage.getItem(`transovo.highlights.${projectId}`) === '0'
+    } catch {
+      /* private mode */
+    }
+    if ((gotPicks || jobActiveNow) && !userChoseOff) {
       setHighlightsOn((prev) => {
         if (prev) return prev
         try {
@@ -140,9 +173,10 @@ export function useFullVideoHighlights(
   }, [status, source, picks.length])
 
   const startedFind = useCallback(() => {
+    reopenList()
     turnOn()
     void load().catch(() => {})
-  }, [turnOn, load])
+  }, [reopenList, turnOn, load])
 
   const wordSpans = useMemo(
     () => editorWords.map((w) => ({ i: w.i, ...wordSourceMs(w) })),
@@ -285,7 +319,19 @@ export function useFullVideoHighlights(
 
   const isJobRunning = jobActive
   const hasPicks = picks.length > 0
-  const showHighlightsList = hasPicks || isJobRunning
+  const showHighlightsList = (hasPicks || isJobRunning) && !listDismissed
+  useEffect(() => {
+    if (!showHighlightsList) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return
+      if (document.querySelector('[role="dialog"]')) return
+      dismissList()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showHighlightsList, dismissList])
 
   return {
     highlightsOn,
@@ -311,5 +357,8 @@ export function useFullVideoHighlights(
     hasPicks,
     isJobRunning,
     showHighlightsList,
+    dismissList,
+    reopenList,
+    listDismissed,
   }
 }

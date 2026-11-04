@@ -2065,6 +2065,7 @@ export function EditorShell({
           onMakeClip={(pick, range) => void fvHighlights.onMakeClip(pick, range)}
           onMakeAll={() => void fvHighlights.onMakeAll()}
           jobRunning={fvHighlights.isJobRunning}
+          onClose={fvHighlights.dismissList}
         />
       ) : null}
       <EditorPanelErrorBoundary label="Script">
@@ -3354,7 +3355,12 @@ export function EditorShell({
                   size="sm"
                   variant={fvHighlights.highlightsOn ? 'default' : 'outline'}
                   data-testid="editor-highlights-toggle"
-                  onClick={() => fvHighlights.persistToggle(!fvHighlights.highlightsOn)}
+                  onClick={() => {
+                    const on = !fvHighlights.highlightsOn || fvHighlights.listDismissed
+                    fvHighlights.persistToggle(on)
+                    if (on) fvHighlights.reopenList()
+                    else fvHighlights.dismissList()
+                  }}
                 >
                   Highlights
                 </Button>

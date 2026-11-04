@@ -85,4 +85,49 @@ describe('useFullVideoHighlights', () => {
 
     unmount()
   })
+
+  it('hides the list after dismissList until Find clips reopens it', async () => {
+    fetchProjectHighlights.mockResolvedValue({
+      source: 'find',
+      status: 'DONE',
+      progress: 100,
+      picks: [
+        {
+          clipId: 'fp_job_0',
+          title: 'Moment',
+          startMs: 3600,
+          endMs: 32000,
+          score: 77,
+          reasonTag: 'visual',
+          why: null,
+          origin: 'find',
+          findJobId: 'job_1',
+        },
+      ],
+    })
+
+    const { result, unmount } = renderHook(() => useFullVideoHighlights('proj_dismiss', true, []))
+
+    await waitFor(() => {
+      expect(result.current.hasPicks).toBe(true)
+      expect(result.current.showHighlightsList).toBe(true)
+    })
+
+    act(() => {
+      result.current.dismissList()
+    })
+
+    expect(result.current.showHighlightsList).toBe(false)
+    expect(store.get('transovo.highlightsList.proj_dismiss')).toBe('hidden')
+
+    act(() => {
+      result.current.startedFind()
+    })
+
+    await waitFor(() => {
+      expect(result.current.showHighlightsList).toBe(true)
+    })
+
+    unmount()
+  })
 })
