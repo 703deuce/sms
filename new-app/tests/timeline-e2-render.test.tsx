@@ -132,6 +132,30 @@ describe('E2 multi-track timeline', () => {
     expect(next.sectionOrder).toEqual([[9000, 20000], [0, 9000]])
   })
 
+  it('B1: Magnet off keeps a real gap at the original position after dragging a split video', () => {
+    localStorage.setItem('transovo.timeline.magnet', '0')
+    try {
+      const e = edits({ cutRanges: [], videoSplits: [9000] })
+      const { getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
+      drag(getAllByTestId('timeline-item-video')[0]!, 15000 * pxPerMs())
+      expect(onCommitEdits).toHaveBeenCalledTimes(1)
+      const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
+      expect(next.sectionOrder).toEqual([[9000, 20000], [0, 9000]])
+      expect(next.inserts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ sourceId: 'gap', durMs: 9000 }),
+      ]))
+    } finally {
+      localStorage.removeItem('transovo.timeline.magnet')
+    }
+  })
+
+  it('B1: a locked Video track cannot be reordered by dragging', () => {
+    const e = edits({ cutRanges: [], videoSplits: [9000], lanes: { video: { locked: true } } } as Partial<ClipEditsV2>)
+    const { getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
+    drag(getAllByTestId('timeline-item-video')[0]!, 15000 * pxPerMs())
+    expect(onCommitEdits).not.toHaveBeenCalled()
+  })
+
   it('trim handle on B-roll start advances the media in-point', () => {
     const { broll, pxPerMs, onCommitEdits } = setup()
     const handle = broll('b1').querySelector('[data-testid="timeline-trim-start"]')!
