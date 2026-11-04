@@ -18,6 +18,7 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CAPTION_PRESETS, presetSlugToId, resolveCaptionPreset, resolvePreset } from '@/lib/clips/caption-presets'
 import { CAPTION_PRESETS_V2 } from '@/lib/clips/templates/registry'
+import { resolveT6CaptionPreset } from '@/lib/clips/caption-v2-bridge'
 import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
@@ -139,7 +140,7 @@ export function CaptionsPanel({
   const [editingWordI, setEditingWordI] = useState<number | null>(null)
   const wordFixCommittedRef = useRef(false)
   const presetId = cap.presetId || 'bold_pop'
-  const preset = resolveCaptionPreset(cap)
+  const preset = resolveT6CaptionPreset(cap, t6CaptionPresetsEnabled())
   const captionFontValue = cap.font ?? preset.font ?? 'Poppins'
   const captionFontItems: Record<string, string> = {
     ...CAPTION_FONT_LABELS,
@@ -517,6 +518,7 @@ export function CaptionsPanel({
                   presetId: id,
                   animation: p.animation,
                   size: cap.size ?? p.sizePct,
+                  userSizePct: undefined,
                 })
               }
               className={cn(
