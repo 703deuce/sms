@@ -32,7 +32,8 @@ CURVE_CHANNELS = ("m", "r", "g", "b")
 WHEELS = ("lift", "gamma", "gain")
 FX_KEYS = ("sharpen", "vignette", "grain")
 # G4b effects library (fx_library.py); canonical string adds them as an "e" part only when set.
-FX2_KEYS = ("pixelate", "blur", "glow", "rgbsplit", "glitch", "shake", "flicker", "scanlines")
+FX2_KEYS = ("pixelate", "blur", "glow", "rgbsplit", "glitch", "shake", "flicker", "scanlines",
+            "mono", "sepia", "invert", "mirror", "zoom")
 FX_ALL = FX_KEYS + FX2_KEYS
 TABLE_N = 255  # 256-entry tables
 GRID = 33

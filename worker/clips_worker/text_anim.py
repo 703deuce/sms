@@ -15,8 +15,11 @@ line, word or character (typewriter by block = by character).
 """
 from __future__ import annotations
 
-IN_TYPES = ("fade", "pop", "zoom", "slide_up", "slide_down", "slide_left", "slide_right", "typewriter")
-BLOCK_ONLY = ("zoom", "slide_up", "slide_down", "slide_left", "slide_right")
+IN_TYPES = ("fade", "pop", "zoom", "slide_up", "slide_down", "slide_left", "slide_right", "typewriter",
+            "bounce_in", "zoom_out")
+BLOCK_ONLY = ("zoom", "slide_up", "slide_down", "slide_left", "slide_right", "bounce_in", "zoom_out")
+# EFFECTS1: text-only types (layers fall back to fade; TS TEXT_ONLY_ANIM).
+TEXT_ONLY = ("typewriter", "bounce_in", "zoom_out")
 UNITS = ("block", "line", "word", "char")
 LOOP_TYPES = ("pulse", "bounce", "wiggle", "flicker")
 DUR_MIN, DUR_MAX, DUR_DEFAULT = 100, 5000, 500
@@ -54,7 +57,7 @@ def norm_anim(raw) -> dict | None:
 
 
 # G3b: layers (B-roll / images / shapes / stickers / progress bars) take the block presets only.
-LAYER_TYPES = tuple(t for t in IN_TYPES if t != "typewriter")
+LAYER_TYPES = tuple(t for t in IN_TYPES if t not in TEXT_ONLY)
 
 
 def norm_layer_anim(raw) -> dict | None:
@@ -66,7 +69,7 @@ def norm_layer_anim(raw) -> dict | None:
     for edge in ("in", "out"):
         if edge in a:
             typ = a[edge]["type"]
-            out[edge] = {"type": "fade" if typ == "typewriter" else typ, "unit": "block", "durMs": a[edge]["durMs"]}
+            out[edge] = {"type": "fade" if typ in TEXT_ONLY else typ, "unit": "block", "durMs": a[edge]["durMs"]}
     if "loop" in a:
         out["loop"] = a["loop"]
     return out or None
@@ -119,6 +122,10 @@ def block_state(typ: str, p: float) -> dict:
         return {"op": e, "sc": 1.0, "dx": (1.0 - e) * SLIDE_X_PCT, "dy": 0.0}
     if typ == "slide_right":
         return {"op": e, "sc": 1.0, "dx": -(1.0 - e) * SLIDE_X_PCT, "dy": 0.0}
+    if typ == "bounce_in":
+        return {"op": _clamp01(p * 3.0), "sc": 1.0, "dx": 0.0, "dy": (ease_back(p) - 1.0) * 12.0}
+    if typ == "zoom_out":
+        return {"op": e, "sc": 1.6 - 0.6 * e, "dx": 0.0, "dy": 0.0}
     return {"op": 1.0, "sc": 1.0, "dx": 0.0, "dy": 0.0}
 
 

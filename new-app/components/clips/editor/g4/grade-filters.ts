@@ -41,8 +41,11 @@ import {
   glitchState,
   glowOpacity,
   pixelateBlock,
+  invertLinear,
+  monoMatrix,
   rgbsplitPx,
   scanlineRows,
+  sepiaMatrix,
   unit,
 } from '@/lib/clips/editor/fx-library'
 
@@ -299,6 +302,19 @@ export class GradeFilterBank {
       f.appendChild(merge)
       last = 'fxglitch'
       entry.glitch = { v: fx.glitch, nodes }
+    }
+    // EFFECTS1: mono → sepia → invert (fx_library.pre_parts, same matrices).
+    const mat3 = (m: number[], name: string) => {
+      const v = [m[0], m[1], m[2], 0, 0, m[3], m[4], m[5], 0, 0, m[6], m[7], m[8], 0, 0, 0, 0, 0, 1, 0]
+      step(el('feColorMatrix', { type: 'matrix', values: v.map((x) => Math.round(x! * 1e6) / 1e6).join(' ') }), name)
+    }
+    if (fx.mono) mat3(monoMatrix(fx.mono), 'fxmono')
+    if (fx.sepia) mat3(sepiaMatrix(fx.sepia), 'fxsepia')
+    if (fx.invert) {
+      const [slope, icpt] = invertLinear(fx.invert)
+      const ct = el('feComponentTransfer', {})
+      for (const t of ['feFuncR', 'feFuncG', 'feFuncB'] as const) ct.appendChild(el(t, { type: 'linear', slope, intercept: icpt }))
+      step(ct, 'fxinv')
     }
     if (fx.sharpen) {
       step(

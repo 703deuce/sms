@@ -10,7 +10,22 @@
  * grain → shake. No imports (shared by lib/clips/edits.ts normalizers).
  */
 
-export const FX2_KEYS = ['pixelate', 'blur', 'glow', 'rgbsplit', 'glitch', 'shake', 'flicker', 'scanlines'] as const
+export const FX2_KEYS = [
+  'pixelate',
+  'blur',
+  'glow',
+  'rgbsplit',
+  'glitch',
+  'shake',
+  'flicker',
+  'scanlines',
+  // EFFECTS1 (append only): colour looks + geometry.
+  'mono',
+  'sepia',
+  'invert',
+  'mirror',
+  'zoom',
+] as const
 export type Fx2Key = (typeof FX2_KEYS)[number]
 
 export const FX2_LABELS: Record<Fx2Key, string> = {
@@ -22,6 +37,32 @@ export const FX2_LABELS: Record<Fx2Key, string> = {
   shake: 'Shake',
   flicker: 'Flicker',
   scanlines: 'Scanlines',
+  mono: 'Black & white',
+  sepia: 'Sepia',
+  invert: 'Negative',
+  mirror: 'Mirror (on when > 0)',
+  zoom: 'Punch-in zoom',
+}
+
+/**
+ * EFFECTS1 colour looks: 3×3 RGB matrices (row-major) mixed with identity by v/100. Export =
+ * ffmpeg colorchannelmixer with the SAME numbers (fx_library.mono_matrix / sepia_matrix).
+ */
+export const LUMA_709 = [0.2126, 0.7152, 0.0722] as const
+export const SEPIA_M = [0.393, 0.769, 0.189, 0.349, 0.686, 0.168, 0.272, 0.534, 0.131] as const
+function mixIdentity(target: readonly number[], v: number): number[] {
+  const a = v / 100
+  return target.map((t, i) => (1 - a) * (i % 4 === 0 ? 1 : 0) + a * t)
+}
+export const monoMatrix = (v: number) => mixIdentity([...LUMA_709, ...LUMA_709, ...LUMA_709], v)
+export const sepiaMatrix = (v: number) => mixIdentity(SEPIA_M, v)
+/** Negative: out = x·(1 − 2a) + a (a = v/100). Export = negate blended at opacity a. */
+export const invertLinear = (v: number): [number, number] => [1 - (2 * v) / 100, v / 100]
+/** Punch-in: uniform zoom 1 + 0.5·v/100, even export size, centre crop (fx_library.zoom_size). */
+export const zoomScale = (v: number) => 1 + (v / 100) * 0.5
+export function zoomSize(v: number, w: number, h: number): [number, number] {
+  const z = zoomScale(v)
+  return [2 * Math.ceil((w * z) / 2), 2 * Math.ceil((h * z) / 2)]
 }
 
 const HASH_A = 1103
@@ -85,6 +126,18 @@ export function shakeCss(v: number, w: number, h: number, frame: number): string
   return `translate(${r((-ox / w) * 100)}%, ${r((-oy / h) * 100)}%) scale(${r(sw / w)}, ${r(sh / h)})`
 }
 
+export function geomCss(fx: Partial<Record<string, number>> | null | undefined, w: number, h: number, frame: number): string {
+  const out: string[] = []
+  const s = shakeCss(fx?.shake ?? 0, w, h, frame)
+  if (s) out.push(s)
+  if (fx?.mirror) out.push('scaleX(-1)')
+  if (fx?.zoom) {
+    const [zw, zh] = zoomSize(fx.zoom, w, h)
+    out.push(`scale(${Math.round((zw / w) * 1e4) / 1e4}, ${Math.round((zh / h) * 1e4) / 1e4})`)
+  }
+  return out.join(' ')
+}
+
 export const flickerGain = (v: number, frame: number) => 1 - (v / 100) * 0.3 * fxHash(frame, 8)
 
 export const scanlinePeriod = (w: number, h: number) => Math.max(2, jround(4 * unit(w, h)))
@@ -105,4 +158,11 @@ export const FX_PRESETS: { id: string; label: string; fx: Partial<Record<Fx2Key 
   { id: 'glitch', label: 'Glitch', fx: { glitch: 70, rgbsplit: 40 } },
   { id: 'quake', label: 'Earthquake', fx: { shake: 70 } },
   { id: 'retro_tv', label: 'Retro TV', fx: { scanlines: 70, vignette: 50, flicker: 30 } },
+  { id: 'bw', label: 'Black & white', fx: { mono: 100 } },
+  { id: 'old_film', label: 'Old film', fx: { sepia: 80, grain: 30, vignette: 40, flicker: 15 } },
+  { id: 'negative', label: 'Negative', fx: { invert: 100 } },
+  { id: 'mirror', label: 'Mirror', fx: { mirror: 100 } },
+  { id: 'punch_in', label: 'Punch-in', fx: { zoom: 30 } },
+  { id: 'noir', label: 'Noir', fx: { mono: 100, vignette: 55, grain: 25 } },
+  { id: 'soft_blur', label: 'Soft blur', fx: { blur: 35 } },
 ]
