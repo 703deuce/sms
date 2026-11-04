@@ -358,8 +358,11 @@ export function EditorShell({
   // FIX2 R7: read localStorage after mount (no SSR/hydration mismatch)
   const [timelineOpen, setTimelineOpen] = useState(false)
   useEffect(() => {
-    if (compact) setTimelineOpen(readTimelineOpen(typeof window === 'undefined' ? null : window.localStorage))
-  }, [compact])
+    if (compact) {
+      const store = typeof window === 'undefined' ? null : window.localStorage
+      setTimelineOpen(unifiedWorkspaceActive ? store?.getItem('clipEditor.timelineOpen') !== '0' : readTimelineOpen(store))
+    }
+  }, [compact, unifiedWorkspaceActive])
   const toggleTimeline = useCallback(() => {
     setTimelineOpen((o) => {
       const next = !o
@@ -367,7 +370,7 @@ export function EditorShell({
       return next
     })
   }, [])
-  const timelineVisible = unifiedWorkspaceActive || !compact || timelineOpen
+  const timelineVisible = !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
   const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
@@ -3451,6 +3454,7 @@ export function EditorShell({
         <EditorLayout
           unified={unifiedWorkspaceActive}
           unifiedTimelineView={layoutView}
+          unifiedTimelineHidden={compact && !timelineOpen}
           onUnifiedTimelineViewChange={setLayoutViewPersist}
           unifiedMain={
             unifiedWorkspaceActive ? (
