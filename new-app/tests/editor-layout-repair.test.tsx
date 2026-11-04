@@ -14,8 +14,8 @@ describe('controlled editor layout repair', () => {
   })
 
   it('uses a two-column Timeline dock with a bounded full-width timeline row', () => {
-    expect(EDITOR_GRID.rootDock).toContain('lg:grid-cols-[clamp(280px,28vw,440px)_minmax(0,1fr)]')
-    expect(EDITOR_GRID.rootDock).toContain('lg:grid-rows-[auto_minmax(0,1fr)_minmax(220px,40%)]')
+    expect(EDITOR_GRID.rootDock).toContain('lg:grid-cols-[minmax(0,45fr)_minmax(0,55fr)]')
+    expect(EDITOR_GRID.rootDock).toContain('lg:grid-rows-[auto_minmax(0,1fr)_minmax(240px,46%)]')
     const ui = render(
       <EditorLayout
         band="desktop"
@@ -59,6 +59,11 @@ describe('controlled editor layout repair', () => {
     const onSelect = vi.fn()
     const onShowScript = vi.fn()
     const ui = render(<ScriptViewToolTabs active={null} onSelect={onSelect} onShowScript={onShowScript} />)
+    const tabs = ui.getByTestId('script-view-tool-tabs')
+    expect(tabs.className).toContain('grid-cols-5')
+    expect(tabs.className).toContain('sm:grid-cols-6')
+    expect(tabs.className).not.toContain('overflow-x-auto')
+    expect(ui.getAllByRole('button')).toHaveLength(11)
     fireEvent.click(ui.getByTestId('script-tool-inspector'))
     expect(onSelect).toHaveBeenCalledWith('inspector')
     fireEvent.click(ui.getByTestId('script-tool-layout'))

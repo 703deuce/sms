@@ -134,15 +134,16 @@ function renderShell(edits: ClipEditsV2) {
 }
 
 function clickRail(label: string, ui: ReturnType<typeof render>) {
-  const rail = ui.getAllByTestId('editor-rail')[0]!
-  fireEvent.click(within(rail).getByRole('button', { name: label }))
+  // All editing tools now live in one full-height right Inspector.
+  if (!ui.queryByTestId('unified-inspector-tool-rail')) {
+    fireEvent.click(ui.getByTestId('unified-inspector-toggle'))
+  }
+  const tools = ui.getByTestId('unified-inspector-tool-rail')
+  fireEvent.click(within(tools).getByRole('button', { name: label }))
 }
 
-// Cleanup is a Script workspace tool, not a standalone EditorRail group.
 function openScriptCleanup(ui: ReturnType<typeof render>) {
-  fireEvent.click(ui.getByTestId('editor-layout-view-script'))
-  const tabs = ui.getByTestId('script-view-tool-tabs')
-  fireEvent.click(within(tabs).getByRole('button', { name: 'Clean up' }))
+  clickRail('Clean up', ui)
 }
 
 describe('clip editor feature mounts (EditorShell)', () => {
@@ -171,15 +172,15 @@ describe('clip editor feature mounts (EditorShell)', () => {
     openScriptCleanup(ui)
     expect(ui.getAllByTestId('clarity-run')).toHaveLength(1)
     expect(ui.getAllByTestId('retake-run')).toHaveLength(1)
-    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
+    expect(ui.getByTestId('unified-editor-workspace').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
 
     fireEvent.click(ui.getByTestId('script-tool-text'))
     expect(ui.getAllByTestId('editor-panel-text')).toHaveLength(1)
-    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
+    expect(ui.getByTestId('unified-editor-workspace').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
 
     fireEvent.click(ui.getByTestId('script-tool-audio'))
     expect(ui.getAllByTestId('audio-music-sfx-mix')).toHaveLength(1)
-    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
+    expect(ui.getByTestId('unified-editor-workspace').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
   })
 
   it('Text: voiceover preview control on selected text item', async () => {

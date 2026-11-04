@@ -31,14 +31,19 @@ export function ScriptViewToolTabs({
   active,
   onSelect,
   onShowScript,
+  variant = 'script',
 }: {
   active: ScriptViewToolPanelId | null
   onSelect: (id: ScriptViewToolPanelId) => void
   onShowScript: () => void
+  variant?: 'script' | 'sidebar'
 }) {
   return (
     <nav
-      className="flex min-h-12 min-w-0 shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-card px-2 py-1 [scrollbar-width:thin]"
+      className={cn(
+        "grid min-w-0 shrink-0 gap-0.5 border-b border-border bg-card px-1.5 py-1",
+        variant === "sidebar" ? "grid-cols-3" : "grid-cols-5 sm:grid-cols-6",
+      )}
       aria-label="Script workspace tools"
       data-testid="script-view-tool-tabs"
     >
@@ -48,7 +53,7 @@ export function ScriptViewToolTabs({
         aria-pressed={active == null}
         data-testid="script-tool-transcript"
         className={cn(
-          'flex h-9 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-muted',
+          'flex min-h-10 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-1 text-[10px] leading-none font-medium hover:bg-muted',
           active == null && 'bg-primary/15 text-primary',
         )}
       >
@@ -63,12 +68,65 @@ export function ScriptViewToolTabs({
           aria-pressed={active === id}
           data-testid={`script-tool-${id}`}
           className={cn(
-            'flex h-9 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-muted',
+            'flex min-h-10 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-1 text-[10px] leading-none font-medium hover:bg-muted',
             active === id && 'bg-primary/15 text-primary',
           )}
         >
           <Icon className="size-4 shrink-0" aria-hidden />
           {label}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+/** Persistent far-right navigation: changing tools swaps Inspector content without moving the transcript or preview. */
+export function EditorInspectorToolRail({
+  active,
+  onSelect,
+  onShowScript,
+}: {
+  active: ScriptViewToolPanelId | null
+  onSelect: (id: ScriptViewToolPanelId) => void
+  onShowScript: () => void
+}) {
+  return (
+    <nav
+      aria-label="Editor tools"
+      data-testid="unified-inspector-tool-rail"
+      className="flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-y-auto border-l border-border/70 bg-muted/20 px-1 py-2 [scrollbar-width:thin]"
+    >
+      <button
+        type="button"
+        aria-label="Script"
+        title="Script"
+        aria-pressed={active == null}
+        data-testid="script-tool-transcript"
+        onClick={onShowScript}
+        className={cn(
+          'flex min-h-11 w-full shrink-0 flex-col items-center justify-center gap-1 rounded-md px-0.5 text-[9px] font-medium leading-tight hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          active == null ? 'bg-accent text-foreground' : 'text-muted-foreground',
+        )}
+      >
+        <FileText className="size-4 shrink-0" aria-hidden />
+        Script
+      </button>
+      {SCRIPT_VIEW_TOOL_PANELS.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          aria-label={label}
+          title={label}
+          aria-pressed={active === id}
+          data-testid={`script-tool-${id}`}
+          onClick={() => onSelect(id)}
+          className={cn(
+            'flex min-h-11 w-full shrink-0 flex-col items-center justify-center gap-1 rounded-md px-0.5 text-[9px] font-medium leading-tight hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            active === id ? 'bg-accent text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          <Icon className="size-4 shrink-0" aria-hidden />
+          <span className="max-w-full truncate">{label}</span>
         </button>
       ))}
     </nav>

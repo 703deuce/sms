@@ -152,7 +152,12 @@ describe('EditorShell render smoke', () => {
         videoUrl={null}
       />,
     )
-    expect(getByTestId('layout-quick-picker')).toBeTruthy()
+    // The unified editor no longer mounts an invisible Layout picker inside a legacy panel.
+    // Verify the actual transcript/preview/timeline workspace and retained top menu instead.
+    expect(getByTestId('unified-editor-workspace')).toBeTruthy()
+    expect(getByTestId('unified-transcript-pane')).toBeTruthy()
+    expect(getByTestId('unified-video-preview')).toBeTruthy()
+    expect(getByTestId('unified-timeline-region')).toBeTruthy()
     expect(getByTestId('versions-menu')).toBeTruthy()
     await waitFor(() => {
       expect(document.body).toBeTruthy()

@@ -29,8 +29,9 @@ export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; on
   return (
     <div className="hidden min-w-0 flex-1 items-center gap-1 lg:flex" data-testid="editor-menu-bar">
       <nav className="flex shrink-0 items-center" aria-label="Editor menu">
-        {menus.map((menu) => (
-          <DropdownMenu key={menu.id}>
+        {menus.map((menu, index) => (
+          <div key={menu.id} className={index < 3 ? "contents" : "hidden min-[1500px]:contents"}>
+          <DropdownMenu>
             <DropdownMenuTrigger
               render={
                 <Button
@@ -73,7 +74,54 @@ export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; on
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         ))}
+        {menus.length > 3 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-[13px] font-medium text-muted-foreground hover:text-foreground min-[1500px]:hidden"
+                  data-testid="editor-menu-more"
+                />
+              }
+            >
+              More
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="max-h-[70dvh] w-72 overflow-y-auto" sideOffset={6}>
+              {menus.slice(3).map((menu, menuIndex) => (
+                <DropdownMenuGroup key={menu.id}>
+                  {menuIndex > 0 ? <DropdownMenuSeparator /> : null}
+                  <DropdownMenuLabel className="px-1.5 text-xs font-semibold text-foreground">{menu.label}</DropdownMenuLabel>
+                  {menu.groups.map((group, groupIndex) => (
+                    <DropdownMenuGroup key={`${menu.id}-${groupIndex}`}>
+                      {group.label ? (
+                        <DropdownMenuLabel className="px-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">{group.label}</DropdownMenuLabel>
+                      ) : null}
+                      {group.items.map((item) => (
+                        <DropdownMenuItem
+                          key={item.id}
+                          disabled={Boolean(item.disabledHint)}
+                          onClick={() => item.onSelect()}
+                          data-testid={`editor-menu-more-item-${item.id}`}
+                          title={item.disabledHint ?? undefined}
+                        >
+                          <span className="truncate">{item.label}</span>
+                          {item.disabledHint ? (
+                            <span className="ml-auto shrink-0 pl-3 text-[11px] text-muted-foreground">{item.disabledHint}</span>
+                          ) : item.shortcut ? <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut> : null}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuGroup>
+                  ))}
+                </DropdownMenuGroup>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </nav>
       <Button
         type="button"

@@ -171,6 +171,7 @@ import { PreviewTransportStrip } from '@/components/clips/editor/preview-transpo
 import { EditorProjectMenu } from '@/components/clips/editor/editor-project-menu'
 import {
   ScriptViewToolTabs,
+  EditorInspectorToolRail,
   SCRIPT_VIEW_TOOL_PANELS,
   type ScriptViewToolPanelId,
 } from '@/components/clips/editor/script-view-tool-rail'
@@ -354,6 +355,7 @@ export function EditorShell({
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const band = useEditorBand()
+  const unifiedWorkspaceActive = band !== 'mobile'
   // FIX2 R7: read localStorage after mount (no SSR/hydration mismatch)
   const [timelineOpen, setTimelineOpen] = useState(false)
   useEffect(() => {
@@ -366,7 +368,7 @@ export function EditorShell({
       return next
     })
   }, [])
-  const timelineVisible = !compact || timelineOpen
+  const timelineVisible = unifiedWorkspaceActive || !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
   const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
@@ -389,16 +391,17 @@ export function EditorShell({
     setLayoutView(readClipEditorLayoutView())
   }, [])
   useEffect(() => {
-    if (layoutView !== 'timeline' || band === 'mobile') return
+    if (unifiedWorkspaceActive || layoutView !== 'timeline' || band === 'mobile') return
     const storage = typeof window === 'undefined' ? null : window.localStorage
     const open = readTimelineDockPanelOpen(storage)
     setDockPanelOpen(open)
     if (open) setPanel((p) => (p === 'inspector' ? 'media' : p))
-  }, [layoutView, band])
+  }, [layoutView, band, unifiedWorkspaceActive])
   const setLayoutViewPersist = useCallback(
     (view: ClipEditorLayoutView) => {
       setLayoutView(view)
       writeClipEditorLayoutView(view)
+      if (unifiedWorkspaceActive) return
       if (view !== 'script') setScriptToolPanel(null)
       if (view !== 'timeline') {
         setDockPanelOpen(false)
@@ -408,7 +411,7 @@ export function EditorShell({
         if (open) setPanel((p) => (p === 'inspector' ? 'media' : p))
       }
     },
-    [band],
+    [band, unifiedWorkspaceActive],
   )
   const { transcriptPct: scriptSplitPct, persist: persistScriptSplit } = useScriptViewSplit()
   const selectPanel = useCallback((id: EditorPanelId) => {
@@ -418,11 +421,12 @@ export function EditorShell({
     }
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
+    if (unifiedWorkspaceActive) return
     if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
     else if (band === 'mobile' || band === 'compact') {
       setMobilePanelOpen(true)
     }
-  }, [band, layoutView, setDockPanelOpenPersist])
+  }, [band, layoutView, setDockPanelOpenPersist, unifiedWorkspaceActive])
   const selectRailGroup = useCallback(
     (groupId: EditorRailGroupId) => {
       const group = editorRailGroups(clipEditorAiExtrasEnabled()).find((g) => g.id === groupId)
@@ -2562,7 +2566,7 @@ export function EditorShell({
   )
   }
   // Script tools are owned by ScriptViewMainSplit; never construct the legacy panel tree there.
-  const panelBody = layoutView === 'script' ? null : renderSidePanels(null)
+  const panelBody = unifiedWorkspaceActive || layoutView === 'script' ? null : renderSidePanels(null)
 
   const previewColumnContent = (
       <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden px-2 pb-1 pt-2">
@@ -3043,6 +3047,10 @@ export function EditorShell({
   }
   const runPalette = (id: string) => runTimelineMenu({ kind: 'palette', id })
   const openToolPanel = (id: EditorPanelId) => {
+    if (unifiedWorkspaceActive) {
+      selectPanel(id)
+      return
+    }
     if (layoutView === 'script' && SCRIPT_VIEW_TOOL_PANELS.some((p) => p.id === id)) {
       const sid = id as ScriptViewToolPanelId
       setVisitedPanels((v) => (v.has(sid) ? v : new Set([...v, sid])))
@@ -3158,8 +3166,8 @@ export function EditorShell({
       groups: [
         {
           items: [
-            { id: 'view-script', label: 'Script view', onSelect: () => setLayoutViewPersist('script'), disabledHint: layoutView === 'script' ? 'Current view' : null },
-            { id: 'view-timeline', label: 'Timeline view', onSelect: () => setLayoutViewPersist('timeline'), disabledHint: layoutView === 'timeline' ? 'Current view' : null },
+            { id: 'view-script', label: 'Compact timeline', onSelect: () => setLayoutViewPersist('script'), disabledHint: layoutView === 'script' ? 'Current view' : null },
+            { id: 'view-timeline', label: 'Full multitrack timeline', onSelect: () => setLayoutViewPersist('timeline'), disabledHint: layoutView === 'timeline' ? 'Current view' : null },
           ],
         },
         {
@@ -3353,9 +3361,7 @@ export function EditorShell({
           producerOpen={producerOpen}
           producerStrip={producerStrip ? { changeCount: producerStrip.changeCount, onUndo: undo } : null}
           pendingPaidCount={producerPendingPaid}
-          layoutViewSlot={
-            <EditorLayoutViewSwitch value={layoutView} onChange={setLayoutViewPersist} />
-          }
+          layoutViewSlot={unifiedWorkspaceActive ? null : <EditorLayoutViewSwitch value={layoutView} onChange={setLayoutViewPersist} />}
           menuBarSlot={
             <EditorMenuBar menus={editorMenus} onOpenSearch={() => runTimelineMenu({ kind: 'openPalette' })} />
           }
@@ -3485,6 +3491,26 @@ export function EditorShell({
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <EditorLayout
+          unified={unifiedWorkspaceActive}
+          unifiedTimelineView={layoutView}
+          onUnifiedTimelineViewChange={setLayoutViewPersist}
+          unifiedMain={
+            unifiedWorkspaceActive ? (
+              <ScriptViewMainSplit
+                transcriptPct={scriptSplitPct}
+                onTranscriptPctChange={persistScriptSplit}
+                className="h-full"
+                minTranscriptPx={280}
+                minPreviewPx={320}
+                transcript={
+                  <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card p-2" data-testid="unified-transcript-pane">
+                    {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+                  </div>
+                }
+                preview={<div className="flex h-full min-h-0 min-w-0 overflow-hidden" data-testid="unified-video-preview">{previewColumnContent}</div>}
+              />
+            ) : null
+          }
           band={band}
           compact={compact}
           panelOpen={dockTools ? dockPanelOpen : mobilePanelOpen}
@@ -3619,7 +3645,46 @@ export function EditorShell({
             )
           }
           properties={
-            !dockTools && !compact && band === 'wide' && layoutView !== 'script' ? (
+            unifiedWorkspaceActive ? (
+              <div className="flex h-full min-h-0 min-w-0" data-testid="unified-tools-content">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-testid="unified-inspector-body">
+                  <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/70 px-3">
+                    <h2 className="truncate text-sm font-semibold">{panel === 'transcript' ? 'Inspector' : (TAB_META[panel]?.label ?? 'Tools')}</h2>
+                  </div>
+                  {panelTabs.length > 1 ? (
+                    <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/70 p-1" role="tablist" aria-label="Tool categories">
+                      {panelTabs.map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={panel === tab.id}
+                          onClick={() => selectPanel(tab.id)}
+                          className={cn('shrink-0 rounded px-2 py-1 text-xs', panel === tab.id ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-muted')}
+                        >
+                          {tab.tabLabel}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <ScrollArea className="min-h-0 flex-1">
+                    {panel === 'transcript' ? (
+                      <p className="p-4 text-sm leading-relaxed text-muted-foreground">Select a tool on the right to edit its settings. The transcript stays beside the video.</p>
+                    ) : (
+                      <div className="p-3">{renderSidePanels(panel)}</div>
+                    )}
+                  </ScrollArea>
+                </div>
+                <EditorInspectorToolRail
+                  active={SCRIPT_VIEW_TOOL_PANELS.some((item) => item.id === panel) ? panel as ScriptViewToolPanelId : null}
+                  onSelect={selectPanel}
+                  onShowScript={() => {
+                    setPanel('transcript')
+                    setScriptToolPanel(null)
+                  }}
+                />
+              </div>
+            ) : !dockTools && !compact && band === 'wide' && layoutView !== 'script' ? (
               <>
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
                   <h2 className="text-sm font-semibold">Properties</h2>
@@ -3666,7 +3731,7 @@ export function EditorShell({
               {timelineOpen ? 'Hide timeline' : 'Show timeline'}
             </button>
           ) : null}
-          <div className={cn('min-h-0', !timelineVisible && 'hidden')} data-testid="editor-timeline-wrap">
+          <div className={cn('h-full min-h-0 min-w-0 overflow-hidden', !timelineVisible && 'hidden')} data-testid="editor-timeline-wrap">
           <Timeline
             angleSources={angleSources}
             edits={edits}

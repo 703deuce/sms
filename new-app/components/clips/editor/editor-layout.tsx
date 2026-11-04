@@ -2,6 +2,7 @@
 import { useCallback, useRef, type ReactNode } from 'react'
 import { useSyncExternalStore } from 'react'
 import { cn } from '@/lib/utils'
+import { UnifiedEditorWorkspace } from '@/components/clips/editor/unified-editor-workspace'
 
 export type EditorBand = 'mobile' | 'compact' | 'desktop' | 'wide'
 export function bandForWidth(w: number): EditorBand {
@@ -61,10 +62,10 @@ export const EDITOR_GRID = {
   rootDock:
     'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
-    'lg:grid-cols-[clamp(280px,28vw,440px)_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)_minmax(220px,40%)]',
+    'lg:grid-cols-[minmax(0,45fr)_minmax(0,55fr)] lg:grid-rows-[auto_minmax(0,1fr)_minmax(240px,46%)]',
   /** TIMELINE_LAYOUT3 (CapCut): tools panel | Player | Properties | icon rail on top; one full-width timeline below. */
-  railDock: 'min-h-0 min-w-0 lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)]',
-  panelDock: 'lg:col-start-1 lg:row-start-2 lg:w-[clamp(260px,28vw,440px)]',
+  railDock: 'min-h-0 min-w-0 overflow-hidden lg:col-start-1 lg:row-start-1',
+  panelDock: 'min-h-0 min-w-0 overflow-hidden lg:col-start-1 lg:row-start-2',
   previewDock:
     'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel lg:col-start-2 lg:row-start-1 lg:row-span-2',
   propertiesDock:
@@ -92,6 +93,11 @@ export function EditorLayout(props: {
   hidePropertiesColumn?: boolean
   /** TIMELINE_LAYOUT1: tools rail + docked panel on the right (Timeline view, lg+). */
   dockTools?: boolean
+  /** Unified desktop editor uses a single transcript/preview surface and a full-height right panel. */
+  unified?: boolean
+  unifiedMain?: ReactNode
+  unifiedTimelineView?: 'script' | 'timeline'
+  onUnifiedTimelineViewChange?: (view: 'script' | 'timeline') => void
 }) {
   const { band, panelOpen, panelWidthPx, onPanelWidthChange, hidePanelColumn, hidePropertiesColumn } = props
   const compact = props.compact === true
@@ -142,6 +148,20 @@ export function EditorLayout(props: {
     : compact || hidePropertiesColumn
       ? EDITOR_GRID.propertiesHidden
       : EDITOR_GRID.properties
+
+  if (props.unified && props.unifiedTimelineView && props.onUnifiedTimelineViewChange) {
+    return (
+      <UnifiedEditorWorkspace
+        main={props.unifiedMain}
+        inspector={props.properties}
+        timeline={props.timeline}
+        timelineView={props.unifiedTimelineView}
+        onTimelineViewChange={props.onUnifiedTimelineViewChange}
+        inspectorWidthPx={panelWidthPx ?? 360}
+        onInspectorWidthChange={onPanelWidthChange ?? (() => undefined)}
+      />
+    )
+  }
 
   return (
     <div
