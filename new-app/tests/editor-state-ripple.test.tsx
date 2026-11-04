@@ -44,6 +44,20 @@ describe('useEditorState ripple (E2): transcript cuts keep B-roll/SFX on their c
     expect(result.current.canRedo).toBe(false)
   })
 
+  it('D1 preserves a named edit through Undo, Redo, and history jumps', () => {
+    const { result } = renderHook(() => useEditorState('clip_d1_history_label', bounds, initial()))
+    act(() => result.current.setEditsPass({ ...result.current.edits, aspectRatio: '1:1' }, 'Changed aspect ratio to square'))
+    expect(result.current.historyPastLabels.at(-1)).toBe('Changed aspect ratio to square')
+    act(() => result.current.undo())
+    expect(result.current.historyFutureLabels[0]).toBe('Changed aspect ratio to square')
+    act(() => result.current.redo())
+    expect(result.current.historyPastLabels.at(-1)).toBe('Changed aspect ratio to square')
+    act(() => result.current.jumpHistory(-1))
+    expect(result.current.historyFutureLabels[0]).toBe('Changed aspect ratio to square')
+    act(() => result.current.jumpHistory(1))
+    expect(result.current.historyPastLabels.at(-1)).toBe('Changed aspect ratio to square')
+  })
+
   it('a timeline commit (setEdits) that only moves an item is not rippled', () => {
     const { result } = renderHook(() => useEditorState('clip_ripple_test2', bounds, initial()))
     const e = result.current.edits
