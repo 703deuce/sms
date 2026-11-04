@@ -27,7 +27,7 @@ describe('editor shell grid', () => {
     expect(EDITOR_GRID.root).toContain('lg:grid-rows-[minmax(0,1fr)_auto]')
     expect(EDITOR_GRID.root).toContain('xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)]')
     expect(EDITOR_GRID.root).toContain('2xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)_minmax(280px,320px)]')
-    expect(EDITOR_GRID.rootScript).toContain('lg:grid-cols-[minmax(0,1fr)]')
+    expect(EDITOR_GRID.rootScript).toContain('lg:grid-cols-[minmax(0,1fr)_auto]')
     expect(EDITOR_GRID.rootScript).not.toContain('var(--editor-panel-w')
     expect(EDITOR_GRID.previewScript).toContain('lg:col-start-1')
     expect(EDITOR_GRID.previewScript).not.toContain('lg:col-start-2')
@@ -97,13 +97,13 @@ describe('editor shell grid', () => {
         properties={<span>i</span>}
         timeline={<span data-testid="script-timeline-slot">t</span>}
         hidePanelColumn
-        hidePropertiesColumn
+        hidePropertiesColumn={false}
       />,
     )
     const root = container.querySelector('[data-testid="editor-grid"]')
     expect(root?.getAttribute('data-script-view')).toBe('true')
     const rootClass = root?.className ?? ''
-    expect(rootClass).toContain('lg:grid-cols-[minmax(0,1fr)]')
+    expect(rootClass).toContain('lg:grid-cols-[minmax(0,1fr)_auto]')
     expect(rootClass).not.toContain('var(--editor-panel-w')
     const previewClass = container.querySelector('[data-region="preview"]')?.className ?? ''
     expect(previewClass).toContain('lg:col-start-1')
@@ -128,6 +128,7 @@ describe('editor shell grid', () => {
     expect(shell).not.toContain('lg:grid-cols-[minmax(0,1fr)_56px')
     expect(shell).not.toContain('dockScriptTools')
     expect(shell).toContain('script-workspace-tabs')
+    expect(shell).toContain('script-workspace-transcript')
     expect(shell).toContain('<EditorLayout')
     expect(shell).toContain('onOpenAiVoiceover')
     expect(shell).toContain('[container-type:size]')
