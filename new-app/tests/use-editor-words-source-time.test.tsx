@@ -25,6 +25,25 @@ describe('A1/A2 source-word timing', () => {
     expect(result.current.words[0]?.e).toBe(6)
   })
 
+  it('N5 does not fetch or display extended-trim progress for an untouched clip with silent margins', async () => {
+    const original = [{ i: 1, w: 'middle', s: 22, e: 23 }]
+    const { result } = renderHook(() => useEditorWords('clip', original, bounds, trim))
+    expect(result.current.loadingReason).toBeNull()
+    expect(result.current.wordsLoading).toBe(false)
+    expect(fetchClipEditorWords).not.toHaveBeenCalled()
+  })
+
+  it('N5 labels initial transcript recovery differently from an actual extended trim', async () => {
+    let resolve!: (value: { words: typeof originalWords; bounds: typeof bounds }) => void
+    const originalWords = [{ i: 1, w: 'middle', s: 22, e: 23 }]
+    vi.mocked(fetchClipEditorWords).mockImplementationOnce(() => new Promise(r => { resolve = r }) as never)
+    const { result } = renderHook(() => useEditorWords('clip', [], bounds, trim))
+    await waitFor(() => expect(result.current.loadingReason).toBe('initial'))
+    resolve({ words: originalWords, bounds })
+    await waitFor(() => expect(result.current.loadingReason).toBeNull())
+    expect(result.current.words).toEqual(originalWords)
+  })
+
   it('keeps the server source timeline when the extended-trim fetch completes', async () => {
     const serverWords = [{ i: 1, w: 'early', s: 5, e: 6 }, { i: 2, w: 'middle', s: 44, e: 44.3 }]
     vi.mocked(fetchClipEditorWords).mockResolvedValueOnce({ words: serverWords, bounds } as never)
