@@ -174,6 +174,23 @@ describe('E2 multi-track timeline', () => {
     }
   })
 
+  it('B1 retest: short Magnet-off drag commits a real gap instead of no-op', () => {
+    localStorage.setItem('transovo.timeline.magnet', '0')
+    try {
+      const e = edits({ cutRanges: [], videoSplits: [9000] })
+      const ui = setup(e)
+      const last = ui.getAllByTestId('timeline-item-video')[1]!
+      drag(last, 1200 * ui.pxPerMs())
+      expect(ui.onCommitEdits).toHaveBeenCalledTimes(1)
+      const next = ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2
+      expect(next.inserts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ sourceId: 'gap', atSrcMs: 9000, durMs: 1200 }),
+      ]))
+    } finally {
+      localStorage.removeItem('transovo.timeline.magnet')
+    }
+  })
+
   it('B1: a locked Video track cannot be reordered by dragging', () => {
     const e = edits({ cutRanges: [], videoSplits: [9000], timelineLanes: { video: { locked: true } } })
     const { getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
