@@ -69,6 +69,7 @@ import {
   shouldDiscardDraftForServerStamp,
 } from '@/lib/clips/editor-save-order'
 import { toast } from 'sonner'
+import { getCutAudioSamples, refineWordCutWithAudio } from '@/lib/clips/editor/audio-cut-edges'
 
 const MAX_UNDO = 100
 
@@ -433,7 +434,19 @@ export function useEditorState(
       if (!ranges.length) return
       const spans = wordSpans()
       const prevCuts = editsRef.current.cutRanges ?? []
-      const cuts = mergeCleanupCutRanges(prevCuts, ranges, spans)
+      const audioSamples = getCutAudioSamples(clipId)
+      const cuts = mergeCleanupCutRanges(prevCuts, ranges, spans, { rmsSamples: audioSamples })
+      // SCRIPT_DOC2: say so when an edge has no quiet point (the words run together).
+      if (audioSamples?.length) {
+        const rough = ranges.filter((r) => refineWordCutWithAudio(r, spans, audioSamples)?.confidence === 'needs_review').length
+        if (rough) {
+          toast.message(
+            rough === 1
+              ? 'This cut runs straight into a neighbouring word. Play it back; press Ctrl+Z if it sounds clipped.'
+              : `${rough} cuts run straight into neighbouring words. Play them back; press Ctrl+Z if they sound clipped.`,
+          )
+        }
+      }
       const tagged = mergeCutCleanupKindsForRanges(
         editsRef.current.cutCleanupKinds,
         ranges,
@@ -463,7 +476,7 @@ export function useEditorState(
       if (rippled !== nextEdits) dispatch({ type: 'set', edits: rippled })
       else dispatch({ type: 'addCuts', cutRanges: cuts })
     },
-    [bumpLocalRevision, rippleFrom, wordSpans],
+    [bumpLocalRevision, clipId, rippleFrom, wordSpans],
   )
 
   const applyCleanupCut = useCallback(

@@ -64,6 +64,8 @@ export function CleanupPanel({
   onAuditionChange,
   onSeek,
   onReloadWords,
+  onGapSettingsChange,
+  mediaOffsetMs = 0,
 }: {
   clipId: string
   projectId: string
@@ -83,6 +85,10 @@ export function CleanupPanel({
   onSeek: (sourceMs: number) => void
   /** Refetch clip transcript after re-transcribe completes. */
   onReloadWords?: () => Promise<void> | void
+  /** SCRIPT_DOC2: "Keep pauses at least" buttons. */
+  onGapSettingsChange?: (patch: Partial<ClipGapToolSettings>) => void
+  /** SCRIPT_DOC2: media file time 0 = this source ms (peaks are in media time). */
+  mediaOffsetMs?: number
 }) {
   const [auditionIds, setAuditionIds] = useState<Set<string>>(new Set())
   const [retakeBusy, setRetakeBusy] = useState(false)
@@ -96,6 +102,7 @@ export function CleanupPanel({
   const [enabledOptIn, setEnabledOptIn] = useState<Set<string>>(new Set())
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set())
   const [retranscribeBusy, setRetranscribeBusy] = useState(false)
+  const [retakeScanned, setRetakeScanned] = useState(false)
 
   const clipBounds = useMemo(
     () => ({ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }),
@@ -125,8 +132,11 @@ export function CleanupPanel({
 
   const audioPeaks = useAudioPeaks(videoUrl, 40, 12_000, { peaksUrl, skipDecode: !videoUrl && !peaksUrl })
   const rmsSamples = useMemo(
-    () => (audioPeaks.peaks.length ? rmsSamplesFromPeaks(audioPeaks.peaks, audioPeaks.peaksPerSec) : []),
-    [audioPeaks.peaks, audioPeaks.peaksPerSec],
+    () =>
+      audioPeaks.peaks.length
+        ? rmsSamplesFromPeaks(audioPeaks.peaks, audioPeaks.peaksPerSec).map((s) => ({ tMs: s.tMs + mediaOffsetMs, rms: s.rms }))
+        : [],
+    [audioPeaks.peaks, audioPeaks.peaksPerSec, mediaOffsetMs],
   )
 
   const filler = useMemo(
@@ -158,7 +168,7 @@ export function CleanupPanel({
 
   const previewCutAudition = (p: CleanupProposal) => {
     onSeek(Math.max(bounds.clipStartMs, p.range[0] - 1000))
-    onAuditionChange(auditionEditsForProposals(edits, [p], wordSpans))
+    onAuditionChange(auditionEditsForProposals(edits, [p], wordSpans, rmsSamples))
   }
 
   const applyAllFillers = () => {
@@ -223,6 +233,11 @@ export function CleanupPanel({
     [proposed],
   )
   const proposedGaps = useMemo(() => proposed.filter((row) => row.kind === 'gap'), [proposed])
+  // SCRIPT_DOC2: one-click rows count only cuts with clean (quiet) edges; the rest wait for review.
+  const fillerReady = proposedFillers.filter((r) => r.quality?.confidence !== 'needs_review')
+  const fillerReview = proposedFillers.length - fillerReady.length
+  const gapReady = proposedGaps.filter((r) => r.quality?.confidence !== 'needs_review')
+  const keepPauseSec = Math.round(Math.max(0, gapSettings.targetGapSec) * 100) / 100
 
   const retakeRemovalMs = useMemo(() => {
     return retakeProposals(retakeGroups, edits.cutRanges ?? []).reduce(
@@ -275,6 +290,7 @@ export function CleanupPanel({
       else toast.success(`${props.length} retake cut(s) ready — review below`)
     } finally {
       setRetakeBusy(false)
+      setRetakeScanned(true)
     }
   }
 
@@ -341,7 +357,7 @@ export function CleanupPanel({
       else next.add(p.id)
       const selected = proposed.filter((row) => next.has(row.id))
       onAuditionChange(
-        selected.length ? auditionEditsForProposals(edits, selected, wordSpans) : null,
+        selected.length ? auditionEditsForProposals(edits, selected, wordSpans, rmsSamples) : null,
       )
       return next
     })
@@ -362,31 +378,97 @@ export function CleanupPanel({
       </div>
 
       <div
-        className="sticky top-0 z-10 -mx-3 flex flex-wrap gap-2 border-b border-border bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+        className="sticky top-0 z-10 -mx-3 space-y-2 border-b border-border bg-background/95 px-3 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80"
         data-testid="cleanup-bulk-actions"
       >
-        {proposedFillers.length ? (
-          <Button type="button" size="sm" variant="secondary" onClick={applyAllFillers}>
-            Accept all fillers
-            <FreeToolBadge className="ml-1.5" />
-          </Button>
-        ) : null}
-        {proposedGaps.length ? (
-          <Button type="button" size="sm" variant="secondary" onClick={() => applyAllOfKind('gap')}>
-            Accept all gaps
-            <FreeToolBadge className="ml-1.5" />
-          </Button>
-        ) : null}
-        {retakeExtras.length && !retakeUnverified ? (
-          <Button type="button" size="sm" data-testid="retake-apply-all-sticky" onClick={() => applyAllOfKind('retake')}>
-            Apply all retakes
-          </Button>
-        ) : null}
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold">One-click cleanup</p>
+          <FreeToolBadge />
+        </div>
+        <QuickCleanupRow
+          testId="cleanup-quick-fillers"
+          title="Remove filler words"
+          detail={
+            fillerReady.length
+              ? `${fillerReady.length} found (um, uh, stutters)${fillerReview ? ` · ${fillerReview} more run into other words, review them below` : ''}`
+              : fillerReview
+                ? `${fillerReview} found, but they run into other words. Review them in Proposed below.`
+                : 'None found in this clip. Hear ums the script left out? Use Re-transcribe (verbatim) below.'
+          }
+          action={fillerReady.length ? `Remove ${fillerReady.length}` : 'Nothing to remove'}
+          disabled={!fillerReady.length}
+          onClick={applyAllFillers}
+        />
+        <QuickCleanupRow
+          testId="cleanup-quick-retakes"
+          actionTestId={retakeExtras.length && !retakeUnverified ? 'retake-apply-all-sticky' : 'cleanup-quick-retakes-find'}
+          title="Remove mess-ups (retakes)"
+          detail={
+            retakeBusy
+              ? 'Looking for sentences you restarted…'
+              : retakeExtras.length
+                ? `${retakeExtras.length} found. Keeps the last take; pick a different take below.`
+                : retakeScanned
+                  ? 'None found in this clip.'
+                  : 'Finds sentences you restarted and keeps the last take.'
+          }
+          action={
+            retakeBusy
+              ? 'Looking…'
+              : retakeExtras.length && !retakeUnverified
+                ? `Remove ${retakeExtras.length}`
+                : retakeExtras.length
+                  ? 'Review below'
+                  : retakeScanned
+                    ? 'Look again'
+                    : 'Find mess-ups'
+          }
+          disabled={retakeBusy || (retakeExtras.length > 0 && retakeUnverified)}
+          onClick={() => {
+            if (retakeExtras.length) applyAllOfKind('retake')
+            else void runRetakes()
+          }}
+        />
+        <QuickCleanupRow
+          testId="cleanup-quick-pauses"
+          title="Shorten long pauses"
+          detail={
+            !rmsSamples.length
+              ? 'Waiting for the audio waveform. Pauses are only shortened where the audio is actually quiet.'
+              : gapReady.length
+                ? `${gapReady.length} found. Each keeps at least ${keepPauseSec}s of quiet.`
+                : `No quiet pauses longer than ${keepPauseSec}s.`
+          }
+          action={gapReady.length ? `Shorten ${gapReady.length}` : 'Nothing to shorten'}
+          disabled={!gapReady.length}
+          onClick={() => applyAllOfKind('gap')}
+        />
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground" data-testid="cleanup-keep-pause">
+          <span className="mr-1">Keep pauses at least</span>
+          {[0.2, 0.3, 0.5, 0.8].map((sec) => (
+            <Button
+              key={sec}
+              type="button"
+              size="sm"
+              variant={Math.abs(keepPauseSec - sec) < 0.01 ? 'default' : 'outline'}
+              className="h-6 px-2 text-[11px]"
+              disabled={!onGapSettingsChange}
+              title={onGapSettingsChange ? `Keep ${sec}s of every shortened pause` : 'Set this in Polish › Shorten gaps'}
+              onClick={() => onGapSettingsChange?.({ targetGapSec: sec })}
+              data-testid={`cleanup-keep-pause-${sec}`}
+            >
+              {sec}s
+            </Button>
+          ))}
+        </div>
         {clarityRows.length ? (
           <Button type="button" size="sm" data-testid="clarity-apply-all-sticky" onClick={applyAllClarity}>
             Apply all clarity
           </Button>
         ) : null}
+        <p className="text-[11px] text-muted-foreground">
+          Each button is one undo step (Ctrl+Z). Any single cut can be restored in Applied. Preview, keep or skip single suggestions in Proposed.
+        </p>
       </div>
 
       <TrimRangeBar bounds={bounds} trim={edits.trim} onCommitTrim={onCommitTrim} />
@@ -596,7 +678,9 @@ export function CleanupPanel({
         </TabsList>
         <TabsContent value="proposed" className="mt-3 space-y-2">
           {proposed.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No cleanup suggestions right now.</p>
+            <p className="text-xs text-muted-foreground" data-testid="cleanup-proposed-empty">
+              Nothing to clean up here: no filler words or long quiet pauses found. Use Find mess-ups above to check for retakes.
+            </p>
           ) : (
             proposed.map((p) => (
               <ProposalRow
@@ -722,6 +806,45 @@ export function CleanupPanel({
   )
 }
 
+/** SCRIPT_DOC2: one row of the One-click cleanup card (title, what was found, one button). */
+function QuickCleanupRow({
+  title,
+  detail,
+  action,
+  disabled,
+  onClick,
+  testId,
+  actionTestId,
+}: {
+  title: string
+  detail: string
+  action: string
+  disabled: boolean
+  onClick: () => void
+  testId: string
+  actionTestId?: string
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2" data-testid={testId}>
+      <div className="min-w-0">
+        <p className="text-[13px] font-medium leading-tight">{title}</p>
+        <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{detail}</p>
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        variant={disabled ? 'outline' : 'default'}
+        className="h-8 shrink-0"
+        disabled={disabled}
+        onClick={onClick}
+        data-testid={actionTestId ?? `${testId}-action`}
+      >
+        {action}
+      </Button>
+    </div>
+  )
+}
+
 function ProposalRow({
   proposal,
   outputTimeMs,
@@ -765,6 +888,15 @@ function ProposalRow({
         >
           {formatTimecode(outputTimeMs)}
         </span>
+        {proposal.quality?.confidence === 'needs_review' ? (
+          <span
+            className="mt-0.5 shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+            title="No quiet point at an edge: it runs into a neighbouring word. Preview before removing."
+            data-testid="cleanup-proposal-review"
+          >
+            Review
+          </span>
+        ) : null}
         <span className="line-clamp-3 min-w-0 flex-1">
         {proposal.kind === 'clarity' && clarityParts ? (
           <>

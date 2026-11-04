@@ -177,6 +177,18 @@ export function TranscriptPanel({
   const [showDeleted, setShowDeleted] = useState(true)
   const [renamingSpk, setRenamingSpk] = useState<string | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  // SCRIPT_DOC2: drag across words to select them (like selecting text in a doc).
+  const dragRef = useRef<{ anchorStart: number; anchorEnd: number; moved: boolean } | null>(null)
+  useEffect(() => {
+    const up = () => {
+      // Cleared after the click event of this mouseup, so a drag never also counts as a click.
+      window.setTimeout(() => {
+        dragRef.current = null
+      }, 0)
+    }
+    window.addEventListener('mouseup', up)
+    return () => window.removeEventListener('mouseup', up)
+  }, [])
   useEffect(() => {
     try {
       setFollow(localStorage.getItem('transovo.script.follow') !== '0')
@@ -685,7 +697,7 @@ export function TranscriptPanel({
     return (
       <span
         key={w.i}
-        className={`mr-1 inline ${muted && !surrounding ? 'text-muted-foreground/50' : ''} ${surrounding ? 'text-muted-foreground/50' : ''}`}
+        className={`inline ${muted && !surrounding ? 'text-muted-foreground/50' : ''} ${surrounding ? 'text-muted-foreground/50' : ''}`}
       >
         <button
           type="button"
@@ -695,9 +707,22 @@ export function TranscriptPanel({
           data-ignored={ignored && !cut ? '1' : undefined}
           data-surrounding={surrounding ? '1' : undefined}
           data-highlight={pickHighlight ? '1' : undefined}
-          className={`rounded px-1 py-0.5 transition hover:bg-accent cursor-text min-h-7 inline-flex items-center ${
+          data-filler={isFiller && !cut ? '1' : undefined}
+          title={isFiller && !cut ? 'Filler word. Select it and press Delete, or use Clean up › Remove filler words.' : undefined}
+          onMouseDown={(e) => {
+            if (e.button !== 0 || e.shiftKey || muted) return
+            dragRef.current = { anchorStart: Math.round(startMs), anchorEnd: Math.round(endMs), moved: false }
+          }}
+          onMouseEnter={(e) => {
+            const d = dragRef.current
+            if (!d || (e.buttons & 1) === 0 || muted) return
+            d.moved = true
+            setSelStart(Math.min(d.anchorStart, Math.round(startMs)))
+            setSelEnd(Math.max(d.anchorEnd, Math.round(endMs)))
+          }}
+          className={`inline rounded-[3px] px-[2px] py-0 text-left transition-colors hover:bg-accent/70 cursor-text select-none ${
             active ? 'bg-[#FFD400]/35' : ''
-          } ${
+          } ${isFiller && !cut ? 'underline decoration-amber-500/80 decoration-wavy underline-offset-4' : ''} ${
             cut
               ? `text-muted-foreground/60 line-through decoration-destructive/70 decoration-2 bg-destructive/5 ${
                   isFiller ? 'decoration-muted-foreground/80' : ''
@@ -708,6 +733,7 @@ export function TranscriptPanel({
           }`}
           onClick={(e) => {
             if (e.detail > 1) return
+            if (dragRef.current?.moved) return
             if (surrounding) {
               onExtendTrim(Math.round(midMs))
               return
@@ -749,7 +775,7 @@ export function TranscriptPanel({
             display
           )}
         </button>
-        {selected && !cut && !muted && !surrounding ? (
+        {selected && !cut && !muted && !surrounding && selStart === Math.round(startMs) && selEnd === Math.round(endMs) ? (
           <button
             type="button"
             className="ml-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-accent"
@@ -782,7 +808,7 @@ export function TranscriptPanel({
           >
             Restore
           </button>
-        ) : null}
+        ) : null}{' '}
       </span>
     )
   }
@@ -1315,9 +1341,14 @@ export function TranscriptPanel({
       >
         <div
           className={cn(
-            largeScript && 'w-full max-w-[68ch] px-6 py-3 text-[17px] leading-[1.65]',
+            largeScript && 'w-full max-w-[68ch] px-6 py-3 text-[17px] leading-[1.75]',
           )}
         >
+        {visible.length ? (
+          <p className="mb-3 select-none text-[11px] leading-snug text-muted-foreground" data-testid="transcript-edit-hint">
+            Drag across words to select · Delete cuts them from the video · Ctrl+Z undoes · Double-click a word to fix its spelling (video unchanged) · <span className="underline decoration-amber-500/80 decoration-wavy underline-offset-2">wavy</span> = filler word
+          </p>
+        ) : null}
         {!visible.length ? (
           <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
             No transcript words for this clip yet. They appear after processing finishes.
@@ -1400,7 +1431,23 @@ export function TranscriptPanel({
               }
               if (paras.has(w.i)) {
                 nodes.push(
-                  <span key={`p-${w.i}`} className="block h-1.5" data-testid="transcript-para-break" aria-hidden />,
+                  <span key={`p-${w.i}`} className="block h-3" data-testid="transcript-para-break" aria-hidden />,
+                )
+              }
+              // SCRIPT_DOC2: a timestamp at the start of every paragraph (and speaker block); click to jump.
+              if (paras.has(w.i) || w.i === block.words[0]?.i) {
+                const paraMs = Math.round(wordSourceMs(w).startMs)
+                nodes.push(
+                  <button
+                    key={`ts-${w.i}`}
+                    type="button"
+                    data-testid="transcript-para-time"
+                    title="Jump here"
+                    className="mr-2 inline-block select-none align-baseline font-mono text-[11px] tabular-nums text-muted-foreground/70 hover:text-primary"
+                    onClick={() => onSeek(paraMs)}
+                  >
+                    {formatScriptTime(paraMs - edits.trim.in)}
+                  </button>,
                 )
               }
               let gapCut = prev ? gapCutBetweenSourceWords(prev, w, edits.cutRanges ?? []) : null
@@ -1486,6 +1533,12 @@ export function TranscriptPanel({
       ) : null}
     </div>
   )
+}
+
+/** SCRIPT_DOC2: m:ss for paragraph timestamps (time from the clip start). */
+export function formatScriptTime(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
 /** FV2: above this many words the transcript renders in lazy chunks. */

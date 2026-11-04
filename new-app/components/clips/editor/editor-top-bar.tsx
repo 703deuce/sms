@@ -122,10 +122,10 @@ export function EditorTopBar({
         )}
       </span>
       {menuBarSlot ? (
-        <>
-          <Separator orientation="vertical" className="mx-1 hidden h-6 lg:block" />
+        <div className="flex min-w-0 flex-1 items-center overflow-hidden" data-testid="editor-top-bar-left">
+          <Separator orientation="vertical" className="mx-1 hidden h-6 shrink-0 lg:block" />
           {menuBarSlot}
-        </>
+        </div>
       ) : null}
       {producerStrip && producerStrip.changeCount > 0 ? (
         <div
@@ -136,7 +136,7 @@ export function EditorTopBar({
           <Button size="sm" variant="outline" onClick={producerStrip.onUndo}>Undo</Button>
         </div>
       ) : null}
-      <div className="ml-auto flex items-center gap-1">
+      <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1 bg-background pl-2">
         <Tooltip>
           <TooltipTrigger
             render={
