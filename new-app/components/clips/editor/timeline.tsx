@@ -113,6 +113,7 @@ import {
   moveItemsToTrack,
   moveVideoSegment,
   moveVideoSegmentWithGap,
+  shiftVideoSegmentWithinSlot,
   reorderInsertBefore,
   isNoopReorder,
   pasteAttributes,
@@ -2324,14 +2325,17 @@ export function Timeline({
       setDrag(null)
       if (!state.moved) return
       let before = state.insertBefore
-      if (before === undefined) {
-        const resolved = slotFromPointer(ev.clientX - state.originX)
-        if (resolved === undefined) return
-        before = resolved
-      }
+      if (before === undefined) before = slotFromPointer(ev.clientX - state.originX)
       const ctx = opCtx()
-      const next = magnet ? moveVideoSegment(ctx, item.id, before) : moveVideoSegmentWithGap(ctx, item.id, before)
+      const next = before !== undefined
+        ? (magnet ? moveVideoSegment(ctx, item.id, before) : moveVideoSegmentWithGap(ctx, item.id, before))
+        : !magnet ? shiftVideoSegmentWithinSlot(ctx, item.id, state.deltaMs) : null
       if (next) commit(next)
+      else if (!magnet && before === undefined) {
+        toast.message(state.deltaMs < 0
+          ? 'No gap to move into — move right first or drag across the preceding clip'
+          : 'Clip could not move to this position', { id: 'timeline-short-main-move' })
+      }
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -2483,6 +2487,20 @@ export function Timeline({
         const s = snapping ? snapValue(edge + raw, targets, thr) : { ms: edge + raw, snappedTo: null }
         state.deltaMs = s.ms - edge
         state.snappedTo = s.snappedTo
+      }
+      // B2: the live trim boundary must be the same boundary that trimItem will commit.
+      // Clamp outer main-video edges against the actual source-media bounds, not the
+      // visible clip's original 31-second duration or unlimited pointer travel.
+      if (item.lane === 'video' && dragMode !== 'move' && !hostOf(item)) {
+        const min = trimLimits?.minMs ?? mediaMinMs ?? clipStartMs
+        const max = trimLimits?.maxMs ?? mediaMaxMs ?? clipEndMs
+        if (dragMode === 'start' && item.srcInMs != null && item.srcInMs <= previewEdits.trim.in + 1) {
+          const t = clampTrim({ in: item.srcInMs + state.deltaMs, out: edits.trim.out })
+          state.deltaMs = Math.max(min, t.in) - item.srcInMs
+        } else if (dragMode === 'end' && item.srcOutMs != null && item.srcOutMs >= previewEdits.trim.out - 1) {
+          const t = clampTrim({ in: edits.trim.in, out: item.srcOutMs + state.deltaMs })
+          state.deltaMs = Math.min(max, t.out) - item.srcOutMs
+        }
       }
       if (dragMode === 'move') state.targetRow = trackRowAt(ev.clientY, item.lane)
       setDrag({ ...state })
