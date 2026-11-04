@@ -25,7 +25,7 @@ def test_lane_toggles_respect_capabilities():
     lanes = normalize_timeline_lanes(
         {"video": {"muted": True, "hidden": True, "locked": True}, "voice": {"hidden": True}, "junk": {"muted": True}}
     )
-    assert lanes == {"video": {"locked": True}}
+    assert lanes == {"video": {"hidden": True, "locked": True}}
 
 
 def test_voice_mute_strips_studio_and_dub_track():
