@@ -42,7 +42,7 @@ export function UnifiedEditorWorkspace({
 }) {
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [focus, setFocus] = useState(false)
-  const [timelinePct, setTimelinePct] = useState(52)
+  const [timelinePct, setTimelinePct] = useState(65)
   const [topBarHost, setTopBarHost] = useState<HTMLElement | null>(null)
   const workspaceRef = useRef<HTMLDivElement>(null)
   const timelineDrag = useRef<{ startY: number; startPct: number; height: number } | null>(null)
