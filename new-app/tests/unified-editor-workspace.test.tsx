@@ -34,11 +34,10 @@ describe('unified editor workspace', () => {
     expect(ui.getAllByTestId('shared-editor-tools')).toHaveLength(1)
     expect(ui.getAllByTestId('shared-editor-timeline')).toHaveLength(1)
     expect(ui.getByTestId('unified-editor-columns').style.gridTemplateColumns).toContain('360px')
-    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('44fr')
-    // Layout controls sit immediately above the timeline, not above the transcript.
-    const layout = ui.getByTestId('unified-main-workspace')
-    expect(Array.from(layout.children).indexOf(ui.getByTestId('unified-workspace-toolbar'))).toBe(1)
-    expect(ui.getByTestId('unified-workspace-toolbar').contains(ui.getByTestId('unified-mode-compact'))).toBe(true)
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('52fr')
+    // The timeline divider now only handles resizing. Mode controls are placed in the global top bar.
+    expect(ui.getByTestId('unified-workspace-toolbar').querySelector('[data-testid^="unified-mode-"]')).toBeNull()
+    expect(ui.getByTestId('unified-mode-fallback').contains(ui.getByTestId('unified-mode-compact'))).toBe(true)
   })
 
   it('supports compact, full timeline and focus without remounting a second Inspector', () => {
@@ -70,7 +69,7 @@ describe('unified editor workspace', () => {
   it('supports keyboard resizing of timeline and Inspector', () => {
     const ui = mount()
     fireEvent.keyDown(ui.getByTestId('unified-timeline-resize'), { key: 'ArrowUp' })
-    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('47fr')
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('55fr')
     fireEvent.keyDown(ui.getByTestId('unified-inspector-resize'), { key: 'ArrowLeft' })
     expect(ui.onInspectorWidthChange).toHaveBeenCalledWith(372)
   })
