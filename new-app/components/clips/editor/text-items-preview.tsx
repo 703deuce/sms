@@ -48,7 +48,7 @@ export function TextItemsPreview({
         const fxShell = Boolean(libassTextFx && textItemHasFx(edits, it.id))
         const fontFamily = css.userFamily
           ? `"${css.userFamily}", ${captionFontStack('Montserrat Black')}`
-          : captionFontStack(it.style.font === 'Montserrat' ? 'Montserrat Black' : it.style.font)
+          : captionFontStack(it.style?.font ? (it.style.font === 'Montserrat' ? 'Montserrat Black' : it.style.font) : 'Montserrat Black')
         return (
           <div
             key={it.id}
