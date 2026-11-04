@@ -260,6 +260,19 @@ describe('E2 multi-track timeline', () => {
     expect(next.loopFriendlyEnd).toBe(false)
   })
 
+  it('B2 keeps the timeline scale steady while trimming and retains room to restore the source', () => {
+    const { getAllByTestId, getByTestId, onCommitEdits, pxPerMs } = setup()
+    const last = getAllByTestId('timeline-item-video').at(-1)!
+    const handle = last.querySelector('[data-testid="timeline-trim-end"]')!
+    const widthBefore = parseFloat(getByTestId('timeline-track').style.width)
+    act(() => fireEvent.pointerDown(handle, { button: 0, clientX: 100, pointerId: 1 }))
+    act(() => fireEvent.pointerMove(window, { clientX: 100 - 2000 * pxPerMs(), pointerId: 1 }))
+    expect(parseFloat(getByTestId('timeline-track').style.width)).toBe(widthBefore)
+    act(() => fireEvent.pointerUp(window, { clientX: 100 - 2000 * pxPerMs(), pointerId: 1 }))
+    expect((onCommitEdits.mock.calls[0]![0] as ClipEditsV2).trim.out).toBe(18000)
+    expect(parseFloat(getByTestId('timeline-track').style.width)).toBeGreaterThanOrEqual(widthBefore)
+  })
+
   it('without onCommitEdits the lanes are read-only', () => {
     const { getByTestId } = setup(edits(), { onCommitEdits: undefined })
     expect((getByTestId('timeline-split') as HTMLButtonElement).disabled).toBe(true)
