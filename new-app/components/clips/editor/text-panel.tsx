@@ -191,10 +191,10 @@ export function TextPanel({
     write([...items, it])
     onSelect(id)
   }
-  const newId = (() => {
-    let n = 0
-    return () => `t${Date.now().toString(36)}${n++ ? `_${n}` : ''}`
-  })
+  // E9: IDs stay unique across rapid successive template clicks, even in
+  // the same millisecond (the old per-render counter reset between clicks).
+  const templateIdCounter = useRef(0)
+  const newId = () => `t${Date.now().toString(36)}_${++templateIdCounter.current}`
   const addItems = (made: TextItem[]) => {
     const room = TEXT_MAX_ITEMS - items.length
     if (room < made.length || !made.length) return
@@ -203,7 +203,7 @@ export function TextPanel({
   }
   // G4b: a title template lands at the playhead on a free text track (never on top of other text).
   const addTemplate = (tid: string) => {
-    const made = placeTemplateGroupInClearSpace(items, newTemplateItems(tid, newId(), playheadMs, durationMs))
+    const made = placeTemplateGroupInClearSpace(items, newTemplateItems(tid, newId, playheadMs, durationMs))
     if (!made.length || TEXT_MAX_ITEMS - items.length < made.length) return
     burst.current = null
     const built = build([...items, ...made])
@@ -215,12 +215,12 @@ export function TextPanel({
     onSelect(made[made.length - 1]!.id)
   }
   const addShape = (type: string) => {
-    const base = newShapeItem(newId()(), type, playheadMs, durationMs)
+    const base = newShapeItem(newId(), type, playheadMs, durationMs)
     const [x, y] = offsetNewOverlayPosition(edits, base.x, base.y)
     addItems([{ ...base, x, y }])
   }
-  const addSticker = (sid: string) => addItems([newStickerItem(newId()(), sid, playheadMs, durationMs)])
-  const addProgress = () => addItems([newProgressItem(newId()(), durationMs)])
+  const addSticker = (sid: string) => addItems([newStickerItem(newId(), sid, playheadMs, durationMs)])
+  const addProgress = () => addItems([newProgressItem(newId(), durationMs)])
 
   const textRef = useRef<HTMLTextAreaElement | null>(null)
   const toggle = (bit: 1 | 2) => {
