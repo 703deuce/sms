@@ -63,12 +63,16 @@ def bg_matte_provider() -> str:
 
 
 def bg_removal_allowed(edits: dict) -> bool:
-    from clips_worker.main_fx import main_key_allowed
+    # Background matting has its own limits. Do not broaden main_key_allowed:
+    # that function also controls unrelated chroma-key effects.
+    from clips_worker.main_fx import MULTI_VIDEO_LAYOUTS
 
-    return (
-        main_key_allowed(edits)
-        and not edits.get("stabilize")
-    )
+    if edits.get("sourceSegments") or edits.get("stabilize"):
+        return False
+    mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+    if mode in MULTI_VIDEO_LAYOUTS:
+        return False
+    return True
 
 
 def bg_removal_active(edits: dict) -> dict | None:
