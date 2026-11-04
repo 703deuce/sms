@@ -48,28 +48,31 @@ export function PreviewTransportStrip({
       </DropdownMenuContent>
     </DropdownMenu>
   )
+  // TIMELINE_LAYOUT4: compact = the same single row, just tighter padding (no second View row).
   if (compact) {
     return (
-      <div className={cn(editorPreviewStrip, 'flex-col items-stretch gap-2 py-2')} data-testid="preview-transport-strip">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className={cn(editorPreviewStripSide, 'min-w-0 flex-[1_1_40%] justify-start')}>{recordSlot}</div>
-          <div className={cn(editorPreviewStripCenter, 'min-w-0 flex-1 flex-wrap justify-center gap-1')}>
-            {transportSlot}
-            {fullscreenSlot}
-          </div>
+      <div className={cn(editorPreviewStrip, 'flex-nowrap gap-2 py-1')} data-testid="preview-transport-strip" data-rows="1">
+        <div className={cn(editorPreviewStripSide, 'min-w-0 shrink justify-start')}>{recordSlot}</div>
+        <div className={cn(editorPreviewStripCenter, 'min-w-0 flex-1 flex-nowrap justify-center gap-1 overflow-x-auto [scrollbar-width:none] [&>*]:flex-nowrap')}>
+          {transportSlot}
         </div>
-        <div className="flex justify-end">{viewMenu}</div>
+        <div className={cn(editorPreviewStripSide, 'shrink-0 justify-end gap-1')} data-testid="preview-strip-right">
+          {fullscreenSlot}
+          {viewMenu}
+        </div>
       </div>
     )
   }
   return (
-    <div className={cn(editorPreviewStrip, 'flex-wrap gap-y-2')} data-testid="preview-transport-strip">
-      <div className={cn(editorPreviewStripSide, 'justify-start')}>{recordSlot}</div>
-      <div className={cn(editorPreviewStripCenter, 'min-w-0 max-w-full flex-wrap')}>
+    <div className={cn(editorPreviewStrip, 'flex-nowrap gap-2')} data-testid="preview-transport-strip" data-rows="1">
+      <div className={cn(editorPreviewStripSide, 'min-w-0 shrink justify-start')}>{recordSlot}</div>
+      <div className={cn(editorPreviewStripCenter, 'min-w-0 flex-1 flex-nowrap justify-center overflow-x-auto [scrollbar-width:none] [&>*]:flex-nowrap')}>
         {transportSlot}
-        {fullscreenSlot}
       </div>
-      <div className={cn(editorPreviewStripSide, 'justify-end')}>{viewMenu}</div>
+      <div className={cn(editorPreviewStripSide, 'shrink-0 justify-end gap-1')} data-testid="preview-strip-right">
+        {fullscreenSlot}
+        {viewMenu}
+      </div>
     </div>
   )
 }
