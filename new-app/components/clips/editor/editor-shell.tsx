@@ -369,6 +369,7 @@ export function EditorShell({
   const timelineVisible = !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
+  const unifiedWorkspaceActive = band !== 'mobile'
   const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
   // TIMELINE_LAYOUT1: Timeline view (lg+) uses the Script-view layout: rail + docked panel on the right.
   const [dockPanelOpen, setDockPanelOpen] = useState(false)
@@ -399,6 +400,7 @@ export function EditorShell({
     (view: ClipEditorLayoutView) => {
       setLayoutView(view)
       writeClipEditorLayoutView(view)
+      if (unifiedWorkspaceActive) return
       if (view !== 'script') setScriptToolPanel(null)
       if (view !== 'timeline') {
         setDockPanelOpen(false)
@@ -408,7 +410,7 @@ export function EditorShell({
         if (open) setPanel((p) => (p === 'inspector' ? 'media' : p))
       }
     },
-    [band],
+    [band, unifiedWorkspaceActive],
   )
   const { transcriptPct: scriptSplitPct, persist: persistScriptSplit } = useScriptViewSplit()
   const selectPanel = useCallback((id: EditorPanelId) => {
@@ -418,11 +420,12 @@ export function EditorShell({
     }
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
+    if (unifiedWorkspaceActive) return
     if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
     else if (band === 'mobile' || band === 'compact') {
       setMobilePanelOpen(true)
     }
-  }, [band, layoutView, setDockPanelOpenPersist])
+  }, [band, layoutView, setDockPanelOpenPersist, unifiedWorkspaceActive])
   const selectRailGroup = useCallback(
     (groupId: EditorRailGroupId) => {
       const group = editorRailGroups(clipEditorAiExtrasEnabled()).find((g) => g.id === groupId)
@@ -2562,7 +2565,7 @@ export function EditorShell({
   )
   }
   // Script tools are owned by ScriptViewMainSplit; never construct the legacy panel tree there.
-  const panelBody = layoutView === 'script' ? null : renderSidePanels(null)
+  const panelBody = unifiedWorkspaceActive || layoutView === 'script' ? null : renderSidePanels(null)
 
   const previewColumnContent = (
       <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden px-2 pb-1 pt-2">
@@ -3038,11 +3041,15 @@ export function EditorShell({
 
   // MENUBAR1: top menu bar. Every item calls an EXISTING handler / panel; conditional items are greyed with a hint.
   const runTimelineMenu = (cmd: TimelineMenuCommand) => {
-    if (layoutView !== 'timeline') setLayoutViewPersist('timeline')
+    if (!unifiedWorkspaceActive && layoutView !== 'timeline') setLayoutViewPersist('timeline')
     setTimelineMenuCmd((prev) => ({ cmd, seq: (prev?.seq ?? 0) + 1 }))
   }
   const runPalette = (id: string) => runTimelineMenu({ kind: 'palette', id })
   const openToolPanel = (id: EditorPanelId) => {
+    if (unifiedWorkspaceActive) {
+      selectPanel(id)
+      return
+    }
     if (layoutView === 'script' && SCRIPT_VIEW_TOOL_PANELS.some((p) => p.id === id)) {
       const sid = id as ScriptViewToolPanelId
       setVisitedPanels((v) => (v.has(sid) ? v : new Set([...v, sid])))
@@ -3354,7 +3361,7 @@ export function EditorShell({
           producerStrip={producerStrip ? { changeCount: producerStrip.changeCount, onUndo: undo } : null}
           pendingPaidCount={producerPendingPaid}
           layoutViewSlot={
-            <EditorLayoutViewSwitch value={layoutView} onChange={setLayoutViewPersist} />
+            {unifiedWorkspaceActive ? null : <EditorLayoutViewSwitch value={layoutView} onChange={setLayoutViewPersist} />}
           }
           menuBarSlot={
             <EditorMenuBar menus={editorMenus} onOpenSearch={() => runTimelineMenu({ kind: 'openPalette' })} />
@@ -3485,6 +3492,26 @@ export function EditorShell({
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <EditorLayout
+          unified={unifiedWorkspaceActive}
+          unifiedTimelineView={layoutView}
+          onUnifiedTimelineViewChange={setLayoutViewPersist}
+          unifiedMain={
+            unifiedWorkspaceActive ? (
+              <ScriptViewMainSplit
+                transcriptPct={scriptSplitPct}
+                onTranscriptPctChange={persistScriptSplit}
+                className="h-full"
+                minTranscriptPx={280}
+                minPreviewPx={320}
+                transcript={
+                  <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card p-2" data-testid="unified-transcript-pane">
+                    {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+                  </div>
+                }
+                preview={<div className="flex h-full min-h-0 min-w-0 overflow-hidden" data-testid="unified-video-preview">{previewColumnContent}</div>}
+              />
+            ) : null
+          }
           band={band}
           compact={compact}
           panelOpen={dockTools ? dockPanelOpen : mobilePanelOpen}
@@ -3619,7 +3646,46 @@ export function EditorShell({
             )
           }
           properties={
-            !dockTools && !compact && band === 'wide' && layoutView !== 'script' ? (
+            unifiedWorkspaceActive ? (
+              <div className="flex h-full min-h-0 min-w-0 flex-col" data-testid="unified-tools-content">
+                <div className="flex h-9 shrink-0 items-center justify-between border-b border-border/70 px-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tools &amp; Inspector</h2>
+                  <span className="text-[11px] text-muted-foreground">{panel === 'transcript' ? 'Transcript' : (TAB_META[panel]?.label ?? 'Tools')}</span>
+                </div>
+                <ScriptViewToolTabs
+                  variant="sidebar"
+                  active={SCRIPT_VIEW_TOOL_PANELS.some((item) => item.id === panel) ? panel as ScriptViewToolPanelId : null}
+                  onSelect={(id) => selectPanel(id)}
+                  onShowScript={() => {
+                    setPanel('transcript')
+                    setScriptToolPanel(null)
+                  }}
+                />
+                {panelTabs.length > 1 ? (
+                  <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/70 p-1" role="tablist" aria-label="Tool categories">
+                    {panelTabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={panel === tab.id}
+                        onClick={() => selectPanel(tab.id)}
+                        className={cn('shrink-0 rounded px-2 py-1 text-xs', panel === tab.id ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-muted')}
+                      >
+                        {tab.tabLabel}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <ScrollArea className="min-h-0 flex-1">
+                  {panel === 'transcript' ? (
+                    <p className="p-4 text-sm text-muted-foreground">Select a tool above to edit its settings. The transcript stays visible beside the preview.</p>
+                  ) : (
+                    <div className="p-3">{renderSidePanels(panel)}</div>
+                  )}
+                </ScrollArea>
+              </div>
+            ) : !dockTools && !compact && band === 'wide' && layoutView !== 'script' ? (
               <>
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
                   <h2 className="text-sm font-semibold">Properties</h2>
