@@ -48,12 +48,9 @@ function setup(e: ClipEditsV2 = edits(), outputMs = 6000) {
     })
   }
   const openKfStrip = () => {
-    const btn = utils.getByTestId('timeline-keyframes-toggle')
-    if (btn.getAttribute('aria-pressed') !== 'true') {
-      act(() => {
-        fireEvent.click(btn)
-      })
-    }
+    act(() => {
+      fireEvent.click(utils.getByTestId('timeline-keyframes-toggle'))
+    })
   }
   return { ...utils, onCommitEdits, onSeekOutput, item, select, openKfStrip }
 }
@@ -62,7 +59,7 @@ describe('E3 keyframes in the timeline', () => {
   afterEach(() => {
     cleanup()
     try {
-      window.localStorage.removeItem('clips.timeline.kfStrip.v2')
+      window.localStorage.removeItem('clips.timeline.kfStrip')
     } catch {
       /* ignore */
     }

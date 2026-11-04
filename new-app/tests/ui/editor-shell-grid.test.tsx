@@ -6,8 +6,6 @@ import { render } from '@testing-library/react'
 import { bandForWidth, EDITOR_GRID, aspectCssToNumber, EditorLayout } from '@/components/clips/editor/editor-layout'
 import { clampTimelineHeight, TIMELINE_MIN_H } from '@/lib/clips/editor/timeline-opts'
 import { EDITOR_RAIL_ITEMS, EDITOR_RAIL_GROUPS } from '@/components/clips/editor/editor-rail'
-import { clipEditorLeftPanelIds } from '@/lib/clips/editor/editor-rail-navigation'
-import type { EditorPanelId } from '@/components/clips/editor/editor-rail'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 
@@ -143,12 +141,9 @@ describe('editor shell grid', () => {
     const timeline = readFileSync(join(ROOT, 'components/clips/editor/timeline.tsx'), 'utf8')
     expect(timeline).not.toMatch(/text-\[8px\]/)
   })
-  it('EDITOR_RAIL_GROUPS cover all items except menu-only panels', () => {
+  it('EDITOR_RAIL_GROUPS cover all items', () => {
     const grouped = EDITOR_RAIL_GROUPS.flatMap((g) => g.ids).sort()
-    const menuOnly = new Set<EditorPanelId>(['repurpose'])
-    const items = clipEditorLeftPanelIds(false)
-      .filter((id) => !menuOnly.has(id))
-      .sort()
+    const items = EDITOR_RAIL_ITEMS.map((i) => i.id).sort()
     expect(grouped).toEqual(items)
   })
 })
