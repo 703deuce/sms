@@ -2912,9 +2912,10 @@ export function Timeline({
           // B2: edge hit testing does not depend on selection or a tiny nested span.
           // The dedicated handle still wins when it is the pointer target.
           const edgePx = Math.min(8, bounds.width / 3)
-          const edge = editable && !st.locked && item.caps.trimStart && x <= edgePx
+          // No measured width means no credible edge hit (e.g. pre-layout/tests).
+          const edge = bounds.width > 16 && editable && !st.locked && item.caps.trimStart && x >= 0 && x <= edgePx
             ? 'start'
-            : editable && !st.locked && item.caps.trimEnd && x >= bounds.width - edgePx
+            : bounds.width > 16 && editable && !st.locked && item.caps.trimEnd && x <= bounds.width && x >= bounds.width - edgePx
               ? 'end' : 'move'
           startDrag(e, item, edge)
         } : undefined}
