@@ -2670,6 +2670,10 @@ export function Timeline({
     return y
   }
   const totalH = RULER_H + rows.reduce((s, r) => s + LANE_H[r.lane], 0)
+  // Full-video highlight / moment bars are rendered *above* the ruler in the media
+  // column. The labels column needs identical spacer rows or every label is one
+  // (or two) lanes above its waveform when opening a clip in full video (C5).
+  const auxiliaryHeaderHeight = 36 * (Number(Boolean(highlights && (highlightLaneRanges.length || highlights.jobRunning))) + Number(Boolean(momentFocus)))
 
   const tbtn =
     'inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-[12px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4'
@@ -3351,6 +3355,7 @@ export function Timeline({
         data-testid="timeline-body"
       >
         <div className="relative min-w-[160px] w-[160px] shrink-0 border-r border-border/60" aria-label="Tracks">
+          {auxiliaryHeaderHeight > 0 ? <div style={{ height: auxiliaryHeaderHeight }} data-testid="timeline-auxiliary-header" aria-hidden /> : null}
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
           {rows.map((r) => (
             <TimelineLaneHeader
@@ -3374,7 +3379,7 @@ export function Timeline({
               aria-label={`Resize ${r.trackId ? r.label : r.lane} lane`}
               title="Drag to resize this lane · double-click to reset"
               className="absolute inset-x-0 z-10 h-1.5 -translate-y-1/2 cursor-row-resize touch-none hover:bg-primary/40"
-              style={{ top: rowTop(r.key) + LANE_H[r.lane] }}
+              style={{ top: auxiliaryHeaderHeight + rowTop(r.key) + LANE_H[r.lane] }}
               data-testid={`timeline-lane-resize-${r.isDefault ? r.lane : `${r.lane}-${r.trackId}`}`}
               onPointerDown={(e) => startLaneResize(r.lane, e)}
               onDoubleClick={() => resetLaneH(r.lane)}
