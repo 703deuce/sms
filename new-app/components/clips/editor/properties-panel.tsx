@@ -7,7 +7,7 @@
  * timeline shows (mirrored, not moved), so keyframes edited in either place are the same data.
  */
 import { rotateBy90 } from '@/lib/clips/editor/canvas-ops'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   ArrowDownToLine,
@@ -130,6 +130,7 @@ export function PropertiesPanel({
   speedSlot,
   colorSlot,
   videoSlot,
+  videoToolRequest,
   brollSceneSlot,
   onReplaceBroll,
   onOpenTextPanel,
@@ -152,6 +153,8 @@ export function PropertiesPanel({
   colorSlot?: ReactNode
   /** G4c main-video tools (stabilize / scene split / blur regions) under Video for the Video layer. */
   videoSlot?: ReactNode
+  /** A menu request is handled once the selected Video controls have rendered. */
+  videoToolRequest?: { id: 'blur-add' | 'bg-removal' | 'properties-panel'; seq: number } | null
   /** G4cfix: scene split for the selected B-roll item (rendered under its layer effects). */
   brollSceneSlot?: (id: string) => ReactNode
   /** FV-19: open replace-media dialog for the selected B-roll item. */
@@ -170,28 +173,40 @@ export function PropertiesPanel({
       if (first) setTab(first.id)
     }
   }, [target]) // eslint-disable-line react-hooks/exhaustive-deps
+  const panelRef = useRef<HTMLDivElement>(null)
+  const handledToolSeq = useRef<number | null>(null)
   useEffect(() => {
-    const openVideoSection = (event: Event) => {
-      const section = (event as CustomEvent<string>).detail
-      if (section !== 'bg-removal' && section !== 'blur-add' && section !== 'properties-panel') return
-      setTab('video')
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        const node = document.querySelector<HTMLElement>(`[data-testid="${section}"]`)
-        node?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
-        const target = section === 'blur-add' ? node?.closest('[data-testid="blur-regions"]') : node
-        target?.classList.add('ring-2', 'ring-primary/50', 'rounded-md')
-        window.setTimeout(() => target?.classList.remove('ring-2', 'ring-primary/50', 'rounded-md'), 2500)
-      }))
-    }
-    window.addEventListener('transovo:editor-video-tool', openVideoSection)
-    return () => window.removeEventListener('transovo:editor-video-tool', openVideoSection)
-  }, [])
+    if (!videoToolRequest || target !== 'video' || handledToolSeq.current === videoToolRequest.seq) return
+    setTab('video')
+    let raf = 0
+    // The Video tab may need a render before its blur/background control exists.
+    raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        const id = videoToolRequest.id === 'bg-removal' ? 'bg-removal-section'
+          : videoToolRequest.id === 'blur-add' ? 'blur-regions'
+          : 'properties-panel'
+        const node = id === 'properties-panel' ? panelRef.current
+          : panelRef.current?.querySelector<HTMLElement>(`[data-testid="${id}"]`)
+        if (!node) return
+        handledToolSeq.current = videoToolRequest.seq
+        node.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+        node.classList.add('ring-2', 'ring-primary/50', 'rounded-md')
+        window.setTimeout(() => node.classList.remove('ring-2', 'ring-primary/50', 'rounded-md'), 2500)
+        if (videoToolRequest.id === 'blur-add') {
+          node.querySelector<HTMLButtonElement>('[data-testid="blur-add"]')?.focus({ preventScroll: true })
+        } else if (videoToolRequest.id === 'bg-removal') {
+          node.querySelector<HTMLButtonElement>('[data-testid="bg-remove-toggle"]')?.focus({ preventScroll: true })
+        }
+      })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [videoToolRequest, target, tab])
   const origin = target ? targetOriginMs(edits, target) : 0
   const localMs = keyframeLocalEditFromPlayhead(edits, outputMs, origin)
   const seekLocal = (t: number) => onSeekOutput(origin + t)
 
   return (
-    <div className="space-y-3 p-3" data-testid="properties-panel" data-target={target ?? ''}>
+    <div ref={panelRef} className="space-y-3 p-3" data-testid="properties-panel" data-target={target ?? ''}>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="truncate text-sm font-semibold">{target ? label : 'Properties'}</h2>
         {target ? <span className="text-[11px] text-muted-foreground">Edits at the playhead</span> : null}
