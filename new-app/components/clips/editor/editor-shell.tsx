@@ -1991,6 +1991,7 @@ export function EditorShell({
                   facecamLayout={facecamLayout}
                   reframeV2Enabled={reframeV2Enabled}
                   onPick={onLayoutPick}
+                  onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
                 />
               }
               canvasBgSlot={
@@ -2245,6 +2246,7 @@ export function EditorShell({
             facecamLayout={facecamLayout}
             reframeV2Enabled={reframeV2Enabled}
             onPick={onLayoutPick}
+                  onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
             className="mb-4"
           />
           <LayersPanel
@@ -2492,6 +2494,7 @@ export function EditorShell({
                   facecamLayout={facecamLayout}
                   reframeV2Enabled={reframeV2Enabled}
                   onPick={onLayoutPick}
+                  onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
                 />
               )
             }
@@ -2710,6 +2713,7 @@ export function EditorShell({
               onLayoutPick(mode, facecam)
               setLayoutCtx(null)
             }}
+            onAspectChange={(aspect) => { setEdits({ ...edits, aspectRatio: aspect }); setLayoutCtx(null) }}
           />
         </CanvasLayoutMenu>
       ) : null}
@@ -3876,6 +3880,7 @@ export function EditorShell({
                 facecamLayout={facecamLayout}
                 reframeV2Enabled={reframeV2Enabled}
                 onPick={onLayoutPick}
+                  onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
               />
             }
             canvasBgSlot={
