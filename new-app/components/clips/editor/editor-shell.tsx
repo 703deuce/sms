@@ -60,6 +60,7 @@ import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { RepurposePanel } from '@/components/clips/editor/repurpose-panel'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FindClipsInVideoButton } from '@/components/clips/editor/find-clips-in-video-button'
+import { OpenInFullVideoButton } from '@/components/clips/editor/open-in-full-video-button'
 import { HighlightsListPanel } from '@/components/clips/editor/highlights-list-panel'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
@@ -3445,7 +3446,7 @@ export function EditorShell({
                 durationMs={bounds.clipEndMs - bounds.clipStartMs}
                 onStarted={fvHighlights.startedFind}
               />
-            ) : null
+            ) : <OpenInFullVideoButton clipId={clipId} />
           }
         />
       {/* File > Versions / History and the project menu keep the full version manager accessible without a top-bar button. */}
