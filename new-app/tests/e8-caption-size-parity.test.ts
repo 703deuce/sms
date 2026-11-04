@@ -29,7 +29,7 @@ describe('E8 caption size preview/export parity', () => {
     const large = { presetId: 'bold_pop', position: 'top', size: 10 }
     const assSmall = buildCaptionsAss(words, small, 720, 1280)
     const assLarge = buildCaptionsAss(words, large, 720, 1280)
-    const styleSize = (ass: string) => Number(ass.split('\\n').find((line) => line.startsWith('Style: Cap,'))!.split(',')[2])
+    const styleSize = (ass: string) => Number(ass.split('\n').find((line) => line.startsWith('Style: Cap,'))!.split(',')[2])
     expect(styleSize(assLarge)).toBeGreaterThan(styleSize(assSmall) * 3)
     expect(assSmall).toContain('Style: Cap,')
     expect(assLarge).toContain('Style: Cap,')
