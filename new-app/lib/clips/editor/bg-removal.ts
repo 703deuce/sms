@@ -70,13 +70,8 @@ export function normalizeBgRemoval(raw: unknown): BgRemoval | undefined {
 export function bgRemovalBlockedReason(edits: ClipEditsV2): string | null {
   if (edits.sourceSegments?.length) return 'Not available with other video sources on the Video lane.'
   const mode = String(edits.layout?.mode ?? 'speaker_follow')
-  if (mode === 'fit_blur' || mode === 'full_frame') return 'Not available in Fit / Full-frame layouts.'
+  // A single full-frame/fit output can use the same person matte as speaker-follow.
   if (MULTI_VIDEO_LAYOUTS.has(mode)) return 'Not available in multi-video layouts.'
-  const tmpl = (edits.layout as { template?: { id?: string } } | undefined)?.template
-  if (tmpl?.id) return 'Not available with layout templates.'
-  if ((edits.layout as { layoutSegments?: unknown[] } | undefined)?.layoutSegments?.length) {
-    return 'Not available when the layout changes during the clip.'
-  }
   if (edits.stabilize?.length) return 'Turn off Stabilize to remove the background.'
   return null
 }
