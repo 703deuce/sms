@@ -59,12 +59,16 @@ export const EDITOR_GRID = {
   backdrop: 'fixed inset-0 z-30 bg-black/50 lg:max-xl:bg-black/30 xl:hidden',
   /** TIMELINE_LAYOUT1: Timeline view like Script view: preview | docked panel | tool rail (right); timeline full width below. */
   rootDock:
-    'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
+    'relative grid h-full min-h-0 overflow-hidden bg-background gap-1.5 p-1.5 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
-    'lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:grid-rows-[minmax(0,1fr)_auto]',
-  railDock: 'min-h-0 lg:col-start-3 lg:row-start-1',
-  panelDock: 'lg:col-start-2 lg:row-start-1 lg:w-[min(var(--editor-panel-w,360px),40vw)]',
-  previewDock: 'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg bg-panel lg:col-start-1 lg:row-start-1',
+    'lg:grid-cols-[auto_minmax(0,1fr)_auto_auto] lg:grid-rows-[minmax(0,1fr)_auto]',
+  /** TIMELINE_LAYOUT3 (CapCut): tools panel | Player | Properties | icon rail on top; one full-width timeline below. */
+  railDock: 'min-h-0 lg:col-start-4 lg:row-start-1',
+  panelDock: 'lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)]',
+  previewDock:
+    'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel lg:col-start-2 lg:row-start-1',
+  propertiesDock:
+    'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-3 lg:row-start-1 lg:w-[clamp(260px,24vw,380px)]',
   timelineDock:
     'col-span-full min-h-0 overflow-y-auto rounded-lg border border-border bg-card max-h-[clamp(220px,58dvh,760px)] lg:row-start-2',
 } as const
@@ -133,8 +137,11 @@ export function EditorLayout(props: {
         : EDITOR_GRID.root
   const previewClass = dock ? EDITOR_GRID.previewDock : scriptView ? EDITOR_GRID.previewScript : EDITOR_GRID.preview
   const timelineClass = dock ? EDITOR_GRID.timelineDock : scriptView ? EDITOR_GRID.timelineScript : EDITOR_GRID.timeline
-  const propertiesClass =
-    compact || hidePropertiesColumn ? EDITOR_GRID.propertiesHidden : EDITOR_GRID.properties
+  const propertiesClass = dock
+    ? EDITOR_GRID.propertiesDock
+    : compact || hidePropertiesColumn
+      ? EDITOR_GRID.propertiesHidden
+      : EDITOR_GRID.properties
 
   return (
     <div
@@ -175,7 +182,7 @@ export function EditorLayout(props: {
       <section data-region="preview" className={previewClass}>
         {props.preview}
       </section>
-      {compact ? null : (
+      {compact && !dock ? null : (
         <aside data-region="properties" className={propertiesClass}>
           {props.properties}
         </aside>

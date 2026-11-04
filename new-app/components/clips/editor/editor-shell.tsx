@@ -393,7 +393,7 @@ export function EditorShell({
     const storage = typeof window === 'undefined' ? null : window.localStorage
     const open = readTimelineDockPanelOpen(storage)
     setDockPanelOpen(open)
-    if (open) setPanel('inspector')
+    if (open) setPanel((p) => (p === 'inspector' ? 'media' : p))
   }, [layoutView, band])
   const setLayoutViewPersist = useCallback(
     (view: ClipEditorLayoutView) => {
@@ -405,13 +405,15 @@ export function EditorShell({
       } else if (typeof window !== 'undefined' && band !== 'mobile') {
         const open = readTimelineDockPanelOpen(window.localStorage)
         setDockPanelOpen(open)
-        if (open) setPanel('inspector')
+        if (open) setPanel((p) => (p === 'inspector' ? 'media' : p))
       }
     },
     [band],
   )
   const { transcriptPct: scriptSplitPct, persist: persistScriptSplit } = useScriptViewSplit()
   const selectPanel = useCallback((id: EditorPanelId) => {
+    // TIMELINE_LAYOUT3: Timeline view (lg+) shows Properties permanently in its own right card.
+    if (id === 'inspector' && layoutView === 'timeline' && band !== 'mobile') return
     setPanel(id)
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
@@ -3511,7 +3513,9 @@ export function EditorShell({
                       'flex h-12 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-border bg-card text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground',
                       dockPanelOpen && panel === 'inspector' && 'bg-accent text-foreground',
                     )}
-                    onClick={() => (dockPanelOpen && panel === 'inspector' ? setDockPanelOpenPersist(false) : selectPanel('inspector'))}
+                    onClick={() =>
+                      document.querySelector<HTMLElement>('[data-region="properties"]')?.scrollIntoView({ block: 'nearest' })
+                    }
                     aria-label="Properties"
                     aria-pressed={dockPanelOpen && panel === 'inspector'}
                     data-testid="timeline-dock-properties"
@@ -3614,7 +3618,7 @@ export function EditorShell({
             )
           }
           properties={
-            !compact && band === 'wide' && !dockTools ? (
+            dockTools || (!compact && band === 'wide') ? (
               <>
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
                   <h2 className="text-sm font-semibold">Properties</h2>
