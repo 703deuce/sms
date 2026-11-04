@@ -89,6 +89,8 @@ export function TrackFxPanel({
                   <p className="text-[11px] text-muted-foreground">Applied on export (the preview can't denoise live).</p>
                 </>
               ) : null}
+              {voiceTrack ? (
+                <>
               <Toggle on={cur.deess != null} label="De-ess" onChange={(v) => set({ deess: v ? FX_LIMITS.deess[2] : undefined })} testId="track-fx-deess" />
               {cur.deess != null ? (
                 <>
@@ -129,6 +131,8 @@ export function TrackFxPanel({
                   />
                 ) : null}
               </div>
+                </>
+              ) : null}
               {voiceTrack ? (
                 <SliderRow
                   label="Pan"
