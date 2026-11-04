@@ -112,6 +112,7 @@ import {
   itemsInRange,
   moveItemsToTrack,
   moveVideoSegment,
+  moveVideoSegmentWithGap,
   reorderInsertBefore,
   isNoopReorder,
   pasteAttributes,
@@ -2276,7 +2277,8 @@ export function Timeline({
         if (resolved === undefined) return
         before = resolved
       }
-      const next = moveVideoSegment(opCtx(), item.id, before)
+      const ctx = opCtx()
+      const next = magnet ? moveVideoSegment(ctx, item.id, before) : moveVideoSegmentWithGap(ctx, item.id, before)
       if (next) commit(next)
     }
     window.addEventListener('pointermove', onMove)
