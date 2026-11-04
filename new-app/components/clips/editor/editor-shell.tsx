@@ -3672,7 +3672,7 @@ export function EditorShell({
               <div className="flex h-full min-h-0 min-w-0" data-testid="unified-tools-content">
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-testid="unified-inspector-body">
                   <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/70 px-3">
-                    <h2 className="truncate text-sm font-semibold">{panel === 'transcript' ? 'Inspector' : (TAB_META[panel]?.label ?? 'Tools')}</h2>
+                    <h2 className="truncate text-sm font-semibold">{panel === 'transcript' ? 'Properties' : (TAB_META[panel]?.label ?? 'Tools')}</h2>
                   </div>
                   {panelTabs.length > 1 ? (
                     <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/70 p-1" role="tablist" aria-label="Tool categories">
@@ -3691,11 +3691,9 @@ export function EditorShell({
                     </div>
                   ) : null}
                   <ScrollArea className="min-h-0 flex-1">
-                    {panel === 'transcript' ? (
-                      <p className="p-4 text-sm leading-relaxed text-muted-foreground">Select a tool on the right to edit its settings. The transcript stays beside the video.</p>
-                    ) : (
-                      <div className="p-3">{renderSidePanels(panel)}</div>
-                    )}
+                    <div className="p-3">
+                      {panel === 'transcript' ? renderInspectorPropertiesPanel(true) : renderSidePanels(panel)}
+                    </div>
                   </ScrollArea>
                 </div>
                 <EditorInspectorToolRail
