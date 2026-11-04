@@ -139,7 +139,7 @@ import {
   keepSegments,
 } from '@/lib/clips/edits'
 import { LayoutQuickPicker } from '@/components/clips/editor/layout-quick-picker'
-import { EXPORT_LAYOUT_OPTIONS, layoutOptionDisabled } from '@/lib/clips/layout-options'
+import { EXPORT_LAYOUT_OPTIONS, layoutOptionDisabled, layoutPickPayload } from '@/lib/clips/layout-options'
 import type { StickerLayer } from '@/lib/clips/layers'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
 import {
@@ -3253,7 +3253,10 @@ export function EditorShell({
             return {
               id: `layout-${opt.id}`,
               label: opt.title,
-              onSelect: () => onLayoutPick(opt.id),
+              onSelect: () => {
+                const selection = layoutPickPayload(opt.id, facecamLayout ?? null, edits)
+                onLayoutPick(selection.mode, selection.facecam)
+              },
               disabledHint: disabled ? (opt.hint ?? 'Not available for this clip') : landscapeOff ? 'Change Aspect above first' : null,
             }
           }),
