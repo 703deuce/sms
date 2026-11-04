@@ -99,7 +99,10 @@ export function layerGeom(edits: ClipEditsV2, l: CanvasLayerDom, boxRect: DOMRec
 }
 
 function visible(l: CanvasLayerDom): boolean {
-  return Boolean(l.el && l.el.style.visibility !== 'hidden' && l.el.style.opacity !== '0')
+  if (!l.el || l.el.style.visibility === 'hidden') return false
+  // N1: libass renders text in a separate canvas; its DOM geometry shell is
+  // intentionally transparent. Opacity 0 must not disable text hit-testing.
+  return l.target.startsWith('text:') || l.el.style.opacity !== '0'
 }
 
 type Drag =
@@ -218,6 +221,7 @@ export function CanvasSelectionOverlay({
       for (let i = layers.length - 1; i >= 0; i--) {
         const l = layers[i]!
         if (!visible(l)) continue
+        if (l.target.startsWith('text:') && (editsRef.current.disabledItems ?? []).includes(l.target)) continue
         const g = layerGeom(editsRef.current, l, b, getOutMs())
         if (g && pointInLayer(g, p, l.target === 'video' ? 0 : 4)) return l.target
       }
