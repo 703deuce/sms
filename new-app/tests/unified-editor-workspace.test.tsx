@@ -34,7 +34,7 @@ describe('unified editor workspace', () => {
     expect(ui.getAllByTestId('shared-editor-tools')).toHaveLength(1)
     expect(ui.getAllByTestId('shared-editor-timeline')).toHaveLength(1)
     expect(ui.getByTestId('unified-editor-columns').style.gridTemplateColumns).toContain('360px')
-    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('52fr')
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('65fr')
     // The timeline divider now only handles resizing. Mode controls are placed in the global top bar.
     expect(ui.getByTestId('unified-workspace-toolbar').querySelector('[data-testid^="unified-mode-"]')).toBeNull()
     expect(ui.getByTestId('unified-mode-fallback').contains(ui.getByTestId('unified-mode-compact'))).toBe(true)
@@ -56,6 +56,38 @@ describe('unified editor workspace', () => {
     expect(ui.onTimelineViewChange).toHaveBeenCalledWith('script')
   })
 
+  it('C2 shrinks the timeline row when collapsed and restores the prior split', () => {
+    const onTimelineViewChange = vi.fn()
+    const ui = render(
+      <UnifiedEditorWorkspace main={<div>Preview</div>} inspector={<div>Tools</div>}
+        timeline={<div data-testid="mini-timeline">Clip and playhead</div>}
+        timelineView="timeline" timelineCollapsed onTimelineViewChange={onTimelineViewChange}
+        inspectorWidthPx={360} onInspectorWidthChange={vi.fn()} />,
+    )
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('112px')
+    expect(ui.getByTestId('mini-timeline').textContent).toContain('Clip and playhead')
+    ui.rerender(
+      <UnifiedEditorWorkspace main={<div>Preview</div>} inspector={<div>Tools</div>}
+        timeline={<div data-testid="mini-timeline">Clip and playhead</div>}
+        timelineView="timeline" timelineCollapsed={false} onTimelineViewChange={onTimelineViewChange}
+        inspectorWidthPx={360} onInspectorWidthChange={vi.fn()} />,
+    )
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('65fr')
+  })
+
+  it('C4 Focus gives the timeline the entire available workspace, then restores split', () => {
+    const ui = mount()
+    fireEvent.click(ui.getByTestId('unified-mode-focus'))
+    const workspace = ui.getByTestId('unified-main-workspace')
+    const timeline = ui.getByTestId('unified-timeline-region')
+    expect(workspace.className).toContain('flex')
+    expect(workspace.style.gridTemplateRows).toBe('')
+    expect(timeline.className).toContain('flex-1')
+    expect(ui.getByTestId('unified-upper-workspace').className).toContain('hidden')
+    fireEvent.click(ui.getByTestId('unified-mode-expanded'))
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('65fr')
+  })
+
   it('collapses the right panel, preserving the player and timeline', () => {
     const ui = mount()
     fireEvent.click(ui.getByTestId('unified-inspector-toggle'))
@@ -69,7 +101,7 @@ describe('unified editor workspace', () => {
   it('supports keyboard resizing of timeline and Inspector', () => {
     const ui = mount()
     fireEvent.keyDown(ui.getByTestId('unified-timeline-resize'), { key: 'ArrowUp' })
-    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('55fr')
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('68fr')
     fireEvent.keyDown(ui.getByTestId('unified-inspector-resize'), { key: 'ArrowLeft' })
     expect(ui.onInspectorWidthChange).toHaveBeenCalledWith(372)
   })

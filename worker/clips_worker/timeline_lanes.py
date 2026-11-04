@@ -17,7 +17,7 @@ LANE_TOGGLES = {
     "text": {"mute": False, "hide": True},
     # G4a: adjustment layers (hide = export without them).
     "adjust": {"mute": False, "hide": True},
-    "video": {"mute": False, "hide": False},
+    "video": {"mute": False, "hide": True},
     "broll": {"mute": False, "hide": True},
     "voice": {"mute": True, "hide": False, "solo": True},
     "music": {"mute": True, "hide": False, "solo": True},

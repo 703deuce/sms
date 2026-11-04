@@ -112,6 +112,7 @@ import {
   itemsInRange,
   moveItemsToTrack,
   moveVideoSegment,
+  moveVideoSegmentWithGap,
   reorderInsertBefore,
   isNoopReorder,
   pasteAttributes,
@@ -352,6 +353,9 @@ export function Timeline({
   canUndo = false,
   canRedo = false,
   historySlot,
+  onCollapsedChange,
+  controlledCollapsed,
+  forceExpanded = false,
   mediaOffsetMs = 0,
   musicUrl = null,
   sfxDurationsMs,
@@ -412,6 +416,12 @@ export function Timeline({
   canUndo?: boolean
   canRedo?: boolean
   historySlot?: React.ReactNode
+  /** Synchronize the mini-strip height with the containing editor workspace. */
+  onCollapsedChange?: (collapsed: boolean) => void
+  /** Parent-owned value keeps Collapse synchronized across Script/Timeline remounts. */
+  controlledCollapsed?: boolean
+  /** Focus mode always displays the full timeline, keeping the user's collapse preference. */
+  forceExpanded?: boolean
   /** Source ms at media time 0 of `videoUrl` (waveform slicing). */
   mediaOffsetMs?: number
   musicUrl?: string | null
@@ -512,6 +522,9 @@ export function Timeline({
   // length on the lane and push later items right. Edits stay in base time; identity without inserts.
   const tmap = useMemo(() => exportTimeMap(tb.segs, edits.inserts), [tb.segs, edits.inserts])
   const dspan = span + tmap.totalMs
+  // B2: preserve the untrimmed source extent as spare space after shortening either edge.
+  // Otherwise trackWidthPx refits to the shorter clip and the same pointer cannot extend it again.
+  const originalSpanMs = Math.max(0, clipEndMs - Math.min(clipStartMs, previewEdits.trim.in))
   const rulerSpanMs = Math.max(dspan, trimScaleFloorMs ?? 0)
   const minPx = timelineMinPxPerSec(rulerSpanMs, trackViewportPx)
   const minPxRef = useRef(minPx)
@@ -941,6 +954,7 @@ export function Timeline({
   // TC2b (TL-55): resizable / collapsible timeline (per-user, localStorage; null = fit all tracks).
   const [tlHeight, setTlHeight] = useState<number | null>(null)
   const [tlCollapsed, setTlCollapsed] = useState(false)
+  const collapsed = (controlledCollapsed ?? tlCollapsed) && !forceExpanded
   useEffect(() => {
     const vh = typeof window === 'undefined' ? 900 : window.innerHeight
     const stored = readTimelineHeight()
@@ -1098,7 +1112,14 @@ export function Timeline({
   useEffect(() => {
     setLaneHUser(readLaneHeights())
   }, [])
-  const LANE_H: Record<LaneId, number> = laneHeights(laneHUser)
+  const [shortLaptop, setShortLaptop] = useState(false)
+  useEffect(() => {
+    const update = () => setShortLaptop(window.innerWidth >= 1024 && window.innerHeight <= 800)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  const LANE_H: Record<LaneId, number> = laneHeights(laneHUser, shortLaptop)
   const startLaneResize = (lane: LaneId, e: { clientY: number; preventDefault: () => void; stopPropagation: () => void }) => {
     e.preventDefault()
     e.stopPropagation()
@@ -2276,7 +2297,8 @@ export function Timeline({
         if (resolved === undefined) return
         before = resolved
       }
-      const next = moveVideoSegment(opCtx(), item.id, before)
+      const ctx = opCtx()
+      const next = magnet ? moveVideoSegment(ctx, item.id, before) : moveVideoSegmentWithGap(ctx, item.id, before)
       if (next) commit(next)
     }
     window.addEventListener('pointermove', onMove)
@@ -2286,7 +2308,6 @@ export function Timeline({
 
   const startDrag = (e: React.PointerEvent, item: TimelineItem, mode: DragState['mode']) => {
     if (e.button !== 0) return
-    if (item.lane === 'video' && (mode === 'start' || mode === 'end')) setTrimScaleFloorMs((prev) => Math.max(prev ?? 0, dspan))
     // TC2b: the Hand tool scrolls from anywhere (the track area handles it).
     if (tool === 'hand') return
     e.stopPropagation()
@@ -2387,6 +2408,8 @@ export function Timeline({
     const thr = SNAP_PX / Math.max(1e-6, pxPerMs)
     const ctx = opCtx()
     const state: DragState = { mode: dragMode, item, refs, originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, alt: e.altKey }
+    // Keep the content coordinate beneath the drag pointer stable while horizontal scrolling.
+    const scrollAtStart = scrollRef.current?.scrollLeft ?? 0
     setDrag(state)
     const captureEl = e.currentTarget as HTMLElement
     try {
@@ -2395,7 +2418,14 @@ export function Timeline({
       /* ignore */
     }
     const onMove = (ev: PointerEvent) => {
-      const dx = ev.clientX - state.originX
+      const scroller = scrollRef.current
+      if (dragMode !== 'move' && scroller) {
+        const bounds = scroller.getBoundingClientRect()
+        const edgePx = 28
+        if (ev.clientX > bounds.right - edgePx && ev.clientX <= bounds.right + edgePx) scroller.scrollLeft += 20
+        else if (ev.clientX < bounds.left + edgePx && ev.clientX >= bounds.left - edgePx) scroller.scrollLeft -= 20
+      }
+      const dx = ev.clientX - state.originX + ((scroller?.scrollLeft ?? scrollAtStart) - scrollAtStart)
       if (!state.moved && Math.abs(dx) < DRAG_SLOP_PX) return
       state.moved = true
       // TC2b: lanes are in export time — a drag across an insert lands where the pointer is
@@ -2435,6 +2465,9 @@ export function Timeline({
         /* ignore */
       }
       setDrag(null)
+      if (item.lane === 'video' && dragMode !== 'move' && state.moved) {
+        setTrimScaleFloorMs((prev) => Math.max(prev ?? 0, rulerSpanMs, originalSpanMs))
+      }
       const alt = state.alt || ev.altKey
       const fromRow = rowOfItem(item)?.key ?? null
       const toRow = dragMode === 'move' && state.targetRow && state.targetRow !== fromRow ? rows.find((r) => r.key === state.targetRow) : undefined
@@ -3045,7 +3078,7 @@ export function Timeline({
         {editable && !st.locked && item.caps.trimStart ? (
           <span
             className={`absolute inset-y-0 left-0 z-30 rounded-l-[3px] border-l-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
-              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-3 cursor-ew-resize'
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-4 cursor-ew-resize bg-cyan-300/70' : 'w-4 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-start"
             title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'J-cut: Alt-drag to offset audio from picture' : undefined}
@@ -3055,7 +3088,7 @@ export function Timeline({
         {editable && !st.locked && item.caps.trimEnd ? (
           <span
             className={`absolute inset-y-0 right-0 z-30 rounded-r-[3px] border-r-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
-              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-3 cursor-ew-resize'
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-4 cursor-ew-resize bg-cyan-300/70' : 'w-4 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-end"
             title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'L-cut: Alt-drag to offset audio from picture' : undefined}
@@ -3321,7 +3354,7 @@ export function Timeline({
         </div>
       ) : null}
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
-      {inspected && !tlCollapsed && kfStripOn ? (
+      {inspected && !collapsed && kfStripOn ? (
         <div
           className="max-h-[96px] shrink-0 overflow-y-auto rounded-md border border-border bg-card"
           data-testid="keyframe-inspector-overlay"
@@ -3341,10 +3374,14 @@ export function Timeline({
           />
         </div>
       ) : null}
-      {tlCollapsed ? (
-        <div className="flex h-10 min-h-10 items-center gap-2 rounded-md border border-border bg-card/50 px-2" data-testid="timeline-mini-strip">
+      {collapsed ? (
+        <div className="flex h-12 min-h-12 items-center gap-2 rounded-md border border-border bg-card/50 px-2" data-testid="timeline-mini-strip">
           <span className="shrink-0 text-[11px] text-muted-foreground">Video</span>
-          <input type="range" min={0} max={Math.max(1, Math.round(span))} value={Math.round(playheadMs)} onChange={(e) => onSeekOutput(Number(e.target.value))} aria-label="Compact timeline scrubber" className="min-w-0 flex-1 accent-primary" />
+          <div className="relative min-w-0 flex-1" data-testid="timeline-mini-clip">
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 rounded-sm border border-sky-400/60 bg-sky-600/40" aria-hidden />
+            <div className="pointer-events-none absolute top-1/2 z-10 h-5 w-0.5 -translate-y-1/2 bg-red-500" style={{ left: `${(playheadMs / Math.max(1, span)) * 100}%` }} data-testid="timeline-mini-playhead" aria-hidden />
+            <input type="range" min={0} max={Math.max(1, Math.round(span))} value={Math.round(playheadMs)} onChange={(e) => onSeekOutput(Number(e.target.value))} aria-label="Compact timeline scrubber" className="relative z-20 w-full cursor-pointer bg-transparent accent-primary" />
+          </div>
           <span className="shrink-0 text-[11px] tabular-nums">{(playheadMs / 1000).toFixed(1)}s</span>
         </div>
       ) : (
@@ -3932,7 +3969,7 @@ export function Timeline({
         </div>
       </div>
       )}
-      {editable ? (
+      {editable && !collapsed ? (
         <div className="flex flex-wrap items-center gap-1 px-1" data-testid="timeline-add-track-row">
           {(
             [
@@ -3962,7 +3999,7 @@ export function Timeline({
         className="group order-first flex h-3 shrink-0 cursor-row-resize items-center justify-center gap-2"
         data-testid="timeline-resize"
         onPointerDown={(e) => {
-          if (e.button !== 0 || tlCollapsed) return
+          if (e.button !== 0 || collapsed) return
           e.preventDefault()
           const body = e.currentTarget.parentElement?.querySelector<HTMLElement>('[data-testid="timeline-body"]') ?? null
           const y0 = e.clientY
@@ -3982,11 +4019,15 @@ export function Timeline({
           type="button"
           className="rounded px-1 text-[11px] text-muted-foreground hover:text-foreground"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setTlCollapsed((c) => !c)}
-          aria-pressed={tlCollapsed}
+          onClick={() => {
+            const next = !(controlledCollapsed ?? tlCollapsed)
+            setTlCollapsed(next)
+            onCollapsedChange?.(next)
+          }}
+          aria-pressed={collapsed}
           data-testid="timeline-collapse"
         >
-          {tlCollapsed ? 'Show timeline' : 'Collapse'}
+          {collapsed ? 'Show timeline' : 'Collapse'}
         </button>
       </div>
       <TimelineShortcutsSheet open={helpOpen} onClose={() => setHelpOpen(false)} />

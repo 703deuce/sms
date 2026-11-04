@@ -562,7 +562,7 @@ def build_ass(
     wpl = int(edits_captions.get("wordsPerLine") or preset["wordsPerLine"] or 2)
     case = (edits_captions.get("case") or preset["case"] or "upper").lower()
     case = "upper" if case == "upper" else "sentence"
-    size_pct = float(edits_captions.get("size") or edits_captions.get("sizePct") or preset["sizePct"])
+    size_pct = float(edits_captions.get("userSizePct") if preset_id.startswith("cp") and edits_captions.get("userSizePct") is not None else edits_captions.get("size") or edits_captions.get("sizePct") or preset["sizePct"])
     if size_pct < 3:
         size_pct = float(preset["sizePct"])
     size_pct = max(3.0, min(12.0, size_pct))

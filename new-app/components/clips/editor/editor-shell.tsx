@@ -49,6 +49,7 @@ import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-
 import { exportTimeMap, toExportMs } from '@/lib/clips/editor/export-time'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { sourceMsToEditorMs } from '@/lib/clips/editor/source-ms-to-editor'
+import { transcriptCutForSelection } from '@/lib/clips/editor/transcript-cut-map'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { EditorMenuBar, type EditorMenu } from '@/components/clips/editor/editor-menu-bar'
@@ -139,7 +140,7 @@ import {
   keepSegments,
 } from '@/lib/clips/edits'
 import { LayoutQuickPicker } from '@/components/clips/editor/layout-quick-picker'
-import { EXPORT_LAYOUT_OPTIONS, layoutOptionDisabled } from '@/lib/clips/layout-options'
+import { EXPORT_LAYOUT_OPTIONS, layoutOptionDisabled, layoutPickPayload } from '@/lib/clips/layout-options'
 import type { StickerLayer } from '@/lib/clips/layers'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
 import {
@@ -321,6 +322,7 @@ export function EditorShell({
   })
   const [replaceBrollId, setReplaceBrollId] = useState<string | null>(null)
   const [fillerReviewOpen, setFillerReviewOpen] = useState(false)
+  const [videoToolRequest, setVideoToolRequest] = useState<{ id: 'blur-add' | 'bg-removal' | 'properties-panel'; seq: number } | null>(null)
   const [gapReviewOpen, setGapReviewOpen] = useState(false)
   const [auditionEdits, setAuditionEdits] = useState<ClipEditsV2 | null>(null)
   // E4: Text / Color panels follow the timeline selection; ✨ Producer pop-over.
@@ -373,6 +375,8 @@ export function EditorShell({
   const timelineVisible = !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
+  const [timelineCollapsed, setTimelineCollapsed] = useState(false)
+  const [timelineFocused, setTimelineFocused] = useState(false)
   const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
   // TIMELINE_LAYOUT1: Timeline view (lg+) uses the Script-view layout: rail + docked panel on the right.
   const [dockPanelOpen, setDockPanelOpen] = useState(false)
@@ -559,15 +563,18 @@ export function EditorShell({
   // Redo always drop the audition so the preview shows exactly the restored edits.
   const undo = useCallback(() => {
     setAuditionEdits(null)
+    setFillerReviewOpen(false)
     undoEdits()
   }, [undoEdits])
   const redo = useCallback(() => {
     setAuditionEdits(null)
+    setFillerReviewOpen(false)
     redoEdits()
   }, [redoEdits])
   const jumpHistory = useCallback(
     (steps: number) => {
       setAuditionEdits(null)
+      setFillerReviewOpen(false)
       jumpHistoryEdits(steps)
     },
     [jumpHistoryEdits],
@@ -1698,22 +1705,17 @@ export function EditorShell({
   const deleteSelection = useCallback(() => {
     const sel = selectionRef.current
     if (!sel || sel.startMs === sel.endMs) return
-    const a = Math.min(sel.startMs, sel.endMs)
-    const b = Math.max(sel.startMs, sel.endMs)
-    const selected = editorWords.filter((w) => {
-      const s = w.s * 1000
-      const e = w.e * 1000
-      return e > a && s < b
-    })
-    if (!selected.length) return
-    const wa = selected[0]
-    const wb = selected[selected.length - 1]
-    applyCutRange([Math.round(wa.s * 1000), Math.round(wb.e * 1000)])
-    toast.success(`Cut ${((wb.e - wa.s) || 0).toFixed(1)}s from the video`, {
+    const cut = transcriptCutForSelection(edits, editorWords, sel.startMs, sel.endMs)
+    if (!cut) {
+      toast.error('Selected words are outside the editable video. Select words inside the clip and retry.')
+      return
+    }
+    applyCleanupCut(cut.range, `Cut transcript at ${(cut.atOutputMs / 1000).toFixed(1)}s`)
+    toast.success(`Cut ${((cut.range[1] - cut.range[0]) / 1000).toFixed(1)}s from the video`, {
       description: 'Removed from the preview, the Timeline (✂ marks the join) and the export. ⌘Z to undo.',
     })
     sel.clear()
-  }, [applyCutRange, editorWords])
+  }, [applyCleanupCut, edits, editorWords])
 
   const playFromTranscriptSelection = useCallback(() => {
     const sel = selectionRef.current
@@ -2047,10 +2049,12 @@ export function EditorShell({
               />
             )
           }}
+          videoToolRequest={videoToolRequest}
           videoSlot={
             <>
               <MainVideoTools
                 edits={edits}
+                clipId={clipId}
                 videoItem={selVideoSeg ? { srcInMs: selVideoSeg.srcInMs, srcOutMs: selVideoSeg.srcOutMs } : null}
                 outputMs={outputMs}
                 durationMs={outDur}
@@ -2250,15 +2254,6 @@ export function EditorShell({
       </div>
       <div className={on('layers') ? 'p-3' : 'hidden'} aria-hidden={!on('layers')}>
         <EditorPanelErrorBoundary label="Layers">
-          <LayoutQuickPicker
-            value={edits.layout.mode}
-            edits={edits}
-            facecamLayout={facecamLayout}
-            reframeV2Enabled={reframeV2Enabled}
-            onPick={onLayoutPick}
-                  onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
-            className="mb-4"
-          />
           <LayersPanel
             clipId={clipId}
             edits={edits}
@@ -2269,6 +2264,12 @@ export function EditorShell({
             onSelectActualLayer={(kind, id, startMs) => {
               if (kind === 'captions') {
                 selectPanel('captions')
+                return
+              }
+              if (kind === 'sticker' || kind === 'badge' || kind === 'headline' || kind === 'hook') {
+                // These legacy overlay controls live in the expanded layer-design section.
+                // Do not send a nonexistent text selection to the timeline.
+                setCanvasSel(null)
                 return
               }
               const target: KeyframeTarget = kind === 'video' ? 'video' : kind === 'broll' ? `broll:${id}` : `text:${id}`
@@ -3097,11 +3098,11 @@ export function EditorShell({
     }, 150)
   }
   /** Select the main video (same as clicking it on the canvas) and open Properties at its video tools. */
-  const openVideoTools = (testId: string) => {
+  const openVideoTools = (testId: 'blur-add' | 'bg-removal' | 'properties-panel') => {
     onCanvasSelect('video')
     if (layoutView === 'script') openToolPanel('inspector')
     else if (band !== 'wide' || layoutView === 'timeline') selectPanel('inspector')
-    window.setTimeout(() => window.dispatchEvent(new CustomEvent('transovo:editor-video-tool', { detail: testId })), 100)
+    setVideoToolRequest((prev) => ({ id: testId, seq: (prev?.seq ?? 0) + 1 }))
   }
   const openVersions = () => {
     document.querySelector<HTMLElement>('[data-testid="versions-menu"]')?.click()
@@ -3221,6 +3222,40 @@ export function EditorShell({
               disabledHint: needFull,
             },
           ],
+        },
+      ],
+    },
+    {
+      id: 'layout',
+      label: 'Layout',
+      groups: [
+        {
+          label: 'Aspect ratio',
+          items: (['16:9', '9:16', '1:1', '4:5'] as const).map((aspect) => ({
+            id: `aspect-${aspect.replace(':', '-')}`,
+            label: `Aspect ${aspect}${(edits.aspectRatio ?? '9:16') === aspect ? ' ✓' : ''}`,
+            onSelect: () => setEdits({ ...edits, aspectRatio: aspect }),
+          })),
+        },
+        {
+          label: 'Video layouts',
+          items: EXPORT_LAYOUT_OPTIONS.map((opt) => {
+            const disabled = layoutOptionDisabled(opt, {
+              facecamLayout: facecamLayout ?? null,
+              reframeV2Enabled,
+              aiExtras: clipEditorAiExtrasEnabled(),
+            })
+            const landscapeOff = (edits.aspectRatio ?? '9:16') === '16:9' && opt.id !== 'full_frame' && opt.id !== 'center_crop'
+            return {
+              id: `layout-${opt.id}`,
+              label: opt.title,
+              onSelect: () => {
+                const selection = layoutPickPayload(opt.id, facecamLayout ?? null, edits)
+                onLayoutPick(selection.mode, selection.facecam)
+              },
+              disabledHint: disabled ? (opt.hint ?? 'Not available for this clip') : landscapeOff ? 'Change Aspect above first' : null,
+            }
+          }),
         },
       ],
     },
@@ -3454,6 +3489,7 @@ export function EditorShell({
         edits={edits}
         clipBounds={{ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }}
         open={fillerReviewOpen}
+        playing={playing}
         onOpenChange={setFillerReviewOpen}
         onApplyProposal={onApplyCleanupProposal}
         onSeek={seekSource}
@@ -3477,7 +3513,9 @@ export function EditorShell({
         <EditorLayout
           unified={unifiedWorkspaceActive}
           unifiedTimelineView={layoutView}
-          unifiedTimelineHidden={compact && !timelineOpen}
+          unifiedTimelineHidden={compact && !timelineOpen && !timelineFocused}
+          unifiedTimelineCollapsed={timelineCollapsed && !timelineFocused}
+          onUnifiedTimelineFocusChange={setTimelineFocused}
           onUnifiedTimelineViewChange={setLayoutViewPersist}
           unifiedMain={
             unifiedWorkspaceActive ? (
@@ -3716,7 +3754,7 @@ export function EditorShell({
               {timelineOpen ? 'Hide timeline' : 'Show timeline'}
             </button>
           ) : null}
-          <div className={cn('h-full min-h-0 min-w-0 overflow-hidden', !timelineVisible && 'hidden')} data-testid="editor-timeline-wrap">
+          <div className={cn('h-full min-h-0 min-w-0 overflow-hidden', !timelineVisible && !timelineFocused && 'hidden')} data-testid="editor-timeline-wrap">
           <Timeline
             angleSources={angleSources}
             edits={edits}
@@ -3750,6 +3788,9 @@ export function EditorShell({
             canUndo={canUndo}
             canRedo={canRedo}
             historySlot={historyPanel}
+            onCollapsedChange={setTimelineCollapsed}
+            controlledCollapsed={timelineCollapsed}
+            forceExpanded={timelineFocused}
             mediaOffsetMs={mediaOffsetMs}
             musicUrl={musicUrl}
             sfxDurationsMs={sfxPreview.durationsMs}

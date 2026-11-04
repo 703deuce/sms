@@ -25,7 +25,9 @@ export function UnifiedEditorWorkspace({
   timeline,
   timelineView,
   timelineHidden = false,
+  timelineCollapsed = false,
   onTimelineViewChange,
+  onFocusChange,
   inspectorWidthPx,
   onInspectorWidthChange,
   className,
@@ -35,14 +37,16 @@ export function UnifiedEditorWorkspace({
   timeline: ReactNode
   timelineView: 'script' | 'timeline'
   timelineHidden?: boolean
+  timelineCollapsed?: boolean
   onTimelineViewChange: (view: 'script' | 'timeline') => void
+  onFocusChange?: (focused: boolean) => void
   inspectorWidthPx: number
   onInspectorWidthChange: (width: number) => void
   className?: string
 }) {
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [focus, setFocus] = useState(false)
-  const [timelinePct, setTimelinePct] = useState(52)
+  const [timelinePct, setTimelinePct] = useState(65)
   const [topBarHost, setTopBarHost] = useState<HTMLElement | null>(null)
   const workspaceRef = useRef<HTMLDivElement>(null)
   const timelineDrag = useRef<{ startY: number; startPct: number; height: number } | null>(null)
@@ -51,7 +55,7 @@ export function UnifiedEditorWorkspace({
   useEffect(() => {
     try {
       const savedInspector = localStorage.getItem(INSPECTOR_OPEN_KEY)
-      setInspectorOpen(savedInspector == null ? window.innerWidth >= 1280 : savedInspector !== 'false')
+      setInspectorOpen(savedInspector == null ? window.innerWidth > 1280 : savedInspector !== 'false')
       const stored = Number(localStorage.getItem(TIMELINE_HEIGHT_KEY))
       if (Number.isFinite(stored) && stored >= 35 && stored <= 78) setTimelinePct(stored)
     } catch {
@@ -78,11 +82,13 @@ export function UnifiedEditorWorkspace({
     if (mode === 'focus') {
       onTimelineViewChange('timeline')
       setFocus(true)
+      onFocusChange?.(true)
     } else {
       setFocus(false)
+      onFocusChange?.(false)
       onTimelineViewChange(mode === 'compact' ? 'script' : 'timeline')
     }
-  }, [onTimelineViewChange])
+  }, [onTimelineViewChange, onFocusChange])
 
   const startTimelineResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (timelineView === 'script' || focus) return
@@ -123,6 +129,7 @@ export function UnifiedEditorWorkspace({
   const gridRows = focus
     ? 'minmax(0,1fr)'
     : timelineHidden ? 'minmax(0,1fr) 0px 32px'
+    : timelineCollapsed && timelineView === 'timeline' ? 'minmax(0,1fr) 9px 112px'
     : timelineView === 'script'
       ? 'minmax(0,1fr) 9px 150px'
       : `minmax(0,${100 - timelinePct}fr) 9px minmax(0,${timelinePct}fr)`
@@ -180,8 +187,8 @@ export function UnifiedEditorWorkspace({
       >
         <div
           ref={workspaceRef}
-          className="grid min-h-0 min-w-0 overflow-hidden"
-          style={{ gridTemplateRows: gridRows }}
+          className={cn('min-h-0 min-w-0 overflow-hidden', focus ? 'flex flex-col' : 'grid')}
+          style={focus ? undefined : { gridTemplateRows: gridRows }}
           data-testid="unified-main-workspace"
           data-timeline-mode={mode}
         >
@@ -212,7 +219,7 @@ export function UnifiedEditorWorkspace({
               </button>
             </div>
           ) : null}
-          <section className="min-h-0 min-w-0 overflow-hidden rounded-md border border-border/70 bg-card" data-testid="unified-timeline-region">
+          <section className={cn('min-h-0 min-w-0 overflow-hidden rounded-md border border-border/70 bg-card', focus && 'flex-1')} data-testid="unified-timeline-region">
             {timeline}
           </section>
         </div>

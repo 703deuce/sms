@@ -134,6 +134,7 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         and edits.get("speechLevelingEnabled") is not True
         and edits.get("speed") in (None, 1, 1.0)
         and not _timeline_voice_muted(edits)
+        and not ((edits.get('timelineLanes') or {}).get('video') or {}).get('hidden')
         # E3: keyframes / cut transitions change the frames — never reuse preview.mp4.
         and not edits.get("keyframes")
         and not edits.get("transitions")
@@ -1438,6 +1439,20 @@ def _clamp_edits_to_clip_span(edits: dict, clip_start_ms: int, clip_end_ms: int)
     return {**edits, "trim": {**trim, "in": nin, "out": nout}}
 
 
+def hide_main_video_keep_audio(src: Path, out: Path) -> None:
+    """Make the main picture black, retaining audio/timing; overlays/captions render later."""
+    subprocess.run(
+        [
+            'ffmpeg', '-y', '-v', 'error', '-i', str(src),
+            '-map', '0:v:0', '-map', '0:a?',
+            '-vf', 'drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill',
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18',
+            '-c:a', 'copy', '-movflags', '+faststart', str(out),
+        ],
+        check=True,
+    )
+
+
 def render_edited_clip(
     clip_src: Path,
     out_mp4: Path,
@@ -1598,6 +1613,10 @@ def render_edited_clip(
         # captioned file and burned captions a second time. Compose from an untouched copy.
         compose_in = work_dir / "preview_fast_compose_in.mp4"
         shutil.copy(out_mp4, compose_in)
+        if ((edits.get('timelineLanes') or {}).get('video') or {}).get('hidden'):
+            black_in = work_dir / 'hidden_main_video.mp4'
+            hide_main_video_keep_audio(compose_in, black_in)
+            compose_in = black_in
         if compositor_off:
             out_mp4, remapped = _legacy_compose(compose_in, remapped, out_mp4, edits, ctx)
         else:
@@ -1771,8 +1790,8 @@ def render_edited_clip(
                 stage=stage,
             )
             track = pct if (pct is not None and pct.is_file()) else (main_track if main_track.is_file() else None)
-            if track is None:
-                raise MatteSkip("no_crop_track")
+            # Full-frame / fill can render without an optional persisted crop track;
+            # the same layout renderer derives its crop when preview_crop_track is None.
             mwd = work_dir / "bgm"
             mwd.mkdir(exist_ok=True)
 
@@ -1884,6 +1903,12 @@ def render_edited_clip(
         if apply_main_mask(cut_mp4, mask_out, edits, mw, mh, work_dir):
             cut_mp4 = mask_out
             stage("main_mask_done")
+    # B7: hide only the primary footage; retain audio, B-roll, text, and captions.
+    if ((edits.get('timelineLanes') or {}).get('video') or {}).get('hidden'):
+        hidden_main = work_dir / 'hidden_main_video.mp4'
+        hide_main_video_keep_audio(cut_mp4, hidden_main)
+        cut_mp4 = hidden_main
+        stage('video_lane_hidden')
     caption_src = cut_mp4
     under_text_ids: list[str] = []
     if broll_specs:

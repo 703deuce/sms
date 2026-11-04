@@ -371,6 +371,7 @@ export function AudioPanel({
       ) : null}
       <section className="space-y-3 rounded-md border border-border p-2" data-testid="audio-music-sfx-mix">
         <h3 className="font-medium">Music, SFX &amp; mix</h3>
+        <p className="text-xs text-muted-foreground" data-testid="audio-fade-help">To fade an individual clip, select the music or sound-effect clip in the timeline. Use <strong>Fade in (s)</strong> and <strong>Fade out (s)</strong> in the clip inspector above the tracks. Music bed fades are also available below after adding music.</p>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" disabled={busy} data-testid="audio-music-suggest" onClick={() => void suggest()}>
             Suggest mood

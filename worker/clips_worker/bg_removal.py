@@ -54,7 +54,7 @@ def normalize_bg_removal(raw) -> dict | None:
 
 
 def bg_matte_enabled() -> bool:
-    return os.environ.get("BG_MATTE_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+    # Explicit opt-out remains available. Requests still pass the existing GPU budget guard.\n    return os.environ.get("BG_MATTE_ENABLED", "1").strip().lower() in ("1", "true", "yes", "on")
 
 
 def bg_matte_provider() -> str:
@@ -63,14 +63,16 @@ def bg_matte_provider() -> str:
 
 
 def bg_removal_allowed(edits: dict) -> bool:
-    from clips_worker.layout_router import needs_per_segment_layout_export
-    from clips_worker.main_fx import main_key_allowed
+    # Background matting has its own limits. Do not broaden main_key_allowed:
+    # that function also controls unrelated chroma-key effects.
+    from clips_worker.main_fx import MULTI_VIDEO_LAYOUTS
 
-    return (
-        main_key_allowed(edits)
-        and not edits.get("stabilize")
-        and not needs_per_segment_layout_export(edits)
-    )
+    if edits.get("sourceSegments") or edits.get("stabilize"):
+        return False
+    mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+    if mode in MULTI_VIDEO_LAYOUTS:
+        return False
+    return True
 
 
 def bg_removal_active(edits: dict) -> dict | None:

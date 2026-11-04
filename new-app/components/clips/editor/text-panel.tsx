@@ -57,7 +57,7 @@ import { TextVoiceoverSection } from '@/components/clips/editor/text-voiceover-s
 const ALIGNS: TextAlign[] = ['left', 'center', 'right']
 
 /** Blank text would drop the item (normalizeTextItems), so blanks stay local until blur reverts them. */
-function TextContent({ value, onCommit, inputRef }: { value: string; onCommit: (v: string) => void; inputRef?: RefObject<HTMLTextAreaElement | null> }) {
+function TextContent({ value, onCommit, onEndEdit, inputRef }: { value: string; onCommit: (v: string) => void; onEndEdit?: () => void; inputRef?: RefObject<HTMLTextAreaElement | null> }) {
   const [draft, setDraft] = useState(value)
   useEffect(() => setDraft(value), [value])
   return (
@@ -71,6 +71,7 @@ function TextContent({ value, onCommit, inputRef }: { value: string; onCommit: (
       }}
       onBlur={() => {
         if (!draft.trim()) setDraft(value)
+        onEndEdit?.()
       }}
       className="min-h-[60px] text-sm"
       data-testid="text-content"
@@ -157,7 +158,11 @@ export function TextPanel({
       return
     }
     const now = Date.now()
-    const push = coalescePush(burst.current, `${sel.id}:${key}`, now, JSON.stringify(sel))
+    // D3: typing is one editing session, even when the user pauses between keystrokes.
+    // Other sliders/pickers retain the shorter 500ms burst behavior.
+    const prior = burst.current
+    const sameTextSession = key === 'text' && prior?.key === `${sel.id}:text` && prior.sig === JSON.stringify(sel)
+    const push = sameTextSession ? false : coalescePush(prior, `${sel.id}:${key}`, now, JSON.stringify(sel))
     const after = next.textItems?.find((t) => t.id === sel.id)
     burst.current = { key: `${sel.id}:${key}`, at: now, sig: JSON.stringify(after ?? null) }
     onEdits(next, push)
@@ -413,6 +418,7 @@ export function TextPanel({
                 value={sel.text}
                 inputRef={textRef}
                 onCommit={(text) => patch({ text, marks: remapMarks(sel.text, text, sel.marks) }, 'text')}
+                onEndEdit={() => { burst.current = null }}
               />
               {clipId && uploadLibraryFiles && placeVoiceover && sel && !sel.kind ? (
                 <TextVoiceoverSection

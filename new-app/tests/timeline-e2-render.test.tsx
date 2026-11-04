@@ -75,6 +75,31 @@ describe('E2 multi-track timeline', () => {
     expect(getByTestId('timeline-track').getAttribute('data-duration-ms')).toBe('19000')
   })
 
+  it('C2 collapse keeps the clip, playhead, seek, and restores the full tracks', () => {
+    const onCollapsedChange = vi.fn()
+    const { getByTestId, queryByTestId, onSeekOutput } = setup(edits(), { onCollapsedChange })
+    fireEvent.click(getByTestId('timeline-collapse'))
+    expect(onCollapsedChange).toHaveBeenCalledWith(true)
+    expect(getByTestId('timeline-mini-strip')).toBeTruthy()
+    expect(getByTestId('timeline-mini-clip')).toBeTruthy()
+    expect(parseFloat(getByTestId('timeline-mini-playhead').style.left)).toBeCloseTo(10000 / 19000 * 100, 3)
+    fireEvent.change(getByTestId('timeline-mini-strip').querySelector('input[type="range"]')!, { target: { value: '3000' } })
+    expect(onSeekOutput).toHaveBeenCalledWith(3000)
+    expect(queryByTestId('timeline-body')).toBeNull()
+    fireEvent.click(getByTestId('timeline-collapse'))
+    expect(onCollapsedChange).toHaveBeenLastCalledWith(false)
+    expect(getByTestId('timeline-lane-video')).toBeTruthy()
+  })
+
+  it('C4 force-expanded timeline shows full tracks in Focus without losing collapsed choice', () => {
+    const ui = setup(edits(), { forceExpanded: false })
+    fireEvent.click(ui.getByTestId('timeline-collapse'))
+    expect(ui.getByTestId('timeline-mini-strip')).toBeTruthy()
+    ui.rerender(<Timeline edits={edits()} words={words} shots={[]} outputMs={10000} clipOutputDurationMs={19000} onSeekOutput={ui.onSeekOutput} clipStartMs={bounds.clipStartMs} clipEndMs={bounds.clipEndMs} forceExpanded />)
+    expect(ui.getByTestId('timeline-lane-video')).toBeTruthy()
+    expect(ui.queryByTestId('timeline-mini-strip')).toBeNull()
+  })
+
   it('keeps track labels aligned below the extra full-video moment row (C5)', () => {
     const { getByTestId } = setup(edits(), {
       momentFocus: {
@@ -130,6 +155,30 @@ describe('E2 multi-track timeline', () => {
     expect(onCommitEdits).toHaveBeenCalledTimes(1)
     const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
     expect(next.sectionOrder).toEqual([[9000, 20000], [0, 9000]])
+  })
+
+  it('B1: Magnet off keeps a real gap at the original position after dragging a split video', () => {
+    localStorage.setItem('transovo.timeline.magnet', '0')
+    try {
+      const e = edits({ cutRanges: [], videoSplits: [9000] })
+      const { getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
+      drag(getAllByTestId('timeline-item-video')[0]!, 15000 * pxPerMs())
+      expect(onCommitEdits).toHaveBeenCalledTimes(1)
+      const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
+      expect(next.sectionOrder).toEqual([[9000, 20000], [0, 9000]])
+      expect(next.inserts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ sourceId: 'gap', durMs: 9000 }),
+      ]))
+    } finally {
+      localStorage.removeItem('transovo.timeline.magnet')
+    }
+  })
+
+  it('B1: a locked Video track cannot be reordered by dragging', () => {
+    const e = edits({ cutRanges: [], videoSplits: [9000], timelineLanes: { video: { locked: true } } })
+    const { getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
+    drag(getAllByTestId('timeline-item-video')[0]!, 15000 * pxPerMs())
+    expect(onCommitEdits).not.toHaveBeenCalled()
   })
 
   it('trim handle on B-roll start advances the media in-point', () => {
@@ -206,6 +255,12 @@ describe('E2 multi-track timeline', () => {
     expect((onCommitEdits.mock.calls[1]![0] as ClipEditsV2).timelineLanes).toEqual({ broll: { hidden: true } })
   })
 
+  it('B7 exposes a Video eye toggle and commits hidden state', () => {
+    const { getByTestId, onCommitEdits } = setup()
+    fireEvent.click(getByTestId('timeline-lane-hide-video'))
+    expect((onCommitEdits.mock.calls[0]![0] as ClipEditsV2).timelineLanes?.video?.hidden).toBe(true)
+  })
+
   it('locked lanes ignore drags', () => {
     const { broll, pxPerMs, onCommitEdits } = setup(edits({ timelineLanes: { broll: { locked: true } } }))
     drag(broll('b1'), 1000 * pxPerMs(), { altKey: true })
@@ -228,6 +283,19 @@ describe('E2 multi-track timeline', () => {
     const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
     expect(next.trim.out).toBe(18000)
     expect(next.loopFriendlyEnd).toBe(false)
+  })
+
+  it('B2 keeps the timeline scale steady while trimming and retains room to restore the source', () => {
+    const { getAllByTestId, getByTestId, onCommitEdits, pxPerMs } = setup()
+    const last = getAllByTestId('timeline-item-video').at(-1)!
+    const handle = last.querySelector('[data-testid="timeline-trim-end"]')!
+    const widthBefore = parseFloat(getByTestId('timeline-track').style.width)
+    act(() => fireEvent.pointerDown(handle, { button: 0, clientX: 100, pointerId: 1 }))
+    act(() => fireEvent.pointerMove(window, { clientX: 100 - 2000 * pxPerMs(), pointerId: 1 }))
+    expect(parseFloat(getByTestId('timeline-track').style.width)).toBe(widthBefore)
+    act(() => fireEvent.pointerUp(window, { clientX: 100 - 2000 * pxPerMs(), pointerId: 1 }))
+    expect((onCommitEdits.mock.calls[0]![0] as ClipEditsV2).trim.out).toBe(18000)
+    expect(parseFloat(getByTestId('timeline-track').style.width)).toBeGreaterThanOrEqual(widthBefore)
   })
 
   it('without onCommitEdits the lanes are read-only', () => {

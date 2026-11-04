@@ -98,6 +98,8 @@ export function EditorLayout(props: {
   unifiedMain?: ReactNode
   unifiedTimelineView?: 'script' | 'timeline'
   unifiedTimelineHidden?: boolean
+  unifiedTimelineCollapsed?: boolean
+  onUnifiedTimelineFocusChange?: (focused: boolean) => void
   onUnifiedTimelineViewChange?: (view: 'script' | 'timeline') => void
 }) {
   const { band, panelOpen, panelWidthPx, onPanelWidthChange, hidePanelColumn, hidePropertiesColumn } = props
@@ -158,6 +160,8 @@ export function EditorLayout(props: {
         timeline={props.timeline}
         timelineView={props.unifiedTimelineView}
         timelineHidden={props.unifiedTimelineHidden}
+        timelineCollapsed={props.unifiedTimelineCollapsed}
+        onFocusChange={props.onUnifiedTimelineFocusChange}
         onTimelineViewChange={props.onUnifiedTimelineViewChange}
         inspectorWidthPx={panelWidthPx ?? 360}
         onInspectorWidthChange={onPanelWidthChange ?? (() => undefined)}

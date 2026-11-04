@@ -27,6 +27,23 @@ describe('useEditorState ripple (E2): transcript cuts keep B-roll/SFX on their c
     expect(result.current.edits.broll![0]).toMatchObject({ startMs: 5000, endMs: 7000 })
     expect(result.current.edits.audio!.sfx[0]!.atMs).toBe(6000)
   })
+  it('D2 enables Undo immediately for an SFX addition and tracks the same stack as keyboard Undo', () => {
+    const { result } = renderHook(() => useEditorState('clip_d2_sfx_history', bounds, initial()))
+    expect(result.current.canUndo).toBe(false)
+    expect(result.current.canRedo).toBe(false)
+    act(() => result.current.addSfx({ generationId: 'whoosh', atMs: 2500, volume: 0.8 }))
+    expect(result.current.edits.audio?.sfx.some((item) => item.generationId === 'whoosh')).toBe(true)
+    expect(result.current.historyPast).toHaveLength(1)
+    expect(result.current.canUndo).toBe(true)
+    act(() => result.current.undo())
+    expect(result.current.edits.audio?.sfx.some((item) => item.generationId === 'whoosh')).toBe(false)
+    expect(result.current.canUndo).toBe(false)
+    expect(result.current.canRedo).toBe(true)
+    act(() => result.current.redo())
+    expect(result.current.canUndo).toBe(true)
+    expect(result.current.canRedo).toBe(false)
+  })
+
   it('a timeline commit (setEdits) that only moves an item is not rippled', () => {
     const { result } = renderHook(() => useEditorState('clip_ripple_test2', bounds, initial()))
     const e = result.current.edits

@@ -38,11 +38,26 @@ describe('EF-24 bgRemoval edits', () => {
   })
 
   it('bgRemovalBlockedReason gates layouts and stabilize', () => {
-    expect(bgRemovalBlockedReason(normalizeEdits({ layout: { mode: 'stack', shotOverrides: [] } }, bounds))).toBeTruthy()
-    expect(bgRemovalBlockedReason(normalizeEdits({ stabilize: [{ startMs: 0, endMs: 1000 }] }, bounds))).toBeTruthy()
+    expect(bgRemovalBlockedReason(normalizeEdits({ layout: { mode: 'facecam_pip', shotOverrides: [] } }, bounds))).toBeTruthy()
+    expect(bgRemovalBlockedReason(normalizeEdits({ stabilize: [{ fromMs: 0, toMs: 1000, amount: 50 }] }, bounds))).toBeTruthy()
     expect(
-      bgRemovalBlockedReason(normalizeEdits({ sourceSegments: [{ id: 's', sourceId: 'a', startMs: 0, endMs: 1000 }] }, bounds)),
+      bgRemovalBlockedReason(normalizeEdits({ sources: [{ id: 'a', ref: 'upload', refId: 'clip-upload-a', mediaType: 'video' }], sourceSegments: [{ id: 's', sourceId: 'a', startMs: 0, endMs: 1000 }] }, bounds)),
     ).toBeTruthy()
+  })
+
+  it('E2 enables full-frame, fill and segmented speaker layouts without breaking per-clip compatibility', () => {
+    const full = normalizeEdits({ layout: { mode: 'full_frame', shotOverrides: [] } }, bounds)
+    const fill = normalizeEdits({ layout: { mode: 'fill', shotOverrides: [] } }, bounds)
+    const follow = normalizeEdits({
+      layout: {
+        mode: 'speaker_follow', shotOverrides: [],
+        layoutSegments: [{ startMs: 0, endMs: 30000, mode: 'full_frame' }, { startMs: 30000, endMs: 60000, mode: 'speaker_follow' }],
+      },
+    }, bounds)
+    expect(bgRemovalBlockedReason(full)).toBeNull()
+    expect(bgRemovalBlockedReason(fill)).toBeNull()
+    expect(bgRemovalBlockedReason(follow)).toBeNull()
+    expect(bgRemovalBlockedReason(normalizeEdits({ layout: { mode: 'facecam_pip', shotOverrides: [] } }, bounds))).toBeTruthy()
   })
 
   it('refineAlpha parity points', () => {

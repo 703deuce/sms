@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { addAdjustLayer } from '@/lib/clips/editor/adjust-layers'
 import { layerFxOf, setLayerFx } from '@/lib/clips/editor/layer-fx'
 import { newTextItem } from '@/lib/clips/editor/text-items'
 import { PropertiesPanel } from '@/components/clips/editor/properties-panel'
+import { MainVideoTools } from '@/components/clips/editor/g4/video-tools'
 import { LayerFxControls } from '@/components/clips/editor/g4/layer-fx-controls'
 
 const bounds = { clipStartMs: 0, clipEndMs: 20_000, trimMinMs: 0, trimMaxMs: 40_000 }
@@ -64,6 +65,25 @@ describe('CV-17c properties Video tab (mask + blend)', () => {
     expect(t.queryByTestId('properties-transform')).toBeNull()
     click(t.getByTestId('layer-fx-mask-rect'))
     expect(layerFxOf(last(onCommit), `adjust:${added.id}`)?.mask?.shape).toBe('rect')
+  })
+
+  it('E3: Clip menu targets the working Blur control, then Background removal', async () => {
+    function W({ request }: { request: { id: 'blur-add' | 'bg-removal'; seq: number } }) {
+      const [edits, setEdits] = useState(base())
+      return <PropertiesPanel edits={edits} target="video" label="Video" outputMs={1000}
+        onCommit={setEdits} onSeekOutput={vi.fn()} cropMode={false} onCropModeChange={vi.fn()}
+        videoToolRequest={request}
+        videoSlot={<MainVideoTools edits={edits} videoItem={null} outputMs={1000}
+          durationMs={20000} onCommit={setEdits} onSeekOutput={vi.fn()} />} />
+    }
+    const ui = render(<W request={{ id: 'blur-add', seq: 1 }} />)
+    await waitFor(() => expect(ui.getByTestId('blur-add')).toBe(document.activeElement))
+    click(ui.getByTestId('blur-add'))
+    expect(ui.getByTestId('blur-editor')).toBeTruthy()
+    ui.rerender(<W request={{ id: 'bg-removal', seq: 2 }} />)
+    await waitFor(() => expect(ui.getByTestId('bg-remove-toggle')).toBe(document.activeElement))
+    click(ui.getByTestId('bg-remove-toggle'))
+    expect(ui.getByTestId('bg-removal-background')).toBeTruthy()
   })
 
   it('setLayerFx round-trips text and adjust targets', () => {

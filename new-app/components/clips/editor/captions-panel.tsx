@@ -18,6 +18,7 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CAPTION_PRESETS, presetSlugToId, resolveCaptionPreset, resolvePreset } from '@/lib/clips/caption-presets'
 import { CAPTION_PRESETS_V2 } from '@/lib/clips/templates/registry'
+import { resolveT6CaptionPreset } from '@/lib/clips/caption-v2-bridge'
 import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
@@ -139,7 +140,7 @@ export function CaptionsPanel({
   const [editingWordI, setEditingWordI] = useState<number | null>(null)
   const wordFixCommittedRef = useRef(false)
   const presetId = cap.presetId || 'bold_pop'
-  const preset = resolveCaptionPreset(cap)
+  const preset = resolveT6CaptionPreset(cap, t6CaptionPresetsEnabled())
   const captionFontValue = cap.font ?? preset.font ?? 'Poppins'
   const captionFontItems: Record<string, string> = {
     ...CAPTION_FONT_LABELS,
@@ -517,6 +518,7 @@ export function CaptionsPanel({
                   presetId: id,
                   animation: p.animation,
                   size: cap.size ?? p.sizePct,
+                  userSizePct: undefined,
                 })
               }
               className={cn(
@@ -695,17 +697,18 @@ export function CaptionsPanel({
       </div>
 
       <label className="text-xs font-medium text-muted-foreground">
-        Size ({cap.size ?? preset.sizePct}% of video height)
+        Size ({presetId.startsWith('cp') ? (cap.userSizePct ?? preset.sizePct) : (cap.size ?? preset.sizePct)}% of video height)
       </label>
       <Slider
         className="w-full min-w-[140px]"
         min={3}
         max={10}
         step={0.5}
-        value={[cap.size ?? preset.sizePct]}
+        value={[presetId.startsWith('cp') ? (cap.userSizePct ?? preset.sizePct) : (cap.size ?? preset.sizePct)]}
         onValueChange={(v) => {
           const n = Array.isArray(v) ? v[0] : v
-          patch({ size: typeof n === 'number' ? n : preset.sizePct })
+          if (presetId.startsWith('cp')) patch({ userSizePct: typeof n === 'number' ? n : preset.sizePct })
+          else patch({ size: typeof n === 'number' ? n : preset.sizePct })
         }}
       />
 

@@ -13,6 +13,18 @@ export const LANE_H_DEFAULT: Record<LaneId, number> = {
 }
 
 /** Smallest height each lane can be dragged to. */
+/** C1: six main lanes fit at 1280×800 without shrinking a user's own lane sizes. */
+export const LANE_H_LAPTOP: Record<LaneId, number> = {
+  captions: 28,
+  text: 32,
+  adjust: 28,
+  video: 70,
+  broll: 40,
+  voice: 36,
+  music: 36,
+  sfx: 36,
+}
+
 export const LANE_H_MIN: Record<LaneId, number> = {
   captions: 24,
   text: 28,
@@ -63,6 +75,6 @@ export function writeLaneHeights(m: Partial<Record<LaneId, number>>): void {
 }
 
 /** Effective heights = defaults overlaid with the user's dragged heights. */
-export function laneHeights(user: Partial<Record<LaneId, number>>): Record<LaneId, number> {
-  return { ...LANE_H_DEFAULT, ...sanitizeLaneHeights(user) }
+export function laneHeights(user: Partial<Record<LaneId, number>>, shortLaptop = false): Record<LaneId, number> {
+  return { ...(shortLaptop ? LANE_H_LAPTOP : LANE_H_DEFAULT), ...sanitizeLaneHeights(user) }
 }

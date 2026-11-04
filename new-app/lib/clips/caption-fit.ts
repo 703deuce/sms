@@ -205,6 +205,7 @@ type CapLike = {
   font?: string
   size?: number
   sizePct?: number
+  userSizePct?: number
   case?: string
   wordsPerLine?: number
   animation?: string
@@ -246,7 +247,7 @@ export function captionFitConfig(input: {
   const ref = fitReferenceFrame(pw, ph)
   let sizePct: number
   if (cpMode) {
-    sizePct = Number(preset.sizePct)
+    sizePct = Number(cap.userSizePct ?? preset.sizePct)
   } else {
     let s = Number(cap.size || cap.sizePct || input.basePresetSizePct || 6.5)
     s = Math.min(10.5, Math.max(3, s))

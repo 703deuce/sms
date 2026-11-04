@@ -16,6 +16,7 @@ import {
   buildTimelineItems,
   deleteItems,
   findItem,
+  newGapId,
   markRippled,
   refLocked,
   refTrack,
@@ -26,6 +27,7 @@ import {
   type OpCtx,
   type TimelineItem,
 } from '@/lib/clips/editor/clip-timeline'
+import { addGapAt } from '@/lib/clips/editor/inserts'
 import type { ColorSpec } from '@/lib/clips/editor/color'
 import { setBrollFx, type LayerFx } from '@/lib/clips/editor/layer-fx'
 import type { KeyframeTarget, KeyframeTrack, LayerProp } from '@/lib/clips/editor/motion-schema'
@@ -367,6 +369,28 @@ export function moveVideoSegment(ctx: OpCtx, segId: string, beforeId: string | n
   if (!norm) delete next.sectionOrder
   if (JSON.stringify(next.sectionOrder ?? null) === JSON.stringify(e.sectionOrder ?? null)) return null
   return next
+}
+
+/**
+ * B1: Magnet-off main-track drag. Reorder the linked video/voice source segments,
+ * then leave a real black/silent gap where the moved piece used to sit.
+ * Gap inserts are the same data model consumed by preview and export.
+ * The ordinary magnet-on path continues to ripple without adding silence.
+ */
+export function moveVideoSegmentWithGap(ctx: OpCtx, segId: string, beforeId: string | null): ClipEditsV2 | null {
+  const before = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits }).video
+  const moved = before.find((v) => v.id === segId)
+  if (!moved || refLocked(ctx.edits, { lane: 'video', id: segId })) return null
+  const next = moveVideoSegment(ctx, segId, beforeId)
+  if (!next) return null
+  const duration = Math.round(moved.endMs - moved.startMs)
+  if (duration < 200) return next
+  // The original drop position is measured on the old edit timeline. The gap
+  // occupies that slot after the reordered sections are placed, preserving
+  // the empty space instead of treating Magnet-off exactly like Magnet-on.
+  const nextPreview = { ...ctx.previewEdits, sectionOrder: next.sectionOrder }
+  const inserts = addGapAt(next.inserts, timebaseFor(nextPreview).segs, moved.startMs, newGapId(), duration)
+  return inserts ? { ...next, inserts } : null
 }
 
 /** Main-track reorder drop slot from the POINTER position (output ms). null = after last. */

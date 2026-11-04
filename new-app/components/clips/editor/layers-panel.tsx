@@ -29,30 +29,43 @@ function patchLayer<T extends Layer>(layers: Layer[], id: string, patch: Partial
   return layers.map((l) => (l.id === id ? ({ ...l, ...patch } as Layer) : l))
 }
 
-type ActualVisualLayer = { key: string; label: string; kind: 'video' | 'broll' | 'text' | 'captions'; id: string; startMs: number }
+type ActualVisualLayer = { key: string; label: string; kind: 'video' | 'broll' | 'text' | 'captions' | 'sticker' | 'badge' | 'headline' | 'hook'; id: string; startMs: number }
 
-function ActualLayersList({ edits, onEdits, selectedKey, onSelect }: {
+function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSelect }: {
   edits: ClipEditsV2
+  layers: Layer[]
+  setLayers: (layers: Layer[]) => void
   onEdits: (next: ClipEditsV2) => void
   selectedKey?: string | null
   onSelect?: (kind: ActualVisualLayer['kind'], id: string, startMs: number) => void
 }) {
   const [dragged, setDragged] = useState<string | null>(null)
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null)
   const broll = orderedStack(edits, 'broll', edits.broll ?? [])
   const text = orderedStack(edits, 'text', edits.textItems ?? [])
   // Visual stack from top to bottom (the video is the backmost visual layer).
   const stack: ActualVisualLayer[] = [
+    ...layers.filter((l) => l.type === 'sticker').map((l) => ({ key: `sticker:${l.id}`, label: 'Sticker · ' + (('text' in l && l.text) || l.id), kind: 'sticker' as const, id: l.id, startMs: 0 })),
     ...text.slice().reverse().map((t) => ({ key: `text:${t.id}`, label: t.text?.trim().slice(0, 36) || 'Text', kind: 'text' as const, id: t.id, startMs: t.startMs })),
-    ...(edits.captions?.enabled !== false ? [{ key: 'captions', label: 'Captions', kind: 'captions' as const, id: 'captions', startMs: 0 }] : [{ key: 'captions', label: 'Captions', kind: 'captions' as const, id: 'captions', startMs: 0 }]),
+    { key: 'captions', label: 'Captions', kind: 'captions' as const, id: 'captions', startMs: 0 },
+    ...layers.filter((l) => l.type === 'badge').map((l) => ({ key: `badge:${l.id}`, label: 'Platform badge', kind: 'badge' as const, id: l.id, startMs: 0 })),
+    ...layers.filter((l) => l.type === 'headline').map((l) => ({ key: `headline:${l.id}`, label: 'Headline', kind: 'headline' as const, id: l.id, startMs: 0 })),
+    ...(edits.hookOverlay ? [{ key: 'hook', label: 'Hook overlay', kind: 'hook' as const, id: 'hook', startMs: 0 }] : []),
     ...broll.slice().reverse().map((b) => ({ key: `broll:${b.id}`, label: `B-roll · ${b.id.slice(0, 18)}`, kind: 'broll' as const, id: b.id, startMs: b.startMs })),
     { key: 'video', label: 'Main video', kind: 'video', id: 'video', startMs: 0 },
   ]
   const off = new Set(edits.disabledItems ?? [])
   const disabled = (row: ActualVisualLayer) =>
-    row.kind === 'captions' ? edits.captions?.enabled === false : off.has(row.key)
+    row.kind === 'captions' ? edits.captions?.enabled === false
+      : row.kind === 'video' ? laneState(edits, 'video').hidden === true
+      : row.kind === 'hook' ? edits.hookOverlay?.enabled === false
+      : row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline' ? !layers.find((l) => l.id === row.id)?.enabled
+      : off.has(row.key)
   const toggleVisibility = (row: ActualVisualLayer) => {
-    if (row.kind === 'video') return
+    if (row.kind === 'video') return onEdits(setLaneState(edits, 'video', { hidden: !disabled(row) }))
     if (row.kind === 'captions') return onEdits({ ...edits, captions: { ...edits.captions, enabled: edits.captions?.enabled === false } })
+    if (row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline') return setLayers(layers.map((l) => l.id === row.id ? { ...l, enabled: !l.enabled } : l))
+    if (row.kind === 'hook') return onEdits({ ...edits, hookOverlay: { ...edits.hookOverlay, enabled: !edits.hookOverlay?.enabled } })
     const next = toggleItemsEnabled(edits, [{ lane: row.kind, id: row.id }])
     if (next) onEdits(next)
   }
@@ -78,7 +91,7 @@ function ActualLayersList({ edits, onEdits, selectedKey, onSelect }: {
       <ul className="space-y-1">
         {stack.map((row) => {
           const hidden = disabled(row)
-          const track = row.kind === 'text' || row.kind === 'broll' ? row.kind : null
+          const track = row.kind === 'text' || row.kind === 'broll' || row.kind === 'video' ? row.kind : null
           const locked = track ? laneState(edits, track).locked === true : false
           return (
             <li key={row.key} className="flex items-center gap-1 rounded border border-border/60 px-1 py-1"
@@ -89,13 +102,12 @@ function ActualLayersList({ edits, onEdits, selectedKey, onSelect }: {
               onDrop={(e) => { e.preventDefault(); const from = stack.find((r) => r.key === dragged); if (from) reorder(from, row); setDragged(null) }}
               onDragEnd={() => setDragged(null)}>
               <GripVertical size={13} className="shrink-0 text-muted-foreground" aria-hidden />
-              <button type="button" className={`min-w-0 flex-1 truncate rounded px-1 py-1 text-left text-xs ${selectedKey === row.key ? 'bg-primary/10 font-semibold' : ''}`}
-                onClick={() => onSelect?.(row.kind, row.id, row.startMs)}
+              <button type="button" className={`min-w-0 flex-1 truncate rounded px-1 py-1 text-left text-xs ${(selectedKey === row.key || selectedRowKey === row.key) ? 'bg-primary/10 font-semibold' : ''}`}
+                onClick={() => { setSelectedRowKey(row.key); onSelect?.(row.kind, row.id, row.startMs) }}
                 data-testid={`actual-layer-select-${row.key}`}>{row.label}</button>
               <button type="button" className="rounded p-1 disabled:opacity-30"
-                title={row.kind === 'video' ? 'Main video visibility is controlled by the Video track' : hidden ? 'Show layer' : 'Hide layer'}
+                title={hidden ? 'Show layer' : 'Hide layer'}
                 aria-label={`Toggle ${row.label} visibility`}
-                disabled={row.kind === 'video'}
                 onClick={() => toggleVisibility(row)}>
                 {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
@@ -108,7 +120,7 @@ function ActualLayersList({ edits, onEdits, selectedKey, onSelect }: {
           )
         })}
       </ul>
-      <p className="text-[10px] text-muted-foreground">Drag overlapping text or B-roll layers to change stacking within their track. Locks apply to the whole track.</p>
+      <p className="text-[10px] text-muted-foreground">Drag overlapping text or B-roll layers to change stacking within their track. Video and track locks prevent editing.</p>
     </section>
   )
 }
@@ -202,7 +214,10 @@ export function LayersPanel({
           Saving layers…
         </p>
       ) : null}
-      <ActualLayersList edits={edits} onEdits={onEdits} selectedKey={selectedLayerKey} onSelect={onSelectActualLayer} />
+      <ActualLayersList edits={edits} layers={layers} setLayers={setLayers} onEdits={onEdits} selectedKey={selectedLayerKey} onSelect={onSelectActualLayer} />
+      <details className="rounded-md border border-border/60 p-2" data-testid="layer-design-settings">
+        <summary className="cursor-pointer text-xs text-muted-foreground">Legacy overlay design, branding and template settings</summary>
+        <div className="mt-3 space-y-4">
       {(onApplyAutoTemplate || (brandTemplates && brandTemplates.length > 0 && onApplyTemplate)) ? (
         <div className="space-y-2 rounded-lg border border-border p-3">
           <p className="text-xs font-medium">Brand template</p>
@@ -463,6 +478,8 @@ export function LayersPanel({
           </>
         )}
       </div>
+        </div>
+      </details>
     </div>
   )
 }
