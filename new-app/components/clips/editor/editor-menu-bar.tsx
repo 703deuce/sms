@@ -27,10 +27,10 @@ export type EditorMenu = { id: string; label: string; groups: EditorMenuGroup[] 
 
 export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; onOpenSearch: () => void }) {
   return (
-    <div className="hidden min-w-0 flex-1 items-center gap-1 lg:flex" data-testid="editor-menu-bar">
+    <div className="hidden min-w-0 shrink-0 items-center gap-0.5 md:flex" data-testid="editor-menu-bar">
       <nav className="flex shrink-0 items-center" aria-label="Editor menu">
         {menus.map((menu, index) => (
-          <div key={menu.id} className={index < 3 ? "contents" : "hidden min-[1500px]:contents"}>
+          <div key={menu.id} className={index < 3 ? "contents" : "hidden min-[1150px]:contents"}>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -84,7 +84,7 @@ export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; on
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2 text-[13px] font-medium text-muted-foreground hover:text-foreground min-[1500px]:hidden"
+                  className="h-8 px-2 text-[13px] font-medium text-muted-foreground hover:text-foreground min-[1150px]:hidden"
                   data-testid="editor-menu-more"
                 />
               }
@@ -127,15 +127,15 @@ export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; on
         type="button"
         variant="outline"
         size="sm"
-        className="h-8 w-8 shrink-0 justify-center gap-2 overflow-hidden px-0 text-[13px] font-normal text-muted-foreground min-[1500px]:w-auto min-[1500px]:min-w-40 min-[1500px]:max-w-56 min-[1500px]:flex-1 min-[1500px]:basis-56 min-[1500px]:justify-start min-[1500px]:px-2.5"
+        className="h-8 w-8 shrink-0 justify-center overflow-hidden px-0 text-[13px] font-normal text-muted-foreground"
         onClick={onOpenSearch}
         aria-label="Search tools"
         title="Search tools (⌘K)"
         data-testid="editor-menu-search"
       >
         <Search className="size-3.5 shrink-0" aria-hidden />
-        <span className="hidden min-w-0 flex-1 truncate text-left min-[1500px]:block">Search tools…</span>
-        <Kbd className="ml-2 hidden shrink-0 2xl:inline-flex">⌘K</Kbd>
+        <span className="sr-only">Search tools…</span>
+        
       </Button>
     </div>
   )
