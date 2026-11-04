@@ -3360,9 +3360,7 @@ export function EditorShell({
           producerOpen={producerOpen}
           producerStrip={producerStrip ? { changeCount: producerStrip.changeCount, onUndo: undo } : null}
           pendingPaidCount={producerPendingPaid}
-          layoutViewSlot={
-            {unifiedWorkspaceActive ? null : <EditorLayoutViewSwitch value={layoutView} onChange={setLayoutViewPersist} />}
-          }
+          layoutViewSlot={unifiedWorkspaceActive ? null : <EditorLayoutViewSwitch value={layoutView} onChange={setLayoutViewPersist} />}
           menuBarSlot={
             <EditorMenuBar menus={editorMenus} onOpenSearch={() => runTimelineMenu({ kind: 'openPalette' })} />
           }
