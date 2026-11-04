@@ -2515,7 +2515,7 @@ export function EditorShell({
       {panelMounted('color') ? (
         <div className={on('color') ? undefined : 'hidden'} aria-hidden={!on('color')} data-testid="editor-panel-color">
           <EditorPanelErrorBoundary label="Color">
-          <EffectsBrowser edits={edits} onEdits={setEdits} playheadSourceMs={playheadSourceMs} outputMs={outputMs} outputDurationMs={outDur}>
+          <EffectsBrowser edits={edits} onEdits={setEdits} playheadSourceMs={playheadSourceMs} outputMs={outputMs} outputDurationMs={outDur} onSeekOutput={seekOutput}>
           <ColorPanel
               edits={edits}
               target={colorTarget}

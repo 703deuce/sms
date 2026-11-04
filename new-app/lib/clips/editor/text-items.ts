@@ -488,12 +488,12 @@ export const TITLE_TEMPLATES: TitleTemplate[] = [
     parts: [
       {
         text: '', kind: 'shape', shape: { type: 'rounded', w: 640, h: 170 }, x: 38, y: 80,
-        style: { ...PLAIN_STYLE, color: '#0F172A' },
+        style: { ...PLAIN_STYLE, color: '#1D4ED8' },
         anim: { in: blockIn('slide_right', 450), out: blockIn('slide_left', 400) },
       },
       {
         text: 'Your Name\n<i>Title · Company</i>', x: 38, y: 80, delayMs: 150,
-        style: { font: 'Poppins', size: 56, color: '#FFFFFF', align: 'center', case: 'none', lineHeight: 1.1 },
+        style: { font: 'Poppins', size: 56, color: '#FFFFFF', align: 'center', case: 'none', lineHeight: 1.1, shadow: { color: '#000000', opacity: 75, dist: 4 } },
         anim: { in: blockIn('slide_right', 450), out: blockIn('slide_left', 400) },
       },
     ],

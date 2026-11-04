@@ -7,9 +7,10 @@
 import type { TemplatePart, TextStyle, TitleTemplate } from '@/lib/clips/editor/text-items'
 import type { TextAnim } from '@/lib/clips/render-plan/text-anim'
 
-const P: TextStyle = { font: 'Montserrat', size: 96, color: '#FFFFFF', align: 'center', case: 'none' }
+const SHADOW = { color: '#000000', opacity: 75, dist: 4 }
+const P: TextStyle = { font: 'Montserrat', size: 96, color: '#FFFFFF', align: 'center', case: 'none', shadow: SHADOW }
 const S = (font: TextStyle['font'], size: number, color: string, extra: Partial<TextStyle> = {}): TextStyle => ({
-  font, size, color, align: 'center', case: 'upper', ...extra,
+  font, size, color, align: 'center', case: 'upper', ...(extra.box ? {} : { shadow: SHADOW }), ...extra,
 })
 type Edge = 'fade' | 'pop' | 'zoom' | 'slide_up' | 'slide_down' | 'slide_left' | 'slide_right' | 'bounce_in' | 'zoom_out' | 'rotate_in'
 const A = (inT: Edge, outT: Edge = 'fade', inMs = 450, outMs = 350, loop?: 'pulse' | 'bounce' | 'wiggle' | 'flicker'): TextAnim => ({
@@ -18,7 +19,7 @@ const A = (inT: Edge, outT: Edge = 'fade', inMs = 450, outMs = 350, loop?: 'puls
   ...(loop ? { loop: { type: loop, periodMs: 1200 } } : {}),
 })
 const box = (w: number, h: number, x: number, y: number, color: string, anim: TextAnim = A('pop'), delayMs?: number): TemplatePart => ({
-  text: '', kind: 'shape', shape: { type: 'rounded', w, h }, x, y, style: { ...P, color }, anim, ...(delayMs ? { delayMs } : {}),
+  text: '', kind: 'shape', shape: { type: 'rounded', w, h }, x, y, style: { font: P.font, size: P.size, align: 'center', case: 'none', color }, anim, ...(delayMs ? { delayMs } : {}),
 })
 const txt = (text: string, x: number, y: number, style: TextStyle, anim: TextAnim = A('fade'), extra: Partial<TemplatePart> = {}): TemplatePart => ({
   text, x, y, style, anim, ...extra,
@@ -45,7 +46,7 @@ export const CATALOG_TEMPLATES: TitleTemplate[] = [
   ]),
   // Lower thirds
   T('lt_dark', 'Name · dark bar', 'Lower thirds', [
-    box(700, 170, 38, 80, '#0F172A', A('slide_right', 'slide_left')),
+    box(700, 170, 38, 80, '#1D4ED8', A('slide_right', 'slide_left')),
     txt('Your Name\n<i>Role · Company</i>', 38, 80, { ...P, font: 'Poppins', size: 54, lineHeight: 1.1 }, A('slide_right', 'slide_left'), { delayMs: 150 }),
   ]),
   T('lt_accent', 'Name · accent', 'Lower thirds', [
@@ -125,7 +126,7 @@ export const CATALOG_TEMPLATES: TitleTemplate[] = [
     txt('GO!', 50, 45, S('Luckiest Guy', 260, '#22C55E', { stroke: { color: '#000000', width: 10 } }), A('zoom_out', 'fade', 300, 300), { delayMs: 2100, durMs: 900 }),
   ]),
   T('cd_circle', 'Countdown circle', 'Countdown', [
-    { text: '', kind: 'shape', shape: { type: 'rounded', w: 420, h: 420 }, x: 50, y: 45, style: { ...P, color: '#0F172A' }, anim: A('pop', 'fade', 300, 300, 'pulse') },
+    { text: '', kind: 'shape', shape: { type: 'rounded', w: 420, h: 420 }, x: 50, y: 45, style: { font: P.font, size: P.size, align: 'center', case: 'none', color: '#E11D48' }, anim: A('pop', 'fade', 300, 300, 'pulse') },
     ...['3', '2', '1'].map((n, i) => txt(n, 50, 45, S('Anton', 220, '#FFFFFF'), A('zoom_out', 'fade', 250, 150), { delayMs: i * 1000, durMs: 1000 })),
   ]),
   T('cd_starting', 'Starting in…', 'Countdown', [
