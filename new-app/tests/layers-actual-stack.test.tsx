@@ -7,6 +7,20 @@ import { defaultEdits } from '@/lib/clips/edits'
 afterEach(cleanup)
 
 describe('actual Layers stack (E5)', () => {
+  it('E5: exposes video visibility/lock and makes real layers the default surface', () => {
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
+    const onEdits = vi.fn()
+    const ui = render(
+      <LayersPanel clipId="clip1" edits={edits} layers={[]} setLayers={vi.fn()} onEdits={onEdits} />,
+    )
+    expect(ui.getByTestId('actual-layer-stack')).toBeTruthy()
+    expect(ui.getByTestId('layer-design-settings').hasAttribute('open')).toBe(false)
+    fireEvent.click(ui.getByRole('button', { name: 'Toggle Main video visibility' }))
+    expect(onEdits.mock.calls.at(-1)?.[0].timelineLanes?.video?.hidden).toBe(true)
+    fireEvent.click(ui.getByRole('button', { name: 'Lock Main video track' }))
+    expect(onEdits.mock.calls.at(-1)?.[0].timelineLanes?.video?.locked).toBe(true)
+  })
+
   it('lists and selects real Text and B-roll items, and hides an item in the shared edits model', () => {
     const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
     edits.textItems = [{ id: 'title1', text: 'Real title', startMs: 1000, endMs: 4000,
