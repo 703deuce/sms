@@ -1112,7 +1112,14 @@ export function Timeline({
   useEffect(() => {
     setLaneHUser(readLaneHeights())
   }, [])
-  const LANE_H: Record<LaneId, number> = laneHeights(laneHUser)
+  const [shortLaptop, setShortLaptop] = useState(false)
+  useEffect(() => {
+    const update = () => setShortLaptop(window.innerWidth >= 1024 && window.innerHeight <= 800)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  const LANE_H: Record<LaneId, number> = laneHeights(laneHUser, shortLaptop)
   const startLaneResize = (lane: LaneId, e: { clientY: number; preventDefault: () => void; stopPropagation: () => void }) => {
     e.preventDefault()
     e.stopPropagation()
