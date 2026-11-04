@@ -230,7 +230,6 @@ const PHASE2_DOM_IDS = [
   'transcript-more-menu',
   'properties-project-settings',
   'properties-project-duration',
-  'editor-rail-group-script',
   'editor-rail-group-captions',
   'editor-rail-group-text',
   'editor-rail-group-media',
@@ -271,10 +270,10 @@ describe('layout inventory (Phase 1–2 guard)', () => {
     const ui = renderShell()
     await waitFor(() => expect(ui.getByTestId('timeline-root')).toBeTruthy())
     fireEvent.click(ui.getByTestId('editor-repurpose-open'))
-    for (const g of ['script', 'captions', 'text', 'media', 'audio', 'effects', 'layers', 'templates'] as const) {
+    for (const g of ['captions', 'text', 'media', 'audio', 'effects', 'layers', 'templates'] as const) {
       fireEvent.click(ui.getAllByTestId(`editor-rail-group-${g}`)[0]!)
     }
-    fireEvent.click(ui.getAllByTestId('editor-rail-group-script')[0]!)
+    fireEvent.click(ui.getByTestId('editor-layout-view-script'))
     await waitFor(() => expect(ui.getByTestId('transcript-more-menu')).toBeTruthy())
     fireEvent.click(ui.getByTestId('transcript-more-menu'))
     const dockTimeline = ui.queryByTestId('timeline-dock-rail')

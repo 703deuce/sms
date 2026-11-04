@@ -28,7 +28,7 @@ export const EDITOR_GRID = {
     'lg:grid-cols-[64px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto] ' +
     'xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)] ' +
     '2xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)]',
-  /** Script view: single main column (left rail hidden at lg+; tools live in the right ScriptViewToolRail). */
+  /** Script view without docked tools (mobile / legacy). */
   rootScript:
     'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
@@ -61,16 +61,21 @@ export const EDITOR_GRID = {
   rootDock:
     'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
-    'lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-rows-[auto_minmax(0,1fr)_auto]',
-  /** TIMELINE_LAYOUT3 (CapCut): tools panel | Player | Properties | icon rail on top; one full-width timeline below. */
-  railDock: 'min-h-0 min-w-0 lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)]',
-  panelDock: 'lg:col-start-1 lg:row-start-2 lg:w-[clamp(260px,28vw,440px)]',
+    'lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-rows-[minmax(0,1fr)_auto]',
+  /** TIMELINE_LAYOUT8: one tools card — tab strip + panel body share column 1 (no empty grid row when panel closed). */
+  toolsDock:
+    'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)]',
+  toolsDockRail: 'min-h-0 min-w-0 shrink-0',
+  toolsDockPanel: 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border',
+  /** @deprecated split rail/panel rows — use toolsDock */
+  railDock: 'min-h-0 min-w-0 shrink-0 lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)]',
+  panelDock: 'flex min-h-0 min-w-0 flex-1 flex-col lg:col-start-1 lg:row-start-2 lg:w-[clamp(260px,28vw,440px)] lg:max-h-none',
   previewDock:
     'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel lg:col-start-2 lg:row-start-1 lg:row-span-2',
   propertiesDock:
     'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-3 lg:row-start-1 lg:row-span-2 lg:w-[clamp(260px,24vw,380px)]',
   timelineDock:
-    'col-span-full min-h-0 overflow-hidden rounded-lg border border-border bg-card lg:row-start-3',
+    'col-span-full min-h-0 overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:col-span-full lg:row-start-2',
 } as const
 
 export function EditorLayout(props: {
@@ -127,7 +132,7 @@ export function EditorLayout(props: {
         } as React.CSSProperties)
       : undefined
 
-  const dock = props.dockTools === true && !scriptView
+  const dock = props.dockTools === true
   const rootClass = dock
     ? EDITOR_GRID.rootDock
     : scriptView
@@ -152,33 +157,55 @@ export function EditorLayout(props: {
       data-compact={compact ? 'true' : undefined}
       data-script-view={scriptView ? 'true' : undefined}
     >
-      <div data-region="rail" className={dock ? EDITOR_GRID.railDock : scriptView ? EDITOR_GRID.railScript : EDITOR_GRID.rail}>{props.rail}</div>
-      {overlay && panelOpen && !dock ? (
-        <button type="button" aria-label="Close panel" className={EDITOR_GRID.backdrop} onClick={props.onClosePanel} data-testid="editor-panel-backdrop" />
-      ) : null}
-      <section
-        data-region="panel"
-        hidden={dock ? !panelOpen : overlay && !panelOpen}
-        data-dock={dock ? 'true' : undefined}
-        className={cn(
-          EDITOR_GRID.panel,
-          dock ? EDITOR_GRID.panelDock : EDITOR_GRID.panelMobile,
-          dock ? null : EDITOR_GRID.panelCompact,
-          dock ? null : scriptView ? EDITOR_GRID.panelScriptHidden : EDITOR_GRID.panelDocked,
-          'relative',
-        )}
-      >
-        {props.panel}
-        {onPanelWidthChange && panelWidthPx != null && !overlay && !scriptView && !dock ? (
-          <button
-            type="button"
-            aria-label="Resize panel"
-            data-testid="editor-panel-resize-handle"
-            className="absolute -right-1 top-0 z-10 hidden h-full w-2 cursor-col-resize touch-none xl:block"
-            onPointerDown={onResizePointerDown}
-          />
-        ) : null}
-      </section>
+      {dock ? (
+        <div data-region="tools" className={EDITOR_GRID.toolsDock}>
+          <div data-region="rail" className={EDITOR_GRID.toolsDockRail}>
+            {props.rail}
+          </div>
+          {panelOpen ? (
+            <section data-region="panel" data-dock="true" className={EDITOR_GRID.toolsDockPanel}>
+              {props.panel}
+            </section>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <div data-region="rail" className={scriptView ? EDITOR_GRID.railScript : EDITOR_GRID.rail}>
+            {props.rail}
+          </div>
+          {overlay && panelOpen ? (
+            <button
+              type="button"
+              aria-label="Close panel"
+              className={EDITOR_GRID.backdrop}
+              onClick={props.onClosePanel}
+              data-testid="editor-panel-backdrop"
+            />
+          ) : null}
+          <section
+            data-region="panel"
+            hidden={overlay && !panelOpen}
+            className={cn(
+              EDITOR_GRID.panel,
+              EDITOR_GRID.panelMobile,
+              EDITOR_GRID.panelCompact,
+              scriptView ? EDITOR_GRID.panelScriptHidden : EDITOR_GRID.panelDocked,
+              'relative',
+            )}
+          >
+            {props.panel}
+            {onPanelWidthChange && panelWidthPx != null && !overlay && !scriptView ? (
+              <button
+                type="button"
+                aria-label="Resize panel"
+                data-testid="editor-panel-resize-handle"
+                className="absolute -right-1 top-0 z-10 hidden h-full w-2 cursor-col-resize touch-none xl:block"
+                onPointerDown={onResizePointerDown}
+              />
+            ) : null}
+          </section>
+        </>
+      )}
       <section data-region="preview" className={previewClass}>
         {props.preview}
       </section>
