@@ -59,9 +59,12 @@ export function __resetProjectTranscriptCache(): void {
 
 async function loadProjectTranscript(
   storage: ReturnType<typeof getClipStorage>,
-  project: { transcriptKey: string | null; updatedAt: Date },
+  project: { transcriptKey: string | null; updatedAt: Date; transcriptWords?: unknown },
 ): Promise<ClipWord[]> {
-  if (!project.transcriptKey) return []
+  // Some ready projects have their transcript in Postgres but no usable object key.
+  // Keep the same fallback used by loadProjectSourceWords; don't strand their editor.
+  const fallback = normalizeTranscriptJson(project.transcriptWords)
+  if (!project.transcriptKey) return fallback
   const cacheKey = transcriptCacheKey(project.transcriptKey, project.updatedAt)
   const hit = projectTranscriptCache.get(cacheKey)
   if (hit) return hit
@@ -77,9 +80,9 @@ async function loadProjectTranscript(
       return normalized
     }
   } catch {
-    /* fall through */
+    /* fall back to the database transcript */
   }
-  return []
+  return fallback
 }
 
 export async function getClipEditorWords(
@@ -92,7 +95,7 @@ export async function getClipEditorWords(
   const prisma = getPrisma()
   const project = await prisma.clipProject.findUnique({
     where: { id: clip.projectId },
-    select: { transcriptKey: true, updatedAt: true, upload: { select: { storageDriver: true } } },
+    select: { transcriptKey: true, transcriptWords: true, updatedAt: true, upload: { select: { storageDriver: true } } },
   })
   if (!project) return null
   const driverHint = clip.storageDriver ?? project.upload?.storageDriver ?? null
@@ -155,6 +158,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
           settings: true,
           status: true,
           transcriptKey: true,
+          transcriptWords: true,
           proxyKey: true,
           updatedAt: true,
           upload: { select: { key: true, storageDriver: true } },
