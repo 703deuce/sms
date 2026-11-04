@@ -51,7 +51,7 @@ export function UnifiedEditorWorkspace({
   useEffect(() => {
     try {
       const savedInspector = localStorage.getItem(INSPECTOR_OPEN_KEY)
-      setInspectorOpen(savedInspector == null ? window.innerWidth >= 1280 : savedInspector !== 'false')
+      setInspectorOpen(savedInspector == null ? window.innerWidth > 1280 : savedInspector !== 'false')
       const stored = Number(localStorage.getItem(TIMELINE_HEIGHT_KEY))
       if (Number.isFinite(stored) && stored >= 35 && stored <= 78) setTimelinePct(stored)
     } catch {
