@@ -49,7 +49,7 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
     { key: 'captions', label: 'Captions', kind: 'captions' as const, id: 'captions', startMs: 0 },
     ...layers.filter((l) => l.type === 'badge' && l.enabled).map((l) => ({ key: `badge:${l.id}`, label: 'Platform badge', kind: 'badge' as const, id: l.id, startMs: 0 })),
     ...layers.filter((l) => l.type === 'headline' && l.enabled).map((l) => ({ key: `headline:${l.id}`, label: 'Headline', kind: 'headline' as const, id: l.id, startMs: 0 })),
-    ...(edits.hook?.enabled ? [{ key: 'hook', label: 'Hook overlay', kind: 'hook' as const, id: 'hook', startMs: 0 }] : []),
+    ...(edits.hookOverlay?.enabled ? [{ key: 'hook', label: 'Hook overlay', kind: 'hook' as const, id: 'hook', startMs: 0 }] : []),
     ...broll.slice().reverse().map((b) => ({ key: `broll:${b.id}`, label: `B-roll · ${b.id.slice(0, 18)}`, kind: 'broll' as const, id: b.id, startMs: b.startMs })),
     { key: 'video', label: 'Main video', kind: 'video', id: 'video', startMs: 0 },
   ]
@@ -63,7 +63,7 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
     if (row.kind === 'video') return onEdits(setLaneState(edits, 'video', { hidden: !disabled(row) }))
     if (row.kind === 'captions') return onEdits({ ...edits, captions: { ...edits.captions, enabled: edits.captions?.enabled === false } })
     if (row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline') return setLayers(layers.map((l) => l.id === row.id ? { ...l, enabled: !l.enabled } : l))
-    if (row.kind === 'hook') return onEdits({ ...edits, hook: { ...edits.hook, enabled: !edits.hook?.enabled } })
+    if (row.kind === 'hook') return onEdits({ ...edits, hookOverlay: { ...edits.hookOverlay, enabled: !edits.hookOverlay?.enabled } })
     const next = toggleItemsEnabled(edits, [{ lane: row.kind, id: row.id }])
     if (next) onEdits(next)
   }
