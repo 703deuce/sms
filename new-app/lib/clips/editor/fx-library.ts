@@ -25,6 +25,10 @@ export const FX2_KEYS = [
   'invert',
   'mirror',
   'zoom',
+  // EFFECTS1b (append only)
+  'flash',
+  'leak',
+  'kenburns',
 ] as const
 export type Fx2Key = (typeof FX2_KEYS)[number]
 
@@ -42,7 +46,28 @@ export const FX2_LABELS: Record<Fx2Key, string> = {
   invert: 'Negative',
   mirror: 'Mirror (on when > 0)',
   zoom: 'Punch-in zoom',
+  flash: 'Flash / strobe',
+  leak: 'Light leak',
+  kenburns: 'Ken Burns (slow zoom)',
 }
+
+/** EFFECTS1b flash: white mix k on frames F mod 15 < 2 (export blend A + (255 − A)·k). */
+export const flashMix = (v: number, frame: number) => (frame % 15 < 2 ? (v / 100) * 0.8 : 0)
+/** EFFECTS1b light leak: warm (255,140,40)·a radial falloff from (0,0), radius 0.9·max(w,h); screen blend. */
+export const LEAK_RGB = [255, 140, 40] as const
+export const leakRadius = (w: number, h: number) => 0.9 * Math.max(w, h)
+export function leakSvgUrl(v: number, w: number, h: number): string {
+  const a = v / 100
+  const c = LEAK_RGB.map((x) => Math.round(x * a)).join(',')
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+    `<defs><radialGradient id="l" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="${leakRadius(w, h)}">` +
+    `<stop offset="0" stop-color="rgb(${c})"/><stop offset="1" stop-color="rgb(0,0,0)"/></radialGradient></defs>` +
+    `<rect width="${w}" height="${h}" fill="url(#l)"/></svg>`
+  return `data:image/svg+xml;base64,${typeof btoa === 'function' ? btoa(svg) : Buffer.from(svg).toString('base64')}`
+}
+/** EFFECTS1b Ken Burns: zoom 1 + min(t, 10)·0.02·v/100 at output time t = frame / 30. */
+export const kenBurnsZoom = (v: number, frame: number) => 1 + Math.min(frame / 30, 10) * 0.02 * (v / 100)
 
 /**
  * EFFECTS1 colour looks: 3×3 RGB matrices (row-major) mixed with identity by v/100. Export =
@@ -131,6 +156,12 @@ export function geomCss(fx: Partial<Record<string, number>> | null | undefined, 
   const s = shakeCss(fx?.shake ?? 0, w, h, frame)
   if (s) out.push(s)
   if (fx?.mirror) out.push('scaleX(-1)')
+  if (fx?.kenburns) {
+    const z = kenBurnsZoom(fx.kenburns, frame)
+    const kw = 2 * Math.ceil((w * z) / 2)
+    const kh = 2 * Math.ceil((h * z) / 2)
+    out.push(`scale(${Math.round((kw / w) * 1e4) / 1e4}, ${Math.round((kh / h) * 1e4) / 1e4})`)
+  }
   if (fx?.zoom) {
     const [zw, zh] = zoomSize(fx.zoom, w, h)
     out.push(`scale(${Math.round((zw / w) * 1e4) / 1e4}, ${Math.round((zh / h) * 1e4) / 1e4})`)

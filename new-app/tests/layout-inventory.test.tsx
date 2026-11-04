@@ -181,7 +181,7 @@ const RAIL_ARIA: Record<string, string> = {
   Brand: 'Brand',
   Captions: 'Captions',
   Cleanup: 'Cleanup',
-  Color: 'Color',
+  Color: 'Effects',
   Cover: 'Cover',
   Dub: 'Dub',
   Layers: 'Layers',

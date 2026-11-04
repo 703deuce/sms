@@ -49,7 +49,7 @@ function maskThumb(type: TransitionType): string | null {
 }
 
 /** Tiny CSS thumbnails so the grid reads like CapCut's transition panel. */
-function Thumb({ type }: { type: TransitionType | 'none' }) {
+export function Thumb({ type }: { type: TransitionType | 'none' }) {
   const a = 'bg-sky-500'
   const b = 'bg-fuchsia-500'
   const base = 'relative h-7 w-10 overflow-hidden rounded-sm'
@@ -146,7 +146,8 @@ export function TransitionPopover({
   const left = typeof window === 'undefined' ? anchor.x : Math.max(8, Math.min(anchor.x - 150, window.innerWidth - 316))
   const top = typeof window === 'undefined' ? anchor.y : Math.max(8, Math.min(anchor.y - 330, window.innerHeight - 340))
   const tile = 'flex flex-col items-center gap-0.5 rounded p-1 text-[11px] leading-tight hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-  const pickerTransitions = brollEdge ? TRANSITIONS.filter((t) => !CUT_ONLY_TRANSITIONS.has(t.type)) : TRANSITIONS
+  const pickerTransitions = TRANSITIONS
+  const cutOnlyHere = (t: TransitionType) => Boolean(brollEdge) && CUT_ONLY_TRANSITIONS.has(t)
   return (
     <div
       ref={ref}
@@ -188,10 +189,11 @@ export function TransitionPopover({
                   <button
                     key={t.type}
                     type="button"
-                    className={`${tile} ${active ? 'bg-muted ring-1 ring-primary' : ''}`}
+                    className={`${tile} ${active ? 'bg-muted ring-1 ring-primary' : ''} disabled:cursor-not-allowed disabled:opacity-40`}
                     onClick={() => onApply({ type: t.type, durMs })}
                     aria-pressed={active}
-                    title={t.label}
+                    disabled={cutOnlyHere(t.type)}
+                    title={cutOnlyHere(t.type) ? `${t.label}: works between main-video cuts only (not B-roll joins yet)` : t.label}
                     data-testid={`transition-tile-${t.type}`}
                   >
                     <Thumb type={t.type} />

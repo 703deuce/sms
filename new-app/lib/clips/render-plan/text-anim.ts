@@ -5,10 +5,10 @@
  */
 import { pyRound } from '@/lib/clips/render-plan/py'
 
-export const TEXT_ANIM_IN_TYPES = ['fade', 'pop', 'zoom', 'slide_up', 'slide_down', 'slide_left', 'slide_right', 'typewriter', 'bounce_in', 'zoom_out'] as const
-export const TEXT_ANIM_BLOCK_ONLY = ['zoom', 'slide_up', 'slide_down', 'slide_left', 'slide_right', 'bounce_in', 'zoom_out'] as const
+export const TEXT_ANIM_IN_TYPES = ['fade', 'pop', 'zoom', 'slide_up', 'slide_down', 'slide_left', 'slide_right', 'typewriter', 'bounce_in', 'zoom_out', 'rotate_in'] as const
+export const TEXT_ANIM_BLOCK_ONLY = ['zoom', 'slide_up', 'slide_down', 'slide_left', 'slide_right', 'bounce_in', 'zoom_out', 'rotate_in'] as const
 /** EFFECTS1: text-only types (layers fall back to fade, same as py TEXT_ONLY). */
-export const TEXT_ONLY_ANIM: ReadonlySet<string> = new Set(['typewriter', 'bounce_in', 'zoom_out'])
+export const TEXT_ONLY_ANIM: ReadonlySet<string> = new Set(['typewriter', 'bounce_in', 'zoom_out', 'rotate_in'])
 export const TEXT_ANIM_UNITS = ['block', 'line', 'word', 'char'] as const
 export const TEXT_ANIM_LOOP_TYPES = ['pulse', 'bounce', 'wiggle', 'flicker'] as const
 export type TextAnimType = (typeof TEXT_ANIM_IN_TYPES)[number]
@@ -91,7 +91,7 @@ export const easeBack = (p: number): number => {
 }
 const clamp01 = (v: number) => (v < 0.0 ? 0.0 : v > 1.0 ? 1.0 : v)
 
-type Block = { op: number; sc: number; dx: number; dy: number }
+type Block = { op: number; sc: number; dx: number; dy: number; rot?: number }
 /**
  * G3afix: an OUT slide is named by the direction it LEAVES in ("Slide down" exits downward), so it
  * replays the mirrored in-curve (block_state of the opposite slide) — text_anim.OUT_MOTION.
@@ -120,6 +120,8 @@ export function blockState(type: string, p0: number): Block {
       return { op: clamp01(p * 3.0), sc: 1.0, dx: 0.0, dy: (easeBack(p) - 1.0) * 12.0 }
     case 'zoom_out':
       return { op: e, sc: 1.6 - 0.6 * e, dx: 0.0, dy: 0.0 }
+    case 'rotate_in':
+      return { op: e, sc: 0.6 + 0.4 * e, dx: 0.0, dy: 0.0, rot: (1.0 - e) * -90.0 }
     default:
       return { op: 1.0, sc: 1.0, dx: 0.0, dy: 0.0 }
   }
@@ -197,6 +199,7 @@ export function frameAnim(anim: TextAnim, tMs: number, start: number, end: numbe
       sc = sc * b.sc
       dx = dx + b.dx
       dy = dy + b.dy
+      rot = rot + (b.rot ?? 0.0)
     } else unit = { type: aIn.type, unit: aIn.unit, t: tl, d: dIn, rev: false }
   }
   const aOut = anim.out
@@ -207,6 +210,7 @@ export function frameAnim(anim: TextAnim, tMs: number, start: number, end: numbe
       sc = sc * b.sc
       dx = dx + b.dx
       dy = dy + b.dy
+      rot = rot + (b.rot ?? 0.0)
     } else if (unit === null) unit = { type: aOut.type, unit: aOut.unit, t: tr, d: dOut, rev: true }
   }
   const lp = anim.loop

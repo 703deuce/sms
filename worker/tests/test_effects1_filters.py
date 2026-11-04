@@ -36,7 +36,7 @@ def _run(fx: dict, en: str) -> subprocess.CompletedProcess:
 
 def test_keys_match_grade_module():
     assert fl.FX2_KEYS == GRADE_FX2_KEYS
-    assert fl.FX2_KEYS[-5:] == ("mono", "sepia", "invert", "mirror", "zoom")
+    assert fl.FX2_KEYS[8:13] == ("mono", "sepia", "invert", "mirror", "zoom")
 
 
 def test_matrices():

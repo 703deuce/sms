@@ -69,6 +69,7 @@ import { Timeline, type TimelineMenuCommand } from '@/components/clips/editor/ti
 import { TextPanel } from '@/components/clips/editor/text-panel'
 import { TemplatesPanel } from '@/components/clips/editor/templates-panel'
 import { ColorPanel, type ColorTarget } from '@/components/clips/editor/color-panel'
+import { EffectsBrowser } from '@/components/clips/editor/effects-browser'
 import { ProducerPopover } from '@/components/clips/editor/producer-popover'
 import { applyProducerPlanStep } from '@/lib/clips/editor/producer-plan'
 import type { ClipWord } from '@/lib/clips/edits'
@@ -2514,6 +2515,7 @@ export function EditorShell({
       {panelMounted('color') ? (
         <div className={on('color') ? undefined : 'hidden'} aria-hidden={!on('color')} data-testid="editor-panel-color">
           <EditorPanelErrorBoundary label="Color">
+          <EffectsBrowser edits={edits} onEdits={setEdits} playheadSourceMs={playheadSourceMs} outputMs={outputMs} outputDurationMs={outDur}>
           <ColorPanel
               edits={edits}
               target={colorTarget}
@@ -2524,6 +2526,7 @@ export function EditorShell({
               onSeekOutput={seekOutput}
               onTargetChange={setColorTarget}
             />
+          </EffectsBrowser>
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
