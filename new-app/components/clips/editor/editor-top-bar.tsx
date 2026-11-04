@@ -181,6 +181,7 @@ export function EditorTopBar({
             Redo <Kbd>⇧⌘Z</Kbd>
           </TooltipContent>
         </Tooltip>
+        <div id="editor-workspace-controls" data-testid="editor-workspace-controls" className="flex shrink-0 items-center gap-1" />
         {historySlot}
         <Separator orientation="vertical" className="mx-1 h-6" />
         {layoutViewSlot}
