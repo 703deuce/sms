@@ -3,25 +3,17 @@ import { EDITOR_GRID } from '@/components/clips/editor/editor-layout'
 import { clampLaneH, LANE_H_DEFAULT, laneHeights, sanitizeLaneHeights } from '@/lib/clips/editor/lane-heights'
 
 describe('TIMELINE_LAYOUT5 tab strip on top of the tools card', () => {
-  it('tools card in row 1; preview/properties row 1 only; timeline row 2', () => {
+  it('tools card spans column 1; preview/properties span both rows; timeline row 2', () => {
     expect(EDITOR_GRID.toolsDock).toContain('lg:col-start-1')
     expect(EDITOR_GRID.toolsDockPanel).toContain('flex-1')
-    expect(EDITOR_GRID.previewDock).toContain('lg:row-start-1')
-    expect(EDITOR_GRID.previewDock).not.toContain('row-span-2')
-    expect(EDITOR_GRID.propertiesDock).toContain('lg:row-start-1')
-    expect(EDITOR_GRID.propertiesDock).not.toContain('row-span-2')
+    expect(EDITOR_GRID.previewDock).toContain('lg:row-span-2')
+    expect(EDITOR_GRID.propertiesDock).toContain('lg:row-span-2')
     expect(EDITOR_GRID.timelineDock).toContain('lg:row-start-2')
-    expect(EDITOR_GRID.rootDock).toContain('lg:grid-rows-[minmax(0,1fr)_var(--editor-timeline-row-h')
-  })
-  it('script view uses rootScript grid (workspace + properties; no dock tools column)', () => {
-    expect(EDITOR_GRID.rootScript).toContain('lg:grid-cols-[minmax(0,1fr)_auto]')
-    expect(EDITOR_GRID.rootDock).toContain('lg:grid-cols-[auto_minmax(0,1fr)_auto]')
-    expect('rootDockScript' in EDITOR_GRID).toBe(false)
-    expect(EDITOR_GRID.propertiesScript).toContain('lg:col-start-2')
+    expect(EDITOR_GRID.rootDock).toContain('lg:grid-rows-[minmax(0,1fr)_auto]')
   })
   it('timeline dock does not scroll itself (only the timeline body scrolls)', () => {
     expect(EDITOR_GRID.timelineDock).not.toContain('overflow-y-auto')
-    expect(EDITOR_GRID.timelineDock).toContain('max-h-[var(--editor-timeline-row-h')
+    expect(EDITOR_GRID.timelineDock).not.toContain('max-h-')
   })
 })
 

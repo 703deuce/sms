@@ -3038,7 +3038,7 @@ export function Timeline({
   return (
     <div
       ref={rootRef}
-      className="relative flex h-full max-h-full min-h-0 min-w-0 flex-col gap-1 overflow-hidden isolate focus-visible:outline-none"
+      className="relative flex min-w-0 flex-col gap-1 focus-visible:outline-none"
       tabIndex={-1}
       onKeyDown={onKeyDown}
       data-testid="timeline-root"
@@ -3325,12 +3325,9 @@ export function Timeline({
       ) : null}
       {tlCollapsed ? null : (
       <div
-        className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-lg border border-border bg-card/30"
-        style={
-          tlHeight
-            ? { maxHeight: tlHeight, minHeight: 0 }
-            : { minHeight: 0, flex: '1 1 0' }
-        }
+        className="relative flex min-w-0 rounded-lg border border-border bg-card/30"
+        // TC3 (d): a set height is the height — taller than all tracks leaves empty space below.
+        style={tlHeight ? { height: tlHeight, overflowY: 'auto' } : undefined}
         data-testid="timeline-body"
       >
         <div className="relative min-w-[160px] w-[160px] shrink-0 border-r border-border/60" aria-label="Tracks">

@@ -2,8 +2,6 @@
 import { useCallback, useRef, type ReactNode } from 'react'
 import { useSyncExternalStore } from 'react'
 import { cn } from '@/lib/utils'
-import { useEditorGridSizing } from '@/lib/clips/editor/use-editor-grid-sizing'
-import { useEditorTimelineRow } from '@/lib/clips/editor/use-editor-timeline-row'
 
 export type EditorBand = 'mobile' | 'compact' | 'desktop' | 'wide'
 export function bandForWidth(w: number): EditorBand {
@@ -32,9 +30,9 @@ export const EDITOR_GRID = {
     '2xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)]',
   /** Script view without docked tools (mobile / legacy). */
   rootScript:
-    'relative isolate grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
-    'grid-cols-1 grid-rows-[minmax(0,1fr)_var(--editor-timeline-row-h,168px)] ' +
-    'lg:grid-cols-[minmax(0,1fr)_auto] lg:grid-rows-[minmax(0,1fr)_var(--editor-timeline-row-h,168px)]',
+    'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
+    'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
+    'lg:grid-cols-[minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto]',
   /** Script view: keep the mobile rail, hide the desktop rail. */
   railScript: 'min-h-0 lg:hidden',
   rail: 'min-h-0 lg:row-span-2 lg:col-start-1 lg:row-start-1',
@@ -51,39 +49,33 @@ export const EDITOR_GRID = {
     'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-panel lg:col-start-1 lg:row-start-1',
   properties:
     'hidden min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card 2xl:flex 2xl:col-start-4 2xl:row-start-1',
-  /** Script view: Properties peer column (same contract as timeline dock). */
-  propertiesScript:
-    'relative isolate z-0 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-2 lg:row-start-1 lg:w-[var(--editor-props-w,clamp(200px,17vw,300px))] lg:min-h-0 lg:[display:var(--editor-props-visible,flex)]',
+  /** Script view: properties column absent (do not merge with properties + 2xl:hidden). */
   propertiesHidden: 'hidden',
   timeline:
     'col-span-full min-h-0 overflow-y-auto rounded-lg border border-border bg-card max-h-[clamp(160px,45dvh,560px)] lg:col-[2/-1] lg:row-start-2',
   /** Script view: compact timeline row, fixed 148px (140px strip + border/padding). */
   timelineScript:
-    'relative isolate z-10 col-span-full flex min-h-0 max-h-[var(--editor-timeline-row-h,168px)] shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-2',
+    'col-span-full h-[168px] min-h-[168px] max-h-[168px] shrink-0 overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-2',
   backdrop: 'fixed inset-0 z-30 bg-black/50 lg:max-xl:bg-black/30 xl:hidden',
   /** TIMELINE_LAYOUT1: Timeline view like Script view: preview | docked panel | tool rail (right); timeline full width below. */
   rootDock:
-    'relative isolate grid h-full min-h-0 max-h-full overflow-hidden bg-background gap-1 p-1 ' +
-    'grid-cols-1 grid-rows-[minmax(0,1fr)_var(--editor-timeline-row-h,240px)] ' +
-    'lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-rows-[minmax(0,1fr)_var(--editor-timeline-row-h,240px)]',
+    'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
+    'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
+    'lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-rows-[minmax(0,1fr)_auto]',
   /** TIMELINE_LAYOUT8: one tools card — tab strip + panel body share column 1 (no empty grid row when panel closed). */
   toolsDock:
-    'relative isolate z-0 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-1 lg:w-[var(--editor-tools-w,clamp(200px,20vw,340px))] lg:min-h-0 lg:max-w-[min(100%,520px)]',
-  toolsDockCollapsed:
-    'lg:w-[min(var(--editor-tools-w,240px),100%)] lg:max-w-[min(100%,520px)]',
+    'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-1 lg:max-h-full lg:w-[clamp(260px,28vw,440px)] lg:self-stretch',
   toolsDockRail: 'min-h-0 min-w-0 shrink-0 border-b border-border bg-card/80',
-  toolsDockPanel: 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden overflow-y-auto border-t border-border',
+  toolsDockPanel: 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border',
   /** @deprecated split rail/panel rows — use toolsDock */
   railDock: 'min-h-0 min-w-0 shrink-0 lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)]',
   panelDock: 'flex min-h-0 min-w-0 flex-1 flex-col lg:col-start-1 lg:row-start-2 lg:w-[clamp(260px,28vw,440px)] lg:max-h-none',
   previewDock:
-    'relative isolate z-0 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden lg:col-start-2 lg:row-start-1 lg:min-h-0',
+    'flex min-h-0 min-w-0 flex-col overflow-hidden lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:min-h-0',
   propertiesDock:
-    'relative isolate z-0 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-3 lg:row-start-1 lg:w-[var(--editor-props-w,clamp(200px,17vw,300px))] lg:min-h-0',
+    'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-3 lg:row-start-1 lg:row-span-2 lg:w-[clamp(260px,24vw,380px)]',
   timelineDock:
-    'relative isolate z-10 col-span-full flex min-h-0 max-h-[var(--editor-timeline-row-h,240px)] flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:col-span-full lg:row-start-2',
-  timelineRowResizeHandle:
-    'h-1.5 shrink-0 cursor-row-resize touch-none rounded-t-lg bg-transparent hover:bg-primary/25 active:bg-primary/40',
+    'col-span-full min-h-0 overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:col-span-full lg:row-start-2',
 } as const
 
 export function EditorLayout(props: {
@@ -103,19 +95,14 @@ export function EditorLayout(props: {
   /** Phase 3: Descript-style script view hides the docked side panel column. */
   hidePanelColumn?: boolean
   hidePropertiesColumn?: boolean
-  /** TIMELINE_LAYOUT1: tools rail + docked panel on the left (Timeline view, lg+). */
+  /** TIMELINE_LAYOUT1: tools rail + docked panel on the right (Timeline view, lg+). */
   dockTools?: boolean
 }) {
   const { band, panelOpen, panelWidthPx, onPanelWidthChange, hidePanelColumn, hidePropertiesColumn } = props
   const compact = props.compact === true
   const scriptView = hidePanelColumn === true
-  const timelineDock = props.dockTools === true
   const overlay = band === 'mobile' || band === 'compact'
   const dragRef = useRef<{ startX: number; startW: number } | null>(null)
-  const gridRef = useRef<HTMLDivElement>(null)
-  useEditorGridSizing(gridRef)
-  const timelineRowMode = timelineDock ? 'timeline-dock' : scriptView ? 'script' : 'default'
-  const { onRowResizePointerDown } = useEditorTimelineRow(gridRef, timelineRowMode)
 
   const onResizePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -145,8 +132,8 @@ export function EditorLayout(props: {
         } as React.CSSProperties)
       : undefined
 
-  const dock = timelineDock
-  const rootClass = timelineDock
+  const dock = props.dockTools === true
+  const rootClass = dock
     ? EDITOR_GRID.rootDock
     : scriptView
       ? EDITOR_GRID.rootScript
@@ -154,22 +141,15 @@ export function EditorLayout(props: {
         ? EDITOR_GRID.rootCompact
         : EDITOR_GRID.root
   const previewClass = dock ? EDITOR_GRID.previewDock : scriptView ? EDITOR_GRID.previewScript : EDITOR_GRID.preview
-  const timelineClass = timelineDock
-    ? EDITOR_GRID.timelineDock
-    : scriptView
-      ? EDITOR_GRID.timelineScript
-      : EDITOR_GRID.timeline
+  const timelineClass = dock ? EDITOR_GRID.timelineDock : scriptView ? EDITOR_GRID.timelineScript : EDITOR_GRID.timeline
   const propertiesClass = dock
     ? EDITOR_GRID.propertiesDock
-    : scriptView && !hidePropertiesColumn
-      ? EDITOR_GRID.propertiesScript
-      : compact || hidePropertiesColumn
-        ? EDITOR_GRID.propertiesHidden
-        : EDITOR_GRID.properties
+    : compact || hidePropertiesColumn
+      ? EDITOR_GRID.propertiesHidden
+      : EDITOR_GRID.properties
 
   return (
     <div
-      ref={gridRef}
       className={rootClass}
       style={panelStyle}
       data-testid="editor-grid"
@@ -177,12 +157,8 @@ export function EditorLayout(props: {
       data-compact={compact ? 'true' : undefined}
       data-script-view={scriptView ? 'true' : undefined}
     >
-      {timelineDock ? (
-        <div
-          data-region="tools"
-          data-tools-collapsed={panelOpen ? undefined : 'true'}
-          className={cn(EDITOR_GRID.toolsDock, !panelOpen && EDITOR_GRID.toolsDockCollapsed)}
-        >
+      {dock ? (
+        <div data-region="tools" className={EDITOR_GRID.toolsDock}>
           <div data-region="rail" className={EDITOR_GRID.toolsDockRail}>
             {props.rail}
           </div>
@@ -233,28 +209,13 @@ export function EditorLayout(props: {
       <section data-region="preview" className={previewClass}>
         {props.preview}
       </section>
-      {compact && !dock && !scriptView ? null : (
-        <aside
-          data-region="properties"
-          className={cn(
-            propertiesClass,
-            (dock || (scriptView && !hidePropertiesColumn)) && 'lg:[display:var(--editor-props-visible,flex)]',
-          )}
-        >
+      {compact && !dock ? null : (
+        <aside data-region="properties" className={propertiesClass}>
           {props.properties}
         </aside>
       )}
       <section data-region="timeline" className={timelineClass}>
-        {timelineDock ? (
-          <button
-            type="button"
-            aria-label="Resize timeline region"
-            data-testid="editor-timeline-row-resize"
-            className={EDITOR_GRID.timelineRowResizeHandle}
-            onPointerDown={onRowResizePointerDown}
-          />
-        ) : null}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{props.timeline}</div>
+        {props.timeline}
       </section>
     </div>
   )
