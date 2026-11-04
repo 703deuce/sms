@@ -137,6 +137,7 @@ export function TimelineLaneHeader({
 function TrackName({ name, tk, onRename }: { name: string; tk: string; onRename?: (name: string) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(name)
+  const cancelledRef = useRef(false)
   if (editing && onRename) {
     return (
       <input
@@ -149,12 +150,14 @@ function TrackName({ name, tk, onRename }: { name: string; tk: string; onRename?
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
           setEditing(false)
-          onRename(draft)
+          if (cancelledRef.current) { cancelledRef.current = false; return }
+          if (draft.trim() && draft.trim() !== name.trim()) onRename(draft.trim())
         }}
         onKeyDown={(e) => {
           e.stopPropagation()
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
           if (e.key === 'Escape') {
+            cancelledRef.current = true
             setDraft(name)
             setEditing(false)
           }
@@ -170,6 +173,7 @@ function TrackName({ name, tk, onRename }: { name: string; tk: string; onRename?
       onDoubleClick={
         onRename
           ? () => {
+              cancelledRef.current = false
               setDraft(name)
               setEditing(true)
             }
@@ -189,8 +193,12 @@ function TrackMenu({ tk, name, actions }: { tk: string; name: string; actions: T
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); setOpen(false) }
+    }
     window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('mousedown', onDown); window.removeEventListener('keydown', onKey) }
   }, [open])
   const item = 'block w-full rounded px-2 py-1 text-left hover:bg-muted disabled:pointer-events-none disabled:opacity-40'
   const run = (fn?: () => void) => () => {
@@ -213,7 +221,10 @@ function TrackMenu({ tk, name, actions }: { tk: string; name: string; actions: T
       {open ? (
         <div className="absolute left-0 top-5 z-50 min-w-[150px] rounded-md border border-border bg-popover p-1 text-[11px] font-normal text-foreground shadow-lg" role="menu">
           {actions.onRename ? (
-            <button type="button" role="menuitem" className={item} onClick={run(() => actions.onRename?.(window.prompt('Track name', name) ?? name))}>
+            <button type="button" role="menuitem" className={item} onClick={run(() => {
+              const next = window.prompt('Track name', name)
+              if (next != null && next.trim() && next.trim() !== name.trim()) actions.onRename?.(next.trim())
+            })}>
               Rename…
             </button>
           ) : null}
