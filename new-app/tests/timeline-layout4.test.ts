@@ -13,6 +13,10 @@ describe('TIMELINE_LAYOUT5 tab strip on top of the tools card', () => {
     expect(EDITOR_GRID.timelineDock).toContain('lg:row-start-2')
     expect(EDITOR_GRID.rootDock).toContain('lg:grid-rows-[minmax(0,1fr)_auto]')
   })
+  it('script dock uses two-column grid without tools column', () => {
+    expect(EDITOR_GRID.rootDockScript).toContain('lg:grid-cols-[minmax(0,1fr)_auto]')
+    expect(EDITOR_GRID.rootDockScript).not.toMatch(/lg:grid-cols-\[auto_minmax/)
+  })
   it('timeline dock does not scroll itself (only the timeline body scrolls)', () => {
     expect(EDITOR_GRID.timelineDock).not.toContain('overflow-y-auto')
     expect(EDITOR_GRID.timelineDock).not.toContain('max-h-')
