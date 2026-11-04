@@ -33,7 +33,7 @@ function aiVoiceoverPlaced(prev: ClipEditsV2, next: ClipEditsV2): boolean {
 export function describeEditsChange(prev: ClipEditsV2, next: ClipEditsV2): string {
   const short = (value: string): string => value.length > 38 ? value.slice(0, 35) + '…' : value
   const quoted = (value: string): string => `“${short(value.trim() || 'Untitled')}”`
-  const seconds = (ms: number): string => `${(ms / 1000).toFixed(2).replace(/\\.?0+$/, '')}s`
+  const seconds = (ms: number): string => `${(ms / 1000).toFixed(2).replace(/\.?0+$/, '')}s`
   const beforeCuts = prev.cutRanges ?? []
   const afterCuts = next.cutRanges ?? []
   if (jsonKey(prev, 'cutRanges') !== jsonKey(next, 'cutRanges')) {
