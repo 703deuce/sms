@@ -25,6 +25,19 @@ describe('A2 editor transcript endpoint contract', () => {
     expect(getClipEditorWords).toHaveBeenCalledWith('ws-test', 'clip1', { trimInMs: 43_000, trimOutMs: 45_000 })
   })
 
+  it('uses server clip bounds when optional query parameters are absent', async () => {
+    vi.mocked(getClipEditorWords).mockResolvedValueOnce({
+      words: [{ i: 0, w: 'hello', s: 1, e: 1.2 }],
+      bounds: { clipStartMs: 0, clipEndMs: 60_000 },
+    } as never)
+    const res = await GET(
+      new Request('http://localhost/api/clips/clips/clip1/editor-words'),
+      { params: Promise.resolve({ id: 'clip1' }) },
+    )
+    expect(res.status).toBe(200)
+    expect(getClipEditorWords).toHaveBeenCalledWith('ws-test', 'clip1', undefined)
+  })
+
   it('preserves not-found responses', async () => {
     vi.mocked(getClipEditorWords).mockResolvedValueOnce(null)
     const res = await GET(
