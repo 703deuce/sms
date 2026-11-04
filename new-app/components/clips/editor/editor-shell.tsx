@@ -2257,15 +2257,6 @@ export function EditorShell({
       </div>
       <div className={on('layers') ? 'p-3' : 'hidden'} aria-hidden={!on('layers')}>
         <EditorPanelErrorBoundary label="Layers">
-          <LayoutQuickPicker
-            value={edits.layout.mode}
-            edits={edits}
-            facecamLayout={facecamLayout}
-            reframeV2Enabled={reframeV2Enabled}
-            onPick={onLayoutPick}
-                  onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
-            className="mb-4"
-          />
           <LayersPanel
             clipId={clipId}
             edits={edits}
