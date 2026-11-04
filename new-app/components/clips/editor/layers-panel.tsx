@@ -110,8 +110,11 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
       const order = visualStack(next)
       const from = order.findIndex(t => t.id === movingTrack)
       const target = order.findIndex(t => t.id === destTrack)
+      // On an isolated track the newly inserted row already sits above the
+      // destination; keep it there when dragging a back layer to the front.
+      const steps = members.length > 1 && a < b ? 0 : Math.abs(target - from)
       const dir = from < target ? 'up' : 'down'
-      for (let i = 0; i < Math.abs(target - from); i++) {
+      for (let i = 0; i < steps; i++) {
         const moved = moveTrack(next, movingTrack, dir)
         if (!moved) break
         next = moved
