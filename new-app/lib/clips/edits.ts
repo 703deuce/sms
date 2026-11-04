@@ -91,6 +91,8 @@ export type ClipEditsV2 = {
     font?: string
     animation?: string
     size?: number
+    /** Explicit CP-preset size override; legacy size is intentionally ignored for CP styles. */
+    userSizePct?: number
     position?: string
     case?: string
     wordsPerLine?: number
@@ -409,6 +411,8 @@ function normalizeCaptions(
         : size > 0 && size < 3
           ? base.size
           : base.size,
+    userSizePct: Number.isFinite(Number(o.userSizePct)) && Number(o.userSizePct) >= 3 && Number(o.userSizePct) <= 10
+      ? Number(o.userSizePct) : undefined,
     position: typeof o.position === 'string' ? o.position : base.position,
     case: typeof o.case === 'string' ? o.case : base.case,
     presetId: typeof o.presetId === 'string' ? o.presetId : base.presetId,
