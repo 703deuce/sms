@@ -13,6 +13,7 @@ import type { EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 
 export type EditorRailGroupId =
+  | 'script'
   | 'captions'
   | 'text'
   | 'media'
@@ -32,6 +33,15 @@ const LS_PREFIX = 'transovo.editor.railTab.'
 
 export function editorRailGroups(aiExtras: boolean = clipEditorAiExtrasEnabled()): EditorRailGroupSpec[] {
   return [
+    {
+      id: 'script',
+      label: 'Script',
+      icon: FileText,
+      tabs: [
+        { id: 'transcript', tabLabel: 'Script' },
+        { id: 'cleanup', tabLabel: 'Cleanup' },
+      ],
+    },
     { id: 'captions', label: 'Captions', icon: Captions, tabs: [{ id: 'captions', tabLabel: 'Captions' }] },
     { id: 'text', label: 'Text', icon: Type, tabs: [{ id: 'text', tabLabel: 'Text' }] },
     {
@@ -58,7 +68,6 @@ export function editorRailGroups(aiExtras: boolean = clipEditorAiExtrasEnabled()
       label: 'Effects',
       icon: Wand2,
       tabs: [
-        { id: 'cleanup', tabLabel: 'Cleanup' },
         { id: 'color', tabLabel: 'Color' },
         { id: 'layout', tabLabel: 'Polish' },
       ],
