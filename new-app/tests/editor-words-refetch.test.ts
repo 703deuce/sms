@@ -31,9 +31,13 @@ describe('trimNeedsEditorWordsRefetch', () => {
     expect(trimNeedsEditorWordsRefetch(words, { in: 15_000, out: 40_500 }, bounds)).toBe(true)
   })
 
-  it('is false when trim is outside the legal extend window', () => {
+  it('respects actual media minimum when trim falls outside the permitted extension', () => {
     const words = [word('mid', 15, 16, 0)]
-    expect(trimNeedsEditorWordsRefetch(words, { in: 0, out: 16_000 }, bounds)).toBe(false)
+    const withMediaLimits = { ...bounds, trimMinMs: 2000, trimMaxMs: 45_000 }
+    expect(trimNeedsEditorWordsRefetch(words, { in: 0, out: 16_000 }, withMediaLimits)).toBe(false)
+    // The editor now allows much longer pre-roll than the old 8-second limit;
+    // source time 0 is valid if the project media itself starts at 0.
+    expect(trimNeedsEditorWordsRefetch(words, { in: 0, out: 16_000 }, bounds)).toBe(true)
   })
 
   it('uses media trim bounds when set', () => {
