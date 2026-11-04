@@ -3041,7 +3041,7 @@ export function EditorShell({
 
   // MENUBAR1: top menu bar. Every item calls an EXISTING handler / panel; conditional items are greyed with a hint.
   const runTimelineMenu = (cmd: TimelineMenuCommand) => {
-    if (!unifiedWorkspaceActive && layoutView !== 'timeline') setLayoutViewPersist('timeline')
+    if (layoutView !== 'timeline') setLayoutViewPersist('timeline')
     setTimelineMenuCmd((prev) => ({ cmd, seq: (prev?.seq ?? 0) + 1 }))
   }
   const runPalette = (id: string) => runTimelineMenu({ kind: 'palette', id })
@@ -3165,8 +3165,8 @@ export function EditorShell({
       groups: [
         {
           items: [
-            { id: 'view-script', label: 'Script view', onSelect: () => setLayoutViewPersist('script'), disabledHint: layoutView === 'script' ? 'Current view' : null },
-            { id: 'view-timeline', label: 'Timeline view', onSelect: () => setLayoutViewPersist('timeline'), disabledHint: layoutView === 'timeline' ? 'Current view' : null },
+            { id: 'view-script', label: 'Compact timeline', onSelect: () => setLayoutViewPersist('script'), disabledHint: layoutView === 'script' ? 'Current view' : null },
+            { id: 'view-timeline', label: 'Full multitrack timeline', onSelect: () => setLayoutViewPersist('timeline'), disabledHint: layoutView === 'timeline' ? 'Current view' : null },
           ],
         },
         {
