@@ -3366,79 +3366,29 @@ export function EditorShell({
           menuBarSlot={
             <EditorMenuBar menus={editorMenus} onOpenSearch={() => runTimelineMenu({ kind: 'openPalette' })} />
           }
-          layoutSlot={
-            <>
-              <OpenInFullVideoButton clipId={clipId} />
-              <EditorLayoutMenu>
-                <LayoutQuickPicker
-                  value={edits.layout.mode}
-                  edits={edits}
-                  facecamLayout={facecamLayout}
-                  reframeV2Enabled={reframeV2Enabled}
-                  onPick={onLayoutPick}
-                />
-              </EditorLayoutMenu>
-            </>
-          }
+          layoutSlot={null}
           versionsSlot={
-            <>
-            {fullVideo ? (
+            fullVideo ? (
               <FindClipsInVideoButton
                 projectId={projectId}
                 durationMs={bounds.clipEndMs - bounds.clipStartMs}
                 onStarted={fvHighlights.startedFind}
               />
-            ) : null}
-            <Button
-              type="button"
-              size="sm"
-              variant={panel === 'repurpose' ? 'default' : 'outline'}
-              data-testid="editor-repurpose-open"
-              onClick={() => selectPanel('repurpose')}
-            >
-              <Megaphone className="size-4 2xl:mr-1.5" aria-hidden />
-              <span className="sr-only 2xl:not-sr-only">Repurpose</span>
-            </Button>
-            {fullVideo ? (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={fvHighlights.highlightsOn ? 'default' : 'outline'}
-                  data-testid="editor-highlights-toggle"
-                  onClick={() => {
-                    const on = !fvHighlights.highlightsOn || fvHighlights.listDismissed
-                    fvHighlights.persistToggle(on)
-                    if (on) fvHighlights.reopenList()
-                    else fvHighlights.dismissList()
-                  }}
-                >
-                  Highlights
-                </Button>
-                {fvHighlights.highlightsOn && fvHighlights.hasPicks ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    data-testid="highlight-make-all"
-                    onClick={() => void fvHighlights.onMakeAll()}
-                  >
-                    Make all
-                  </Button>
-                ) : null}
-              </>
-            ) : null}
-            <EditorVersionsMenu
-              enabled={versionsEnabled}
-              versions={editVersions}
-              onSaveVersion={(name) => void saveEditVersion(name)}
-              onRestoreVersion={(id) => void restoreEditVersion(id)}
-              onDeleteVersion={(id) => void deleteEditVersion(id)}
-              onRestoreOriginal={() => void restoreOriginalEdits()}
-            />
-            </>
+            ) : null
           }
         />
+      {/* File > Versions / History and the project menu keep the full version manager accessible without a top-bar button. */}
+      <div className="absolute left-24 top-9 z-40 h-px w-px overflow-visible" data-testid="editor-versions-anchor">
+        <EditorVersionsMenu
+          concealed
+          enabled={versionsEnabled}
+          versions={editVersions}
+          onSaveVersion={(name) => void saveEditVersion(name)}
+          onRestoreVersion={(id) => void restoreEditVersion(id)}
+          onDeleteVersion={(id) => void deleteEditVersion(id)}
+          onRestoreOriginal={() => void restoreOriginalEdits()}
+        />
+      </div>
       <EditorPanelErrorBoundary label="AI Producer">
         <ProducerPopover
           open={producerOpen}
