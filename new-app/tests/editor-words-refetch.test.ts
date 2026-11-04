@@ -15,14 +15,20 @@ describe('trimNeedsEditorWordsRefetch', () => {
     expect(trimNeedsEditorWordsRefetch(words, { in: 12_000, out: 36_000 }, bounds)).toBe(false)
   })
 
-  it('is true when trim extends before word coverage', () => {
+  it('N5 does not refetch normal unextended trim just because a clip begins in silence', () => {
     const words = [word('mid', 15, 16, 0)]
-    expect(trimNeedsEditorWordsRefetch(words, { in: 10_500, out: 16_000 }, bounds)).toBe(true)
+    expect(trimNeedsEditorWordsRefetch(words, { in: 10_500, out: 16_000 }, bounds)).toBe(false)
+    expect(trimNeedsEditorWordsRefetch(words, { in: 10_000, out: 40_000 }, bounds)).toBe(false)
+  })
+
+  it('does refetch a genuinely extended trim before the original clip start', () => {
+    const words = [word('mid', 15, 16, 0)]
+    expect(trimNeedsEditorWordsRefetch(words, { in: 9_500, out: 16_000 }, bounds)).toBe(true)
   })
 
   it('is true when trim extends after word coverage', () => {
     const words = [word('mid', 15, 16, 0)]
-    expect(trimNeedsEditorWordsRefetch(words, { in: 15_000, out: 39_500 }, bounds)).toBe(true)
+    expect(trimNeedsEditorWordsRefetch(words, { in: 15_000, out: 40_500 }, bounds)).toBe(true)
   })
 
   it('is false when trim is outside the legal extend window', () => {
@@ -38,6 +44,7 @@ describe('trimNeedsEditorWordsRefetch', () => {
       trimMaxMs: 38_000,
     }
     expect(trimNeedsEditorWordsRefetch(words, { in: 11_500, out: 16_000 }, mediaBounds)).toBe(false)
-    expect(trimNeedsEditorWordsRefetch(words, { in: 12_500, out: 16_000 }, mediaBounds)).toBe(true)
+    expect(trimNeedsEditorWordsRefetch(words, { in: 12_500, out: 16_000 }, mediaBounds)).toBe(false)
+    expect(trimNeedsEditorWordsRefetch(words, { in: 10_000, out: 16_000 }, mediaBounds)).toBe(false)
   })
 })
