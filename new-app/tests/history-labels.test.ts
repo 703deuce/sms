@@ -12,7 +12,7 @@ function base(): ClipEditsV2 {
 describe('describeEditsChange', () => {
   it('labels cutRanges', () => {
     const a = base()
-    const b = { ...a, cutRanges: [{ startMs: 100, endMs: 200 }] }
+    const b = { ...a, cutRanges: [[100, 200] as [number, number]] }
     expect(describeEditsChange(a, b)).toBe('Deleted segment 0.1s–0.2s')
   })
 
