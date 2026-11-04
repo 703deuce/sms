@@ -25,6 +25,8 @@ import { ScriptViewMainSplit } from '@/components/clips/editor/script-view-main-
 import { ScriptViewCompactTimeline } from '@/components/clips/editor/script-view-compact-timeline'
 import { useScriptViewSplit } from '@/lib/clips/editor/use-script-view-split'
 import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
+import { setCutAudioSamples } from '@/lib/clips/editor/audio-cut-edges'
+import { rmsSamplesFromPeaks } from '@/lib/clips/gap-audio-trim'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { EditorLayout, useEditorBand, aspectCssToNumber } from '@/components/clips/editor/editor-layout'
 import { CanvasLayoutMenu } from '@/components/clips/editor/canvas-layout-menu'
@@ -1532,6 +1534,16 @@ export function EditorShell({
     peaksUrl: editorAssets?.peaksUrl ?? null,
     skipDecode: Boolean(editorAssets?.fullVideo),
   })
+  // SCRIPT_DOC2: share the clip's audio levels (shifted to source ms) so every cut edge lands on quiet audio.
+  useEffect(() => {
+    const samples = scriptVoicePeaks.peaks.length
+      ? rmsSamplesFromPeaks(scriptVoicePeaks.peaks, scriptVoicePeaks.peaksPerSec).map((s) => ({
+          tMs: s.tMs + mediaOffsetMs,
+          rms: s.rms,
+        }))
+      : []
+    setCutAudioSamples(clipId, samples)
+  }, [clipId, mediaOffsetMs, scriptVoicePeaks.peaks, scriptVoicePeaks.peaksPerSec])
 
   const seekSource = useCallback(
     (sourceMs: number) => {
@@ -2129,6 +2141,8 @@ export function EditorShell({
             onAuditionChange={setAuditionEdits}
             onSeek={seekSource}
             onReloadWords={reloadWords}
+            onGapSettingsChange={(patch) => setGapToolSettings((s) => ({ ...s, ...patch }))}
+            mediaOffsetMs={mediaOffsetMs}
           />
         </EditorPanelErrorBoundary>
       </div>
@@ -2988,8 +3002,13 @@ export function EditorShell({
     document.querySelector<HTMLElement>('[data-testid="versions-menu"]')?.click()
   }
   const openProjectSettings = () => {
-    if (layoutView === 'script') toggleScriptTool('inspector')
-    else selectPanel('inspector')
+    // SCRIPT_DOC2: project settings only render when nothing is selected, so clear the selection;
+    // never toggle the panel closed; the wide Timeline view already shows the Properties column.
+    onCanvasSelect(null)
+    if (layoutView === 'script') {
+      if (scriptToolPanel !== 'inspector') toggleScriptTool('inspector')
+    } else if (band !== 'wide') selectPanel('inspector')
+    window.setTimeout(() => scrollToTestId('properties-project-settings'), 80)
   }
   const needSel = canvasSel ? null : 'Select a clip first'
   const needBroll = canvasSel?.target.startsWith('broll:') ? null : 'Select a B-roll clip first'

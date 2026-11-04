@@ -27,8 +27,8 @@ export type EditorMenu = { id: string; label: string; groups: EditorMenuGroup[] 
 
 export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; onOpenSearch: () => void }) {
   return (
-    <div className="hidden min-w-0 items-center gap-1 lg:flex" data-testid="editor-menu-bar">
-      <nav className="flex items-center" aria-label="Editor menu">
+    <div className="hidden min-w-0 flex-1 items-center gap-1 lg:flex" data-testid="editor-menu-bar">
+      <nav className="flex shrink-0 items-center" aria-label="Editor menu">
         {menus.map((menu) => (
           <DropdownMenu key={menu.id}>
             <DropdownMenuTrigger
@@ -79,14 +79,15 @@ export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; on
         type="button"
         variant="outline"
         size="sm"
-        className="h-8 gap-2 px-2.5 text-[13px] font-normal text-muted-foreground xl:w-48 xl:justify-start"
+        className="h-8 min-w-8 max-w-56 flex-1 basis-56 justify-start gap-2 overflow-hidden px-2.5 text-[13px] font-normal text-muted-foreground"
         onClick={onOpenSearch}
         aria-label="Search tools"
+        title="Search tools (⌘K)"
         data-testid="editor-menu-search"
       >
         <Search className="size-3.5 shrink-0" aria-hidden />
-        <span className="hidden xl:inline">Search tools…</span>
-        <Kbd className="ml-auto hidden xl:inline-flex">⌘K</Kbd>
+        <span className="min-w-0 flex-1 truncate text-left">Search tools…</span>
+        <Kbd className="ml-2 hidden shrink-0 2xl:inline-flex">⌘K</Kbd>
       </Button>
     </div>
   )

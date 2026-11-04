@@ -19,14 +19,11 @@ import { excerptForCutRange } from '@/lib/clips/editor/cleanup-text'
 import { normalizeToken } from '@/lib/clips/script-editor/enrich-transcript'
 import type { RetakeGroup } from '@/lib/clips/editor/retakes'
 import { retakeCutRange } from '@/lib/clips/editor/retakes'
-import {
-  framesFromSamples,
-  refineCutBoundary,
-  type RmsFrame,
-} from '@/lib/clips/cuts-quality/cut-boundary-refine'
+
 import { isDefaultRemovableFiller } from '@/lib/clips/cuts-quality/filler-classifier'
 import type { CutQualityMeta } from '@/lib/clips/cuts-quality/types'
 import { pauseMiddleRemovalRange, gapKeptForMotion } from '@/lib/clips/cuts-quality/pause-shorten'
+import { refineWordCutWithAudio } from '@/lib/clips/editor/audio-cut-edges'
 
 export type CleanupCutKind = 'filler' | 'repeat' | 'gap' | 'manual' | 'unknown' | 'retake' | 'clarity'
 
@@ -72,23 +69,24 @@ function refineFillerRange(
   rmsSamples?: GapRmsSample[] | null,
 ): { range: CutRange; quality?: CutQualityMeta } {
   if (!rmsSamples?.length) return { range: raw }
-  const prev = orderedWords[wordIndex - 1]
-  const w = orderedWords[wordIndex]!
-  const next = orderedWords[wordIndex + 1]
-  const frames: RmsFrame[] = framesFromSamples(
-    rmsSamples.map((s) => ({ tMs: s.tMs, rms: s.rms })),
+  void wordIndex
+  // SCRIPT_DOC2: the whole audible filler goes (a trailing "m" past the ASR end too); the edge
+  // never enters a kept word. No quiet point = needs_review, so "Remove all" skips it.
+  const audio = refineWordCutWithAudio(
+    raw,
+    orderedWords.map((x) => ({ s: x.t0Ms / 1000, e: x.t1Ms / 1000 })),
+    rmsSamples,
   )
-  const { range, meta } = refineCutBoundary({
-    frames,
-    reason: 'filler',
-    neighbors: {
-      prevEndMs: prev ? prev.t1Ms : null,
-      wordStartMs: w.t0Ms,
-      wordEndMs: w.t1Ms,
-      nextStartMs: next ? next.t0Ms : null,
+  if (!audio) return { range: raw }
+  return {
+    range: audio.range,
+    quality: {
+      srcStartMs: audio.range[0],
+      srcEndMs: audio.range[1],
+      confidence: audio.confidence,
+      reason: `filler; ${audio.note}`,
     },
-  })
-  return { range, quality: meta }
+  }
 }
 
 export function proposalId(range: CutRange): string {
@@ -386,7 +384,8 @@ export function gapProposals(
 ): CleanupProposal[] {
   const preset = opts.strength ? gapPresetForStrength(opts.strength) : null
   const minGapMs = preset?.minGapMs ?? opts.minGapMs
-  const targetGapMs = preset?.targetGapMs ?? opts.targetGapMs
+  // SCRIPT_DOC2: the user's "keep pauses at least" length is a floor; a strength preset never goes below it.
+  const targetGapMs = Math.max(opts.targetGapMs, preset?.targetGapMs ?? 0)
   const hits = listClipGapHits(orderedWords, cutRanges, { ...opts, minGapMs, targetGapMs, rmsSamples: opts.rmsSamples })
   return hits
     .map((hit) => {
@@ -402,7 +401,11 @@ export function gapProposals(
           opts.rmsSamples ?? null,
           opts.wordSpans,
         ) ??
-        pauseMiddleRemovalRange(hit.prevWord.t1Ms, hit.word.t0Ms, hit.gapMs, targetGapMs)
+        // SCRIPT_DOC2: a transcript gap is only a candidate. When audio levels were passed, only the
+        // audio-checked range above may cut; never fall back to a blind middle cut.
+        (opts.rmsSamples === undefined
+          ? pauseMiddleRemovalRange(hit.prevWord.t1Ms, hit.word.t0Ms, hit.gapMs, targetGapMs)
+          : null)
       if (!range) return null
     const normalized =
       opts.wordSpans?.length != null && opts.wordSpans.length > 0
@@ -458,9 +461,18 @@ export function mergeCleanupCutRanges(
   baseCuts: CutRange[],
   ranges: CutRange[],
   wordSpans: { s: number; e: number; w?: string }[],
+  opts?: { rmsSamples?: GapRmsSample[] | null },
 ): CutRange[] {
   let cuts = [...baseCuts]
   for (const range of ranges) {
+    // SCRIPT_DOC2: whole-word cuts (transcript delete, filler, retake) take their edges from the
+    // audio instead of fixed pads. The result never enters a kept word, so the worker's
+    // sanitize_cut_ranges keeps it as-is and the export cuts where the preview cuts.
+    const audio = wordSpans.length > 0 ? refineWordCutWithAudio(range, wordSpans, opts?.rmsSamples) : null
+    if (audio) {
+      cuts = mergeCutRanges([...cuts, audio.range])
+      continue
+    }
     const snapped =
       wordSpans.length > 0
         ? normalizeCleanupCutRange(range, wordSpans) ?? snapCutRangeToWordGaps(range, wordSpans) ?? range
@@ -480,17 +492,19 @@ export function applyProposalsToEdits(
   edits: ClipEditsV2,
   proposals: CleanupProposal[],
   wordSpans: { s: number; e: number; w?: string }[],
+  rmsSamples?: GapRmsSample[] | null,
 ): ClipEditsV2 {
   const ranges = proposals.map((p) => p.range)
-  return { ...edits, cutRanges: mergeCleanupCutRanges(edits.cutRanges, ranges, wordSpans) }
+  return { ...edits, cutRanges: mergeCleanupCutRanges(edits.cutRanges, ranges, wordSpans, { rmsSamples }) }
 }
 
 export function auditionEditsForProposals(
   edits: ClipEditsV2,
   proposals: CleanupProposal[],
   wordSpans: { s: number; e: number; w?: string }[],
+  rmsSamples?: GapRmsSample[] | null,
 ): ClipEditsV2 {
-  return applyProposalsToEdits(edits, proposals, wordSpans)
+  return applyProposalsToEdits(edits, proposals, wordSpans, rmsSamples)
 }
 
 export function restoreCleanupProposal(edits: ClipEditsV2, range: CutRange): ClipEditsV2 {
