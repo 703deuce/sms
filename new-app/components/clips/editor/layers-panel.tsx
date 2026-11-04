@@ -45,12 +45,12 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
   const text = orderedStack(edits, 'text', edits.textItems ?? [])
   // Visual stack from top to bottom (the video is the backmost visual layer).
   const stack: ActualVisualLayer[] = [
-    ...layers.filter((l) => l.type === 'sticker' && l.enabled).map((l) => ({ key: `sticker:${l.id}`, label: 'Sticker · ' + (('text' in l && l.text) || l.id), kind: 'sticker' as const, id: l.id, startMs: 0 })),
+    ...layers.filter((l) => l.type === 'sticker').map((l) => ({ key: `sticker:${l.id}`, label: 'Sticker · ' + (('text' in l && l.text) || l.id), kind: 'sticker' as const, id: l.id, startMs: 0 })),
     ...text.slice().reverse().map((t) => ({ key: `text:${t.id}`, label: t.text?.trim().slice(0, 36) || 'Text', kind: 'text' as const, id: t.id, startMs: t.startMs })),
     { key: 'captions', label: 'Captions', kind: 'captions' as const, id: 'captions', startMs: 0 },
-    ...layers.filter((l) => l.type === 'badge' && l.enabled).map((l) => ({ key: `badge:${l.id}`, label: 'Platform badge', kind: 'badge' as const, id: l.id, startMs: 0 })),
-    ...layers.filter((l) => l.type === 'headline' && l.enabled).map((l) => ({ key: `headline:${l.id}`, label: 'Headline', kind: 'headline' as const, id: l.id, startMs: 0 })),
-    ...(edits.hookOverlay?.enabled ? [{ key: 'hook', label: 'Hook overlay', kind: 'hook' as const, id: 'hook', startMs: 0 }] : []),
+    ...layers.filter((l) => l.type === 'badge').map((l) => ({ key: `badge:${l.id}`, label: 'Platform badge', kind: 'badge' as const, id: l.id, startMs: 0 })),
+    ...layers.filter((l) => l.type === 'headline').map((l) => ({ key: `headline:${l.id}`, label: 'Headline', kind: 'headline' as const, id: l.id, startMs: 0 })),
+    ...(edits.hookOverlay ? [{ key: 'hook', label: 'Hook overlay', kind: 'hook' as const, id: 'hook', startMs: 0 }] : []),
     ...broll.slice().reverse().map((b) => ({ key: `broll:${b.id}`, label: `B-roll · ${b.id.slice(0, 18)}`, kind: 'broll' as const, id: b.id, startMs: b.startMs })),
     { key: 'video', label: 'Main video', kind: 'video', id: 'video', startMs: 0 },
   ]
@@ -58,6 +58,7 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
   const disabled = (row: ActualVisualLayer) =>
     row.kind === 'captions' ? edits.captions?.enabled === false
       : row.kind === 'video' ? laneState(edits, 'video').hidden === true
+      : row.kind === 'hook' ? edits.hookOverlay?.enabled === false
       : row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline' ? !layers.find((l) => l.id === row.id)?.enabled
       : off.has(row.key)
   const toggleVisibility = (row: ActualVisualLayer) => {
