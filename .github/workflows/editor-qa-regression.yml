@@ -45,6 +45,9 @@ jobs:
             tests/clip-filler-review-lifecycle.test.tsx \
             tests/unified-editor-workspace.test.tsx \
             tests/history-labels.test.ts \
+            tests/bg-removal-section-preview.test.tsx \
+            tests/editor-words-refetch.test.ts \
+            tests/use-editor-words-source-time.test.tsx \
             tests/text-template-panel-add.test.tsx \
             tests/layers-actual-stack.test.tsx \
             tests/preview-stage-e3.test.tsx \
