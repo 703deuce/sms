@@ -80,6 +80,59 @@ export function ScriptViewToolTabs({
   )
 }
 
+/** Persistent far-right navigation: changing tools swaps Inspector content without moving the transcript or preview. */
+export function EditorInspectorToolRail({
+  active,
+  onSelect,
+  onShowScript,
+}: {
+  active: ScriptViewToolPanelId | null
+  onSelect: (id: ScriptViewToolPanelId) => void
+  onShowScript: () => void
+}) {
+  return (
+    <nav
+      aria-label="Editor tools"
+      data-testid="unified-inspector-tool-rail"
+      className="flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-y-auto border-l border-border/70 bg-muted/20 px-1 py-2 [scrollbar-width:thin]"
+    >
+      <button
+        type="button"
+        aria-label="Script"
+        title="Script"
+        aria-pressed={active == null}
+        data-testid="script-tool-transcript"
+        onClick={onShowScript}
+        className={cn(
+          'flex min-h-11 w-full shrink-0 flex-col items-center justify-center gap-1 rounded-md px-0.5 text-[9px] font-medium leading-tight hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          active == null ? 'bg-accent text-foreground' : 'text-muted-foreground',
+        )}
+      >
+        <FileText className="size-4 shrink-0" aria-hidden />
+        Script
+      </button>
+      {SCRIPT_VIEW_TOOL_PANELS.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          aria-label={label}
+          title={label}
+          aria-pressed={active === id}
+          data-testid={`script-tool-${id}`}
+          onClick={() => onSelect(id)}
+          className={cn(
+            'flex min-h-11 w-full shrink-0 flex-col items-center justify-center gap-1 rounded-md px-0.5 text-[9px] font-medium leading-tight hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            active === id ? 'bg-accent text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          <Icon className="size-4 shrink-0" aria-hidden />
+          <span className="max-w-full truncate">{label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
+
 export const SCRIPT_VIEW_DRAWER_WIDTH_PX = 340
 export const SCRIPT_VIEW_TOOL_RAIL_WIDTH_PX = 56
 
