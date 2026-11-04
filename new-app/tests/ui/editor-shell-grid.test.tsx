@@ -31,7 +31,7 @@ describe('editor shell grid', () => {
     expect(EDITOR_GRID.rootScript).not.toContain('var(--editor-panel-w')
     expect(EDITOR_GRID.previewScript).toContain('lg:col-start-1')
     expect(EDITOR_GRID.previewScript).not.toContain('lg:col-start-2')
-    expect(EDITOR_GRID.timelineScript).toContain('h-[168px]')
+    expect(EDITOR_GRID.timelineScript).toContain('var(--editor-timeline-row-h')
     expect(EDITOR_GRID.timelineScript).not.toContain('max-h-[clamp')
     expect(EDITOR_GRID.properties).toContain('hidden')
     expect(EDITOR_GRID.properties).toContain('2xl:flex')
@@ -109,7 +109,7 @@ describe('editor shell grid', () => {
     expect(previewClass).toContain('lg:col-start-1')
     expect(previewClass).not.toContain('lg:col-start-2')
     const timelineClass = container.querySelector('[data-region="timeline"]')?.className ?? ''
-    expect(timelineClass).toContain('h-[168px]')
+    expect(timelineClass).toContain('var(--editor-timeline-row-h')
     expect(timelineClass).not.toContain('max-h-[clamp')
   })
   it('clampTimelineHeight', () => {
@@ -126,6 +126,8 @@ describe('editor shell grid', () => {
     const shell = readFileSync(join(ROOT, 'components/clips/editor/editor-shell.tsx'), 'utf8')
     expect(shell).not.toContain('h-[calc(100dvh-3.5rem)]')
     expect(shell).not.toContain('lg:grid-cols-[minmax(0,1fr)_56px')
+    expect(shell).not.toContain('dockScriptTools')
+    expect(shell).toContain('script-workspace-tabs')
     expect(shell).toContain('<EditorLayout')
     expect(shell).toContain('onOpenAiVoiceover')
     expect(shell).toContain('[container-type:size]')

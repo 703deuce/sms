@@ -35,7 +35,7 @@ import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, Maximize2, Megaphone, PanelRightOpen, SlidersHorizontal } from 'lucide-react'
+import { FileText, Loader2, Maximize2, Megaphone, PanelLeftClose, PanelLeftOpen, PanelRightOpen, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClipBounds } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -367,8 +367,7 @@ export function EditorShell({
   // TIMELINE_LAYOUT1: Timeline view (lg+) uses the Script-view layout: rail + docked panel on the right.
   const [dockPanelOpen, setDockPanelOpen] = useState(false)
   const dockTimelineTools = layoutView === 'timeline' && band !== 'mobile'
-  const dockScriptTools = layoutView === 'script' && band !== 'mobile'
-  const dockTools = dockTimelineTools || dockScriptTools
+  const dockTools = dockTimelineTools
   const setDockPanelOpenPersist = useCallback(
     (open: boolean) => {
       setDockPanelOpen(open)
@@ -392,8 +391,7 @@ export function EditorShell({
       setDockPanelOpen(open)
       if (open) setPanel((p) => (p === 'inspector' || p === 'transcript' ? 'captions' : p))
     } else if (layoutView === 'script') {
-      setDockPanelOpen(true)
-      setPanel((p) => (p === 'transcript' ? 'captions' : p))
+      setPanel((p) => (p === 'transcript' ? p : p === 'inspector' ? 'transcript' : p))
     }
   }, [layoutView, band])
   const setLayoutViewPersist = useCallback(
@@ -401,8 +399,7 @@ export function EditorShell({
       setLayoutView(view)
       writeClipEditorLayoutView(view)
       if (view === 'script' && band !== 'mobile') {
-        setDockPanelOpen(true)
-        setPanel((p) => (p === 'transcript' ? 'captions' : p))
+        setPanel((p) => (p === 'transcript' ? p : 'transcript'))
       } else if (view === 'timeline' && typeof window !== 'undefined' && band !== 'mobile') {
         const open = readTimelineDockPanelOpen(window.localStorage)
         setDockPanelOpen(open)
@@ -420,7 +417,7 @@ export function EditorShell({
     setPanel(id)
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
-    if ((layoutView === 'timeline' || layoutView === 'script') && band !== 'mobile') setDockPanelOpenPersist(true)
+    if ((layoutView === 'timeline') && band !== 'mobile') setDockPanelOpenPersist(true)
     else if (band === 'mobile' || band === 'compact') {
       setMobilePanelOpen(true)
     }
@@ -3500,29 +3497,35 @@ export function EditorShell({
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {(() => {
+          const scrollTimelineProperties = () => {
+            document.querySelector<HTMLElement>('[data-region="properties"]')?.scrollIntoView({ block: 'nearest' })
+          }
+          const scriptWorkspaceTabStrip = (
+            <div className="shrink-0 rounded-t-lg border-b border-border bg-card/80 p-1" data-testid="script-workspace-tabs">
+              <EditorRail
+                variant="tabs"
+                active={panel}
+                onChange={selectPanel}
+                onSelectGroup={selectRailGroup}
+                leadingTabs={[{ panelId: 'transcript', label: 'Script', icon: FileText }]}
+                includePropertiesTab
+              />
+            </div>
+          )
           const dockToolTabStrip = (
-            <div
-              className={cn(
-                'flex shrink-0 items-stretch bg-card/80 p-1',
-                dockScriptTools && 'rounded-lg border border-border',
-              )}
-            >
-              <button
+            <div className="flex shrink-0 items-stretch bg-card/80 p-1">
+              <Button
                 type="button"
-                className={cn(
-                  'flex h-11 w-[4.875rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[0.6875rem] font-medium leading-none text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-[1.125rem]',
-                  panel === 'inspector' && 'bg-accent text-foreground',
-                )}
-                onClick={() => {
-                  document.querySelector<HTMLElement>('[data-region="properties"]')?.scrollIntoView({ block: 'nearest' })
-                }}
-                aria-label="Properties"
-                data-testid="timeline-dock-properties"
+                size="sm"
+                variant="ghost"
+                className="hidden h-11 w-10 shrink-0 lg:inline-flex"
+                aria-label={dockPanelOpen ? 'Collapse tools panel' : 'Expand tools panel'}
+                data-testid="timeline-dock-collapse"
+                onClick={() => setDockPanelOpenPersist(!dockPanelOpen)}
               >
-                <SlidersHorizontal className="size-5" aria-hidden />
-                Properties
-              </button>
-              <div className="flex min-w-0 flex-1 items-stretch overflow-hidden">
+                {dockPanelOpen ? <PanelLeftClose className="size-4" aria-hidden /> : <PanelLeftOpen className="size-4" aria-hidden />}
+              </Button>
+              <div className="flex min-w-0 flex-1 items-stretch overflow-visible">
                 <EditorRail
                   variant="tabs"
                   active={panel}
@@ -3532,9 +3535,16 @@ export function EditorShell({
                       : selectPanel(id)
                   }
                   onSelectGroup={dockSelectGroup}
+                  includePropertiesTab
+                  onPropertiesTab={scrollTimelineProperties}
                 />
               </div>
             </div>
+          )
+          const toolPanelScrollBody = (
+            <ScrollArea className="min-h-0 flex-1">
+              <div className={cn(panel === 'transcript' || panel === 'repurpose' ? 'p-0' : 'p-4')}>{panelBody}</div>
+            </ScrollArea>
           )
           const toolPanelBody = (
             <>
@@ -3579,23 +3589,38 @@ export function EditorShell({
                   </div>
                 ) : null}
               </div>
-              <ScrollArea className="min-h-0 flex-1">
-                <div className={cn(panel === 'transcript' || panel === 'repurpose' ? 'p-0' : 'p-4')}>{panelBody}</div>
-              </ScrollArea>
+              {toolPanelScrollBody}
             </>
+          )
+          const scriptWorkspaceColumn = (
+            <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
+              <div className="hidden shrink-0 lg:block">{scriptWorkspaceTabStrip}</div>
+              {panel === 'transcript' ? (
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2">
+                  {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+                </div>
+              ) : panel === 'inspector' ? (
+                <ScrollArea className="min-h-0 flex-1">
+                  <div className="p-4" data-testid="editor-panel-inspector">
+                    {renderInspectorPropertiesPanel(true)}
+                  </div>
+                </ScrollArea>
+              ) : (
+                toolPanelBody
+              )}
+            </div>
           )
           return (
         <EditorLayout
           band={band}
           compact={compact}
-          panelOpen={dockTimelineTools ? true : mobilePanelOpen}
+          panelOpen={dockTimelineTools ? dockPanelOpen : mobilePanelOpen}
           onClosePanel={() => (dockTools ? setDockPanelOpenPersist(false) : setMobilePanelOpen(false))}
           panelWidthPx={panelWidthPx}
           onPanelWidthChange={persistPanelWidth}
-          hidePanelColumn={layoutView === 'script' && !dockTools}
-          hidePropertiesColumn={layoutView === 'script' && !dockScriptTools}
+          hidePanelColumn={layoutView === 'script' && band !== 'mobile'}
+          hidePropertiesColumn={layoutView === 'script'}
           dockTools={dockTimelineTools}
-          scriptDockTools={dockScriptTools}
           rail={
             <>
               <EditorMobileRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
@@ -3614,37 +3639,17 @@ export function EditorShell({
           preview={
             layoutView === 'script' ? (
               <div className="flex h-full max-h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1">
-                {dockScriptTools ? (
-                  <div className="mb-1 hidden shrink-0 lg:block" data-testid="script-dock-rail">
-                    {dockToolTabStrip}
-                  </div>
-                ) : null}
-                <div className="flex min-h-0 flex-1 overflow-hidden">
-                  {dockScriptTools && panel !== 'inspector' ? (
-                    <div
-                      className="mr-1 hidden min-h-0 w-[clamp(240px,24vw,340px)] shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:flex"
-                      data-region="panel"
-                      data-dock="true"
-                    >
-                      {toolPanelBody}
+                <ScriptViewMainSplit
+                  transcriptPct={scriptSplitPct}
+                  onTranscriptPctChange={persistScriptSplit}
+                  className="min-h-0 flex-1"
+                  transcript={scriptWorkspaceColumn}
+                  preview={
+                    <div className="flex h-full max-h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-testid="script-view-preview-stack">
+                      {previewColumnContent}
                     </div>
-                  ) : null}
-                  <ScriptViewMainSplit
-                    transcriptPct={scriptSplitPct}
-                    onTranscriptPctChange={persistScriptSplit}
-                    className="min-h-0 flex-1"
-                    transcript={
-                      <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-2">
-                        {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
-                      </div>
-                    }
-                    preview={
-                      <div className="flex h-full max-h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-testid="script-view-preview-stack">
-                        {previewColumnContent}
-                      </div>
-                    }
-                  />
-                </div>
+                  }
+                />
               </div>
             ) : (
               previewColumnContent
