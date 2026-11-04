@@ -562,15 +562,18 @@ export function EditorShell({
   // Redo always drop the audition so the preview shows exactly the restored edits.
   const undo = useCallback(() => {
     setAuditionEdits(null)
+    setFillerReviewOpen(false)
     undoEdits()
   }, [undoEdits])
   const redo = useCallback(() => {
     setAuditionEdits(null)
+    setFillerReviewOpen(false)
     redoEdits()
   }, [redoEdits])
   const jumpHistory = useCallback(
     (steps: number) => {
       setAuditionEdits(null)
+      setFillerReviewOpen(false)
       jumpHistoryEdits(steps)
     },
     [jumpHistoryEdits],
@@ -3458,6 +3461,7 @@ export function EditorShell({
         edits={edits}
         clipBounds={{ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }}
         open={fillerReviewOpen}
+        playing={playing}
         onOpenChange={setFillerReviewOpen}
         onApplyProposal={onApplyCleanupProposal}
         onSeek={seekSource}
