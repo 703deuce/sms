@@ -354,6 +354,7 @@ export function Timeline({
   canRedo = false,
   historySlot,
   onCollapsedChange,
+  controlledCollapsed,
   forceExpanded = false,
   mediaOffsetMs = 0,
   musicUrl = null,
@@ -417,6 +418,8 @@ export function Timeline({
   historySlot?: React.ReactNode
   /** Synchronize the mini-strip height with the containing editor workspace. */
   onCollapsedChange?: (collapsed: boolean) => void
+  /** Parent-owned value keeps Collapse synchronized across Script/Timeline remounts. */
+  controlledCollapsed?: boolean
   /** Focus mode always displays the full timeline, keeping the user's collapse preference. */
   forceExpanded?: boolean
   /** Source ms at media time 0 of `videoUrl` (waveform slicing). */
@@ -951,7 +954,7 @@ export function Timeline({
   // TC2b (TL-55): resizable / collapsible timeline (per-user, localStorage; null = fit all tracks).
   const [tlHeight, setTlHeight] = useState<number | null>(null)
   const [tlCollapsed, setTlCollapsed] = useState(false)
-  const collapsed = tlCollapsed && !forceExpanded
+  const collapsed = (controlledCollapsed ?? tlCollapsed) && !forceExpanded
   useEffect(() => {
     const vh = typeof window === 'undefined' ? 900 : window.innerHeight
     const stored = readTimelineHeight()
@@ -3959,7 +3962,7 @@ export function Timeline({
         </div>
       </div>
       )}
-      {editable ? (
+      {editable && !collapsed ? (
         <div className="flex flex-wrap items-center gap-1 px-1" data-testid="timeline-add-track-row">
           {(
             [
@@ -4010,7 +4013,7 @@ export function Timeline({
           className="rounded px-1 text-[11px] text-muted-foreground hover:text-foreground"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => {
-            const next = !tlCollapsed
+            const next = !(controlledCollapsed ?? tlCollapsed)
             setTlCollapsed(next)
             onCollapsedChange?.(next)
           }}
