@@ -1,12 +1,15 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render } from '@testing-library/react'
 import { PreviewStage } from '@/components/clips/editor/preview-stage'
 import { stageBoxForZoom } from '@/lib/clips/editor/preview-view'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { setPropertyAt } from '@/lib/clips/editor/keyframes'
 
 const bounds = { clipStartMs: 0, clipEndMs: 20000 }
+
+// Every preview test mounts a player with async effects; unmount it before the next case.
+afterEach(cleanup)
 
 describe('PreviewStage E3 layers', () => {
   it('renders the transition clones, sorted B-roll boxes and keeps the main video unique', () => {
