@@ -49,6 +49,7 @@ jobs:
             tests/editor-words-refetch.test.ts \
             tests/use-editor-words-source-time.test.tsx \
             tests/text-template-panel-add.test.tsx \
+            tests/g1a-canvas-ui.test.tsx \
             tests/layers-actual-stack.test.tsx \
             tests/preview-stage-e3.test.tsx \
             tests/e8-caption-size-parity.test.ts \
