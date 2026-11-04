@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-export type PaletteCommand = { id: string; label: string; keys?: string; group: string; run: () => void; disabled?: boolean }
+export type PaletteCommand = { id: string; label: string; keys?: string; keywords?: string; group: string; run: () => void; disabled?: boolean }
 
 /** Case-insensitive fuzzy-ish match: every query word must appear in label / group / keys. */
-export function filterPaletteCommands<T extends Pick<PaletteCommand, 'label' | 'group' | 'keys'>>(cmds: readonly T[], query: string): T[] {
+export function filterPaletteCommands<T extends Pick<PaletteCommand, 'label' | 'group' | 'keys' | 'keywords'>>(cmds: readonly T[], query: string): T[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (!words.length) return [...cmds]
   return cmds.filter((c) => {
-    const hay = `${c.label} ${c.group} ${c.keys ?? ''}`.toLowerCase()
+    const hay = `${c.label} ${c.group} ${c.keys ?? ''} ${c.keywords ?? ''}`.toLowerCase()
     return words.every((w) => hay.includes(w))
   })
 }
