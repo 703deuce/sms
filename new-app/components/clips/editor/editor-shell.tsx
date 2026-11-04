@@ -2,7 +2,7 @@
 
 import { Anton, Montserrat, Poppins } from 'next/font/google'
 import { addFontVarsToBody, clipDisplayFontVars } from '@/components/clips/editor/clip-editor-fonts'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
 import { EditorRail, clipEditorRailIds, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import {
@@ -299,17 +299,6 @@ export function EditorShell({
   /** FIX2 R7: compact (Opus-style) clip editor: no Properties column, the timeline is collapsible (closed by default). */
   compact?: boolean
 }) {
-  // TIMELINE_LAYOUT6: editor looks like 80% browser zoom (rem-based UI). No CSS zoom/transform, so pointer math is untouched.
-  useLayoutEffect(() => {
-    const html = document.documentElement
-    const prev = html.style.fontSize
-    html.style.fontSize = '80%'
-    html.dataset.editorDense = 'true'
-    return () => {
-      html.style.fontSize = prev
-      delete html.dataset.editorDense
-    }
-  }, [])
   const [title, setTitle] = useState(initialTitle)
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
   const mergeBrollMedia = useCallback((rows: BrollMediaRow[]) => {

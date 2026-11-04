@@ -238,6 +238,12 @@
 }
 
 @layer base {
+  /* TIMELINE_LAYOUT6 v2: site-wide density = 80% browser zoom look (rem-based UI). Phones keep 100%. */
+  @media (min-width: 768px) {
+    html {
+      font-size: 80%;
+    }
+  }
   * {
     @apply border-border outline-ring/50;
   }
