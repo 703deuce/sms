@@ -3038,7 +3038,7 @@ export function Timeline({
   return (
     <div
       ref={rootRef}
-      className="relative flex min-w-0 flex-col gap-1 focus-visible:outline-none"
+      className="relative flex h-full max-h-full min-h-0 min-w-0 flex-col gap-1 overflow-y-auto focus-visible:outline-none"
       tabIndex={-1}
       onKeyDown={onKeyDown}
       data-testid="timeline-root"
