@@ -632,6 +632,38 @@ export function Timeline({
   // E1fix: +/-/0 work whenever focus is not in a text field (before: only after clicking the
   // timeline). When the timeline itself is focused its onKeyDown handles the key first and calls
   // preventDefault, so this window listener skips it (no double zoom).
+  // N2: Ctrl/Cmd+A while the editor canvas is active selects clips; subsequently typed
+  // characters are not commands until the user intentionally clicks back into the editor.
+  const selectAllShortcutArmed = useRef(false)
+  useEffect(() => {
+    const onPointer = () => { selectAllShortcutArmed.current = false }
+    const onFocus = (ev: FocusEvent) => {
+      if (isFormControlTarget(ev.target)) selectAllShortcutArmed.current = false
+    }
+    const onKey = (ev: KeyboardEvent) => {
+      if (isFormControlTarget(ev.target) || isFormControlTarget(document.activeElement)) {
+        selectAllShortcutArmed.current = false
+        return
+      }
+      if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && ev.key.toLowerCase() === 'a') {
+        selectAllShortcutArmed.current = true
+        return
+      }
+      if (selectAllShortcutArmed.current && !ev.ctrlKey && !ev.metaKey && !ev.altKey &&
+          (ev.key.length === 1 || ev.code === 'Space')) {
+        ev.preventDefault()
+        ev.stopImmediatePropagation()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('pointerdown', onPointer, true)
+    window.addEventListener('focusin', onFocus, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('pointerdown', onPointer, true)
+      window.removeEventListener('focusin', onFocus, true)
+    }
+  }, [])
   const zoomKeysRef = useRef({ zoomIn, zoomOut, zoomFit, split: () => {}, canSplit: false })
   zoomKeysRef.current = { zoomIn, zoomOut, zoomFit, split: () => split(), canSplit: Boolean(onCommitEdits) }
   useEffect(() => {
@@ -2830,7 +2862,7 @@ export function Timeline({
     return (
       <div
         key={refKey(item)}
-        className={`absolute top-0.5 overflow-hidden rounded-[3px] text-[11px] leading-4 text-white ${
+        className={`absolute top-0.5 rounded-[3px] text-[11px] leading-4 text-white ${
           host ? 'bg-violet-600' : LANE_COLORS[item.lane]
         } ${isSel ? 'ring-2 ring-white ring-offset-1 ring-offset-primary' : ''} ${faded ? 'opacity-40' : ''} ${
           dimmed ? 'pointer-events-none opacity-30' : ''
@@ -2856,7 +2888,18 @@ export function Timeline({
         data-group-selected={grpSel ? 'true' : undefined}
         data-compound={host ? host.group.id : undefined}
         title={`${off ? '[Deactivated] ' : ''}${host ? '[Compound] ' : inGroup ? '[Grouped] ' : ''}${item.label} · ${(item.startMs / 1000).toFixed(2)}–${(item.endMs / 1000).toFixed(2)} s`}
-        onPointerDown={interactive && !dimmed ? (e) => startDrag(e, item, 'move') : undefined}
+        onPointerDown={interactive && !dimmed ? (e) => {
+          const bounds = e.currentTarget.getBoundingClientRect()
+          const x = e.clientX - bounds.left
+          // B2: edge hit testing does not depend on selection or a tiny nested span.
+          // The dedicated handle still wins when it is the pointer target.
+          const edgePx = Math.min(8, bounds.width / 3)
+          const edge = editable && !st.locked && item.caps.trimStart && x <= edgePx
+            ? 'start'
+            : editable && !st.locked && item.caps.trimEnd && x >= bounds.width - edgePx
+              ? 'end' : 'move'
+          startDrag(e, item, edge)
+        } : undefined}
         onDoubleClick={
           host
             ? (e) => {
@@ -3077,7 +3120,7 @@ export function Timeline({
           : null}
         {editable && !st.locked && item.caps.trimStart ? (
           <span
-            className={`absolute inset-y-0 left-0 z-30 rounded-l-[3px] border-l-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
+            className={`absolute inset-y-0 -left-1 z-30 rounded-l-[3px] border-l-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
               altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-4 cursor-ew-resize bg-cyan-300/70' : 'w-4 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-start"
@@ -3087,7 +3130,7 @@ export function Timeline({
         ) : null}
         {editable && !st.locked && item.caps.trimEnd ? (
           <span
-            className={`absolute inset-y-0 right-0 z-30 rounded-r-[3px] border-r-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
+            className={`absolute inset-y-0 -right-1 z-30 rounded-r-[3px] border-r-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
               altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-4 cursor-ew-resize bg-cyan-300/70' : 'w-4 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-end"
