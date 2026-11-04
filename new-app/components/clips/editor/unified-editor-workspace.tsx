@@ -24,6 +24,7 @@ export function UnifiedEditorWorkspace({
   inspector,
   timeline,
   timelineView,
+  timelineHidden = false,
   onTimelineViewChange,
   inspectorWidthPx,
   onInspectorWidthChange,
@@ -33,6 +34,7 @@ export function UnifiedEditorWorkspace({
   inspector: ReactNode
   timeline: ReactNode
   timelineView: 'script' | 'timeline'
+  timelineHidden?: boolean
   onTimelineViewChange: (view: 'script' | 'timeline') => void
   inspectorWidthPx: number
   onInspectorWidthChange: (width: number) => void
@@ -120,6 +122,7 @@ export function UnifiedEditorWorkspace({
   const mode: TimelineDisplay = focus ? 'focus' : timelineView === 'script' ? 'compact' : 'expanded'
   const gridRows = focus
     ? 'minmax(0,1fr)'
+    : timelineHidden ? 'minmax(0,1fr) 0px 32px'
     : timelineView === 'script'
       ? 'minmax(0,1fr) 9px 150px'
       : `minmax(0,${100 - timelinePct}fr) 9px minmax(0,${timelinePct}fr)`
