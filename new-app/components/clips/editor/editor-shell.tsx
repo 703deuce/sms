@@ -321,6 +321,7 @@ export function EditorShell({
   })
   const [replaceBrollId, setReplaceBrollId] = useState<string | null>(null)
   const [fillerReviewOpen, setFillerReviewOpen] = useState(false)
+  const [videoToolRequest, setVideoToolRequest] = useState<{ id: 'blur-add' | 'bg-removal' | 'properties-panel'; seq: number } | null>(null)
   const [gapReviewOpen, setGapReviewOpen] = useState(false)
   const [auditionEdits, setAuditionEdits] = useState<ClipEditsV2 | null>(null)
   // E4: Text / Color panels follow the timeline selection; ✨ Producer pop-over.
@@ -2049,6 +2050,7 @@ export function EditorShell({
               />
             )
           }}
+          videoToolRequest={videoToolRequest}
           videoSlot={
             <>
               <MainVideoTools
@@ -3099,11 +3101,11 @@ export function EditorShell({
     }, 150)
   }
   /** Select the main video (same as clicking it on the canvas) and open Properties at its video tools. */
-  const openVideoTools = (testId: string) => {
+  const openVideoTools = (testId: 'blur-add' | 'bg-removal' | 'properties-panel') => {
     onCanvasSelect('video')
     if (layoutView === 'script') openToolPanel('inspector')
     else if (band !== 'wide' || layoutView === 'timeline') selectPanel('inspector')
-    window.setTimeout(() => window.dispatchEvent(new CustomEvent('transovo:editor-video-tool', { detail: testId })), 100)
+    setVideoToolRequest((prev) => ({ id: testId, seq: (prev?.seq ?? 0) + 1 }))
   }
   const openVersions = () => {
     document.querySelector<HTMLElement>('[data-testid="versions-menu"]')?.click()
