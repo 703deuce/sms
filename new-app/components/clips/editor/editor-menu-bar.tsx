@@ -2,7 +2,6 @@
 
 import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Kbd } from '@/components/ui/kbd'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,7 +37,7 @@ export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; on
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-1.5 text-[13px] font-medium min-[1500px]:px-2.5 text-muted-foreground hover:text-foreground data-[popup-open]:bg-muted data-[popup-open]:text-foreground"
+                  className="h-8 px-1.5 text-[13px] font-medium min-[1150px]:px-1.5 text-muted-foreground hover:text-foreground data-[popup-open]:bg-muted data-[popup-open]:text-foreground"
                   data-testid={`editor-menu-${menu.id}`}
                 />
               }
