@@ -145,7 +145,7 @@ export function railGroupIcon(id: EditorRailGroupId): LucideIcon {
 /** Panels still mounted in the left column (not top bar / right column only). */
 export function clipEditorLeftPanelIds(aiExtras: boolean = clipEditorAiExtrasEnabled()): EditorPanelId[] {
   const tabs = editorRailGroups(aiExtras).flatMap((g) => g.tabs.map((t) => t.id))
-  return [...tabs, 'repurpose']
+  return [...tabs, 'repurpose', 'inspector']
 }
 
 export function clipEditorRailGroupIds(): EditorRailGroupId[] {
