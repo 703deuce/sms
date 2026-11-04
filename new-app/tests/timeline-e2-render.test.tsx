@@ -113,6 +113,16 @@ describe('E2 multi-track timeline', () => {
     expect(getByTestId('timeline-lane-header-voice')).toBeTruthy()
   })
 
+  it('C1 keeps lane viewport exactly as tall as its tracks, not a stretched empty region', () => {
+    const ui = setup()
+    const trackHeight = parseFloat(ui.getByTestId('timeline-track').style.height)
+    const body = ui.getByTestId('timeline-body')
+    expect(parseFloat(body.style.height)).toBe(trackHeight)
+    expect(body.style.flex).toBe('0 1 auto')
+    expect(ui.getAllByTestId('timeline-lane-video')).toHaveLength(1)
+    expect(ui.getByTestId('timeline-add-track-row')).toBeTruthy()
+  })
+
   it('B-roll bars sit at their OUTPUT time after a cut (old timeline drew them on the source span)', () => {
     const { broll, pxPerMs } = setup()
     expect(parseFloat(broll('b1').style.left)).toBeCloseTo(5000 * pxPerMs(), 3)
