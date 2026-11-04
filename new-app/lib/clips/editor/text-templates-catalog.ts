@@ -97,12 +97,12 @@ export const CATALOG_TEMPLATES: TitleTemplate[] = [
   // Quotes & stats
   T('qs_quote', 'Quote', 'Quotes & stats', [
     txt('"', 50, 32, S('Anton', 220, '#FACC15'), A('pop')),
-    txt('Your quote goes here,\nshort and punchy.', 50, 42, { ...P, font: 'Poppins', size: 72, lineHeight: 1.15 }, A('fade', 'fade', 600), { delayMs: 200 }),
-    txt('— Name', 50, 52, { ...P, font: 'Poppins', size: 48, color: '#94A3B8' }, A('fade'), { delayMs: 500 }),
+    txt('Your quote goes here,\nshort and punchy.', 50, 42, { ...P, font: 'Poppins', size: 160, lineHeight: 1.15 }, A('fade', 'fade', 600), { delayMs: 200 }),
+    txt('— Name', 50, 56, { ...P, font: 'Poppins', size: 94, color: '#94A3B8' }, A('fade'), { delayMs: 500 }),
   ]),
   T('qs_stat', 'Big stat', 'Quotes & stats', [
     txt('87%', 50, 40, S('Anton', 240, '#22C55E', { stroke: { color: '#000000', width: 10 } }), A('zoom_out', 'fade', 500)),
-    txt('of people agree', 50, 50, { ...P, font: 'Poppins', size: 64 }, A('slide_up'), { delayMs: 300 }),
+    txt('of people agree', 50, 54, { ...P, font: 'Poppins', size: 135 }, A('slide_up'), { delayMs: 300 }),
   ]),
   T('qs_fact', 'Fact box', 'Quotes & stats', [
     box(1000, 360, 50, 45, '#FFFFFF', A('pop')),
@@ -120,9 +120,9 @@ export const CATALOG_TEMPLATES: TitleTemplate[] = [
   T('sc_comic', 'Comic hype', 'Social captions', [txt('LET’S GO!', 50, 70, S('Bangers', 140, '#FFFFFF', { stroke: { color: '#000000', width: 10 }, shadow: { color: '#000000', opacity: 100, dist: 6 } }), A('rotate_in', 'zoom', 400, 300, 'wiggle'))]),
   // Countdown
   T('cd_321', '3 · 2 · 1', 'Countdown', ['3', '2', '1'].map((n, i) =>
-    txt(n, 50, 45, S('Anton', 300, '#FFFFFF', { stroke: { color: '#000000', width: 12 } }), A('zoom_out', 'fade', 300, 200), { delayMs: i * 1000, durMs: 1000 }))),
+    txt(n, 50, 45, S('Anton', 240, '#FFFFFF', { stroke: { color: '#000000', width: 12 } }), A('zoom_out', 'fade', 300, 200), { delayMs: i * 1000, durMs: 1000 }))),
   T('cd_321_go', '3 · 2 · 1 · GO', 'Countdown', [
-    ...['3', '2', '1'].map((n, i) => txt(n, 50, 45, S('Bebas Neue', 320, '#FACC15'), A('pop', 'fade', 250, 200), { delayMs: i * 700, durMs: 700 })),
+    ...['3', '2', '1'].map((n, i) => txt(n, 50, 45, S('Bebas Neue', 240, '#FACC15'), A('pop', 'fade', 250, 200), { delayMs: i * 700, durMs: 700 })),
     txt('GO!', 50, 45, S('Luckiest Guy', 260, '#22C55E', { stroke: { color: '#000000', width: 10 } }), A('zoom_out', 'fade', 300, 300), { delayMs: 2100, durMs: 900 }),
   ]),
   T('cd_circle', 'Countdown circle', 'Countdown', [
