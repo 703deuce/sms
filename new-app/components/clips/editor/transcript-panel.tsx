@@ -9,6 +9,7 @@ import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
 import { FILLER_RE, isWordCut, normalizeSectionOrder, wordDisplayText } from '@/lib/clips/edits'
 import { moveSelection, sectionBlocksForEdits } from '@/lib/clips/editor/reorder'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
+import { transcriptWordRemovedFromVideo } from '@/lib/clips/editor/transcript-cut-map'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { multicamAngles, setAngleForSourceSpan, sourceSpanFromTranscriptSelection } from '@/lib/clips/editor/multicam-manual'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
@@ -671,6 +672,7 @@ export function TranscriptPanel({
   }
 
   const wordCutRange = (w: SourceWord): CutRange | null => {
+    if (!transcriptWordRemovedFromVideo(edits, w)) return null
     const { startMs, endMs } = wordSourceMs(w)
     for (const [s, e] of edits.cutRanges) {
       if (startMs < e && endMs > s) {
@@ -685,7 +687,7 @@ export function TranscriptPanel({
   const renderWord = (w: SourceWord) => {
     const { startMs, endMs, midMs } = wordSourceMs(w)
     const cutRange = wordCutRange(w)
-    const cut = Boolean(cutRange) || isWordCut(w, edits.cutRanges)
+    const cut = transcriptWordRemovedFromVideo(edits, w)
     const display = wordDisplayText(w, edits.wordFixes, edits.wordFixMeta)
     const ignored = isWordIgnored(w.i, edits.wordFixes)
     const active = activeI === w.i
@@ -703,7 +705,7 @@ export function TranscriptPanel({
     const nextMs = nextW ? wordSourceMs(nextW) : null
     const nextSelected =
       selected && nextMs != null && selStart !== null && selEnd !== null && nextMs.startMs >= Math.min(selStart, selEnd) && nextMs.endMs <= Math.max(selStart, selEnd)
-    const nextCut = cut && nextW != null && isWordCut(nextW, edits.cutRanges)
+    const nextCut = cut && nextW != null && transcriptWordRemovedFromVideo(edits, nextW)
 
     if (editingI === w.i) {
       return (
@@ -1443,7 +1445,7 @@ export function TranscriptPanel({
           const emitSlice = (slice: SourceWord[], prevBefore: SourceWord | null) => {
             const runs = showDeleted
               ? slice.map((w) => ({ kind: 'word' as const, w }))
-              : collapseCutRuns(slice, (x) => isWordCut(x, edits.cutRanges))
+              : collapseCutRuns(slice, (x) => transcriptWordRemovedFromVideo(edits, x))
             const nodes: ReactNode[] = []
             let prev = prevBefore
             for (const run of runs) {
