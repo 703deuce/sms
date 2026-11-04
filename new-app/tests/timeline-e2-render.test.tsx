@@ -75,6 +75,19 @@ describe('E2 multi-track timeline', () => {
     expect(getByTestId('timeline-track').getAttribute('data-duration-ms')).toBe('19000')
   })
 
+  it('keeps track labels aligned below the extra full-video moment row (C5)', () => {
+    const { getByTestId } = setup(edits(), {
+      momentFocus: {
+        fromClipId: 'source-clip', startMs: 2000, endMs: 12000, title: 'Full video moment',
+        onRangeChange: vi.fn(), onMakeClip: vi.fn(),
+      },
+      onMomentSeek: vi.fn(),
+    })
+    expect(getByTestId('full-video-moment-lane')).toBeTruthy()
+    expect(getByTestId('timeline-auxiliary-header').style.height).toBe('36px')
+    expect(getByTestId('timeline-lane-header-voice')).toBeTruthy()
+  })
+
   it('B-roll bars sit at their OUTPUT time after a cut (old timeline drew them on the source span)', () => {
     const { broll, pxPerMs } = setup()
     expect(parseFloat(broll('b1').style.left)).toBeCloseTo(5000 * pxPerMs(), 3)
