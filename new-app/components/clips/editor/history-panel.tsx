@@ -29,7 +29,9 @@ function buildRows(
       steps: i + 1,
     })
   }
-  rows.push({ kind: 'current', label: 'Current' })
+  rows.push({ kind: 'current', label: past.length
+    ? `Current · ${pastLabels[past.length - 1]?.trim() || describeEditsChange(past[past.length - 1]!, edits)}`
+    : 'Original clip · No edits yet' })
   for (let i = past.length - 1; i >= 0; i--) {
     const steps = -(past.length - i)
     const prev = past[i]!
