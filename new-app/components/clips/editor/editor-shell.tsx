@@ -2578,7 +2578,8 @@ export function EditorShell({
             style={{
               aspectRatio: aspectStyle,
               width: `min(100cqw, calc(100cqh * ${aspectCssToNumber(previewAspect)}))`,
-              height: 'auto',
+              height: `min(100cqh, calc(100cqw / ${aspectCssToNumber(previewAspect)}))`,
+              maxWidth: '100%',
               maxHeight: '100%',
             }}
             onContextMenu={(e) => {
@@ -3527,7 +3528,7 @@ export function EditorShell({
                     <SlidersHorizontal className="size-5" aria-hidden />
                     Properties
                   </button>
-                  <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none]">
+                  <div className="flex min-w-0 flex-1 items-stretch overflow-hidden">
                     <EditorRail
                       variant="tabs"
                       active={panel}
@@ -3617,7 +3618,7 @@ export function EditorShell({
           }
           properties={
             dockTools || (!compact && band === 'wide') ? (
-              <>
+              <div className="flex h-full min-h-0 flex-col overflow-hidden">
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
                   <h2 className="text-sm font-semibold">Properties</h2>
                 </div>
@@ -3626,7 +3627,7 @@ export function EditorShell({
                     {renderInspectorPropertiesPanel(true)}
                   </div>
                 </ScrollArea>
-              </>
+              </div>
             ) : null
           }
           timeline={

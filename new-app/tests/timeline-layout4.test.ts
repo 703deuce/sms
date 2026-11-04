@@ -3,11 +3,13 @@ import { EDITOR_GRID } from '@/components/clips/editor/editor-layout'
 import { clampLaneH, LANE_H_DEFAULT, laneHeights, sanitizeLaneHeights } from '@/lib/clips/editor/lane-heights'
 
 describe('TIMELINE_LAYOUT5 tab strip on top of the tools card', () => {
-  it('tools card spans column 1; preview/properties span both rows; timeline row 2', () => {
+  it('tools card in row 1; preview/properties row 1 only; timeline row 2', () => {
     expect(EDITOR_GRID.toolsDock).toContain('lg:col-start-1')
     expect(EDITOR_GRID.toolsDockPanel).toContain('flex-1')
-    expect(EDITOR_GRID.previewDock).toContain('lg:row-span-2')
-    expect(EDITOR_GRID.propertiesDock).toContain('lg:row-span-2')
+    expect(EDITOR_GRID.previewDock).toContain('lg:row-start-1')
+    expect(EDITOR_GRID.previewDock).not.toContain('row-span-2')
+    expect(EDITOR_GRID.propertiesDock).toContain('lg:row-start-1')
+    expect(EDITOR_GRID.propertiesDock).not.toContain('row-span-2')
     expect(EDITOR_GRID.timelineDock).toContain('lg:row-start-2')
     expect(EDITOR_GRID.rootDock).toContain('lg:grid-rows-[minmax(0,1fr)_auto]')
   })

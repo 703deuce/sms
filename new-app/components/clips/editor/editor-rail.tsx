@@ -1,9 +1,15 @@
 'use client'
 
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Captions, Eraser, FileText, FolderOpen, Image as ImageIcon, Languages, LayoutPanelTop, Layers, LayoutTemplate, Megaphone, Music2, Palette, SlidersHorizontal, Sparkles, SwatchBook, Type, Clapperboard } from 'lucide-react'
+import { Captions, Eraser, FileText, FolderOpen, Image as ImageIcon, Languages, LayoutPanelTop, Layers, LayoutTemplate, Megaphone, MoreHorizontal, Music2, Palette, SlidersHorizontal, Sparkles, SwatchBook, Type, Clapperboard } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import {
@@ -82,6 +88,9 @@ export function editorRailIcon(id: EditorPanelId) {
   return itemById.get(id)?.icon ?? FileText
 }
 
+const DOCK_TAB_PX = 78
+const DOCK_MORE_PX = 56
+
 export function EditorRail({
   active,
   onChange,
@@ -105,6 +114,34 @@ export function EditorRail({
   const activeGroupId = panelToRailGroup(active)?.id ?? null
 
   const visibleGroups = useMemo(() => groups.filter((g) => g.tabs.some((t) => !hidden.has(t.id))), [groups, hidden])
+
+  const stripMeasureRef = useRef<HTMLDivElement>(null)
+  const [inlineTabCount, setInlineTabCount] = useState(visibleGroups.length)
+
+  useLayoutEffect(() => {
+    if (!tabs) return
+    const el = stripMeasureRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.clientWidth
+      if (w <= 0) return
+      const allFit = Math.floor(w / DOCK_TAB_PX)
+      if (allFit >= visibleGroups.length) {
+        setInlineTabCount(visibleGroups.length)
+        return
+      }
+      const withMore = Math.max(1, Math.floor((w - DOCK_MORE_PX) / DOCK_TAB_PX))
+      setInlineTabCount(Math.min(withMore, visibleGroups.length))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [tabs, visibleGroups.length])
+
+  const inlineGroups = tabs ? visibleGroups.slice(0, inlineTabCount) : visibleGroups
+  const overflowGroups = tabs ? visibleGroups.slice(inlineTabCount) : []
+  const overflowActive = overflowGroups.some((g) => g.id === activeGroupId)
 
   const pickGroup = useCallback(
     (groupId: EditorRailGroupId) => {
@@ -179,6 +216,7 @@ export function EditorRail({
   }
 
   return (
+    <div ref={tabs ? stripMeasureRef : undefined} className={cn(tabs && 'flex min-w-0 flex-1 items-stretch overflow-hidden')}>
     <nav
       ref={navRef}
       data-testid="editor-rail"
@@ -186,18 +224,51 @@ export function EditorRail({
       onKeyDown={onKeyDown}
       className={cn(
         tabs
-          ? 'flex min-w-0 flex-row flex-nowrap items-stretch gap-0 overflow-x-auto [scrollbar-width:none]'
+          ? 'flex min-w-0 flex-row flex-nowrap items-stretch gap-0 overflow-hidden'
           : horizontal
           ? 'flex flex-row gap-1'
           : 'hidden h-full w-16 shrink-0 flex-col items-center gap-0.5 overflow-y-auto rounded-lg border border-border bg-card py-2 [scrollbar-width:thin] lg:flex',
       )}
     >
-      {visibleGroups.map((group, gi) => (
+      {inlineGroups.map((group, gi) => (
         <div key={group.id} className={tabs ? 'flex shrink-0' : 'flex w-full flex-col items-center gap-0.5'}>
           {gi > 0 && !horizontal && !tabs ? <div className="my-1 h-px w-8 bg-border" aria-hidden /> : null}
           {renderGroupButton(group, !horizontal)}
         </div>
       ))}
     </nav>
+    {tabs && overflowGroups.length > 0 ? (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button
+              type="button"
+              className={cn(
+                'flex h-11 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-muted-foreground hover:bg-accent hover:text-foreground',
+                overflowActive && 'bg-accent text-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary relative text-foreground',
+              )}
+              data-testid="editor-rail-more-tabs"
+              aria-label="More tools"
+            >
+              <MoreHorizontal className="size-[1.125rem]" aria-hidden />
+              <span className="text-[0.6875rem] font-medium leading-none">More</span>
+            </button>
+          }
+        />
+        <DropdownMenuContent align="start" className="min-w-40">
+          {overflowGroups.map((group) => (
+            <DropdownMenuItem
+              key={group.id}
+              data-testid={`editor-rail-group-${group.id}`}
+              onClick={() => pickGroup(group.id)}
+              className={activeGroupId === group.id ? 'bg-accent' : undefined}
+            >
+              {group.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : null}
+    </div>
   )
 }
