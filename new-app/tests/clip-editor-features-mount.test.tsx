@@ -134,15 +134,16 @@ function renderShell(edits: ClipEditsV2) {
 }
 
 function clickRail(label: string, ui: ReturnType<typeof render>) {
-  const rail = ui.getAllByTestId('editor-rail')[0]!
-  fireEvent.click(within(rail).getByRole('button', { name: label }))
+  // All editing tools now live in one full-height right Inspector.
+  if (!ui.queryByTestId('script-view-tool-tabs')) {
+    fireEvent.click(ui.getByTestId('unified-inspector-toggle'))
+  }
+  const tools = ui.getByTestId('script-view-tool-tabs')
+  fireEvent.click(within(tools).getByRole('button', { name: label }))
 }
 
-// Cleanup is a Script workspace tool, not a standalone EditorRail group.
 function openScriptCleanup(ui: ReturnType<typeof render>) {
-  fireEvent.click(ui.getByTestId('editor-layout-view-script'))
-  const tabs = ui.getByTestId('script-view-tool-tabs')
-  fireEvent.click(within(tabs).getByRole('button', { name: 'Clean up' }))
+  clickRail('Clean up', ui)
 }
 
 describe('clip editor feature mounts (EditorShell)', () => {
