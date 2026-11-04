@@ -278,10 +278,11 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
               onClick={() => p.toggleOpt('magnet')}
               aria-pressed={p.magnet}
               aria-label="Main track magnet"
-              title="Main track magnet (timeline option)"
+              title={p.magnet ? 'Magnet ON: trims and deletes close the gap. Click to leave gaps (for B-roll).' : 'Magnet OFF: trims and deletes leave a gap. Click to close gaps automatically.'}
               data-testid="timeline-magnet"
+              style={{ width: 'auto', paddingInline: 6 }}
             >
-              <span className="text-[10px] font-semibold">M</span>
+              <span className="whitespace-nowrap text-[10px] font-semibold">{p.magnet ? 'Magnet on' : 'Magnet off'}</span>
             </button>
             <button
               type="button"

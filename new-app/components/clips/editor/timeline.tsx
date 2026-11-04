@@ -212,7 +212,8 @@ const TRACK_OFFSET_PX = 8
 const TRACK_EXTRA_PX = 16
 const RULER_H = 18
 // FV2: Video lane is taller so the filmstrip (top) and word chips (bottom) both show; B-roll gets a strip too.
-const LANE_H: Record<LaneId, number> = { captions: 20, text: 20, adjust: 20, video: 58, broll: 30, voice: 24, music: 22, sfx: 20 }
+// TIMELINE_LAYOUT1: taller rows; Video = 68 px clip + its own 18 px transcript row underneath (+4 pad).
+const LANE_H: Record<LaneId, number> = { captions: 30, text: 36, adjust: 30, video: 90, broll: 44, voice: 40, music: 40, sfx: 36 }
 /** Word-chip bar height at the bottom of the Video lane (filmstrip fills the space above it). */
 const VIDEO_WORDBAR_H = 18
 /** FV2: above this span (full videos) the timeline windows its DOM and opens at Fit; clips are unchanged. */
@@ -559,7 +560,7 @@ export function Timeline({
       setPxPerSec(
         longMedia
           ? fitPxPerSec(dspan, trackViewportPx, minPx)
-          : initialPxPerSec(dspan, trackViewportPx, readableScale, minPx),
+          : Math.min(fitPxPerSec(dspan, trackViewportPx, minPx), initialPxPerSec(dspan, trackViewportPx, readableScale, minPx)),
       )
   }, [pxPerSec, dspan, trackViewportPx, readableScale, longMedia, minPx])
 
@@ -908,7 +909,7 @@ export function Timeline({
   useEffect(() => {
     const vh = typeof window === 'undefined' ? 900 : window.innerHeight
     const stored = readTimelineHeight()
-    setTlHeight(stored == null ? null : clampTimelineHeight(stored, vh))
+    setTlHeight(clampTimelineHeight(stored ?? Math.round(vh * 0.3), vh))
   }, [])
   useEffect(() => {
     const onResize = () => {
@@ -2187,6 +2188,18 @@ export function Timeline({
       return
     }
     rootRef.current?.focus({ preventScroll: true })
+    // TIMELINE_LAYOUT1 (8): a plain click on a clip selects it AND moves the playhead there (CapCut).
+    // Only a release within DRAG_SLOP_PX of the press seeks, so drags (move / trim / reorder) never do.
+    if (mode === 'move' && !(e.shiftKey || e.metaKey || e.ctrlKey)) {
+      const area0 = trackAreaRef.current
+      const seekAt = area0 ? msAtClientX(e.clientX, area0) : null
+      const x0 = e.clientX
+      const upSeek = (ev: PointerEvent) => {
+        window.removeEventListener('pointerup', upSeek, true)
+        if (seekAt != null && Math.abs(ev.clientX - x0) < DRAG_SLOP_PX) onSeekOutput(Math.max(0, seekAt))
+      }
+      window.addEventListener('pointerup', upSeek, true)
+    }
     const key = refKey(item)
     const multi = e.shiftKey || e.metaKey || e.ctrlKey
     if (refLocked(edits, item)) {
@@ -2677,7 +2690,7 @@ export function Timeline({
         style={{
           left,
           width: w,
-          height: h - 4,
+          height: item.lane === 'video' ? h - 4 - VIDEO_WORDBAR_H : h - 4,
           pointerEvents: interactive && !dimmed ? 'auto' : 'none',
           ...(off ? { backgroundImage: 'repeating-linear-gradient(135deg, rgba(0,0,0,0.45) 0 4px, transparent 4px 8px)' } : {}),
         }}
@@ -2914,8 +2927,8 @@ export function Timeline({
           : null}
         {editable && !st.locked && item.caps.trimStart ? (
           <span
-            className={`absolute inset-y-0 left-0 z-10 bg-white/40 hover:bg-white/80 ${
-              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'z-20 w-3 cursor-ew-resize bg-cyan-300/70' : 'w-1.5 cursor-ew-resize'
+            className={`absolute inset-y-0 left-0 z-30 rounded-l-[3px] border-l-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-2.5 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-start"
             title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'J-cut: Alt-drag to offset audio from picture' : undefined}
@@ -2924,8 +2937,8 @@ export function Timeline({
         ) : null}
         {editable && !st.locked && item.caps.trimEnd ? (
           <span
-            className={`absolute inset-y-0 right-0 z-10 bg-white/40 hover:bg-white/80 ${
-              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'z-20 w-3 cursor-ew-resize bg-cyan-300/70' : 'w-1.5 cursor-ew-resize'
+            className={`absolute inset-y-0 right-0 z-30 rounded-r-[3px] border-r-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-2.5 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-end"
             title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'L-cut: Alt-drag to offset audio from picture' : undefined}
@@ -2939,7 +2952,7 @@ export function Timeline({
   return (
     <div
       ref={rootRef}
-      className="min-w-0 space-y-1 focus-visible:outline-none"
+      className="relative flex min-w-0 flex-col gap-1 focus-visible:outline-none"
       tabIndex={-1}
       onKeyDown={onKeyDown}
       data-testid="timeline-root"
@@ -3123,6 +3136,7 @@ export function Timeline({
         />
       ) : null}
       {singleSel && (singleSel.lane === 'music' || singleSel.lane === 'sfx') && editable ? (
+        <div className="absolute bottom-5 right-2 z-40 max-w-[min(560px,92%)] rounded-md border border-border bg-card/95 p-1 shadow-lg" data-testid="timeline-audio-inspector-slot">
         <AudioClipInspector
           edits={edits}
           lane={singleSel.lane}
@@ -3135,9 +3149,14 @@ export function Timeline({
           readOnly={Boolean(itemState(singleSel).locked)}
           onCommit={(next) => commit(next)}
         />
+        </div>
       ) : null}
       {singleSel && singleSel.lane === 'video' && singleSel.srcInMs != null && singleSel.srcOutMs != null && editable ? (
-        <div ref={speedSlotRef} data-testid="timeline-speed-slot">
+        <div
+          ref={speedSlotRef}
+          className="absolute bottom-5 right-2 z-40 max-w-[min(560px,92%)] rounded-md border border-border bg-card/95 p-1 shadow-lg"
+          data-testid="timeline-speed-slot"
+        >
           <ItemSpeedControl
             edits={edits}
             srcInMs={singleSel.srcInMs}
@@ -3730,20 +3749,42 @@ export function Timeline({
         </div>
       </div>
       )}
+      {editable ? (
+        <div className="flex flex-wrap items-center gap-1 px-1" data-testid="timeline-add-track-row">
+          {(
+            [
+              ['overlay', '+ Video overlay track'],
+              ['text', '+ Text track'],
+              ['audio', '+ Audio track'],
+            ] as const
+          ).map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              className="rounded border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary hover:text-foreground disabled:opacity-40"
+              disabled={!canAddTrack(edits, kind)}
+              onClick={() => addTrackOf(kind)}
+              data-testid={`timeline-add-track-row-${kind}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div
         role="separator"
         aria-orientation="horizontal"
         aria-label="Resize timeline (drag; double-click = fit all tracks)"
         title="Drag to resize the timeline · double-click: show all tracks"
-        className="group flex h-3 cursor-row-resize items-center justify-center gap-2"
+        className="group order-first flex h-3 cursor-row-resize items-center justify-center gap-2"
         data-testid="timeline-resize"
         onPointerDown={(e) => {
           if (e.button !== 0 || tlCollapsed) return
           e.preventDefault()
-          const body = (e.currentTarget.previousElementSibling as HTMLElement | null)
+          const body = e.currentTarget.parentElement?.querySelector<HTMLElement>('[data-testid="timeline-body"]') ?? null
           const y0 = e.clientY
           const h0 = tlHeight ?? body?.getBoundingClientRect().height ?? 240
-          const mv = (ev: PointerEvent) => setTimelineHeight(h0 + (ev.clientY - y0))
+          const mv = (ev: PointerEvent) => setTimelineHeight(h0 - (ev.clientY - y0))
           const up = () => {
             window.removeEventListener('pointermove', mv)
             window.removeEventListener('pointerup', up)
