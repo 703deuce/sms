@@ -35,6 +35,7 @@ jobs:
       - name: Editor QA regression tests
         run: |
           pnpm exec vitest run \
+            tests/a1-transcript-cut-map.test.ts \
             tests/c1-laptop-lanes.test.ts \
             tests/clip-timeline.test.ts \
             tests/editor-state-ripple.test.tsx \
