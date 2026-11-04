@@ -38,7 +38,7 @@ describe('EF-24 bgRemoval edits', () => {
   })
 
   it('bgRemovalBlockedReason gates layouts and stabilize', () => {
-    expect(bgRemovalBlockedReason(normalizeEdits({ layout: { mode: 'stack', shotOverrides: [] } }, bounds))).toBeTruthy()
+    expect(bgRemovalBlockedReason(normalizeEdits({ layout: { mode: 'facecam_pip', shotOverrides: [] } }, bounds))).toBeTruthy()
     expect(bgRemovalBlockedReason(normalizeEdits({ stabilize: [{ startMs: 0, endMs: 1000 }] }, bounds))).toBeTruthy()
     expect(
       bgRemovalBlockedReason(normalizeEdits({ sources: [{ id: 'a', ref: 'upload', refId: 'clip-upload-a', mediaType: 'video' }], sourceSegments: [{ id: 's', sourceId: 'a', startMs: 0, endMs: 1000 }] }, bounds)),
