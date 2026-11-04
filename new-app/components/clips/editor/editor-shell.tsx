@@ -1679,6 +1679,9 @@ export function EditorShell({
     const wa = selected[0]
     const wb = selected[selected.length - 1]
     applyCutRange([Math.round(wa.s * 1000), Math.round(wb.e * 1000)])
+    toast.success(`Cut ${((wb.e - wa.s) || 0).toFixed(1)}s from the video`, {
+      description: 'Removed from the preview, the Timeline (✂ marks the join) and the export. ⌘Z to undo.',
+    })
     sel.clear()
   }, [applyCutRange, editorWords])
 

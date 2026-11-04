@@ -3494,6 +3494,43 @@ export function Timeline({
                         return base
                       })()
                   ).map(renderItem)}
+                  {lane === 'video'
+                    ? realCutIndices(tb).map((k) => {
+                        const gapA = tb.segs[k - 1]![1]
+                        const gapB = tb.segs[k]![0]
+                        const removedMs = gapB - gapA
+                        const atMs = tb.starts[k]!
+                        if (removedMs < 1 || !inView(atMs, atMs)) return null
+                        return (
+                          <button
+                            type="button"
+                            key={`cutseam${gapA}`}
+                            className="absolute top-0 z-[25] -translate-x-1/2 rounded-b bg-rose-500 px-1 text-[10px] font-semibold leading-4 text-white shadow hover:bg-rose-400"
+                            style={{ left: xs(atMs) }}
+                            title={`${(removedMs / 1000).toFixed(1)}s removed here (Script or Timeline cut). Double-click to restore it.`}
+                            data-testid="timeline-cut-seam"
+                            data-removed-ms={removedMs}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation()
+                              if (!onCommitEdits) return
+                              onCommitEdits(
+                                {
+                                  ...edits,
+                                  cutRanges: edits.cutRanges.filter(
+                                    ([s, e2]) => !(Math.max(s, e2) > gapA && Math.min(s, e2) < gapB),
+                                  ),
+                                },
+                                true,
+                                'Restore cut',
+                              )
+                            }}
+                          >
+                            ✂ {(removedMs / 1000).toFixed(1)}s
+                          </button>
+                        )
+                      })
+                    : null}
                   {lane === 'video' && drag?.reorder && drag.moved && drag.insertBefore !== undefined ? (
                     <div
                       className="pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-primary"

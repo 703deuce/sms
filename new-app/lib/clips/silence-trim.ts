@@ -38,7 +38,7 @@ export const SILENCE_TRIM_STREAM_GENTLE: SilenceTrimSettings = {
   protectReactionGaps: true,
 }
 
-const FILLER_ONLY_RE = /^(um|uh|erm|hmm|mm|mhm)$/i
+const FILLER_ONLY_RE = /^(um+|uh+|uhm|erm|hmm+|mm+|mhm+)$/i
 
 function cutOverlapsProtectedSpan(cut: CutRange, spans: CutRange[] | undefined): boolean {
   if (!spans?.length) return false
@@ -87,7 +87,7 @@ export function fillerWordCutRanges(
 ): CutRange[] {
   const cuts: CutRange[] = []
   for (const w of words) {
-    const text = (w.w ?? '').trim()
+    const text = (w.w ?? '').replace(/[^\w']/g, '').trim()
     if (!text || !FILLER_ONLY_RE.test(text)) continue
     const a = Math.round(w.s * 1000)
     const b = Math.round(w.e * 1000)

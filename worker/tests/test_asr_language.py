@@ -18,6 +18,7 @@ def test_listen_params_default_matches_english():
 def test_listen_params_auto_detect():
     p = _params("auto")
     assert p.get("detect_language") == ["true"]
+    assert p.get("filler_words") == ["true"]
     assert "language" not in p
 
 

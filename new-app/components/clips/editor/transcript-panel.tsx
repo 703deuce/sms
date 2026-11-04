@@ -362,6 +362,9 @@ export function TranscriptPanel({
     const wa = selected[0]
     const wb = selected[selected.length - 1]
     onAddCut([Math.round(wa.s * 1000), Math.round(wb.e * 1000)])
+    toast.success(`Cut ${((wb.e - wa.s) || 0).toFixed(1)}s from the video`, {
+      description: 'Removed from the preview, the Timeline (✂ marks the join) and the export. ⌘Z to undo.',
+    })
     setSelStart(null)
     setSelEnd(null)
   }
@@ -399,6 +402,7 @@ export function TranscriptPanel({
     }
     const on = nextIgnoreState(ws, edits.wordFixes)
     onSetEdits({ ...edits, ...setWordsIgnored(edits.wordFixes, edits.wordFixMeta, ws, on) })
+    if (on) toast.message('Hidden from captions only. The video still has this part; use Cut to remove it.')
   }
   const restoreSelection = () => {
     const r = selRange()
@@ -737,7 +741,7 @@ export function TranscriptPanel({
                   isFiller ? 'decoration-muted-foreground/80' : ''
                 }`
               : ''
-          } ${surrounding ? 'line-through decoration-muted-foreground/70' : ''} ${pickHighlight ? 'bg-primary/15 ring-1 ring-primary/25' : ''} ${ignored && !cut ? 'text-muted-foreground/50 line-through decoration-dashed decoration-muted-foreground/70' : ''} ${selected && !nextSelected ? 'bg-primary/25' : ''} ${
+          } ${surrounding ? 'line-through decoration-muted-foreground/70' : ''} ${pickHighlight ? 'bg-primary/15 ring-1 ring-primary/25' : ''} ${ignored && !cut ? 'text-muted-foreground/45 italic underline decoration-dotted decoration-muted-foreground/60' : ''} ${selected && !nextSelected ? 'bg-primary/25' : ''} ${
             edits.captions?.emphasis?.includes(w.i) ? 'underline decoration-dotted decoration-lane-ai' : ''
           }`}
           onClick={(e) => {
@@ -1194,11 +1198,11 @@ export function TranscriptPanel({
               variant="ghost"
               className="h-8 gap-1"
               onClick={toggleIgnoreSelection}
-              title="Strike from the script and captions; keep the video and audio. Ignoring drops any text correction on that word."
+              title="Hide from captions only. The video and audio KEEP this part (use Cut to remove it). Hiding drops any text correction on that word."
               data-testid="transcript-ignore"
             >
               <EyeOff className="size-3.5" />
-              {ignoreTargets().length && !nextIgnoreState(ignoreTargets(), edits.wordFixes) ? 'Unignore' : 'Ignore'}
+              {ignoreTargets().length && !nextIgnoreState(ignoreTargets(), edits.wordFixes) ? 'Show in captions' : 'Hide text only'}
             </Button>
           ) : null}
           <Button
