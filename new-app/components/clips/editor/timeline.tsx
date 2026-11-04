@@ -513,7 +513,10 @@ export function Timeline({
   // length on the lane and push later items right. Edits stay in base time; identity without inserts.
   const tmap = useMemo(() => exportTimeMap(tb.segs, edits.inserts), [tb.segs, edits.inserts])
   const dspan = span + tmap.totalMs
-  const rulerSpanMs = Math.max(dspan, trimScaleFloorMs ?? 0)
+  // B2: preserve the untrimmed source extent as spare space after shortening either edge.
+  // Otherwise trackWidthPx refits to the shorter clip and the same pointer cannot extend it again.
+  const originalSpanMs = Math.max(0, clipEndMs - Math.min(clipStartMs, previewEdits.trim.in))
+  const rulerSpanMs = Math.max(dspan, originalSpanMs, trimScaleFloorMs ?? 0)
   const minPx = timelineMinPxPerSec(rulerSpanMs, trackViewportPx)
   const minPxRef = useRef(minPx)
   minPxRef.current = minPx
@@ -2288,7 +2291,10 @@ export function Timeline({
 
   const startDrag = (e: React.PointerEvent, item: TimelineItem, mode: DragState['mode']) => {
     if (e.button !== 0) return
-    if (item.lane === 'video' && (mode === 'start' || mode === 'end')) setTrimScaleFloorMs((prev) => Math.max(prev ?? 0, dspan))
+    if (item.lane === 'video' && (mode === 'start' || mode === 'end')) {
+      // Freeze the scale for this gesture, including the region available for extending the source.
+      setTrimScaleFloorMs((prev) => Math.max(prev ?? 0, rulerSpanMs))
+    }
     // TC2b: the Hand tool scrolls from anywhere (the track area handles it).
     if (tool === 'hand') return
     e.stopPropagation()
@@ -2389,6 +2395,8 @@ export function Timeline({
     const thr = SNAP_PX / Math.max(1e-6, pxPerMs)
     const ctx = opCtx()
     const state: DragState = { mode: dragMode, item, refs, originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, alt: e.altKey }
+    // Keep the content coordinate beneath the drag pointer stable while horizontal scrolling.
+    const scrollAtStart = scrollRef.current?.scrollLeft ?? 0
     setDrag(state)
     const captureEl = e.currentTarget as HTMLElement
     try {
@@ -2397,7 +2405,14 @@ export function Timeline({
       /* ignore */
     }
     const onMove = (ev: PointerEvent) => {
-      const dx = ev.clientX - state.originX
+      const scroller = scrollRef.current
+      if (dragMode !== 'move' && scroller) {
+        const bounds = scroller.getBoundingClientRect()
+        const edgePx = 28
+        if (ev.clientX > bounds.right - edgePx && ev.clientX <= bounds.right + edgePx) scroller.scrollLeft += 20
+        else if (ev.clientX < bounds.left + edgePx && ev.clientX >= bounds.left - edgePx) scroller.scrollLeft -= 20
+      }
+      const dx = ev.clientX - state.originX + ((scroller?.scrollLeft ?? scrollAtStart) - scrollAtStart)
       if (!state.moved && Math.abs(dx) < DRAG_SLOP_PX) return
       state.moved = true
       // TC2b: lanes are in export time — a drag across an insert lands where the pointer is
