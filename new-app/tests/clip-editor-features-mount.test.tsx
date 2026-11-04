@@ -166,6 +166,22 @@ describe('clip editor feature mounts (EditorShell)', () => {
     expect(ui.getByTestId('retake-run')).toBeTruthy()
   })
 
+  it('mounts each Script tool once, including after switching tools', () => {
+    const ui = renderShell(loadFixture('regular.json'))
+    openScriptCleanup(ui)
+    expect(ui.getAllByTestId('clarity-run')).toHaveLength(1)
+    expect(ui.getAllByTestId('retake-run')).toHaveLength(1)
+    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
+
+    fireEvent.click(ui.getByTestId('script-tool-text'))
+    expect(ui.getAllByTestId('editor-panel-text')).toHaveLength(1)
+    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
+
+    fireEvent.click(ui.getByTestId('script-tool-audio'))
+    expect(ui.getAllByTestId('audio-music-sfx-mix')).toHaveLength(1)
+    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
+  })
+
   it('Text: voiceover preview control on selected text item', async () => {
     const blob = new Blob(['x'], { type: 'audio/mpeg' })
     vi.stubGlobal(
