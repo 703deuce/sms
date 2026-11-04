@@ -7,7 +7,7 @@ import { defaultEdits } from '@/lib/clips/edits'
 afterEach(cleanup)
 
 describe('TextPanel multi-part templates', () => {
-  for (const [id, count] of [['qs_quote', 3], ['cd_321', 3], ['qs_stat', 2]] as const) {
+  for (const [id, count] of [['c_qs_quote', 3], ['c_cd_321', 3], ['c_qs_stat', 2]] as const) {
     it(`adds ${id} to the actual Text track at the playhead`, () => {
       const onEdits = vi.fn()
       const onSelect = vi.fn()
