@@ -774,6 +774,23 @@ export function trimItem(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: 
   return null
 }
 
+/** TIMELINE_LAYOUT1: magnet OFF — a trimmed main-video edge leaves a black gap of the removed length (no ripple). */
+function gapIfMagnetOff(ctx: OpCtx, next: ClipEditsV2, removedMs: number, atSrcMs: number | null): ClipEditsV2 {
+  if (ctx.magnet ?? magnetOn(ctx.edits.timelineOpts)) return next
+  const inserts = [...(next.inserts ?? [])]
+  if (inserts.length >= MAX_INSERTS || removedMs < INSERT_MIN_MS) return next
+  inserts.push({
+    id: newGapId(),
+    sourceId: GAP_SOURCE_ID,
+    atSrcMs: atSrcMs ?? 0,
+    ...(atSrcMs == null ? { append: true as const } : {}),
+    inMs: 0,
+    durMs: Math.min(INSERT_MAX_MS, Math.round(removedMs)),
+    audio: 'mute',
+  })
+  return { ...next, inserts }
+}
+
 function trimVideoSegment(
   ctx: OpCtx,
   tb: Timebase,
@@ -804,7 +821,8 @@ function trimVideoSegment(
     }
     newA = Math.max(newA, prevEnd)
     if (newA === a) return null
-    if (newA > a) return { ...edits, cutRanges: mergeCutRanges([...edits.cutRanges, [a, newA] as CutRange]) }
+    if (newA > a)
+      return gapIfMagnetOff(ctx, { ...edits, cutRanges: mergeCutRanges([...edits.cutRanges, [a, newA] as CutRange]) }, newA - a, newA)
     return { ...edits, cutRanges: subtractRangeFromCuts(edits.cutRanges, [newA, a]) }
   }
 
@@ -819,7 +837,13 @@ function trimVideoSegment(
   }
   newB = Math.min(newB, nextStart)
   if (newB === b) return null
-  if (newB < b) return { ...edits, cutRanges: mergeCutRanges([...edits.cutRanges, [newB, b] as CutRange]) }
+  if (newB < b)
+    return gapIfMagnetOff(
+      ctx,
+      { ...edits, cutRanges: mergeCutRanges([...edits.cutRanges, [newB, b] as CutRange]) },
+      b - newB,
+      nextStart < pv.trim.out ? nextStart : null,
+    )
   return { ...edits, cutRanges: subtractRangeFromCuts(edits.cutRanges, [b, newB]) }
 }
 

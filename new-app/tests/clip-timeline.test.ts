@@ -177,6 +177,14 @@ describe('operations map onto the edits model', () => {
     expect(tout.loopFriendlyEnd).toBe(false)
   })
 
+  it('magnet off: main-video start trim also inserts a gap (TIMELINE_LAYOUT1)', () => {
+    const e = base({ cutRanges: [[3000, 4000]] })
+    const s = trimItem({ ...ctxOf(e), magnet: false }, { lane: 'video', id: 'seg:4000' }, 'start', 3500)!
+    expect(s.cutRanges).toEqual([[3000, 4500]])
+    expect(s.inserts?.length).toBe(1)
+    expect(s.inserts![0]!.durMs).toBe(500)
+  })
+
   it('locked lanes are not editable', () => {
     const locked = setLaneState(withBroll, 'broll', { locked: true })
     expect(moveItems(ctxOf(locked), [{ lane: 'broll', id: 'b1' }], 500)).toBeNull()

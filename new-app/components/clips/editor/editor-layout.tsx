@@ -57,6 +57,16 @@ export const EDITOR_GRID = {
   timelineScript:
     'col-span-full h-[168px] min-h-[168px] max-h-[168px] shrink-0 overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-2',
   backdrop: 'fixed inset-0 z-30 bg-black/50 lg:max-xl:bg-black/30 xl:hidden',
+  /** TIMELINE_LAYOUT1: Timeline view like Script view: preview | docked panel | tool rail (right); timeline full width below. */
+  rootDock:
+    'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
+    'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
+    'lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:grid-rows-[minmax(0,1fr)_auto]',
+  railDock: 'min-h-0 lg:col-start-3 lg:row-start-1',
+  panelDock: 'lg:col-start-2 lg:row-start-1 lg:w-[min(var(--editor-panel-w,360px),40vw)]',
+  previewDock: 'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg bg-panel lg:col-start-1 lg:row-start-1',
+  timelineDock:
+    'col-span-full min-h-0 overflow-y-auto rounded-lg border border-border bg-card max-h-[clamp(220px,58dvh,760px)] lg:row-start-2',
 } as const
 
 export function EditorLayout(props: {
@@ -76,6 +86,8 @@ export function EditorLayout(props: {
   /** Phase 3: Descript-style script view hides the docked side panel column. */
   hidePanelColumn?: boolean
   hidePropertiesColumn?: boolean
+  /** TIMELINE_LAYOUT1: tools rail + docked panel on the right (Timeline view, lg+). */
+  dockTools?: boolean
 }) {
   const { band, panelOpen, panelWidthPx, onPanelWidthChange, hidePanelColumn, hidePropertiesColumn } = props
   const compact = props.compact === true
@@ -111,13 +123,16 @@ export function EditorLayout(props: {
         } as React.CSSProperties)
       : undefined
 
-  const rootClass = scriptView
-    ? EDITOR_GRID.rootScript
-    : compact
-      ? EDITOR_GRID.rootCompact
-      : EDITOR_GRID.root
-  const previewClass = scriptView ? EDITOR_GRID.previewScript : EDITOR_GRID.preview
-  const timelineClass = scriptView ? EDITOR_GRID.timelineScript : EDITOR_GRID.timeline
+  const dock = props.dockTools === true && !scriptView
+  const rootClass = dock
+    ? EDITOR_GRID.rootDock
+    : scriptView
+      ? EDITOR_GRID.rootScript
+      : compact
+        ? EDITOR_GRID.rootCompact
+        : EDITOR_GRID.root
+  const previewClass = dock ? EDITOR_GRID.previewDock : scriptView ? EDITOR_GRID.previewScript : EDITOR_GRID.preview
+  const timelineClass = dock ? EDITOR_GRID.timelineDock : scriptView ? EDITOR_GRID.timelineScript : EDITOR_GRID.timeline
   const propertiesClass =
     compact || hidePropertiesColumn ? EDITOR_GRID.propertiesHidden : EDITOR_GRID.properties
 
@@ -130,23 +145,24 @@ export function EditorLayout(props: {
       data-compact={compact ? 'true' : undefined}
       data-script-view={scriptView ? 'true' : undefined}
     >
-      <div data-region="rail" className={scriptView ? EDITOR_GRID.railScript : EDITOR_GRID.rail}>{props.rail}</div>
-      {overlay && panelOpen ? (
+      <div data-region="rail" className={dock ? EDITOR_GRID.railDock : scriptView ? EDITOR_GRID.railScript : EDITOR_GRID.rail}>{props.rail}</div>
+      {overlay && panelOpen && !dock ? (
         <button type="button" aria-label="Close panel" className={EDITOR_GRID.backdrop} onClick={props.onClosePanel} data-testid="editor-panel-backdrop" />
       ) : null}
       <section
         data-region="panel"
-        hidden={overlay && !panelOpen}
+        hidden={dock ? !panelOpen : overlay && !panelOpen}
+        data-dock={dock ? 'true' : undefined}
         className={cn(
           EDITOR_GRID.panel,
-          EDITOR_GRID.panelMobile,
-          EDITOR_GRID.panelCompact,
-          scriptView ? EDITOR_GRID.panelScriptHidden : EDITOR_GRID.panelDocked,
+          dock ? EDITOR_GRID.panelDock : EDITOR_GRID.panelMobile,
+          dock ? null : EDITOR_GRID.panelCompact,
+          dock ? null : scriptView ? EDITOR_GRID.panelScriptHidden : EDITOR_GRID.panelDocked,
           'relative',
         )}
       >
         {props.panel}
-        {onPanelWidthChange && panelWidthPx != null && !overlay && !scriptView ? (
+        {onPanelWidthChange && panelWidthPx != null && !overlay && !scriptView && !dock ? (
           <button
             type="button"
             aria-label="Resize panel"

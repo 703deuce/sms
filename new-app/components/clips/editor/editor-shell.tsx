@@ -35,7 +35,7 @@ import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, Maximize2, Megaphone, PanelRightOpen } from 'lucide-react'
+import { Loader2, Maximize2, Megaphone, PanelRightOpen, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClipBounds } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -370,6 +370,9 @@ export function EditorShell({
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
   const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
+  // TIMELINE_LAYOUT1: Timeline view (lg+) uses the Script-view layout: rail + docked panel on the right.
+  const [dockPanelOpen, setDockPanelOpen] = useState(false)
+  const dockTools = layoutView === 'timeline' && band !== 'mobile'
   const [editorShortcutsOpen, setEditorShortcutsOpen] = useState(false)
   /** MENUBAR1: last top-menu command for the Timeline (seq bumps on every click). */
   const [timelineMenuCmd, setTimelineMenuCmd] = useState<{ cmd: TimelineMenuCommand; seq: number } | null>(null)
@@ -380,16 +383,18 @@ export function EditorShell({
     setLayoutView(view)
     writeClipEditorLayoutView(view)
     if (view !== 'script') setScriptToolPanel(null)
+    setDockPanelOpen(false)
   }, [])
   const { transcriptPct: scriptSplitPct, persist: persistScriptSplit } = useScriptViewSplit()
   const selectPanel = useCallback((id: EditorPanelId) => {
     setPanel(id)
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
-    if (band === 'mobile' || band === 'compact') {
+    if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpen(true)
+    else if (band === 'mobile' || band === 'compact') {
       setMobilePanelOpen(true)
     }
-  }, [band])
+  }, [band, layoutView])
   const toggleScriptTool = useCallback(
     (id: ScriptViewToolPanelId) => {
       setScriptToolPanel((prev) => {
@@ -413,10 +418,10 @@ export function EditorShell({
     [selectPanel],
   )
   useEffect(() => {
-    if (band === 'wide' && panel === 'inspector') {
+    if (band === 'wide' && panel === 'inspector' && layoutView !== 'timeline') {
       setPanel('transcript')
     }
-  }, [band, panel])
+  }, [band, panel, layoutView])
   const openLayersTab = useCallback(() => selectPanel('layers'), [selectPanel])
 
   // G4cfix2: every B2 medium on the editor route in CORS mode (+ recovery of pre-hydration failures).
@@ -2474,9 +2479,9 @@ export function EditorShell({
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
-      {(scope === 'inspector' || (band !== 'wide' && panelMounted('inspector'))) ? (
+      {(scope === 'inspector' || ((band !== 'wide' || dockTools) && panelMounted('inspector'))) ? (
         <div className={on('inspector') ? undefined : 'hidden'} aria-hidden={!on('inspector')} data-testid="editor-panel-inspector">
-          {renderInspectorPropertiesPanel(scope === 'inspector' || band !== 'wide')}
+          {renderInspectorPropertiesPanel(scope === 'inspector' || band !== 'wide' || dockTools)}
         </div>
       ) : null}
       {panelMounted('color') ? (
@@ -2728,7 +2733,7 @@ export function EditorShell({
         ) : null}
       </div>
           ) : null}
-        <div className="min-w-0 shrink-0 space-y-2 border-t border-border pt-2">
+        <div className={cn('min-w-0 shrink-0 space-y-2 border-t border-border pt-2', dockTools && 'mx-auto w-full max-w-4xl')}>
           <PreviewTransportStrip
             compact={layoutView === 'script' || previewFrameW < 560}
             recordSlot={
@@ -3026,7 +3031,7 @@ export function EditorShell({
   const openVideoTools = (testId: string) => {
     onCanvasSelect('video')
     if (layoutView === 'script') openToolPanel('inspector')
-    else if (band !== 'wide') selectPanel('inspector')
+    else if (band !== 'wide' || layoutView === 'timeline') selectPanel('inspector')
     scrollToTestId(testId)
   }
   const openVersions = () => {
@@ -3035,6 +3040,14 @@ export function EditorShell({
   const openProjectSettings = () => {
     // SCRIPT_DOC3: a dialog always opens, whatever is selected and whichever view is shown.
     setProjectSettingsOpen(true)
+  }
+  /** TIMELINE_LAYOUT1: clicking the open group again closes the docked panel (Script-view rail behaviour). */
+  const dockSelectGroup = (groupId: EditorRailGroupId) => {
+    if (dockPanelOpen && panelToRailGroup(panel)?.id === groupId) {
+      setDockPanelOpen(false)
+      return
+    }
+    selectRailGroup(groupId)
   }
   const needSel = canvasSel ? null : 'Select a clip first'
   const needBroll = canvasSel?.target.startsWith('broll:') ? null : 'Select a B-roll clip first'
@@ -3443,18 +3456,45 @@ export function EditorShell({
         <EditorLayout
           band={band}
           compact={compact}
-          panelOpen={mobilePanelOpen}
-          onClosePanel={() => setMobilePanelOpen(false)}
+          panelOpen={dockTools ? dockPanelOpen : mobilePanelOpen}
+          onClosePanel={() => (dockTools ? setDockPanelOpen(false) : setMobilePanelOpen(false))}
           panelWidthPx={panelWidthPx}
           onPanelWidthChange={persistPanelWidth}
           hidePanelColumn={layoutView === 'script'}
-          hidePropertiesColumn={layoutView === 'script'}
+          hidePropertiesColumn={layoutView === 'script' || dockTools}
+          dockTools={dockTools}
           rail={
             <>
               <EditorMobileRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
-              <div className="hidden min-h-0 lg:block">
-                <EditorRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
-              </div>
+              {dockTools ? (
+                <div className="hidden h-full min-h-0 flex-col gap-1 lg:flex" data-testid="timeline-dock-rail">
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex h-12 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-border bg-card text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground',
+                      dockPanelOpen && panel === 'inspector' && 'bg-accent text-foreground',
+                    )}
+                    onClick={() => (dockPanelOpen && panel === 'inspector' ? setDockPanelOpen(false) : selectPanel('inspector'))}
+                    aria-label="Properties"
+                    aria-pressed={dockPanelOpen && panel === 'inspector'}
+                    data-testid="timeline-dock-properties"
+                  >
+                    <SlidersHorizontal className="size-5" aria-hidden />
+                    Properties
+                  </button>
+                  <div className="min-h-0 flex-1">
+                    <EditorRail
+                      active={panel}
+                      onChange={(id) => (dockPanelOpen && panel === id ? setDockPanelOpen(false) : selectPanel(id))}
+                      onSelectGroup={dockSelectGroup}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="hidden min-h-0 lg:block">
+                  <EditorRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
+                </div>
+              )}
             </>
           }
           panel={
@@ -3464,8 +3504,17 @@ export function EditorShell({
                   <TabIcon className="size-4 text-muted-foreground" aria-hidden />
                   <h2 className="text-sm font-semibold">{meta.label}</h2>
                   <span className="ml-auto hidden text-xs text-muted-foreground sm:inline">{meta.hint}</span>
-                  {band === 'mobile' || band === 'compact' ? (
-                    <Button type="button" size="sm" variant="ghost" onClick={() => setMobilePanelOpen(false)}>
+                  {band === 'mobile' || band === 'compact' || dockTools ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setMobilePanelOpen(false)
+                        setDockPanelOpen(false)
+                      }}
+                      data-testid="timeline-dock-close"
+                    >
                       Close
                     </Button>
                   ) : null}
@@ -3528,7 +3577,7 @@ export function EditorShell({
             )
           }
           properties={
-            !compact && band === 'wide' ? (
+            !compact && band === 'wide' && !dockTools ? (
               <>
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
                   <h2 className="text-sm font-semibold">Properties</h2>
