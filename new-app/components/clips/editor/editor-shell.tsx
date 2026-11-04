@@ -3745,6 +3745,24 @@ export function EditorShell({
             transcriptSelectionRef={selectionRef}
             registerBeatCut={registerBeatCut}
             menuCommand={timelineMenuCmd}
+            editorToolCommands={[
+              ...editorMenus.flatMap((menu) => menu.groups.flatMap((group) => group.items.map((item) => ({
+                id: `editor-${menu.id}-${item.id}`,
+                group: menu.label,
+                label: item.label,
+                keys: item.shortcut,
+                keywords: item.id === 'bg-removal' ? 'background cutout remove bg green screen chroma' : item.id === 'blur' ? 'face blur region mask privacy' : item.id === 'cleanup' ? 'clean fillers remove retakes edit clarity' : item.id === 'music' ? 'music audio sfx sound' : item.id === 'layout' ? 'layout aspect ratio crop 16:9 9:16' : '',
+                run: item.onSelect,
+                disabled: Boolean(item.disabledHint),
+              })))),
+              ...(['transcript', 'cleanup', 'layout', 'inspector', 'captions', 'text', 'audio', 'effects', 'media', 'layers', 'templates', 'broll', 'brand'] as EditorPanelId[]).map((id) => ({
+                id: `editor-panel-${id}`,
+                group: 'Editor tools',
+                label: id === 'inspector' ? 'Properties / Inspector' : id === 'transcript' ? 'Script / Transcript' : id === 'cleanup' ? 'Clean up / Edit for clarity' : id[0]!.toUpperCase() + id.slice(1),
+                keywords: id === 'inspector' ? 'transform rotation position scale' : id === 'effects' ? 'color filters speed adjustment' : id === 'audio' ? 'music sfx sound' : id === 'layout' ? 'aspect ratio background' : '',
+                run: () => openToolPanel(id),
+              })),
+            ]}
             momentFocus={fvMoment}
             onMomentSeek={seekSource}
             highlights={
