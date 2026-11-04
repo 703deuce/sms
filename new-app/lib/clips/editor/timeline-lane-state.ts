@@ -11,7 +11,7 @@ export const LANE_TOGGLES: Record<LaneId, { mute: boolean; hide: boolean; solo?:
   captions: { mute: false, hide: false },
   text: { mute: false, hide: true },
   adjust: { mute: false, hide: true },
-  video: { mute: false, hide: false },
+  video: { mute: false, hide: true },
   broll: { mute: false, hide: true },
   voice: { mute: true, hide: false, solo: true },
   music: { mute: true, hide: false, solo: true },
