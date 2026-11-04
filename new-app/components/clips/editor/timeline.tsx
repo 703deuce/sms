@@ -516,7 +516,7 @@ export function Timeline({
   // B2: preserve the untrimmed source extent as spare space after shortening either edge.
   // Otherwise trackWidthPx refits to the shorter clip and the same pointer cannot extend it again.
   const originalSpanMs = Math.max(0, clipEndMs - Math.min(clipStartMs, previewEdits.trim.in))
-  const rulerSpanMs = Math.max(dspan, originalSpanMs, trimScaleFloorMs ?? 0)
+  const rulerSpanMs = Math.max(dspan, trimScaleFloorMs ?? 0)
   const minPx = timelineMinPxPerSec(rulerSpanMs, trackViewportPx)
   const minPxRef = useRef(minPx)
   minPxRef.current = minPx
@@ -2291,10 +2291,6 @@ export function Timeline({
 
   const startDrag = (e: React.PointerEvent, item: TimelineItem, mode: DragState['mode']) => {
     if (e.button !== 0) return
-    if (item.lane === 'video' && (mode === 'start' || mode === 'end')) {
-      // Freeze the scale for this gesture, including the region available for extending the source.
-      setTrimScaleFloorMs((prev) => Math.max(prev ?? 0, rulerSpanMs))
-    }
     // TC2b: the Hand tool scrolls from anywhere (the track area handles it).
     if (tool === 'hand') return
     e.stopPropagation()
@@ -2452,6 +2448,9 @@ export function Timeline({
         /* ignore */
       }
       setDrag(null)
+      if (item.lane === 'video' && dragMode !== 'move' && state.moved) {
+        setTrimScaleFloorMs((prev) => Math.max(prev ?? 0, rulerSpanMs, originalSpanMs))
+      }
       const alt = state.alt || ev.altKey
       const fromRow = rowOfItem(item)?.key ?? null
       const toRow = dragMode === 'move' && state.targetRow && state.targetRow !== fromRow ? rows.find((r) => r.key === state.targetRow) : undefined
