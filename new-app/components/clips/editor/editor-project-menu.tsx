@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -90,7 +91,9 @@ export function EditorProjectMenu({
           }
         />
         <DropdownMenuContent align="start" className="w-56">
-          <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{title}</DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{title}</DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           {item(actions.newProject)}
           {item(actions.openProjects)}

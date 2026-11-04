@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Captions, Eraser, FolderOpen, Layers, LayoutPanelTop, Music2, SlidersHorizontal, Sparkles, Type } from 'lucide-react'
+import { Captions, Eraser, FolderOpen, Layers, LayoutPanelTop, LayoutTemplate, Music2, SlidersHorizontal, Sparkles, Type } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { EditorPanelId } from '@/components/clips/editor/editor-rail'
@@ -10,7 +10,7 @@ import type { EditorPanelId } from '@/components/clips/editor/editor-rail'
 /** Descript-style script view tool strip (far right). */
 export type ScriptViewToolPanelId = Extract<
   EditorPanelId,
-  'cleanup' | 'layout' | 'inspector' | 'captions' | 'text' | 'audio' | 'color' | 'media' | 'layers'
+  'cleanup' | 'layout' | 'inspector' | 'captions' | 'text' | 'audio' | 'color' | 'media' | 'layers' | 'templates'
 >
 
 export const SCRIPT_VIEW_TOOL_PANELS: { id: ScriptViewToolPanelId; label: string; icon: LucideIcon }[] = [
@@ -23,6 +23,7 @@ export const SCRIPT_VIEW_TOOL_PANELS: { id: ScriptViewToolPanelId; label: string
   { id: 'color', label: 'Effects', icon: Sparkles },
   { id: 'media', label: 'Media', icon: FolderOpen },
   { id: 'layers', label: 'Layers', icon: Layers },
+  { id: 'templates', label: 'Templates', icon: LayoutTemplate },
 ]
 
 export const SCRIPT_VIEW_DRAWER_WIDTH_PX = 340
