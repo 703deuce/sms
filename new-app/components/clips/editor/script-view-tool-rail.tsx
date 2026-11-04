@@ -31,14 +31,19 @@ export function ScriptViewToolTabs({
   active,
   onSelect,
   onShowScript,
+  variant = 'script',
 }: {
   active: ScriptViewToolPanelId | null
   onSelect: (id: ScriptViewToolPanelId) => void
   onShowScript: () => void
+  variant?: 'script' | 'sidebar'
 }) {
   return (
     <nav
-      className="grid min-w-0 shrink-0 grid-cols-5 gap-0.5 border-b border-border bg-card px-1.5 py-1 sm:grid-cols-6"
+      className={cn(
+        "grid min-w-0 shrink-0 gap-0.5 border-b border-border bg-card px-1.5 py-1",
+        variant === "sidebar" ? "grid-cols-3" : "grid-cols-5 sm:grid-cols-6",
+      )}
       aria-label="Script workspace tools"
       data-testid="script-view-tool-tabs"
     >
