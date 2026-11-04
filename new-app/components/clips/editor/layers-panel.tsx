@@ -2,6 +2,7 @@
 
 import { GripVertical, Eye, EyeOff, Lock, Unlock, Loader2 } from 'lucide-react'
 import { orderedStack, moveInStack } from '@/lib/clips/editor/layer-props'
+import { visualStack, trackIdOf, moveTrack, trackState } from '@/lib/clips/editor/tracks'
 import { toggleItemsEnabled } from '@/lib/clips/editor/item-flags'
 import { setLaneState, laneState } from '@/lib/clips/editor/clip-timeline'
 import { useState } from 'react'
@@ -43,15 +44,24 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null)
   const broll = orderedStack(edits, 'broll', edits.broll ?? [])
   const text = orderedStack(edits, 'text', edits.textItems ?? [])
-  // Visual stack from top to bottom (the video is the backmost visual layer).
+  // E5: order the real visual rows by the SAME mixed text/overlay track stack
+  // as preview/export. The old list hardcoded every text layer above every B-roll.
+  const visuals = [
+    ...text.map((t) => ({ key: `text:${t.id}`, label: t.text?.trim().slice(0, 36) || 'Text', kind: 'text' as const, id: t.id, startMs: t.startMs })),
+    ...broll.map((b) => ({ key: `broll:${b.id}`, label: `B-roll · ${b.id.slice(0, 18)}`, kind: 'broll' as const, id: b.id, startMs: b.startMs })),
+  ]
+  const tracks = visualStack(edits)
+  const trackRank = (r: ActualVisualLayer) => tracks.findIndex(t => t.id === trackIdOf(edits, r.kind === 'text' ? 'text' : 'overlay', r.id))
+  const sortedVisuals = visuals.slice().sort((a, b) => trackRank(b) - trackRank(a) || (a.kind === b.kind ? (a.kind === 'text' ? text.findIndex(t => t.id === b.id) - text.findIndex(t => t.id === a.id) : broll.findIndex(t => t.id === b.id) - broll.findIndex(t => t.id === a.id)) : 0))
+  // Visual stack from front to back. Captions/legacy overlays have fixed render slots.
   const stack: ActualVisualLayer[] = [
     ...layers.filter((l) => l.type === 'sticker').map((l) => ({ key: `sticker:${l.id}`, label: 'Sticker · ' + (('text' in l && l.text) || l.id), kind: 'sticker' as const, id: l.id, startMs: 0 })),
-    ...text.slice().reverse().map((t) => ({ key: `text:${t.id}`, label: t.text?.trim().slice(0, 36) || 'Text', kind: 'text' as const, id: t.id, startMs: t.startMs })),
+
     { key: 'captions', label: 'Captions', kind: 'captions' as const, id: 'captions', startMs: 0 },
     ...layers.filter((l) => l.type === 'badge').map((l) => ({ key: `badge:${l.id}`, label: 'Platform badge', kind: 'badge' as const, id: l.id, startMs: 0 })),
     ...layers.filter((l) => l.type === 'headline').map((l) => ({ key: `headline:${l.id}`, label: 'Headline', kind: 'headline' as const, id: l.id, startMs: 0 })),
     ...(edits.hookOverlay ? [{ key: 'hook', label: 'Hook overlay', kind: 'hook' as const, id: 'hook', startMs: 0 }] : []),
-    ...broll.slice().reverse().map((b) => ({ key: `broll:${b.id}`, label: `B-roll · ${b.id.slice(0, 18)}`, kind: 'broll' as const, id: b.id, startMs: b.startMs })),
+    ...sortedVisuals,
     { key: 'video', label: 'Main video', kind: 'video', id: 'video', startMs: 0 },
   ]
   const off = new Set(edits.disabledItems ?? [])
@@ -70,12 +80,33 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
     if (next) onEdits(next)
   }
   const reorder = (src: ActualVisualLayer, to: ActualVisualLayer) => {
-    // The shared preview/export model permits reordering overlapping items on
-    // their same visual track, not arbitrary cross-type compositing.
-    if (src.kind !== to.kind || (src.kind !== 'text' && src.kind !== 'broll') || src.key === to.key) return
-    const rows = stack.filter((r) => r.kind === src.kind)
-    const a = rows.findIndex((r) => r.key === src.key)
-    const b = rows.findIndex((r) => r.key === to.key)
+    if (src.key === to.key || !['text', 'broll'].includes(src.kind) || !['text', 'broll'].includes(to.kind)) return
+    const sourceKind = src.kind === 'text' ? 'text' : 'overlay'
+    const destKind = to.kind === 'text' ? 'text' : 'overlay'
+    const sourceTrack = trackIdOf(edits, sourceKind, src.id)
+    const destTrack = trackIdOf(edits, destKind, to.id)
+    if (trackState(edits, sourceTrack).locked || trackState(edits, destTrack).locked) return
+    if (sourceTrack !== destTrack) {
+      // Across types / tracks, move the owning visual track in the persistent
+      // compositor order. This changes actual preview/export stacking, not only UI rows.
+      const tracks = visualStack(edits)
+      const a = tracks.findIndex(t => t.id === sourceTrack)
+      const b = tracks.findIndex(t => t.id === destTrack)
+      if (a < 0 || b < 0) return
+      const dir = a < b ? 'up' : 'down'
+      let next = edits
+      for (let i = 0; i < Math.abs(b - a); i++) {
+        const moved = moveTrack(next, sourceTrack, dir)
+        if (!moved) break
+        next = moved
+      }
+      if (next !== edits) onEdits(next)
+      return
+    }
+    if (src.kind !== to.kind) return
+    const rows = stack.filter(r => r.kind === src.kind && trackIdOf(edits, sourceKind, r.id) === sourceTrack)
+    const a = rows.findIndex(r => r.key === src.key)
+    const b = rows.findIndex(r => r.key === to.key)
     if (a < 0 || b < 0) return
     let next = edits
     const dir = a < b ? 'backward' : 'forward'
@@ -96,9 +127,9 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
           return (
             <li key={row.key} className="flex items-center gap-1 rounded border border-border/60 px-1 py-1"
               data-testid={`actual-layer-${row.key}`}
-              draggable={row.kind === 'text' || row.kind === 'broll'}
+              draggable={(row.kind === 'text' || row.kind === 'broll') && !locked}
               onDragStart={(e) => { setDragged(row.key); e.dataTransfer.effectAllowed = 'move' }}
-              onDragOver={(e) => { if (dragged && dragged !== row.key) e.preventDefault() }}
+              onDragOver={(e) => { if (dragged && dragged !== row.key && (row.kind === 'text' || row.kind === 'broll') && !locked) e.preventDefault() }}
               onDrop={(e) => { e.preventDefault(); const from = stack.find((r) => r.key === dragged); if (from) reorder(from, row); setDragged(null) }}
               onDragEnd={() => setDragged(null)}>
               <GripVertical size={13} className="shrink-0 text-muted-foreground" aria-hidden />
@@ -120,7 +151,7 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
           )
         })}
       </ul>
-      <p className="text-[10px] text-muted-foreground">Drag overlapping text or B-roll layers to change stacking within their track. Video and track locks prevent editing.</p>
+      <p className="text-[10px] text-muted-foreground">Drag Text or B-roll to reorder overlapping items, or to move their track above/below another visual track. Locked tracks cannot be moved.</p>
     </section>
   )
 }
