@@ -1073,7 +1073,7 @@ export function PreviewStage({
     () => sourceSegmentAt(edits.sourceSegments, previewSourceMs),
     [edits.sourceSegments, previewSourceMs],
   )
-  const mainHiddenByLayout = segmentLayoutActive ? ' invisible pointer-events-none' : ''
+  const mainHiddenByLayout = segmentLayoutActive || edits.timelineLanes?.video?.hidden ? ' invisible pointer-events-none' : ''
   const facecamBox = edits.layout.facecam?.box
   const facecamGameplay = edits.layout.facecam?.gameplay
   const facecamStackPreview =
@@ -1366,7 +1366,7 @@ export function PreviewStage({
         <div ref={mainFxRef} className="absolute inset-0">
         <div ref={underRef} className="absolute inset-0" data-testid="preview-under">
         <div ref={mainKfRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }} data-testid="preview-main-kf">
-        <div ref={mainLayerRef} className="absolute inset-0" data-testid="preview-main-layer">
+        <div ref={mainLayerRef} className="absolute inset-0" style={edits.timelineLanes?.video?.hidden ? { visibility: "hidden" } : undefined} data-testid="preview-main-layer">
         {templatePreview ? (
           <TemplateStage
             spec={templatePreview}
