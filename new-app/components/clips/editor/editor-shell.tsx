@@ -189,7 +189,7 @@ import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { SHOW_SURROUNDING_CONTEXT_MS, editorWindowMs } from '@/lib/clips/trim-bounds'
-import { readTimelineOpen, writeTimelineOpen } from '@/lib/clips/editor/compact-editor'
+import { readTimelineOpen, readTimelineDockPanelOpen, writeTimelineDockPanelOpen, writeTimelineOpen } from '@/lib/clips/editor/compact-editor'
 import { addMediaToLane, placeAddedOnTrack, replaceBrollMedia, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { ClipRecordMenu } from '@/components/clips/editor/recording/record-menu'
 import { ClipRecorderBar } from '@/components/clips/editor/recording/recorder-bar'
@@ -373,28 +373,53 @@ export function EditorShell({
   // TIMELINE_LAYOUT1: Timeline view (lg+) uses the Script-view layout: rail + docked panel on the right.
   const [dockPanelOpen, setDockPanelOpen] = useState(false)
   const dockTools = layoutView === 'timeline' && band !== 'mobile'
+  const setDockPanelOpenPersist = useCallback(
+    (open: boolean) => {
+      setDockPanelOpen(open)
+      if (layoutView === 'timeline' && band !== 'mobile') {
+        writeTimelineDockPanelOpen(typeof window === 'undefined' ? null : window.localStorage, open)
+      }
+    },
+    [band, layoutView],
+  )
   const [editorShortcutsOpen, setEditorShortcutsOpen] = useState(false)
   /** MENUBAR1: last top-menu command for the Timeline (seq bumps on every click). */
   const [timelineMenuCmd, setTimelineMenuCmd] = useState<{ cmd: TimelineMenuCommand; seq: number } | null>(null)
   useEffect(() => {
     setLayoutView(readClipEditorLayoutView())
   }, [])
-  const setLayoutViewPersist = useCallback((view: ClipEditorLayoutView) => {
-    setLayoutView(view)
-    writeClipEditorLayoutView(view)
-    if (view !== 'script') setScriptToolPanel(null)
-    setDockPanelOpen(false)
-  }, [])
+  useEffect(() => {
+    if (layoutView !== 'timeline' || band === 'mobile') return
+    const storage = typeof window === 'undefined' ? null : window.localStorage
+    const open = readTimelineDockPanelOpen(storage)
+    setDockPanelOpen(open)
+    if (open) setPanel('inspector')
+  }, [layoutView, band])
+  const setLayoutViewPersist = useCallback(
+    (view: ClipEditorLayoutView) => {
+      setLayoutView(view)
+      writeClipEditorLayoutView(view)
+      if (view !== 'script') setScriptToolPanel(null)
+      if (view !== 'timeline') {
+        setDockPanelOpen(false)
+      } else if (typeof window !== 'undefined' && band !== 'mobile') {
+        const open = readTimelineDockPanelOpen(window.localStorage)
+        setDockPanelOpen(open)
+        if (open) setPanel('inspector')
+      }
+    },
+    [band],
+  )
   const { transcriptPct: scriptSplitPct, persist: persistScriptSplit } = useScriptViewSplit()
   const selectPanel = useCallback((id: EditorPanelId) => {
     setPanel(id)
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
-    if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpen(true)
+    if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
     else if (band === 'mobile' || band === 'compact') {
       setMobilePanelOpen(true)
     }
-  }, [band, layoutView])
+  }, [band, layoutView, setDockPanelOpenPersist])
   const toggleScriptTool = useCallback(
     (id: ScriptViewToolPanelId) => {
       setScriptToolPanel((prev) => {
@@ -2549,6 +2574,7 @@ export function EditorShell({
       <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 overflow-hidden p-2 sm:p-3">
         <div
           className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4 [container-type:size]"
+          style={dockTools ? { alignItems: 'end', paddingBottom: 4 } : undefined}
         >
           <div
             ref={previewFrameRef}
@@ -2716,7 +2742,7 @@ export function EditorShell({
       ) : null}
           </div>
         </div>
-        {pickerWhy || detectedLayout || clipTypeLabel ? (
+        {!dockTools && (pickerWhy || detectedLayout || clipTypeLabel) ? (
           <div className="hidden max-w-xl space-y-1 px-1 2xl:block">
         {clipTypeLabel ? (
           <p className="text-[11px] text-muted-foreground">
@@ -2735,7 +2761,7 @@ export function EditorShell({
           ) : null}
         <div className={cn('min-w-0 shrink-0 space-y-2 border-t border-border pt-2', dockTools && 'mx-auto w-full max-w-4xl')}>
           <PreviewTransportStrip
-            compact={layoutView === 'script' || previewFrameW < 560}
+            compact={layoutView === 'script' || (!dockTools && previewFrameW < 560)}
             recordSlot={
               recordDevicesOk ? (
                 <ClipRecordMenu
@@ -2952,7 +2978,7 @@ export function EditorShell({
                   aria-label="Full screen"
                   data-testid="preview-fullscreen"
                 >
-                  {layoutView === 'script' || previewFrameW < 560 ? (
+                  {layoutView === 'script' || dockTools || previewFrameW < 560 ? (
                     <Maximize2 className="size-4" aria-hidden />
                   ) : (
                     'Full screen'
@@ -2961,6 +2987,17 @@ export function EditorShell({
               )
             }
           />
+          {dockTools && (clipTypeLabel || detectedLayout || pickerWhy) ? (
+            <p
+              className="truncate px-1 text-center text-[11px] text-muted-foreground"
+              title={[clipTypeLabel ? `Clip type: ${clipTypeLabel}` : '', detectedLayout ? `Detected layout: ${detectedLayout}` : '', pickerWhy ?? '']
+                .filter(Boolean)
+                .join(' · ')}
+              data-testid="preview-clip-meta-line"
+            >
+              {[clipTypeLabel, detectedLayout, pickerWhy].filter(Boolean).join(' · ')}
+            </p>
+          ) : null}
           {clipRec.armed ? (
           <ClipRecorderBar
           mode={clipRec.mode}
@@ -3044,7 +3081,7 @@ export function EditorShell({
   /** TIMELINE_LAYOUT1: clicking the open group again closes the docked panel (Script-view rail behaviour). */
   const dockSelectGroup = (groupId: EditorRailGroupId) => {
     if (dockPanelOpen && panelToRailGroup(panel)?.id === groupId) {
-      setDockPanelOpen(false)
+      setDockPanelOpenPersist(false)
       return
     }
     selectRailGroup(groupId)
@@ -3457,7 +3494,7 @@ export function EditorShell({
           band={band}
           compact={compact}
           panelOpen={dockTools ? dockPanelOpen : mobilePanelOpen}
-          onClosePanel={() => (dockTools ? setDockPanelOpen(false) : setMobilePanelOpen(false))}
+          onClosePanel={() => (dockTools ? setDockPanelOpenPersist(false) : setMobilePanelOpen(false))}
           panelWidthPx={panelWidthPx}
           onPanelWidthChange={persistPanelWidth}
           hidePanelColumn={layoutView === 'script'}
@@ -3474,7 +3511,7 @@ export function EditorShell({
                       'flex h-12 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-border bg-card text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground',
                       dockPanelOpen && panel === 'inspector' && 'bg-accent text-foreground',
                     )}
-                    onClick={() => (dockPanelOpen && panel === 'inspector' ? setDockPanelOpen(false) : selectPanel('inspector'))}
+                    onClick={() => (dockPanelOpen && panel === 'inspector' ? setDockPanelOpenPersist(false) : selectPanel('inspector'))}
                     aria-label="Properties"
                     aria-pressed={dockPanelOpen && panel === 'inspector'}
                     data-testid="timeline-dock-properties"
@@ -3485,7 +3522,7 @@ export function EditorShell({
                   <div className="min-h-0 flex-1">
                     <EditorRail
                       active={panel}
-                      onChange={(id) => (dockPanelOpen && panel === id ? setDockPanelOpen(false) : selectPanel(id))}
+                      onChange={(id) => (dockPanelOpen && panel === id ? setDockPanelOpenPersist(false) : selectPanel(id))}
                       onSelectGroup={dockSelectGroup}
                     />
                   </div>
@@ -3511,7 +3548,7 @@ export function EditorShell({
                       variant="ghost"
                       onClick={() => {
                         setMobilePanelOpen(false)
-                        setDockPanelOpen(false)
+                        setDockPanelOpenPersist(false)
                       }}
                       data-testid="timeline-dock-close"
                     >

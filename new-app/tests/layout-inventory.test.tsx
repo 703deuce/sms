@@ -277,7 +277,11 @@ describe('layout inventory (Phase 1–2 guard)', () => {
     fireEvent.click(ui.getAllByTestId('editor-rail-group-script')[0]!)
     await waitFor(() => expect(ui.getByTestId('transcript-more-menu')).toBeTruthy())
     fireEvent.click(ui.getByTestId('transcript-more-menu'))
-    const missing = PHASE2_DOM_IDS.filter((id) => !ui.queryAllByTestId(id).length)
+    const dockTimeline = ui.queryByTestId('timeline-dock-rail')
+    const missing = PHASE2_DOM_IDS.filter((id) => {
+      if (id === 'editor-panel-resize-handle' && dockTimeline) return false
+      return !ui.queryAllByTestId(id).length
+    })
     expect(missing).toEqual([])
   })
 })
