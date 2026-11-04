@@ -45,6 +45,21 @@ describe('EF-24 bgRemoval edits', () => {
     ).toBeTruthy()
   })
 
+  it('E2 enables full-frame, fill and segmented speaker layouts without breaking per-clip compatibility', () => {
+    const full = normalizeEdits({ layout: { mode: 'full_frame', shotOverrides: [] } }, bounds)
+    const fill = normalizeEdits({ layout: { mode: 'fill', shotOverrides: [] } }, bounds)
+    const follow = normalizeEdits({
+      layout: {
+        mode: 'speaker_follow', shotOverrides: [],
+        layoutSegments: [{ startMs: 0, endMs: 30000, mode: 'full_frame' }, { startMs: 30000, endMs: 60000, mode: 'speaker_follow' }],
+      },
+    }, bounds)
+    expect(bgRemovalBlockedReason(full)).toBeNull()
+    expect(bgRemovalBlockedReason(fill)).toBeNull()
+    expect(bgRemovalBlockedReason(follow)).toBeNull()
+    expect(bgRemovalBlockedReason(normalizeEdits({ layout: { mode: 'facecam_pip', shotOverrides: [] } }, bounds))).toBeTruthy()
+  })
+
   it('refineAlpha parity points', () => {
     expect(refineAlpha(0.5, 0, 0)).toBe(0.5)
     expect(refineAlpha(0.3, 0, 40)).toBeCloseTo(0.125, 10)
