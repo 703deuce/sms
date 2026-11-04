@@ -64,7 +64,7 @@ describe('unified editor workspace', () => {
         timelineView="timeline" timelineCollapsed onTimelineViewChange={onTimelineViewChange}
         inspectorWidthPx={360} onInspectorWidthChange={vi.fn()} />,
     )
-    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('76px')
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('112px')
     expect(ui.getByTestId('mini-timeline').textContent).toContain('Clip and playhead')
     ui.rerender(
       <UnifiedEditorWorkspace main={<div>Preview</div>} inspector={<div>Tools</div>}
