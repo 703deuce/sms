@@ -37,7 +37,7 @@ export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; on
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2.5 text-[13px] font-medium text-muted-foreground hover:text-foreground data-[popup-open]:bg-muted data-[popup-open]:text-foreground"
+                  className="h-8 px-1.5 text-[13px] font-medium min-[1500px]:px-2.5 text-muted-foreground hover:text-foreground data-[popup-open]:bg-muted data-[popup-open]:text-foreground"
                   data-testid={`editor-menu-${menu.id}`}
                 />
               }
@@ -79,14 +79,14 @@ export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; on
         type="button"
         variant="outline"
         size="sm"
-        className="h-8 min-w-40 max-w-56 flex-1 basis-56 justify-start gap-2 overflow-hidden px-2.5 text-[13px] font-normal text-muted-foreground"
+        className="h-8 w-8 shrink-0 justify-center gap-2 overflow-hidden px-0 text-[13px] font-normal text-muted-foreground min-[1500px]:w-auto min-[1500px]:min-w-40 min-[1500px]:max-w-56 min-[1500px]:flex-1 min-[1500px]:basis-56 min-[1500px]:justify-start min-[1500px]:px-2.5"
         onClick={onOpenSearch}
         aria-label="Search tools"
         title="Search tools (⌘K)"
         data-testid="editor-menu-search"
       >
         <Search className="size-3.5 shrink-0" aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-left">Search tools…</span>
+        <span className="hidden min-w-0 flex-1 truncate text-left min-[1500px]:block">Search tools…</span>
         <Kbd className="ml-2 hidden shrink-0 2xl:inline-flex">⌘K</Kbd>
       </Button>
     </div>

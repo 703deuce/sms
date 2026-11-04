@@ -59,18 +59,18 @@ export const EDITOR_GRID = {
   backdrop: 'fixed inset-0 z-30 bg-black/50 lg:max-xl:bg-black/30 xl:hidden',
   /** TIMELINE_LAYOUT1: Timeline view like Script view: preview | docked panel | tool rail (right); timeline full width below. */
   rootDock:
-    'relative grid h-full min-h-0 overflow-hidden bg-background gap-1.5 p-1.5 ' +
+    'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
-    'lg:grid-cols-[auto_minmax(0,1fr)_auto_auto] lg:grid-rows-[minmax(0,1fr)_auto]',
+    'lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-rows-[auto_minmax(0,1fr)_auto]',
   /** TIMELINE_LAYOUT3 (CapCut): tools panel | Player | Properties | icon rail on top; one full-width timeline below. */
-  railDock: 'min-h-0 lg:col-start-4 lg:row-start-1 lg:row-span-2',
-  panelDock: 'lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)]',
+  railDock: 'min-h-0 min-w-0 lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)]',
+  panelDock: 'lg:col-start-1 lg:row-start-2 lg:w-[clamp(260px,28vw,440px)]',
   previewDock:
-    'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel lg:col-start-2 lg:row-start-1',
+    'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel lg:col-start-2 lg:row-start-1 lg:row-span-2',
   propertiesDock:
-    'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-3 lg:row-start-1 lg:w-[clamp(260px,24vw,380px)]',
+    'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-3 lg:row-start-1 lg:row-span-2 lg:w-[clamp(260px,24vw,380px)]',
   timelineDock:
-    'col-span-full min-h-0 overflow-hidden rounded-lg border border-border bg-card lg:col-[1/4] lg:row-start-2',
+    'col-span-full min-h-0 overflow-hidden rounded-lg border border-border bg-card lg:row-start-3',
 } as const
 
 export function EditorLayout(props: {

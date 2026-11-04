@@ -93,11 +93,13 @@ export function EditorRail({
   onChange: (id: EditorPanelId) => void
   /** When set, group clicks resolve last-used tab per group. */
   onSelectGroup?: (groupId: EditorRailGroupId) => void
-  variant?: 'vertical' | 'horizontal'
+  variant?: 'vertical' | 'horizontal' | 'tabs'
   hiddenIds?: string[]
 }) {
   const navRef = useRef<HTMLElement>(null)
   const horizontal = variant === 'horizontal'
+  /** TIMELINE_LAYOUT5: CapCut-style short icon+label strip across the top of the tools card. */
+  const tabs = variant === 'tabs'
   const hidden = useMemo(() => new Set(hiddenIds), [hiddenIds])
   const groups = useMemo(() => editorRailGroups(), [])
   const activeGroupId = panelToRailGroup(active)?.id ?? null
@@ -148,17 +150,21 @@ export function EditorRail({
         data-testid={`editor-rail-group-${group.id}`}
         onClick={() => pickGroup(group.id)}
         className={cn(
-          vertical
+          tabs
+            ? 'relative flex h-10 min-w-[40px] flex-1 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+            : vertical
             ? 'relative flex h-12 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
             : 'relative grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          isActive && tabs && 'text-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary',
           isActive &&
             vertical &&
+            !tabs &&
             'bg-accent text-foreground before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary',
           isActive && !vertical && 'bg-accent text-foreground',
         )}
       >
-        <Icon className="size-5" aria-hidden />
-        {vertical ? <span className="max-w-full truncate text-[11px] leading-none">{group.label}</span> : null}
+        <Icon className={tabs ? 'size-4' : 'size-5'} aria-hidden />
+        {vertical ? <span className={cn('max-w-full truncate leading-none', tabs ? 'text-[10px]' : 'text-[11px]')}>{group.label}</span> : null}
       </button>
     )
     if (horizontal) return btn
@@ -177,14 +183,16 @@ export function EditorRail({
       aria-label="Editor tools"
       onKeyDown={onKeyDown}
       className={cn(
-        horizontal
+        tabs
+          ? 'flex min-w-0 flex-row flex-nowrap items-stretch gap-0 overflow-x-auto [scrollbar-width:none]'
+          : horizontal
           ? 'flex flex-row gap-1'
           : 'hidden h-full w-16 shrink-0 flex-col items-center gap-0.5 overflow-y-auto rounded-lg border border-border bg-card py-2 [scrollbar-width:thin] lg:flex',
       )}
     >
       {visibleGroups.map((group, gi) => (
-        <div key={group.id} className="flex w-full flex-col items-center gap-0.5">
-          {gi > 0 && !horizontal ? <div className="my-1 h-px w-8 bg-border" aria-hidden /> : null}
+        <div key={group.id} className={tabs ? 'flex min-w-[40px] flex-1' : 'flex w-full flex-col items-center gap-0.5'}>
+          {gi > 0 && !horizontal && !tabs ? <div className="my-1 h-px w-8 bg-border" aria-hidden /> : null}
           {renderGroupButton(group, !horizontal)}
         </div>
       ))}

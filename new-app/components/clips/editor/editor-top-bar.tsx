@@ -77,7 +77,7 @@ export function EditorTopBar({
         : 'text-muted-foreground'
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur">
+    <header className="flex h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border bg-background/80 px-2 backdrop-blur [@media(max-height:800px)]:h-9" data-testid="editor-top-bar">
       <SidebarToggleButton />
       <Button size="icon" variant="ghost" aria-label="Back to project" render={<Link href={backHref} />}>
         <ArrowLeft className="size-4" />
@@ -122,7 +122,7 @@ export function EditorTopBar({
         )}
       </span>
       {menuBarSlot ? (
-        <div className="flex min-w-0 flex-1 items-center overflow-hidden lg:min-w-[33rem]" data-testid="editor-top-bar-left">
+        <div className="flex min-w-0 flex-1 items-center overflow-hidden" data-testid="editor-top-bar-left">
           <Separator orientation="vertical" className="mx-1 hidden h-6 shrink-0 lg:block" />
           {menuBarSlot}
         </div>
@@ -147,7 +147,7 @@ export function EditorTopBar({
                 disabled={!canUndo}
                 onClick={onUndo}
                 aria-label="Undo"
-                className="text-muted-foreground"
+                className="text-muted-foreground max-[1499px]:hidden"
               />
             }
           >
@@ -167,7 +167,7 @@ export function EditorTopBar({
                 disabled={!canRedo}
                 onClick={onRedo}
                 aria-label="Redo"
-                className="text-muted-foreground"
+                className="text-muted-foreground max-[1499px]:hidden"
               />
             }
           >
@@ -192,9 +192,10 @@ export function EditorTopBar({
             onClick={() => onOpenProducer()}
             aria-pressed={producerOpen}
             aria-controls="editor-panel-producer"
+            title="AI Producer"
           >
             <Sparkles className="size-4 text-lane-ai" aria-hidden />
-            AI Producer
+            <span className="max-[1499px]:sr-only">AI Producer</span>
             {pendingPaidCount > 0 && (
               <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-warning" aria-hidden />
             )}

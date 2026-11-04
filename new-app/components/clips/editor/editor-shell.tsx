@@ -3509,11 +3509,11 @@ export function EditorShell({
             <>
               <EditorMobileRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
               {dockTools ? (
-                <div className="hidden h-full min-h-0 flex-col gap-0.5 lg:flex" data-testid="timeline-dock-rail">
+                <div className="hidden min-w-0 items-stretch rounded-lg border border-border bg-card p-0.5 lg:flex" data-testid="timeline-dock-rail">
                   <button
                     type="button"
                     className={cn(
-                      'flex h-11 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-border bg-card text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground',
+                      'flex h-10 min-w-[40px] flex-1 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-[10px] leading-none text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-4',
                       dockPanelOpen && panel === 'inspector' && 'bg-accent text-foreground',
                     )}
                     onClick={() =>
@@ -3526,8 +3526,9 @@ export function EditorShell({
                     <SlidersHorizontal className="size-5" aria-hidden />
                     Properties
                   </button>
-                  <div className="min-h-0 flex-1">
+                  <div className="min-w-0 flex-[8_1_0%]">
                     <EditorRail
+                      variant="tabs"
                       active={panel}
                       onChange={(id) => (dockPanelOpen && panel === id ? setDockPanelOpenPersist(false) : selectPanel(id))}
                       onSelectGroup={dockSelectGroup}
@@ -3543,7 +3544,7 @@ export function EditorShell({
           }
           panel={
             <>
-              <div className="flex min-h-12 shrink-0 flex-col justify-center gap-2 border-b border-border px-3 py-2">
+              <div className="flex min-h-10 shrink-0 flex-col justify-center gap-1 border-b border-border px-2.5 py-1">
                 <div className="flex h-9 items-center gap-2">
                   <TabIcon className="size-4 text-muted-foreground" aria-hidden />
                   <h2 className="text-sm font-semibold">{meta.label}</h2>

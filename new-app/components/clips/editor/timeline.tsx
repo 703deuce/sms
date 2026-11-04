@@ -214,6 +214,10 @@ const TRACK_EXTRA_PX = 16
 const RULER_H = 18
 // FV2: Video lane is taller so the filmstrip (top) and word chips (bottom) both show; B-roll gets a strip too.
 // TIMELINE_LAYOUT1: taller rows; Video = 68 px clip + its own 18 px transcript row underneath (+4 pad).
+/** TIMELINE_LAYOUT5: on short screens (<=800px) the timeline never takes more than 42% of the window. */
+export function capSmallScreenTl(h: number, vh: number): number {
+  return vh <= 800 ? Math.min(h, Math.round(vh * 0.42)) : h
+}
 // TIMELINE_LAYOUT4: per-lane heights are user-resizable — see LANE_H inside Timeline() + lib/clips/editor/lane-heights.ts.
 /** Word-chip bar height at the bottom of the Video lane (filmstrip fills the space above it). */
 const VIDEO_WORDBAR_H = 18
@@ -933,17 +937,36 @@ export function Timeline({
   useEffect(() => {
     const vh = typeof window === 'undefined' ? 900 : window.innerHeight
     const stored = readTimelineHeight()
-    setTlHeight(clampTimelineHeight(stored ?? Math.round(vh * 0.3), vh))
+    setTlHeight(capSmallScreenTl(clampTimelineHeight(stored ?? Math.round(vh * 0.3), vh), vh))
   }, [])
   useEffect(() => {
     const onResize = () => {
-      setTlHeight((h) => (h == null ? null : clampTimelineHeight(h, window.innerHeight)))
+      setTlHeight((h) => (h == null ? null : capSmallScreenTl(clampTimelineHeight(h, window.innerHeight), window.innerHeight)))
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+  // TIMELINE_LAYOUT5: keyframe strip under the toolbar is on demand (same controls live in Properties > Transform).
+  const [kfStripOn, setKfStripOn] = useState(false)
+  useEffect(() => {
+    try {
+      setKfStripOn(window.localStorage.getItem('clips.timeline.kfStrip') === '1')
+    } catch {
+      /* ignore */
+    }
+  }, [])
+  const toggleKfStrip = () =>
+    setKfStripOn((v) => {
+      try {
+        window.localStorage.setItem('clips.timeline.kfStrip', v ? '0' : '1')
+      } catch {
+        /* ignore */
+      }
+      return !v
+    })
   const setTimelineHeight = (h: number | null) => {
-    const v = h == null ? null : clampTimelineHeight(h, typeof window === 'undefined' ? 900 : window.innerHeight)
+    const vhNow = typeof window === 'undefined' ? 900 : window.innerHeight
+    const v = h == null ? null : capSmallScreenTl(clampTimelineHeight(h, vhNow), vhNow)
     setTlHeight(v)
     writeTimelineHeight(v)
   }
@@ -3145,6 +3168,18 @@ export function Timeline({
         zoomOut={zoomOut}
         zoomIn={zoomIn}
         zoomSlider={
+          <>
+          <button
+            type="button"
+            className={`mr-1 inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[12px] hover:bg-muted disabled:opacity-40 ${kfStripOn ? 'bg-primary/15 text-foreground' : 'text-muted-foreground'}`}
+            onClick={toggleKfStrip}
+            disabled={!inspected}
+            aria-pressed={kfStripOn}
+            title={inspected ? 'Show/hide the keyframe strip (also in Properties > Transform)' : 'Select a clip to edit its keyframes here (also in Properties > Transform)'}
+            data-testid="timeline-keyframes-toggle"
+          >
+            ◆ Keyframes
+          </button>
           <input
             type="range"
             min={0}
@@ -3156,6 +3191,7 @@ export function Timeline({
             aria-label="Timeline zoom"
             data-testid="timeline-zoom-slider"
           />
+          </>
         }
         zoomLabel={`${zoomPercent(effectivePxPerSec, minPx)}%`}
         zoomDefault={zoomDefault}
@@ -3253,7 +3289,7 @@ export function Timeline({
         </div>
       ) : null}
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
-      {inspected && !tlCollapsed ? (
+      {inspected && !tlCollapsed && kfStripOn ? (
         <div
           className="max-h-[96px] shrink-0 overflow-y-auto rounded-md border border-border bg-card"
           data-testid="keyframe-inspector-overlay"
