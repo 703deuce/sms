@@ -101,6 +101,7 @@ export function TranscriptPanel({
   compactToolbar = false,
   largeScript = false,
   documentView = false,
+  findRequestSeq = 0,
   beatsAvailable = false,
   beatsAnalyzing = false,
   beatCount = 0,
@@ -153,6 +154,8 @@ export function TranscriptPanel({
   largeScript?: boolean
   /** Unified editor keeps instructions available via menu while giving words priority. */
   documentView?: boolean
+  /** Incremented by menu commands to open/focus find after the Script panel mounts. */
+  findRequestSeq?: number
   beatsAvailable?: boolean
   beatsAnalyzing?: boolean
   beatCount?: number
@@ -292,6 +295,14 @@ export function TranscriptPanel({
       window.removeEventListener('transovo:find-transcript', onFindRequested)
     }
   }, [panelActive, documentView])
+
+  useEffect(() => {
+    if (!findRequestSeq || (!panelActive && !documentView)) return
+    if (documentView) setDocumentFindOpen(true)
+    // The compact document search is conditionally mounted, so focus after that render.
+    const frame = requestAnimationFrame(() => findInputRef.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [findRequestSeq, panelActive, documentView, documentFindOpen])
 
   const applyReplaceCurrent = () => {
     if (!activeMatch || !applyWordFixesBatch) return
