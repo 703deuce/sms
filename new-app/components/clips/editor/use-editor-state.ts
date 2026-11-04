@@ -1121,8 +1121,10 @@ export function useEditorState(
     historyPast: state.past,
     historyPastLabels: state.pastLabels,
     historyFuture: state.future,
-    canUndo: historyReady && state.past.length > 0,
-    canRedo: historyReady && state.future.length > 0,
+    // D2: the same reducer-owned stacks that undo()/redo() read must drive toolbar state.
+    // The historyReady gesture latch is unrelated to whether a real edit exists.
+    canUndo: state.past.length > 0,
+    canRedo: state.future.length > 0,
     saveState: state.saveState,
     producerStrip: state.producerStrip,
     clearProducerStrip,
