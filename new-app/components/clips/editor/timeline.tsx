@@ -1241,7 +1241,17 @@ export function Timeline({
       toast.message('Open the compound (double-click) to split inside it', { id: 'timeline-compound' })
       return
     }
-    const next = splitAt(opCtx(), liveSelected, playheadMs)
+    // Voice pieces use the same source split boundaries as Video (with optional J/L offsets).
+    // Route a voice-only selection to its matching Video segment so both lanes split together.
+    const voiceOnly = liveSelected.length > 0 && liveSelected.every((r) => r.lane === 'voice')
+    if (voiceOnly && liveSelected.some((r) => refLocked(edits, r))) {
+      toast.message('Voice lane is locked — unlock it before splitting')
+      return
+    }
+    const refsToSplit: ItemRef[] = voiceOnly
+      ? liveSelected.map((r) => ({ lane: 'video' as const, id: r.id.replace(/^voice:/, 'seg:') }))
+      : liveSelected
+    const next = splitAt(opCtx(), refsToSplit, playheadMs)
     if (next) commit(next)
     else toast.message(playheadMs <= 1 ? 'Can’t split at the very start of a clip' : splitNoopMessage(edits, liveSelected))
   }
