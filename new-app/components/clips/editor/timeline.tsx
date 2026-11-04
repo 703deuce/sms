@@ -2307,7 +2307,7 @@ export function Timeline({
     }
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - state.originX
-      if (!state.moved && Math.abs(dx) < DRAG_SLOP_PX * 2) return
+      if (!state.moved && Math.abs(dx) < Math.max(4, DRAG_SLOP_PX)) return
       state.moved = true
       state.deltaMs = dx / Math.max(1e-6, pxPerMs)
       state.insertBefore = slotFromPointer(dx)
