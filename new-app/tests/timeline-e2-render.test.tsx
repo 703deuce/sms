@@ -230,6 +230,12 @@ describe('E2 multi-track timeline', () => {
     expect((onCommitEdits.mock.calls[1]![0] as ClipEditsV2).timelineLanes).toEqual({ broll: { hidden: true } })
   })
 
+  it('B7 exposes a Video eye toggle and commits hidden state', () => {
+    const { getByTestId, onCommitEdits } = setup()
+    fireEvent.click(getByTestId('timeline-lane-hide-video'))
+    expect((onCommitEdits.mock.calls[0]![0] as ClipEditsV2).timelineLanes?.video?.hidden).toBe(true)
+  })
+
   it('locked lanes ignore drags', () => {
     const { broll, pxPerMs, onCommitEdits } = setup(edits({ timelineLanes: { broll: { locked: true } } }))
     drag(broll('b1'), 1000 * pxPerMs(), { altKey: true })
