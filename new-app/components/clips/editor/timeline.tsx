@@ -950,7 +950,8 @@ export function Timeline({
   const [kfStripOn, setKfStripOn] = useState(false)
   useEffect(() => {
     try {
-      setKfStripOn(window.localStorage.getItem('clips.timeline.kfStrip') === '1')
+      const s = window.localStorage.getItem('clips.timeline.kfStrip')
+      setKfStripOn(s == null ? true : s === '1')
     } catch {
       /* ignore */
     }

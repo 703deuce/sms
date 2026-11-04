@@ -145,6 +145,7 @@ export function EditorRail({
       <button
         type="button"
         aria-label={group.label}
+        title={tabs && group.id === 'script' ? 'Open Script view' : undefined}
         aria-current={isActive ? 'page' : undefined}
         tabIndex={0}
         data-testid={`editor-rail-group-${group.id}`}
