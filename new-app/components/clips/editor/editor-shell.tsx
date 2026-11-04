@@ -171,6 +171,7 @@ import { PreviewTransportStrip } from '@/components/clips/editor/preview-transpo
 import { EditorProjectMenu } from '@/components/clips/editor/editor-project-menu'
 import {
   ScriptViewToolTabs,
+  EditorInspectorToolRail,
   SCRIPT_VIEW_TOOL_PANELS,
   type ScriptViewToolPanelId,
 } from '@/components/clips/editor/script-view-tool-rail'
@@ -3645,43 +3646,43 @@ export function EditorShell({
           }
           properties={
             unifiedWorkspaceActive ? (
-              <div className="flex h-full min-h-0 min-w-0 flex-col" data-testid="unified-tools-content">
-                <div className="flex h-9 shrink-0 items-center justify-between border-b border-border/70 px-3">
-                  <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tools &amp; Inspector</h2>
-                  <span className="text-[11px] text-muted-foreground">{panel === 'transcript' ? 'Transcript' : (TAB_META[panel]?.label ?? 'Tools')}</span>
+              <div className="flex h-full min-h-0 min-w-0" data-testid="unified-tools-content">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-testid="unified-inspector-body">
+                  <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/70 px-3">
+                    <h2 className="truncate text-sm font-semibold">{panel === 'transcript' ? 'Inspector' : (TAB_META[panel]?.label ?? 'Tools')}</h2>
+                  </div>
+                  {panelTabs.length > 1 ? (
+                    <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/70 p-1" role="tablist" aria-label="Tool categories">
+                      {panelTabs.map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={panel === tab.id}
+                          onClick={() => selectPanel(tab.id)}
+                          className={cn('shrink-0 rounded px-2 py-1 text-xs', panel === tab.id ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-muted')}
+                        >
+                          {tab.tabLabel}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <ScrollArea className="min-h-0 flex-1">
+                    {panel === 'transcript' ? (
+                      <p className="p-4 text-sm leading-relaxed text-muted-foreground">Select a tool on the right to edit its settings. The transcript stays beside the video.</p>
+                    ) : (
+                      <div className="p-3">{renderSidePanels(panel)}</div>
+                    )}
+                  </ScrollArea>
                 </div>
-                <ScriptViewToolTabs
-                  variant="sidebar"
+                <EditorInspectorToolRail
                   active={SCRIPT_VIEW_TOOL_PANELS.some((item) => item.id === panel) ? panel as ScriptViewToolPanelId : null}
-                  onSelect={(id) => selectPanel(id)}
+                  onSelect={selectPanel}
                   onShowScript={() => {
                     setPanel('transcript')
                     setScriptToolPanel(null)
                   }}
                 />
-                {panelTabs.length > 1 ? (
-                  <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/70 p-1" role="tablist" aria-label="Tool categories">
-                    {panelTabs.map((tab) => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={panel === tab.id}
-                        onClick={() => selectPanel(tab.id)}
-                        className={cn('shrink-0 rounded px-2 py-1 text-xs', panel === tab.id ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-muted')}
-                      >
-                        {tab.tabLabel}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <ScrollArea className="min-h-0 flex-1">
-                  {panel === 'transcript' ? (
-                    <p className="p-4 text-sm text-muted-foreground">Select a tool above to edit its settings. The transcript stays visible beside the preview.</p>
-                  ) : (
-                    <div className="p-3">{renderSidePanels(panel)}</div>
-                  )}
-                </ScrollArea>
               </div>
             ) : !dockTools && !compact && band === 'wide' && layoutView !== 'script' ? (
               <>
