@@ -16,6 +16,7 @@ export function HighlightsListPanel({
   onMakeClip,
   onMakeAll,
   jobRunning,
+  onClose,
 }: {
   picks: HighlightPick[]
   ranges: HighlightRange[]
@@ -24,8 +25,10 @@ export function HighlightsListPanel({
   onMakeClip: (pick: HighlightPick, range: HighlightRange) => void
   onMakeAll: () => void
   jobRunning?: boolean
+  onClose?: () => void
 }) {
   const [sort, setSort] = useState<'score' | 'time'>('score')
+  const [open, setOpen] = useState(false)
   const byId = useMemo(() => new Map(ranges.map((r) => [r.pick.clipId, r])), [ranges])
 
   const rows = useMemo(() => {
@@ -39,10 +42,32 @@ export function HighlightsListPanel({
   }, [picks, byId, sort])
 
   return (
-    <div className="mb-4 space-y-3 rounded-lg border border-border bg-muted/20 p-3" data-testid="highlights-list-panel">
+    <div className="mb-2 shrink-0 space-y-2 rounded-lg border border-border bg-muted/20 p-2" data-testid="highlights-list-panel">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-semibold">Highlights</h3>
-        <div className="ml-auto flex gap-1">
+        <button
+          type="button"
+          className="flex items-center gap-1 text-sm font-semibold hover:text-primary"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          data-testid="highlights-list-toggle"
+        >
+          <span aria-hidden>{open ? '▾' : '▸'}</span>
+          Highlights{picks.length ? ` (${picks.length})` : ''}
+          {jobRunning ? <span className="text-xs font-normal text-muted-foreground"> · finding…</span> : null}
+        </button>
+        {onClose ? (
+          <button
+            type="button"
+            className="order-last ml-1 rounded p-1 text-base leading-none text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={onClose}
+            aria-label="Close highlights (Esc)"
+            title="Close (Esc). Turn back on with the Highlights button or Find clips."
+            data-testid="highlights-list-close"
+          >
+            ×
+          </button>
+        ) : null}
+        <div className={cn('ml-auto flex gap-1', !open && 'hidden')}>
           <Button type="button" size="sm" variant={sort === 'score' ? 'default' : 'outline'} onClick={() => setSort('score')}>
             Score
           </Button>
@@ -51,10 +76,10 @@ export function HighlightsListPanel({
           </Button>
         </div>
       </div>
-      {jobRunning && !rows.length ? (
+      {open && jobRunning && !rows.length ? (
         <p className="text-xs text-muted-foreground">Finding clips…</p>
       ) : null}
-      <ul className="max-h-64 space-y-2 overflow-y-auto">
+      <ul className={cn('max-h-48 space-y-2 overflow-y-auto', !open && 'hidden')}>
         {rows.map(({ pick, range }) => {
           const selected = pick.clipId === selectedClipId
           return (
@@ -95,7 +120,7 @@ export function HighlightsListPanel({
           )
         })}
       </ul>
-      {rows.length ? (
+      {open && rows.length ? (
         <Button type="button" size="sm" className="w-full" onClick={() => onMakeAll()} data-testid="highlights-list-make-all">
           Make all
         </Button>

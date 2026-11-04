@@ -473,8 +473,8 @@ export function useEditorState(
         dispatch({ type: 'pass', edits: rippled, label: passLabel })
         return
       }
-      if (rippled !== nextEdits) dispatch({ type: 'set', edits: rippled })
-      else dispatch({ type: 'addCuts', cutRanges: cuts })
+      // SCRIPT_DOC5: always store the full edit (cutRanges + cutCleanupKinds + cutQualityMeta) as one undo step.
+      dispatch({ type: 'set', edits: rippled })
     },
     [bumpLocalRevision, clipId, rippleFrom, wordSpans],
   )
