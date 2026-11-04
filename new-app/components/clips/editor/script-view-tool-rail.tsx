@@ -91,7 +91,7 @@ export function ScriptViewToolDrawer({
   if (!open) return null
   return (
     <aside
-      className="flex h-full min-h-0 w-[340px] shrink-0 flex-col overflow-hidden border-l border-border bg-card"
+      className="flex h-full min-h-0 w-[clamp(280px,38%,340px)] shrink-0 flex-col overflow-hidden border-l border-border bg-card"
       data-testid="script-view-tool-drawer"
       aria-label={title}
     >
