@@ -251,8 +251,6 @@ export function useEditorState(
     saveState: draftDiffers ? 'dirty' : 'saved',
     producerStrip: null,
   })
-  /** TC4fix: undo is user-session only — nothing before first editor gesture counts (load seeds, draft). */
-  const [historyReady, setHistoryReady] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const localRevisionRef = useRef(restoredLocalRevision)
   const savedRevisionRef = useRef(0)
@@ -280,20 +278,13 @@ export function useEditorState(
 
   // TC4fix: fresh load / bfcache restore must not keep pre-reload undo stacks (draft restores content only).
   useEffect(() => {
-    setHistoryReady(false)
     dispatch({ type: 'resetHistory' })
-    const arm = () => setHistoryReady(true)
-    window.addEventListener('pointerdown', arm, { once: true, capture: true })
-    window.addEventListener('keydown', arm, { once: true, capture: true })
     const onPageShow = (e: PageTransitionEvent) => {
       if (!e.persisted) return
-      setHistoryReady(false)
       dispatch({ type: 'resetHistory' })
     }
     window.addEventListener('pageshow', onPageShow)
     return () => {
-      window.removeEventListener('pointerdown', arm, { capture: true })
-      window.removeEventListener('keydown', arm, { capture: true })
       window.removeEventListener('pageshow', onPageShow)
     }
   }, [clipId])
@@ -340,7 +331,7 @@ export function useEditorState(
       const edits = rippleFrom(editsRef.current, input)
       if (editsEqual(editsRef.current, edits)) return
       editsRef.current = edits
-      setHistoryReady(true)
+
       bumpLocalRevision()
       dispatch({ type: 'pass', edits, label })
     },
@@ -351,7 +342,7 @@ export function useEditorState(
   const applyProducerPatch = useCallback(
     (edits: ClipEditsV2, before?: ClipEditsV2, producerChangeCount?: number, label?: string) => {
       if (editsEqual(editsRef.current, edits)) return
-      setHistoryReady(true)
+
       bumpLocalRevision()
       dispatch({ type: 'BATCH', edits, before, producerChangeCount, label })
     },
@@ -360,7 +351,7 @@ export function useEditorState(
 
   const undo = useCallback(() => {
     if (!historyRef.current.past.length) return
-    setHistoryReady(true)
+
     const prev = historyRef.current.past[historyRef.current.past.length - 1]!
     editsRef.current = prev
     bumpLocalRevision()
@@ -368,7 +359,7 @@ export function useEditorState(
   }, [bumpLocalRevision])
   const redo = useCallback(() => {
     if (!historyRef.current.future.length) return
-    setHistoryReady(true)
+
     const next = historyRef.current.future[0]!
     editsRef.current = next
     bumpLocalRevision()
@@ -378,7 +369,7 @@ export function useEditorState(
   const jumpHistory = useCallback(
     (steps: number) => {
       if (!steps) return
-      setHistoryReady(true)
+
       let past = historyRef.current.past
       let future = historyRef.current.future
       let edits = editsRef.current
@@ -472,7 +463,7 @@ export function useEditorState(
       const rippled = rippleFrom(editsRef.current, nextEdits)
       editsRef.current = rippled
       bumpLocalRevision()
-      setHistoryReady(true)
+
       if (passLabel) {
         dispatch({ type: 'pass', edits: rippled, label: passLabel })
         return
@@ -522,7 +513,7 @@ export function useEditorState(
       const rippled = rippleFrom(editsRef.current, next)
       if (editsEqual(editsRef.current, rippled)) return
       editsRef.current = rippled
-      setHistoryReady(true)
+
       bumpLocalRevision()
       dispatch({ type: 'pass', edits: rippled, label: 'Word fix' })
     },
@@ -589,7 +580,7 @@ export function useEditorState(
       const rippled = rippleFrom(editsRef.current, nextEdits)
       editsRef.current = rippled
       bumpLocalRevision()
-      setHistoryReady(true)
+
       if (passLabel) {
         dispatch({ type: 'pass', edits: rippled, label: passLabel })
         return
@@ -1075,7 +1066,7 @@ export function useEditorState(
 
   const applyRestoredEdits = useCallback(
     (restored: ClipEditsV2) => {
-      setHistoryReady(true)
+
       cancelPendingAutosave()
       bumpLocalRevision()
       const normalized = normalizeEdits(restored, bounds)
@@ -1122,7 +1113,7 @@ export function useEditorState(
     historyPastLabels: state.pastLabels,
     historyFuture: state.future,
     // D2: the same reducer-owned stacks that undo()/redo() read must drive toolbar state.
-    // The historyReady gesture latch is unrelated to whether a real edit exists.
+    // The old gesture latch was unrelated to whether a real edit exists.
     canUndo: state.past.length > 0,
     canRedo: state.future.length > 0,
     saveState: state.saveState,
