@@ -64,7 +64,7 @@ def run_bg_matte_preview_job(conn, job: dict, post_progress) -> None:
         subprocess.check_call([
             "ffmpeg", "-y", "-v", "error", "-ss", f"{seek_s:.3f}",
             "-i", str(src), "-t", f"{sample_ms / 1000:.3f}",
-            "-vf", "scale='if(gt(iw,ih),min(640,iw),-2)':'if(gt(ih,iw),min(640,ih),-2)'",
+            "-vf", "scale='if(gte(iw,ih),640,-2)':'if(gt(ih,iw),640,-2)'",
             "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "24",
             "-pix_fmt", "yuv420p", str(snippet),
         ])
