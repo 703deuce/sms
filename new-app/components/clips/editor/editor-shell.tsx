@@ -740,7 +740,7 @@ export function EditorShell({
   const editorWordsContextMs = showSurrounding ? SHOW_SURROUNDING_CONTEXT_MS : undefined
   // FIX1 (E.2): one window for the timeline + trim clamp (timeline.tsx clampTrimWithMediaBounds, line 476).
   const editorWin = editorWindowMs(editorMedia?.minMs, editorMedia?.maxMs, bounds.clipStartMs, bounds.clipEndMs)
-  const { words: clipEditorWords, wordsLoading, reloadWords } = useEditorWords(
+  const { words: clipEditorWords, wordsLoading, loadingReason, reloadWords } = useEditorWords(
     clipId,
     words,
     bounds,
@@ -2109,6 +2109,7 @@ export function EditorShell({
         <TranscriptPanel
           words={editorWords}
           wordsLoading={wordsLoading}
+          wordsLoadingReason={loadingReason}
           clipStartMs={bounds.clipStartMs}
           clipEndMs={bounds.clipEndMs}
           shots={cropShots}
