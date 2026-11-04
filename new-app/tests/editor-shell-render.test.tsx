@@ -165,7 +165,7 @@ describe('EditorShell render smoke', () => {
     expect(getByTestId('editor-workspace-controls').contains(getByTestId('unified-mode-expanded'))).toBe(true)
     expect(document.querySelector('[data-testid="unified-workspace-toolbar"] [data-testid^="unified-mode-"]')).toBeNull()
     window.dispatchEvent(new Event('transovo:find-transcript'))
-    expect(getByTestId('transcript-find-replace')).toBeTruthy()
+    await waitFor(() => expect(getByTestId('transcript-find-replace')).toBeTruthy())
     expect(getByTestId('versions-menu')).toBeTruthy()
     const topBar = getByTestId('editor-top-bar')
     const menus = getByTestId('editor-top-bar-left')
