@@ -22,7 +22,7 @@ import {
 } from '@/lib/clips/editor/editor-layout-view'
 import { EditorLayoutViewSwitch, ScriptViewWaveStrip } from '@/components/clips/editor/script-view-chrome'
 import { ScriptViewMainSplit } from '@/components/clips/editor/script-view-main-split'
-import { ScriptViewWaveform } from '@/components/clips/editor/script-view-waveform'
+import { ScriptViewCompactTimeline } from '@/components/clips/editor/script-view-compact-timeline'
 import { useScriptViewSplit } from '@/lib/clips/editor/use-script-view-split'
 import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
@@ -111,6 +111,7 @@ import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { CleanupPanel } from '@/components/clips/editor/cleanup-panel'
 import type { CleanupProposal } from '@/lib/clips/editor/cleanup-proposals'
 import { singleCleanupApplyLabel } from '@/lib/clips/editor/history-labels'
+import { toggleMarkerAt } from '@/lib/clips/editor/markers'
 import { deriveClipFromEditor } from '@/lib/clips-api'
 import { LayersPanel } from '@/components/clips/editor/layers-panel'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
@@ -1649,6 +1650,42 @@ export function EditorShell({
     sel.clear()
   }, [applyCutRange, editorWords])
 
+  const playFromTranscriptSelection = useCallback(() => {
+    const sel = selectionRef.current
+    if (!sel || sel.startMs === sel.endMs) return
+    seekSource(Math.min(sel.startMs, sel.endMs))
+    void togglePlay()
+  }, [seekSource, togglePlay])
+
+  const previewTranscriptSelection = useCallback(() => {
+    const sel = selectionRef.current
+    if (!sel || sel.startMs === sel.endMs) return
+    const preview = editorPreviewEdits(edits, editorWords)
+    const tb = timebaseFor(preview)
+    const a = Math.min(sel.startMs, sel.endMs)
+    const b = Math.max(sel.startMs, sel.endMs)
+    const inMs = sourceMsToEditorMs(tb, a).ms
+    const outMs = sourceMsToEditorMs(tb, b).ms
+    setExportTimelineInOut({ inMs, outMs: Math.max(inMs + 1, outMs) })
+    seekOutput(inMs)
+    void togglePlay()
+  }, [edits, editorWords, seekOutput, togglePlay])
+
+  const splitSceneAtTranscriptSelection = useCallback(() => {
+    const sel = selectionRef.current
+    if (!sel || sel.startMs === sel.endMs) return
+    splitLayoutAtSource(Math.min(sel.startMs, sel.endMs))
+  }, [splitLayoutAtSource])
+
+  const addMarkerAtTranscriptSelection = useCallback(() => {
+    const sel = selectionRef.current
+    if (!sel || sel.startMs === sel.endMs) return
+    const preview = editorPreviewEdits(edits, editorWords)
+    const ms = sourceMsToEditorMs(timebaseFor(preview), Math.min(sel.startMs, sel.endMs)).ms
+    const id = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+    setEdits({ ...edits, markers: toggleMarkerAt(edits.markers, ms, id) })
+  }, [edits, editorWords, setEdits])
+
   // G1b: J / K / L shuttle. L plays (again: 2× / 4× / 8×), J plays backward (again: faster), K
   // stops. Above 1× and backward the preview scrubs frame by frame (no sound), like a jog wheel.
   const shuttleRef = useRef({ dir: 0 as -1 | 0 | 1, rate: 1, raf: 0, ms: 0, last: 0 })
@@ -2045,6 +2082,10 @@ export function EditorShell({
           beatCount={beatCutApi?.beatCount ?? 0}
           beatBpm={beatCutApi?.bpm}
           onCutToBeat={beatCutApi ? (every) => beatCutApi.cut(every) : undefined}
+          onPlayFromSelection={playFromTranscriptSelection}
+          onPreviewSelection={previewTranscriptSelection}
+          onSplitSceneAtSelection={splitSceneAtTranscriptSelection}
+          onAddMarkerAtSelection={addMarkerAtTranscriptSelection}
           onSelectRange={
             fullVideo && fvHighlights.highlightsOn
               ? (startMs, endMs) => {
@@ -3202,19 +3243,20 @@ export function EditorShell({
           timeline={
           layoutView === 'script' ? (
             <ScriptViewWaveStrip
-              durationMs={outDur}
-              outputMs={outputMs}
-              onSeekOutput={seekOutput}
               onShowTimeline={() => setLayoutViewPersist('timeline')}
-              waveformSlot={
-                <ScriptViewWaveform
+              timelineSlot={
+                <ScriptViewCompactTimeline
                   peaks={scriptVoicePeaks}
                   edits={edits}
+                  words={editorWords}
                   trimInMs={edits.trim.in}
                   trimOutMs={edits.trim.out}
                   mediaOffsetMs={mediaOffsetMs}
                   outputDurationMs={outDur}
                   outputMs={outputMs}
+                  videoUrl={videoUrl}
+                  posterUrl={posterUrl}
+                  editorAssets={editorAssets}
                   onSeekOutput={seekOutput}
                 />
               }
