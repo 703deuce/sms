@@ -17,7 +17,7 @@ export const TAB_META: Record<
   brand: { label: 'Brand', hint: 'Logo, colors & fonts from your kit' },
   text: { label: 'Text', hint: 'Titles & text layers on the Text lane' },
   templates: { label: 'Templates', hint: 'Layouts, caption & text styles, brand kits' },
-  color: { label: 'Color', hint: 'Filters & adjustments' },
+  color: { label: 'Effects', hint: 'Effects, filters & adjustments' },
   media: { label: 'Media', hint: 'Your uploads, camera angles & multicam' },
   repurpose: { label: 'Repurpose', hint: 'Clips, posts & formats from this edit' },
   inspector: { label: 'Properties', hint: 'Position, size, crop, flip, order, keyframes of the selection' },

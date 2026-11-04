@@ -29,6 +29,20 @@ import { ADJUST_KEY_PROPS, FX_PROPS, type KeyframeTarget } from '@/lib/clips/edi
 import { targetOriginMs } from '@/lib/clips/editor/keyframes'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
 import { ColorWheels, CurvesEditor, FxControls, HslControls } from '@/components/clips/editor/g4/grade-controls'
+import { FX_PRESETS } from '@/lib/clips/editor/fx-library'
+
+/** EFFECTS1d: effect looks as tiles in the Filters grid (same apply as the Effects section: spec.fx replaced). */
+const FX_TILES: { id: string; label: string; fx: Record<string, number> }[] = [
+  ...FX_PRESETS.map((p) => ({ id: p.id, label: p.label, fx: p.fx as Record<string, number> })),
+  { id: 'sepia', label: 'Sepia', fx: { sepia: 80 } },
+  { id: 'flash', label: 'Flash / strobe', fx: { flash: 70 } },
+  { id: 'leak', label: 'Light leak', fx: { leak: 60 } },
+  { id: 'kenburns', label: 'Ken Burns', fx: { kenburns: 100 } },
+]
+const fxSame = (a: Record<string, number> | undefined, b: Record<string, number>) => {
+  const ka = Object.keys(a ?? {}).filter((k) => a![k])
+  return ka.length === Object.keys(b).length && ka.every((k) => a![k] === b[k])
+}
 import { LutPicker } from '@/components/clips/editor/g4/lut-picker'
 import { ColorMatchSection } from '@/components/clips/editor/g4/color-match-section'
 import { ScopesPanel } from '@/components/clips/editor/g4/scopes-panel'
@@ -339,6 +353,25 @@ export function ColorPanel({
               >
                 <Swatch spec={{ preset: id }} />
                 {COLOR_PRESETS[id].label}
+              </button>
+            )
+          })}
+          {FX_TILES.map((t) => {
+            const active = fxSame(spec.fx as Record<string, number> | undefined, t.fx)
+            return (
+              <button
+                key={`fx-${t.id}`}
+                type="button"
+                data-testid={`color-fx-tile-${t.id}`}
+                data-active={active ? 'true' : 'false'}
+                title={active ? `Remove ${t.label}` : `Apply ${t.label} (adjust amounts under Effects below)`}
+                className={cn('rounded-lg border p-1 text-[11px]', active ? 'border-primary ring-2 ring-primary/20' : 'border-border')}
+                onClick={() => commit({ ...spec, fx: active ? undefined : { ...t.fx } }, `fx-preset-${t.id}`)}
+              >
+                <span className="mb-0.5 grid h-8 place-items-center rounded bg-gradient-to-br from-violet-500/70 to-amber-400/70 text-[11px] font-semibold text-white">
+                  FX
+                </span>
+                {t.label}
               </button>
             )
           })}

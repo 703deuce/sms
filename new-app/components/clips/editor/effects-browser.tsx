@@ -36,6 +36,7 @@ export function EffectsBrowser({
   playheadSourceMs,
   outputMs = 0,
   outputDurationMs = 0,
+  onSeekOutput,
   children,
 }: {
   edits: ClipEditsV2
@@ -43,6 +44,7 @@ export function EffectsBrowser({
   playheadSourceMs: number
   outputMs?: number
   outputDurationMs?: number
+  onSeekOutput?: (ms: number) => void
   children: ReactNode
 }) {
   const [tab, setTab] = useState<Tab>('effects')
@@ -100,7 +102,11 @@ export function EffectsBrowser({
                         className="rounded border border-border bg-muted/40 px-2 py-2 text-left text-[11px] hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                         onClick={() => {
                           const items = newTemplateItems(t.id, mkTplId, outputMs, outputDurationMs)
-                          if (items.length) onEdits({ ...edits, textItems: [...(edits.textItems ?? []), ...items] })
+                          if (items.length) {
+                            onEdits({ ...edits, textItems: [...(edits.textItems ?? []), ...items] })
+                            const settle = Math.max(...items.map((i) => Math.min(i.endMs - 1, i.startMs + (i.anim?.in?.durMs ?? 0) + 50)))
+                            onSeekOutput?.(settle)
+                          }
                         }}
                         data-testid={`effects-browser-template-${t.id}`}
                       >
