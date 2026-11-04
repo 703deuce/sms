@@ -1790,8 +1790,8 @@ def render_edited_clip(
                 stage=stage,
             )
             track = pct if (pct is not None and pct.is_file()) else (main_track if main_track.is_file() else None)
-            if track is None:
-                raise MatteSkip("no_crop_track")
+            # Full-frame / fill can render without an optional persisted crop track;
+            # the same layout renderer derives its crop when preview_crop_track is None.
             mwd = work_dir / "bgm"
             mwd.mkdir(exist_ok=True)
 
