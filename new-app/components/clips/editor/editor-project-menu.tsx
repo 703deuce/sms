@@ -75,17 +75,17 @@ export function EditorProjectMenu({
   }
 
   return (
-    <div className={cn('flex min-w-0 max-w-md items-center', className)} data-testid="editor-project-menu">
+    <div className={cn('flex w-full min-w-0 max-w-full items-center', className)} data-testid="editor-project-menu">
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <button
               type="button"
-              className="flex min-w-0 max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex w-full min-w-0 max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Project menu"
               data-testid="editor-project-menu-trigger"
             >
-              <span className="truncate text-base font-semibold">{title || 'Untitled'}</span>
+              <span className="min-w-0 truncate text-sm font-semibold">{title || 'Untitled'}</span>
               <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden />
             </button>
           }

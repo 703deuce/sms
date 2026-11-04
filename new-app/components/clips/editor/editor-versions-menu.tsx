@@ -144,6 +144,7 @@ function EditorVersionsMenuInner({
   onRestoreVersion,
   onDeleteVersion,
   onRestoreOriginal,
+  concealed = false,
 }: {
   enabled: boolean
   versions: EditVersionRow[]
@@ -151,6 +152,7 @@ function EditorVersionsMenuInner({
   onRestoreVersion: (id: string) => void
   onDeleteVersion: (id: string) => void
   onRestoreOriginal: () => void
+  concealed?: boolean
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
@@ -206,7 +208,7 @@ function EditorVersionsMenuInner({
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           render={
-            <Button type="button" size="sm" variant="outline" className="gap-1" data-testid="versions-menu">
+            <Button type="button" size="sm" variant="outline" className={concealed ? "pointer-events-none absolute left-0 top-0 h-px w-px overflow-hidden border-0 p-0 opacity-0" : "gap-1"} aria-hidden={concealed} tabIndex={concealed ? -1 : undefined} data-testid="versions-menu">
               Versions
               <ChevronDown className="size-3.5 opacity-70" aria-hidden />
             </Button>
@@ -307,6 +309,7 @@ export function EditorVersionsMenu(props: {
   onRestoreVersion: (id: string) => void
   onDeleteVersion: (id: string) => void
   onRestoreOriginal: () => void
+  concealed?: boolean
 }) {
   return (
     <VersionsMenuErrorBoundary>

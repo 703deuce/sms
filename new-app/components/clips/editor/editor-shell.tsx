@@ -35,7 +35,7 @@ import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, Maximize2, Megaphone, PanelRightOpen, SlidersHorizontal } from 'lucide-react'
+import { Loader2, Maximize2, PanelRightOpen, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClipBounds } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -57,7 +57,6 @@ import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { CaptionLinesPanel } from '@/components/clips/editor/caption-lines-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { RepurposePanel } from '@/components/clips/editor/repurpose-panel'
-import { OpenInFullVideoButton } from '@/components/clips/editor/open-in-full-video-button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FindClipsInVideoButton } from '@/components/clips/editor/find-clips-in-video-button'
 import { HighlightsListPanel } from '@/components/clips/editor/highlights-list-panel'
@@ -129,7 +128,7 @@ import { clipsFetch } from '@/lib/clips-api'
 import { isFormControlTarget } from '@/lib/clips/editor/timeline-zoom'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
-import { EditorVersionsMenu, EditorLayoutMenu, type EditVersionRow } from '@/components/clips/editor/editor-versions-menu'
+import { EditorVersionsMenu, type EditVersionRow } from '@/components/clips/editor/editor-versions-menu'
 import {
   normalizeEdits,
   normalizeEditSpeed,
@@ -2077,7 +2076,7 @@ export function EditorShell({
       </EditorPanelErrorBoundary>
     ) : null
 
-  const renderTranscriptPanel = (options: { compactToolbar?: boolean; largeScript?: boolean }) => (
+  const renderTranscriptPanel = (options: { compactToolbar?: boolean; largeScript?: boolean; documentView?: boolean }) => (
     <>
       {fullVideo && fvHighlights.showHighlightsList ? (
         <HighlightsListPanel
@@ -2136,6 +2135,7 @@ export function EditorShell({
           momentRows={fullVideo && fvHighlights.highlightsOn ? fvHighlights.momentRows : undefined}
           compactToolbar={options.compactToolbar}
           largeScript={options.largeScript}
+          documentView={options.documentView}
           beatsAvailable={Boolean(beatCutApi?.hasBeats)}
           beatsAnalyzing={Boolean(beatCutApi?.analyzing)}
           beatCount={beatCutApi?.beatCount ?? 0}
@@ -2569,10 +2569,10 @@ export function EditorShell({
   const panelBody = unifiedWorkspaceActive || layoutView === 'script' ? null : renderSidePanels(null)
 
   const previewColumnContent = (
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden px-2 pb-1 pt-2">
+      <div className={cn("flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden", unifiedWorkspaceActive ? "px-0 pb-0 pt-0" : "px-2 pb-1 pt-2")}>
         <div
-          className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-1 md:p-2 [container-type:size]"
-          style={dockTools ? { alignItems: 'end', paddingBottom: 4 } : undefined}
+          className={cn("relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] [container-type:size]", unifiedWorkspaceActive ? "p-0" : "p-1 md:p-2")}
+          style={dockTools && !unifiedWorkspaceActive ? { alignItems: 'end', paddingBottom: 4 } : undefined}
         >
           <div
             ref={previewFrameRef}
@@ -2757,7 +2757,7 @@ export function EditorShell({
         ) : null}
       </div>
           ) : null}
-        <div className={cn('mt-auto min-w-0 shrink-0 space-y-1 border-t border-border pt-1.5', dockTools && 'mx-auto w-full max-w-4xl')}>
+        <div className={cn('mt-auto min-w-0 shrink-0 space-y-1 border-t border-border pt-1.5', dockTools && 'mx-auto w-full max-w-4xl', unifiedWorkspaceActive && 'pt-0.5')}>
           {dockTools && (clipTypeLabel || detectedLayout || pickerWhy) ? (
             <p
               className="truncate px-1 text-center text-[11px] text-muted-foreground"
@@ -3365,79 +3365,29 @@ export function EditorShell({
           menuBarSlot={
             <EditorMenuBar menus={editorMenus} onOpenSearch={() => runTimelineMenu({ kind: 'openPalette' })} />
           }
-          layoutSlot={
-            <>
-              <OpenInFullVideoButton clipId={clipId} />
-              <EditorLayoutMenu>
-                <LayoutQuickPicker
-                  value={edits.layout.mode}
-                  edits={edits}
-                  facecamLayout={facecamLayout}
-                  reframeV2Enabled={reframeV2Enabled}
-                  onPick={onLayoutPick}
-                />
-              </EditorLayoutMenu>
-            </>
-          }
+          layoutSlot={null}
           versionsSlot={
-            <>
-            {fullVideo ? (
+            fullVideo ? (
               <FindClipsInVideoButton
                 projectId={projectId}
                 durationMs={bounds.clipEndMs - bounds.clipStartMs}
                 onStarted={fvHighlights.startedFind}
               />
-            ) : null}
-            <Button
-              type="button"
-              size="sm"
-              variant={panel === 'repurpose' ? 'default' : 'outline'}
-              data-testid="editor-repurpose-open"
-              onClick={() => selectPanel('repurpose')}
-            >
-              <Megaphone className="size-4 2xl:mr-1.5" aria-hidden />
-              <span className="sr-only 2xl:not-sr-only">Repurpose</span>
-            </Button>
-            {fullVideo ? (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={fvHighlights.highlightsOn ? 'default' : 'outline'}
-                  data-testid="editor-highlights-toggle"
-                  onClick={() => {
-                    const on = !fvHighlights.highlightsOn || fvHighlights.listDismissed
-                    fvHighlights.persistToggle(on)
-                    if (on) fvHighlights.reopenList()
-                    else fvHighlights.dismissList()
-                  }}
-                >
-                  Highlights
-                </Button>
-                {fvHighlights.highlightsOn && fvHighlights.hasPicks ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    data-testid="highlight-make-all"
-                    onClick={() => void fvHighlights.onMakeAll()}
-                  >
-                    Make all
-                  </Button>
-                ) : null}
-              </>
-            ) : null}
-            <EditorVersionsMenu
-              enabled={versionsEnabled}
-              versions={editVersions}
-              onSaveVersion={(name) => void saveEditVersion(name)}
-              onRestoreVersion={(id) => void restoreEditVersion(id)}
-              onDeleteVersion={(id) => void deleteEditVersion(id)}
-              onRestoreOriginal={() => void restoreOriginalEdits()}
-            />
-            </>
+            ) : null
           }
         />
+      {/* File > Versions / History and the project menu keep the full version manager accessible without a top-bar button. */}
+      <div className="absolute left-24 top-9 z-40 h-px w-px overflow-visible" data-testid="editor-versions-anchor">
+        <EditorVersionsMenu
+          concealed
+          enabled={versionsEnabled}
+          versions={editVersions}
+          onSaveVersion={(name) => void saveEditVersion(name)}
+          onRestoreVersion={(id) => void restoreEditVersion(id)}
+          onDeleteVersion={(id) => void deleteEditVersion(id)}
+          onRestoreOriginal={() => void restoreOriginalEdits()}
+        />
+      </div>
       <EditorPanelErrorBoundary label="AI Producer">
         <ProducerPopover
           open={producerOpen}
@@ -3503,8 +3453,8 @@ export function EditorShell({
                 minTranscriptPx={280}
                 minPreviewPx={320}
                 transcript={
-                  <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card p-2" data-testid="unified-transcript-pane">
-                    {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+                  <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card" data-testid="unified-transcript-pane">
+                    {renderTranscriptPanel({ largeScript: true, compactToolbar: true, documentView: true })}
                   </div>
                 }
                 preview={<div className="flex h-full min-h-0 min-w-0 overflow-hidden" data-testid="unified-video-preview">{previewColumnContent}</div>}

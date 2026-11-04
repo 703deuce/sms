@@ -2,14 +2,14 @@ import type { LaneId } from '@/lib/clips/editor/clip-timeline'
 
 /** TIMELINE_LAYOUT4: default lane heights (px). Non-video lanes raised so blocks are readable. */
 export const LANE_H_DEFAULT: Record<LaneId, number> = {
-  captions: 36,
-  text: 40,
+  captions: 32,
+  text: 36,
   adjust: 32,
-  video: 90,
-  broll: 56,
-  voice: 48,
-  music: 48,
-  sfx: 48,
+  video: 82,
+  broll: 48,
+  voice: 42,
+  music: 42,
+  sfx: 42,
 }
 
 /** Smallest height each lane can be dragged to. */

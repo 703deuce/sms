@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 
 type TimelineDisplay = 'compact' | 'expanded' | 'focus'
 
-const TIMELINE_HEIGHT_KEY = 'transovo.editor.unified.timelinePct'
+const TIMELINE_HEIGHT_KEY = 'transovo.editor.unified.timelinePct.v2'
 const INSPECTOR_OPEN_KEY = 'transovo.editor.unified.inspectorOpen'
 
 function clampTimelinePct(value: number): number {
@@ -39,7 +39,7 @@ export function UnifiedEditorWorkspace({
 }) {
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [focus, setFocus] = useState(false)
-  const [timelinePct, setTimelinePct] = useState(56)
+  const [timelinePct, setTimelinePct] = useState(44)
   const workspaceRef = useRef<HTMLDivElement>(null)
   const timelineDrag = useRef<{ startY: number; startPct: number; height: number } | null>(null)
   const inspectorDrag = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -113,43 +113,13 @@ export function UnifiedEditorWorkspace({
 
   const mode: TimelineDisplay = focus ? 'focus' : timelineView === 'script' ? 'compact' : 'expanded'
   const gridRows = focus
-    ? 'minmax(0,1fr)'
+    ? '32px minmax(0,1fr)'
     : timelineView === 'script'
-      ? 'minmax(0,1fr) 7px 168px'
-      : `minmax(0,${100 - timelinePct}fr) 7px minmax(0,${timelinePct}fr)`
+      ? 'minmax(0,1fr) 32px 150px'
+      : `minmax(0,${100 - timelinePct}fr) 32px minmax(0,${timelinePct}fr)`
 
   return (
     <div className={cn('flex h-full min-h-0 min-w-0 flex-col gap-1 overflow-hidden bg-background p-1', className)} data-testid="unified-editor-workspace">
-      <div className="flex h-9 min-h-9 min-w-0 items-center justify-between gap-2 border-b border-border/70 px-2" data-testid="unified-workspace-toolbar">
-        <div className="flex min-w-0 items-center gap-1" role="group" aria-label="Timeline display">
-          {(['compact', 'expanded', 'focus'] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              aria-pressed={mode === item}
-              data-testid={`unified-mode-${item}`}
-              onClick={() => selectMode(item)}
-              className={cn(
-                'h-7 rounded-md px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                mode === item ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              {item === 'compact' ? 'Compact' : item === 'expanded' ? 'Timeline' : 'Focus'}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          data-testid="unified-inspector-toggle"
-          aria-label={inspectorOpen ? 'Hide tools panel' : 'Show tools panel'}
-          aria-expanded={inspectorOpen}
-          onClick={() => persistInspectorOpen(!inspectorOpen)}
-          className="flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {inspectorOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
-          <span>Tools</span>
-        </button>
-      </div>
       <div
         className="grid min-h-0 min-w-0 flex-1 gap-0 overflow-hidden"
         style={{ gridTemplateColumns: inspectorOpen ? `minmax(0,1fr) 7px ${inspectorWidthPx}px` : 'minmax(0,1fr)' }}
@@ -169,23 +139,53 @@ export function UnifiedEditorWorkspace({
           >
             {main}
           </section>
-          {!focus ? (
+          <div className="flex min-h-0 min-w-0 items-center justify-between gap-1 border-y border-border/60 bg-background px-1" data-testid="unified-workspace-toolbar">
+            <div className="flex min-w-0 items-center gap-1" role="group" aria-label="Timeline display">
+          {(['compact', 'expanded', 'focus'] as const).map((item) => (
             <button
+              key={item}
               type="button"
-              aria-label="Resize timeline height"
-              data-testid="unified-timeline-resize"
-              onPointerDown={startTimelineResize}
-              onKeyDown={(e) => {
-                if (timelineView === 'script') return
-                if (e.key === 'ArrowUp') { e.preventDefault(); persistTimelinePct(timelinePct + 3) }
-                if (e.key === 'ArrowDown') { e.preventDefault(); persistTimelinePct(timelinePct - 3) }
-              }}
-              disabled={timelineView === 'script'}
-              className="flex min-h-0 cursor-row-resize items-center justify-center text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+              aria-pressed={mode === item}
+              data-testid={`unified-mode-${item}`}
+              onClick={() => selectMode(item)}
+              className={cn(
+                'h-7 rounded-md px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                mode === item ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
             >
-              <GripHorizontal className="size-4" />
+              {item === 'compact' ? 'Compact' : item === 'expanded' ? 'Timeline' : 'Focus'}
             </button>
-          ) : null}
+          ))}
+        </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                aria-label="Resize timeline height"
+                data-testid="unified-timeline-resize"
+                onPointerDown={startTimelineResize}
+                onKeyDown={(e) => {
+                  if (timelineView === 'script') return
+                  if (e.key === 'ArrowUp') { e.preventDefault(); persistTimelinePct(timelinePct + 3) }
+                  if (e.key === 'ArrowDown') { e.preventDefault(); persistTimelinePct(timelinePct - 3) }
+                }}
+                disabled={timelineView === 'script' || focus}
+                className="flex h-7 w-8 cursor-row-resize items-center justify-center text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+              >
+                <GripHorizontal className="size-4" />
+              </button>
+              <button
+          type="button"
+          data-testid="unified-inspector-toggle"
+          aria-label={inspectorOpen ? 'Hide tools panel' : 'Show tools panel'}
+          aria-expanded={inspectorOpen}
+          onClick={() => persistInspectorOpen(!inspectorOpen)}
+          className="flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {inspectorOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+          <span>Tools</span>
+        </button>
+            </div>
+          </div>
           <section className="min-h-0 min-w-0 overflow-hidden rounded-md border border-border/70 bg-card" data-testid="unified-timeline-region">
             {timeline}
           </section>

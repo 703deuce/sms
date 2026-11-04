@@ -3580,8 +3580,8 @@ export function Timeline({
                           <button
                             key={`cap${p.s}-${i}`}
                             type="button"
-                            className="absolute top-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] border border-dashed border-amber-400/70 bg-amber-500/25 px-1 text-left text-[11px] leading-4 text-foreground/90 hover:bg-amber-500/40"
-                            style={{ left: xs(p.s), width: Math.max(6, xe(p.e) - xs(p.s)), height: Math.max(14, LANE_H.text - 8) }}
+                            className="absolute top-1.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] border border-violet-400/45 bg-violet-500/20 px-1.5 text-left text-[11px] leading-4 text-foreground/90 hover:bg-violet-500/30"
+                            style={{ left: xs(p.s), width: Math.max(6, xe(p.e) - xs(p.s)), height: Math.min(24, Math.max(16, LANE_H.text - 12)) }}
                             title={`Caption: ${p.text} (edit wording in Captions or Script)`}
                             data-testid="timeline-caption-block"
                             onPointerDown={(ev) => ev.stopPropagation()}
