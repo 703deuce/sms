@@ -47,16 +47,29 @@ function setup(e: ClipEditsV2 = edits(), outputMs = 6000) {
       fireEvent.pointerUp(window, { clientX: 100, pointerId: 1 })
     })
   }
-  return { ...utils, onCommitEdits, onSeekOutput, item, select }
+  const openKfStrip = () => {
+    act(() => {
+      fireEvent.click(utils.getByTestId('timeline-keyframes-toggle'))
+    })
+  }
+  return { ...utils, onCommitEdits, onSeekOutput, item, select, openKfStrip }
 }
 
 describe('E3 keyframes in the timeline', () => {
-  afterEach(() => cleanup())
+  afterEach(() => {
+    cleanup()
+    try {
+      window.localStorage.removeItem('clips.timeline.kfStrip')
+    } catch {
+      /* ignore */
+    }
+  })
 
   it('selecting a B-roll item shows the inspector; ◇ adds a keyframe at the playhead (item-local ms)', () => {
     const t = setup()
     expect(t.queryByTestId('keyframe-inspector')).toBeNull()
     t.select(t.item('broll', 'b1'))
+    t.openKfStrip()
     const insp = t.getByTestId('keyframe-inspector')
     expect(insp.getAttribute('data-target')).toBe('broll:b1')
     for (const p of ['x', 'y', 'scale', 'rotation', 'opacity']) expect(t.getByTestId(`kf-toggle-${p}`)).toBeTruthy()
@@ -70,6 +83,7 @@ describe('E3 keyframes in the timeline', () => {
   it('Voice lane is selectable and offers only Volume', () => {
     const t = setup()
     t.select(t.item('voice'))
+    t.openKfStrip()
     expect(t.getByTestId('keyframe-inspector').getAttribute('data-target')).toBe('voice')
     expect(t.getByTestId('kf-toggle-volume')).toBeTruthy()
     expect(t.queryByTestId('kf-toggle-x')).toBeNull()
@@ -78,6 +92,7 @@ describe('E3 keyframes in the timeline', () => {
   it('typing a value with keyframes present auto-keys at the playhead', () => {
     const t = setup(edits({ keyframes: [{ target: 'broll:b1', prop: 'x', points: [{ tMs: 0, v: 0 }] }] }))
     t.select(t.item('broll', 'b1'))
+    t.openKfStrip()
     const input = t.getByTestId('kf-value-x') as HTMLInputElement
     act(() => {
       fireEvent.change(input, { target: { value: '30' } })

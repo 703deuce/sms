@@ -75,7 +75,10 @@ export function AppShell({
             >
               Skip to content
             </a>
-            <AppSidebar recordingNavEnabled={recordingNavEnabled} />
+            <AppSidebar
+              recordingNavEnabled={recordingNavEnabled}
+              collapsible={isClipEditorPath(pathname ?? '') ? 'offcanvas' : 'icon'}
+            />
             <SidebarInset className="min-w-0 bg-background has-[main[data-immersive]]:h-dvh has-[main[data-immersive]]:overflow-hidden">
               <AppTopBar />
               <AppMain>{children}</AppMain>

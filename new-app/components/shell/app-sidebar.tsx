@@ -96,7 +96,14 @@ function NavItemRow({ item, active }: { item: SidebarNavItem; active: boolean })
   )
 }
 
-export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnabled?: boolean }) {
+export function AppSidebar({
+  recordingNavEnabled = false,
+  collapsible = 'icon',
+}: {
+  recordingNavEnabled?: boolean
+  /** TIMELINE_LAYOUT5: 'offcanvas' on the clip editor = no icon column; the editor's menu button slides it in. */
+  collapsible?: 'icon' | 'offcanvas'
+}) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { testMode } = useClipsWorkspace()
@@ -125,7 +132,7 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
   const group = (g: SidebarNavGroup) => items.filter((i) => i.group === g)
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border" data-testid="app-sidebar">
+    <Sidebar collapsible={collapsible} className="border-r border-sidebar-border" data-testid="app-sidebar" data-collapsible-mode={collapsible}>
       <SidebarHeader className="gap-2 p-2">
         <div data-nav-id="workspace-switcher" className="flex items-center gap-2">
           <LogoMark className="size-7 shrink-0" />
