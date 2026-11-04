@@ -150,7 +150,7 @@ describe('E2 multi-track timeline', () => {
   })
 
   it('B1: a locked Video track cannot be reordered by dragging', () => {
-    const e = edits({ cutRanges: [], videoSplits: [9000], lanes: { video: { locked: true } } } as Partial<ClipEditsV2>)
+    const e = edits({ cutRanges: [], videoSplits: [9000], timelineLanes: { video: { locked: true } } })
     const { getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
     drag(getAllByTestId('timeline-item-video')[0]!, 15000 * pxPerMs())
     expect(onCommitEdits).not.toHaveBeenCalled()
