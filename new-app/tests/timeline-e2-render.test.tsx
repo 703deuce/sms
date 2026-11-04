@@ -75,6 +75,31 @@ describe('E2 multi-track timeline', () => {
     expect(getByTestId('timeline-track').getAttribute('data-duration-ms')).toBe('19000')
   })
 
+  it('C2 collapse keeps the clip, playhead, seek, and restores the full tracks', () => {
+    const onCollapsedChange = vi.fn()
+    const { getByTestId, queryByTestId, onSeekOutput } = setup(edits(), { onCollapsedChange })
+    fireEvent.click(getByTestId('timeline-collapse'))
+    expect(onCollapsedChange).toHaveBeenCalledWith(true)
+    expect(getByTestId('timeline-mini-strip')).toBeTruthy()
+    expect(getByTestId('timeline-mini-clip')).toBeTruthy()
+    expect(getByTestId('timeline-mini-playhead').style.left).toBe('52.63157894736842%')
+    fireEvent.change(getByTestId('timeline-mini-strip').querySelector('input[type="range"]')!, { target: { value: '3000' } })
+    expect(onSeekOutput).toHaveBeenCalledWith(3000)
+    expect(queryByTestId('timeline-body')).toBeNull()
+    fireEvent.click(getByTestId('timeline-collapse'))
+    expect(onCollapsedChange).toHaveBeenLastCalledWith(false)
+    expect(getByTestId('timeline-lane-video')).toBeTruthy()
+  })
+
+  it('C4 force-expanded timeline shows full tracks in Focus without losing collapsed choice', () => {
+    const ui = setup(edits(), { forceExpanded: false })
+    fireEvent.click(ui.getByTestId('timeline-collapse'))
+    expect(ui.getByTestId('timeline-mini-strip')).toBeTruthy()
+    ui.rerender(<Timeline edits={edits()} words={words} shots={[]} outputMs={10000} clipOutputDurationMs={19000} onSeekOutput={ui.onSeekOutput} clipStartMs={bounds.clipStartMs} clipEndMs={bounds.clipEndMs} forceExpanded />)
+    expect(ui.getByTestId('timeline-lane-video')).toBeTruthy()
+    expect(ui.queryByTestId('timeline-mini-strip')).toBeNull()
+  })
+
   it('keeps track labels aligned below the extra full-video moment row (C5)', () => {
     const { getByTestId } = setup(edits(), {
       momentFocus: {
