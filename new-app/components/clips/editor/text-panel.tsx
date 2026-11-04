@@ -24,6 +24,7 @@ import {
   newShapeItem,
   newStickerItem,
   newTemplateItems,
+  placeTemplateGroupInClearSpace,
   newTextItem,
   normalizeTextItems,
   remapMarks,
@@ -202,7 +203,7 @@ export function TextPanel({
   }
   // G4b: a title template lands at the playhead on a free text track (never on top of other text).
   const addTemplate = (tid: string) => {
-    const made = newTemplateItems(tid, newId(), playheadMs, durationMs)
+    const made = placeTemplateGroupInClearSpace(items, newTemplateItems(tid, newId(), playheadMs, durationMs))
     if (!made.length || TEXT_MAX_ITEMS - items.length < made.length) return
     burst.current = null
     const built = build([...items, ...made])
