@@ -53,7 +53,9 @@ jobs:
             tests/layers-actual-stack.test.tsx \
             tests/preview-stage-e3.test.tsx \
             tests/e8-caption-size-parity.test.ts \
-            tests/ef24-bg-removal-edits.test.ts
+            tests/ef24-bg-removal-edits.test.ts \
+            tests/stock-audio-picker-placement.test.tsx \
+            tests/batch5-template-full-video.test.tsx
 
   captions-worker-regression:
     runs-on: ubuntu-latest
