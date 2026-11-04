@@ -27,7 +27,7 @@ import {
   type OpCtx,
   type TimelineItem,
 } from '@/lib/clips/editor/clip-timeline'
-import { addGapAt } from '@/lib/clips/editor/inserts'
+import { addGapAt, GAP_SOURCE_ID } from '@/lib/clips/editor/inserts'
 import type { ColorSpec } from '@/lib/clips/editor/color'
 import { setBrollFx, type LayerFx } from '@/lib/clips/editor/layer-fx'
 import type { KeyframeTarget, KeyframeTrack, LayerProp } from '@/lib/clips/editor/motion-schema'
@@ -407,7 +407,7 @@ export function shiftVideoSegmentWithinSlot(ctx: OpCtx, segId: string, deltaMs: 
   const inserts = ctx.edits.inserts ?? []
   // Gap inserts are anchored to a source coordinate and displayed before the clip at that point.
   const atSrcMs = item.srcInMs
-  const existing = inserts.filter(ins => !ins.append && ins.atSrcMs === atSrcMs && ins.sourceId === '__gap__')
+  const existing = inserts.filter(ins => !ins.append && ins.atSrcMs === atSrcMs && ins.sourceId === GAP_SOURCE_ID)
   if (delta < 0) {
     const gap = existing[existing.length - 1]
     if (!gap) return null
