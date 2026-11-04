@@ -4,6 +4,10 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
 import { defaultEdits } from '@/lib/clips/edits'
 
+// This suite checks the fade controls, not the unrelated stock catalog network.
+// Prevent its mount-time search from calling a non-running localhost server in CI.
+vi.mock('@/components/clips/editor/stock-audio-picker', () => ({ StockAudioPicker: () => null }))
+
 afterEach(cleanup)
 
 describe('Audio panel fade controls (E11)', () => {
