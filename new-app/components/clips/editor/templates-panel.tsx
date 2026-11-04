@@ -19,7 +19,6 @@ import {
 } from '@/lib/clips/editor/starter-templates'
 import { newTextItem, normalizeTextItems, TEXT_PRESETS } from '@/lib/clips/editor/text-items'
 import { t6CaptionPresetsEnabled, t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
-import { bgRemovalUiEnabled } from '@/lib/clips/editor/bg-removal'
 import { layoutPackFromEdits } from '@/lib/clips/layout-packs'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 
@@ -52,7 +51,6 @@ export function TemplatesPanel({
   onApplyBrand,
   playheadMs,
   durationMs,
-  onOpenBgRemoval,
 }: {
   edits: ClipEditsV2
   onEdits: (e: ClipEditsV2) => void
@@ -62,7 +60,6 @@ export function TemplatesPanel({
   onApplyBrand: (id: string) => void
   playheadMs: number
   durationMs: number
-  onOpenBgRemoval?: () => void
 }) {
   const pathname = usePathname()
   const t6Templates = t6TemplatesEnabled()
@@ -207,19 +204,6 @@ export function TemplatesPanel({
             </button>
           ))}
         </div>
-        {bgRemovalUiEnabled() ? (
-          <button
-            type="button"
-            className={cn(
-              tile(false),
-              'mt-2 inline-flex w-full items-center justify-center gap-2 border-primary/30 bg-primary/5 font-medium',
-            )}
-            data-testid="bg-remove-toggle"
-            onClick={() => onOpenBgRemoval?.()}
-          >
-            Remove background
-          </button>
-        ) : null}
       </Section>
     </div>
   )
