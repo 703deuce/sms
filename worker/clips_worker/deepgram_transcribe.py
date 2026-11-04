@@ -121,6 +121,8 @@ def _listen_params(model: str | None = None, language: str | None = "en", keyter
         params["filler_words"] = "true"
     elif lang == "auto":
         params["detect_language"] = "true"
+        # SCRIPT_DOC4: keep um/uh when the detected language is English (ignored otherwise).
+        params["filler_words"] = "true"
     else:
         params["language"] = lang
     pairs: list[tuple[str, str]] = list(params.items())

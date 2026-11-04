@@ -3,8 +3,14 @@ import type { ClipWord } from '@/lib/clips/edits'
 /** Align with worker `picker/snap_bounds.py` FILLERS (single-token). */
 export const SCRIPT_FILLER_LEXICON = new Set([
   'um',
+  'umm',
+  'uhm',
   'uh',
+  'uhh',
   'erm',
+  'er',
+  'hmm',
+  'mhmm',
   'so',
   'and',
   'but',

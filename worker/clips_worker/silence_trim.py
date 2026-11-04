@@ -3,7 +3,7 @@ import re
 
 from clips_worker.gap_audio_trim import gap_shorten_cut_range_with_audio, rms_samples_from_peaks
 
-FILLER_ONLY = re.compile(r"^(um|uh|erm|hmm|mm|mhm)$", re.I)
+FILLER_ONLY = re.compile(r"^(um+|uh+|uhm|erm|hmm+|mm+|mhm+)$", re.I)
 MAX_SILENCE_GAP_MS = 1500
 MAX_SINGLE_CUT_MS = 3000
 
@@ -11,7 +11,7 @@ MAX_SINGLE_CUT_MS = 3000
 def filler_word_cuts(words: list[dict]) -> list[list[int]]:
     cuts: list[list[int]] = []
     for w in words:
-        text = str(w.get("w", "")).strip()
+        text = re.sub(r"[^\w']", "", str(w.get("w", ""))).strip()
         if not text or not FILLER_ONLY.match(text):
             continue
         a = int(float(w["s"]) * 1000)
