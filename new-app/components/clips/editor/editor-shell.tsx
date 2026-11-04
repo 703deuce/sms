@@ -413,8 +413,6 @@ export function EditorShell({
   )
   const { transcriptPct: scriptSplitPct, persist: persistScriptSplit } = useScriptViewSplit()
   const selectPanel = useCallback((id: EditorPanelId) => {
-    // TIMELINE_LAYOUT3: Timeline view (lg+) shows Properties permanently in its own right card.
-    if (id === 'inspector' && layoutView === 'timeline' && band !== 'mobile') return
     setPanel(id)
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
@@ -1412,9 +1410,12 @@ export function EditorShell({
       })
       if (target?.startsWith('text:')) setSelectedTextId(target.slice(5))
       // Text panel open + a text item clicked: stay there (it follows the selection); else Properties.
-      if (target && !(panel === 'text' && target.startsWith('text:'))) setPanel('inspector')
+      if (target && !(panel === 'text' && target.startsWith('text:'))) {
+        setPanel('inspector')
+        if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
+      }
     },
-    [edits.textItems, outputMs, panel],
+    [edits.textItems, outputMs, panel, layoutView, band, setDockPanelOpenPersist],
   )
   const onCanvasCommit = useCallback(
     (next: ClipEditsV2, pushHistory: boolean) => setEdits(next, pushHistory),
@@ -3516,9 +3517,10 @@ export function EditorShell({
                       'flex h-10 min-w-[2.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-[0.625rem] leading-none text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-4',
                       dockPanelOpen && panel === 'inspector' && 'bg-accent text-foreground',
                     )}
-                    onClick={() =>
-                      document.querySelector<HTMLElement>('[data-region="properties"]')?.scrollIntoView({ block: 'nearest' })
-                    }
+                    onClick={() => {
+                      if (dockPanelOpen && panel === 'inspector') setDockPanelOpenPersist(false)
+                      else selectPanel('inspector')
+                    }}
                     aria-label="Properties"
                     aria-pressed={dockPanelOpen && panel === 'inspector'}
                     data-testid="timeline-dock-properties"
@@ -3622,7 +3624,7 @@ export function EditorShell({
             )
           }
           properties={
-            dockTools || (!compact && band === 'wide') ? (
+            !dockTools && !compact && band === 'wide' && layoutView !== 'script' ? (
               <>
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
                   <h2 className="text-sm font-semibold">Properties</h2>
