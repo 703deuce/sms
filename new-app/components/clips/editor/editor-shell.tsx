@@ -506,6 +506,7 @@ export function EditorShell({
     saveState,
     applyCleanupCut,
     applyCleanupCuts,
+    syncWordsForCuts,
     setCutRanges,
     setWordFix,
     applyWordFixesBatch,
@@ -745,6 +746,9 @@ export function EditorShell({
     () => mergeMediaWords(clipEditorWords, { sources: editSources, sourceSegments: editSourceSegments }, mediaTranscripts.transcripts),
     [clipEditorWords, editSources, editSourceSegments, mediaTranscripts.transcripts],
   )
+  useEffect(() => {
+    syncWordsForCuts(editorWords)
+  }, [editorWords, syncWordsForCuts])
 
   const handleDeriveClip = useCallback(
     async (trimIn: number, trimOut: number, deriveTitle?: string) => {
