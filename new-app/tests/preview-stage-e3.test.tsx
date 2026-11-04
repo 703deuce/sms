@@ -4,6 +4,7 @@ import { render } from '@testing-library/react'
 import { PreviewStage } from '@/components/clips/editor/preview-stage'
 import { stageBoxForZoom } from '@/lib/clips/editor/preview-view'
 import { normalizeEdits } from '@/lib/clips/edits'
+import { setPropertyAt } from '@/lib/clips/editor/keyframes'
 
 const bounds = { clipStartMs: 0, clipEndMs: 20000 }
 
@@ -44,6 +45,21 @@ describe('PreviewStage E3 layers', () => {
     expect(r.getAllByTestId('preview-broll-layer').map((el) => el.getAttribute('data-broll-id'))).toEqual(['b1', 'b2'])
     // Clones are created lazily during a window → only one main video element at rest.
     expect(r.getByTestId('preview-transition-a').querySelector('video')).toBeNull()
+  })
+
+  it('E4: Rotation 15 appears on the main Video transform immediately after Properties edits', () => {
+    const before = normalizeEdits({ v: 2, trim: { in: 0, out: 20000 } }, bounds)
+    const r = render(
+      <PreviewStage videoUrl="https://example.com/video.mp4" edits={before}
+        words={[]} cropTrack={null} videoRef={{ current: null }} onTick={vi.fn()} />,
+    )
+    const node = r.getByTestId('preview-main-kf')
+    const after = setPropertyAt(before, 'video', 'rotation', 0, 15)
+    r.rerender(
+      <PreviewStage videoUrl="https://example.com/video.mp4" edits={after}
+        words={[]} cropTrack={null} videoRef={{ current: null }} onTick={vi.fn()} />,
+    )
+    expect(node.getAttribute('style')).toContain('rotate(15deg)')
   })
 
   it('21:9 testBoxSize uses pillarbox path and zoom 200 scales stage', () => {
