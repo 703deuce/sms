@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { exportTimeMap, seekBaseMs, toBaseMs, toExportMs } from '@/lib/clips/editor/export-time'
 import { parseNudge } from '@/lib/clips/editor/timecode-nudge'
 import { readTimelineHeight, clampTimelineHeight, TIMELINE_MIN_H, writeTimelineHeight } from '@/lib/clips/editor/timeline-opts'
+import { clampLaneH, laneHeights, readLaneHeights, writeLaneHeights } from '@/lib/clips/editor/lane-heights'
 import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
 import { Activity, Blend, Bookmark, Command, Keyboard, Layers, Link2, Magnet, Maximize2, Pause, Plus, Redo2, Repeat, Scissors, Square, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
 import { FreeToolBadge } from '@/components/clips/ui/free-tool-badge'
@@ -213,7 +214,7 @@ const TRACK_EXTRA_PX = 16
 const RULER_H = 18
 // FV2: Video lane is taller so the filmstrip (top) and word chips (bottom) both show; B-roll gets a strip too.
 // TIMELINE_LAYOUT1: taller rows; Video = 68 px clip + its own 18 px transcript row underneath (+4 pad).
-const LANE_H: Record<LaneId, number> = { captions: 30, text: 36, adjust: 30, video: 90, broll: 44, voice: 40, music: 40, sfx: 36 }
+// TIMELINE_LAYOUT4: per-lane heights are user-resizable — see LANE_H inside Timeline() + lib/clips/editor/lane-heights.ts.
 /** Word-chip bar height at the bottom of the Video lane (filmstrip fills the space above it). */
 const VIDEO_WORDBAR_H = 18
 /** FV2: above this span (full videos) the timeline windows its DOM and opens at Fit; clips are unchanged. */
@@ -733,6 +734,29 @@ export function Timeline({
     [captionWords],
   )
   const wordItems = useMemo(() => groupWordbarItems(wordChips, pxPerMs), [wordChips, pxPerMs])
+  // TIMELINE_LAYOUT4: auto-caption phrases shown as blocks on the Text lane (word chips stay on their own row).
+  const captionPhrases = useMemo(() => {
+    if ((edits.captionLines?.length ?? 0) > 0) return []
+    const out: { s: number; e: number; text: string }[] = []
+    let cur: { s: number; e: number; text: string } | null = null
+    let n = 0
+    for (const c of captionWords) {
+      if (cur && (n >= 5 || c.s_ms - cur.e > 700)) {
+        out.push(cur)
+        cur = null
+      }
+      if (!cur) {
+        cur = { s: c.s_ms, e: Math.max(c.s_ms + 1, c.e_ms), text: c.text }
+        n = 1
+      } else {
+        cur.e = Math.max(cur.e, c.e_ms)
+        cur.text += ` ${c.text}`
+        n++
+      }
+    }
+    if (cur) out.push(cur)
+    return out
+  }, [captionWords, edits.captionLines])
   const wordEdges = useMemo(() => wordChips.flatMap((w) => [w.outStartMs, w.outEndMs]), [wordChips])
   const wordByI = useMemo(() => new Map(words.map((w) => [String(w.i), w])), [words])
   // FV2: full videos read the worker's compact peaks file and never download the media for it.
@@ -1038,6 +1062,41 @@ export function Timeline({
   const [speedFocusSeq, setSpeedFocusSeq] = useState(0)
   const trackAreaRef = useRef<HTMLDivElement | null>(null)
   const rows = useMemo(() => timelineRows(edits), [edits])
+  // TIMELINE_LAYOUT4: drag a lane header's bottom border to resize; height is saved per lane type.
+  const [laneHUser, setLaneHUser] = useState<Partial<Record<LaneId, number>>>({})
+  useEffect(() => {
+    setLaneHUser(readLaneHeights())
+  }, [])
+  const LANE_H: Record<LaneId, number> = laneHeights(laneHUser)
+  const startLaneResize = (lane: LaneId, e: { clientY: number; preventDefault: () => void; stopPropagation: () => void }) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const y0 = e.clientY
+    const h0 = LANE_H[lane]
+    let last = h0
+    const move = (ev: PointerEvent) => {
+      last = clampLaneH(lane, h0 + ev.clientY - y0)
+      setLaneHUser((m) => ({ ...m, [lane]: last }))
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      setLaneHUser((m) => {
+        const next = { ...m, [lane]: last }
+        writeLaneHeights(next)
+        return next
+      })
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+  const resetLaneH = (lane: LaneId) =>
+    setLaneHUser((m) => {
+      const next = { ...m }
+      delete next[lane]
+      writeLaneHeights(next)
+      return next
+    })
   const rowIndexOf = (r: ItemRef) =>
     rows.findIndex((row) => row.lane === r.lane && rowItems(lanes, row).some((i) => i.id === r.id))
 
@@ -3221,7 +3280,7 @@ export function Timeline({
         style={tlHeight ? { height: tlHeight, overflowY: 'auto' } : undefined}
         data-testid="timeline-body"
       >
-        <div className="min-w-[160px] w-[160px] shrink-0 border-r border-border/60" aria-label="Tracks">
+        <div className="relative min-w-[160px] w-[160px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
           {rows.map((r) => (
             <TimelineLaneHeader
@@ -3237,10 +3296,24 @@ export function Timeline({
               dropTarget={Boolean(drag?.moved && drag.targetRow === r.key && rowOfItem(drag.item)?.key !== r.key)}
             />
           ))}
+          {rows.map((r) => (
+            <div
+              key={`lane-resize-${r.key}`}
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label={`Resize ${r.trackId ? r.label : r.lane} lane`}
+              title="Drag to resize this lane · double-click to reset"
+              className="absolute inset-x-0 z-10 h-1.5 -translate-y-1/2 cursor-row-resize touch-none hover:bg-primary/40"
+              style={{ top: rowTop(r.key) + LANE_H[r.lane] }}
+              data-testid={`timeline-lane-resize-${r.isDefault ? r.lane : `${r.lane}-${r.trackId}`}`}
+              onPointerDown={(e) => startLaneResize(r.lane, e)}
+              onDoubleClick={() => resetLaneH(r.lane)}
+            />
+          ))}
         </div>
         <div
           ref={scrollRef}
-          className="min-w-0 flex-1 overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-w-0 flex-1 self-start overflow-x-auto overflow-y-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           tabIndex={0}
           aria-label="Timeline (S split, Del delete, arrows nudge, +/- zoom, 0 fit, N snapping)"
           data-testid="timeline-scroll"
@@ -3462,6 +3535,27 @@ export function Timeline({
                           aria-hidden
                         />
                       ))
+                    : null}
+                  {lane === 'text' && row.isDefault
+                    ? captionPhrases
+                        .filter((p) => !virtualize || inView(p.s, p.e))
+                        .map((p, i) => (
+                          <button
+                            key={`cap${p.s}-${i}`}
+                            type="button"
+                            className="absolute top-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] border border-dashed border-amber-400/70 bg-amber-500/25 px-1 text-left text-[11px] leading-4 text-foreground/90 hover:bg-amber-500/40"
+                            style={{ left: xs(p.s), width: Math.max(6, xe(p.e) - xs(p.s)), height: Math.max(14, LANE_H.text - 8) }}
+                            title={`Caption: ${p.text} (edit wording in Captions or Script)`}
+                            data-testid="timeline-caption-block"
+                            onPointerDown={(ev) => ev.stopPropagation()}
+                            onClick={(ev) => {
+                              ev.stopPropagation()
+                              onSeekOutput(p.s)
+                            }}
+                          >
+                            {p.text}
+                          </button>
+                        ))
                     : null}
                   {(lane === 'text' || lane === 'broll' || lane === 'sfx') &&
                   autoXfadeRegions

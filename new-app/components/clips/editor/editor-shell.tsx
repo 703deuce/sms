@@ -2576,9 +2576,9 @@ export function EditorShell({
   const panelBody = renderSidePanels(null)
 
   const previewColumnContent = (
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 overflow-hidden p-2 sm:p-3">
+      <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden px-2 pb-1 pt-2">
         <div
-          className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4 [container-type:size]"
+          className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-1 md:p-2 [container-type:size]"
           style={dockTools ? { alignItems: 'end', paddingBottom: 4 } : undefined}
         >
           <div
@@ -2764,7 +2764,18 @@ export function EditorShell({
         ) : null}
       </div>
           ) : null}
-        <div className={cn('min-w-0 shrink-0 space-y-2 border-t border-border pt-2', dockTools && 'mx-auto w-full max-w-4xl')}>
+        <div className={cn('mt-auto min-w-0 shrink-0 space-y-1 border-t border-border pt-1.5', dockTools && 'mx-auto w-full max-w-4xl')}>
+          {dockTools && (clipTypeLabel || detectedLayout || pickerWhy) ? (
+            <p
+              className="truncate px-1 text-center text-[11px] text-muted-foreground"
+              title={[clipTypeLabel ? `Clip type: ${clipTypeLabel}` : '', detectedLayout ? `Detected layout: ${detectedLayout}` : '', pickerWhy ?? '']
+                .filter(Boolean)
+                .join(' · ')}
+              data-testid="preview-clip-meta-line"
+            >
+              {[clipTypeLabel, detectedLayout, pickerWhy].filter(Boolean).join(' · ')}
+            </p>
+          ) : null}
           <PreviewTransportStrip
             compact={layoutView === 'script' || (!dockTools && previewFrameW < 560)}
             recordSlot={
@@ -2992,17 +3003,6 @@ export function EditorShell({
               )
             }
           />
-          {dockTools && (clipTypeLabel || detectedLayout || pickerWhy) ? (
-            <p
-              className="truncate px-1 text-center text-[11px] text-muted-foreground"
-              title={[clipTypeLabel ? `Clip type: ${clipTypeLabel}` : '', detectedLayout ? `Detected layout: ${detectedLayout}` : '', pickerWhy ?? '']
-                .filter(Boolean)
-                .join(' · ')}
-              data-testid="preview-clip-meta-line"
-            >
-              {[clipTypeLabel, detectedLayout, pickerWhy].filter(Boolean).join(' · ')}
-            </p>
-          ) : null}
           {clipRec.armed ? (
           <ClipRecorderBar
           mode={clipRec.mode}
@@ -3509,11 +3509,11 @@ export function EditorShell({
             <>
               <EditorMobileRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
               {dockTools ? (
-                <div className="hidden h-full min-h-0 flex-col gap-1 lg:flex" data-testid="timeline-dock-rail">
+                <div className="hidden h-full min-h-0 flex-col gap-0.5 lg:flex" data-testid="timeline-dock-rail">
                   <button
                     type="button"
                     className={cn(
-                      'flex h-12 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-border bg-card text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground',
+                      'flex h-11 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-border bg-card text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground',
                       dockPanelOpen && panel === 'inspector' && 'bg-accent text-foreground',
                     )}
                     onClick={() =>
