@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useState } from 'react'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { TextPanel } from '@/components/clips/editor/text-panel'
 import { defaultEdits } from '@/lib/clips/edits'
@@ -7,6 +8,31 @@ import { defaultEdits } from '@/lib/clips/edits'
 afterEach(cleanup)
 
 describe('TextPanel multi-part templates', () => {
+  it('D3: adding a text item and typing is two history steps regardless of typing pauses', () => {
+    const commits: boolean[] = []
+    const original = defaultEdits({ clipStartMs: 0, clipEndMs: 60000 })
+    function Editor() {
+      const [edits, setEdits] = useState(original)
+      const [selectedId, setSelectedId] = useState<string | null>(null)
+      return <TextPanel edits={edits} onEdits={(next, pushHistory) => {
+        commits.push(pushHistory !== false)
+        setEdits(next)
+      }} playheadMs={3000} durationMs={60000} selectedId={selectedId} onSelect={setSelectedId} />
+    }
+    const ui = render(<Editor />)
+    fireEvent.click(ui.getByTestId('text-add'))
+    expect(commits).toEqual([true])
+    const field = ui.getByTestId('text-content')
+    fireEvent.change(field, { target: { value: 'Welcome' } })
+    fireEvent.change(field, { target: { value: 'Welcome back' } })
+    fireEvent.change(field, { target: { value: 'Welcome back!' } })
+    expect(commits).toEqual([true, true, false, false])
+    fireEvent.blur(field)
+    fireEvent.change(field, { target: { value: 'Welcome back!!' } })
+    expect(commits).toEqual([true, true, false, false, true])
+  })
+
+
   for (const [id, count] of [['c_qs_quote', 3], ['c_cd_321', 3], ['c_qs_stat', 2]] as const) {
     it(`adds ${id} to the actual Text track at the playhead`, () => {
       const onEdits = vi.fn()
