@@ -44,6 +44,7 @@ jobs:
             tests/editor-state-ripple.test.tsx \
             tests/clip-filler-review-lifecycle.test.tsx \
             tests/unified-editor-workspace.test.tsx \
+            tests/history-labels.test.ts \
             tests/text-template-panel-add.test.tsx \
             tests/layers-actual-stack.test.tsx \
             tests/preview-stage-e3.test.tsx \
