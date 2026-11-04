@@ -28,13 +28,13 @@ export const EDITOR_GRID = {
     'lg:grid-cols-[64px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto] ' +
     'xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)] ' +
     '2xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)]',
-  /** Phase 3 script view: two columns only (rail + main) — no panel/properties grid slots. */
+  /** Script view: single main column (left rail hidden at lg+; tools live in the right ScriptViewToolRail). */
   rootScript:
     'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
-    'lg:grid-cols-[64px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto] ' +
-    'xl:grid-cols-[64px_minmax(0,1fr)] ' +
-    '2xl:grid-cols-[64px_minmax(0,1fr)]',
+    'lg:grid-cols-[minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto]',
+  /** Script view: keep the mobile rail, hide the desktop rail. */
+  railScript: 'min-h-0 lg:hidden',
   rail: 'min-h-0 lg:row-span-2 lg:col-start-1 lg:row-start-1',
   panelMobile: 'max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:max-h-[70dvh] max-lg:rounded-t-xl max-lg:border-t',
   panelCompact: 'lg:max-xl:absolute lg:max-xl:inset-y-1 lg:max-xl:left-[68px] lg:max-xl:z-30 lg:max-xl:w-[340px] lg:max-xl:shadow-2xl',
@@ -46,16 +46,16 @@ export const EDITOR_GRID = {
     'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg bg-panel lg:col-start-2 lg:row-start-1 xl:col-start-3 2xl:col-start-3',
   /** Script view main column (spans former panel + preview width). */
   previewScript:
-    'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-panel lg:col-start-2 lg:row-start-1 xl:col-start-2 2xl:col-start-2',
+    'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-panel lg:col-start-1 lg:row-start-1',
   properties:
     'hidden min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card 2xl:flex 2xl:col-start-4 2xl:row-start-1',
   /** Script view: properties column absent (do not merge with properties + 2xl:hidden). */
   propertiesHidden: 'hidden',
   timeline:
     'col-span-full min-h-0 overflow-y-auto rounded-lg border border-border bg-card max-h-[clamp(160px,45dvh,560px)] lg:col-[2/-1] lg:row-start-2',
-  /** Script view: fixed wave strip row (not full timeline max-height). */
+  /** Script view: compact timeline row, fixed 148px (140px strip + border/padding). */
   timelineScript:
-    'col-span-full h-16 min-h-16 max-h-16 shrink-0 overflow-hidden rounded-lg border border-border bg-card lg:col-[2/-1] lg:row-start-2',
+    'col-span-full h-[148px] min-h-[148px] max-h-[148px] shrink-0 overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-2',
   backdrop: 'fixed inset-0 z-30 bg-black/50 lg:max-xl:bg-black/30 xl:hidden',
 } as const
 
@@ -130,7 +130,7 @@ export function EditorLayout(props: {
       data-compact={compact ? 'true' : undefined}
       data-script-view={scriptView ? 'true' : undefined}
     >
-      <div data-region="rail" className={EDITOR_GRID.rail}>{props.rail}</div>
+      <div data-region="rail" className={scriptView ? EDITOR_GRID.railScript : EDITOR_GRID.rail}>{props.rail}</div>
       {overlay && panelOpen ? (
         <button type="button" aria-label="Close panel" className={EDITOR_GRID.backdrop} onClick={props.onClosePanel} data-testid="editor-panel-backdrop" />
       ) : null}

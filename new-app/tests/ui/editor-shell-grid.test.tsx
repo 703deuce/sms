@@ -25,11 +25,11 @@ describe('editor shell grid', () => {
     expect(EDITOR_GRID.root).toContain('lg:grid-rows-[minmax(0,1fr)_auto]')
     expect(EDITOR_GRID.root).toContain('xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)]')
     expect(EDITOR_GRID.root).toContain('2xl:grid-cols-[64px_var(--editor-panel-w,360px)_minmax(0,1fr)_minmax(280px,320px)]')
-    expect(EDITOR_GRID.rootScript).toContain('xl:grid-cols-[64px_minmax(0,1fr)]')
+    expect(EDITOR_GRID.rootScript).toContain('lg:grid-cols-[minmax(0,1fr)]')
     expect(EDITOR_GRID.rootScript).not.toContain('var(--editor-panel-w')
-    expect(EDITOR_GRID.previewScript).toContain('xl:col-start-2')
-    expect(EDITOR_GRID.previewScript).not.toContain('xl:col-start-3')
-    expect(EDITOR_GRID.timelineScript).toContain('h-16')
+    expect(EDITOR_GRID.previewScript).toContain('lg:col-start-1')
+    expect(EDITOR_GRID.previewScript).not.toContain('lg:col-start-2')
+    expect(EDITOR_GRID.timelineScript).toContain('h-[148px]')
     expect(EDITOR_GRID.timelineScript).not.toContain('max-h-[clamp')
     expect(EDITOR_GRID.properties).toContain('hidden')
     expect(EDITOR_GRID.properties).toContain('2xl:flex')
@@ -101,13 +101,13 @@ describe('editor shell grid', () => {
     const root = container.querySelector('[data-testid="editor-grid"]')
     expect(root?.getAttribute('data-script-view')).toBe('true')
     const rootClass = root?.className ?? ''
-    expect(rootClass).toContain('xl:grid-cols-[64px_minmax(0,1fr)]')
+    expect(rootClass).toContain('lg:grid-cols-[minmax(0,1fr)]')
     expect(rootClass).not.toContain('var(--editor-panel-w')
     const previewClass = container.querySelector('[data-region="preview"]')?.className ?? ''
-    expect(previewClass).toContain('xl:col-start-2')
-    expect(previewClass).not.toContain('xl:col-start-3')
+    expect(previewClass).toContain('lg:col-start-1')
+    expect(previewClass).not.toContain('lg:col-start-2')
     const timelineClass = container.querySelector('[data-region="timeline"]')?.className ?? ''
-    expect(timelineClass).toContain('h-16')
+    expect(timelineClass).toContain('h-[148px]')
     expect(timelineClass).not.toContain('max-h-[clamp')
   })
   it('clampTimelineHeight', () => {
