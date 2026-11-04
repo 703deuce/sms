@@ -94,14 +94,14 @@ describe('caption preview overlay', () => {
     const one = render(
       <CaptionOverlay words={words} currentTimeSec={0.2} edits={small} boxHeightPx={200} outputDurationSec={5} />,
     )
-    const smallPx = parseFloat((one.getByTestId('caption-row') as HTMLElement).style.fontSize)
+    const smallPx = parseFloat((one.container.querySelector('[data-testid="caption-row"]') as HTMLElement).style.fontSize)
     one.unmount()
     const large = defaultEdits(bounds)
     large.captions = { ...large.captions, size: 10 }
     const two = render(
       <CaptionOverlay words={words} currentTimeSec={0.2} edits={large} boxHeightPx={200} outputDurationSec={5} />,
     )
-    const largePx = parseFloat((two.getByTestId('caption-row') as HTMLElement).style.fontSize)
+    const largePx = parseFloat((two.container.querySelector('[data-testid="caption-row"]') as HTMLElement).style.fontSize)
     expect(largePx).toBeGreaterThan(smallPx * 2)
   })
 
