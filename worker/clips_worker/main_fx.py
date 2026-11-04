@@ -17,8 +17,12 @@ def main_key_allowed(edits: dict) -> bool:
     if edits.get("sourceSegments"):
         return False
     mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
-    # Full-frame and fit layouts keep a single composited foreground.
+    if mode in ("fit_blur", "full_frame"):
+        return False
     if mode in MULTI_VIDEO_LAYOUTS:
+        return False
+    tmpl = (edits.get("layout") or {}).get("template") if isinstance(edits.get("layout"), dict) else None
+    if isinstance(tmpl, dict) and tmpl.get("id"):
         return False
     return True
 
