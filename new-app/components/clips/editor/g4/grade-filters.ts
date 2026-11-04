@@ -41,7 +41,9 @@ import {
   glitchState,
   glowOpacity,
   pixelateBlock,
+  flashMix,
   invertLinear,
+  leakSvgUrl,
   monoMatrix,
   rgbsplitPx,
   scanlineRows,
@@ -59,6 +61,7 @@ type Entry = {
   /** G4b per-frame nodes */
   glitch?: { v: number; nodes: SVGFEOffsetElement[] }
   flicker?: { v: number; funcs: SVGElement[] }
+  flash?: { v: number; funcs: SVGElement[] }
 }
 
 export type GradeCssOpts = { spatialOnly?: boolean }
@@ -161,6 +164,13 @@ export class GradeFilterBank {
       if (e.flicker) {
         const g = String(Math.round(flickerGain(e.flicker.v, frame) * 1e5) / 1e5)
         for (const f of e.flicker.funcs) if (f.getAttribute('slope') !== g) f.setAttribute('slope', g)
+      }
+      if (e.flash) {
+        const k = flashMix(e.flash.v, frame)
+        for (const f of e.flash.funcs) {
+          f.setAttribute('slope', String(1 - k))
+          f.setAttribute('intercept', String(k))
+        }
       }
       if (!e.grain) continue
       const { img, gw, gh } = e.grain
@@ -341,6 +351,18 @@ export class GradeFilterBank {
       const comp = el('feComposite', { in2: 'vm', operator: 'arithmetic', k1: 1, k2: 0, k3: 0, k4: 0 })
       step(comp, 'vig')
     }
+    if (fx.leak) {
+      const lk = `l${fx.leak}_${W}x${H}`
+      let url = maskCache.get(lk)
+      if (!url) {
+        url = leakSvgUrl(fx.leak, W, H)
+        maskCache.set(lk, url)
+      }
+      const img = el('feImage', { x: 0, y: 0, width: 1, height: 1, preserveAspectRatio: 'none', result: 'lk' })
+      img.setAttribute('href', url)
+      f.appendChild(img)
+      step(el('feBlend', { mode: 'screen', in2: 'lk' }), 'leak')
+    }
     if (fx.scanlines) {
       const sk = `s${fx.scanlines}_${W}x${H}`
       let url = maskCache.get(sk)
@@ -363,6 +385,17 @@ export class GradeFilterBank {
       })
       step(ct, 'flick')
       entry.flicker = { v: fx.flicker, funcs }
+    }
+    if (fx.flash) {
+      const k = flashMix(fx.flash, this.frame)
+      const ct = el('feComponentTransfer', {})
+      const funcs = (['feFuncR', 'feFuncG', 'feFuncB'] as const).map((t) => {
+        const fn = el(t, { type: 'linear', slope: 1 - k, intercept: k })
+        ct.appendChild(fn)
+        return fn as SVGElement
+      })
+      step(ct, 'flash')
+      entry.flash = { v: fx.flash, funcs }
     }
     if (fx.grain) {
       const c = grainCell(this.play.h)

@@ -6,7 +6,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 describe('EFFECTS1 registry', () => {
   it('appends the new keys in worker order with labels', () => {
-    expect(FX2_KEYS.slice(-5)).toEqual(['mono', 'sepia', 'invert', 'mirror', 'zoom'])
+    expect(FX2_KEYS.slice(8, 13)).toEqual(['mono', 'sepia', 'invert', 'mirror', 'zoom'])
     for (const k of FX2_KEYS) expect(FX2_LABELS[k]).toBeTruthy()
     for (const p of FX_PRESETS) for (const k of Object.keys(p.fx)) expect([...FX2_KEYS, 'sharpen', 'vignette', 'grain']).toContain(k)
   })

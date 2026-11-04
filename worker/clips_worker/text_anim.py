@@ -16,10 +16,10 @@ line, word or character (typewriter by block = by character).
 from __future__ import annotations
 
 IN_TYPES = ("fade", "pop", "zoom", "slide_up", "slide_down", "slide_left", "slide_right", "typewriter",
-            "bounce_in", "zoom_out")
-BLOCK_ONLY = ("zoom", "slide_up", "slide_down", "slide_left", "slide_right", "bounce_in", "zoom_out")
+            "bounce_in", "zoom_out", "rotate_in")
+BLOCK_ONLY = ("zoom", "slide_up", "slide_down", "slide_left", "slide_right", "bounce_in", "zoom_out", "rotate_in")
 # EFFECTS1: text-only types (layers fall back to fade; TS TEXT_ONLY_ANIM).
-TEXT_ONLY = ("typewriter", "bounce_in", "zoom_out")
+TEXT_ONLY = ("typewriter", "bounce_in", "zoom_out", "rotate_in")
 UNITS = ("block", "line", "word", "char")
 LOOP_TYPES = ("pulse", "bounce", "wiggle", "flicker")
 DUR_MIN, DUR_MAX, DUR_DEFAULT = 100, 5000, 500
@@ -126,6 +126,8 @@ def block_state(typ: str, p: float) -> dict:
         return {"op": _clamp01(p * 3.0), "sc": 1.0, "dx": 0.0, "dy": (ease_back(p) - 1.0) * 12.0}
     if typ == "zoom_out":
         return {"op": e, "sc": 1.6 - 0.6 * e, "dx": 0.0, "dy": 0.0}
+    if typ == "rotate_in":
+        return {"op": e, "sc": 0.6 + 0.4 * e, "dx": 0.0, "dy": 0.0, "rot": (1.0 - e) * -90.0}
     return {"op": 1.0, "sc": 1.0, "dx": 0.0, "dy": 0.0}
 
 
@@ -197,6 +199,7 @@ def frame_anim(anim: dict, t_ms: float, start: int, end: int, d_in: int, d_out: 
         if a_in["unit"] == "block":
             b = block_state(a_in["type"], tl / d_in)
             op, sc, dx, dy = op * b["op"], sc * b["sc"], dx + b["dx"], dy + b["dy"]
+            rot = rot + b.get("rot", 0.0)
         else:
             unit = {"type": a_in["type"], "unit": a_in["unit"], "t": tl, "d": d_in, "rev": False}
     a_out = anim.get("out")
@@ -204,6 +207,7 @@ def frame_anim(anim: dict, t_ms: float, start: int, end: int, d_in: int, d_out: 
         if a_out["unit"] == "block":
             b = block_state(OUT_MOTION.get(a_out["type"], a_out["type"]), tr / d_out)
             op, sc, dx, dy = op * b["op"], sc * b["sc"], dx + b["dx"], dy + b["dy"]
+            rot = rot + b.get("rot", 0.0)
         elif unit is None:
             unit = {"type": a_out["type"], "unit": a_out["unit"], "t": tr, "d": d_out, "rev": True}
     lp = anim.get("loop")

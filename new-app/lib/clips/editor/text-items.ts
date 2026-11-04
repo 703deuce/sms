@@ -13,6 +13,7 @@
  */
 import { normAnim, normLayerAnim, type TextAnim } from '@/lib/clips/render-plan/text-anim'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { CATALOG_TEMPLATES } from '@/lib/clips/editor/text-templates-catalog'
 import { normMarks, safeFamily, userFontId, type TextMark } from '@/lib/clips/render-plan/text-rich'
 import {
   PROGRESS_H_MAX,
@@ -439,8 +440,8 @@ export function newProgressItem(id: string, clipEndMs: number): TextItem {
  * G3b: animated title templates — one click adds 1–3 ready-made items (text + shapes) with in / out
  * / loop presets. Everything stays a plain editable item afterwards.
  */
-type TemplatePart = Omit<TextItem, 'id' | 'startMs' | 'endMs'> & { delayMs?: number }
-export type TitleTemplate = { id: string; label: string; parts: TemplatePart[] }
+export type TemplatePart = Omit<TextItem, 'id' | 'startMs' | 'endMs'> & { delayMs?: number; durMs?: number }
+export type TitleTemplate = { id: string; label: string; parts: TemplatePart[]; category?: string }
 const blockIn = (type: TextAnimEdgeType, durMs = 500) => ({ type, unit: 'block' as const, durMs })
 type TextAnimEdgeType = NonNullable<TextAnim['in']>['type']
 
@@ -539,6 +540,7 @@ export const TITLE_TEMPLATES: TitleTemplate[] = [
       },
     ],
   },
+  ...CATALOG_TEMPLATES,
 ]
 
 /** Template → items at the playhead (ids from `mkId`), clamped to the clip like "Add text". */
@@ -546,7 +548,7 @@ export function newTemplateItems(templateId: string, mkId: () => string, playhea
   const tpl = TITLE_TEMPLATES.find((t) => t.id === templateId)
   if (!tpl) return []
   const [a, b] = itemWindow(playheadMs, clipEndMs)
-  return tpl.parts.map(({ delayMs, ...p }) => {
+  return tpl.parts.map(({ delayMs, durMs, ...p }) => {
     const s = Math.min(b - TEXT_MIN_MS, a + (delayMs ?? 0))
     const parsed = p.kind ? null : parseInlineMarks(p.text)
     return {
@@ -554,7 +556,7 @@ export function newTemplateItems(templateId: string, mkId: () => string, playhea
       ...(parsed ? { text: parsed.text, ...(parsed.marks.length ? { marks: parsed.marks } : {}) } : {}),
       id: mkId(),
       startMs: Math.max(a, s),
-      endMs: b,
+      endMs: durMs ? Math.min(b, Math.max(a, s) + Math.max(TEXT_MIN_MS, durMs)) : b,
       style: { ...p.style },
     } as TextItem
   })

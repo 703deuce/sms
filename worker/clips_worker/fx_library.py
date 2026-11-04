@@ -19,8 +19,21 @@ import math
 from pathlib import Path
 
 FX2_KEYS = ("pixelate", "blur", "glow", "rgbsplit", "glitch", "shake", "flicker", "scanlines",
-            "mono", "sepia", "invert", "mirror", "zoom")
+            "mono", "sepia", "invert", "mirror", "zoom", "flash", "leak", "kenburns")
 HASH_A, HASH_B, HASH_M = 1103, 7919, 997
+LEAK_RGB = (255, 140, 40)
+
+
+def leak_image(v: int, w: int, h: int):
+    """(h, w, 3) uint8: warm radial falloff from (0,0), radius 0.9·max(w,h) (TS leakSvgUrl)."""
+    import numpy as np
+
+    a = v / 100
+    r = 0.9 * max(w, h)
+    ys, xs = np.mgrid[0:h, 0:w]
+    s = np.clip(1 - np.sqrt((xs + 0.5) ** 2 + (ys + 0.5) ** 2) / r, 0, 1)
+    c = np.array([round(x * a) for x in LEAK_RGB], dtype="float64")
+    return np.floor(s[:, :, None] * c[None, None, :] + 0.5).astype("uint8")
 
 # EFFECTS1 colour looks (TS fx-library monoMatrix / sepiaMatrix / invertLinear / zoomSize).
 LUMA_709 = (0.2126, 0.7152, 0.0722)
@@ -224,6 +237,13 @@ def post_parts(cur: str, fx: dict, w: int, h: int, work_dir: Path, tag: str, en:
     from clips_worker.color_fx import _q, _write_pgm
 
     parts: list[str] = []
+    if fx.get("leak"):
+        v = int(fx["leak"])
+        p = Path(work_dir) / f"leak_{tag}_{v}_{w}x{h}.ppm"
+        p.write_bytes(f"P6\n{w} {h}\n255\n".encode("ascii") + leak_image(v, w, h).tobytes())
+        parts.append(f"movie='{_q(p)}':loop=0,setpts=N/(30*TB),format=gbrp[{tag}lm]")
+        parts.append(f"[{cur}][{tag}lm]blend=all_mode=screen:shortest=1{en}[{tag}lk]")
+        cur = f"{tag}lk"
     if fx.get("scanlines"):
         v = int(fx["scanlines"])
         mask = _write_pgm(Path(work_dir) / f"scan_{tag}_{v}_{w}x{h}.pgm", scanline_mask(v, w, h), w, h)
@@ -236,6 +256,11 @@ def post_parts(cur: str, fx: dict, w: int, h: int, work_dir: Path, tag: str, en:
         parts.append(f"[{cur}]split[{tag}f0][{tag}f1]")
         parts.append(f"[{tag}f0][{tag}f1]blend=all_expr='A*{g}'{en}[{tag}fl]")
         cur = f"{tag}fl"
+    if fx.get("flash"):
+        k = f"({int(fx['flash']) / 100 * 0.8:.6f}*lt(mod(floor(T*30+0.001),15),2))"
+        parts.append(f"[{cur}]split[{tag}h0][{tag}h1]")
+        parts.append(f"[{tag}h0][{tag}h1]blend=all_expr='A+(255-A)*{k}'{en}[{tag}fh]")
+        cur = f"{tag}fh"
     return parts, cur
 
 
@@ -243,11 +268,15 @@ def shake_parts(cur: str, fx: dict, w: int, h: int, tag: str, en: str) -> tuple[
     """shake (last): scale up + per-block crop, overlaid (timeline enable) on the unshaken frame."""
     gparts: list[str] = []
     zv, mv = int(fx.get("zoom") or 0), int(fx.get("mirror") or 0)
-    if zv or mv:
+    kv = int(fx.get("kenburns") or 0)
+    if zv or mv or kv:
         chain = []
         if zv:
             zw, zh = zoom_size(zv, w, h)
             chain.append(f"scale={zw}:{zh}:flags=bilinear,crop={w}:{h}:{(zw - w) // 2}:{(zh - h) // 2}")
+        if kv:
+            z = f"(1+min(t,10)*0.02*{kv / 100:.4f})"
+            chain.append(f"scale=w='2*ceil({w}*{z}/2)':h='2*ceil({h}*{z}/2)':eval=frame:flags=bilinear,crop={w}:{h}")
         if mv:
             chain.append("hflip")
         gparts += [

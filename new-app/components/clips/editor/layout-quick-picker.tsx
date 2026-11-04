@@ -34,6 +34,7 @@ export function LayoutQuickPicker({
   const aiExtras = clipEditorAiExtrasEnabled()
   const ctx = { facecamLayout, reframeV2Enabled, aiExtras }
   const landscape = isLandscapeAspect(edits.aspectRatio ?? '9:16')
+  const composite = Boolean(edits.sourceSegments?.length)
   const shown = landscape && !LANDSCAPE_ACTIVE.has(value) ? 'full_frame' : value
   return (
     <div className={className} data-testid="layout-quick-picker">
@@ -41,7 +42,7 @@ export function LayoutQuickPicker({
       <div className="flex flex-wrap gap-1.5">
         {EXPORT_LAYOUT_OPTIONS.map((opt) => {
           const landscapeOff = landscape && !LANDSCAPE_ACTIVE.has(opt.id)
-          const disabled = layoutOptionDisabled(opt, ctx) || landscapeOff
+          const disabled = layoutOptionDisabled(opt, ctx) || landscapeOff || composite
           const selected = shown === opt.id && !disabled
           return (
             <Button
@@ -51,7 +52,11 @@ export function LayoutQuickPicker({
               variant={selected ? 'default' : 'outline'}
               disabled={disabled}
               title={
-                landscapeOff ? LANDSCAPE_HINT : disabled && opt.needsFacecam ? 'No facecam detected for this clip' : opt.hint
+                composite
+                  ? 'Multi-source clip: each source keeps its own framing (set it per segment on the timeline).'
+                  : landscapeOff
+                    ? LANDSCAPE_HINT
+                    : disabled && opt.needsFacecam ? 'No facecam detected for this clip' : opt.hint
               }
               onClick={() => {
                 if (disabled) return
