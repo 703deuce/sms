@@ -2,7 +2,7 @@
 
 import { GripVertical, Eye, EyeOff, Lock, Unlock, Loader2 } from 'lucide-react'
 import { orderedStack, moveInStack } from '@/lib/clips/editor/layer-props'
-import { visualStack, trackIdOf, moveTrack, trackState } from '@/lib/clips/editor/tracks'
+import { visualStack, trackIdOf, moveTrack, trackState, addTrack, setItemsTrack } from '@/lib/clips/editor/tracks'
 import { toggleItemsEnabled } from '@/lib/clips/editor/item-flags'
 import { setLaneState, laneState } from '@/lib/clips/editor/clip-timeline'
 import { useState } from 'react'
@@ -93,10 +93,26 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
       const a = tracks.findIndex(t => t.id === sourceTrack)
       const b = tracks.findIndex(t => t.id === destTrack)
       if (a < 0 || b < 0) return
-      const dir = a < b ? 'up' : 'down'
       let next = edits
-      for (let i = 0; i < Math.abs(b - a); i++) {
-        const moved = moveTrack(next, sourceTrack, dir)
+      let movingTrack = sourceTrack
+      // A Layers row denotes ONE item, not every item sharing its track.
+      // Isolate it on its own visual track before moving, when necessary.
+      const members = (sourceKind === 'text' ? edits.textItems ?? [] : edits.broll ?? [])
+        .filter(it => trackIdOf(edits, sourceKind, it.id) === sourceTrack)
+      if (members.length > 1) {
+        const created = addTrack(next, sourceKind, { above: destTrack })
+        if (!created) return
+        const assigned = setItemsTrack(created.edits, sourceKind, [src.id], created.trackId)
+        if (!assigned) return
+        next = assigned
+        movingTrack = created.trackId
+      }
+      const order = visualStack(next)
+      const from = order.findIndex(t => t.id === movingTrack)
+      const target = order.findIndex(t => t.id === destTrack)
+      const dir = from < target ? 'up' : 'down'
+      for (let i = 0; i < Math.abs(target - from); i++) {
+        const moved = moveTrack(next, movingTrack, dir)
         if (!moved) break
         next = moved
       }
