@@ -2,6 +2,7 @@
 import { useCallback, useRef, type ReactNode } from 'react'
 import { useSyncExternalStore } from 'react'
 import { cn } from '@/lib/utils'
+import { UnifiedEditorWorkspace } from '@/components/clips/editor/unified-editor-workspace'
 
 export type EditorBand = 'mobile' | 'compact' | 'desktop' | 'wide'
 export function bandForWidth(w: number): EditorBand {
@@ -92,6 +93,11 @@ export function EditorLayout(props: {
   hidePropertiesColumn?: boolean
   /** TIMELINE_LAYOUT1: tools rail + docked panel on the right (Timeline view, lg+). */
   dockTools?: boolean
+  /** Unified desktop editor uses a single transcript/preview surface and a full-height right panel. */
+  unified?: boolean
+  unifiedMain?: ReactNode
+  unifiedTimelineView?: 'script' | 'timeline'
+  onUnifiedTimelineViewChange?: (view: 'script' | 'timeline') => void
 }) {
   const { band, panelOpen, panelWidthPx, onPanelWidthChange, hidePanelColumn, hidePropertiesColumn } = props
   const compact = props.compact === true
@@ -142,6 +148,20 @@ export function EditorLayout(props: {
     : compact || hidePropertiesColumn
       ? EDITOR_GRID.propertiesHidden
       : EDITOR_GRID.properties
+
+  if (props.unified && props.unifiedTimelineView && props.onUnifiedTimelineViewChange) {
+    return (
+      <UnifiedEditorWorkspace
+        main={props.unifiedMain}
+        inspector={props.properties}
+        timeline={props.timeline}
+        timelineView={props.unifiedTimelineView}
+        onTimelineViewChange={props.onUnifiedTimelineViewChange}
+        inspectorWidthPx={panelWidthPx ?? 360}
+        onInspectorWidthChange={onPanelWidthChange ?? (() => undefined)}
+      />
+    )
+  }
 
   return (
     <div
