@@ -1220,6 +1220,10 @@ export function Timeline({
   // G1b3: freeze frame at the playhead (an E5b insert with no media: holds the composed frame).
   const freezeFrame = () => {
     if (!editable || refLocked(edits, { lane: 'video', id: '' })) return
+    if (liveSelected.length > 0 && !liveSelected.some((r) => r.lane === 'video')) {
+      toast.message('Select a video clip to freeze', { id: 'timeline-freeze' })
+      return
+    }
     const atMs = liveOutMs
     const ins = addFreezeFrame(edits.inserts, timebaseFor(previewEdits).segs, atMs, `frz-${crypto.randomUUID().slice(0, 8)}`)
     if (!ins) {
@@ -1236,7 +1240,7 @@ export function Timeline({
     }
     const next = splitAt(opCtx(), liveSelected, playheadMs)
     if (next) commit(next)
-    else toast.message(splitNoopMessage(edits, liveSelected))
+    else toast.message(playheadMs <= 1 ? 'Can’t split at the very start of a clip' : splitNoopMessage(edits, liveSelected))
   }
   // E3fix: Join — remove a Video split (prev / next of one selected half, or between selected halves).
   const joinOpts = videoJoinOptions({ edits, previewEdits }, liveSelected)
@@ -1507,6 +1511,10 @@ export function Timeline({
   }
   const trimToPlayhead = (edge: 'start' | 'end'): boolean => {
     if (!editable) return false
+    if (playheadMs <= 1) {
+      if (edge === 'end') toast.message('Cannot trim the clip to zero length', { id: 'timeline-trim' })
+      return true
+    }
     if (selCompound && selCompound.id !== openCompound) {
       commit(trimCompound(opCtx(), selCompound, edge, playheadMs))
       return true
@@ -3052,7 +3060,7 @@ export function Timeline({
         historySlot={historySlot}
         split={split}
         freezeFrame={freezeFrame}
-        freezeDisabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
+        freezeDisabled={!editable || refLocked(edits, { lane: 'video', id: '' }) || (liveSelected.length > 0 && !liveSelected.some((r) => r.lane === 'video'))}
         insertGap={insertGap}
         gapDisabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
         del={() => del()}
@@ -3310,11 +3318,17 @@ export function Timeline({
           />
         </div>
       ) : null}
-      {tlCollapsed ? null : (
+      {tlCollapsed ? (
+        <div className="flex h-10 min-h-10 items-center gap-2 rounded-md border border-border bg-card/50 px-2" data-testid="timeline-mini-strip">
+          <span className="shrink-0 text-[11px] text-muted-foreground">Video</span>
+          <input type="range" min={0} max={Math.max(1, Math.round(span))} value={Math.round(playheadMs)} onChange={(e) => onSeekOutput(Number(e.target.value))} aria-label="Compact timeline scrubber" className="min-w-0 flex-1 accent-primary" />
+          <span className="shrink-0 text-[11px] tabular-nums">{(playheadMs / 1000).toFixed(1)}s</span>
+        </div>
+      ) : (
       <div
         className="relative flex min-w-0 rounded-lg border border-border bg-card/30"
         // TC3 (d): a set height is the height — taller than all tracks leaves empty space below.
-        style={tlHeight ? { height: tlHeight, overflowY: 'auto' } : undefined}
+        style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}
         data-testid="timeline-body"
       >
         <div className="relative min-w-[160px] w-[160px] shrink-0 border-r border-border/60" aria-label="Tracks">
@@ -3921,7 +3935,7 @@ export function Timeline({
         aria-orientation="horizontal"
         aria-label="Resize timeline (drag; double-click = fit all tracks)"
         title="Drag to resize the timeline · double-click: show all tracks"
-        className="group order-first flex h-3 cursor-row-resize items-center justify-center gap-2"
+        className="group order-first flex h-3 shrink-0 cursor-row-resize items-center justify-center gap-2"
         data-testid="timeline-resize"
         onPointerDown={(e) => {
           if (e.button !== 0 || tlCollapsed) return
