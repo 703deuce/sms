@@ -3531,7 +3531,7 @@ export function EditorShell({
                       variant="tabs"
                       active={panel}
                       onChange={(id) => (dockPanelOpen && panel === id ? setDockPanelOpenPersist(false) : selectPanel(id))}
-                      onSelectGroup={dockSelectGroup}
+                      onSelectGroup={(g) => (g === 'script' ? setLayoutViewPersist('script') : dockSelectGroup(g))}
                     />
                   </div>
                 </div>
