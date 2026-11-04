@@ -20,7 +20,7 @@ import {
   type OpCtx,
 } from '@/lib/clips/editor/clip-timeline'
 import { defaultEdits, editsPayloadForSave, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
-import { moveVideoSegment, moveVideoSegmentWithGap } from '@/lib/clips/editor/timeline-edit-ops'
+import { moveVideoSegment, moveVideoSegmentWithGap, shiftVideoSegmentWithinSlot } from '@/lib/clips/editor/timeline-edit-ops'
 
 const bounds = { clipStartMs: 0, clipEndMs: 10000, trimMinMs: 0, trimMaxMs: 20000 }
 
@@ -316,5 +316,21 @@ describe('B1 main clip reordering', () => {
     const lanes = buildTimelineItems({ edits: off!, previewEdits: off! })
     expect(lanes.video.length).toBeGreaterThan(0)
     expect(lanes.voice.length).toBeGreaterThan(0)
+  })
+})
+
+describe('B1 retest: Magnet-off sub-slot main-video movement', () => {
+  it('moves by a short drag using a real gap and reverses it on left drag', () => {
+    const e = base({ videoSplits: [5000] })
+    const moved = shiftVideoSegmentWithinSlot(ctxOf(e), 'seg:5000', 950)!
+    expect(moved.inserts).toMatchObject([{ sourceId: 'gap', atSrcMs: 5000, durMs: 950 }])
+    const reverted = shiftVideoSegmentWithinSlot(ctxOf(moved), 'seg:5000', -950)!
+    expect(reverted.inserts ?? []).toHaveLength(0)
+  })
+
+  it('does not silently invent a leftward overlap when there is no gap', () => {
+    const e = base({ videoSplits: [5000] })
+    expect(shiftVideoSegmentWithinSlot(ctxOf(e), 'seg:5000', -500)).toBeNull()
+    expect(shiftVideoSegmentWithinSlot(ctxOf(e), 'seg:5000', 0)).toBeNull()
   })
 })
