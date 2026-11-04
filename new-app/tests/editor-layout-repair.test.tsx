@@ -34,6 +34,27 @@ describe('controlled editor layout repair', () => {
     expect(ui.getByTestId('editor-grid').querySelector('[data-region="preview"]')).toBeTruthy()
   })
 
+  it('does not mount a duplicate hidden tool panel in Script view', () => {
+    const ui = render(
+      <EditorLayout
+        band="desktop"
+        rail={<div>Mobile tools</div>}
+        panel={<div data-testid="legacy-tool-panel">Legacy tool panel</div>}
+        panelOpen
+        onClosePanel={vi.fn()}
+        preview={<div data-testid="script-preview">Script preview and tools</div>}
+        properties={null}
+        timeline={<div>Compact timeline</div>}
+        hidePanelColumn
+        hidePropertiesColumn
+      />,
+    )
+    expect(ui.queryByTestId('legacy-tool-panel')).toBeNull()
+    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
+    expect(ui.getByTestId('script-preview')).toBeTruthy()
+    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="preview"]')).toHaveLength(1)
+  })
+
   it('shows the real Script tab and routes tool tabs without a separate drawer', () => {
     const onSelect = vi.fn()
     const onShowScript = vi.fn()
