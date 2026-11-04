@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, within } from '@testing-library/react'
 import { LayersPanel } from '@/components/clips/editor/layers-panel'
 import { defaultEdits } from '@/lib/clips/edits'
 import { newTextItem } from '@/lib/clips/editor/text-items'
+import { visualStack } from '@/lib/clips/editor/tracks'
 
 afterEach(cleanup)
 
@@ -57,4 +58,24 @@ describe('actual Layers stack (E5)', () => {
     fireEvent.click(ui.getByRole('button', { name: 'Toggle Real title visibility' }))
     expect(onEdits).toHaveBeenCalledWith(expect.objectContaining({ disabledItems: ['text:title1'] }))
   })
+  it('E5: dragging B-roll in front of Text updates persistent mixed-track export order', () => {
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
+    edits.textItems = [newTextItem('title', 1000, 30_000)]
+    edits.broll = [{ id: 'overlay', source: 'stock', assetId: 'asset1', startMs: 1000, endMs: 5000 }]
+    const onEdits = vi.fn()
+    const onSelect = vi.fn()
+    const ui = render(<LayersPanel clipId="clip1" edits={edits} layers={[]}
+      setLayers={vi.fn()} onEdits={onEdits} onSelectActualLayer={onSelect} />)
+    const from = ui.getByTestId('actual-layer-broll:overlay')
+    const to = ui.getByTestId('actual-layer-text:title')
+    fireEvent.dragStart(from, { dataTransfer: { effectAllowed: 'move' } })
+    fireEvent.dragOver(to)
+    fireEvent.drop(to)
+    expect(onEdits).toHaveBeenCalledTimes(1)
+    const next = onEdits.mock.calls[0]![0]!
+    expect(visualStack(next).map(t => t.id)).toEqual(['tx1', 'ov1'])
+    fireEvent.click(ui.getByTestId('actual-layer-select-text:title'))
+    expect(onSelect).toHaveBeenCalledWith('text', 'title', 1000)
+  })
+
 })
