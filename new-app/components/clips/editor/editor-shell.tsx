@@ -2563,22 +2563,23 @@ export function EditorShell({
   const panelBody = renderSidePanels(null)
 
   const previewColumnContent = (
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden px-2 pb-1 pt-2">
+      <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden p-2">
         <div
           className={cn(
-            'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
-            dockTools && 'rounded-lg border border-border bg-panel',
+            'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-panel',
           )}
         >
         <div
-          className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-1 md:p-2 [container-type:size]"
+          className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-1 md:p-2 [container-type:size]"
         >
           <div
             ref={previewFrameRef}
-            className="relative max-h-full min-w-0 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
+            className="relative max-h-full max-w-full shrink-0 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
             style={{
               aspectRatio: aspectStyle,
-              width: `min(100%, calc(100cqh * ${aspectCssToNumber(previewAspect)}))`,
+              width: `min(100cqw, calc(100cqh * ${aspectCssToNumber(previewAspect)}))`,
+              height: 'auto',
+              maxHeight: '100%',
             }}
             onContextMenu={(e) => {
               if ((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]')) return
@@ -2756,7 +2757,7 @@ export function EditorShell({
         ) : null}
       </div>
           ) : null}
-        <div className={cn('min-w-0 shrink-0 space-y-1 border-t border-border px-1 pb-1 pt-1.5', !dockTools && 'mt-auto')}>
+        <div className="relative z-10 min-h-0 shrink-0 space-y-1 border-t border-border bg-panel px-1 pb-1 pt-1.5">
           {dockTools && (clipTypeLabel || detectedLayout || pickerWhy) ? (
             <p
               className="truncate px-1 text-center text-[11px] text-muted-foreground"
@@ -2769,7 +2770,7 @@ export function EditorShell({
             </p>
           ) : null}
           <PreviewTransportStrip
-            compact={layoutView === 'script' || (!dockTools && previewFrameW < 560)}
+            compact={!dockTools && (layoutView === 'script' || previewFrameW < 560)}
             recordSlot={
               recordDevicesOk ? (
                 <ClipRecordMenu
@@ -3498,7 +3499,7 @@ export function EditorShell({
         <EditorLayout
           band={band}
           compact={compact}
-          panelOpen={dockTools ? (layoutView === 'script' ? true : dockPanelOpen) : mobilePanelOpen}
+          panelOpen={dockTools ? true : mobilePanelOpen}
           onClosePanel={() => (dockTools ? setDockPanelOpenPersist(false) : setMobilePanelOpen(false))}
           panelWidthPx={panelWidthPx}
           onPanelWidthChange={persistPanelWidth}
@@ -3510,11 +3511,11 @@ export function EditorShell({
               <EditorMobileRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
               {dockTools ? (
                 <div className="hidden min-h-0 min-w-0 flex-col overflow-hidden lg:flex" data-testid="timeline-dock-rail">
-                  <div className="flex shrink-0 items-stretch border-b border-border p-0.5">
+                  <div className="flex shrink-0 items-stretch bg-card/80 p-1">
                   <button
                     type="button"
                     className={cn(
-                      'flex h-10 w-[4.25rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[0.625rem] leading-none text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-4',
+                      'flex h-11 w-[4.875rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[0.6875rem] font-medium leading-none text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-[1.125rem]',
                       panel === 'inspector' && 'bg-accent text-foreground',
                     )}
                     onClick={() => {
@@ -3597,7 +3598,7 @@ export function EditorShell({
                 <ScriptViewMainSplit
                   transcriptPct={scriptSplitPct}
                   onTranscriptPctChange={persistScriptSplit}
-                  className="flex-1"
+                  className="min-h-0 flex-1"
                   transcript={
                     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-2">
                       {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}

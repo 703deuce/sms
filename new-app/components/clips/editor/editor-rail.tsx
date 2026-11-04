@@ -151,7 +151,7 @@ export function EditorRail({
         onClick={() => pickGroup(group.id)}
         className={cn(
           tabs
-            ? 'relative flex h-10 w-[4.25rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+            ? 'relative flex h-11 w-[4.875rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
             : vertical
             ? 'relative flex h-12 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
             : 'relative grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -163,9 +163,9 @@ export function EditorRail({
           isActive && !vertical && 'bg-accent text-foreground',
         )}
       >
-        <Icon className={tabs ? 'size-4' : 'size-5'} aria-hidden />
+        <Icon className={tabs ? 'size-[1.125rem]' : 'size-5'} aria-hidden />
         {vertical || tabs ? (
-          <span className={cn('max-w-full truncate leading-none', tabs ? 'text-[0.625rem]' : 'text-[11px]')}>{group.label}</span>
+          <span className={cn('max-w-full truncate leading-none', tabs ? 'text-[0.6875rem] font-medium' : 'text-[11px]')}>{group.label}</span>
         ) : null}
       </button>
     )
