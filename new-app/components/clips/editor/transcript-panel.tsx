@@ -709,7 +709,7 @@ export function TranscriptPanel({
       <span
         key={w.i}
         className={`inline ${muted && !surrounding ? 'text-muted-foreground/50' : ''} ${surrounding ? 'text-muted-foreground/50' : ''} ${
-          nextSelected ? 'bg-primary/25' : nextCut ? 'bg-destructive/10' : ''
+          nextSelected ? 'bg-primary/20' : nextCut ? 'bg-destructive/5' : ''
         }`}
       >
         <button
@@ -733,15 +733,15 @@ export function TranscriptPanel({
             setSelStart(Math.min(d.anchorStart, Math.round(startMs)))
             setSelEnd(Math.max(d.anchorEnd, Math.round(endMs)))
           }}
-          className={`inline p-0 text-left transition-colors hover:bg-accent/70 cursor-text select-none ${
-            active ? 'bg-[#FFD400]/35' : ''
+          className={`inline border-0 bg-transparent p-0 text-left font-normal tracking-normal transition-colors hover:bg-accent/35 cursor-text select-none ${
+            active ? 'bg-amber-300/25 dark:bg-amber-400/20' : ''
           } ${isFiller && !cut ? 'underline decoration-amber-500/80 decoration-wavy underline-offset-4' : ''} ${
             cut
-              ? `text-muted-foreground/60 line-through decoration-destructive/70 decoration-2 ${nextCut ? '' : 'bg-destructive/10'} ${
+              ? `text-muted-foreground/50 line-through decoration-destructive/60 decoration-[1.5px] ${nextCut ? '' : 'bg-destructive/5'} ${
                   isFiller ? 'decoration-muted-foreground/80' : ''
                 }`
               : ''
-          } ${surrounding ? 'line-through decoration-muted-foreground/70' : ''} ${pickHighlight ? 'bg-primary/15 ring-1 ring-primary/25' : ''} ${ignored && !cut ? 'text-muted-foreground/45 italic underline decoration-dotted decoration-muted-foreground/60' : ''} ${selected && !nextSelected ? 'bg-primary/25' : ''} ${
+          } ${surrounding ? 'line-through decoration-muted-foreground/70' : ''} ${pickHighlight ? 'bg-primary/10' : ''} ${ignored && !cut ? 'text-muted-foreground/45 italic underline decoration-dotted decoration-muted-foreground/60' : ''} ${selected && !nextSelected ? 'bg-primary/20' : ''} ${
             edits.captions?.emphasis?.includes(w.i) ? 'underline decoration-dotted decoration-lane-ai' : ''
           }`}
           onClick={(e) => {
@@ -791,7 +791,7 @@ export function TranscriptPanel({
         {selected && !cut && !muted && !surrounding && selStart === Math.round(startMs) && selEnd === Math.round(endMs) ? (
           <button
             type="button"
-            className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded align-middle hover:bg-accent"
+            className="ml-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded align-middle text-muted-foreground/50 opacity-0 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:opacity-100 [span:hover>&]:opacity-100"
             title="Edit word (Enter)"
             aria-label="Edit word"
             onClick={(e) => {
@@ -805,7 +805,7 @@ export function TranscriptPanel({
         {cut && !nextCut ? (
           <button
             type="button"
-            className="ml-1 text-[11px] font-medium text-primary"
+            className="ml-1 text-[10px] font-medium text-primary/80 underline-offset-2 hover:underline"
             title="Restore this cut (to restore single words, select them and right-click › Restore)"
             onClick={() => {
               const full = edits.cutRanges.find(([s, e]) => startMs < e && endMs > s)
@@ -819,7 +819,7 @@ export function TranscriptPanel({
         ) : surroundingRunRestoreMs.has(w.i) ? (
           <button
             type="button"
-            className="ml-0.5 text-[11px] font-medium text-primary"
+            className="ml-0.5 text-[10px] font-medium text-primary/80 underline-offset-2 hover:underline"
             onClick={() => onExtendTrim(surroundingRunRestoreMs.get(w.i)!)}
           >
             Restore
@@ -833,7 +833,7 @@ export function TranscriptPanel({
     <div
       className={cn(
         'flex flex-col',
-        compactToolbar ? 'h-full min-h-0 gap-2 p-3' : largeScript ? 'h-full min-h-0 gap-3 p-4' : 'gap-3 p-3',
+        compactToolbar ? 'h-full min-h-0 gap-2 p-2' : largeScript ? 'h-full min-h-0 gap-3 p-3' : 'gap-3 p-3',
       )}
       aria-busy={wordsLoading}
     >
@@ -1357,11 +1357,11 @@ export function TranscriptPanel({
       >
         <div
           className={cn(
-            largeScript && 'w-full max-w-[68ch] px-6 py-3 text-[17px] leading-[1.75]',
+            largeScript && 'mx-auto w-full max-w-[70ch] px-3 py-3 text-[15px] leading-[1.8] sm:px-5 sm:text-[16px]',
           )}
         >
         {visible.length ? (
-          <p className="mb-3 select-none text-[11px] leading-snug text-muted-foreground" data-testid="transcript-edit-hint">
+          <p className="mb-4 select-none border-b border-border/50 pb-3 text-[11px] leading-relaxed text-muted-foreground/70" data-testid="transcript-edit-hint">
             Drag across words to select · Delete cuts them from the video · Ctrl+Z undoes · Double-click a word to fix its spelling (video unchanged) · <span className="underline decoration-amber-500/80 decoration-wavy underline-offset-2">wavy</span> = filler word
           </p>
         ) : null}
@@ -1411,7 +1411,7 @@ export function TranscriptPanel({
                 nodes.push(
                   <span
                     key={`rm-${run.range[0]}`}
-                    className="mx-0.5 inline-flex items-center gap-1 rounded bg-destructive/10 px-1 py-0.5 text-[11px] text-muted-foreground"
+                    className="mx-0.5 inline items-center gap-1 border-b border-dashed border-destructive/40 bg-destructive/5 px-0.5 text-[11px] text-muted-foreground"
                     data-testid="transcript-removed-run"
                   >
                     ⋯ {run.words.length} word{run.words.length === 1 ? '' : 's'} removed
@@ -1447,7 +1447,7 @@ export function TranscriptPanel({
               }
               if (paras.has(w.i)) {
                 nodes.push(
-                  <span key={`p-${w.i}`} className="block h-3" data-testid="transcript-para-break" aria-hidden />,
+                  <span key={`p-${w.i}`} className="block h-4" data-testid="transcript-para-break" aria-hidden />,
                 )
               }
               // SCRIPT_DOC2: a timestamp at the start of every paragraph (and speaker block); click to jump.
@@ -1459,7 +1459,7 @@ export function TranscriptPanel({
                     type="button"
                     data-testid="transcript-para-time"
                     title="Jump here"
-                    className="mr-2 inline-block select-none align-baseline font-mono text-[11px] tabular-nums text-muted-foreground/70 hover:text-primary"
+                    className="mr-2 inline-block select-none align-baseline font-mono text-[10px] tabular-nums text-muted-foreground/45 hover:text-primary"
                     onClick={() => onSeek(paraMs)}
                   >
                     {formatScriptTime(paraMs - edits.trim.in)}
@@ -1479,7 +1479,7 @@ export function TranscriptPanel({
           }
           return (
             <div key={`${block.spk}-${bi}`}>
-              <div className="mt-3 flex items-center gap-1.5 first:mt-0">
+              <div className="mt-5 mb-1 flex items-center gap-1.5 first:mt-0">
                 {renamingSpk === `${block.spk}-${bi}` && onSetEdits ? (
                   <Input
                     autoFocus
@@ -1508,7 +1508,7 @@ export function TranscriptPanel({
                     type="button"
                     data-testid="transcript-speaker-chip"
                     title="Rename speaker"
-                    className="inline-flex h-6 items-center gap-1.5 rounded-full bg-muted px-2 text-xs font-medium hover:bg-accent"
+                    className="inline-flex h-6 items-center gap-1.5 rounded px-0.5 text-xs font-semibold tracking-wide text-muted-foreground hover:text-foreground"
                     onClick={() => onSetEdits && setRenamingSpk(`${block.spk}-${bi}`)}
                   >
                     <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
