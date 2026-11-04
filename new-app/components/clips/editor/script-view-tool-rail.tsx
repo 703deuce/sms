@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Captions, Eraser, FolderOpen, Layers, LayoutPanelTop, LayoutTemplate, Music2, SlidersHorizontal, Sparkles, Type } from 'lucide-react'
+import { Captions, Eraser, FileText, FolderOpen, Layers, LayoutPanelTop, LayoutTemplate, Music2, SlidersHorizontal, Sparkles, Type } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { EditorPanelId } from '@/components/clips/editor/editor-rail'
@@ -25,6 +25,55 @@ export const SCRIPT_VIEW_TOOL_PANELS: { id: ScriptViewToolPanelId; label: string
   { id: 'layers', label: 'Layers', icon: Layers },
   { id: 'templates', label: 'Templates', icon: LayoutTemplate },
 ]
+
+/** Horizontal navigation above the existing TranscriptPanel. Tool selection never changes the preview pane. */
+export function ScriptViewToolTabs({
+  active,
+  onSelect,
+  onShowScript,
+}: {
+  active: ScriptViewToolPanelId | null
+  onSelect: (id: ScriptViewToolPanelId) => void
+  onShowScript: () => void
+}) {
+  return (
+    <nav
+      className="flex min-h-12 min-w-0 shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-card px-2 py-1 [scrollbar-width:thin]"
+      aria-label="Script workspace tools"
+      data-testid="script-view-tool-tabs"
+    >
+      <button
+        type="button"
+        onClick={onShowScript}
+        aria-pressed={active == null}
+        data-testid="script-tool-transcript"
+        className={cn(
+          'flex h-9 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-muted',
+          active == null && 'bg-primary/15 text-primary',
+        )}
+      >
+        <FileText className="size-4 shrink-0" aria-hidden />
+        Script
+      </button>
+      {SCRIPT_VIEW_TOOL_PANELS.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onSelect(id)}
+          aria-pressed={active === id}
+          data-testid={`script-tool-${id}`}
+          className={cn(
+            'flex h-9 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-muted',
+            active === id && 'bg-primary/15 text-primary',
+          )}
+        >
+          <Icon className="size-4 shrink-0" aria-hidden />
+          {label}
+        </button>
+      ))}
+    </nav>
+  )
+}
 
 export const SCRIPT_VIEW_DRAWER_WIDTH_PX = 340
 export const SCRIPT_VIEW_TOOL_RAIL_WIDTH_PX = 56
