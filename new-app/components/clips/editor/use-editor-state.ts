@@ -308,7 +308,6 @@ export function useEditorState(
     const edits = rippleFrom(editsRef.current, input)
     if (editsEqual(editsRef.current, edits)) return
     editsRef.current = edits
-    if (pushHistory) setHistoryReady(true)
     bumpLocalRevision()
     dispatch({ type: 'set', edits, pushHistory })
   }, [bumpLocalRevision, rippleFrom])
