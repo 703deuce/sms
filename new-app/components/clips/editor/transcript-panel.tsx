@@ -46,6 +46,10 @@ import { cn } from '@/lib/utils'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 import type { VisualMomentRow } from '@/lib/clips/editor/highlights'
+import {
+  TranscriptContextMenu,
+  type TranscriptContextMenuItem,
+} from '@/components/clips/editor/transcript-context-menu'
 
 export type TranscriptSelection = {
   startMs: number
@@ -101,6 +105,12 @@ export function TranscriptPanel({
   beatCount = 0,
   beatBpm,
   onCutToBeat,
+  onPlayFromSelection,
+  onPreviewSelection,
+  onCopySelection,
+  onPasteSelection,
+  onSplitSceneAtSelection,
+  onAddMarkerAtSelection,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -145,6 +155,12 @@ export function TranscriptPanel({
   beatCount?: number
   beatBpm?: number
   onCutToBeat?: (every: 1 | 2 | 4) => void
+  onPlayFromSelection?: () => void
+  onPreviewSelection?: () => void
+  onCopySelection?: () => void
+  onPasteSelection?: () => void
+  onSplitSceneAtSelection?: () => void
+  onAddMarkerAtSelection?: () => void
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
@@ -161,7 +177,6 @@ export function TranscriptPanel({
   const [showDeleted, setShowDeleted] = useState(true)
   const [renamingSpk, setRenamingSpk] = useState<string | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
-  const ctxRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     try {
       setFollow(localStorage.getItem('transovo.script.follow') !== '0')
@@ -358,15 +373,8 @@ export function TranscriptPanel({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setCtxMenu(null)
     }
-    const onPointer = (e: MouseEvent) => {
-      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) setCtxMenu(null)
-    }
     window.addEventListener('keydown', onKey)
-    window.addEventListener('mousedown', onPointer)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      window.removeEventListener('mousedown', onPointer)
-    }
+    return () => window.removeEventListener('keydown', onKey)
   }, [ctxMenu])
   const ignoreTargets = () => selectionWords().filter((w) => !isWordCut(w, edits.cutRanges))
   const toggleIgnoreSelection = () => {
@@ -385,6 +393,129 @@ export function TranscriptPanel({
     setSelStart(null)
     setSelEnd(null)
   }
+  const copySelectionText = () => {
+    if (onCopySelection) {
+      onCopySelection()
+      return
+    }
+    const text = selectionWords()
+      .map((w) => wordDisplayText(w, edits.wordFixes))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (text) void navigator.clipboard.writeText(text)
+  }
+  const canRestoreSel =
+    Boolean(onRestoreCutRange) &&
+    (() => {
+      const r = selRange()
+      return r ? selectionHasCuts(edits.cutRanges, r[0], r[1]) : false
+    })()
+  const makeClipFromSelection = () => {
+    if (selStart == null || selEnd == null || !onSaveAsNewClip) return
+    const trimIn = Math.min(selStart, selEnd)
+    const trimOut = Math.max(selStart, selEnd)
+    const title = selectionWords()
+      .map((w) => wordDisplayText(w, edits.wordFixes))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120)
+    void onSaveAsNewClip(trimIn, trimOut, title || undefined)
+  }
+  const ctxMenuItems: TranscriptContextMenuItem[] = ctxMenu
+    ? [
+        {
+          id: 'play-from',
+          label: 'Play from here',
+          shortcut: '⇧Space',
+          disabled: !onPlayFromSelection,
+          onClick: () => onPlayFromSelection?.(),
+        },
+        {
+          id: 'preview-selection',
+          label: 'Preview selection',
+          shortcut: '⇧⌘Space',
+          disabled: !onPreviewSelection,
+          onClick: () => onPreviewSelection?.(),
+        },
+        { id: 'cut', label: 'Cut', shortcut: '⌘X', onClick: deleteSelection },
+        { id: 'copy', label: 'Copy', shortcut: '⌘C', onClick: copySelectionText },
+        {
+          id: 'paste',
+          label: 'Paste',
+          shortcut: '⌘V',
+          disabled: !onPasteSelection,
+          onClick: () => onPasteSelection?.(),
+        },
+        { id: 'delete-cut', label: 'Delete (cut)', shortcut: 'Delete', onClick: deleteSelection },
+        {
+          id: 'restore',
+          label: 'Restore',
+          shortcut: '⇧Enter',
+          disabled: !canRestoreSel,
+          onClick: restoreSelection,
+          testId: 'transcript-restore-selection',
+        },
+        {
+          id: 'build-transcript',
+          label: 'Build from transcript',
+          disabled: !onBuildFromTranscript,
+          onClick: () => onBuildFromTranscript?.(),
+          testId: 'transcript-build-from-transcript',
+        },
+        {
+          id: 'make-clip',
+          label: 'Make clip',
+          disabled: !onSaveAsNewClip || selStart === null || selEnd === null,
+          onClick: makeClipFromSelection,
+          testId: 'transcript-make-clip',
+        },
+        {
+          id: 'move-up',
+          label: 'Move up',
+          disabled: !onPatchSectionOrder || mediaKind === 'composite' || selStart === null,
+          onClick: () => moveSection('up'),
+        },
+        {
+          id: 'move-down',
+          label: 'Move down',
+          disabled: !onPatchSectionOrder || mediaKind === 'composite' || selStart === null,
+          onClick: () => moveSection('down'),
+        },
+        ...(onSplitSceneAtSelection
+          ? [
+              {
+                id: 'split-scene',
+                label: 'Split scene here',
+                shortcut: '/',
+                onClick: () => onSplitSceneAtSelection(),
+              } satisfies TranscriptContextMenuItem,
+            ]
+          : []),
+        {
+          id: 'add-marker',
+          label: 'Add marker',
+          shortcut: '#',
+          disabled: !onAddMarkerAtSelection,
+          onClick: () => onAddMarkerAtSelection?.(),
+        },
+      ]
+    : []
+  const ctxMenuSections =
+    ctxMenu && angles.length > 1 && onSetEdits
+      ? [
+          {
+            label: 'Camera',
+            items: angles.map((ang) => ({
+              id: `angle-${ang.sourceId}`,
+              label: `${ang.key}. ${ang.label}`,
+              onClick: () => angleSelection(ang.sourceId),
+              testId: `transcript-ctx-angle-${ang.sourceId}`,
+            })),
+          },
+        ]
+      : undefined
   const restoreAll = () => {
     if (!onSetEdits || !cutCount) return
     if (!window.confirm(`Restore all ${cutCount} removed sections? This includes silence and filler cleanup. Undo with Ctrl+Z.`)) return
@@ -1177,8 +1308,7 @@ export function TranscriptPanel({
         onTouchStart={bumpFollowPause}
         onScroll={bumpFollowPause}
         onContextMenu={(e) => {
-          if (selStart === null || selEnd === null || !onSetEdits || angles.length < 2) return
-          if (!selectionWords().length) return
+          if (selStart === null || selEnd === null || !selectionWords().length) return
           e.preventDefault()
           setCtxMenu({ x: e.clientX, y: e.clientY })
         }}
@@ -1345,32 +1475,14 @@ export function TranscriptPanel({
         )}
         </div>
       </div>
-      {ctxMenu && angles.length > 1 && onSetEdits ? (
-        <div
-          ref={ctxRef}
-          className="fixed z-50 min-w-[200px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg"
-          style={{ left: ctxMenu.x, top: ctxMenu.y }}
-          role="menu"
-          aria-label="Script selection"
-          data-testid="transcript-ctx-menu"
-        >
-          <p className="px-2 pt-1 text-[11px] font-medium text-muted-foreground">Camera ▸</p>
-          {angles.map((ang) => (
-            <button
-              key={ang.sourceId}
-              type="button"
-              className="block w-full rounded px-2 py-1.5 pl-4 text-left hover:bg-muted"
-              role="menuitem"
-              data-testid={`transcript-ctx-angle-${ang.sourceId}`}
-              onClick={() => {
-                angleSelection(ang.sourceId)
-                setCtxMenu(null)
-              }}
-            >
-              {ang.key}. {ang.label}
-            </button>
-          ))}
-        </div>
+      {ctxMenu ? (
+        <TranscriptContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={ctxMenuItems}
+          sections={ctxMenuSections}
+          onClose={() => setCtxMenu(null)}
+        />
       ) : null}
     </div>
   )
