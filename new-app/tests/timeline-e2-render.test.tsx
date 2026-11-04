@@ -180,7 +180,9 @@ describe('E2 multi-track timeline', () => {
       const e = edits({ cutRanges: [], videoSplits: [9000] })
       const ui = setup(e)
       const last = ui.getAllByTestId('timeline-item-video')[1]!
-      drag(last, 1200 * ui.pxPerMs())
+      const track = ui.getByTestId('timeline-track')
+      const actualPxPerMs = parseFloat(track.style.width) / Number(track.getAttribute('data-duration-ms'))
+      drag(last, 1200 * actualPxPerMs)
       expect(ui.onCommitEdits).toHaveBeenCalledTimes(1)
       const next = ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2
       expect(next.inserts).toEqual(expect.arrayContaining([
@@ -340,6 +342,18 @@ describe('E2 multi-track timeline', () => {
     expect(Number(last.getAttribute('data-end-ms'))).toBeLessThanOrEqual(39000)
     act(() => fireEvent.pointerUp(window, { clientX: 100 + dx, pointerId: 91 }))
     expect((ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2).trim.out).toBe(40000)
+  })
+
+  it('B2 hit-tests an unselected clip body within eight pixels of its edge', () => {
+    const ui = setup()
+    const last = ui.getAllByTestId('timeline-item-video').at(-1)!
+    expect(last.getAttribute('data-selected')).toBeNull()
+    const rect = { x: 0, y: 0, top: 0, bottom: 50, left: 0, right: 200, width: 200, height: 50, toJSON: () => ({}) }
+    Object.defineProperty(last, 'getBoundingClientRect', { configurable: true, value: () => rect })
+    act(() => fireEvent.pointerDown(last, { button: 0, clientX: 195, pointerId: 32 }))
+    act(() => fireEvent.pointerMove(window, { clientX: 195 - 500 * ui.pxPerMs(), pointerId: 32 }))
+    act(() => fireEvent.pointerUp(window, { clientX: 195 - 500 * ui.pxPerMs(), pointerId: 32 }))
+    expect((ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2).trim.out).toBe(19500)
   })
 
   it('B2 left trim can start on an unselected clip', () => {
