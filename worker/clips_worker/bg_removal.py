@@ -54,7 +54,7 @@ def normalize_bg_removal(raw) -> dict | None:
 
 
 def bg_matte_enabled() -> bool:
-    return os.environ.get("BG_MATTE_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+    # Explicit opt-out remains available. Requests still pass the existing GPU budget guard.\n    return os.environ.get("BG_MATTE_ENABLED", "1").strip().lower() in ("1", "true", "yes", "on")
 
 
 def bg_matte_provider() -> str:
