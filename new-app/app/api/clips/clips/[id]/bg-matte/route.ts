@@ -31,7 +31,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     })
     if (!row) return NextResponse.json({ data: { state: 'idle', url: null } }, { headers: { 'Cache-Control': 'no-store' } })
     if (row.status === 'READY' && row.storageKey) {
-      const storage = getClipStorageForObjectKey(row.storageKey)
+      const storage = await getClipStorageForObjectKey(row.storageKey)
       const url = await createCachedSignedDownloadUrl(storage, row.storageKey, { versionHint: row.updatedAt.toISOString() })
       return NextResponse.json({ data: { state: 'ready', url, generationId: row.id } }, { headers: { 'Cache-Control': 'no-store' } })
     }
