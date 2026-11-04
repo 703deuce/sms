@@ -3047,7 +3047,7 @@ export function Timeline({
         {editable && !st.locked && item.caps.trimStart ? (
           <span
             className={`absolute inset-y-0 left-0 z-30 rounded-l-[3px] border-l-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
-              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-3 cursor-ew-resize'
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-4 cursor-ew-resize bg-cyan-300/70' : 'w-4 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-start"
             title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'J-cut: Alt-drag to offset audio from picture' : undefined}
@@ -3057,7 +3057,7 @@ export function Timeline({
         {editable && !st.locked && item.caps.trimEnd ? (
           <span
             className={`absolute inset-y-0 right-0 z-30 rounded-r-[3px] border-r-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
-              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-3 cursor-ew-resize'
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-4 cursor-ew-resize bg-cyan-300/70' : 'w-4 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-end"
             title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'L-cut: Alt-drag to offset audio from picture' : undefined}
