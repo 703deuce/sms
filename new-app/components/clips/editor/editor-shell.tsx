@@ -373,6 +373,8 @@ export function EditorShell({
   const timelineVisible = !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
+  const [timelineCollapsed, setTimelineCollapsed] = useState(false)
+  const [timelineFocused, setTimelineFocused] = useState(false)
   const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
   // TIMELINE_LAYOUT1: Timeline view (lg+) uses the Script-view layout: rail + docked panel on the right.
   const [dockPanelOpen, setDockPanelOpen] = useState(false)
@@ -3478,6 +3480,8 @@ export function EditorShell({
           unified={unifiedWorkspaceActive}
           unifiedTimelineView={layoutView}
           unifiedTimelineHidden={compact && !timelineOpen}
+          unifiedTimelineCollapsed={timelineCollapsed && !timelineFocused}
+          onUnifiedTimelineFocusChange={setTimelineFocused}
           onUnifiedTimelineViewChange={setLayoutViewPersist}
           unifiedMain={
             unifiedWorkspaceActive ? (
@@ -3750,6 +3754,8 @@ export function EditorShell({
             canUndo={canUndo}
             canRedo={canRedo}
             historySlot={historyPanel}
+            onCollapsedChange={setTimelineCollapsed}
+            forceExpanded={timelineFocused}
             mediaOffsetMs={mediaOffsetMs}
             musicUrl={musicUrl}
             sfxDurationsMs={sfxPreview.durationsMs}
