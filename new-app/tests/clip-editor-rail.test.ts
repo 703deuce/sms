@@ -4,8 +4,9 @@ import { clipEditorRailGroupIds, editorRailGroups } from '@/lib/clips/editor/edi
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 
 describe('clip editor rail', () => {
-  it('exposes seven rail groups with expected tabs (Phase 2)', () => {
+  it('exposes eight rail groups with expected tabs (Phase 2)', () => {
     expect(clipEditorRailGroupIds()).toEqual([
+      'script',
       'captions',
       'text',
       'media',
@@ -17,7 +18,7 @@ describe('clip editor rail', () => {
     const media = editorRailGroups(false).find((g) => g.id === 'media')
     expect(media?.tabs.map((t) => t.id)).toEqual(['media', 'broll', 'thumbnail'])
     const effects = editorRailGroups(false).find((g) => g.id === 'effects')
-    expect(effects?.tabs.map((t) => t.id)).toEqual(['cleanup', 'color', 'layout'])
+    expect(effects?.tabs.map((t) => t.id)).toEqual(['color', 'layout'])
   })
 
   it('left panels include repurpose but not producer or inspector', () => {
@@ -38,6 +39,6 @@ describe('clip editor rail', () => {
   })
 
   it('EDITOR_RAIL_GROUPS mirrors navigation groups', () => {
-    expect(EDITOR_RAIL_GROUPS.length).toBe(7)
+    expect(EDITOR_RAIL_GROUPS.length).toBe(8)
   })
 })

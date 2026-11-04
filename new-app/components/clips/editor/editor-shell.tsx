@@ -169,6 +169,12 @@ import { CanvasBackgroundChip, CanvasBackgroundSection } from '@/components/clip
 import { PreviewChipRow, previewChipButtonClass } from '@/components/clips/editor/preview-chip-row'
 import { PreviewTransportStrip } from '@/components/clips/editor/preview-transport-strip'
 import { EditorProjectMenu } from '@/components/clips/editor/editor-project-menu'
+import {
+  ScriptViewToolDrawer,
+  ScriptViewToolRail,
+  SCRIPT_VIEW_TOOL_PANELS,
+  type ScriptViewToolPanelId,
+} from '@/components/clips/editor/script-view-tool-rail'
 import { TimelineShortcutsSheet } from '@/components/clips/editor/timeline/shortcuts-sheet'
 import { canvasBgRelevant } from '@/lib/clips/canvas-bg'
 import { aspectCss } from '@/lib/clips/export-aspect'
@@ -346,7 +352,7 @@ export function EditorShell({
   })
   const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
   const pendingApplyDone = useRef(false)
-  const [panel, setPanel] = useState<EditorPanelId>('captions')
+  const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const band = useEditorBand()
   // FIX2 R7: read localStorage after mount (no SSR/hydration mismatch)
@@ -364,9 +370,10 @@ export function EditorShell({
   const timelineVisible = !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
+  const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
   // TIMELINE_LAYOUT1: Timeline view (lg+) uses the Script-view layout: rail + docked panel on the right.
   const [dockPanelOpen, setDockPanelOpen] = useState(false)
-  const dockTools = (layoutView === 'timeline' || layoutView === 'script') && band !== 'mobile'
+  const dockTools = layoutView === 'timeline' && band !== 'mobile'
   const setDockPanelOpenPersist = useCallback(
     (open: boolean) => {
       setDockPanelOpen(open)
@@ -383,30 +390,23 @@ export function EditorShell({
     setLayoutView(readClipEditorLayoutView())
   }, [])
   useEffect(() => {
-    if (band === 'mobile') return
-    if (layoutView === 'timeline') {
-      const storage = typeof window === 'undefined' ? null : window.localStorage
-      const open = readTimelineDockPanelOpen(storage)
-      setDockPanelOpen(open)
-      if (open) setPanel((p) => (p === 'inspector' || p === 'transcript' ? 'captions' : p))
-    } else if (layoutView === 'script') {
-      setDockPanelOpen(true)
-      setPanel((p) => (p === 'transcript' ? 'captions' : p))
-    }
+    if (layoutView !== 'timeline' || band === 'mobile') return
+    const storage = typeof window === 'undefined' ? null : window.localStorage
+    const open = readTimelineDockPanelOpen(storage)
+    setDockPanelOpen(open)
+    if (open) setPanel((p) => (p === 'inspector' ? 'media' : p))
   }, [layoutView, band])
   const setLayoutViewPersist = useCallback(
     (view: ClipEditorLayoutView) => {
       setLayoutView(view)
       writeClipEditorLayoutView(view)
-      if (view === 'script' && band !== 'mobile') {
-        setDockPanelOpen(true)
-        setPanel((p) => (p === 'transcript' ? 'captions' : p))
-      } else if (view === 'timeline' && typeof window !== 'undefined' && band !== 'mobile') {
+      if (view !== 'script') setScriptToolPanel(null)
+      if (view !== 'timeline') {
+        setDockPanelOpen(false)
+      } else if (typeof window !== 'undefined' && band !== 'mobile') {
         const open = readTimelineDockPanelOpen(window.localStorage)
         setDockPanelOpen(open)
-        if (open) setPanel((p) => (p === 'inspector' || p === 'transcript' ? 'captions' : p))
-      } else if (view !== 'timeline' && view !== 'script') {
-        setDockPanelOpen(false)
+        if (open) setPanel((p) => (p === 'inspector' ? 'media' : p))
       }
     },
     [band],
@@ -418,11 +418,24 @@ export function EditorShell({
     setPanel(id)
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
-    if ((layoutView === 'timeline' || layoutView === 'script') && band !== 'mobile') setDockPanelOpenPersist(true)
+    if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
     else if (band === 'mobile' || band === 'compact') {
       setMobilePanelOpen(true)
     }
   }, [band, layoutView, setDockPanelOpenPersist])
+  const toggleScriptTool = useCallback(
+    (id: ScriptViewToolPanelId) => {
+      setScriptToolPanel((prev) => {
+        const next = prev === id ? null : id
+        if (next) {
+          setVisitedPanels((v) => (v.has(next) ? v : new Set([...v, next])))
+          selectPanel(next)
+        }
+        return next
+      })
+    },
+    [selectPanel],
+  )
   const selectRailGroup = useCallback(
     (groupId: EditorRailGroupId) => {
       const group = editorRailGroups(clipEditorAiExtrasEnabled()).find((g) => g.id === groupId)
@@ -433,21 +446,21 @@ export function EditorShell({
     [selectPanel],
   )
   useEffect(() => {
-    if (band === 'wide' && panel === 'inspector' && layoutView !== 'timeline' && !dockTools) {
+    if (band === 'wide' && panel === 'inspector' && layoutView !== 'timeline') {
       setPanel('transcript')
     }
-  }, [band, panel, layoutView, dockTools])
+  }, [band, panel, layoutView])
   const openLayersTab = useCallback(() => selectPanel('layers'), [selectPanel])
 
   // G4cfix2: every B2 medium on the editor route in CORS mode (+ recovery of pre-hydration failures).
   useEffect(() => watchEditorMediaCors(typeof document === 'undefined' ? null : document.body), [])
   useEffect(() => {
     if (!clipEditorLeftPanelIds(clipEditorAiExtrasEnabled()).includes(panel)) {
-      setPanel('captions')
+      setPanel('transcript')
     }
   }, [panel])
   /** Re-hooked panels (B-roll, Brand, Cover, Dub) mount on first open so they don't fetch on editor load. */
-  const [visitedPanels, setVisitedPanels] = useState<ReadonlySet<EditorPanelId>>(() => new Set(['captions']))
+  const [visitedPanels, setVisitedPanels] = useState<ReadonlySet<EditorPanelId>>(() => new Set(['transcript']))
   useEffect(() => {
     setVisitedPanels((prev) => (prev.has(panel) ? prev : new Set([...prev, panel])))
   }, [panel])
@@ -2563,23 +2576,17 @@ export function EditorShell({
   const panelBody = renderSidePanels(null)
 
   const previewColumnContent = (
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden p-2">
+      <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden px-2 pb-1 pt-2">
         <div
-          className={cn(
-            'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-panel',
-          )}
-        >
-        <div
-          className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-1 md:p-2 [container-type:size]"
+          className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-1 md:p-2 [container-type:size]"
+          style={dockTools ? { alignItems: 'end', paddingBottom: 4 } : undefined}
         >
           <div
             ref={previewFrameRef}
-            className="relative max-h-full max-w-full shrink-0 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
+            className="relative max-h-full min-w-0 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
             style={{
               aspectRatio: aspectStyle,
-              width: `min(100cqw, calc(100cqh * ${aspectCssToNumber(previewAspect)}))`,
-              height: 'auto',
-              maxHeight: '100%',
+              width: `min(100%, calc(100cqh * ${aspectCssToNumber(previewAspect)}))`,
             }}
             onContextMenu={(e) => {
               if ((e.target as HTMLElement).closest('input,textarea,[contenteditable="true"]')) return
@@ -2757,7 +2764,7 @@ export function EditorShell({
         ) : null}
       </div>
           ) : null}
-        <div className="relative z-10 min-h-0 shrink-0 space-y-1 border-t border-border bg-panel px-1 pb-1 pt-1.5">
+        <div className={cn('mt-auto min-w-0 shrink-0 space-y-1 border-t border-border pt-1.5', dockTools && 'mx-auto w-full max-w-4xl')}>
           {dockTools && (clipTypeLabel || detectedLayout || pickerWhy) ? (
             <p
               className="truncate px-1 text-center text-[11px] text-muted-foreground"
@@ -2770,7 +2777,7 @@ export function EditorShell({
             </p>
           ) : null}
           <PreviewTransportStrip
-            compact={!dockTools && (layoutView === 'script' || previewFrameW < 560)}
+            compact={layoutView === 'script' || (!dockTools && previewFrameW < 560)}
             recordSlot={
               recordDevicesOk ? (
                 <ClipRecordMenu
@@ -3038,7 +3045,6 @@ export function EditorShell({
           ) : null}
         </div>
       </div>
-    </div>
   )
 
   // MENUBAR1: top menu bar. Every item calls an EXISTING handler / panel; conditional items are greyed with a hint.
@@ -3048,12 +3054,11 @@ export function EditorShell({
   }
   const runPalette = (id: string) => runTimelineMenu({ kind: 'palette', id })
   const openToolPanel = (id: EditorPanelId) => {
-    if (layoutView === 'script' && id === 'transcript') {
-      setLayoutViewPersist('script')
-      return
-    }
-    if (layoutView === 'script' && id !== 'transcript') {
-      selectPanel(id)
+    if (layoutView === 'script' && SCRIPT_VIEW_TOOL_PANELS.some((p) => p.id === id)) {
+      const sid = id as ScriptViewToolPanelId
+      setVisitedPanels((v) => (v.has(sid) ? v : new Set([...v, sid])))
+      selectPanel(sid)
+      setScriptToolPanel(sid)
       return
     }
     if (layoutView === 'script') setLayoutViewPersist('timeline')
@@ -3166,12 +3171,6 @@ export function EditorShell({
           items: [
             { id: 'view-script', label: 'Script view', onSelect: () => setLayoutViewPersist('script'), disabledHint: layoutView === 'script' ? 'Current view' : null },
             { id: 'view-timeline', label: 'Timeline view', onSelect: () => setLayoutViewPersist('timeline'), disabledHint: layoutView === 'timeline' ? 'Current view' : null },
-          ],
-        },
-        {
-          items: [
-            { id: 'view-repurpose', label: 'Repurpose (chapters, show notes)', onSelect: () => openToolPanel('repurpose') },
-            { id: 'view-transcript', label: 'Script / transcript', onSelect: () => setLayoutViewPersist('script'), disabledHint: layoutView === 'script' ? 'Current view' : null },
           ],
         },
         {
@@ -3499,42 +3498,41 @@ export function EditorShell({
         <EditorLayout
           band={band}
           compact={compact}
-          panelOpen={dockTools ? true : mobilePanelOpen}
+          panelOpen={dockTools ? dockPanelOpen : mobilePanelOpen}
           onClosePanel={() => (dockTools ? setDockPanelOpenPersist(false) : setMobilePanelOpen(false))}
           panelWidthPx={panelWidthPx}
           onPanelWidthChange={persistPanelWidth}
-          hidePanelColumn={layoutView === 'script' && !dockTools}
+          hidePanelColumn={layoutView === 'script'}
           hidePropertiesColumn={layoutView === 'script' || dockTools}
           dockTools={dockTools}
           rail={
             <>
               <EditorMobileRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
               {dockTools ? (
-                <div className="hidden min-h-0 min-w-0 flex-col overflow-hidden lg:flex" data-testid="timeline-dock-rail">
-                  <div className="flex shrink-0 items-stretch bg-card/80 p-1">
+                <div className="hidden min-w-0 items-stretch rounded-lg border border-border bg-card p-0.5 lg:flex" data-testid="timeline-dock-rail">
                   <button
                     type="button"
                     className={cn(
-                      'flex h-11 w-[4.875rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[0.6875rem] font-medium leading-none text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-[1.125rem]',
-                      panel === 'inspector' && 'bg-accent text-foreground',
+                      'flex h-10 min-w-[2.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-[0.625rem] leading-none text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-4',
+                      dockPanelOpen && panel === 'inspector' && 'bg-accent text-foreground',
                     )}
-                    onClick={() => {
+                    onClick={() =>
                       document.querySelector<HTMLElement>('[data-region="properties"]')?.scrollIntoView({ block: 'nearest' })
-                    }}
+                    }
                     aria-label="Properties"
+                    aria-pressed={dockPanelOpen && panel === 'inspector'}
                     data-testid="timeline-dock-properties"
                   >
                     <SlidersHorizontal className="size-5" aria-hidden />
                     Properties
                   </button>
-                  <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none]">
+                  <div className="min-w-0 flex-[8_1_0%]">
                     <EditorRail
                       variant="tabs"
                       active={panel}
-                      onChange={(id) => (dockPanelOpen && panel === id && layoutView !== 'script' ? setDockPanelOpenPersist(false) : selectPanel(id))}
-                      onSelectGroup={dockSelectGroup}
+                      onChange={(id) => (dockPanelOpen && panel === id ? setDockPanelOpenPersist(false) : selectPanel(id))}
+                      onSelectGroup={(g) => (g === 'script' ? setLayoutViewPersist('script') : dockSelectGroup(g))}
                     />
-                  </div>
                   </div>
                 </div>
               ) : (
@@ -3594,19 +3592,27 @@ export function EditorShell({
           }
           preview={
             layoutView === 'script' ? (
-              <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1">
+              <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                 <ScriptViewMainSplit
-                  transcriptPct={scriptSplitPct}
+                  transcriptPct={scriptToolPanel != null ? Math.min(scriptSplitPct, 30) : scriptSplitPct}
                   onTranscriptPctChange={persistScriptSplit}
-                  className="min-h-0 flex-1"
+                  className="flex-1"
                   transcript={
                     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-2">
                       {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
                     </div>
                   }
                   preview={
-                    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-testid="script-view-preview-stack">
-                      {previewColumnContent}
+                    <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden" data-testid="script-view-preview-stack">
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{previewColumnContent}</div>
+                      <ScriptViewToolDrawer
+                        open={scriptToolPanel != null}
+                        title={SCRIPT_VIEW_TOOL_PANELS.find((p) => p.id === scriptToolPanel)?.label ?? 'Panel'}
+                        onClose={() => setScriptToolPanel(null)}
+                      >
+                        {scriptToolPanel ? renderSidePanels(scriptToolPanel) : null}
+                      </ScriptViewToolDrawer>
+                      <ScriptViewToolRail active={scriptToolPanel} onToggle={toggleScriptTool} />
                     </div>
                   }
                 />
