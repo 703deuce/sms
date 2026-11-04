@@ -545,6 +545,13 @@ def handle_find_clips_entry(conn, job: dict) -> None:
     handle_find_clips(conn, job)
 
 
+def handle_bg_matte_preview(conn, job: dict) -> None:
+    from clips_worker.bg_matte_preview_job import run_bg_matte_preview_job
+
+    run_bg_matte_preview_job(conn, job, post_progress_resilient)
+    _mark_job_done(conn, job["id"])
+
+
 DISPATCH: dict[str, object] = {
     "IMPORT_URL": handle_import_url,
     "STREAM_IMPORT": handle_stream_import,
@@ -558,6 +565,7 @@ DISPATCH: dict[str, object] = {
     "PROCESS_PROJECT": process_job,
     "REPLACE_CLIP": handle_replace_clip,
     "RENDER_CLIP": handle_render_clip,
+    "BG_MATTE_PREVIEW": handle_bg_matte_preview,
     "REFRAME_CROP": handle_reframe_crop,
     "MUSIC": handle_music,
     "STUDIO_SOUND": handle_studio_sound,
