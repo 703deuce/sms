@@ -226,6 +226,8 @@ export function TranscriptPanel({
     return merged
   }, [words, edits.trim.in, edits.trim.out, clipStartMs, clipEndMs, showSurrounding])
   const spkOrder = useMemo(() => speakerOrder(visible, shots), [visible, shots])
+  // SCRIPT_DOC3: position of each word, so a selection / cut band also covers the space to the next word.
+  const visibleIdx = useMemo(() => new Map(visible.map((x, k) => [x.i, k])), [visible])
   const maxPlausibleGapMs = useMemo(() => maxPlausibleGapMsForTrim(edits.trim), [edits.trim.in, edits.trim.out])
   const reorderActive = Boolean(
     normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out),
@@ -663,6 +665,11 @@ export function TranscriptPanel({
     const surrounding = showSurrounding && muted && !cut
     const selected =
       selStart !== null && selEnd !== null && startMs >= Math.min(selStart, selEnd) && endMs <= Math.max(selStart, selEnd)
+    const nextW = visible[(visibleIdx.get(w.i) ?? -2) + 1]
+    const nextMs = nextW ? wordSourceMs(nextW) : null
+    const nextSelected =
+      selected && nextMs != null && selStart !== null && selEnd !== null && nextMs.startMs >= Math.min(selStart, selEnd) && nextMs.endMs <= Math.max(selStart, selEnd)
+    const nextCut = cut && nextW != null && isWordCut(nextW, edits.cutRanges)
 
     if (editingI === w.i) {
       return (
@@ -697,7 +704,9 @@ export function TranscriptPanel({
     return (
       <span
         key={w.i}
-        className={`inline ${muted && !surrounding ? 'text-muted-foreground/50' : ''} ${surrounding ? 'text-muted-foreground/50' : ''}`}
+        className={`inline ${muted && !surrounding ? 'text-muted-foreground/50' : ''} ${surrounding ? 'text-muted-foreground/50' : ''} ${
+          nextSelected ? 'bg-primary/25' : nextCut ? 'bg-destructive/10' : ''
+        }`}
       >
         <button
           type="button"
@@ -720,15 +729,15 @@ export function TranscriptPanel({
             setSelStart(Math.min(d.anchorStart, Math.round(startMs)))
             setSelEnd(Math.max(d.anchorEnd, Math.round(endMs)))
           }}
-          className={`inline rounded-[3px] px-[2px] py-0 text-left transition-colors hover:bg-accent/70 cursor-text select-none ${
+          className={`inline p-0 text-left transition-colors hover:bg-accent/70 cursor-text select-none ${
             active ? 'bg-[#FFD400]/35' : ''
           } ${isFiller && !cut ? 'underline decoration-amber-500/80 decoration-wavy underline-offset-4' : ''} ${
             cut
-              ? `text-muted-foreground/60 line-through decoration-destructive/70 decoration-2 bg-destructive/5 ${
+              ? `text-muted-foreground/60 line-through decoration-destructive/70 decoration-2 ${nextCut ? '' : 'bg-destructive/10'} ${
                   isFiller ? 'decoration-muted-foreground/80' : ''
                 }`
               : ''
-          } ${surrounding ? 'line-through decoration-muted-foreground/70' : ''} ${pickHighlight ? 'bg-primary/15 ring-1 ring-primary/25' : ''} ${ignored && !cut ? 'text-muted-foreground/50 line-through decoration-dashed decoration-muted-foreground/70' : ''} ${selected ? 'bg-primary/30 ring-1 ring-primary/50' : ''} ${
+          } ${surrounding ? 'line-through decoration-muted-foreground/70' : ''} ${pickHighlight ? 'bg-primary/15 ring-1 ring-primary/25' : ''} ${ignored && !cut ? 'text-muted-foreground/50 line-through decoration-dashed decoration-muted-foreground/70' : ''} ${selected && !nextSelected ? 'bg-primary/25' : ''} ${
             edits.captions?.emphasis?.includes(w.i) ? 'underline decoration-dotted decoration-lane-ai' : ''
           }`}
           onClick={(e) => {
@@ -778,7 +787,7 @@ export function TranscriptPanel({
         {selected && !cut && !muted && !surrounding && selStart === Math.round(startMs) && selEnd === Math.round(endMs) ? (
           <button
             type="button"
-            className="ml-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-accent"
+            className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded align-middle hover:bg-accent"
             title="Edit word (Enter)"
             aria-label="Edit word"
             onClick={(e) => {
@@ -789,12 +798,15 @@ export function TranscriptPanel({
             <Pencil className="h-3 w-3 text-muted-foreground" />
           </button>
         ) : null}
-        {cut ? (
+        {cut && !nextCut ? (
           <button
             type="button"
-            className="ml-0.5 text-[11px] font-medium text-primary"
+            className="ml-1 text-[11px] font-medium text-primary"
+            title="Restore this cut (to restore single words, select them and right-click › Restore)"
             onClick={() => {
-              if (cutRange && onRestoreCutRange) onRestoreCutRange(cutRange)
+              const full = edits.cutRanges.find(([s, e]) => startMs < e && endMs > s)
+              if (full && onRestoreCutRange) onRestoreCutRange(full)
+              else if (cutRange && onRestoreCutRange) onRestoreCutRange(cutRange)
               else onRestoreWord(w)
             }}
           >

@@ -1,17 +1,20 @@
 /**
- * SCRIPT_DOC2: cut edges come from the audio, not from fixed padding.
+ * SCRIPT_DOC2/3: cut edges come from the audio, not from the transcript timestamps.
  *
- * A word cut (a deleted word, phrase, sentence or filler) covers whole words. Each edge is moved to the
- * quietest point inside the gap next to it (between the previous kept word's end and the first cut
- * word's start; between the last cut word's end and the next kept word's start). The edge never
- * enters a kept word, so the worker's sanitize_cut_ranges keeps it unchanged and the export cuts
- * exactly where the preview cuts. When a gap has no quiet point (the words run together), the edge
- * stays on the ASR word edge and the result is marked needs_review.
+ * Transcript word times drift (speech speed varies), so each edge of a whole-word cut is searched
+ * in a ±120 ms window around the transcript edge, on the finest audio envelope available (5 ms from
+ * a browser decode of the clip, else the 25 ms peaks):
+ *  - a quiet run (energy below an adaptive threshold between the local noise floor and the local
+ *    speech level) nearest the transcript edge → cut in the middle of that quiet run;
+ *  - no quiet run (words touch) → cut at the lowest-energy valley, moved 5 ms toward the deleted
+ *    side so the kept word stays whole, and mark needs_review when the valley is still loud.
+ * The preview and export fade every join (preview 20/25 ms volume ramp, export 20 ms afade), so a
+ * cut at a valley does not click. Edges are saved in edits.cutRanges, which the export uses.
  */
 import type { CutRange } from '@/lib/clips/edits'
 import type { GapRmsSample } from '@/lib/clips/gap-audio-trim'
 
-/** Audio level samples (~25 ms) of the clip's program audio, registered by the editor shell. */
+/** Audio level samples of the clip's program audio (source ms), registered by the editor shell. */
 const registry = new Map<string, GapRmsSample[]>()
 
 export function setCutAudioSamples(clipId: string, samples: GapRmsSample[]): void {
@@ -29,37 +32,83 @@ export type AudioCutEdge = {
   note: string
 }
 
-/** Gaps shorter than this have no room for a quiet edge (words run together). */
-export const MIN_EDGE_GAP_MS = 15
-/** When there is no neighbour word, search this far outside the cut words. */
-export const OPEN_EDGE_SEARCH_MS = 200
-/** A sample counts as quiet when it is at most this far above the local floor (dB). */
-export const QUIET_DB_ABOVE_FLOOR = 6
-/** Absolute quiet ceiling (linear, 0..1 peak scale): −30 dBFS. */
-export const QUIET_MAX_LINEAR = 10 ** (-30 / 20)
+/** Search this far either side of the transcript edge. */
+export const EDGE_SEARCH_MS = 120
+/** Quiet = below floor + this share of (speech − floor). */
+export const QUIET_SHARE = 0.15
+/** A valley louder than floor + this share of (speech − floor) is flagged for review. */
+export const LOUD_VALLEY_SHARE = 0.35
+/** Valley cuts move this far into the deleted side so the kept word stays whole. */
+export const VALLEY_BIAS_MS = 5
+/** Tolerance (ms) for a range already refined earlier (re-refine must stay a word cut). */
+const REFINED_SLACK_MS = EDGE_SEARCH_MS + 60
 
-function localFloor(samples: GapRmsSample[], lo: number, hi: number): number {
-  const vals = samples.filter((s) => s.tMs >= lo - 1500 && s.tMs <= hi + 1500).map((s) => s.rms)
+function pct(vals: number[], p: number): number {
   if (!vals.length) return 0
-  vals.sort((a, b) => a - b)
-  return vals[Math.floor(vals.length * 0.1)] ?? 0
+  const s = [...vals].sort((a, b) => a - b)
+  return s[Math.min(s.length - 1, Math.max(0, Math.floor(s.length * p)))] ?? 0
 }
 
-/** Lowest sample in [lo, hi] if it is quiet; prefers the point nearest `prefer` on ties. */
-function quietestPoint(samples: GapRmsSample[], lo: number, hi: number, thr: number, prefer: number): number | null {
-  let best: GapRmsSample | null = null
-  for (const s of samples) {
-    if (s.tMs < lo || s.tMs > hi) continue
-    if (s.rms > thr) continue
-    if (!best || s.rms < best.rms || (s.rms === best.rms && Math.abs(s.tMs - prefer) < Math.abs(best.tMs - prefer))) best = s
+type Edge = { ms: number; quiet: boolean; loud: boolean }
+
+/**
+ * One edge. `deletedSide` = +1 when the deleted words are after the edge (cut start), −1 when they
+ * are before it (cut end).
+ */
+function findEdge(
+  samples: GapRmsSample[],
+  transcriptMs: number,
+  deletedSide: 1 | -1,
+  floor: number,
+  speech: number,
+  stepMs: number,
+): Edge {
+  // Window = ±EDGE_SEARCH_MS plus two samples, so a coarse envelope still sees the quiet next to the edge.
+  const lo = transcriptMs - EDGE_SEARCH_MS - 2 * stepMs
+  const hi = transcriptMs + EDGE_SEARCH_MS + 2 * stepMs
+  const win = samples.filter((s) => s.tMs >= lo && s.tMs <= hi)
+  if (!win.length) return { ms: transcriptMs, quiet: false, loud: true }
+  const thr = floor + QUIET_SHARE * (speech - floor)
+  // Quiet runs (contiguous samples at or below thr).
+  const runs: [number, number][] = []
+  let start: number | null = null
+  let prevT = win[0]!.tMs
+  for (const s of win) {
+    if (s.rms <= thr) {
+      if (start == null) start = s.tMs
+      prevT = s.tMs
+    } else if (start != null) {
+      runs.push([start, prevT])
+      start = null
+    }
   }
-  return best ? best.tMs : null
+  if (start != null) runs.push([start, prevT])
+  if (runs.length) {
+    let best = runs[0]!
+    let bestD = Infinity
+    for (const r of runs) {
+      const d = transcriptMs < r[0] ? r[0] - transcriptMs : transcriptMs > r[1] ? transcriptMs - r[1] : 0
+      if (d < bestD) {
+        bestD = d
+        best = r
+      }
+    }
+    return { ms: Math.round((best[0] + best[1]) / 2), quiet: true, loud: false }
+  }
+  // Words touch: lowest-energy valley, nudged into the deleted side.
+  let v = win[0]!
+  for (const s of win) if (s.rms < v.rms || (s.rms === v.rms && Math.abs(s.tMs - transcriptMs) < Math.abs(v.tMs - transcriptMs))) v = s
+  return {
+    ms: Math.round(v.tMs + deletedSide * VALLEY_BIAS_MS),
+    quiet: false,
+    loud: v.rms > floor + LOUD_VALLEY_SHARE * (speech - floor),
+  }
 }
 
 /**
- * Refine a cut over whole words. `words` are source spans in seconds (sorted or not).
- * Returns null when the range covers no word (a pause cut) or there is no audio: callers then keep
- * their existing behaviour.
+ * Refine a cut over whole words. `words` are source spans in seconds. Returns null when the range
+ * covers no word (a pause cut), is not a whole-word cut (a razor cut mid-word), or there is no
+ * audio: callers then keep their existing behaviour.
  */
 export function refineWordCutWithAudio(
   range: CutRange,
@@ -76,55 +125,37 @@ export function refineWordCutWithAudio(
   if (!inside.length) return null
   const first = inside[0]!
   const last = inside[inside.length - 1]!
-  const prevEnd = spans.filter(([s, e]) => e <= first[0] && (s + e) / 2 < lo).reduce<number | null>((m, [, e]) => (m == null ? e : Math.max(m, e)), null)
-  const nextStart = spans.filter(([s, e]) => s >= last[1] && (s + e) / 2 >= hi).reduce<number | null>((m, [s]) => (m == null ? s : Math.min(m, s)), null)
-  // Only whole-word cuts (transcript deletes, fillers, retakes): both edges sit in the gaps around
-  // the cut words or within 80 ms inside them. Anything else (a razor cut mid-word) is left alone.
-  if (prevEnd != null && lo < prevEnd - 1) return null
-  if (nextStart != null && hi > nextStart + 1) return null
-  if (lo > first[0] + 80 || hi < last[1] - 80) return null
-  const floor = localFloor(samples, first[0], last[1])
-  const thr = Math.min(QUIET_MAX_LINEAR, Math.max(floor, 1e-4) * 10 ** (QUIET_DB_ABOVE_FLOOR / 20))
+  const prevEnd = spans.filter(([s, e]) => (s + e) / 2 < lo).reduce<number | null>((m, [, e]) => (m == null ? e : Math.max(m, e)), null)
+  const nextStart = spans.filter(([s, e]) => (s + e) / 2 >= hi).reduce<number | null>((m, [s]) => (m == null ? s : Math.min(m, s)), null)
+  // Only whole-word cuts: each edge near the transcript edge of the cut words.
+  if (Math.abs(lo - first[0]) > REFINED_SLACK_MS || Math.abs(hi - last[1]) > REFINED_SLACK_MS) return null
 
-  let confidence: AudioCutEdge['confidence'] = 'ready'
+  const local = samples.filter((s) => s.tMs >= first[0] - 1500 && s.tMs <= last[1] + 1500).map((s) => s.rms)
+  const floor = pct(local, 0.1)
+  const speech = pct(local, 0.9)
+  if (!(speech > floor * 1.5)) return null // no usable speech contrast
+
+  const k = Math.min(samples.length - 1, 10)
+  const stepMs = k > 0 ? Math.max(1, (samples[k]!.tMs - samples[0]!.tMs) / k) : 25
+  const L = findEdge(samples, first[0], 1, floor, speech, stepMs)
+  const R = findEdge(samples, last[1], -1, floor, speech, stepMs)
+  let left = L.ms
+  let right = R.ms
+  // Never past the middle of a kept neighbour, never shorter than the cut words' middle.
+  if (prevEnd != null) left = Math.max(left, prevEnd - EDGE_SEARCH_MS - 2 * stepMs)
+  if (nextStart != null) right = Math.min(right, nextStart + EDGE_SEARCH_MS + 2 * stepMs)
+  const firstMid = (first[0] + first[1]) / 2
+  const lastMid = (last[0] + last[1]) / 2
+  left = Math.min(left, Math.round(firstMid) - 1)
+  right = Math.max(right, Math.round(lastMid) + 1)
+  if (right - left < 20) return { range: [first[0], last[1]], confidence: 'needs_review', note: 'too narrow after refine' }
+
   const notes: string[] = []
-
-  // Left edge: quiet point between the previous kept word and the first cut word.
-  const leftLo = prevEnd ?? first[0] - OPEN_EDGE_SEARCH_MS
-  const leftHi = first[0]
-  let left = first[0]
-  if (leftHi - leftLo >= MIN_EDGE_GAP_MS) {
-    const q = quietestPoint(samples, leftLo, leftHi, thr, leftHi)
-    if (q != null) left = Math.round(q)
-    else {
-      confidence = 'needs_review'
-      notes.push('no quiet point before the cut')
-    }
-  } else if (prevEnd != null) {
-    confidence = 'needs_review'
-    notes.push('runs into the previous word')
+  if (!L.quiet) notes.push(L.loud ? 'start runs into the previous word' : 'start at an energy valley')
+  if (!R.quiet) notes.push(R.loud ? 'end runs into the next word' : 'end at an energy valley')
+  return {
+    range: [left, right],
+    confidence: L.loud || R.loud ? 'needs_review' : 'ready',
+    note: notes.join('; ') || 'audio edges',
   }
-
-  // Right edge: quiet point between the last cut word and the next kept word.
-  const rightLo = last[1]
-  const rightHi = nextStart ?? last[1] + OPEN_EDGE_SEARCH_MS
-  let right = last[1]
-  if (rightHi - rightLo >= MIN_EDGE_GAP_MS) {
-    const q = quietestPoint(samples, rightLo, rightHi, thr, rightLo)
-    if (q != null) right = Math.round(q)
-    else {
-      confidence = 'needs_review'
-      notes.push('no quiet point after the cut')
-    }
-  } else if (nextStart != null) {
-    confidence = 'needs_review'
-    notes.push('runs into the next word')
-  }
-
-  // Never enter a kept word; always cover the cut words completely.
-  if (prevEnd != null) left = Math.max(left, prevEnd)
-  if (nextStart != null) right = Math.min(right, nextStart)
-  left = Math.min(left, first[0])
-  right = Math.max(right, last[1])
-  return { range: [left, right], confidence, note: notes.join('; ') || 'audio edges' }
 }

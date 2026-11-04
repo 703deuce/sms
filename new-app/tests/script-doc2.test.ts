@@ -33,7 +33,9 @@ describe('SCRIPT_DOC2 audio cut edges', () => {
     ]
     const r = refineWordCutWithAudio([600, 800], tight, levels([[0, 1500]]))
     expect(r?.confidence).toBe('needs_review')
-    expect(r!.range).toEqual([600, 800])
+    // SCRIPT_DOC3: valley cut, nudged into the deleted word so the kept words stay whole.
+    expect(r!.range[0]).toBeGreaterThanOrEqual(600)
+    expect(r!.range[1]).toBeLessThanOrEqual(800)
   })
   it('leaves non-word (razor / pause) cuts alone', () => {
     expect(refineWordCutWithAudio([420, 580], words, levels([[0, 400]]))).toBeNull()

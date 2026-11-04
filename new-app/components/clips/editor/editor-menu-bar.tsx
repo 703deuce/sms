@@ -79,7 +79,7 @@ export function EditorMenuBar({ menus, onOpenSearch }: { menus: EditorMenu[]; on
         type="button"
         variant="outline"
         size="sm"
-        className="h-8 min-w-8 max-w-56 flex-1 basis-56 justify-start gap-2 overflow-hidden px-2.5 text-[13px] font-normal text-muted-foreground"
+        className="h-8 min-w-40 max-w-56 flex-1 basis-56 justify-start gap-2 overflow-hidden px-2.5 text-[13px] font-normal text-muted-foreground"
         onClick={onOpenSearch}
         aria-label="Search tools"
         title="Search tools (⌘K)"
