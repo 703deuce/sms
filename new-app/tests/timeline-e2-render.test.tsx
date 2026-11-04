@@ -298,6 +298,41 @@ describe('E2 multi-track timeline', () => {
     expect(parseFloat(getByTestId('timeline-track').style.width)).toBeGreaterThanOrEqual(widthBefore)
   })
 
+  it('N2 blocks single-letter commands and Space after canvas Ctrl+A until the next click', () => {
+    const ui = setup()
+    fireEvent.keyDown(ui.getByTestId('timeline-scroll'), { key: 'a', code: 'KeyA', ctrlKey: true })
+    const prior = ui.onCommitEdits.mock.calls.length
+    for (const key of ['h', 'e', 'l', 'l', 'o', ' ', 'i', 's']) {
+      fireEvent.keyDown(window, { key, code: key === ' ' ? 'Space' : undefined })
+    }
+    expect(ui.onCommitEdits).toHaveBeenCalledTimes(prior)
+    expect(ui.onSeekOutput).not.toHaveBeenCalled()
+    fireEvent.pointerDown(ui.getByTestId('timeline-root'), { button: 0 })
+    fireEvent.keyDown(window, { key: 's', code: 'KeyS' })
+    expect(ui.onCommitEdits.mock.calls.length).toBeGreaterThan(prior)
+  })
+
+  it('B2 allows an unselected end trim and clamps live geometry and commit at the media limit', () => {
+    const ui = setup()
+    const last = ui.getAllByTestId('timeline-item-video').at(-1)!
+    expect(last.getAttribute('data-selected')).toBeNull()
+    const handle = last.querySelector('[data-testid="timeline-trim-end"]')!
+    const dx = 35_000 * ui.pxPerMs()
+    act(() => fireEvent.pointerDown(handle, { button: 0, clientX: 100, pointerId: 91 }))
+    act(() => fireEvent.pointerMove(window, { clientX: 100 + dx, pointerId: 91 }))
+    expect(Number(last.getAttribute('data-end-ms'))).toBeLessThanOrEqual(39000)
+    act(() => fireEvent.pointerUp(window, { clientX: 100 + dx, pointerId: 91 }))
+    expect((ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2).trim.out).toBe(40000)
+  })
+
+  it('B2 left trim can start on an unselected clip', () => {
+    const ui = setup()
+    const first = ui.getAllByTestId('timeline-item-video')[0]!
+    const handle = first.querySelector('[data-testid="timeline-trim-start"]')!
+    drag(handle, 1000 * ui.pxPerMs())
+    expect((ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2).trim.in).toBe(1000)
+  })
+
   it('without onCommitEdits the lanes are read-only', () => {
     const { getByTestId } = setup(edits(), { onCommitEdits: undefined })
     expect((getByTestId('timeline-split') as HTMLButtonElement).disabled).toBe(true)
