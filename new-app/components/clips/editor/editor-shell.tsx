@@ -3230,6 +3230,37 @@ export function EditorShell({
       ],
     },
     {
+      id: 'layout',
+      label: 'Layout',
+      groups: [
+        {
+          label: 'Aspect ratio',
+          items: (['16:9', '9:16', '1:1', '4:5'] as const).map((aspect) => ({
+            id: `aspect-${aspect.replace(':', '-')}`,
+            label: `Aspect ${aspect}${(edits.aspectRatio ?? '9:16') === aspect ? ' ✓' : ''}`,
+            onSelect: () => setEdits({ ...edits, aspectRatio: aspect }),
+          })),
+        },
+        {
+          label: 'Video layouts',
+          items: EXPORT_LAYOUT_OPTIONS.map((opt) => {
+            const disabled = layoutOptionDisabled(opt, {
+              facecamLayout: facecamLayout ?? null,
+              reframeV2Enabled,
+              aiExtras: clipEditorAiExtrasEnabled(),
+            })
+            const landscapeOff = (edits.aspectRatio ?? '9:16') === '16:9' && opt.id !== 'full_frame' && opt.id !== 'center_crop'
+            return {
+              id: `layout-${opt.id}`,
+              label: opt.title,
+              onSelect: () => onLayoutPick(opt.id),
+              disabledHint: disabled ? (opt.hint ?? 'Not available for this clip') : landscapeOff ? 'Change Aspect above first' : null,
+            }
+          }),
+        },
+      ],
+    },
+    {
       id: 'clip',
       label: 'Clip',
       groups: [
