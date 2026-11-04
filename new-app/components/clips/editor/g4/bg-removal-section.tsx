@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { BG_DEFAULT, bgRemovalBlockedReason, normalizeBgRemoval, type BgRemoval } from '@/lib/clips/editor/bg-removal'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
@@ -13,10 +14,12 @@ export function BgRemovalSection({
   edits,
   onCommit,
   readOnly,
+  clipId,
 }: {
   edits: ClipEditsV2
   onCommit: (next: ClipEditsV2) => void
   readOnly?: boolean
+  clipId?: string
 }) {
   const cur = normalizeBgRemoval(edits.bgRemoval)
   const blocked = bgRemovalBlockedReason(edits)
@@ -24,6 +27,24 @@ export function BgRemovalSection({
   const set = (next: BgRemoval | undefined) => onCommit({ ...edits, bgRemoval: next })
   const patch = (p: Partial<BgRemoval>) => set({ ...(cur ?? BG_DEFAULT), ...p, enabled: true })
   const bg = cur?.background
+  const [renderStatus, setRenderStatus] = useState<'idle' | 'queued' | 'rendering'>('idle')
+  useEffect(() => {
+    if (!enabled || !clipId) { setRenderStatus('idle'); return }
+    let gone = false
+    const check = async () => {
+      try {
+        const res = await fetch(`/api/clips/clips/${encodeURIComponent(clipId)}/active-render`)
+        if (!res.ok) return
+        const payload = await res.json() as { data?: { render?: { status?: string } | null } }
+        if (gone) return
+        const status = payload.data?.render?.status
+        setRenderStatus(status === 'RENDERING' ? 'rendering' : status === 'QUEUED' ? 'queued' : 'idle')
+      } catch { /* Status is advisory; export handling owns failures and retries. */ }
+    }
+    void check()
+    const interval = window.setInterval(() => { void check() }, 4000)
+    return () => { gone = true; window.clearInterval(interval) }
+  }, [clipId, enabled])
   return (
     <div className="space-y-1.5" data-testid="bg-removal">
       <div className="flex items-center gap-1.5">
@@ -130,8 +151,11 @@ export function BgRemovalSection({
           />
         </>
       ) : null}
-      <p className="text-[11px] text-muted-foreground" data-testid="bg-removal-note">
-        Applied on export (the preview shows the original). Works on people; pets and objects count as background.
+      <p className="text-[11px] text-muted-foreground" role="status" data-testid="bg-removal-note">
+        {!enabled ? 'Off. Enable Remove background to include a person matte in your export.'
+          : renderStatus === 'rendering' ? 'Processing person matte with the export worker…'
+          : renderStatus === 'queued' ? 'Background matte queued with the export worker…'
+          : 'Enabled for export. Person matte generation starts during rendering; the live preview still shows the original video.'}
       </p>
     </div>
   )
