@@ -170,6 +170,22 @@ export function PropertiesPanel({
       if (first) setTab(first.id)
     }
   }, [target]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const openVideoSection = (event: Event) => {
+      const section = (event as CustomEvent<string>).detail
+      if (section !== 'bg-removal' && section !== 'blur-add' && section !== 'properties-panel') return
+      setTab('video')
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const node = document.querySelector<HTMLElement>(`[data-testid="${section}"]`)
+        node?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+        const target = section === 'blur-add' ? node?.closest('[data-testid="blur-regions"]') : node
+        target?.classList.add('ring-2', 'ring-primary/50', 'rounded-md')
+        window.setTimeout(() => target?.classList.remove('ring-2', 'ring-primary/50', 'rounded-md'), 2500)
+      }))
+    }
+    window.addEventListener('transovo:editor-video-tool', openVideoSection)
+    return () => window.removeEventListener('transovo:editor-video-tool', openVideoSection)
+  }, [])
   const origin = target ? targetOriginMs(edits, target) : 0
   const localMs = keyframeLocalEditFromPlayhead(edits, outputMs, origin)
   const seekLocal = (t: number) => onSeekOutput(origin + t)
