@@ -63,13 +63,11 @@ def bg_matte_provider() -> str:
 
 
 def bg_removal_allowed(edits: dict) -> bool:
-    from clips_worker.layout_router import needs_per_segment_layout_export
     from clips_worker.main_fx import main_key_allowed
 
     return (
         main_key_allowed(edits)
         and not edits.get("stabilize")
-        and not needs_per_segment_layout_export(edits)
     )
 
 
