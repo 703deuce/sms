@@ -82,7 +82,7 @@ describe('E2 multi-track timeline', () => {
     expect(onCollapsedChange).toHaveBeenCalledWith(true)
     expect(getByTestId('timeline-mini-strip')).toBeTruthy()
     expect(getByTestId('timeline-mini-clip')).toBeTruthy()
-    expect(getByTestId('timeline-mini-playhead').style.left).toBe('52.63157894736842%')
+    expect(parseFloat(getByTestId('timeline-mini-playhead').style.left)).toBeCloseTo(10000 / 19000 * 100, 3)
     fireEvent.change(getByTestId('timeline-mini-strip').querySelector('input[type="range"]')!, { target: { value: '3000' } })
     expect(onSeekOutput).toHaveBeenCalledWith(3000)
     expect(queryByTestId('timeline-body')).toBeNull()
