@@ -695,17 +695,18 @@ export function CaptionsPanel({
       </div>
 
       <label className="text-xs font-medium text-muted-foreground">
-        Size ({cap.size ?? preset.sizePct}% of video height)
+        Size ({presetId.startsWith('cp') ? (cap.userSizePct ?? preset.sizePct) : (cap.size ?? preset.sizePct)}% of video height)
       </label>
       <Slider
         className="w-full min-w-[140px]"
         min={3}
         max={10}
         step={0.5}
-        value={[cap.size ?? preset.sizePct]}
+        value={[presetId.startsWith('cp') ? (cap.userSizePct ?? preset.sizePct) : (cap.size ?? preset.sizePct)]}
         onValueChange={(v) => {
           const n = Array.isArray(v) ? v[0] : v
-          patch({ size: typeof n === 'number' ? n : preset.sizePct })
+          if (presetId.startsWith('cp')) patch({ userSizePct: typeof n === 'number' ? n : preset.sizePct })
+          else patch({ size: typeof n === 'number' ? n : preset.sizePct })
         }}
       />
 
