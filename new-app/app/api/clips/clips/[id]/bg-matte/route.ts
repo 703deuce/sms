@@ -5,38 +5,103 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
+import { bgRemovalBlockedReason } from '@/lib/clips/editor/bg-removal'
+import { normalizeEdits } from '@/lib/clips/edits'
+import { createId } from '@/lib/supabase/id'
 
-/**
- * E2: A matte is created by the existing export worker, not by this GET.
- * Return only the signed grayscale person mask for this workspace's clip.
- * The editor can display it as a genuine low-resolution mask preview after generation.
- */
+const NO_STORE = { 'Cache-Control': 'no-store' }
+type Quality = 'standard' | 'detail'
+const qualityOf = (raw: unknown): Quality => raw === 'detail' ? 'detail' : 'standard'
+
+async function matteState(workspaceId: string, clipId: string, quality: Quality) {
+  const prisma = getPrisma()
+  const [generations, jobs] = await Promise.all([
+    prisma.aiGeneration.findMany({
+      where: { workspaceId, clipId, kind: 'BG_MATTE' },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+      select: { id: true, status: true, storageKey: true, params: true, updatedAt: true },
+    }),
+    prisma.clipJob.findMany({
+      where: { clipId, type: 'BG_MATTE_PREVIEW' },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { id: true, status: true, payload: true, error: true, createdAt: true },
+    }),
+  ])
+  const matching = generations.filter(gen => {
+    const params = gen.params && typeof gen.params === 'object' && !Array.isArray(gen.params)
+      ? gen.params as Record<string, unknown> : {}
+    return params.quality === quality
+  })
+  const recentJob = jobs.find(job => {
+    const body = job.payload && typeof job.payload === 'object' && !Array.isArray(job.payload)
+      ? job.payload as Record<string, unknown> : {}
+    return body.quality === quality
+  })
+  // An active preview job takes precedence over an older mask of the same quality.
+  if (recentJob?.status === 'QUEUED' || recentJob?.status === 'RUNNING') {
+    return { state: recentJob.status === 'QUEUED' ? 'queued' : 'processing', url: null, jobId: recentJob.id }
+  }
+  const ready = matching.find(gen => gen.status === 'READY' && gen.storageKey)
+  if (ready?.storageKey) {
+    const storage = await getClipStorageForObjectKey(ready.storageKey)
+    const url = await createCachedSignedDownloadUrl(storage, ready.storageKey, { versionHint: ready.updatedAt.toISOString() })
+    return { state: 'ready', url, generationId: ready.id }
+  }
+  if (recentJob?.status === 'FAILED') return { state: 'failed', url: null, error: recentJob.error ?? 'Preview generation failed' }
+  const row = matching[0]
+  if (row?.status === 'RUNNING') return { state: 'processing', url: null }
+  if (row?.status === 'FAILED') return { state: 'failed', url: null }
+  return { state: 'idle', url: null }
+}
+
+/** Workspace-scoped status for an actual generated matte; never fake a mask. */
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const clip = await getClipForWorkspace(workspaceId, id)
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    const quality = new URL(request.url).searchParams.get('quality') === 'detail' ? 'detail' : 'standard'
-    const generations = await getPrisma().aiGeneration.findMany({
-      where: { workspaceId, clipId: id, kind: 'BG_MATTE' },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      select: { id: true, status: true, storageKey: true, params: true, updatedAt: true },
+    const quality = qualityOf(new URL(request.url).searchParams.get('quality'))
+    return NextResponse.json({ data: await matteState(workspaceId, id, quality) }, { headers: NO_STORE })
+  } catch (err) {
+    return jsonError(err, 500)
+  }
+}
+
+/**
+ * Generate a short real person matte in the background, before export.
+ * This is a free editor preview (0 user credits), not an export.
+ * Reuse completed generations and dedupe active jobs for the same clip/quality.
+ */
+export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params
+    const workspaceId = await resolveWorkspaceId()
+    const clip = await getClipForWorkspace(workspaceId, id)
+    if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const body = (await request.json().catch(() => ({}))) as { quality?: unknown }
+    const quality = qualityOf(body.quality)
+    const edits = normalizeEdits(clip.edits, { clipStartMs: clip.startMs, clipEndMs: clip.endMs })
+    const blocked = bgRemovalBlockedReason(edits)
+    if (blocked) return NextResponse.json({ error: blocked }, { status: 400 })
+    const existing = await matteState(workspaceId, id, quality)
+    if (existing.state === 'ready' || existing.state === 'queued' || existing.state === 'processing')
+      return NextResponse.json({ data: { ...existing, credits: 0 } }, { headers: NO_STORE })
+    const prisma = getPrisma()
+    const created = await prisma.clipJob.create({
+      data: {
+        id: createId('job'),
+        projectId: clip.projectId,
+        clipId: id,
+        type: 'BG_MATTE_PREVIEW',
+        status: 'QUEUED',
+        maxAttempts: 1,
+        payload: { clipId: id, workspaceId, quality, previewSeconds: 6 },
+      },
     })
-    const row = generations.find((gen) => {
-      const params = gen.params && typeof gen.params === 'object' && !Array.isArray(gen.params)
-        ? gen.params as Record<string, unknown> : {}
-      return params.quality === quality
-    })
-    if (!row) return NextResponse.json({ data: { state: 'idle', url: null } }, { headers: { 'Cache-Control': 'no-store' } })
-    if (row.status === 'READY' && row.storageKey) {
-      const storage = await getClipStorageForObjectKey(row.storageKey)
-      const url = await createCachedSignedDownloadUrl(storage, row.storageKey, { versionHint: row.updatedAt.toISOString() })
-      return NextResponse.json({ data: { state: 'ready', url, generationId: row.id } }, { headers: { 'Cache-Control': 'no-store' } })
-    }
-    const state = row.status === 'FAILED' ? 'failed' : row.status === 'RUNNING' ? 'processing' : 'queued'
-    return NextResponse.json({ data: { state, url: null } }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ data: { state: 'queued', jobId: created.id, url: null, credits: 0 } }, { status: 202, headers: NO_STORE })
   } catch (err) {
     return jsonError(err, 500)
   }
