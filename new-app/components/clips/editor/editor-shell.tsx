@@ -2361,7 +2361,11 @@ export function EditorShell({
           onAttachMusic={attachMusicGeneration}
           onPatchMusic={patchMusic}
           onRemoveMusic={() => setMusic(null)}
-          onAddSfx={(generationId, atMs) => addSfx({ generationId, atMs, volume: 0.8 })}
+          onAddSfx={(generationId, atMs) => {
+            addSfx({ generationId, atMs, volume: 0.8 })
+            setTimelineSelReq((prev) => ({ lane: 'sfx', id: generationId, seq: (prev?.seq ?? 0) + 1 }))
+            setCanvasSel({ target: `sfx:${generationId}`, label: 'Sound effect' })
+          }}
           onUpdateSfx={updateSfx}
           onRemoveSfx={removeSfx}
           onPatchStudioSound={patchStudioSound}
