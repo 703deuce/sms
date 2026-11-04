@@ -491,7 +491,7 @@ export function buildCaptionsAss(
   const wpl = pyInt(pyFloat(or(cap.wordsPerLine, preset.wordsPerLine, 2)))
   let caseMode = String(or(cap.case, preset.case, 'upper')).toLowerCase()
   caseMode = caseMode === 'upper' ? 'upper' : 'sentence'
-  let sizePct = pyFloat(or(cap.size, cap.sizePct, preset.sizePct))
+  let sizePct = pyFloat(or(isCp ? cap.userSizePct : cap.size, isCp ? undefined : cap.sizePct, preset.sizePct))
   if (sizePct < 3) sizePct = pyFloat(preset.sizePct)
   sizePct = Math.max(3.0, Math.min(12.0, sizePct))
   let fontsize = pyRound((sizePct / 100) * playH)
