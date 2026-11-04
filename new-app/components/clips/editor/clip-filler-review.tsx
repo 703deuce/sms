@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ScriptFillerReviewBar,
   type FillerReviewAction,
@@ -53,6 +53,7 @@ export function ClipFillerReview({
   const [fillerAvoidHarsh, setFillerAvoidHarsh] = useState(false)
   const [fillerAction, setFillerAction] = useState<FillerReviewAction>('delete')
   const [searchOptions, setSearchOptions] = useState<FillerSearchOptions>(DEFAULT_SEARCH_OPTIONS)
+  const lastPreviewedCursor = useRef<number | null>(null)
 
   const orderedWords = useMemo(
     () => editorWordsForClipFillerReview(clipId, words, edits, clipBounds),
@@ -79,10 +80,27 @@ export function ClipFillerReview({
   }, [fillerCursor, fillerHits.length])
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      lastPreviewedCursor.current = null
+      return
+    }
+    // Undo and caption updates may recalculate hits: do not keep rewinding live playback.
+    if (lastPreviewedCursor.current === fillerCursor) return
+    lastPreviewedCursor.current = fillerCursor
     const hit = fillerHits[fillerCursor]
     if (hit) onSeek(hit.word.t0Ms)
   }, [open, fillerCursor, fillerHits, onSeek])
+
+  useEffect(() => {
+    if (!open) return
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onOpenChange(false)
+    }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [open, onOpenChange])
 
   const applyHits = useCallback(
     (action: FillerReviewAction, hits: { word: { t0Ms: number; t1Ms: number } }[]) => {
