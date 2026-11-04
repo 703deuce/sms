@@ -854,7 +854,8 @@ export function TranscriptPanel({
         <p className="text-xs text-muted-foreground" role="status">Updating transcript for extended trim…</p>
       ) : null}
       {compactToolbar ? (!documentView || documentFindOpen) && (
-        <div className="flex shrink-0 items-center gap-2" data-testid="transcript-find-replace">
+        <div className={cn("flex shrink-0 gap-2", documentView ? "flex-col" : "items-center")} data-testid="transcript-find-replace">
+          <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
@@ -1059,6 +1060,15 @@ export function TranscriptPanel({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
+          {documentView && documentFindOpen ? (
+            <div className="flex min-w-0 items-center gap-2" data-testid="transcript-replace-row">
+              <Input aria-label="Replace with" placeholder="Replace…" value={replace} onChange={(event) => setReplace(event.target.value)} className="h-8 min-w-0 flex-1" />
+              <Button size="sm" variant="outline" disabled={!activeMatch || !replace.trim()} onClick={applyReplaceCurrent}>Replace</Button>
+              <Button size="sm" variant="outline" disabled={!phraseMatches.length || !replace.trim()} onClick={applyReplaceAll}>All</Button>
+              <Button size="sm" variant="ghost" aria-label="Close find and replace" onClick={() => setDocumentFindOpen(false)}>✕</Button>
+            </div>
+          ) : null}
         </div>
       ) : (
       <div className="flex flex-col gap-2" data-testid="transcript-find-replace">
