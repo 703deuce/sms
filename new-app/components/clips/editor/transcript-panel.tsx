@@ -100,6 +100,7 @@ export function TranscriptPanel({
   onSelectRange,
   compactToolbar = false,
   largeScript = false,
+  documentView = false,
   beatsAvailable = false,
   beatsAnalyzing = false,
   beatCount = 0,
@@ -150,6 +151,8 @@ export function TranscriptPanel({
   compactToolbar?: boolean
   /** Phase 3 script view: larger transcript typography in the main split. */
   largeScript?: boolean
+  /** Unified editor keeps instructions available via menu while giving words priority. */
+  documentView?: boolean
   beatsAvailable?: boolean
   beatsAnalyzing?: boolean
   beatCount?: number
@@ -1357,10 +1360,10 @@ export function TranscriptPanel({
       >
         <div
           className={cn(
-            largeScript && 'mx-auto w-full max-w-[70ch] px-3 py-3 text-[15px] leading-[1.8] sm:px-5 sm:text-[16px]',
+            largeScript && 'mx-auto w-full max-w-[70ch] px-3 py-2 text-[15px] leading-[1.7] sm:px-4 sm:text-[16px]',
           )}
         >
-        {visible.length ? (
+        {visible.length && !documentView ? (
           <p className="mb-4 select-none border-b border-border/50 pb-3 text-[11px] leading-relaxed text-muted-foreground/70" data-testid="transcript-edit-hint">
             Drag across words to select · Delete cuts them from the video · Ctrl+Z undoes · Double-click a word to fix its spelling (video unchanged) · <span className="underline decoration-amber-500/80 decoration-wavy underline-offset-2">wavy</span> = filler word
           </p>
@@ -1479,7 +1482,7 @@ export function TranscriptPanel({
           }
           return (
             <div key={`${block.spk}-${bi}`}>
-              <div className="mt-5 mb-1 flex items-center gap-1.5 first:mt-0">
+              <div className={cn("mb-1 flex items-center gap-1.5 first:mt-0", documentView ? "mt-2" : "mt-5")}>
                 {renamingSpk === `${block.spk}-${bi}` && onSetEdits ? (
                   <Input
                     autoFocus
