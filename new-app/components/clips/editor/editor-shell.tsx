@@ -170,8 +170,7 @@ import { PreviewChipRow, previewChipButtonClass } from '@/components/clips/edito
 import { PreviewTransportStrip } from '@/components/clips/editor/preview-transport-strip'
 import { EditorProjectMenu } from '@/components/clips/editor/editor-project-menu'
 import {
-  ScriptViewToolDrawer,
-  ScriptViewToolRail,
+  ScriptViewToolTabs,
   SCRIPT_VIEW_TOOL_PANELS,
   type ScriptViewToolPanelId,
 } from '@/components/clips/editor/script-view-tool-rail'
@@ -413,9 +412,10 @@ export function EditorShell({
   )
   const { transcriptPct: scriptSplitPct, persist: persistScriptSplit } = useScriptViewSplit()
   const selectPanel = useCallback((id: EditorPanelId) => {
-    // TIMELINE_LAYOUT3: Timeline view (lg+) shows Properties permanently in its own right card.
-    if (id === 'inspector' && layoutView === 'timeline' && band !== 'mobile') return
     setPanel(id)
+    if (layoutView === 'script' && SCRIPT_VIEW_TOOL_PANELS.some((tool) => tool.id === id)) {
+      setScriptToolPanel(id as ScriptViewToolPanelId)
+    }
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
     if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
@@ -423,19 +423,6 @@ export function EditorShell({
       setMobilePanelOpen(true)
     }
   }, [band, layoutView, setDockPanelOpenPersist])
-  const toggleScriptTool = useCallback(
-    (id: ScriptViewToolPanelId) => {
-      setScriptToolPanel((prev) => {
-        const next = prev === id ? null : id
-        if (next) {
-          setVisitedPanels((v) => (v.has(next) ? v : new Set([...v, next])))
-          selectPanel(next)
-        }
-        return next
-      })
-    },
-    [selectPanel],
-  )
   const selectRailGroup = useCallback(
     (groupId: EditorRailGroupId) => {
       const group = editorRailGroups(clipEditorAiExtrasEnabled()).find((g) => g.id === groupId)
@@ -445,11 +432,6 @@ export function EditorShell({
     },
     [selectPanel],
   )
-  useEffect(() => {
-    if (band === 'wide' && panel === 'inspector' && layoutView !== 'timeline') {
-      setPanel('transcript')
-    }
-  }, [band, panel, layoutView])
   const openLayersTab = useCallback(() => selectPanel('layers'), [selectPanel])
 
   // G4cfix2: every B2 medium on the editor route in CORS mode (+ recovery of pre-hydration failures).
@@ -1412,9 +1394,13 @@ export function EditorShell({
       })
       if (target?.startsWith('text:')) setSelectedTextId(target.slice(5))
       // Text panel open + a text item clicked: stay there (it follows the selection); else Properties.
-      if (target && !(panel === 'text' && target.startsWith('text:'))) setPanel('inspector')
+      if (target && !(panel === 'text' && target.startsWith('text:'))) {
+        setPanel('inspector')
+        if (layoutView === 'script') setScriptToolPanel('inspector')
+        if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
+      }
     },
-    [edits.textItems, outputMs, panel],
+    [edits.textItems, outputMs, panel, layoutView, band, setDockPanelOpenPersist],
   )
   const onCanvasCommit = useCallback(
     (next: ClipEditsV2, pushHistory: boolean) => setEdits(next, pushHistory),
@@ -2172,9 +2158,11 @@ export function EditorShell({
     const on = (id: EditorPanelId) => (scope != null ? scope === id : panel === id)
     return (
     <>
-      <div className={on('transcript') ? undefined : 'hidden'} aria-hidden={!on('transcript')}>
-        {renderTranscriptPanel({ compactToolbar: true })}
-      </div>
+      {scope == null || scope === 'transcript' ? (
+        <div className={on('transcript') ? undefined : 'hidden'} aria-hidden={!on('transcript')}>
+          {renderTranscriptPanel({ compactToolbar: true })}
+        </div>
+      ) : null}
       <div className={on('cleanup') ? undefined : 'hidden'} aria-hidden={!on('cleanup')}>
         <EditorPanelErrorBoundary label="Cleanup">
           <CleanupPanel
@@ -2573,7 +2561,8 @@ export function EditorShell({
     </>
   )
   }
-  const panelBody = renderSidePanels(null)
+  // Script tools are owned by ScriptViewMainSplit; never construct the legacy panel tree there.
+  const panelBody = layoutView === 'script' ? null : renderSidePanels(null)
 
   const previewColumnContent = (
       <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden px-2 pb-1 pt-2">
@@ -3516,9 +3505,10 @@ export function EditorShell({
                       'flex h-10 min-w-[2.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-[0.625rem] leading-none text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-4',
                       dockPanelOpen && panel === 'inspector' && 'bg-accent text-foreground',
                     )}
-                    onClick={() =>
-                      document.querySelector<HTMLElement>('[data-region="properties"]')?.scrollIntoView({ block: 'nearest' })
-                    }
+                    onClick={() => {
+                      if (dockPanelOpen && panel === 'inspector') setDockPanelOpenPersist(false)
+                      else selectPanel('inspector')
+                    }}
                     aria-label="Properties"
                     aria-pressed={dockPanelOpen && panel === 'inspector'}
                     data-testid="timeline-dock-properties"
@@ -3594,25 +3584,32 @@ export function EditorShell({
             layoutView === 'script' ? (
               <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                 <ScriptViewMainSplit
-                  transcriptPct={scriptToolPanel != null ? Math.min(scriptSplitPct, 30) : scriptSplitPct}
+                  transcriptPct={scriptSplitPct}
                   onTranscriptPctChange={persistScriptSplit}
                   className="flex-1"
                   transcript={
-                    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-2">
-                      {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+                    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+                      <ScriptViewToolTabs
+                        active={scriptToolPanel}
+                        onSelect={(id) => {
+                          selectPanel(id)
+                          setScriptToolPanel(id)
+                        }}
+                        onShowScript={() => {
+                          setScriptToolPanel(null)
+                          setPanel('transcript')
+                        }}
+                      />
+                      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-2" data-testid="script-workspace-content">
+                        {scriptToolPanel == null
+                          ? renderTranscriptPanel({ largeScript: true, compactToolbar: true })
+                          : renderSidePanels(scriptToolPanel)}
+                      </div>
                     </div>
                   }
                   preview={
                     <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden" data-testid="script-view-preview-stack">
-                      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{previewColumnContent}</div>
-                      <ScriptViewToolDrawer
-                        open={scriptToolPanel != null}
-                        title={SCRIPT_VIEW_TOOL_PANELS.find((p) => p.id === scriptToolPanel)?.label ?? 'Panel'}
-                        onClose={() => setScriptToolPanel(null)}
-                      >
-                        {scriptToolPanel ? renderSidePanels(scriptToolPanel) : null}
-                      </ScriptViewToolDrawer>
-                      <ScriptViewToolRail active={scriptToolPanel} onToggle={toggleScriptTool} />
+                      {previewColumnContent}
                     </div>
                   }
                 />
@@ -3622,7 +3619,7 @@ export function EditorShell({
             )
           }
           properties={
-            dockTools || (!compact && band === 'wide') ? (
+            !dockTools && !compact && band === 'wide' && layoutView !== 'script' ? (
               <>
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
                   <h2 className="text-sm font-semibold">Properties</h2>

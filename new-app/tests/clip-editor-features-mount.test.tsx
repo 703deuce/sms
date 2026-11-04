@@ -138,6 +138,13 @@ function clickRail(label: string, ui: ReturnType<typeof render>) {
   fireEvent.click(within(rail).getByRole('button', { name: label }))
 }
 
+// Cleanup is a Script workspace tool, not a standalone EditorRail group.
+function openScriptCleanup(ui: ReturnType<typeof render>) {
+  fireEvent.click(ui.getByTestId('editor-layout-view-script'))
+  const tabs = ui.getByTestId('script-view-tool-tabs')
+  fireEvent.click(within(tabs).getByRole('button', { name: 'Clean up' }))
+}
+
 describe('clip editor feature mounts (EditorShell)', () => {
   afterEach(() => {
     cleanup()
@@ -146,7 +153,7 @@ describe('clip editor feature mounts (EditorShell)', () => {
 
   it('Cleanup: clarity flow opens from Edit for clarity', async () => {
     const ui = renderShell(loadFixture('regular.json'))
-    clickRail('Cleanup', ui)
+    openScriptCleanup(ui)
     fireEvent.click(ui.getByTestId('clarity-run'))
     await waitFor(() => expect(clipsFetch).toHaveBeenCalledWith('/api/clips/clips/clip_mount/clarity', expect.any(Object)))
     await waitFor(() => expect(ui.getByTestId('clarity-apply-all')).toBeTruthy())
@@ -155,8 +162,24 @@ describe('clip editor feature mounts (EditorShell)', () => {
 
   it('Cleanup: Remove retakes control is visible', () => {
     const ui = renderShell(loadFixture('regular.json'))
-    clickRail('Cleanup', ui)
+    openScriptCleanup(ui)
     expect(ui.getByTestId('retake-run')).toBeTruthy()
+  })
+
+  it('mounts each Script tool once, including after switching tools', () => {
+    const ui = renderShell(loadFixture('regular.json'))
+    openScriptCleanup(ui)
+    expect(ui.getAllByTestId('clarity-run')).toHaveLength(1)
+    expect(ui.getAllByTestId('retake-run')).toHaveLength(1)
+    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
+
+    fireEvent.click(ui.getByTestId('script-tool-text'))
+    expect(ui.getAllByTestId('editor-panel-text')).toHaveLength(1)
+    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
+
+    fireEvent.click(ui.getByTestId('script-tool-audio'))
+    expect(ui.getAllByTestId('audio-music-sfx-mix')).toHaveLength(1)
+    expect(ui.getByTestId('editor-grid').querySelectorAll('[data-region="panel"]')).toHaveLength(0)
   })
 
   it('Text: voiceover preview control on selected text item', async () => {
