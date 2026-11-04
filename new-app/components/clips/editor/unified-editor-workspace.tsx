@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
-import { ChevronsDownUp, ChevronsUpDown, GripHorizontal, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { GripHorizontal, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type TimelineDisplay = 'compact' | 'expanded' | 'focus'
@@ -46,7 +46,8 @@ export function UnifiedEditorWorkspace({
 
   useEffect(() => {
     try {
-      setInspectorOpen(localStorage.getItem(INSPECTOR_OPEN_KEY) !== 'false')
+      const savedInspector = localStorage.getItem(INSPECTOR_OPEN_KEY)
+      setInspectorOpen(savedInspector == null ? window.innerWidth >= 1280 : savedInspector !== 'false')
       const stored = Number(localStorage.getItem(TIMELINE_HEIGHT_KEY))
       if (Number.isFinite(stored) && stored >= 35 && stored <= 78) setTimelinePct(stored)
     } catch {
@@ -75,13 +76,13 @@ export function UnifiedEditorWorkspace({
     }
   }, [onTimelineViewChange])
 
-  const startTimelineResize = (event: PointerEvent<HTMLButtonElement>) => {
+  const startTimelineResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (timelineView === 'script' || focus) return
     event.preventDefault()
     const height = workspaceRef.current?.getBoundingClientRect().height ?? 0
     if (!height) return
     timelineDrag.current = { startY: event.clientY, startPct: timelinePct, height }
-    const onMove = (e: globalThis.PointerEvent) => {
+    const onMove = (e: PointerEvent) => {
       const drag = timelineDrag.current
       if (drag) persistTimelinePct(drag.startPct + ((drag.startY - e.clientY) / drag.height) * 100)
     }
@@ -94,10 +95,10 @@ export function UnifiedEditorWorkspace({
     window.addEventListener('pointerup', onUp)
   }
 
-  const startInspectorResize = (event: PointerEvent<HTMLButtonElement>) => {
+  const startInspectorResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault()
     inspectorDrag.current = { startX: event.clientX, startWidth: inspectorWidthPx }
-    const onMove = (e: globalThis.PointerEvent) => {
+    const onMove = (e: PointerEvent) => {
       const drag = inspectorDrag.current
       if (drag) onInspectorWidthChange(drag.startWidth + drag.startX - e.clientX)
     }
