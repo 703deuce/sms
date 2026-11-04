@@ -24,6 +24,17 @@ describe('E8 caption size preview/export parity', () => {
     expect(large.fontsize).toBeGreaterThan(small.fontsize * 3)
   })
 
+  it('scales the original bold preset at Top in the export renderer as well', () => {
+    const small = { presetId: 'bold_pop', position: 'top', size: 3 }
+    const large = { presetId: 'bold_pop', position: 'top', size: 10 }
+    const assSmall = buildCaptionsAss(words, small, 720, 1280)
+    const assLarge = buildCaptionsAss(words, large, 720, 1280)
+    const styleSize = (ass: string) => Number(ass.split('\\n').find((line) => line.startsWith('Style: Cap,'))!.split(',')[2])
+    expect(styleSize(assLarge)).toBeGreaterThan(styleSize(assSmall) * 3)
+    expect(assSmall).toContain('Style: Cap,')
+    expect(assLarge).toContain('Style: Cap,')
+  })
+
   it('retains the CP slider override through normalization and ASS export', () => {
     const small = normalizeEdits({ captions: { presetId: 'cp1', size: 6.5, userSizePct: 3, position: 'top' } }, bounds)
     const large = normalizeEdits({ captions: { presetId: 'cp1', size: 6.5, userSizePct: 10, position: 'top' } }, bounds)
