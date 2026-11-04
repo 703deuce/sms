@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 const LS_KEY = 'transovo.editor.panelWidthPx.v2'
-const DEFAULT_PX = 320
+const DEFAULT_PX = 328
 const MIN_PX = 280
 
 export function readEditorPanelWidthPx(): number {
