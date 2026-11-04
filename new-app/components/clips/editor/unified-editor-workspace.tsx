@@ -129,7 +129,7 @@ export function UnifiedEditorWorkspace({
   const gridRows = focus
     ? 'minmax(0,1fr)'
     : timelineHidden ? 'minmax(0,1fr) 0px 32px'
-    : timelineCollapsed && timelineView === 'timeline' ? 'minmax(0,1fr) 9px 76px'
+    : timelineCollapsed && timelineView === 'timeline' ? 'minmax(0,1fr) 9px 112px'
     : timelineView === 'script'
       ? 'minmax(0,1fr) 9px 150px'
       : `minmax(0,${100 - timelinePct}fr) 9px minmax(0,${timelinePct}fr)`
