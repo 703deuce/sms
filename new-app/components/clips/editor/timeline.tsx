@@ -503,6 +503,8 @@ export function Timeline({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [viewportPx, setViewportPx] = useState(0)
   const [pxPerSec, setPxPerSec] = useState<number | null>(null)
+  // Keep the source extent visible after a trim, so users can extend back to the original end.
+  const [trimScaleFloorMs, setTrimScaleFloorMs] = useState<number | null>(null)
   const pendingScrollRef = useRef<number | null>(null)
   const trackViewportPx = Math.max(0, viewportPx - TRACK_EXTRA_PX)
   // FV2: long media can zoom out until the whole hour fits; clips keep the 4 px/s floor.
@@ -510,13 +512,14 @@ export function Timeline({
   // length on the lane and push later items right. Edits stay in base time; identity without inserts.
   const tmap = useMemo(() => exportTimeMap(tb.segs, edits.inserts), [tb.segs, edits.inserts])
   const dspan = span + tmap.totalMs
-  const minPx = timelineMinPxPerSec(dspan, trackViewportPx)
+  const rulerSpanMs = Math.max(dspan, trimScaleFloorMs ?? 0)
+  const minPx = timelineMinPxPerSec(rulerSpanMs, trackViewportPx)
   const minPxRef = useRef(minPx)
   minPxRef.current = minPx
   const longMedia = dspan > LONG_MEDIA_MS
   const effectivePxPerSec = pxPerSec ?? (longMedia ? minPx : TIMELINE_DEFAULT_PX_PER_SEC)
-  const widthPx = trackWidthPx(dspan, effectivePxPerSec, trackViewportPx, minPx)
-  const pxPerMs = widthPx / dspan
+  const widthPx = trackWidthPx(rulerSpanMs, effectivePxPerSec, trackViewportPx, minPx)
+  const pxPerMs = widthPx / rulerSpanMs
   const highlightLaneRanges = useMemo(
     () => (highlights ? picksToLaneRanges(highlights.picks, highlights.ranges, tb) : []),
     [highlights, tb],
@@ -576,7 +579,7 @@ export function Timeline({
     (nextPxPerSec: number, anchorX?: number) => {
       const el = scrollRef.current
       const prevW = widthRef.current
-      const nextW = trackWidthPx(dspan, nextPxPerSec, trackViewportPx, minPxRef.current)
+      const nextW = trackWidthPx(rulerSpanMs, nextPxPerSec, trackViewportPx, minPxRef.current)
       if (el) {
         const playheadAnchor = TRACK_OFFSET_PX + playheadPxRef.current - el.scrollLeft
         const anchor =
@@ -594,7 +597,7 @@ export function Timeline({
       }
       setPxPerSec(nextPxPerSec)
     },
-    [dspan, trackViewportPx],
+    [rulerSpanMs, trackViewportPx],
   )
 
   useLayoutEffect(() => {
@@ -608,7 +611,8 @@ export function Timeline({
   const zoomOut = () => applyZoom(zoomBy(effectivePxPerSec, 'out', undefined, minPx))
   const zoomFit = () => {
     pendingScrollRef.current = 0
-    setPxPerSec(fitPxPerSec(dspan, trackViewportPx, minPx))
+    setTrimScaleFloorMs(null)
+    setPxPerSec(fitPxPerSec(dspan, trackViewportPx, timelineMinPxPerSec(dspan, trackViewportPx)))
   }
   const zoomDefault = () => applyZoom(TIMELINE_DEFAULT_PX_PER_SEC)
 
@@ -2282,6 +2286,7 @@ export function Timeline({
 
   const startDrag = (e: React.PointerEvent, item: TimelineItem, mode: DragState['mode']) => {
     if (e.button !== 0) return
+    if (item.lane === 'video' && (mode === 'start' || mode === 'end')) setTrimScaleFloorMs((prev) => Math.max(prev ?? 0, dspan))
     // TC2b: the Hand tool scrolls from anywhere (the track area handles it).
     if (tool === 'hand') return
     e.stopPropagation()
@@ -3036,7 +3041,7 @@ export function Timeline({
         {editable && !st.locked && item.caps.trimStart ? (
           <span
             className={`absolute inset-y-0 left-0 z-30 rounded-l-[3px] border-l-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
-              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-2.5 cursor-ew-resize'
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-3 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-start"
             title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'J-cut: Alt-drag to offset audio from picture' : undefined}
@@ -3046,7 +3051,7 @@ export function Timeline({
         {editable && !st.locked && item.caps.trimEnd ? (
           <span
             className={`absolute inset-y-0 right-0 z-30 rounded-r-[3px] border-r-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
-              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-2.5 cursor-ew-resize'
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-3 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-end"
             title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'L-cut: Alt-drag to offset audio from picture' : undefined}
