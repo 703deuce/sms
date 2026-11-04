@@ -390,12 +390,12 @@ export function EditorShell({
     setLayoutView(readClipEditorLayoutView())
   }, [])
   useEffect(() => {
-    if (layoutView !== 'timeline' || band === 'mobile') return
+    if (unifiedWorkspaceActive || layoutView !== 'timeline' || band === 'mobile') return
     const storage = typeof window === 'undefined' ? null : window.localStorage
     const open = readTimelineDockPanelOpen(storage)
     setDockPanelOpen(open)
     if (open) setPanel((p) => (p === 'inspector' ? 'media' : p))
-  }, [layoutView, band])
+  }, [layoutView, band, unifiedWorkspaceActive])
   const setLayoutViewPersist = useCallback(
     (view: ClipEditorLayoutView) => {
       setLayoutView(view)
