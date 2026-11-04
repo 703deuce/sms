@@ -169,6 +169,7 @@ export function UnifiedEditorWorkspace({
           )
         : null}
     <div className={cn('flex h-full min-h-0 min-w-0 flex-col gap-1 overflow-hidden bg-background p-1', className)} data-testid="unified-editor-workspace">
+      {!topBarHost ? <div data-testid="unified-mode-fallback" className="sr-only">{modeButtons}{inspectorButton}</div> : null}
       <div
         className="grid min-h-0 min-w-0 flex-1 gap-0 overflow-hidden"
         style={{ gridTemplateColumns: inspectorOpen ? `minmax(0,1fr) 7px ${inspectorWidthPx}px` : 'minmax(0,1fr)' }}
@@ -190,7 +191,7 @@ export function UnifiedEditorWorkspace({
           </section>
           {!focus ? (
             <div className="flex min-h-0 items-center justify-center border-y border-border/50 bg-background" data-testid="unified-workspace-toolbar">
-              {!topBarHost ? <div className="sr-only">{modeButtons}{inspectorButton}</div> : null}
+
               <button
                 type="button"
                 aria-label="Resize timeline height"
