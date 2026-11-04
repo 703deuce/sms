@@ -354,6 +354,7 @@ export function EditorShell({
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const band = useEditorBand()
+  const unifiedWorkspaceActive = band !== 'mobile'
   // FIX2 R7: read localStorage after mount (no SSR/hydration mismatch)
   const [timelineOpen, setTimelineOpen] = useState(false)
   useEffect(() => {
@@ -366,10 +367,9 @@ export function EditorShell({
       return next
     })
   }, [])
-  const timelineVisible = !compact || timelineOpen
+  const timelineVisible = unifiedWorkspaceActive || !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
-  const unifiedWorkspaceActive = band !== 'mobile'
   const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
   // TIMELINE_LAYOUT1: Timeline view (lg+) uses the Script-view layout: rail + docked panel on the right.
   const [dockPanelOpen, setDockPanelOpen] = useState(false)
