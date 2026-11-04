@@ -133,6 +133,17 @@ describe('G1a canvas selection', () => {
     expect(s.queryByTestId('canvas-text-editor')).toBeNull()
   })
 
+  it('N1: double-click opens inline editor on a transparent libass text hit shell', () => {
+    const s = stage(textEdits())
+    const shell = s.box.querySelector<HTMLElement>('[style*="transform-origin: 50% 25%"]')!
+    shell.style.visibility = 'visible'
+    shell.style.opacity = '0'
+    fireEvent.doubleClick(s.box, { clientX: 100, clientY: 100 })
+    const textarea = s.getByTestId('canvas-text-editor') as HTMLTextAreaElement
+    expect(textarea.value).toBe('Hello')
+    expect(s.onSelect).toHaveBeenLastCalledWith('text:t1')
+  })
+
   it('crop mode: edge bars write cropL…cropB on the video', async () => {
     const s = stage(base(), { selected: 'video', cropMode: true })
     await act(async () => {
