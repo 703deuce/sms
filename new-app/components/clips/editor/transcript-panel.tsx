@@ -1360,7 +1360,7 @@ export function TranscriptPanel({
       >
         <div
           className={cn(
-            largeScript && 'mx-auto w-full max-w-[70ch] px-3 py-2 text-[15px] leading-[1.7] sm:px-4 sm:text-[16px]',
+            largeScript && 'mx-auto w-full max-w-[70ch] px-3 py-2 text-[16px] leading-[1.8] sm:px-4 sm:text-[17px]',
           )}
         >
         {visible.length && !documentView ? (
