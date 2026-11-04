@@ -36,10 +36,10 @@ export function TextItemsPreview({
   libassTextFx?: boolean
 }) {
   // G1a: DOM order = stacking order (export: text_items.py events / layers in the same order).
-  const items = orderedStack(edits, 'text', edits.textItems ?? []).filter((it) => {
-    if (!libassTextFx || !textItemHasFx(edits, it.id)) return true
-    return it.id === selectedId || it.id === canvasSelectedId
-  })
+  // N1: keep an invisible DOM hit-test geometry shell for *every* text item.
+  // Libass paints the visible glyphs; discarding unselected DOM shells made
+  // double-click unable to find a text item until it was selected elsewhere.
+  const items = orderedStack(edits, 'text', edits.textItems ?? [])
   if (!items.length || boxH <= 0) return null
   return (
     <>
