@@ -22,6 +22,8 @@ function mount(timelineView: 'script' | 'timeline' = 'timeline') {
       onInspectorWidthChange={onInspectorWidthChange}
     />,
   )
+  // On narrow test viewports the Inspector deliberately starts closed.
+  if (!ui.queryByTestId('shared-editor-tools')) fireEvent.click(ui.getByTestId('unified-inspector-toggle'))
   return { ...ui, onTimelineViewChange, onInspectorWidthChange }
 }
 
