@@ -1,15 +1,9 @@
 'use client'
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Captions, Eraser, FileText, FolderOpen, Image as ImageIcon, Languages, LayoutPanelTop, Layers, LayoutTemplate, Megaphone, MoreHorizontal, Music2, Palette, SlidersHorizontal, Sparkles, SwatchBook, Type, Clapperboard } from 'lucide-react'
+import { Captions, Eraser, FileText, FolderOpen, Image as ImageIcon, Languages, LayoutPanelTop, Layers, LayoutTemplate, Megaphone, Music2, Palette, SlidersHorizontal, Sparkles, SwatchBook, Type, Clapperboard } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import {
@@ -19,11 +13,6 @@ import {
   readRailGroupTab,
   type EditorRailGroupId,
 } from '@/lib/clips/editor/editor-rail-navigation'
-import {
-  buildEditorDockTabEntries,
-  type EditorDockLeadingTab,
-  type EditorDockTabEntry,
-} from '@/lib/clips/editor/editor-dock-tabs'
 
 export type EditorPanelId =
   | 'producer'
@@ -93,22 +82,12 @@ export function editorRailIcon(id: EditorPanelId) {
   return itemById.get(id)?.icon ?? FileText
 }
 
-const DOCK_TAB_PX = 78
-const DOCK_TAB_COMPACT_PX = 44
-const DOCK_MORE_PX = 52
-
 export function EditorRail({
   active,
   onChange,
   onSelectGroup,
   variant = 'vertical',
   hiddenIds = [],
-  /** Script tab (or other) before rail groups — included in dock strip fit. */
-  leadingTabs = [],
-  /** 8th tab: Properties (fit + overflow). */
-  includePropertiesTab = false,
-  /** Timeline view: focus right Properties column instead of opening inspector panel. */
-  onPropertiesTab,
 }: {
   active: EditorPanelId
   onChange: (id: EditorPanelId) => void
@@ -116,9 +95,6 @@ export function EditorRail({
   onSelectGroup?: (groupId: EditorRailGroupId) => void
   variant?: 'vertical' | 'horizontal' | 'tabs'
   hiddenIds?: string[]
-  leadingTabs?: EditorDockLeadingTab[]
-  includePropertiesTab?: boolean
-  onPropertiesTab?: () => void
 }) {
   const navRef = useRef<HTMLElement>(null)
   const horizontal = variant === 'horizontal'
@@ -129,49 +105,6 @@ export function EditorRail({
   const activeGroupId = panelToRailGroup(active)?.id ?? null
 
   const visibleGroups = useMemo(() => groups.filter((g) => g.tabs.some((t) => !hidden.has(t.id))), [groups, hidden])
-
-  const dockEntries = useMemo(
-    () =>
-      tabs
-        ? buildEditorDockTabEntries({
-            leading: leadingTabs,
-            includeProperties: includePropertiesTab,
-            hiddenPanelIds: hidden,
-          })
-        : [],
-    [tabs, leadingTabs, includePropertiesTab, hidden],
-  )
-
-  const stripOuterRef = useRef<HTMLDivElement>(null)
-  const [inlineTabCount, setInlineTabCount] = useState(() => dockEntries.length)
-  const [compactTabs, setCompactTabs] = useState(false)
-
-  useLayoutEffect(() => {
-    if (!tabs) return
-    const el = stripOuterRef.current
-    if (!el) return
-    const measure = () => {
-      const w = el.clientWidth
-      if (w <= 0 || dockEntries.length === 0) return
-      const compact = w / dockEntries.length < 68
-      const tabPx = compact ? DOCK_TAB_COMPACT_PX : DOCK_TAB_PX
-      setCompactTabs(compact)
-      const allFit = dockEntries.length * tabPx <= w
-      if (allFit) {
-        setInlineTabCount(dockEntries.length)
-        return
-      }
-      const withMore = Math.max(1, Math.floor((w - DOCK_MORE_PX) / tabPx))
-      setInlineTabCount(Math.min(withMore, dockEntries.length))
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [tabs, dockEntries.length])
-
-  const inlineEntries = tabs ? dockEntries.slice(0, inlineTabCount) : []
-  const overflowEntries = tabs ? dockEntries.slice(inlineTabCount) : []
 
   const pickGroup = useCallback(
     (groupId: EditorRailGroupId) => {
@@ -204,68 +137,6 @@ export function EditorRail({
     },
     [activeGroupId, horizontal, pickGroup, visibleGroups],
   )
-
-  const inlineGroups = tabs ? visibleGroups : visibleGroups
-  const overflowGroups = tabs ? [] : []
-
-  const entryActive = (entry: EditorDockTabEntry) => {
-    if (entry.kind === 'leading' || entry.kind === 'properties') return active === entry.panelId
-    return activeGroupId === entry.groupId
-  }
-
-  const overflowActive = overflowEntries.some((e) => entryActive(e))
-
-  const activateEntry = (entry: EditorDockTabEntry) => {
-    if (entry.kind === 'leading') {
-      onChange(entry.panelId)
-      return
-    }
-    if (entry.kind === 'properties') {
-      if (onPropertiesTab) onPropertiesTab()
-      else onChange(entry.panelId)
-      return
-    }
-    pickGroup(entry.groupId)
-  }
-
-  const renderDockTabButton = (entry: EditorDockTabEntry) => {
-    const isActive = entryActive(entry)
-    const Icon = entry.icon
-    const btn = (
-      <button
-        type="button"
-        aria-label={entry.label}
-        aria-current={isActive ? 'page' : undefined}
-        tabIndex={0}
-        data-testid={
-          entry.kind === 'group'
-            ? `editor-rail-group-${entry.groupId}`
-            : entry.kind === 'properties'
-              ? 'timeline-dock-properties'
-              : `editor-rail-leading-${entry.panelId}`
-        }
-        onClick={() => activateEntry(entry)}
-        className={cn(
-          'relative flex h-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          compactTabs ? 'w-11' : 'w-[4.875rem]',
-          isActive && 'bg-accent text-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary',
-        )}
-      >
-        <Icon className="size-[1.125rem]" aria-hidden />
-        {!compactTabs ? (
-          <span className="max-w-full truncate text-[0.6875rem] font-medium leading-none">{entry.label}</span>
-        ) : null}
-      </button>
-    )
-    return compactTabs ? (
-      <Tooltip>
-        <TooltipTrigger render={btn} />
-        <TooltipContent side="bottom">{entry.label}</TooltipContent>
-      </Tooltip>
-    ) : (
-      btn
-    )
-  }
 
   const renderGroupButton = (group: (typeof groups)[number], vertical: boolean) => {
     const isActive = activeGroupId === group.id
@@ -307,67 +178,7 @@ export function EditorRail({
     )
   }
 
-  if (tabs) {
-    return (
-      <div ref={stripOuterRef} className="flex min-w-0 flex-1 items-stretch gap-0" data-testid="editor-dock-tab-strip">
-        <div className="flex min-w-0 flex-1 overflow-hidden">
-          <nav
-            ref={navRef}
-            data-testid="editor-rail"
-            aria-label="Editor tools"
-            className="flex min-w-0 flex-1 flex-row flex-nowrap items-stretch overflow-hidden"
-          >
-            {inlineEntries.map((entry) => (
-              <div key={entry.kind === 'group' ? entry.groupId : entry.panelId} className="flex shrink-0">
-                {renderDockTabButton(entry)}
-              </div>
-            ))}
-          </nav>
-        </div>
-        {overflowEntries.length > 0 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <button
-                  type="button"
-                  className={cn(
-                    'relative flex h-11 w-[3.25rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-muted-foreground hover:bg-accent hover:text-foreground',
-                    overflowActive && 'bg-accent text-foreground',
-                  )}
-                  data-testid="editor-rail-more-tabs"
-                  aria-label="More tools"
-                >
-                  <MoreHorizontal className="size-[1.125rem]" aria-hidden />
-                  <span className="text-[0.6875rem] font-medium leading-none">More</span>
-                </button>
-              }
-            />
-            <DropdownMenuContent align="end" className="min-w-40">
-              {overflowEntries.map((entry) => (
-                <DropdownMenuItem
-                  key={entry.kind === 'group' ? entry.groupId : entry.panelId}
-                  data-testid={
-                    entry.kind === 'group'
-                      ? `editor-rail-group-${entry.groupId}`
-                      : entry.kind === 'properties'
-                        ? 'timeline-dock-properties'
-                        : `editor-rail-leading-${entry.panelId}`
-                  }
-                  onClick={() => activateEntry(entry)}
-                  className={entryActive(entry) ? 'bg-accent' : undefined}
-                >
-                  {entry.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-      </div>
-    )
-  }
-
   return (
-    <div className={cn(tabs && 'flex min-w-0 flex-1 items-stretch overflow-hidden')}>
     <nav
       ref={navRef}
       data-testid="editor-rail"
@@ -375,19 +186,18 @@ export function EditorRail({
       onKeyDown={onKeyDown}
       className={cn(
         tabs
-          ? 'flex min-w-0 flex-row flex-nowrap items-stretch gap-0 overflow-hidden'
+          ? 'flex min-w-0 flex-row flex-nowrap items-stretch gap-0 overflow-x-auto [scrollbar-width:none]'
           : horizontal
           ? 'flex flex-row gap-1'
           : 'hidden h-full w-16 shrink-0 flex-col items-center gap-0.5 overflow-y-auto rounded-lg border border-border bg-card py-2 [scrollbar-width:thin] lg:flex',
       )}
     >
-      {inlineGroups.map((group, gi) => (
-        <div key={group.id} className="flex w-full flex-col items-center gap-0.5">
-          {gi > 0 && !horizontal ? <div className="my-1 h-px w-8 bg-border" aria-hidden /> : null}
+      {visibleGroups.map((group, gi) => (
+        <div key={group.id} className={tabs ? 'flex shrink-0' : 'flex w-full flex-col items-center gap-0.5'}>
+          {gi > 0 && !horizontal && !tabs ? <div className="my-1 h-px w-8 bg-border" aria-hidden /> : null}
           {renderGroupButton(group, !horizontal)}
         </div>
       ))}
     </nav>
-    </div>
   )
 }
