@@ -3140,8 +3140,12 @@ export function EditorShell({
               id: 'find-replace',
               label: 'Find & replace in script',
               onSelect: () => {
-                if (layoutView !== 'script') selectPanel('transcript')
-                scrollToTestId('transcript-find-replace')
+                if (unifiedWorkspaceActive) {
+                  window.dispatchEvent(new Event('transovo:find-transcript'))
+                } else {
+                  if (layoutView !== 'script') selectPanel('transcript')
+                  scrollToTestId('transcript-find-replace')
+                }
               },
             },
             { id: 'marker', label: 'Add / remove marker', shortcut: 'M', onSelect: () => runPalette('marker') },
