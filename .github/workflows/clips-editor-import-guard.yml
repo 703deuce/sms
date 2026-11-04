@@ -39,5 +39,5 @@ jobs:
       - run: pnpm run verify:clip-editor-feature-parity
       - run: pnpm run verify:editor-shell-hook-order
       - run: pnpm run verify:clips-editor-eslint
-      - run: pnpm exec vitest run tests/editor-shell-use-editor-words.test.ts tests/editor-shell-render.test.tsx tests/editor-shell-ssr.test.tsx tests/clip-editor-features-mount.test.tsx tests/editor-layout-repair.test.tsx tests/unified-editor-workspace.test.tsx tests/editor-density-defaults.test.ts tests/text-template-panel-add.test.tsx tests/editor-words-merge.test.ts tests/caption-overlay-preview.test.tsx tests/clip-timeline.test.ts tests/audio-panel-fades.test.tsx
+      - run: pnpm exec vitest run tests/editor-shell-use-editor-words.test.ts tests/editor-shell-render.test.tsx tests/editor-shell-ssr.test.tsx tests/clip-editor-features-mount.test.tsx tests/editor-layout-repair.test.tsx tests/unified-editor-workspace.test.tsx tests/editor-density-defaults.test.ts tests/text-template-panel-add.test.tsx tests/editor-words-merge.test.ts tests/caption-overlay-preview.test.tsx tests/clip-timeline.test.ts tests/audio-panel-fades.test.tsx tests/layers-actual-stack.test.tsx
       - run: pnpm run typecheck:clips
