@@ -273,7 +273,7 @@ export function TranscriptPanel({
   }, [search])
 
   useEffect(() => {
-    if (!panelActive) return
+    if (!panelActive && !documentView) return
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault()
