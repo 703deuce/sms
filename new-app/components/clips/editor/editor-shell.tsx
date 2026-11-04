@@ -170,8 +170,7 @@ import { PreviewChipRow, previewChipButtonClass } from '@/components/clips/edito
 import { PreviewTransportStrip } from '@/components/clips/editor/preview-transport-strip'
 import { EditorProjectMenu } from '@/components/clips/editor/editor-project-menu'
 import {
-  ScriptViewToolDrawer,
-  ScriptViewToolRail,
+  ScriptViewToolTabs,
   SCRIPT_VIEW_TOOL_PANELS,
   type ScriptViewToolPanelId,
 } from '@/components/clips/editor/script-view-tool-rail'
@@ -414,6 +413,9 @@ export function EditorShell({
   const { transcriptPct: scriptSplitPct, persist: persistScriptSplit } = useScriptViewSplit()
   const selectPanel = useCallback((id: EditorPanelId) => {
     setPanel(id)
+    if (layoutView === 'script' && SCRIPT_VIEW_TOOL_PANELS.some((tool) => tool.id === id)) {
+      setScriptToolPanel(id as ScriptViewToolPanelId)
+    }
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
     if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
@@ -1412,6 +1414,7 @@ export function EditorShell({
       // Text panel open + a text item clicked: stay there (it follows the selection); else Properties.
       if (target && !(panel === 'text' && target.startsWith('text:'))) {
         setPanel('inspector')
+        if (layoutView === 'script') setScriptToolPanel('inspector')
         if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
       }
     },
@@ -3596,25 +3599,32 @@ export function EditorShell({
             layoutView === 'script' ? (
               <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                 <ScriptViewMainSplit
-                  transcriptPct={scriptToolPanel != null ? Math.min(scriptSplitPct, 30) : scriptSplitPct}
+                  transcriptPct={scriptSplitPct}
                   onTranscriptPctChange={persistScriptSplit}
                   className="flex-1"
                   transcript={
-                    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-2">
-                      {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+                    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+                      <ScriptViewToolTabs
+                        active={scriptToolPanel}
+                        onSelect={(id) => {
+                          selectPanel(id)
+                          setScriptToolPanel(id)
+                        }}
+                        onShowScript={() => {
+                          setScriptToolPanel(null)
+                          setPanel('transcript')
+                        }}
+                      />
+                      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-2" data-testid="script-workspace-content">
+                        {scriptToolPanel == null
+                          ? renderTranscriptPanel({ largeScript: true, compactToolbar: true })
+                          : renderSidePanels(scriptToolPanel)}
+                      </div>
                     </div>
                   }
                   preview={
                     <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden" data-testid="script-view-preview-stack">
-                      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{previewColumnContent}</div>
-                      <ScriptViewToolDrawer
-                        open={scriptToolPanel != null}
-                        title={SCRIPT_VIEW_TOOL_PANELS.find((p) => p.id === scriptToolPanel)?.label ?? 'Panel'}
-                        onClose={() => setScriptToolPanel(null)}
-                      >
-                        {scriptToolPanel ? renderSidePanels(scriptToolPanel) : null}
-                      </ScriptViewToolDrawer>
-                      <ScriptViewToolRail active={scriptToolPanel} onToggle={toggleScriptTool} />
+                      {previewColumnContent}
                     </div>
                   }
                 />
