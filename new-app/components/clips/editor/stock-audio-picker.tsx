@@ -88,7 +88,12 @@ export function StockAudioPicker({
       if (!uploadId) throw new Error('Attach failed')
       if (hit.kind === 'music') onMusicUploaded(uploadId)
       else onSfxUploaded(uploadId, playheadMs)
-      toast.success(`Added ${hit.title}`)
+      if (hit.kind === 'music') toast.success(`Added ${hit.title} to Music`)
+      else {
+        const secs = Math.max(0, Math.floor(playheadMs / 1000))
+        const time = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
+        toast.success(`Added to SFX at ${time}`, { description: hit.title })
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not add audio')
     } finally {
