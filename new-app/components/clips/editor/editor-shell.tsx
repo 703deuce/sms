@@ -717,6 +717,7 @@ export function EditorShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once on open
   }, [])
 
+  const [transcriptFindRequestSeq, setTranscriptFindRequestSeq] = useState(0)
   const [showSurrounding, setShowSurrounding] = useState(false)
   useEffect(() => {
     try {
@@ -2140,6 +2141,8 @@ export function EditorShell({
           compactToolbar={options.compactToolbar}
           largeScript={options.largeScript}
           documentView={options.documentView}
+          findRequestSeq={transcriptFindRequestSeq}
+          panelActive={Boolean(options.documentView || (layoutView === 'script' ? scriptToolPanel == null : panel === 'transcript'))}
           beatsAvailable={Boolean(beatCutApi?.hasBeats)}
           beatsAnalyzing={Boolean(beatCutApi?.analyzing)}
           beatCount={beatCutApi?.beatCount ?? 0}
@@ -3147,12 +3150,12 @@ export function EditorShell({
               id: 'find-replace',
               label: 'Find & replace in script',
               onSelect: () => {
-                if (unifiedWorkspaceActive) {
-                  window.dispatchEvent(new Event('transovo:find-transcript'))
-                } else {
-                  if (layoutView !== 'script') selectPanel('transcript')
-                  scrollToTestId('transcript-find-replace')
+                // A3: request focus through React so it survives opening a hidden or unmounted Script panel.
+                if (!unifiedWorkspaceActive) {
+                  if (layoutView === 'script') setScriptToolPanel(null)
+                  else selectPanel('transcript')
                 }
+                setTranscriptFindRequestSeq((seq) => seq + 1)
               },
             },
             { id: 'marker', label: 'Add / remove marker', shortcut: 'M', onSelect: () => runPalette('marker') },
