@@ -28,8 +28,9 @@ export function BgRemovalSection({
   const patch = (p: Partial<BgRemoval>) => set({ ...(cur ?? BG_DEFAULT), ...p, enabled: true })
   const bg = cur?.background
   const [renderStatus, setRenderStatus] = useState<'idle' | 'queued' | 'rendering'>('idle')
+  const [mattePreview, setMattePreview] = useState<{ state: string; url: string | null }>({ state: 'idle', url: null })
   useEffect(() => {
-    if (!enabled || !clipId) { setRenderStatus('idle'); return }
+    if (!enabled || !clipId) { setRenderStatus('idle'); setMattePreview({ state: 'idle', url: null }); return }
     let gone = false
     const check = async () => {
       try {
@@ -40,11 +41,20 @@ export function BgRemovalSection({
         const status = payload.data?.render?.status
         setRenderStatus(status === 'RENDERING' ? 'rendering' : status === 'QUEUED' ? 'queued' : 'idle')
       } catch { /* Status is advisory; export handling owns failures and retries. */ }
+      try {
+        const url = `/api/clips/clips/${encodeURIComponent(clipId)}/bg-matte?quality=${cur?.quality === 'detail' ? 'detail' : 'standard'}`
+        const res = await fetch(url, { cache: 'no-store' })
+        if (!res.ok) return
+        const payload = await res.json() as { data?: { state?: string; url?: string | null } }
+        if (gone) return
+        const next = { state: payload.data?.state ?? 'idle', url: payload.data?.url ?? null }
+        setMattePreview((prev) => prev.state === next.state && prev.url === next.url ? prev : next)
+      } catch { /* Cached matte lookup is optional; do not interrupt editing. */ }
     }
     void check()
     const interval = window.setInterval(() => { void check() }, 4000)
     return () => { gone = true; window.clearInterval(interval) }
-  }, [clipId, enabled])
+  }, [clipId, enabled, cur?.quality])
   return (
     <div className="space-y-1.5" data-testid="bg-removal">
       <div className="flex items-center gap-1.5">
@@ -153,10 +163,20 @@ export function BgRemovalSection({
       ) : null}
       <p className="text-[11px] text-muted-foreground" role="status" data-testid="bg-removal-note">
         {!enabled ? 'Off. Enable Remove background to include a person matte in your export.'
-          : renderStatus === 'rendering' ? 'Processing person matte with the export worker…'
+          : mattePreview.state === 'ready' && mattePreview.url ? 'Subject matte ready. Inspect the genuine mask below; the worker composites it during export.'
+          : mattePreview.state === 'processing' ? 'Generating person matte on the worker…'
+          : mattePreview.state === 'failed' ? 'Matte generation failed. Retry the export or check the worker logs.'
+          : renderStatus === 'rendering' ? 'Export rendering; preparing the person matte…'
           : renderStatus === 'queued' ? 'Background matte queued with the export worker…'
-          : 'Enabled for export. Person matte generation starts during rendering; the live preview still shows the original video.'}
+          : 'Enabled. Start an export to generate the person matte; the live video preview remains unchanged until processing.'}
       </p>
+      {enabled && mattePreview.url ? (
+        <div className="space-y-1 rounded-md border border-border/60 p-2" data-testid="bg-matte-preview">
+          <p className="text-[11px] font-medium">Person matte preview (grayscale mask)</p>
+          <video src={mattePreview.url} controls muted playsInline preload="metadata" className="max-h-40 w-full rounded bg-black object-contain" aria-label="Generated person matte preview" />
+          <p className="text-[10px] text-muted-foreground">White keeps the person; black replaces the background. The final background and other layers are composited on export.</p>
+        </div>
+      ) : null}
     </div>
   )
 }
