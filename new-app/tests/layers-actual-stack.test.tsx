@@ -78,4 +78,28 @@ describe('actual Layers stack (E5)', () => {
     expect(onSelect).toHaveBeenCalledWith('text', 'title', 1000)
   })
 
+  it('E5 isolates a dragged layer when another layer shares the source track', () => {
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
+    edits.textItems = [newTextItem('title', 1000, 30_000)]
+    edits.broll = [
+      { id: 'first', source: 'stock', assetId: 'a1', startMs: 1000, endMs: 5000 },
+      { id: 'second', source: 'stock', assetId: 'a2', startMs: 1000, endMs: 5000 },
+    ]
+    const onEdits = vi.fn()
+    const ui = render(<LayersPanel clipId="clip1" edits={edits} layers={[]}
+      setLayers={vi.fn()} onEdits={onEdits} />)
+    const from = ui.getByTestId('actual-layer-broll:first')
+    const to = ui.getByTestId('actual-layer-text:title')
+    fireEvent.dragStart(from, { dataTransfer: { effectAllowed: 'move' } })
+    fireEvent.dragOver(to)
+    fireEvent.drop(to)
+    const next = onEdits.mock.calls[0]![0]!
+    const stack = visualStack(next)
+    const isolated = stack.find(t => t.items?.includes('first'))
+    expect(isolated?.kind).toBe('overlay')
+    expect(isolated?.id).not.toBe('ov1')
+    expect(stack.findIndex(t => t.id === isolated?.id)).toBeGreaterThan(stack.findIndex(t => t.id === 'tx1'))
+    expect(stack.find(t => t.id === 'ov1')?.items?.includes('second') ?? false).toBe(false)
+  })
+
 })
