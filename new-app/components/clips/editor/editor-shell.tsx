@@ -423,19 +423,6 @@ export function EditorShell({
       setMobilePanelOpen(true)
     }
   }, [band, layoutView, setDockPanelOpenPersist])
-  const toggleScriptTool = useCallback(
-    (id: ScriptViewToolPanelId) => {
-      setScriptToolPanel((prev) => {
-        const next = prev === id ? null : id
-        if (next) {
-          setVisitedPanels((v) => (v.has(next) ? v : new Set([...v, next])))
-          selectPanel(next)
-        }
-        return next
-      })
-    },
-    [selectPanel],
-  )
   const selectRailGroup = useCallback(
     (groupId: EditorRailGroupId) => {
       const group = editorRailGroups(clipEditorAiExtrasEnabled()).find((g) => g.id === groupId)
@@ -445,11 +432,6 @@ export function EditorShell({
     },
     [selectPanel],
   )
-  useEffect(() => {
-    if (band === 'wide' && panel === 'inspector' && layoutView !== 'timeline') {
-      setPanel('transcript')
-    }
-  }, [band, panel, layoutView])
   const openLayersTab = useCallback(() => selectPanel('layers'), [selectPanel])
 
   // G4cfix2: every B2 medium on the editor route in CORS mode (+ recovery of pre-hydration failures).
