@@ -21,16 +21,22 @@ export function useEditorWords(
   const lastTrimRef = useRef(trim)
   const contextRef = useRef(contextMs)
   const wordsRef = useRef(initialWords)
+  // Parent renders may pass a newly allocated but identical words array.
+  // Treat source changes by value, or an empty parent array will repeatedly
+  // overwrite freshly fetched transcript words and trigger an update loop.
+  const incomingRef = useRef(JSON.stringify({ clipId, initialWords, bounds }))
   wordsRef.current = words
   contextRef.current = contextMs
 
   const extendMs = contextMs != null && Number.isFinite(contextMs) ? contextMs : MAX_TRIM_EXTEND_MS
 
   useEffect(() => {
-    const next = initialWords
-    setWords(next)
-    wordsRef.current = next
-  }, [clipId, initialWords, bounds.clipStartMs, bounds.clipEndMs])
+    const signature = JSON.stringify({ clipId, initialWords, bounds })
+    if (signature === incomingRef.current) return
+    incomingRef.current = signature
+    setWords(initialWords)
+    wordsRef.current = initialWords
+  }, [clipId, initialWords, bounds])
 
   useEffect(() => {
     lastTrimRef.current = trim
@@ -38,28 +44,35 @@ export function useEditorWords(
 
     const trimSnap = { in: trim.in, out: trim.out }
     const ctxSnap = contextRef.current
-    const handle = window.setTimeout(() => {
-      if (!trimNeedsEditorWordsRefetch(wordsRef.current, trimSnap, bounds, 250, extendMs)) return
+    let active = true
+    const load = () => {
+      if (!active || !trimNeedsEditorWordsRefetch(wordsRef.current, trimSnap, bounds, 250, extendMs)) return
       setWordsLoading(true)
       void fetchClipEditorWords(clipId, trimSnap, ctxSnap)
         .then((data) => {
           if (
+            !active ||
             lastTrimRef.current.in !== trimSnap.in ||
             lastTrimRef.current.out !== trimSnap.out ||
             contextRef.current !== ctxSnap
-          ) {
-            return
-          }
+          ) return
           setWords(data.words)
           wordsRef.current = data.words
         })
         .catch(() => {
-          /* keep prior words; transcript panel still shows best-effort slice */
+          /* retain prior words and let the user retry if loading fails */
         })
-        .finally(() => setWordsLoading(false))
-    }, 280)
+        .finally(() => { if (active) setWordsLoading(false) })
+    }
+    // Fetch missing initial transcripts immediately; debounce extended trim drags.
+    const delay = wordsRef.current.length ? 280 : 0
+    const handle = delay ? window.setTimeout(load, delay) : null
+    if (!delay) load()
 
-    return () => window.clearTimeout(handle)
+    return () => {
+      active = false
+      if (handle != null) window.clearTimeout(handle)
+    }
   }, [
     clipId,
     bounds.clipStartMs,
