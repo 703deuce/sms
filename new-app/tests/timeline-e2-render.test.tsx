@@ -122,6 +122,16 @@ describe('E2 multi-track timeline', () => {
     expect(next.broll![0]).toMatchObject({ startMs: 7000, endMs: 10000 })
   })
 
+  it('dragging a split main video clip commits a linked video/voice reorder (B1 magnet on)', () => {
+    const e = edits({ cutRanges: [], videoSplits: [9000] })
+    const { getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
+    const first = getAllByTestId('timeline-item-video')[0]!
+    drag(first, 15000 * pxPerMs())
+    expect(onCommitEdits).toHaveBeenCalledTimes(1)
+    const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
+    expect(next.sectionOrder).toEqual([[9000, 20000], [0, 9000]])
+  })
+
   it('trim handle on B-roll start advances the media in-point', () => {
     const { broll, pxPerMs, onCommitEdits } = setup()
     const handle = broll('b1').querySelector('[data-testid="timeline-trim-start"]')!
