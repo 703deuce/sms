@@ -55,7 +55,7 @@ export const EDITOR_GRID = {
     'col-span-full min-h-0 overflow-y-auto rounded-lg border border-border bg-card max-h-[clamp(160px,45dvh,560px)] lg:col-[2/-1] lg:row-start-2',
   /** Script view: compact timeline row, fixed 148px (140px strip + border/padding). */
   timelineScript:
-    'col-span-full h-[148px] min-h-[148px] max-h-[148px] shrink-0 overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-2',
+    'col-span-full h-[168px] min-h-[168px] max-h-[168px] shrink-0 overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-2',
   backdrop: 'fixed inset-0 z-30 bg-black/50 lg:max-xl:bg-black/30 xl:hidden',
 } as const
 

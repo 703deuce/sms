@@ -29,7 +29,7 @@ describe('editor shell grid', () => {
     expect(EDITOR_GRID.rootScript).not.toContain('var(--editor-panel-w')
     expect(EDITOR_GRID.previewScript).toContain('lg:col-start-1')
     expect(EDITOR_GRID.previewScript).not.toContain('lg:col-start-2')
-    expect(EDITOR_GRID.timelineScript).toContain('h-[148px]')
+    expect(EDITOR_GRID.timelineScript).toContain('h-[168px]')
     expect(EDITOR_GRID.timelineScript).not.toContain('max-h-[clamp')
     expect(EDITOR_GRID.properties).toContain('hidden')
     expect(EDITOR_GRID.properties).toContain('2xl:flex')
@@ -107,7 +107,7 @@ describe('editor shell grid', () => {
     expect(previewClass).toContain('lg:col-start-1')
     expect(previewClass).not.toContain('lg:col-start-2')
     const timelineClass = container.querySelector('[data-region="timeline"]')?.className ?? ''
-    expect(timelineClass).toContain('h-[148px]')
+    expect(timelineClass).toContain('h-[168px]')
     expect(timelineClass).not.toContain('max-h-[clamp')
   })
   it('clampTimelineHeight', () => {

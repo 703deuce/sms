@@ -13,10 +13,10 @@ export function ScriptViewWaveStrip({
 }) {
   return (
     <div
-      className="flex h-[140px] shrink-0 flex-col gap-1 border-t border-border bg-card px-2 py-1.5 sm:px-3"
+      className="relative flex h-full min-h-0 shrink-0 flex-col border-t border-border bg-card px-2 py-1.5 sm:px-3"
       data-testid="script-view-wave-strip"
     >
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="absolute left-2 top-1.5 z-20 sm:left-3">
         <Button type="button" size="sm" variant="secondary" data-testid="script-view-show-timeline" onClick={onShowTimeline}>
           Show timeline
         </Button>
