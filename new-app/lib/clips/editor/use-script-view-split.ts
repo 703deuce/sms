@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 const LS_KEY = 'transovo.editor.scriptSplitPct.v2'
 export const SCRIPT_SPLIT_DEFAULT = 0.4
 export const SCRIPT_SPLIT_MIN_PX_TRANSCRIPT = 320
-export const SCRIPT_SPLIT_MIN_PX_PREVIEW = 480
+export const SCRIPT_SPLIT_MIN_PX_PREVIEW = 360
 const MIN = 0.3
 const MAX = 0.5
 

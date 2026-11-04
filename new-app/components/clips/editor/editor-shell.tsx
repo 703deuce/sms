@@ -366,7 +366,9 @@ export function EditorShell({
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
   // TIMELINE_LAYOUT1: Timeline view (lg+) uses the Script-view layout: rail + docked panel on the right.
   const [dockPanelOpen, setDockPanelOpen] = useState(false)
-  const dockTools = (layoutView === 'timeline' || layoutView === 'script') && band !== 'mobile'
+  const dockTimelineTools = layoutView === 'timeline' && band !== 'mobile'
+  const dockScriptTools = layoutView === 'script' && band !== 'mobile'
+  const dockTools = dockTimelineTools || dockScriptTools
   const setDockPanelOpenPersist = useCallback(
     (open: boolean) => {
       setDockPanelOpen(open)
@@ -2563,7 +2565,7 @@ export function EditorShell({
   const panelBody = renderSidePanels(null)
 
   const previewColumnContent = (
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden p-2">
+      <div className="flex h-full max-h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden p-2">
         <div
           className={cn(
             'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-panel',
@@ -3497,62 +3499,51 @@ export function EditorShell({
         onTargetGapSecChange={(n) => setGapToolSettings((s) => ({ ...s, targetGapSec: n }))}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <EditorLayout
-          band={band}
-          compact={compact}
-          panelOpen={dockTools ? true : mobilePanelOpen}
-          onClosePanel={() => (dockTools ? setDockPanelOpenPersist(false) : setMobilePanelOpen(false))}
-          panelWidthPx={panelWidthPx}
-          onPanelWidthChange={persistPanelWidth}
-          hidePanelColumn={layoutView === 'script' && !dockTools}
-          hidePropertiesColumn={layoutView === 'script' || dockTools}
-          dockTools={dockTools}
-          rail={
-            <>
-              <EditorMobileRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
-              {dockTools ? (
-                <div className="hidden min-h-0 min-w-0 flex-col overflow-hidden lg:flex" data-testid="timeline-dock-rail">
-                  <div className="flex shrink-0 items-stretch bg-card/80 p-1">
-                  <button
-                    type="button"
-                    className={cn(
-                      'flex h-11 w-[4.875rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[0.6875rem] font-medium leading-none text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-[1.125rem]',
-                      panel === 'inspector' && 'bg-accent text-foreground',
-                    )}
-                    onClick={() => {
-                      document.querySelector<HTMLElement>('[data-region="properties"]')?.scrollIntoView({ block: 'nearest' })
-                    }}
-                    aria-label="Properties"
-                    data-testid="timeline-dock-properties"
-                  >
-                    <SlidersHorizontal className="size-5" aria-hidden />
-                    Properties
-                  </button>
-                  <div className="flex min-w-0 flex-1 items-stretch overflow-hidden">
-                    <EditorRail
-                      variant="tabs"
-                      active={panel}
-                      onChange={(id) => (dockPanelOpen && panel === id && layoutView !== 'script' ? setDockPanelOpenPersist(false) : selectPanel(id))}
-                      onSelectGroup={dockSelectGroup}
-                    />
-                  </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="hidden min-h-0 lg:block">
-                  <EditorRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
-                </div>
+        {(() => {
+          const dockToolTabStrip = (
+            <div
+              className={cn(
+                'flex shrink-0 items-stretch bg-card/80 p-1',
+                dockScriptTools && 'rounded-lg border border-border',
               )}
-            </>
-          }
-          panel={
+            >
+              <button
+                type="button"
+                className={cn(
+                  'flex h-11 w-[4.875rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[0.6875rem] font-medium leading-none text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-[1.125rem]',
+                  panel === 'inspector' && 'bg-accent text-foreground',
+                )}
+                onClick={() => {
+                  document.querySelector<HTMLElement>('[data-region="properties"]')?.scrollIntoView({ block: 'nearest' })
+                }}
+                aria-label="Properties"
+                data-testid="timeline-dock-properties"
+              >
+                <SlidersHorizontal className="size-5" aria-hidden />
+                Properties
+              </button>
+              <div className="flex min-w-0 flex-1 items-stretch overflow-hidden">
+                <EditorRail
+                  variant="tabs"
+                  active={panel}
+                  onChange={(id) =>
+                    dockTimelineTools && dockPanelOpen && panel === id
+                      ? setDockPanelOpenPersist(false)
+                      : selectPanel(id)
+                  }
+                  onSelectGroup={dockSelectGroup}
+                />
+              </div>
+            </div>
+          )
+          const toolPanelBody = (
             <>
               <div className="flex min-h-10 shrink-0 flex-col justify-center gap-1 border-b border-border px-2.5 py-1">
                 <div className="flex h-9 items-center gap-2">
                   <TabIcon className="size-4 text-muted-foreground" aria-hidden />
                   <h2 className="text-sm font-semibold">{meta.label}</h2>
                   <span className="ml-auto hidden text-xs text-muted-foreground sm:inline">{meta.hint}</span>
-                  {band === 'mobile' || band === 'compact' || dockTools ? (
+                  {band === 'mobile' || band === 'compact' || dockTimelineTools ? (
                     <Button
                       type="button"
                       size="sm"
@@ -3592,25 +3583,68 @@ export function EditorShell({
                 <div className={cn(panel === 'transcript' || panel === 'repurpose' ? 'p-0' : 'p-4')}>{panelBody}</div>
               </ScrollArea>
             </>
+          )
+          return (
+        <EditorLayout
+          band={band}
+          compact={compact}
+          panelOpen={dockTimelineTools ? true : mobilePanelOpen}
+          onClosePanel={() => (dockTools ? setDockPanelOpenPersist(false) : setMobilePanelOpen(false))}
+          panelWidthPx={panelWidthPx}
+          onPanelWidthChange={persistPanelWidth}
+          hidePanelColumn={layoutView === 'script' && !dockTools}
+          hidePropertiesColumn={layoutView === 'script' && !dockScriptTools}
+          dockTools={dockTimelineTools}
+          scriptDockTools={dockScriptTools}
+          rail={
+            <>
+              <EditorMobileRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
+              {dockTimelineTools ? (
+                <div className="hidden min-h-0 min-w-0 flex-col overflow-hidden lg:flex" data-testid="timeline-dock-rail">
+                  {dockToolTabStrip}
+                </div>
+              ) : (
+                <div className="hidden min-h-0 lg:block">
+                  <EditorRail active={panel} onChange={selectPanel} onSelectGroup={selectRailGroup} />
+                </div>
+              )}
+            </>
           }
+          panel={dockTimelineTools ? toolPanelBody : null}
           preview={
             layoutView === 'script' ? (
-              <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1">
-                <ScriptViewMainSplit
-                  transcriptPct={scriptSplitPct}
-                  onTranscriptPctChange={persistScriptSplit}
-                  className="min-h-0 flex-1"
-                  transcript={
-                    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-2">
-                      {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+              <div className="flex h-full max-h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1">
+                {dockScriptTools ? (
+                  <div className="mb-1 hidden shrink-0 lg:block" data-testid="script-dock-rail">
+                    {dockToolTabStrip}
+                  </div>
+                ) : null}
+                <div className="flex min-h-0 flex-1 overflow-hidden">
+                  {dockScriptTools && panel !== 'inspector' ? (
+                    <div
+                      className="mr-1 hidden min-h-0 w-[clamp(240px,24vw,340px)] shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:flex"
+                      data-region="panel"
+                      data-dock="true"
+                    >
+                      {toolPanelBody}
                     </div>
-                  }
-                  preview={
-                    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-testid="script-view-preview-stack">
-                      {previewColumnContent}
-                    </div>
-                  }
-                />
+                  ) : null}
+                  <ScriptViewMainSplit
+                    transcriptPct={scriptSplitPct}
+                    onTranscriptPctChange={persistScriptSplit}
+                    className="min-h-0 flex-1"
+                    transcript={
+                      <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-2">
+                        {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+                      </div>
+                    }
+                    preview={
+                      <div className="flex h-full max-h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-testid="script-view-preview-stack">
+                        {previewColumnContent}
+                      </div>
+                    }
+                  />
+                </div>
               </div>
             ) : (
               previewColumnContent
@@ -3618,7 +3652,7 @@ export function EditorShell({
           }
           properties={
             dockTools || (!compact && band === 'wide') ? (
-              <div className="flex h-full min-h-0 flex-col overflow-hidden">
+              <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden">
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
                   <h2 className="text-sm font-semibold">Properties</h2>
                 </div>
@@ -3749,6 +3783,8 @@ export function EditorShell({
           </>
           )}
         />
+          )
+        })()}
       </div>
       <Button
         type="button"

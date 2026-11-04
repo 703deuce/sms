@@ -59,9 +59,14 @@ export const EDITOR_GRID = {
   backdrop: 'fixed inset-0 z-30 bg-black/50 lg:max-xl:bg-black/30 xl:hidden',
   /** TIMELINE_LAYOUT1: Timeline view like Script view: preview | docked panel | tool rail (right); timeline full width below. */
   rootDock:
-    'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
+    'relative grid h-full min-h-0 max-h-full overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
     'lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-rows-[minmax(0,1fr)_auto]',
+  /** TIMELINE_LAYOUT9: Script view — transcript workspace + properties; no left tools column. */
+  rootDockScript:
+    'relative grid h-full min-h-0 max-h-full overflow-hidden bg-background gap-1 p-1 ' +
+    'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
+    'lg:grid-cols-[minmax(0,1fr)_auto] lg:grid-rows-[minmax(0,1fr)_auto]',
   /** TIMELINE_LAYOUT8: one tools card — tab strip + panel body share column 1 (no empty grid row when panel closed). */
   toolsDock:
     'flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)] lg:min-h-0',
@@ -97,6 +102,8 @@ export function EditorLayout(props: {
   hidePropertiesColumn?: boolean
   /** TIMELINE_LAYOUT1: tools rail + docked panel on the right (Timeline view, lg+). */
   dockTools?: boolean
+  /** Script view (lg+): tabs + tool panel live in the main column, not a left grid column. */
+  scriptDockTools?: boolean
 }) {
   const { band, panelOpen, panelWidthPx, onPanelWidthChange, hidePanelColumn, hidePropertiesColumn } = props
   const compact = props.compact === true
@@ -132,16 +139,26 @@ export function EditorLayout(props: {
         } as React.CSSProperties)
       : undefined
 
-  const dock = props.dockTools === true
-  const rootClass = dock
+  const timelineDock = props.dockTools === true
+  const scriptDock = props.scriptDockTools === true
+  const dock = timelineDock || scriptDock
+  const rootClass = timelineDock
     ? EDITOR_GRID.rootDock
-    : scriptView
-      ? EDITOR_GRID.rootScript
-      : compact
-        ? EDITOR_GRID.rootCompact
-        : EDITOR_GRID.root
+    : scriptDock
+      ? EDITOR_GRID.rootDockScript
+      : scriptView
+        ? EDITOR_GRID.rootScript
+        : compact
+          ? EDITOR_GRID.rootCompact
+          : EDITOR_GRID.root
   const previewClass = dock ? EDITOR_GRID.previewDock : scriptView ? EDITOR_GRID.previewScript : EDITOR_GRID.preview
-  const timelineClass = dock ? EDITOR_GRID.timelineDock : scriptView ? EDITOR_GRID.timelineScript : EDITOR_GRID.timeline
+  const timelineClass = scriptDock
+    ? EDITOR_GRID.timelineScript
+    : timelineDock
+      ? EDITOR_GRID.timelineDock
+      : scriptView
+        ? EDITOR_GRID.timelineScript
+        : EDITOR_GRID.timeline
   const propertiesClass = dock
     ? EDITOR_GRID.propertiesDock
     : compact || hidePropertiesColumn
@@ -157,7 +174,7 @@ export function EditorLayout(props: {
       data-compact={compact ? 'true' : undefined}
       data-script-view={scriptView ? 'true' : undefined}
     >
-      {dock ? (
+      {timelineDock ? (
         <div data-region="tools" className={EDITOR_GRID.toolsDock}>
           <div data-region="rail" className={EDITOR_GRID.toolsDockRail}>
             {props.rail}
@@ -210,7 +227,7 @@ export function EditorLayout(props: {
         {props.preview}
       </section>
       {compact && !dock ? null : (
-        <aside data-region="properties" className={propertiesClass}>
+        <aside data-region="properties" className={cn(propertiesClass, scriptDock && 'hidden lg:flex')}>
           {props.properties}
         </aside>
       )}
