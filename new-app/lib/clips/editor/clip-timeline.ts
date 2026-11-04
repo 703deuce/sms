@@ -869,7 +869,12 @@ export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2
   const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits })
   const tb = timebaseFor(ctx.previewEdits)
   const t = Math.round(outMs)
-  const targets: ItemRef[] = refs.length ? refs : [{ lane: 'video', id: '' }]
+  // Voice is the audio component of the same source footage, not an independent
+  // movable audio file. Splitting it also splits its linked Video segment.
+  // Respect the Voice lock before forwarding to the main-video split operation.
+  const targets: ItemRef[] = refs.length
+    ? refs.filter((r) => !refLocked(ctx.edits, r)).map((r) => r.lane === 'voice' ? { lane: 'video', id: '' } : r)
+    : [{ lane: 'video', id: '' }]
   let next = ctx.edits
   let changed = false
   for (const r of targets) {
