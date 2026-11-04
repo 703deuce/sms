@@ -14,12 +14,16 @@ export function ScriptViewMainSplit({
   transcript,
   preview,
   className,
+  minTranscriptPx = SCRIPT_SPLIT_MIN_PX_TRANSCRIPT,
+  minPreviewPx = SCRIPT_SPLIT_MIN_PX_PREVIEW,
 }: {
   transcriptPct: number
   onTranscriptPctChange: (pct: number) => void
   transcript: ReactNode
   preview: ReactNode
   className?: string
+  minTranscriptPx?: number
+  minPreviewPx?: number
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ startX: number; startPct: number; width: number } | null>(null)
@@ -61,7 +65,7 @@ export function ScriptViewMainSplit({
       <div
         className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-l-lg border border-border bg-card"
         style={{
-          flex: `${pct} 1 ${SCRIPT_SPLIT_MIN_PX_TRANSCRIPT}px`,
+          flex: `${pct} 1 ${minTranscriptPx}px`,
         }}
         data-testid="script-view-transcript-pane"
       >
@@ -80,8 +84,8 @@ export function ScriptViewMainSplit({
       <div
         className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-r-lg bg-panel"
         style={{
-          flex: `${previewPct} 1 ${SCRIPT_SPLIT_MIN_PX_PREVIEW}px`,
-          minWidth: SCRIPT_SPLIT_MIN_PX_PREVIEW,
+          flex: `${previewPct} 1 ${minPreviewPx}px`,
+          minWidth: minPreviewPx,
         }}
         data-testid="script-view-preview-pane"
       >
