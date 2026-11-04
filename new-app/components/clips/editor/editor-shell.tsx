@@ -3666,7 +3666,7 @@ export function EditorShell({
               {timelineOpen ? 'Hide timeline' : 'Show timeline'}
             </button>
           ) : null}
-          <div className={cn('min-h-0', !timelineVisible && 'hidden')} data-testid="editor-timeline-wrap">
+          <div className={cn('h-full min-h-0 min-w-0 overflow-hidden', !timelineVisible && 'hidden')} data-testid="editor-timeline-wrap">
           <Timeline
             angleSources={angleSources}
             edits={edits}
