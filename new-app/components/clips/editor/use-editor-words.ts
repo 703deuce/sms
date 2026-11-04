@@ -17,7 +17,8 @@ export function useEditorWords(
   contextMs?: number,
 ) {
   const [words, setWords] = useState(() => initialWords)
-  const [wordsLoading, setWordsLoading] = useState(false)
+  const [loadingReason, setLoadingReason] = useState<'initial' | 'extended' | 'context' | 'reload' | null>(null)
+  const wordsLoading = loadingReason != null
   const lastTrimRef = useRef(trim)
   const contextRef = useRef(contextMs)
   const wordsRef = useRef(initialWords)
@@ -36,6 +37,7 @@ export function useEditorWords(
     incomingRef.current = signature
     setWords(initialWords)
     wordsRef.current = initialWords
+    setLoadingReason(null)
   }, [clipId, initialWords, bounds])
 
   useEffect(() => {
@@ -47,7 +49,8 @@ export function useEditorWords(
     let active = true
     const load = () => {
       if (!active || !trimNeedsEditorWordsRefetch(wordsRef.current, trimSnap, bounds, 250, extendMs)) return
-      setWordsLoading(true)
+      const extended = trimSnap.in < bounds.clipStartMs || trimSnap.out > bounds.clipEndMs
+      setLoadingReason(extended ? 'extended' : 'initial')
       void fetchClipEditorWords(clipId, trimSnap, ctxSnap)
         .then((data) => {
           if (
@@ -62,7 +65,7 @@ export function useEditorWords(
         .catch(() => {
           /* retain prior words and let the user retry if loading fails */
         })
-        .finally(() => { if (active) setWordsLoading(false) })
+        .finally(() => { if (active) setLoadingReason(null) })
     }
     // Fetch missing initial transcripts immediately; debounce extended trim drags.
     const delay = wordsRef.current.length ? 280 : 0
@@ -72,6 +75,7 @@ export function useEditorWords(
     return () => {
       active = false
       if (handle != null) window.clearTimeout(handle)
+      setLoadingReason(null)
     }
   }, [
     clipId,
@@ -88,28 +92,30 @@ export function useEditorWords(
     if (contextMs == null || !Number.isFinite(contextMs)) return
     const trimSnap = { in: trim.in, out: trim.out }
     const ctxSnap = contextMs
-    setWordsLoading(true)
+    let active = true
+    setLoadingReason('context')
     void fetchClipEditorWords(clipId, trimSnap, ctxSnap)
       .then((data) => {
-        if (contextRef.current !== ctxSnap) return
+        if (!active || contextRef.current !== ctxSnap) return
         setWords(data.words)
         wordsRef.current = data.words
       })
       .catch(() => {
         /* keep prior words */
       })
-      .finally(() => setWordsLoading(false))
+      .finally(() => { if (active) setLoadingReason(null) })
+    return () => { active = false; setLoadingReason(null) }
   }, [clipId, contextMs, trim.in, trim.out])
 
-  return { words, wordsLoading, reloadWords: () => {
+  return { words, wordsLoading, loadingReason, reloadWords: () => {
     const trimSnap = { in: trim.in, out: trim.out }
     const ctxSnap = contextRef.current
-    setWordsLoading(true)
+    setLoadingReason('reload')
     return fetchClipEditorWords(clipId, trimSnap, ctxSnap)
       .then((data) => {
         setWords(data.words)
         wordsRef.current = data.words
       })
-      .finally(() => setWordsLoading(false))
+      .finally(() => setLoadingReason(null))
   } }
 }
