@@ -1,6 +1,8 @@
 import type { ClipWord } from '@/lib/clips/edits'
 import { dedupeAdjacentEditorWords } from '@/lib/clips/editor-words-dedupe'
 import { loadSourceWords, wordsInRange, type SourceWord } from '@/lib/clips/source-words'
+import { mergeClipWordsWithProjectTranscript } from '@/lib/clips/editor-words-merge'
+import { MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
 import type { getClipStorage } from '@/lib/storage'
 
 /** Deepgram / DB / S3 may wrap the word array. */
@@ -109,20 +111,27 @@ export async function resolveEditorWords(
     }
   }
 
-  if (clipRaw.length) {
-    const absolute = clipWordsToAbsolute(clipRaw, clip.startMs, clip.endMs)
-    const clipLoaded = dedupeAdjacentEditorWords(loadSourceWords(absolute))
-    return clipLoaded
-  }
+  const clipLoaded = clipRaw.length
+    ? dedupeAdjacentEditorWords(loadSourceWords(clipWordsToAbsolute(clipRaw, clip.startMs, clip.endMs)))
+    : []
+  if (!projectTranscript.length) return clipLoaded
 
-  if (projectTranscript.length) {
-    const projectWords = loadSourceWords(projectTranscript)
-    const sliced = wordsInRange(projectWords, clip.startMs, clip.endMs)
-    if (sliced.length) return dedupeAdjacentEditorWords(sliced)
-    return []
-  }
+  const projectWords = loadSourceWords(projectTranscript)
+  const trimIn = opts?.trimInMs ?? clip.startMs
+  const trimOut = opts?.trimOutMs ?? clip.endMs
+  const extended = trimIn < clip.startMs || trimOut > clip.endMs
+  if (!extended && clipLoaded.length) return clipLoaded
 
-  return []
+  // The editor asks for additional words when a trim extends beyond the original
+  // clip. Reading only [clip.startMs, clip.endMs] made those requests return empty
+  // repeatedly, even though the project transcript already contained the words.
+  const contextMs = Math.max(0, Math.min(opts?.contextMs ?? MAX_TRIM_EXTEND_MS, MAX_TRIM_EXTEND_MS))
+  const range = { startMs: trimIn, endMs: trimOut }
+  const merged = mergeClipWordsWithProjectTranscript(
+    clipLoaded, projectWords, clip.startMs, clip.endMs, contextMs,
+    range, opts?.trimLimits,
+  )
+  return dedupeAdjacentEditorWords(merged)
 }
 
 /** Start clip + fallback words.json downloads in parallel (editor payload). */
