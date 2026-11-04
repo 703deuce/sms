@@ -56,6 +56,38 @@ describe('unified editor workspace', () => {
     expect(ui.onTimelineViewChange).toHaveBeenCalledWith('script')
   })
 
+  it('C2 shrinks the timeline row when collapsed and restores the prior split', () => {
+    const onTimelineViewChange = vi.fn()
+    const ui = render(
+      <UnifiedEditorWorkspace main={<div>Preview</div>} inspector={<div>Tools</div>}
+        timeline={<div data-testid="mini-timeline">Clip and playhead</div>}
+        timelineView="timeline" timelineCollapsed onTimelineViewChange={onTimelineViewChange}
+        inspectorWidthPx={360} onInspectorWidthChange={vi.fn()} />,
+    )
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('76px')
+    expect(ui.getByTestId('mini-timeline').textContent).toContain('Clip and playhead')
+    ui.rerender(
+      <UnifiedEditorWorkspace main={<div>Preview</div>} inspector={<div>Tools</div>}
+        timeline={<div data-testid="mini-timeline">Clip and playhead</div>}
+        timelineView="timeline" timelineCollapsed={false} onTimelineViewChange={onTimelineViewChange}
+        inspectorWidthPx={360} onInspectorWidthChange={vi.fn()} />,
+    )
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('65fr')
+  })
+
+  it('C4 Focus gives the timeline the entire available workspace, then restores split', () => {
+    const ui = mount()
+    fireEvent.click(ui.getByTestId('unified-mode-focus'))
+    const workspace = ui.getByTestId('unified-main-workspace')
+    const timeline = ui.getByTestId('unified-timeline-region')
+    expect(workspace.className).toContain('flex')
+    expect(workspace.style.gridTemplateRows).toBe('')
+    expect(timeline.className).toContain('flex-1')
+    expect(ui.getByTestId('unified-upper-workspace').className).toContain('hidden')
+    fireEvent.click(ui.getByTestId('unified-mode-expanded'))
+    expect(ui.getByTestId('unified-main-workspace').style.gridTemplateRows).toContain('65fr')
+  })
+
   it('collapses the right panel, preserving the player and timeline', () => {
     const ui = mount()
     fireEvent.click(ui.getByTestId('unified-inspector-toggle'))
