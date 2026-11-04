@@ -23,7 +23,11 @@ function buildRows(
 ): Row[] {
   const rows: Row[] = []
   for (let i = future.length - 1; i >= 0; i--) {
-    rows.push({ kind: 'future', label: 'Redo', steps: i + 1 })
+    rows.push({
+      kind: 'future',
+      label: describeEditsChange(i === 0 ? edits : future[i - 1]!, future[i]!),
+      steps: i + 1,
+    })
   }
   rows.push({ kind: 'current', label: 'Current' })
   for (let i = past.length - 1; i >= 0; i--) {
@@ -73,15 +77,15 @@ export function EditorHistoryPanel({
       >
         <History className="size-4" />
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-56 p-1" data-testid="editor-history-panel">
+      <PopoverContent align="end" className="w-80 max-w-[calc(100vw-24px)] p-2" data-testid="editor-history-panel">
         <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">History</p>
-        <ul className="max-h-64 overflow-y-auto">
+        <ul className="max-h-[min(65vh,420px)] overflow-y-auto">
           {rows.map((row, idx) => {
             if (row.kind === 'current') {
               return (
                 <li
                   key={`cur-${idx}`}
-                  className="rounded-sm px-2 py-1.5 text-xs font-medium text-foreground"
+                  className="rounded-sm bg-primary/10 px-2 py-2 text-xs font-semibold text-foreground"
                   data-testid="editor-history-row"
                 >
                   {row.label}
