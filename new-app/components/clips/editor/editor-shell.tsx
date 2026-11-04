@@ -2265,6 +2265,22 @@ export function EditorShell({
             layers={layers}
             setLayers={setLayers}
             onEdits={setEdits}
+            selectedLayerKey={canvasSel?.target ?? null}
+            onSelectActualLayer={(kind, id, startMs) => {
+              if (kind === 'captions') {
+                selectPanel('captions')
+                return
+              }
+              const target: KeyframeTarget = kind === 'video' ? 'video' : kind === 'broll' ? `broll:${id}` : `text:${id}`
+              setCanvasSel({ target, label: kind === 'video' ? 'Main video' : kind === 'broll' ? 'B-roll' : 'Text' })
+              setTimelineSelReq((prev) => ({
+                lane: kind === 'video' ? 'video' : kind,
+                ...(kind === 'video' ? { atMs: outputMs } : { id }),
+                seq: (prev?.seq ?? 0) + 1,
+              }))
+              if (kind === 'text') setSelectedTextId(id)
+              if (kind !== 'video' && Math.abs(startMs - outputMs) > 500) seekOutput(startMs)
+            }}
             clipType={(aiMeta as ClipAiMeta | null)?.clipType ?? null}
             platform={
               streamerSide?.platform === 'kick'
