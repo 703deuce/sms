@@ -3075,7 +3075,7 @@ export function EditorShell({
     onCanvasSelect('video')
     if (layoutView === 'script') openToolPanel('inspector')
     else if (band !== 'wide' || layoutView === 'timeline') selectPanel('inspector')
-    scrollToTestId(testId)
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent('transovo:editor-video-tool', { detail: testId })), 100)
   }
   const openVersions = () => {
     document.querySelector<HTMLElement>('[data-testid="versions-menu"]')?.click()
