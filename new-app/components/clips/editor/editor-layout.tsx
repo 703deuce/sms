@@ -64,16 +64,16 @@ export const EDITOR_GRID = {
     'lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-rows-[minmax(0,1fr)_auto]',
   /** TIMELINE_LAYOUT8: one tools card — tab strip + panel body share column 1 (no empty grid row when panel closed). */
   toolsDock:
-    'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-1 lg:max-h-full lg:w-[clamp(260px,28vw,440px)] lg:self-stretch',
+    'flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)] lg:min-h-0',
   toolsDockRail: 'min-h-0 min-w-0 shrink-0 border-b border-border bg-card/80',
   toolsDockPanel: 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border',
   /** @deprecated split rail/panel rows — use toolsDock */
   railDock: 'min-h-0 min-w-0 shrink-0 lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)]',
   panelDock: 'flex min-h-0 min-w-0 flex-1 flex-col lg:col-start-1 lg:row-start-2 lg:w-[clamp(260px,28vw,440px)] lg:max-h-none',
   previewDock:
-    'flex min-h-0 min-w-0 flex-col overflow-hidden lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:min-h-0',
+    'flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden lg:col-start-2 lg:row-start-1 lg:min-h-0',
   propertiesDock:
-    'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-3 lg:row-start-1 lg:row-span-2 lg:w-[clamp(260px,24vw,380px)]',
+    'flex min-h-0 max-h-full flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-3 lg:row-start-1 lg:w-[clamp(260px,24vw,380px)] lg:min-h-0',
   timelineDock:
     'col-span-full min-h-0 overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:col-span-full lg:row-start-2',
 } as const
