@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { TranscriptPanel } from '@/components/clips/editor/transcript-panel'
 import { defaultEdits } from '@/lib/clips/edits'
+import { buildTimelineItems, realCutIndices, timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import type { SourceWord } from '@/lib/clips/source-words'
 
 afterEach(cleanup)
@@ -56,4 +57,17 @@ describe('A1 transcript Cut uses absolute source time', () => {
     expect(view.container.querySelector('[data-word-i="2"]')?.className).toContain('line-through')
     expect(view.container.querySelector('[data-word-i="3"]')?.className).not.toContain('line-through')
   })
+  it('places the cut seam and both Video/Voice pieces at 0:44 on the shared timebase', () => {
+    const edits = { ...defaultEdits({ clipStartMs: 0, clipEndMs: 240_000 }), cutRanges: [[44_000, 44_300] as [number, number]] }
+    const tb = timebaseFor(edits)
+    const seam = realCutIndices(tb)
+    expect(seam).toEqual([1])
+    expect(tb.starts[seam[0]!]).toBe(44_000)
+    const lanes = buildTimelineItems({ edits, previewEdits: edits })
+    expect(lanes.video).toHaveLength(2)
+    expect(lanes.voice).toHaveLength(2)
+    expect(lanes.video[1]?.startMs).toBe(44_000)
+    expect(lanes.voice[1]?.startMs).toBe(44_000)
+  })
+
 })
