@@ -2508,10 +2508,6 @@ export function EditorShell({
             durationMs={outDur}
             brandTemplates={brandTemplates}
             onApplyBrand={applyBrandTemplateById}
-            onOpenBgRemoval={() => {
-              setCanvasSel({ target: 'video', label: 'Video' })
-              selectPanel('inspector')
-            }}
             layoutSlot={
               t6TemplatesEnabled() ? (
                 <TemplateLayoutPanel
