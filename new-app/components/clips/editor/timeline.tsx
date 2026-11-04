@@ -947,10 +947,10 @@ export function Timeline({
     return () => window.removeEventListener('resize', onResize)
   }, [])
   // TIMELINE_LAYOUT5: keyframe strip under the toolbar is on demand (same controls live in Properties > Transform).
-  const [kfStripOn, setKfStripOn] = useState(true)
+  const [kfStripOn, setKfStripOn] = useState(false)
   useEffect(() => {
     try {
-      const s = window.localStorage.getItem('clips.timeline.kfStrip.v2')
+      const s = window.localStorage.getItem('clips.timeline.kfStrip')
       setKfStripOn(s == null ? true : s === '1')
     } catch {
       /* ignore */
@@ -959,7 +959,7 @@ export function Timeline({
   const toggleKfStrip = () =>
     setKfStripOn((v) => {
       try {
-        window.localStorage.setItem('clips.timeline.kfStrip.v2', v ? '0' : '1')
+        window.localStorage.setItem('clips.timeline.kfStrip', v ? '0' : '1')
       } catch {
         /* ignore */
       }
@@ -3174,13 +3174,9 @@ export function Timeline({
             type="button"
             className={`mr-1 inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[12px] hover:bg-muted disabled:opacity-40 ${kfStripOn ? 'bg-primary/15 text-foreground' : 'text-muted-foreground'}`}
             onClick={toggleKfStrip}
-            disabled={false}
+            disabled={!inspected}
             aria-pressed={kfStripOn}
-            title={
-              inspected
-                ? 'Show/hide the keyframe strip (also in Properties > Transform)'
-                : 'Show/hide the keyframe strip — select a clip to edit keyframes (also in Properties > Transform)'
-            }
+            title={inspected ? 'Show/hide the keyframe strip (also in Properties > Transform)' : 'Select a clip to edit its keyframes here (also in Properties > Transform)'}
             data-testid="timeline-keyframes-toggle"
           >
             ◆ Keyframes
@@ -3294,8 +3290,7 @@ export function Timeline({
         </div>
       ) : null}
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
-      {kfStripOn && !tlCollapsed ? (
-        inspected ? (
+      {inspected && !tlCollapsed && kfStripOn ? (
         <div
           className="max-h-[96px] shrink-0 overflow-y-auto rounded-md border border-border bg-card"
           data-testid="keyframe-inspector-overlay"
@@ -3314,14 +3309,6 @@ export function Timeline({
             }}
           />
         </div>
-        ) : (
-        <div
-          className="flex h-9 shrink-0 items-center rounded-md border border-dashed border-border/80 bg-muted/20 px-3 text-xs text-muted-foreground"
-          data-testid="keyframe-strip-empty"
-        >
-          Select a clip on the timeline to edit keyframes here, or use Properties → Transform.
-        </div>
-        )
       ) : null}
       {tlCollapsed ? null : (
       <div
