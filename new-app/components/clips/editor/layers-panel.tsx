@@ -40,6 +40,7 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
   onSelect?: (kind: ActualVisualLayer['kind'], id: string, startMs: number) => void
 }) {
   const [dragged, setDragged] = useState<string | null>(null)
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null)
   const broll = orderedStack(edits, 'broll', edits.broll ?? [])
   const text = orderedStack(edits, 'text', edits.textItems ?? [])
   // Visual stack from top to bottom (the video is the backmost visual layer).
@@ -100,8 +101,8 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
               onDrop={(e) => { e.preventDefault(); const from = stack.find((r) => r.key === dragged); if (from) reorder(from, row); setDragged(null) }}
               onDragEnd={() => setDragged(null)}>
               <GripVertical size={13} className="shrink-0 text-muted-foreground" aria-hidden />
-              <button type="button" className={`min-w-0 flex-1 truncate rounded px-1 py-1 text-left text-xs ${selectedKey === row.key ? 'bg-primary/10 font-semibold' : ''}`}
-                onClick={() => onSelect?.(row.kind, row.id, row.startMs)}
+              <button type="button" className={`min-w-0 flex-1 truncate rounded px-1 py-1 text-left text-xs ${(selectedKey === row.key || selectedRowKey === row.key) ? 'bg-primary/10 font-semibold' : ''}`}
+                onClick={() => { setSelectedRowKey(row.key); onSelect?.(row.kind, row.id, row.startMs) }}
                 data-testid={`actual-layer-select-${row.key}`}>{row.label}</button>
               <button type="button" className="rounded p-1 disabled:opacity-30"
                 title={hidden ? 'Show layer' : 'Hide layer'}
@@ -213,6 +214,9 @@ export function LayersPanel({
         </p>
       ) : null}
       <ActualLayersList edits={edits} layers={layers} setLayers={setLayers} onEdits={onEdits} selectedKey={selectedLayerKey} onSelect={onSelectActualLayer} />
+      <details className="rounded-md border border-border/60 p-2" data-testid="layer-design-settings">
+        <summary className="cursor-pointer text-xs text-muted-foreground">Legacy overlay design, branding and template settings</summary>
+        <div className="mt-3 space-y-4">
       {(onApplyAutoTemplate || (brandTemplates && brandTemplates.length > 0 && onApplyTemplate)) ? (
         <div className="space-y-2 rounded-lg border border-border p-3">
           <p className="text-xs font-medium">Brand template</p>
@@ -473,6 +477,8 @@ export function LayersPanel({
           </>
         )}
       </div>
+        </div>
+      </details>
     </div>
   )
 }
