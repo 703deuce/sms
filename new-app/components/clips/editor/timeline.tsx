@@ -3449,8 +3449,10 @@ export function Timeline({
       ) : (
       <div
         className="relative flex min-w-0 rounded-lg border border-border bg-card/30"
-        // TC3 (d): a set height is the height — taller than all tracks leaves empty space below.
-        style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}
+        // C1: the lanes own their intrinsic height. Do not stretch the track
+        // viewport to consume the grid row: that created a blank strip after SFX.
+        // On short screens the viewport may shrink and scroll, never shrink lanes.
+        style={{ flex: '0 1 auto', height: totalH + auxiliaryHeaderHeight, minHeight: 0, overflowY: 'auto' }}
         data-testid="timeline-body"
       >
         <div className="relative min-w-[160px] w-[160px] shrink-0 border-r border-border/60" aria-label="Tracks">
