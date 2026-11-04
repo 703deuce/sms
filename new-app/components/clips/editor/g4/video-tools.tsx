@@ -429,6 +429,7 @@ export function BlurRegionsSection({
 
 export function MainVideoTools({
   edits,
+  clipId,
   videoItem,
   outputMs,
   durationMs,
@@ -437,6 +438,7 @@ export function MainVideoTools({
   readOnly,
 }: {
   edits: ClipEditsV2
+  clipId?: string
   videoItem: { srcInMs: number; srcOutMs: number } | null
   outputMs: number
   durationMs: number
@@ -448,7 +450,7 @@ export function MainVideoTools({
     <div className="space-y-4" data-testid="main-video-tools">
       {bgRemovalUiEnabled() ? (
         <Section title="Remove background" testId="bg-removal-section">
-          <BgRemovalSection edits={edits} onCommit={onCommit} readOnly={readOnly} />
+          <BgRemovalSection edits={edits} clipId={clipId} onCommit={onCommit} readOnly={readOnly} />
         </Section>
       ) : null}
       <Section title="Stabilize" testId="stabilize-section">
