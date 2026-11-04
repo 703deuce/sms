@@ -26,7 +26,8 @@ import { ScriptViewCompactTimeline } from '@/components/clips/editor/script-view
 import { useScriptViewSplit } from '@/lib/clips/editor/use-script-view-split'
 import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { setCutAudioSamples } from '@/lib/clips/editor/audio-cut-edges'
-import { rmsSamplesFromPeaks } from '@/lib/clips/gap-audio-trim'
+import { rmsSamplesFromPeaks, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
+import { loadFineEnvelope } from '@/lib/clips/editor/fine-audio-envelope'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { EditorLayout, useEditorBand, aspectCssToNumber } from '@/components/clips/editor/editor-layout'
 import { CanvasLayoutMenu } from '@/components/clips/editor/canvas-layout-menu'
@@ -309,6 +310,7 @@ export function EditorShell({
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false)
   const [beatCutApi, setBeatCutApi] = useState<BeatCutRegisterApi | null>(null)
   const registerBeatCut = useCallback((api: BeatCutRegisterApi | null) => {
     setBeatCutApi(api)
@@ -1535,15 +1537,30 @@ export function EditorShell({
     skipDecode: Boolean(editorAssets?.fullVideo),
   })
   // SCRIPT_DOC2: share the clip's audio levels (shifted to source ms) so every cut edge lands on quiet audio.
+  // SCRIPT_DOC3: a 5 ms envelope decoded in the browser replaces the 25 ms peaks once ready
+  // (clips only; full-length videos keep the peaks).
+  const fineCutAudioRef = useRef<{ key: string; samples: GapRmsSample[] } | null>(null)
   useEffect(() => {
-    const samples = scriptVoicePeaks.peaks.length
+    const coarse = scriptVoicePeaks.peaks.length
       ? rmsSamplesFromPeaks(scriptVoicePeaks.peaks, scriptVoicePeaks.peaksPerSec).map((s) => ({
           tMs: s.tMs + mediaOffsetMs,
           rms: s.rms,
         }))
       : []
-    setCutAudioSamples(clipId, samples)
-  }, [clipId, mediaOffsetMs, scriptVoicePeaks.peaks, scriptVoicePeaks.peaksPerSec])
+    const key = `${videoUrl ?? ''}|${mediaOffsetMs}`
+    const fine = fineCutAudioRef.current?.key === key ? fineCutAudioRef.current.samples : null
+    setCutAudioSamples(clipId, fine ?? coarse)
+    if (fine || !videoUrl || editorAssets?.fullVideo) return
+    let cancelled = false
+    void loadFineEnvelope(videoUrl, mediaOffsetMs).then((s) => {
+      if (cancelled || !s?.length) return
+      fineCutAudioRef.current = { key, samples: s }
+      setCutAudioSamples(clipId, s)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [clipId, editorAssets?.fullVideo, mediaOffsetMs, scriptVoicePeaks.peaks, scriptVoicePeaks.peaksPerSec, videoUrl])
 
   const seekSource = useCallback(
     (sourceMs: number) => {
@@ -2234,6 +2251,15 @@ export function EditorShell({
       </div>
       <div className={on('captions') ? undefined : 'hidden'} aria-hidden={!on('captions')}>
         <EditorPanelErrorBoundary label="Captions">
+        <CaptionLinesPanel
+          part="fix"
+          edits={edits}
+          words={editorWords}
+          playheadMs={outputMs}
+          durationMs={outDur}
+          onEdits={(e) => setEdits(e)}
+          onSeekOutput={seekOutput}
+        />
         <CaptionsPanel
           clipId={clipId}
           edits={edits}
@@ -2248,6 +2274,7 @@ export function EditorShell({
           onSeekOutput={seekOutput}
         />
         <CaptionLinesPanel
+          part="manual"
           edits={edits}
           words={editorWords}
           playheadMs={outputMs}
@@ -3002,13 +3029,8 @@ export function EditorShell({
     document.querySelector<HTMLElement>('[data-testid="versions-menu"]')?.click()
   }
   const openProjectSettings = () => {
-    // SCRIPT_DOC2: project settings only render when nothing is selected, so clear the selection;
-    // never toggle the panel closed; the wide Timeline view already shows the Properties column.
-    onCanvasSelect(null)
-    if (layoutView === 'script') {
-      if (scriptToolPanel !== 'inspector') toggleScriptTool('inspector')
-    } else if (band !== 'wide') selectPanel('inspector')
-    window.setTimeout(() => scrollToTestId('properties-project-settings'), 80)
+    // SCRIPT_DOC3: a dialog always opens, whatever is selected and whichever view is shown.
+    setProjectSettingsOpen(true)
   }
   const needSel = canvasSel ? null : 'Select a clip first'
   const needBroll = canvasSel?.target.startsWith('broll:') ? null : 'Select a B-roll clip first'
@@ -3702,6 +3724,49 @@ export function EditorShell({
         posterUrl={posterUrl}
       />
       </ClipperSurfaceErrorBoundary>
+      <Dialog open={projectSettingsOpen} onOpenChange={setProjectSettingsOpen}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto" data-testid="project-settings-dialog">
+          <DialogHeader>
+            <DialogTitle>Project settings</DialogTitle>
+          </DialogHeader>
+          <PropertiesProjectSettings
+            edits={edits}
+            durationMs={outDur}
+            layoutSlot={
+              <LayoutQuickPicker
+                value={edits.layout.mode}
+                edits={edits}
+                facecamLayout={facecamLayout}
+                reframeV2Enabled={reframeV2Enabled}
+                onPick={onLayoutPick}
+              />
+            }
+            canvasBgSlot={
+              <CanvasBackgroundSection
+                edits={edits}
+                media={media}
+                projectId={projectId}
+                clipId={clipId}
+                compositeLocked={compositePreviewClip}
+                readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+                onCommit={(next) => setEdits(next)}
+              />
+            }
+            onOpenTextPanel={() => {
+              setProjectSettingsOpen(false)
+              openToolPanel('text')
+            }}
+            onOpenCaptionsPanel={() => {
+              setProjectSettingsOpen(false)
+              openToolPanel('captions')
+            }}
+            onOpenLayoutPanel={() => {
+              setProjectSettingsOpen(false)
+              openToolPanel('layout')
+            }}
+          />
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!replaceBrollId} onOpenChange={(o) => !o && setReplaceBrollId(null)}>
         <DialogContent className="max-w-2xl" data-testid="replace-media-dialog">
           <DialogHeader>

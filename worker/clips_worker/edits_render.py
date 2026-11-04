@@ -291,7 +291,7 @@ def ffmpeg_concat_segments(src: Path, dest: Path, segs_sec: list[tuple[float, fl
             ],
         )
         return
-    xf = 0.01  # CUTS_QUALITY1: 10 ms equal-power crossfade at segment joins
+    xf = 0.02  # SCRIPT_DOC3: 20 ms fade out/in at segment joins (was 10 ms)
     parts: list[str] = []
     for i, (a, b) in enumerate(segs_sec):
         dur = b - a

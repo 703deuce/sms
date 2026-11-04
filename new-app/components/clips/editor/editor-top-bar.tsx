@@ -122,7 +122,7 @@ export function EditorTopBar({
         )}
       </span>
       {menuBarSlot ? (
-        <div className="flex min-w-0 flex-1 items-center overflow-hidden" data-testid="editor-top-bar-left">
+        <div className="flex min-w-0 flex-1 items-center overflow-hidden lg:min-w-[33rem]" data-testid="editor-top-bar-left">
           <Separator orientation="vertical" className="mx-1 hidden h-6 shrink-0 lg:block" />
           {menuBarSlot}
         </div>

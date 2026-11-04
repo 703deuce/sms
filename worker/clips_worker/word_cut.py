@@ -54,6 +54,21 @@ def _is_exact_word_span(cut: list[int], words: list[dict]) -> bool:
     return False
 
 
+def cut_splits_word(cut: list[int], words: list[dict]) -> bool:
+    """SCRIPT_DOC3: True when a cut edge lands in the middle half of a word (a real split).
+    Edges within the outer quarter of a word are transcript-timing drift (edges come from the audio)."""
+    a, b = min(cut[0], cut[1]), max(cut[0], cut[1])
+    for w in words:
+        ws, we = _word_span_ms(w)
+        d = we - ws
+        if d <= 0:
+            continue
+        lo, hi = ws + 0.25 * d, we - 0.25 * d
+        if lo < a < hi or lo < b < hi:
+            return True
+    return False
+
+
 def sanitize_cut_ranges(cuts: list, words: list[dict], pad_ms: int = WORD_CUT_PAD_MS) -> list:
     out: list = []
     for c in cuts:
@@ -61,6 +76,11 @@ def sanitize_cut_ranges(cuts: list, words: list[dict], pad_ms: int = WORD_CUT_PA
             continue
         pair = [int(c[0]), int(c[1])]
         if _is_exact_word_span(pair, words):
+            out.append(pair)
+            continue
+        # SCRIPT_DOC3: a cut over whole words (sentence delete, audio-refined filler) is kept exactly as
+        # the editor saved it, so the export cuts where the preview cuts.
+        if not cut_splits_word(pair, words):
             out.append(pair)
             continue
         if cut_intersects_word_interior(pair, words):

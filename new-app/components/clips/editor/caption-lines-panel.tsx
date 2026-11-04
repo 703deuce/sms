@@ -110,9 +110,11 @@ function FixRow({
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault()
+            e.stopPropagation()
             e.currentTarget.blur()
           }
           if (e.key === 'Escape') {
+            e.stopPropagation()
             cancelRef.current = true
             e.currentTarget.blur()
           }
@@ -213,7 +215,10 @@ export function CaptionLinesPanel({
   onSelect,
   onEdits,
   onSeekOutput,
+  part = 'all',
 }: {
+  /** SCRIPT_DOC3: 'fix' = only Fix caption text (top of the panel); 'manual' = everything else. */
+  part?: 'all' | 'fix' | 'manual'
   edits: ClipEditsV2
   words: CaptionSourceWord[]
   playheadMs: number
@@ -274,7 +279,11 @@ export function CaptionLinesPanel({
   const layouts = captionLayoutsFor(edits.aspectRatio)
 
   return (
-    <section className="space-y-3 border-t p-3 text-sm" data-testid="caption-lines-panel">
+    <section
+      className={cn('space-y-3 p-3 text-sm', part !== 'fix' && 'border-t')}
+      data-testid={part === 'fix' ? 'caption-fix-panel' : 'caption-lines-panel'}
+    >
+      {part !== 'manual' ? (
       <div className="space-y-1.5" data-testid="caption-fix-text">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fix caption text</p>
         <p className="text-[11px] text-muted-foreground">
@@ -309,6 +318,9 @@ export function CaptionLinesPanel({
           </p>
         )}
       </div>
+      ) : null}
+      {part !== 'fix' ? (
+      <>
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manual captions</p>
         <p className="text-[11px] text-muted-foreground">
@@ -518,6 +530,8 @@ export function CaptionLinesPanel({
           ))}
         </div>
       </div>
+      </>
+      ) : null}
     </section>
   )
 }

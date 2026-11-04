@@ -628,8 +628,12 @@ export function PreviewStage({
     Object.values(brollRefs.current).forEach((el) => applyRate(el))
   }, [edits.speed, videoUrl, canPlay, previewRate])
 
+  // SCRIPT_DOC3: volume ramp at cut joins (base volume + time of the last jump).
+  const joinFadeRef = useRef<{ base: number; at: number } | null>(null)
   useEffect(() => {
     let raf = 0
+    const JOIN_LOOKAHEAD_MS = 20
+    const JOIN_FADE_IN_MS = 25
     const tick = () => {
       const v = videoRefInner.current
       const blur = blurRef.current
@@ -653,17 +657,34 @@ export function PreviewStage({
           }
         })
         if (!v.paused) {
-          const stepped = applyPlaybackTime(src, playbackEdits)
+          // SCRIPT_DOC3: the rAF tick is ~16 ms late, so it used to play into the cut before jumping
+          // (heard as a clipped word). Jump when the cut starts within 20 ms, mute at the jump and
+          // ramp the volume back over 25 ms.
+          const nextCut = playbackEdits.cutRanges.find(([s]) => s > src && s - src <= JOIN_LOOKAHEAD_MS)
+          const stepped = applyPlaybackTime(nextCut ? nextCut[0] : src, playbackEdits)
           if (Math.abs(stepped.sourceMs - src) > 5) {
             const t = videoTimeFromSourceMs(stepped.sourceMs, mediaOffsetMs)
+            const jf = joinFadeRef.current
+            if (jf) jf.at = performance.now()
+            else joinFadeRef.current = { base: v.volume, at: performance.now() }
+            v.volume = 0
             v.currentTime = t
             if (blur) blur.currentTime = t
             src = stepped.sourceMs
+          }
+          const jf = joinFadeRef.current
+          if (jf) {
+            const k = Math.min(1, (performance.now() - jf.at) / JOIN_FADE_IN_MS)
+            v.volume = jf.base * k
+            if (k >= 1) joinFadeRef.current = null
           }
           if (stepped.atEnd) {
             v.pause()
             setPlaying(false)
           }
+        } else if (joinFadeRef.current) {
+          v.volume = joinFadeRef.current.base
+          joinFadeRef.current = null
         }
       }
       if (v && v === boundVideoRef.current) lastSrcMsRef.current = src
