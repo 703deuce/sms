@@ -383,6 +383,7 @@ export function Timeline({
   transcriptSelectionRef,
   registerBeatCut,
   menuCommand = null,
+  editorToolCommands = [],
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -478,6 +479,8 @@ export function Timeline({
   registerBeatCut?: (api: BeatCutRegisterApi | null) => void
   /** MENUBAR1: a new `seq` runs `cmd` once (also right after mount, when the menu switched to Timeline view). */
   menuCommand?: { cmd: TimelineMenuCommand; seq: number } | null
+  /** All editor panels and menu actions are searchable alongside timeline commands. */
+  editorToolCommands?: PaletteCommand[]
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -1945,6 +1948,7 @@ export function Timeline({
     { id: 'addAudio', group: 'Timeline', label: 'Add audio track', run: () => addTrackOf('audio'), disabled: !editable || !canAddTrack(edits, 'audio') },
     { id: 'help', group: 'Timeline', label: 'Keyboard shortcuts', keys: '?', run: () => setHelpOpen(true) },
     ...(onOpenExport ? [{ id: 'export', group: 'File', label: 'Export', keys: `${mk}E`, run: onOpenExport }] : []),
+    ...editorToolCommands,
   ]
   // MENUBAR1: run a top-menu command with the existing palette commands / applyJLCut / detachBrollAudio.
   const menuSeqRef = useRef(0)
