@@ -505,6 +505,7 @@ export function EditorShell({
     historyPast,
     historyPastLabels,
     historyFuture,
+    historyFutureLabels,
     canUndo,
     canRedo,
     saveState,
@@ -585,6 +586,7 @@ export function EditorShell({
       historyPast={historyPast}
       historyPastLabels={historyPastLabels}
       historyFuture={historyFuture}
+      historyFutureLabels={historyFutureLabels}
       jumpHistory={jumpHistory}
       disabled={!canUndo && !canRedo}
     />
