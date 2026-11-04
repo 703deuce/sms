@@ -220,7 +220,7 @@ export function UnifiedEditorWorkspace({
                 <GripHorizontal className="size-3" />
               </button>
             </div>
-          ) : null}
+          )}
           <section className="min-h-0 min-w-0 overflow-hidden rounded-md border border-border/70 bg-card" data-testid="unified-timeline-region">
             {timeline}
           </section>
