@@ -20,6 +20,7 @@ import {
   type OpCtx,
 } from '@/lib/clips/editor/clip-timeline'
 import { defaultEdits, editsPayloadForSave, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { moveVideoSegment, moveVideoSegmentWithGap } from '@/lib/clips/editor/timeline-edit-ops'
 
 const bounds = { clipStartMs: 0, clipEndMs: 10000, trimMinMs: 0, trimMaxMs: 20000 }
 
@@ -300,5 +301,20 @@ describe('lane state + schema', () => {
       rows,
     )
     expect(out.map((r) => r.id)).toEqual(['b2', 'b2~1000'])
+  })
+})
+
+describe('B1 main clip reordering', () => {
+  it('reorders linked video and voice with magnet on, and preserves an inserted gap with magnet off', () => {
+    const edits = base({ videoSplits: [3000, 6000] })
+    const on = moveVideoSegment(ctxOf(edits), 'seg:0', null)
+    expect(on?.sectionOrder).toBeTruthy()
+    expect(on?.inserts ?? []).toHaveLength(0)
+    const off = moveVideoSegmentWithGap(ctxOf(edits), 'seg:0', null)
+    expect(off?.sectionOrder).toEqual(on?.sectionOrder)
+    expect(off?.inserts?.some((insert) => insert.sourceId === '__gap__' || insert.durMs === 3000)).toBe(true)
+    const lanes = buildTimelineItems({ edits: off!, previewEdits: off! })
+    expect(lanes.video.length).toBeGreaterThan(0)
+    expect(lanes.voice.length).toBeGreaterThan(0)
   })
 })
