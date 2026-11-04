@@ -135,10 +135,10 @@ function renderShell(edits: ClipEditsV2) {
 
 function clickRail(label: string, ui: ReturnType<typeof render>) {
   // All editing tools now live in one full-height right Inspector.
-  if (!ui.queryByTestId('script-view-tool-tabs')) {
+  if (!ui.queryByTestId('unified-inspector-tool-rail')) {
     fireEvent.click(ui.getByTestId('unified-inspector-toggle'))
   }
-  const tools = ui.getByTestId('script-view-tool-tabs')
+  const tools = ui.getByTestId('unified-inspector-tool-rail')
   fireEvent.click(within(tools).getByRole('button', { name: label }))
 }
 
