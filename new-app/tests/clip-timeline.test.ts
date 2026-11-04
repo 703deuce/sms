@@ -264,6 +264,11 @@ describe('lane state + schema', () => {
     expect(n.broll![0]!.inMs).toBe(250)
     expect(n.audio!.music).toMatchObject({ startMs: 500, endMs: 4000, inMs: 100 })
   })
+  it('video visibility persists without deleting the main source', () => {
+    const e = setLaneState(base(), 'video', { hidden: true })
+    expect(normalizeEdits(e, bounds).timelineLanes?.video?.hidden).toBe(true)
+    expect(applyTimelineLaneState(e).timelineLanes?.video?.hidden).toBe(true)
+  })
   it('clearing all lane toggles is sent as null so the server copy is cleared', () => {
     expect(editsPayloadForSave(base()).timelineLanes).toBeNull()
   })
