@@ -151,7 +151,7 @@ export function EditorRail({
         onClick={() => pickGroup(group.id)}
         className={cn(
           tabs
-            ? 'relative flex h-10 min-w-[40px] flex-1 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+            ? 'relative flex h-10 min-w-[2.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
             : vertical
             ? 'relative flex h-12 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
             : 'relative grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -164,7 +164,7 @@ export function EditorRail({
         )}
       >
         <Icon className={tabs ? 'size-4' : 'size-5'} aria-hidden />
-        {vertical ? <span className={cn('max-w-full truncate leading-none', tabs ? 'text-[10px]' : 'text-[11px]')}>{group.label}</span> : null}
+        {vertical ? <span className={cn('max-w-full truncate leading-none', tabs ? 'text-[0.625rem]' : 'text-[11px]')}>{group.label}</span> : null}
       </button>
     )
     if (horizontal) return btn
@@ -191,7 +191,7 @@ export function EditorRail({
       )}
     >
       {visibleGroups.map((group, gi) => (
-        <div key={group.id} className={tabs ? 'flex min-w-[40px] flex-1' : 'flex w-full flex-col items-center gap-0.5'}>
+        <div key={group.id} className={tabs ? 'flex min-w-[2.5rem] flex-1' : 'flex w-full flex-col items-center gap-0.5'}>
           {gi > 0 && !horizontal && !tabs ? <div className="my-1 h-px w-8 bg-border" aria-hidden /> : null}
           {renderGroupButton(group, !horizontal)}
         </div>
