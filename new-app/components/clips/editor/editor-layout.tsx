@@ -61,16 +61,16 @@ export const EDITOR_GRID = {
   rootDock:
     'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
-    'lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-rows-[auto_minmax(0,1fr)_auto]',
+    'lg:grid-cols-[clamp(280px,28vw,440px)_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)_minmax(220px,40%)]',
   /** TIMELINE_LAYOUT3 (CapCut): tools panel | Player | Properties | icon rail on top; one full-width timeline below. */
   railDock: 'min-h-0 min-w-0 lg:col-start-1 lg:row-start-1 lg:w-[clamp(260px,28vw,440px)]',
   panelDock: 'lg:col-start-1 lg:row-start-2 lg:w-[clamp(260px,28vw,440px)]',
   previewDock:
     'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel lg:col-start-2 lg:row-start-1 lg:row-span-2',
   propertiesDock:
-    'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card lg:col-start-3 lg:row-start-1 lg:row-span-2 lg:w-[clamp(260px,24vw,380px)]',
+    'hidden',
   timelineDock:
-    'col-span-full min-h-0 overflow-hidden rounded-lg border border-border bg-card lg:row-start-3',
+    'col-span-full min-h-0 min-w-0 overflow-hidden rounded-lg border border-border bg-card lg:col-start-1 lg:col-span-2 lg:row-start-3',
 } as const
 
 export function EditorLayout(props: {
@@ -182,7 +182,7 @@ export function EditorLayout(props: {
       <section data-region="preview" className={previewClass}>
         {props.preview}
       </section>
-      {compact && !dock ? null : (
+      {compact || dock ? null : (
         <aside data-region="properties" className={propertiesClass}>
           {props.properties}
         </aside>
