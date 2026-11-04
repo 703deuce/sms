@@ -101,6 +101,7 @@ export function TranscriptPanel({
   compactToolbar = false,
   largeScript = false,
   documentView = false,
+  findRequestSeq = 0,
   beatsAvailable = false,
   beatsAnalyzing = false,
   beatCount = 0,
@@ -153,6 +154,8 @@ export function TranscriptPanel({
   largeScript?: boolean
   /** Unified editor keeps instructions available via menu while giving words priority. */
   documentView?: boolean
+  /** Incremented by menu commands to open/focus find after the Script panel mounts. */
+  findRequestSeq?: number
   beatsAvailable?: boolean
   beatsAnalyzing?: boolean
   beatCount?: number
@@ -170,6 +173,7 @@ export function TranscriptPanel({
   const [editingI, setEditingI] = useState<number | null>(null)
   const wordFixCommittedRef = useRef(false)
   const [search, setSearch] = useState('')
+  const [documentFindOpen, setDocumentFindOpen] = useState(false)
   const [replace, setReplace] = useState('')
   const [matchIndex, setMatchIndex] = useState(0)
   const [addToVocab, setAddToVocab] = useState(false)
@@ -272,16 +276,37 @@ export function TranscriptPanel({
   }, [search])
 
   useEffect(() => {
-    if (!panelActive) return
+    if (!panelActive && !documentView) return
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault()
-        findInputRef.current?.focus()
+        if (documentView) setDocumentFindOpen(true)
+        requestAnimationFrame(() => findInputRef.current?.focus())
       }
     }
+    const onFindRequested = () => {
+      if (documentView) setDocumentFindOpen(true)
+      requestAnimationFrame(() => findInputRef.current?.focus())
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [panelActive])
+    window.addEventListener('transovo:find-transcript', onFindRequested)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('transovo:find-transcript', onFindRequested)
+    }
+  }, [panelActive, documentView])
+
+  useEffect(() => {
+    if (!findRequestSeq || (!panelActive && !documentView)) return
+    if (documentView) setDocumentFindOpen(true)
+  }, [findRequestSeq, panelActive, documentView])
+
+  useEffect(() => {
+    if ((!panelActive && !documentView) || (documentView && !documentFindOpen)) return
+    // The compact document search mounts only after its state becomes open.
+    const frame = requestAnimationFrame(() => findInputRef.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [findRequestSeq, panelActive, documentView, documentFindOpen])
 
   const applyReplaceCurrent = () => {
     if (!activeMatch || !applyWordFixesBatch) return
@@ -836,15 +861,16 @@ export function TranscriptPanel({
     <div
       className={cn(
         'flex flex-col',
-        compactToolbar ? 'h-full min-h-0 gap-2 p-2' : largeScript ? 'h-full min-h-0 gap-3 p-3' : 'gap-3 p-3',
+        compactToolbar ? (documentView ? 'h-full min-h-0 gap-0 p-1.5' : 'h-full min-h-0 gap-2 p-2') : largeScript ? 'h-full min-h-0 gap-3 p-3' : 'gap-3 p-3',
       )}
       aria-busy={wordsLoading}
     >
       {wordsLoading ? (
         <p className="text-xs text-muted-foreground" role="status">Updating transcript for extended trim…</p>
       ) : null}
-      {compactToolbar ? (
-        <div className="flex shrink-0 items-center gap-2" data-testid="transcript-find-replace">
+      {compactToolbar ? (!documentView || documentFindOpen) && (
+        <div className={cn("flex shrink-0 gap-2", documentView ? "flex-col" : "items-center")} data-testid="transcript-find-replace">
+          <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
@@ -1049,6 +1075,15 @@ export function TranscriptPanel({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
+          {documentView && documentFindOpen ? (
+            <div className="flex min-w-0 items-center gap-2" data-testid="transcript-replace-row">
+              <Input aria-label="Replace with" placeholder="Replace…" value={replace} onChange={(event) => setReplace(event.target.value)} className="h-8 min-w-0 flex-1" />
+              <Button size="sm" variant="outline" disabled={!activeMatch || !replace.trim()} onClick={applyReplaceCurrent}>Replace</Button>
+              <Button size="sm" variant="outline" disabled={!phraseMatches.length || !replace.trim()} onClick={applyReplaceAll}>All</Button>
+              <Button size="sm" variant="ghost" aria-label="Close find and replace" onClick={() => setDocumentFindOpen(false)}>✕</Button>
+            </div>
+          ) : null}
         </div>
       ) : (
       <div className="flex flex-col gap-2" data-testid="transcript-find-replace">
@@ -1360,7 +1395,7 @@ export function TranscriptPanel({
       >
         <div
           className={cn(
-            largeScript && 'mx-auto w-full max-w-[70ch] px-3 py-2 text-[16px] leading-[1.8] sm:px-4 sm:text-[17px]',
+            largeScript && (documentView ? 'w-full px-2 py-1 text-[14px] leading-[1.55] sm:px-3' : 'mx-auto w-full max-w-[70ch] px-3 py-2 text-[16px] leading-[1.8] sm:px-4 sm:text-[17px]'),
           )}
         >
         {visible.length && !documentView ? (
@@ -1450,11 +1485,11 @@ export function TranscriptPanel({
               }
               if (paras.has(w.i)) {
                 nodes.push(
-                  <span key={`p-${w.i}`} className="block h-4" data-testid="transcript-para-break" aria-hidden />,
+                  <span key={`p-${w.i}`} className={cn("block", documentView ? "h-1.5" : "h-4")} data-testid="transcript-para-break" aria-hidden />,
                 )
               }
               // SCRIPT_DOC2: a timestamp at the start of every paragraph (and speaker block); click to jump.
-              if (paras.has(w.i) || w.i === block.words[0]?.i) {
+              if (!documentView && (paras.has(w.i) || w.i === block.words[0]?.i)) {
                 const paraMs = Math.round(wordSourceMs(w).startMs)
                 nodes.push(
                   <button
@@ -1482,7 +1517,8 @@ export function TranscriptPanel({
           }
           return (
             <div key={`${block.spk}-${bi}`}>
-              <div className={cn("mb-1 flex items-center gap-1.5 first:mt-0", documentView ? "mt-2" : "mt-5")}>
+              {(!documentView || bi === 0 || blocks[bi - 1]?.spk !== block.spk) ? (
+              <div className={cn("mb-0.5 flex items-center gap-1.5 first:mt-0", documentView ? "mt-1" : "mt-5")}>
                 {renamingSpk === `${block.spk}-${bi}` && onSetEdits ? (
                   <Input
                     autoFocus
@@ -1511,7 +1547,7 @@ export function TranscriptPanel({
                     type="button"
                     data-testid="transcript-speaker-chip"
                     title="Rename speaker"
-                    className="inline-flex h-6 items-center gap-1.5 rounded px-0.5 text-xs font-semibold tracking-wide text-muted-foreground hover:text-foreground"
+                    className={cn("inline-flex items-center gap-1 rounded px-0.5 font-medium text-muted-foreground hover:text-foreground", documentView ? "h-4 text-[11px]" : "h-6 gap-1.5 text-xs tracking-wide")}
                     onClick={() => onSetEdits && setRenamingSpk(`${block.spk}-${bi}`)}
                   >
                     <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
@@ -1520,6 +1556,7 @@ export function TranscriptPanel({
                   </button>
                 )}
               </div>
+              ) : null}
               {transcriptChunkStarts(block.words.length, longTranscript).map((from) => {
                 const to = Math.min(block.words.length, from + TRANSCRIPT_CHUNK_WORDS)
                 const slice = block.words.slice(from, to)

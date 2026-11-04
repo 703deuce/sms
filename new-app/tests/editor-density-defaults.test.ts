@@ -7,8 +7,8 @@ afterEach(() => localStorage.clear())
 
 describe('unified editor density defaults', () => {
   it('allocates more width to the transcript and player by default', () => {
-    expect(readEditorPanelWidthPx()).toBe(328)
-    localStorage.setItem('transovo.editor.panelWidthPx.v2', '348')
+    expect(readEditorPanelWidthPx()).toBe(294)
+    localStorage.setItem('transovo.editor.panelWidthPx.v3', '348')
     expect(readEditorPanelWidthPx()).toBe(348)
   })
 

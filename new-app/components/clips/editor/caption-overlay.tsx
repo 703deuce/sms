@@ -96,7 +96,9 @@ export function CaptionOverlay({
   const exportPlayH = exportPlay.height
   const assScale = boxHeightPx > 0 ? boxHeightPx / exportPlayH : 1
   const emRatio = assEmPerFontsize(fitCfg.font)
-  const fontSize = Math.max(12, ((boxHeightPx * fitCfg.fontsize) / fitCfg.refH) * emRatio)
+  // Do not impose a 12px floor: on a laptop preview 3–10% caption sizes
+  // can ALL fall below 12px, making the Size control appear broken.
+  const fontSize = Math.max(1, ((boxHeightPx * fitCfg.fontsize) / fitCfg.refH) * emRatio)
   const motion = outputMs != null ? captionMotionAt(edits, outputMs) : { xPct: 0, yPct: 0, scalePct: 100 }
   const motionScale = Math.max(0.5, Math.min(2, motion.scalePct / 100))
   const colors = cap.colors

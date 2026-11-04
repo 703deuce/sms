@@ -358,8 +358,11 @@ export function EditorShell({
   // FIX2 R7: read localStorage after mount (no SSR/hydration mismatch)
   const [timelineOpen, setTimelineOpen] = useState(false)
   useEffect(() => {
-    if (compact) setTimelineOpen(readTimelineOpen(typeof window === 'undefined' ? null : window.localStorage))
-  }, [compact])
+    if (compact) {
+      const store = typeof window === 'undefined' ? null : window.localStorage
+      setTimelineOpen(unifiedWorkspaceActive ? store?.getItem('clipEditor.timelineOpen') !== '0' : readTimelineOpen(store))
+    }
+  }, [compact, unifiedWorkspaceActive])
   const toggleTimeline = useCallback(() => {
     setTimelineOpen((o) => {
       const next = !o
@@ -367,7 +370,7 @@ export function EditorShell({
       return next
     })
   }, [])
-  const timelineVisible = unifiedWorkspaceActive || !compact || timelineOpen
+  const timelineVisible = !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
   const [scriptToolPanel, setScriptToolPanel] = useState<ScriptViewToolPanelId | null>(null)
@@ -503,6 +506,7 @@ export function EditorShell({
     saveState,
     applyCleanupCut,
     applyCleanupCuts,
+    syncWordsForCuts,
     setCutRanges,
     setWordFix,
     applyWordFixesBatch,
@@ -714,6 +718,7 @@ export function EditorShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once on open
   }, [])
 
+  const [transcriptFindRequestSeq, setTranscriptFindRequestSeq] = useState(0)
   const [showSurrounding, setShowSurrounding] = useState(false)
   useEffect(() => {
     try {
@@ -741,6 +746,9 @@ export function EditorShell({
     () => mergeMediaWords(clipEditorWords, { sources: editSources, sourceSegments: editSourceSegments }, mediaTranscripts.transcripts),
     [clipEditorWords, editSources, editSourceSegments, mediaTranscripts.transcripts],
   )
+  useEffect(() => {
+    syncWordsForCuts(editorWords)
+  }, [editorWords, syncWordsForCuts])
 
   const handleDeriveClip = useCallback(
     async (trimIn: number, trimOut: number, deriveTitle?: string) => {
@@ -1991,6 +1999,7 @@ export function EditorShell({
                   facecamLayout={facecamLayout}
                   reframeV2Enabled={reframeV2Enabled}
                   onPick={onLayoutPick}
+                  onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
                 />
               }
               canvasBgSlot={
@@ -2136,6 +2145,8 @@ export function EditorShell({
           compactToolbar={options.compactToolbar}
           largeScript={options.largeScript}
           documentView={options.documentView}
+          findRequestSeq={transcriptFindRequestSeq}
+          panelActive={Boolean(options.documentView || (layoutView === 'script' ? scriptToolPanel == null : panel === 'transcript'))}
           beatsAvailable={Boolean(beatCutApi?.hasBeats)}
           beatsAnalyzing={Boolean(beatCutApi?.analyzing)}
           beatCount={beatCutApi?.beatCount ?? 0}
@@ -2245,6 +2256,7 @@ export function EditorShell({
             facecamLayout={facecamLayout}
             reframeV2Enabled={reframeV2Enabled}
             onPick={onLayoutPick}
+                  onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
             className="mb-4"
           />
           <LayersPanel
@@ -2253,6 +2265,22 @@ export function EditorShell({
             layers={layers}
             setLayers={setLayers}
             onEdits={setEdits}
+            selectedLayerKey={canvasSel?.target ?? null}
+            onSelectActualLayer={(kind, id, startMs) => {
+              if (kind === 'captions') {
+                selectPanel('captions')
+                return
+              }
+              const target: KeyframeTarget = kind === 'video' ? 'video' : kind === 'broll' ? `broll:${id}` : `text:${id}`
+              setCanvasSel({ target, label: kind === 'video' ? 'Main video' : kind === 'broll' ? 'B-roll' : 'Text' })
+              setTimelineSelReq((prev) => ({
+                lane: kind === 'video' ? 'video' : kind,
+                ...(kind === 'video' ? { atMs: outputMs } : { id }),
+                seq: (prev?.seq ?? 0) + 1,
+              }))
+              if (kind === 'text') setSelectedTextId(id)
+              if (kind !== 'video' && Math.abs(startMs - outputMs) > 500) seekOutput(startMs)
+            }}
             clipType={(aiMeta as ClipAiMeta | null)?.clipType ?? null}
             platform={
               streamerSide?.platform === 'kick'
@@ -2492,6 +2520,7 @@ export function EditorShell({
                   facecamLayout={facecamLayout}
                   reframeV2Enabled={reframeV2Enabled}
                   onPick={onLayoutPick}
+                  onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
                 />
               )
             }
@@ -2710,6 +2739,7 @@ export function EditorShell({
               onLayoutPick(mode, facecam)
               setLayoutCtx(null)
             }}
+            onAspectChange={(aspect) => { setEdits({ ...edits, aspectRatio: aspect }); setLayoutCtx(null) }}
           />
         </CanvasLayoutMenu>
       ) : null}
@@ -3071,7 +3101,7 @@ export function EditorShell({
     onCanvasSelect('video')
     if (layoutView === 'script') openToolPanel('inspector')
     else if (band !== 'wide' || layoutView === 'timeline') selectPanel('inspector')
-    scrollToTestId(testId)
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent('transovo:editor-video-tool', { detail: testId })), 100)
   }
   const openVersions = () => {
     document.querySelector<HTMLElement>('[data-testid="versions-menu"]')?.click()
@@ -3140,8 +3170,12 @@ export function EditorShell({
               id: 'find-replace',
               label: 'Find & replace in script',
               onSelect: () => {
-                if (layoutView !== 'script') selectPanel('transcript')
-                scrollToTestId('transcript-find-replace')
+                // A3: request focus through React so it survives opening a hidden or unmounted Script panel.
+                if (!unifiedWorkspaceActive) {
+                  if (layoutView === 'script') setScriptToolPanel(null)
+                  else selectPanel('transcript')
+                }
+                setTranscriptFindRequestSeq((seq) => seq + 1)
               },
             },
             { id: 'marker', label: 'Add / remove marker', shortcut: 'M', onSelect: () => runPalette('marker') },
@@ -3443,6 +3477,7 @@ export function EditorShell({
         <EditorLayout
           unified={unifiedWorkspaceActive}
           unifiedTimelineView={layoutView}
+          unifiedTimelineHidden={compact && !timelineOpen}
           onUnifiedTimelineViewChange={setLayoutViewPersist}
           unifiedMain={
             unifiedWorkspaceActive ? (
@@ -3741,6 +3776,24 @@ export function EditorShell({
             transcriptSelectionRef={selectionRef}
             registerBeatCut={registerBeatCut}
             menuCommand={timelineMenuCmd}
+            editorToolCommands={[
+              ...editorMenus.flatMap((menu) => menu.groups.flatMap((group) => group.items.map((item) => ({
+                id: `editor-${menu.id}-${item.id}`,
+                group: menu.label,
+                label: item.label,
+                keys: item.shortcut,
+                keywords: item.id === 'bg-removal' ? 'background cutout remove bg green screen chroma' : item.id === 'blur' ? 'face blur region mask privacy' : item.id === 'cleanup' ? 'clean fillers remove retakes edit clarity' : item.id === 'music' ? 'music audio sfx sound' : item.id === 'layout' ? 'layout aspect ratio crop 16:9 9:16' : '',
+                run: item.onSelect,
+                disabled: Boolean(item.disabledHint),
+              })))),
+              ...(['transcript', 'cleanup', 'layout', 'inspector', 'captions', 'text', 'audio', 'effects', 'media', 'layers', 'templates', 'broll', 'brand'] as EditorPanelId[]).map((id) => ({
+                id: `editor-panel-${id}`,
+                group: 'Editor tools',
+                label: id === 'inspector' ? 'Properties / Inspector' : id === 'transcript' ? 'Script / Transcript' : id === 'cleanup' ? 'Clean up / Edit for clarity' : id[0]!.toUpperCase() + id.slice(1),
+                keywords: id === 'inspector' ? 'transform rotation position scale' : id === 'effects' ? 'color filters speed adjustment' : id === 'audio' ? 'music sfx sound' : id === 'layout' ? 'aspect ratio background' : '',
+                run: () => openToolPanel(id),
+              })),
+            ]}
             momentFocus={fvMoment}
             onMomentSeek={seekSource}
             highlights={
@@ -3854,6 +3907,7 @@ export function EditorShell({
                 facecamLayout={facecamLayout}
                 reframeV2Enabled={reframeV2Enabled}
                 onPick={onLayoutPick}
+                  onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
               />
             }
             canvasBgSlot={

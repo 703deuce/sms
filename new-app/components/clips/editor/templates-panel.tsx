@@ -124,7 +124,7 @@ export function TemplatesPanel({
               >
                 <span
                   className="block truncate text-[13px] font-black"
-                  style={{ fontFamily: o.font ? captionFontStack(o.font) : undefined, color: classic?.primary }}
+                  style={{ fontFamily: o.font ? captionFontStack(o.font) : undefined }}
                 >
                   {o.name}
                 </span>

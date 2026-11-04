@@ -10,7 +10,7 @@ import {
   type LayoutOptionId,
 } from '@/lib/clips/layout-options'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
-import { isLandscapeAspect } from '@/lib/clips/export-aspect'
+import { isLandscapeAspect, EXPORT_ASPECT_PRESETS, type ExportAspect } from '@/lib/clips/export-aspect'
 
 /** EFFECTS1: on 16:9 the export renders only these layouts differently (worker landscape_layout). */
 const LANDSCAPE_ACTIVE = new Set<string>(['full_frame', 'center_crop'])
@@ -22,6 +22,7 @@ export function LayoutQuickPicker({
   facecamLayout = null,
   reframeV2Enabled = false,
   onPick,
+  onAspectChange,
   className,
 }: {
   value: ClipEditsV2['layout']['mode']
@@ -29,6 +30,7 @@ export function LayoutQuickPicker({
   facecamLayout?: FacecamLayoutState | null
   reframeV2Enabled?: boolean
   onPick: (mode: LayoutOptionId, facecam?: ClipEditsV2['layout']['facecam']) => void
+  onAspectChange?: (aspect: ExportAspect) => void
   className?: string
 }) {
   const aiExtras = clipEditorAiExtrasEnabled()
@@ -38,6 +40,16 @@ export function LayoutQuickPicker({
   const shown = landscape && !LANDSCAPE_ACTIVE.has(value) ? 'full_frame' : value
   return (
     <div className={className} data-testid="layout-quick-picker">
+      {onAspectChange ? (
+        <div className="mb-3 space-y-1.5" data-testid="layout-quick-aspect">
+          <p className="text-xs font-semibold text-muted-foreground">Aspect ratio</p>
+          <div className="flex flex-wrap gap-1">
+            {EXPORT_ASPECT_PRESETS.map((aspect) => (
+              <Button key={aspect} size="sm" type="button" variant={(edits.aspectRatio ?? '9:16') === aspect ? 'default' : 'outline'} onClick={() => onAspectChange(aspect)} data-testid={`quick-aspect-${aspect}`}>{aspect}</Button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <p className="mb-1.5 text-xs font-medium text-muted-foreground">Layout</p>
       <div className="flex flex-wrap gap-1.5">
         {EXPORT_LAYOUT_OPTIONS.map((opt) => {

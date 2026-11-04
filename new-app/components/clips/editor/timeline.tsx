@@ -383,6 +383,7 @@ export function Timeline({
   transcriptSelectionRef,
   registerBeatCut,
   menuCommand = null,
+  editorToolCommands = [],
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -478,6 +479,8 @@ export function Timeline({
   registerBeatCut?: (api: BeatCutRegisterApi | null) => void
   /** MENUBAR1: a new `seq` runs `cmd` once (also right after mount, when the menu switched to Timeline view). */
   menuCommand?: { cmd: TimelineMenuCommand; seq: number } | null
+  /** All editor panels and menu actions are searchable alongside timeline commands. */
+  editorToolCommands?: PaletteCommand[]
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -500,6 +503,8 @@ export function Timeline({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [viewportPx, setViewportPx] = useState(0)
   const [pxPerSec, setPxPerSec] = useState<number | null>(null)
+  // Keep the source extent visible after a trim, so users can extend back to the original end.
+  const [trimScaleFloorMs, setTrimScaleFloorMs] = useState<number | null>(null)
   const pendingScrollRef = useRef<number | null>(null)
   const trackViewportPx = Math.max(0, viewportPx - TRACK_EXTRA_PX)
   // FV2: long media can zoom out until the whole hour fits; clips keep the 4 px/s floor.
@@ -507,13 +512,14 @@ export function Timeline({
   // length on the lane and push later items right. Edits stay in base time; identity without inserts.
   const tmap = useMemo(() => exportTimeMap(tb.segs, edits.inserts), [tb.segs, edits.inserts])
   const dspan = span + tmap.totalMs
-  const minPx = timelineMinPxPerSec(dspan, trackViewportPx)
+  const rulerSpanMs = Math.max(dspan, trimScaleFloorMs ?? 0)
+  const minPx = timelineMinPxPerSec(rulerSpanMs, trackViewportPx)
   const minPxRef = useRef(minPx)
   minPxRef.current = minPx
   const longMedia = dspan > LONG_MEDIA_MS
   const effectivePxPerSec = pxPerSec ?? (longMedia ? minPx : TIMELINE_DEFAULT_PX_PER_SEC)
-  const widthPx = trackWidthPx(dspan, effectivePxPerSec, trackViewportPx, minPx)
-  const pxPerMs = widthPx / dspan
+  const widthPx = trackWidthPx(rulerSpanMs, effectivePxPerSec, trackViewportPx, minPx)
+  const pxPerMs = widthPx / rulerSpanMs
   const highlightLaneRanges = useMemo(
     () => (highlights ? picksToLaneRanges(highlights.picks, highlights.ranges, tb) : []),
     [highlights, tb],
@@ -573,7 +579,7 @@ export function Timeline({
     (nextPxPerSec: number, anchorX?: number) => {
       const el = scrollRef.current
       const prevW = widthRef.current
-      const nextW = trackWidthPx(dspan, nextPxPerSec, trackViewportPx, minPxRef.current)
+      const nextW = trackWidthPx(rulerSpanMs, nextPxPerSec, trackViewportPx, minPxRef.current)
       if (el) {
         const playheadAnchor = TRACK_OFFSET_PX + playheadPxRef.current - el.scrollLeft
         const anchor =
@@ -591,7 +597,7 @@ export function Timeline({
       }
       setPxPerSec(nextPxPerSec)
     },
-    [dspan, trackViewportPx],
+    [rulerSpanMs, trackViewportPx],
   )
 
   useLayoutEffect(() => {
@@ -605,7 +611,8 @@ export function Timeline({
   const zoomOut = () => applyZoom(zoomBy(effectivePxPerSec, 'out', undefined, minPx))
   const zoomFit = () => {
     pendingScrollRef.current = 0
-    setPxPerSec(fitPxPerSec(dspan, trackViewportPx, minPx))
+    setTrimScaleFloorMs(null)
+    setPxPerSec(fitPxPerSec(dspan, trackViewportPx, timelineMinPxPerSec(dspan, trackViewportPx)))
   }
   const zoomDefault = () => applyZoom(TIMELINE_DEFAULT_PX_PER_SEC)
 
@@ -1220,6 +1227,10 @@ export function Timeline({
   // G1b3: freeze frame at the playhead (an E5b insert with no media: holds the composed frame).
   const freezeFrame = () => {
     if (!editable || refLocked(edits, { lane: 'video', id: '' })) return
+    if (liveSelected.length > 0 && !liveSelected.some((r) => r.lane === 'video')) {
+      toast.message('Select a video clip to freeze', { id: 'timeline-freeze' })
+      return
+    }
     const atMs = liveOutMs
     const ins = addFreezeFrame(edits.inserts, timebaseFor(previewEdits).segs, atMs, `frz-${crypto.randomUUID().slice(0, 8)}`)
     if (!ins) {
@@ -1234,9 +1245,19 @@ export function Timeline({
       toast.message('Open the compound (double-click) to split inside it', { id: 'timeline-compound' })
       return
     }
-    const next = splitAt(opCtx(), liveSelected, playheadMs)
+    // Voice pieces use the same source split boundaries as Video (with optional J/L offsets).
+    // Route a voice-only selection to its matching Video segment so both lanes split together.
+    const voiceOnly = liveSelected.length > 0 && liveSelected.every((r) => r.lane === 'voice')
+    if (voiceOnly && liveSelected.some((r) => refLocked(edits, r))) {
+      toast.message('Voice lane is locked — unlock it before splitting')
+      return
+    }
+    const refsToSplit: ItemRef[] = voiceOnly
+      ? liveSelected.map((r) => ({ lane: 'video' as const, id: r.id.replace(/^voice:/, 'seg:') }))
+      : liveSelected
+    const next = splitAt(opCtx(), refsToSplit, playheadMs)
     if (next) commit(next)
-    else toast.message(splitNoopMessage(edits, liveSelected))
+    else toast.message(playheadMs <= 1 ? 'Can’t split at the very start of a clip' : splitNoopMessage(edits, liveSelected))
   }
   // E3fix: Join — remove a Video split (prev / next of one selected half, or between selected halves).
   const joinOpts = videoJoinOptions({ edits, previewEdits }, liveSelected)
@@ -1507,6 +1528,10 @@ export function Timeline({
   }
   const trimToPlayhead = (edge: 'start' | 'end'): boolean => {
     if (!editable) return false
+    if (playheadMs <= 1) {
+      if (edge === 'end') toast.message('Cannot trim the clip to zero length', { id: 'timeline-trim' })
+      return true
+    }
     if (selCompound && selCompound.id !== openCompound) {
       commit(trimCompound(opCtx(), selCompound, edge, playheadMs))
       return true
@@ -1937,6 +1962,7 @@ export function Timeline({
     { id: 'addAudio', group: 'Timeline', label: 'Add audio track', run: () => addTrackOf('audio'), disabled: !editable || !canAddTrack(edits, 'audio') },
     { id: 'help', group: 'Timeline', label: 'Keyboard shortcuts', keys: '?', run: () => setHelpOpen(true) },
     ...(onOpenExport ? [{ id: 'export', group: 'File', label: 'Export', keys: `${mk}E`, run: onOpenExport }] : []),
+    ...editorToolCommands,
   ]
   // MENUBAR1: run a top-menu command with the existing palette commands / applyJLCut / detachBrollAudio.
   const menuSeqRef = useRef(0)
@@ -2260,6 +2286,7 @@ export function Timeline({
 
   const startDrag = (e: React.PointerEvent, item: TimelineItem, mode: DragState['mode']) => {
     if (e.button !== 0) return
+    if (item.lane === 'video' && (mode === 'start' || mode === 'end')) setTrimScaleFloorMs((prev) => Math.max(prev ?? 0, dspan))
     // TC2b: the Hand tool scrolls from anywhere (the track area handles it).
     if (tool === 'hand') return
     e.stopPropagation()
@@ -2643,6 +2670,10 @@ export function Timeline({
     return y
   }
   const totalH = RULER_H + rows.reduce((s, r) => s + LANE_H[r.lane], 0)
+  // Full-video highlight / moment bars are rendered *above* the ruler in the media
+  // column. The labels column needs identical spacer rows or every label is one
+  // (or two) lanes above its waveform when opening a clip in full video (C5).
+  const auxiliaryHeaderHeight = 36 * (Number(Boolean(highlights && (highlightLaneRanges.length || highlights.jobRunning))) + Number(Boolean(momentFocus)))
 
   const tbtn =
     'inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-[12px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4'
@@ -3014,7 +3045,7 @@ export function Timeline({
         {editable && !st.locked && item.caps.trimStart ? (
           <span
             className={`absolute inset-y-0 left-0 z-30 rounded-l-[3px] border-l-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
-              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-2.5 cursor-ew-resize'
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-3 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-start"
             title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'J-cut: Alt-drag to offset audio from picture' : undefined}
@@ -3024,7 +3055,7 @@ export function Timeline({
         {editable && !st.locked && item.caps.trimEnd ? (
           <span
             className={`absolute inset-y-0 right-0 z-30 rounded-r-[3px] border-r-[3px] border-white/50 bg-transparent hover:border-white hover:bg-white/30 ${
-              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-2.5 cursor-ew-resize'
+              altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'w-3 cursor-ew-resize bg-cyan-300/70' : 'w-3 cursor-ew-resize'
             }`}
             data-testid="timeline-trim-end"
             title={altHeld && (item.lane === 'voice' || item.lane === 'video') ? 'L-cut: Alt-drag to offset audio from picture' : undefined}
@@ -3052,7 +3083,7 @@ export function Timeline({
         historySlot={historySlot}
         split={split}
         freezeFrame={freezeFrame}
-        freezeDisabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
+        freezeDisabled={!editable || refLocked(edits, { lane: 'video', id: '' }) || (liveSelected.length > 0 && !liveSelected.some((r) => r.lane === 'video'))}
         insertGap={insertGap}
         gapDisabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
         del={() => del()}
@@ -3310,14 +3341,21 @@ export function Timeline({
           />
         </div>
       ) : null}
-      {tlCollapsed ? null : (
+      {tlCollapsed ? (
+        <div className="flex h-10 min-h-10 items-center gap-2 rounded-md border border-border bg-card/50 px-2" data-testid="timeline-mini-strip">
+          <span className="shrink-0 text-[11px] text-muted-foreground">Video</span>
+          <input type="range" min={0} max={Math.max(1, Math.round(span))} value={Math.round(playheadMs)} onChange={(e) => onSeekOutput(Number(e.target.value))} aria-label="Compact timeline scrubber" className="min-w-0 flex-1 accent-primary" />
+          <span className="shrink-0 text-[11px] tabular-nums">{(playheadMs / 1000).toFixed(1)}s</span>
+        </div>
+      ) : (
       <div
         className="relative flex min-w-0 rounded-lg border border-border bg-card/30"
         // TC3 (d): a set height is the height — taller than all tracks leaves empty space below.
-        style={tlHeight ? { height: tlHeight, overflowY: 'auto' } : undefined}
+        style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}
         data-testid="timeline-body"
       >
         <div className="relative min-w-[160px] w-[160px] shrink-0 border-r border-border/60" aria-label="Tracks">
+          {auxiliaryHeaderHeight > 0 ? <div style={{ height: auxiliaryHeaderHeight }} data-testid="timeline-auxiliary-header" aria-hidden /> : null}
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
           {rows.map((r) => (
             <TimelineLaneHeader
@@ -3341,7 +3379,7 @@ export function Timeline({
               aria-label={`Resize ${r.trackId ? r.label : r.lane} lane`}
               title="Drag to resize this lane · double-click to reset"
               className="absolute inset-x-0 z-10 h-1.5 -translate-y-1/2 cursor-row-resize touch-none hover:bg-primary/40"
-              style={{ top: rowTop(r.key) + LANE_H[r.lane] }}
+              style={{ top: auxiliaryHeaderHeight + rowTop(r.key) + LANE_H[r.lane] }}
               data-testid={`timeline-lane-resize-${r.isDefault ? r.lane : `${r.lane}-${r.trackId}`}`}
               onPointerDown={(e) => startLaneResize(r.lane, e)}
               onDoubleClick={() => resetLaneH(r.lane)}
@@ -3921,7 +3959,7 @@ export function Timeline({
         aria-orientation="horizontal"
         aria-label="Resize timeline (drag; double-click = fit all tracks)"
         title="Drag to resize the timeline · double-click: show all tracks"
-        className="group order-first flex h-3 cursor-row-resize items-center justify-center gap-2"
+        className="group order-first flex h-3 shrink-0 cursor-row-resize items-center justify-center gap-2"
         data-testid="timeline-resize"
         onPointerDown={(e) => {
           if (e.button !== 0 || tlCollapsed) return

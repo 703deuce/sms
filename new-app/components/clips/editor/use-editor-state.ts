@@ -265,7 +265,7 @@ export function useEditorState(
   const saveBaseEditsRef = useRef<ClipEditsV2>(restored)
   const lastSavedEditsRef = useRef<ClipEditsV2>(restored)
   const wordsRef = useRef(opts?.words ?? [])
-  wordsRef.current = opts?.words ?? wordsRef.current
+  // Keep the latest source-timed editor words; never reset a refetch to stale initial clip words.
   const editsRef = useRef(state.edits)
   editsRef.current = state.edits
   const historyRef = useRef({ past: state.past, future: state.future })
@@ -410,6 +410,10 @@ export function useEditorState(
   )
 
   const clearProducerStrip = useCallback(() => dispatch({ type: 'clearProducerStrip' }), [])
+
+  const syncWordsForCuts = useCallback((nextWords: SourceWord[]) => {
+    wordsRef.current = nextWords
+  }, [])
 
   const wordSpans = useCallback(() => {
     return wordsRef.current.map((w) => {
@@ -1124,6 +1128,7 @@ export function useEditorState(
     clearProducerStrip,
     applyCleanupCut,
     applyCleanupCuts,
+    syncWordsForCuts,
     setCutRanges,
     setWordFix,
     applyWordFixesBatch,

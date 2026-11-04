@@ -4,15 +4,11 @@ import { useEffect, useRef, useState } from 'react'
 import type { ClipBounds } from '@/lib/clips/edits'
 import { trimNeedsEditorWordsRefetch } from '@/lib/clips/editor-words-merge'
 import { MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
-import { clipWordsToAbsolute } from '@/lib/server/clips/editor-words'
 import { fetchClipEditorWords } from '@/lib/clips-api'
 import type { SourceWord } from '@/lib/clips/source-words'
 
-function absoluteEditorWords(words: SourceWord[], bounds: ClipBounds): SourceWord[] {
-  if (!words.length) return words
-  return clipWordsToAbsolute(words, bounds.clipStartMs, bounds.clipEndMs) as SourceWord[]
-}
-
+// Editor payload and refetch endpoint both return words in absolute source seconds.
+// Applying clip-relative detection again double-offsets early extended-trim words.
 export function useEditorWords(
   clipId: string,
   initialWords: SourceWord[],
@@ -20,7 +16,7 @@ export function useEditorWords(
   trim: { in: number; out: number },
   contextMs?: number,
 ) {
-  const [words, setWords] = useState(() => absoluteEditorWords(initialWords, bounds))
+  const [words, setWords] = useState(() => initialWords)
   const [wordsLoading, setWordsLoading] = useState(false)
   const lastTrimRef = useRef(trim)
   const contextRef = useRef(contextMs)
@@ -31,7 +27,7 @@ export function useEditorWords(
   const extendMs = contextMs != null && Number.isFinite(contextMs) ? contextMs : MAX_TRIM_EXTEND_MS
 
   useEffect(() => {
-    const next = absoluteEditorWords(initialWords, bounds)
+    const next = initialWords
     setWords(next)
     wordsRef.current = next
   }, [clipId, initialWords, bounds.clipStartMs, bounds.clipEndMs])
@@ -54,8 +50,8 @@ export function useEditorWords(
           ) {
             return
           }
-          setWords(absoluteEditorWords(data.words, bounds))
-          wordsRef.current = absoluteEditorWords(data.words, bounds)
+          setWords(data.words)
+          wordsRef.current = data.words
         })
         .catch(() => {
           /* keep prior words; transcript panel still shows best-effort slice */
@@ -83,8 +79,8 @@ export function useEditorWords(
     void fetchClipEditorWords(clipId, trimSnap, ctxSnap)
       .then((data) => {
         if (contextRef.current !== ctxSnap) return
-        setWords(absoluteEditorWords(data.words, bounds))
-        wordsRef.current = absoluteEditorWords(data.words, bounds)
+        setWords(data.words)
+        wordsRef.current = data.words
       })
       .catch(() => {
         /* keep prior words */
@@ -98,8 +94,8 @@ export function useEditorWords(
     setWordsLoading(true)
     return fetchClipEditorWords(clipId, trimSnap, ctxSnap)
       .then((data) => {
-        setWords(absoluteEditorWords(data.words, bounds))
-        wordsRef.current = absoluteEditorWords(data.words, bounds)
+        setWords(data.words)
+        wordsRef.current = data.words
       })
       .finally(() => setWordsLoading(false))
   } }

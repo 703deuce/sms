@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { render, waitFor, cleanup } from '@testing-library/react'
+import { render, waitFor, cleanup, fireEvent } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
@@ -158,6 +158,17 @@ describe('EditorShell render smoke', () => {
     expect(getByTestId('unified-transcript-pane')).toBeTruthy()
     expect(getByTestId('unified-video-preview')).toBeTruthy()
     expect(getByTestId('unified-timeline-region')).toBeTruthy()
+    expect(document.querySelector('[data-testid="transcript-find-replace"]')).toBeNull()
+    expect(document.querySelector('[data-testid="transcript-para-time"]')).toBeNull()
+    expect(getByTestId('editor-workspace-controls')).toBeTruthy()
+    expect(getByTestId('unified-top-bar-modes')).toBeTruthy()
+    expect(getByTestId('editor-workspace-controls').contains(getByTestId('unified-mode-expanded'))).toBe(true)
+    expect(document.querySelector('[data-testid="unified-workspace-toolbar"] [data-testid^="unified-mode-"]')).toBeNull()
+    fireEvent.click(getByTestId('editor-menu-edit'))
+    await waitFor(() => expect(getByTestId('editor-menu-item-find-replace')).toBeTruthy())
+    fireEvent.click(getByTestId('editor-menu-item-find-replace'))
+    await waitFor(() => expect(getByTestId('transcript-find-replace')).toBeTruthy())
+    await waitFor(() => expect(document.activeElement).toBe(getByTestId('transcript-find-replace').querySelector('input[aria-label="Find in transcript"]')))
     expect(getByTestId('versions-menu')).toBeTruthy()
     const topBar = getByTestId('editor-top-bar')
     const menus = getByTestId('editor-top-bar-left')

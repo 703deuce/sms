@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { toast } from 'sonner'
 import {
   Activity,
   Blend,
@@ -381,16 +382,16 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuLabel className={editorMenuSection}>Tracks</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => p.setXfadeTracks((v) => !v)} disabled={!p.autoXfade} data-testid="timeline-xfade-tracks">
-                ⇅ Tracks
+              <DropdownMenuItem onClick={() => { p.setXfadeTracks((v) => !v); toast.message(p.xfadeTracks ? "Cross-track fades disabled" : "Cross-track fades enabled") }} disabled={!p.autoXfade} data-testid="timeline-xfade-tracks">
+                ⇅ Cross-track fades {p.xfadeTracks ? "✓" : ""}
               </DropdownMenuItem>
               {p.addTrackMenu}
               <DropdownMenuItem onClick={() => p.setPacingOpen((v) => !v)} data-testid="timeline-pacing">
                 Pacing
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => p.setEnvOn((v) => !v)} data-testid="timeline-envelopes">
+              <DropdownMenuItem onClick={() => { p.setEnvOn((v) => !v); toast.message(p.envOn ? "Volume and opacity envelopes hidden" : "Volume and opacity envelopes visible on eligible clips") }} data-testid="timeline-envelopes">
                 <Activity className="size-4" />
-                Envelopes
+                Envelopes {p.envOn ? "✓" : ""}
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

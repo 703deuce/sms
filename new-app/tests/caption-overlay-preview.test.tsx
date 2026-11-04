@@ -87,4 +87,22 @@ describe('caption preview overlay', () => {
     const row = container.querySelector('[style*="font-family"]') as HTMLElement | null
     expect(row?.style.fontFamily).toContain('Anton')
   })
+  it('scales caption font visibly from 3% to 10% at laptop preview height (E8)', () => {
+    const words: ClipWord[] = [{ w: 'hello', s: 0, e: 1, idx: 0 }]
+    const small = defaultEdits(bounds)
+    small.captions = { ...small.captions, size: 3 }
+    const one = render(
+      <CaptionOverlay words={words} currentTimeSec={0.2} edits={small} boxHeightPx={200} outputDurationSec={5} />,
+    )
+    const smallPx = parseFloat((one.container.querySelector('[data-testid="caption-row"]') as HTMLElement).style.fontSize)
+    one.unmount()
+    const large = defaultEdits(bounds)
+    large.captions = { ...large.captions, size: 10 }
+    const two = render(
+      <CaptionOverlay words={words} currentTimeSec={0.2} edits={large} boxHeightPx={200} outputDurationSec={5} />,
+    )
+    const largePx = parseFloat((two.container.querySelector('[data-testid="caption-row"]') as HTMLElement).style.fontSize)
+    expect(largePx).toBeGreaterThan(smallPx * 2)
+  })
+
 })

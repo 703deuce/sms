@@ -64,10 +64,10 @@ export function AudioPanel({
   playheadAtMsRef?: RefObject<number>
   onSuggestMusic: (prompt: string) => void
   onAttachMusic: (generationId: string) => void
-  onPatchMusic: (patch: { volume?: number; duckDepth?: number }) => void
+  onPatchMusic: (patch: { volume?: number; duckDepth?: number; fadeInMs?: number; fadeOutMs?: number }) => void
   onRemoveMusic: () => void
   onAddSfx: (generationId: string, atMs: number) => void
-  onUpdateSfx: (generationId: string, patch: { atMs?: number; volume?: number }) => void
+  onUpdateSfx: (generationId: string, patch: { atMs?: number; volume?: number; fadeInMs?: number; fadeOutMs?: number }) => void
   onRemoveSfx: (generationId: string) => void
   onPatchStudioSound: (studio: ClipStudioSound | null) => void
   onStartStudioSound?: () => void
@@ -430,6 +430,27 @@ export function AudioPanel({
                 }}
               />
             </label>
+            <div className="grid grid-cols-2 gap-2" data-testid="music-fade-controls">
+              {(['fadeInMs', 'fadeOutMs'] as const).map((edge) => (
+                <label key={edge} className="space-y-1 text-xs">
+                  <span>{edge === 'fadeInMs' ? 'Fade in (seconds)' : 'Fade out (seconds)'}</span>
+                  <input
+                    key={`${music.generationId}:${edge}:${music[edge] ?? 0}`}
+                    type="number"
+                    min={0}
+                    max={30}
+                    step={0.1}
+                    defaultValue={((music[edge] ?? (edge === 'fadeInMs' ? 500 : 1000)) / 1000).toFixed(1)}
+                    className="w-full rounded border border-border bg-background px-2 py-1"
+                    aria-label={edge === 'fadeInMs' ? 'Music fade in seconds' : 'Music fade out seconds'}
+                    onBlur={(e) => {
+                      const seconds = Number(e.currentTarget.value)
+                      if (Number.isFinite(seconds)) onPatchMusic({ [edge]: Math.round(Math.min(30, Math.max(0, seconds)) * 1000) })
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={onRemoveMusic}>Remove</Button>
               <Button size="sm" variant="outline" disabled={busy} onClick={() => void generateMusic()}>Regenerate</Button>
@@ -493,7 +514,7 @@ export function AudioPanel({
           </div>
           <ul className="space-y-1 text-xs">
             {(edits.audio?.sfx || []).map((s) => (
-              <li key={s.generationId} className="flex items-center justify-between gap-2 rounded bg-muted/50 px-2 py-1">
+              <li key={s.generationId} className="space-y-1 rounded bg-muted/50 px-2 py-1">
                 <span>
                   {Math.floor(s.atMs / 1000)}s · vol {Math.round((s.volume ?? 0.8) * 100)}%
                 </span>
@@ -502,6 +523,27 @@ export function AudioPanel({
                     Move to playhead
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => onRemoveSfx(s.generationId)}>×</Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2" data-testid="sfx-fade-controls">
+                  {(['fadeInMs', 'fadeOutMs'] as const).map((edge) => (
+                    <label key={edge} className="space-y-0.5 text-[11px]">
+                      <span>{edge === 'fadeInMs' ? 'Fade in (s)' : 'Fade out (s)'}</span>
+                      <input
+                        key={`${s.generationId}:${edge}:${s[edge] ?? 0}`}
+                        type="number"
+                        min={0}
+                        max={30}
+                        step={0.1}
+                        defaultValue={((s[edge] ?? 0) / 1000).toFixed(1)}
+                        className="w-full rounded border border-border bg-background px-2 py-1"
+                        aria-label={edge === 'fadeInMs' ? 'SFX fade in seconds' : 'SFX fade out seconds'}
+                        onBlur={(e) => {
+                          const seconds = Number(e.currentTarget.value)
+                          if (Number.isFinite(seconds)) onUpdateSfx(s.generationId, { [edge]: Math.round(Math.min(30, Math.max(0, seconds)) * 1000) })
+                        }}
+                      />
+                    </label>
+                  ))}
                 </div>
               </li>
             ))}

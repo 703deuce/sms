@@ -141,6 +141,22 @@ describe('operations map onto the edits model', () => {
     expect(next.layout.layoutSegments!.some((s) => s.startMs === 4000 || s.endMs === 4000)).toBe(true)
   })
 
+  it('splits linked main video when only a Voice item is selected (B3)', () => {
+    const e = base()
+    const voice = buildTimelineItems({ edits: e, previewEdits: e }).voice[0]!
+    const next = splitAt(ctxOf(e), [{ lane: 'voice', id: voice.id }], 4000)!
+    expect(next.videoSplits).toContain(4000)
+    const lanes = buildTimelineItems({ edits: next, previewEdits: next })
+    expect(lanes.video).toHaveLength(2)
+    expect(lanes.voice).toHaveLength(2)
+  })
+
+  it('does not split a locked Voice selection (B3)', () => {
+    const e = setLaneState(base(), 'voice', { locked: true })
+    const voice = buildTimelineItems({ edits: e, previewEdits: e }).voice[0]!
+    expect(splitAt(ctxOf(e), [{ lane: 'voice', id: voice.id }], 4000)).toBeNull()
+  })
+
   it('deletes items; a video segment becomes a cut range; the last segment is kept', () => {
     const e = base({ cutRanges: [[3000, 4000]] })
     const next = deleteItems(ctxOf(e), [{ lane: 'video', id: 'seg:0' }])!

@@ -75,6 +75,19 @@ describe('E2 multi-track timeline', () => {
     expect(getByTestId('timeline-track').getAttribute('data-duration-ms')).toBe('19000')
   })
 
+  it('keeps track labels aligned below the extra full-video moment row (C5)', () => {
+    const { getByTestId } = setup(edits(), {
+      momentFocus: {
+        fromClipId: 'source-clip', startMs: 2000, endMs: 12000, title: 'Full video moment',
+        onRangeChange: vi.fn(), onMakeClip: vi.fn(),
+      },
+      onMomentSeek: vi.fn(),
+    })
+    expect(getByTestId('full-video-moment-lane')).toBeTruthy()
+    expect(getByTestId('timeline-auxiliary-header').style.height).toBe('36px')
+    expect(getByTestId('timeline-lane-header-voice')).toBeTruthy()
+  })
+
   it('B-roll bars sit at their OUTPUT time after a cut (old timeline drew them on the source span)', () => {
     const { broll, pxPerMs } = setup()
     expect(parseFloat(broll('b1').style.left)).toBeCloseTo(5000 * pxPerMs(), 3)
@@ -107,6 +120,16 @@ describe('E2 multi-track timeline', () => {
     drag(broll('b1'), 1980 * pxPerMs())
     const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
     expect(next.broll![0]).toMatchObject({ startMs: 7000, endMs: 10000 })
+  })
+
+  it('dragging a split main video clip commits a linked video/voice reorder (B1 magnet on)', () => {
+    const e = edits({ cutRanges: [], videoSplits: [9000] })
+    const { getAllByTestId, pxPerMs, onCommitEdits } = setup(e)
+    const first = getAllByTestId('timeline-item-video')[0]!
+    drag(first, 15000 * pxPerMs())
+    expect(onCommitEdits).toHaveBeenCalledTimes(1)
+    const next = onCommitEdits.mock.calls[0]![0] as ClipEditsV2
+    expect(next.sectionOrder).toEqual([[9000, 20000], [0, 9000]])
   })
 
   it('trim handle on B-roll start advances the media in-point', () => {

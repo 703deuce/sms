@@ -1,6 +1,9 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
+import { GripVertical, Eye, EyeOff, Lock, Unlock, Loader2 } from 'lucide-react'
+import { orderedStack, moveInStack } from '@/lib/clips/editor/layer-props'
+import { toggleItemsEnabled } from '@/lib/clips/editor/item-flags'
+import { setLaneState, laneState } from '@/lib/clips/editor/clip-timeline'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,12 +29,98 @@ function patchLayer<T extends Layer>(layers: Layer[], id: string, patch: Partial
   return layers.map((l) => (l.id === id ? ({ ...l, ...patch } as Layer) : l))
 }
 
+type ActualVisualLayer = { key: string; label: string; kind: 'video' | 'broll' | 'text' | 'captions'; id: string; startMs: number }
+
+function ActualLayersList({ edits, onEdits, selectedKey, onSelect }: {
+  edits: ClipEditsV2
+  onEdits: (next: ClipEditsV2) => void
+  selectedKey?: string | null
+  onSelect?: (kind: ActualVisualLayer['kind'], id: string, startMs: number) => void
+}) {
+  const [dragged, setDragged] = useState<string | null>(null)
+  const broll = orderedStack(edits, 'broll', edits.broll ?? [])
+  const text = orderedStack(edits, 'text', edits.textItems ?? [])
+  // Visual stack from top to bottom (the video is the backmost visual layer).
+  const stack: ActualVisualLayer[] = [
+    ...text.slice().reverse().map((t) => ({ key: `text:${t.id}`, label: t.text?.trim().slice(0, 36) || 'Text', kind: 'text' as const, id: t.id, startMs: t.startMs })),
+    ...(edits.captions?.enabled !== false ? [{ key: 'captions', label: 'Captions', kind: 'captions' as const, id: 'captions', startMs: 0 }] : [{ key: 'captions', label: 'Captions', kind: 'captions' as const, id: 'captions', startMs: 0 }]),
+    ...broll.slice().reverse().map((b) => ({ key: `broll:${b.id}`, label: `B-roll · ${b.id.slice(0, 18)}`, kind: 'broll' as const, id: b.id, startMs: b.startMs })),
+    { key: 'video', label: 'Main video', kind: 'video', id: 'video', startMs: 0 },
+  ]
+  const off = new Set(edits.disabledItems ?? [])
+  const disabled = (row: ActualVisualLayer) =>
+    row.kind === 'captions' ? edits.captions?.enabled === false : off.has(row.key)
+  const toggleVisibility = (row: ActualVisualLayer) => {
+    if (row.kind === 'video') return
+    if (row.kind === 'captions') return onEdits({ ...edits, captions: { ...edits.captions, enabled: edits.captions?.enabled === false } })
+    const next = toggleItemsEnabled(edits, [{ lane: row.kind, id: row.id }])
+    if (next) onEdits(next)
+  }
+  const reorder = (src: ActualVisualLayer, to: ActualVisualLayer) => {
+    // The shared preview/export model permits reordering overlapping items on
+    // their same visual track, not arbitrary cross-type compositing.
+    if (src.kind !== to.kind || (src.kind !== 'text' && src.kind !== 'broll') || src.key === to.key) return
+    const rows = stack.filter((r) => r.kind === src.kind)
+    const a = rows.findIndex((r) => r.key === src.key)
+    const b = rows.findIndex((r) => r.key === to.key)
+    if (a < 0 || b < 0) return
+    let next = edits
+    const dir = a < b ? 'backward' : 'forward'
+    for (let i = 0; i < Math.abs(b - a); i++) next = moveInStack(next, src.key, dir)
+    if (next !== edits) onEdits(next)
+  }
+  return (
+    <section className="space-y-2 rounded-md border border-border p-2" data-testid="actual-layer-stack">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold">Layers · front to back</h3>
+        <span className="text-[10px] text-muted-foreground">{stack.length} layers</span>
+      </div>
+      <ul className="space-y-1">
+        {stack.map((row) => {
+          const hidden = disabled(row)
+          const track = row.kind === 'text' || row.kind === 'broll' ? row.kind : null
+          const locked = track ? laneState(edits, track).locked === true : false
+          return (
+            <li key={row.key} className="flex items-center gap-1 rounded border border-border/60 px-1 py-1"
+              data-testid={`actual-layer-${row.key}`}
+              draggable={row.kind === 'text' || row.kind === 'broll'}
+              onDragStart={(e) => { setDragged(row.key); e.dataTransfer.effectAllowed = 'move' }}
+              onDragOver={(e) => { if (dragged && dragged !== row.key) e.preventDefault() }}
+              onDrop={(e) => { e.preventDefault(); const from = stack.find((r) => r.key === dragged); if (from) reorder(from, row); setDragged(null) }}
+              onDragEnd={() => setDragged(null)}>
+              <GripVertical size={13} className="shrink-0 text-muted-foreground" aria-hidden />
+              <button type="button" className={`min-w-0 flex-1 truncate rounded px-1 py-1 text-left text-xs ${selectedKey === row.key ? 'bg-primary/10 font-semibold' : ''}`}
+                onClick={() => onSelect?.(row.kind, row.id, row.startMs)}
+                data-testid={`actual-layer-select-${row.key}`}>{row.label}</button>
+              <button type="button" className="rounded p-1 disabled:opacity-30"
+                title={row.kind === 'video' ? 'Main video visibility is controlled by the Video track' : hidden ? 'Show layer' : 'Hide layer'}
+                aria-label={`Toggle ${row.label} visibility`}
+                disabled={row.kind === 'video'}
+                onClick={() => toggleVisibility(row)}>
+                {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+              {track ? <button type="button" className="rounded p-1" title={locked ? 'Unlock track' : 'Lock track'}
+                aria-label={`${locked ? 'Unlock' : 'Lock'} ${row.label} track`}
+                onClick={() => onEdits(setLaneState(edits, track, { locked: !locked }))}>
+                {locked ? <Lock size={14} /> : <Unlock size={14} />}
+              </button> : null}
+            </li>
+          )
+        })}
+      </ul>
+      <p className="text-[10px] text-muted-foreground">Drag overlapping text or B-roll layers to change stacking within their track. Locks apply to the whole track.</p>
+    </section>
+  )
+}
+
 export function LayersPanel({
   clipId,
   edits,
   layers,
   setLayers,
   onEdits,
+  selectedLayerKey,
+  onSelectActualLayer,
   platform,
   brandTemplates,
   onApplyTemplate,
@@ -46,6 +135,8 @@ export function LayersPanel({
   layers: Layer[]
   setLayers: (layers: Layer[]) => void
   onEdits: (edits: ClipEditsV2) => void
+  selectedLayerKey?: string | null
+  onSelectActualLayer?: (kind: ActualVisualLayer['kind'], id: string, startMs: number) => void
   platform?: 'twitch' | 'kick'
   brandTemplates?: { id: string; name: string; settings: unknown; pending?: boolean }[]
   onApplyTemplate?: (templateId: string) => void
@@ -111,6 +202,7 @@ export function LayersPanel({
           Saving layers…
         </p>
       ) : null}
+      <ActualLayersList edits={edits} onEdits={onEdits} selectedKey={selectedLayerKey} onSelect={onSelectActualLayer} />
       {(onApplyAutoTemplate || (brandTemplates && brandTemplates.length > 0 && onApplyTemplate)) ? (
         <div className="space-y-2 rounded-lg border border-border p-3">
           <p className="text-xs font-medium">Brand template</p>

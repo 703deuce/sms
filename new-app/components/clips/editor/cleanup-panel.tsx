@@ -373,8 +373,22 @@ export function CleanupPanel({
 
   return (
     <div className="flex flex-col gap-4 p-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-medium">Cleanup</h3>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-testid="clarity-run"
+            disabled={clarityLoading}
+            onClick={() => void runClarity()}
+          >
+            {clarityLoading ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : null}
+            Edit for clarity
+            <span className="ml-1.5 inline-flex">
+              <AiCreditBadge credits={2} />
+            </span>
+          </Button>
       </div>
 
       <div
@@ -573,20 +587,7 @@ export function CleanupPanel({
             Remove retakes
             <FreeToolBadge className="ml-1.5" />
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            data-testid="clarity-run"
-            disabled={clarityLoading}
-            onClick={() => void runClarity()}
-          >
-            {clarityLoading ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : null}
-            Edit for clarity
-            <span className="ml-1.5 inline-flex">
-              <AiCreditBadge credits={2} />
-            </span>
-          </Button>
+
           {clarityRows.length ? (
             <Button type="button" size="sm" data-testid="clarity-apply-all" onClick={applyAllClarity}>
               Apply all clarity
