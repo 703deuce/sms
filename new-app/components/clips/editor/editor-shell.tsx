@@ -3479,7 +3479,7 @@ export function EditorShell({
         <EditorLayout
           unified={unifiedWorkspaceActive}
           unifiedTimelineView={layoutView}
-          unifiedTimelineHidden={compact && !timelineOpen}
+          unifiedTimelineHidden={compact && !timelineOpen && !timelineFocused}
           unifiedTimelineCollapsed={timelineCollapsed && !timelineFocused}
           onUnifiedTimelineFocusChange={setTimelineFocused}
           onUnifiedTimelineViewChange={setLayoutViewPersist}
@@ -3720,7 +3720,7 @@ export function EditorShell({
               {timelineOpen ? 'Hide timeline' : 'Show timeline'}
             </button>
           ) : null}
-          <div className={cn('h-full min-h-0 min-w-0 overflow-hidden', !timelineVisible && 'hidden')} data-testid="editor-timeline-wrap">
+          <div className={cn('h-full min-h-0 min-w-0 overflow-hidden', !timelineVisible && !timelineFocused && 'hidden')} data-testid="editor-timeline-wrap">
           <Timeline
             angleSources={angleSources}
             edits={edits}
@@ -3755,6 +3755,7 @@ export function EditorShell({
             canRedo={canRedo}
             historySlot={historyPanel}
             onCollapsedChange={setTimelineCollapsed}
+            controlledCollapsed={timelineCollapsed}
             forceExpanded={timelineFocused}
             mediaOffsetMs={mediaOffsetMs}
             musicUrl={musicUrl}
