@@ -82,51 +82,55 @@ export function EditorTopBar({
       <Button size="icon" variant="ghost" aria-label="Back to project" render={<Link href={backHref} />}>
         <ArrowLeft className="size-4" />
       </Button>
-      {titleMenuSlot ?? (
-        <Input
-          className="h-9 max-w-md border-transparent bg-transparent text-base font-semibold shadow-none hover:border-input focus-visible:border-input"
-          value={title}
-          onChange={(e) => onTitleChange(e.target.value)}
-          aria-label="Clip title"
-        />
-      )}
-      <span className={cn('shrink-0', saveTone)} aria-live="polite">
-        {optimisticPending && saveState !== 'saving' ? (
-          <Badge variant="outline" className="mr-2 h-6 text-[11px] font-normal">
-            Pending save
-          </Badge>
-        ) : null}
-        {(saveState === 'saving' || saveState === 'dirty') && (
-          <span className="inline-flex items-center gap-1 text-xs">
-            <Loader2 className="size-3.5 animate-spin" aria-hidden />
-            Saving…
-          </span>
-        )}
-        {saveState === 'saved' && (
-          <span className="inline-flex items-center gap-1 text-xs">
-            <CloudCheck className="size-3.5" aria-hidden />
-            Saved
-          </span>
-        )}
-        {saveState === 'error' && (
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            className="h-auto p-0 text-xs text-destructive"
-            onClick={() => onRetrySave?.()}
-          >
-            <CloudAlert className="mr-1 size-3.5 inline" aria-hidden />
-            Not saved · Retry
-          </Button>
-        )}
-      </span>
       {menuBarSlot ? (
-        <div className="flex min-w-0 flex-1 items-center overflow-hidden" data-testid="editor-top-bar-left">
-          <Separator orientation="vertical" className="mx-1 hidden h-6 shrink-0 lg:block" />
+        <div className="flex min-w-0 shrink-0 items-center" data-testid="editor-top-bar-left">
           {menuBarSlot}
         </div>
       ) : null}
+      <Separator orientation="vertical" className="mx-1 hidden h-5 shrink-0 lg:block" />
+      <div className="flex min-w-0 max-w-[min(22vw,220px)] shrink items-center overflow-hidden" data-testid="editor-top-bar-project">
+      {titleMenuSlot ?? (
+          <Input
+            className="h-8 w-full min-w-0 border-transparent bg-transparent text-sm font-semibold shadow-none hover:border-input focus-visible:border-input"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            aria-label="Clip title"
+          />
+        )}
+      </div>
+      <div className="flex shrink-0 items-center" data-testid="editor-top-bar-save">
+      <span className={cn('shrink-0', saveTone)} aria-live="polite">
+          {optimisticPending && saveState !== 'saving' ? (
+            <Badge variant="outline" className="mr-2 h-6 text-[11px] font-normal">
+              Pending save
+            </Badge>
+          ) : null}
+          {(saveState === 'saving' || saveState === 'dirty') && (
+            <span className="inline-flex items-center gap-1 text-xs">
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              Saving…
+            </span>
+          )}
+          {saveState === 'saved' && (
+            <span className="inline-flex items-center gap-1 text-xs">
+              <CloudCheck className="size-3.5" aria-hidden />
+              Saved
+            </span>
+          )}
+          {saveState === 'error' && (
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-xs text-destructive"
+              onClick={() => onRetrySave?.()}
+            >
+              <CloudAlert className="mr-1 size-3.5 inline" aria-hidden />
+              Not saved · Retry
+            </Button>
+          )}
+        </span>
+      </div>
       {producerStrip && producerStrip.changeCount > 0 ? (
         <div
           data-testid="producer-undo-strip"
