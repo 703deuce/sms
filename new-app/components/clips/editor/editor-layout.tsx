@@ -156,6 +156,7 @@ export function EditorLayout(props: {
       {overlay && panelOpen && !dock ? (
         <button type="button" aria-label="Close panel" className={EDITOR_GRID.backdrop} onClick={props.onClosePanel} data-testid="editor-panel-backdrop" />
       ) : null}
+      {!scriptView ? (
       <section
         data-region="panel"
         hidden={dock ? !panelOpen : overlay && !panelOpen}
@@ -179,6 +180,7 @@ export function EditorLayout(props: {
           />
         ) : null}
       </section>
+      ) : null}
       <section data-region="preview" className={previewClass}>
         {props.preview}
       </section>
