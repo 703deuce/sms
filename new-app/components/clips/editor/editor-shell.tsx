@@ -2077,7 +2077,7 @@ export function EditorShell({
       </EditorPanelErrorBoundary>
     ) : null
 
-  const renderTranscriptPanel = (options: { compactToolbar?: boolean; largeScript?: boolean }) => (
+  const renderTranscriptPanel = (options: { compactToolbar?: boolean; largeScript?: boolean; documentView?: boolean }) => (
     <>
       {fullVideo && fvHighlights.showHighlightsList ? (
         <HighlightsListPanel
@@ -2136,6 +2136,7 @@ export function EditorShell({
           momentRows={fullVideo && fvHighlights.highlightsOn ? fvHighlights.momentRows : undefined}
           compactToolbar={options.compactToolbar}
           largeScript={options.largeScript}
+          documentView={options.documentView}
           beatsAvailable={Boolean(beatCutApi?.hasBeats)}
           beatsAnalyzing={Boolean(beatCutApi?.analyzing)}
           beatCount={beatCutApi?.beatCount ?? 0}
@@ -2569,10 +2570,10 @@ export function EditorShell({
   const panelBody = unifiedWorkspaceActive || layoutView === 'script' ? null : renderSidePanels(null)
 
   const previewColumnContent = (
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden px-2 pb-1 pt-2">
+      <div className={cn("flex h-full min-h-0 w-full min-w-0 flex-col gap-1 overflow-hidden", unifiedWorkspaceActive ? "px-0 pb-0 pt-0" : "px-2 pb-1 pt-2")}>
         <div
-          className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-1 md:p-2 [container-type:size]"
-          style={dockTools ? { alignItems: 'end', paddingBottom: 4 } : undefined}
+          className={cn("relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] [container-type:size]", unifiedWorkspaceActive ? "p-0" : "p-1 md:p-2")}
+          style={dockTools && !unifiedWorkspaceActive ? { alignItems: 'end', paddingBottom: 4 } : undefined}
         >
           <div
             ref={previewFrameRef}
@@ -2757,7 +2758,7 @@ export function EditorShell({
         ) : null}
       </div>
           ) : null}
-        <div className={cn('mt-auto min-w-0 shrink-0 space-y-1 border-t border-border pt-1.5', dockTools && 'mx-auto w-full max-w-4xl')}>
+        <div className={cn('mt-auto min-w-0 shrink-0 space-y-1 border-t border-border pt-1.5', dockTools && 'mx-auto w-full max-w-4xl', unifiedWorkspaceActive && 'pt-0.5')}>
           {dockTools && (clipTypeLabel || detectedLayout || pickerWhy) ? (
             <p
               className="truncate px-1 text-center text-[11px] text-muted-foreground"
@@ -3503,8 +3504,8 @@ export function EditorShell({
                 minTranscriptPx={280}
                 minPreviewPx={320}
                 transcript={
-                  <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card p-2" data-testid="unified-transcript-pane">
-                    {renderTranscriptPanel({ largeScript: true, compactToolbar: true })}
+                  <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card" data-testid="unified-transcript-pane">
+                    {renderTranscriptPanel({ largeScript: true, compactToolbar: true, documentView: true })}
                   </div>
                 }
                 preview={<div className="flex h-full min-h-0 min-w-0 overflow-hidden" data-testid="unified-video-preview">{previewColumnContent}</div>}
