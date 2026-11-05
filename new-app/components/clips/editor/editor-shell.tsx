@@ -1450,6 +1450,8 @@ export function EditorShell({
     playing,
     outputDurationMs: outDur,
     voiceMuted: laneVoiceMuted,
+    playerMuted,
+    playerVolume,
     meterOn,
   })
   const peakLevels = usePeakLevels(meterOn ? audioMeter.analysers : null)
@@ -1764,7 +1766,6 @@ export function EditorShell({
       v.pause()
       return
     }
-    v.volume = playerVolume / 100
     const mode = await playWithSound(v)
     if (mode === 'muted') {
       setPlayerMuted(true)
@@ -1798,12 +1799,8 @@ export function EditorShell({
     }
   }, [clipRec, laneVoiceMuted, outputMs, playerMuted, recPlacement, togglePlay])
 
-  useEffect(() => {
-    const v = videoRef.current
-    if (!v || useDubAudio) return
-    v.muted = playerMuted || laneVoiceMuted
-    v.volume = playerVolume / 100
-  }, [laneVoiceMuted, playerMuted, playerVolume, useDubAudio, videoUrl])
+  // AudioMix owns the main sound state, including CORS-safe Web Audio and plain
+  // video fallback. Do not race its envelope/track-FX gain control here.
 
   const deleteSelection = useCallback(() => {
     const sel = selectionRef.current
@@ -3097,22 +3094,12 @@ export function EditorShell({
                       if (!v) return
                       const next = !playerMuted
                       setPlayerMuted(next)
-                      v.muted = next
-                      if (!next) {
-                        v.volume = playerVolume / 100
-                        void playWithSound(v)
-                      }
+                      v.muted = next || laneVoiceMuted || useDubAudio
+                      if (!next && !laneVoiceMuted && !useDubAudio) void playWithSound(v)
                     }}
                     onVolumeChange={(pct) => {
                       setPlayerVolume(pct)
-                      const v = videoRef.current
-                      if (v) {
-                        v.volume = pct / 100
-                        if (pct > 0) {
-                          v.muted = false
-                          setPlayerMuted(false)
-                        }
-                      }
+                      if (pct > 0) setPlayerMuted(false)
                     }}
                     meterSlot={meterOn ? <AudioMeter levels={peakLevels} voiceMetered={audioMeter.voiceMetered} /> : null}
                   />
