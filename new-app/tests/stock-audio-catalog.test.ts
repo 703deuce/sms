@@ -11,11 +11,11 @@ describe('stock-audio-catalog', () => {
   })
 
   it('F19 exposes actual verified CC0 music loops rather than an empty placeholder', () => {
-    expect(CC0_MUSIC).toHaveLength(2)
+    expect(CC0_MUSIC).toHaveLength(4)
     for (const e of CC0_MUSIC) {
       expect(e.kind).toBe('music')
       expect(e.license).toBe('cc0')
-      expect(e.src).toMatch(/^https:\/\/raw\.githubusercontent\.com\/blancmathis\/Super_Bash_Folds\/[0-9a-f]{40}\/public\/assets\/audio\/open\/music\/.+\.ogg$/)
+      expect(e.src).toMatch(/^https:\/\/raw\.githubusercontent\.com\/(?:blancmathis\/Super_Bash_Folds|jarlah\/dungeon-haskell)\/[0-9a-f]{40}\/.+\.ogg$/)
     }
     expect(searchStockAudio(allStockAudioEntries(), 'battle', { kind: 'music' }).map(e => e.id)).toContain('cc0-battle-loop')
     expect(searchStockAudio(allStockAudioEntries(), 'menu', { kind: 'music' }).map(e => e.id)).toContain('cc0-menu-loop')
