@@ -176,8 +176,11 @@ export function CleanupPanel({
     [edits, orderedWords, deletedSet],
   )
   const proposed = useMemo(
-    () => [...filler, ...gaps, ...retakeExtras, ...clarityRows].filter((p) => !skippedIds.has(p.id)),
-    [filler, gaps, retakeExtras, clarityRows, skippedIds],
+    () => [...filler, ...gaps, ...retakeExtras, ...clarityRows].filter((p) =>
+      !skippedIds.has(p.id) &&
+      (!(p.kind === 'filler' || p.kind === 'repeat') ||
+        !(edits.audioMuteRanges ?? []).some(([a, b]) => a <= p.range[0] && b >= p.range[1]))),
+    [filler, gaps, retakeExtras, clarityRows, skippedIds, edits.audioMuteRanges],
   )
 
   const previewCutAudition = (p: CleanupProposal) => {
