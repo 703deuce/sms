@@ -2474,8 +2474,16 @@ export function Timeline({
       // (display delta → base delta at the dragged edge), not off by the insert's length.
       const anchor = dragMode === 'end' ? item.endMs : item.startMs
       const rule = dragMode === 'end' ? 'end' : 'start'
+      // F3: outer main-video handles must move beyond the CURRENT edit span to
+      // recover trimmed source frames. Mapping a negative/after-end display
+      // position through toBaseMs clamps it to the edited timeline and traps
+      // the edge permanently. Use signed pointer deltas for those handles.
+      const outerSourceTrim = item.lane === 'video' && dragMode !== 'move' &&
+        (dragMode === 'start'
+          ? item.srcInMs != null && item.srcInMs <= previewEdits.trim.in + 1
+          : item.srcOutMs != null && item.srcOutMs >= previewEdits.trim.out - 1)
       const raw =
-        slideTool && item.lane === 'video'
+        outerSourceTrim || (slideTool && item.lane === 'video')
           ? dx / Math.max(1e-6, pxPerMs)
           : tmap.totalMs
             ? toBaseMs(tmap, Math.max(0, toExportMs(tmap, anchor, rule) + dx / Math.max(1e-6, pxPerMs))) - anchor
