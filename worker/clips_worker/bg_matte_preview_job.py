@@ -24,6 +24,7 @@ def run_bg_matte_preview_job(conn, job: dict, post_progress) -> None:
     workspace_id = str(payload.get("workspaceId") or "")
     project_id = str(job.get("projectId") or "")
     quality = "detail" if payload.get("quality") == "detail" else "standard"
+    preview_fingerprint = str(payload.get("previewFingerprint") or "")
     if not clip_id or not workspace_id or not project_id:
         raise RuntimeError("missing matte preview clip/workspace/project")
 
@@ -71,7 +72,7 @@ def run_bg_matte_preview_job(conn, job: dict, post_progress) -> None:
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "matte_preview_gpu", "progress": 30})
         ensure_matte(
             conn, snippet, work, workspace_id=workspace_id, project_id=project_id,
-            clip_id=clip_id, quality=quality,
+            clip_id=clip_id, quality=quality, preview_fingerprint=preview_fingerprint,
             stage=lambda *_args, **_kw: None,
         )
     post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "matte_preview_ready", "progress": 95})
