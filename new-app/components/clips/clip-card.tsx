@@ -38,6 +38,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { clipsFetch, deriveClipFromEditor, patchClip } from '@/lib/clips-api'
 import { useOpenInFullVideo } from '@/components/clips/editor/open-in-full-video-button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -46,6 +47,7 @@ export function ClipCard({
   projectId,
   onDownload,
   onHidden,
+  onChanged,
   isStreamer = false,
   cardAspect = '9:16' as ExportAspect,
   selected = false,
@@ -56,6 +58,7 @@ export function ClipCard({
   projectId: string
   onDownload?: (clipId: string) => void | Promise<void>
   onHidden?: (clipId: string) => void
+  onChanged?: () => void
   isStreamer?: boolean
   cardAspect?: ExportAspect
   selected?: boolean
@@ -67,6 +70,7 @@ export function ClipCard({
   const [thumbBusy, setThumbBusy] = useState(false)
   const [hideBusy, setHideBusy] = useState(false)
   const [downloadBusy, setDownloadBusy] = useState(false)
+  const [cardActionBusy, setCardActionBusy] = useState(false)
   const aiMeta = (clip.aiMeta || {}) as ClipAiMeta
   const why = clipWhySummary(aiMeta)
   const layoutChip = clipLayoutChip(aiMeta)
@@ -88,6 +92,35 @@ export function ClipCard({
 
   const openEditor = () => {
     router.push(editorHref)
+  }
+
+  const renameCard = async () => {
+    const title = window.prompt('Clip name', clip.title)?.trim()
+    if (!title || title === clip.title) return
+    setCardActionBusy(true)
+    try {
+      await patchClip(clip.id, { title })
+      toast.success('Clip renamed')
+      onChanged?.()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Rename failed') }
+    finally { setCardActionBusy(false) }
+  }
+  const duplicateCard = async () => {
+    setCardActionBusy(true)
+    try {
+      await deriveClipFromEditor(clip.id, { trimIn: clip.startMs, trimOut: clip.endMs, title: `${clip.title} copy`.slice(0, 120) })
+      toast.success('Duplicate created')
+      onChanged?.()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Duplicate failed') }
+    finally { setCardActionBusy(false) }
+  }
+  const copyMomentLink = async () => {
+    try {
+      const link = await clipsFetch<{ url?: string; preparing?: boolean }>(`/api/clips/clips/${clip.id}/full-video-link`)
+      if (!link?.url) return toast.message('Full-video link is not ready yet')
+      await navigator.clipboard.writeText(new URL(link.url, window.location.origin).href)
+      toast.success('Moment link copied')
+    } catch { toast.error('Could not copy moment link') }
   }
 
   const runDownload = async () => {
@@ -382,6 +415,9 @@ export function ClipCard({
               <MoreHorizontal className="size-4" aria-hidden />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled={cardActionBusy} data-testid="clip-card-rename" onClick={() => void renameCard()}>Rename</DropdownMenuItem>
+              <DropdownMenuItem disabled={cardActionBusy} data-testid="clip-card-duplicate" onClick={() => void duplicateCard()}>Duplicate</DropdownMenuItem>
+              {projectHasUpload ? <DropdownMenuItem data-testid="clip-card-copy-moment" onClick={() => void copyMomentLink()}>Copy moment link</DropdownMenuItem> : null}
               <DropdownMenuItem disabled={thumbBusy} onClick={() => void makeThumbnail()}>
                 Make thumbnail
               </DropdownMenuItem>
