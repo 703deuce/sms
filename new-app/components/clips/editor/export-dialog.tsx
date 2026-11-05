@@ -942,6 +942,7 @@ export function ExportDialog({
         {onLayoutModeChange ? (
           <ExportLayoutPicker
             value={layoutMode}
+            aspectRatio={aspect}
             edits={edits}
             facecamLayout={facecamLayout}
             reframeV2Enabled={reframeV2Enabled}
