@@ -74,7 +74,7 @@ export function BgRemovalSection({
           if (!gone) {
             const next = { state: payload.data?.state ?? 'idle', url: payload.data?.url ?? null }
             setMattePreview((prev) => prev.state === next.state && prev.url === next.url ? prev : next)
-            if (next.state === 'failed') setPreviewError(payload.data?.error ?? 'Matte preview generation failed')
+            if (next.state === 'failed') setPreviewError((previous) => payload.data?.error ?? previous ?? 'Matte preview generation failed')
             else if (next.state === 'ready') setPreviewError(null)
           }
         }
