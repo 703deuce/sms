@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
+  runTool: vi.fn(),
+}))
+vi.mock('@/lib/ai-producer-agent/log', () => ({
+  logAiProducerStep: vi.fn(), redactArgs: (args: unknown) => args,
+}))
 import { checkEditorialSelections } from '@/lib/ai-producer-agent/specialists'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
 import type { ClipWord } from '@/lib/clips/edits'
