@@ -125,6 +125,7 @@ def ensure_matte(
     project_id: str,
     clip_id: str,
     quality: str,
+    preview_fingerprint: str = "",
     stage=lambda *a, **k: None,
 ) -> tuple[Path, str]:
     from clips_worker import storage
@@ -139,7 +140,7 @@ def ensure_matte(
         raise MatteSkip("too_long")
     model = "rvm_resnet50" if quality == "detail" else "rvm_mobilenetv3"
     src_sha = _file_sha(clip_src)
-    params_hash = hashlib.sha256(f"{src_sha}|{quality}|{model}|v1".encode()).hexdigest()[:32]
+    params_hash = hashlib.sha256(f"{src_sha}|{quality}|{model}|v1|{preview_fingerprint}".encode()).hexdigest()[:32]
     out = work_dir / "bg_matte.mp4"
     hit = _find_ready(conn, clip_id, params_hash)
     if hit:
@@ -154,6 +155,7 @@ def ensure_matte(
         "hash": params_hash,
         "srcSha": src_sha,
         "quality": quality,
+        "previewFingerprint": preview_fingerprint or None,
         "model": model,
         "modelVersion": "53d74c6",
         "durS": dur_s,
