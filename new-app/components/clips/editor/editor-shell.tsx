@@ -3099,8 +3099,9 @@ export function EditorShell({
                       if (!v) return
                       const next = !playerMuted
                       setPlayerMuted(next)
-                      v.muted = next || laneVoiceMuted || useDubAudio
-                      if (!next && !laneVoiceMuted && !useDubAudio) void playWithSound(v)
+                      v.muted = next || laneVoiceMuted || useDubAudio || audioMeter.voiceFxProxyActive
+                      // Unmuting must not start a paused video or bypass Voice FX.
+                      if (!next) void audioMeter.resumeAudio()?.catch(() => {})
                     }}
                     onVolumeChange={(pct) => {
                       setPlayerVolume(pct)
