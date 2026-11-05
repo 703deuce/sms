@@ -83,6 +83,7 @@ export async function buildToolCtx(run: {
       outputType: run.outputType as AgentPromptContext['outputType'],
       resolvedOutputType: config.resolvedOutputType,
       platform: run.platform as AgentPromptContext['platform'],
+      editMode: config.editMode,
     },
     markUsed(out) {
       for (const seg of out.builder?.segs ?? []) {
