@@ -4364,10 +4364,12 @@ export function Timeline({
                   ))}
                 </>
               ) : null}
-              {timelineClipboard.get() ? (
+              {(
                 <button
                   type="button"
-                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  disabled={!editable || !timelineClipboard.get()}
+                  title={timelineClipboard.get() ? 'Insert copied footage at the playhead' : 'Copy a clip before pasting'}
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                   role="menuitem"
                   data-testid="timeline-ctx-paste"
                   onClick={() => {
