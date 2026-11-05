@@ -76,6 +76,9 @@ export function PlayerControls({
             step={1}
             value={volume ?? 100}
             onChange={(e) => onVolumeChange(Number(e.currentTarget.value))}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerMove={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             aria-label="Volume"
             aria-valuetext={`${volume ?? 100}%`}
             data-testid="player-volume-slider"
