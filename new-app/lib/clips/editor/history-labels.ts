@@ -53,6 +53,26 @@ export function describeEditsChange(prev: ClipEditsV2, next: ClipEditsV2): strin
 
   if (jsonKey(prev, 'wordFixes') !== jsonKey(next, 'wordFixes')) return 'Corrected transcript wording'
 
+  if (jsonKey(prev, 'bgRemoval') !== jsonKey(next, 'bgRemoval')) {
+    if (Boolean(prev.bgRemoval?.enabled) !== Boolean(next.bgRemoval?.enabled)) {
+      return next.bgRemoval?.enabled ? 'Background removal on' : 'Background removal off'
+    }
+    return 'Adjusted background removal'
+  }
+
+  if (jsonKey(prev, 'layerProps') !== jsonKey(next, 'layerProps')) {
+    const oldProps = prev.layerProps ?? []
+    const newProps = next.layerProps ?? []
+    const targets = new Set([...oldProps.map(p => p.target), ...newProps.map(p => p.target)])
+    for (const target of targets) {
+      const before = oldProps.find(p => p.target === target)
+      const after = newProps.find(p => p.target === target)
+      if (Boolean(before?.flipH) !== Boolean(after?.flipH)) return after?.flipH ? 'Flipped horizontally' : 'Unflipped horizontally'
+      if (Boolean(before?.flipV) !== Boolean(after?.flipV)) return after?.flipV ? 'Flipped vertically' : 'Unflipped vertically'
+    }
+    return 'Adjusted layer properties'
+  }
+
   if (jsonKey(prev, 'keyframes') !== jsonKey(next, 'keyframes')) {
     const tracks = next.keyframes ?? []
     const oldTracks = prev.keyframes ?? []
