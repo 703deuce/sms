@@ -112,10 +112,6 @@ export default async function ClipProjectPage({
 
   const projectSettings = parseSettings(project.settings)
 
-  if (projectSettings.byo && project.status === 'READY' && !streamVod && initialClips?.length === 1 && sp.open === 'editor') {
-    redirect(`/app/clips/${project.id}/edit/${initialClips[0]!.id}`)
-  }
-
   const uploadDurationMs =
     upload && 'durationMs' in upload ? upload.durationMs : project.upload?.durationMs ?? null
 
