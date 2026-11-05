@@ -140,7 +140,7 @@ export function insertCopiedMainVideo(edits: ClipEditsV2, atOutputMs: number,
         left -= b - a
         source = b
       }
-      if (source > block[0] && source < block[1]) chunks.push([block[0], source])
+      if (source > block[0]) chunks.push([block[0], source])
       chunks.push(...clone())
       if (source < block[1]) chunks.push([source, block[1]])
       inserted = true
