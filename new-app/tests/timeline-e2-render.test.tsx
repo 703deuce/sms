@@ -112,7 +112,7 @@ describe('E2 multi-track timeline', () => {
     fireEvent.click(ui.getByTestId('timeline-more-menu'))
     fireEvent.click(ui.getByTestId('timeline-xfade-tracks'))
     expect(ui.getByTestId('timeline-xfade-tracks-active').textContent).toContain('Fades on')
-    expect(ui.getByTestId('timeline-xfade-tracks-active').getAttribute('title')).toContain('Two')
+    expect(ui.getByTestId('timeline-xfade-tracks-active').getAttribute('title')).toContain('another')
     ui.unmount()
   })
 
@@ -131,10 +131,10 @@ describe('E2 multi-track timeline', () => {
   it('F2: Paste at playhead is disabled in the Edit menu until something was copied', () => {
     timelineClipboard.set(null)
     const ui = setup(edits({ cutRanges: [] }))
-    fireEvent.click(ui.getByTestId('timeline-more-menu'))
-    // Toolbar/menu command disabled state is owned by the clipboard, not by
-    // whether there happens to be a selected timeline item.
-    expect(timelineClipboard.get()).toBeNull()
+    fireEvent.contextMenu(ui.getAllByTestId('timeline-item-video')[0]!)
+    const paste = ui.getByTestId('timeline-ctx-paste') as HTMLButtonElement
+    expect(paste.disabled).toBe(true)
+    expect(paste.getAttribute('title')).toContain('Copy a clip')
     ui.unmount()
   })
 
