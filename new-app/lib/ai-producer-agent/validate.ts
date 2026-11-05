@@ -11,6 +11,9 @@ export type ValidationCtx = {
   bursts: { s: number; e: number; speech: boolean }[]
   layoutAt: (srcMs: number) => { contentType: string; mode: string } | null
   outputType: 'single_payoff' | 'montage' | 'story'
+  editMode?: 'just_chatting_rough_cut'
+  sourceRangeMs?: [number, number]
+  audioEvidenceAvailable?: boolean
   targetLengthS: [number, number]
   memeSfx: 'off' | 'subtle' | 'meme'
   payoffSrc: [number, number][]
@@ -127,7 +130,8 @@ export function validateDraft(b: DraftEditsBuilder, ctx: ValidationCtx): Validat
     if (ctx.bursts.some((x) => inside(t, x.s, x.e))) H('cut_in_burst', { atSrcMs: t })
   }
 
-  const minSeg = ctx.outputType === 'montage' ? MONTAGE_FLASH_MIN_MS : MIN_SEG_MS
+  const minSeg = ctx.editMode === 'just_chatting_rough_cut' ? 3000 :
+    ctx.outputType === 'montage' ? MONTAGE_FLASH_MIN_MS : MIN_SEG_MS
   for (const [s, en] of orderedKeepSegments(e)) {
     if (en - s < minSeg) H('segment_too_short', { atSrcMs: s, detail: `${en - s}ms` })
   }
@@ -144,6 +148,24 @@ export function validateDraft(b: DraftEditsBuilder, ctx: ValidationCtx): Validat
         H('zoom_on_full_frame_irl', { atOutMs: p.tMs })
         break
       }
+    }
+  }
+
+  if (ctx.editMode === 'just_chatting_rough_cut') {
+    const segs = b.segs
+    if (!segs.length || segs.length > 24) H('rough_cut_segment_count', { detail: `${segs.length} segments` })
+    for (let i = 0; i < segs.length; i++) {
+      const seg = segs[i]!
+      if (seg.srcOutMs <= seg.srcInMs) H('rough_cut_invalid_segment', { atSrcMs: seg.srcInMs })
+      if (i > 0 && segs[i - 1]!.srcOutMs > seg.srcInMs) {
+        H('rough_cut_non_chronological_or_overlapping', { atSrcMs: seg.srcInMs })
+      }
+      if (ctx.sourceRangeMs && (seg.srcInMs < ctx.sourceRangeMs[0] || seg.srcOutMs > ctx.sourceRangeMs[1])) {
+        H('rough_cut_outside_source_window', { atSrcMs: seg.srcInMs })
+      }
+    }
+    if (!ctx.audioEvidenceAvailable) {
+      warn.push({ code: 'audio_join_listening_required', severity: 'DEFAULT', detail: 'Acoustic timing could not be verified automatically; audition all joins before export.' })
     }
   }
 
