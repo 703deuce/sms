@@ -106,7 +106,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         type: 'BG_MATTE_PREVIEW',
         status: 'QUEUED',
         maxAttempts: 1,
-        payload: { clipId: id, workspaceId, quality, previewSeconds: 6, previewFingerprint: mattePreviewFingerprint(clip) },
+        payload: { clipId: id, workspaceId, quality, previewSeconds: 6, previewStartMs: edits.trim.in, previewFingerprint: mattePreviewFingerprint(clip) },
       },
     })
     return NextResponse.json({ data: { state: 'queued', jobId: created.id, url: null, credits: 0 } }, { status: 202, headers: NO_STORE })
