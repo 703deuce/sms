@@ -86,7 +86,7 @@ export function TrackFxPanel({
                     onCommit={(v) => set({ nrMix: v / 100 })}
                     testId="track-fx-nr-mix"
                   />
-                  <p className="text-[11px] text-muted-foreground">Applied on export (the preview can't denoise live).</p>
+                  <p className="text-[11px] text-muted-foreground" data-testid="track-fx-nr-preview-note">Noise reduction is applied on export. EQ, high-pass and other supported filters can be heard while previewing.</p>
                 </>
               ) : null}
               {voiceTrack ? (
@@ -95,7 +95,7 @@ export function TrackFxPanel({
               {cur.deess != null ? (
                 <>
                   <SliderRow label="Intensity" value={cur.deess} min={0} max={100} unit="%" onCommit={(v) => set({ deess: v })} testId="track-fx-deess-amount" />
-                  <p className="text-[11px] text-muted-foreground">De-ess and Noise reduction apply on export only.</p>
+                  <p className="text-[11px] text-muted-foreground">De-ess and Noise reduction apply on export only; EQ is available during playback.</p>
                 </>
               ) : null}
               <div className="space-y-1">
@@ -150,6 +150,7 @@ export function TrackFxPanel({
             </div>
             <div className="space-y-1.5">
               <div className="text-[11px] font-medium">EQ</div>
+              <p className="text-[11px] text-muted-foreground" data-testid="track-fx-eq-preview-note">EQ changes are audible in the editor preview; noise reduction and de-ess render on export.</p>
               <SliderRow label="Low (120 Hz)" value={eq.low ?? 0} min={-12} max={12} step={0.5} unit=" dB" onCommit={(v) => set({ eq: { ...eq, low: v || undefined } })} testId="track-fx-low" />
               <SliderRow label={`Mid (${eq.midHz ?? FX_LIMITS.midHz[2]} Hz)`} value={eq.mid ?? 0} min={-12} max={12} step={0.5} unit=" dB" onCommit={(v) => set({ eq: { ...eq, mid: v || undefined } })} testId="track-fx-mid" />
               {eq.mid != null ? (
