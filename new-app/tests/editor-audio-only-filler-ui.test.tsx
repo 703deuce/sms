@@ -36,6 +36,7 @@ describe('audio-only cleanup UI', () => {
     expect(onCommitEdits.mock.calls[0][1]).toContain('video kept')
 
     ui.rerender(<CleanupPanel {...props} edits={next} />)
+    fireEvent.click(ui.getByRole('tab', { name: /Applied/ }))
     expect(ui.getByTestId('audio-only-fillers-applied')).toBeTruthy()
     fireEvent.click(ui.getByTestId('restore-audio-only-fillers'))
     expect(onCommitEdits.mock.calls.at(-1)?.[0].audioMuteRanges).toEqual([])
