@@ -138,7 +138,11 @@ export function describeEditsChange(prev: ClipEditsV2, next: ClipEditsV2): strin
 
   // Timeline split often changes segment layout metadata as well as its split array.
   // Report the user's actual action, not the incidental layout-mode fallback.
-  if (jsonKey(prev, 'videoSplits') !== jsonKey(next, 'videoSplits')) return 'Split Video clip'
+  if (jsonKey(prev, 'videoSplits') !== jsonKey(next, 'videoSplits')) {
+    const before = prev.videoSplits ?? []
+    const after = next.videoSplits ?? []
+    return after.length < before.length ? 'Joined Video clips · restored cut' : 'Split Video clip'
+  }
   if (jsonKey(prev, 'aspectRatio') !== jsonKey(next, 'aspectRatio')) return `Changed aspect to ${next.aspectRatio}`
   if (jsonKey(prev, 'timelineOpts') !== jsonKey(next, 'timelineOpts')) {
     const a = (prev.timelineOpts ?? {}) as Record<string, unknown>

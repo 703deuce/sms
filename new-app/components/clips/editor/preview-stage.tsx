@@ -1478,6 +1478,7 @@ export function PreviewStage({
                   key={`preview-main-${layoutMode}`}
                   ref={videoRefInner}
                   {...mainVideoMediaProps}
+                  data-bg-matte-crop="true"
                 src={videoUrl ?? undefined}
                   data-testid={composeSpec ? 'compose-video' : 'fit-top-main-video'}
                   className={`absolute inset-x-0 z-[1] max-w-none object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}

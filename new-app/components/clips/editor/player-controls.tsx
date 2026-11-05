@@ -76,6 +76,21 @@ export function PlayerControls({
             step={1}
             value={volume ?? 100}
             onChange={(e) => onVolumeChange(Number(e.currentTarget.value))}
+            onPointerDown={(e) => {
+              // The preview's drag/scrub handlers can intercept native range clicks.
+              // Calculate from the range itself and capture drag on the thumb.
+              e.stopPropagation()
+              const rect = e.currentTarget.getBoundingClientRect()
+              if (rect.width > 0) onVolumeChange(Math.round(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * 100))
+              e.currentTarget.setPointerCapture?.(e.pointerId)
+            }}
+            onPointerMove={(e) => {
+              e.stopPropagation()
+              if (e.buttons !== 1 || !e.currentTarget.hasPointerCapture?.(e.pointerId)) return
+              const rect = e.currentTarget.getBoundingClientRect()
+              if (rect.width > 0) onVolumeChange(Math.round(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * 100))
+            }}
+            onClick={(e) => e.stopPropagation()}
             aria-label="Volume"
             aria-valuetext={`${volume ?? 100}%`}
             data-testid="player-volume-slider"

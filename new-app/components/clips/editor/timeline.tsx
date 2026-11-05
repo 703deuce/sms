@@ -1341,7 +1341,7 @@ export function Timeline({
     if (!editable) return
     const next = joinVideoSplits({ edits }, points)
     if (!next) return
-    commit(next)
+    commit(next, true, 'Joined Video clips · restored cut')
     // Select the joined clip: it keeps the id of the half that ended at the first joined point.
     const keep = lanes.video.find((v) => v.srcOutMs === Math.min(...points))
     setSelected(keep ? [{ lane: 'video', id: keep.id }] : [])
@@ -1442,7 +1442,7 @@ export function Timeline({
       c.compound && r.refs.length >= 2
         ? createCompound(r.edits, r.refs, `c_${Date.now().toString(36)}`, undefined, c.compound.name)
         : null
-    commit(e2 ?? r.edits)
+    commit(e2 ?? r.edits, true, 'Pasted Video clip')
     setSelected(r.refs)
     toast.success(r.refs.length ? 'Pasted at playhead' : 'Pasted video footage at playhead', { id: 'timeline-clipboard' })
     if (r.skipped) toast.message(`${r.skipped} item${r.skipped > 1 ? 's' : ''} can't be placed twice (AI / library sounds)`, { id: 'timeline-clipboard' })
@@ -1457,7 +1457,7 @@ export function Timeline({
       src && r.refs.length >= 2
         ? createCompound(r.edits, r.refs, `c_${Date.now().toString(36)}`, undefined, `${src.compound.name} copy`)
         : null
-    commit(wrapped ?? r.edits)
+    commit(wrapped ?? r.edits, true, 'Duplicated Video clip')
     setSelected(r.refs)
     toast.success('Duplicated selected footage', { id: 'timeline-clipboard' })
     return true

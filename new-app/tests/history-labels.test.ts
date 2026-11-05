@@ -134,6 +134,13 @@ describe('describeEditsChange', () => {
     expect(describeEditsChange(a, b)).toBe('Split Video clip')
   })
 
+  it('Retest7 F10 names Join differently from Split', () => {
+    const initial = base()
+    const cut = { ...initial, videoSplits: [5000] }
+    expect(describeEditsChange(initial, cut)).toBe('Split Video clip')
+    expect(describeEditsChange(cut, initial)).toBe('Joined Video clips · restored cut')
+  })
+
   it('Batch 3 F12 identifies aspect and timeline toggles', () => {
     const a = base()
     expect(describeEditsChange(a, { ...a, aspectRatio: '16:9' })).toBe('Changed aspect to 16:9')
