@@ -131,20 +131,6 @@ export function StockAudioPicker({
       {kind === 'music' ? (
         <p className="text-[11px] text-muted-foreground">Browse CC0 instrumental loops (no credits), or generate a custom track below.</p>
       ) : null}
-      {kind === 'music' && presets.length > 0 ? (
-        <div className="grid max-h-48 gap-2 overflow-y-auto">
-          {presets.slice(0, 12).map((p) => (
-            <div key={p.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs" data-testid="stock-audio-preset">
-              <span>
-                {p.title} · {p.lengthS}s
-              </span>
-              <Button size="xs" variant="outline" onClick={() => onGeneratePreset(p.prompt, p.lengthS)}>
-                Generate
-              </Button>
-            </div>
-          ))}
-        </div>
-      ) : null}
       <ul className="max-h-48 space-y-1 overflow-y-auto">
           {hits.map((h) => (
             <li
@@ -170,6 +156,21 @@ export function StockAudioPicker({
             </li>
           ))}
         </ul>
+      {kind === 'music' && presets.length > 0 ? (
+        <div className="grid max-h-48 gap-2 overflow-y-auto" data-testid="stock-audio-generation-presets">
+          <p className="text-[11px] font-medium text-muted-foreground">Generate more music (credits)</p>
+          {presets.slice(0, 12).map((p) => (
+            <div key={p.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs" data-testid="stock-audio-preset">
+              <span>
+                {p.title} · {p.lengthS}s
+              </span>
+              <Button size="xs" variant="outline" onClick={() => onGeneratePreset(p.prompt, p.lengthS)}>
+                Generate
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {kind === 'music' && available && moods.length ? (
         <div className="flex flex-wrap gap-1">
           {moods.slice(0, 6).map((m) => (
