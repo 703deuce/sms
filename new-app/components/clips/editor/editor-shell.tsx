@@ -2779,6 +2779,7 @@ export function EditorShell({
         videoRef={videoRef}
         onTick={onTick}
         gapDisplayMs={gapPreview?.displayMs ?? null}
+        voiceOutputMuted={laneVoiceMuted || playerMuted || Boolean(useDubAudio) || audioMeter.voiceFxProxyActive}
         channelDisplay={streamChannelDisplay}
         chatPreviewEnabled={streamChatAvailable}
         media={editorMedia}
