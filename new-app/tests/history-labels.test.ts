@@ -34,6 +34,18 @@ describe('describeEditsChange', () => {
     expect(describeEditsChange(a, b)).toBe('Added text “x”')
   })
 
+  it('Retest4 N14 gives a readable fallback label for multi-part text templates', () => {
+    const a = base()
+    const style = { font: 'Poppins', size: 100, align: 'center', color: '#FFFFFF' } as const
+    const b: ClipEditsV2 = { ...a, textItems: [
+      { id: 'q1', text: '', kind: 'shape', shape: { type: 'rounded', w: 800, h: 100 },
+        x: 50, y: 50, startMs: 1000, endMs: 3000, style },
+      { id: 'q2', text: 'Your quote goes here', x: 50, y: 45, startMs: 1000, endMs: 3000, style },
+      { id: 'q3', text: '— Name', x: 50, y: 70, startMs: 1500, endMs: 3000, style },
+    ] }
+    expect(describeEditsChange(a, b)).toBe('Added text group (3 items)')
+  })
+
   it('labels layout', () => {
     const a = base()
     const b = { ...a, layout: { ...a.layout, mode: 'facecam' as const } }
