@@ -1139,7 +1139,8 @@ export function Timeline({
   const [speedOpen, setSpeedOpen] = useState(false)
   const [speedFocusSeq, setSpeedFocusSeq] = useState(0)
   const trackAreaRef = useRef<HTMLDivElement | null>(null)
-  const rows = useMemo(() => timelineRows(edits), [edits])
+  const [captionsLaneSelected, setCaptionsLaneSelected] = useState(false)
+  const rows = useMemo(() => timelineRows(edits, captionsLaneSelected), [edits, captionsLaneSelected])
   // TIMELINE_LAYOUT4: drag a lane header's bottom border to resize; height is saved per lane type.
   const [laneHUser, setLaneHUser] = useState<Partial<Record<LaneId, number>>>({})
   useEffect(() => {
@@ -1221,7 +1222,6 @@ export function Timeline({
   const selCompound = useMemo(() => compoundOfSelection(edits, liveSelected), [edits, liveSelected])
   const selectedKeys = useMemo(() => new Set(liveSelected.map(refKey)), [liveSelected])
   // Automatic captions may not have manual captionLines; the lane is still selectable.
-  const [captionsLaneSelected, setCaptionsLaneSelected] = useState(false)
   // E4: report the single selection (by key + source range so re-renders don't spam the shell).
   const singleSel = liveSelected.length === 1 ? lanes[liveSelected[0]!.lane].find((i) => i.id === liveSelected[0]!.id) ?? null : null
   const singleSelKey = singleSel ? `${refKey(singleSel)}:${singleSel.srcInMs ?? ''}:${singleSel.srcOutMs ?? ''}` : ''
