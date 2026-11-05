@@ -63,6 +63,8 @@ export function useAudioMix({
   playing,
   outputDurationMs,
   voiceMuted = false,
+  playerMuted = false,
+  playerVolume = 100,
   musicRate,
   meterOn = false,
 }: {
@@ -79,6 +81,9 @@ export function useAudioMix({
   outputDurationMs?: number
   /** E2: Voice lane muted (speech / dub silent; music + SFX still play). */
   voiceMuted?: boolean
+  /** F1/F5: master player controls affect every preview output route. */
+  playerMuted?: boolean
+  playerVolume?: number
   /** E4: music element rate while per-item speeds play (global × item speed). Omitted = unchanged. */
   musicRate?: number
   /** AU-30: route preview audio through master analysers when on. */
@@ -115,7 +120,7 @@ export function useAudioMix({
   const mixDest = (ctx: AudioContext): AudioNode => {
     if (!masterRef.current) {
       const m = ctx.createGain()
-      m.gain.value = 1
+      m.gain.value = Math.max(0, Math.min(1, playerVolume / 100)) * (playerMuted ? 0 : 1)
       m.connect(ctx.destination)
       masterRef.current = m
       const split = ctx.createChannelSplitter(2)
@@ -209,13 +214,8 @@ export function useAudioMix({
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    if (useDubAudio || voiceMuted) {
-      video.muted = true
-    } else {
-      video.muted = false
-      if (video.volume <= 0) video.volume = 1
-    }
-  }, [useDubAudio, videoRef, voiceMuted])
+    video.muted = Boolean(useDubAudio || voiceMuted || playerMuted)
+  }, [useDubAudio, videoRef, voiceMuted, playerMuted, outputMs])
 
   useEffect(() => {
     const video = videoRef.current
@@ -234,14 +234,14 @@ export function useAudioMix({
   useEffect(() => {
     const dub = dubRef.current
     if (!useDubAudio || !dub || !dubUrl) return
-    dub.muted = voiceMuted
+    dub.muted = voiceMuted || playerMuted
     if (playing) {
       if (dub.paused || Math.abs(dub.currentTime - outputMs / 1000) > 0.3) dub.currentTime = outputMs / 1000
       void dub.play().catch(() => {})
     } else {
       dub.pause()
     }
-  }, [playing, outputMs, dubUrl, useDubAudio, voiceMuted])
+  }, [playing, outputMs, dubUrl, useDubAudio, voiceMuted, playerMuted])
 
   useEffect(() => {
     const video = videoRef.current
@@ -329,13 +329,22 @@ export function useAudioMix({
   useEffect(() => {
     const video = videoRef.current
     const voice = hasVoiceEnv ? volumeAt(edits, 'voice', outputMs) : 1
-    if (voiceGainRef.current) {
-      voiceGainRef.current.gain.value = voice
-      if (video && hasVoiceEnv && video.volume !== 1) video.volume = 1
-    } else if (video && (hasVoiceEnv || video.volume !== 1)) {
-      video.volume = Math.max(0, Math.min(1, voice))
+    const level = Math.max(0, Math.min(1, playerVolume / 100))
+    // The graph owns global master volume, so direct element volume stays at 1
+    // for routed sources. Plain media (CORS fallback) needs the master level here.
+    if (voiceGainRef.current) voiceGainRef.current.gain.value = voiceMuted || useDubAudio ? 0 : voice
+    if (masterRef.current) masterRef.current.gain.value = playerMuted ? 0 : level
+    if (video) {
+      const plain = !elementSourceRef.current
+      const desiredVolume = plain ? voice * level : 1
+      if (Math.abs(video.volume - desiredVolume) > 0.001) video.volume = desiredVolume
+      const shouldMute = Boolean(voiceMuted || playerMuted || useDubAudio)
+      if (video.muted !== shouldMute) video.muted = shouldMute
     }
-    if (dubRef.current) dubRef.current.volume = Math.max(0, Math.min(1, voice))
+    if (dubRef.current) {
+      dubRef.current.volume = Math.max(0, Math.min(1, voice * level))
+      dubRef.current.muted = voiceMuted || playerMuted
+    }
     const env = musicEnvRef.current
     if (env) {
       const win = audio?.music ? musicWindow(audio.music, outputDurationMs ?? Number.MAX_SAFE_INTEGER) : null
@@ -344,7 +353,7 @@ export function useAudioMix({
       const fade = audio?.music && outputDurationMs ? musicFadeAt(audio.music, outputMs, outputDurationMs) : 1
       env.gain.value = kf * fade
     }
-  }, [audio?.music, edits, hasMusicEnv, hasVoiceEnv, outputDurationMs, outputMs, videoRef])
+  }, [audio?.music, edits, hasMusicEnv, hasVoiceEnv, outputDurationMs, outputMs, videoRef, voiceMuted, playerMuted, playerVolume, useDubAudio])
 
   // E2: SFX play in preview at atMs (previously never scheduled). Re-scheduled on play / seek.
   // G1b3: + the SFX volume envelopes (`sfx:<id>` keyframes), so editing one re-schedules.
