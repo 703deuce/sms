@@ -320,6 +320,16 @@ describe('B1 main clip reordering', () => {
 })
 
 describe('B1 retest: Magnet-off sub-slot main-video movement', () => {
+  it('moves a lone main-video clip forward from time zero and preserves a real opening gap', () => {
+    const edits = base()
+    const moved = shiftVideoSegmentWithinSlot(ctxOf(edits), 'seg:0', 1200)
+    expect(moved).not.toBeNull()
+    expect(moved?.inserts).toMatchObject([{ sourceId: 'gap', atSrcMs: 0, durMs: 1200 }])
+    const video = buildTimelineItems({ edits: moved!, previewEdits: moved! }).video
+    expect(video).toHaveLength(1)
+    expect(video[0]!.startMs).toBeGreaterThanOrEqual(1200)
+  })
+
   it('moves by a short drag using a real gap and reverses it on left drag', () => {
     const e = base({ videoSplits: [5000] })
     const moved = shiftVideoSegmentWithinSlot(ctxOf(e), 'seg:5000', 950)!
