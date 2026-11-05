@@ -78,6 +78,7 @@ export function StockAudioPicker({
 
   const addHit = async (hit: Hit) => {
     setBusy(true)
+    toast.loading(`Adding ${hit.title}…`, { id: 'stock-audio-attach' })
     try {
       const data = await clipsFetch<{ uploadId: string }>(`/api/clips/clips/${clipId}/stock-audio/attach`, {
         method: 'POST',
@@ -88,6 +89,7 @@ export function StockAudioPicker({
       if (!uploadId) throw new Error('Attach failed')
       if (hit.kind === 'music') onMusicUploaded(uploadId)
       else onSfxUploaded(uploadId, playheadMs)
+      toast.dismiss('stock-audio-attach')
       if (hit.kind === 'music') toast.success(`Added ${hit.title} to Music`)
       else {
         const secs = Math.max(0, Math.floor(playheadMs / 1000))
@@ -95,6 +97,7 @@ export function StockAudioPicker({
         toast.success(`Added to SFX at ${time}`, { description: hit.title })
       }
     } catch (e) {
+      toast.dismiss('stock-audio-attach')
       toast.error(e instanceof Error ? e.message : 'Could not add audio')
     } finally {
       setBusy(false)
@@ -161,7 +164,7 @@ export function StockAudioPicker({
               <div className="flex shrink-0 gap-1">
                 <audio src={h.previewUrl} controls className="h-6 max-w-[100px]" />
                 <Button size="xs" disabled={busy} data-testid="stock-audio-add" onClick={() => void addHit(h)}>
-                  Add
+                  {busy ? 'Adding…' : 'Add'}
                 </Button>
               </div>
             </li>
