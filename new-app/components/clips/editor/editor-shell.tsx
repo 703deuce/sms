@@ -3109,6 +3109,13 @@ export function EditorShell({
                     }}
                     meterSlot={meterOn ? <AudioMeter levels={peakLevels} voiceMetered={audioMeter.voiceMetered} /> : null}
                   />
+                  {edits.inserts?.some(i => i.sourceId === 'gap') ? (
+                    <span className="ml-1 shrink-0 text-[10px] text-muted-foreground"
+                      title="Total duration includes inserted black/silent gaps. Magnet-off deletion replaces removed footage with an equal-length gap, so the total time does not shrink."
+                      data-testid="editor-duration-gap-indicator">
+                      Includes {(edits.inserts.filter(i => i.sourceId === 'gap').reduce((total, i) => total + i.durMs, 0) / 1000).toFixed(1)}s gap
+                    </span>
+                  ) : null}
                 </>
               )
             }
