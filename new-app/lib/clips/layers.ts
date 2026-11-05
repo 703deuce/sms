@@ -148,7 +148,8 @@ export function layersFromLegacy(edits: ClipEditsV2): Layer[] {
   out.push({
     id: 'headline',
     type: 'headline',
-    enabled: Boolean(hb?.enabled),
+    // An absent headline toggle is not an explicit user hide. Keep explicit false.
+    enabled: hb?.enabled !== false,
     z: headlineZ,
     text: String(hb?.text ?? ''),
     suggested: tpl?.suggestedHeadline ? String(tpl.suggestedHeadline) : undefined,
