@@ -353,6 +353,8 @@ export function Timeline({
   onRedo,
   canUndo = false,
   canRedo = false,
+  loopOn = false,
+  onLoopChange,
   historySlot,
   onCollapsedChange,
   controlledCollapsed,
@@ -417,6 +419,8 @@ export function Timeline({
   onRedo?: () => void
   canUndo?: boolean
   canRedo?: boolean
+  loopOn?: boolean
+  onLoopChange?: (enabled: boolean) => void
   historySlot?: React.ReactNode
   /** Synchronize the mini-strip height with the containing editor workspace. */
   onCollapsedChange?: (collapsed: boolean) => void
@@ -1145,7 +1149,6 @@ export function Timeline({
   // box-select rectangle (track-area px), speed-control focus request.
   const [markerPanel, setMarkerPanel] = useState<{ focusId: string | null } | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [loopOn, setLoopOn] = useState(false)
   const previewRate = useSyncExternalStore(subscribePreviewRate, getPreviewRate, () => 1)
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const speedSlotRef = useRef<HTMLDivElement | null>(null)
@@ -1598,7 +1601,7 @@ export function Timeline({
       toast.message('Mark in and out first (I / O), then loop', { id: 'timeline-loop' })
       return true
     }
-    setLoopOn((v) => !v)
+    onLoopChange?.(!loopOn)
     return true
   }
   const trimToPlayhead = (edge: 'start' | 'end'): boolean => {
@@ -1665,10 +1668,10 @@ export function Timeline({
     loopPrevRef.current = outputMs
     if (!loopOn || !range) return
     const [a, b] = range
-    if (prev >= a && prev < b && outputMs >= b && outputMs - prev < 1500) onSeekOutput(a)
+    if (prev >= a && outputMs >= b && outputMs >= prev) onSeekOutput(a)
   }, [outputMs, loopOn, range?.[0], range?.[1]]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (loopOn && !range) setLoopOn(false)
+    if (loopOn && !range) onLoopChange?.(false)
   }, [loopOn, range])
 
   const runCommand = (cmd: TimelineCommand): boolean => {
