@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
+import { getPrisma } from '@/lib/server/db'
+import { getClipStorageForObjectKey } from '@/lib/storage'
+import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 
 /**
  * Same-origin, authenticated media stream for the editor's person matte canvas.
@@ -14,10 +17,28 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const payload = await getClipEditorPayload(workspaceId, id)
     if (!payload) return NextResponse.json({ error: 'Clip not found' }, { status: 404 })
     const kind = new URL(request.url).searchParams.get('kind')
-    if (!kind || !['proxy', 'segment', 'source', 'preview'].includes(kind))
+    if (!kind || !['proxy', 'segment', 'source', 'preview', 'matte'].includes(kind))
       return NextResponse.json({ error: 'Invalid media kind' }, { status: 400 })
     const urls = payload.mediaUrls
-    const url = urls[kind as keyof typeof urls]
+    let url: string | null | undefined
+    if (kind === 'matte') {
+      const quality = new URL(request.url).searchParams.get('quality') === 'detail' ? 'detail' : 'standard'
+      const generations = await getPrisma().aiGeneration.findMany({
+        where: { workspaceId, clipId: id, kind: 'BG_MATTE', status: 'READY' },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: { storageKey: true, params: true, updatedAt: true },
+      })
+      const match = generations.find(g => g.storageKey &&
+        g.params && typeof g.params === 'object' && !Array.isArray(g.params) &&
+        (g.params as Record<string, unknown>).quality === quality)
+      if (match?.storageKey) {
+        const storage = await getClipStorageForObjectKey(match.storageKey)
+        url = await createCachedSignedDownloadUrl(storage, match.storageKey, { versionHint: match.updatedAt.toISOString() })
+      }
+    } else {
+      url = urls[kind as keyof typeof urls]
+    }
     if (typeof url !== 'string' || !url.startsWith('https://'))
       return NextResponse.json({ error: 'Media not ready' }, { status: 404 })
     const range = request.headers.get('range')
