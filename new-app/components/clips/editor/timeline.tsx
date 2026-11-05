@@ -3778,12 +3778,13 @@ export function Timeline({
                             type="button"
                             className="absolute top-1.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] border border-violet-400/45 bg-violet-500/20 px-1.5 text-left text-[11px] leading-4 text-foreground/90 hover:bg-violet-500/30"
                             style={{ left: xs(p.s), width: Math.max(6, xe(p.e) - xs(p.s)), height: Math.min(24, Math.max(16, LANE_H.text - 12)) }}
-                            title={`Caption: ${p.text} (edit wording in Captions or Script)`}
+                            title={`Auto caption: ${p.text}. Click to select captions; edit in Captions or Script. Text track hide only affects added text.`}
                             data-testid="timeline-caption-block"
                             onPointerDown={(ev) => ev.stopPropagation()}
                             onClick={(ev) => {
                               ev.stopPropagation()
                               onSeekOutput(p.s)
+                              setCaptionsLaneSelected(true)
                             }}
                           >
                             {p.text}
