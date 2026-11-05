@@ -136,11 +136,23 @@ export function describeEditsChange(prev: ClipEditsV2, next: ClipEditsV2): strin
     return 'Moved/trimmed B-roll clip'
   }
 
+  // Timeline split often changes segment layout metadata as well as its split array.
+  // Report the user's actual action, not the incidental layout-mode fallback.
+  if (jsonKey(prev, 'videoSplits') !== jsonKey(next, 'videoSplits')) return 'Split Video clip'
+  if (jsonKey(prev, 'aspectRatio') !== jsonKey(next, 'aspectRatio')) return `Changed aspect to ${next.aspectRatio}`
+  if (jsonKey(prev, 'timelineOpts') !== jsonKey(next, 'timelineOpts')) {
+    const a = (prev.timelineOpts ?? {}) as Record<string, unknown>
+    const b = (next.timelineOpts ?? {}) as Record<string, unknown>
+    const key = [...new Set([...Object.keys(a), ...Object.keys(b)])].find(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]))
+    if (key) return `Timeline ${key.replace(/([A-Z])/g, ' $1').toLowerCase()} ${b[key] ? 'on' : 'off'}`
+    return 'Changed timeline options'
+  }
+  if (jsonKey(prev, 'tracks') !== jsonKey(next, 'tracks')) return 'Changed track settings'
+  if (jsonKey(prev, 'layers') !== jsonKey(next, 'layers')) return 'Updated layers'
   if (jsonKey(prev, 'layout') !== jsonKey(next, 'layout')) return `Changed layout to ${next.layout.mode}`
   if (jsonKey(prev, 'color') !== jsonKey(next, 'color')) return 'Adjusted color'
   if (jsonKey(prev, 'sectionOrder') !== jsonKey(next, 'sectionOrder')) return 'Reordered Video clips'
   if (jsonKey(prev, 'inserts') !== jsonKey(next, 'inserts')) return 'Changed timeline gap/insert'
-  if (jsonKey(prev, 'videoSplits') !== jsonKey(next, 'videoSplits')) return 'Split Video clip'
   for (const key of ORDER) {
     if (jsonKey(prev, key) !== jsonKey(next, key)) return `Edited ${String(key)}`
   }
