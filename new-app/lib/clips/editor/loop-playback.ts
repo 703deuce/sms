@@ -7,3 +7,18 @@ export function shouldWrapLoop(previousMs: number, currentMs: number, range: [nu
   const [start, end] = range
   return end > start && previousMs >= start && previousMs < end && currentMs >= end && currentMs >= previousMs
 }
+
+/** The preview player owns looping even when the timeline is hidden.
+ * Use the live output-time clock, not a previous React render tick. A delayed
+ * frame may jump past Out by several seconds and must still wrap.
+ */
+export function loopSeekAtOutput(
+  outputMs: number,
+  inMs: number | null,
+  outMs: number | null,
+  enabled: boolean,
+  playing: boolean,
+): number | null {
+  if (!enabled || !playing || inMs == null || outMs == null || outMs <= inMs) return null
+  return outputMs >= outMs ? inMs : null
+}
