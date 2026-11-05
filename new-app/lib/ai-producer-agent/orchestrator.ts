@@ -61,7 +61,13 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
 
   await setRunStatus(runId, 'running', 'ingest')
   try {
-    await sysTool(ctx, budget, 'ingest', 'find_moments', { mode: 'best_moments', limit: 12 })
+    await sysTool(ctx, budget, 'ingest', 'find_moments', {
+      mode: 'best_moments', limit: ctx.config.editMode === 'just_chatting_rough_cut' ? 30 : 12,
+      targetClipLenS: ctx.config.editMode === 'just_chatting_rough_cut' ? 60 : undefined,
+    })
+    if (ctx.config.editMode === 'just_chatting_rough_cut' && !ctx.cache.moments?.length) {
+      throw new Error('rough_cut_requires_real_video_analysis')
+    }
     if (ctx.sources.length > 1 || run.outputType !== 'single_payoff') {
       await sysTool(ctx, budget, 'inventory', 'find_moments', { mode: 'inventory' })
     }
