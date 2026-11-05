@@ -127,6 +127,7 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         edits["trim"]["in"] == d["trim"]["in"]
         and edits["trim"]["out"] == d["trim"]["out"]
         and not edits["cutRanges"]
+        and not edits.get("audioMuteRanges")
         and not edits["wordFixes"]
         and not (edits.get("layout") or {}).get("shotOverrides")
         and not normalize_section_order(edits.get("sectionOrder"), trim_in, trim_out)
@@ -1938,6 +1939,20 @@ def render_edited_clip(
     length_s = sum((b - a) for a, b in segs) / 1000.0
     from clips_worker.timeline_lanes import music_window as _music_window
     from clips_worker.timeline_lanes import voice_muted as _voice_muted
+
+    # Audio-only filler cleanup changes speech audio, not video timing. Apply
+    # before downstream music/SFX mixing so those layers stay untouched.
+    if edits.get("audioMuteRanges") and not (
+        edits.get("sourceSegments") or edits.get("segmentSpeeds")
+        or edits.get("speedCurves") or edits.get("splitEdits")
+        or edits.get("speed") not in (None, 1, 1.0)
+    ):
+        from clips_worker.audio_only_mute import apply_audio_only_mutes
+
+        audio_only_out = work_dir / "audio_only_fillers.mp4"
+        if apply_audio_only_mutes(caption_src, audio_only_out, edits):
+            caption_src = audio_only_out
+            print("[clipper:timeline] audio_only_filler_mutes", flush=True)
 
     if _voice_muted(edits):
         from clips_worker.audio_render import apply_voice_mute
