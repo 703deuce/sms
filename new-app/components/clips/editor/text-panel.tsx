@@ -272,6 +272,7 @@ export function TextPanel({
         Add text at playhead
       </Button>
 
+      {!sel ? <p className="text-xs text-muted-foreground" data-testid="text-style-hint">Select a text item from “On this clip” or the timeline to open its Font and Color pickers below.</p> : null}
       <section className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Styles</p>
         <div className="grid grid-cols-3 gap-2">
