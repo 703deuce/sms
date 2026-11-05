@@ -69,12 +69,12 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
     row.kind === 'captions' ? edits.captions?.enabled === false
       : row.kind === 'video' ? laneState(edits, 'video').hidden === true
       : row.kind === 'hook' ? edits.hookOverlay?.enabled === false
-      : row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline' ? !layers.find((l) => l.id === row.id)?.enabled
+      : row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline' ? layers.find((l) => l.id === row.id)?.enabled === false
       : off.has(row.key)
   const toggleVisibility = (row: ActualVisualLayer) => {
     if (row.kind === 'video') return onEdits(setLaneState(edits, 'video', { hidden: !disabled(row) }))
     if (row.kind === 'captions') return onEdits({ ...edits, captions: { ...edits.captions, enabled: edits.captions?.enabled === false } })
-    if (row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline') return setLayers(layers.map((l) => l.id === row.id ? { ...l, enabled: !l.enabled } : l))
+    if (row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline') return setLayers(layers.map((l) => l.id === row.id ? { ...l, enabled: l.enabled === false } : l))
     if (row.kind === 'hook') return onEdits({ ...edits, hookOverlay: { ...edits.hookOverlay, enabled: !edits.hookOverlay?.enabled } })
     const next = toggleItemsEnabled(edits, [{ lane: row.kind, id: row.id }])
     if (next) onEdits(next)
@@ -132,6 +132,39 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
     for (let i = 0; i < Math.abs(b - a); i++) next = moveInStack(next, src.key, dir)
     if (next !== edits) onEdits(next)
   }
+  // Native HTML drag-and-drop is inconsistent when the user grabs the label/button
+  // inside a row. Support pointer drags past a small threshold as well.
+  const pointerReorder = (e: React.PointerEvent<HTMLLIElement>, row: ActualVisualLayer) => {
+    if (e.button !== 0 || (row.kind !== 'text' && row.kind !== 'broll')) return
+    if ((e.target as HTMLElement).closest('button[aria-label]')) return
+    const startX = e.clientX
+    const startY = e.clientY
+    let moved = false
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      setDragged(null)
+    }
+    const onMove = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return
+      moved = true
+      setDragged(row.key)
+    }
+    const onUp = (ev: PointerEvent) => {
+      if (moved) {
+        const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-layer-row-key]')
+        const key = target?.getAttribute('data-layer-row-key')
+        const to = stack.find((r) => r.key === key)
+        if (to) reorder(row, to)
+      }
+      cleanup()
+    }
+    const onCancel = () => cleanup()
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+  }
   return (
     <section className="space-y-2 rounded-md border border-border p-2" data-testid="actual-layer-stack">
       <div className="flex items-center justify-between">
@@ -146,6 +179,8 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
           return (
             <li key={row.key} className="flex items-center gap-1 rounded border border-border/60 px-1 py-1"
               data-testid={`actual-layer-${row.key}`}
+              data-layer-row-key={row.key}
+              onPointerDown={(e) => { if (!locked) pointerReorder(e, row) }}
               draggable={(row.kind === 'text' || row.kind === 'broll') && !locked}
               onDragStart={(e) => { setDragged(row.key); e.dataTransfer.effectAllowed = 'move' }}
               onDragOver={(e) => { if (dragged && dragged !== row.key && (row.kind === 'text' || row.kind === 'broll') && !locked) e.preventDefault() }}

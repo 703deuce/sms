@@ -551,6 +551,11 @@ export function newTemplateItems(templateId: string, mkId: () => string, playhea
   // E9: the last delayed part must still get its full play duration. The old
   // shared 3s window clamped late countdown numbers to the same end frame.
   return tpl.parts.map(({ delayMs, durMs, ...p }) => {
+    // E9: the first frame of these templates must actually paint at the
+    // insertion playhead; pop/zoom entrances otherwise start fully invisible.
+    // Later countdown numbers retain their timed entrances.
+    const immediate = (delayMs ?? 0) === 0 &&
+      (templateId === 'c_qs_quote' || templateId === 'c_qs_stat' || templateId === 'c_cd_321')
     const s = Math.min(Math.max(0, clipEndMs - TEXT_MIN_MS), a + (delayMs ?? 0))
     const end = Math.min(clipEndMs, s + Math.max(TEXT_MIN_MS, durMs ?? TEXT_DEFAULT_MS))
     const parsed = p.kind ? null : parseInlineMarks(p.text)
@@ -561,6 +566,7 @@ export function newTemplateItems(templateId: string, mkId: () => string, playhea
       startMs: Math.max(a, s),
       endMs: end,
       style: { ...p.style },
+      ...(immediate && p.anim?.in ? { anim: { ...p.anim, in: undefined } } : {}),
     } as TextItem
   })
 }
@@ -569,22 +575,54 @@ export function newTemplateItems(templateId: string, mkId: () => string, playhea
  * away from other text at this playhead; never flatten their deliberately
  * different relative positions or their staggered entrance times. */
 export function placeTemplateGroupInClearSpace(existing: readonly TextItem[], group: TextItem[]): TextItem[] {
-  if (!group.length) return group
+  if (!group.length || !existing.length) return group
   const overlapsTime = (a: TextItem, b: TextItem) => a.startMs < b.endMs && b.startMs < a.endMs
-  const near = (a: TextItem, b: TextItem) =>
-    Math.abs(a.x - b.x) < 13 && Math.abs(a.y - b.y) < 10
-  for (let step = 0; step < 14; step++) {
-    const dx = step % 3 === 0 ? 0 : step % 3 === 1 ? -18 : 18
-    const dy = step === 0 ? 0 : (Math.ceil(step / 3) * 12) * (step % 2 ? -1 : 1)
-    const candidate = group.map(it => ({
-      ...it,
-      x: Math.max(10, Math.min(90, it.x + dx)),
-      y: Math.max(10, Math.min(90, it.y + dy)),
-    }))
-    if (candidate.every(it => existing.every(old => !overlapsTime(it, old) || !near(it, old)))) return candidate
+  // E9: center-point proximity is not a collision test. A wide quote can
+  // intersect a stat even when their anchors are 20% apart.
+  const box = (it: TextItem) => {
+    const lines = (it.text || ' ').split('\n')
+    const size = it.style?.size ?? 96
+    const width = it.kind === 'shape' && it.shape
+      ? it.shape.w / 19.2
+      : Math.min(92, Math.max(8, Math.max(...lines.map(l => l.length)) * size * 0.55 / 34.13))
+    const height = it.kind === 'shape' && it.shape
+      ? it.shape.h / 19.2
+      : Math.min(70, Math.max(6, lines.length * size * 1.15 / 19.2))
+    return { l: it.x - width / 2, r: it.x + width / 2, t: it.y - height / 2, b: it.y + height / 2 }
   }
-  // When there is no fully clear slot, still offset the new group visibly.
-  return group.map(it => ({ ...it, x: Math.min(90, it.x + 18), y: Math.min(90, it.y + 12) }))
+  const overlap = (a: TextItem, b: TextItem) => {
+    if (!overlapsTime(a, b)) return 0
+    const x = box(a), y = box(b)
+    return Math.max(0, Math.min(x.r, y.r) - Math.max(x.l, y.l)) *
+      Math.max(0, Math.min(x.b, y.b) - Math.max(x.t, y.t))
+  }
+  const minX = Math.min(...group.map(it => it.x))
+  const maxX = Math.max(...group.map(it => it.x))
+  const minY = Math.min(...group.map(it => it.y))
+  const maxY = Math.max(...group.map(it => it.y))
+  const shifts = [
+    [0, 0], [-30, 0], [30, 0], [0, -28], [0, 28],
+    [-30, -28], [30, -28], [-30, 28], [30, 28],
+    [0, -42], [0, 42], [-42, 0], [42, 0],
+    [-42, -28], [42, -28], [-42, 28], [42, 28],
+  ]
+  let best = group
+  let bestScore = Infinity
+  for (const [wantX, wantY] of shifts) {
+    // Move the entire multi-part layout by the same amount, preserving
+    // quote/attribution alignment and countdown relative coordinates.
+    const dx = Math.max(5 - minX, Math.min(95 - maxX, wantX!))
+    const dy = Math.max(5 - minY, Math.min(95 - maxY, wantY!))
+    const candidate = group.map(it => ({ ...it, x: it.x + dx, y: it.y + dy }))
+    const score = candidate.reduce((sum, it) =>
+      sum + existing.reduce((n, old) => n + overlap(it, old), 0), 0)
+    if (score < bestScore) {
+      best = candidate
+      bestScore = score
+    }
+    if (score === 0) return candidate
+  }
+  return best
 }
 
 /** `<b>` / `<i>` inline tags → plain text + marks (used by templates only). */

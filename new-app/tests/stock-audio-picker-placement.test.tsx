@@ -6,7 +6,7 @@ import { clipsFetch } from '@/lib/clips-api'
 import { toast } from 'sonner'
 
 vi.mock('@/lib/clips-api', () => ({ clipsFetch: vi.fn() }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
 describe('N3 CC0 stock sound placement', () => {
@@ -25,7 +25,9 @@ describe('N3 CC0 stock sound placement', () => {
       onSfxUploaded={onSfxUploaded} />)
     await waitFor(() => expect(ui.getByTestId('stock-audio-add')).toBeTruthy())
     fireEvent.click(ui.getByTestId('stock-audio-add'))
+    expect(toast.loading).toHaveBeenCalledWith('Adding Pop…', { id: 'stock-audio-attach' })
     await waitFor(() => expect(onSfxUploaded).toHaveBeenCalledWith('uploaded-pop', 12_000))
+    expect(toast.dismiss).toHaveBeenCalledWith('stock-audio-attach')
     expect(toast.success).toHaveBeenCalledWith('Added to SFX at 0:12', { description: 'Pop' })
   })
 })

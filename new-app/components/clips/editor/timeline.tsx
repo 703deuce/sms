@@ -2425,7 +2425,7 @@ export function Timeline({
       window.addEventListener('pointerup', up)
       return
     }
-    if (!slideTool && tool !== 'roll' && dragMode === 'move' && item.lane === 'video' && lanes.video.length > 1) {
+    if (!slideTool && tool !== 'roll' && dragMode === 'move' && item.lane === 'video' && (lanes.video.length > 1 || !magnet)) {
       startVideoReorder(e, item)
       return
     }

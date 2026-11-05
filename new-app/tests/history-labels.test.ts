@@ -99,6 +99,23 @@ describe('describeEditsChange', () => {
     expect(describeEditsChange(a, b)).toBe('Deleted text “Welcome back”')
   })
 
+  it('names background removal activation and deactivation', () => {
+    const a = base()
+    const b: ClipEditsV2 = { ...a, bgRemoval: { enabled: true, quality: 'standard',
+      refine: { feather: 10, choke: 0 }, background: { type: 'blur', amount: 50 } } }
+    expect(describeEditsChange(a, b)).toBe('Background removal on')
+    expect(describeEditsChange(b, { ...b, bgRemoval: { ...b.bgRemoval!, enabled: false } })).toBe('Background removal off')
+  })
+
+  it('names horizontal and vertical flip changes', () => {
+    const a = base()
+    const b: ClipEditsV2 = { ...a, layerProps: [{ target: 'video', flipH: true }] }
+    expect(describeEditsChange(a, b)).toBe('Flipped horizontally')
+    expect(describeEditsChange(b, { ...b, layerProps: [] })).toBe('Unflipped horizontally')
+    const c: ClipEditsV2 = { ...a, layerProps: [{ target: 'video', flipV: true }] }
+    expect(describeEditsChange(a, c)).toBe('Flipped vertically')
+  })
+
   it('falls back to Edit', () => {
     const a = base()
     const b = { ...a, layersV: 3 as const }

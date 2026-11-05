@@ -23,6 +23,19 @@ describe('actual Layers stack (E5)', () => {
     expect(onEdits.mock.calls.at(-1)?.[0].timelineLanes?.video?.locked).toBe(true)
   })
 
+  it('N8 treats an unspecified Headline visibility as visible and toggles it off', () => {
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
+    const headline = { id: 'headline1', type: 'headline', text: 'News',
+      style: { preset: 'stream_white_box' } } as never
+    const setLayers = vi.fn()
+    const ui = render(<LayersPanel clipId="clip1" edits={edits} layers={[headline]}
+      setLayers={setLayers} onEdits={vi.fn()} />)
+    const toggle = ui.getByRole('button', { name: 'Toggle Headline visibility' })
+    expect(toggle.getAttribute('title')).toBe('Hide layer')
+    fireEvent.click(toggle)
+    expect(setLayers).toHaveBeenCalledWith([expect.objectContaining({ enabled: false })])
+  })
+
   it('E5 reorders overlapping text layers through the shared export stack model', () => {
     const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
     edits.textItems = [newTextItem('a', 1000, 30_000), newTextItem('b', 1000, 30_000)]
@@ -58,6 +71,28 @@ describe('actual Layers stack (E5)', () => {
     fireEvent.click(ui.getByRole('button', { name: 'Toggle Real title visibility' }))
     expect(onEdits).toHaveBeenCalledWith(expect.objectContaining({ disabledItems: ['text:title1'] }))
   })
+  it('E5: pointer drag of a row label reorders its visual track on release', () => {
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
+    edits.textItems = [newTextItem('title', 1000, 30_000)]
+    edits.broll = [{ id: 'overlay', source: 'stock', assetId: 'asset1', startMs: 1000, endMs: 5000 }]
+    const onEdits = vi.fn()
+    const ui = render(<LayersPanel clipId="clip1" edits={edits} layers={[]}
+      setLayers={vi.fn()} onEdits={onEdits} />)
+    const from = ui.getByTestId('actual-layer-broll:overlay')
+    const to = ui.getByTestId('actual-layer-text:title')
+    const prior = document.elementFromPoint
+    document.elementFromPoint = vi.fn(() => to)
+    try {
+      fireEvent.pointerDown(from, { clientX: 10, clientY: 10, button: 0 })
+      fireEvent.pointerMove(window, { clientX: 10, clientY: 30 })
+      fireEvent.pointerUp(window, { clientX: 10, clientY: 30 })
+      expect(onEdits).toHaveBeenCalledOnce()
+      expect(visualStack(onEdits.mock.calls[0]![0]).map(t => t.id)).toEqual(['tx1', 'ov1'])
+    } finally {
+      document.elementFromPoint = prior
+    }
+  })
+
   it('E5: dragging B-roll in front of Text updates persistent mixed-track export order', () => {
     const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
     edits.textItems = [newTextItem('title', 1000, 30_000)]

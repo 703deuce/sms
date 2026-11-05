@@ -250,14 +250,6 @@ export function ProjectClipsView({
     }
   }, [initialStatus, readyHydrated, hydrateReady])
 
-  useEffect(() => {
-    if (!byoProject) return
-    const clipId = clips[0]?.id ?? pollPrimaryClipId
-    if (!clipId) return
-    if (status !== 'READY' && !readyHydrated) return
-    router.replace(`/app/clips/${projectId}/edit/${clipId}`)
-  }, [byoProject, readyHydrated, status, clips, pollPrimaryClipId, projectId, router])
-
   const onByoReadyFromPoll = useCallback(
     (payload: { primaryClipId?: string | null }) => {
       if (payload.primaryClipId) setPollPrimaryClipId(payload.primaryClipId)

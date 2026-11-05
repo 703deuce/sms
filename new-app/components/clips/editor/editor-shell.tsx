@@ -2268,6 +2268,14 @@ export function EditorShell({
             onSelectActualLayer={(kind, id, startMs) => {
               if (kind === 'captions') {
                 selectPanel('captions')
+                const line = (edits.captionLines ?? []).find(l => outputMs >= l.startMs && outputMs < l.endMs)
+                  ?? edits.captionLines?.[0]
+                if (line) {
+                  setTimelineSelReq(prev => ({
+                    lane: 'captions', id: line.id, seq: (prev?.seq ?? 0) + 1,
+                  }))
+                  if (Math.abs(line.startMs - outputMs) > 500) seekOutput(line.startMs)
+                }
                 return
               }
               if (kind === 'sticker' || kind === 'badge' || kind === 'headline' || kind === 'hook') {
@@ -2644,6 +2652,7 @@ export function EditorShell({
       ) : null}
       <EditorPanelErrorBoundary label="Preview">
       <PreviewStage
+        clipId={clipId}
         videoUrl={videoUrl}
         posterUrl={posterUrl}
         edits={renderEdits}
