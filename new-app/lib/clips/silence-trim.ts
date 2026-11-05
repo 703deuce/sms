@@ -38,7 +38,9 @@ export const SILENCE_TRIM_STREAM_GENTLE: SilenceTrimSettings = {
   protectReactionGaps: true,
 }
 
-const FILLER_ONLY_RE = /^(um+|uh+|uhm|erm|hmm+|mm+|mhm+)$/i
+// Avoid removing acknowledgements, thinking sounds or reactions (mhm/mm/hmm).
+// Those may convey meaning even when the ASR categorizes them as fillers.
+const FILLER_ONLY_RE = /^(um+|uh+|uhm|erm|er+)$/i
 
 function cutOverlapsProtectedSpan(cut: CutRange, spans: CutRange[] | undefined): boolean {
   if (!spans?.length) return false
@@ -150,13 +152,12 @@ export function applySilenceTrimToEdits(
   const ctx: SilenceTrimContext = { trimIn, trimOut, protectedSpans }
   const inTrimWords = words.filter((w) => w.e * 1000 > trimIn + 15 && w.s * 1000 < trimOut - 15)
   const wordMs = inTrimWords.map((w) => ({ s: w.s, e: w.e, w: w.w }))
-  const extra = sanitizeCutRangesForWords(
-    [
-      ...silenceTrimCutRanges(wordMs, settings, ctx),
-      ...(settings.fillerTrim ? fillerWordCutRanges(wordMs, ctx) : []),
-    ],
-    wordMs,
-  )
+  // Pause cuts must stay in word gaps. Exact filler-word cuts are different:
+  // sanitizing those as gap cuts rejects their word midpoints and silently
+  // drops the filler removal altogether.
+  const gapCuts = sanitizeCutRangesForWords(silenceTrimCutRanges(wordMs, settings, ctx), wordMs)
+  const fillerCuts = settings.fillerTrim ? fillerWordCutRanges(wordMs, ctx) : []
+  const extra = mergeCutRanges([...gapCuts, ...fillerCuts])
   const merged = mergeCutRanges([
     ...sanitizeCutRangesForTrim(edits.cutRanges, trimIn, trimOut),
     ...extra,
