@@ -25,13 +25,10 @@ export const metadata = { title: 'Project · Clips' }
 
 export default async function ClipProjectPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ projectId: string }>
-  searchParams: Promise<{ open?: string }>
 }) {
   const { projectId } = await params
-  const sp = await searchParams
   const reserved = reservedProjectSlugRedirects()[projectId]
   if (reserved) redirect(reserved)
   const workspaceId = await resolveWorkspaceId()
