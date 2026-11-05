@@ -12,5 +12,6 @@ describe('Editor audit: stale matte invalidation', () => {
     expect(mattePreviewFingerprint({ ...clip, startMs: 2000 })).not.toBe(fingerprint)
     expect(mattePreviewFingerprint({ ...clip, endMs: 7500 })).not.toBe(fingerprint)
     expect(mattePreviewFingerprint({ ...clip, sourceSegStartMs: 1500 })).not.toBe(fingerprint)
+    expect(mattePreviewFingerprint({ ...clip, edits: { trim: { in: 2000, out: 9000 } } })).not.toBe(fingerprint)
   })
 })
