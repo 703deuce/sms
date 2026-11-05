@@ -8,14 +8,9 @@ import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cac
 import { bgRemovalBlockedReason } from '@/lib/clips/editor/bg-removal'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { createId } from '@/lib/supabase/id'
+import { matteJobTimedOut } from '@/lib/clips/editor/matte-job-status'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
-// A crash/deployment interruption can leave a GPU job in RUNNING forever.
-// Never block the editor on an orphaned job; let the user retry safely.
-export const MATTE_PREVIEW_MAX_AGE_MS = 8 * 60 * 1000
-export function matteJobTimedOut(status: string, createdAt: Date, now = Date.now()): boolean {
-  return (status === 'QUEUED' || status === 'RUNNING') && now - createdAt.getTime() > MATTE_PREVIEW_MAX_AGE_MS
-}
 type Quality = 'standard' | 'detail'
 const qualityOf = (raw: unknown): Quality => raw === 'detail' ? 'detail' : 'standard'
 
@@ -61,7 +56,9 @@ async function matteState(workspaceId: string, clipId: string, quality: Quality)
   }
   if (recentJob?.status === 'FAILED') return { state: 'failed', url: null, error: recentJob.error ?? 'Preview generation failed' }
   const row = matching[0]
-  if (row?.status === 'RUNNING') return { state: 'processing', url: null }
+  if (row?.status === 'RUNNING') return matteJobTimedOut(row.status, row.updatedAt)
+    ? { state: 'failed', url: null, error: 'Matte generation stalled. Retry the preview.' }
+    : { state: 'processing', url: null }
   if (row?.status === 'FAILED') return { state: 'failed', url: null }
   return { state: 'idle', url: null }
 }
