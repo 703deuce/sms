@@ -57,6 +57,21 @@ export const CC0_MUSIC: StockAudioEntry[] = [
     mood: 'Energetic', genre: 'Game',
     src: 'https://raw.githubusercontent.com/blancmathis/Super_Bash_Folds/1028a3b739ef54efdcbe5a2ef0ad1714fe569c47/public/assets/audio/open/music/battle-loop.ogg',
   },
+  // CC0 attribution recorded in github.com/jarlah/dungeon-haskell/assets/CREDITS.md
+  {
+    id: 'cc0-dungeon-theme', kind: 'music', title: 'Spooky Dungeon · 8-bit Loop',
+    source: 'cc0-music', license: 'cc0', durationS: 0,
+    tags: ['background', 'loop', 'spooky', 'horror', 'retro', 'game'],
+    mood: 'Suspenseful', genre: 'Retro',
+    src: 'https://raw.githubusercontent.com/jarlah/dungeon-haskell/8a443d355b99dc3aa09b5c5cd8bf02b55b2fe2c4/assets/music/theme.ogg',
+  },
+  {
+    id: 'cc0-boss-battle', kind: 'music', title: 'Epic Boss Battle · Orchestral Loop',
+    source: 'cc0-music', license: 'cc0', durationS: 0,
+    tags: ['background', 'loop', 'cinematic', 'epic', 'orchestra', 'action', 'battle'],
+    mood: 'Epic', genre: 'Orchestral',
+    src: 'https://raw.githubusercontent.com/jarlah/dungeon-haskell/8a443d355b99dc3aa09b5c5cd8bf02b55b2fe2c4/assets/music/boss.ogg',
+  },
 ]
 
 export type MusicPromptPreset = (typeof prompts)[number]
