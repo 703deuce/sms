@@ -16,6 +16,7 @@ export type AgentPromptContext = {
   /** Resolved type for template/platform when outputType is auto (optional until DECIDE). */
   resolvedOutputType?: 'single_payoff' | 'montage' | 'story'
   platform: 'tiktok' | 'shorts' | 'reels'
+  editMode?: 'just_chatting_rough_cut'
 }
 
 function readText(root: string, name: string): string {
@@ -68,6 +69,15 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
       : ''
   const template = outputTemplateSection(ctx)
   const platform = platformTargetSection(ctx.platform)
+  if (ctx.editMode === 'just_chatting_rough_cut') {
+    // Short-form pack limits and payoff caps do not apply to this long edit.
+    const longForm = readText(RULEPACK_ROOT, 'just_chatting_rough_cut.md')
+    return [
+      'You are editing a long-form Just Chatting stream into a coherent, editable rough cut. Follow the skill below, not short-form clip rules.',
+      readText(RULEPACK_ROOT, 'core.md'),
+      longForm,
+    ].filter(Boolean).join('\n\n---\n\n')
+  }
   return [base, core, genre, template, platform].filter(Boolean).join('\n\n---\n\n')
 }
 
