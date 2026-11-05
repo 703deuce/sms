@@ -106,6 +106,7 @@ import { AudioMeter, usePeakLevels } from '@/components/clips/editor/audio-meter
 import { useSfxCues } from '@/components/clips/editor/use-sfx-cues'
 import type { EditorAssets } from '@/lib/clips/editor/editor-assets'
 import { applyTimelineLaneState, arrowStepMs, brollMediaForItems, voiceMuted } from '@/lib/clips/editor/clip-timeline'
+import { loopSeekAtOutput } from '@/lib/clips/editor/loop-playback'
 import { useStudioSoundPreview } from '@/components/clips/editor/use-studio-sound-preview'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import { ClipFillerReview } from '@/components/clips/editor/clip-filler-review'
@@ -1581,13 +1582,29 @@ export function EditorShell({
     }
   }, [edits, setEdits])
 
+  // Looping belongs to the player clock, not to the Timeline component: the
+  // Timeline can be collapsed/unmounted while the preview keeps playing.
+  const loopSeekRef = useRef<(ms: number) => void>(() => {})
+  const loopJumpPendingRef = useRef(false)
   const onTick = useCallback((tick: { sourceMs: number; outputMs: number; playing: boolean }) => {
-    // While a gap is displayed the main video is parked at its source boundary.
-    // Source ticks must not overwrite the black gap's export-time playhead.
     if (gapPreviewRef.current) return
+    const markIn = exportTimelineInOut.inMs
+    const markOut = exportTimelineInOut.outMs
+    if (playbackLoopOn && tick.playing && markIn != null && markOut != null && markOut > markIn) {
+      if (tick.outputMs < markOut - 25) loopJumpPendingRef.current = false
+      const loopTarget = loopSeekAtOutput(tick.outputMs, markIn, markOut, playbackLoopOn, tick.playing)
+      if (loopTarget != null && !loopJumpPendingRef.current) {
+        loopJumpPendingRef.current = true
+        loopSeekRef.current(loopTarget)
+        return
+      }
+      if (loopJumpPendingRef.current) return
+    } else {
+      loopJumpPendingRef.current = false
+    }
     setOutputMs(tick.outputMs)
     setPlaying(tick.playing)
-  }, [])
+  }, [playbackLoopOn, exportTimelineInOut.inMs, exportTimelineInOut.outMs])
 
   const mediaOffsetMs = editorMedia?.offsetMs ?? 0
   const scriptVoicePeaks = useAudioPeaks(videoUrl, 40, 12_000, {
@@ -1664,6 +1681,8 @@ export function EditorShell({
     },
     [edits, editorWords, mediaOffsetMs],
   )
+
+  loopSeekRef.current = seekOutput
 
   const seekTimelineDisplay = useCallback(
     (baseMs: number, displayMs?: number) => {
@@ -3196,7 +3215,23 @@ export function EditorShell({
     if (layoutView !== 'timeline') setLayoutViewPersist('timeline')
     setTimelineMenuCmd((prev) => ({ cmd, seq: (prev?.seq ?? 0) + 1 }))
   }
-  const runPalette = (id: string) => runTimelineMenu({ kind: 'palette', id })
+  const runPalette = (id: string) => {
+    // Keep the actual canvas selection through a top-menu click. In compact
+    // view the Timeline may mount AFTER the menu closes and loses its local
+    // selection during the view switch.
+    const target = canvasSel?.target
+    const selectionHint =
+      target === 'video'
+        ? { lane: 'video' as const, sourceInMs: selectedVideo?.srcInMs, atMs: outputMs }
+        : target?.startsWith('broll:')
+          ? { lane: 'broll' as const, id: target.slice(6) }
+          : target?.startsWith('text:')
+            ? { lane: 'text' as const, id: target.slice(5) }
+            : target?.startsWith('sfx:')
+              ? { lane: 'sfx' as const, id: target.slice(4) }
+              : undefined
+    runTimelineMenu({ kind: 'palette', id, selectionHint })
+  }
   const openToolPanel = (id: EditorPanelId) => {
     if (unifiedWorkspaceActive) {
       selectPanel(id)

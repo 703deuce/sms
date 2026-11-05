@@ -75,7 +75,7 @@ export function EditorHistoryPanel({
             size="icon"
             disabled={disabled}
             aria-label="Edit history"
-            className="text-muted-foreground"
+            className={disabled ? "text-muted-foreground opacity-40" : "text-foreground hover:text-primary"}
             data-testid="editor-history-button"
           />
         }

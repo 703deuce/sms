@@ -67,14 +67,18 @@ export function PlayerControls({
         </Button>
       ) : null}
       {onVolumeChange ? (
-        <div className="hidden w-24 shrink-0 sm:block">
-          <Slider
-            className="w-full"
+        <div className="hidden w-24 shrink-0 sm:flex sm:items-center" data-testid="player-volume-control">
+          <input
+            type="range"
+            className="h-5 w-full cursor-pointer accent-primary"
             min={0}
             max={100}
-            value={[volume ?? 100]}
-            onValueChange={(v) => onVolumeChange(Array.isArray(v) ? v[0] ?? 100 : 100)}
+            step={1}
+            value={volume ?? 100}
+            onChange={(e) => onVolumeChange(Number(e.currentTarget.value))}
             aria-label="Volume"
+            aria-valuetext={`${volume ?? 100}%`}
+            data-testid="player-volume-slider"
           />
         </div>
       ) : null}

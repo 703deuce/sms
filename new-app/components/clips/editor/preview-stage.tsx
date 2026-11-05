@@ -812,6 +812,17 @@ export function PreviewStage({
         v.muted = voiceOutputMutedRef.current || srcMutedMainRef.current.prev
         srcMutedMainRef.current = null
       }
+      // F1: never restore the main video's captured mute state over a current
+      // Voice mute. On music/track changes the secondary routing can restore
+      // a stale `prev: false` from before both audio tracks were muted.
+      // Reassert the authoritative mute for every speech decoder each frame.
+      if (voiceOutputMutedRef.current) {
+        if (v && !v.muted) v.muted = true
+        if (sa && !sa.muted) sa.muted = true
+        for (const el of Object.values(srcElRefs.current)) {
+          if (el instanceof HTMLVideoElement && !el.muted) el.muted = true
+        }
+      }
       // E4 / G4a: color — main layer by source position (+ color keyframes at output time), B-roll
       // per item, adjustment layers on the wrapper. SVG chain (grade-filters) or WebGL mirror for
       // the HSL / LUT stage (grade-gl), both from the same math as the export (color-grade.ts).

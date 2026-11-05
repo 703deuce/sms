@@ -259,6 +259,39 @@ export function useEditorState(
     futureLabels: [],
     saveState: draftDiffers ? 'dirty' : 'saved',
     producerStrip: null,
+  } as State, (initial): State => {
+    // F6: hydrate undo/redo synchronously with the initial edits. Restoring
+    // history in an effect raced the first render's persistence effect and
+    // periodically replaced saved steps with an empty history.
+    if (typeof window === 'undefined') return initial
+    const key = `transovo:editor-history:v1:${clipId}`
+    for (const store of [window.sessionStorage, window.localStorage]) {
+      try {
+        const raw = store.getItem(key)
+        if (!raw) continue
+        const saved = JSON.parse(raw) as {
+          edits?: ClipEditsV2
+          past?: ClipEditsV2[]
+          pastLabels?: (string | undefined)[]
+          future?: ClipEditsV2[]
+          futureLabels?: (string | undefined)[]
+        }
+        if (!saved.edits || !Array.isArray(saved.past) || !Array.isArray(saved.future)) continue
+        const current = normalizeEdits(saved.edits, bounds)
+        const equivalent = editsEqual(current, restored) ||
+          (['trim', 'cutRanges', 'videoSplits', 'wordFixes', 'broll', 'textItems', 'audio', 'inserts'] as const)
+            .every((key) => JSON.stringify(current[key] ?? null) === JSON.stringify(restored[key] ?? null))
+        if (!equivalent) continue
+        return {
+          ...initial,
+          past: saved.past.slice(-MAX_UNDO).map((e) => normalizeEdits(e, bounds)),
+          pastLabels: (saved.pastLabels ?? []).slice(-MAX_UNDO),
+          future: saved.future.slice(0, MAX_UNDO).map((e) => normalizeEdits(e, bounds)),
+          futureLabels: (saved.futureLabels ?? []).slice(0, MAX_UNDO),
+        }
+      } catch { /* Browser storage can be unavailable or contain older data. */ }
+    }
+    return initial
   })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const localRevisionRef = useRef(restoredLocalRevision)
@@ -275,9 +308,6 @@ export function useEditorState(
   // Keep the latest source-timed editor words; never reset a refetch to stale initial clip words.
   const editsRef = useRef(state.edits)
   editsRef.current = state.edits
-  // Restoration dispatch is asynchronous; don't immediately overwrite the stored
-  // Undo stack with the first render's empty history before React applies it.
-  const historyRestorePendingRef = useRef(false)
   const historyRef = useRef({ past: state.past, future: state.future })
   historyRef.current = { past: state.past, future: state.future }
 
@@ -288,48 +318,18 @@ export function useEditorState(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
   }, [])
 
-  // Keep a bounded, clip-scoped undo stack across reloads. Only restore when its
-  // exact edited state matches the server (or a recovered autosave draft).
-  // Never replay another clip's history or overwrite newer server edits.
+  // Persist in the tab and in local storage so hard reloads can recover the
+  // bounded editor history even after hydration or a new browser tab.
   useEffect(() => {
     const key = `transovo:editor-history:v1:${clipId}`
-    try {
-      const raw = window.sessionStorage.getItem(key)
-      if (raw) {
-        const saved = JSON.parse(raw) as {
-          edits: ClipEditsV2; past: ClipEditsV2[]; pastLabels: (string | undefined)[];
-          future: ClipEditsV2[]; futureLabels: (string | undefined)[]
-        }
-        if (editsEqual(saved.edits, restored) && Array.isArray(saved.past) && Array.isArray(saved.future)) {
-          historyRestorePendingRef.current = saved.past.length > 0 || saved.future.length > 0
-          dispatch({
-            type: 'restoreHistory',
-            past: saved.past.slice(-MAX_UNDO).map((e) => normalizeEdits(e, bounds)),
-            pastLabels: (saved.pastLabels ?? []).slice(-MAX_UNDO),
-            future: saved.future.slice(0, MAX_UNDO).map((e) => normalizeEdits(e, bounds)),
-            futureLabels: (saved.futureLabels ?? []).slice(0, MAX_UNDO),
-          })
-        } else window.sessionStorage.removeItem(key)
-      }
-    } catch { /* Storage is optional; editing and autosave must still work. */ }
-    // Once per clip mount; state changes are saved in the effect below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clipId])
-
-  useEffect(() => {
-    if (historyRestorePendingRef.current) {
-      if (!state.past.length && !state.future.length) return
-      historyRestorePendingRef.current = false
+    const payload = JSON.stringify({
+      edits: state.edits,
+      past: state.past.slice(-25), pastLabels: state.pastLabels.slice(-25),
+      future: state.future.slice(0, 25), futureLabels: state.futureLabels.slice(0, 25),
+    })
+    for (const store of [window.sessionStorage, window.localStorage]) {
+      try { store.setItem(key, payload) } catch { /* Storage is optional. */ }
     }
-    const key = `transovo:editor-history:v1:${clipId}`
-    try {
-      // Retain a compact recent window to avoid browser storage quota exhaustion.
-      window.sessionStorage.setItem(key, JSON.stringify({
-        edits: state.edits,
-        past: state.past.slice(-25), pastLabels: state.pastLabels.slice(-25),
-        future: state.future.slice(0, 25), futureLabels: state.futureLabels.slice(0, 25),
-      }))
-    } catch { /* Session storage may be disabled or full. */ }
   }, [clipId, state.edits, state.past, state.pastLabels, state.future, state.futureLabels])
 
   const bumpLocalRevision = useCallback(() => {

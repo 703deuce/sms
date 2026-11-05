@@ -139,12 +139,12 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
     <div className={`${editorToolbarRow} min-w-0 flex-nowrap justify-between gap-2`} data-testid="timeline-toolbar">
       <div className={`${editorToolbarGroup} min-w-0 shrink`}>
         {p.onUndo ? (
-          <button type="button" className={`${editorIconBtn} ${p.canUndo ? "text-foreground" : ""}`} onClick={p.onUndo} disabled={!p.canUndo} aria-disabled={!p.canUndo} aria-label="Undo" title="Undo (Ctrl/Cmd+Z)">
+          <button type="button" className={`${editorIconBtn} ${p.canUndo ? "text-foreground hover:text-primary" : "text-muted-foreground opacity-35"}`} onClick={p.onUndo} disabled={!p.canUndo} aria-disabled={!p.canUndo} aria-label="Undo" title="Undo (Ctrl/Cmd+Z)">
             <Undo2 />
           </button>
         ) : null}
         {p.onRedo ? (
-          <button type="button" className={`${editorIconBtn} ${p.canRedo ? "text-foreground" : ""}`} onClick={p.onRedo} disabled={!p.canRedo} aria-disabled={!p.canRedo} aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)">
+          <button type="button" className={`${editorIconBtn} ${p.canRedo ? "text-foreground hover:text-primary" : "text-muted-foreground opacity-35"}`} onClick={p.onRedo} disabled={!p.canRedo} aria-disabled={!p.canRedo} aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)">
             <Redo2 />
           </button>
         ) : null}
