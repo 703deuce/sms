@@ -75,6 +75,8 @@ export type ClipEditsV2 = {
   v: 2
   trim: { in: number; out: number }
   cutRanges: CutRange[]
+  /** Source-time intervals to silence speech without shortening the video. */
+  audioMuteRanges?: CutRange[]
   /** Cleanup kind keyed by `${lo}:${hi}` for each applied cut (restore-by-type). */
   cutCleanupKinds?: Record<string, CutCleanupKind>
   /** CUTS_QUALITY1: refined edges + confidence per cut id. */
@@ -297,6 +299,7 @@ export function defaultEdits(bounds: ClipBounds): ClipEditsV2 {
     v: 2,
     trim: { in: bounds.clipStartMs, out: bounds.clipEndMs },
     cutRanges: [],
+    audioMuteRanges: [],
     wordFixes: {},
     captions: {
       enabled: true,
@@ -665,6 +668,11 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     v: 2,
     trim,
     cutRanges: sanitizeCutRangesForTrim(rawCuts, trim.in, trim.out),
+    audioMuteRanges: sanitizeCutRangesForTrim(
+      Array.isArray(o.audioMuteRanges) ? (o.audioMuteRanges as CutRange[]).filter((r) =>
+        Array.isArray(r) && r.length === 2 && Number.isFinite(r[0]) && Number.isFinite(r[1])) : [],
+      trim.in, trim.out,
+    ),
     cutCleanupKinds: normalizeCutCleanupKinds(o.cutCleanupKinds),
     cutQualityMeta: normalizeCutQualityMeta(o.cutQualityMeta),
     wordFixes: (o.wordFixes as Record<string, string>) || {},
@@ -832,6 +840,7 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     edits.trim.in === d.trim.in &&
     edits.trim.out === d.trim.out &&
     edits.cutRanges.length === 0 &&
+    !(edits.audioMuteRanges?.length) &&
     Object.keys(edits.wordFixes).length === 0 &&
     (edits.layout.shotOverrides?.length ?? 0) === 0 &&
     !edits.layout.cropBox &&
