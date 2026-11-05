@@ -7,6 +7,7 @@ import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview
 import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { normalizeEditSpeed, orderedKeepSegments } from '@/lib/clips/edits'
+import { audioMuteGain, audioMuteAllowed } from '@/lib/clips/editor/audio-only-filler'
 import { fitBlurCssFilter, fitBlurStrength } from '@/lib/clips/fit-blur'
 import { resolveCanvasBg } from '@/lib/clips/canvas-bg'
 import { CanvasBgFill } from '@/components/clips/editor/canvas-bg-fill'
@@ -656,6 +657,7 @@ export function PreviewStage({
 
   // SCRIPT_DOC3: volume ramp at cut joins (base volume + time of the last jump).
   const joinFadeRef = useRef<{ base: number; at: number } | null>(null)
+  const audioMuteVolumeRef = useRef<{ base: number; last: number } | null>(null)
   useEffect(() => {
     let raf = 0
     const JOIN_LOOKAHEAD_MS = 20
@@ -711,6 +713,25 @@ export function PreviewStage({
         } else if (joinFadeRef.current) {
           v.volume = joinFadeRef.current.base
           joinFadeRef.current = null
+        }
+      }
+      // Audio-only filler muting leaves video playback time untouched. Restore
+      // the user's volume outside each muted word; keep soft 12ms edges.
+      if (v && !joinFadeRef.current) {
+        const gain = audioMuteAllowed(e) ? audioMuteGain(src, e.audioMuteRanges) : 1
+        const last = audioMuteVolumeRef.current
+        if (gain < 1) {
+          const base = last?.base ?? v.volume
+          if (last && Math.abs(v.volume - last.last) > 0.02 && last.last > 0.02) {
+            // Player volume slider changed during the cut: preserve new base.
+            last.base = Math.min(1, Math.max(0, v.volume / Math.max(0.02, last.last / Math.max(0.02, base))))
+          }
+          const applied = Math.min(1, Math.max(0, (last?.base ?? base) * gain))
+          v.volume = applied
+          audioMuteVolumeRef.current = { base: last?.base ?? base, last: applied }
+        } else if (last) {
+          v.volume = last.base
+          audioMuteVolumeRef.current = null
         }
       }
       if (v && v === boundVideoRef.current) lastSrcMsRef.current = src
