@@ -916,6 +916,10 @@ export function Timeline({
   const editable = Boolean(onCommitEdits)
 
   const [selected, setSelected] = useState<ItemRef[]>([])
+  const [clipboardRevision, setClipboardRevision] = useState(0)
+  // The clipboard is a module-level store. Explicitly refresh command
+  // availability on Copy/Cut so Paste never appears active while empty.
+  void clipboardRevision
   const applyBeatCut = useCallback(
     (every: 1 | 2 | 4) => {
       if (!onCommitEdits || !cutBeatsMs.length) {
@@ -1403,13 +1407,15 @@ export function Timeline({
       const r = cutItems(opCtx(), refs)
       if (!r) return false
       timelineClipboard.set(selCompound ? { ...r.clip, compound: { ...selCompound.compound } } : r.clip)
+      setClipboardRevision(n => n + 1)
       commit(r.edits)
       setSelected([])
       toast.message(`Cut ${r.clip.entries.length} item${r.clip.entries.length > 1 ? 's' : ''}`, { id: 'timeline-clipboard' })
     } else {
-      const c = copyItems(edits, refs)
+      const c = copyItems(edits, refs, previewEdits)
       if (!c) return false
       timelineClipboard.set(selCompound ? { ...c, compound: { ...selCompound.compound } } : c)
+      setClipboardRevision(n => n + 1)
       toast.message(`Copied ${c.entries.length} item${c.entries.length > 1 ? 's' : ''}`, { id: 'timeline-clipboard' })
     }
     return true
@@ -1428,6 +1434,7 @@ export function Timeline({
         : null
     commit(e2 ?? r.edits)
     setSelected(r.refs)
+    toast.success(r.refs.length ? 'Pasted at playhead' : 'Pasted video footage at playhead', { id: 'timeline-clipboard' })
     if (r.skipped) toast.message(`${r.skipped} item${r.skipped > 1 ? 's' : ''} can't be placed twice (AI / library sounds)`, { id: 'timeline-clipboard' })
     return true
   }
@@ -1435,13 +1442,14 @@ export function Timeline({
     if (!editable) return false
     const src = selCompound
     const r = duplicateItems(opCtx(), liveSelected)
-    if (!r) return false
+    if (!r) { toast.message('This clip cannot be duplicated here', { id: 'timeline-clipboard' }); return false }
     const wrapped =
       src && r.refs.length >= 2
         ? createCompound(r.edits, r.refs, `c_${Date.now().toString(36)}`, undefined, `${src.compound.name} copy`)
         : null
     commit(wrapped ?? r.edits)
     setSelected(r.refs)
+    toast.success('Duplicated selected footage', { id: 'timeline-clipboard' })
     return true
   }
   const pasteAttrs = () => {
@@ -1969,8 +1977,8 @@ export function Timeline({
     { id: 'delete', group: 'Edit', label: 'Delete selected', keys: 'Del', run: () => void del(), disabled: !editable || !liveSelected.length },
     { id: 'copy', group: 'Edit', label: 'Copy', keys: `${mk}C`, run: () => void copySel(false) },
     { id: 'cut', group: 'Edit', label: 'Cut', keys: `${mk}X`, run: () => void copySel(true), disabled: !editable },
-    { id: 'paste', group: 'Edit', label: 'Paste at playhead', keys: `${mk}V`, run: () => void paste(), disabled: !editable },
-    { id: 'duplicate', group: 'Edit', label: 'Duplicate', keys: `${mk}D`, run: () => void duplicate(), disabled: !editable },
+    { id: 'paste', group: 'Edit', label: 'Paste at playhead', keys: `${mk}V`, run: () => void paste(), disabled: !editable || !timelineClipboard.get() },
+    { id: 'duplicate', group: 'Edit', label: 'Duplicate', keys: `${mk}D`, run: () => void duplicate(), disabled: !editable || !copyableRefs(liveSelected).length },
     { id: 'pasteAttrs', group: 'Edit', label: 'Paste attributes', keys: `${mk}Shift+V`, run: () => void pasteAttrs(), disabled: !editable },
     { id: 'trimStart', group: 'Edit', label: 'Trim start to playhead', keys: '[', run: () => void trimToPlayhead('start'), disabled: !editable },
     { id: 'trimEnd', group: 'Edit', label: 'Trim end to playhead', keys: ']', run: () => void trimToPlayhead('end'), disabled: !editable },
