@@ -68,8 +68,19 @@ function refineFillerRange(
   wordIndex: number,
   rmsSamples?: GapRmsSample[] | null,
 ): { range: CutRange; quality?: CutQualityMeta } {
-  if (!rmsSamples?.length) return { range: raw }
-  void wordIndex
+  const prev = orderedWords[wordIndex - 1]
+  const next = orderedWords[wordIndex + 1]
+  const contact = (prev != null && raw[0] - prev.t1Ms < 40) ||
+    (next != null && next.t0Ms - raw[1] < 40)
+  if (!rmsSamples?.length) {
+    // With no usable audio, ASR word stamps are NOT an acoustic cut boundary.
+    // Still show the proposal for individual audition, but don't put it in
+    // Remove All until a human has reviewed the potentially clipped syllables.
+    return { range: raw, quality: {
+      srcStartMs: raw[0], srcEndMs: raw[1],
+      confidence: 'needs_review', reason: 'no_audio_envelope',
+    } }
+  }
   // SCRIPT_DOC2: the whole audible filler goes (a trailing "m" past the ASR end too); the edge
   // never enters a kept word. No quiet point = needs_review, so "Remove all" skips it.
   const audio = refineWordCutWithAudio(
@@ -77,14 +88,17 @@ function refineFillerRange(
     orderedWords.map((x) => ({ s: x.t0Ms / 1000, e: x.t1Ms / 1000 })),
     rmsSamples,
   )
-  if (!audio) return { range: raw }
+  if (!audio) return { range: raw, quality: {
+    srcStartMs: raw[0], srcEndMs: raw[1],
+    confidence: 'needs_review', reason: 'audio_alignment_unavailable',
+  } }
   return {
     range: audio.range,
     quality: {
       srcStartMs: audio.range[0],
       srcEndMs: audio.range[1],
-      confidence: audio.confidence,
-      reason: `filler; ${audio.note}`,
+      confidence: audio.confidence === 'needs_review' || contact ? 'needs_review' : 'ready',
+      reason: `filler; ${audio.note}${contact ? '; word boundary touches kept speech' : ''}`,
     },
   }
 }

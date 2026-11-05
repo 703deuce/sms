@@ -9,7 +9,7 @@ import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
 import { FILLER_RE, isWordCut, normalizeSectionOrder, wordDisplayText } from '@/lib/clips/edits'
 import { moveSelection, sectionBlocksForEdits } from '@/lib/clips/editor/reorder'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
-import { transcriptWordRemovedFromVideo } from '@/lib/clips/editor/transcript-cut-map'
+import { transcriptWordRemovedFromVideo, wordsSelectedByMidpoint } from '@/lib/clips/editor/transcript-cut-map'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { multicamAngles, setAngleForSourceSpan, sourceSpanFromTranscriptSelection } from '@/lib/clips/editor/multicam-manual'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
@@ -342,10 +342,7 @@ export function TranscriptPanel({
       if (selStart === null || selEnd === null) return [] as SourceWord[]
       const a = Math.min(selStart, selEnd)
       const b = Math.max(selStart, selEnd)
-      return visible.filter((w) => {
-        const { startMs, endMs } = wordSourceMs(w)
-        return endMs > a && startMs < b
-      })
+      return wordsSelectedByMidpoint(visible, a, b)
     })()
     const span = sw.length
       ? ([Math.round(wordSourceMs(sw[0]!).startMs), Math.round(wordSourceMs(sw[sw.length - 1]!).endMs)] as [number, number])
@@ -385,10 +382,7 @@ export function TranscriptPanel({
     if (selStart === null || selEnd === null) return
     const a = Math.min(selStart, selEnd)
     const b = Math.max(selStart, selEnd)
-    const selected = visible.filter((w) => {
-      const { startMs, endMs } = wordSourceMs(w)
-      return endMs > a && startMs < b
-    })
+    const selected = wordsSelectedByMidpoint(visible, a, b)
     if (!selected.length) return
     const wa = selected[0]
     const wb = selected[selected.length - 1]
@@ -406,10 +400,7 @@ export function TranscriptPanel({
     if (selStart === null || selEnd === null) return []
     const a = Math.min(selStart, selEnd)
     const b = Math.max(selStart, selEnd)
-    return visible.filter((w) => {
-      const { startMs, endMs } = wordSourceMs(w)
-      return endMs > a && startMs < b
-    })
+    return wordsSelectedByMidpoint(visible, a, b)
   }
   const selRange = (): CutRange | null => {
     const sw = selectionWords()

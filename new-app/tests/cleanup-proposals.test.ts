@@ -32,6 +32,12 @@ describe('cleanup proposals', () => {
     expect(proposalId(range)).toBe('1000:1200')
   })
 
+  it('keeps filler without audio in review, not unsafe Remove All', () => {
+    const props = fillerProposals(words, new Set())
+    expect(props[0]?.quality?.confidence).toBe('needs_review')
+    expect(props[0]?.quality?.reason).toBe('no_audio_envelope')
+  })
+
   it('lists filler proposals', () => {
     const props = fillerProposals(words, new Set())
     expect(props).toHaveLength(1)
