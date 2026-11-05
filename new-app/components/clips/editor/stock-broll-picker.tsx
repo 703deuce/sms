@@ -28,11 +28,12 @@ export function StockBrollPicker({
   defaultQuery: string
   clipEndMs: number
   playheadMs: number
-  onInsert: (providerId: string, startMs: number, endMs: number) => void
+  onInsert: (providerId: string, startMs: number, endMs: number) => void | Promise<void>
 }) {
   const [q, setQ] = useState(defaultQuery)
   const [hits, setHits] = useState<Hit[]>([])
   const [loading, setLoading] = useState(false)
+  const [inserting, setInserting] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) setQ(defaultQuery)
@@ -91,13 +92,17 @@ export function StockBrollPicker({
               <Button
                 size="sm"
                 className="absolute bottom-1 left-1 right-1 text-xs"
+                disabled={inserting !== null || clipEndMs < 1000}
                 onClick={() => {
                   const { startMs, endMs } = brollInsertWindow(playheadMs, clipEndMs)
-                  onInsert(h.providerId, startMs, endMs)
-                  onClose()
+                  if (endMs <= startMs) return
+                  setInserting(h.providerId)
+                  void Promise.resolve(onInsert(h.providerId, startMs, endMs))
+                    .then(() => onClose())
+                    .finally(() => setInserting(null))
                 }}
               >
-                Insert at playhead
+                {inserting === h.providerId ? 'Adding B-roll…' : 'Insert at playhead'}
               </Button>
             </div>
           ))}
