@@ -13,12 +13,15 @@ export function sourceWordsForClipEditing(
     const { startMs, endMs } = wordSourceMs(w)
     return endMs > trimIn + 15 && startMs < trimOut - 15
   })
-  if (inTrim.length >= 2) return inTrim
+  // A one-word clip is still a complete clip. Falling back to every project
+  // word made one-second clips display the entire struck-through transcript.
+  if (inTrim.length > 0) return inTrim
   if (clipBounds) {
     const ranged = wordsInRange(words, clipBounds.clipStartMs, clipBounds.clipEndMs)
-    if (ranged.length >= 2) return ranged
+    if (ranged.length > 0) return ranged
   }
-  return words
+  // No words in this trim must not resurrect the full project transcript.
+  return []
 }
 
 export function maxPlausibleGapMsForTrim(trim: { in: number; out: number }): number {
