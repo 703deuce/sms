@@ -1,5 +1,7 @@
 'use client'
 
+import { shouldWrapLoop } from '@/lib/clips/editor/loop-playback'
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { exportTimeMap, seekBaseMs, toBaseMs, toExportMs, speedDisplayMs, speedBaseMs } from '@/lib/clips/editor/export-time'
 import { parseNudge } from '@/lib/clips/editor/timecode-nudge'
@@ -1668,7 +1670,7 @@ export function Timeline({
     loopPrevRef.current = outputMs
     if (!loopOn || !range) return
     const [a, b] = range
-    if (prev >= a && outputMs >= b && outputMs >= prev) onSeekOutput(a)
+    if (shouldWrapLoop(prev, outputMs, [a, b], loopOn)) onSeekOutput(a)
   }, [outputMs, loopOn, range?.[0], range?.[1]]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (loopOn && !range) onLoopChange?.(false)
