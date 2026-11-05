@@ -192,14 +192,15 @@ describe('E2 multi-track timeline', () => {
     expect(ui.getByTestId('moment-make-clip')).toBeTruthy()
   })
 
-  it('N7 shows readable volume envelopes on Video, Voice, Music and SFX', () => {
+  it('N7/F14 shows independent Video opacity and Voice/Music/SFX volume envelopes', () => {
     const ui = setup()
     expect(ui.queryByTestId('timeline-envelope')).toBeNull()
     fireEvent.click(ui.getByTestId('timeline-more-menu'))
     fireEvent.click(ui.getByTestId('timeline-envelopes'))
     const video = ui.getAllByTestId('timeline-item-video')[0]!
     const voice = ui.getAllByTestId('timeline-item-voice')[0]!
-    expect(video.querySelector('[data-testid="timeline-envelope"][data-kind="volume"]')).toBeTruthy()
+    // F14: the picture opacity must be independent of the Voice volume.
+    expect(video.querySelector('[data-testid="timeline-envelope"][data-kind="opacity"]')).toBeTruthy()
     expect(voice.querySelector('[data-testid="timeline-envelope"][data-kind="volume"]')).toBeTruthy()
     const music = ui.getAllByTestId('timeline-item-music')[0]!
     const sfx = ui.getAllByTestId('timeline-item-sfx')[0]!
