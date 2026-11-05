@@ -645,14 +645,13 @@ export function ExportDialog({
           </div>
         </div>
         {posterUrl ? (
-          <div className="mt-3 flex justify-center rounded-lg border bg-black/80 p-2" data-testid="export-dialog-preview">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={posterUrl}
-              alt=""
-              className="max-h-36 max-w-full object-contain"
-              style={{ aspectRatio: aspect.replace(':', '/') }}
-            />
+          <div className="mt-3 flex justify-center rounded-lg border bg-muted/30 p-2" data-testid="export-dialog-preview">
+            <div className="relative max-h-36 overflow-hidden rounded bg-black" style={{ aspectRatio: aspect.replace(':', '/'), height: 144 }}>
+              {/* This is a source poster, not an export-rendered still. Keep its true
+                  proportions inside the target canvas rather than stretching it. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={posterUrl} alt="Source poster (export framing may differ)" className="absolute inset-0 h-full w-full object-contain" />
+            </div>
           </div>
         ) : null}
         <div className="mt-3">
