@@ -163,7 +163,8 @@ export function BgMatteCompositePreview({
         if (!fc || !mc || !fg || !ctx) return
         fc.clearRect(0, 0, w, h)
         // Main editor video normally uses object-contain; preserve the full frame.
-        const fit = window.getComputedStyle(source).objectFit || 'contain'
+        // The hidden same-origin decoder has no object-fit styling; match the visible editor video.
+        const fit = window.getComputedStyle(primary).objectFit || 'contain'
         const pic = fitVideoFrame(source.videoWidth, source.videoHeight, w, h, fit)
         const maskFit = fitVideoFrame(maskVideo.videoWidth, maskVideo.videoHeight, w, h, fit)
         fc.drawImage(source, pic.sx, pic.sy, pic.sw, pic.sh, pic.dx, pic.dy, pic.dw, pic.dh)
