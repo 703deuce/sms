@@ -484,6 +484,28 @@ describe('E2 multi-track timeline', () => {
     expect(next.loopFriendlyEnd).toBe(false)
   })
 
+  it('F3: a real mouse can extend a previously trimmed end edge back out after rerender', () => {
+    const ui = setup()
+    const originalPxPerMs = ui.pxPerMs()
+    const last = ui.getAllByTestId('timeline-item-video').at(-1)!
+    const handle = last.querySelector('[data-testid="timeline-trim-end"]')!
+    drag(handle, -2000 * originalPxPerMs)
+    const short = ui.onCommitEdits.mock.calls.at(-1)![0] as ClipEditsV2
+    expect(short.trim.out).toBe(18000)
+    ui.rerender(<Timeline
+      edits={short} words={words} shots={[]} outputMs={10000}
+      clipOutputDurationMs={17000} onSeekOutput={ui.onSeekOutput}
+      clipStartMs={bounds.clipStartMs} clipEndMs={bounds.clipEndMs}
+      trimMinMs={bounds.trimMinMs} trimMaxMs={bounds.trimMaxMs}
+      onCommitEdits={ui.onCommitEdits} />)
+    const restoredHandle = ui.getAllByTestId('timeline-item-video').at(-1)!
+      .querySelector('[data-testid="timeline-trim-end"]')!
+    drag(restoredHandle, 2000 * originalPxPerMs)
+    const restored = ui.onCommitEdits.mock.calls.at(-1)![0] as ClipEditsV2
+    expect(restored.trim.out).toBe(20000)
+    ui.unmount()
+  })
+
   it('B2 keeps the timeline scale steady while trimming and retains room to restore the source', () => {
     const { getAllByTestId, getByTestId, onCommitEdits, pxPerMs } = setup()
     const last = getAllByTestId('timeline-item-video').at(-1)!
