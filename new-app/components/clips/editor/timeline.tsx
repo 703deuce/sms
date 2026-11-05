@@ -1332,7 +1332,7 @@ export function Timeline({
       ? liveSelected.map((r) => ({ lane: 'video' as const, id: r.id.replace(/^voice:/, 'seg:') }))
       : liveSelected
     const next = splitAt(opCtx(), refsToSplit, playheadMs)
-    if (next) commit(next)
+    if (next) commit(next, true, 'Split Video clip')
     else toast.message(playheadMs <= 1 ? 'Can’t split at the very start of a clip' : splitNoopMessage(edits, liveSelected))
   }
   // E3fix: Join — remove a Video split (prev / next of one selected half, or between selected halves).
@@ -2426,7 +2426,7 @@ export function Timeline({
       const area = trackAreaRef.current
       const at = area ? msAtClientX(e.clientX, area) : playheadMs
       const next = splitAt(opCtx(), [{ lane: item.lane, id: item.id }], at)
-      if (next) commit(next)
+      if (next) commit(next, true, item.lane === 'video' ? 'Split Video clip' : 'Split selected clip')
       else toast.message('Can’t split here (too close to an edge)', { id: 'timeline-blade' })
       return
     }
