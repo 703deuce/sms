@@ -206,12 +206,12 @@ export function PropertiesPanel({
   const seekLocal = (t: number) => onSeekOutput(origin + t)
 
   return (
-    <div ref={panelRef} className="space-y-3 p-3" data-testid="properties-panel" data-target={target ?? ''}>
+    <div ref={panelRef} className="min-w-0 space-y-3 p-3" data-testid="properties-panel" data-target={target ?? ''}>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="truncate text-sm font-semibold">{target ? label : 'Properties'}</h2>
         {target ? <span className="text-[11px] text-muted-foreground">Edits at the playhead</span> : null}
       </div>
-      <div className="flex gap-0.5 rounded-md border border-border p-0.5" role="tablist" aria-label="Properties">
+      <div className="grid min-w-0 grid-cols-5 gap-0.5 rounded-md border border-border p-0.5" role="tablist" aria-label="Properties">
         {TABS.map((t) => {
           const why = avail[t.id]
           return (
@@ -223,7 +223,7 @@ export function PropertiesPanel({
               disabled={why != null}
               title={why ?? t.label}
               onClick={() => setTab(t.id)}
-              className={`flex-1 rounded px-1.5 py-1 text-[11px] font-medium disabled:opacity-35 ${tab === t.id && why == null ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              className={`min-w-0 rounded px-0.5 py-1 text-[10px] font-medium disabled:opacity-35 ${tab === t.id && why == null ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
               data-testid={`properties-tab-${t.id}`}
             >
               {t.label}
