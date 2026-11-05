@@ -10,7 +10,8 @@ export function createProject(ctx: ToolCtx, out: OutputState, args: Record<strin
   if (!main) return { ok: false, summary: 'no main source' }
   const bounds = provisionalBounds(ctx)
   out.builder = new DraftEditsBuilder(bounds, main, ctx.cache.words ?? [], ctx.rmsLookup ?? (() => []))
-  out.builder.aspectRatio = (args.aspect as typeof out.builder.aspectRatio) ?? '9:16'
+  out.builder.aspectRatio = ctx.config.editMode === 'just_chatting_rough_cut'
+    ? '16:9' : (args.aspect as typeof out.builder.aspectRatio) ?? '9:16'
   out.pendingTitle = String(args.title ?? 'AI Producer edit')
   out.pendingSources = sources
   return { ok: true, summary: `builder ready main=${main}`, data: { mainSourceId: main } }
