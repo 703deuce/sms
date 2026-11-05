@@ -69,7 +69,8 @@ jobs:
             tests/editor-retest8-matte.test.tsx \
             tests/editor-audit-save-history.test.tsx \
             tests/editor-audit-transcript.test.tsx \
-            tests/editor-audit-matte.test.ts
+            tests/editor-audit-matte.test.ts \
+            tests/editor-audit-rename.test.tsx
 
   captions-worker-regression:
     runs-on: ubuntu-latest
