@@ -41,7 +41,7 @@ export function buildCaptionWords(words: CaptionSourceWord[], edits: ClipEditsV2
   const segs = orderedKeepSegments(edits)
   const out: CaptionWord[] = []
   for (const w of words) {
-    if (isWordCutByRanges(w, cutRanges)) continue
+    if (isWordCutByRanges(w, cutRanges) || isWordCutByRanges(w, edits.audioMuteRanges ?? [])) continue
     const sMs = w.s * 1000
     const eMs = w.e * 1000
     const mid = (sMs + eMs) / 2
