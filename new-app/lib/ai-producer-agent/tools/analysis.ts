@@ -70,17 +70,28 @@ export async function analyzeVisual(ctx: import('@/lib/ai-producer-agent/tools/r
   if (!budget.canSpendGemini(est)) return { ok: false, summary: 'budget exceeded', costUsd: 0 }
   const anchor = ctx.sources[0]?.projectId
   if (!anchor) return { ok: false, summary: 'no anchor' }
+  const requested = args.rangeMs as [number, number] | undefined
+  const sources = requested
+    ? ctx.sources.map((s) => {
+        const [start, end] = s.rangeMs ?? [0, s.durationMs ?? 0]
+        const lo = Math.max(start, Number(requested[0]))
+        const hi = Math.min(end, Number(requested[1]))
+        return { ...s, rangeMs: [lo, Math.max(lo, hi)] as [number, number] }
+      }).filter((s) => s.rangeMs[1] > s.rangeMs[0])
+    : ctx.sources
+  if (!sources.length) return { ok: false, summary: 'visual_range_outside_source', costUsd: 0 }
   const job = await enqueueAiProducerAnalyzeJob({
-    runId: ctx.runId,
-    projectId: anchor,
-    mode: 'best_moments',
-    sources: ctx.sources,
+    runId: ctx.runId, projectId: anchor, mode: 'best_moments',
+    sources, targetClipLenS: 45,
   })
-  await waitForClipJobDone(job.id).catch(() => null)
-  const data = ctx.cache.visual ?? { laughs: [], reactions: [], actions: [], faces: [] }
-  ctx.cache.laughs = (data.laughs as [number, number][]) ?? []
-  budget.addGemini(est)
-  return { ok: true, summary: 'visual analyzed', data, costUsd: est }
+  const finished = await waitForClipJobDone(job.id).catch(() => null)
+  const payload = (finished?.payload ?? {}) as { analyzeResult?: { moments?: Record<string, unknown>[] } }
+  if (!payload.analyzeResult) return { ok: false, summary: 'visual_analysis_unavailable', costUsd: 0 }
+  const actions = payload.analyzeResult.moments ?? []
+  const data = { laughs: [], reactions: [], actions: actions.slice(0, 20), faces: [] }
+  ctx.cache.visual = data
+  // Only visual claims grounded in the worker's real Gemini observations.
+  return { ok: true, summary: `${actions.length} observed visual moments`, data, costUsd: est }
 }
 
 export async function audioEnergy(ctx: import('@/lib/ai-producer-agent/tools/registry').ToolCtx, budget: Budget, args: Record<string, unknown>) {
@@ -88,6 +99,11 @@ export async function audioEnergy(ctx: import('@/lib/ai-producer-agent/tools/reg
   if (!budget.canSpendGemini(est)) return { ok: false, summary: 'budget exceeded', costUsd: 0 }
   const frames = ctx.cache.rmsFrames ?? []
   ctx.rmsLookup = buildRmsLookup(frames)
+  if (!frames.length) {
+    // Never tell the agent an audio boundary was checked when no actual
+    // waveform/energy samples were delivered to the runner.
+    return { ok: false, summary: 'audio_energy_unavailable_review_join_manually', costUsd: 0 }
+  }
   return {
     ok: true,
     summary: `${frames.length} frames`,
