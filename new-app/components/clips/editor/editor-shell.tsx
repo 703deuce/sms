@@ -250,6 +250,7 @@ export function EditorShell({
   cropShots,
   cropTrack,
   videoUrl,
+  matteMediaKind = null,
   editorMedia = null,
   posterUrl = null,
   aiMeta,
@@ -276,6 +277,7 @@ export function EditorShell({
   cropShots: CropShot[]
   cropTrack: CropTrack | null
   videoUrl: string | null
+  matteMediaKind?: string | null
   editorMedia?: EditorMedia | null
   posterUrl?: string | null
   aiMeta?: { brollIdeas?: string[] } | null
@@ -2653,6 +2655,7 @@ export function EditorShell({
       <EditorPanelErrorBoundary label="Preview">
       <PreviewStage
         clipId={clipId}
+        matteMediaKind={matteMediaKind}
         videoUrl={videoUrl}
         posterUrl={posterUrl}
         edits={renderEdits}
