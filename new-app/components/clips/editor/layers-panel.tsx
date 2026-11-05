@@ -188,8 +188,8 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
           const sourceTrack = row.kind === 'text' || row.kind === 'broll'
             ? trackIdOf(edits, row.kind === 'text' ? 'text' : 'overlay', row.id)
             : null
-          const canMove = (row.kind === 'text' || row.kind === 'broll') &&
-            !locked && !(sourceTrack && trackState(edits, sourceTrack).locked)
+          const isLocked = locked || Boolean(sourceTrack && trackState(edits, sourceTrack).locked)
+          const canMove = (row.kind === 'text' || row.kind === 'broll') && !isLocked
           return (
             <li key={row.key} className="flex items-center gap-1 rounded border border-border/60 px-1 py-1"
               data-testid={`actual-layer-${row.key}`}
@@ -209,7 +209,7 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
                 </span>
               ) : (
                 <span className="flex shrink-0 items-center rounded p-1 text-muted-foreground/60"
-                  title={locked ? 'Unlock the track to reorder' : 'Fixed compositing layer — cannot reorder'}
+                  title={isLocked ? 'Unlock the track to reorder' : 'Fixed compositing layer — cannot reorder'}
                   data-testid={`actual-layer-fixed-${row.key}`}>
                   <Lock size={13} aria-hidden />
                 </span>
