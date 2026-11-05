@@ -1998,9 +1998,16 @@ export function Timeline({
     { id: 'replaceGap', group: 'Edit', label: 'Replace selected main clip with gap', run: () => void replaceSelWithGap(), disabled: !editable || !liveSelected.some((r) => r.lane === 'video') },
     { id: 'speed', group: 'Edit', label: 'Speed of the clip under the playhead', keys: `${mk}R`, run: () => void openSpeed(), disabled: !editable },
     {
+      id: 'joinPrev',
+      group: 'Edit',
+      label: 'Join with previous (restore removed cut if needed)',
+      run: () => { if (joinOpts.prev !== null) join([joinOpts.prev]) },
+      disabled: !editable || joinOpts.prev === null,
+    },
+    {
       id: 'joinNext',
       group: 'Edit',
-      label: 'Join with next',
+      label: 'Join with next (restore removed cut if needed)',
       run: () => {
         if (joinOpts.next !== null) join([joinOpts.next])
       },
@@ -3315,8 +3322,8 @@ export function Timeline({
         previewRate={previewRate}
         setPaletteOpen={setPaletteOpen}
         range={range}
-        joinVisible={Boolean(editable && joinOpts.between.length)}
-        onJoin={() => join(joinOpts.between)}
+        joinVisible={Boolean(editable && (joinOpts.between.length || joinOpts.next !== null || joinOpts.prev !== null))}
+        onJoin={() => join(joinOpts.between.length ? joinOpts.between : joinOpts.next != null ? [joinOpts.next] : joinOpts.prev != null ? [joinOpts.prev] : [])}
         selectionCount={liveSelected.length}
         openCompound={openCompound}
         compoundBanner={
@@ -4220,7 +4227,7 @@ export function Timeline({
                     setCtxMenu(null)
                   }}
                 >
-                  Join with previous
+                  Join with previous (restore cut)
                 </button>
               ) : null}
               {joinOpts.next !== null ? (
@@ -4234,7 +4241,7 @@ export function Timeline({
                     setCtxMenu(null)
                   }}
                 >
-                  Join with next
+                  Join with next (restore cut)
                 </button>
               ) : null}
               {joinOpts.between.length ? (
