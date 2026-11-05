@@ -551,6 +551,11 @@ export function newTemplateItems(templateId: string, mkId: () => string, playhea
   // E9: the last delayed part must still get its full play duration. The old
   // shared 3s window clamped late countdown numbers to the same end frame.
   return tpl.parts.map(({ delayMs, durMs, ...p }) => {
+    // E9: the first frame of these templates must actually paint at the
+    // insertion playhead; pop/zoom entrances otherwise start fully invisible.
+    // Later countdown numbers retain their timed entrances.
+    const immediate = (delayMs ?? 0) === 0 &&
+      (templateId === 'c_qs_quote' || templateId === 'c_qs_stat' || templateId === 'c_cd_321')
     const s = Math.min(Math.max(0, clipEndMs - TEXT_MIN_MS), a + (delayMs ?? 0))
     const end = Math.min(clipEndMs, s + Math.max(TEXT_MIN_MS, durMs ?? TEXT_DEFAULT_MS))
     const parsed = p.kind ? null : parseInlineMarks(p.text)
@@ -561,6 +566,7 @@ export function newTemplateItems(templateId: string, mkId: () => string, playhea
       startMs: Math.max(a, s),
       endMs: end,
       style: { ...p.style },
+      ...(immediate && p.anim?.in ? { anim: { ...p.anim, in: undefined } } : {}),
     } as TextItem
   })
 }
