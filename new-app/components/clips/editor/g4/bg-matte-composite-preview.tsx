@@ -36,6 +36,26 @@ export function fitVideoFrame(
   return { sx: 0, sy: 0, sw: vw, sh: vh, dx: 0, dy: 0, dw: width, dh: height }
 }
 
+/** Map a CSS-positioned/cropped video into the matte canvas's backing pixels.
+ * The speaker-follow video is larger than the preview viewport and is shifted
+ * offscreen; object-fit alone loses that transform and keeps just an edge.
+ */
+export function visibleVideoPlacement(
+  frame: { left: number; top: number; width: number; height: number },
+  viewport: { left: number; top: number; width: number; height: number },
+  canvasWidth: number,
+  canvasHeight: number,
+): { dx: number; dy: number; dw: number; dh: number } {
+  const scaleX = canvasWidth / Math.max(1, viewport.width)
+  const scaleY = canvasHeight / Math.max(1, viewport.height)
+  return {
+    dx: (frame.left - viewport.left) * scaleX,
+    dy: (frame.top - viewport.top) * scaleY,
+    dw: frame.width * scaleX,
+    dh: frame.height * scaleY,
+  }
+}
+
 /** Real subject-mask compositing for the first six seconds of a clip.
  * The worker stores an actual 6s grayscale person matte; this uses the same
  * video frame and the real mask rather than drawing an approximate silhouette.
@@ -165,8 +185,16 @@ export function BgMatteCompositePreview({
         // Main editor video normally uses object-contain; preserve the full frame.
         // The hidden same-origin decoder has no object-fit styling; match the visible editor video.
         const fit = window.getComputedStyle(primary).objectFit || 'contain'
-        const pic = fitVideoFrame(source.videoWidth, source.videoHeight, w, h, fit)
-        const maskFit = fitVideoFrame(maskVideo.videoWidth, maskVideo.videoHeight, w, h, fit)
+        const cropped = primary.dataset.bgMatteCrop === 'true'
+        const visible = cropped
+          ? visibleVideoPlacement(primary.getBoundingClientRect(), rect, w, h)
+          : null
+        const pic = visible
+          ? { sx: 0, sy: 0, sw: source.videoWidth, sh: source.videoHeight, ...visible }
+          : fitVideoFrame(source.videoWidth, source.videoHeight, w, h, fit)
+        const maskFit = visible
+          ? { sx: 0, sy: 0, sw: maskVideo.videoWidth, sh: maskVideo.videoHeight, ...visible }
+          : fitVideoFrame(maskVideo.videoWidth, maskVideo.videoHeight, w, h, fit)
         fc.drawImage(source, pic.sx, pic.sy, pic.sw, pic.sh, pic.dx, pic.dy, pic.dw, pic.dh)
         mc.clearRect(0, 0, w, h)
         // Mirror worker/clips_worker/bg_removal.py refine_params: Gaussian
