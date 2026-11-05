@@ -97,7 +97,11 @@ export function describeEditsChange(prev: ClipEditsV2, next: ClipEditsV2): strin
     const removed = before.find(t => !after.some(n => n.id === t.id))
     if (removed) return `Deleted text ${quoted(removed.text)}`
     const added = after.find(t => !before.some(p => p.id === t.id))
-    if (added) return `Added text ${quoted(added.text)}`
+    if (added) {
+      const addedCount = after.filter(t => !before.some(p => p.id === t.id)).length
+      if (addedCount > 1) return `Added text group (${addedCount} items)`
+      return `Added text ${quoted(added.text)}`
+    }
     const changed = after.find(t => JSON.stringify(t) !== JSON.stringify(before.find(p => p.id === t.id)))
     if (changed) {
       const old = before.find(p => p.id === changed.id)

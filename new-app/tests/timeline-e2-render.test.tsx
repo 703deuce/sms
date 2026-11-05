@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { Timeline } from '@/components/clips/editor/timeline'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
+import { gapAtDisplayMs, exportTimeMap } from '@/lib/clips/editor/export-time'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { shiftVideoSegmentWithinSlot } from '@/lib/clips/editor/timeline-edit-ops'
 
@@ -66,6 +67,46 @@ function drag(el: Element, dxPx: number, opts: { altKey?: boolean } = {}) {
 }
 
 describe('E2 multi-track timeline', () => {
+  it('Retest4 N15: clicking a Video clip selects but does not seek', () => {
+    const ui = setup()
+    const video = ui.getAllByTestId('timeline-item-video')[0]!
+    act(() => fireEvent.pointerDown(video, { button: 0, clientX: 120, pointerId: 41 }))
+    act(() => fireEvent.pointerUp(window, { clientX: 120, pointerId: 41 }))
+    expect(video.getAttribute('data-selected')).toBe('true')
+    expect(ui.onSeekOutput).not.toHaveBeenCalled()
+    expect(ui.onCommitEdits).not.toHaveBeenCalled()
+  })
+
+  it('Retest4 N13: one main-video pointer gesture gives exactly one insert commit', () => {
+    const ui = setup(edits({ cutRanges: [], videoSplits: undefined }))
+    const magnet = ui.getByTestId('timeline-magnet')
+    if (magnet.getAttribute('aria-pressed') === 'true') fireEvent.click(magnet)
+    const video = ui.getAllByTestId('timeline-item-video')[0]!
+    act(() => fireEvent.pointerDown(video, { button: 0, clientX: 120, pointerId: 42 }))
+    act(() => fireEvent.pointerMove(window, { clientX: 320, pointerId: 42 }))
+    act(() => fireEvent.pointerUp(window, { clientX: 320, pointerId: 42 }))
+    // A duplicate pointerup is never allowed to create another history commit.
+    act(() => fireEvent.pointerUp(window, { clientX: 320, pointerId: 42 }))
+    expect(ui.onCommitEdits).toHaveBeenCalledTimes(1)
+    const next = ui.onCommitEdits.mock.calls[0]![0] as ClipEditsV2
+    expect(next.inserts?.some(i => i.sourceId === 'gap')).toBe(true)
+  })
+
+  it('Retest4 N12: ruler clicks inside an opening gap preserve display time, not base zero', () => {
+    const e = edits({ cutRanges: [], inserts: [{ id: 'g1', sourceId: 'gap',
+      atSrcMs: 0, inMs: 0, durMs: 5000, audio: 'mute' }] })
+    const map = exportTimeMap(timebaseFor(e).segs, e.inserts)
+    expect(gapAtDisplayMs(map, 2500)).toMatchObject({ startMs: 0, endMs: 5000, baseMs: 0 })
+    expect(gapAtDisplayMs(map, 5000)).toBeNull()
+    const ui = setup(e)
+    const ruler = ui.getByTestId('timeline-ruler')
+    Object.defineProperty(ruler, 'getBoundingClientRect', { configurable: true, value: () =>
+      ({ left: 0, right: 1000, width: 1000, top: 0, bottom: 32, height: 32 }) })
+    act(() => fireEvent.pointerDown(ruler, { button: 0, clientX: 100, clientY: 12, pointerId: 44 }))
+    act(() => fireEvent.pointerUp(window, { clientX: 100, clientY: 12, pointerId: 44 }))
+    expect(ui.onSeekOutput).toHaveBeenCalledWith(0, 2500)
+  })
+
   it('N12 displays and labels a lone Video clip at its saved gap-adjusted export time', () => {
     const clean = edits({ cutRanges: [], videoSplits: undefined })
     const moved = shiftVideoSegmentWithinSlot({ edits: clean, previewEdits: clean }, 'seg:0', 1200)!

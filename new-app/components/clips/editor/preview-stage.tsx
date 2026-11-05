@@ -138,6 +138,7 @@ function usesSpeakerCropPreview(edits: ClipEditsV2, track: CropTrack | null): bo
 export function PreviewStage({
   clipId = null,
   matteMediaKind = null,
+  gapDisplayMs = null,
   videoUrl,
   posterUrl = null,
   edits,
@@ -173,6 +174,8 @@ export function PreviewStage({
 }: {
   clipId?: string | null
   matteMediaKind?: string | null
+  /** Export-time cursor over a silent/black insert (there is no source frame). */
+  gapDisplayMs?: number | null
   videoUrl: string | null
   posterUrl?: string | null
   edits: ClipEditsV2
@@ -2012,6 +2015,10 @@ export function PreviewStage({
               }}
             />
           </Suspense>
+        ) : null}
+        {gapDisplayMs != null ? (
+          <div className="pointer-events-none absolute inset-0 z-[90] bg-black" aria-hidden="true"
+            data-testid="preview-black-gap" data-display-ms={Math.round(gapDisplayMs)} />
         ) : null}
         {canvas && !compositePreview && box.w > 0 ? (
           <CanvasSelectionOverlay

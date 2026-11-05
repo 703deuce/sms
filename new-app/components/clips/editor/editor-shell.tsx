@@ -46,7 +46,7 @@ import { patchClip } from '@/lib/clips-api'
 import { editorPreviewDurationMs, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { seedEditorExportTemplate } from '@/lib/clips/editor-export-template-seed'
 import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-log'
-import { exportTimeMap, toExportMs } from '@/lib/clips/editor/export-time'
+import { exportTimeMap, toExportMs, gapAtDisplayMs } from '@/lib/clips/editor/export-time'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { sourceMsToEditorMs } from '@/lib/clips/editor/source-ms-to-editor'
 import { transcriptCutForSelection } from '@/lib/clips/editor/transcript-cut-map'
@@ -461,6 +461,11 @@ export function EditorShell({
   }, [panel])
   const panelMounted = (id: EditorPanelId) => panel === id || visitedPanels.has(id)
   const [outputMs, setOutputMs] = useState(0)
+  // A gap is an export-only interval: its display cursor cannot be represented
+  // by the source video's outputMs. Keep it separately; never rewrite the EDL.
+  type GapPreview = { displayMs: number; endMs: number; baseMs: number; playing: boolean }
+  const [gapPreview, setGapPreview] = useState<GapPreview | null>(null)
+  const gapPreviewRef = useRef<GapPreview | null>(null)
   const outputMsRef = useRef(0)
   outputMsRef.current = outputMs
   const [playing, setPlaying] = useState(false)
@@ -1049,6 +1054,7 @@ export function EditorShell({
   )
   // G1c: source monitor (Media panel) + match frame (F on the timeline).
   const timelineTb = useMemo(() => timebaseFor(previewEditsForTimeline), [previewEditsForTimeline])
+  const exportMap = useMemo(() => exportTimeMap(timelineTb.segs, edits.inserts), [timelineTb, edits.inserts])
   const [monitorRequest, setMonitorRequest] = useState<MonitorRequest | null>(null)
   const matchFrame = (outMs: number): boolean => {
     const m = matchFrameAt(renderEdits, timelineTb, outMs, media.items)
@@ -1235,6 +1241,7 @@ export function EditorShell({
     const exportAt = toExportMs(tmap, outputMs, 'end')
     return Math.min(displayDur, Math.max(0, exportAt))
   }, [displayDur, edits, editorWords, outputMs])
+  const shownTransportMs = gapPreview?.displayMs ?? transportClockMs
 
   useEffect(() => {
     void clipsFetch<{ items: { id: string; name: string; settings: unknown }[] }>('/api/clips/brand/templates')
@@ -1569,6 +1576,9 @@ export function EditorShell({
   }, [edits, setEdits])
 
   const onTick = useCallback((tick: { sourceMs: number; outputMs: number; playing: boolean }) => {
+    // While a gap is displayed the main video is parked at its source boundary.
+    // Source ticks must not overwrite the black gap's export-time playhead.
+    if (gapPreviewRef.current) return
     setOutputMs(tick.outputMs)
     setPlaying(tick.playing)
   }, [])
@@ -1632,6 +1642,10 @@ export function EditorShell({
 
   const seekOutput = useCallback(
     (ms: number) => {
+      if (gapPreviewRef.current) {
+        gapPreviewRef.current = null
+        setGapPreview(null)
+      }
       const preview = editorPreviewEdits(edits, editorWords)
       const clamped = Math.max(0, Math.min(Math.max(0, outputDurationMs(preview) - 1), Math.round(ms)))
       outputMsRef.current = clamped
@@ -1645,6 +1659,82 @@ export function EditorShell({
     [edits, editorWords, mediaOffsetMs],
   )
 
+  const seekTimelineDisplay = useCallback(
+    (baseMs: number, displayMs?: number) => {
+      seekOutput(baseMs)
+      const gap = displayMs == null ? null : gapAtDisplayMs(exportMap, displayMs)
+      if (!gap) return
+      videoRef.current?.pause()
+      const next: GapPreview = { displayMs: Math.max(gap.startMs, Math.min(displayMs!, gap.endMs - 1)),
+        endMs: gap.endMs, baseMs: gap.baseMs, playing: false }
+      gapPreviewRef.current = next
+      setGapPreview(next)
+      setPlaying(false)
+    },
+    [exportMap, seekOutput],
+  )
+
+  // When the only clip is moved right, its new opening gap should appear black
+  // immediately without requiring a second click in the timeline.
+  useEffect(() => {
+    const active = gapPreviewRef.current
+    if (active) {
+      // Undoing the drag can remove its insert. Never strand the preview on
+      // a phantom black frame, and keep an enlarged/shrunk gap in sync.
+      const stillThere = gapAtDisplayMs(exportMap, active.displayMs)
+      if (!stillThere) {
+        gapPreviewRef.current = null
+        setGapPreview(null)
+        setPlaying(false)
+        return
+      }
+      if (active.endMs !== stillThere.endMs || active.baseMs !== stillThere.baseMs) {
+        const updated = { ...active, endMs: stillThere.endMs, baseMs: stillThere.baseMs }
+        gapPreviewRef.current = updated
+        setGapPreview(updated)
+      }
+      return
+    }
+    const at = toExportMs(exportMap, outputMsRef.current, 'end')
+    const gap = gapAtDisplayMs(exportMap, at)
+    if (!gap) return
+    videoRef.current?.pause()
+    const next: GapPreview = { displayMs: gap.startMs, endMs: gap.endMs, baseMs: gap.baseMs, playing: false }
+    gapPreviewRef.current = next
+    setGapPreview(next)
+    setPlaying(false)
+  }, [exportMap])
+
+  // Black/silent insert playback is clocked in export time, not by the paused
+  // source video. Resume the real clip only once the inserted gap has elapsed.
+  useEffect(() => {
+    if (!gapPreview?.playing) return
+    let raf = 0
+    let last = performance.now()
+    const tick = (now: number) => {
+      const active = gapPreviewRef.current
+      if (!active?.playing) return
+      const elapsed = Math.max(0, now - last) * getPreviewRate()
+      last = now
+      const position = Math.min(active.endMs, active.displayMs + elapsed)
+      if (position >= active.endMs) {
+        const base = active.baseMs
+        gapPreviewRef.current = null
+        setGapPreview(null)
+        seekOutput(base)
+        const video = videoRef.current
+        if (video) void playWithSound(video).catch(() => {})
+        return
+      }
+      const next = { ...active, displayMs: position }
+      gapPreviewRef.current = next
+      setGapPreview(next)
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [gapPreview?.playing, seekOutput])
+
   /** Transport / display-clock scrub (PlayerControls) → stored edit ms. Timeline uses seekOutput directly. */
   const seekDisplay = useCallback(
     (displayMs: number) => {
@@ -1654,12 +1744,20 @@ export function EditorShell({
         preview.inserts?.length ||
         (normalizeEditSpeed(preview.speed) ?? 1) !== 1
       const editMs = timingActive ? editMsAtDisplayMs({ ...preview, speed: edits.speed }, displayMs) : displayMs
-      seekOutput(editMs)
+      seekTimelineDisplay(editMs, displayMs)
     },
-    [edits, editorWords, seekOutput],
+    [edits, editorWords, seekTimelineDisplay],
   )
 
   const togglePlay = async () => {
+    const gap = gapPreviewRef.current
+    if (gap) {
+      const next = { ...gap, playing: !gap.playing }
+      gapPreviewRef.current = next
+      setGapPreview(next)
+      setPlaying(next.playing)
+      return
+    }
     const v = videoRef.current
     if (!v) return
     if (!v.paused) {
@@ -2496,6 +2594,7 @@ export function EditorShell({
           <TextPanel
             edits={edits}
             onEdits={setEdits}
+            onEditsPass={setEditsPass}
             playheadMs={outputMs}
             durationMs={outDur}
             selectedId={selectedTextId}
@@ -2678,6 +2777,7 @@ export function EditorShell({
         sourceUrls={sourceUrls}
         videoRef={videoRef}
         onTick={onTick}
+        gapDisplayMs={gapPreview?.displayMs ?? null}
         channelDisplay={streamChannelDisplay}
         chatPreviewEnabled={streamChatAvailable}
         media={editorMedia}
@@ -2984,8 +3084,8 @@ export function EditorShell({
               clipRec.armed ? null : (
                 <>
                   <PlayerControls
-                    playing={playing}
-                    outputMs={transportClockMs}
+                    playing={gapPreview?.playing ?? playing}
+                    outputMs={shownTransportMs}
                     outputDurationMs={displayDur}
                     onToggle={() => void togglePlay()}
                     onScrub={seekDisplay}
@@ -3780,7 +3880,8 @@ export function EditorShell({
             brollMedia={previewBrollMedia}
             sourceUrls={sourceUrls}
             posterUrl={posterUrl}
-            onSeekOutput={seekOutput}
+            onSeekOutput={seekTimelineDisplay}
+            gapDisplayMs={gapPreview?.displayMs ?? null}
             onTrimChange={setTrim}
             clipStartMs={bounds.clipStartMs}
             clipEndMs={bounds.clipEndMs}

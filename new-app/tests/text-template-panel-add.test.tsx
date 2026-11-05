@@ -33,6 +33,23 @@ describe('TextPanel multi-part templates', () => {
   })
 
 
+  it('Retest4 N14: Quote commits one atomic named undo entry and renders at the click playhead', () => {
+    const onEdits = vi.fn()
+    const onEditsPass = vi.fn()
+    const ui = render(<TextPanel edits={defaultEdits({ clipStartMs: 0, clipEndMs: 60000 })}
+      onEdits={onEdits} onEditsPass={onEditsPass}
+      playheadMs={7000} durationMs={60000} selectedId={null} onSelect={vi.fn()} />)
+    fireEvent.click(ui.getByTestId('text-template-c_qs_quote'))
+    expect(onEditsPass).toHaveBeenCalledTimes(1)
+    expect(onEdits).not.toHaveBeenCalled()
+    expect(onEditsPass.mock.calls[0]![1]).toBe('Added Quote template')
+    const next = onEditsPass.mock.calls[0]![0]
+    const quote = next.textItems.find((i: { text: string }) => i.text.includes('Your quote goes here'))
+    expect(quote.startMs).toBe(7000)
+    expect(quote.anim?.in).toBeUndefined()
+    expect(next.textItems).toHaveLength(3)
+  })
+
   for (const [id, count] of [['c_qs_quote', 3], ['c_cd_321', 3], ['c_qs_stat', 2]] as const) {
     it(`adds ${id} to the actual Text track at the playhead`, () => {
       const onEdits = vi.fn()

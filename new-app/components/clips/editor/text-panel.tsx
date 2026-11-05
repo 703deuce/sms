@@ -121,6 +121,7 @@ function ColorField({ label, value, onChange, testId }: { label: string; value: 
 export function TextPanel({
   edits,
   onEdits,
+  onEditsPass,
   playheadMs,
   durationMs,
   selectedId,
@@ -133,6 +134,8 @@ export function TextPanel({
   edits: ClipEditsV2
   /** pushHistory=false folds the change into the current undo step (E4fix coalescing). */
   onEdits: (e: ClipEditsV2, pushHistory?: boolean) => void
+  /** Atomic labelled undo step for a multi-part template; no intermediate text/track commits. */
+  onEditsPass?: (e: ClipEditsV2, label: string) => void
   playheadMs: number
   durationMs: number
   selectedId: string | null
@@ -208,10 +211,13 @@ export function TextPanel({
     burst.current = null
     const built = build([...items, ...made])
     const placed = built.textItems?.filter((t) => made.some((m) => m.id === t.id)) ?? []
-    if (!placed.length) return onEdits(built)
+    const label = TITLE_TEMPLATES.find((t) => t.id === tid)?.label ?? 'Title'
+    if (!placed.length) return onEditsPass ? onEditsPass(built, `Added ${label} template`) : onEdits(built)
     const a = Math.min(...placed.map((t) => t.startMs))
     const b = Math.max(...placed.map((t) => t.endMs))
-    onEdits(placeOnFreeTrack(built, 'text', placed.map((t) => t.id), a, b))
+    const next = placeOnFreeTrack(built, 'text', placed.map((t) => t.id), a, b)
+    if (onEditsPass) onEditsPass(next, `Added ${label} template`)
+    else onEdits(next)
     onSelect(made[made.length - 1]!.id)
   }
   const addShape = (type: string) => {
