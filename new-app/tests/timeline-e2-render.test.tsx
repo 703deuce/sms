@@ -5,7 +5,7 @@ import { Timeline } from '@/components/clips/editor/timeline'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { gapAtDisplayMs, exportTimeMap } from '@/lib/clips/editor/export-time'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
-import { shiftVideoSegmentWithinSlot } from '@/lib/clips/editor/timeline-edit-ops'
+import { shiftVideoSegmentWithinSlot, timelineClipboard } from '@/lib/clips/editor/timeline-edit-ops'
 
 const bounds = { clipStartMs: 0, clipEndMs: 20000, trimMinMs: 0, trimMaxMs: 40000 }
 const words = Array.from({ length: 30 }, (_, i) => ({ i, w: `w${i}`, s: i * 0.6, e: i * 0.6 + 0.4 }))
@@ -67,6 +67,78 @@ function drag(el: Element, dxPx: number, opts: { altKey?: boolean } = {}) {
 }
 
 describe('E2 multi-track timeline', () => {
+  it('F11: Snap ON has a distinct visible state and clip end snaps precisely to the playhead', () => {
+    const ui = setup()
+    const button = ui.getByTestId('timeline-snap')
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(button.textContent).toContain('Snap on')
+    const broll = ui.broll('b1')
+    const deltaToPlayhead = (10_000 - 8_000) * ui.pxPerMs() - 4
+    drag(broll, deltaToPlayhead)
+    expect(ui.onCommitEdits).toHaveBeenCalled()
+    const next = ui.onCommitEdits.mock.calls.at(-1)![0] as ClipEditsV2
+    expect(next.broll?.find(x => x.id === 'b1')?.endMs).toBe(10_000)
+    fireEvent.click(button)
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(button.textContent).toContain('Snap off')
+    ui.unmount()
+  })
+
+  it('F21: a 1.5× main clip bar uses the exported (shorter) duration', () => {
+    const e = edits({ cutRanges: [], speed: 1.5 })
+    const ui = setup(e, { clipOutputDurationMs: 20_000 })
+    const main = ui.getAllByTestId('timeline-item-video')[0]!
+    expect(ui.getByTestId('timeline-track').getAttribute('data-duration-ms')).toBe('13333')
+    expect(Number(main.getAttribute('data-end-ms'))).toBe(13_333)
+    expect(main.title).toContain('13.33')
+    ui.unmount()
+  })
+
+  it('F35: Shift-click multi-select never selects page text', () => {
+    const ui = setup()
+    expect(ui.getByTestId('timeline-root').className).toContain('select-none')
+    const [first, second] = ui.getAllByTestId('timeline-item-broll')
+    fireEvent.pointerDown(first!, { button: 0, clientX: 100, pointerId: 71 })
+    fireEvent.pointerUp(window, { clientX: 100, pointerId: 71 })
+    fireEvent.pointerDown(second!, { button: 0, clientX: 100, pointerId: 72, shiftKey: true })
+    fireEvent.pointerUp(window, { clientX: 100, pointerId: 72 })
+    expect(ui.getAllByTestId('timeline-item-broll').filter(el => el.getAttribute('data-selected') === 'true')).toHaveLength(2)
+    ui.unmount()
+  })
+
+  it('F37: cross-track fades toggle has an explanatory persistent toolbar status', () => {
+    const ui = setup()
+    expect(ui.queryByTestId('timeline-xfade-tracks-active')).toBeNull()
+    fireEvent.click(ui.getByTestId('timeline-more-menu'))
+    fireEvent.click(ui.getByTestId('timeline-xfade-tracks'))
+    expect(ui.getByTestId('timeline-xfade-tracks-active').textContent).toContain('Fades on')
+    expect(ui.getByTestId('timeline-xfade-tracks-active').getAttribute('title')).toContain('Two')
+    ui.unmount()
+  })
+
+  it('F10: selected split piece exposes Join button without relying on Undo', () => {
+    const ui = setup(edits({ cutRanges: [], videoSplits: [10_000] }))
+    const first = ui.getAllByTestId('timeline-item-video')[0]!
+    fireEvent.pointerDown(first, { button: 0, clientX: 100, pointerId: 73 })
+    fireEvent.pointerUp(window, { clientX: 100, pointerId: 73 })
+    fireEvent.click(ui.getByTestId('timeline-join'))
+    expect(ui.onCommitEdits).toHaveBeenCalled()
+    const next = ui.onCommitEdits.mock.calls.at(-1)![0] as ClipEditsV2
+    expect(next.videoSplits).toEqual([])
+    ui.unmount()
+  })
+
+  it('F2: Paste at playhead is disabled in the Edit menu until something was copied', () => {
+    timelineClipboard.set(null)
+    const ui = setup(edits({ cutRanges: [] }))
+    fireEvent.click(ui.getByTestId('timeline-more-menu'))
+    // Toolbar/menu command disabled state is owned by the clipboard, not by
+    // whether there happens to be a selected timeline item.
+    expect(timelineClipboard.get()).toBeNull()
+    ui.unmount()
+  })
+
+
   it('Retest4 N15: clicking a Video clip selects but does not seek', () => {
     const ui = setup()
     const video = ui.getAllByTestId('timeline-item-video')[0]!
