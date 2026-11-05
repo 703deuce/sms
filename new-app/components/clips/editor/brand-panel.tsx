@@ -30,6 +30,7 @@ export function BrandPanel({
 }) {
   const [templates, setTemplates] = useState<TemplateRow[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [bumperUploading, setBumperUploading] = useState<'intro' | 'outro' | null>(null)
   const brand = (edits.brand || {}) as {
     templateId?: string
     useIntro?: boolean
@@ -63,6 +64,31 @@ export function BrandPanel({
 
   const selectedTemplate = templates.find((t) => t.id === (selectedTemplateId ?? brand.templateId))
   const appliedTemplate = templates.find((t) => t.id === brand.templateId)
+
+  const uploadBumper = async (kind: 'intro' | 'outro', file: File | undefined) => {
+    if (!file || !appliedTemplate) return
+    if (file.size > 80 * 1024 * 1024) {
+      toast.error('Bumper MP4 must be under 80 MB')
+      return
+    }
+    setBumperUploading(kind)
+    try {
+      const form = new FormData()
+      form.set('file', file)
+      const res = await fetch(`/api/clips/brand/templates/${encodeURIComponent(appliedTemplate.id)}/bookend?kind=${kind}`, { method: 'POST', body: form })
+      if (!res.ok) throw new Error('Could not upload bumper MP4')
+      const data = await res.json() as { data?: { key?: string } }
+      const key = data.data?.key
+      if (!key) throw new Error('Bumper upload returned no media key')
+      onEdits({ ...edits, brand: { ...(edits.brand as object), [kind === 'intro' ? 'introVideoKey' : 'outroVideoKey']: key, [kind === 'intro' ? 'useIntro' : 'useOutro']: true } })
+      await refresh()
+      toast.success(`${kind === 'intro' ? 'Intro' : 'Outro'} bumper uploaded and enabled`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Bumper upload failed')
+    } finally {
+      setBumperUploading(null)
+    }
+  }
 
   const patchBrand = (patch: Record<string, unknown>) => {
     onEdits({ ...edits, brand: { ...(edits.brand as object), ...patch } })
@@ -118,6 +144,18 @@ export function BrandPanel({
       </div>
       {appliedTemplate && (!appliedTemplate.introVideoKey || !appliedTemplate.outroVideoKey) ? (
         <p className="text-xs text-muted-foreground" data-testid="brand-bumper-upload-hint">Bumper switches require an uploaded Intro/Outro MP4 on this template. Use Manage templates to upload the missing videos first.</p>
+      ) : null}
+      {appliedTemplate ? (
+        <div className="flex flex-wrap gap-3" data-testid="brand-bumper-uploads">
+          {(['intro', 'outro'] as const).map((kind) => (
+            <label key={kind} className="cursor-pointer text-xs text-primary underline">
+              {bumperUploading === kind ? 'Uploading…' : `Upload ${kind} MP4`}
+              <input type="file" accept="video/mp4,.mp4" className="sr-only" disabled={!!bumperUploading}
+                data-testid={`brand-upload-${kind}`}
+                onChange={(ev) => { void uploadBumper(kind, ev.target.files?.[0]); ev.target.value = '' }} />
+            </label>
+          ))}
+        </div>
       ) : null}
       <Button size="sm" variant="outline" render={<a href="/app/clips/brand" />}>
         Manage templates
