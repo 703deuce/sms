@@ -1,17 +1,21 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { render } from '@testing-library/react'
-import { createRef } from 'react'
+import { createElement, createRef } from 'react'
 import { applyMatteAlpha, fitVideoFrame, BgMatteCompositePreview } from '@/components/clips/editor/g4/bg-matte-composite-preview'
 
 describe('E2 real person matte compositing', () => {
   it('mounts a click-through canvas for the authenticated source even when no pixels have decoded yet', () => {
-    const ui = render(
-      <BgMatteCompositePreview clipId="clip-test" mediaKind="proxy" video={createRef<HTMLVideoElement>()}
-        outMs={createRef<number>()} enabled
-        removal={{ enabled: true, quality: 'standard', refine: { feather: 10, choke: 0 },
-          background: { type: 'blur', amount: 50 } }} />,
-    )
+    const ui = render(createElement(BgMatteCompositePreview, {
+      clipId: 'clip-test',
+      mediaKind: 'proxy',
+      video: createRef<HTMLVideoElement>(),
+      outMs: createRef<number>(),
+      enabled: true,
+      removal: { enabled: true, quality: 'standard', refine: { feather: 10, choke: 0 },
+        background: { type: 'blur', amount: 50 } },
+    }))
+
     const canvas = ui.getByTestId('preview-person-cutout')
     expect(canvas.className).toContain('pointer-events-none')
     ui.unmount()
