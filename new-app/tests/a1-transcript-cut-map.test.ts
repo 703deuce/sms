@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultEdits, type ClipEditsV2 } from '@/lib/clips/edits'
-import { transcriptCutForSelection, transcriptWordRemovedFromVideo } from '@/lib/clips/editor/transcript-cut-map'
+import { transcriptCutForSelection, transcriptWordRemovedFromVideo, wordsSelectedByMidpoint } from '@/lib/clips/editor/transcript-cut-map'
 import type { SourceWord } from '@/lib/clips/source-words'
 
 const bounds = { clipStartMs: 40000, clipEndMs: 55000 }
@@ -12,6 +12,17 @@ const words: SourceWord[] = [
 ]
 
 describe('A1 script cut source/output mapping', () => {
+  it('does not delete an overlapping but unselected neighbouring word', () => {
+    const near: SourceWord[] = [
+      { i: 1, s: 40, e: 40.2, w: 'keep' },
+      { i: 2, s: 40.15, e: 40.3, w: 'remove' },
+      { i: 3, s: 40.31, e: 40.5, w: 'also-keep' },
+    ]
+    expect(wordsSelectedByMidpoint(near, 40150, 40300).map((w) => w.w)).toEqual(['remove'])
+    const edits = defaultEdits({ clipStartMs: 40000, clipEndMs: 40500 })
+    expect(transcriptCutForSelection(edits, near, 40150, 40300)?.range).toEqual([40150, 40300])
+  })
+
   it('cuts selected words at the absolute source time, not 0:00 of the clip', () => {
     const edits = defaultEdits(bounds)
     const cut = transcriptCutForSelection(edits, words, 44000, 44450)
