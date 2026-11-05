@@ -9,6 +9,7 @@ on:
       - "new-app/tests/**"
       - "worker/clips_worker/captions_ass.py"
       - "worker/clips_worker/bg_removal.py"
+      - "worker/modal_app/matte.py"
       - "worker/tests/test_e8_caption_size.py"
       - ".github/workflows/editor-qa-regression.yml"
 
@@ -60,7 +61,9 @@ jobs:
             tests/fullsuite-batch3.test.ts \
             tests/fullsuite-batch4.test.tsx \
             tests/fullsuite-batch4-brand.test.tsx \
-            tests/fullsuite-batch5.test.ts
+            tests/fullsuite-batch5.test.ts \
+            tests/editor-retest6-controls.test.tsx \
+            tests/editor-retest6-menu.test.tsx
 
   captions-worker-regression:
     runs-on: ubuntu-latest
@@ -70,6 +73,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile all clips-worker modules and worker tests
-        run: python -m py_compile worker/clips_worker/*.py worker/tests/*.py
+        run: python -m py_compile worker/clips_worker/*.py worker/tests/*.py worker/modal_app/matte.py
       - run: python -m pip install pytest
       - run: PYTHONPATH=worker python -m pytest -q worker/tests/test_e8_caption_size.py worker/tests/test_export_duration_guard.py
