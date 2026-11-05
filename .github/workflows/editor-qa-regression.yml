@@ -40,6 +40,7 @@ jobs:
             tests/a1-transcript-cut-map.test.ts \
             tests/editor-audio-cut-boundaries.test.ts \
             tests/editor-audio-only-filler.test.ts \
+            tests/editor-audio-only-filler-ui.test.tsx \
             tests/clip-timeline.test.ts \
             tests/timeline-e2-render.test.tsx \
             tests/c1-laptop-lanes.test.ts \
