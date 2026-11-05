@@ -21,6 +21,7 @@ import {
 } from '@/lib/clips/editor/clip-timeline'
 import { defaultEdits, editsPayloadForSave, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { moveVideoSegment, moveVideoSegmentWithGap, shiftVideoSegmentWithinSlot } from '@/lib/clips/editor/timeline-edit-ops'
+import { exportTimeMap, toExportMs } from '@/lib/clips/editor/export-time'
 
 const bounds = { clipStartMs: 0, clipEndMs: 10000, trimMinMs: 0, trimMaxMs: 20000 }
 
@@ -327,7 +328,9 @@ describe('B1 retest: Magnet-off sub-slot main-video movement', () => {
     expect(moved?.inserts).toMatchObject([{ sourceId: 'gap', atSrcMs: 0, durMs: 1200 }])
     const video = buildTimelineItems({ edits: moved!, previewEdits: moved! }).video
     expect(video).toHaveLength(1)
-    expect(video[0]!.startMs).toBeGreaterThanOrEqual(1200)
+    // Lane items remain in base time; the actual timeline draws them in export time.
+    const map = exportTimeMap(timebaseFor(moved!).segs, moved!.inserts)
+    expect(toExportMs(map, video[0]!.startMs, 'start')).toBe(1200)
   })
 
   it('moves by a short drag using a real gap and reverses it on left drag', () => {
