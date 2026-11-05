@@ -558,7 +558,11 @@ export function useAudioMix({
   }, [])
 
   const meter = meterOn ? meterState : { analysers: null, voiceMetered: true }
-  return { ...meter, resumeAudio: () => ctxRef.current?.resume() }
+  return {
+    ...meter,
+    voiceFxProxyActive: Boolean(fxVoiceRef.current && !fxVoiceBrokenRef.current),
+    resumeAudio: () => ctxRef.current?.resume(),
+  }
 }
 
 /** Test helper: SFX reschedule key (pan changes must invalidate). */
