@@ -1052,6 +1052,9 @@ export function Timeline({
     [autoXfade, edits, previewEdits, sfxDurationsMs, xfadeTracks],
   )
   const [drag, setDrag] = useState<DragState | null>(null)
+  // One active main-video drag per pointer sequence; native pointer-capture and
+  // bubbling must never commit the same gap twice.
+  const mainVideoDragActiveRef = useRef(false)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hitSrcMs?: number | null } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   // E3: selected keyframe (diamond), live diamond drag, open transition pop-over.
@@ -2292,7 +2295,10 @@ export function Timeline({
     // TC4b (3): no native drag of the filmstrip images (it swallowed pointerup, so the drop only
     // completed on an extra click); a cancelled pointer ends the drag like a release.
     // TC4fix2: pointer capture so pointerup/pointermove always fire after a slow drag (R2).
+    if (mainVideoDragActiveRef.current) return
+    mainVideoDragActiveRef.current = true
     e.preventDefault()
+    e.stopPropagation()
     const captureEl = e.currentTarget as HTMLElement
     try {
       captureEl.setPointerCapture(e.pointerId)
@@ -2316,17 +2322,21 @@ export function Timeline({
       state.insertBefore = slotFromPointer(dx)
       setDrag({ ...state })
     }
-    const onUp = (ev: PointerEvent) => {
+    let finished = false
+    const finish = (ev: PointerEvent, cancelled = false) => {
+      if (finished) return
+      finished = true
+      mainVideoDragActiveRef.current = false
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       try {
         captureEl.releasePointerCapture(e.pointerId)
       } catch {
         /* ignore */
       }
       setDrag(null)
-      if (!state.moved) return
+      if (cancelled || !state.moved) return
       let before = state.insertBefore
       if (before === undefined) before = slotFromPointer(ev.clientX - state.originX)
       const ctx = opCtx()
@@ -2340,9 +2350,11 @@ export function Timeline({
           : 'Clip could not move to this position', { id: 'timeline-short-main-move' })
       }
     }
+    const onUp = (ev: PointerEvent) => finish(ev)
+    const onCancel = (ev: PointerEvent) => finish(ev, true)
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   const startDrag = (e: React.PointerEvent, item: TimelineItem, mode: DragState['mode']) => {
@@ -2361,18 +2373,7 @@ export function Timeline({
       return
     }
     rootRef.current?.focus({ preventScroll: true })
-    // TIMELINE_LAYOUT1 (8): a plain click on a clip selects it AND moves the playhead there (CapCut).
-    // Only a release within DRAG_SLOP_PX of the press seeks, so drags (move / trim / reorder) never do.
-    if (mode === 'move' && !(e.shiftKey || e.metaKey || e.ctrlKey)) {
-      const area0 = trackAreaRef.current
-      const seekAt = area0 ? msAtClientX(e.clientX, area0) : null
-      const x0 = e.clientX
-      const upSeek = (ev: PointerEvent) => {
-        window.removeEventListener('pointerup', upSeek, true)
-        if (seekAt != null && Math.abs(ev.clientX - x0) < DRAG_SLOP_PX) onSeekOutput(Math.max(0, seekAt))
-      }
-      window.addEventListener('pointerup', upSeek, true)
-    }
+    // N15: clicking a clip selects it, without seeking. Only ruler and empty lane seek.
     const key = refKey(item)
     const multi = e.shiftKey || e.metaKey || e.ctrlKey
     if (refLocked(edits, item)) {
