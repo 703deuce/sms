@@ -56,7 +56,8 @@ export function EnvelopeLine({
     const r = svgRef.current!.getBoundingClientRect()
     return { t: toLocal(e.clientX - r.left), v: vOf(e.clientY - r.top) }
   }
-  const color = kind === 'volume' ? 'stroke-emerald-300' : 'stroke-yellow-300'
+  // Audio waveforms are green/teal/orange; a lime line with a dark halo remains readable on all three.
+  const color = kind === 'volume' ? 'stroke-lime-200' : 'stroke-yellow-300'
   return (
     <svg
       ref={svgRef}
@@ -70,8 +71,9 @@ export function EnvelopeLine({
       <polyline
         points={line}
         className={`fill-none ${color}`}
-        strokeWidth={2.5}
+        strokeWidth={3.5}
         data-testid="timeline-envelope-line"
+        style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.95))' }}
         style={{ pointerEvents: 'none' }}
       />
       {/* Wide invisible hit line: click adds a point. */}
