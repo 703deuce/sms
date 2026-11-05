@@ -2,7 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, within } from '@testing-library/react'
 import { LayersPanel } from '@/components/clips/editor/layers-panel'
-import { defaultEdits } from '@/lib/clips/edits'
+import { defaultEdits, normalizeEdits } from '@/lib/clips/edits'
+import { legacyFromLayers, resolveLayers } from '@/lib/clips/layers'
 import { newTextItem } from '@/lib/clips/editor/text-items'
 import { visualStack } from '@/lib/clips/editor/tracks'
 
@@ -21,6 +22,23 @@ describe('actual Layers stack (E5)', () => {
     expect(onEdits.mock.calls.at(-1)?.[0].timelineLanes?.video?.hidden).toBe(true)
     fireEvent.click(ui.getByRole('button', { name: 'Lock Main video track' }))
     expect(onEdits.mock.calls.at(-1)?.[0].timelineLanes?.video?.locked).toBe(true)
+  })
+
+  it('N8 migrates legacy false Headline defaults, but an explicit eye hide stays off after save/reload', () => {
+    const bounds = { clipStartMs: 0, clipEndMs: 30_000 }
+    const old = normalizeEdits({
+      ...defaultEdits(bounds),
+      exportTemplate: { headlineBar: { enabled: false, text: 'Headline text' } },
+    }, bounds)
+    expect(old.exportTemplate?.headlineBar?.enabled).toBe(true)
+    const fresh = resolveLayers(old)
+    expect(fresh.find(l => l.type === 'headline')?.enabled).toBe(true)
+    const hidden = fresh.map(l => l.type === 'headline' ? { ...l, enabled: false } : l)
+    const saved = legacyFromLayers(hidden, old)
+    expect(saved.headlineVisibilitySet).toBe(true)
+    const reloaded = normalizeEdits(saved, bounds)
+    expect(reloaded.exportTemplate?.headlineBar?.enabled).toBe(false)
+    expect(resolveLayers(reloaded).find(l => l.type === 'headline')?.enabled).toBe(false)
   })
 
   it('N8 treats an unspecified Headline visibility as visible and toggles it off', () => {
