@@ -1677,7 +1677,24 @@ export function EditorShell({
   // When the only clip is moved right, its new opening gap should appear black
   // immediately without requiring a second click in the timeline.
   useEffect(() => {
-    if (gapPreviewRef.current) return
+    const active = gapPreviewRef.current
+    if (active) {
+      // Undoing the drag can remove its insert. Never strand the preview on
+      // a phantom black frame, and keep an enlarged/shrunk gap in sync.
+      const stillThere = gapAtDisplayMs(exportMap, active.displayMs)
+      if (!stillThere) {
+        gapPreviewRef.current = null
+        setGapPreview(null)
+        setPlaying(false)
+        return
+      }
+      if (active.endMs !== stillThere.endMs || active.baseMs !== stillThere.baseMs) {
+        const updated = { ...active, endMs: stillThere.endMs, baseMs: stillThere.baseMs }
+        gapPreviewRef.current = updated
+        setGapPreview(updated)
+      }
+      return
+    }
     const at = toExportMs(exportMap, outputMsRef.current, 'end')
     const gap = gapAtDisplayMs(exportMap, at)
     if (!gap) return
