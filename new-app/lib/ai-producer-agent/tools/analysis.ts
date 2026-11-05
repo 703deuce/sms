@@ -29,13 +29,29 @@ export async function findMoments(
   const finished = await waitForClipJobDone(job.id).catch(() => null)
   const payload = (finished?.payload ?? {}) as { analyzeResult?: Record<string, unknown> }
   const result = payload.analyzeResult ?? {}
-  const moments = (result.moments ?? result.inventory ?? []) as Record<string, unknown>[]
-  ctx.cache.moments = moments
-  ctx.cache.momentsSummary = moments.slice(0, 12)
-  if (result.inventory) ctx.cache.inventory = result.inventory as typeof ctx.cache.inventory
-  ctx.cache.inventorySummary = ctx.cache.inventory
-  budget.addGemini(Number(result.costUsd ?? est))
-  return { ok: true, summary: `${moments.length} moments`, data: { moments, inventory: result.inventory }, costUsd: Number(result.costUsd ?? est) }
+  if (!finished || !payload.analyzeResult) {
+    return { ok: false, summary: 'video_analysis_unavailable', costUsd: 0 }
+  }
+  const rows = Array.isArray(result.inventory) ? result.inventory as Record<string, unknown>[] : []
+  if (mode === 'inventory') {
+    // An inventory is a list of contextual beats, not a second moments search.
+    // Do not overwrite the best-moment candidates with an empty array.
+    ctx.cache.inventory = { rows } as typeof ctx.cache.inventory
+    ctx.cache.inventorySummary = { rows: rows.slice(0, 45) }
+  } else {
+    const moments = Array.isArray(result.moments) ? result.moments as Record<string, unknown>[] : []
+    if (moments.length) {
+      ctx.cache.moments = moments
+      ctx.cache.momentsSummary = moments.slice(0, 30)
+    }
+  }
+  const costUsd = Number(result.costUsd ?? result.meta && (result.meta as Record<string, unknown>).est_usd ?? est)
+  return {
+    ok: true,
+    summary: mode === 'inventory' ? `${rows.length} inventory beats` : `${ctx.cache.moments?.length ?? 0} moments`,
+    data: { moments: ctx.cache.moments ?? [], inventory: ctx.cache.inventory },
+    costUsd: Number.isFinite(costUsd) ? costUsd : est,
+  }
 }
 
 export async function getTranscript(ctx: import('@/lib/ai-producer-agent/tools/registry').ToolCtx, args: Record<string, unknown>) {
