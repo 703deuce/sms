@@ -304,7 +304,7 @@ export function ExportTemplateSection({
         platform={platform ?? tpl.platform}
         channelUrl={linkOn ? normalizeChannelUrl(channelUrl) || undefined : undefined}
         exportPlatformId={exportPlatformId ?? tpl.exportPlatformId ?? 'tiktok'}
-        videoLabel={layoutMiniPreviewLabel(layoutMode)}
+        videoLabel={layoutMiniPreviewLabel(layoutMode, edits.aspectRatio)}
       />
     </div>
   )
