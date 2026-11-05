@@ -3213,7 +3213,23 @@ export function EditorShell({
     if (layoutView !== 'timeline') setLayoutViewPersist('timeline')
     setTimelineMenuCmd((prev) => ({ cmd, seq: (prev?.seq ?? 0) + 1 }))
   }
-  const runPalette = (id: string) => runTimelineMenu({ kind: 'palette', id })
+  const runPalette = (id: string) => {
+    // Keep the actual canvas selection through a top-menu click. In compact
+    // view the Timeline may mount AFTER the menu closes and loses its local
+    // selection during the view switch.
+    const target = canvasSel?.target
+    const selectionHint =
+      target === 'video'
+        ? { lane: 'video' as const, sourceInMs: selectedVideo?.srcInMs, atMs: outputMs }
+        : target?.startsWith('broll:')
+          ? { lane: 'broll' as const, id: target.slice(6) }
+          : target?.startsWith('text:')
+            ? { lane: 'text' as const, id: target.slice(5) }
+            : target?.startsWith('sfx:')
+              ? { lane: 'sfx' as const, id: target.slice(4) }
+              : undefined
+    runTimelineMenu({ kind: 'palette', id, selectionHint })
+  }
   const openToolPanel = (id: EditorPanelId) => {
     if (unifiedWorkspaceActive) {
       selectPanel(id)
