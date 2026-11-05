@@ -62,7 +62,7 @@ export const EDITOR_GRID = {
   rootDock:
     'relative grid h-full min-h-0 overflow-hidden bg-background gap-1 p-1 ' +
     'grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] ' +
-    'lg:grid-cols-[minmax(0,45fr)_minmax(0,55fr)] lg:grid-rows-[auto_minmax(0,1fr)_minmax(240px,46%)]',
+    'lg:grid-cols-[minmax(0,45fr)_minmax(0,55fr)] lg:grid-rows-[auto_minmax(0,1fr)_minmax(190px,36%)]',
   /** TIMELINE_LAYOUT3 (CapCut): tools panel | Player | Properties | icon rail on top; one full-width timeline below. */
   railDock: 'min-h-0 min-w-0 overflow-hidden lg:col-start-1 lg:row-start-1',
   panelDock: 'min-h-0 min-w-0 overflow-hidden lg:col-start-1 lg:row-start-2',
