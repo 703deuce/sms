@@ -4379,7 +4379,7 @@ export function Timeline({
                 >
                   Paste at playhead (Ctrl+V)
                 </button>
-              ) : null}
+              )}
               {timelineClipboard.get() && liveSelected.some((r) => r.lane === 'text' || r.lane === 'broll') ? (
                 <button
                   type="button"
