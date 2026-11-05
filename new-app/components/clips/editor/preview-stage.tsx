@@ -1767,7 +1767,7 @@ export function PreviewStage({
             playing={playing}
           />
         ) : null}
-        {clipId && edits.bgRemoval?.enabled && !templatePreview && !segmentLayoutActive && !(edits.inserts?.length) ? (
+        {clipId && edits.bgRemoval?.enabled && !templatePreview && !segmentLayoutActive ? (
           <BgMatteCompositePreview clipId={clipId} video={videoRefInner} outMs={outMsRef}
             enabled={true} removal={edits.bgRemoval} />
         ) : null}
