@@ -34,6 +34,19 @@ function balancePan(ctx: AudioContext, pan: number): { input: AudioNode; output:
   return { input: split, output: merge, nodes: [split, gL, gR, merge] }
 }
 
+/** F5: one master gain for music, SFX and routed Voice. Direct video
+ * fallback uses exactly the same level. */
+export function previewMasterGain(volumePct: number, muted: boolean): number {
+  if (muted) return 0
+  return Math.max(0, Math.min(1, volumePct / 100))
+}
+
+/** F1: always mute the source's direct output when voice is muted, dub is
+ * replacing it, or a same-origin FX decoder is providing its audio. */
+export function previewSourceMuted(voiceMuted: boolean, playerMuted: boolean, useDub: boolean, proxied: boolean): boolean {
+  return voiceMuted || playerMuted || useDub || proxied
+}
+
 /** A fixed same-origin media route for preview FX when signed sources lack CORS.
  * The route verifies clip workspace ownership and never takes arbitrary URLs. */
 export function voiceFxPreviewUrl(clipId: string, mediaKind: string | null | undefined): string | null {
@@ -134,7 +147,7 @@ export function useAudioMix({
   const mixDest = (ctx: AudioContext): AudioNode => {
     if (!masterRef.current) {
       const m = ctx.createGain()
-      m.gain.value = Math.max(0, Math.min(1, playerVolume / 100)) * (playerMuted ? 0 : 1)
+      m.gain.value = previewMasterGain(playerVolume, playerMuted)
       m.connect(ctx.destination)
       masterRef.current = m
       const split = ctx.createChannelSplitter(2)
@@ -216,7 +229,7 @@ export function useAudioMix({
         el.src = fxVoiceUrl!
         el.addEventListener('error', () => {
           fxVoiceBrokenRef.current = true
-          video.muted = Boolean(voiceMuted || playerMuted || useDubAudio)
+          video.muted = previewSourceMuted(voiceMuted, playerMuted, Boolean(useDubAudio), false)
         })
         fxVoiceRef.current = el
       }
@@ -246,8 +259,8 @@ export function useAudioMix({
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    video.muted = Boolean(useDubAudio || voiceMuted || playerMuted ||
-      (fxVoiceRef.current && !fxVoiceBrokenRef.current))
+    video.muted = previewSourceMuted(voiceMuted, playerMuted, Boolean(useDubAudio),
+      Boolean(fxVoiceRef.current && !fxVoiceBrokenRef.current))
   }, [useDubAudio, videoRef, voiceMuted, playerMuted, outputMs])
 
   useEffect(() => {
@@ -268,7 +281,7 @@ export function useAudioMix({
       void ctxRef.current?.resume().catch(() => {})
       void sound.play().catch(() => {
         fxVoiceBrokenRef.current = true
-        picture.muted = Boolean(voiceMuted || playerMuted || useDubAudio)
+        picture.muted = previewSourceMuted(voiceMuted, playerMuted, Boolean(useDubAudio), false)
       })
     }
   }, [playing, outputMs, videoRef, useDubAudio, voiceMuted, playerMuted])
@@ -385,17 +398,17 @@ export function useAudioMix({
   useEffect(() => {
     const video = videoRef.current
     const voice = hasVoiceEnv ? volumeAt(edits, 'voice', outputMs) : 1
-    const level = Math.max(0, Math.min(1, playerVolume / 100))
+    const level = previewMasterGain(playerVolume, false)
     // The graph owns global master volume, so direct element volume stays at 1
     // for routed sources. Plain media (CORS fallback) needs the master level here.
     if (voiceGainRef.current) voiceGainRef.current.gain.value = voiceMuted || useDubAudio ? 0 : voice
-    if (masterRef.current) masterRef.current.gain.value = playerMuted ? 0 : level
+    if (masterRef.current) masterRef.current.gain.value = previewMasterGain(playerVolume, playerMuted)
     if (video) {
       const plain = !elementSourceRef.current || fxVoiceBrokenRef.current
       const desiredVolume = plain ? voice * level : 1
       if (Math.abs(video.volume - desiredVolume) > 0.001) video.volume = desiredVolume
-      const shouldMute = Boolean(voiceMuted || playerMuted || useDubAudio ||
-        (fxVoiceRef.current && !fxVoiceBrokenRef.current))
+      const shouldMute = previewSourceMuted(voiceMuted, playerMuted, Boolean(useDubAudio),
+        Boolean(fxVoiceRef.current && !fxVoiceBrokenRef.current))
       if (video.muted !== shouldMute) video.muted = shouldMute
     }
     if (dubRef.current) {
