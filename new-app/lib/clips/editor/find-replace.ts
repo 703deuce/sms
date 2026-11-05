@@ -100,7 +100,10 @@ export function replacementFixes(
     for (let i = 0; i < matched.length; i++) {
       const w = matched[i]!
       const key = String(w.i)
-      fixes[key] = repTokens[i]!
+      // Preserve sentence delimiters on the replaced source word so paragraph
+      // grouping does not merge this line with the next one.
+      const punctuation = trailingPunct(w.w)
+      fixes[key] = repTokens[i]! + (punctuation && !repTokens[i]!.endsWith(punctuation) ? punctuation : '')
       meta[key] = { s: Math.round(w.s * 1000), w: w.w }
     }
     return { fixes, meta }
