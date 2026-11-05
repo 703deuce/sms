@@ -4,9 +4,42 @@ import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edit
 import { patchAudioClip } from '@/lib/clips/editor/audio-clip'
 import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 import { buildFxChain, webAudioPlan, type TrackFx } from '@/lib/clips/editor/track-fx'
-import { sfxMixKey } from '@/components/clips/editor/use-audio-mix'
+import { previewMasterGain, previewSourceMuted, sfxMixKey, voiceFxPreviewUrl } from '@/components/clips/editor/use-audio-mix'
 
 describe('audio pan + track FX (AU-11/12/31)', () => {
+  it('F1: Voice mute is respected in source playback, even with the FX audio route', () => {
+    expect(previewSourceMuted(true, false, false, false)).toBe(true)
+    expect(previewSourceMuted(true, false, false, true)).toBe(true)
+    expect(previewSourceMuted(false, true, false, false)).toBe(true)
+    expect(previewSourceMuted(false, false, true, false)).toBe(true)
+    expect(previewSourceMuted(false, false, false, true)).toBe(true)
+    expect(previewSourceMuted(false, false, false, false)).toBe(false)
+  })
+
+  it('F5: player volume drives the same master gain for routed media and fallback video', () => {
+    expect(previewMasterGain(100, false)).toBe(1)
+    expect(previewMasterGain(50, false)).toBe(0.5)
+    expect(previewMasterGain(10, false)).toBe(0.1)
+    expect(previewMasterGain(0, false)).toBe(0)
+    expect(previewMasterGain(150, false)).toBe(1)
+    expect(previewMasterGain(75, true)).toBe(0)
+  })
+
+  it('F29: EQ is a realtime Web Audio filter and uses an authorized same-origin audio source', () => {
+    const plan = webAudioPlan({
+      track: 'voice', eq: { hp: 90, low: -3, mid: 5, midHz: 1250, high: 6 },
+    })
+    const filters = plan.filter(node => node.type === 'biquad')
+    expect(filters).toHaveLength(4)
+    expect(filters.map(node => node.type === 'biquad' ? node.kind : '')).toEqual([
+      'highpass', 'lowshelf', 'peaking', 'highshelf',
+    ])
+    expect(voiceFxPreviewUrl('clip-1', 'proxy')).toBe('/api/clips/clips/clip-1/bg-matte-media?kind=proxy')
+    expect(voiceFxPreviewUrl('clip-1', 'source')).toBe('/api/clips/clips/clip-1/bg-matte-media?kind=source')
+    expect(voiceFxPreviewUrl('clip-1', 'arbitrary')).toBeNull()
+    expect(voiceFxPreviewUrl('', 'proxy')).toBeNull()
+  })
+
   it('panGains balance law', () => {
     expect(panGains(0)).toEqual([1, 1])
     expect(panGains(-100)).toEqual([1, 0])
