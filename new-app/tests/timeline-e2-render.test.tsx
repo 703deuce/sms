@@ -129,7 +129,7 @@ describe('E2 multi-track timeline', () => {
     expect(ui.getByTestId('moment-make-clip')).toBeTruthy()
   })
 
-  it('N7 shows editable volume envelopes on Video/Voice when the menu is enabled', () => {
+  it('N7 shows readable volume envelopes on Video, Voice, Music and SFX', () => {
     const ui = setup()
     expect(ui.queryByTestId('timeline-envelope')).toBeNull()
     fireEvent.click(ui.getByTestId('timeline-more-menu'))
@@ -138,9 +138,13 @@ describe('E2 multi-track timeline', () => {
     const voice = ui.getAllByTestId('timeline-item-voice')[0]!
     expect(video.querySelector('[data-testid="timeline-envelope"][data-kind="volume"]')).toBeTruthy()
     expect(voice.querySelector('[data-testid="timeline-envelope"][data-kind="volume"]')).toBeTruthy()
+    const music = ui.getAllByTestId('timeline-item-music')[0]!
+    const sfx = ui.getAllByTestId('timeline-item-sfx')[0]!
+    expect(music.querySelector('[data-testid="timeline-envelope"][data-kind="volume"]')).toBeTruthy()
+    expect(sfx.querySelector('[data-testid="timeline-envelope"][data-kind="volume"]')).toBeTruthy()
     const line = video.querySelector('[data-testid="timeline-envelope-line"]') as SVGPolylineElement
     expect(line.getAttribute('points')).toBeTruthy()
-    expect(line.getAttribute('stroke-width')).toBe('2.5')
+    expect(line.getAttribute('stroke-width')).toBe('3.5')
   })
 
   it('C1 keeps lane viewport exactly as tall as its tracks, not a stretched empty region', () => {
