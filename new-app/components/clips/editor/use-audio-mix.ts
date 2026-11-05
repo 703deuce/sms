@@ -210,7 +210,7 @@ export function useAudioMix({
       video.addEventListener('loadedmetadata', () => ensureVoiceGraphRef.current(), { once: true })
       return
     }
-    const needsDedicatedSource = voiceFxOn && Boolean(fxVoiceUrl)
+    const needsDedicatedSource = voicePreviewFxOn && Boolean(fxVoiceUrl)
     if (!needsDedicatedSource && !audioGraphSafe(video)) {
       video.dataset.g4audioPlain = '1'
       if (meterOn) setMeterState((s) => ({ ...s, voiceMetered: false }))
@@ -229,7 +229,8 @@ export function useAudioMix({
         el.src = fxVoiceUrl!
         el.addEventListener('error', () => {
           fxVoiceBrokenRef.current = true
-          video.muted = previewSourceMuted(voiceMuted, playerMuted, Boolean(useDubAudio), false)
+          const activeVideo = videoRef.current
+          if (activeVideo) activeVideo.muted = previewSourceMuted(voiceMuted, playerMuted, Boolean(useDubAudio), false)
         })
         fxVoiceRef.current = el
       }
@@ -243,9 +244,22 @@ export function useAudioMix({
   }
   const ensureVoiceGraphRef = useRef(ensureVoiceGraph)
   ensureVoiceGraphRef.current = ensureVoiceGraph
-  const voiceFxOn = audioFxActive(trackFxFor(edits, 'voice'))
-  const needVoiceGraph = voiceFxOn || meterOn
+  const voiceFx = trackFxFor(edits, 'voice')
+  const voiceFxOn = audioFxActive(voiceFx)
+  // Noise reduction and de-essing are export-only; don't create a second
+  // audio decoder if there is no effect the browser can actually process.
+  const voicePreviewFxOn = Boolean(voiceFx && webAudioPlan(voiceFx).length)
+  const needVoiceGraph = voicePreviewFxOn || meterOn
   const fxKey = JSON.stringify(edits.trackFx ?? []) + JSON.stringify(lufsGains)
+  useEffect(() => {
+    const sound = fxVoiceRef.current
+    if (!sound || !fxVoiceUrl) return
+    if (sound.getAttribute('src') !== fxVoiceUrl) {
+      sound.pause()
+      sound.src = fxVoiceUrl
+      fxVoiceBrokenRef.current = false
+    }
+  }, [fxVoiceUrl])
   useEffect(() => {
     // The main sound only goes through Web Audio when it needs to (music bed, Voice chain, or AU-30 meter).
     if (needVoiceGraph) ensureVoiceGraph()
