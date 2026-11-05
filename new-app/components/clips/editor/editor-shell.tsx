@@ -1581,13 +1581,28 @@ export function EditorShell({
     }
   }, [edits, setEdits])
 
+  // Looping belongs to the player clock, not to the Timeline component: the
+  // Timeline can be collapsed/unmounted while the preview keeps playing.
+  const loopSeekRef = useRef<(ms: number) => void>(() => {})
+  const loopJumpPendingRef = useRef(false)
   const onTick = useCallback((tick: { sourceMs: number; outputMs: number; playing: boolean }) => {
-    // While a gap is displayed the main video is parked at its source boundary.
-    // Source ticks must not overwrite the black gap's export-time playhead.
     if (gapPreviewRef.current) return
+    const markIn = exportTimelineInOut.inMs
+    const markOut = exportTimelineInOut.outMs
+    if (playbackLoopOn && tick.playing && markIn != null && markOut != null && markOut > markIn) {
+      if (tick.outputMs < markOut - 25) loopJumpPendingRef.current = false
+      if (tick.outputMs >= markOut && !loopJumpPendingRef.current) {
+        loopJumpPendingRef.current = true
+        loopSeekRef.current(markIn)
+        return
+      }
+      if (loopJumpPendingRef.current) return
+    } else {
+      loopJumpPendingRef.current = false
+    }
     setOutputMs(tick.outputMs)
     setPlaying(tick.playing)
-  }, [])
+  }, [playbackLoopOn, exportTimelineInOut.inMs, exportTimelineInOut.outMs])
 
   const mediaOffsetMs = editorMedia?.offsetMs ?? 0
   const scriptVoicePeaks = useAudioPeaks(videoUrl, 40, 12_000, {
@@ -1664,6 +1679,8 @@ export function EditorShell({
     },
     [edits, editorWords, mediaOffsetMs],
   )
+
+  loopSeekRef.current = seekOutput
 
   const seekTimelineDisplay = useCallback(
     (baseMs: number, displayMs?: number) => {
