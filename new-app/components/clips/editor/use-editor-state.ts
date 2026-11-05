@@ -275,6 +275,9 @@ export function useEditorState(
   // Keep the latest source-timed editor words; never reset a refetch to stale initial clip words.
   const editsRef = useRef(state.edits)
   editsRef.current = state.edits
+  // Restoration dispatch is asynchronous; don't immediately overwrite the stored
+  // Undo stack with the first render's empty history before React applies it.
+  const historyRestorePendingRef = useRef(false)
   const historyRef = useRef({ past: state.past, future: state.future })
   historyRef.current = { past: state.past, future: state.future }
 
@@ -298,6 +301,7 @@ export function useEditorState(
           future: ClipEditsV2[]; futureLabels: (string | undefined)[]
         }
         if (editsEqual(saved.edits, restored) && Array.isArray(saved.past) && Array.isArray(saved.future)) {
+          historyRestorePendingRef.current = saved.past.length > 0 || saved.future.length > 0
           dispatch({
             type: 'restoreHistory',
             past: saved.past.slice(-MAX_UNDO).map((e) => normalizeEdits(e, bounds)),
@@ -313,6 +317,10 @@ export function useEditorState(
   }, [clipId])
 
   useEffect(() => {
+    if (historyRestorePendingRef.current) {
+      if (!state.past.length && !state.future.length) return
+      historyRestorePendingRef.current = false
+    }
     const key = `transovo:editor-history:v1:${clipId}`
     try {
       // Retain a compact recent window to avoid browser storage quota exhaustion.
