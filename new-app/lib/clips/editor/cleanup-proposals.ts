@@ -88,7 +88,10 @@ function refineFillerRange(
     orderedWords.map((x) => ({ s: x.t0Ms / 1000, e: x.t1Ms / 1000 })),
     rmsSamples,
   )
-  if (!audio) return { range: raw }
+  if (!audio) return { range: raw, quality: {
+    srcStartMs: raw[0], srcEndMs: raw[1],
+    confidence: 'needs_review', reason: 'audio_alignment_unavailable',
+  } }
   return {
     range: audio.range,
     quality: {
