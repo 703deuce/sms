@@ -88,12 +88,22 @@ export function fillerWordCutRanges(
   ctx?: SilenceTrimContext,
 ): CutRange[] {
   const cuts: CutRange[] = []
-  for (const w of words) {
+  const ordered = [...words].sort((a, b) => a.s - b.s)
+  for (let i = 0; i < ordered.length; i++) {
+    const w = ordered[i]!
     const text = (w.w ?? '').replace(/[^\w']/g, '').trim()
     if (!text || !FILLER_ONLY_RE.test(text)) continue
     const a = Math.round(w.s * 1000)
     const b = Math.round(w.e * 1000)
-    if (b - a > 30) cuts.push([a, b])
+    if (b - a <= 30) continue
+    // This automatic polish path may not have a decoded audio envelope.
+    // If a filler nearly touches real speech, ASR drift could delete a
+    // neighbouring consonant: leave it for the editor's per-cut review.
+    const prev = ordered[i - 1]
+    const next = ordered[i + 1]
+    if (prev && a - Math.round(prev.e * 1000) < 60) continue
+    if (next && Math.round(next.s * 1000) - b < 60) continue
+    cuts.push([a, b])
   }
   if (!ctx) return cuts
   return sanitizeCutRangesForTrim(cuts, ctx.trimIn, ctx.trimOut).filter(
