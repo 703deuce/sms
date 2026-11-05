@@ -2496,6 +2496,7 @@ export function EditorShell({
           <TextPanel
             edits={edits}
             onEdits={setEdits}
+            onEditsPass={setEditsPass}
             playheadMs={outputMs}
             durationMs={outDur}
             selectedId={selectedTextId}
