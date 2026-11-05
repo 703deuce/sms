@@ -3251,13 +3251,19 @@ export function Timeline({
   return (
     <div
       ref={rootRef}
-      className="relative flex h-full max-h-full min-h-0 min-w-0 select-none flex-col gap-1 overflow-y-auto focus-visible:outline-none"
+      className="relative flex h-full max-h-full min-h-0 min-w-0 select-none flex-col gap-0 overflow-y-auto focus-visible:outline-none"
       tabIndex={-1}
       onKeyDown={onKeyDown}
       data-testid="timeline-root"
     >
       <TimelineToolbarChrome
         editable={editable}
+        collapsed={collapsed}
+        onToggleCollapsed={() => {
+          const next = !collapsed
+          setTlCollapsed(next)
+          onCollapsedChange?.(next)
+        }}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={onUndo}
