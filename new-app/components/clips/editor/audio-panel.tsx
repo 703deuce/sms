@@ -495,9 +495,11 @@ export function AudioPanel({
         </div>
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground">Sound effects</p>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap items-start gap-1" data-testid="audio-sfx-preset-list">
             {SFX_PRESETS.map((p) => (
-              <Button key={p.id} size="sm" variant="secondary" disabled={busy} onClick={() => void placeSfx(p.id)}>
+              <Button key={p.id} size="sm" variant="secondary" disabled={busy}
+                className="h-auto min-h-7 max-w-full shrink-0 whitespace-normal break-words px-2 py-1"
+                title={p.label} aria-label={`Add ${p.label} SFX`} onClick={() => void placeSfx(p.id)}>
                 {p.label}
               </Button>
             ))}
