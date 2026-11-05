@@ -100,11 +100,16 @@ describe('actual Layers stack (E5)', () => {
     const to = ui.getByTestId('actual-layer-text:title')
     const grip = ui.getByRole('button', { name: 'Drag B-roll · overlay layer' })
     const prior = document.elementFromPoint
-    document.elementFromPoint = vi.fn(() => to)
+    document.elementFromPoint = vi.fn(() => from)
+    // Real pointer geometry wins even when elementFromPoint returns the source.
+    Object.defineProperty(from, 'getBoundingClientRect', { configurable: true,
+      value: () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 200, width: 200 }) })
+    Object.defineProperty(to, 'getBoundingClientRect', { configurable: true,
+      value: () => ({ top: 20, bottom: 50, height: 30, left: 0, right: 200, width: 200 }) })
     try {
       fireEvent.pointerDown(grip, { clientX: 10, clientY: 10, button: 0 })
-      fireEvent.pointerMove(window, { clientX: 10, clientY: 30 })
-      fireEvent.pointerUp(window, { clientX: 10, clientY: 30 })
+      fireEvent.pointerMove(window, { clientX: 10, clientY: 35 })
+      fireEvent.pointerUp(window, { clientX: 10, clientY: 35 })
       expect(onEdits).toHaveBeenCalledOnce()
       expect(visualStack(onEdits.mock.calls[0]![0]).map(t => t.id)).toEqual(['tx1', 'ov1'])
     } finally {
