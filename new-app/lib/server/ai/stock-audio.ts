@@ -1,8 +1,181 @@
-  const filtered = searchStockAudio(musicEntries, q, {
-    kind: input.kind ?? 'music',
-    mood: input.mood,
-    genre: input.genre,
+import 'server-only'
+
+import { getPrisma } from '@/lib/server/db'
+import { getClipStorage, storageDriverName } from '@/lib/storage'
+import { allStockAudioEntries, type StockAudioEntry } from '@/lib/clips/stock-audio-catalog'
+import MUSIC_PROMPTS from '@/lib/clips/music-library-prompts.json'
+import { shareBaseUrl } from '@/lib/server/clips/composition-share'
+import { registerProjectMedia } from '@/lib/server/clips/project-media'
+import { createId } from '@/lib/supabase/id'
+
+const MANIFEST_KEY = 'stock-audio/music/manifest.json'
+const MANIFEST_TTL_MS = 10 * 60 * 1000
+
+type MusicManifest = {
+  version: number
+  tracks: { id: string; title: string; mood?: string; genre?: string; durationS: number; storageKey: string; bpm?: number }[]
+}
+
+let manifestCache: { at: number; manifest: MusicManifest | null; available: boolean } | null = null
+
+async function loadMusicManifest(): Promise<{ available: boolean; manifest: MusicManifest | null }> {
+  const now = Date.now()
+  if (manifestCache && now - manifestCache.at < MANIFEST_TTL_MS) {
+    return { available: manifestCache.available, manifest: manifestCache.manifest }
+  }
+  const storage = getClipStorage()
+  try {
+    const raw = await storage.getJson<MusicManifest>(MANIFEST_KEY)
+    if (raw?.tracks?.length) {
+      manifestCache = { at: now, manifest: raw, available: true }
+      return { available: true, manifest: raw }
+    }
+  } catch {
+    /* missing */
+  }
+  manifestCache = { at: now, manifest: null, available: false }
+  return { available: false, manifest: null }
+}
+
+export type StockAudioSearchHit = {
+  id: string
+  title: string
+  kind: 'music' | 'sfx'
+  license: 'elevenlabs' | 'cc0'
+  durationS: number
+  tags: string[]
+  mood?: string
+  genre?: string
+  bpm?: number
+  previewUrl: string
+}
+
+function entryById(id: string): StockAudioEntry | null {
+  return allStockAudioEntries().find((e) => e.id === id) ?? null
+}
+
+/** Read Vorbis Ogg duration from page granules, not an invented catalog estimate. */
+export function vorbisDurationMs(buf: Buffer): number {
+  let sampleRate = 0
+  let finalGranule = 0
+  for (let i = 0; i + 27 <= buf.length;) {
+    if (buf.toString('ascii', i, i + 4) !== 'OggS') break
+    const segCount = buf[i + 26]!
+    if (i + 27 + segCount > buf.length) break
+    let bodyLen = 0
+    for (let j = 0; j < segCount; j++) bodyLen += buf[i + 27 + j]!
+    const start = i + 27 + segCount
+    if (start + bodyLen > buf.length) break
+    if (!sampleRate && bodyLen >= 16 && buf[start] === 1 &&
+        buf.toString('ascii', start + 1, start + 7) === 'vorbis') {
+      sampleRate = buf.readUInt32LE(start + 12)
+    }
+    const granule = Number(buf.readBigUInt64LE(i + 6))
+    if (Number.isSafeInteger(granule) && granule > finalGranule) finalGranule = granule
+    i = start + bodyLen
+  }
+  return sampleRate && finalGranule ? Math.round(finalGranule / sampleRate * 1000) : 0
+}
+
+async function ensureCatalogFile(entry: StockAudioEntry): Promise<string> {
+  const prisma = getPrisma()
+  const storage = getClipStorage()
+  const providerId = entry.id
+  const cc0Music = entry.source === 'cc0-music'
+  const provider = cc0Music ? 'cc0-music' : 'kenney-sfx'
+  const existing = await prisma.stockAsset.findUnique({
+    where: { provider_providerId: { provider, providerId } },
   })
+  const objectKey = cc0Music
+    ? `stock-audio/cc0-music/${providerId}.ogg`
+    : `stock-audio/kenney/${providerId}.wav`
+  if (existing?.storageKey) {
+    try {
+      const size = await storage.getObjectSizeBytes(existing.storageKey)
+      if (size && size > 0) return storage.createSignedDownloadUrl(existing.storageKey, 3600)
+    } catch {
+      /* re-ingest */
+    }
+  }
+  // Only fixed, commit-pinned catalog paths are fetched, never user URLs.
+  const publicUrl = cc0Music ? entry.src! : `${shareBaseUrl()}${entry.src}`
+  const res = await fetch(publicUrl, { signal: AbortSignal.timeout(15000) })
+  if (!res.ok) throw new Error('Stock asset unavailable')
+  const buf = Buffer.from(await res.arrayBuffer())
+  if (buf.length < 128 || buf.length > 12_000_000) throw new Error('Invalid stock audio payload')
+  const durationS = cc0Music ? vorbisDurationMs(buf) / 1000 : entry.durationS
+  if (cc0Music && durationS <= 0) throw new Error('Invalid CC0 music duration')
+  await storage.putBytes(objectKey, buf, cc0Music ? 'audio/ogg' : 'audio/wav')
+  const row =
+    existing ??
+    (await prisma.stockAsset.create({
+      data: {
+        provider,
+        providerId,
+        pageUrl: cc0Music ? 'https://opengameart.org/' : 'https://kenney.nl/',
+        author: cc0Music ? 'qubodup' : 'Kenney',
+        authorId: 'cc0',
+        tags: entry.tags.join(','),
+        width: 0,
+        height: 0,
+        durationS,
+        thumbUrl: '',
+        storageKey: objectKey,
+      },
+    }))
+  if (!row.storageKey) {
+    await prisma.stockAsset.update({ where: { id: row.id }, data: { storageKey: objectKey } })
+  }
+  return storage.createSignedDownloadUrl(objectKey, 3600)
+}
+
+async function ensureMusicFile(trackId: string): Promise<string> {
+  const { manifest } = await loadMusicManifest()
+  const track = manifest?.tracks.find((t) => t.id === trackId)
+  if (!track?.storageKey) throw new Error('Unknown music track')
+  const storage = getClipStorage()
+  return storage.createSignedDownloadUrl(track.storageKey, 3600)
+}
+
+export async function searchStockAudioServer(input: {
+  q: string
+  kind?: 'music' | 'sfx'
+  mood?: string
+  genre?: string
+}): Promise<{ available: boolean; hits: StockAudioSearchHit[]; presets?: typeof MUSIC_PROMPTS }> {
+  const { available, manifest } = await loadMusicManifest()
+  const q = input.q.trim()
+  if (input.kind === 'sfx' || !input.kind) {
+    const { searchStockAudio } = await import('@/lib/clips/stock-audio-catalog')
+    const sfxHits = searchStockAudio(allStockAudioEntries(), q, {
+      kind: 'sfx',
+      mood: input.mood,
+      genre: input.genre,
+    })
+    const hits: StockAudioSearchHit[] = sfxHits.map((e) => ({
+      id: e.id,
+      title: e.title,
+      kind: 'sfx',
+      license: 'cc0',
+      durationS: e.durationS,
+      tags: e.tags,
+      previewUrl: `/api/clips/stock-audio/${e.id}/file`,
+    }))
+    if (input.kind === 'sfx') return { available: true, hits }
+  }
+  // The CC0 music is always available, even before the optional generated
+  // ElevenLabs manifest is populated in object storage.
+  const musicEntries: StockAudioEntry[] = [
+    ...allStockAudioEntries().filter(e => e.kind === 'music'),
+    ...(manifest?.tracks ?? []).map(t => ({
+      id: t.id, kind: 'music' as const, title: t.title,
+      source: 'transovo-music' as const, license: 'elevenlabs' as const,
+      durationS: t.durationS,
+      tags: [t.mood ?? '', t.genre ?? ''].filter(Boolean),
+      mood: t.mood, genre: t.genre, bpm: t.bpm, storageKey: t.storageKey,
+    })),
+  ]
+  const { searchStockAudio } = await import('@/lib/clips/stock-audio-catalog')
   const filtered = searchStockAudio(musicEntries, q, {
     kind: 'music',
     mood: input.mood,
@@ -110,7 +283,7 @@ export async function attachStockAudioToProject(
     })
     upload = { id: uploadId }
   }
-  const ext = meta.mime.includes('wav') ? 'wav' : 'mp3'
+  const ext = meta.mime.includes('wav') ? 'wav' : meta.mime.includes('ogg') ? 'ogg' : 'mp3'
   await registerProjectMedia(workspaceId, projectId, {
     uploadId: upload.id,
     label: `${meta.label}.${ext}`,
