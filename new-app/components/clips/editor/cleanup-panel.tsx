@@ -26,6 +26,7 @@ import type { ClipBounds } from '@/lib/clips/edits'
 import { findRetakes, retakeGroupWithKeepIndex, type RetakeGroup } from '@/lib/clips/editor/retakes'
 import { cleanupPassLabel, cleanupRestorePassLabel } from '@/lib/clips/editor/history-labels'
 import { orderedKeepSegments, remapTime } from '@/lib/clips/edits'
+import { addAudioMuteRanges, audioMuteAllowed, removeAudioMuteRanges } from '@/lib/clips/editor/audio-only-filler'
 import { formatTimecode } from '@/lib/clips/format'
 import { excerptPartsForCutRange } from '@/lib/clips/editor/cleanup-text'
 import {
@@ -37,7 +38,8 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
-import { rmsSamplesFromPeaks } from '@/lib/clips/gap-audio-trim'
+import { rmsSamplesFromPeaks, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
+import { loadFineEnvelope } from '@/lib/clips/editor/fine-audio-envelope'
 import {
   cleanupPassConfirmMessage,
   cleanupPassNeedsConfirm,
@@ -58,6 +60,7 @@ export function CleanupPanel({
   peaksUrl = null,
   onApplyProposal,
   onApplyPass,
+  onCommitEdits,
   onRestoreProposal,
   onRestorePass,
   onCommitTrim,
@@ -78,6 +81,7 @@ export function CleanupPanel({
   peaksUrl?: string | null
   onApplyProposal: (proposal: CleanupProposal) => void
   onApplyPass?: (proposals: CleanupProposal[], label: string) => void
+  onCommitEdits?: (next: ClipEditsV2, label: string) => void
   onRestoreProposal: (proposal: CleanupProposal) => void
   onRestorePass?: (proposals: CleanupProposal[], label: string) => void
   onCommitTrim: (trim: { in: number; out: number }) => void
@@ -91,6 +95,18 @@ export function CleanupPanel({
   mediaOffsetMs?: number
 }) {
   const [auditionIds, setAuditionIds] = useState<Set<string>>(new Set())
+  const [fillerMode, setFillerMode] = useState<'audio' | 'ripple'>('audio')
+  const [fineSpeechEnvelope, setFineSpeechEnvelope] = useState<GapRmsSample[] | null>(null)
+  const audioOnly = fillerMode === 'audio' && audioMuteAllowed(edits) && Boolean(onCommitEdits)
+  const commitFillerAudio = (rows: CleanupProposal[], label: string) => {
+    if (!onCommitEdits || !rows.length) return
+    onCommitEdits(addAudioMuteRanges(edits, rows.map((r) => r.range)), label)
+    setSkippedIds((old) => new Set([...old, ...rows.map((r) => r.id)]))
+    onAuditionChange(null)
+  }
+  const auditionRows = (rows: CleanupProposal[]) => audioOnly && rows.every((p) => p.kind === 'filler' || p.kind === 'repeat')
+    ? addAudioMuteRanges(edits, rows.map((r) => r.range))
+    : auditionEditsForProposals(edits, rows, wordSpans, rmsSamples)
   const [retakeBusy, setRetakeBusy] = useState(false)
   const [retakeExtras, setRetakeExtras] = useState<CleanupProposal[]>([])
   const [retakeGroups, setRetakeGroups] = useState<RetakeGroup[]>([])
@@ -139,9 +155,22 @@ export function CleanupPanel({
     [audioPeaks.peaks, audioPeaks.peaksPerSec, mediaOffsetMs],
   )
 
+  // The 40 Hz peaks are enough to find long pauses, but not a safe boundary
+  // for an 'um' touching a consonant. Only 5 ms decoded audio can approve an
+  // automatic filler edit. Otherwise the candidate requires human audition.
+  useEffect(() => {
+    let cancelled = false
+    setFineSpeechEnvelope(null)
+    if (videoUrl) void loadFineEnvelope(videoUrl, mediaOffsetMs).then((samples) => {
+      if (!cancelled) setFineSpeechEnvelope(samples?.length ? samples : null)
+    })
+    return () => { cancelled = true }
+  }, [videoUrl, mediaOffsetMs])
   const filler = useMemo(
-    () => fillerProposals(orderedWords, deletedSet, { strength, enabledOptInFillers: enabledOptIn, rmsSamples }),
-    [orderedWords, deletedSet, strength, enabledOptIn, rmsSamples],
+    () => fillerProposals(orderedWords, deletedSet, {
+      strength, enabledOptInFillers: enabledOptIn, rmsSamples: fineSpeechEnvelope,
+    }),
+    [orderedWords, deletedSet, strength, enabledOptIn, fineSpeechEnvelope],
   )
   const gaps = useMemo(
     () =>
@@ -162,13 +191,16 @@ export function CleanupPanel({
     [edits, orderedWords, deletedSet],
   )
   const proposed = useMemo(
-    () => [...filler, ...gaps, ...retakeExtras, ...clarityRows].filter((p) => !skippedIds.has(p.id)),
-    [filler, gaps, retakeExtras, clarityRows, skippedIds],
+    () => [...filler, ...gaps, ...retakeExtras, ...clarityRows].filter((p) =>
+      !skippedIds.has(p.id) &&
+      (!(p.kind === 'filler' || p.kind === 'repeat') ||
+        !(edits.audioMuteRanges ?? []).some(([a, b]) => a <= p.range[0] && b >= p.range[1]))),
+    [filler, gaps, retakeExtras, clarityRows, skippedIds, edits.audioMuteRanges],
   )
 
   const previewCutAudition = (p: CleanupProposal) => {
     onSeek(Math.max(bounds.clipStartMs, p.range[0] - 1000))
-    onAuditionChange(auditionEditsForProposals(edits, [p], wordSpans, rmsSamples))
+    onAuditionChange(auditionRows([p]))
   }
 
   const applyAllFillers = () => {
@@ -178,7 +210,8 @@ export function CleanupPanel({
         row.quality?.confidence === 'ready',
     )
     if (!rows.length) return
-    if (onApplyPass) onApplyPass(rows, cleanupPassLabel('filler', rows.length))
+    if (audioOnly) commitFillerAudio(rows, `Muted ${rows.length} filler sounds · video kept`)
+    else if (onApplyPass) onApplyPass(rows, cleanupPassLabel('filler', rows.length))
     else for (const p of rows) onApplyProposal(p)
     setSkippedIds(new Set())
     setAuditionIds(new Set())
@@ -203,7 +236,8 @@ export function CleanupPanel({
         if (!ok) return
       }
     }
-    if (onApplyPass) onApplyPass(rows, cleanupPassLabel(kind, rows.length))
+    if (kind === 'filler' && audioOnly) commitFillerAudio(rows, `Muted ${rows.length} filler sounds · video kept`)
+    else if (onApplyPass) onApplyPass(rows, cleanupPassLabel(kind, rows.length))
     else for (const p of rows) onApplyProposal(p)
     if (kind === 'filler' || kind === 'gap') setSkippedIds(new Set())
     if (kind === 'clarity') setClarityRows([])
@@ -368,7 +402,7 @@ export function CleanupPanel({
       else next.add(p.id)
       const selected = proposed.filter((row) => next.has(row.id))
       onAuditionChange(
-        selected.length ? auditionEditsForProposals(edits, selected, wordSpans, rmsSamples) : null,
+        selected.length ? auditionRows(selected) : null,
       )
       return next
     })
@@ -410,6 +444,19 @@ export function CleanupPanel({
           <p className="text-xs font-semibold">One-click cleanup</p>
           <FreeToolBadge />
         </div>
+        <div className="flex items-center gap-2 text-xs" data-testid="filler-edit-mode">
+          <span>Filler treatment</span>
+          <Button type="button" size="sm" variant={fillerMode === 'audio' ? 'default' : 'outline'}
+            disabled={!audioMuteAllowed(edits) || !onCommitEdits}
+            onClick={() => setFillerMode('audio')} data-testid="filler-mode-audio">
+            Mute audio · keep video
+          </Button>
+          <Button type="button" size="sm" variant={fillerMode === 'ripple' ? 'default' : 'outline'}
+            onClick={() => setFillerMode('ripple')} data-testid="filler-mode-ripple">
+            Remove video time
+          </Button>
+        </div>
+        {!audioMuteAllowed(edits) ? <p className="text-[11px] text-muted-foreground">Audio-only mute is unavailable for retimed or replaced audio. Ripple edits remain available.</p> : null}
         <QuickCleanupRow
           testId="cleanup-quick-fillers"
           title="Remove filler words"
@@ -686,7 +733,7 @@ export function CleanupPanel({
       <Tabs defaultValue="proposed">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="proposed">Proposed ({proposed.length})</TabsTrigger>
-          <TabsTrigger value="applied">Applied ({applied.length})</TabsTrigger>
+          <TabsTrigger value="applied">Applied ({applied.length + (edits.audioMuteRanges?.length ?? 0)})</TabsTrigger>
         </TabsList>
         <TabsContent value="proposed" className="mt-3 space-y-2">
           {proposed.length === 0 ? (
@@ -706,7 +753,8 @@ export function CleanupPanel({
                 onPreview={() => previewCutAudition(p)}
                 onSkip={() => setSkippedIds((s) => new Set(s).add(p.id))}
                 onApply={() => {
-                  onApplyProposal(p)
+                  if (audioOnly && (p.kind === 'filler' || p.kind === 'repeat')) commitFillerAudio([p], `Muted “${p.label}” · video kept`)
+                  else onApplyProposal(p)
                   setRetakeExtras((rows) => rows.filter((r) => r.id !== p.id))
                   setAuditionIds((s) => {
                     const n = new Set(s)
@@ -722,7 +770,15 @@ export function CleanupPanel({
           )}
         </TabsContent>
         <TabsContent value="applied" className="mt-3 space-y-2">
-          {applied.length === 0 ? (
+          {edits.audioMuteRanges?.length ? (
+            <div className="flex items-center justify-between gap-2 rounded border p-2 text-xs" data-testid="audio-only-fillers-applied">
+              <span>{edits.audioMuteRanges.length} audio-only silence interval(s) · video length unchanged</span>
+              <Button size="sm" variant="outline" type="button" onClick={() => onCommitEdits?.(
+                removeAudioMuteRanges(edits, edits.audioMuteRanges ?? []), 'Restore muted filler audio'
+              )} data-testid="restore-audio-only-fillers">Restore audio</Button>
+            </div>
+          ) : null}
+          {applied.length === 0 && !edits.audioMuteRanges?.length ? (
             <p className="text-xs text-muted-foreground">No cuts applied yet.</p>
           ) : (
             applied.map((p) => (

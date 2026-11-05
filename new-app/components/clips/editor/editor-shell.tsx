@@ -2322,6 +2322,7 @@ export function EditorShell({
             peaksUrl={editorAssets?.peaksUrl ?? null}
             onApplyProposal={onApplyCleanupProposal}
             onApplyPass={onApplyCleanupPass}
+            onCommitEdits={(next, label) => setEditsPass(next, label)}
             onRestoreProposal={onRestoreCleanupProposal}
             onRestorePass={onRestoreCleanupPass}
             onCommitTrim={setTrim}

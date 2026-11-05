@@ -79,7 +79,7 @@ def build_caption_words(words: list[dict], edits: dict, *, words_fallback: bool 
     segs = ordered_keep_segments(edits)
     out: list[dict] = []
     for w in words:
-        if is_word_cut_by_ranges(w, cut_ranges, trim_in=trim_in, trim_out=trim_out):
+        if is_word_cut_by_ranges(w, cut_ranges, trim_in=trim_in, trim_out=trim_out) or is_word_cut_by_ranges(w, edits.get("audioMuteRanges") or [], trim_in=trim_in, trim_out=trim_out):
             continue
         s_ms = int(float(w["s"]) * 1000)
         e_ms = int(float(w["e"]) * 1000)
