@@ -41,9 +41,10 @@ export function fitVideoFrame(
  * video frame and the real mask rather than drawing an approximate silhouette.
  */
 export function BgMatteCompositePreview({
-  clipId, video, outMs, enabled, removal,
+  clipId, mediaKind, video, outMs, enabled, removal,
 }: {
   clipId: string
+  mediaKind?: string | null
   video: React.RefObject<HTMLVideoElement | null>
   outMs: React.RefObject<number>
   enabled: boolean
@@ -52,6 +53,7 @@ export function BgMatteCompositePreview({
   const [maskUrl, setMaskUrl] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const maskRef = useRef<HTMLVideoElement>(null)
+  const sourceRef = useRef<HTMLVideoElement>(null)
   const workingRef = useRef<{ frame: HTMLCanvasElement; mask: HTMLCanvasElement; foreground: HTMLCanvasElement } | null>(null)
   const [renderable, setRenderable] = useState(false)
   const quality = removal?.quality ?? 'standard'
@@ -84,20 +86,29 @@ export function BgMatteCompositePreview({
   useEffect(() => {
     const main = video.current
     const matte = maskRef.current
+    const source = sourceRef.current
     if (!enabled || !maskUrl || !main || !matte) return
     const followPlayback = () => {
-      if (main.paused) matte.pause()
-      else void matte.play().catch(() => { /* The rAF below can seek individual mask frames. */ })
+      if (main.paused) {
+        matte.pause()
+        source?.pause()
+      } else {
+        void matte.play().catch(() => { /* rAF sync handles paused frames. */ })
+        void source?.play().catch(() => { /* rAF sync handles paused frames. */ })
+      }
     }
     main.addEventListener('play', followPlayback)
     main.addEventListener('pause', followPlayback)
     matte.addEventListener('canplay', followPlayback)
+    source?.addEventListener('canplay', followPlayback)
     followPlayback()
     return () => {
       main.removeEventListener('play', followPlayback)
       main.removeEventListener('pause', followPlayback)
       matte.removeEventListener('canplay', followPlayback)
+      source?.removeEventListener('canplay', followPlayback)
       matte.pause()
+      source?.pause()
     }
   }, [enabled, maskUrl, video])
 
@@ -115,13 +126,18 @@ export function BgMatteCompositePreview({
     const paint = () => {
       if (stopped) return
       frameId = requestAnimationFrame(paint)
-      const source = video.current
+      const primary = video.current
+      const source = mediaKind ? sourceRef.current : primary
       const ms = outMs.current
-      if (!source || source.readyState < 2 || maskVideo.readyState < 2 || ms < 0 || ms >= 6000) {
+      if (!source || !primary || source.readyState < 2 || maskVideo.readyState < 2 || ms < 0 || ms >= 6000) {
         output.style.visibility = 'hidden'
         return
       }
       const target = ms / 1000
+      if (mediaKind && Math.abs(source.currentTime - primary.currentTime) > 0.10 && !source.seeking) {
+        try { source.currentTime = primary.currentTime } catch { return }
+      }
+      if (source.seeking || (mediaKind && Math.abs(source.currentTime - primary.currentTime) > 0.18)) return
       if (Math.abs(maskVideo.currentTime - target) > 0.12 && !maskVideo.seeking) {
         try { maskVideo.currentTime = target } catch { return }
       }
@@ -187,11 +203,17 @@ export function BgMatteCompositePreview({
       output.style.visibility = 'hidden'
       workingRef.current = null
     }
-  }, [enabled, maskUrl, video, outMs, removal])
+  }, [enabled, maskUrl, mediaKind, video, outMs, removal])
 
   if (!enabled || !clipId) return null
   return (
     <>
+      {maskUrl && mediaKind ? (
+        <video ref={sourceRef} crossOrigin="anonymous"
+          src={`/api/clips/clips/${encodeURIComponent(clipId)}/bg-matte-media?kind=${encodeURIComponent(mediaKind)}`}
+          muted playsInline preload="auto" data-own-clock="1" className="hidden" aria-hidden
+          data-testid="preview-person-cors-source" />
+      ) : null}
       {maskUrl ? (
         <video ref={maskRef} crossOrigin="anonymous" src={maskUrl} muted playsInline preload="auto"
           data-own-clock="1"
