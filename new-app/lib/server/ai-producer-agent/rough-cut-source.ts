@@ -7,19 +7,6 @@ import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import type { AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
 
-/**
- * Restrict v0 to the last 20 minutes of an accessible source. Return
- * absolute source millisecond ranges, never a new timeline origin.
- */
-export function roughCutSourceWindow(source: AiProducerSourceRef): AiProducerSourceRef {
-  const [start, end] = source.rangeMs ?? [0, source.durationMs ?? 0]
-  if (!(end > start) || end - start < 5 * 60_000) {
-    throw new Error('rough_cut_requires_five_minutes_of_source')
-  }
-  const rangeMs: [number, number] = [Math.max(start, end - 20 * 60_000), end]
-  return { ...source, rangeMs, durationMs: rangeMs[1] - rangeMs[0] }
-}
-
 /** Load the real transcript used by the editor, not a model-invented one. */
 export async function loadRoughCutWords(
   workspaceId: string,
