@@ -860,6 +860,26 @@ def _run_render_clip_job_body(
             {"jobStatus": "RUNNING", "stage": "render_clip", "progress": overall_progress("upload", 0.0), "etaSeconds": ETA_UPLOAD_S},
         )
         _export_stage_log(render_id, "pre_upload", t_job)
+        # F15: the compositor can keep a final video frame or AAC tail beyond
+        # a short clip's Out point. Clamp the *rendered streams*, not just the
+        # metadata shown in the export dialog. Intro/outro bumpers are exempt:
+        # they intentionally extend the output beyond the edited clip.
+        if not (intro_key or outro_key):
+            from clips_worker.export_duration_guard import correct_export_overrun
+
+            from clips_worker.edits_render import output_duration_ms as _editor_duration_ms
+
+            intended_ms = int(render_meta.get("effective_edits_ms") or _editor_duration_ms(edits))
+            bounded_out = td_path / "render_duration_bounded.mp4"
+            original_out = out_mp4
+            out_mp4, observed_lengths = correct_export_overrun(
+                original_out, bounded_out, intended_ms,
+            )
+            if out_mp4 != original_out:
+                print(
+                    f"[clipper:duration_guard] {json.dumps({'renderId': render_id, 'targetMs': intended_ms, 'streams': observed_lengths})}",
+                    flush=True,
+                )
         pre_deliver = out_mp4
         from clips_worker.export_deliver import normalize_deliver, deliver as run_deliver, srt_slice
 
