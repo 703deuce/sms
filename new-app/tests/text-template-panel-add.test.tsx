@@ -71,16 +71,16 @@ describe('TextPanel multi-part templates', () => {
     }
     const ui = render(<Editor />)
     for (const id of ['c_qs_quote', 'c_cd_321', 'c_qs_stat']) {
-      const before = commits.at(-1)?.textItems?.length ?? 0
+      const beforeIds = new Set(commits.at(-1)?.textItems?.map(t => t.id) ?? [])
       fireEvent.click(ui.getByTestId(`text-template-${id}`))
-      const parts = commits.at(-1)!.textItems!.slice(before)
+      const parts = commits.at(-1)!.textItems!.filter(t => !beforeIds.has(t.id))
       expect(parts[0]!.startMs).toBe(4000)
       expect(parts[0]!.anim?.in).toBeUndefined()
       expect(parts[0]!.style.size).toBeGreaterThan(100)
     }
     const groups = commits.map((edit, i) => {
-      const priorLength = i ? commits[i - 1]!.textItems!.length : 0
-      return edit.textItems!.slice(priorLength)
+      const priorIds = new Set(i ? commits[i - 1]!.textItems!.map(t => t.id) : [])
+      return edit.textItems!.filter(t => !priorIds.has(t.id))
     })
     expect(groups[1]![0]!.x !== groups[0]![0]!.x || groups[1]![0]!.y !== groups[0]![0]!.y).toBe(true)
     expect(groups[2]![0]!.x !== groups[0]![0]!.x || groups[2]![0]!.y !== groups[0]![0]!.y).toBe(true)
