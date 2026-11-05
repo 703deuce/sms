@@ -129,6 +129,15 @@ export function refineWordCutWithAudio(
   const nextStart = spans.filter(([s, e]) => (s + e) / 2 >= hi).reduce<number | null>((m, [s]) => (m == null ? s : Math.min(m, s)), null)
   // Only whole-word cuts: each edge near the transcript edge of the cut words.
   if (Math.abs(lo - first[0]) > REFINED_SLACK_MS || Math.abs(hi - last[1]) > REFINED_SLACK_MS) return null
+  // Overlapping ASR words are ambiguous: there is no cut that can both remove
+  // the selected syllable and guarantee preservation of its neighbour.
+  // Flag for audition rather than blindly widening the edit into spoken audio.
+  const firstMid = (first[0] + first[1]) / 2
+  const lastMid = (last[0] + last[1]) / 2
+  if ((prevEnd != null && prevEnd >= firstMid) ||
+      (nextStart != null && nextStart <= lastMid)) {
+    return { range: [first[0], last[1]], confidence: 'needs_review', note: 'overlapping aligned words' }
+  }
 
   const local = samples.filter((s) => s.tMs >= first[0] - 1500 && s.tMs <= last[1] + 1500).map((s) => s.rms)
   const floor = pct(local, 0.1)
@@ -141,11 +150,12 @@ export function refineWordCutWithAudio(
   const R = findEdge(samples, last[1], -1, floor, speech, stepMs)
   let left = L.ms
   let right = R.ms
-  // Never past the middle of a kept neighbour, never shorter than the cut words' middle.
-  if (prevEnd != null) left = Math.max(left, prevEnd - EDGE_SEARCH_MS - 2 * stepMs)
-  if (nextStart != null) right = Math.min(right, nextStart + EDGE_SEARCH_MS + 2 * stepMs)
-  const firstMid = (first[0] + first[1]) / 2
-  const lastMid = (last[0] + last[1]) / 2
+  // A word's timestamp is uncertain, but it is never safe to eat into a
+  // retained neighbouring word just to catch a filler tail.
+  const crossesPrevious = prevEnd != null && left < prevEnd
+  const crossesNext = nextStart != null && right > nextStart
+  if (prevEnd != null) left = Math.max(left, prevEnd)
+  if (nextStart != null) right = Math.min(right, nextStart)
   left = Math.min(left, Math.round(firstMid) - 1)
   right = Math.max(right, Math.round(lastMid) + 1)
   if (right - left < 20) return { range: [first[0], last[1]], confidence: 'needs_review', note: 'too narrow after refine' }
@@ -153,9 +163,10 @@ export function refineWordCutWithAudio(
   const notes: string[] = []
   if (!L.quiet) notes.push(L.loud ? 'start runs into the previous word' : 'start at an energy valley')
   if (!R.quiet) notes.push(R.loud ? 'end runs into the next word' : 'end at an energy valley')
+  if (crossesPrevious || crossesNext) notes.push('audio edge would overlap retained word')
   return {
     range: [left, right],
-    confidence: L.loud || R.loud ? 'needs_review' : 'ready',
+    confidence: L.loud || R.loud || crossesPrevious || crossesNext ? 'needs_review' : 'ready',
     note: notes.join('; ') || 'audio edges',
   }
 }
