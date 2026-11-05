@@ -62,6 +62,7 @@ import { HookOverlayPreview } from '@/components/clips/editor/hook-overlay-previ
 import { TextItemsPreview } from '@/components/clips/editor/text-items-preview'
 import { CanvasSelectionOverlay, type CanvasLayerDom } from '@/components/clips/editor/canvas-selection-overlay'
 import { CanvasDirectHandles } from '@/components/clips/editor/canvas-direct-handles'
+import { BgMatteCompositePreview } from '@/components/clips/editor/g4/bg-matte-composite-preview'
 import { orderedStack } from '@/lib/clips/editor/layer-props'
 import type { KeyframeTarget } from '@/lib/clips/editor/keyframes'
 import { ColorLookDefs, lookFilterCss, usedSpecs } from '@/components/clips/editor/color-look-defs'
@@ -135,6 +136,7 @@ function usesSpeakerCropPreview(edits: ClipEditsV2, track: CropTrack | null): bo
 }
 
 export function PreviewStage({
+  clipId = null,
   videoUrl,
   posterUrl = null,
   edits,
@@ -168,6 +170,7 @@ export function PreviewStage({
   onFitPercent,
   onEditorMediaError,
 }: {
+  clipId?: string | null
   videoUrl: string | null
   posterUrl?: string | null
   edits: ClipEditsV2
@@ -1763,6 +1766,10 @@ export function PreviewStage({
             mediaOffsetMs={mediaOffsetMs}
             playing={playing}
           />
+        ) : null}
+        {clipId && edits.bgRemoval?.enabled && !templatePreview && !segmentLayoutActive && !(edits.inserts?.length) ? (
+          <BgMatteCompositePreview clipId={clipId} video={videoRefInner} outMs={outMsRef}
+            enabled={true} removal={edits.bgRemoval} />
         ) : null}
         <InsertPlayback videoRef={videoRefInner} edits={edits} words={words} sourceUrls={sourceUrls} mediaOffsetMs={mediaOffsetMs} />
         {videoUrl && edits.splitEdits?.length ? (
