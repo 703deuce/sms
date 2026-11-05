@@ -733,7 +733,7 @@ export function CleanupPanel({
       <Tabs defaultValue="proposed">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="proposed">Proposed ({proposed.length})</TabsTrigger>
-          <TabsTrigger value="applied">Applied ({applied.length})</TabsTrigger>
+          <TabsTrigger value="applied">Applied ({applied.length + (edits.audioMuteRanges?.length ?? 0)})</TabsTrigger>
         </TabsList>
         <TabsContent value="proposed" className="mt-3 space-y-2">
           {proposed.length === 0 ? (
