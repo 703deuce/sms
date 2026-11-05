@@ -2,7 +2,7 @@ import type { CaptionSourceWord } from '@/lib/clips/caption-words'
 import { buildCaptionWords, captionWordsToClipWords, wordMidMs } from '@/lib/clips/caption-words'
 import { captionLineClipWords } from '@/lib/clips/editor/caption-lines'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
-import { normalizeSectionOrder, outputDurationMs, resolveWordFixText } from '@/lib/clips/edits'
+import { normalizeSectionOrder, orderedKeepSegments, resolveWordFixText } from '@/lib/clips/edits'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { reversePieces } from '@/lib/clips/editor/video-reverse'
 import { applyLoopFriendlyTrimToEdits } from '@/lib/clips/loop-friendly-trim'
@@ -29,7 +29,10 @@ export function editorPreviewEdits(edits: ClipEditsV2, words: CaptionSourceWord[
 }
 
 export function editorPreviewDurationMs(edits: ClipEditsV2, words: CaptionSourceWord[]): number {
-  return outputDurationMs(editorPreviewEdits(edits, words))
+  // F2: source duplication/reorder alters the length of the actual edit
+  // sequence; the original source/cut-only duration is no longer sufficient.
+  return orderedKeepSegments(editorPreviewEdits(edits, words))
+    .reduce((total, [a, b]) => total + b - a, 0)
 }
 
 /** Same caption word pipeline as export burn-in (output timeline seconds). */
