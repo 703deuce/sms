@@ -227,7 +227,7 @@ const VIDEO_WORDBAR_H = 18
 const LONG_MEDIA_MS = 10 * 60 * 1000
 /** Timeline-side view of a B-roll media row (filmstrip source). */
 type TimelineBrollMedia = { id: string; url: string | null; thumbUrl?: string; mediaType?: string }
-const SNAP_PX = 8
+const SNAP_PX = 12
 const DRAG_SLOP_PX = 3
 
 const LANE_COLORS: Record<LaneId, string> = {
@@ -2386,6 +2386,12 @@ export function Timeline({
     // N15: clicking a clip selects it, without seeking. Only ruler and empty lane seek.
     const key = refKey(item)
     const multi = e.shiftKey || e.metaKey || e.ctrlKey
+    if (multi) {
+      // F35: Shift-click is a timeline selection gesture, not browser text selection.
+      // Prevent the native anchor/range selection before processing the clip.
+      e.preventDefault()
+      window.getSelection()?.removeAllRanges()
+    }
     if (refLocked(edits, item)) {
       lockedClickRef.current = item.lane
       return
@@ -2500,15 +2506,24 @@ export function Timeline({
       if (ev.altKey) state.alt = true
       if (dragMode === 'move') {
         const edges = moving.flatMap((m) => [m.startMs, m.endMs])
-        const s =
-          snapping && !slideTool ? snapMoveDelta(edges, raw, targets, thr) : { deltaMs: raw, snappedTo: null }
-        state.deltaMs = s.deltaMs
-        state.snappedTo = s.snappedTo
+        const s = snapping && !slideTool
+          ? snapMoveDelta(edges, raw, targets, thr)
+          : { deltaMs: raw, snappedTo: null }
+        // F11: the red playhead is the strongest editing target. Dense word
+        // edges must not steal the snap when an edge is also near the playhead.
+        const playheadEdge = snapping && !slideTool
+          ? edges.map(edge => ({ edge, d: Math.abs(edge + raw - playheadMs) }))
+              .sort((a, b) => a.d - b.d)[0] : null
+        const strong = playheadEdge && playheadEdge.d <= thr
+          ? { deltaMs: playheadMs - playheadEdge.edge, snappedTo: playheadMs } : null
+        state.deltaMs = strong?.deltaMs ?? s.deltaMs
+        state.snappedTo = strong?.snappedTo ?? s.snappedTo
       } else {
         const edge = dragMode === 'start' ? item.startMs : item.endMs
         const s = snapping ? snapValue(edge + raw, targets, thr) : { ms: edge + raw, snappedTo: null }
-        state.deltaMs = s.ms - edge
-        state.snappedTo = s.snappedTo
+        const nearPlayhead = snapping && Math.abs(edge + raw - playheadMs) <= thr
+        state.deltaMs = (nearPlayhead ? playheadMs : s.ms) - edge
+        state.snappedTo = nearPlayhead ? playheadMs : s.snappedTo
       }
       // B2: the live trim boundary must be the same boundary that trimItem will commit.
       // Clamp outer main-video edges against the actual source-media bounds, not the
@@ -3188,7 +3203,7 @@ export function Timeline({
   return (
     <div
       ref={rootRef}
-      className="relative flex h-full max-h-full min-h-0 min-w-0 flex-col gap-1 overflow-y-auto focus-visible:outline-none"
+      className="relative flex h-full max-h-full min-h-0 min-w-0 select-none flex-col gap-1 overflow-y-auto focus-visible:outline-none"
       tabIndex={-1}
       onKeyDown={onKeyDown}
       data-testid="timeline-root"
