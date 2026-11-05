@@ -278,9 +278,9 @@ export function useEditorState(
         }
         if (!saved.edits || !Array.isArray(saved.past) || !Array.isArray(saved.future)) continue
         const current = normalizeEdits(saved.edits, bounds)
-        const equivalent = editsEqual(current, restored) ||
-          (['trim', 'cutRanges', 'videoSplits', 'wordFixes', 'broll', 'textItems', 'audio', 'inserts'] as const)
-            .every((key) => JSON.stringify(current[key] ?? null) === JSON.stringify(restored[key] ?? null))
+        // Undo/redo must belong to the exact persisted EDL, including sectionOrder,
+        // layer positions, speed and source segments (not just the old subset).
+        const equivalent = editsEqual(current, restored)
         if (!equivalent) continue
         return {
           ...initial,
@@ -298,6 +298,9 @@ export function useEditorState(
   const savedRevisionRef = useRef(0)
   const saveInFlightRef = useRef(false)
   const savePendingRef = useRef(false)
+  // Await the actual in-flight PATCH before starting export; a queued save
+  // is not complete merely because processSaveQueue returned early.
+  const saveIdleWaitersRef = useRef<Array<() => void>>([])
   const saveSeqRef = useRef(nextClientSaveSeq(Math.max(restoredSaveSeq, serverSaveSeq, 0) - 1))
   const serverConfirmedEditsRef = useRef<ClipEditsV2>(restored)
   const serverUpdatedAtRef = useRef(opts?.serverUpdatedAt)
@@ -931,6 +934,8 @@ export function useEditorState(
             saveSeqRef.current = nextClientSaveSeq(saveSeqRef.current)
             if (staleRejections >= 2) {
               failed = true
+              dispatch({ type: 'saveFailed' })
+              toast.error('Could not save edits: a newer version exists')
               break
             }
             continue
@@ -1007,6 +1012,8 @@ export function useEditorState(
       toast.error('Could not save edits')
     } finally {
       saveInFlightRef.current = false
+      const waiters = saveIdleWaitersRef.current.splice(0)
+      waiters.forEach((resolve) => resolve())
       const pending = savePendingRef.current
       savePendingRef.current = false
       console.info('[clipper:editor] save', {
@@ -1216,15 +1223,20 @@ export function useEditorState(
     syncEditsSaveVersion: (v: number) => {
       serverVersionRef.current = v
     },
-    flushSave: () => {
-      if (savedRevisionRef.current >= localRevisionRef.current) {
-        return Promise.resolve()
-      }
-      return processSaveQueue().then(() => {
-        if (savedRevisionRef.current < localRevisionRef.current) {
-          throw new Error('Could not save edits')
+    flushSave: async () => {
+      // Export must await all revisions, including an autosave already in flight.
+      // Never treat a busy queue's immediate return as an unsuccessful save.
+      for (let tries = 0; tries < 3; tries++) {
+        if (savedRevisionRef.current >= localRevisionRef.current) return
+        if (saveInFlightRef.current) {
+          await new Promise<void>((resolve) => saveIdleWaitersRef.current.push(resolve))
+        } else {
+          await processSaveQueue()
         }
-      })
+      }
+      if (savedRevisionRef.current < localRevisionRef.current) {
+        throw new Error('Could not save edits')
+      }
     },
   }
 }
