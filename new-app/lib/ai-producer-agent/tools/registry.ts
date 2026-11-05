@@ -2,6 +2,7 @@ import 'server-only'
 
 import { getPrisma } from '@/lib/server/db'
 import { resolveAiProducerSources } from '@/lib/server/ai-producer-agent/resolve-sources'
+import { roughCutSourceWindow, loadRoughCutWords } from '@/lib/server/ai-producer-agent/rough-cut-source'
 import { createAiProducerOutputProject } from '@/lib/server/ai-producer-agent/create-output-project'
 import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 import type { AiProducerRunConfig, AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
@@ -62,7 +63,11 @@ export async function buildToolCtx(run: {
 }, budget: Budget): Promise<ToolCtx> {
   const config = (run.config ?? {}) as AiProducerRunConfig
   const sourcesRaw = (run.sourceSnapshot ?? []) as AiProducerSourceRef[]
-  const sources = await resolveAiProducerSources(run.workspaceId, sourcesRaw)
+  const allSources = await resolveAiProducerSources(run.workspaceId, sourcesRaw)
+  const sources = config.editMode === 'just_chatting_rough_cut'
+    ? allSources.map(roughCutSourceWindow) : allSources
+  const roughWords = config.editMode === 'just_chatting_rough_cut'
+    ? await loadRoughCutWords(run.workspaceId, sources[0]!) : []
   const totalSourceMs = sources.reduce((acc, s) => acc + (s.durationMs ?? 0), 0)
   const ctx: ToolCtx = {
     runId: run.id,
@@ -70,7 +75,7 @@ export async function buildToolCtx(run: {
     createdById: run.createdById ?? 'system',
     sources,
     config,
-    cache: { words: [], rmsFrames: [], bursts: [] },
+    cache: { words: roughWords, rmsFrames: [], bursts: [] },
     usedPayoffs: [],
     totalSourceMs,
     decideInput: {
