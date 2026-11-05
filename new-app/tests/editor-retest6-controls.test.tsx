@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
+import { visibleVideoPlacement } from '@/components/clips/editor/g4/bg-matte-composite-preview'
 import { PropertiesPanel } from '@/components/clips/editor/properties-panel'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { loopSeekAtOutput } from '@/lib/clips/editor/loop-playback'
@@ -26,6 +27,11 @@ describe('Editor retest #6 regression controls', () => {
     expect(slider.value).toBe('100')
     act(() => fireEvent.change(slider,{target:{value:'42'}}))
     expect(changed).toHaveBeenCalledWith(42)
+    // A real mouse click reaches the input even when preview drag handlers listen above it.
+    Object.defineProperty(slider, 'getBoundingClientRect', { configurable: true, value: () =>
+      ({ left: 10, top: 0, width: 200, height: 20, right: 210, bottom: 20 }) })
+    act(() => fireEvent.pointerDown(slider, { clientX: 60, pointerId: 1, buttons: 1 }))
+    expect(changed).toHaveBeenCalledWith(25)
     ui.rerender(<PlayerControls playing={false} outputMs={1000} outputDurationMs={31000}
       onToggle={vi.fn()} onScrub={vi.fn()} volume={42} onVolumeChange={changed} />)
     expect((ui.getByTestId('player-volume-slider') as HTMLInputElement).value).toBe('42')
@@ -48,6 +54,17 @@ describe('Editor retest #6 regression controls', () => {
     expect(ui.getByTestId('properties-text-color-controls')).toBeTruthy()
     act(() => fireEvent.change(ui.getByLabelText('Text colour'), {target:{value:'#ff0000'}}))
     expect(onCommit).toHaveBeenCalled()
+  })
+
+  it('F7 matte crop follows the scaled and shifted visible video geometry', () => {
+    const actual = visibleVideoPlacement(
+      {left:-100,top:25,width:600,height:400},
+      {left:0,top:0,width:300,height:500},300,500)
+    expect(actual).toEqual({dx:-100,dy:25,dw:600,dh:400})
+    const reduced = visibleVideoPlacement(
+      {left:-100,top:25,width:600,height:400},
+      {left:0,top:0,width:300,height:500},150,250)
+    expect(reduced).toEqual({dx:-50,dy:12.5,dw:300,dh:200})
   })
 
   it('F4 wraps overrun output ticks even after a long or delayed frame', () => {
