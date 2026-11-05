@@ -163,7 +163,7 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
         }) ?? document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-layer-row-key]')
         const key = destination?.getAttribute('data-layer-row-key')
         const to = stack.find((r) => r.key === key)
-        if (to) reorder(row, to)
+        if (to && (to.kind === 'text' || to.kind === 'broll')) reorder(row, to)
       }
       cleanup()
     }
@@ -183,20 +183,37 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
           const hidden = disabled(row)
           const track = row.kind === 'text' || row.kind === 'broll' || row.kind === 'video' ? row.kind : null
           const locked = track ? laneState(edits, track).locked === true : false
+          // Captions, Headline, stickers and Main video use fixed compositor slots.
+          // Only text and B-roll belong to the movable, persistent visual-track stack.
+          const sourceTrack = row.kind === 'text' || row.kind === 'broll'
+            ? trackIdOf(edits, row.kind === 'text' ? 'text' : 'overlay', row.id)
+            : null
+          const canMove = (row.kind === 'text' || row.kind === 'broll') &&
+            !locked && !(sourceTrack && trackState(edits, sourceTrack).locked)
           return (
             <li key={row.key} className="flex items-center gap-1 rounded border border-border/60 px-1 py-1"
               data-testid={`actual-layer-${row.key}`}
               data-layer-row-key={row.key}
-              draggable={(row.kind === 'text' || row.kind === 'broll') && !locked}
+              draggable={false}
               onDragStart={(e) => { setDragged(row.key); e.dataTransfer.effectAllowed = 'move' }}
               onDragOver={(e) => { if (dragged && dragged !== row.key && (row.kind === 'text' || row.kind === 'broll') && !locked) e.preventDefault() }}
               onDrop={(e) => { e.preventDefault(); const from = stack.find((r) => r.key === dragged); if (from) reorder(from, row); setDragged(null) }}
               onDragEnd={() => setDragged(null)}>
-              <span role="button" tabIndex={0} aria-label={`Drag ${row.label} layer`}
-                className="flex shrink-0 touch-none cursor-grab items-center rounded p-1 text-muted-foreground"
-                onPointerDown={(e) => { if (!locked) pointerReorder(e, row) }}>
-                <GripVertical size={13} aria-hidden />
-              </span>
+              {canMove ? (
+                <span role="button" tabIndex={0} aria-label={`Drag ${row.label} layer`}
+                  title="Drag to change front-to-back order (preview and export)"
+                  className="flex shrink-0 touch-none cursor-grab select-none items-center rounded p-1 text-muted-foreground"
+                  data-testid={`actual-layer-grip-${row.key}`}
+                  onPointerDown={(e) => pointerReorder(e, row)}>
+                  <GripVertical size={13} aria-hidden />
+                </span>
+              ) : (
+                <span className="flex shrink-0 items-center rounded p-1 text-muted-foreground/60"
+                  title={locked ? 'Unlock the track to reorder' : 'Fixed compositing layer — cannot reorder'}
+                  data-testid={`actual-layer-fixed-${row.key}`}>
+                  <Lock size={13} aria-hidden />
+                </span>
+              )}
               <button type="button" className={`min-w-0 flex-1 truncate rounded px-1 py-1 text-left text-xs ${(selectedKey === row.key || selectedRowKey === row.key) ? 'bg-primary/10 font-semibold' : ''}`}
                 onClick={() => { setSelectedRowKey(row.key); onSelect?.(row.kind, row.id, row.startMs) }}
                 data-testid={`actual-layer-select-${row.key}`}>{row.label}</button>
@@ -215,7 +232,7 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
           )
         })}
       </ul>
-      <p className="text-[10px] text-muted-foreground">Drag Text or B-roll to reorder overlapping items, or to move their track above/below another visual track. Locked tracks cannot be moved.</p>
+      <p className="text-[10px] text-muted-foreground">Drag the grip on Text or B-roll to change their preview/export stacking. Captions, Headline and Main video occupy fixed compositor positions; their lock icons explain this. Locked tracks cannot move.</p>
     </section>
   )
 }
