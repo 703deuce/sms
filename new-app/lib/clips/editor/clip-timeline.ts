@@ -368,10 +368,15 @@ export function buildTimelineItems(input: {
 
   const vsegs = videoLaneSegments(tb, edits.videoSplits)
   const multi = vsegs.length > 1
+  // Repeated source ranges after Duplicate/Paste need unique React/select IDs.
+  // Preserve legacy seg:<src> IDs for non-repeated footage.
+  const seenVideoStarts = new Set<number>()
   vsegs.forEach(({ a, b, startMs }, i) => {
+    const repeated = seenVideoStarts.has(a)
+    seenVideoStarts.add(a)
     lanes.video.push({
       lane: 'video',
-      id: `seg:${a}`,
+      id: repeated ? `seg:${a}@${Math.round(startMs)}` : `seg:${a}`,
       startMs,
       endMs: startMs + (b - a),
       srcInMs: a,
@@ -384,7 +389,12 @@ export function buildTimelineItems(input: {
   const offs = splitOffsets(tb.segs, edits.splitEdits, previewEdits.trim.in, previewEdits.trim.out)
   const real = new Set(realCutIndices(tb))
   vsegs.forEach((vs, vi) => {
-    const ki = tb.segs.findIndex(([a, b]) => a <= vs.a && vs.b <= b)
+    // F2: find by OUTPUT occurrence, not the first matching source span.
+    // A repeated segment has identical source times but a different output slot.
+    const ki = tb.segs.findIndex(([a, b], k) =>
+      tb.starts[k]! <= vs.startMs + 0.5 &&
+      vs.startMs < tb.starts[k]! + (b - a) - 0.5 &&
+      a <= vs.a && vs.b <= b)
     if (ki < 0) return
     const [ka, kb] = tb.segs[ki]!
     const picStart = tb.starts[ki]! + (vs.a - ka)
@@ -395,7 +405,8 @@ export function buildTimelineItems(input: {
     const endMs = picEnd + (lastInKeep ? offs[ki + 1]! : splitEditAt(edits, vsegs[vi + 1]!.a))
     lanes.voice.push({
       lane: 'voice',
-      id: `voice:${vs.a}`,
+      id: vi > 0 && vsegs.slice(0, vi).some(v => v.a === vs.a)
+        ? `voice:${vs.a}@${Math.round(vs.startMs)}` : `voice:${vs.a}`,
       startMs,
       endMs,
       srcInMs: vs.a + (firstInKeep ? offs[ki]! : splitEditAt(edits, vs.a)),
