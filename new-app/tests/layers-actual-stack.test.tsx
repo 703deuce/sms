@@ -80,10 +80,11 @@ describe('actual Layers stack (E5)', () => {
       setLayers={vi.fn()} onEdits={onEdits} />)
     const from = ui.getByTestId('actual-layer-broll:overlay')
     const to = ui.getByTestId('actual-layer-text:title')
+    const grip = ui.getByRole('button', { name: 'Drag B-roll · overlay layer' })
     const prior = document.elementFromPoint
     document.elementFromPoint = vi.fn(() => to)
     try {
-      fireEvent.pointerDown(from, { clientX: 10, clientY: 10, button: 0 })
+      fireEvent.pointerDown(grip, { clientX: 10, clientY: 10, button: 0 })
       fireEvent.pointerMove(window, { clientX: 10, clientY: 30 })
       fireEvent.pointerUp(window, { clientX: 10, clientY: 30 })
       expect(onEdits).toHaveBeenCalledOnce()
