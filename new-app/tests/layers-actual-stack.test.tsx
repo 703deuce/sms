@@ -23,6 +23,19 @@ describe('actual Layers stack (E5)', () => {
     expect(onEdits.mock.calls.at(-1)?.[0].timelineLanes?.video?.locked).toBe(true)
   })
 
+  it('N8 treats an unspecified Headline visibility as visible and toggles it off', () => {
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
+    const headline = { id: 'headline1', type: 'headline', text: 'News',
+      style: { preset: 'stream_white_box' } } as never
+    const setLayers = vi.fn()
+    const ui = render(<LayersPanel clipId="clip1" edits={edits} layers={[headline]}
+      setLayers={setLayers} onEdits={vi.fn()} />)
+    const toggle = ui.getByRole('button', { name: 'Toggle Headline visibility' })
+    expect(toggle.getAttribute('title')).toBe('Hide layer')
+    fireEvent.click(toggle)
+    expect(setLayers).toHaveBeenCalledWith([expect.objectContaining({ enabled: false })])
+  })
+
   it('E5 reorders overlapping text layers through the shared export stack model', () => {
     const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
     edits.textItems = [newTextItem('a', 1000, 30_000), newTextItem('b', 1000, 30_000)]
