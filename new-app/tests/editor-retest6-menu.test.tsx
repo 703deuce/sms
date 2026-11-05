@@ -12,7 +12,7 @@ const e:ClipEditsV2 = {
   broll:[{id:'b1',source:'stock',assetId:'stock123',startMs:2000,endMs:5000}],
 }
 afterEach(()=>cleanup())
-function timeline(command: {cmd:{kind:'palette';id:string;selectionHint?:{lane:'broll';id:'b1'}};seq:number},onCommitEdits:ReturnType<typeof vi.fn>){
+function timeline(command: {cmd:{kind:'palette';id:string;selectionHint?:{lane:'broll';id:'b1'}|{lane:'video';atMs:number}};seq:number},onCommitEdits:ReturnType<typeof vi.fn>){
   return <Timeline edits={e} words={words} shots={[]} outputMs={10000} clipOutputDurationMs={31000}
     onSeekOutput={vi.fn()} clipStartMs={0} clipEndMs={31000}
     trimMinMs={0} trimMaxMs={31000} onCommitEdits={onCommitEdits}
@@ -26,6 +26,14 @@ describe('Retest #6 F2 Edit top menu clipboard commands',()=>{
     const edited=commit.mock.calls.at(-1)![0] as ClipEditsV2
     expect(edited.broll?.length).toBe(2)
     expect(edited.broll?.[1]?.id).not.toBe('b1')
+  })
+  it('Edit Duplicate on the main Video clip creates repeated footage in the EDL',async()=>{
+    const commit=vi.fn()
+    render(timeline({cmd:{kind:'palette',id:'duplicate',selectionHint:{lane:'video',atMs:10000}},seq:1},commit))
+    await waitFor(()=>expect(commit).toHaveBeenCalled())
+    const next=commit.mock.calls.at(-1)![0] as ClipEditsV2
+    expect(next.sectionOrder?.length).toBeGreaterThan(1)
+    expect(next.sectionOrder).not.toEqual(e.sectionOrder)
   })
   it('Copy from inspector then Paste at playhead creates a new timeline item',async()=>{
     const commit=vi.fn()
