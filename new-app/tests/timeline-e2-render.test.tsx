@@ -212,6 +212,16 @@ describe('E2 multi-track timeline', () => {
     expect(getByTestId('timeline-track').getAttribute('data-duration-ms')).toBe('19000')
   })
 
+  it('R9 uses a single timeline divider and keeps Collapse inside the editing toolbar', () => {
+    const ui = setup()
+    expect(ui.queryByTestId('timeline-resize')).toBeNull()
+    const toolbar = ui.getByTestId('timeline-toolbar')
+    expect(toolbar.contains(ui.getByTestId('timeline-collapse'))).toBe(true)
+    expect(ui.getByTestId('timeline-root').className).toContain('gap-0')
+    expect(ui.getByTestId('timeline-collapse').getAttribute('aria-label')).toBe('Collapse timeline')
+    ui.unmount()
+  })
+
   it('C2 collapse keeps the clip, playhead, seek, and restores the full tracks', () => {
     const onCollapsedChange = vi.fn()
     const { getByTestId, queryByTestId, onSeekOutput } = setup(edits(), { onCollapsedChange })
