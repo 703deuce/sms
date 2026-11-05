@@ -3583,7 +3583,7 @@ export function Timeline({
               className="relative shrink-0"
               role="presentation"
               data-testid="timeline-track"
-              data-duration-ms={Math.round(span)}
+              data-duration-ms={Math.round(dspan)}
               data-tool={tool}
               style={{ width: widthPx, height: totalH, cursor: tool === 'hand' ? 'grab' : tool === 'blade' ? 'crosshair' : undefined }}
               onPointerDown={(e) => {
