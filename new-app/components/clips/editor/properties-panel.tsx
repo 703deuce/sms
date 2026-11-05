@@ -166,6 +166,7 @@ export function PropertiesPanel({
   projectSettingsSlot?: ReactNode
 }) {
   const avail = tabsFor(target)
+  const textSelected = target === 'text' || Boolean(target?.startsWith('text:'))
   const [tab, setTab] = useState<PropertiesTab>('video')
   useEffect(() => {
     if (avail[tab] != null) {
@@ -211,9 +212,10 @@ export function PropertiesPanel({
         <h2 className="truncate text-sm font-semibold">{target ? label : 'Properties'}</h2>
         {target ? <span className="text-[11px] text-muted-foreground">Edits at the playhead</span> : null}
       </div>
-      <div className="grid min-w-0 grid-cols-5 gap-0.5 rounded-md border border-border p-0.5" role="tablist" aria-label="Properties">
+      <div className="flex min-w-0 gap-0.5 overflow-x-auto rounded-md border border-border p-0.5" role="tablist" aria-label="Properties">
         {TABS.map((t) => {
-          const why = avail[t.id]
+          const textColorShortcut = t.id === 'color' && textSelected && Boolean(onOpenTextPanel)
+          const why = textColorShortcut ? null : avail[t.id]
           return (
             <button
               key={t.id}
@@ -221,9 +223,12 @@ export function PropertiesPanel({
               role="tab"
               aria-selected={tab === t.id}
               disabled={why != null}
-              title={why ?? t.label}
-              onClick={() => setTab(t.id)}
-              className={`min-w-0 rounded px-0.5 py-1 text-[10px] font-medium disabled:opacity-35 ${tab === t.id && why == null ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              title={textColorShortcut ? 'Edit text colors in the Text panel' : why ?? t.label}
+              onClick={() => {
+                if (textColorShortcut) onOpenTextPanel?.()
+                else setTab(t.id)
+              }}
+              className={`min-w-max flex-1 shrink-0 rounded px-1 py-1 text-[10px] font-medium disabled:opacity-35 ${tab === t.id && why == null ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
               data-testid={`properties-tab-${t.id}`}
             >
               {t.label}
