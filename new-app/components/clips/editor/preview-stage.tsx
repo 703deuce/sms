@@ -657,7 +657,7 @@ export function PreviewStage({
 
   // SCRIPT_DOC3: volume ramp at cut joins (base volume + time of the last jump).
   const joinFadeRef = useRef<{ base: number; at: number } | null>(null)
-  const audioMuteVolumeRef = useRef<{ base: number; last: number } | null>(null)
+  const audioMuteVolumeRef = useRef<{ base: number; last: number; gain: number } | null>(null)
   useEffect(() => {
     let raf = 0
     const JOIN_LOOKAHEAD_MS = 20
@@ -722,13 +722,16 @@ export function PreviewStage({
         const last = audioMuteVolumeRef.current
         if (gain < 1) {
           const base = last?.base ?? v.volume
-          if (last && Math.abs(v.volume - last.last) > 0.02 && last.last > 0.02) {
-            // Player volume slider changed during the cut: preserve new base.
-            last.base = Math.min(1, Math.max(0, v.volume / Math.max(0.02, last.last / Math.max(0.02, base))))
+          if (last && Math.abs(v.volume - last.last) > 0.02) {
+            // A slider/external player controller changed volume while the edit
+            // was active. Recalculate the unmuffled reference when measurable.
+            last.base = last.gain > 0.02
+              ? Math.min(1, Math.max(0, v.volume / last.gain))
+              : Math.min(1, Math.max(0, v.volume))
           }
           const applied = Math.min(1, Math.max(0, (last?.base ?? base) * gain))
           v.volume = applied
-          audioMuteVolumeRef.current = { base: last?.base ?? base, last: applied }
+          audioMuteVolumeRef.current = { base: last?.base ?? base, last: applied, gain }
         } else if (last) {
           v.volume = last.base
           audioMuteVolumeRef.current = null
