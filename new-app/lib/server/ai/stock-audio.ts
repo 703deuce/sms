@@ -91,7 +91,7 @@ async function ensureCatalogFile(entry: StockAudioEntry): Promise<string> {
         provider,
         providerId,
         pageUrl: cc0Music ? 'https://opengameart.org/' : 'https://kenney.nl/',
-        author: cc0Music ? 'qubodup' : 'Kenney',
+        author: cc0Music ? (entry.id === 'cc0-boss-battle' ? 'Juhani Junkala' : entry.id === 'cc0-dungeon-theme' ? 'Memoraphile' : 'qubodup') : 'Kenney',
         authorId: 'cc0',
         tags: entry.tags.join(','),
         width: 0,
