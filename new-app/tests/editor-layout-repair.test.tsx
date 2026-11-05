@@ -15,7 +15,7 @@ describe('controlled editor layout repair', () => {
 
   it('uses a two-column Timeline dock with a bounded full-width timeline row', () => {
     expect(EDITOR_GRID.rootDock).toContain('lg:grid-cols-[minmax(0,45fr)_minmax(0,55fr)]')
-    expect(EDITOR_GRID.rootDock).toContain('lg:grid-rows-[auto_minmax(0,1fr)_minmax(240px,46%)]')
+    expect(EDITOR_GRID.rootDock).toContain('lg:grid-rows-[auto_minmax(0,1fr)_minmax(190px,36%)]')
     const ui = render(
       <EditorLayout
         band="desktop"
