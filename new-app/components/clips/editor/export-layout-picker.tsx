@@ -19,23 +19,25 @@ export function ExportLayoutPicker({
   onChange,
   facecamLayout = null,
   edits,
+  aspectRatio,
   reframeV2Enabled = false,
 }: {
   value: ClipEditsV2['layout']['mode']
   onChange: (mode: ClipEditsV2['layout']['mode'], facecam?: ClipEditsV2['layout']['facecam']) => void
   facecamLayout?: FacecamLayoutState | null
   edits: ClipEditsV2
+  aspectRatio?: ClipEditsV2['aspectRatio']
   reframeV2Enabled?: boolean
 }) {
   const aiExtras = clipEditorAiExtrasEnabled()
   const ctx = { facecamLayout, reframeV2Enabled, aiExtras }
-  const landscape = isLandscapeAspect(edits.aspectRatio ?? '9:16')
+  const landscape = isLandscapeAspect(aspectRatio ?? edits.aspectRatio ?? '9:16')
   const options = EXPORT_LAYOUT_OPTIONS.filter((o) => !landscape || landscapeLayoutVisible(o.id))
   return (
     <div className="mt-3 space-y-1" data-testid="export-layout-picker">
       <p className="text-xs font-medium">Layout for this export</p>
       <p className="text-xs text-muted-foreground" data-testid="export-layout-hint">
-        {exportLayoutHint(value)}
+        {landscape ? 'Landscape output uses full-frame fit or crop instead of portrait speaker-follow.' : exportLayoutHint(value)}
       </p>
       {!facecamLayout?.facecam && !edits.layout.facecam?.box ? (
         <p className="text-[11px] text-muted-foreground">No facecam detected for this clip</p>
@@ -43,7 +45,7 @@ export function ExportLayoutPicker({
       <div className="mt-1 flex flex-wrap gap-2">
         {options.map((opt) => {
           const disabled = layoutOptionDisabled(opt, ctx)
-          const selected = value === opt.id && !disabled
+          const selected = (landscape ? (value === 'center_crop' ? 'center_crop' : 'fit_blur') : value) === opt.id && !disabled
           return (
             <Button
               key={opt.id}
