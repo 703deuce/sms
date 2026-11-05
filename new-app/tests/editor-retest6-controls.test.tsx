@@ -31,15 +31,23 @@ describe('Editor retest #6 regression controls', () => {
     expect((ui.getByTestId('player-volume-slider') as HTMLInputElement).value).toBe('42')
   })
 
-  it('F9 text Color tab is actionable and opens the existing text styling tools', () => {
+  it('F9 text Color stays in Properties and offers the selected text color', () => {
     const onOpenTextPanel = vi.fn()
-    const ui = render(<PropertiesPanel edits={base()} target="text:t1" label="Text"
-      outputMs={1000} onCommit={vi.fn()} onSeekOutput={vi.fn()} cropMode={false}
+    const onCommit = vi.fn()
+    const edits = { ...base(), textItems: [{
+      id: 't1', text: 'Hello', startMs: 0, endMs: 3000, x: 50, y: 50,
+      style: {font:'Montserrat' as const,size:60,color:'ffffff',align:'center' as const,case:'none' as const}
+    }] }
+    const ui = render(<PropertiesPanel edits={edits} target="text:t1" label="Text"
+      outputMs={1000} onCommit={onCommit} onSeekOutput={vi.fn()} cropMode={false}
       onCropModeChange={vi.fn()} onOpenTextPanel={onOpenTextPanel} />)
     const tab = ui.getByTestId('properties-tab-color') as HTMLButtonElement
     expect(tab.disabled).toBe(false)
     act(() => fireEvent.click(tab))
-    expect(onOpenTextPanel).toHaveBeenCalledOnce()
+    expect(onOpenTextPanel).not.toHaveBeenCalled()
+    expect(ui.getByTestId('properties-text-color-controls')).toBeTruthy()
+    act(() => fireEvent.change(ui.getByLabelText('Text colour'), {target:{value:'#ff0000'}}))
+    expect(onCommit).toHaveBeenCalled()
   })
 
   it('F4 wraps overrun output ticks even after a long or delayed frame', () => {
