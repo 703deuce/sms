@@ -688,6 +688,8 @@ export function EditorShell({
     [applyCleanupCut],
   )
 
+  const [playbackLoopOn, setPlaybackLoopOn] = useState(false)
+  const togglePlaybackLoop = useCallback(() => setPlaybackLoopOn((on) => !on), [])
   const toggleLoopFriendly = useCallback(() => {
     setEdits({ ...edits, loopFriendlyEnd: !(edits.loopFriendlyEnd ?? false) })
   }, [edits, setEdits])
@@ -2932,11 +2934,14 @@ export function EditorShell({
                 <ClipRecordMenu disabled disabledReason="Recording needs a secure origin and microphone access" onPick={() => undefined} />
               )
             }
-            viewSummary={`Loop ${edits.loopFriendlyEnd === false ? 'off' : 'on'} · ${previewQuality === 'auto' ? 'Auto' : previewQuality}`}
+            viewSummary={`Loop ${playbackLoopOn ? 'on' : 'off'} · ${previewQuality === 'auto' ? 'Auto' : previewQuality}`}
             viewMenuBody={
               <div className="flex flex-col gap-2" data-testid="preview-chip-row">
+                <button type="button" className={previewChipButtonClass()} onClick={togglePlaybackLoop} aria-pressed={playbackLoopOn} data-testid="player-loop-toggle">
+                  Loop in–out {playbackLoopOn ? 'on' : 'off'}
+                </button>
                 <button type="button" className={previewChipButtonClass()} onClick={toggleLoopFriendly}>
-                  Loop trim {edits.loopFriendlyEnd === false ? 'off' : 'on'}
+                  Loop-friendly ending {edits.loopFriendlyEnd === false ? 'off' : 'on'}
                 </button>
                 <Select
                   value={previewQuality}
@@ -3901,6 +3906,8 @@ export function EditorShell({
             onRedo={redo}
             canUndo={canUndo}
             canRedo={canRedo}
+            loopOn={playbackLoopOn}
+            onLoopChange={setPlaybackLoopOn}
             historySlot={historyPanel}
             onCollapsedChange={setTimelineCollapsed}
             controlledCollapsed={timelineCollapsed}
