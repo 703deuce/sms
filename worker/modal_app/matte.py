@@ -114,6 +114,32 @@ class Matter:
         self._nets[quality] = net
         return net
 
+    def _person_net(self):
+        """Secondary multi-person semantic mask.
+
+        RVM excels at a primary foreground subject, but can erase another
+        speaker in group footage. DeepLab's COCO/VOC person class recovers
+        additional people; its pixels are unioned with RVM, retaining RVM hair.
+        Loading is lazy and safe to skip when model weights cannot be fetched.
+        """
+        if getattr(self, "_person_net_unavailable", False):
+            return None
+        if getattr(self, "_person_seg", None) is not None:
+            return self._person_seg
+        try:
+            from torchvision.models.segmentation import (
+                DeepLabV3_MobileNet_V3_Large_Weights,
+                deeplabv3_mobilenet_v3_large,
+            )
+            weights = DeepLabV3_MobileNet_V3_Large_Weights.DEFAULT
+            model = deeplabv3_mobilenet_v3_large(weights=weights).eval().cuda()
+            self._person_seg = model
+            return model
+        except Exception as exc:
+            self._person_net_unavailable = True
+            print(f"[matte:people] semantic model unavailable: {type(exc).__name__}", flush=True)
+            return None
+
     @modal.method()
     def ping(self) -> dict:
         return {"ok": True}
@@ -137,6 +163,7 @@ class Matter:
     def _matte_impl(self, item: dict, t0: float) -> dict:
         import numpy as np
         import torch
+        import torch.nn.functional as F
 
         cold = (t0 - getattr(self, "_boot_at", t0)) < 3.0
         quality = "detail" if item.get("quality") == "detail" else "standard"
@@ -148,6 +175,14 @@ class Matter:
         w, h = _out_size(sw, sh, int(item.get("short_side") or 1080))
         n_pre = int(round(pre * fps))
         net = self._net(quality)
+        person_net = self._person_net()
+        semantic_mask = None
+        people_mask_frames = 0
+        # A semantic frame every four output frames balances temporal accuracy
+        # with the separate L4 inference budget.
+        semantic_interval = 4
+        norm_mean = torch.tensor([0.485, 0.456, 0.406], device="cuda").view(1, 3, 1, 1)
+        norm_std = torch.tensor([0.229, 0.224, 0.225], device="cuda").view(1, 3, 1, 1)
         ratio = float(downsample_ratio(w, h))
         frame_bytes = w * h * 3
         data = b""
@@ -234,6 +269,25 @@ class Matter:
                         else:
                             a_out = a
                         prev = (prev + [a])[-2:]
+                        if person_net is not None and out_idx % semantic_interval == 0:
+                            try:
+                                small = F.interpolate(src.float(), size=(384, 384), mode="bilinear", align_corners=False)
+                                logits = person_net((small - norm_mean) / norm_std)["out"]
+                                # torchvision VOC class 15 is person. Include all
+                                # people in the frame, not just the dominant subject.
+                                person_prob = torch.softmax(logits, dim=1)[:, 15:16]
+                                mask = (person_prob > 0.38).float()
+                                mask = F.max_pool2d(mask, kernel_size=5, stride=1, padding=2)
+                                semantic_mask = F.interpolate(mask, size=(h, w), mode="bilinear", align_corners=False)[0, 0]
+                                people_mask_frames += 1
+                            except Exception as exc:
+                                print(f"[matte:people] inference fallback: {type(exc).__name__}", flush=True)
+                                person_net = None
+                                semantic_mask = None
+                        if semantic_mask is not None:
+                            # Union keeps fine RVM hair, while covering second
+                            # people that single-foreground matting drops.
+                            a_out = torch.maximum(a_out, semantic_mask * 0.96)
                         u8 = (a_out.clamp(0, 1) * 255.0 + 0.5).to(torch.uint8).cpu().numpy()
                         enc.stdin.write(np.ascontiguousarray(u8).tobytes())
                         alpha_sum += float(a_out.mean())
@@ -269,7 +323,8 @@ class Matter:
             "h": h,
             "gpu_seconds": el,
             "mean_alpha": alpha_sum / max(1, kept),
-            "model": f"rvm_{RVM_WEIGHTS[quality][0]}",
+            "model": f"rvm_{RVM_WEIGHTS[quality][0]}+person_semantic" if people_mask_frames else f"rvm_{RVM_WEIGHTS[quality][0]}",
+            "person_semantic_frames": people_mask_frames,
             "rvm_sha": RVM_SHA,
             "downsample_ratio": ratio,
             "cold_start": cold,
