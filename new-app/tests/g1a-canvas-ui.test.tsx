@@ -154,6 +154,14 @@ describe('G1a canvas selection', () => {
     expect(s.onCommit).not.toHaveBeenCalled()
   })
 
+  it('N1: a double-click originating on a text block bubbles into the canvas inline editor', () => {
+    const s = stage(textEdits())
+    const block = s.box.querySelector('div[style*="translate(-50%, -50%)"]') as HTMLDivElement
+    expect(block).toBeTruthy()
+    fireEvent.doubleClick(block, { clientX: 100, clientY: 100 })
+    expect(s.getByTestId('canvas-text-editor')).toBeTruthy()
+  })
+
   it('N1: double-click opens inline editor on a transparent libass text hit shell', () => {
     const s = stage(textEdits())
     const shell = s.box.querySelector<HTMLElement>('[style*="transform-origin: 50% 25%"]')!
