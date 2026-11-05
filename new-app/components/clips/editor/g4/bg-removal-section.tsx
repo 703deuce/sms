@@ -70,10 +70,12 @@ export function BgRemovalSection({
       try {
         const res = await fetch(`${endpoint}?quality=${quality}`, { cache: 'no-store' })
         if (res.ok) {
-          const payload = await res.json() as { data?: { state?: string; url?: string | null } }
+          const payload = await res.json() as { data?: { state?: string; url?: string | null; error?: string } }
           if (!gone) {
             const next = { state: payload.data?.state ?? 'idle', url: payload.data?.url ?? null }
             setMattePreview((prev) => prev.state === next.state && prev.url === next.url ? prev : next)
+            if (next.state === 'failed') setPreviewError((previous) => payload.data?.error ?? previous ?? 'Matte preview generation failed')
+            else if (next.state === 'ready') setPreviewError(null)
           }
         }
       } catch { /* Keep last known status. User can retry a failed generation. */ }

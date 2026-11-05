@@ -575,6 +575,10 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   // Clearing every lane toggle must clear the persisted value (PATCH merges over the server copy).
   if (!edits.timelineLanes) payload.timelineLanes = null
   if (!edits.videoSplits?.length) payload.videoSplits = null
+  // F38: the main-video Duplicate/Paste EDL is sectionOrder. Undoing back to
+  // the original removes this optional field; PATCH is a merge and must receive
+  // an explicit null or the server resurrects the duplicated footage on reload.
+  if (!edits.sectionOrder?.length) payload.sectionOrder = null
   if (!edits.keyframes?.length) payload.keyframes = null
   if (!edits.transitions?.length) payload.transitions = null
   if (!edits.layerProps?.length) payload.layerProps = null
