@@ -222,11 +222,11 @@ export function TranscriptPanel({
     const bounds =
       clipStartMs != null && clipEndMs != null ? { clipStartMs, clipEndMs } : undefined
     const core = sourceWordsForClipEditing(words, edits, bounds)
-    const pad = showSurrounding ? SHOW_SURROUNDING_CONTEXT_MS : 2000
+    const pad = showSurrounding ? SHOW_SURROUNDING_CONTEXT_MS : 0
     const viewMin = edits.trim.in - pad
     const viewMax = edits.trim.out + pad
     const extended = words.filter((w) => w.e * 1000 >= viewMin && w.s * 1000 <= viewMax)
-    if (!core.length) return extended.length ? extended : words
+    if (!core.length) return extended
     const coreIds = new Set(core.map((w) => w.i))
     const merged = [...core]
     for (const w of extended) {
