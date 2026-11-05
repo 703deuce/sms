@@ -106,6 +106,7 @@ import { AudioMeter, usePeakLevels } from '@/components/clips/editor/audio-meter
 import { useSfxCues } from '@/components/clips/editor/use-sfx-cues'
 import type { EditorAssets } from '@/lib/clips/editor/editor-assets'
 import { applyTimelineLaneState, arrowStepMs, brollMediaForItems, voiceMuted } from '@/lib/clips/editor/clip-timeline'
+import { loopSeekAtOutput } from '@/lib/clips/editor/loop-playback'
 import { useStudioSoundPreview } from '@/components/clips/editor/use-studio-sound-preview'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import { ClipFillerReview } from '@/components/clips/editor/clip-filler-review'
@@ -1591,9 +1592,10 @@ export function EditorShell({
     const markOut = exportTimelineInOut.outMs
     if (playbackLoopOn && tick.playing && markIn != null && markOut != null && markOut > markIn) {
       if (tick.outputMs < markOut - 25) loopJumpPendingRef.current = false
-      if (tick.outputMs >= markOut && !loopJumpPendingRef.current) {
+      const loopTarget = loopSeekAtOutput(tick.outputMs, markIn, markOut, playbackLoopOn, tick.playing)
+      if (loopTarget != null && !loopJumpPendingRef.current) {
         loopJumpPendingRef.current = true
-        loopSeekRef.current(markIn)
+        loopSeekRef.current(loopTarget)
         return
       }
       if (loopJumpPendingRef.current) return
