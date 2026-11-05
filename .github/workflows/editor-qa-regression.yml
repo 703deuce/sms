@@ -55,7 +55,12 @@ jobs:
             tests/e8-caption-size-parity.test.ts \
             tests/ef24-bg-removal-edits.test.ts \
             tests/stock-audio-picker-placement.test.tsx \
-            tests/batch5-template-full-video.test.tsx
+            tests/batch5-template-full-video.test.tsx \
+            tests/fullsuite-batch2.test.ts \
+            tests/fullsuite-batch3.test.ts \
+            tests/fullsuite-batch4.test.tsx \
+            tests/fullsuite-batch4-brand.test.tsx \
+            tests/fullsuite-batch5.test.ts
 
   captions-worker-regression:
     runs-on: ubuntu-latest
