@@ -16,6 +16,26 @@ export function applyMatteAlpha(
   }
 }
 
+/** Align matte and picture using the same CSS object-fit framing. */
+export function fitVideoFrame(
+  videoW: number, videoH: number, width: number, height: number, fit: string,
+): { sx: number; sy: number; sw: number; sh: number; dx: number; dy: number; dw: number; dh: number } {
+  const vw = Math.max(1, videoW), vh = Math.max(1, videoH)
+  if (fit === 'cover') {
+    const sourceRatio = vw / vh
+    const targetRatio = width / Math.max(1, height)
+    const sw = sourceRatio > targetRatio ? vh * targetRatio : vw
+    const sh = sourceRatio > targetRatio ? vh : vw / targetRatio
+    return { sx: (vw - sw) / 2, sy: (vh - sh) / 2, sw, sh, dx: 0, dy: 0, dw: width, dh: height }
+  }
+  if (fit === 'contain') {
+    const scale = Math.min(width / vw, height / vh)
+    const dw = vw * scale, dh = vh * scale
+    return { sx: 0, sy: 0, sw: vw, sh: vh, dx: (width - dw) / 2, dy: (height - dh) / 2, dw, dh }
+  }
+  return { sx: 0, sy: 0, sw: vw, sh: vh, dx: 0, dy: 0, dw: width, dh: height }
+}
+
 /** Real subject-mask compositing for the first six seconds of a clip.
  * The worker stores an actual 6s grayscale person matte; this uses the same
  * video frame and the real mask rather than drawing an approximate silhouette.
@@ -127,8 +147,12 @@ export function BgMatteCompositePreview({
         if (!fc || !mc || !fg || !ctx) return
         fc.clearRect(0, 0, w, h)
         // Main editor video normally uses object-contain; preserve the full frame.
-        fc.drawImage(source, 0, 0, w, h)
-        mc.drawImage(maskVideo, 0, 0, w, h)
+        const fit = window.getComputedStyle(source).objectFit || 'contain'
+        const pic = fitVideoFrame(source.videoWidth, source.videoHeight, w, h, fit)
+        const maskFit = fitVideoFrame(maskVideo.videoWidth, maskVideo.videoHeight, w, h, fit)
+        fc.drawImage(source, pic.sx, pic.sy, pic.sw, pic.sh, pic.dx, pic.dy, pic.dw, pic.dh)
+        mc.clearRect(0, 0, w, h)
+        mc.drawImage(maskVideo, maskFit.sx, maskFit.sy, maskFit.sw, maskFit.sh, maskFit.dx, maskFit.dy, maskFit.dw, maskFit.dh)
         const src = fc.getImageData(0, 0, w, h)
         const mask = mc.getImageData(0, 0, w, h)
         // Soft, grayscale matte: luminance is the subject alpha.
