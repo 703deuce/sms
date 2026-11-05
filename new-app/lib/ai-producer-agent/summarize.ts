@@ -20,8 +20,12 @@ export function summarizeToolResult(name: string, r: ToolResult): string {
     case 'find_moments':
       return cap({
         ok: true,
-        moments: ((d.moments as unknown[]) ?? []).slice(0, 12).map(pickMoment),
-      })
+        moments: ((d.moments as unknown[]) ?? []).slice(0, 24).map(pickMoment),
+        // The inventory was previously lost at this tool boundary. Give the
+        // editor enough narrative beats across the entire 20-minute source.
+        inventory: ((d.inventory as { rows?: unknown[] } | undefined)?.rows ?? [])
+          .slice(0, 40),
+      }, 9000)
     case 'analyze_visual':
       return cap({
         ok: true,
@@ -42,9 +46,9 @@ export function summarizeToolResult(name: string, r: ToolResult): string {
   }
 }
 
-function cap(o: unknown) {
+function cap(o: unknown, limit = 2000) {
   const s = JSON.stringify(o)
-  return s.length <= 2000 ? s : JSON.stringify({ truncated: true, head: s.slice(0, 1900) })
+  return s.length <= limit ? s : JSON.stringify({ truncated: true, head: s.slice(0, limit - 100) })
 }
 
 function toLines(words: unknown[]) {

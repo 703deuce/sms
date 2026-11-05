@@ -2,6 +2,8 @@ import 'server-only'
 
 import { getPrisma } from '@/lib/server/db'
 import { resolveAiProducerSources } from '@/lib/server/ai-producer-agent/resolve-sources'
+import { loadRoughCutWords } from '@/lib/server/ai-producer-agent/rough-cut-source'
+import { roughCutSourceWindow } from '@/lib/ai-producer-agent/rough-cut-window'
 import { createAiProducerOutputProject } from '@/lib/server/ai-producer-agent/create-output-project'
 import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 import type { AiProducerRunConfig, AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
@@ -62,7 +64,11 @@ export async function buildToolCtx(run: {
 }, budget: Budget): Promise<ToolCtx> {
   const config = (run.config ?? {}) as AiProducerRunConfig
   const sourcesRaw = (run.sourceSnapshot ?? []) as AiProducerSourceRef[]
-  const sources = await resolveAiProducerSources(run.workspaceId, sourcesRaw)
+  const allSources = await resolveAiProducerSources(run.workspaceId, sourcesRaw)
+  const sources = config.editMode === 'just_chatting_rough_cut'
+    ? allSources.map(roughCutSourceWindow) : allSources
+  const roughWords = config.editMode === 'just_chatting_rough_cut'
+    ? await loadRoughCutWords(run.workspaceId, sources[0]!) : []
   const totalSourceMs = sources.reduce((acc, s) => acc + (s.durationMs ?? 0), 0)
   const ctx: ToolCtx = {
     runId: run.id,
@@ -70,7 +76,7 @@ export async function buildToolCtx(run: {
     createdById: run.createdById ?? 'system',
     sources,
     config,
-    cache: { words: [], rmsFrames: [], bursts: [] },
+    cache: { words: roughWords, rmsFrames: [], bursts: [] },
     usedPayoffs: [],
     totalSourceMs,
     decideInput: {
@@ -83,6 +89,7 @@ export async function buildToolCtx(run: {
       outputType: run.outputType as AgentPromptContext['outputType'],
       resolvedOutputType: config.resolvedOutputType,
       platform: run.platform as AgentPromptContext['platform'],
+      editMode: config.editMode,
     },
     markUsed(out) {
       for (const seg of out.builder?.segs ?? []) {
@@ -125,6 +132,9 @@ export async function buildToolCtx(run: {
         bursts: ctx.cache.bursts ?? [],
         layoutAt: () => ({ contentType: 'irl', mode: 'fit_blur' }),
         outputType: out.outputType,
+        editMode: config.editMode,
+        sourceRangeMs: sources[0]?.rangeMs,
+        audioEvidenceAvailable: Boolean(ctx.cache.rmsFrames?.length),
         targetLengthS: config.targetLengthS,
         memeSfx: config.memeSfx,
         payoffSrc: (out.builder?.segs ?? []).filter((s) => s.beat === 'payoff').map((s) => [s.srcInMs, s.srcOutMs] as [number, number]),

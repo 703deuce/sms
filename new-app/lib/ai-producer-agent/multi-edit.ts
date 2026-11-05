@@ -10,6 +10,7 @@ export function planOutputs(
   run: { outputType: AiProducerOutputType; config: AiProducerRunConfig },
 ) {
   type T = 'single_payoff' | 'montage' | 'story'
+  if (run.config.editMode === 'just_chatting_rough_cut') return ['story' as T]
   if (run.outputType !== 'auto') return [run.outputType as T]
   const m = ctx.cache.moments ?? []
   const strong = m.filter((x) => Number(x.score ?? 0) >= STRONG)

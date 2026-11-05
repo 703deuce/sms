@@ -61,7 +61,13 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
 
   await setRunStatus(runId, 'running', 'ingest')
   try {
-    await sysTool(ctx, budget, 'ingest', 'find_moments', { mode: 'best_moments', limit: 12 })
+    await sysTool(ctx, budget, 'ingest', 'find_moments', {
+      mode: 'best_moments', limit: ctx.config.editMode === 'just_chatting_rough_cut' ? 30 : 12,
+      targetClipLenS: ctx.config.editMode === 'just_chatting_rough_cut' ? 60 : undefined,
+    })
+    if (ctx.config.editMode === 'just_chatting_rough_cut' && !ctx.cache.moments?.length) {
+      throw new Error('rough_cut_requires_real_video_analysis')
+    }
     if (ctx.sources.length > 1 || run.outputType !== 'single_payoff') {
       await sysTool(ctx, budget, 'inventory', 'find_moments', { mode: 'inventory' })
     }
@@ -96,12 +102,15 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     {
       role: 'user',
       content: JSON.stringify({
-        task: 'make_edit',
+        task: ctx.config.editMode === 'just_chatting_rough_cut' ? 'make_long_form_rough_cut' : 'make_edit',
         outputIndex: out.index,
         outputType: out.outputType,
         config: ctx.config,
         instruction,
-        sources: ctx.sources.map((s) => ({ sourceId: s.sourceId, durationMs: s.durationMs, title: s.title })),
+        sources: ctx.sources.map((s) => ({ sourceId: s.sourceId, durationMs: s.durationMs, rangeMs: s.rangeMs, title: s.title })),
+        transcriptWordCount: ctx.cache.words?.length ?? 0,
+        editorialGoal: ctx.config.editMode === 'just_chatting_rough_cut'
+          ? 'Select complete, coherent conversational sections from all twenty minutes; do not make a shorts montage. Use get_transcript in bounded ranges before deciding cut boundaries.' : undefined,
         moments: ctx.cache.momentsSummary,
         inventory: ctx.cache.inventory,
         usedPayoffs: ctx.usedPayoffs,
