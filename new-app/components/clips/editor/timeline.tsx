@@ -3467,6 +3467,7 @@ export function Timeline({
             <TimelineLaneHeader
               key={r.key}
               lane={r.lane}
+              selected={r.lane === 'captions' && (captionsLaneSelected || liveSelected.some(item => item.lane === 'captions'))}
               height={LANE_H[r.lane]}
               state={rowState(edits, r)}
               onToggle={editable ? (patch) => toggleRow(r, patch) : undefined}
