@@ -62,6 +62,26 @@ export function BgMatteCompositePreview({
   }, [clipId, quality, enabled])
 
   useEffect(() => {
+    const main = video.current
+    const matte = maskRef.current
+    if (!enabled || !maskUrl || !main || !matte) return
+    const followPlayback = () => {
+      if (main.paused) matte.pause()
+      else void matte.play().catch(() => { /* The rAF below can seek individual mask frames. */ })
+    }
+    main.addEventListener('play', followPlayback)
+    main.addEventListener('pause', followPlayback)
+    matte.addEventListener('canplay', followPlayback)
+    followPlayback()
+    return () => {
+      main.removeEventListener('play', followPlayback)
+      main.removeEventListener('pause', followPlayback)
+      matte.removeEventListener('canplay', followPlayback)
+      matte.pause()
+    }
+  }, [enabled, maskUrl, video])
+
+  useEffect(() => {
     if (!enabled || !maskUrl) { setRenderable(false); return }
     const output = canvasRef.current
     const maskVideo = maskRef.current
@@ -150,6 +170,7 @@ export function BgMatteCompositePreview({
     <>
       {maskUrl ? (
         <video ref={maskRef} crossOrigin="anonymous" src={maskUrl} muted playsInline preload="auto"
+          data-own-clock="1"
           className="hidden" aria-hidden data-testid="preview-person-matte-video" />
       ) : null}
       <canvas ref={canvasRef} data-testid="preview-person-cutout" data-matte-rendered={renderable ? 'true' : 'false'}
