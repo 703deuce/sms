@@ -16,6 +16,8 @@ import type { AiProducerPhase } from '@/lib/ai-producer-agent/phases'
 import { estimateLunaUsd } from '@/lib/ai-producer-agent/cost'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
+import { createEditorialHandoff, runEditorialRole, type EditorialHandoff } from '@/lib/ai-producer-agent/specialists'
 
 export type Phase = AiProducerPhase
 
@@ -34,6 +36,7 @@ export type OutputState = {
   story?: string
   pendingTitle?: string
   pendingSources?: string[]
+  editorialHandoff?: EditorialHandoff
 }
 
 const activeRuns = new Set<string>()
@@ -97,8 +100,14 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
 }
 
 async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, instruction: string | null) {
+  if (ctx.config.editMode === 'just_chatting_rough_cut') {
+    out.editorialHandoff = await createEditorialHandoff(ctx, out, budget, instruction)
+  }
   const messages: LunaMessage[] = [
-    { role: 'system', content: buildAgentSystemPromptForModel(ctx.promptArgs) },
+    { role: 'system', content: [
+      buildAgentSystemPromptForModel(ctx.promptArgs),
+      ...(out.editorialHandoff ? [FILM_EDITING_THEORY, SPECIALIST_ROLES.assembly] : []),
+    ].join('\n\n') },
     {
       role: 'user',
       content: JSON.stringify({
@@ -113,14 +122,36 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
           ? 'Select complete, coherent conversational sections from all twenty minutes; do not make a shorts montage. Use get_transcript in bounded ranges before deciding cut boundaries.' : undefined,
         moments: ctx.cache.momentsSummary,
         inventory: ctx.cache.inventory,
+        editorialHandoff: out.editorialHandoff ?? undefined,
+        assembleOnlyApprovedCuts: Boolean(out.editorialHandoff),
         usedPayoffs: ctx.usedPayoffs,
       }),
     },
   ]
   await loop(ctx, out, budget, messages, 'plan')
+  if (out.editorialHandoff) {
+    const approved = out.editorialHandoff.cutPlan
+    const assembled = out.builder?.segs ?? []
+    if (assembled.length !== approved.length || assembled.some((seg, i) =>
+      seg.srcInMs !== approved[i]?.startMs || seg.srcOutMs !== approved[i]?.endMs)) {
+      throw new Error('specialist_assembly_does_not_match_approved_cut_plan')
+    }
+  }
   if (!out.lastValid) {
     out.notes.push('no valid plan')
     return
+  }
+  if (out.editorialHandoff && out.lastValid) {
+    const review = await runEditorialRole(ctx, out, budget, 'qa', {
+      outline: out.editorialHandoff.outline,
+      selections: out.editorialHandoff.cutPlan,
+      timeline: out.lastValid,
+      validation: out.lastValidation,
+      instruction: 'Identify incoherent transitions, missing context, unsupported acoustic claims, and any hard safety concerns. This is a decision review; no rendered video has been presented.',
+    })
+    out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
+    out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
+    if (!out.editorialHandoff.review.pass) throw new Error('specialist_editorial_review_failed')
   }
   await apply(ctx, out, budget)
   for (; out.fixLoops < CAPS.maxFixLoops && budget.state() !== 'hard'; out.fixLoops++) {
@@ -162,7 +193,11 @@ async function loop(ctx: ToolCtx, out: OutputState, budget: Budget, messages: Lu
     }
     compactHistory(messages, budget)
     const t0 = Date.now()
-    const res = await lunaChat({ messages, tools: toolsForPhase(phase, bs), toolChoice: 'required' })
+    const availableTools = toolsForPhase(phase, bs)
+    const tools = out.editorialHandoff
+      ? availableTools.filter((t) => !['find_moments', 'analyze_visual', 'reorder_segments', 'trim_segment', 'cut_range', 'set_speed', 'set_freeze'].includes(t.name))
+      : availableTools
+    const res = await lunaChat({ messages, tools, toolChoice: 'required' })
     budget.steps++
     budget.addLuna(res.usage)
     await logAiProducerStep({
@@ -192,7 +227,17 @@ async function loop(ctx: ToolCtx, out: OutputState, budget: Budget, messages: Lu
         args = null
       }
       const t1 = Date.now()
-      const r = await runTool(ctx, name, args, out, budget)
+      let blocked = Boolean(out.editorialHandoff) && !tools.some((t) => t.name === name)
+      if (out.editorialHandoff && name === 'add_clip_segment') {
+        const a = args as { sourceId?: string; srcInMs?: number; srcOutMs?: number } | null
+        const approved = out.editorialHandoff.cutPlan
+        if (!a || a.sourceId !== ctx.sources[0]?.sourceId ||
+          !approved.some((seg) => seg.startMs === a.srcInMs && seg.endMs === a.srcOutMs) ||
+          out.builder?.segs.some((seg) => seg.srcInMs === a.srcInMs && seg.srcOutMs === a.srcOutMs)) blocked = true
+      }
+      const r = blocked
+        ? { ok: false, summary: 'specialist_assembly_tool_or_range_not_approved' }
+        : await runTool(ctx, name, args, out, budget)
       budget.steps++
       budget.addGemini(r.costUsd)
       await logAiProducerStep({
@@ -325,6 +370,12 @@ async function finishRun(
           notes: o.notes,
           story: o.story,
           validation: o.lastValidation,
+          specialists: o.editorialHandoff ? {
+            story: o.editorialHandoff.outline,
+            curatedCount: o.editorialHandoff.footage.length,
+            approvedCuts: o.editorialHandoff.cutPlan,
+            review: o.editorialHandoff.review,
+          } : undefined,
         })),
         cappedBy: budget.cappedBy,
       }),
