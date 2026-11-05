@@ -5,6 +5,19 @@ import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { sourceToOutput, timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { orderedKeepSegments } from '@/lib/clips/edits'
 
+/** Select only spoken words whose center belongs to the selected range.
+ * A transcript model can assign overlapping edges to adjacent tokens; overlap
+ * alone must not silently include an unselected neighbouring word.
+ */
+export function wordsSelectedByMidpoint(words: SourceWord[], startMs: number, endMs: number): SourceWord[] {
+  const a = Math.min(startMs, endMs)
+  const b = Math.max(startMs, endMs)
+  return words.filter((w) => {
+    const { midMs } = wordSourceMs(w)
+    return midMs >= a && midMs < b
+  }).sort((x, y) => x.s - y.s || x.i - y.i)
+}
+
 /** A1: Transcript selection is in absolute SOURCE milliseconds, not output-relative time. */
 export function transcriptCutForSelection(
   edits: ClipEditsV2,
@@ -15,10 +28,7 @@ export function transcriptCutForSelection(
   const a = Math.min(startMs, endMs)
   const b = Math.max(startMs, endMs)
   if (a === b) return null
-  const selected = words.filter((w) => {
-    const { startMs: s, endMs: e } = wordSourceMs(w)
-    return e > a && s < b
-  })
+  const selected = wordsSelectedByMidpoint(words, a, b)
   if (!selected.length) return null
   const first = wordSourceMs(selected[0]!)
   const last = wordSourceMs(selected[selected.length - 1]!)
