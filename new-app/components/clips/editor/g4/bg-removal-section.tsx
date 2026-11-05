@@ -100,7 +100,7 @@ export function BgRemovalSection({
           className={`${btn} ${!enabled ? on : ''}`}
           disabled={readOnly}
           data-testid="bg-removal-off"
-          onClick={() => cur && set({ ...cur, enabled: false })}
+          onClick={() => enabled && set(undefined)}
         >
           Off
         </button>
@@ -199,15 +199,16 @@ export function BgRemovalSection({
         </>
       ) : null}
       <p className="text-[11px] text-muted-foreground" role="status" data-testid="bg-removal-note">
-        {!enabled ? 'Off. Enable Remove background to include a person matte in your export.'
+        {!enabled ? 'Off. Settings were reset; enabling starts with the default matte controls.'
           : mattePreview.state === 'ready' && mattePreview.url ? 'Subject matte ready. The main preview composites the person during the six-second sample; export applies the effect to the full clip.'
-          : mattePreview.state === 'processing' ? 'Generating a 6-second person matte preview (0 credits)…'
+          : mattePreview.state === 'processing' ? 'Processing a 6-second subject matte (0 credits). Background color and edge controls update the composite without regenerating the subject mask…'
           : mattePreview.state === 'failed' ? (previewError || 'Matte preview generation failed. Retry below.')
-          : mattePreview.state === 'queued' ? 'Person matte preview queued (0 credits)…'
+          : mattePreview.state === 'queued' ? 'Person matte queued (0 credits). Multiple people may not all be retained by the current matte model…'
           : renderStatus === 'rendering' ? 'Export rendering; preparing the person matte…'
           : renderStatus === 'queued' ? 'Background matte queued with the export worker…'
           : 'Person matte preview will generate automatically (0 credits).'}
       </p>
+      {enabled ? <p className="text-[11px] text-muted-foreground" data-testid="bg-matte-multi-person-note">The current subject mask may miss people in group footage. Check every person before exporting; changing blur or feather cannot recover a person absent from the matte.</p> : null}
       {enabled && mattePreview.state === 'failed' && clipId ? (
         <button type="button" className={btn} onClick={() => { setPreviewError(null); setRetryToken(v => v + 1) }} data-testid="bg-matte-retry">Retry matte preview · 0 credits</button>
       ) : null}
