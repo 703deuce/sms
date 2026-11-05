@@ -990,9 +990,13 @@ export function orderedKeepSegments(edits: ClipEditsV2): [number, number][] {
 export function displayDurationMs(edits: ClipEditsV2): number {
   const speed = normalizeEditSpeed(edits.speed) ?? 1
   // E4: per-item speeds warp the edit timeline before the global speed (export_post order).
+  const ordered = orderedKeepSegments(edits)
+  // F2: duplicated source footage and main-track reorder are stored in
+  // sectionOrder. The old shortcut outputDurationMs(edits) ignores that EDL
+  // completely, so header/export-clock stayed at the original source length.
   const base = edits.segmentSpeeds?.length
-    ? warpedDurationMs(speedWarpPieces(orderedKeepSegments(edits), edits.segmentSpeeds))
-    : outputDurationMs(edits)
+    ? warpedDurationMs(speedWarpPieces(ordered, edits.segmentSpeeds))
+    : ordered.reduce((total, [a, b]) => total + b - a, 0)
   // TC1fix: inserts / gaps are spliced into the finished export (after speed) — they lengthen it.
   return Math.round(base / speed) + (edits.inserts ?? []).reduce((s, i) => s + i.durMs, 0)
 }
