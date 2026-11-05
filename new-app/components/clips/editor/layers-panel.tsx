@@ -320,12 +320,14 @@ export function LayersPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {savePending ? (
-        <p className="inline-flex items-center gap-2 text-xs text-muted-foreground" role="status">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden />
-          Saving layers…
-        </p>
-      ) : null}
+      <div className="min-h-[20px]" aria-live="polite" data-testid="layers-save-status">
+        {savePending ? (
+          <p className="inline-flex items-center gap-2 text-xs text-muted-foreground" role="status">
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            Saving layers…
+          </p>
+        ) : null}
+      </div>
       <ActualLayersList edits={edits} layers={layers} setLayers={setLayers} onEdits={onEdits} selectedKey={selectedLayerKey} onSelect={onSelectActualLayer} />
       <details className="rounded-md border border-border/60 p-2" data-testid="layer-design-settings">
         <summary className="cursor-pointer text-xs text-muted-foreground">Legacy overlay design, branding and template settings</summary>
