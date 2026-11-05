@@ -42,9 +42,10 @@ export function brollInsertWindow(
   clipEndMs: number,
   shotMs: number = BROLL_DEFAULT_SHOT_MS,
 ): { startMs: number; endMs: number } {
-  const startMs = toIntMs(playheadMs)
   const endBound = Math.max(0, Math.floor(Number.isFinite(clipEndMs) ? clipEndMs : 0))
-  return { startMs, endMs: Math.max(startMs, Math.min(startMs + shotMs, endBound)) }
+  if (endBound < BROLL_MIN_MS) return { startMs: 0, endMs: 0 }
+  const startMs = Math.max(0, Math.min(toIntMs(playheadMs), endBound - BROLL_MIN_MS))
+  return { startMs, endMs: Math.min(startMs + Math.max(BROLL_MIN_MS, toIntMs(shotMs)), endBound) }
 }
 
 /** Zod-friendly coercion for API bodies: accepts floats / numeric strings, stores integer ms. */
