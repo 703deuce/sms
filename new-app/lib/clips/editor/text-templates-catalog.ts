@@ -97,7 +97,7 @@ export const CATALOG_TEMPLATES: TitleTemplate[] = [
   // Quotes & stats
   T('qs_quote', 'Quote', 'Quotes & stats', [
     txt('"', 50, 32, S('Anton', 220, '#FACC15'), A('pop')),
-    txt('Your quote goes here,\nshort and punchy.', 50, 42, { ...P, font: 'Poppins', size: 160, lineHeight: 1.15 }, A('fade', 'fade', 600), { delayMs: 200 }),
+    txt('Your quote goes here,\nshort and punchy.', 50, 42, { ...P, font: 'Poppins', size: 160, lineHeight: 1.15 }, A('fade', 'fade', 600)),
     txt('— Name', 50, 60, { ...P, font: 'Poppins', size: 138, color: '#E2E8F0' }, A('fade'), { delayMs: 500 }),
   ]),
   T('qs_stat', 'Big stat', 'Quotes & stats', [
