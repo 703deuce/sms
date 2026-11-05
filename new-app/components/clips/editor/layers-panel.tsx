@@ -69,12 +69,12 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
     row.kind === 'captions' ? edits.captions?.enabled === false
       : row.kind === 'video' ? laneState(edits, 'video').hidden === true
       : row.kind === 'hook' ? edits.hookOverlay?.enabled === false
-      : row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline' ? !layers.find((l) => l.id === row.id)?.enabled
+      : row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline' ? layers.find((l) => l.id === row.id)?.enabled === false
       : off.has(row.key)
   const toggleVisibility = (row: ActualVisualLayer) => {
     if (row.kind === 'video') return onEdits(setLaneState(edits, 'video', { hidden: !disabled(row) }))
     if (row.kind === 'captions') return onEdits({ ...edits, captions: { ...edits.captions, enabled: edits.captions?.enabled === false } })
-    if (row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline') return setLayers(layers.map((l) => l.id === row.id ? { ...l, enabled: !l.enabled } : l))
+    if (row.kind === 'sticker' || row.kind === 'badge' || row.kind === 'headline') return setLayers(layers.map((l) => l.id === row.id ? { ...l, enabled: l.enabled === false } : l))
     if (row.kind === 'hook') return onEdits({ ...edits, hookOverlay: { ...edits.hookOverlay, enabled: !edits.hookOverlay?.enabled } })
     const next = toggleItemsEnabled(edits, [{ lane: row.kind, id: row.id }])
     if (next) onEdits(next)
