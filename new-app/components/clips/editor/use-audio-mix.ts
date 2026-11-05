@@ -245,7 +245,6 @@ export function useAudioMix({
   const ensureVoiceGraphRef = useRef(ensureVoiceGraph)
   ensureVoiceGraphRef.current = ensureVoiceGraph
   const voiceFx = trackFxFor(edits, 'voice')
-  const voiceFxOn = audioFxActive(voiceFx)
   // Noise reduction and de-essing are export-only; don't create a second
   // audio decoder if there is no effect the browser can actually process.
   const voicePreviewFxOn = Boolean(voiceFx && webAudioPlan(voiceFx).length)
