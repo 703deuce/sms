@@ -215,7 +215,9 @@ export function BgMatteCompositePreview({
           data-testid="preview-person-cors-source" />
       ) : null}
       {maskUrl ? (
-        <video ref={maskRef} crossOrigin="anonymous" src={maskUrl} muted playsInline preload="auto"
+        <video ref={maskRef} crossOrigin="anonymous"
+          src={`/api/clips/clips/${encodeURIComponent(clipId)}/bg-matte-media?kind=matte&quality=${encodeURIComponent(quality)}`}
+          muted playsInline preload="auto"
           data-own-clock="1"
           className="hidden" aria-hidden data-testid="preview-person-matte-video" />
       ) : null}
