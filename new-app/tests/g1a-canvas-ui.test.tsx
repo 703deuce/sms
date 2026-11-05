@@ -133,6 +133,17 @@ describe('G1a canvas selection', () => {
     expect(s.queryByTestId('canvas-text-editor')).toBeNull()
   })
 
+  it('N9: Escape cancels an inline edit without saving or creating an undo entry', () => {
+    const s = stage(textEdits())
+    fireEvent.doubleClick(s.box, { clientX: 100, clientY: 100 })
+    const ta = s.getByTestId('canvas-text-editor') as HTMLTextAreaElement
+    fireEvent.change(ta, { target: { value: 'Cancelled change' } })
+    fireEvent.keyDown(ta, { key: 'Escape' })
+    fireEvent.blur(ta)
+    expect(s.queryByTestId('canvas-text-editor')).toBeNull()
+    expect(s.onCommit).not.toHaveBeenCalled()
+  })
+
   it('N1: double-click opens inline editor on a transparent libass text hit shell', () => {
     const s = stage(textEdits())
     const shell = s.box.querySelector<HTMLElement>('[style*="transform-origin: 50% 25%"]')!
