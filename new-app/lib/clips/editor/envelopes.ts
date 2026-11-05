@@ -15,9 +15,10 @@ export const ENVELOPE_TOL_MS = 5
 /** The envelope a timeline item shows (null: none — SFX, hook title). */
 export function envelopeFor(lane: string, id: string): { target: KeyframeTarget; prop: EnvelopeKind } | null {
   if (lane === 'text' && id === 'hook') return null
-  // N7: the Video clip carries the source's speech audio. Its envelope is
-  // Voice volume, not the picture opacity envelope.
-  if (lane === 'video') return { target: 'voice', prop: 'volume' }
+  // F14: Video opacity and Voice volume are independent properties and targets.
+  // Earlier versions exposed the Voice keyframes on both lanes, so dragging
+  // a Voice point also moved the apparent Video envelope.
+  if (lane === 'video') return { target: 'video', prop: 'opacity' }
   const target = targetForItem(lane, id)
   if (!target) return null
   const props = propsForTarget(target)
