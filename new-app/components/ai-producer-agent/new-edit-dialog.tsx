@@ -33,7 +33,7 @@ export function NewEditDialog({
   onOpenChange: (open: boolean) => void
   defaultSources: NewEditDialogSource[]
 }) {
-  const [outputType, setOutputType] = useState<'single_payoff' | 'montage' | 'story' | 'auto'>('auto')
+  const [outputType, setOutputType] = useState<'single_payoff' | 'montage' | 'story' | 'auto' | 'rough_cut'>('auto')
   const [platform, setPlatform] = useState<'tiktok' | 'shorts' | 'reels'>('tiktok')
   const [instruction, setInstruction] = useState('')
   const [runId, setRunId] = useState<string | null>(null)
@@ -60,7 +60,8 @@ export function NewEditDialog({
             ...s,
             sourceId: s.sourceId || `src_${i}`,
           })),
-          outputType,
+          outputType: outputType === 'rough_cut' ? 'story' : outputType,
+          ...(outputType === 'rough_cut' ? { editMode: 'just_chatting_rough_cut', targetLengthS: [180, 480] } : {}),
           platform,
           genre: 'irl_just_chatting',
           instruction: instruction.trim() || undefined,
@@ -102,10 +103,11 @@ export function NewEditDialog({
                   className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                   value={outputType}
                   onChange={(e) =>
-                    setOutputType(e.target.value as 'single_payoff' | 'montage' | 'story' | 'auto')
+                    setOutputType(e.target.value as 'single_payoff' | 'montage' | 'story' | 'auto' | 'rough_cut')
                   }
                 >
                   <option value="auto">Auto (decide from footage)</option>
+                  <option value="rough_cut">Just Chatting · rough cut (3–8 min)</option>
                   <option value="single_payoff">Single setup → payoff</option>
                   <option value="montage">Montage</option>
                   <option value="story">Story (multi-beat / sources)</option>
@@ -124,6 +126,11 @@ export function NewEditDialog({
                 </select>
               </div>
             </div>
+            {outputType === 'rough_cut' ? (
+              <p className="rounded-md border px-3 py-2 text-xs text-muted-foreground" data-testid="rough-cut-source-info">
+                Uses the last 20 minutes of the selected recording (minimum 5 minutes). Creates one new editable 3–8 minute rough cut with complete thoughts, conservative dialogue cuts, no automatic posting or paid visual generation. Review all cuts before export.
+              </p>
+            ) : null}
             <div className="space-y-1">
               <Label>Optional instruction</Label>
               <Textarea value={instruction} onChange={(e) => setInstruction(e.target.value)} rows={3} />
