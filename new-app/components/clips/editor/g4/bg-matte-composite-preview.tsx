@@ -3,6 +3,19 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BgRemoval } from '@/lib/clips/editor/bg-removal'
 
+/** Convert a grayscale person-matte frame into pixel alpha. */
+export function applyMatteAlpha(
+  foreground: Uint8ClampedArray,
+  mask: Uint8ClampedArray,
+): void {
+  for (let i = 0; i < foreground.length; i += 4) {
+    foreground[i + 3] = Math.round(
+      (0.2126 * mask[i]! + 0.7152 * mask[i + 1]! + 0.0722 * mask[i + 2]!) *
+      (foreground[i + 3]! / 255),
+    )
+  }
+}
+
 /** Real subject-mask compositing for the first six seconds of a clip.
  * The worker stores an actual 6s grayscale person matte; this uses the same
  * video frame and the real mask rather than drawing an approximate silhouette.
@@ -99,12 +112,7 @@ export function BgMatteCompositePreview({
         const src = fc.getImageData(0, 0, w, h)
         const mask = mc.getImageData(0, 0, w, h)
         // Soft, grayscale matte: luminance is the subject alpha.
-        for (let i = 0; i < src.data.length; i += 4) {
-          src.data[i + 3] = Math.round(
-            (0.2126 * mask.data[i]! + 0.7152 * mask.data[i + 1]! + 0.0722 * mask.data[i + 2]!) *
-            (src.data[i + 3]! / 255),
-          )
-        }
+        applyMatteAlpha(src.data, mask.data)
         fg.putImageData(src, 0, 0)
         ctx.clearRect(0, 0, w, h)
         const background = removal?.background
