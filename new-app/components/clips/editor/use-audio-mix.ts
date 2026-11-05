@@ -34,6 +34,13 @@ function balancePan(ctx: AudioContext, pan: number): { input: AudioNode; output:
   return { input: split, output: merge, nodes: [split, gL, gR, merge] }
 }
 
+/** A fixed same-origin media route for preview FX when signed sources lack CORS.
+ * The route verifies clip workspace ownership and never takes arbitrary URLs. */
+export function voiceFxPreviewUrl(clipId: string, mediaKind: string | null | undefined): string | null {
+  if (!['proxy', 'segment', 'source', 'preview'].includes(mediaKind ?? '') || !clipId) return null
+  return `/api/clips/clips/${encodeURIComponent(clipId)}/bg-matte-media?kind=${mediaKind}`
+}
+
 type SfxCue = {
   buffer: AudioBuffer
   atMs: number
@@ -52,6 +59,8 @@ type SfxCue = {
 }
 
 export function useAudioMix({
+  clipId,
+  mediaKind,
   videoRef,
   edits,
   words,
@@ -68,6 +77,8 @@ export function useAudioMix({
   musicRate,
   meterOn = false,
 }: {
+  clipId: string
+  mediaKind?: string | null
   videoRef: React.RefObject<HTMLVideoElement | null>
   edits: ClipEditsV2
   words: SourceWord[]
@@ -95,6 +106,8 @@ export function useAudioMix({
   const musicGainRef = useRef<GainNode | null>(null)
   const musicPanRef = useRef<{ input: AudioNode; output: AudioNode; nodes: AudioNode[]; pan: number } | null>(null)
   const elementSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
+  const fxVoiceRef = useRef<HTMLAudioElement | null>(null)
+  const fxVoiceBrokenRef = useRef(false)
   // E3: volume keyframes (Voice / Music lanes) — gain envelopes in series with the existing mix.
   const voiceGainRef = useRef<GainNode | null>(null)
   const musicEnvRef = useRef<GainNode | null>(null)
@@ -112,6 +125,7 @@ export function useAudioMix({
   const rate = normalizeEditSpeed(edits.speed) ?? 1
 
   const audio = edits.audio
+  const fxVoiceUrl = voiceFxPreviewUrl(clipId, mediaKind)
 
   // G1c track FX: one Web Audio chain per track key (voice / music / audio tracks).
   const lufsGains = useTrackFxLufs({ edits, sfxCues, musicUrl, outputDurationMs })
@@ -183,7 +197,8 @@ export function useAudioMix({
       video.addEventListener('loadedmetadata', () => ensureVoiceGraphRef.current(), { once: true })
       return
     }
-    if (!audioGraphSafe(video)) {
+    const needsDedicatedSource = voiceFxOn && Boolean(fxVoiceUrl)
+    if (!needsDedicatedSource && !audioGraphSafe(video)) {
       video.dataset.g4audioPlain = '1'
       if (meterOn) setMeterState((s) => ({ ...s, voiceMetered: false }))
       return
@@ -191,7 +206,24 @@ export function useAudioMix({
     if (meterOn) setMeterState((s) => ({ ...s, voiceMetered: true }))
     if (!ctxRef.current) ctxRef.current = new AudioContext()
     mixDest(ctxRef.current)
-    elementSourceRef.current = ctxRef.current.createMediaElementSource(video)
+    let audioInput: HTMLMediaElement = video
+    if (needsDedicatedSource) {
+      if (!fxVoiceRef.current) {
+        const el = new Audio()
+        el.preload = 'auto'
+        // Same origin, same media bytes, same currentTime coordinate as the
+        // visible video; Web Audio stays active even after its CORS fallback.
+        el.src = fxVoiceUrl!
+        el.addEventListener('error', () => {
+          fxVoiceBrokenRef.current = true
+          video.muted = Boolean(voiceMuted || playerMuted || useDubAudio)
+        })
+        fxVoiceRef.current = el
+      }
+      audioInput = fxVoiceRef.current
+      video.muted = true
+    }
+    elementSourceRef.current = ctxRef.current.createMediaElementSource(audioInput)
     voiceGainRef.current = ctxRef.current.createGain()
     elementSourceRef.current.connect(voiceGainRef.current)
     routeRef.current('voice')
@@ -214,8 +246,32 @@ export function useAudioMix({
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    video.muted = Boolean(useDubAudio || voiceMuted || playerMuted)
+    video.muted = Boolean(useDubAudio || voiceMuted || playerMuted ||
+      (fxVoiceRef.current && !fxVoiceBrokenRef.current))
   }, [useDubAudio, videoRef, voiceMuted, playerMuted, outputMs])
+
+  useEffect(() => {
+    const sound = fxVoiceRef.current
+    const picture = videoRef.current
+    if (!sound || !picture || fxVoiceBrokenRef.current) return
+    const shouldPlay = playing && !picture.paused && !useDubAudio && !voiceMuted && !playerMuted
+    if (!shouldPlay) {
+      if (!sound.paused) sound.pause()
+      return
+    }
+    const target = picture.currentTime
+    if (Math.abs(sound.currentTime - target) > 0.12) {
+      try { sound.currentTime = target } catch { /* wait for media metadata */ }
+    }
+    if (sound.playbackRate !== picture.playbackRate) sound.playbackRate = picture.playbackRate
+    if (sound.paused) {
+      void ctxRef.current?.resume().catch(() => {})
+      void sound.play().catch(() => {
+        fxVoiceBrokenRef.current = true
+        picture.muted = Boolean(voiceMuted || playerMuted || useDubAudio)
+      })
+    }
+  }, [playing, outputMs, videoRef, useDubAudio, voiceMuted, playerMuted])
 
   useEffect(() => {
     const video = videoRef.current
@@ -335,10 +391,11 @@ export function useAudioMix({
     if (voiceGainRef.current) voiceGainRef.current.gain.value = voiceMuted || useDubAudio ? 0 : voice
     if (masterRef.current) masterRef.current.gain.value = playerMuted ? 0 : level
     if (video) {
-      const plain = !elementSourceRef.current
+      const plain = !elementSourceRef.current || fxVoiceBrokenRef.current
       const desiredVolume = plain ? voice * level : 1
       if (Math.abs(video.volume - desiredVolume) > 0.001) video.volume = desiredVolume
-      const shouldMute = Boolean(voiceMuted || playerMuted || useDubAudio)
+      const shouldMute = Boolean(voiceMuted || playerMuted || useDubAudio ||
+        (fxVoiceRef.current && !fxVoiceBrokenRef.current))
       if (video.muted !== shouldMute) video.muted = shouldMute
     }
     if (dubRef.current) {
@@ -461,6 +518,8 @@ export function useAudioMix({
       ctxRef.current = null
       musicRef.current = null
       dubRef.current = null
+      fxVoiceRef.current?.pause()
+      fxVoiceRef.current = null
       musicGainRef.current = null
       musicEnvRef.current = null
       voiceGainRef.current = null
@@ -472,7 +531,8 @@ export function useAudioMix({
     }
   }, [])
 
-  return meterOn ? meterState : { analysers: null, voiceMetered: true }
+  const meter = meterOn ? meterState : { analysers: null, voiceMetered: true }
+  return { ...meter, resumeAudio: () => ctxRef.current?.resume() }
 }
 
 /** Test helper: SFX reschedule key (pan changes must invalidate). */
