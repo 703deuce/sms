@@ -63,7 +63,7 @@ export function TextItemsPreview({
             aria-hidden
           >
             <div
-              className={`absolute${selectedId === it.id || canvasSelectedId === it.id ? ' outline outline-1 outline-dashed outline-white/70' : ''}`}
+              className={`pointer-events-auto cursor-text absolute${selectedId === it.id || canvasSelectedId === it.id ? ' outline outline-1 outline-dashed outline-white/70' : ''}`}
               style={(it.kind === 'progress' ? { ...css.anchor, width: `${it.progress?.w ?? 100}%` } : css.anchor) as CSSProperties}
               data-testid="preview-text-block"
               data-align={it.style.align}
