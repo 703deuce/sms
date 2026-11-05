@@ -83,6 +83,7 @@ jobs:
             tests/cleanup-proposals.test.ts \
             tests/ai-producer-agent/just-chatting-rough-cut.test.ts \
             tests/ai-producer-agent/specialists.test.ts \
+            tests/ai-producer-agent/specialist-workflow.test.ts \
             tests/ai-producer-agent/system-prompt.test.ts \
             tests/ai-producer-agent/validate.items.test.ts
 
