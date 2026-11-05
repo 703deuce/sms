@@ -1,6 +1,6 @@
 import { normalizeAudioEdits, type ClipEditsAudio } from '@/lib/clips/audio'
 import { normalizeBrollItems, type BrollItem } from '@/lib/clips/broll'
-import { parseExportAspect, type ExportAspect } from '@/lib/clips/export-aspect'
+import { isLandscapeAspect, parseExportAspect, type ExportAspect } from '@/lib/clips/export-aspect'
 import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
 import { clampZoomIntensity } from '@/lib/clips/zoom-keyframes'
 import type { SilenceTrimSettings } from '@/lib/clips/silence-trim'
@@ -677,7 +677,9 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       blurStrength: normalizeFitBlurStrength((layoutRaw as { blurStrength?: unknown }).blurStrength),
       splitScreenFallback:
         (layoutRaw as { splitScreenFallback?: unknown }).splitScreenFallback === true ? true : undefined,
-      template: normalizeLayoutTemplate((layoutRaw as { template?: unknown }).template),
+      template: isLandscapeAspect(aspectRatio) && (layoutRaw as { template?: { id?: string } }).template?.id === 'I2'
+        ? undefined
+        : normalizeLayoutTemplate((layoutRaw as { template?: unknown }).template),
     },
     aspectRatio,
     broll: normalizeBrollItems(o.broll, outputDurationMs({ ...base, ...o, v: 2 } as ClipEditsV2)),
