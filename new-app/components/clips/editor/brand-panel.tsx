@@ -29,6 +29,7 @@ export function BrandPanel({
   onEdits: (edits: ClipEditsV2) => void
 }) {
   const [templates, setTemplates] = useState<TemplateRow[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const brand = (edits.brand || {}) as {
     templateId?: string
     useIntro?: boolean
@@ -60,6 +61,9 @@ export function BrandPanel({
     }
   }
 
+  const selectedTemplate = templates.find((t) => t.id === (selectedTemplateId ?? brand.templateId))
+  const appliedTemplate = templates.find((t) => t.id === brand.templateId)
+
   const patchBrand = (patch: Record<string, unknown>) => {
     onEdits({ ...edits, brand: { ...(edits.brand as object), ...patch } })
   }
@@ -73,15 +77,14 @@ export function BrandPanel({
       <Select
         // E1fix: `items` lets the trigger show the template name (Base UI renders the raw id otherwise).
         items={templates.map((t) => ({ value: t.id, label: t.name }))}
-        value={brand.templateId || null}
+        value={selectedTemplateId ?? (templates.some((t) => t.id === brand.templateId) ? brand.templateId! : null)}
         onValueChange={(v) => {
           if (typeof v !== 'string' || !v) return
-          const tpl = templates.find((t) => t.id === v)
-          if (tpl) applyTemplate(tpl)
+          setSelectedTemplateId(v)
         }}
       >
         <SelectTrigger className="w-full" data-testid="brand-template-select">
-          <SelectValue placeholder="Select template…" />
+          <SelectValue placeholder={templates.length ? 'Select template…' : 'Loading templates…'} />
         </SelectTrigger>
         <SelectContent>
           {templates.map((t) => (
@@ -91,11 +94,17 @@ export function BrandPanel({
           ))}
         </SelectContent>
       </Select>
+      {selectedTemplate ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2" data-testid="brand-template-preview">
+          <span className="min-w-0 flex-1 text-xs">{selectedTemplate.name}{selectedTemplate.id === brand.templateId ? ' · Applied' : ' · Preview only'}</span>
+          <Button size="sm" type="button" onClick={() => { applyTemplate(selectedTemplate); setSelectedTemplateId(null) }} data-testid="brand-template-apply">Apply kit</Button>
+        </div>
+      ) : null}
       <div className="flex items-center justify-between gap-2">
         <Label className="text-xs">Include intro bumper</Label>
         <Switch
           checked={brand.useIntro ?? false}
-          disabled={!templates.find((t) => t.id === brand.templateId)?.introVideoKey}
+          disabled={!appliedTemplate?.introVideoKey}
           onCheckedChange={(checked) => patchBrand({ useIntro: Boolean(checked) })}
         />
       </div>
@@ -103,7 +112,7 @@ export function BrandPanel({
         <Label className="text-xs">Include outro bumper</Label>
         <Switch
           checked={brand.useOutro ?? false}
-          disabled={!templates.find((t) => t.id === brand.templateId)?.outroVideoKey}
+          disabled={!appliedTemplate?.outroVideoKey}
           onCheckedChange={(checked) => patchBrand({ useOutro: Boolean(checked) })}
         />
       </div>
