@@ -11,7 +11,7 @@
  */
 import { DEFAULT_SFX_VOLUME, type ClipAudioSfx, type ClipEditsAudio } from '@/lib/clips/audio'
 import { BROLL_MIN_MS, type BrollItem } from '@/lib/clips/broll'
-import { mergeCutRanges, normalizeSectionOrder, pruneVideoSplitsInCutRanges, type ClipEditsV2, type CutRange } from '@/lib/clips/edits'
+import { keepSegments, mergeCutRanges, normalizeSectionOrder, pruneVideoSplitsInCutRanges, type ClipEditsV2, type CutRange } from '@/lib/clips/edits'
 import {
   buildTimelineItems,
   deleteItems,
@@ -23,6 +23,7 @@ import {
   splitBrollId,
   timebaseFor,
   videoLaneSegments,
+  outputToSource,
   type ItemRef,
   type OpCtx,
   type TimelineItem,
@@ -44,12 +45,13 @@ import { audioClipKind } from '@/lib/clips/editor/audio-kind'
 
 type Attach = { keyframes: KeyframeTrack[]; layer?: Omit<LayerProp, 'target'>; color?: ColorSpec; fx?: Omit<LayerFx, 'target'> }
 export type ClipboardEntry =
+  | { kind: 'video'; startMs: number; srcInMs: number; srcOutMs: number; track: 'video' }
   | ({ kind: 'broll'; item: BrollItem; track: string } & Attach)
   | ({ kind: 'text'; item: TextItem; track: string } & Attach)
   | { kind: 'sfx'; cue: ClipAudioSfx; track: string; startMs: number }
 export type TimelineClipboard = { v: 1; originMs: number; entries: ClipboardEntry[]; compound?: { name: string } }
 
-const startOf = (e: ClipboardEntry) => (e.kind === 'sfx' ? e.startMs : e.item.startMs)
+const startOf = (e: ClipboardEntry) => e.kind === 'sfx' || e.kind === 'video' ? e.startMs : e.item.startMs
 
 function attachOf(edits: ClipEditsV2, target: KeyframeTarget, colorKey?: string): Attach {
   const keyframes = (edits.keyframes ?? []).filter((t) => t.target === target).map((t) => ({ ...t, points: t.points.map((p) => ({ ...p })) }))
@@ -72,11 +74,16 @@ function structuredCloneSafe<T>(v: T): T {
 }
 
 /** Copy the selected text / B-roll / SFX items (Video / Voice / Music / hook are not copyable). */
-export function copyItems(edits: ClipEditsV2, refs: readonly ItemRef[]): TimelineClipboard | null {
+export function copyItems(edits: ClipEditsV2, refs: readonly ItemRef[], previewEdits: ClipEditsV2 = edits): TimelineClipboard | null {
   const entries: ClipboardEntry[] = []
+  const video = buildTimelineItems({ edits, previewEdits }).video
   for (const r of refs) {
     const track = refTrack(edits, r) ?? ''
-    if (r.lane === 'broll') {
+    if (r.lane === 'video') {
+      const item = video.find(v => v.id === r.id)
+      if (item?.srcInMs != null && item.srcOutMs != null && item.srcOutMs - item.srcInMs >= 300)
+        entries.push({ kind: 'video', startMs: item.startMs, srcInMs: item.srcInMs, srcOutMs: item.srcOutMs, track: 'video' })
+    } else if (r.lane === 'broll') {
       const item = edits.broll?.find((b) => b.id === r.id)
       if (item) entries.push({ kind: 'broll', item: { ...item }, track, ...attachOf(edits, `broll:${item.id}`, item.id) })
     } else if (r.lane === 'text' && r.id !== 'hook') {
@@ -92,7 +99,7 @@ export function copyItems(edits: ClipEditsV2, refs: readonly ItemRef[]): Timelin
 }
 
 export function copyableRefs(refs: readonly ItemRef[]): ItemRef[] {
-  return refs.filter((r) => r.lane === 'broll' || r.lane === 'sfx' || (r.lane === 'text' && r.id !== 'hook'))
+  return refs.filter((r) => r.lane === 'video' || r.lane === 'broll' || r.lane === 'sfx' || (r.lane === 'text' && r.id !== 'hook'))
 }
 
 function freshId(base: string, taken: Set<string>, maxLen = 64): string {
@@ -102,6 +109,59 @@ function freshId(base: string, taken: Set<string>, maxLen = 64): string {
   while (taken.has(id)) id = `${root}-c${++n}`
   taken.add(id)
   return id
+}
+
+/**
+ * F2: A main-video copy uses the existing sectionOrder EDL (the same model
+ * already rendered by clip_keep_segments.py), so it is exported as actual
+ * repeated footage and increases duration. Split blocks at duplicate midpoint
+ * to keep a source-time descent: the canonical normalizer otherwise treats
+ * monotonically sorted blocks as the untouched original and drops the copy.
+ * The base coverage is always preserved, even around existing cut ranges.
+ */
+export function insertCopiedMainVideo(edits: ClipEditsV2, atOutputMs: number,
+  copied: readonly { srcInMs: number; srcOutMs: number }[]): ClipEditsV2 | null {
+  if (!copied.length || copied.some(c => c.srcOutMs - c.srcInMs < 300)) return null
+  const ti = edits.trim.in, to = edits.trim.out
+  const base = normalizeSectionOrder(edits.sectionOrder, ti, to) ?? ([[ti, to]] as [number, number][])
+  const len = ([a, b]: readonly [number, number]) =>
+    keepSegments(a, b, edits.cutRanges).reduce((sum, [s, e]) => sum + e - s, 0)
+  const outMs = Math.max(0, Math.min(Math.round(atOutputMs), base.reduce((s, b) => s + len(b), 0)))
+  const chunks: [number, number][] = []
+  let remaining = outMs, inserted = false
+  const clone = (): [number, number][] => copied.map(c => [c.srcInMs, c.srcOutMs] as [number, number])
+  for (const block of base) {
+    const dur = len(block)
+    if (!inserted && remaining <= dur) {
+      let source = block[0]
+      let left = remaining
+      for (const [a, b] of keepSegments(block[0], block[1], edits.cutRanges)) {
+        if (left < b - a) { source = a + left; break }
+        left -= b - a
+        source = b
+      }
+      if (source > block[0] && source < block[1]) chunks.push([block[0], source])
+      chunks.push(...clone())
+      if (source < block[1]) chunks.push([source, block[1]])
+      inserted = true
+    } else chunks.push([block[0], block[1]])
+    remaining -= dur
+  }
+  if (!inserted) chunks.push(...clone())
+  // Partition at each copy midpoint wherever a block contains it. This does
+  // not change the pictures but guarantees the repeated footage is a genuine
+  // non-monotone EDL, including full-clip duplication.
+  let parts = chunks
+  for (const c of copied) {
+    const mid = Math.floor((c.srcInMs + c.srcOutMs) / 2)
+    if (mid - c.srcInMs < 300 || c.srcOutMs - mid < 300) continue
+    parts = parts.flatMap(([a, b]) => a + 299 < mid && mid + 299 < b
+      ? ([[a, mid], [mid, b]] as [number, number][]) : ([[a, b]] as [number, number][]))
+  }
+  if (parts.length > 64) return null
+  const normalized = normalizeSectionOrder(parts, ti, to)
+  if (!normalized || normalized.length < base.length + 1) return null
+  return { ...edits, sectionOrder: normalized }
 }
 
 export type PasteResult = { edits: ClipEditsV2; refs: ItemRef[]; skipped: number }
@@ -114,6 +174,14 @@ export type PasteResult = { edits: ClipEditsV2; refs: ItemRef[]; skipped: number
 export function pasteItems(ctx: OpCtx, clip: TimelineClipboard, atMs: number): PasteResult | null {
   const dur = timebaseFor(ctx.previewEdits).durationMs
   let next: ClipEditsV2 = ctx.edits
+  // Video source duplication changes the EDL and duration atomically.
+  const videoEntries = clip.entries.filter((e): e is Extract<ClipboardEntry, { kind: 'video' }> => e.kind === 'video')
+  if (videoEntries.length) {
+    const updated = insertCopiedMainVideo(next, atMs,
+      videoEntries.map(e => ({ srcInMs: e.srcInMs, srcOutMs: e.srcOutMs })))
+    if (!updated) return null
+    next = updated
+  }
   const refs: ItemRef[] = []
   let skipped = 0
   const brollIds = new Set((next.broll ?? []).map((b) => b.id))
@@ -132,6 +200,11 @@ export function pasteItems(ctx: OpCtx, clip: TimelineClipboard, atMs: number): P
   }
   const shift = Math.round(atMs) - clip.originMs
   for (const e of clip.entries) {
+    if (e.kind === 'video') {
+      // A new Video segment appears in the lengthened timeline. Select the
+      // inserted footage once its actual source-range clip has been mapped.
+      continue
+    }
     if (e.kind === 'broll') {
       const len = e.item.endMs - e.item.startMs
       const startMs = Math.max(0, Math.min(e.item.startMs + shift, dur - Math.max(BROLL_MIN_MS, len)))
@@ -178,7 +251,7 @@ export function pasteItems(ctx: OpCtx, clip: TimelineClipboard, atMs: number): P
       refs.push({ lane: 'sfx', id })
     }
   }
-  if (!refs.length) return null
+  if (!refs.length && !videoEntries.length) return null
   for (const { kind, track, ids } of byTrack.values()) {
     if (track !== DEFAULT_TRACK_ID[kind]) next = setItemsTrack(next, kind, ids, track) ?? next
   }
@@ -220,10 +293,10 @@ export function cutItems(ctx: OpCtx, refs: readonly ItemRef[]): { edits: ClipEdi
 
 /** Duplicate: a copy of the selection right after it (CapCut Ctrl+D), same tracks. */
 export function duplicateItems(ctx: OpCtx, refs: readonly ItemRef[]): PasteResult | null {
-  const clip = copyItems(ctx.edits, copyableRefs(refs))
+  const clip = copyItems(ctx.edits, copyableRefs(refs), ctx.previewEdits)
   if (!clip) return null
   const end = Math.max(
-    ...clip.entries.map((e) => (e.kind === 'sfx' ? e.startMs + 1000 : e.item.endMs)),
+    ...clip.entries.map((e) => (e.kind === 'sfx' ? e.startMs + 1000 : e.kind === 'video' ? e.startMs + (e.srcOutMs - e.srcInMs) : e.item.endMs)),
   )
   return pasteItems(ctx, clip, clip.originMs + (end - clip.originMs))
 }
