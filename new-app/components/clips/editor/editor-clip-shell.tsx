@@ -84,6 +84,8 @@ export function EditorClipShell(props: {
     props.mediaUrls.source ??
     props.mediaUrls.preview
 
+  const matteMediaKind = (Object.entries(props.mediaUrls).find(([, url]) => url && url === videoUrl)?.[0] ?? null)
+
   return (
     <ClipperSurfaceErrorBoundary surface="Clip editor">
       <EditorShell
@@ -100,6 +102,7 @@ export function EditorClipShell(props: {
         cropTrack={props.cropTrack}
         facecamLayout={props.facecamLayout}
         videoUrl={videoUrl}
+        matteMediaKind={matteMediaKind}
         editorMedia={media}
         posterUrl={props.posterUrl}
         aiMeta={props.aiMeta}

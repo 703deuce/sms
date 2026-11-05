@@ -200,7 +200,7 @@ export function BgRemovalSection({
       ) : null}
       <p className="text-[11px] text-muted-foreground" role="status" data-testid="bg-removal-note">
         {!enabled ? 'Off. Enable Remove background to include a person matte in your export.'
-          : mattePreview.state === 'ready' && mattePreview.url ? 'Subject matte ready. Inspect the genuine mask below; the worker composites it during export.'
+          : mattePreview.state === 'ready' && mattePreview.url ? 'Subject matte ready. The main preview composites the person during the six-second sample; export applies the effect to the full clip.'
           : mattePreview.state === 'processing' ? 'Generating a 6-second person matte preview (0 credits)…'
           : mattePreview.state === 'failed' ? (previewError || 'Matte preview generation failed. Retry below.')
           : mattePreview.state === 'queued' ? 'Person matte preview queued (0 credits)…'

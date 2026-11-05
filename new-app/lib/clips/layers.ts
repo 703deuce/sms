@@ -148,7 +148,8 @@ export function layersFromLegacy(edits: ClipEditsV2): Layer[] {
   out.push({
     id: 'headline',
     type: 'headline',
-    enabled: Boolean(hb?.enabled),
+    // Legacy disabled-by-default is not an explicit user hide.
+    enabled: edits.headlineVisibilitySet ? hb?.enabled !== false : true,
     z: headlineZ,
     text: String(hb?.text ?? ''),
     suggested: tpl?.suggestedHeadline ? String(tpl.suggestedHeadline) : undefined,
@@ -395,6 +396,7 @@ export function legacyFromLayers(layers: Layer[], edits: ClipEditsV2): ClipEdits
       enabled: hl.enabled,
       text: hl.text,
     }
+    out.headlineVisibilitySet = true
     if (hl.suggested) tpl.suggestedHeadline = hl.suggested
     tplDirty = hadTpl || hl.enabled || Boolean(hl.text.trim())
   }

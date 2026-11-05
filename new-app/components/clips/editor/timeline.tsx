@@ -1139,7 +1139,8 @@ export function Timeline({
   const [speedOpen, setSpeedOpen] = useState(false)
   const [speedFocusSeq, setSpeedFocusSeq] = useState(0)
   const trackAreaRef = useRef<HTMLDivElement | null>(null)
-  const rows = useMemo(() => timelineRows(edits), [edits])
+  const [captionsLaneSelected, setCaptionsLaneSelected] = useState(false)
+  const rows = useMemo(() => timelineRows(edits, captionsLaneSelected), [edits, captionsLaneSelected])
   // TIMELINE_LAYOUT4: drag a lane header's bottom border to resize; height is saved per lane type.
   const [laneHUser, setLaneHUser] = useState<Partial<Record<LaneId, number>>>({})
   useEffect(() => {
@@ -1220,6 +1221,7 @@ export function Timeline({
   )
   const selCompound = useMemo(() => compoundOfSelection(edits, liveSelected), [edits, liveSelected])
   const selectedKeys = useMemo(() => new Set(liveSelected.map(refKey)), [liveSelected])
+  // Automatic captions may not have manual captionLines; the lane is still selectable.
   // E4: report the single selection (by key + source range so re-renders don't spam the shell).
   const singleSel = liveSelected.length === 1 ? lanes[liveSelected[0]!.lane].find((i) => i.id === liveSelected[0]!.id) ?? null : null
   const singleSelKey = singleSel ? `${refKey(singleSel)}:${singleSel.srcInMs ?? ''}:${singleSel.srcOutMs ?? ''}` : ''
@@ -1230,6 +1232,7 @@ export function Timeline({
     if (!r) return
     const it = r.id != null ? lanes[r.lane].find((i) => i.id === r.id) : lanes[r.lane].find((i) => r.atMs! >= i.startMs && r.atMs! < i.endMs)
     setSelected(it ? [{ lane: r.lane, id: it.id }] : [])
+    setCaptionsLaneSelected(r.lane === 'captions')
   }, [selectRequest?.seq]) // eslint-disable-line react-hooks/exhaustive-deps
   const singleSelRef = useRef(singleSel)
   singleSelRef.current = singleSel
@@ -2854,6 +2857,8 @@ export function Timeline({
     const geo = shown(item)
     const left = xs(geo.startMs)
     const w = Math.max(2, xe(geo.endMs) - left)
+    const displayStartMs = toExportMs(tmap, item.startMs, 'start')
+    const displayEndMs = toExportMs(tmap, item.endMs, 'end')
     const st = itemState(item)
     const isSel = selectedKeys.has(refKey(item))
     // TC1: deactivated items stay on the timeline, dimmed + striped.
@@ -2898,14 +2903,14 @@ export function Timeline({
         data-lane={item.lane}
         data-item-id={item.id}
         data-jl-split={item.lane === 'voice' && item.label.includes('split') ? 'true' : undefined}
-        data-start-ms={Math.round(item.startMs)}
-        data-end-ms={Math.round(item.endMs)}
+        data-start-ms={Math.round(displayStartMs)}
+        data-end-ms={Math.round(displayEndMs)}
         data-selected={isSel ? 'true' : undefined}
         data-disabled={off ? 'true' : undefined}
         data-grouped={inGroup || host ? 'true' : undefined}
         data-group-selected={grpSel ? 'true' : undefined}
         data-compound={host ? host.group.id : undefined}
-        title={`${off ? '[Deactivated] ' : ''}${host ? '[Compound] ' : inGroup ? '[Grouped] ' : ''}${item.label} · ${(item.startMs / 1000).toFixed(2)}–${(item.endMs / 1000).toFixed(2)} s`}
+        title={`${off ? '[Deactivated] ' : ''}${host ? '[Compound] ' : inGroup ? '[Grouped] ' : ''}${item.label} · ${(displayStartMs / 1000).toFixed(2)}–${(displayEndMs / 1000).toFixed(2)} s`}
         onPointerDown={interactive && !dimmed ? (e) => {
           const bounds = e.currentTarget.getBoundingClientRect()
           const x = e.clientX - bounds.left
@@ -3462,6 +3467,7 @@ export function Timeline({
             <TimelineLaneHeader
               key={r.key}
               lane={r.lane}
+              selected={r.lane === 'captions' && (captionsLaneSelected || liveSelected.some(item => item.lane === 'captions'))}
               height={LANE_H[r.lane]}
               state={rowState(edits, r)}
               onToggle={editable ? (patch) => toggleRow(r, patch) : undefined}

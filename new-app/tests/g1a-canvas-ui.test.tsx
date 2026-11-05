@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { TextItemsPreview } from '@/components/clips/editor/text-items-preview'
 import { CanvasSelectionOverlay, type CanvasLayerDom } from '@/components/clips/editor/canvas-selection-overlay'
 import { PropertiesPanel, tabsFor } from '@/components/clips/editor/properties-panel'
 import { Timeline } from '@/components/clips/editor/timeline'
@@ -69,6 +70,15 @@ afterEach(() => {
 })
 
 describe('G1a canvas selection', () => {
+  it('N1 text-preview blocks receive pointer events above the video for real double-clicks', () => {
+    const edits = textEdits()
+    const ui = render(<TextItemsPreview edits={edits} boxH={1080} elRef={vi.fn()} />)
+    const block = ui.getByTestId('preview-text-block')
+    expect(block.className).toContain('pointer-events-auto')
+    expect(block.className).toContain('cursor-text')
+    ui.unmount()
+  })
+
   it('click picks the top-most layer; empty area of the frame = the video', () => {
     const s = stage(textEdits())
     fireEvent.pointerDown(s.box, { clientX: 100, clientY: 100, button: 0 })
@@ -142,6 +152,14 @@ describe('G1a canvas selection', () => {
     fireEvent.blur(ta)
     expect(s.queryByTestId('canvas-text-editor')).toBeNull()
     expect(s.onCommit).not.toHaveBeenCalled()
+  })
+
+  it('N1: a double-click originating on a text block bubbles into the canvas inline editor', () => {
+    const s = stage(textEdits())
+    const block = s.box.querySelector('div[style*="translate(-50%, -50%)"]') as HTMLDivElement
+    expect(block).toBeTruthy()
+    fireEvent.doubleClick(block, { clientX: 100, clientY: 100 })
+    expect(s.getByTestId('canvas-text-editor')).toBeTruthy()
   })
 
   it('N1: double-click opens inline editor on a transparent libass text hit shell', () => {

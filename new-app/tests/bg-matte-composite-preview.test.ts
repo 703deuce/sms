@@ -1,8 +1,57 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
-import { applyMatteAlpha, fitVideoFrame } from '@/components/clips/editor/g4/bg-matte-composite-preview'
+import { describe, expect, it, vi } from 'vitest'
+import { render, waitFor } from '@testing-library/react'
+import { createElement, createRef } from 'react'
+import { applyMatteAlpha, fitVideoFrame, BgMatteCompositePreview } from '@/components/clips/editor/g4/bg-matte-composite-preview'
 
 describe('E2 real person matte compositing', () => {
+  it('mounts a click-through canvas for the authenticated source even when no pixels have decoded yet', () => {
+    const ui = render(createElement(BgMatteCompositePreview, {
+      clipId: 'clip-test',
+      mediaKind: 'proxy',
+      video: createRef<HTMLVideoElement>(),
+      outMs: createRef<number>(),
+      enabled: true,
+      removal: { enabled: true, quality: 'standard', refine: { feather: 10, choke: 0 },
+        background: { type: 'blur', amount: 50 } },
+    }))
+
+    const canvas = ui.getByTestId('preview-person-cutout')
+    expect(canvas.className).toContain('pointer-events-none')
+    ui.unmount()
+  })
+
+  it('E2: a ready matte mounts authenticated same-origin source AND matte videos', async () => {
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { state: 'ready', url: 'https://signed.example/matte.mp4' } }),
+    })
+    vi.stubGlobal('fetch', fetchStub)
+    const ui = render(createElement(BgMatteCompositePreview, {
+      clipId: 'clip-ready',
+      mediaKind: 'proxy',
+      video: createRef<HTMLVideoElement>(),
+      outMs: createRef<number>(),
+      enabled: true,
+      removal: { enabled: true, quality: 'detail', refine: { feather: 10, choke: 0 },
+        background: { type: 'color', color: 'ff0000' } },
+    }))
+    try {
+      await waitFor(() => expect(ui.getByTestId('preview-person-cors-source')).toBeTruthy())
+      expect(ui.getByTestId('preview-person-cors-source').getAttribute('src'))
+        .toBe('/api/clips/clips/clip-ready/bg-matte-media?kind=proxy')
+      expect(ui.getByTestId('preview-person-matte-video').getAttribute('src'))
+        .toBe('/api/clips/clips/clip-ready/bg-matte-media?kind=matte&quality=detail')
+      expect(fetchStub).toHaveBeenCalledWith(
+        '/api/clips/clips/clip-ready/bg-matte?quality=detail',
+        { cache: 'no-store' },
+      )
+    } finally {
+      ui.unmount()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('uses identical crop geometry for portrait object-cover video and its mask', () => {
     expect(fitVideoFrame(1920, 1080, 360, 640, 'cover')).toMatchObject({
       sx: 656.25, sy: 0, sw: 607.5, sh: 1080, dx: 0, dy: 0, dw: 360, dh: 640,

@@ -2,7 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { Timeline } from '@/components/clips/editor/timeline'
+import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { shiftVideoSegmentWithinSlot } from '@/lib/clips/editor/timeline-edit-ops'
 
 const bounds = { clipStartMs: 0, clipEndMs: 20000, trimMinMs: 0, trimMaxMs: 40000 }
 const words = Array.from({ length: 30 }, (_, i) => ({ i, w: `w${i}`, s: i * 0.6, e: i * 0.6 + 0.4 }))
@@ -64,6 +66,26 @@ function drag(el: Element, dxPx: number, opts: { altKey?: boolean } = {}) {
 }
 
 describe('E2 multi-track timeline', () => {
+  it('N12 displays and labels a lone Video clip at its saved gap-adjusted export time', () => {
+    const clean = edits({ cutRanges: [], videoSplits: undefined })
+    const moved = shiftVideoSegmentWithinSlot({ edits: clean, previewEdits: clean }, 'seg:0', 1200)!
+    expect(moved.inserts?.some(i => i.durMs === 1200)).toBe(true)
+    const ui = setup(moved, { clipOutputDurationMs: timebaseFor(moved).durationMs + 1200 })
+    const main = ui.getAllByTestId('timeline-item-video')[0]!
+    expect(main.getAttribute('data-start-ms')).toBe('1200')
+    expect(main.title).toContain('1.20–')
+    expect(Number.parseFloat(main.style.left)).toBeGreaterThan(0)
+    ui.unmount()
+  })
+
+  it('E5 highlights the automatic Captions lane even without manual caption items', () => {
+    const ui = setup(edits({ captionLines: undefined }), {
+      selectRequest: { lane: 'captions', atMs: 10000, seq: 1 },
+    })
+    expect(ui.getByTestId('timeline-lane-header-captions').getAttribute('data-selected')).toBe('true')
+    ui.unmount()
+  })
+
   afterEach(() => cleanup())
 
   it('renders all lanes with headers on one output time base', () => {

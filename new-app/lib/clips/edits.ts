@@ -203,6 +203,8 @@ export type ClipEditsV2 = {
   layersV?: number
   layers?: unknown
   layersLegacyFp?: string
+  /** N8: records a user decision to hide/show the Headline (legacy false was also an untouched default). */
+  headlineVisibilitySet?: true
   /** E2 timeline lane toggles (mute / hide / lock); applied to preview + export. */
   timelineLanes?: TimelineLanesState
   /**
@@ -706,6 +708,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     layersV: typeof o.layersV === 'number' ? o.layersV : undefined,
     layers: o.layers,
     layersLegacyFp: typeof o.layersLegacyFp === 'string' ? o.layersLegacyFp : undefined,
+    headlineVisibilitySet: o.headlineVisibilitySet === true ? true : undefined,
     timelineLanes: normalizeTimelineLanes(o.timelineLanes),
     videoSplits: normalizeVideoSplits(o.videoSplits, trim.in, trim.out),
     keyframes: normalizeKeyframeTracks(o.keyframes),
@@ -747,6 +750,15 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     timelineOpts: normalizeTimelineOpts(o.timelineOpts),
     beatSync: normalizeBeatSync(o.beatSync),
     speakerNames: normalizeSpeakerNames(o.speakerNames),
+  }
+  // N8: old generated clips often have headlineBar.enabled=false without anyone hiding
+  // the Headline. Migrate that old default to visible; from now on an explicit eye
+  // action sets headlineVisibilitySet so hiding remains stable across reload/export.
+  if (!out.headlineVisibilitySet && out.exportTemplate?.headlineBar?.enabled === false) {
+    out.exportTemplate = {
+      ...out.exportTemplate,
+      headlineBar: { ...out.exportTemplate.headlineBar, enabled: true },
+    }
   }
   // G1c: take groups reference the normalized B-roll ids.
   const takes = normalizeTakes(o.takes, new Set((out.broll ?? []).map((b) => b.id)))

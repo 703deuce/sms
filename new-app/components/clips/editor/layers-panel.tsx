@@ -134,9 +134,10 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
   }
   // Native HTML drag-and-drop is inconsistent when the user grabs the label/button
   // inside a row. Support pointer drags past a small threshold as well.
-  const pointerReorder = (e: React.PointerEvent<HTMLLIElement>, row: ActualVisualLayer) => {
+  const pointerReorder = (e: React.PointerEvent<HTMLElement>, row: ActualVisualLayer) => {
     if (e.button !== 0 || (row.kind !== 'text' && row.kind !== 'broll')) return
-    if ((e.target as HTMLElement).closest('button[aria-label]')) return
+    e.preventDefault()
+    e.stopPropagation()
     const startX = e.clientX
     const startY = e.clientY
     let moved = false
@@ -153,8 +154,14 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
     }
     const onUp = (ev: PointerEvent) => {
       if (moved) {
-        const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-layer-row-key]')
-        const key = target?.getAttribute('data-layer-row-key')
+        // Real browsers may retarget elementFromPoint to the dragged element.
+        // Determine the drop row from its geometry, not native HTML drag events.
+        const elements = Array.from(document.querySelectorAll<HTMLElement>('[data-layer-row-key]'))
+        const destination = elements.find(el => {
+          const rect = el.getBoundingClientRect()
+          return rect.height > 0 && ev.clientY >= rect.top && ev.clientY <= rect.bottom
+        }) ?? document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-layer-row-key]')
+        const key = destination?.getAttribute('data-layer-row-key')
         const to = stack.find((r) => r.key === key)
         if (to) reorder(row, to)
       }
@@ -180,13 +187,16 @@ function ActualLayersList({ edits, layers, setLayers, onEdits, selectedKey, onSe
             <li key={row.key} className="flex items-center gap-1 rounded border border-border/60 px-1 py-1"
               data-testid={`actual-layer-${row.key}`}
               data-layer-row-key={row.key}
-              onPointerDown={(e) => { if (!locked) pointerReorder(e, row) }}
               draggable={(row.kind === 'text' || row.kind === 'broll') && !locked}
               onDragStart={(e) => { setDragged(row.key); e.dataTransfer.effectAllowed = 'move' }}
               onDragOver={(e) => { if (dragged && dragged !== row.key && (row.kind === 'text' || row.kind === 'broll') && !locked) e.preventDefault() }}
               onDrop={(e) => { e.preventDefault(); const from = stack.find((r) => r.key === dragged); if (from) reorder(from, row); setDragged(null) }}
               onDragEnd={() => setDragged(null)}>
-              <GripVertical size={13} className="shrink-0 text-muted-foreground" aria-hidden />
+              <span role="button" tabIndex={0} aria-label={`Drag ${row.label} layer`}
+                className="flex shrink-0 touch-none cursor-grab items-center rounded p-1 text-muted-foreground"
+                onPointerDown={(e) => { if (!locked) pointerReorder(e, row) }}>
+                <GripVertical size={13} aria-hidden />
+              </span>
               <button type="button" className={`min-w-0 flex-1 truncate rounded px-1 py-1 text-left text-xs ${(selectedKey === row.key || selectedRowKey === row.key) ? 'bg-primary/10 font-semibold' : ''}`}
                 onClick={() => { setSelectedRowKey(row.key); onSelect?.(row.kind, row.id, row.startMs) }}
                 data-testid={`actual-layer-select-${row.key}`}>{row.label}</button>

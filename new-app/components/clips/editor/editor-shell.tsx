@@ -250,6 +250,7 @@ export function EditorShell({
   cropShots,
   cropTrack,
   videoUrl,
+  matteMediaKind = null,
   editorMedia = null,
   posterUrl = null,
   aiMeta,
@@ -276,6 +277,7 @@ export function EditorShell({
   cropShots: CropShot[]
   cropTrack: CropTrack | null
   videoUrl: string | null
+  matteMediaKind?: string | null
   editorMedia?: EditorMedia | null
   posterUrl?: string | null
   aiMeta?: { brollIdeas?: string[] } | null
@@ -2270,12 +2272,11 @@ export function EditorShell({
                 selectPanel('captions')
                 const line = (edits.captionLines ?? []).find(l => outputMs >= l.startMs && outputMs < l.endMs)
                   ?? edits.captionLines?.[0]
-                if (line) {
-                  setTimelineSelReq(prev => ({
-                    lane: 'captions', id: line.id, seq: (prev?.seq ?? 0) + 1,
-                  }))
-                  if (Math.abs(line.startMs - outputMs) > 500) seekOutput(line.startMs)
-                }
+                setTimelineSelReq(prev => ({
+                  lane: 'captions', ...(line ? { id: line.id } : { atMs: outputMs }),
+                  seq: (prev?.seq ?? 0) + 1,
+                }))
+                if (line && Math.abs(line.startMs - outputMs) > 500) seekOutput(line.startMs)
                 return
               }
               if (kind === 'sticker' || kind === 'badge' || kind === 'headline' || kind === 'hook') {
@@ -2653,6 +2654,7 @@ export function EditorShell({
       <EditorPanelErrorBoundary label="Preview">
       <PreviewStage
         clipId={clipId}
+        matteMediaKind={matteMediaKind}
         videoUrl={videoUrl}
         posterUrl={posterUrl}
         edits={renderEdits}

@@ -564,7 +564,7 @@ export type TimelineRow = { key: string; lane: LaneId; trackId?: string; label: 
  * Rows top → bottom: the visual stack front-first (text and overlay tracks interleaved as the user
  * ordered them), the main Video track, Voice, Music, then the audio (SFX) tracks.
  */
-export function timelineRows(edits: ClipEditsV2): TimelineRow[] {
+export function timelineRows(edits: ClipEditsV2, showCaptions = false): TimelineRow[] {
   const ts = effectiveTracks(edits)
   const row = (t: { id: string; kind: TrackKind }): TimelineRow => {
     const lane = t.kind === 'overlay' ? 'broll' : t.kind === 'text' ? 'text' : 'sfx'
@@ -573,7 +573,7 @@ export function timelineRows(edits: ClipEditsV2): TimelineRow[] {
   }
   const visual = ts.filter((t) => t.kind !== 'audio').reverse().map(row)
   const fixed = (lane: LaneId): TimelineRow => ({ key: lane, lane, label: LANE_LABELS[lane], isDefault: true })
-  const caps = edits.captionLines?.length ? [fixed('captions')] : []
+  const caps = edits.captionLines?.length || showCaptions ? [fixed('captions')] : []
   // G4a: the Adjustment row sits under the text rows and above the overlay rows (it grades what is
   // below it — overlays + main video — and never the text).
   if (edits.adjustLayers?.length) {

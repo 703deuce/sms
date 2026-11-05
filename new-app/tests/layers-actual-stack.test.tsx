@@ -2,7 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, within } from '@testing-library/react'
 import { LayersPanel } from '@/components/clips/editor/layers-panel'
-import { defaultEdits } from '@/lib/clips/edits'
+import { defaultEdits, normalizeEdits } from '@/lib/clips/edits'
+import { legacyFromLayers, resolveLayers } from '@/lib/clips/layers'
 import { newTextItem } from '@/lib/clips/editor/text-items'
 import { visualStack } from '@/lib/clips/editor/tracks'
 
@@ -21,6 +22,23 @@ describe('actual Layers stack (E5)', () => {
     expect(onEdits.mock.calls.at(-1)?.[0].timelineLanes?.video?.hidden).toBe(true)
     fireEvent.click(ui.getByRole('button', { name: 'Lock Main video track' }))
     expect(onEdits.mock.calls.at(-1)?.[0].timelineLanes?.video?.locked).toBe(true)
+  })
+
+  it('N8 migrates legacy false Headline defaults, but an explicit eye hide stays off after save/reload', () => {
+    const bounds = { clipStartMs: 0, clipEndMs: 30_000 }
+    const old = normalizeEdits({
+      ...defaultEdits(bounds),
+      exportTemplate: { headlineBar: { enabled: false, text: 'Headline text' } },
+    }, bounds)
+    expect(old.exportTemplate?.headlineBar?.enabled).toBe(true)
+    const fresh = resolveLayers(old)
+    expect(fresh.find(l => l.type === 'headline')?.enabled).toBe(true)
+    const hidden = fresh.map(l => l.type === 'headline' ? { ...l, enabled: false } : l)
+    const saved = legacyFromLayers(hidden, old)
+    expect(saved.headlineVisibilitySet).toBe(true)
+    const reloaded = normalizeEdits(saved, bounds)
+    expect(reloaded.exportTemplate?.headlineBar?.enabled).toBe(false)
+    expect(resolveLayers(reloaded).find(l => l.type === 'headline')?.enabled).toBe(false)
   })
 
   it('N8 treats an unspecified Headline visibility as visible and toggles it off', () => {
@@ -80,12 +98,18 @@ describe('actual Layers stack (E5)', () => {
       setLayers={vi.fn()} onEdits={onEdits} />)
     const from = ui.getByTestId('actual-layer-broll:overlay')
     const to = ui.getByTestId('actual-layer-text:title')
+    const grip = ui.getByRole('button', { name: 'Drag B-roll · overlay layer' })
     const prior = document.elementFromPoint
-    document.elementFromPoint = vi.fn(() => to)
+    document.elementFromPoint = vi.fn(() => from)
+    // Real pointer geometry wins even when elementFromPoint returns the source.
+    Object.defineProperty(from, 'getBoundingClientRect', { configurable: true,
+      value: () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 200, width: 200 }) })
+    Object.defineProperty(to, 'getBoundingClientRect', { configurable: true,
+      value: () => ({ top: 20, bottom: 50, height: 30, left: 0, right: 200, width: 200 }) })
     try {
-      fireEvent.pointerDown(from, { clientX: 10, clientY: 10, button: 0 })
-      fireEvent.pointerMove(window, { clientX: 10, clientY: 30 })
-      fireEvent.pointerUp(window, { clientX: 10, clientY: 30 })
+      fireEvent.pointerDown(grip, { clientX: 10, clientY: 10, button: 0 })
+      fireEvent.pointerMove(window, { clientX: 10, clientY: 35 })
+      fireEvent.pointerUp(window, { clientX: 10, clientY: 35 })
       expect(onEdits).toHaveBeenCalledOnce()
       expect(visualStack(onEdits.mock.calls[0]![0]).map(t => t.id)).toEqual(['tx1', 'ov1'])
     } finally {
