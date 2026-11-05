@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { exportTimeMap, seekBaseMs, toBaseMs, toExportMs } from '@/lib/clips/editor/export-time'
+import { exportTimeMap, seekBaseMs, toBaseMs, toExportMs, speedDisplayMs, speedBaseMs } from '@/lib/clips/editor/export-time'
 import { parseNudge } from '@/lib/clips/editor/timecode-nudge'
 import { readTimelineHeight, clampTimelineHeight, TIMELINE_MIN_H, writeTimelineHeight } from '@/lib/clips/editor/timeline-opts'
 import { clampLaneH, laneHeights, readLaneHeights, writeLaneHeights } from '@/lib/clips/editor/lane-heights'
@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from 'sonner'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { wordDisplayText } from '@/lib/clips/edits'
+import { wordDisplayText, normalizeEditSpeed } from '@/lib/clips/edits'
 import { clampTrimWithMediaBounds } from '@/lib/clips/trim-bounds'
 import { HighlightsLane } from '@/components/clips/editor/timeline/highlights-lane'
 import { FullVideoMomentLane, type FullVideoMomentFocus } from '@/components/clips/editor/full-video-moment-focus'
@@ -524,10 +524,13 @@ export function Timeline({
   // TC2: lanes are drawn in EXPORT time — inserts (gaps, freeze frames, inserted clips) take their
   // length on the lane and push later items right. Edits stay in base time; identity without inserts.
   const tmap = useMemo(() => exportTimeMap(tb.segs, edits.inserts), [tb.segs, edits.inserts])
-  const dspan = span + tmap.totalMs
+  // F21: the ruler and every clip bar display exported time. A 31s
+  // source at 1.5× occupies ~20.7s, while added gaps retain full length.
+  const globalSpeed = normalizeEditSpeed(edits.speed) ?? 1
+  const dspan = span / globalSpeed + tmap.totalMs
   // B2: preserve the untrimmed source extent as spare space after shortening either edge.
   // Otherwise trackWidthPx refits to the shorter clip and the same pointer cannot extend it again.
-  const originalSpanMs = Math.max(0, clipEndMs - Math.min(clipStartMs, previewEdits.trim.in))
+  const originalSpanMs = Math.max(0, clipEndMs - Math.min(clipStartMs, previewEdits.trim.in)) / globalSpeed
   const rulerSpanMs = Math.max(dspan, trimScaleFloorMs ?? 0)
   const minPx = timelineMinPxPerSec(rulerSpanMs, trackViewportPx)
   const minPxRef = useRef(minPx)
@@ -541,17 +544,19 @@ export function Timeline({
     [highlights, tb],
   )
   /** Base ms → lane px: `xs` for starts / seek points (after an insert there), `xe` for ends. */
-  const xs = (ms: number) => toExportMs(tmap, ms, 'start') * pxPerMs
-  const xe = (ms: number) => toExportMs(tmap, ms, 'end') * pxPerMs
-  /** Lane px → base ms (a point inside an insert → its base point). */
-  const msAtPx = (px: number) => seekBaseMs(tmap, px / Math.max(1e-6, pxPerMs), span)
+  const xs = (ms: number) => speedDisplayMs(tmap, ms, globalSpeed, 'start') * pxPerMs
+  const xe = (ms: number) => speedDisplayMs(tmap, ms, globalSpeed, 'end') * pxPerMs
+  /** Lane px → base edit ms, including speed and inserted gaps. */
+  const msAtPx = (px: number) => speedBaseMs(tmap, px / Math.max(1e-6, pxPerMs), globalSpeed, span)
 
   const widthRef = useRef(widthPx)
   widthRef.current = widthPx
 
   const playheadMs = Math.max(0, Math.min(span, outputMs))
   const liveOutMs = playheadOutMsRef?.current ?? playheadMs
-  const playheadPx = gapDisplayMs != null ? gapDisplayMs * pxPerMs : xe(liveOutMs)
+  const playheadPx = gapDisplayMs != null
+    ? (gapDisplayMs - toBaseMs(tmap, gapDisplayMs) + toBaseMs(tmap, gapDisplayMs) / globalSpeed) * pxPerMs
+    : xe(liveOutMs)
   const playheadPct = (playheadPx / Math.max(1, widthPx)) * 100
   const playheadPxRef = useRef(playheadPx)
   playheadPxRef.current = playheadPx
@@ -2320,7 +2325,7 @@ export function Timeline({
     const state: DragState = { mode: 'move', item, refs: [{ lane: 'video', id: item.id }], originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, reorder: true, insertBefore: undefined }
     setDrag(state)
     const slotFromPointer = (dx: number) => {
-      const pointerMs = grabMs + dx / Math.max(1e-6, pxPerMs)
+      const pointerMs = grabMs + dx * globalSpeed / Math.max(1e-6, pxPerMs)
       const before = reorderInsertBefore(lanes.video, item.id, pointerMs)
       return isNoopReorder(lanes.video, item.id, before) ? undefined : before
     }
@@ -2328,7 +2333,7 @@ export function Timeline({
       const dx = ev.clientX - state.originX
       if (!state.moved && Math.abs(dx) < Math.max(4, DRAG_SLOP_PX)) return
       state.moved = true
-      state.deltaMs = dx / Math.max(1e-6, pxPerMs)
+      state.deltaMs = dx * globalSpeed / Math.max(1e-6, pxPerMs)
       state.insertBefore = slotFromPointer(dx)
       setDrag({ ...state })
     }
@@ -2498,10 +2503,10 @@ export function Timeline({
           : item.srcOutMs != null && item.srcOutMs >= previewEdits.trim.out - 1)
       const raw =
         outerSourceTrim || (slideTool && item.lane === 'video')
-          ? dx / Math.max(1e-6, pxPerMs)
+          ? dx * globalSpeed / Math.max(1e-6, pxPerMs)
           : tmap.totalMs
-            ? toBaseMs(tmap, Math.max(0, toExportMs(tmap, anchor, rule) + dx / Math.max(1e-6, pxPerMs))) - anchor
-            : dx / Math.max(1e-6, pxPerMs)
+            ? speedBaseMs(tmap, Math.max(0, speedDisplayMs(tmap, anchor, globalSpeed, rule) + dx / Math.max(1e-6, pxPerMs)), globalSpeed, span) - anchor
+            : dx * globalSpeed / Math.max(1e-6, pxPerMs)
       const snapping = snapOn && !ev.altKey
       if (ev.altKey) state.alt = true
       if (dragMode === 'move') {
@@ -2891,8 +2896,8 @@ export function Timeline({
     const geo = shown(item)
     const left = xs(geo.startMs)
     const w = Math.max(2, xe(geo.endMs) - left)
-    const displayStartMs = toExportMs(tmap, item.startMs, 'start')
-    const displayEndMs = toExportMs(tmap, item.endMs, 'end')
+    const displayStartMs = speedDisplayMs(tmap, item.startMs, globalSpeed, 'start')
+    const displayEndMs = speedDisplayMs(tmap, item.endMs, globalSpeed, 'end')
     const st = itemState(item)
     const isSel = selectedKeys.has(refKey(item))
     // TC1: deactivated items stay on the timeline, dimmed + striped.
@@ -3642,7 +3647,7 @@ export function Timeline({
                 <div
                   key={`insshade${w.id}`}
                   className="pointer-events-none absolute bottom-0 z-[18] bg-[repeating-linear-gradient(135deg,rgba(0,0,0,0.55)_0_4px,rgba(0,0,0,0.25)_4px_8px)]"
-                  style={{ left: w.startMs * pxPerMs, width: Math.max(2, w.durMs * pxPerMs), top: RULER_H }}
+                  style={{ left: (w.baseMs / globalSpeed + w.startMs - w.baseMs) * pxPerMs, width: Math.max(2, w.durMs * pxPerMs), top: RULER_H }}
                   title="Inserted time: overlays pause here in the export"
                   data-testid="timeline-insert-shade"
                   aria-hidden
