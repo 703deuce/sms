@@ -42,9 +42,13 @@ export function brollInsertWindow(
   clipEndMs: number,
   shotMs: number = BROLL_DEFAULT_SHOT_MS,
 ): { startMs: number; endMs: number } {
-  const startMs = toIntMs(playheadMs)
   const endBound = Math.max(0, Math.floor(Number.isFinite(clipEndMs) ? clipEndMs : 0))
-  return { startMs, endMs: Math.max(startMs, Math.min(startMs + shotMs, endBound)) }
+  if (endBound < BROLL_MIN_MS) return { startMs: 0, endMs: 0 }
+  const durationMs = Math.min(endBound, Math.max(BROLL_MIN_MS, toIntMs(shotMs)))
+  // When the playhead is at/near Out, backfill the requested shot rather
+  // than creating an invalid zero-length overlay or an unexpected 1 s stub.
+  const startMs = Math.max(0, Math.min(toIntMs(playheadMs), endBound - durationMs))
+  return { startMs, endMs: Math.min(startMs + durationMs, endBound) }
 }
 
 /** Zod-friendly coercion for API bodies: accepts floats / numeric strings, stores integer ms. */

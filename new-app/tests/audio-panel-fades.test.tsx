@@ -11,6 +11,30 @@ vi.mock('@/components/clips/editor/stock-audio-picker', () => ({ StockAudioPicke
 afterEach(cleanup)
 
 describe('Audio panel fade controls (E11)', () => {
+  it('F19 shows complete SFX preset names in narrow inspector layouts', () => {
+    const ui = render(<AudioPanel
+      clipId="clip1"
+      edits={defaultEdits({ clipStartMs: 0, clipEndMs: 60_000 })}
+      outputDurationMs={60_000}
+      playheadMs={0}
+      onSuggestMusic={vi.fn()}
+      onAttachMusic={vi.fn()}
+      onPatchMusic={vi.fn()}
+      onRemoveMusic={vi.fn()}
+      onAddSfx={vi.fn()}
+      onUpdateSfx={vi.fn()}
+      onRemoveSfx={vi.fn()}
+      onPatchStudioSound={vi.fn()}
+    />)
+    expect(ui.getByTestId('audio-sfx-preset-list')).toBeTruthy()
+    for (const label of ['Whoosh', 'Ding', 'Record scratch', 'Camera shutter']) {
+      // The full name must be rendered, not an abbreviated or ellipsized label.
+      const button = ui.getByRole('button', { name: `Add ${label === 'Camera shutter' ? 'Shutter' : label} SFX` })
+      expect(button.className).toContain('whitespace-normal')
+      expect(button.getAttribute('title')).toBe(label === 'Camera shutter' ? 'Shutter' : label)
+    }
+  })
+
   it('persists Music and SFX fade times in the existing edits model', () => {
     const onPatchMusic = vi.fn()
     const onUpdateSfx = vi.fn()

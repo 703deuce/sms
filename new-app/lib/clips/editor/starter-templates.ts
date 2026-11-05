@@ -15,6 +15,7 @@ import { CAPTION_PRESETS, presetSlugToId } from '@/lib/clips/caption-presets'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { normalizeColorSpec, setVideoLook, type ColorPresetId } from '@/lib/clips/editor/color'
 import { newTextItem, TEXT_PRESETS } from '@/lib/clips/editor/text-items'
+import { isLandscapeAspect } from '@/lib/clips/export-aspect'
 import { CAPTION_PRESETS_V2, T6_TEMPLATES_BY_ID, templateInFamily, type TemplateDef, type TemplateLane } from '@/lib/clips/templates/registry'
 
 /**
@@ -38,7 +39,9 @@ export function templateLayoutPatch(
       cropBox: usesTrim ? edits.layout.cropBox : undefined,
       layoutSegments: undefined,
       userPicked: !opts.auto,
-      template: { id: t.id, auto: opts.auto, reason: opts.reason, lane: famLane, boxes: edits.layout.template?.boxes },
+      template: t.id === 'I2' && isLandscapeAspect(edits.aspectRatio)
+        ? undefined
+        : { id: t.id, auto: opts.auto, reason: opts.reason, lane: famLane, boxes: edits.layout.template?.boxes },
     },
   }
 }

@@ -368,10 +368,15 @@ export function buildTimelineItems(input: {
 
   const vsegs = videoLaneSegments(tb, edits.videoSplits)
   const multi = vsegs.length > 1
+  // Repeated source ranges after Duplicate/Paste need unique React/select IDs.
+  // Preserve legacy seg:<src> IDs for non-repeated footage.
+  const seenVideoStarts = new Set<number>()
   vsegs.forEach(({ a, b, startMs }, i) => {
+    const repeated = seenVideoStarts.has(a)
+    seenVideoStarts.add(a)
     lanes.video.push({
       lane: 'video',
-      id: `seg:${a}`,
+      id: repeated ? `seg:${a}@${Math.round(startMs)}` : `seg:${a}`,
       startMs,
       endMs: startMs + (b - a),
       srcInMs: a,
@@ -384,7 +389,12 @@ export function buildTimelineItems(input: {
   const offs = splitOffsets(tb.segs, edits.splitEdits, previewEdits.trim.in, previewEdits.trim.out)
   const real = new Set(realCutIndices(tb))
   vsegs.forEach((vs, vi) => {
-    const ki = tb.segs.findIndex(([a, b]) => a <= vs.a && vs.b <= b)
+    // F2: find by OUTPUT occurrence, not the first matching source span.
+    // A repeated segment has identical source times but a different output slot.
+    const ki = tb.segs.findIndex(([a, b], k) =>
+      tb.starts[k]! <= vs.startMs + 0.5 &&
+      vs.startMs < tb.starts[k]! + (b - a) - 0.5 &&
+      a <= vs.a && vs.b <= b)
     if (ki < 0) return
     const [ka, kb] = tb.segs[ki]!
     const picStart = tb.starts[ki]! + (vs.a - ka)
@@ -395,7 +405,8 @@ export function buildTimelineItems(input: {
     const endMs = picEnd + (lastInKeep ? offs[ki + 1]! : splitEditAt(edits, vsegs[vi + 1]!.a))
     lanes.voice.push({
       lane: 'voice',
-      id: `voice:${vs.a}`,
+      id: vi > 0 && vsegs.slice(0, vi).some(v => v.a === vs.a)
+        ? `voice:${vs.a}@${Math.round(vs.startMs)}` : `voice:${vs.a}`,
       startMs,
       endMs,
       srcInMs: vs.a + (firstInKeep ? offs[ki]! : splitEditAt(edits, vs.a)),
@@ -986,14 +997,23 @@ export function videoJoinOptions(ctx: Pick<OpCtx, 'edits' | 'previewEdits'>, ref
   if (lockedLanes(ctx.edits).has('video')) return none
   const tb = timebaseFor(ctx.previewEdits)
   const vsegs = videoLaneSegments(tb, ctx.edits.videoSplits)
-  const joinable = (i: number) =>
-    i > 0 &&
-    i < vsegs.length &&
-    vsegs[i - 1]!.b === vsegs[i]!.a &&
-    videoSplitPointsAt(ctx.edits.videoSplits, vsegs[i]!.a).length > 0
+  const joinable = (i: number) => {
+    if (i <= 0 || i >= vsegs.length) return false
+    const prev = vsegs[i - 1]!, next = vsegs[i]!
+    // An explicit split marker is removable without the undo stack.
+    if (prev.b === next.a && videoSplitPointsAt(ctx.edits.videoSplits, next.a).length) return true
+    // F10: an adjacent cut is another visible boundary; joining restores the
+    // deleted source interval. Never join reordered/non-adjacent footage.
+    return prev.b < next.a && (ctx.edits.cutRanges ?? []).some(([s, e]) =>
+      Math.abs(s - prev.b) <= 1 && Math.abs(e - next.a) <= 1)
+  }
   const idxs = refs
     .filter((r) => r.lane === 'video')
-    .map((r) => vsegs.findIndex((v) => `seg:${v.a}` === r.id))
+    .map((r) => vsegs.findIndex((v, i) => {
+      const duplicate = vsegs.slice(0, i).some(p => p.a === v.a)
+      const id = duplicate ? `seg:${v.a}@${Math.round(v.startMs)}` : `seg:${v.a}`
+      return id === r.id
+    }))
     .filter((i) => i >= 0)
     .sort((a, b) => a - b)
   if (!idxs.length) return none
@@ -1015,8 +1035,12 @@ export function joinVideoSplits(ctx: Pick<OpCtx, 'edits'>, splitSrcMs: readonly 
   if (!splitSrcMs.length || lockedLanes(ctx.edits).has('video')) return null
   const cur = ctx.edits.videoSplits ?? []
   const kept = cur.filter((p) => !splitSrcMs.some((q) => Math.abs(p - q) <= 0.5))
-  if (kept.length === cur.length) return null
-  return { ...ctx.edits, videoSplits: kept }
+  const cuts = ctx.edits.cutRanges ?? []
+  // Join across a removed interval: clicking Join explicitly restores that
+  // source footage, unlike a normal split-marker join which changes no frames.
+  const keptCuts = cuts.filter(([s, e]) => !splitSrcMs.some(q => Math.abs(e - q) <= 1))
+  if (kept.length === cur.length && keptCuts.length === cuts.length) return null
+  return { ...ctx.edits, videoSplits: kept, cutRanges: keptCuts }
 }
 
 /** Delete items. Video segments become cut ranges (never deletes the last segment). */

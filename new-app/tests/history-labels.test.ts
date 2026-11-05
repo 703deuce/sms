@@ -128,6 +128,18 @@ describe('describeEditsChange', () => {
     expect(describeEditsChange(a, c)).toBe('Flipped vertically')
   })
 
+  it('Batch 3 F12 labels split before incidental layout changes', () => {
+    const a = base()
+    const b: ClipEditsV2 = { ...a, videoSplits: [5000], layout: { ...a.layout, mode: 'full_frame' } }
+    expect(describeEditsChange(a, b)).toBe('Split Video clip')
+  })
+
+  it('Batch 3 F12 identifies aspect and timeline toggles', () => {
+    const a = base()
+    expect(describeEditsChange(a, { ...a, aspectRatio: '16:9' })).toBe('Changed aspect to 16:9')
+    expect(describeEditsChange(a, { ...a, timelineOpts: { magnet: false } })).toContain('Timeline magnet')
+  })
+
   it('falls back to Edit', () => {
     const a = base()
     const b = { ...a, layersV: 3 as const }

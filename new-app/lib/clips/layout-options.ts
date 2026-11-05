@@ -75,7 +75,8 @@ export function exportLayoutHint(mode: LayoutOptionId | undefined): string {
 }
 
 /** E4fix: label of the video area in the export mini preview, per saved layout mode. */
-export function layoutMiniPreviewLabel(mode: LayoutOptionId | undefined): string {
+export function layoutMiniPreviewLabel(mode: LayoutOptionId | undefined, aspect?: ExportAspect): string {
+  if (isLandscapeAspect(aspect)) return mode === 'center_crop' ? 'Landscape crop fill' : 'Landscape fit / blur'
   switch (mode) {
     case 'facecam_stack':
       return 'Facecam over gameplay'

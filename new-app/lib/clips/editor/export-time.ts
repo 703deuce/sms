@@ -44,6 +44,31 @@ export function toExportMs(map: ExportTimeMap, ms: number, edge: 'start' | 'end'
   return ms + add
 }
 
+/**
+ * F21: global edit speed changes the visible duration of SOURCE footage, not
+ * the length of inserted gaps/stills (which are post-speed export splices).
+ * These are inverse mappings for ruler, playhead, clip geometry and hit-tests.
+ * Edits remain in their unwarped base-time coordinates.
+ */
+export function speedDisplayMs(map: ExportTimeMap, baseMs: number, rate: number,
+  edge: 'start' | 'end' = 'start'): number {
+  const v = Number.isFinite(rate) && rate > 0 ? rate : 1
+  return baseMs / v + (toExportMs(map, baseMs, edge) - baseMs)
+}
+
+export function speedBaseMs(map: ExportTimeMap, displayMs: number, rate: number,
+  spanMs: number): number {
+  const v = Number.isFinite(rate) && rate > 0 ? rate : 1
+  let inserted = 0
+  for (const w of map.wins) {
+    const from = w.baseMs / v + inserted
+    if (displayMs < from) break
+    if (displayMs < from + w.durMs) return Math.max(0, Math.min(spanMs, w.baseMs - 1))
+    inserted += w.durMs
+  }
+  return Math.max(0, Math.min(spanMs, (displayMs - inserted) * v))
+}
+
 /** A black/silent gap occupies display time but has no corresponding main-video frame. */
 export function gapAtDisplayMs(map: ExportTimeMap, displayMs: number) {
   return map.wins.find(w => w.gap && displayMs >= w.startMs && displayMs < w.endMs) ?? null

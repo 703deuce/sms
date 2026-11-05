@@ -139,6 +139,7 @@ export function PreviewStage({
   clipId = null,
   matteMediaKind = null,
   gapDisplayMs = null,
+  voiceOutputMuted = false,
   videoUrl,
   posterUrl = null,
   edits,
@@ -176,6 +177,8 @@ export function PreviewStage({
   matteMediaKind?: string | null
   /** Export-time cursor over a silent/black insert (there is no source frame). */
   gapDisplayMs?: number | null
+  /** Voice/player mute also covers J/L-cut secondary audio and switched sources. */
+  voiceOutputMuted?: boolean
   videoUrl: string | null
   posterUrl?: string | null
   edits: ClipEditsV2
@@ -365,6 +368,18 @@ export function PreviewStage({
   const lastRateRef = useRef<number | null>(null)
   // TC1 (TL-39): preview-only speed (timeline toolbar); multiplies every element's playbackRate.
   const previewRate = useSyncExternalStore(subscribePreviewRate, getPreviewRate, () => 1)
+  const voiceOutputMutedRef = useRef(voiceOutputMuted)
+  voiceOutputMutedRef.current = voiceOutputMuted
+  useEffect(() => {
+    // Mute every secondary speech source immediately on toggle, even while
+    // paused (the rAF may not have run yet). The rAF restores source-specific
+    // routing when the Voice/player mute is released.
+    if (!voiceOutputMuted) return
+    if (splitAudioRef.current) splitAudioRef.current.muted = true
+    for (const el of Object.values(srcElRefs.current)) {
+      if (el instanceof HTMLVideoElement) el.muted = true
+    }
+  }, [voiceOutputMuted])
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
   const captionTimeRef = useRef(0)
@@ -758,7 +773,7 @@ export function PreviewStage({
           if (on && sseg) {
             const t = segmentMediaMs(sseg, s, src) / 1000
             if (Math.abs(el.currentTime - t) > 0.15) el.currentTime = t
-            const muted = segmentAudio(sseg, s) === 'main'
+            const muted = segmentAudio(sseg, s) === 'main' || voiceOutputMutedRef.current
             if (el.muted !== muted) el.muted = muted
             if (v && el.playbackRate !== v.playbackRate) el.playbackRate = v.playbackRate
             if (v && !v.paused && el.paused) void el.play().catch(() => {})
@@ -777,7 +792,8 @@ export function PreviewStage({
         if (v && splitSrc != null) {
           const t = videoTimeFromSourceMs(splitSrc, mediaOffsetMs)
           if (Math.abs(sa.currentTime - t) > 0.12) sa.currentTime = t
-          const baseMuted = srcMutedMainRef.current ? srcMutedMainRef.current.prev : v.muted
+          const baseMuted = voiceOutputMutedRef.current ||
+            (srcMutedMainRef.current ? srcMutedMainRef.current.prev : v.muted)
           if (sa.muted !== baseMuted) sa.muted = baseMuted
           if (sa.volume !== v.volume) sa.volume = v.volume
           if (sa.playbackRate !== v.playbackRate) sa.playbackRate = v.playbackRate
@@ -793,7 +809,7 @@ export function PreviewStage({
         srcMutedMainRef.current = { prev: v.muted }
         v.muted = true
       } else if (v && !muteMain && srcMutedMainRef.current) {
-        v.muted = srcMutedMainRef.current.prev
+        v.muted = voiceOutputMutedRef.current || srcMutedMainRef.current.prev
         srcMutedMainRef.current = null
       }
       // E4 / G4a: color — main layer by source position (+ color keyframes at output time), B-roll

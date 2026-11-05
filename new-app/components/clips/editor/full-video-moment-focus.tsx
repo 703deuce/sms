@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { clampPickDrag } from '@/lib/clips/editor/highlights'
 import { formatMomentMs } from '@/lib/clips/format-moment-ms'
-import { deriveClipFromEditor } from '@/lib/clips-api'
+import { clipsFetch, deriveClipFromEditor } from '@/lib/clips-api'
 
 export type FullVideoMomentFocus = {
   fromClipId: string
@@ -29,6 +29,16 @@ export function useFullVideoMomentFocus(
   const titleParam = searchParams.get('momentTitle') ?? 'Clip moment'
 
   const [range, setRange] = useState<{ startMs: number; endMs: number } | null>(null)
+  const [currentTitle, setCurrentTitle] = useState<string | null>(null)
+  useEffect(() => {
+    if (!fullVideo || !fromClipId) { setCurrentTitle(null); return }
+    let cancelled = false
+    void clipsFetch<{ clip?: { title?: string } }>(`/api/clips/clips/${encodeURIComponent(fromClipId)}`)
+      .then(data => { if (!cancelled) setCurrentTitle(data.clip?.title?.trim() || null) })
+      .catch(() => { /* retain navigation title when source is unavailable */ })
+    return () => { cancelled = true }
+  }, [fullVideo, fromClipId])
+  const momentTitle = currentTitle ?? titleParam
 
   useEffect(() => {
     if (!fullVideo || !fromClipId) {
@@ -51,7 +61,7 @@ export function useFullVideoMomentFocus(
         const res = await deriveClipFromEditor(fromClipId, {
           trimIn: range.startMs,
           trimOut: range.endMs,
-          title: titleParam.slice(0, 120),
+          title: momentTitle.slice(0, 120),
         })
         toast.success('New clip created', {
           action: {
@@ -63,7 +73,7 @@ export function useFullVideoMomentFocus(
         toast.error(e instanceof Error ? e.message : 'Make clip failed')
       }
     })()
-  }, [fromClipId, range, router, titleParam])
+  }, [fromClipId, range, router, momentTitle])
 
   return useMemo(() => {
     if (!fullVideo || !fromClipId || !range) return null
@@ -71,11 +81,11 @@ export function useFullVideoMomentFocus(
       fromClipId,
       startMs: range.startMs,
       endMs: range.endMs,
-      title: titleParam,
+      title: momentTitle,
       onRangeChange,
       onMakeClip,
     }
-  }, [fullVideo, fromClipId, range, titleParam, onRangeChange, onMakeClip])
+  }, [fullVideo, fromClipId, range, momentTitle, onRangeChange, onMakeClip])
 }
 
 export type MomentFocusLaneProps = {

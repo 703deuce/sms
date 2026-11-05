@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeAudioEdits } from '@/lib/clips/audio'
 import { defaultEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { envelopeFor, addEnvelopePoint, moveEnvelopePoint, envelopePoints } from '@/lib/clips/editor/envelopes'
 import {
   addMusicClip,
   clipGainAt,
@@ -43,6 +44,19 @@ const song = (refId: string, durationMs: number): ProjectMediaItem => ({
   url: 'https://x/y',
   syncMs: null,
   syncStatus: 'none',
+})
+
+describe('Batch 1 F14 — independent Video opacity and Voice volume envelopes', () => {
+  it('renders separate lanes and editing a Voice point leaves Video untouched', () => {
+    expect(envelopeFor('video', 'seg:0')).toEqual({ target: 'video', prop: 'opacity' })
+    expect(envelopeFor('voice', 'voice')).toEqual({ target: 'voice', prop: 'volume' })
+    let edits = base()
+    edits = addEnvelopePoint(edits, 'video', 'opacity', 1000, 75)
+    edits = addEnvelopePoint(edits, 'voice', 'volume', 1000, 80)
+    edits = moveEnvelopePoint(edits, 'voice', 'volume', 1000, 1800, 35)
+    expect(envelopePoints(edits, 'video', 'opacity').points).toEqual([{ tMs: 1000, v: 75 }])
+    expect(envelopePoints(edits, 'voice', 'volume').points).toEqual([{ tMs: 1800, v: 35 }])
+  })
 })
 
 describe('G2 audio model (normalize)', () => {

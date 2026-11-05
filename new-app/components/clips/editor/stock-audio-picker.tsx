@@ -66,7 +66,7 @@ export function StockAudioPicker({
       )
       setHits(data.hits ?? [])
       setAvailable(data.available !== false)
-      setPresets(kind === 'music' && !data.available ? data.presets ?? [] : [])
+      setPresets(kind === 'music' ? data.presets ?? [] : [])
     } finally {
       setBusy(false)
     }
@@ -128,11 +128,37 @@ export function StockAudioPicker({
           Search
         </Button>
       </div>
-      {kind === 'music' && !available ? (
-        <p className="text-[11px] text-muted-foreground">Library not built yet — generate from a preset (same credits as Music).</p>
+      {kind === 'music' ? (
+        <p className="text-[11px] text-muted-foreground">Browse CC0 instrumental loops (no credits), or generate a custom track below.</p>
       ) : null}
-      {kind === 'music' && !available ? (
-        <div className="grid max-h-48 gap-2 overflow-y-auto">
+      <ul className="max-h-48 space-y-1 overflow-y-auto">
+          {hits.map((h) => (
+            <li
+              key={h.id}
+              className="flex items-center justify-between gap-2 rounded border border-border/60 px-2 py-1 text-[11px]"
+              data-testid="stock-audio-hit"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="break-words font-medium" title={h.title}>{h.title}</div>
+                <div className="text-muted-foreground">
+                  {h.mood ? `${h.mood} · ` : ''}
+                  {h.genre ? `${h.genre} · ` : ''}
+                  {h.durationS > 0 ? `${h.durationS}s` : 'Loop'} {h.bpm ? `· ${h.bpm} BPM` : ''}
+                </div>
+                <span className="text-[11px]">{h.license === 'cc0' ? 'CC0' : 'AI-generated'}</span>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <audio src={h.previewUrl} controls preload="none" className="h-7 w-24 min-w-0 sm:w-32" aria-label={`Preview ${h.title}`} />
+                <Button size="xs" disabled={busy} data-testid="stock-audio-add" onClick={() => void addHit(h)}>
+                  {busy ? 'Adding…' : 'Add'}
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      {kind === 'music' && presets.length > 0 ? (
+        <div className="grid max-h-48 gap-2 overflow-y-auto" data-testid="stock-audio-generation-presets">
+          <p className="text-[11px] font-medium text-muted-foreground">Generate more music (credits)</p>
           {presets.slice(0, 12).map((p) => (
             <div key={p.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs" data-testid="stock-audio-preset">
               <span>
@@ -144,33 +170,7 @@ export function StockAudioPicker({
             </div>
           ))}
         </div>
-      ) : (
-        <ul className="max-h-48 space-y-1 overflow-y-auto">
-          {hits.map((h) => (
-            <li
-              key={h.id}
-              className="flex items-center justify-between gap-2 rounded border border-border/60 px-2 py-1 text-[11px]"
-              data-testid="stock-audio-hit"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{h.title}</div>
-                <div className="text-muted-foreground">
-                  {h.mood ? `${h.mood} · ` : ''}
-                  {h.genre ? `${h.genre} · ` : ''}
-                  {h.durationS}s {h.bpm ? `· ${h.bpm} BPM` : ''}
-                </div>
-                <span className="text-[11px]">{h.license === 'cc0' ? 'CC0' : 'AI-generated'}</span>
-              </div>
-              <div className="flex shrink-0 gap-1">
-                <audio src={h.previewUrl} controls className="h-6 max-w-[100px]" />
-                <Button size="xs" disabled={busy} data-testid="stock-audio-add" onClick={() => void addHit(h)}>
-                  {busy ? 'Adding…' : 'Add'}
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      ) : null}
       {kind === 'music' && available && moods.length ? (
         <div className="flex flex-wrap gap-1">
           {moods.slice(0, 6).map((m) => (

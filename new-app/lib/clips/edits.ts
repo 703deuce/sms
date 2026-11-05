@@ -1,6 +1,6 @@
 import { normalizeAudioEdits, type ClipEditsAudio } from '@/lib/clips/audio'
 import { normalizeBrollItems, type BrollItem } from '@/lib/clips/broll'
-import { parseExportAspect, type ExportAspect } from '@/lib/clips/export-aspect'
+import { isLandscapeAspect, parseExportAspect, type ExportAspect } from '@/lib/clips/export-aspect'
 import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
 import { clampZoomIntensity } from '@/lib/clips/zoom-keyframes'
 import type { SilenceTrimSettings } from '@/lib/clips/silence-trim'
@@ -677,7 +677,9 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       blurStrength: normalizeFitBlurStrength((layoutRaw as { blurStrength?: unknown }).blurStrength),
       splitScreenFallback:
         (layoutRaw as { splitScreenFallback?: unknown }).splitScreenFallback === true ? true : undefined,
-      template: normalizeLayoutTemplate((layoutRaw as { template?: unknown }).template),
+      template: isLandscapeAspect(aspectRatio) && (layoutRaw as { template?: { id?: string } }).template?.id === 'I2'
+        ? undefined
+        : normalizeLayoutTemplate((layoutRaw as { template?: unknown }).template),
     },
     aspectRatio,
     broll: normalizeBrollItems(o.broll, outputDurationMs({ ...base, ...o, v: 2 } as ClipEditsV2)),
@@ -990,9 +992,13 @@ export function orderedKeepSegments(edits: ClipEditsV2): [number, number][] {
 export function displayDurationMs(edits: ClipEditsV2): number {
   const speed = normalizeEditSpeed(edits.speed) ?? 1
   // E4: per-item speeds warp the edit timeline before the global speed (export_post order).
+  const ordered = orderedKeepSegments(edits)
+  // F2: duplicated source footage and main-track reorder are stored in
+  // sectionOrder. The old shortcut outputDurationMs(edits) ignores that EDL
+  // completely, so header/export-clock stayed at the original source length.
   const base = edits.segmentSpeeds?.length
-    ? warpedDurationMs(speedWarpPieces(orderedKeepSegments(edits), edits.segmentSpeeds))
-    : outputDurationMs(edits)
+    ? warpedDurationMs(speedWarpPieces(ordered, edits.segmentSpeeds))
+    : ordered.reduce((total, [a, b]) => total + b - a, 0)
   // TC1fix: inserts / gaps are spliced into the finished export (after speed) — they lengthen it.
   return Math.round(base / speed) + (edits.inserts ?? []).reduce((s, i) => s + i.durMs, 0)
 }

@@ -688,6 +688,8 @@ export function EditorShell({
     [applyCleanupCut],
   )
 
+  const [playbackLoopOn, setPlaybackLoopOn] = useState(false)
+  const togglePlaybackLoop = useCallback(() => setPlaybackLoopOn((on) => !on), [])
   const toggleLoopFriendly = useCallback(() => {
     setEdits({ ...edits, loopFriendlyEnd: !(edits.loopFriendlyEnd ?? false) })
   }, [edits, setEdits])
@@ -1438,6 +1440,8 @@ export function EditorShell({
     [],
   )
   const audioMeter = useAudioMix({
+    clipId,
+    mediaKind: matteMediaKind,
     musicRate,
     videoRef,
     edits: renderEdits,
@@ -1450,6 +1454,8 @@ export function EditorShell({
     playing,
     outputDurationMs: outDur,
     voiceMuted: laneVoiceMuted,
+    playerMuted,
+    playerVolume,
     meterOn,
   })
   const peakLevels = usePeakLevels(meterOn ? audioMeter.analysers : null)
@@ -1764,7 +1770,8 @@ export function EditorShell({
       v.pause()
       return
     }
-    v.volume = playerVolume / 100
+    // An explicit Play gesture unlocks the Web Audio graph as well as the video.
+    void audioMeter.resumeAudio()?.catch(() => {})
     const mode = await playWithSound(v)
     if (mode === 'muted') {
       setPlayerMuted(true)
@@ -1798,12 +1805,8 @@ export function EditorShell({
     }
   }, [clipRec, laneVoiceMuted, outputMs, playerMuted, recPlacement, togglePlay])
 
-  useEffect(() => {
-    const v = videoRef.current
-    if (!v || useDubAudio) return
-    v.muted = playerMuted || laneVoiceMuted
-    v.volume = playerVolume / 100
-  }, [laneVoiceMuted, playerMuted, playerVolume, useDubAudio, videoUrl])
+  // AudioMix owns the main sound state, including CORS-safe Web Audio and plain
+  // video fallback. Do not race its envelope/track-FX gain control here.
 
   const deleteSelection = useCallback(() => {
     const sel = selectionRef.current
@@ -2778,6 +2781,7 @@ export function EditorShell({
         videoRef={videoRef}
         onTick={onTick}
         gapDisplayMs={gapPreview?.displayMs ?? null}
+        voiceOutputMuted={laneVoiceMuted || playerMuted || Boolean(useDubAudio) || audioMeter.voiceFxProxyActive}
         channelDisplay={streamChannelDisplay}
         chatPreviewEnabled={streamChatAvailable}
         media={editorMedia}
@@ -2930,11 +2934,14 @@ export function EditorShell({
                 <ClipRecordMenu disabled disabledReason="Recording needs a secure origin and microphone access" onPick={() => undefined} />
               )
             }
-            viewSummary={`Loop ${edits.loopFriendlyEnd === false ? 'off' : 'on'} · ${previewQuality === 'auto' ? 'Auto' : previewQuality}`}
+            viewSummary={`Loop ${playbackLoopOn ? 'on' : 'off'} · ${previewQuality === 'auto' ? 'Auto' : previewQuality}`}
             viewMenuBody={
               <div className="flex flex-col gap-2" data-testid="preview-chip-row">
+                <button type="button" className={previewChipButtonClass()} onClick={togglePlaybackLoop} aria-pressed={playbackLoopOn} data-testid="player-loop-toggle">
+                  Loop in–out {playbackLoopOn ? 'on' : 'off'}
+                </button>
                 <button type="button" className={previewChipButtonClass()} onClick={toggleLoopFriendly}>
-                  Loop trim {edits.loopFriendlyEnd === false ? 'off' : 'on'}
+                  Loop-friendly ending {edits.loopFriendlyEnd === false ? 'off' : 'on'}
                 </button>
                 <Select
                   value={previewQuality}
@@ -3097,25 +3104,23 @@ export function EditorShell({
                       if (!v) return
                       const next = !playerMuted
                       setPlayerMuted(next)
-                      v.muted = next
-                      if (!next) {
-                        v.volume = playerVolume / 100
-                        void playWithSound(v)
-                      }
+                      v.muted = next || laneVoiceMuted || useDubAudio || audioMeter.voiceFxProxyActive
+                      // Unmuting must not start a paused video or bypass Voice FX.
+                      if (!next) void audioMeter.resumeAudio()?.catch(() => {})
                     }}
                     onVolumeChange={(pct) => {
                       setPlayerVolume(pct)
-                      const v = videoRef.current
-                      if (v) {
-                        v.volume = pct / 100
-                        if (pct > 0) {
-                          v.muted = false
-                          setPlayerMuted(false)
-                        }
-                      }
+                      if (pct > 0) setPlayerMuted(false)
                     }}
                     meterSlot={meterOn ? <AudioMeter levels={peakLevels} voiceMetered={audioMeter.voiceMetered} /> : null}
                   />
+                  {edits.inserts?.some(i => i.sourceId === 'gap') ? (
+                    <span className="ml-1 shrink-0 text-[10px] text-muted-foreground"
+                      title="Total duration includes inserted black/silent gaps. Magnet-off deletion replaces removed footage with an equal-length gap, so the total time does not shrink."
+                      data-testid="editor-duration-gap-indicator">
+                      Includes {(edits.inserts.filter(i => i.sourceId === 'gap').reduce((total, i) => total + i.durMs, 0) / 1000).toFixed(1)}s gap
+                    </span>
+                  ) : null}
                 </>
               )
             }
@@ -3901,6 +3906,8 @@ export function EditorShell({
             onRedo={redo}
             canUndo={canUndo}
             canRedo={canRedo}
+            loopOn={playbackLoopOn}
+            onLoopChange={setPlaybackLoopOn}
             historySlot={historyPanel}
             onCollapsedChange={setTimelineCollapsed}
             controlledCollapsed={timelineCollapsed}

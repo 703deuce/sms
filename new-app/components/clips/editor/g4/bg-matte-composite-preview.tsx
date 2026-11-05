@@ -1,18 +1,18 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { BgRemoval } from '@/lib/clips/editor/bg-removal'
+import { refineAlpha, type BgRemoval } from '@/lib/clips/editor/bg-removal'
 
 /** Convert a grayscale person-matte frame into pixel alpha. */
 export function applyMatteAlpha(
   foreground: Uint8ClampedArray,
   mask: Uint8ClampedArray,
+  feather = 0,
+  choke = 0,
 ): void {
   for (let i = 0; i < foreground.length; i += 4) {
-    foreground[i + 3] = Math.round(
-      (0.2126 * mask[i]! + 0.7152 * mask[i + 1]! + 0.0722 * mask[i + 2]!) *
-      (foreground[i + 3]! / 255),
-    )
+    const raw = (0.2126 * mask[i]! + 0.7152 * mask[i + 1]! + 0.0722 * mask[i + 2]!) / 255
+    foreground[i + 3] = Math.round(refineAlpha(raw, feather, choke) * foreground[i + 3]!)
   }
 }
 
@@ -169,11 +169,18 @@ export function BgMatteCompositePreview({
         const maskFit = fitVideoFrame(maskVideo.videoWidth, maskVideo.videoHeight, w, h, fit)
         fc.drawImage(source, pic.sx, pic.sy, pic.sw, pic.sh, pic.dx, pic.dy, pic.dw, pic.dh)
         mc.clearRect(0, 0, w, h)
+        // Mirror worker/clips_worker/bg_removal.py refine_params: Gaussian
+        // feather first, then choke/expand alpha range in applyMatteAlpha.
+        const feather = removal?.refine.feather ?? 0
+        const choke = removal?.refine.choke ?? 0
+        const sigma = Math.max(feather / 100 * 0.010 * Math.min(w, h), Math.abs(choke) / 100 * 0.006 * Math.min(w, h))
+        mc.filter = sigma > 0 ? `blur(${sigma}px)` : 'none'
         mc.drawImage(maskVideo, maskFit.sx, maskFit.sy, maskFit.sw, maskFit.sh, maskFit.dx, maskFit.dy, maskFit.dw, maskFit.dh)
+        mc.filter = 'none'
         const src = fc.getImageData(0, 0, w, h)
         const mask = mc.getImageData(0, 0, w, h)
         // Soft, grayscale matte: luminance is the subject alpha.
-        applyMatteAlpha(src.data, mask.data)
+        applyMatteAlpha(src.data, mask.data, removal?.refine.feather ?? 0, removal?.refine.choke ?? 0)
         fg.putImageData(src, 0, 0)
         ctx.clearRect(0, 0, w, h)
         const background = removal?.background

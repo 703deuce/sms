@@ -1,4 +1,5 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { isLandscapeAspect } from '@/lib/clips/export-aspect'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import { resolveTemplateGeometryById, type TemplateSpecV2 } from '@/lib/clips/templates/geometry'
 import { autoTemplateSegments, sceneSignals, segmentAt } from '@/lib/clips/templates/scenes'
@@ -18,6 +19,9 @@ export function editorTemplateSpec(
   if (!t6TemplatesEnabled()) return null
   const tid = edits.layout?.template?.id
   if (!tid) return null
+  // I2's portrait bands squeeze landscape footage into a 32%-height strip.
+  // On landscape use the ordinary fit/blur presentation instead of portrait template geometry.
+  if (tid === 'I2' && isLandscapeAspect(edits.aspectRatio)) return null
   const signals = signalsOrDefaults(aiMeta ?? null)
   const segs = sourceMs == null ? null : autoTemplateSegments(edits, signals)
   if (segs && signals.scenes) {

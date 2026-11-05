@@ -17,6 +17,8 @@ import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import { TemplateStage } from '@/components/clips/editor/template-stage'
 import { resolveTemplateGeometry } from '@/lib/clips/templates/geometry'
 import { templateLayoutPatch } from '@/lib/clips/editor/starter-templates'
+import { isLandscapeAspect } from '@/lib/clips/export-aspect'
+import { toast } from 'sonner'
 
 const LANES: TemplateLane[] = ['gaming', 'irl', 'just_chatting', 'podcast']
 
@@ -53,6 +55,7 @@ export function TemplateLayoutPanel({
     const t = T6_TEMPLATES_BY_ID[id]
     if (!t) return
     // E4: shared with the Templates picker (identical edits from both places).
+    if (t.id === 'I2' && isLandscapeAspect(edits.aspectRatio)) toast.message('I2 is a portrait design; using a full-size blur layout for landscape video.')
     onEdits(templateLayoutPatch(edits, t, { auto, reason, family }))
   }
 

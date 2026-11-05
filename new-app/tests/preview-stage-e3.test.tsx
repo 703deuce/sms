@@ -12,6 +12,36 @@ const bounds = { clipStartMs: 0, clipEndMs: 20000 }
 afterEach(cleanup)
 
 describe('PreviewStage E3 layers', () => {
+  it('F1 mutes the separate J/L-cut speech element when the Voice lane is muted', () => {
+    const edits = normalizeEdits({
+      v: 2, trim: { in: 0, out: 20_000 },
+      cutRanges: [[9_000, 10_000]],
+      splitEdits: [{ atMs: 10_000, audioMs: 300 }],
+    }, bounds)
+    const stage = render(<PreviewStage
+      videoUrl="https://example.com/video.mp4"
+      edits={edits}
+      words={[]}
+      cropTrack={null}
+      videoRef={{ current: null }}
+      onTick={vi.fn()}
+      voiceOutputMuted={false}
+    />)
+    const extra = stage.getByTestId('preview-split-audio') as HTMLVideoElement
+    expect(extra.muted).toBe(false)
+    stage.rerender(<PreviewStage
+      videoUrl="https://example.com/video.mp4"
+      edits={edits}
+      words={[]}
+      cropTrack={null}
+      videoRef={{ current: null }}
+      onTick={vi.fn()}
+      voiceOutputMuted
+    />)
+    expect(extra.muted).toBe(true)
+  })
+
+
   it('renders the transition clones, sorted B-roll boxes and keeps the main video unique', () => {
     const edits = normalizeEdits(
       {

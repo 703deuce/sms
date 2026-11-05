@@ -1,7 +1,9 @@
 'use client'
 
+import { shouldWrapLoop } from '@/lib/clips/editor/loop-playback'
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { exportTimeMap, seekBaseMs, toBaseMs, toExportMs } from '@/lib/clips/editor/export-time'
+import { exportTimeMap, seekBaseMs, toBaseMs, toExportMs, speedDisplayMs, speedBaseMs } from '@/lib/clips/editor/export-time'
 import { parseNudge } from '@/lib/clips/editor/timecode-nudge'
 import { readTimelineHeight, clampTimelineHeight, TIMELINE_MIN_H, writeTimelineHeight } from '@/lib/clips/editor/timeline-opts'
 import { clampLaneH, laneHeights, readLaneHeights, writeLaneHeights } from '@/lib/clips/editor/lane-heights'
@@ -12,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from 'sonner'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { wordDisplayText } from '@/lib/clips/edits'
+import { wordDisplayText, normalizeEditSpeed } from '@/lib/clips/edits'
 import { clampTrimWithMediaBounds } from '@/lib/clips/trim-bounds'
 import { HighlightsLane } from '@/components/clips/editor/timeline/highlights-lane'
 import { FullVideoMomentLane, type FullVideoMomentFocus } from '@/components/clips/editor/full-video-moment-focus'
@@ -227,7 +229,7 @@ const VIDEO_WORDBAR_H = 18
 const LONG_MEDIA_MS = 10 * 60 * 1000
 /** Timeline-side view of a B-roll media row (filmstrip source). */
 type TimelineBrollMedia = { id: string; url: string | null; thumbUrl?: string; mediaType?: string }
-const SNAP_PX = 8
+const SNAP_PX = 12
 const DRAG_SLOP_PX = 3
 
 const LANE_COLORS: Record<LaneId, string> = {
@@ -353,6 +355,8 @@ export function Timeline({
   onRedo,
   canUndo = false,
   canRedo = false,
+  loopOn = false,
+  onLoopChange,
   historySlot,
   onCollapsedChange,
   controlledCollapsed,
@@ -417,6 +421,8 @@ export function Timeline({
   onRedo?: () => void
   canUndo?: boolean
   canRedo?: boolean
+  loopOn?: boolean
+  onLoopChange?: (enabled: boolean) => void
   historySlot?: React.ReactNode
   /** Synchronize the mini-strip height with the containing editor workspace. */
   onCollapsedChange?: (collapsed: boolean) => void
@@ -524,10 +530,13 @@ export function Timeline({
   // TC2: lanes are drawn in EXPORT time — inserts (gaps, freeze frames, inserted clips) take their
   // length on the lane and push later items right. Edits stay in base time; identity without inserts.
   const tmap = useMemo(() => exportTimeMap(tb.segs, edits.inserts), [tb.segs, edits.inserts])
-  const dspan = span + tmap.totalMs
+  // F21: the ruler and every clip bar display exported time. A 31s
+  // source at 1.5× occupies ~20.7s, while added gaps retain full length.
+  const globalSpeed = normalizeEditSpeed(edits.speed) ?? 1
+  const dspan = span / globalSpeed + tmap.totalMs
   // B2: preserve the untrimmed source extent as spare space after shortening either edge.
   // Otherwise trackWidthPx refits to the shorter clip and the same pointer cannot extend it again.
-  const originalSpanMs = Math.max(0, clipEndMs - Math.min(clipStartMs, previewEdits.trim.in))
+  const originalSpanMs = Math.max(0, clipEndMs - Math.min(clipStartMs, previewEdits.trim.in)) / globalSpeed
   const rulerSpanMs = Math.max(dspan, trimScaleFloorMs ?? 0)
   const minPx = timelineMinPxPerSec(rulerSpanMs, trackViewportPx)
   const minPxRef = useRef(minPx)
@@ -541,17 +550,19 @@ export function Timeline({
     [highlights, tb],
   )
   /** Base ms → lane px: `xs` for starts / seek points (after an insert there), `xe` for ends. */
-  const xs = (ms: number) => toExportMs(tmap, ms, 'start') * pxPerMs
-  const xe = (ms: number) => toExportMs(tmap, ms, 'end') * pxPerMs
-  /** Lane px → base ms (a point inside an insert → its base point). */
-  const msAtPx = (px: number) => seekBaseMs(tmap, px / Math.max(1e-6, pxPerMs), span)
+  const xs = (ms: number) => speedDisplayMs(tmap, ms, globalSpeed, 'start') * pxPerMs
+  const xe = (ms: number) => speedDisplayMs(tmap, ms, globalSpeed, 'end') * pxPerMs
+  /** Lane px → base edit ms, including speed and inserted gaps. */
+  const msAtPx = (px: number) => speedBaseMs(tmap, px / Math.max(1e-6, pxPerMs), globalSpeed, span)
 
   const widthRef = useRef(widthPx)
   widthRef.current = widthPx
 
   const playheadMs = Math.max(0, Math.min(span, outputMs))
   const liveOutMs = playheadOutMsRef?.current ?? playheadMs
-  const playheadPx = gapDisplayMs != null ? gapDisplayMs * pxPerMs : xe(liveOutMs)
+  const playheadPx = gapDisplayMs != null
+    ? (gapDisplayMs - toBaseMs(tmap, gapDisplayMs) + toBaseMs(tmap, gapDisplayMs) / globalSpeed) * pxPerMs
+    : xe(liveOutMs)
   const playheadPct = (playheadPx / Math.max(1, widthPx)) * 100
   const playheadPxRef = useRef(playheadPx)
   playheadPxRef.current = playheadPx
@@ -916,6 +927,10 @@ export function Timeline({
   const editable = Boolean(onCommitEdits)
 
   const [selected, setSelected] = useState<ItemRef[]>([])
+  const [clipboardRevision, setClipboardRevision] = useState(0)
+  // The clipboard is a module-level store. Explicitly refresh command
+  // availability on Copy/Cut so Paste never appears active while empty.
+  void clipboardRevision
   const applyBeatCut = useCallback(
     (every: 1 | 2 | 4) => {
       if (!onCommitEdits || !cutBeatsMs.length) {
@@ -1136,7 +1151,6 @@ export function Timeline({
   // box-select rectangle (track-area px), speed-control focus request.
   const [markerPanel, setMarkerPanel] = useState<{ focusId: string | null } | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [loopOn, setLoopOn] = useState(false)
   const previewRate = useSyncExternalStore(subscribePreviewRate, getPreviewRate, () => 1)
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const speedSlotRef = useRef<HTMLDivElement | null>(null)
@@ -1403,13 +1417,15 @@ export function Timeline({
       const r = cutItems(opCtx(), refs)
       if (!r) return false
       timelineClipboard.set(selCompound ? { ...r.clip, compound: { ...selCompound.compound } } : r.clip)
+      setClipboardRevision(n => n + 1)
       commit(r.edits)
       setSelected([])
       toast.message(`Cut ${r.clip.entries.length} item${r.clip.entries.length > 1 ? 's' : ''}`, { id: 'timeline-clipboard' })
     } else {
-      const c = copyItems(edits, refs)
+      const c = copyItems(edits, refs, previewEdits)
       if (!c) return false
       timelineClipboard.set(selCompound ? { ...c, compound: { ...selCompound.compound } } : c)
+      setClipboardRevision(n => n + 1)
       toast.message(`Copied ${c.entries.length} item${c.entries.length > 1 ? 's' : ''}`, { id: 'timeline-clipboard' })
     }
     return true
@@ -1428,6 +1444,7 @@ export function Timeline({
         : null
     commit(e2 ?? r.edits)
     setSelected(r.refs)
+    toast.success(r.refs.length ? 'Pasted at playhead' : 'Pasted video footage at playhead', { id: 'timeline-clipboard' })
     if (r.skipped) toast.message(`${r.skipped} item${r.skipped > 1 ? 's' : ''} can't be placed twice (AI / library sounds)`, { id: 'timeline-clipboard' })
     return true
   }
@@ -1435,13 +1452,14 @@ export function Timeline({
     if (!editable) return false
     const src = selCompound
     const r = duplicateItems(opCtx(), liveSelected)
-    if (!r) return false
+    if (!r) { toast.message('This clip cannot be duplicated here', { id: 'timeline-clipboard' }); return false }
     const wrapped =
       src && r.refs.length >= 2
         ? createCompound(r.edits, r.refs, `c_${Date.now().toString(36)}`, undefined, `${src.compound.name} copy`)
         : null
     commit(wrapped ?? r.edits)
     setSelected(r.refs)
+    toast.success('Duplicated selected footage', { id: 'timeline-clipboard' })
     return true
   }
   const pasteAttrs = () => {
@@ -1585,7 +1603,7 @@ export function Timeline({
       toast.message('Mark in and out first (I / O), then loop', { id: 'timeline-loop' })
       return true
     }
-    setLoopOn((v) => !v)
+    onLoopChange?.(!loopOn)
     return true
   }
   const trimToPlayhead = (edge: 'start' | 'end'): boolean => {
@@ -1652,10 +1670,10 @@ export function Timeline({
     loopPrevRef.current = outputMs
     if (!loopOn || !range) return
     const [a, b] = range
-    if (prev >= a && prev < b && outputMs >= b && outputMs - prev < 1500) onSeekOutput(a)
+    if (shouldWrapLoop(prev, outputMs, [a, b], loopOn)) onSeekOutput(a)
   }, [outputMs, loopOn, range?.[0], range?.[1]]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (loopOn && !range) setLoopOn(false)
+    if (loopOn && !range) onLoopChange?.(false)
   }, [loopOn, range])
 
   const runCommand = (cmd: TimelineCommand): boolean => {
@@ -1969,8 +1987,8 @@ export function Timeline({
     { id: 'delete', group: 'Edit', label: 'Delete selected', keys: 'Del', run: () => void del(), disabled: !editable || !liveSelected.length },
     { id: 'copy', group: 'Edit', label: 'Copy', keys: `${mk}C`, run: () => void copySel(false) },
     { id: 'cut', group: 'Edit', label: 'Cut', keys: `${mk}X`, run: () => void copySel(true), disabled: !editable },
-    { id: 'paste', group: 'Edit', label: 'Paste at playhead', keys: `${mk}V`, run: () => void paste(), disabled: !editable },
-    { id: 'duplicate', group: 'Edit', label: 'Duplicate', keys: `${mk}D`, run: () => void duplicate(), disabled: !editable },
+    { id: 'paste', group: 'Edit', label: 'Paste at playhead', keys: `${mk}V`, run: () => void paste(), disabled: !editable || !timelineClipboard.get() },
+    { id: 'duplicate', group: 'Edit', label: 'Duplicate', keys: `${mk}D`, run: () => void duplicate(), disabled: !editable || !copyableRefs(liveSelected).length },
     { id: 'pasteAttrs', group: 'Edit', label: 'Paste attributes', keys: `${mk}Shift+V`, run: () => void pasteAttrs(), disabled: !editable },
     { id: 'trimStart', group: 'Edit', label: 'Trim start to playhead', keys: '[', run: () => void trimToPlayhead('start'), disabled: !editable },
     { id: 'trimEnd', group: 'Edit', label: 'Trim end to playhead', keys: ']', run: () => void trimToPlayhead('end'), disabled: !editable },
@@ -1985,9 +2003,16 @@ export function Timeline({
     { id: 'replaceGap', group: 'Edit', label: 'Replace selected main clip with gap', run: () => void replaceSelWithGap(), disabled: !editable || !liveSelected.some((r) => r.lane === 'video') },
     { id: 'speed', group: 'Edit', label: 'Speed of the clip under the playhead', keys: `${mk}R`, run: () => void openSpeed(), disabled: !editable },
     {
+      id: 'joinPrev',
+      group: 'Edit',
+      label: 'Join with previous (restore removed cut if needed)',
+      run: () => { if (joinOpts.prev !== null) join([joinOpts.prev]) },
+      disabled: !editable || joinOpts.prev === null,
+    },
+    {
       id: 'joinNext',
       group: 'Edit',
-      label: 'Join with next',
+      label: 'Join with next (restore removed cut if needed)',
       run: () => {
         if (joinOpts.next !== null) join([joinOpts.next])
       },
@@ -2312,7 +2337,7 @@ export function Timeline({
     const state: DragState = { mode: 'move', item, refs: [{ lane: 'video', id: item.id }], originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, reorder: true, insertBefore: undefined }
     setDrag(state)
     const slotFromPointer = (dx: number) => {
-      const pointerMs = grabMs + dx / Math.max(1e-6, pxPerMs)
+      const pointerMs = grabMs + dx * globalSpeed / Math.max(1e-6, pxPerMs)
       const before = reorderInsertBefore(lanes.video, item.id, pointerMs)
       return isNoopReorder(lanes.video, item.id, before) ? undefined : before
     }
@@ -2320,7 +2345,7 @@ export function Timeline({
       const dx = ev.clientX - state.originX
       if (!state.moved && Math.abs(dx) < Math.max(4, DRAG_SLOP_PX)) return
       state.moved = true
-      state.deltaMs = dx / Math.max(1e-6, pxPerMs)
+      state.deltaMs = dx * globalSpeed / Math.max(1e-6, pxPerMs)
       state.insertBefore = slotFromPointer(dx)
       setDrag({ ...state })
     }
@@ -2378,6 +2403,12 @@ export function Timeline({
     // N15: clicking a clip selects it, without seeking. Only ruler and empty lane seek.
     const key = refKey(item)
     const multi = e.shiftKey || e.metaKey || e.ctrlKey
+    if (multi) {
+      // F35: Shift-click is a timeline selection gesture, not browser text selection.
+      // Prevent the native anchor/range selection before processing the clip.
+      e.preventDefault()
+      window.getSelection()?.removeAllRanges()
+    }
     if (refLocked(edits, item)) {
       lockedClickRef.current = item.lane
       return
@@ -2474,25 +2505,42 @@ export function Timeline({
       // (display delta → base delta at the dragged edge), not off by the insert's length.
       const anchor = dragMode === 'end' ? item.endMs : item.startMs
       const rule = dragMode === 'end' ? 'end' : 'start'
+      // F3: outer main-video handles must move beyond the CURRENT edit span to
+      // recover trimmed source frames. Mapping a negative/after-end display
+      // position through toBaseMs clamps it to the edited timeline and traps
+      // the edge permanently. Use signed pointer deltas for those handles.
+      const outerSourceTrim = item.lane === 'video' && dragMode !== 'move' &&
+        (dragMode === 'start'
+          ? item.srcInMs != null && item.srcInMs <= previewEdits.trim.in + 1
+          : item.srcOutMs != null && item.srcOutMs >= previewEdits.trim.out - 1)
       const raw =
-        slideTool && item.lane === 'video'
-          ? dx / Math.max(1e-6, pxPerMs)
+        outerSourceTrim || (slideTool && item.lane === 'video')
+          ? dx * globalSpeed / Math.max(1e-6, pxPerMs)
           : tmap.totalMs
-            ? toBaseMs(tmap, Math.max(0, toExportMs(tmap, anchor, rule) + dx / Math.max(1e-6, pxPerMs))) - anchor
-            : dx / Math.max(1e-6, pxPerMs)
+            ? speedBaseMs(tmap, Math.max(0, speedDisplayMs(tmap, anchor, globalSpeed, rule) + dx / Math.max(1e-6, pxPerMs)), globalSpeed, span) - anchor
+            : dx * globalSpeed / Math.max(1e-6, pxPerMs)
       const snapping = snapOn && !ev.altKey
       if (ev.altKey) state.alt = true
       if (dragMode === 'move') {
         const edges = moving.flatMap((m) => [m.startMs, m.endMs])
-        const s =
-          snapping && !slideTool ? snapMoveDelta(edges, raw, targets, thr) : { deltaMs: raw, snappedTo: null }
-        state.deltaMs = s.deltaMs
-        state.snappedTo = s.snappedTo
+        const s = snapping && !slideTool
+          ? snapMoveDelta(edges, raw, targets, thr)
+          : { deltaMs: raw, snappedTo: null }
+        // F11: the red playhead is the strongest editing target. Dense word
+        // edges must not steal the snap when an edge is also near the playhead.
+        const playheadEdge = snapping && !slideTool
+          ? edges.map(edge => ({ edge, d: Math.abs(edge + raw - playheadMs) }))
+              .sort((a, b) => a.d - b.d)[0] : null
+        const strong = playheadEdge && playheadEdge.d <= thr
+          ? { deltaMs: playheadMs - playheadEdge.edge, snappedTo: playheadMs } : null
+        state.deltaMs = strong?.deltaMs ?? s.deltaMs
+        state.snappedTo = strong?.snappedTo ?? s.snappedTo
       } else {
         const edge = dragMode === 'start' ? item.startMs : item.endMs
         const s = snapping ? snapValue(edge + raw, targets, thr) : { ms: edge + raw, snappedTo: null }
-        state.deltaMs = s.ms - edge
-        state.snappedTo = s.snappedTo
+        const nearPlayhead = snapping && Math.abs(edge + raw - playheadMs) <= thr
+        state.deltaMs = (nearPlayhead ? playheadMs : s.ms) - edge
+        state.snappedTo = nearPlayhead ? playheadMs : s.snappedTo
       }
       // B2: the live trim boundary must be the same boundary that trimItem will commit.
       // Clamp outer main-video edges against the actual source-media bounds, not the
@@ -2860,8 +2908,8 @@ export function Timeline({
     const geo = shown(item)
     const left = xs(geo.startMs)
     const w = Math.max(2, xe(geo.endMs) - left)
-    const displayStartMs = toExportMs(tmap, item.startMs, 'start')
-    const displayEndMs = toExportMs(tmap, item.endMs, 'end')
+    const displayStartMs = speedDisplayMs(tmap, item.startMs, globalSpeed, 'start')
+    const displayEndMs = speedDisplayMs(tmap, item.endMs, globalSpeed, 'end')
     const st = itemState(item)
     const isSel = selectedKeys.has(refKey(item))
     // TC1: deactivated items stay on the timeline, dimmed + striped.
@@ -3172,7 +3220,7 @@ export function Timeline({
   return (
     <div
       ref={rootRef}
-      className="relative flex h-full max-h-full min-h-0 min-w-0 flex-col gap-1 overflow-y-auto focus-visible:outline-none"
+      className="relative flex h-full max-h-full min-h-0 min-w-0 select-none flex-col gap-1 overflow-y-auto focus-visible:outline-none"
       tabIndex={-1}
       onKeyDown={onKeyDown}
       data-testid="timeline-root"
@@ -3279,8 +3327,8 @@ export function Timeline({
         previewRate={previewRate}
         setPaletteOpen={setPaletteOpen}
         range={range}
-        joinVisible={Boolean(editable && joinOpts.between.length)}
-        onJoin={() => join(joinOpts.between)}
+        joinVisible={Boolean(editable && (joinOpts.between.length || joinOpts.next !== null || joinOpts.prev !== null))}
+        onJoin={() => join(joinOpts.between.length ? joinOpts.between : joinOpts.next != null ? [joinOpts.next] : joinOpts.prev != null ? [joinOpts.prev] : [])}
         selectionCount={liveSelected.length}
         openCompound={openCompound}
         compoundBanner={
@@ -3540,7 +3588,7 @@ export function Timeline({
               className="relative shrink-0"
               role="presentation"
               data-testid="timeline-track"
-              data-duration-ms={Math.round(span)}
+              data-duration-ms={Math.round(dspan)}
               data-tool={tool}
               style={{ width: widthPx, height: totalH, cursor: tool === 'hand' ? 'grab' : tool === 'blade' ? 'crosshair' : undefined }}
               onPointerDown={(e) => {
@@ -3611,7 +3659,7 @@ export function Timeline({
                 <div
                   key={`insshade${w.id}`}
                   className="pointer-events-none absolute bottom-0 z-[18] bg-[repeating-linear-gradient(135deg,rgba(0,0,0,0.55)_0_4px,rgba(0,0,0,0.25)_4px_8px)]"
-                  style={{ left: w.startMs * pxPerMs, width: Math.max(2, w.durMs * pxPerMs), top: RULER_H }}
+                  style={{ left: (w.baseMs / globalSpeed + w.startMs - w.baseMs) * pxPerMs, width: Math.max(2, w.durMs * pxPerMs), top: RULER_H }}
                   title="Inserted time: overlays pause here in the export"
                   data-testid="timeline-insert-shade"
                   aria-hidden
@@ -3730,12 +3778,13 @@ export function Timeline({
                             type="button"
                             className="absolute top-1.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] border border-violet-400/45 bg-violet-500/20 px-1.5 text-left text-[11px] leading-4 text-foreground/90 hover:bg-violet-500/30"
                             style={{ left: xs(p.s), width: Math.max(6, xe(p.e) - xs(p.s)), height: Math.min(24, Math.max(16, LANE_H.text - 12)) }}
-                            title={`Caption: ${p.text} (edit wording in Captions or Script)`}
+                            title={`Auto caption: ${p.text}. Click to select captions; edit in Captions or Script. Text track hide only affects added text.`}
                             data-testid="timeline-caption-block"
                             onPointerDown={(ev) => ev.stopPropagation()}
                             onClick={(ev) => {
                               ev.stopPropagation()
                               onSeekOutput(p.s)
+                              setCaptionsLaneSelected(true)
                             }}
                           >
                             {p.text}
@@ -4184,7 +4233,7 @@ export function Timeline({
                     setCtxMenu(null)
                   }}
                 >
-                  Join with previous
+                  Join with previous (restore cut)
                 </button>
               ) : null}
               {joinOpts.next !== null ? (
@@ -4198,7 +4247,7 @@ export function Timeline({
                     setCtxMenu(null)
                   }}
                 >
-                  Join with next
+                  Join with next (restore cut)
                 </button>
               ) : null}
               {joinOpts.between.length ? (
@@ -4321,10 +4370,12 @@ export function Timeline({
                   ))}
                 </>
               ) : null}
-              {timelineClipboard.get() ? (
+              {(
                 <button
                   type="button"
-                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  disabled={!editable || !timelineClipboard.get()}
+                  title={timelineClipboard.get() ? 'Insert copied footage at the playhead' : 'Copy a clip before pasting'}
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                   role="menuitem"
                   data-testid="timeline-ctx-paste"
                   onClick={() => {
@@ -4334,7 +4385,7 @@ export function Timeline({
                 >
                   Paste at playhead (Ctrl+V)
                 </button>
-              ) : null}
+              )}
               {timelineClipboard.get() && liveSelected.some((r) => r.lane === 'text' || r.lane === 'broll') ? (
                 <button
                   type="button"

@@ -167,6 +167,8 @@ export function ProjectClipsView({
     (initialStatus === 'FAILED' && initialClips != null && initialClips.length > 0)
   const [status, setStatus] = useState(initialStatus)
   const [clips, setClips] = useState<ClipCardData[]>(initialClips ?? [])
+  const [clipSort, setClipSort] = useState<'score' | 'timeline' | 'title'>('score')
+  const displayedClips = [...clips].sort((a,b) => clipSort === 'timeline' ? a.startMs - b.startMs : clipSort === 'title' ? a.title.localeCompare(b.title) : b.score - a.score)
   const [montagePollKey, setMontagePollKey] = useState(0)
   const [error, setError] = useState<string | null>(initialError ?? null)
   const [readyHydrated, setReadyHydrated] = useState(readyFromServer)
@@ -523,10 +525,15 @@ export function ProjectClipsView({
           {!isStreamer && clips.length > 0 ? <ProjectPeopleStrip clips={clips} /> : null}
           <Panel
             title={clipCountLabel(clips.length)}
-            description="Sorted by score. Hover a card to preview."
+            description={`Sorted by ${clipSort}. Hover a card to preview.`}
             actions={
               clips.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
+                  <select aria-label="Sort clips" data-testid="project-clip-sort" className="h-8 rounded border border-border bg-background px-2 text-xs" value={clipSort} onChange={e => setClipSort(e.target.value as typeof clipSort)}>
+                    <option value="score">Score</option>
+                    <option value="timeline">Timeline</option>
+                    <option value="title">Title</option>
+                  </select>
                   <Sheet>
                     <SheetTrigger render={<Button size="sm" variant="outline" />}>
                       <Sparkles className="mr-1 size-4 text-primary" />
@@ -617,9 +624,10 @@ export function ProjectClipsView({
                   />
                 ) : null}
                 <ClipGrid
-                  clips={clips}
+                  clips={displayedClips}
                   projectId={projectId}
                   onHidden={onClipHidden}
+                  onChanged={() => void refreshClipsList()}
                   isStreamer={isStreamer}
                   cardAspect={exportAspect}
                   projectHasUpload={projectHasUpload}

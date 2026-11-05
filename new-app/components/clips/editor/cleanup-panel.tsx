@@ -325,7 +325,7 @@ export function CleanupPanel({
     setClarityLoading(true)
     setClarityEmpty(null)
     try {
-      const data = await clipsFetch<{ proposals: { startMs: number; endMs: number; reason: string }[] }>(
+      const data = await clipsFetch<{ proposals: { startMs: number; endMs: number; reason: string }[]; warning?: string }>(
         `/api/clips/clips/${clipId}/clarity`,
         { method: 'POST', body: '{}' },
       )
@@ -337,10 +337,20 @@ export function CleanupPanel({
         orderedWords,
       )
       setClarityRows(props)
-      if (!props.length) setClarityEmpty('Nothing to tighten')
-    } catch {
+      if (data.warning) {
+        setClarityEmpty(`Clarity suggestions unavailable: ${data.warning}`)
+        toast.error('Could not generate clarity edits', { description: data.warning })
+      } else if (!props.length) {
+        setClarityEmpty('No safe clarity cuts were found for this transcript.')
+        toast.message('No clarity edits found', { description: 'The transcript has no safe suggested cuts. No changes were applied.' })
+      } else {
+        toast.success(`${props.length} clarity edit${props.length === 1 ? '' : 's'} ready — review or apply below`)
+      }
+    } catch (error) {
       setClarityRows([])
-      setClarityEmpty('Nothing to tighten')
+      const message = error instanceof Error ? error.message : 'Request failed'
+      setClarityEmpty(`Clarity unavailable: ${message}`)
+      toast.error('Could not generate clarity edits', { description: message })
     } finally {
       setClarityLoading(false)
     }
@@ -374,7 +384,7 @@ export function CleanupPanel({
   return (
     <div className="flex flex-col gap-4 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">Cleanup</h3>
+        <h3 className="shrink-0 text-sm font-medium">Cleanup</h3>
           <Button
             type="button"
             size="sm"
@@ -826,16 +836,16 @@ function QuickCleanupRow({
   actionTestId?: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2" data-testid={testId}>
-      <div className="min-w-0">
-        <p className="text-[13px] font-medium leading-tight">{title}</p>
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2" data-testid={testId}>
+      <div className="min-w-0 flex-1 basis-[150px]">
+        <p className="break-words text-[13px] font-medium leading-tight">{title}</p>
         <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{detail}</p>
       </div>
       <Button
         type="button"
         size="sm"
         variant={disabled ? 'outline' : 'default'}
-        className="h-8 shrink-0"
+        className="h-auto min-h-8 shrink-0 whitespace-normal text-center"
         disabled={disabled}
         onClick={onClick}
         data-testid={actionTestId ?? `${testId}-action`}

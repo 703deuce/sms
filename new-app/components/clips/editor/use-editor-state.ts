@@ -104,6 +104,7 @@ type Action =
   | { type: 'replaceRestore'; edits: ClipEditsV2; recordUndo?: boolean }
   | { type: 'hydrate'; edits: ClipEditsV2 }
   | { type: 'resetHistory' }
+  | { type: 'restoreHistory'; past: ClipEditsV2[]; pastLabels: (string | undefined)[]; future: ClipEditsV2[]; futureLabels: (string | undefined)[] }
 
 function editsEqual(a: ClipEditsV2, b: ClipEditsV2) {
   return canonicalEditsJson(a) === canonicalEditsJson(b)
@@ -211,6 +212,8 @@ export function editorEditsReducer(state: State, action: Action): State {
       if (editsEqual(state.edits, action.edits)) return { ...state, saveState: 'saved', past: [], pastLabels: [], future: [], futureLabels: [] }
       return { ...state, edits: action.edits, saveState: 'saved', past: [], pastLabels: [], future: [], futureLabels: [] }
     }
+    case 'restoreHistory':
+      return { ...state, past: action.past, pastLabels: action.pastLabels, future: action.future, futureLabels: action.futureLabels }
     case 'resetHistory':
       if (!state.past.length && !state.future.length) return state
       return { ...state, past: [], pastLabels: [], future: [], futureLabels: [] }
@@ -272,6 +275,9 @@ export function useEditorState(
   // Keep the latest source-timed editor words; never reset a refetch to stale initial clip words.
   const editsRef = useRef(state.edits)
   editsRef.current = state.edits
+  // Restoration dispatch is asynchronous; don't immediately overwrite the stored
+  // Undo stack with the first render's empty history before React applies it.
+  const historyRestorePendingRef = useRef(false)
   const historyRef = useRef({ past: state.past, future: state.future })
   historyRef.current = { past: state.past, future: state.future }
 
@@ -282,18 +288,49 @@ export function useEditorState(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
   }, [])
 
-  // TC4fix: fresh load / bfcache restore must not keep pre-reload undo stacks (draft restores content only).
+  // Keep a bounded, clip-scoped undo stack across reloads. Only restore when its
+  // exact edited state matches the server (or a recovered autosave draft).
+  // Never replay another clip's history or overwrite newer server edits.
   useEffect(() => {
-    dispatch({ type: 'resetHistory' })
-    const onPageShow = (e: PageTransitionEvent) => {
-      if (!e.persisted) return
-      dispatch({ type: 'resetHistory' })
-    }
-    window.addEventListener('pageshow', onPageShow)
-    return () => {
-      window.removeEventListener('pageshow', onPageShow)
-    }
+    const key = `transovo:editor-history:v1:${clipId}`
+    try {
+      const raw = window.sessionStorage.getItem(key)
+      if (raw) {
+        const saved = JSON.parse(raw) as {
+          edits: ClipEditsV2; past: ClipEditsV2[]; pastLabels: (string | undefined)[];
+          future: ClipEditsV2[]; futureLabels: (string | undefined)[]
+        }
+        if (editsEqual(saved.edits, restored) && Array.isArray(saved.past) && Array.isArray(saved.future)) {
+          historyRestorePendingRef.current = saved.past.length > 0 || saved.future.length > 0
+          dispatch({
+            type: 'restoreHistory',
+            past: saved.past.slice(-MAX_UNDO).map((e) => normalizeEdits(e, bounds)),
+            pastLabels: (saved.pastLabels ?? []).slice(-MAX_UNDO),
+            future: saved.future.slice(0, MAX_UNDO).map((e) => normalizeEdits(e, bounds)),
+            futureLabels: (saved.futureLabels ?? []).slice(0, MAX_UNDO),
+          })
+        } else window.sessionStorage.removeItem(key)
+      }
+    } catch { /* Storage is optional; editing and autosave must still work. */ }
+    // Once per clip mount; state changes are saved in the effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clipId])
+
+  useEffect(() => {
+    if (historyRestorePendingRef.current) {
+      if (!state.past.length && !state.future.length) return
+      historyRestorePendingRef.current = false
+    }
+    const key = `transovo:editor-history:v1:${clipId}`
+    try {
+      // Retain a compact recent window to avoid browser storage quota exhaustion.
+      window.sessionStorage.setItem(key, JSON.stringify({
+        edits: state.edits,
+        past: state.past.slice(-25), pastLabels: state.pastLabels.slice(-25),
+        future: state.future.slice(0, 25), futureLabels: state.futureLabels.slice(0, 25),
+      }))
+    } catch { /* Session storage may be disabled or full. */ }
+  }, [clipId, state.edits, state.past, state.pastLabels, state.future, state.futureLabels])
 
   const bumpLocalRevision = useCallback(() => {
     localRevisionRef.current += 1

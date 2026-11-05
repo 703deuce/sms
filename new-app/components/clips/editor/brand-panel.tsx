@@ -29,6 +29,8 @@ export function BrandPanel({
   onEdits: (edits: ClipEditsV2) => void
 }) {
   const [templates, setTemplates] = useState<TemplateRow[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [bumperUploading, setBumperUploading] = useState<'intro' | 'outro' | null>(null)
   const brand = (edits.brand || {}) as {
     templateId?: string
     useIntro?: boolean
@@ -60,6 +62,34 @@ export function BrandPanel({
     }
   }
 
+  const selectedTemplate = templates.find((t) => t.id === (selectedTemplateId ?? brand.templateId))
+  const appliedTemplate = templates.find((t) => t.id === brand.templateId)
+
+  const uploadBumper = async (kind: 'intro' | 'outro', file: File | undefined) => {
+    if (!file || !appliedTemplate) return
+    if (file.size > 80 * 1024 * 1024) {
+      toast.error('Bumper MP4 must be under 80 MB')
+      return
+    }
+    setBumperUploading(kind)
+    try {
+      const form = new FormData()
+      form.set('file', file)
+      const res = await fetch(`/api/clips/brand/templates/${encodeURIComponent(appliedTemplate.id)}/bookend?kind=${kind}`, { method: 'POST', body: form })
+      if (!res.ok) throw new Error('Could not upload bumper MP4')
+      const data = await res.json() as { data?: { key?: string } }
+      const key = data.data?.key
+      if (!key) throw new Error('Bumper upload returned no media key')
+      onEdits({ ...edits, brand: { ...(edits.brand as object), [kind === 'intro' ? 'introVideoKey' : 'outroVideoKey']: key, [kind === 'intro' ? 'useIntro' : 'useOutro']: true } })
+      await refresh()
+      toast.success(`${kind === 'intro' ? 'Intro' : 'Outro'} bumper uploaded and enabled`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Bumper upload failed')
+    } finally {
+      setBumperUploading(null)
+    }
+  }
+
   const patchBrand = (patch: Record<string, unknown>) => {
     onEdits({ ...edits, brand: { ...(edits.brand as object), ...patch } })
   }
@@ -73,15 +103,14 @@ export function BrandPanel({
       <Select
         // E1fix: `items` lets the trigger show the template name (Base UI renders the raw id otherwise).
         items={templates.map((t) => ({ value: t.id, label: t.name }))}
-        value={brand.templateId || null}
+        value={selectedTemplateId ?? (templates.some((t) => t.id === brand.templateId) ? brand.templateId! : null)}
         onValueChange={(v) => {
           if (typeof v !== 'string' || !v) return
-          const tpl = templates.find((t) => t.id === v)
-          if (tpl) applyTemplate(tpl)
+          setSelectedTemplateId(v)
         }}
       >
         <SelectTrigger className="w-full" data-testid="brand-template-select">
-          <SelectValue placeholder="Select template…" />
+          <SelectValue placeholder={templates.length ? 'Select template…' : 'Loading templates…'} />
         </SelectTrigger>
         <SelectContent>
           {templates.map((t) => (
@@ -91,11 +120,17 @@ export function BrandPanel({
           ))}
         </SelectContent>
       </Select>
+      {selectedTemplate ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2" data-testid="brand-template-preview">
+          <span className="min-w-0 flex-1 text-xs">{selectedTemplate.name}{selectedTemplate.id === brand.templateId ? ' · Applied' : ' · Preview only'}</span>
+          <Button size="sm" type="button" onClick={() => { applyTemplate(selectedTemplate); setSelectedTemplateId(null) }} data-testid="brand-template-apply">Apply kit</Button>
+        </div>
+      ) : null}
       <div className="flex items-center justify-between gap-2">
         <Label className="text-xs">Include intro bumper</Label>
         <Switch
           checked={brand.useIntro ?? false}
-          disabled={!templates.find((t) => t.id === brand.templateId)?.introVideoKey}
+          disabled={!appliedTemplate?.introVideoKey}
           onCheckedChange={(checked) => patchBrand({ useIntro: Boolean(checked) })}
         />
       </div>
@@ -103,10 +138,25 @@ export function BrandPanel({
         <Label className="text-xs">Include outro bumper</Label>
         <Switch
           checked={brand.useOutro ?? false}
-          disabled={!templates.find((t) => t.id === brand.templateId)?.outroVideoKey}
+          disabled={!appliedTemplate?.outroVideoKey}
           onCheckedChange={(checked) => patchBrand({ useOutro: Boolean(checked) })}
         />
       </div>
+      {appliedTemplate && (!appliedTemplate.introVideoKey || !appliedTemplate.outroVideoKey) ? (
+        <p className="text-xs text-muted-foreground" data-testid="brand-bumper-upload-hint">Bumper switches require an uploaded Intro/Outro MP4 on this template. Use Manage templates to upload the missing videos first.</p>
+      ) : null}
+      {appliedTemplate ? (
+        <div className="flex flex-wrap gap-3" data-testid="brand-bumper-uploads">
+          {(['intro', 'outro'] as const).map((kind) => (
+            <label key={kind} className="cursor-pointer text-xs text-primary underline">
+              {bumperUploading === kind ? 'Uploading…' : `Upload ${kind} MP4`}
+              <input type="file" accept="video/mp4,.mp4" className="sr-only" disabled={!!bumperUploading}
+                data-testid={`brand-upload-${kind}`}
+                onChange={(ev) => { void uploadBumper(kind, ev.target.files?.[0]); ev.target.value = '' }} />
+            </label>
+          ))}
+        </div>
+      ) : null}
       <Button size="sm" variant="outline" render={<a href="/app/clips/brand" />}>
         Manage templates
       </Button>

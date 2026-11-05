@@ -24,6 +24,7 @@ export function ClipGrid({
   projectId,
   onDownload,
   onHidden,
+  onChanged,
   isStreamer = false,
   cardAspect = '9:16' as ExportAspect,
   selectedIds,
@@ -34,6 +35,7 @@ export function ClipGrid({
   projectId: string
   onDownload?: (clipId: string) => void | Promise<void>
   onHidden?: (clipId: string) => void
+  onChanged?: () => void
   isStreamer?: boolean
   cardAspect?: ExportAspect
   selectedIds?: Set<string>
@@ -49,6 +51,7 @@ export function ClipGrid({
           projectId={projectId}
           onDownload={onDownload}
           onHidden={onHidden}
+          onChanged={onChanged}
           isStreamer={isStreamer}
           cardAspect={cardAspect}
           selected={selectedIds?.has(c.id) ?? false}

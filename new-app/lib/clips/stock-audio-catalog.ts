@@ -4,7 +4,7 @@ export type StockAudioEntry = {
   id: string
   kind: 'music' | 'sfx'
   title: string
-  source: 'transovo-music' | 'kenney-sfx'
+  source: 'transovo-music' | 'kenney-sfx' | 'cc0-music'
   license: 'elevenlabs' | 'cc0'
   durationS: number
   tags: string[]
@@ -12,7 +12,7 @@ export type StockAudioEntry = {
   genre?: string
   bpm?: number
   storageKey?: string
-  /** Public path under /stock-audio/ for Kenney files. */
+  /** Public path under /stock-audio/ or a pinned, trusted CC0 file URL. */
   src?: string
 }
 
@@ -36,12 +36,50 @@ export const KENNEY_SFX: StockAudioEntry[] = KENNEY_FILES.map((row) => ({
   src: `/stock-audio/sfx/${row.file}`,
 }))
 
+/** F19: Small *real* CC0 background-music starter catalog. These are full music
+ * loops from qubodup on OpenGameArt, redistributed in an open-source project
+ * with recorded CC0 provenance. Commit-pinned so media cannot be swapped later.
+ * Source/license records: github.com/blancmathis/Super_Bash_Folds
+ * /blob/main/public/assets/audio/LICENSES.md
+ */
+export const CC0_MUSIC: StockAudioEntry[] = [
+  {
+    id: 'cc0-menu-loop', kind: 'music', title: 'Tiggo · Menu Loop',
+    source: 'cc0-music', license: 'cc0', durationS: 0,
+    tags: ['loop', 'background', 'menu', 'retro', 'game', 'instrumental'],
+    mood: 'Light', genre: 'Game',
+    src: 'https://raw.githubusercontent.com/blancmathis/Super_Bash_Folds/1028a3b739ef54efdcbe5a2ef0ad1714fe569c47/public/assets/audio/open/music/menu-loop.ogg',
+  },
+  {
+    id: 'cc0-battle-loop', kind: 'music', title: 'Tigrun · Battle Loop',
+    source: 'cc0-music', license: 'cc0', durationS: 0,
+    tags: ['loop', 'background', 'battle', 'retro', 'action', 'game'],
+    mood: 'Energetic', genre: 'Game',
+    src: 'https://raw.githubusercontent.com/blancmathis/Super_Bash_Folds/1028a3b739ef54efdcbe5a2ef0ad1714fe569c47/public/assets/audio/open/music/battle-loop.ogg',
+  },
+  // CC0 attribution recorded in github.com/jarlah/dungeon-haskell/assets/CREDITS.md
+  {
+    id: 'cc0-dungeon-theme', kind: 'music', title: 'Spooky Dungeon · 8-bit Loop',
+    source: 'cc0-music', license: 'cc0', durationS: 0,
+    tags: ['background', 'loop', 'spooky', 'horror', 'retro', 'game'],
+    mood: 'Suspenseful', genre: 'Retro',
+    src: 'https://raw.githubusercontent.com/jarlah/dungeon-haskell/8a443d355b99dc3aa09b5c5cd8bf02b55b2fe2c4/assets/music/theme.ogg',
+  },
+  {
+    id: 'cc0-boss-battle', kind: 'music', title: 'Epic Boss Battle · Orchestral Loop',
+    source: 'cc0-music', license: 'cc0', durationS: 0,
+    tags: ['background', 'loop', 'cinematic', 'epic', 'orchestra', 'action', 'battle'],
+    mood: 'Epic', genre: 'Orchestral',
+    src: 'https://raw.githubusercontent.com/jarlah/dungeon-haskell/8a443d355b99dc3aa09b5c5cd8bf02b55b2fe2c4/assets/music/boss.ogg',
+  },
+]
+
 export type MusicPromptPreset = (typeof prompts)[number]
 
 export const MUSIC_PROMPT_PRESETS: MusicPromptPreset[] = prompts
 
 export function allStockAudioEntries(): StockAudioEntry[] {
-  return [...KENNEY_SFX]
+  return [...KENNEY_SFX, ...CC0_MUSIC]
 }
 
 function tokenize(q: string): string[] {

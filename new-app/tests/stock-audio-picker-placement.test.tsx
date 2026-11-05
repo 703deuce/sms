@@ -10,6 +10,33 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: v
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
 describe('N3 CC0 stock sound placement', () => {
+  it('F19 shows licensed CC0 music entries and attaches one without generation credits', async () => {
+    vi.mocked(clipsFetch).mockImplementation(async (url) => {
+      if (String(url).includes('/stock-audio/search')) return {
+        available: true,
+        hits: [{ id: 'cc0-menu-loop', title: 'Tiggo · Menu Loop',
+          kind: 'music', license: 'cc0', durationS: 0,
+          tags: ['loop'], previewUrl: '/api/clips/stock-audio/cc0-menu-loop/file' }],
+        presets: [{ id: 'gen', title: 'Generate more', mood: 'chill',
+          genre: 'custom', lengthS: 30, prompt: 'Custom music' }],
+      } as never
+      if (String(url).includes('/stock-audio/attach')) return { uploadId: 'upl-menu' } as never
+      throw new Error('Unexpected audio API')
+    })
+    const onMusicUploaded = vi.fn()
+    const onGeneratePreset = vi.fn()
+    const ui = render(<StockAudioPicker clipId="clip-1" kind="music" playheadMs={0}
+      hasMusicBed={false} onGeneratePreset={onGeneratePreset}
+      onMusicUploaded={onMusicUploaded} onSfxUploaded={vi.fn()} />)
+    await waitFor(() => expect(ui.getByTestId('stock-audio-hit')).toBeTruthy())
+    expect(ui.getByTestId('stock-audio-hit').textContent).toContain('Tiggo · Menu Loop')
+    expect(ui.getByTestId('stock-audio-hit').textContent).toContain('CC0')
+    expect(ui.getByTestId('stock-audio-generation-presets')).toBeTruthy()
+    fireEvent.click(ui.getByTestId('stock-audio-add'))
+    await waitFor(() => expect(onMusicUploaded).toHaveBeenCalledWith('upl-menu'))
+    expect(onGeneratePreset).not.toHaveBeenCalled()
+  })
+
   it('attaches at the current playhead and confirms the SFX lane and time', async () => {
     vi.mocked(clipsFetch).mockImplementation(async (url) => {
       if (String(url).includes('/stock-audio/search')) return {
