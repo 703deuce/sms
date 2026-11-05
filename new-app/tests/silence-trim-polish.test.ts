@@ -26,6 +26,15 @@ describe('silence trim polish', () => {
     expect(cuts).toEqual([[900, 1100]])
   })
 
+  it('skips tightly connected fillers without audio to avoid clipping retained words', () => {
+    const cuts = fillerWordCutRanges([
+      { s: 0.4, e: 0.9, w: 'before' },
+      { s: 0.92, e: 1.15, w: 'um' },
+      { s: 1.16, e: 1.5, w: 'after' },
+    ])
+    expect(cuts).toEqual([])
+  })
+
   it('preserves an exact filler cut through the silence-trim sanitizer', () => {
     const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 3000 })
     const polished = applySilenceTrimToEdits(edits,
