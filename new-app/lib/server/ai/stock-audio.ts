@@ -7,6 +7,7 @@ import MUSIC_PROMPTS from '@/lib/clips/music-library-prompts.json'
 import { shareBaseUrl } from '@/lib/server/clips/composition-share'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import { createId } from '@/lib/supabase/id'
+import { vorbisDurationMs } from '@/lib/clips/editor/vorbis-duration'
 
 const MANIFEST_KEY = 'stock-audio/music/manifest.json'
 const MANIFEST_TTL_MS = 10 * 60 * 1000
@@ -52,29 +53,6 @@ export type StockAudioSearchHit = {
 
 function entryById(id: string): StockAudioEntry | null {
   return allStockAudioEntries().find((e) => e.id === id) ?? null
-}
-
-/** Read Vorbis Ogg duration from page granules, not an invented catalog estimate. */
-export function vorbisDurationMs(buf: Buffer): number {
-  let sampleRate = 0
-  let finalGranule = 0
-  for (let i = 0; i + 27 <= buf.length;) {
-    if (buf.toString('ascii', i, i + 4) !== 'OggS') break
-    const segCount = buf[i + 26]!
-    if (i + 27 + segCount > buf.length) break
-    let bodyLen = 0
-    for (let j = 0; j < segCount; j++) bodyLen += buf[i + 27 + j]!
-    const start = i + 27 + segCount
-    if (start + bodyLen > buf.length) break
-    if (!sampleRate && bodyLen >= 16 && buf[start] === 1 &&
-        buf.toString('ascii', start + 1, start + 7) === 'vorbis') {
-      sampleRate = buf.readUInt32LE(start + 12)
-    }
-    const granule = Number(buf.readBigUInt64LE(i + 6))
-    if (Number.isSafeInteger(granule) && granule > finalGranule) finalGranule = granule
-    i = start + bodyLen
-  }
-  return sampleRate && finalGranule ? Math.round(finalGranule / sampleRate * 1000) : 0
 }
 
 async function ensureCatalogFile(entry: StockAudioEntry): Promise<string> {
