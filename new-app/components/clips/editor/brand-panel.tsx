@@ -116,6 +116,9 @@ export function BrandPanel({
           onCheckedChange={(checked) => patchBrand({ useOutro: Boolean(checked) })}
         />
       </div>
+      {appliedTemplate && (!appliedTemplate.introVideoKey || !appliedTemplate.outroVideoKey) ? (
+        <p className="text-xs text-muted-foreground" data-testid="brand-bumper-upload-hint">Bumper switches require an uploaded Intro/Outro MP4 on this template. Use Manage templates to upload the missing videos first.</p>
+      ) : null}
       <Button size="sm" variant="outline" render={<a href="/app/clips/brand" />}>
         Manage templates
       </Button>
