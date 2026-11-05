@@ -140,7 +140,7 @@ def ensure_matte(
         raise MatteSkip("too_long")
     model = "rvm_resnet50" if quality == "detail" else "rvm_mobilenetv3"
     src_sha = _file_sha(clip_src)
-    params_hash = hashlib.sha256(f"{src_sha}|{quality}|{model}|v1|{preview_fingerprint}".encode()).hexdigest()[:32]
+    params_hash = hashlib.sha256((f"{src_sha}|{quality}|{model}|v1" + (f"|{preview_fingerprint}" if preview_fingerprint else "")).encode()).hexdigest()[:32]
     out = work_dir / "bg_matte.mp4"
     hit = _find_ready(conn, clip_id, params_hash)
     if hit:
