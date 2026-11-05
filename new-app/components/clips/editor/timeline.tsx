@@ -2854,6 +2854,8 @@ export function Timeline({
     const geo = shown(item)
     const left = xs(geo.startMs)
     const w = Math.max(2, xe(geo.endMs) - left)
+    const displayStartMs = toExportMs(tmap, item.startMs, 'start')
+    const displayEndMs = toExportMs(tmap, item.endMs, 'end')
     const st = itemState(item)
     const isSel = selectedKeys.has(refKey(item))
     // TC1: deactivated items stay on the timeline, dimmed + striped.
@@ -2898,14 +2900,14 @@ export function Timeline({
         data-lane={item.lane}
         data-item-id={item.id}
         data-jl-split={item.lane === 'voice' && item.label.includes('split') ? 'true' : undefined}
-        data-start-ms={Math.round(item.startMs)}
-        data-end-ms={Math.round(item.endMs)}
+        data-start-ms={Math.round(displayStartMs)}
+        data-end-ms={Math.round(displayEndMs)}
         data-selected={isSel ? 'true' : undefined}
         data-disabled={off ? 'true' : undefined}
         data-grouped={inGroup || host ? 'true' : undefined}
         data-group-selected={grpSel ? 'true' : undefined}
         data-compound={host ? host.group.id : undefined}
-        title={`${off ? '[Deactivated] ' : ''}${host ? '[Compound] ' : inGroup ? '[Grouped] ' : ''}${item.label} · ${(item.startMs / 1000).toFixed(2)}–${(item.endMs / 1000).toFixed(2)} s`}
+        title={`${off ? '[Deactivated] ' : ''}${host ? '[Compound] ' : inGroup ? '[Grouped] ' : ''}${item.label} · ${(displayStartMs / 1000).toFixed(2)}–${(displayEndMs / 1000).toFixed(2)} s`}
         onPointerDown={interactive && !dimmed ? (e) => {
           const bounds = e.currentTarget.getBoundingClientRect()
           const x = e.clientX - bounds.left
