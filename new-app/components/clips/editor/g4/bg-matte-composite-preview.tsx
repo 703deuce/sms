@@ -10,16 +10,9 @@ export function applyMatteAlpha(
   feather = 0,
   choke = 0,
 ): void {
-  const softAmount = Math.max(0, Math.min(1, feather / 100))
   for (let i = 0; i < foreground.length; i += 4) {
     const raw = (0.2126 * mask[i]! + 0.7152 * mask[i + 1]! + 0.0722 * mask[i + 2]!) / 255
-    const adjusted = refineAlpha(raw, feather, choke)
-    // Feather softens the opacity transition at a silhouette edge without
-    // altering the matte source. Choke/expand moves the edge threshold.
-    const width = 0.12 + softAmount * 0.72
-    const soft = Math.max(0, Math.min(1, (adjusted - (0.5 - width / 2)) / width))
-    const opacity = adjusted * (1 - softAmount) + soft * softAmount
-    foreground[i + 3] = Math.round(opacity * foreground[i + 3]!)
+    foreground[i + 3] = Math.round(refineAlpha(raw, feather, choke) * foreground[i + 3]!)
   }
 }
 
@@ -176,7 +169,14 @@ export function BgMatteCompositePreview({
         const maskFit = fitVideoFrame(maskVideo.videoWidth, maskVideo.videoHeight, w, h, fit)
         fc.drawImage(source, pic.sx, pic.sy, pic.sw, pic.sh, pic.dx, pic.dy, pic.dw, pic.dh)
         mc.clearRect(0, 0, w, h)
+        // Mirror worker/clips_worker/bg_removal.py refine_params: Gaussian
+        // feather first, then choke/expand alpha range in applyMatteAlpha.
+        const feather = removal?.refine.feather ?? 0
+        const choke = removal?.refine.choke ?? 0
+        const sigma = Math.max(feather / 100 * 0.010 * Math.min(w, h), Math.abs(choke) / 100 * 0.006 * Math.min(w, h))
+        mc.filter = sigma > 0 ? `blur(${sigma}px)` : 'none'
         mc.drawImage(maskVideo, maskFit.sx, maskFit.sy, maskFit.sw, maskFit.sh, maskFit.dx, maskFit.dy, maskFit.dw, maskFit.dh)
+        mc.filter = 'none'
         const src = fc.getImageData(0, 0, w, h)
         const mask = mc.getImageData(0, 0, w, h)
         // Soft, grayscale matte: luminance is the subject alpha.
