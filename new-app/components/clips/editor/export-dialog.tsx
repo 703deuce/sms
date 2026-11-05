@@ -1116,7 +1116,7 @@ export function ExportDialog({
         </div>
         <ExportTemplateSection
           clipId={clipId}
-          edits={{ ...edits, exportTemplate }}
+          edits={{ ...edits, aspectRatio: aspect, exportTemplate }}
           layoutMode={layoutMode}
           platform={platform}
           defaultChannelUrl={defaultChannelUrl}
