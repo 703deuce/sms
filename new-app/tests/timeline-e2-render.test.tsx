@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { Timeline } from '@/components/clips/editor/timeline'
+// Run Batch 2 pure export/clipboard regressions in the required Editor QA suite.
+import './fullsuite-batch2.test'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { gapAtDisplayMs, exportTimeMap } from '@/lib/clips/editor/export-time'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
