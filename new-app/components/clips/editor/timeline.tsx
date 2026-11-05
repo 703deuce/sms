@@ -327,7 +327,7 @@ const MAIN_MOTION_KEY = '__main__'
 
 /** MENUBAR1: top menu bar → the SAME handlers as the command palette / clip right-click menu. */
 export type TimelineMenuCommand =
-  | { kind: 'palette'; id: string }
+  | { kind: 'palette'; id: string; selectionHint?: { lane: 'video' | 'broll' | 'text' | 'sfx'; id?: string; sourceInMs?: number; atMs?: number } }
   | { kind: 'openPalette' }
   | { kind: 'jCut' }
   | { kind: 'lCut' }
@@ -1409,8 +1409,8 @@ export function Timeline({
   const itemState = (item: TimelineItem) => (item.track ? trackState(soloEdits, item.track) : laneState(soloEdits, item.lane))
 
   // ---- G1b commands (clipboard, ranges, jumps, tracks) -------------------------------------
-  const copySel = (cut: boolean) => {
-    const refs = copyableRefs(liveSelected)
+  const copySel = (cut: boolean, selection: readonly ItemRef[] = liveSelected) => {
+    const refs = copyableRefs(selection)
     if (!refs.length) return false
     if (cut) {
       if (!editable) return false
@@ -1448,10 +1448,10 @@ export function Timeline({
     if (r.skipped) toast.message(`${r.skipped} item${r.skipped > 1 ? 's' : ''} can't be placed twice (AI / library sounds)`, { id: 'timeline-clipboard' })
     return true
   }
-  const duplicate = () => {
+  const duplicate = (selection: readonly ItemRef[] = liveSelected) => {
     if (!editable) return false
     const src = selCompound
-    const r = duplicateItems(opCtx(), liveSelected)
+    const r = duplicateItems(opCtx(), selection)
     if (!r) { toast.message('This clip cannot be duplicated here', { id: 'timeline-clipboard' }); return false }
     const wrapped =
       src && r.refs.length >= 2
@@ -2077,6 +2077,37 @@ export function Timeline({
         setSelected([{ lane: 'sfx', id: r.id }])
       }
       return
+    }
+    // F2: menu clicks can change the docked editor view before this effect
+    // runs. The timeline selection may be cleared during that transition even
+    // though the canvas/inspector still shows the selected clip. Carry the
+    // selected item identity with the command and run the same edit operation.
+    const hint = c.kind === 'palette' ? c.selectionHint : undefined
+    const hintedItem = hint && (
+      hint.id ? lanes[hint.lane].find(i => i.id === hint.id)
+        : hint.lane === 'video' && hint.sourceInMs != null
+          ? lanes.video.find(i => i.srcInMs === hint.sourceInMs)
+          : lanes[hint.lane].find(i => hint.atMs != null && hint.atMs >= i.startMs && hint.atMs < i.endMs)
+    )
+    const selectedForMenu: ItemRef[] = liveSelected.length ? liveSelected :
+      hintedItem ? [{ lane: hintedItem.lane, id: hintedItem.id }] : []
+    if (c.kind === 'palette') {
+      if (c.id === 'copy') {
+        if (!copySel(false, selectedForMenu)) toast.message('Select a video, B-roll or text clip to copy', { id: 'timeline-menu' })
+        return
+      }
+      if (c.id === 'cut') {
+        if (!copySel(true, selectedForMenu)) toast.message('Select an unlocked clip to cut', { id: 'timeline-menu' })
+        return
+      }
+      if (c.id === 'duplicate') {
+        if (!duplicate(selectedForMenu)) toast.message('Select an editable clip to duplicate', { id: 'timeline-menu' })
+        return
+      }
+      if (c.id === 'paste') {
+        if (!paste()) toast.message('Copy a clip first, then Paste at playhead', { id: 'timeline-menu' })
+        return
+      }
     }
     const pc = paletteCommands.find((p) => p.id === c.id)
     if (!pc || pc.disabled) {
