@@ -137,6 +137,7 @@ function usesSpeakerCropPreview(edits: ClipEditsV2, track: CropTrack | null): bo
 
 export function PreviewStage({
   clipId = null,
+  matteMediaKind = null,
   videoUrl,
   posterUrl = null,
   edits,
@@ -171,6 +172,7 @@ export function PreviewStage({
   onEditorMediaError,
 }: {
   clipId?: string | null
+  matteMediaKind?: string | null
   videoUrl: string | null
   posterUrl?: string | null
   edits: ClipEditsV2
@@ -1768,7 +1770,7 @@ export function PreviewStage({
           />
         ) : null}
         {clipId && edits.bgRemoval?.enabled && !templatePreview && !segmentLayoutActive ? (
-          <BgMatteCompositePreview clipId={clipId} video={videoRefInner} outMs={outMsRef}
+          <BgMatteCompositePreview clipId={clipId} mediaKind={matteMediaKind} video={videoRefInner} outMs={outMsRef}
             enabled={true} removal={edits.bgRemoval} />
         ) : null}
         <InsertPlayback videoRef={videoRefInner} edits={edits} words={words} sourceUrls={sourceUrls} mediaOffsetMs={mediaOffsetMs} />
