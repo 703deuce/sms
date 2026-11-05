@@ -113,7 +113,7 @@ export function tabsFor(target: KeyframeTarget | null): Record<PropertiesTab, st
     audio: off('Text has no audio'),
     speed: off('Speed is set per Video item'),
     animation: null,
-    color: off('Text colour lives in the Text panel'),
+    color: null,
   }
 }
 
@@ -214,8 +214,7 @@ export function PropertiesPanel({
       </div>
       <div className="flex min-w-0 gap-0.5 overflow-x-auto rounded-md border border-border p-0.5" role="tablist" aria-label="Properties">
         {TABS.map((t) => {
-          const textColorShortcut = t.id === 'color' && textSelected && Boolean(onOpenTextPanel)
-          const why = textColorShortcut ? null : avail[t.id]
+          const why = avail[t.id]
           return (
             <button
               key={t.id}
@@ -223,10 +222,9 @@ export function PropertiesPanel({
               role="tab"
               aria-selected={tab === t.id}
               disabled={why != null}
-              title={textColorShortcut ? 'Edit text colors in the Text panel' : why ?? t.label}
+              title={why ?? t.label}
               onClick={() => {
-                if (textColorShortcut) onOpenTextPanel?.()
-                else setTab(t.id)
+                setTab(t.id)
               }}
               className={`min-w-max flex-1 shrink-0 rounded px-1 py-1 text-[10px] font-medium disabled:opacity-35 ${tab === t.id && why == null ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
               data-testid={`properties-tab-${t.id}`}
@@ -309,7 +307,19 @@ export function PropertiesPanel({
       ) : tab === 'animation' && avail.animation == null ? (
         <AnimationTab edits={edits} target={target} label={label} localMs={localMs} onCommit={onCommit} onSeekLocal={seekLocal} readOnly={readOnly} />
       ) : tab === 'color' && avail.color == null ? (
-        colorSlot ?? null
+        textSelected ? (
+          <div className="space-y-3" data-testid="properties-text-color-controls">
+            {(() => {
+              const id = target?.startsWith('text:') ? target.slice(5) : null
+              const item = (edits.textItems ?? []).find((t) => t.id === id)
+              if (!item) return <p className="text-xs text-muted-foreground">Select a text item to edit its colour.</p>
+              return <label className="flex items-center justify-between gap-3 text-xs">Text colour
+                <input type="color" aria-label="Text colour" value={`#${item.style.color.replace(/^#/, '')}`}
+                  disabled={readOnly} onChange={(e) => onCommit({ ...edits, textItems: (edits.textItems ?? []).map((t) => t.id === id ? { ...t, style: { ...t.style, color: e.target.value.replace(/^#/, '') } } : t) })} />
+              </label>
+            })()}
+          </div>
+        ) : colorSlot ?? null
       ) : null}
     </div>
   )
