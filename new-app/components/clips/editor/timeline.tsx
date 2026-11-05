@@ -385,6 +385,7 @@ export function Timeline({
   momentFocus = null,
   onMomentSeek,
   playheadOutMsRef,
+  gapDisplayMs = null,
   transcriptSelectionRef,
   registerBeatCut,
   menuCommand = null,
@@ -396,7 +397,7 @@ export function Timeline({
   outputMs: number
   clipOutputDurationMs: number
   videoUrl?: string | null
-  onSeekOutput: (outputMs: number) => void
+  onSeekOutput: (outputMs: number, displayMs?: number) => void
   /** @deprecated E2 trims the clip in/out via the Video lane edges (onCommitEdits). */
   onTrimChange?: (trim: { in: number; out: number }) => void
   /** @deprecated E2 commits B-roll moves through onCommitEdits (one undo step per drag). */
@@ -483,6 +484,7 @@ export function Timeline({
   momentFocus?: FullVideoMomentFocus | null
   onMomentSeek?: (sourceMs: number) => void
   /** Live timeline playhead (output ms); ref updates on scrub before React state. */
+  gapDisplayMs?: number | null
   playheadOutMsRef?: React.MutableRefObject<number>
   /** Script word selection — keys 1–9 apply camera to this span instead of the playhead cut. */
   transcriptSelectionRef?: React.MutableRefObject<TranscriptSelection | null>
@@ -549,7 +551,7 @@ export function Timeline({
 
   const playheadMs = Math.max(0, Math.min(span, outputMs))
   const liveOutMs = playheadOutMsRef?.current ?? playheadMs
-  const playheadPx = xe(liveOutMs)
+  const playheadPx = gapDisplayMs != null ? gapDisplayMs * pxPerMs : xe(liveOutMs)
   const playheadPct = (playheadPx / Math.max(1, widthPx)) * 100
   const playheadPxRef = useRef(playheadPx)
   playheadPxRef.current = playheadPx
@@ -3581,7 +3583,7 @@ export function Timeline({
                       }
                     }
                   }
-                  onSeekOutput(hitMs)
+                  onSeekOutput(hitMs, (e.clientX - e.currentTarget.getBoundingClientRect().left) / Math.max(1e-6, pxPerMs))
                   startMarquee(e, additive)
                 }
               }}
@@ -3601,7 +3603,7 @@ export function Timeline({
                 pxPerMs={pxPerMs}
                 widthPx={widthPx}
                 height={RULER_H}
-                onScrub={(d) => onSeekOutput(msAtPx(d * pxPerMs))}
+                onScrub={(d) => onSeekOutput(msAtPx(d * pxPerMs), d)}
                 visFromPx={virtualize ? visFromPx : undefined}
                 visToPx={virtualize ? visToPx : undefined}
               />
