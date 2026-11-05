@@ -903,11 +903,13 @@ export function useEditorState(
       while (saveSyncRequired(savedRevisionRef.current, localRevisionRef.current)) {
         attempts += 1
         const revisionAtSend = localRevisionRef.current
+        // Snapshot before await: editsRef can advance during an in-flight PATCH.
+        const editsAtSend = editsRef.current
         saveSeqRef.current = nextClientSaveSeq(saveSeqRef.current)
         const saveSeqAtSend = saveSeqRef.current
         saveBaseEditsRef.current = lastSavedEditsRef.current
         writeEditorAutosaveDraft(clipId, {
-          edits: editsRef.current,
+          edits: editsAtSend,
           savedAt: new Date().toISOString(),
           localRevision: localRevisionRef.current,
           saveSeq: saveSeqAtSend,
@@ -915,7 +917,7 @@ export function useEditorState(
         })
         try {
           const res = await patchClip(clipId, {
-            edits: editsPayloadForSave(editsRef.current),
+            edits: editsPayloadForSave(editsAtSend),
             baseVersion: serverVersionRef.current,
             expectedUpdatedAt: serverUpdatedAtRef.current,
             clientSaveSeq: saveSeqAtSend,
@@ -933,6 +935,14 @@ export function useEditorState(
             }
             continue
           }
+          // Even when a newer edit/undo happened mid-flight, the server has
+          // accepted this version. Advance the conflict base before retrying;
+          // otherwise every later PATCH uses a stale version and can merge
+          // newer timeline inserts with older duplicated segments.
+          if (res.updatedAt) serverUpdatedAtRef.current = res.updatedAt
+          if (typeof res.editsSaveVersion === 'number') serverVersionRef.current = res.editsSaveVersion
+          lastSavedEditsRef.current = editsAtSend
+          serverConfirmedEditsRef.current = editsAtSend
           if (
             !shouldApplySaveResponse(
               saveSeqAtSend,
@@ -943,12 +953,8 @@ export function useEditorState(
           ) {
             continue
           }
-          if (res.updatedAt) serverUpdatedAtRef.current = res.updatedAt
-          if (typeof res.editsSaveVersion === 'number') serverVersionRef.current = res.editsSaveVersion
           clearEditorAutosaveDraft(clipId)
           savedRevisionRef.current = revisionAtSend
-          lastSavedEditsRef.current = editsRef.current
-          serverConfirmedEditsRef.current = editsRef.current
           break
         } catch (err) {
           const transient =
