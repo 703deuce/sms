@@ -2652,6 +2652,7 @@ export function EditorShell({
       ) : null}
       <EditorPanelErrorBoundary label="Preview">
       <PreviewStage
+        clipId={clipId}
         videoUrl={videoUrl}
         posterUrl={posterUrl}
         edits={renderEdits}
