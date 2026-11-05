@@ -66,7 +66,11 @@ jobs:
             tests/editor-retest6-menu.test.tsx \
             tests/editor-retest7-state.test.tsx \
             tests/editor-retest8-persistence.test.ts \
-            tests/editor-retest8-matte.test.tsx
+            tests/editor-retest8-matte.test.tsx \
+            tests/editor-audit-save-history.test.tsx \
+            tests/editor-audit-transcript.test.tsx \
+            tests/editor-audit-matte.test.ts \
+            tests/editor-audit-rename.test.tsx
 
   captions-worker-regression:
     runs-on: ubuntu-latest

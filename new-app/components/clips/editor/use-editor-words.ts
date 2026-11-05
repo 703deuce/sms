@@ -22,6 +22,8 @@ export function useEditorWords(
   const lastTrimRef = useRef(trim)
   const contextRef = useRef(contextMs)
   const wordsRef = useRef(initialWords)
+  // A manual refresh must never overwrite newer trim/context or parent words.
+  const reloadSeqRef = useRef(0)
   // Parent renders may pass a newly allocated but identical words array.
   // Treat source changes by value, or an empty parent array will repeatedly
   // overwrite freshly fetched transcript words and trigger an update loop.
@@ -35,12 +37,14 @@ export function useEditorWords(
     const signature = JSON.stringify({ clipId, initialWords, bounds })
     if (signature === incomingRef.current) return
     incomingRef.current = signature
+    reloadSeqRef.current += 1
     setWords(initialWords)
     wordsRef.current = initialWords
     setLoadingReason(null)
   }, [clipId, initialWords, bounds])
 
   useEffect(() => {
+    reloadSeqRef.current += 1
     lastTrimRef.current = trim
     if (!trimNeedsEditorWordsRefetch(wordsRef.current, trim, bounds, 250, extendMs)) return
 
@@ -89,6 +93,7 @@ export function useEditorWords(
   ])
 
   useEffect(() => {
+    reloadSeqRef.current += 1
     if (contextMs == null || !Number.isFinite(contextMs)) return
     const trimSnap = { in: trim.in, out: trim.out }
     const ctxSnap = contextMs
@@ -110,12 +115,15 @@ export function useEditorWords(
   return { words, wordsLoading, loadingReason, reloadWords: () => {
     const trimSnap = { in: trim.in, out: trim.out }
     const ctxSnap = contextRef.current
+    const seq = ++reloadSeqRef.current
     setLoadingReason('reload')
     return fetchClipEditorWords(clipId, trimSnap, ctxSnap)
       .then((data) => {
+        if (seq !== reloadSeqRef.current || lastTrimRef.current.in !== trimSnap.in ||
+            lastTrimRef.current.out !== trimSnap.out || contextRef.current !== ctxSnap) return
         setWords(data.words)
         wordsRef.current = data.words
       })
-      .finally(() => setLoadingReason(null))
+      .finally(() => { if (seq === reloadSeqRef.current) setLoadingReason(null) })
   } }
 }

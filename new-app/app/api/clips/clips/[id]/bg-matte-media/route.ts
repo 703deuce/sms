@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
+import { getClipForWorkspace } from '@/lib/server/clips/clips'
+import { mattePreviewFingerprint } from '@/lib/server/clips/matte-preview-fingerprint'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
@@ -23,6 +25,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     let url: string | null | undefined
     if (kind === 'matte') {
       const quality = new URL(request.url).searchParams.get('quality') === 'detail' ? 'detail' : 'standard'
+      const clip = await getClipForWorkspace(workspaceId, id)
+      if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      const fingerprint = mattePreviewFingerprint(clip)
       const generations = await getPrisma().aiGeneration.findMany({
         where: { workspaceId, clipId: id, kind: 'BG_MATTE', status: 'READY' },
         orderBy: { createdAt: 'desc' },
@@ -31,7 +36,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       })
       const match = generations.find(g => g.storageKey &&
         g.params && typeof g.params === 'object' && !Array.isArray(g.params) &&
-        (g.params as Record<string, unknown>).quality === quality)
+        (g.params as Record<string, unknown>).quality === quality &&
+        (g.params as Record<string, unknown>).previewFingerprint === fingerprint)
       if (match?.storageKey) {
         const storage = await getClipStorageForObjectKey(match.storageKey)
         url = await createCachedSignedDownloadUrl(storage, match.storageKey, { versionHint: match.updatedAt.toISOString() })

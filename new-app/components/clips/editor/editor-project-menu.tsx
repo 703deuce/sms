@@ -41,6 +41,13 @@ export function EditorProjectMenu({
   className?: string
 }) {
   const [renaming, setRenaming] = useState(false)
+  const [draftTitle, setDraftTitle] = useState(title)
+  const cancelRenameRef = useRef(false)
+  const commitRename = () => {
+    setRenaming(false)
+    if (!cancelRenameRef.current && draftTitle.trim() && draftTitle !== title) onTitleChange(draftTitle.trim())
+    cancelRenameRef.current = false
+  }
   const inputRef = useRef<HTMLInputElement>(null)
 
   const item = (a: EditorProjectMenuAction, icon?: React.ReactNode) =>
@@ -62,11 +69,17 @@ export function EditorProjectMenu({
         ref={inputRef}
         autoFocus
         className={cn('h-9 max-w-md border-transparent bg-transparent text-base font-semibold shadow-none hover:border-input focus-visible:border-input', className)}
-        value={title}
-        onChange={(e) => onTitleChange(e.target.value)}
-        onBlur={() => setRenaming(false)}
+        value={draftTitle}
+        onChange={(e) => setDraftTitle(e.target.value)}
+        onBlur={commitRename}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === 'Escape') setRenaming(false)
+          if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() }
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            cancelRenameRef.current = true
+            setDraftTitle(title)
+            e.currentTarget.blur()
+          }
         }}
         aria-label="Clip title"
         data-testid="editor-clip-title-input"
@@ -99,6 +112,8 @@ export function EditorProjectMenu({
           {item(actions.openProjects)}
           <DropdownMenuItem
             onClick={() => {
+              cancelRenameRef.current = false
+              setDraftTitle(title)
               setRenaming(true)
               actions.rename?.kind === 'button' && actions.rename.onClick()
               window.setTimeout(() => inputRef.current?.focus(), 0)

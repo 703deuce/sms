@@ -76,6 +76,7 @@ export function BgMatteCompositePreview({
   const sourceRef = useRef<HTMLVideoElement>(null)
   const workingRef = useRef<{ frame: HTMLCanvasElement; mask: HTMLCanvasElement; foreground: HTMLCanvasElement } | null>(null)
   const [renderable, setRenderable] = useState(false)
+  const [compositeError, setCompositeError] = useState<string | null>(null)
   const quality = removal?.quality ?? 'standard'
 
   useEffect(() => {
@@ -93,9 +94,11 @@ export function BgMatteCompositePreview({
         if (stopped) return
         if (json.data?.state === 'ready' && typeof json.data?.url === 'string') {
           setMaskUrl(json.data.url)
-          return
+        } else if (json.data?.state === 'failed') {
+          // Retrying in the inspector queues another job without remounting this
+          // player. Keep polling so the eventual successful retry appears.
+          setMaskUrl(null)
         }
-        if (json.data?.state === 'failed') return
       } catch { /* Inspector owns error reporting/retry. */ }
       if (!stopped) timer = setTimeout(fetchStatus, 3500)
     }
@@ -226,10 +229,12 @@ export function BgMatteCompositePreview({
         ctx.drawImage(foreground, 0, 0, w, h)
         output.style.visibility = 'visible'
         setRenderable(true)
+        setCompositeError((previous) => previous === null ? previous : null)
       } catch {
-        // CORS-protected or not-yet-decoded media: keep the normal editor video
-        // instead of presenting a false or broken cutout.
+        // Keep normal video visible, but explain why READY does not show a cutout.
         output.style.visibility = 'hidden'
+        setRenderable(false)
+        setCompositeError((previous) => previous ?? 'Matte is ready but the browser cannot composite these video frames. Check media access or try reloading.')
       }
     }
     frameId = requestAnimationFrame(paint)
@@ -246,16 +251,24 @@ export function BgMatteCompositePreview({
     <>
       {maskUrl && mediaKind ? (
         <video ref={sourceRef} crossOrigin="anonymous"
+          onError={() => setCompositeError('Background removal source video could not be decoded.')}
           src={`/api/clips/clips/${encodeURIComponent(clipId)}/bg-matte-media?kind=${encodeURIComponent(mediaKind)}`}
           muted playsInline preload="auto" data-own-clock="1" className="hidden" aria-hidden
           data-testid="preview-person-cors-source" />
       ) : null}
       {maskUrl ? (
         <video ref={maskRef} crossOrigin="anonymous"
+          onError={() => setCompositeError('Generated person matte could not be decoded. Retry the preview.')}
           src={`/api/clips/clips/${encodeURIComponent(clipId)}/bg-matte-media?kind=matte&quality=${encodeURIComponent(quality)}`}
           muted playsInline preload="auto"
           data-own-clock="1"
           className="hidden" aria-hidden data-testid="preview-person-matte-video" />
+      ) : null}
+      {maskUrl && compositeError ? (
+        <p role="status" data-testid="preview-person-composite-error"
+          className="pointer-events-none absolute bottom-2 left-2 z-[4] max-w-[90%] rounded bg-black/80 px-2 py-1 text-[11px] text-white">
+          {compositeError}
+        </p>
       ) : null}
       <canvas ref={canvasRef} data-testid="preview-person-cutout" data-matte-rendered={renderable ? 'true' : 'false'}
         aria-label="Background removal composite preview"

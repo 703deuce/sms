@@ -24,6 +24,7 @@ def run_bg_matte_preview_job(conn, job: dict, post_progress) -> None:
     workspace_id = str(payload.get("workspaceId") or "")
     project_id = str(job.get("projectId") or "")
     quality = "detail" if payload.get("quality") == "detail" else "standard"
+    preview_fingerprint = str(payload.get("previewFingerprint") or "")
     if not clip_id or not workspace_id or not project_id:
         raise RuntimeError("missing matte preview clip/workspace/project")
 
@@ -54,7 +55,8 @@ def run_bg_matte_preview_job(conn, job: dict, post_progress) -> None:
         raise RuntimeError("clip is too short for matte preview")
     sample_ms = min(6000, duration_ms)
     # Preview the beginning of this clip, never the beginning of a larger upload.
-    seek_s = max(0.0, (int(row[3]) - source_offset_ms) / 1000.0)
+    preview_start_ms = int(payload.get('previewStartMs') if payload.get('previewStartMs') is not None else row[3])
+    seek_s = max(0.0, (preview_start_ms - source_offset_ms) / 1000.0)
     post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "matte_preview_source", "progress": 10})
     with tempfile.TemporaryDirectory(prefix="bg_matte_preview_") as tmp:
         work = Path(tmp)
@@ -71,7 +73,7 @@ def run_bg_matte_preview_job(conn, job: dict, post_progress) -> None:
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "matte_preview_gpu", "progress": 30})
         ensure_matte(
             conn, snippet, work, workspace_id=workspace_id, project_id=project_id,
-            clip_id=clip_id, quality=quality,
+            clip_id=clip_id, quality=quality, preview_fingerprint=preview_fingerprint,
             stage=lambda *_args, **_kw: None,
         )
     post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "matte_preview_ready", "progress": 95})
