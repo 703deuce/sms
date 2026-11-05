@@ -44,6 +44,11 @@ export function toExportMs(map: ExportTimeMap, ms: number, edge: 'start' | 'end'
   return ms + add
 }
 
+/** A black/silent gap occupies display time but has no corresponding main-video frame. */
+export function gapAtDisplayMs(map: ExportTimeMap, displayMs: number) {
+  return map.wins.find(w => w.gap && displayMs >= w.startMs && displayMs < w.endMs) ?? null
+}
+
 /** Export ms → base ms; a point inside an insert maps to the insert's base point. */
 export function toBaseMs(map: ExportTimeMap, d: number): number {
   let shift = 0
