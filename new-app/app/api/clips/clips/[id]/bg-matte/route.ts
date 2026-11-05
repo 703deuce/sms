@@ -10,6 +10,12 @@ import { normalizeEdits } from '@/lib/clips/edits'
 import { createId } from '@/lib/supabase/id'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
+// A crash/deployment interruption can leave a GPU job in RUNNING forever.
+// Never block the editor on an orphaned job; let the user retry safely.
+export const MATTE_PREVIEW_MAX_AGE_MS = 8 * 60 * 1000
+export function matteJobTimedOut(status: string, createdAt: Date, now = Date.now()): boolean {
+  return (status === 'QUEUED' || status === 'RUNNING') && now - createdAt.getTime() > MATTE_PREVIEW_MAX_AGE_MS
+}
 type Quality = 'standard' | 'detail'
 const qualityOf = (raw: unknown): Quality => raw === 'detail' ? 'detail' : 'standard'
 
@@ -39,15 +45,19 @@ async function matteState(workspaceId: string, clipId: string, quality: Quality)
       ? job.payload as Record<string, unknown> : {}
     return body.quality === quality
   })
-  // An active preview job takes precedence over an older mask of the same quality.
-  if (recentJob?.status === 'QUEUED' || recentJob?.status === 'RUNNING') {
-    return { state: recentJob.status === 'QUEUED' ? 'queued' : 'processing', url: null, jobId: recentJob.id }
-  }
+  // A completed mask is usable even if the worker was interrupted before
+  // marking its corresponding job complete. Prefer it over stale RUNNING rows.
   const ready = matching.find(gen => gen.status === 'READY' && gen.storageKey)
   if (ready?.storageKey) {
     const storage = await getClipStorageForObjectKey(ready.storageKey)
     const url = await createCachedSignedDownloadUrl(storage, ready.storageKey, { versionHint: ready.updatedAt.toISOString() })
     return { state: 'ready', url, generationId: ready.id }
+  }
+  if (recentJob && matteJobTimedOut(recentJob.status, recentJob.createdAt)) {
+    return { state: 'failed', url: null, error: 'Matte generation did not finish. Retry the preview.' }
+  }
+  if (recentJob?.status === 'QUEUED' || recentJob?.status === 'RUNNING') {
+    return { state: recentJob.status === 'QUEUED' ? 'queued' : 'processing', url: null, jobId: recentJob.id }
   }
   if (recentJob?.status === 'FAILED') return { state: 'failed', url: null, error: recentJob.error ?? 'Preview generation failed' }
   const row = matching[0]
