@@ -370,6 +370,16 @@ export function PreviewStage({
   const previewRate = useSyncExternalStore(subscribePreviewRate, getPreviewRate, () => 1)
   const voiceOutputMutedRef = useRef(voiceOutputMuted)
   voiceOutputMutedRef.current = voiceOutputMuted
+  useEffect(() => {
+    // Mute every secondary speech source immediately on toggle, even while
+    // paused (the rAF may not have run yet). The rAF restores source-specific
+    // routing when the Voice/player mute is released.
+    if (!voiceOutputMuted) return
+    if (splitAudioRef.current) splitAudioRef.current.muted = true
+    for (const el of Object.values(srcElRefs.current)) {
+      if (el instanceof HTMLVideoElement) el.muted = true
+    }
+  }, [voiceOutputMuted])
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
   const captionTimeRef = useRef(0)
