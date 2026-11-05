@@ -15,6 +15,7 @@ import type { AiProducerRunConfig, AiProducerSourceRef } from '@/lib/ai-producer
 export type CreateAiProducerRunInput = {
   sources: AiProducerSourceRef[]
   outputType: AiProducerOutputType
+  editMode?: 'just_chatting_rough_cut'
   genre?: string
   platform?: 'tiktok' | 'shorts' | 'reels'
   targetLengthS?: [number, number]
@@ -36,11 +37,15 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
   await assertNoConcurrentRun(workspaceId)
   const genre = input.genre ?? 'irl_just_chatting'
   if (genre !== 'irl_just_chatting') throw new Error('genre_not_supported')
+  if (input.editMode === 'just_chatting_rough_cut' && input.outputType !== 'story') throw new Error('rough_cut_requires_story_output')
+  if (input.editMode === 'just_chatting_rough_cut' && input.sources.length !== 1) throw new Error('rough_cut_single_source_only')
+  if (input.editMode === 'just_chatting_rough_cut' && input.exportOnFinish) throw new Error('rough_cut_requires_review_before_export')
   const resolvedForConfig =
     input.outputType === 'auto' ? 'single_payoff' : input.outputType === 'story' ? 'story' : input.outputType
   const config: AiProducerRunConfig = {
+    editMode: input.editMode,
     targetLengthS:
-      input.targetLengthS ??
+      (input.editMode === 'just_chatting_rough_cut' ? [180, 480] : input.targetLengthS) ??
       (resolvedForConfig === 'montage'
         ? [30, 60]
         : resolvedForConfig === 'story'
@@ -48,11 +53,11 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
           : [15, 30]),
     music:
       input.music ??
-      (resolvedForConfig === 'montage' || resolvedForConfig === 'story' ? 'library' : 'none'),
-    memeSfx: input.memeSfx ?? 'subtle',
+      (input.editMode === 'just_chatting_rough_cut' ? 'none' : resolvedForConfig === 'montage' || resolvedForConfig === 'story' ? 'library' : 'none'),
+    memeSfx: input.editMode === 'just_chatting_rough_cut' ? 'off' : input.memeSfx ?? 'subtle',
     exportOnFinish: Boolean(input.exportOnFinish),
     geminiUsdCap: AI_PRODUCER_AGENT_GEMINI_USD_CAP,
-    maxEditsPerRun: AI_PRODUCER_MAX_EDITS_PER_RUN,
+    maxEditsPerRun: input.editMode === 'just_chatting_rough_cut' ? 1 : AI_PRODUCER_MAX_EDITS_PER_RUN,
   }
   const id = createId('aprun')
   const row = await getPrisma().aiProducerAgentRun.create({
