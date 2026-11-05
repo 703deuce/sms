@@ -99,6 +99,7 @@ export function StockBrollPicker({
                   setInserting(h.providerId)
                   void Promise.resolve(onInsert(h.providerId, startMs, endMs))
                     .then(() => onClose())
+                    .catch(() => { /* Parent displays the upload error; leave picker open. */ })
                     .finally(() => setInserting(null))
                 }}
               >
