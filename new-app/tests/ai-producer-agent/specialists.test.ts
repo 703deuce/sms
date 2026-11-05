@@ -54,7 +54,7 @@ describe('AI Producer specialist editorial handoff', () => {
       approved[0], { ...approved[1], endMs: 320_000 },
     ], source, words)).toThrow('invalid_source')
     expect(() => checkEditorialSelections([
-      { ...approved[0], startMs: 500, endMs: 3900 },
+      { ...approved[0], startMs: 500, endMs: 10500 },
       approved[1],
     ], source, words)).toThrow('cut_inside_word')
     expect(() => checkEditorialSelections([
