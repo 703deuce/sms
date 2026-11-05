@@ -60,6 +60,7 @@ export function TimelineLaneHeader({
       className={`flex items-center gap-0.5 border-b border-border/40 pl-1.5 pr-1 text-[12px] font-medium text-muted-foreground ${dropTarget ? 'bg-primary/15' : selected ? 'bg-primary/15 ring-1 ring-inset ring-primary/50' : ''}`}
       style={{ height }}
       data-testid={`timeline-lane-header-${tk}`}
+      data-selected={selected ? 'true' : undefined}
     >
       <TrackName name={name} tk={tk} onRename={track?.onRename} />
       {track?.fxOn && track.onFx ? (
