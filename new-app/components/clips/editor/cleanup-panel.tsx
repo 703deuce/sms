@@ -175,7 +175,7 @@ export function CleanupPanel({
     const rows = proposed.filter(
       (row) =>
         (row.kind === 'filler' || row.kind === 'repeat') &&
-        row.quality?.confidence !== 'needs_review',
+        row.quality?.confidence === 'ready',
     )
     if (!rows.length) return
     if (onApplyPass) onApplyPass(rows, cleanupPassLabel('filler', rows.length))
@@ -187,7 +187,8 @@ export function CleanupPanel({
 
   const applyAllOfKind = (kind: CleanupProposal['kind']) => {
     const rows = proposed.filter(
-      (row) => row.kind === kind && row.quality?.confidence !== 'needs_review',
+      (row) => row.kind === kind &&
+        ((kind === 'filler' || kind === 'repeat') ? row.quality?.confidence === 'ready' : row.quality?.confidence !== 'needs_review'),
     )
     if (!rows.length) return
     if (kind === 'gap') {
@@ -234,7 +235,7 @@ export function CleanupPanel({
   )
   const proposedGaps = useMemo(() => proposed.filter((row) => row.kind === 'gap'), [proposed])
   // SCRIPT_DOC2: one-click rows count only cuts with clean (quiet) edges; the rest wait for review.
-  const fillerReady = proposedFillers.filter((r) => r.quality?.confidence !== 'needs_review')
+  const fillerReady = proposedFillers.filter((r) => r.quality?.confidence === 'ready')
   const fillerReview = proposedFillers.length - fillerReady.length
   const gapReady = proposedGaps.filter((r) => r.quality?.confidence !== 'needs_review')
   const keepPauseSec = Math.round(Math.max(0, gapSettings.targetGapSec) * 100) / 100
