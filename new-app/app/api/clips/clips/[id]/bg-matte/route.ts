@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { createHash } from 'node:crypto'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
@@ -10,25 +9,11 @@ import { bgRemovalBlockedReason } from '@/lib/clips/editor/bg-removal'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { createId } from '@/lib/supabase/id'
 import { matteJobTimedOut } from '@/lib/clips/editor/matte-job-status'
+import { mattePreviewFingerprint } from '@/lib/server/clips/matte-preview-fingerprint'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 type Quality = 'standard' | 'detail'
 const qualityOf = (raw: unknown): Quality => raw === 'detail' ? 'detail' : 'standard'
-
-// A preview matte is only valid for the exact footage and source window it
-// was generated from; clipId + quality alone can reuse a stale subject mask.
-export function mattePreviewFingerprint(clip: {
-  sourceSegKey?: string | null
-  sourceSegStartMs?: number | null
-  previewKey?: string | null
-  startMs: number
-  endMs: number
-}): string {
-  return createHash('sha256').update(JSON.stringify([
-    clip.sourceSegKey ?? null, clip.sourceSegStartMs ?? null,
-    clip.previewKey ?? null, clip.startMs, clip.endMs,
-  ])).digest('hex').slice(0, 32)
-}
 
 async function matteState(workspaceId: string, clipId: string, quality: Quality, fingerprint: string) {
   const prisma = getPrisma()
