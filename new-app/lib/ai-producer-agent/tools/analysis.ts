@@ -45,7 +45,8 @@ export async function findMoments(
       ctx.cache.momentsSummary = moments.slice(0, 30)
     }
   }
-  const costUsd = Number(result.costUsd ?? result.meta && (result.meta as Record<string, unknown>).est_usd ?? est)
+  const meta = result.meta && typeof result.meta === 'object' ? result.meta as Record<string, unknown> : null
+  const costUsd = Number(result.costUsd ?? meta?.est_usd ?? est)
   return {
     ok: true,
     summary: mode === 'inventory' ? `${rows.length} inventory beats` : `${ctx.cache.moments?.length ?? 0} moments`,
