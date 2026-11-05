@@ -262,17 +262,23 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
       <div className={`${editorToolbarGroup} shrink-0`}>
         <button
           type="button"
-          className={toggleBtn(p.snapOn)}
+          className={`${toggleBtn(p.snapOn)} px-2 ${p.snapOn ? 'ring-2 ring-primary/80 bg-primary/20' : 'border border-border opacity-65'}`}
           onClick={() => p.setSnapOn((v) => !v)}
           aria-pressed={p.snapOn}
           aria-label="Snapping"
-          title="Snap (N)"
+          title={p.snapOn ? 'Snapping ON (N): edges lock to playhead and nearby clip boundaries' : 'Snapping OFF (N): edges move freely'}
           data-testid="timeline-snap"
         >
           <Magnet />
+          <span className="ml-1 text-[10px] font-semibold">{p.snapOn ? 'Snap on' : 'Snap off'}</span>
         </button>
         {p.editable ? (
           <>
+            {p.xfadeTracks && p.autoXfade ? (
+              <span className="rounded border border-primary/60 bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+                title="Cross-track fades ON: moving one Text, B-roll, or SFX clip to partially overlap another on a different track adds fade keyframes. One clip alone has nothing to fade with."
+                data-testid="timeline-xfade-tracks-active">⇅ Fades on</span>
+            ) : null}
             <button
               type="button"
               className={toggleBtn(p.magnet)}
@@ -384,6 +390,7 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
               <DropdownMenuLabel className={editorMenuSection}>Tracks</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => { p.setXfadeTracks((v) => !v); toast.message(p.xfadeTracks ? "Cross-track fades disabled" : "Cross-track fades enabled") }} disabled={!p.autoXfade} data-testid="timeline-xfade-tracks">
                 ⇅ Cross-track fades {p.xfadeTracks ? "✓" : ""}
+                <span className="ml-2 block text-[10px] text-muted-foreground">Applies when overlapping two Text, B-roll, or SFX clips on separate tracks</span>
               </DropdownMenuItem>
               {p.addTrackMenu}
               <DropdownMenuItem onClick={() => p.setPacingOpen((v) => !v)} data-testid="timeline-pacing">
