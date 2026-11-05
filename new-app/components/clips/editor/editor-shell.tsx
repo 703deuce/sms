@@ -1438,6 +1438,8 @@ export function EditorShell({
     [],
   )
   const audioMeter = useAudioMix({
+    clipId,
+    mediaKind: matteMediaKind,
     musicRate,
     videoRef,
     edits: renderEdits,
@@ -1766,6 +1768,8 @@ export function EditorShell({
       v.pause()
       return
     }
+    // An explicit Play gesture unlocks the Web Audio graph as well as the video.
+    void audioMeter.resumeAudio()?.catch(() => {})
     const mode = await playWithSound(v)
     if (mode === 'muted') {
       setPlayerMuted(true)
