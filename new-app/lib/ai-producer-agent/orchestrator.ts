@@ -5,7 +5,7 @@ import { verifyEdlCaptionSync } from '@/lib/clips/cuts-quality/edl-invariant'
 import { buildAgentSystemPromptForModel } from '@/lib/ai-producer-agent/prompts'
 import { lunaChat, type LunaMessage } from '@/lib/ai-producer-agent/luna-client'
 import { toolsForPhase } from '@/lib/ai-producer-agent/tools/schemas'
-import { runTool, buildToolCtx, type ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
+import { runTool, buildToolCtx, type ToolCtx, type ToolResult } from '@/lib/ai-producer-agent/tools/registry'
 import { summarizeToolResult, compactHistory } from '@/lib/ai-producer-agent/summarize'
 import type { ValidationReport } from '@/lib/ai-producer-agent/validate'
 import type { DraftEditsBuilder } from '@/lib/ai-producer-agent/draft-edits'
@@ -235,8 +235,8 @@ async function loop(ctx: ToolCtx, out: OutputState, budget: Budget, messages: Lu
           !approved.some((seg) => seg.startMs === a.srcInMs && seg.endMs === a.srcOutMs) ||
           out.builder?.segs.some((seg) => seg.srcInMs === a.srcInMs && seg.srcOutMs === a.srcOutMs)) blocked = true
       }
-      const r = blocked
-        ? { ok: false, summary: 'specialist_assembly_tool_or_range_not_approved' }
+      const r: ToolResult = blocked
+        ? { ok: false, summary: 'specialist_assembly_tool_or_range_not_approved', costUsd: 0 }
         : await runTool(ctx, name, args, out, budget)
       budget.steps++
       budget.addGemini(r.costUsd)
