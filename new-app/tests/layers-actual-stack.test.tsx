@@ -10,6 +10,41 @@ import { visualStack } from '@/lib/clips/editor/tracks'
 afterEach(cleanup)
 
 describe('actual Layers stack (E5)', () => {
+  it('Retest4 E5: fixed Captions, Headline and Main video never advertise a draggable grip', () => {
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
+    const ui = render(<LayersPanel clipId="clip1" edits={edits}
+      layers={resolveLayers(edits)} setLayers={vi.fn()} onEdits={vi.fn()} />)
+    for (const key of ['captions', 'headline:headline', 'video']) {
+      const row = ui.getByTestId(`actual-layer-${key}`)
+      expect(row.getAttribute('draggable')).toBe('false')
+      const pin = ui.getByTestId(`actual-layer-fixed-${key}`)
+      expect(pin.getAttribute('title')).toContain('Fixed compositing layer')
+      expect(ui.queryByTestId(`actual-layer-grip-${key}`)).toBeNull()
+    }
+  })
+
+  it('Retest4 E5: Text/B-roll grips are pointer draggable, not native HTML5 drag surfaces', () => {
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
+    edits.textItems = [newTextItem('title', 1000, 30000)]
+    edits.broll = [{ id: 'overlay', source: 'stock', assetId: 'a1', startMs: 1000, endMs: 8000 }]
+    const onEdits = vi.fn()
+    const ui = render(<LayersPanel clipId="clip1" edits={edits} layers={[]}
+      setLayers={vi.fn()} onEdits={onEdits} />)
+    const from = ui.getByTestId('actual-layer-broll:overlay')
+    const to = ui.getByTestId('actual-layer-text:title')
+    const grip = ui.getByTestId('actual-layer-grip-broll:overlay')
+    expect(from.getAttribute('draggable')).toBe('false')
+    Object.defineProperty(from, 'getBoundingClientRect', { configurable: true,
+      value: () => ({ top: 0, bottom: 20, height: 20, left: 0, right: 160, width: 160 }) })
+    Object.defineProperty(to, 'getBoundingClientRect', { configurable: true,
+      value: () => ({ top: 21, bottom: 49, height: 28, left: 0, right: 160, width: 160 }) })
+    fireEvent.pointerDown(grip, { button: 0, pointerId: 8, clientX: 15, clientY: 10 })
+    fireEvent.pointerMove(window, { pointerId: 8, clientX: 15, clientY: 35 })
+    fireEvent.pointerUp(window, { pointerId: 8, clientX: 15, clientY: 35 })
+    expect(onEdits).toHaveBeenCalledTimes(1)
+    expect(visualStack(onEdits.mock.calls[0]![0]).map(t => t.id)).toEqual(['tx1', 'ov1'])
+  })
+
   it('E5: exposes video visibility/lock and makes real layers the default surface', () => {
     const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 30_000 })
     const onEdits = vi.fn()
