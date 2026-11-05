@@ -127,6 +127,9 @@ export type TimelineToolbarChromeProps = {
   zoomDefault: () => void
   zoomFit: () => void
   onDuplicateFreeze: () => void
+  /** Collapse control lives with the timeline commands, not in a second resize strip. */
+  collapsed: boolean
+  onToggleCollapsed: () => void
 }
 
 export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
@@ -448,6 +451,17 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        <button
+          type="button"
+          onClick={p.onToggleCollapsed}
+          aria-expanded={!p.collapsed}
+          aria-label={p.collapsed ? 'Expand timeline' : 'Collapse timeline'}
+          title={p.collapsed ? 'Expand timeline' : 'Collapse timeline'}
+          data-testid="timeline-collapse"
+          className={`${editorIconBtn} shrink-0`}
+        >
+          <ChevronDown className={`size-4 transition-transform ${p.collapsed ? '' : 'rotate-180'}`} />
+        </button>
       </div>
     </div>
   )

@@ -5,7 +5,7 @@ import { shouldWrapLoop } from '@/lib/clips/editor/loop-playback'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { exportTimeMap, seekBaseMs, toBaseMs, toExportMs, speedDisplayMs, speedBaseMs } from '@/lib/clips/editor/export-time'
 import { parseNudge } from '@/lib/clips/editor/timecode-nudge'
-import { readTimelineHeight, clampTimelineHeight, TIMELINE_MIN_H, writeTimelineHeight } from '@/lib/clips/editor/timeline-opts'
+import { TIMELINE_MIN_H } from '@/lib/clips/editor/timeline-opts'
 import { clampLaneH, laneHeights, readLaneHeights, writeLaneHeights } from '@/lib/clips/editor/lane-heights'
 import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
 import { Activity, Blend, Bookmark, Command, Keyboard, Layers, Link2, Magnet, Maximize2, Pause, Plus, Redo2, Repeat, Scissors, Square, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
@@ -1001,22 +1001,9 @@ export function Timeline({
   const [snapOn, setSnapOn] = useState(true)
   // G1b3: trim tools (V select · R roll · U slide) and Vegas-style auto-crossfade on overlap.
   const [tool, setTool] = useState<TrimTool>('select')
-  // TC2b (TL-55): resizable / collapsible timeline (per-user, localStorage; null = fit all tracks).
-  const [tlHeight, setTlHeight] = useState<number | null>(null)
+  // The unified workspace owns the only vertical timeline resize handle.
   const [tlCollapsed, setTlCollapsed] = useState(false)
   const collapsed = (controlledCollapsed ?? tlCollapsed) && !forceExpanded
-  useEffect(() => {
-    const vh = typeof window === 'undefined' ? 900 : window.innerHeight
-    const stored = readTimelineHeight()
-    setTlHeight(capSmallScreenTl(clampTimelineHeight(stored ?? Math.round(vh * 0.3), vh), vh))
-  }, [])
-  useEffect(() => {
-    const onResize = () => {
-      setTlHeight((h) => (h == null ? null : capSmallScreenTl(clampTimelineHeight(h, window.innerHeight), window.innerHeight)))
-    }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
   // TIMELINE_LAYOUT5: keyframe strip under the toolbar is on demand (same controls live in Properties > Transform).
   const [kfStripOn, setKfStripOn] = useState(false)
   useEffect(() => {
@@ -1036,12 +1023,6 @@ export function Timeline({
       }
       return !v
     })
-  const setTimelineHeight = (h: number | null) => {
-    const vhNow = typeof window === 'undefined' ? 900 : window.innerHeight
-    const v = h == null ? null : capSmallScreenTl(clampTimelineHeight(h, vhNow), vhNow)
-    setTlHeight(v)
-    writeTimelineHeight(v)
-  }
   const [autoXfade, setAutoXfade] = useState(true)
   // TC2c (TL-49): cross-track crossfades (opt-in; overlap across tracks is often picture-in-picture).
   const [xfadeTracks, setXfadeTracksRaw] = useState(false)
@@ -3251,13 +3232,19 @@ export function Timeline({
   return (
     <div
       ref={rootRef}
-      className="relative flex h-full max-h-full min-h-0 min-w-0 select-none flex-col gap-1 overflow-y-auto focus-visible:outline-none"
+      className="relative flex h-full max-h-full min-h-0 min-w-0 select-none flex-col gap-0 overflow-y-auto focus-visible:outline-none"
       tabIndex={-1}
       onKeyDown={onKeyDown}
       data-testid="timeline-root"
     >
       <TimelineToolbarChrome
         editable={editable}
+        collapsed={collapsed}
+        onToggleCollapsed={() => {
+          const next = !collapsed
+          setTlCollapsed(next)
+          onCollapsedChange?.(next)
+        }}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={onUndo}
@@ -4144,45 +4131,6 @@ export function Timeline({
           ))}
         </div>
       ) : null}
-      <div
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize timeline (drag; double-click = fit all tracks)"
-        title="Drag to resize the timeline · double-click: show all tracks"
-        className="group order-first flex h-3 shrink-0 cursor-row-resize items-center justify-center gap-2"
-        data-testid="timeline-resize"
-        onPointerDown={(e) => {
-          if (e.button !== 0 || collapsed) return
-          e.preventDefault()
-          const body = e.currentTarget.parentElement?.querySelector<HTMLElement>('[data-testid="timeline-body"]') ?? null
-          const y0 = e.clientY
-          const h0 = tlHeight ?? body?.getBoundingClientRect().height ?? 240
-          const mv = (ev: PointerEvent) => setTimelineHeight(h0 - (ev.clientY - y0))
-          const up = () => {
-            window.removeEventListener('pointermove', mv)
-            window.removeEventListener('pointerup', up)
-          }
-          window.addEventListener('pointermove', mv)
-          window.addEventListener('pointerup', up)
-        }}
-        onDoubleClick={() => setTimelineHeight(null)}
-      >
-        <span className="h-1 w-10 rounded bg-border group-hover:bg-primary/60" />
-        <button
-          type="button"
-          className="rounded px-1 text-[11px] text-muted-foreground hover:text-foreground"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => {
-            const next = !(controlledCollapsed ?? tlCollapsed)
-            setTlCollapsed(next)
-            onCollapsedChange?.(next)
-          }}
-          aria-pressed={collapsed}
-          data-testid="timeline-collapse"
-        >
-          {collapsed ? 'Show timeline' : 'Collapse'}
-        </button>
-      </div>
       <TimelineShortcutsSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
       {trPop ? (
         <TransitionPopover

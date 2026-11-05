@@ -12,11 +12,14 @@ describe('unified editor density defaults', () => {
     expect(readEditorPanelWidthPx()).toBe(348)
   })
 
-  it('starts with compact, readable timeline lanes rather than tall caption chips', () => {
-    expect(LANE_H_DEFAULT.text).toBe(36)
+  it('starts with larger readable video and text tracks while captions remain compact', () => {
+    expect(LANE_H_DEFAULT.text).toBe(40)
     expect(LANE_H_DEFAULT.captions).toBe(32)
     expect(LANE_H_DEFAULT.broll).toBe(48)
-    expect(LANE_H_DEFAULT.video).toBe(82)
+    expect(LANE_H_DEFAULT.video).toBe(100)
+    expect(LANE_H_DEFAULT.voice).toBe(52)
+    expect(LANE_H_DEFAULT.music).toBe(40)
+    expect(LANE_H_DEFAULT.sfx).toBe(40)
   })
 
   it('still respects user-adjusted lane heights and existing minimums', () => {
