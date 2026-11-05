@@ -61,6 +61,32 @@ describe('TextPanel multi-part templates', () => {
     expect(parts.every((t: { style: { size: number } }) => t.style.size >= 200)).toBe(true)
   })
 
+  it('E9: Quote, Big stat and Countdown show their first visible part exactly at the playhead', () => {
+    const initial = defaultEdits({ clipStartMs: 0, clipEndMs: 60_000 })
+    const commits: typeof initial[] = []
+    function Editor() {
+      const [edits, setEdits] = useState(initial)
+      return <TextPanel edits={edits} playheadMs={4000} durationMs={60_000}
+        selectedId={null} onSelect={vi.fn()} onEdits={(next) => { commits.push(next); setEdits(next) }} />
+    }
+    const ui = render(<Editor />)
+    for (const id of ['c_qs_quote', 'c_cd_321', 'c_qs_stat']) {
+      const before = commits.at(-1)?.textItems?.length ?? 0
+      fireEvent.click(ui.getByTestId(`text-template-${id}`))
+      const parts = commits.at(-1)!.textItems!.slice(before)
+      expect(parts[0]!.startMs).toBe(4000)
+      expect(parts[0]!.anim?.in).toBeUndefined()
+      expect(parts[0]!.style.size).toBeGreaterThan(100)
+    }
+    const groups = commits.map((edit, i) => {
+      const priorLength = i ? commits[i - 1]!.textItems!.length : 0
+      return edit.textItems!.slice(priorLength)
+    })
+    expect(groups[1]![0]!.x !== groups[0]![0]!.x || groups[1]![0]!.y !== groups[0]![0]!.y).toBe(true)
+    expect(groups[2]![0]!.x !== groups[0]![0]!.x || groups[2]![0]!.y !== groups[0]![0]!.y).toBe(true)
+    expect(groups[0]!.find(t => t.text === '— Name')!.style.size).toBeGreaterThan(100)
+  })
+
   it('E9: consecutive quote templates are visibly separated as intact groups', () => {
     const initial = defaultEdits({ clipStartMs: 0, clipEndMs: 60_000 })
     const log: typeof initial[] = []
