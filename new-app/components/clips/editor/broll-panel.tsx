@@ -363,7 +363,7 @@ export function BrollPanel({
             defaultQuery={defaultQuery}
             clipEndMs={outputDurationMs}
             playheadMs={playheadMs}
-            onInsert={(pid, a, b) => void insertStock(pid, a, b).catch((e) => toast.error(e instanceof Error ? e.message : 'Insert failed'))}
+            onInsert={(pid, a, b) => insertStock(pid, a, b).catch((e) => { toast.error(e instanceof Error ? e.message : 'Insert failed'); throw e })}
           />
         </>
       ) : (
