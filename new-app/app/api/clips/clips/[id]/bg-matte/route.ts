@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createHash } from 'node:crypto'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
@@ -14,7 +15,22 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 type Quality = 'standard' | 'detail'
 const qualityOf = (raw: unknown): Quality => raw === 'detail' ? 'detail' : 'standard'
 
-async function matteState(workspaceId: string, clipId: string, quality: Quality) {
+// A preview matte is only valid for the exact footage and source window it
+// was generated from; clipId + quality alone can reuse a stale subject mask.
+export function mattePreviewFingerprint(clip: {
+  sourceSegKey?: string | null
+  sourceSegStartMs?: number | null
+  previewKey?: string | null
+  startMs: number
+  endMs: number
+}): string {
+  return createHash('sha256').update(JSON.stringify([
+    clip.sourceSegKey ?? null, clip.sourceSegStartMs ?? null,
+    clip.previewKey ?? null, clip.startMs, clip.endMs,
+  ])).digest('hex').slice(0, 32)
+}
+
+async function matteState(workspaceId: string, clipId: string, quality: Quality, fingerprint: string) {
   const prisma = getPrisma()
   const [generations, jobs] = await Promise.all([
     prisma.aiGeneration.findMany({
@@ -33,12 +49,12 @@ async function matteState(workspaceId: string, clipId: string, quality: Quality)
   const matching = generations.filter(gen => {
     const params = gen.params && typeof gen.params === 'object' && !Array.isArray(gen.params)
       ? gen.params as Record<string, unknown> : {}
-    return params.quality === quality
+    return params.quality === quality && params.previewFingerprint === fingerprint
   })
   const recentJob = jobs.find(job => {
     const body = job.payload && typeof job.payload === 'object' && !Array.isArray(job.payload)
       ? job.payload as Record<string, unknown> : {}
-    return body.quality === quality
+    return body.quality === quality && body.previewFingerprint === fingerprint
   })
   // A completed mask is usable even if the worker was interrupted before
   // marking its corresponding job complete. Prefer it over stale RUNNING rows.
@@ -71,7 +87,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const clip = await getClipForWorkspace(workspaceId, id)
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const quality = qualityOf(new URL(request.url).searchParams.get('quality'))
-    return NextResponse.json({ data: await matteState(workspaceId, id, quality) }, { headers: NO_STORE })
+    return NextResponse.json({ data: await matteState(workspaceId, id, quality, mattePreviewFingerprint(clip)) }, { headers: NO_STORE })
   } catch (err) {
     return jsonError(err, 500)
   }
@@ -93,7 +109,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const edits = normalizeEdits(clip.edits, { clipStartMs: clip.startMs, clipEndMs: clip.endMs })
     const blocked = bgRemovalBlockedReason(edits)
     if (blocked) return NextResponse.json({ error: blocked }, { status: 400 })
-    const existing = await matteState(workspaceId, id, quality)
+    const existing = await matteState(workspaceId, id, quality, mattePreviewFingerprint(clip))
     if (existing.state === 'ready' || existing.state === 'queued' || existing.state === 'processing')
       return NextResponse.json({ data: { ...existing, credits: 0 } }, { headers: NO_STORE })
     const prisma = getPrisma()
@@ -105,7 +121,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         type: 'BG_MATTE_PREVIEW',
         status: 'QUEUED',
         maxAttempts: 1,
-        payload: { clipId: id, workspaceId, quality, previewSeconds: 6 },
+        payload: { clipId: id, workspaceId, quality, previewSeconds: 6, previewFingerprint: mattePreviewFingerprint(clip) },
       },
     })
     return NextResponse.json({ data: { state: 'queued', jobId: created.id, url: null, credits: 0 } }, { status: 202, headers: NO_STORE })
