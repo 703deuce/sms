@@ -38,7 +38,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { clipsFetch, deriveClipFromEditor, patchClip } from '@/lib/clips-api'
+import { clipsFetch, patchClip } from '@/lib/clips-api'
 import { useOpenInFullVideo } from '@/components/clips/editor/open-in-full-video-button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -108,7 +108,7 @@ export function ClipCard({
   const duplicateCard = async () => {
     setCardActionBusy(true)
     try {
-      await deriveClipFromEditor(clip.id, { trimIn: clip.startMs, trimOut: clip.endMs, title: `${clip.title} copy`.slice(0, 120) })
+      await clipsFetch(`/api/clips/clips/${encodeURIComponent(clip.id)}/duplicate`, { method: 'POST', body: '{}' })
       toast.success('Duplicate created')
       onChanged?.()
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Duplicate failed') }
