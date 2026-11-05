@@ -29,6 +29,7 @@ export async function EditorPayloadSection({
 
   return (
     <EditorClipShell
+      key={`${projectId}:${clipId}`}
       projectId={projectId}
       projectTitle={data.project.title}
       clipId={clipId}
