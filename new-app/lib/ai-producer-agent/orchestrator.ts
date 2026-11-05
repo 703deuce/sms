@@ -96,12 +96,15 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     {
       role: 'user',
       content: JSON.stringify({
-        task: 'make_edit',
+        task: ctx.config.editMode === 'just_chatting_rough_cut' ? 'make_long_form_rough_cut' : 'make_edit',
         outputIndex: out.index,
         outputType: out.outputType,
         config: ctx.config,
         instruction,
-        sources: ctx.sources.map((s) => ({ sourceId: s.sourceId, durationMs: s.durationMs, title: s.title })),
+        sources: ctx.sources.map((s) => ({ sourceId: s.sourceId, durationMs: s.durationMs, rangeMs: s.rangeMs, title: s.title })),
+        transcriptWordCount: ctx.cache.words?.length ?? 0,
+        editorialGoal: ctx.config.editMode === 'just_chatting_rough_cut'
+          ? 'Select complete, coherent conversational sections from all twenty minutes; do not make a shorts montage. Use get_transcript in bounded ranges before deciding cut boundaries.' : undefined,
         moments: ctx.cache.momentsSummary,
         inventory: ctx.cache.inventory,
         usedPayoffs: ctx.usedPayoffs,
