@@ -536,7 +536,10 @@ export function CanvasSelectionOverlay({
           onChange={(e) => setEditing({ ...editing, text: e.target.value })}
           onKeyDown={(e) => {
             e.stopPropagation()
-            if (e.key === 'Escape') finishEdit(false)
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              finishEdit(false)
+            }
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) finishEdit(true)
           }}
           onBlur={() => finishEdit(true)}
