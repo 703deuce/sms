@@ -38,7 +38,8 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
-import { rmsSamplesFromPeaks } from '@/lib/clips/gap-audio-trim'
+import { rmsSamplesFromPeaks, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
+import { loadFineEnvelope } from '@/lib/clips/editor/fine-audio-envelope'
 import {
   cleanupPassConfirmMessage,
   cleanupPassNeedsConfirm,
@@ -95,6 +96,7 @@ export function CleanupPanel({
 }) {
   const [auditionIds, setAuditionIds] = useState<Set<string>>(new Set())
   const [fillerMode, setFillerMode] = useState<'audio' | 'ripple'>('audio')
+  const [fineSpeechEnvelope, setFineSpeechEnvelope] = useState<GapRmsSample[] | null>(null)
   const audioOnly = fillerMode === 'audio' && audioMuteAllowed(edits) && Boolean(onCommitEdits)
   const commitFillerAudio = (rows: CleanupProposal[], label: string) => {
     if (!onCommitEdits || !rows.length) return
@@ -153,9 +155,22 @@ export function CleanupPanel({
     [audioPeaks.peaks, audioPeaks.peaksPerSec, mediaOffsetMs],
   )
 
+  // The 40 Hz peaks are enough to find long pauses, but not a safe boundary
+  // for an 'um' touching a consonant. Only 5 ms decoded audio can approve an
+  // automatic filler edit. Otherwise the candidate requires human audition.
+  useEffect(() => {
+    let cancelled = false
+    setFineSpeechEnvelope(null)
+    if (videoUrl) void loadFineEnvelope(videoUrl, mediaOffsetMs).then((samples) => {
+      if (!cancelled) setFineSpeechEnvelope(samples?.length ? samples : null)
+    })
+    return () => { cancelled = true }
+  }, [videoUrl, mediaOffsetMs])
   const filler = useMemo(
-    () => fillerProposals(orderedWords, deletedSet, { strength, enabledOptInFillers: enabledOptIn, rmsSamples }),
-    [orderedWords, deletedSet, strength, enabledOptIn, rmsSamples],
+    () => fillerProposals(orderedWords, deletedSet, {
+      strength, enabledOptInFillers: enabledOptIn, rmsSamples: fineSpeechEnvelope,
+    }),
+    [orderedWords, deletedSet, strength, enabledOptIn, fineSpeechEnvelope],
   )
   const gaps = useMemo(
     () =>
