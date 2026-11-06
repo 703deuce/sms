@@ -55,3 +55,52 @@ User instruction takes precedence over soft pacing suggestions.
 
 Explain what was kept, what was shortened, which joins are uncertain,
 and any editorial choices worth A/B auditioning. Never promise perfection.
+
+## Just Chatting editorial direction v1 — learned from five editing case studies
+
+This is the *genre-specific* layer; it does not replace universal film grammar.
+The five training sources cover professional editorial passes, creative direction,
+marker-driven collaboration, documentary interview retrieval, and ad generation.
+Only the applicable conversational principles are used for this skill.
+
+### Editorial evaluation (before cutting)
+- Identify the central topic and viewer promise. Ask what makes this conversation
+  worth seeing and what context a new viewer needs to understand it.
+- Inventory all 20 minutes, not just finder highlights. Notice setup, story,
+  joke, reaction, repetition, emotional pause and payoff. Rank for *contribution
+  to this video's story*, not virality scores.
+- Preserve original meaning. Don't rearrange responses to create a false answer
+  or change how a person appears to respond. Source-ground every kept interval.
+- Remove redundant explanations, dead time and failed retakes *only when clear*;
+  some pauses, repetition and laughter are essential to the moment.
+- Keep the video coherent, with the smallest number of visual effects that serve
+  the topic. Do not impose 'change shots every 3 seconds' from other genres.
+
+### Full-edit polish (after approving story cuts)
+- Preserve the streamer's aspect ratio and facecam/chat context. Avoid zooming
+  away readable chat or important reactions. Default to a restrained full frame.
+- Differentiate captions (faithful speech) from supers (concise, accurate
+  takeaways). Add only when appropriate. Never make text compete with captions.
+- No fabricated B-roll, decorative motion graphics or generic cinematic music.
+  Just Chatting normally benefits from clear speech and natural pacing.
+- Distinguish a technical jump cut from a genuine change of topic. Don't apply
+  a flashy transition to every silence removal.
+
+### Supervising review (before creating output project)
+- Review the literal first/last transcript words of *every chosen section* and
+  the before/after words at *each join*. Check the meaning and context of the
+  proposed timeline; a validator passing does not certify the story.
+- Fail edits where the beginning promises a topic that never pays off, where
+  the end of one sentence is spliced onto an unrelated response, or where a
+  joke loses its setup or reaction. Flag uncertain acoustic joins for listening.
+- After creating the edit, use draft-render technical checks; never equate
+  technical checks with somebody actually watching/listening to the result.
+- Keep selection decisions and QA findings in producer notes for human review.
+
+### First benchmark
+
+Use the LAST 20 minutes of one authorized stream upload (minimum five minutes)
+and output one chronological editable 3–8-minute project, with no automatic
+posting. Score narrative coherence, retained context, reactions, natural audio
+joins, unnecessary material, faithful captions and actual rendered playback.
+Do not claim a publishable full edit until real footage has passed these tests.
