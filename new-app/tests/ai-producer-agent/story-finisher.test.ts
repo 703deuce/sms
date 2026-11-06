@@ -361,8 +361,8 @@ describe('source-verified Story Finisher', () => {
       {w:'Complete.',s:1,e:1.3},{w:'Incomplete',s:2,e:2.3},
       {w:'he',s:10,e:10.2},{w:'said,',s:10.3,e:10.6},
     ]
-    const original=[part(1000,2300),part(10000,10600)]
-    const initially=[part(970,2330),part(9970,10630)]
+    const original=[part(500,2300),part(10000,10600)]
+    const initially=[part(470,2330),part(9970,10630)]
     const review=applyStoryBoundaryReview([
       {index:0,openingComplete:true,endingComplete:false,firstWordId:0,lastWordId:0,
         explanation:'Cut before tangent'},
