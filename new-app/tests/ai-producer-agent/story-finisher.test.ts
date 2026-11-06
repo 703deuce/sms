@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
-import { fullFinisherTranscript, runStoryFinisher, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
+import { finisherRepairHint, fullFinisherTranscript, repairFinisherEdges, runStoryFinisher, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
 import { createEditorialHandoff } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
@@ -88,6 +88,41 @@ describe('source-verified Story Finisher', () => {
       selections: candidate, payoff, editorialReason: 'Too far before source selection.',
     }, footage, words, [300000,1500000], [75,105]))
       .toThrow('specialist_cut_outside_curated_footage')
+  })
+  it('repairs only tiny timing drift, never silently bridges excluded footage', () => {
+    const allowed = [{ ...footage[0], startMs: 300000, endMs: 326880 },
+      { ...footage[1], startMs: 435670, endMs: 493885 }]
+    const tiny = part(326920, 331000)
+    const fixed = repairFinisherEdges([tiny], allowed) as typeof footage
+    expect(fixed[0]?.startMs).toBe(326920)
+    expect(fixed[0]?.endMs).toBe(331000) // cannot compress below 3s by clamping
+    const repairable = part(300675, 326980)
+    const repaired = repairFinisherEdges([repairable], allowed) as typeof footage
+    expect(repaired[0]?.endMs).toBe(326880)
+    const acrossGap = part(310000, 451000)
+    expect(repairFinisherEdges([acrossGap], allowed)).toEqual([acrossGap])
+    const hint = finisherRepairHint([acrossGap], footage, [300000,1500000])
+    expect(hint.invalid[0]).toMatchObject({ index: 0, problem: 'outside_curated_footage' })
+  })
+  it('rejects output above the actual requested maximum, not a 20% grace range', () => {
+    const tooLong = [...footage.slice(0, 5), part(600040, 631500)]
+    // Source-grounded even when the selection extends deep into the curated tail.
+    expect(() => verifyStoryFinish({
+      selections: tooLong, payoff: { ...payoff, startMs: 629000, endMs: 630000, quote: 'source' },
+      editorialReason: 'Still too long',
+    }, footage, words, [300000,1500000], [75,105])).toThrow()
+  })
+  it('can use a focused rescue prompt while retaining full transcript context', async () => {
+    __setLunaImpl(async ({ messages }) => {
+      expect(messages[0]?.content).toContain('RECOVERY PASS')
+      expect(messages[0]?.content).toContain('OMIT')
+      expect(messages[1]?.content).toContain('entireAuthorizedTranscript')
+      return response('submit_story_finish', {
+        selections: compressed, payoff, editorialReason: 'Short sourced passages and exact ending',
+      }, 'rescue')
+    })
+    const result = await runStoryFinisher(ctx(), new Budget(), outline, footage, 'rescue')
+    expect(result.selections).toEqual(compressed)
   })
   it('compresses the 187s story to approximately 95s and ends near the real payoff', () => {
     const valid = verifyStoryFinish({
