@@ -71,57 +71,38 @@ describe('AI Producer specialist execution', () => {
     expect(toolNames[2]).toContain('get_audio_energy')
     expect(budget.steps).toBe(3)
   })
-  it('rejects under-length Footage and Dialogue before accepting the handoff', async () => {
-    const short = [
-      { startMs: 0, endMs: 55_000, beat: 'setup', reason: 'opening' },
-      { startMs: 140_000, endMs: 200_000, beat: 'payoff', reason: 'response' },
+  it('delivers a coherent short cut instead of rejecting the edit for duration', async () => {
+    const selected = [
+      { startMs: 0, endMs: 55_000, beat: 'setup', reason: 'complete opening' },
+      { startMs: 140_000, endMs: 200_000, beat: 'payoff', reason: 'complete response' },
     ]
-    const full = [
-      { startMs: 0, endMs: 110_000, beat: 'setup', reason: 'opening' },
-      { startMs: 140_000, endMs: 290_000, beat: 'payoff', reason: 'response' },
-    ]
-    const calls = [
+    const submissions = [
       ['submit_story_outline', { logline: 'A story', audiencePromise: 'Context', beats: ['setup', 'detail', 'payoff'] }],
-      ['submit_footage_selections', { selections: short }],
-      ['submit_footage_selections', { selections: full }],
-      ['submit_dialogue_cut_plan', { selections: short }],
-      ['submit_dialogue_cut_plan', { selections: full }],
+      ['submit_footage_selections', { selections: selected }],
+      ['submit_dialogue_cut_plan', { selections: selected }],
     ] as const
-    let index = 0
-    const toolFeedback: string[] = []
-    __setLunaImpl(async ({ messages, tools }) => {
-      const [name, data] = calls[index++]!
+    let callIndex = 0
+    __setLunaImpl(async ({ tools }) => {
+      const [name, args] = submissions[callIndex++]!
       expect(tools.some((t) => t.name === name)).toBe(true)
-      for (const msg of messages) {
-        if (msg.role === 'tool' && typeof msg.content === 'string' && msg.content.includes('specialist_selections_too_short')) {
-          toolFeedback.push(msg.content)
-        }
-      }
       return {
-        message: {
-          role: 'assistant', content: null,
-          tool_calls: [{ id: `duration_${index}`, type: 'function',
-            function: { name, arguments: JSON.stringify(data) } }],
-        },
+        message: { role: 'assistant', content: null, tool_calls: [
+          { id: `short_${callIndex}`, type: 'function', function: { name, arguments: JSON.stringify(args) } },
+        ] },
         usage: { prompt_tokens: 200, completion_tokens: 50 },
       }
     })
     const words = Array.from({ length: 150 }, (_, i) =>
       ({ w: 'word', s: i * 2 + 0.3, e: i * 2 + 0.8 }))
     const ctx = {
-      runId: 'duration-run', sources: [{ sourceId: 'source1', rangeMs: [0, 300_000] }],
+      runId: 'short-run', sources: [{ sourceId: 'source1', rangeMs: [0, 300_000] }],
       cache: { words, momentsSummary: [], inventorySummary: { rows: [] } },
       config: { targetLengthS: [180, 480] },
     } as unknown as ToolCtx
     const out = { index: 0, outputType: 'story', builder: null, notes: [] } as unknown as OutputState
     const handoff = await createEditorialHandoff(ctx, out, new Budget(), null)
-    expect(index).toBe(5)
-    expect(handoff.cutPlan).toEqual(full)
-    expect(toolFeedback.length).toBeGreaterThanOrEqual(2)
-    for (const hint of toolFeedback) {
-      expect(hint).toContain('deficitSeconds')
-      expect(hint).toContain('minRequiredS')
-    }
+    expect(callIndex).toBe(3)
+    expect(handoff.cutPlan).toEqual(selected)
   })
 
 })
