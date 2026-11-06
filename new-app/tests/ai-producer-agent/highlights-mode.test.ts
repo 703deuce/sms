@@ -117,14 +117,19 @@ describe('distinct highlights mode', () => {
     expect(edit.cutPlan).toEqual(spread)
     expect(highlightsCoverage(edit.cutPlan, [75, 105]).distinctMomentCount).toBe(3)
   })
-  it('does not add source-diversity requirements to Story mode', async () => {
+  it('gives Story mode the complete transcript and never forces highlight-specific revisions', async () => {
     const calls = mockRoles([
       ['submit_story_outline', outline],
-      ['submit_footage_selections', { selections: spread }],
-      ['submit_dialogue_cut_plan', { selections: spread }],
+      ['submit_footage_word_selections', { selections: [
+        {firstWordId:0,lastWordId:47,beat:'surprise',reason:'real sourced reaction'},
+        {firstWordId:640,lastWordId:695,beat:'funny moment',reason:'complete funny thought'},
+        {firstWordId:1600,lastWordId:1679,beat:'insight',reason:'full payoff'},
+      ] }],
     ])
     const edit = await createEditorialHandoff(ctx('story'), output(), new Budget(), null)
-    expect(calls()).toBe(3)
-    expect(edit.cutPlan).toEqual(spread)
+    expect(calls()).toBe(2)
+    expect(edit.cutPlan).toHaveLength(3)
+    expect(edit.cutPlan).toEqual(edit.footage)
+    expect(highlightsCoverage(edit.cutPlan,[75,105]).distinctMomentCount).toBe(3)
   })
 })
