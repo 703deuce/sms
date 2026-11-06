@@ -507,30 +507,68 @@ const boundaryWordSubmission: ToolSchema = {
   },
 }
 
-const EDGE_TRIM_MS = 3000
-const EDGE_RESTORE_MS = 2000
 const EDGE_SEARCH_MS = 1500
+const CONTEXT_SENTENCES = 2
+const SENTENCE_PAUSE_MS = 1400
 
-/** Word IDs refer to the ORIGINAL unsampled ASR array; indices do not change
- * when nearby context from separate selected passages overlaps. */
+/** Surface the ENTIRE Footage passage plus the previous/next two sentences.
+ * Punctuation is the primary sentence boundary. On ASR without punctuation,
+ * long natural speech pauses delimit nearby thought groups. No seconds cap:
+ * slow speech can require tens of seconds to finish a sentence. */
 export function boundaryWordContext(
   words: ClipWord[], selections: EditorialSelection[], bounds: [number, number],
 ) {
-  return selections.map((selection, index) => ({
-    index,
-    currentStartMs: selection.startMs,
-    currentEndMs: selection.endMs,
-    beat: selection.beat,
-    purpose: selection.reason,
-    words: words.flatMap((w, id) => {
-      if (!Number.isFinite(w.s) || !Number.isFinite(w.e) || w.e <= w.s) return []
-      const start = Math.round(w.s * 1000), end = Math.round(w.e * 1000)
-      if (end < Math.max(bounds[0], selection.startMs - 10_000) ||
-          start > Math.min(bounds[1], selection.endMs + 10_000)) return []
-      return [{ id, startMs: start, endMs: end, text: w.w,
-        currentlyKept: end > selection.startMs && start < selection.endMs }]
-    }).sort((a,b)=>a.startMs-b.startMs || a.id-b.id),
-  }))
+  const timed = words.flatMap((w,id) => Number.isFinite(w.s) &&
+    Number.isFinite(w.e) && w.e > w.s
+    ? [{ id,startMs:Math.round(w.s*1000),endMs:Math.round(w.e*1000),text:w.w }]
+    : []).filter(w => w.endMs > bounds[0] && w.startMs < bounds[1])
+    .sort((a,b)=>a.startMs-b.startMs || a.id-b.id)
+  // A pause is supporting evidence when ASR has no punctuation, not an
+  // artificial maximum sentence length or an instruction to split a thought.
+  const endOfSentence = (i:number) => {
+    const w=timed[i]!
+    return /[.!?][”"'’)]*$/.test(w.text.trim()) ||
+      Boolean(timed[i+1] && timed[i+1]!.startMs - w.endMs >= SENTENCE_PAUSE_MS)
+  }
+  const sentenceEndIndices:number[]=[]
+  for(let i=0;i<timed.length;i++)if(endOfSentence(i))sentenceEndIndices.push(i)
+  if(timed.length && sentenceEndIndices[sentenceEndIndices.length-1]!==timed.length-1)
+    sentenceEndIndices.push(timed.length-1)
+  return selections.map((selection,index)=>{
+    // All overlapping words in Footage's selection are always included.
+    const first=timed.findIndex(w=>w.endMs>selection.startMs)
+    let last=-1
+    for(let i=timed.length-1;i>=0;i--)if(timed[i]!.startMs<selection.endMs){last=i;break}
+    if(first<0||last<first)
+      return {index,currentStartMs:selection.startMs,currentEndMs:selection.endMs,
+        beat:selection.beat,purpose:selection.reason,words:[] as Array<{
+          id:number;startMs:number;endMs:number;text:string;currentlyKept:boolean
+        }>}
+    // Resolve context by COMPLETE sentence boundaries, including the entire
+    // original selection even when it spans many sentences.
+    const firstSentence=sentenceEndIndices.findIndex(e=>e>=first)
+    const lastSentence=sentenceEndIndices.findIndex(e=>e>=last)
+    let contextFirstSentence=Math.max(0,firstSentence-CONTEXT_SENTENCES)
+    let contextLastSentence=Math.min(sentenceEndIndices.length-1,lastSentence+CONTEXT_SENTENCES)
+    // A distant recording event is not neighboring sentence context. Never
+    // cross a conversational break (e.g. a word 13 minutes later), even if
+    // missing punctuation makes it the next ASR sentence.
+    let left=contextFirstSentence===0?0:sentenceEndIndices[contextFirstSentence-1]!+1
+    let right=sentenceEndIndices[contextLastSentence]!
+    for(let i=first;i>left;i--){
+      if(timed[i]!.startMs-timed[i-1]!.endMs>30000){left=i;break}
+    }
+    for(let i=last;i<right;i++){
+      if(timed[i+1]!.startMs-timed[i]!.endMs>30000){right=i;break}
+    }
+    return {
+      index,currentStartMs:selection.startMs,currentEndMs:selection.endMs,
+      beat:selection.beat,purpose:selection.reason,
+      words:timed.slice(left,right+1).map(w=>({
+        ...w,currentlyKept:w.endMs>selection.startMs&&w.startMs<selection.endMs,
+      })),
+    }
+  })
 }
 
 /** Find a legal edge nearest the WORD boundary, never near an LLM timestamp.
@@ -565,59 +603,57 @@ export function resolveStoryWordBoundaries(
   raw: unknown, original: EditorialSelection[], words: ClipWord[], bounds: [number, number],
 ): BoundaryPolishResult {
   const proposals = Array.isArray(raw) ? raw : []
-  const seen = new Set<number>()
+  const context = boundaryWordContext(words,original,bounds)
   const selections: EditorialSelection[] = []
   const diagnostics: BoundaryPolishResult['diagnostics'] = []
-  for (let index = 0; index < original.length; index++) {
-    const prior = original[index]!
-    const submitted = proposals.find(v => v && typeof v === 'object' &&
-      (v as BoundaryWordDecision).index === index) as BoundaryWordDecision | undefined
-    let start = prior.startMs, end = prior.endMs
-    let startStatus = 'unchanged', endStatus = 'unchanged'
-    if (!submitted || seen.has(index)) {
-      diagnostics.push({index,start:'missing_or_duplicate_proposal',end:'missing_or_duplicate_proposal'})
+  for(let index=0;index<original.length;index++){
+    const prior=original[index]!
+    const options=proposals.filter(v=>v && typeof v==='object' &&
+      (v as BoundaryWordDecision).index===index) as BoundaryWordDecision[]
+    const proposal=options.length===1?options[0]:undefined
+    let start=prior.startMs,end=prior.endMs
+    let startStatus='unchanged',endStatus='unchanged'
+    if(!proposal){
       selections.push(prior)
+      diagnostics.push({index,start:'missing_or_duplicate_proposal',end:'missing_or_duplicate_proposal'})
       continue
     }
-    seen.add(index)
-    const first = words[submitted.firstWordId]
-    const last = words[submitted.lastWordId]
-    if (Number.isInteger(submitted.firstWordId) && first &&
-        Number.isFinite(first.s) && Number.isFinite(first.e) && first.e > first.s) {
-      const wordMs = Math.round(first.s*1000)
-      if (wordMs >= prior.startMs - EDGE_RESTORE_MS &&
-          wordMs <= prior.startMs + EDGE_TRIM_MS &&
-          wordMs < prior.endMs) {
-        const allowedMin = Math.max(bounds[0],prior.startMs-EDGE_RESTORE_MS,
-          index ? selections[index-1]!.endMs : bounds[0])
-        const allowedMax = Math.min(prior.endMs-400,prior.startMs+EDGE_TRIM_MS)
-        const resolved = safeBoundaryAfterWord(first,'start',words,allowedMin,allowedMax)
-        if (resolved !== null) { start=resolved; startStatus='resolved_word_id' }
+    const eligible=new Set(context[index]!.words.map(w=>w.id))
+    const first=Number.isInteger(proposal.firstWordId)&&eligible.has(proposal.firstWordId)
+      ? words[proposal.firstWordId]:undefined
+    const last=Number.isInteger(proposal.lastWordId)&&eligible.has(proposal.lastWordId)
+      ? words[proposal.lastWordId]:undefined
+    // The model is only allowed to extend into the surrounding sentence
+    // context; trims must stay inside this original source passage.
+    const leftLimit=Math.max(bounds[0],index?original[index-1]!.endMs:bounds[0],
+      (context[index]!.words[0]?.startMs??prior.startMs)-WORD_GUARD_MS)
+    const rightLimit=Math.min(bounds[1],
+      index+1<original.length?original[index+1]!.startMs:bounds[1],
+      (context[index]!.words.at(-1)?.endMs??prior.endMs)+WORD_GUARD_MS)
+    if(first && Number.isFinite(first.s)&&Number.isFinite(first.e) && first.e>first.s){
+      const wordStart=Math.round(first.s*1000)
+      if(wordStart>=leftLimit && wordStart<prior.endMs){
+        const resolved=safeBoundaryAfterWord(first,'start',words,leftLimit,
+          Math.min(prior.endMs-400,rightLimit))
+        if(resolved!==null){start=resolved;startStatus='resolved_word_id'}
         else startStatus='no_safe_word_edge'
-      } else startStatus='first_word_outside_edge_window'
-    } else startStatus='invalid_first_word_id'
-    if (Number.isInteger(submitted.lastWordId) && last &&
-        Number.isFinite(last.s) && Number.isFinite(last.e) && last.e > last.s) {
-      const wordMs = Math.round(last.e*1000)
-      if (wordMs >= prior.endMs - EDGE_TRIM_MS &&
-          wordMs <= prior.endMs + EDGE_RESTORE_MS &&
-          wordMs > prior.startMs) {
-        const allowedMin = Math.max(bounds[0],prior.startMs+400,prior.endMs-EDGE_TRIM_MS)
-        const allowedMax = Math.min(bounds[1],prior.endMs+EDGE_RESTORE_MS,
-          index+1 < original.length ? original[index+1]!.startMs : bounds[1])
-        const resolved = safeBoundaryAfterWord(last,'end',words,allowedMin,allowedMax)
-        if (resolved !== null) { end=resolved; endStatus='resolved_word_id' }
+      }else startStatus='first_word_outside_passage_context'
+    }else startStatus='invalid_or_unavailable_first_word_id'
+    if(last && Number.isFinite(last.s)&&Number.isFinite(last.e)&&last.e>last.s){
+      const wordEnd=Math.round(last.e*1000)
+      if(wordEnd<=rightLimit && wordEnd>prior.startMs){
+        const resolved=safeBoundaryAfterWord(last,'end',words,
+          Math.max(leftLimit,prior.startMs+400),rightLimit)
+        if(resolved!==null){end=resolved;endStatus='resolved_word_id'}
         else endStatus='no_safe_word_edge'
-      } else endStatus='last_word_outside_edge_window'
-    } else endStatus='invalid_last_word_id'
-    // Independent recovery: if one edge would collapse an excerpt, retain only
-    // the good side. Preserve minimum 400ms playable footage and source order.
-    if (end - start < 400) {
-      if (start !== prior.startMs && end - prior.startMs >= 400) {
-        start=prior.startMs; startStatus='kept_original_to_avoid_collapse'
-      } else if (end !== prior.endMs && prior.endMs - start >= 400) {
-        end=prior.endMs; endStatus='kept_original_to_avoid_collapse'
-      } else {start=prior.startMs;end=prior.endMs;startStatus='kept_original';endStatus='kept_original'}
+      }else endStatus='last_word_outside_passage_context'
+    }else endStatus='invalid_or_unavailable_last_word_id'
+    // A model returning reversed words must not turn the passage into a new
+    // story. Independently keep whichever edge remains playable.
+    if(end-start<400){
+      if(end-prior.startMs>=400){start=prior.startMs;startStatus='kept_original_to_avoid_collapse'}
+      else if(prior.endMs-start>=400){end=prior.endMs;endStatus='kept_original_to_avoid_collapse'}
+      else{start=prior.startMs;end=prior.endMs;startStatus='kept_original';endStatus='kept_original'}
     }
     selections.push({...prior,startMs:start,endMs:end})
     diagnostics.push({index,start:startStatus,end:endStatus})
@@ -638,14 +674,14 @@ export async function runStoryBoundaryFinisher(
       'You are a spoken-word boundary polisher, NOT a video editor. Footage already selected the story and every passage.',
       'For each existing passage, identify the FIRST and LAST transcript words that should remain. Return ONLY their integer word IDs, never timestamps.',
       'Do not select new source moments, omit passages, change their order, or compress the story. Remove only an extra few words at the edges. If the current start/end is already a complete thought, choose its existing first/last kept word.',
-      'You may recover a few preceding words for an opening that starts mid-sentence, or a few following words for an ending that cuts mid-sentence. Focus on complete spoken thoughts and avoid trailing new topics.',
-      'Use only the transcript words provided around each cut (10s context). The code converts your word choices into safe audio boundaries. Do not calculate milliseconds or try to satisfy an exact video duration.',
+      'You may recover the relevant earlier sentence beginning for a late start, or the actual conclusion for an early ending. Context contains two complete sentences before and after each original cut; speech may be slow, so there is no two- or three-second limit.',
+      'Use the full transcript of each proposed passage and its neighboring sentences. The code converts your chosen word IDs into legal boundaries. Do not calculate milliseconds, aim at a runtime, or reselect scenes.',
     ].join('\n\n') },
     { role: 'user', content: JSON.stringify({
       story: { logline:outline.logline, essentialSetup:outline.essentialSetup,
         intendedPayoff:outline.intendedPayoff, endingRule:outline.endingRule },
       passages:context,
-      instruction:'Return one entry per passage, with index, firstWordId, lastWordId. Prefer complete thoughts over arbitrary cut lengths. Every ID must exist in that passage words array.',
+      instruction:'For every existing passage, choose precisely its first and last words needed for the planned story. Consider up to two full sentences before and after, regardless of speech speed. Return index, firstWordId, lastWordId; every ID must appear in that passage words array. Do not add/remove passages.',
     }) },
   ]
   if (budget.state() === 'hard') return footage
