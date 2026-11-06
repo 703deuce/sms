@@ -233,7 +233,7 @@ export function verifyHighlightsFinish(
     if (selection.endMs - raw.landing.endMs > 4_000) {
       throw new Error('highlights_finisher_kept_talk_after_landing')
     }
-    const spoken = sourceWords(words, selection.startMs, selection.endMs + 100)
+    const spoken = sourceWords(words, selection.startMs, selection.endMs)
     if (!spoken.length || dangling(spoken[spoken.length - 1]!.w)) {
       throw new Error('highlights_finisher_mid_sentence_ending')
     }
