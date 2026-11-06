@@ -14,6 +14,7 @@ vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
 }))
 vi.mock('@/lib/ai-producer-agent/story-finisher', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai-producer-agent/story-finisher')>()),
+  runStoryBoundaryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => footage),
   runStoryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => ({
     selections: footage,
     payoff: {

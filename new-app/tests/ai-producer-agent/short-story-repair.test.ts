@@ -14,6 +14,7 @@ vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
 }))
 vi.mock('@/lib/ai-producer-agent/story-finisher', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai-producer-agent/story-finisher')>()),
+  runStoryBoundaryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => footage),
   runStoryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => ({
     selections: footage,
     payoff: {
@@ -93,7 +94,7 @@ describe('90-second story completion', () => {
     expect(cut.cutPlan.reduce((n, s) => n + s.endMs - s.startMs, 0)).toBe(89_000)
   })
 
-  it('replaces a 504s source-gathering draft with a coherent 326s revision', async () => {
+  it('compresses a 504s draft through a shorter 326s revision to a real 89s cut', async () => {
     const original = [
       { startMs: 20000,endMs: 188000,beat:'setup',reason:'wide first passage' },
       { startMs: 200000,endMs: 368000,beat:'development',reason:'wide second passage' },
@@ -113,12 +114,13 @@ describe('90-second story completion', () => {
       ['submit_story_outline', outline],
       ['submit_footage_selections', { selections: original }],
       ['submit_footage_selections', { selections: revised }],
-      ['submit_dialogue_cut_plan', { selections: revised }],
+      ['submit_footage_selections', { selections: complete }],
+      ['submit_dialogue_cut_plan', { selections: complete }],
     ])
     const edit = await createEditorialHandoff(ctx,output(),new Budget(),null)
-    expect(calls()).toBe(4)
-    expect(edit.footage).toEqual(revised)
-    expect(edit.cutPlan).toEqual(revised)
+    expect(calls()).toBe(5)
+    expect(edit.footage).toEqual(complete)
+    expect(edit.cutPlan).toEqual(complete)
   })
 
   it('restores curated story beats when Dialogue collapses a complete 90s edit', async () => {
