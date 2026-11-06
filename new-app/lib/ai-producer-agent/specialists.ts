@@ -303,6 +303,9 @@ export function shortStoryCoverage(
       .sort((a, b) => a.s - b.s).slice(-8) : []
   const lastWord = tailWords[tailWords.length - 1]?.w?.trim() ?? ''
   const terminalSentence = /[.!?][\"'”’]?$/.test(lastWord) && !/\.{2,}[\"'”’]?$/.test(lastWord)
+  // ASR from some providers has no punctuation at all: don't mistake that
+  // absence of metadata for evidence that every sentence is unfinished.
+  const punctuationAvailable = words.some(w => /[.!?][\"'”’]?$/.test(w.w))
   const enoughSourceToExplore = sourceRange[1] - sourceRange[0] >= 3 * 60_000
   const localOnly = enoughSourceToExplore &&
     sourceSpanMs <= Math.max(90_000, target[1] * 1000 * 1.2) &&
@@ -312,7 +315,7 @@ export function shortStoryCoverage(
     lastWord, terminalSentence,
     localOnly,
     underTarget: durationSeconds < target[0],
-    needsReview: durationSeconds < target[0] || !terminalSentence || localOnly,
+    needsReview: durationSeconds < target[0] || (punctuationAvailable && !terminalSentence) || localOnly,
   }
 }
 
