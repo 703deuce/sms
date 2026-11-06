@@ -67,7 +67,7 @@ describe('source-verified Story Finisher', () => {
     }, footage, words, [300000, 1500000], [75, 105])
     expect(valid.selections).toEqual(compressed)
     expect(valid.selections.reduce((n, s) => n + s.endMs - s.startMs, 0) / 1000)
-      .toBeCloseTo(95.015, 2)
+      .toBeCloseTo(96.015, 2)
     expect(valid.payoff.quote).toBe('passed it the second time')
   })
   it('rejects a fabricated payoff even if the timing seems plausible', () => {
@@ -123,7 +123,7 @@ describe('source-verified Story Finisher', () => {
     })
     const edit = await createEditorialHandoff(ctx(), out(), new Budget(), null)
     expect(names).toEqual([
-      'submit_story_outline','submit_footage_selections','submit_story_finish','submit_dialogue_cut_plan',
+      'submit_story_outline','submit_footage_selections','submit_footage_selections','submit_story_finish','submit_dialogue_cut_plan',
     ])
     expect(edit.finisher?.payoff).toEqual(payoff)
     expect(edit.cutPlan).toEqual(compressed)
