@@ -111,4 +111,28 @@ describe('AI Producer specialist editorial handoff', () => {
       { ...approved[0], endMs: 2500 }, approved[1],
     ], source, words)).toThrow('invalid_source')
   })
+  it('snaps Dialogue edges rejected by the final 30ms word guard', () => {
+    const crowded: ClipWord[] = [
+      { w: 'So', s: 300.690, e: 300.930 },
+      { w: 'heard', s: 324.680, e: 324.890 },
+      { w: 'aspirations', s: 399.780, e: 400.060 },
+      { w: 'was', s: 429.280, e: 429.510 },
+      ...Array.from({ length: 35 }, (_, i) => ({ w: 'speech', s: 301 + i * 0.65, e: 301.4 + i * 0.65 })),
+      ...Array.from({ length: 40 }, (_, i) => ({ w: 'speech', s: 401 + i * 0.65, e: 401.4 + i * 0.65 })),
+    ]
+    const proposed = [
+      { startMs: 300_705, endMs: 324_705, beat: 'setup', reason: 'real dialogue' },
+      { startMs: 399_810, endMs: 429_310, beat: 'payoff', reason: 'complete answer' },
+    ]
+    const windows = [
+      { ...proposed[0], startMs: 300_000, endMs: 325_000 },
+      { ...proposed[1], startMs: 399_000, endMs: 430_000 },
+    ]
+    expect(() => checkEditorialSelections(proposed, [300_000, 430_000], crowded, windows)).toThrow('cut_inside_word')
+    const repaired = snapEditorialSelections(proposed, [300_000, 430_000], crowded, windows)
+    expect(repaired).toHaveLength(2)
+    expect(repaired.some((x, i) => x.startMs !== proposed[i]?.startMs || x.endMs !== proposed[i]?.endMs)).toBe(true)
+    expect(checkEditorialSelections(repaired, [300_000, 430_000], crowded, windows)).toEqual(repaired)
+  })
+
 })
