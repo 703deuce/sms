@@ -417,8 +417,8 @@ describe('source-verified Story Finisher', () => {
         expect(request.transcriptSamples).toBeUndefined()
         expect(request.fullTranscript[0]).toHaveLength(4)
         return response(name,{selections:[
-          {firstWordId:0,lastWordId:2,beat:'setup',reason:'first complete source thought'},
-          {firstWordId:6,lastWordId:9,beat:'development',reason:'second complete source thought'},
+          {firstWordId:0,lastWordId:7,beat:'setup',reason:'first complete source thought'},
+          {firstWordId:12,lastWordId:20,beat:'development',reason:'second complete source thought'},
         ]},'footage')
       }
       throw new Error('Unexpected legacy repair agent '+name)
