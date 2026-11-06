@@ -156,7 +156,11 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     })
     out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
     out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
-    if (!out.editorialHandoff.review.pass) throw new Error('specialist_editorial_review_failed')
+    if (!out.editorialHandoff.review.pass) {
+      // QA findings belong on the editable draft. Do not discard an otherwise
+      // valid rough cut solely because the editorial review asks for revisions.
+      out.notes.push('Editorial QA requested revisions; editable rough cut retained')
+    }
   }
   await apply(ctx, out, budget)
   for (; out.fixLoops < CAPS.maxFixLoops && budget.state() !== 'hard'; out.fixLoops++) {

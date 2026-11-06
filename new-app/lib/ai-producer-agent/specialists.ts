@@ -210,6 +210,20 @@ export function snapEditorialSelections(
   }
 }
 
+function selectionDurationS(selections: EditorialSelection[]): number {
+  return selections.reduce((sum, s) => sum + (s.endMs - s.startMs), 0) / 1000
+}
+
+/** Duration targets guide editing quality but must not block a usable cut. */
+function durationAdvisory(selections: EditorialSelection[], target: [number, number]) {
+  const actualSeconds = selectionDurationS(selections)
+  const [minimumSeconds, maximumSeconds] = target
+  return {
+    actualSeconds, minimumSeconds, maximumSeconds,
+    outsideTarget: actualSeconds < minimumSeconds || actualSeconds > maximumSeconds,
+  }
+}
+
 function selectionRepairHint(
   raw: unknown, words: ClipWord[], bounds: [number, number],
   allowed?: EditorialSelection[],
@@ -301,6 +315,9 @@ export async function runEditorialRole(
     { role: 'user', content: JSON.stringify({
       ...context, sourceId: source.sourceId, sourceRangeMs: source.rangeMs,
       outputTargetSeconds: ctx.config.targetLengthS,
+      ...((role === 'footage' || role === 'dialogue')
+        ? { selectionDurationInstruction: 'Aim for the requested duration with coherent story-driven selections. Duration is a preference, not a reason to withhold an editable cut. Never add irrelevant padding or invent footage.' }
+        : {}),
       ...(role === 'qa' && ctx.config.editMode === 'just_chatting_rough_cut'
         ? { requiredReviewChecks: JUST_CHATTING_REVIEW_CHECKS } : {}),
     }) },
@@ -358,6 +375,8 @@ export async function runEditorialRole(
             ? context.curatedSelections as EditorialSelection[] | undefined
             : undefined
           const selections = snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
+          const duration = durationAdvisory(selections, ctx.config.targetLengthS)
+          await specialistEvent(ctx, budget, role, 'duration_advisory', { ...duration, acceptedDespiteDuration: duration.outsideTarget })
           await specialistEvent(ctx, budget, role, 'accepted', { turn, proposal: selectionLogSummary(args),
             accepted: selections.map((s) => [s.startMs, s.endMs]),
             movedEdges: selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
@@ -470,8 +489,13 @@ export async function createEditorialHandoff(
     instruction: 'Refine whole-thought boundaries inside chosen footage; never select outside.',
   })
   const cutPlan = refined.selections as EditorialSelection[]
-  const duration = cutPlan.reduce((sum, s) => sum + s.endMs - s.startMs, 0) / 1000
+  const duration = selectionDurationS(cutPlan)
   const [lo, hi] = ctx.config.targetLengthS
-  if (duration < lo || duration > hi) throw new Error('specialist_cut_plan_duration_outside_target')
+  if (duration < lo || duration > hi) {
+    await specialistEvent(ctx, budget, 'dialogue', 'handoff_duration_advisory', {
+      actualSeconds: duration, minimumSeconds: lo, maximumSeconds: hi,
+      note: 'Deliver the best coherent editable cut even when shorter or longer than requested.',
+    })
+  }
   return { outline, footage, cutPlan }
 }

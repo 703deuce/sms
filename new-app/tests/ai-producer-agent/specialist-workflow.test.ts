@@ -71,4 +71,38 @@ describe('AI Producer specialist execution', () => {
     expect(toolNames[2]).toContain('get_audio_energy')
     expect(budget.steps).toBe(3)
   })
+  it('delivers a coherent short cut instead of rejecting the edit for duration', async () => {
+    const selected = [
+      { startMs: 0, endMs: 55_000, beat: 'setup', reason: 'complete opening' },
+      { startMs: 140_000, endMs: 200_000, beat: 'payoff', reason: 'complete response' },
+    ]
+    const submissions = [
+      ['submit_story_outline', { logline: 'A story', audiencePromise: 'Context', beats: ['setup', 'detail', 'payoff'] }],
+      ['submit_footage_selections', { selections: selected }],
+      ['submit_dialogue_cut_plan', { selections: selected }],
+    ] as const
+    let callIndex = 0
+    __setLunaImpl(async ({ tools }) => {
+      const [name, args] = submissions[callIndex++]!
+      expect(tools.some((t) => t.name === name)).toBe(true)
+      return {
+        message: { role: 'assistant', content: null, tool_calls: [
+          { id: `short_${callIndex}`, type: 'function', function: { name, arguments: JSON.stringify(args) } },
+        ] },
+        usage: { prompt_tokens: 200, completion_tokens: 50 },
+      }
+    })
+    const words = Array.from({ length: 150 }, (_, i) =>
+      ({ w: 'word', s: i * 2 + 0.3, e: i * 2 + 0.8 }))
+    const ctx = {
+      runId: 'short-run', sources: [{ sourceId: 'source1', rangeMs: [0, 300_000] }],
+      cache: { words, momentsSummary: [], inventorySummary: { rows: [] } },
+      config: { targetLengthS: [180, 480] },
+    } as unknown as ToolCtx
+    const out = { index: 0, outputType: 'story', builder: null, notes: [] } as unknown as OutputState
+    const handoff = await createEditorialHandoff(ctx, out, new Budget(), null)
+    expect(callIndex).toBe(3)
+    expect(handoff.cutPlan).toEqual(selected)
+  })
+
 })
