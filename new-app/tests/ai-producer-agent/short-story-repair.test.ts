@@ -1,149 +1,102 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
-import { createEditorialHandoff } from '@/lib/ai-producer-agent/specialists'
+import { createEditorialHandoff, completeTranscriptWords, resolveFootageWordSelections } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 
-vi.mock('@/lib/ai-producer-agent/log', () => ({
-  logAiProducerStep: vi.fn(async () => undefined),
-  redactArgs: (a: unknown) => a,
+vi.mock('@/lib/ai-producer-agent/log',()=>({
+  logAiProducerStep:vi.fn(async()=>undefined),redactArgs:(x:unknown)=>x,
 }))
-vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
-  runTool: vi.fn(async () => ({ ok: false, summary: 'not_used' })),
-}))
-vi.mock('@/lib/ai-producer-agent/story-finisher', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/ai-producer-agent/story-finisher')>()),
-  runStoryBoundaryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => footage),
-  runStoryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => ({
-    selections: footage,
-    payoff: {
-      startMs: footage[footage.length-1]!.endMs - 2000,
-      endMs: footage[footage.length-1]!.endMs - 500,
-      quote: 'word word',
-    },
-    editorialReason: 'Keep existing test emphasis on Footage and Dialogue',
-  })),
+vi.mock('@/lib/ai-producer-agent/tools/registry',()=>({
+  runTool:vi.fn(async()=>{throw Error('Full transcription already supplied; no fragments should be read')}),
 }))
 
-const brief = [
-  { startMs: 20_000, endMs: 44_000, beat: 'setup', reason: 'a short source-grounded quote' },
-]
-const complete = [
-  { startMs: 20_000, endMs: 48_000, beat: 'setup', reason: 'establish the problem' },
-  { startMs: 70_000, endMs: 97_000, beat: 'development', reason: 'show the complication' },
-  { startMs: 150_000, endMs: 184_000, beat: 'payoff', reason: 'deliver the result' },
-]
-const outline = {
-  logline: 'A discussion moves from problem to resolution',
-  audiencePromise: 'Understand what happened',
-  beats: ['setup', 'development', 'payoff'],
-  intendedPayoff: 'Passing the written test on the second attempt',
-  essentialSetup: 'Language struggle and initial failure',
-  excludeAsides: ['Unrelated ride-along discussion'],
-  endingRule: 'Stop at the complete spoken resolution',
-  highlightCriteria: 'Separate memorable moments with standalone conclusions',
+const outline={
+  logline:'A discussion moves from problem to resolution',
+  audiencePromise:'Understand what happened',
+  beats:['setup','development','payoff'],
+  intendedPayoff:'Passing the written test on the second attempt',
+  essentialSetup:'Language struggle and initial failure',
+  excludeAsides:[],endingRule:'Stop at the complete spoken resolution',
+  highlightCriteria:'Standalone source-grounded moments',
 }
-function context(): ToolCtx {
-  return {
-    runId: 'run90',
-    sources: [{ sourceId: 'recording', rangeMs: [0, 300_000] }],
-    cache: { words: Array.from({ length: 600 }, (_, i) => ({
-      w: 'word', s: i * 0.5 + 0.1, e: i * 0.5 + 0.3,
-    })), momentsSummary: [], inventorySummary: {} },
-    config: { editMode: 'just_chatting_rough_cut', targetLengthS: [75, 105] },
+const words=Array.from({length:600},(_,i)=>({
+  w:i===599?'final-word.':'word',s:i*0.5+0.1,e:i*0.5+0.3,
+}))
+function context():ToolCtx{
+  return {runId:'full-story',sources:[{sourceId:'recording',rangeMs:[0,300000]}],
+    cache:{words,momentsSummary:[],inventorySummary:{}},
+    config:{editMode:'just_chatting_rough_cut',roughCutIntent:'story',targetLengthS:[75,105]},
   } as unknown as ToolCtx
 }
-function output(): OutputState {
-  return { index: 0, outputType: 'story', builder: null, notes: [] } as unknown as OutputState
-}
-function mockSequence(items: Array<[string, object]>) {
-  let i = 0
-  __setLunaImpl(async ({ tools, messages }) => {
-    const next = items[i++]
-    if (!next) throw new Error('extra specialist invocation ' + i)
-    expect(tools.some((t) => t.name === next[0])).toBe(true)
-    if (i === 3) {
-      // The repair request names the previous cut and its missing duration.
-      expect(messages[1]?.content).toContain('missingSecondsToMinimum')
+const output=()=>({index:0,outputType:'story',builder:null,notes:[]} as unknown as OutputState)
+const selection=(firstWordId:number,lastWordId:number,beat:string)=>({
+  firstWordId,lastWordId,beat,reason:'Complete sourced thought in story order',
+})
+const complete=[
+  selection(40,95,'setup'),selection(140,193,'development'),selection(300,367,'payoff'),
+]
+function run(choices:typeof complete, transcriptCheck=true){
+  let calls=0
+  __setLunaImpl(async ({messages,tools})=>{
+    const stage=calls++
+    const name=stage===0?'submit_story_outline':'submit_footage_word_selections'
+    expect(tools.some(t=>t.name===name)).toBe(true)
+    const payload=JSON.parse(messages[1]!.content!)
+    if(transcriptCheck){
+      expect(payload.transcriptSamples).toBeUndefined()
+      expect(payload.fullTranscript).toHaveLength(words.length)
+      expect(payload.fullTranscript[599][0]).toBe(599)
+      expect(payload.fullTranscript[599].at(-1)).toBe('final-word.')
     }
-    return {
-      message: { role: 'assistant', content: null, tool_calls: [{
-        id: 's' + i, type: 'function',
-        function: { name: next[0], arguments: JSON.stringify(next[1]) },
-      }] },
-      usage: { prompt_tokens: 80, completion_tokens: 30 },
+    if(stage===1){
+      expect(payload.storyOutline.logline).toBe(outline.logline)
+      expect(payload.fullTranscript[40]).toEqual([40,20100,20300,'word'])
     }
+    if(stage>1)throw Error('Unexpected Finisher/Dialogue re-edit')
+    return {message:{role:'assistant',content:null,tool_calls:[{
+      id:'stage-'+stage,type:'function',
+      function:{name,arguments:JSON.stringify(stage===0?outline:{selections:choices})},
+    }]},usage:{prompt_tokens:500,completion_tokens:100}}
   })
-  return () => i
+  return ()=>calls
 }
-afterEach(() => __setLunaImpl(null))
+afterEach(()=>__setLunaImpl(null))
 
-describe('90-second story completion', () => {
-  it('requests a fuller source-grounded edit rather than accepting a lone 24s excerpt', async () => {
-    const calls = mockSequence([
-      ['submit_story_outline', outline],
-      ['submit_footage_selections', { selections: brief }],
-      ['submit_footage_selections', { selections: complete }],
-      ['submit_dialogue_cut_plan', { selections: complete }],
-    ])
-    const cut = await createEditorialHandoff(context(), output(), new Budget(), null)
-    expect(calls()).toBe(4)
-    expect(cut.footage).toHaveLength(3)
-    expect(cut.cutPlan).toHaveLength(3)
-    expect(cut.cutPlan.reduce((n, s) => n + s.endMs - s.startMs, 0)).toBe(89_000)
+describe('full-transcript Story/Footage handoff',()=>{
+  it('delivers the entire recording to Story and every timestamped word to Footage',async()=>{
+    const calls=run(complete)
+    const edit=await createEditorialHandoff(context(),output(),new Budget(),null)
+    expect(calls()).toBe(2)
+    expect(edit.cutPlan).toHaveLength(3)
+    expect(edit.cutPlan).toEqual(edit.footage)
+    expect(edit.cutPlan[0]).toMatchObject({startMs:20070,endMs:47830})
+    expect(edit.cutPlan[2]).toMatchObject({startMs:150070,endMs:183830})
   })
-
-  it('compresses a 504s draft through a shorter 326s revision to a real 89s cut', async () => {
-    const original = [
-      { startMs: 20000,endMs: 188000,beat:'setup',reason:'wide first passage' },
-      { startMs: 200000,endMs: 368000,beat:'development',reason:'wide second passage' },
-      { startMs: 390000,endMs: 558000,beat:'payoff',reason:'wide final passage' },
-    ]
-    const revised = [
-      { ...original[0],endMs: 128000 },
-      { ...original[1],endMs: 308000 },
-      { ...original[2],endMs: 500000 },
-    ]
-    const ctx = context()
-    ctx.sources[0]!.rangeMs = [0,700000]
-    ctx.cache.words = Array.from({ length: 1400 }, (_,i) => ({
-      w:'word',s:i*0.5+0.1,e:i*0.5+0.3,
-    }))
-    const calls = mockSequence([
-      ['submit_story_outline', outline],
-      ['submit_footage_selections', { selections: original }],
-      ['submit_footage_selections', { selections: revised }],
-      ['submit_footage_selections', { selections: complete }],
-      ['submit_dialogue_cut_plan', { selections: complete }],
-    ])
-    const edit = await createEditorialHandoff(ctx,output(),new Budget(),null)
-    expect(calls()).toBe(5)
-    expect(edit.footage).toEqual(complete)
-    expect(edit.cutPlan).toEqual(complete)
+  it('does not silently trim a source transcript to twelve overview windows',()=>{
+    expect(completeTranscriptWords(words,false)).toHaveLength(600)
+    expect(completeTranscriptWords(words,true)[599]).toEqual([599,299600,299800,'final-word.'])
   })
-
-  it('restores curated story beats when Dialogue collapses a complete 90s edit', async () => {
-    const calls = mockSequence([
-      ['submit_story_outline', outline],
-      ['submit_footage_selections', { selections: complete }],
-      ['submit_dialogue_cut_plan', { selections: brief }],
-    ])
-    const cut = await createEditorialHandoff(context(), output(), new Budget(), null)
-    expect(calls()).toBe(3)
-    expect(cut.cutPlan).toEqual(cut.footage)
-    expect(cut.cutPlan).toHaveLength(3)
+  it('retains one coherent long passage without forcing extra story beats',async()=>{
+    const one=[selection(100,280,'complete speech')]
+    const calls=run(one as typeof complete)
+    const edit=await createEditorialHandoff(context(),output(),new Budget(),null)
+    expect(calls()).toBe(2)
+    expect(edit.cutPlan).toHaveLength(1)
+    expect(edit.cutPlan[0]).toMatchObject({startMs:50070,endMs:140330})
   })
-
-  it('keeps the strongest existing excerpt when the revised selection is no better', async () => {
-    const calls = mockSequence([
-      ['submit_story_outline', outline],
-      ['submit_footage_selections', { selections: brief }],
-      ['submit_footage_selections', { selections: brief }],
-      ['submit_dialogue_cut_plan', { selections: brief }],
-    ])
-    const cut = await createEditorialHandoff(context(), output(), new Budget(), null)
-    expect(calls()).toBe(4)
-    expect(cut.cutPlan).toEqual(brief)
+  it('rejects malformed and reversed word IDs instead of treating them as timestamps',()=>{
+    expect(()=>resolveFootageWordSelections([
+      selection(95,40,'reversed'),selection(140,193,'another'),
+    ],words,[0,300000])).toThrow('footage_invalid_or_reversed_word_ids')
+    expect(()=>resolveFootageWordSelections([
+      selection(9999,10000,'invalid'),
+    ],words,[0,300000])).toThrow('footage_invalid_or_reversed_word_ids')
+  })
+  it('rejects overlapping passage selections without another agent fixing the story',()=>{
+    expect(()=>resolveFootageWordSelections([
+      selection(40,95,'setup'),selection(80,140,'overlap'),
+    ],words,[0,300000])).toThrow('specialist_non_chronological_cut')
   })
 })
