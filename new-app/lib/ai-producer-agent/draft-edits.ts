@@ -319,6 +319,43 @@ export class DraftEditsBuilder {
     this.e.exportSfx = 'subtle'
   }
 
+  /** Gentle audio-only anti-click fades at each APPROVED Story edit.
+   * All times are OUTPUT timeline milliseconds; this never moves media cuts.
+   * Voice gain keyframes are shared by preview/export; picture is untouched.
+   * Preserve a flat 100% level except for short ramps around each edit.
+   * Disable if the user later edits the voice envelope independently.
+   */
+  setStoryVoiceCutFades(fadeMs = 15): void {
+    const duration = this.segs.reduce((sum, seg) => sum + seg.srcOutMs - seg.srcInMs, 0)
+    const segmentDurations = this.segs.map(s => s.srcOutMs - s.srcInMs)
+    if (!segmentDurations.length || segmentDurations.some(d => d <= 0)) return
+    const points: Array<{ tMs:number; v:number }> = []
+    const add = (tMs:number,v:number) => {
+      if (points.length && points[points.length-1]!.tMs === tMs)
+        points[points.length-1] = {tMs,v}
+      else points.push({tMs,v})
+    }
+    const initial = Math.min(fadeMs, Math.floor(segmentDurations[0]! / 4))
+    add(0,0)
+    add(initial,100)
+    let offset=0
+    for (let i=0; i<segmentDurations.length-1; i++) {
+      const before=segmentDurations[i]!,after=segmentDurations[i+1]!
+      offset+=before
+      const outMs=Math.min(fadeMs,Math.floor(before/4))
+      const inMs=Math.min(fadeMs,Math.floor(after/4))
+      add(offset-outMs,100)
+      add(offset,0)
+      add(offset+inMs,100)
+    }
+    add(Math.max(0,duration-Math.min(fadeMs,Math.floor(segmentDurations.at(-1)!/4))),100)
+    add(duration,0)
+    this.e.keyframes = [
+      ...(this.e.keyframes ?? []).filter(k => !(k.target==='voice' && k.prop==='volume')),
+      {target:'voice',prop:'volume',points},
+    ]
+  }
+
   snapshot(): ClipEditsV2 {
     const withAspect = { ...this.e, aspectRatio: this.aspectRatio ?? this.e.aspectRatio }
     const clone = structuredClone(withAspect) as ClipEditsV2
