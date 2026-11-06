@@ -52,6 +52,18 @@ const normalized = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s]/g
 const seconds = (selections: EditorialSelection[]) =>
   selections.reduce((n, s) => n + (s.endMs - s.startMs), 0) / 1000
 
+/** A curator may cut off the answer. Give the LLM a small amount of actual
+ * source before/after each selected event, not permission to invent material
+ * or jump to a completely different conversation. */
+export const FINISHER_CONTEXT_EXTENSION_MS = 15_000
+function extendedRanges(selections: EditorialSelection[], bounds: [number, number]): EditorialSelection[] {
+  return selections.map(s => ({
+    ...s,
+    startMs: Math.max(bounds[0], s.startMs - FINISHER_CONTEXT_EXTENSION_MS),
+    endMs: Math.min(bounds[1], s.endMs + FINISHER_CONTEXT_EXTENSION_MS),
+  }))
+}
+
 /** All authorized words, each with original source timestamps. Never sample or
  * truncate: a 20-minute source is inexpensive text compared with video.
  */
@@ -80,8 +92,9 @@ export function verifyStoryFinish(
 ): StoryFinisherDecision {
   if (!proposal || typeof proposal !== 'object') throw new Error('finisher_invalid_submission')
   const p = proposal as Record<string, unknown>
-  const selections = snapEditorialSelections(p.selections, bounds, words, footage)
-  checkEditorialSelections(selections, bounds, words, footage)
+  const allowed = extendedRanges(footage, bounds)
+  const selections = snapEditorialSelections(p.selections, bounds, words, allowed)
+  checkEditorialSelections(selections, bounds, words, allowed)
   if (!selections.length || typeof p.editorialReason !== 'string' || !p.editorialReason.trim()) {
     throw new Error('finisher_missing_editorial_decision')
   }
@@ -207,8 +220,9 @@ export function verifyHighlightsFinish(
     // Separate guards per moment, not just one total EDL: every highlight must
     // survive and no highlight can grow into a previously skipped section.
     const selection = raw.selection
+    const context = extendedRanges([original], bounds)[0]!
     if (!Number.isInteger(selection.startMs) || !Number.isInteger(selection.endMs) ||
-        selection.startMs < original.startMs || selection.endMs > original.endMs ||
+        selection.startMs < context.startMs || selection.endMs > context.endMs ||
         selection.startMs < bounds[0] || selection.endMs > bounds[1]) {
       throw new Error('highlights_finisher_outside_curated_moment')
     }
@@ -264,7 +278,7 @@ export async function runHighlightsFinisher(
     { role: 'system', content: [
       'You are HIGHLIGHTS FINISHER, the same editorial completion specialist as Story Finisher, but with a DIFFERENT completion criterion.',
       'There is NO single shared narrative payoff. Each curated highlight must be independently interesting and comprehensible, with its own setup and source-spoken punchline, revelation, conclusion or natural landing.',
-      'Preserve EXACTLY ONE source interval for EACH of the curated highlights in the SAME order. You can shorten within those bounds but cannot omit a highlight, add new footage, move it, or join all moments into one long narrative. Even the long last highlight must be compressed.',
+      'Preserve ONE source interval per curated highlight in original order. You may adjust each start/end by up to 15 seconds beyond the curator\'s original interval when the FULL transcript shows a needed setup or complete ending. Do not lose a highlight, pick unrelated moments or turn the reel into a single continuous scene.',
       'Choose a whole-thought beginning and ending for EACH interval. Never end with "And", "In the", a dangling clause, or an incomplete question. Do not claim quotes not literally spoken. Give a 2+ word timed landing quote near each end, then stop (max 4 seconds after landing).',
       'Read the ENTIRE authorized timed transcript, including the earlier question and the later answer for each moment. Judge the whole exchange, not its last word or punctuation. Keep source-referenced absolute milliseconds and submit one submit_highlights_finish tool call.',
     ].join('\\n\\n') },
@@ -321,9 +335,9 @@ export async function runStoryFinisher(
   const messages: LunaMessage[] = [
     { role: 'system', content: [
       'You are STORY FINISHER, a specialist between Footage and Dialogue. Your only jobs are: identify the ACTUAL recorded payoff, remove irrelevant surrounding talk, and end the story at a complete natural thought. Do not assemble media or change chronology.',
-      'Read the ENTIRE source transcript to understand the full conversation, including the question before a candidate and the outcome afterward. Choose cuts only inside Footage selections; never invent speech or a payoff. If no real resolution exists, do not fake one.',
+      'Read the ENTIRE source transcript to understand the full conversation, including the question before a candidate and the outcome afterward. You may extend a Footage interval by up to 15 seconds on either side to capture a missing question or natural complete ending, but only if semantically part of that selected moment. Never invent speech or a payoff; if no real resolution exists, do not fake one.',
       'A source-backed payoff is a precise 2+ word quote and timestamp, included in the LAST selected passage. Keep only a short natural reaction after the payoff (<=8 seconds). EVERY retained passage must END at a complete sentence, not a comma or connector; a word-safe boundary alone is not enough. If you end a sentence before a dangling continuation, stop at that sentence timestamp. Do not keep the lead-in to the next thought. Aim for the target duration (at least 75% of requested minimum), not a 51-second cut when 75-105 seconds were requested. Preserve essential setup, obstacle, and result.',
-      'Use absolute source milliseconds and whole-word boundaries. The input contains EVERY authorized ASR word with original timestamps, not selected snippets. Read the full narrative to decide where thoughts start and truly resolve. Sentence punctuation alone is not enough.',
+      'Use absolute source milliseconds and whole-word boundaries. The input contains EVERY authorized ASR word with original timestamps, not selected snippets. Read the full narrative to decide where thoughts start and truly resolve. Sentence punctuation alone is not enough. The 15-second per-side extension is a maximum permission, not an invitation to pad.',
     ].join('\n\n') },
     { role: 'user', content: JSON.stringify({
       outline, targetSeconds: ctx.config.targetLengthS,
