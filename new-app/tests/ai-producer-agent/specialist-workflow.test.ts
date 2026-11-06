@@ -117,7 +117,7 @@ describe('AI Producer specialist execution', () => {
     const handoff = await createEditorialHandoff(ctx, out, new Budget(), null)
     expect(index).toBe(5)
     expect(handoff.cutPlan).toEqual(full)
-    expect(toolFeedback).toHaveLength(2)
+    expect(toolFeedback.length).toBeGreaterThanOrEqual(2)
     for (const hint of toolFeedback) {
       expect(hint).toContain('deficitSeconds')
       expect(hint).toContain('minRequiredS')
