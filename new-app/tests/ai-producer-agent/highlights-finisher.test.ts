@@ -128,6 +128,11 @@ describe('Highlights Finisher: independent endings', () => {
       expect(tools.map(t=>t.name)).toEqual(['submit_highlights_finish'])
       expect(messages[1]?.content).toContain('entireAuthorizedTranscript')
       expect(messages[1]?.content).toContain('full-context-beyond-moments')
+      const userContext = JSON.parse(messages[1]!.content)
+      expect(userContext.perHighlightIntent).toHaveLength(3)
+      expect(userContext.perHighlightIntent[1].intendedMoment).toBe('motorcycle ride along')
+      expect(userContext.perHighlightIntent[2].sourceRangeMs).toEqual([1109485,1183350])
+      expect(userContext.outline.highlightCriteria).toContain('independent')
       const proposed=candidate()
       if(attempts++===0) proposed.moments[1]!.landing.quote='fictional phrase'
       return {
@@ -140,6 +145,11 @@ describe('Highlights Finisher: independent endings', () => {
     })
     const result=await runHighlightsFinisher(ctx(),new Budget(),{
       logline:'Three interesting exchanges',audiencePromise:'Best moments',beats:['one','two','three'],
+      intendedPayoff:'Each moment has an interesting natural landing',
+      essentialSetup:'Enough context before each independent moment',
+      excludeAsides:['Off-topic rambling'],
+      endingRule:'Each moment stops at its own conclusion',
+      highlightCriteria:'Three independent moments with different takeaways',
     }, originals as EditorialSelection[])
     expect(attempts).toBe(2)
     expect(result.selections).toHaveLength(3)
