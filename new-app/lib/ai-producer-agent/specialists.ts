@@ -45,37 +45,42 @@ export type FootagePreferredEdit = {
   intendedPoint: string
   endingCue: string
 }
+/** Keep useful per-passage guidance even if the source validator drops or
+ * repairs a candidate. Hints never expand the allowed footage windows. */
 export function validateFootagePreferredEdits(
   raw: unknown, selections: EditorialSelection[],
   bounds: [number, number],
 ): FootagePreferredEdit[] {
-  if (!Array.isArray(raw) || raw.length !== selections.length)
-    throw new Error('footage_preferred_edit_count_mismatch')
-  return raw.map((value: unknown, index: number) => {
-    if (!value || typeof value !== 'object') throw new Error('footage_preferred_edit_invalid')
-    const r = value as Record<string, unknown>
+  if (!Array.isArray(raw)) return []
+  const retained: FootagePreferredEdit[] = []
+  for (const value of raw) {
+    if (!value || typeof value !== 'object') continue
+    const r = value as Partial<FootagePreferredEdit>
     const { candidateStartMs, candidateEndMs, preferredStartMs, preferredEndMs, intendedPoint, endingCue } = r
-    if (![candidateStartMs,candidateEndMs,preferredStartMs,preferredEndMs].every(Number.isInteger) ||
-      typeof candidateStartMs !== 'number' || typeof candidateEndMs !== 'number' ||
+    if (typeof candidateStartMs !== 'number' || typeof candidateEndMs !== 'number' ||
       typeof preferredStartMs !== 'number' || typeof preferredEndMs !== 'number' ||
+      ![candidateStartMs,candidateEndMs,preferredStartMs,preferredEndMs].every(Number.isInteger) ||
       candidateStartMs < bounds[0] || candidateEndMs > bounds[1] ||
       candidateEndMs <= candidateStartMs ||
       preferredStartMs < candidateStartMs || preferredEndMs > candidateEndMs ||
-      preferredEndMs - preferredStartMs < 3000 ||
+      preferredEndMs <= preferredStartMs ||
       typeof intendedPoint !== 'string' || !intendedPoint.trim() ||
-      typeof endingCue !== 'string' || !endingCue.trim()) {
-      throw new Error('footage_preferred_edit_invalid')
-    }
-    const selected = selections[index]!
-    // Broad candidate must include the actual verified source selection. It
-    // cannot grant access to unrelated parts of the recording.
-    if (candidateStartMs > selected.startMs || candidateEndMs < selected.endMs)
-      throw new Error('footage_candidate_must_cover_selection')
-    if (index > 0 && candidateStartMs < (raw[index-1] as FootagePreferredEdit).candidateEndMs)
-      throw new Error('footage_candidates_overlap')
-    return { candidateStartMs,candidateEndMs,preferredStartMs,preferredEndMs,
-      intendedPoint: intendedPoint.slice(0,220),endingCue: endingCue.slice(0,220) }
-  })
+      typeof endingCue !== 'string' || !endingCue.trim()) continue
+    // Each hint must correspond to a CURRENT accepted candidate, not an
+    // index from the pre-repair submission. Clip the preferred range to
+    // that candidate; ignore entries that cannot be safely paired.
+    const source = selections.find(sel =>
+      candidateStartMs <= sel.endMs && candidateEndMs >= sel.startMs &&
+      preferredStartMs >= sel.startMs && preferredEndMs <= sel.endMs)
+    if (!source || retained.some(p => p.candidateStartMs === source.startMs &&
+      p.candidateEndMs === source.endMs)) continue
+    retained.push({
+      candidateStartMs: source.startMs, candidateEndMs: source.endMs,
+      preferredStartMs, preferredEndMs,
+      intendedPoint: intendedPoint.slice(0,220), endingCue: endingCue.slice(0,220),
+    })
+  }
+  return retained
 }
 export type EditorialHandoff = {
   outline: EditorialOutline
@@ -202,6 +207,7 @@ function validSelections(
   bounds: [number, number],
   words: ClipWord[],
   allowed?: EditorialSelection[],
+  minDurationMs = 3000,
 ): EditorialSelection[] {
   if (!Array.isArray(raw) || raw.length < 1 || raw.length > 24) throw new Error('specialist_invalid_selection_count')
   const normalized: EditorialSelection[] = raw.map((entry) => {
@@ -210,12 +216,12 @@ function validSelections(
     const { startMs, endMs, beat, reason } = r
     if (!Number.isInteger(startMs) || !Number.isInteger(endMs) ||
       typeof startMs !== 'number' || typeof endMs !== 'number' ||
-      startMs < bounds[0] || endMs > bounds[1] || endMs - startMs < 3000 ||
+      startMs < bounds[0] || endMs > bounds[1] || endMs - startMs < minDurationMs ||
       typeof beat !== 'string' || typeof reason !== 'string' ||
       !reason.trim()) throw new Error('specialist_invalid_source_range')
     // Require transcript evidence for the proposed actual source.
     const matches = words.filter((w) => w.e * 1000 > startMs && w.s * 1000 < endMs)
-    if (matches.length < 5) throw new Error('specialist_range_has_no_speech_evidence')
+    if (matches.length < (minDurationMs < 3000 ? 1 : 5)) throw new Error('specialist_range_has_no_speech_evidence')
     if (allowed && !allowed.some((a) => startMs >= a.startMs && endMs <= a.endMs)) {
       throw new Error('specialist_cut_outside_curated_footage')
     }
@@ -281,9 +287,10 @@ export function snapEditorialSelections(
   bounds: [number, number],
   words: ClipWord[],
   allowed?: EditorialSelection[],
+  minDurationMs = 3000,
 ): EditorialSelection[] {
-  try { return validSelections(raw, bounds, words, allowed) } catch (error) {
-    if (!Array.isArray(raw) || raw.length < 2 || raw.length > 24) throw error
+  try { return validSelections(raw, bounds, words, allowed, minDurationMs) } catch (error) {
+    if (!Array.isArray(raw) || raw.length < 1 || raw.length > 24) throw error
     const repaired = raw.map((value) => {
       if (!value || typeof value !== 'object') return value
       const item = value as EditorialSelection
@@ -302,7 +309,7 @@ export function snapEditorialSelections(
         endMs: endMs ?? item.endMs,
       }
     })
-    return validSelections(repaired, bounds, words, allowed)
+    return validSelections(repaired, bounds, words, allowed, minDurationMs)
   }
 }
 
@@ -510,8 +517,9 @@ export function checkEditorialSelections(
   bounds: [number, number],
   words: ClipWord[],
   allowed?: EditorialSelection[],
+  minDurationMs = 3000,
 ): EditorialSelection[] {
-  return validSelections(selections, bounds, words, allowed)
+  return validSelections(selections, bounds, words, allowed, minDurationMs)
 }
 
 /** Prevent one stage from mutating the timeline or accessing other agents' tools. */
@@ -649,7 +657,7 @@ export async function runEditorialRole(
             movedEdges: selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
               s.endMs !== (args.selections as EditorialSelection[])[i]?.endMs).length,
           })
-          return { selections, ...(preferredEdits ? { preferredEdits } : {}) }
+          return { selections, ...(preferredEdits?.length ? { preferredEdits } : {}) }
         }
         if (typeof args.pass !== 'boolean' || !Array.isArray(args.issues) ||
             !args.issues.every((i) => typeof i === 'string')) {
@@ -850,7 +858,7 @@ export async function createEditorialHandoff(
       })
     }
   }
-  if (firstCoverage?.needsReview && budget.state() !== 'hard') {
+  if (shortStory && (firstCoverage?.needsReview || selectionDurationS(footage) > maximumSeconds * 1.5) && budget.state() !== 'hard') {
     const beforeSeconds = selectionDurationS(footage)
     try {
       const revised = await runEditorialRole(ctx, out, budget, 'footage', {
@@ -864,6 +872,9 @@ export async function createEditorialHandoff(
       const candidates = revised.selections as EditorialSelection[]
       const candidateSeconds = selectionDurationS(candidates)
       const candidateCoverage = shortStoryCoverage(candidates, ctx.cache.words, ctx.config.targetLengthS, source.rangeMs)
+      const originalWasOversized = beforeSeconds > maximumSeconds * 1.5
+      const meaningfullyShorter = originalWasOversized && candidateSeconds < beforeSeconds * 0.9 &&
+        candidateSeconds >= minimumSeconds * 0.7 && !candidateCoverage.localOnly
       // Do not replace a reasonable existing edit with a longer but weaker
       // single excerpt. A complete ending or meaningful broader coverage can
       // justify a shorter alternative; adding arbitrary seconds cannot.
@@ -872,9 +883,9 @@ export async function createEditorialHandoff(
       const improvesDuration = candidateSeconds >= minimumSeconds &&
         beforeSeconds < minimumSeconds && !candidateCoverage.localOnly
       const notWorse = candidateSeconds >= Math.min(beforeSeconds * 0.75, minimumSeconds * 0.8)
-      if (notWorse && candidateSeconds <= maximumSeconds * 1.5 &&
+      if (meaningfullyShorter || (notWorse && candidateSeconds <= maximumSeconds * 1.5 &&
           (improvesEnding || improvesCoverage || improvesDuration ||
-           (candidateSeconds > beforeSeconds + 5 && !candidateCoverage.localOnly))) {
+           (candidateSeconds > beforeSeconds + 5 && !candidateCoverage.localOnly)))) {
         footage = candidates
         preferredEdits = revised.preferredEdits as FootagePreferredEdit[] | undefined
         await specialistEvent(ctx, budget, 'footage', 'short_story_repaired', {
@@ -1106,5 +1117,5 @@ export async function createEditorialHandoff(
       note: 'Deliver the best coherent editable cut even when shorter or longer than requested.',
     })
   }
-  return { outline, footage, cutPlan, ...(preferredEdits ? { preferredEdits } : {}), ...(finisher ? { finisher } : {}), ...(highlightsFinisher ? { highlightsFinisher } : {}) }
+  return { outline, footage, cutPlan, ...(preferredEdits?.length ? { preferredEdits } : {}), ...(finisher ? { finisher } : {}), ...(highlightsFinisher ? { highlightsFinisher } : {}) }
 }
