@@ -817,13 +817,24 @@ export async function runStoryBoundaryFinisher(
         ...(pass?{previousUnresolved:[...unresolved]}:{}),
       })},
     ]
-    const reviewed=await lunaChat({messages:reviewMessages,tools:[boundaryReviewSubmission],toolChoice:'required'})
-    budget.steps++
-    budget.addLuna(reviewed.usage)
+    let reviewed:Awaited<ReturnType<typeof lunaChat>>
+    try{
+      reviewed=await lunaChat({messages:reviewMessages,tools:[boundaryReviewSubmission],toolChoice:'required'})
+      budget.steps++
+      budget.addLuna(reviewed.usage)
+    }catch(error){
+      await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',kind:'validate',
+        tool:'story_word_boundary_review_failed',
+        error:String((error as Error).message).slice(0,200),
+        resultSummary:'Semantic review unavailable; preserve existing word-aligned draft'})
+      unresolved.add('semantic_review_unavailable')
+      break
+    }
     const reviewCall=reviewed.message.tool_calls?.find(c=>c.function.name===boundaryReviewSubmission.name)
     if(!reviewCall){
       await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',kind:'validate',
         tool:'story_word_boundary_review_missing',resultSummary:'Semantic acceptance not verified; keep current sourced cut'})
+      unresolved.add('semantic_review_missing')
       break
     }
     let reviewInput:unknown
