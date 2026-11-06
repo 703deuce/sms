@@ -105,6 +105,9 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
   if (ctx.config.editMode === 'just_chatting_rough_cut') {
     out.editorialHandoff = await createEditorialHandoff(ctx, out, budget, instruction)
   }
+  if (out.editorialHandoff) {
+    await assembleApprovedRoughCut(ctx, out, budget)
+  }
   const messages: LunaMessage[] = [
     { role: 'system', content: [
       buildAgentSystemPromptForModel(ctx.promptArgs),
@@ -130,7 +133,9 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       }),
     },
   ]
-  await loop(ctx, out, budget, messages, 'plan')
+  // The specialists already chose the cut. Picture assembly is deterministic:
+  // never rely on the model to issue create_project/add_clip_segment N times.
+  if (!out.editorialHandoff) await loop(ctx, out, budget, messages, 'plan')
   if (out.editorialHandoff) {
     const approved = out.editorialHandoff.cutPlan
     const assembled = out.builder?.segs ?? []
@@ -144,6 +149,7 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     return
   }
   if (out.editorialHandoff && out.lastValid) {
+    try {
     const review = await runEditorialRole(ctx, out, budget, 'qa', {
       outline: out.editorialHandoff.outline,
       selections: out.editorialHandoff.cutPlan,
@@ -160,6 +166,9 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       // QA findings belong on the editable draft. Do not discard an otherwise
       // valid rough cut solely because the editorial review asks for revisions.
       out.notes.push('Editorial QA requested revisions; editable rough cut retained')
+    }
+    } catch (error) {
+      out.notes.push('Editorial QA could not complete: ' + String((error as Error)?.message ?? error).slice(0, 250))
     }
   }
   await apply(ctx, out, budget)
@@ -186,6 +195,48 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     if (out.lastValid !== before && out.lastValid) await ctx.writeDraft(out, out.lastValid)
   }
 }
+
+/**
+ * Deterministically turn approved selections into an actual editor timeline.
+ * A model's missing create_project calls must never prevent project creation.
+ */
+async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: Budget) {
+  const source = ctx.sources[0]
+  const cuts = out.editorialHandoff?.cutPlan
+  if (!source?.sourceId || !cuts?.length) throw new Error('rough_cut_approved_selections_missing')
+  const title = `AI Producer rough cut · ${source.title ?? 'stream'}`
+  const created = await sysTool(ctx, budget, 'plan', 'create_project', {
+    title, sources: [source.sourceId], aspect: '16:9', outputType: out.outputType,
+  }, out)
+  if (!created.ok || !out.builder) throw new Error('rough_cut_builder_creation_failed: ' + created.summary)
+  for (const cut of cuts) {
+    const added = await sysTool(ctx, budget, 'plan', 'add_clip_segment', {
+      sourceId: source.sourceId, srcInMs: cut.startMs, srcOutMs: cut.endMs,
+    }, out)
+    if (!added.ok) throw new Error('rough_cut_assembly_segment_failed: ' + added.summary)
+  }
+  const validation = await sysTool(ctx, budget, 'plan', 'validate_plan', {}, out)
+  const report = validation.data as ValidationReport | undefined
+  if (!validation.ok || !report || !Array.isArray(report.hardFailures)) {
+    throw new Error('rough_cut_validation_unavailable: ' + validation.summary)
+  }
+  out.lastValidation = report
+  if (report.hardFailures.length) {
+    await logAiProducerStep({
+      runId: ctx.runId, stepIndex: ++budget.steps,
+      phase: 'plan', tool: 'rough_cut_validation_failed', kind: 'validate',
+      resultSummary: JSON.stringify(report.hardFailures.map((x) => x.code)).slice(0, 1000),
+    })
+    throw new Error('rough_cut_validation_failed: ' + report.hardFailures.map((x) => x.code).join(','))
+  }
+  out.lastValid = out.builder.snapshot()
+  await logAiProducerStep({
+    runId: ctx.runId, stepIndex: ++budget.steps,
+    phase: 'plan', tool: 'rough_cut_assembled', kind: 'system',
+    resultSummary: JSON.stringify({ segments: cuts.length, durationMs: cuts.reduce((n, c) => n + c.endMs - c.startMs, 0) }),
+  })
+}
+
 
 async function loop(ctx: ToolCtx, out: OutputState, budget: Budget, messages: LunaMessage[], start: Phase) {
   let phase: Phase = start
@@ -263,7 +314,7 @@ async function loop(ctx: ToolCtx, out: OutputState, budget: Budget, messages: Lu
       })
       messages.push({ role: 'tool', tool_call_id: call.id, content: summarizeToolResult(name, r) })
 
-      if (name === 'validate_plan' && r.ok) {
+      if (name === 'validate_plan' && r.ok && r.data && Array.isArray((r.data as ValidationReport).hardFailures)) {
         const rep = r.data as ValidationReport
         out.lastValidation = rep
         if (!rep.hardFailures.length) {
@@ -280,10 +331,16 @@ async function loop(ctx: ToolCtx, out: OutputState, budget: Budget, messages: Lu
         if (!out.lastValidation || out.lastValidation.hardFailures.length) {
           const v = await runTool(ctx, 'validate_plan', {}, out, budget)
           budget.steps++
-          const rep = v.data as ValidationReport
+          const rep = v.data as ValidationReport | undefined
+          if (!v.ok || !rep || !Array.isArray(rep.hardFailures)) {
+            out.notes.push('finish_edit validation unavailable: ' + v.summary)
+            if (!out.builder) throw new Error('rough_cut_no_builder')
+            continue
+          }
+          out.lastValidation = rep
           if (!rep.hardFailures.length) out.lastValid = out.builder!.snapshot()
         }
-        out.story = (args as { story?: string })?.story
+        out.story = (args as { story?: string } | null)?.story
         return
       }
     }
