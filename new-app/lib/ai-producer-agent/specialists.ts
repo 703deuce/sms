@@ -177,6 +177,67 @@ const submitSchemas: Record<EditorialRole, ToolSchema> = {
   },
 }
 
+
+/** Complete original ASR; never sample or omit words from Story / short Story
+ * Footage. Original array indices are stable IDs throughout the handoff. */
+export function completeTranscriptWords(words: ClipWord[], withTiming: boolean) {
+  return words.map((w,id) => withTiming
+    ? [id,Math.round(w.s*1000),Math.round(w.e*1000),w.w]
+    : [id,w.w])
+}
+
+const footageWordSelection = {
+  type: 'object',additionalProperties:false,
+  properties:{
+    firstWordId:{type:'integer',minimum:0},
+    lastWordId:{type:'integer',minimum:0},
+    beat:jsonString,reason:jsonString,
+  },
+  required:['firstWordId','lastWordId','beat','reason'],
+}
+const footageWordsSubmission:ToolSchema = {
+  name:'submit_footage_word_selections',
+  description:'Select the exact first and last spoken word IDs for each complete passage; deterministic code converts IDs to safe timestamps.',
+  parameters:{type:'object',additionalProperties:false,
+    properties:{selections:{type:'array',minItems:2,maxItems:24,
+      items:footageWordSelection}},
+    required:['selections'],
+  },
+}
+
+/** Word IDs are the editorial decision. Timestamps are derived, never
+ * guessed by the model. Reject unsafe/no-speech edits with actionable errors.
+ * This function is used only by the full-transcript Story mode. */
+export function resolveFootageWordSelections(
+  raw:unknown, words:ClipWord[], bounds:[number,number],
+): EditorialSelection[] {
+  if(!Array.isArray(raw)||raw.length<1||raw.length>24)
+    throw new Error('footage_word_selection_invalid_count')
+  const converted:EditorialSelection[]=[]
+  for(let i=0;i<raw.length;i++){
+    const item=raw[i] as Record<string,unknown>|null
+    if(!item||!Number.isInteger(item.firstWordId)||!Number.isInteger(item.lastWordId))
+      throw new Error('footage_word_ids_required_for_passage_'+i)
+    const firstId=item.firstWordId as number,lastId=item.lastWordId as number
+    const first=words[firstId],last=words[lastId]
+    if(!first||!last||!Number.isFinite(first.s)||!Number.isFinite(first.e)||
+      !Number.isFinite(last.s)||!Number.isFinite(last.e)||lastId<firstId||
+      first.e<=first.s||last.e<=last.s)
+      throw new Error('footage_invalid_or_reversed_word_ids_passage_'+i)
+    const startAnchor=Math.round(first.s*1000)-WORD_GUARD_MS
+    const endAnchor=Math.round(last.e*1000)+WORD_GUARD_MS
+    const startMs=nearestLegalEdge(startAnchor,'startMs',words,bounds,undefined,1500)
+    const endMs=nearestLegalEdge(endAnchor,'endMs',words,bounds,undefined,1500)
+    if(startMs===null||endMs===null||
+      startMs>Math.round(first.s*1000)-WORD_GUARD_MS ||
+      endMs<Math.round(last.e*1000)+WORD_GUARD_MS)
+      throw new Error('footage_word_boundary_no_safe_seam_passage_'+i)
+    converted.push({startMs,endMs,beat:String(item.beat??'').slice(0,90),
+      reason:String(item.reason??'').slice(0,320)})
+  }
+  return validSelections(converted,bounds,words)
+}
+
 function safeJson(input: string): Record<string, unknown> | null {
   try {
     const raw = JSON.parse(input) as unknown
@@ -518,10 +579,16 @@ export async function runEditorialRole(
   if (!source?.rangeMs) throw new Error('specialist_source_window_missing')
   const highlightsMode = ctx.config.roughCutIntent === 'highlights'
   const allowedTools = TOOL_SCHEMAS.filter((tool) => readTools[role].includes(tool.name))
-  const tools = [...allowedTools, submitSchemas[role]]
+  const wordFootage=role==='footage' && context.fullTranscriptWordIndexed===true
+  const submitTool=wordFootage?footageWordsSubmission:submitSchemas[role]
+  const tools = [...allowedTools,submitTool]
   const messages: LunaMessage[] = [
     { role: 'system', content: [
       FILM_EDITING_THEORY, SPECIALIST_ROLES[role],
+      ...(context.fullTranscriptWordIndexed === true ? [
+        'You have the FULL original transcript in order, not snippets. No relevant speech is omitted. The source transcript contains original stable word IDs and millisecond timing. Read the whole conversation and select complete, contextual thoughts.',
+        'You make editorial decisions; deterministic code executes them. For Footage submit ONLY firstWordId and lastWordId with beat and reason, never startMs/endMs. Finish a thought before cutting; do not stop on an introductory conjunction, incomplete quote, question, or setup. Do not fabricate outcomes to fill the time target.'
+      ] : []),
       ...(ctx.config.editMode === 'just_chatting_rough_cut'
         ? [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role],
           ctx.config.targetLengthS[1] <= 105
@@ -561,8 +628,8 @@ export async function runEditorialRole(
     // Reserve the last half of the budget for a structured handoff, not
     // repeated transcript searches. The initial context already includes
     // inventory plus twelve chronological transcript samples.
-    const mustSubmit = turn >= 5 || transcriptReads >= 3 || invalidSubmissions >= 2
-    const turnTools = mustSubmit ? [submitSchemas[role]] : tools
+    const mustSubmit = turn >= 5 || (role !== 'story' && role !== 'footage' && transcriptReads >= 3) || invalidSubmissions >= 2
+    const turnTools = mustSubmit ? [submitTool] : tools
     await specialistEvent(ctx, budget, role, 'turn', { turn, transcriptReads, invalidSubmissions, forcedSubmit: mustSubmit, allowedTools: turnTools.map((t) => t.name) })
     const response = await lunaChat({ messages, tools: turnTools, toolChoice: 'required' })
     budget.steps++
@@ -583,11 +650,12 @@ export async function runEditorialRole(
     for (const call of calls) {
       const name = call.function.name
       const args = safeJson(call.function.arguments)
-      if (name === names[role]) await specialistEvent(ctx, budget, role, 'submit_attempt', {
+      const isSubmit=name===submitTool.name
+      if (isSubmit) await specialistEvent(ctx, budget, role, 'submit_attempt', {
         turn, callId: call.id, proposal: selectionLogSummary(args),
         malformedJson: args === null,
       })
-      if (name === names[role] && !args) {
+      if (isSubmit && !args) {
         invalidSubmissions++
         await specialistEvent(ctx, budget, role, 'rejected', {
           turn, invalidSubmissions, errorCode: 'specialist_malformed_submission',
@@ -597,7 +665,7 @@ export async function runEditorialRole(
           content: '{"ok":false,"error":"specialist_malformed_submission","instruction":"Submit valid structured JSON."}' })
         continue
       }
-      if (name === names[role] && args) {
+      if (isSubmit && args) {
         try {
         if (role === 'story') {
           if (typeof args.logline !== 'string' || typeof args.audiencePromise !== 'string' ||
@@ -619,8 +687,11 @@ export async function runEditorialRole(
           let selections: EditorialSelection[]
           let recovery: ReturnType<typeof recoverEditorialSelections> | undefined
           try {
-            selections = snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
+            selections = wordFootage
+              ? resolveFootageWordSelections(args.selections,ctx.cache.words??[],source.rangeMs)
+              : snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
           } catch (firstError) {
+            if(wordFootage)throw firstError // Never reinterpret word IDs as milliseconds.
             recovery = recoverEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
             if (!recovery.selections.length) throw firstError
             selections = recovery.selections
@@ -650,7 +721,9 @@ export async function runEditorialRole(
           const allowed = role === 'dialogue'
             ? context.curatedSelections as EditorialSelection[] | undefined
             : undefined
-          const repairHint = (role === 'footage' || role === 'dialogue')
+          const repairHint = wordFootage
+            ? {instruction:'Use existing firstWordId/lastWordId from the full source transcript; make complete thoughts, maintain chronology, and avoid overlapping passages.',errorCode}
+            : (role === 'footage' || role === 'dialogue')
             ? selectionRepairHint(args.selections, ctx.cache.words ?? [], source.rangeMs, allowed)
             : {}
           await specialistEvent(ctx, budget, role, 'rejected', {
