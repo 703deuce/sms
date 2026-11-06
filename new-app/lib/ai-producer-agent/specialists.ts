@@ -540,16 +540,47 @@ export async function createEditorialHandoff(
     audienceGoal: 'Coherent conversational 3–8 minute editable stream edit, never a shorts montage',
     editingPriorities: ['meaning and context','narrative payoff','natural dialogue and reactions','no repetition','restrained polish'],
   }
-  const story = await runEditorialRole(ctx, out, budget, 'story', base)
+  let story: Record<string, unknown>
+  try {
+    story = await runEditorialRole(ctx, out, budget, 'story', base)
+  } catch (error) {
+    // An unavailable paper outline must not destroy a sourced editable draft.
+    await specialistEvent(ctx, budget, 'story', 'fallback', {
+      errorCode: String((error as Error)?.message ?? error).slice(0, 200),
+    })
+    story = { logline: 'Source-grounded conversational rough cut',
+      audiencePromise: 'Review the best available recorded conversation',
+      beats: ['context', 'discussion', 'resolution'] }
+  }
   const outline = {
     logline: String(story.logline),
     audiencePromise: String(story.audiencePromise),
     beats: (story.beats as string[]).slice(0, 10),
   }
-  const found = await runEditorialRole(ctx, out, budget, 'footage', {
-    ...base, storyOutline: outline,
-    instruction: 'Select coherent source intervals; evidence first, then editorial value.',
-  })
+  let found: Record<string, unknown>
+  try {
+    found = await runEditorialRole(ctx, out, budget, 'footage', {
+      ...base, storyOutline: outline,
+      instruction: 'Select coherent source intervals; evidence first, then editorial value.',
+    })
+  } catch (error) {
+    // Last-resort, honest first-pass source selection. Keep an editable draft
+    // rather than losing the upload to failed model submissions.
+    const [start, end] = source.rangeMs
+    const targetMs = Math.min(end - start, Math.max(180_000, ctx.config.targetLengthS[0] * 1000))
+    const fallbackStart = Math.max(start, end - targetMs)
+    const provisional: EditorialSelection[] = [{
+      startMs: fallbackStart, endMs: end, beat: 'discussion',
+      reason: 'Fallback source selection; review and refine in the editor',
+    }]
+    const recovered = recoverEditorialSelections(provisional, source.rangeMs, ctx.cache.words)
+    if (!recovered.selections.length) throw error
+    await specialistEvent(ctx, budget, 'footage', 'fallback_to_source', {
+      errorCode: String((error as Error)?.message ?? error).slice(0, 200),
+      selectedMs: end - fallbackStart, unsafeEdges: recovered.unsafeEdges,
+    })
+    found = { selections: recovered.selections }
+  }
   const footage = found.selections as EditorialSelection[]
   let refined: Record<string, unknown>
   try {
