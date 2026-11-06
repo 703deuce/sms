@@ -117,6 +117,197 @@ export function verifyStoryFinish(
   }, editorialReason: p.editorialReason.slice(0, 500) }
 }
 
+/** The Highlights variant of the Finisher does NOT require one shared story payoff.
+ * Each original curated moment is retained, given its own spoken landing,
+ * and compressed independently without changing source order.
+ */
+export type HighlightFinish = {
+  selection: EditorialSelection
+  landing: StoryPayoff
+  editorialReason: string
+}
+export type HighlightsFinisherDecision = {
+  selections: EditorialSelection[]
+  moments: HighlightFinish[]
+  editorialReason: string
+}
+const highlightMomentSchema = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    selection: {
+      type: 'object', additionalProperties: false,
+      properties: {
+        startMs: { type: 'integer', minimum: 0 },
+        endMs: { type: 'integer', minimum: 0 },
+        beat: { type: 'string' },
+        reason: { type: 'string' },
+      },
+      required: ['startMs', 'endMs', 'beat', 'reason'],
+    },
+    landing: {
+      type: 'object', additionalProperties: false,
+      properties: {
+        startMs: { type: 'integer', minimum: 0 },
+        endMs: { type: 'integer', minimum: 0 },
+        quote: { type: 'string' },
+      },
+      required: ['startMs', 'endMs', 'quote'],
+    },
+    editorialReason: { type: 'string' },
+  },
+  required: ['selection', 'landing', 'editorialReason'],
+}
+const highlightsSubmission: ToolSchema = {
+  name: 'submit_highlights_finish',
+  description: 'Submit a separately completed, source-grounded excerpt and spoken landing for every curated highlight.',
+  parameters: {
+    type: 'object', additionalProperties: false,
+    properties: {
+      moments: { type: 'array', minItems: 2, maxItems: 24, items: highlightMomentSchema },
+      editorialReason: { type: 'string' },
+    },
+    required: ['moments', 'editorialReason'],
+  },
+}
+function sourceWords(words: ClipWord[], startMs: number, endMs: number): ClipWord[] {
+  return words.filter(w => w.e * 1000 > startMs && w.s * 1000 < endMs)
+    .sort((a,b) => a.s - b.s)
+}
+function dangling(w: string): boolean {
+  return /^(a|an|the|in|on|at|to|for|of|and|but|or|because|with|from|just|i|we|he|she|they|it)$/i.test(w.trim().replace(/[.,!?]+$/, '')) ||
+    /\\.{2,}$/.test(w.trim())
+}
+function verifySpokenQuote(words: ClipWord[], landing: StoryPayoff): void {
+  if (!Number.isInteger(landing.startMs) || !Number.isInteger(landing.endMs) ||
+      landing.endMs <= landing.startMs || landing.endMs - landing.startMs > 12_000 ||
+      typeof landing.quote !== 'string' || normalized(landing.quote).split(' ').length < 2) {
+    throw new Error('highlights_finisher_invalid_landing')
+  }
+  const evidence = sourceWords(words, landing.startMs - 150, landing.endMs + 150)
+    .map(w => w.w).join(' ')
+  if (!normalized(evidence).includes(normalized(landing.quote))) {
+    throw new Error('highlights_finisher_unsourced_landing')
+  }
+}
+export function verifyHighlightsFinish(
+  proposal: unknown, footage: EditorialSelection[], words: ClipWord[],
+  bounds: [number, number], target: [number, number],
+): HighlightsFinisherDecision {
+  if (!proposal || typeof proposal !== 'object') throw new Error('highlights_finisher_invalid_submission')
+  const p = proposal as Record<string, unknown>
+  if (!Array.isArray(p.moments) || p.moments.length !== footage.length ||
+      typeof p.editorialReason !== 'string' || !p.editorialReason.trim()) {
+    throw new Error('highlights_finisher_must_keep_all_curated_moments')
+  }
+  const mapped: HighlightFinish[] = []
+  for (let i=0;i<footage.length;i++) {
+    const original = footage[i]!
+    const raw = p.moments[i] as HighlightFinish | null
+    if (!raw || typeof raw !== 'object' || !raw.selection ||
+        !raw.landing || typeof raw.editorialReason !== 'string' || !raw.editorialReason.trim()) {
+      throw new Error('highlights_finisher_invalid_moment')
+    }
+    // Separate guards per moment, not just one total EDL: every highlight must
+    // survive and no highlight can grow into a previously skipped section.
+    const selection = snapEditorialSelections([raw.selection], bounds, words, [original])[0]
+    if (!selection || selection.startMs < original.startMs || selection.endMs > original.endMs) {
+      throw new Error('highlights_finisher_outside_curated_moment')
+    }
+    if (selection.endMs - selection.startMs < 3_000) throw new Error('highlights_finisher_moment_too_short')
+    if (raw.landing.startMs < selection.startMs || raw.landing.endMs > selection.endMs) {
+      throw new Error('highlights_finisher_landing_not_retained')
+    }
+    verifySpokenQuote(words, raw.landing)
+    if (selection.endMs - raw.landing.endMs > 4_000) {
+      throw new Error('highlights_finisher_kept_talk_after_landing')
+    }
+    const spoken = sourceWords(words, selection.startMs, selection.endMs + 100)
+    if (!spoken.length || dangling(spoken[spoken.length - 1]!.w)) {
+      throw new Error('highlights_finisher_mid_sentence_ending')
+    }
+    // Detect obvious mid-sentence cut-ins by requiring an actual sentence
+    // boundary shortly before each selected opening, or source start. The
+    // context rule is advisory elsewhere; here only an obvious dangling
+    // starting fragment is rejected.
+    if (/^(and|but|because|which|whose|that|with|to)$/i.test(spoken[0]!.w.replace(/[^a-z]/gi, ''))) {
+      throw new Error('highlights_finisher_mid_sentence_opening')
+    }
+    mapped.push({
+      selection, landing: {
+        startMs: raw.landing.startMs, endMs: raw.landing.endMs,
+        quote: raw.landing.quote.slice(0,180),
+      }, editorialReason: raw.editorialReason.slice(0,350),
+    })
+  }
+  const selections = mapped.map(m => m.selection)
+  if (seconds(selections) > target[1] * 1.15) throw new Error('highlights_finisher_still_over_target')
+  if (seconds(selections) < target[0] * 0.6) throw new Error('highlights_finisher_overshort')
+  // Preserve the highlights' original diversity: one source interval per
+  // curated distinct moment, in original chronological order.
+  for (let i=1;i<selections.length;i++) {
+    if (selections[i]!.startMs < selections[i-1]!.endMs)
+      throw new Error('highlights_finisher_invalid_chronology')
+  }
+  return { selections, moments: mapped, editorialReason: p.editorialReason.slice(0,500) }
+}
+
+export async function runHighlightsFinisher(
+  ctx: ToolCtx, budget: Budget,
+  outline: { logline: string; audiencePromise: string; beats: string[] },
+  footage: EditorialSelection[],
+): Promise<HighlightsFinisherDecision> {
+  const words = ctx.cache.words ?? []
+  const source = ctx.sources[0]
+  if (!source?.rangeMs || !words.length || footage.length < 2) throw new Error('highlights_finisher_source_unavailable')
+  const messages: LunaMessage[] = [
+    { role: 'system', content: [
+      'You are HIGHLIGHTS FINISHER, the same editorial completion specialist as Story Finisher, but with a DIFFERENT completion criterion.',
+      'There is NO single shared narrative payoff. Each curated highlight must be independently interesting and comprehensible, with its own setup and source-spoken punchline, revelation, conclusion or natural landing.',
+      'Preserve EXACTLY ONE source interval for EACH of the curated highlights in the SAME order. You can shorten within those bounds but cannot omit a highlight, add new footage, move it, or join all moments into one long narrative. Even the long last highlight must be compressed.',
+      'Choose a whole-thought beginning and ending for EACH interval. Never end with "And", "In the", a dangling clause, or an incomplete question. Do not claim quotes not literally spoken. Give a 2+ word timed landing quote near each end, then stop (max 4 seconds after landing).',
+      'Aim at the total requested duration without padding; keep source-referenced absolute millisecond positions. You have timed ASR words for each candidate with 3 seconds of context. Submit one submit_highlights_finish tool call.',
+    ].join('\\n\\n') },
+    { role: 'user', content: JSON.stringify({
+      outline, targetSeconds: ctx.config.targetLengthS,
+      originalSeconds: seconds(footage), curatedHighlights: footage,
+      timedWords: transcriptFor(words, footage),
+      instruction: 'Return the same number of highlights as supplied, but each shorter and independently complete. Choose separate verified spoken landing quotes. Prioritize conversational meaning and a clean ending for all moments.',
+    }) },
+  ]
+  let reason='highlights_finisher_no_usable_decision'
+  for(let attempt=0;attempt<3;attempt++) {
+    if (budget.state() === 'hard') throw new Error('highlights_finisher_budget_exhausted')
+    const response=await lunaChat({messages,tools:[highlightsSubmission],toolChoice:'required'})
+    budget.steps++
+    budget.addLuna(response.usage)
+    messages.push(response.message)
+    const call=response.message.tool_calls?.find(c=>c.function.name===highlightsSubmission.name)
+    try {
+      if(!call) throw new Error('highlights_finisher_missing_submit_tool')
+      const proposal=JSON.parse(call.function.arguments) as unknown
+      const decision=verifyHighlightsFinish(proposal,footage,words,source.rangeMs,ctx.config.targetLengthS)
+      await logAiProducerStep({
+        runId:ctx.runId, stepIndex:budget.steps, phase:'plan', kind:'validate',
+        tool:'highlights_finisher_accepted',
+        argsSummary:JSON.stringify({beforeSeconds:seconds(footage),afterSeconds:seconds(decision.selections),
+          moments:decision.moments.map(m=>({range:[m.selection.startMs,m.selection.endMs],
+            landing:[m.landing.startMs,m.landing.endMs]}))}).slice(0,3000),
+        resultSummary:'verified independent source-grounded endings for curated highlights',
+      })
+      return decision
+    } catch(error) {
+      reason=String((error as Error).message).slice(0,200)
+      await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',kind:'validate',
+        tool:'highlights_finisher_rejected',error:reason,resultSummary:reason})
+      if(call) messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({
+        ok:false,error:reason,
+        instruction:'Keep every original highlight once. Select within each original interval, verify the exact spoken landing quotes, close every moment cleanly, and compress to the requested duration. Resubmit.',
+      })})
+    }
+  }
+  throw new Error(reason)
+}
+
 export async function runStoryFinisher(
   ctx: ToolCtx, budget: Budget,
   outline: { logline: string; audiencePromise: string; beats: string[] },
