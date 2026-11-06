@@ -77,4 +77,26 @@ describe('Just Chatting long-form rough cut', () => {
     })
     expect(bad.hardFailures.map(x=>x.code)).toContain('rough_cut_non_chronological_or_overlapping')
   })
+  it('ships a reversible rough cut with ASR-midword joins marked for review', () => {
+    const builder = new DraftEditsBuilder(
+      { clipStartMs: 300_000, clipEndMs: 500_000, trimMinMs: 300_000, trimMaxMs: 500_000 },
+      'raw_stream',
+    )
+    builder.preserveApprovedEdges = true
+    builder.addSegment({ sourceId: 'raw_stream', srcInMs: 300_705, srcOutMs: 324_705 })
+    builder.addSegment({ sourceId: 'raw_stream', srcInMs: 399_810, srcOutMs: 429_310 })
+    const wordData = [
+      { w: 'So', s: 300.69, e: 300.93 }, { w: 'heard', s: 324.68, e: 324.89 },
+      { w: 'aspirations', s: 399.78, e: 400.06 }, { w: 'was', s: 429.28, e: 429.51 },
+    ]
+    const report = validateDraft(builder, {
+      words: wordData, laughs: [], reactions: [], bursts: [],
+      layoutAt: () => null, outputType: 'story', editMode: 'just_chatting_rough_cut',
+      sourceRangeMs: [300_000, 500_000], audioEvidenceAvailable: false,
+      targetLengthS: [180, 480], memeSfx: 'off', payoffSrc: [],
+    })
+    expect(report.hardFailures).toEqual([])
+    expect(report.warnings.filter((i) => i.code === 'cut_in_word')).toHaveLength(4)
+  })
+
 })
