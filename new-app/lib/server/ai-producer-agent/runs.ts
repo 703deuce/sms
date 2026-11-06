@@ -16,6 +16,7 @@ export type CreateAiProducerRunInput = {
   sources: AiProducerSourceRef[]
   outputType: AiProducerOutputType
   editMode?: 'just_chatting_rough_cut'
+  roughCutIntent?: 'story' | 'highlights'
   genre?: string
   platform?: 'tiktok' | 'shorts' | 'reels'
   targetLengthS?: [number, number]
@@ -37,6 +38,7 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
   await assertNoConcurrentRun(workspaceId)
   const genre = input.genre ?? 'irl_just_chatting'
   if (genre !== 'irl_just_chatting') throw new Error('genre_not_supported')
+  if (input.roughCutIntent && input.editMode !== 'just_chatting_rough_cut') throw new Error('rough_cut_intent_requires_rough_cut_mode')
   if (input.editMode === 'just_chatting_rough_cut' && input.outputType !== 'story') throw new Error('rough_cut_requires_story_output')
   if (input.editMode === 'just_chatting_rough_cut' && input.sources.length !== 1) throw new Error('rough_cut_single_source_only')
   if (input.editMode === 'just_chatting_rough_cut' && input.exportOnFinish) throw new Error('rough_cut_requires_review_before_export')
@@ -51,6 +53,7 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
     input.outputType === 'auto' ? 'single_payoff' : input.outputType === 'story' ? 'story' : input.outputType
   const config: AiProducerRunConfig = {
     editMode: input.editMode,
+    roughCutIntent: input.editMode === 'just_chatting_rough_cut' ? input.roughCutIntent ?? 'story' : undefined,
     targetLengthS:
       (input.editMode === 'just_chatting_rough_cut' ? input.targetLengthS ?? [180, 480] : input.targetLengthS) ??
       (resolvedForConfig === 'montage'
