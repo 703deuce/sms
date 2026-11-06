@@ -140,6 +140,69 @@ function validSelections(
   return normalized
 }
 
+/**
+ * Only repair minor timestamp quantization, not arbitrary model selections.
+ * A snapping candidate must still satisfy every speech, chronology and
+ * curated-footage validator after repair.
+ */
+export function snapEditorialSelections(
+  raw: unknown,
+  bounds: [number, number],
+  words: ClipWord[],
+  allowed?: EditorialSelection[],
+): EditorialSelection[] {
+  try { return validSelections(raw, bounds, words, allowed) } catch (error) {
+    if (!Array.isArray(raw) || raw.length < 2 || raw.length > 24) throw error
+    const inside = (edge: number) => words.find((w) =>
+      edge > w.s * 1000 + 30 && edge < w.e * 1000 - 30)
+    const repaired = raw.map((value) => {
+      if (!value || typeof value !== 'object') return value
+      const item = value as EditorialSelection
+      if (!Number.isInteger(item.startMs) || !Number.isInteger(item.endMs)) return value
+      let startMs = item.startMs
+      let endMs = item.endMs
+      const startWord = inside(startMs)
+      const endWord = inside(endMs)
+      if (startWord) {
+        const candidate = Math.max(bounds[0], Math.floor(startWord.s * 1000) - 30)
+        if (startMs - candidate <= 300) startMs = candidate
+      }
+      if (endWord) {
+        const candidate = Math.min(bounds[1], Math.ceil(endWord.e * 1000) + 30)
+        if (candidate - endMs <= 300) endMs = candidate
+      }
+      return { ...item, startMs, endMs }
+    })
+    return validSelections(repaired, bounds, words, allowed)
+  }
+}
+
+function selectionRepairHint(
+  raw: unknown, words: ClipWord[], bounds: [number, number],
+): Record<string, unknown> {
+  if (!Array.isArray(raw)) return { instruction: 'Submit 2–24 intervals.' }
+  for (let i = 0; i < raw.length; i++) {
+    const r = raw[i] as EditorialSelection | null
+    if (!r || !Number.isInteger(r.startMs) || !Number.isInteger(r.endMs)) {
+      return { index: i, instruction: 'Use integer source milliseconds.' }
+    }
+    for (const edge of ['startMs', 'endMs'] as const) {
+      const t = r[edge]
+      const w = words.find((w) => t > w.s * 1000 + 30 && t < w.e * 1000 - 30)
+      if (w) return {
+        index: i, edge, suppliedMs: t,
+        nearestLegalWordEdgesMs: [
+          Math.max(bounds[0], Math.floor(w.s * 1000) - 30),
+          Math.min(bounds[1], Math.ceil(w.e * 1000) + 30),
+        ],
+      }
+    }
+    const speechCount = words.filter((w) => w.e * 1000 > r.startMs && w.s * 1000 < r.endMs).length
+    if (speechCount < 5) return { index: i, speechCount, instruction: 'Choose a transcript-grounded spoken interval.' }
+  }
+  return { instruction: 'Check chronology, minimum 3 seconds and source bounds.' }
+}
+
 export function checkEditorialSelections(
   selections: unknown,
   bounds: [number, number],
@@ -176,9 +239,16 @@ export async function runEditorialRole(
         ? { requiredReviewChecks: JUST_CHATTING_REVIEW_CHECKS } : {}),
     }) },
   ]
-  for (let turn = 0; turn < 8; turn++) {
+  let transcriptReads = 0
+  let invalidSubmissions = 0
+  for (let turn = 0; turn < 10; turn++) {
     if (budget.state() === 'hard') throw new Error('specialist_budget_exhausted')
-    const response = await lunaChat({ messages, tools, toolChoice: 'required' })
+    // Reserve the last half of the budget for a structured handoff, not
+    // repeated transcript searches. The initial context already includes
+    // inventory plus twelve chronological transcript samples.
+    const mustSubmit = turn >= 5 || transcriptReads >= 3 || invalidSubmissions >= 2
+    const turnTools = mustSubmit ? [submitSchemas[role]] : tools
+    const response = await lunaChat({ messages, tools: turnTools, toolChoice: 'required' })
     budget.steps++
     budget.addLuna(response.usage)
     messages.push(response.message)
@@ -211,7 +281,7 @@ export async function runEditorialRole(
           const allowed = role === 'dialogue'
             ? context.curatedSelections as EditorialSelection[] | undefined
             : undefined
-          return { selections: validSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed) }
+          return { selections: snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed) }
         }
         if (typeof args.pass !== 'boolean' || !Array.isArray(args.issues) ||
             !args.issues.every((i) => typeof i === 'string')) {
@@ -219,6 +289,7 @@ export async function runEditorialRole(
         }
         return { pass: args.pass, issues: args.issues.slice(0, 15) }
         } catch (error) {
+          invalidSubmissions++
           // Models sometimes choose an imprecise word boundary. Reject the
           // proposal but give this specialist a chance to repair it before
           // the entire twenty-minute run fails.
@@ -227,7 +298,8 @@ export async function runEditorialRole(
             content: JSON.stringify({
               ok: false,
               error: String((error as Error)?.message ?? error).slice(0, 240),
-              instruction: 'Revise the handoff using real source timestamps and resubmit.',
+              repairHint: selectionRepairHint(args.selections, ctx.cache.words ?? [], source.rangeMs),
+              instruction: 'Do not call get_transcript again. Correct and resubmit using legal source word edges.',
             }),
           })
           continue
@@ -238,6 +310,7 @@ export async function runEditorialRole(
         messages.push({ role: 'tool', tool_call_id: call.id, content: '{"ok":false,"error":"role_tool_forbidden"}' })
         continue
       }
+      if (name === 'get_transcript') transcriptReads++
       const result = await runTool(ctx, name, args ?? {}, out, budget)
       budget.steps++
       budget.addGemini(result.costUsd)
@@ -251,7 +324,7 @@ export async function runEditorialRole(
       messages.push({ role: 'tool', tool_call_id: call.id, content: summarizeToolResult(name, result) })
     }
   }
-  throw new Error(`specialist_${role}_did_not_submit`)
+  throw new Error(`specialist_${role}_did_not_submit_after_${invalidSubmissions}_invalid_attempts`)
 }
 
 function representativeTranscript(words: ClipWord[], range: [number, number]) {
