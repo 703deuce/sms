@@ -130,7 +130,6 @@ export function validateDraft(b: DraftEditsBuilder, ctx: ValidationCtx): Validat
   const warn: Issue[] = []
   const H = (code: string, d: Partial<Issue> = {}) => hard.push({ code, severity: 'HARD', detail: '', ...d })
 
-  const words = ctx.words.map((w) => ({ w: w.w, s: Math.round(w.s * 1000), e: Math.round(w.e * 1000) }))
   const joins = [e.trim.in, e.trim.out, ...e.cutRanges.flat()]
   for (const t of joins) {
     const w = wordAtUnsafeBoundary(t, ctx.words)
