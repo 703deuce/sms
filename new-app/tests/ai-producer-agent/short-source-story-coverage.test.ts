@@ -26,7 +26,7 @@ const outline = { logline: 'A personal transformation', audiencePromise: 'What c
   beats: ['setup', 'challenge', 'payoff'] }
 const words = Array.from({ length: 1200 }, (_, i) => ({
   w: i === 66 ? 'just...' : 'story.',
-  s: 300 + i, e: 300.3 + i,
+  s: 300.4 + i, e: 300.6 + i,
 }))
 const context = () => ({
   runId: 'short-local', sources: [{ sourceId: 'recording', rangeMs: [300_000, 1_500_000] }],
