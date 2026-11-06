@@ -404,46 +404,29 @@ describe('source-verified Story Finisher', () => {
     expect(result.every((r,i)=>r.startMs>=compressed[i]!.startMs-2000 &&
       r.endMs<=compressed[i]!.endMs+2000)).toBe(true)
   })
-  it('Footage owns the edit; boundary Finisher is word-based and never rescouts', async () => {
+  it('Story and Footage see every original word, and short Story no longer invokes Finisher or Dialogue',async()=>{
     const names:string[]=[]
     __setLunaImpl(async ({tools,messages})=>{
       const name=tools[tools.length-1]!.name
       names.push(name)
+      const request=JSON.parse(messages[1]!.content!)
+      expect(request.fullTranscript).toHaveLength(words.length)
+      expect(request.fullTranscript.at(-1).at(-1)).toBe('late-discussion-context')
       if(name==='submit_story_outline')return response(name,outline,'story')
-      if(name==='submit_footage_selections')return response(name,{selections:compressed},'footage')
-      if(name==='submit_story_boundary_review'){
-        const p=JSON.parse(messages[1]!.content!)
-        return response(name,{reviews:p.actualProposedCut.map((segment:{
-          index:number;spokenWords:Array<{id:number}>,
-        })=>({
-          index:segment.index,openingComplete:true,endingComplete:true,
-          firstWordId:segment.spokenWords[0]!.id,
-          lastWordId:segment.spokenWords[segment.spokenWords.length-1]!.id,
-          explanation:'This mocked passage is complete',
-        }))},'review')
+      if(name==='submit_footage_word_selections'){
+        expect(request.transcriptSamples).toBeUndefined()
+        expect(request.fullTranscript[0]).toHaveLength(4)
+        return response(name,{selections:[
+          {firstWordId:0,lastWordId:7,beat:'setup',reason:'first complete source thought'},
+          {firstWordId:12,lastWordId:20,beat:'development',reason:'second complete source thought'},
+        ]},'footage')
       }
-      if(name==='submit_story_word_boundaries'){
-        const context=JSON.parse(messages[1]!.content!)
-        expect(context.entireAuthorizedTranscript).toBeUndefined()
-        const passages=context.passages.map((p:{
-          index:number;words:Array<{id:number;currentlyKept:boolean}>,
-        })=>{
-          const kept=p.words.filter(w=>w.currentlyKept)
-          return {index:p.index,firstWordId:kept[0]!.id,lastWordId:kept[kept.length-1]!.id}
-        })
-        return response(name,{passages},'polish')
-      }
-      if(name==='submit_dialogue_cut_plan')return response(name,{selections:compressed},'dialogue')
-      throw new Error('Unexpected tool '+name)
+      throw new Error('Unexpected legacy repair agent '+name)
     })
     const edit=await createEditorialHandoff(ctx(),out(),new Budget(),null)
-    expect(names[0]).toBe('submit_story_outline')
-    expect(names.filter(n=>n==='submit_footage_selections').length).toBeGreaterThanOrEqual(1)
-    expect(names.filter(n=>n==='submit_story_word_boundaries')).toHaveLength(1)
-    expect(names.filter(n=>n==='submit_story_boundary_review')).toHaveLength(1)
-    expect(names[names.length-1]).toBe('submit_dialogue_cut_plan')
-    expect(edit.cutPlan).toHaveLength(compressed.length)
-    expect(edit.cutPlan.reduce((sum,s)=>sum+s.endMs-s.startMs,0)).toBeLessThan(110000)
+    expect(names).toEqual(['submit_story_outline','submit_footage_word_selections'])
+    expect(edit.cutPlan).toEqual(edit.footage)
+    expect(edit.cutPlan).toHaveLength(2)
     expect(edit.finisher).toBeUndefined()
   })
 })
