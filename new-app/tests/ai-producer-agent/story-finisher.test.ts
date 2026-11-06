@@ -87,7 +87,7 @@ describe('source-verified Story Finisher', () => {
       payoff: { startMs: 698000, endMs: 698800, quote: 'In the' },
       editorialReason: 'Mid-phrase is not a payoff',
     }, footage, words, [300000, 1500000], [75, 105]))
-      .toThrow('finisher_mid_sentence_ending')
+      .toThrow('finisher_still_over_target')
   })
   it('retries invalid evidence then returns a real sourced short edit', async () => {
     let n = 0
