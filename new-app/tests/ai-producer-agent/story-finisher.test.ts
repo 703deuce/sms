@@ -265,7 +265,7 @@ describe('source-verified Story Finisher', () => {
     ],original,speech,[0,25000])
     expect(result.selections[0]!.endMs).toBe(6030)
     expect(result.selections[1]).toEqual(original[1])
-    expect(result.diagnostics[1]!.start).toBe('invalid_first_word_id')
+    expect(result.diagnostics[1]!.start).toBe('invalid_or_unavailable_first_word_id')
   })
   it('handles overlapping ASR words without making an unsafe cut', () => {
     const original=[part(1000,7000)]
