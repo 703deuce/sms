@@ -156,6 +156,7 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     try {
     const review = await runEditorialRole(ctx, out, budget, 'qa', {
       outline: out.editorialHandoff.outline,
+      storyFinisher: out.editorialHandoff.finisher ?? null,
       selections: out.editorialHandoff.cutPlan,
       timeline: out.lastValid,
       validation: out.lastValidation,
@@ -164,7 +165,7 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       ),
       instruction: ctx.config.roughCutIntent === 'highlights'
         ? 'HIGHLIGHTS QA: Inspect the actual opening and closing transcript words for EVERY selected moment and the joins. Does the reel contain distinct memorable moments rather than consecutive breaths from one conversation? Is each highlight understandable with its own payoff or complete thought, without repetitiveness, misrepresented context or sentence fragments? Judge pacing and selected content, and report pass=false with specific timestamps if weak. No rendered audio was supplied; acoustic joins require listening review.'
-        : 'Evaluate the source-grounded opening/closing dialogue for every chosen interval and the actual before/after words at EVERY join. Check context, meaning, repetition, reactions, payoff and unnecessary sections. A valid timeline is not necessarily a good edit. If an actual semantic issue is found, return pass=false with specifics. Acoustic joins still need a listening review: no rendered video or audio was supplied.',
+        : 'Evaluate the source-grounded opening/closing dialogue for every chosen interval and the actual before/after words at EVERY join. Check context, meaning, repetition, reactions, payoff and unnecessary sections. If Story Finisher supplied a verified payoff, check that the LAST retained exchange contains that exact payoff and ends naturally without adding an unrelated topic or dangling phrase. A valid timeline is not necessarily a good edit. If an actual semantic issue is found, return pass=false with specifics. Acoustic joins still need a listening review: no rendered video or audio was supplied.',
     })
     out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
     out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
