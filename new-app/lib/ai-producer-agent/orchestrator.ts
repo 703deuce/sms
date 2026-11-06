@@ -216,14 +216,23 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
   const recovered = recoverEditorialSelections(
     proposed, source.rangeMs, ctx.cache.words ?? [], out.editorialHandoff?.footage,
   )
-  const cuts = recovered.selections.length ? recovered.selections : out.editorialHandoff!.footage
+  // A Finisher's exact completed word edges are editorial commitments.
+  // Dense ASR sometimes has no 30ms silent gap after a finished sentence:
+  // the generic recovery pass can move a clean "Okay." cut into the next
+  // dangling "And". The Finisher already checked for true word splitting,
+  // source evidence, and the actual ending. Preserve its approved edges;
+  // report acoustic uncertainty for listening review instead.
+  const verifiedFinisher = Boolean(out.editorialHandoff!.finisher || out.editorialHandoff!.highlightsFinisher)
+  const cuts = verifiedFinisher ? proposed
+    : recovered.selections.length ? recovered.selections : out.editorialHandoff!.footage
   if (!cuts.length) throw new Error('rough_cut_no_usable_source_segments')
   out.editorialHandoff!.cutPlan = cuts
   await logAiProducerStep({
     runId: ctx.runId, stepIndex: ++budget.steps,
     phase: 'plan', tool: 'rough_cut_final_boundary_check', kind: 'validate',
     resultSummary: JSON.stringify({ cuts: cuts.length, dropped: recovered.dropped,
-      unsafeEdges: recovered.unsafeEdges, preservedFromFootage: !recovered.selections.length }),
+      unsafeEdges: recovered.unsafeEdges, preservedFromFootage: !recovered.selections.length,
+      preservedFinisherEdges: verifiedFinisher }),
   })
   const title = `AI Producer ${ctx.config.roughCutIntent === 'highlights' ? 'highlights' : 'rough cut'} · ${source.title ?? 'stream'}`
   const created = await sysTool(ctx, budget, 'plan', 'create_project', {
