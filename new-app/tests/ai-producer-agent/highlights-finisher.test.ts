@@ -82,6 +82,15 @@ const ctx = (): ToolCtx => ({
 afterEach(() => __setLunaImpl(null))
 
 describe('Highlights Finisher: independent endings', () => {
+  it('allows a limited transcript-grounded opening outside the original highlight', () => {
+    const proposal = candidate()
+    proposal.moments[1]!.selection.startMs = originals[1]!.startMs - 2000
+    expect(() => verifyHighlightsFinish(proposal, originals, wordEvidence,[300000,1500000],[50,75]))
+      .not.toThrow()
+    proposal.moments[1]!.selection.startMs = originals[1]!.startMs - 16000
+    expect(() => verifyHighlightsFinish(proposal, originals, wordEvidence,[300000,1500000],[50,75]))
+      .toThrow('highlights_finisher_outside_curated_moment')
+  })
   it('shortens the real 112s 3-moment retest to ~47 seconds without collapsing diversity', () => {
     const result = verifyHighlightsFinish(candidate(), originals, wordEvidence, [300000,1500000],[50,75])
     expect(result.selections).toHaveLength(3)
