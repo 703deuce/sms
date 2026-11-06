@@ -854,6 +854,36 @@ export async function createEditorialHandoff(
       await specialistEvent(ctx, budget, 'story', 'finisher_unavailable', {
         errorCode: String((error as Error)?.message ?? error).slice(0, 200),
       })
+      // A long source-gathering draft is NOT a finished short story. Give the
+      // precise compressor a focused recovery pass before falling back to it.
+      // Never truncate footage at an arbitrary timestamp to fake compliance.
+      if (selectionDurationS(footage) > maximumSeconds && budget.state() !== 'hard') {
+        try {
+          const { runStoryFinisher } = await import('@/lib/ai-producer-agent/story-finisher')
+          const originalDurationSeconds = selectionDurationS(footage)
+          const recovered = await runStoryFinisher(ctx, budget, outline, footage, 'rescue')
+          footage = recovered.selections
+          finisher = {
+            payoff: recovered.payoff,
+            editorialReason: recovered.editorialReason,
+            originalDurationSeconds,
+            finalDurationSeconds: selectionDurationS(footage),
+          }
+          await specialistEvent(ctx, budget, 'story', 'finisher_rescued', {
+            beforeSeconds: originalDurationSeconds,
+            afterSeconds: finisher.finalDurationSeconds,
+            payoffMs: [recovered.payoff.startMs, recovered.payoff.endMs],
+            cuts: footage.length,
+          })
+        } catch (rescueError) {
+          await specialistEvent(ctx, budget, 'story', 'finisher_rescue_unavailable', {
+            errorCode: String((rescueError as Error)?.message ?? rescueError).slice(0,200),
+            sourceSeconds: selectionDurationS(footage),
+            requestedMaximumSeconds: maximumSeconds,
+            note: 'Preserve source-grounded editable draft, but mark requested short edit incomplete.',
+          })
+        }
+      }
     }
   }
   let highlightsFinisher: EditorialHandoff['highlightsFinisher']
