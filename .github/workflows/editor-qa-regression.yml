@@ -91,6 +91,7 @@ jobs:
             tests/ai-producer-agent/short-story-repair.test.ts \
             tests/ai-producer-agent/short-story-coverage.test.ts \
             tests/ai-producer-agent/absolute-timebase-multicut.test.ts \
+            tests/ai-producer-agent/short-source-story-coverage.test.ts \
             tests/ai-producer-agent/system-prompt.test.ts \
             tests/ai-producer-agent/validate.items.test.ts
 
