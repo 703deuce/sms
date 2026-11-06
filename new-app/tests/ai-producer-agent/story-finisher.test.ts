@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
 import { finisherRepairHint, fullFinisherTranscript, repairFinisherEdges, runStoryFinisher, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
-import { createEditorialHandoff } from '@/lib/ai-producer-agent/specialists'
+import { createEditorialHandoff, validateFootagePreferredEdits } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
@@ -176,6 +176,58 @@ describe('source-verified Story Finisher', () => {
     const decision = await runStoryFinisher(ctx(), new Budget(), outline, footage)
     expect(n).toBe(2)
     expect(decision.selections).toEqual(compressed)
+  })
+  it('validates candidate and preferred ranges without allowing an arbitrary source extension', () => {
+    const hints = footage.map((selection, index) => ({
+      candidateStartMs: selection.startMs,
+      candidateEndMs: selection.endMs,
+      preferredStartMs: selection.startMs,
+      preferredEndMs: selection.startMs + Math.min(5000, selection.endMs-selection.startMs),
+      intendedPoint: 'Story beat ' + index,
+      endingCue: 'Stop after the relevant thought',
+    }))
+    expect(validateFootagePreferredEdits(hints, footage, [300000,1500000])).toHaveLength(6)
+    expect(() => validateFootagePreferredEdits(hints.slice(1), footage, [300000,1500000]))
+      .toThrow('footage_preferred_edit_count_mismatch')
+    const outside = hints.map((h, i) => i === 1 ? { ...h, preferredEndMs: h.candidateEndMs + 1000 } : h)
+    expect(() => validateFootagePreferredEdits(outside, footage, [300000,1500000]))
+      .toThrow('footage_preferred_edit_invalid')
+    const overlapping = hints.map((h,i) => i === 1 ? { ...h, candidateStartMs: 310000 } : h)
+    expect(() => validateFootagePreferredEdits(overlapping, footage, [300000,1500000]))
+      .toThrow()
+  })
+  it('passes Footage preferred tight cuts and semantic ending cues into Finisher', async () => {
+    const hints = footage.map((selection, index) => ({
+      candidateStartMs: selection.startMs,
+      candidateEndMs: selection.endMs,
+      preferredStartMs: selection.startMs,
+      preferredEndMs: selection.startMs + Math.min(5000, selection.endMs - selection.startMs),
+      intendedPoint: 'Required beat ' + index,
+      endingCue: 'End before the next idea, beat ' + index,
+    }))
+    __setLunaImpl(async ({ tools, messages }) => {
+      const name = tools[tools.length-1]!.name
+      if (name === 'submit_story_outline') return response(name, outline, 's')
+      if (name === 'submit_footage_selections') {
+        expect(messages[1]?.content).toContain('preferredEditInstruction')
+        return response(name, { selections: footage, preferredEdits: hints }, 'f')
+      }
+      if (name === 'submit_story_finish') {
+        const supplied = JSON.parse(messages[1]!.content!)
+        expect(supplied.preferredEdits).toEqual(hints)
+        expect(supplied.preferredEdits[5].endingCue).toContain('End before the next idea')
+        expect(supplied.entireAuthorizedTranscript).toBeDefined()
+        return response(name, {
+          selections: compressed, payoff, editorialReason: 'Trim the source to useful thoughts',
+        }, 'finish')
+      }
+      if (name === 'submit_dialogue_cut_plan')
+        return response(name, { selections: compressed }, 'd')
+      throw new Error('Unexpected role ' + name)
+    })
+    const edit = await createEditorialHandoff(ctx(), out(), new Budget(), null)
+    expect(edit.preferredEdits).toEqual(hints)
+    expect(edit.cutPlan).toEqual(compressed)
   })
   it('invokes Finisher between Footage and Dialogue and preserves its verified ending', async () => {
     const names: string[] = []

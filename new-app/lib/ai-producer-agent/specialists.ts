@@ -35,10 +35,53 @@ export type EditorialSelection = {
   beat: string
   reason: string
 }
+/** Footage's own short first-pass edit inside a wider source candidate.
+ * The Finisher is free to adjust, split or omit it; never a mandatory cut. */
+export type FootagePreferredEdit = {
+  candidateStartMs: number
+  candidateEndMs: number
+  preferredStartMs: number
+  preferredEndMs: number
+  intendedPoint: string
+  endingCue: string
+}
+export function validateFootagePreferredEdits(
+  raw: unknown, selections: EditorialSelection[],
+  bounds: [number, number],
+): FootagePreferredEdit[] {
+  if (!Array.isArray(raw) || raw.length !== selections.length)
+    throw new Error('footage_preferred_edit_count_mismatch')
+  return raw.map((value: unknown, index: number) => {
+    if (!value || typeof value !== 'object') throw new Error('footage_preferred_edit_invalid')
+    const r = value as Record<string, unknown>
+    const { candidateStartMs, candidateEndMs, preferredStartMs, preferredEndMs, intendedPoint, endingCue } = r
+    if (![candidateStartMs,candidateEndMs,preferredStartMs,preferredEndMs].every(Number.isInteger) ||
+      typeof candidateStartMs !== 'number' || typeof candidateEndMs !== 'number' ||
+      typeof preferredStartMs !== 'number' || typeof preferredEndMs !== 'number' ||
+      candidateStartMs < bounds[0] || candidateEndMs > bounds[1] ||
+      candidateEndMs <= candidateStartMs ||
+      preferredStartMs < candidateStartMs || preferredEndMs > candidateEndMs ||
+      preferredEndMs - preferredStartMs < 3000 ||
+      typeof intendedPoint !== 'string' || !intendedPoint.trim() ||
+      typeof endingCue !== 'string' || !endingCue.trim()) {
+      throw new Error('footage_preferred_edit_invalid')
+    }
+    const selected = selections[index]!
+    // Broad candidate must include the actual verified source selection. It
+    // cannot grant access to unrelated parts of the recording.
+    if (candidateStartMs > selected.startMs || candidateEndMs < selected.endMs)
+      throw new Error('footage_candidate_must_cover_selection')
+    if (index > 0 && candidateStartMs < (raw[index-1] as FootagePreferredEdit).candidateEndMs)
+      throw new Error('footage_candidates_overlap')
+    return { candidateStartMs,candidateEndMs,preferredStartMs,preferredEndMs,
+      intendedPoint: intendedPoint.slice(0,220),endingCue: endingCue.slice(0,220) }
+  })
+}
 export type EditorialHandoff = {
   outline: EditorialOutline
   footage: EditorialSelection[]
   cutPlan: EditorialSelection[]
+  preferredEdits?: FootagePreferredEdit[]
   finisher?: {
     payoff: { startMs: number; endMs: number; quote: string }
     editorialReason: string
@@ -100,10 +143,26 @@ const submitSchemas: Record<EditorialRole, ToolSchema> = {
   },
   footage: {
     name: names.footage,
-    description: 'Submit grounded, chronological candidate source intervals covering a complete rough cut.',
+    description: 'Submit grounded candidate source intervals AND short preferred cuts with semantic ending cues.',
     parameters: {
       type: 'object', additionalProperties: false,
-      properties: { selections: { type: 'array', minItems: 2, maxItems: 24, items: selection } },
+      properties: {
+        selections: { type: 'array', minItems: 2, maxItems: 24, items: selection },
+        // Optional for existing workflows and Highlights; required by the
+        // short Story prompt, with safe fallback for older model responses.
+        preferredEdits: { type: 'array', minItems: 2, maxItems: 24,
+          items: { type: 'object', additionalProperties: false,
+            properties: {
+              candidateStartMs: { type: 'integer', minimum: 0 },
+              candidateEndMs: { type: 'integer', minimum: 0 },
+              preferredStartMs: { type: 'integer', minimum: 0 },
+              preferredEndMs: { type: 'integer', minimum: 0 },
+              intendedPoint: jsonString, endingCue: jsonString,
+            },
+            required: ['candidateStartMs','candidateEndMs','preferredStartMs','preferredEndMs','intendedPoint','endingCue'],
+          },
+        },
+      },
       required: ['selections'],
     },
   },
@@ -487,6 +546,9 @@ export async function runEditorialRole(
       ...context, sourceId: source.sourceId, sourceRangeMs: source.rangeMs,
       outputTargetSeconds: ctx.config.targetLengthS,
       editingIntent: highlightsMode ? 'multi_moment_highlights' : ctx.config.targetLengthS[1] <= 105 ? 'short_story' : 'conversational_long_form',
+      ...(role === 'footage' && !highlightsMode &&
+        ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105
+        ? { preferredEditInstruction: 'MANDATORY SHORT STORY TWO-RANGE HANDOFF: Return selections as broad but relevant source candidate intervals AND preferredEdits as an equal-length array. For each source selection, candidateStartMs/candidateEndMs bound the wider relevant material and MUST contain that selection; preferredStartMs/preferredEndMs must identify the much SHORTER spoken portion actually worth keeping inside that candidate. Include intendedPoint (why this moment advances this specific story) and endingCue (the actual thought or spoken phrase where it naturally ENDS, before the next tangent). Prioritize 5–20 second preferred excerpts and a total near the requested duration; no padding. The Finisher may change or omit your suggested cuts. Keep each preferred edit inside its source candidate, and do NOT bridge gaps between candidates.' } : {}),
       ...((role === 'footage' || role === 'dialogue')
         ? { selectionDurationInstruction: highlightsMode
           ? 'Find distinct self-contained highlights from different source moments. Do not count adjacent breath cuts as different moments. Choose compelling footage up to the duration target without padding; finish each excerpt on a complete thought.'
@@ -575,6 +637,11 @@ export async function runEditorialRole(
               count: selections.length, originalError: String((firstError as Error).message),
             })
           }
+          const preferredEdits = role === 'footage' && !highlightsMode &&
+            ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105 &&
+            args.preferredEdits !== undefined
+            ? validateFootagePreferredEdits(args.preferredEdits, selections, source.rangeMs)
+            : undefined
           const duration = durationAdvisory(selections, ctx.config.targetLengthS)
           await specialistEvent(ctx, budget, role, 'duration_advisory', { ...duration, acceptedDespiteDuration: duration.outsideTarget })
           await specialistEvent(ctx, budget, role, 'accepted', { turn, proposal: selectionLogSummary(args),
@@ -582,7 +649,7 @@ export async function runEditorialRole(
             movedEdges: selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
               s.endMs !== (args.selections as EditorialSelection[])[i]?.endMs).length,
           })
-          return { selections }
+          return { selections, ...(preferredEdits ? { preferredEdits } : {}) }
         }
         if (typeof args.pass !== 'boolean' || !Array.isArray(args.issues) ||
             !args.issues.every((i) => typeof i === 'string')) {
@@ -745,6 +812,7 @@ export async function createEditorialHandoff(
     found = { selections: recovered.selections }
   }
   let footage = found.selections as EditorialSelection[]
+  let preferredEdits = found.preferredEdits as FootagePreferredEdit[] | undefined
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   // One targeted *editorial* retry instead of accepting a 20s excerpt as a
@@ -808,6 +876,7 @@ export async function createEditorialHandoff(
           (improvesEnding || improvesCoverage || improvesDuration ||
            (candidateSeconds > beforeSeconds + 5 && !candidateCoverage.localOnly))) {
         footage = candidates
+        preferredEdits = revised.preferredEdits as FootagePreferredEdit[] | undefined
         await specialistEvent(ctx, budget, 'footage', 'short_story_repaired', {
           beforeSeconds, afterSeconds: candidateSeconds, count: footage.length,
           beforeCoverage: firstCoverage, afterCoverage: candidateCoverage,
@@ -835,7 +904,7 @@ export async function createEditorialHandoff(
     try {
       const { runStoryFinisher } = await import('@/lib/ai-producer-agent/story-finisher')
       const originalDurationSeconds = selectionDurationS(footage)
-      const decision = await runStoryFinisher(ctx, budget, outline, footage)
+      const decision = await runStoryFinisher(ctx, budget, outline, footage, 'normal', preferredEdits)
       footage = decision.selections
       finisher = {
         payoff: decision.payoff,
@@ -861,7 +930,7 @@ export async function createEditorialHandoff(
         try {
           const { runStoryFinisher } = await import('@/lib/ai-producer-agent/story-finisher')
           const originalDurationSeconds = selectionDurationS(footage)
-          const recovered = await runStoryFinisher(ctx, budget, outline, footage, 'rescue')
+          const recovered = await runStoryFinisher(ctx, budget, outline, footage, 'rescue', preferredEdits)
           footage = recovered.selections
           finisher = {
             payoff: recovered.payoff,
@@ -1037,5 +1106,5 @@ export async function createEditorialHandoff(
       note: 'Deliver the best coherent editable cut even when shorter or longer than requested.',
     })
   }
-  return { outline, footage, cutPlan, ...(finisher ? { finisher } : {}), ...(highlightsFinisher ? { highlightsFinisher } : {}) }
+  return { outline, footage, cutPlan, ...(preferredEdits ? { preferredEdits } : {}), ...(finisher ? { finisher } : {}), ...(highlightsFinisher ? { highlightsFinisher } : {}) }
 }
