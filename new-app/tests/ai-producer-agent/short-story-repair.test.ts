@@ -71,8 +71,8 @@ describe('full-transcript Story/Footage handoff',()=>{
     expect(calls()).toBe(2)
     expect(edit.cutPlan).toHaveLength(3)
     expect(edit.cutPlan).toEqual(edit.footage)
-    expect(edit.cutPlan[0]).toMatchObject({startMs:20070,endMs:47830})
-    expect(edit.cutPlan[2]).toMatchObject({startMs:150070,endMs:183830})
+    expect(edit.cutPlan[0]).toMatchObject({startMs:20100,endMs:47800})
+    expect(edit.cutPlan[2]).toMatchObject({startMs:150100,endMs:183800})
   })
   it('does not silently trim a source transcript to twelve overview windows',()=>{
     expect(completeTranscriptWords(words,false)).toHaveLength(600)
@@ -84,7 +84,17 @@ describe('full-transcript Story/Footage handoff',()=>{
     const edit=await createEditorialHandoff(context(),output(),new Budget(),null)
     expect(calls()).toBe(2)
     expect(edit.cutPlan).toHaveLength(1)
-    expect(edit.cutPlan[0]).toMatchObject({startMs:50070,endMs:140330})
+    expect(edit.cutPlan[0]).toMatchObject({startMs:50100,endMs:140300})
+  })
+  it('applies exact selected timestamps even when ASR words overlap and no legal silence seam exists',()=>{
+    const dense = Array.from({length:80},(_,i)=>({
+      w:'spoken', s: 10+i*0.09, e: 10+i*0.09+0.15,
+    }))
+    const edit=resolveFootageWordSelections([
+      selection(0,40,'dense speech'),
+    ],dense,[0,20000])
+    expect(edit).toHaveLength(1)
+    expect(edit[0]).toMatchObject({startMs:10000,endMs:13750})
   })
   it('rejects malformed and reversed word IDs instead of treating them as timestamps',()=>{
     expect(()=>resolveFootageWordSelections([
@@ -97,6 +107,6 @@ describe('full-transcript Story/Footage handoff',()=>{
   it('rejects overlapping passage selections without another agent fixing the story',()=>{
     expect(()=>resolveFootageWordSelections([
       selection(40,95,'setup'),selection(80,140,'overlap'),
-    ],words,[0,300000])).toThrow('specialist_non_chronological_cut')
+    ],words,[0,300000])).toThrow('footage_nonchronological_or_overlapping_passage')
   })
 })
