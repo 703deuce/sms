@@ -171,7 +171,7 @@ export function validateDraft(b: DraftEditsBuilder, ctx: ValidationCtx): Validat
 
   const outS = outputDurationMs(e) / 1000
   const [lo, hi] = ctx.targetLengthS
-  if (outS < lo || outS > hi) H('length_out_of_target', { detail: `${outS.toFixed(1)}s not in [${lo},${hi}]` })
+  if (outS < lo || outS > hi) warn.push({ code: 'length_out_of_target', severity: 'DEFAULT', detail: `${outS.toFixed(1)}s not in [${lo},${hi}]; keep the best available editable cut` })
 
   if (countZoomPunches(e.keyframes) / Math.max(1, outS / 10) > IRL_JC_LIMITS.maxZoomsPer10s) {
     warn.push({ code: 'zoom_budget', severity: 'DEFAULT', detail: '' })
