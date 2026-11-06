@@ -124,6 +124,14 @@ describe('source-verified Story Finisher', () => {
       expect(tools.map(t => t.name)).toEqual(['submit_story_finish'])
       expect(messages[1]?.content).toContain('entireAuthorizedTranscript')
       expect(messages[1]?.content).toContain('late-discussion-context')
+      const userContext = JSON.parse(messages[1]!.content)
+      expect(userContext.storyIntent).toEqual({
+        intendedPayoff: outline.intendedPayoff,
+        essentialSetup: outline.essentialSetup,
+        excludeAsides: outline.excludeAsides,
+        endingRule: outline.endingRule,
+      })
+      expect(userContext.outline.audiencePromise).toBe(outline.audiencePromise)
       return response('submit_story_finish', {
         selections: compressed,
         payoff: n++ === 0 ? { ...payoff, quote: 'a fabricated DUI payoff' } : payoff,
