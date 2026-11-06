@@ -307,14 +307,19 @@ export async function runEditorialRole(
   ]
   let transcriptReads = 0
   let invalidSubmissions = 0
-  await specialistEvent(ctx, budget, role, 'start', {\n    wordCount: ctx.cache.words?.length ?? 0, sourceRangeMs: source.rangeMs,\n    allowedCount: Array.isArray(context.curatedSelections) ? context.curatedSelections.length : undefined,\n  })\n  for (let turn = 0; turn < 10; turn++) {
+  await specialistEvent(ctx, budget, role, 'start', {
+    wordCount: ctx.cache.words?.length ?? 0, sourceRangeMs: source.rangeMs,
+    allowedCount: Array.isArray(context.curatedSelections) ? context.curatedSelections.length : undefined,
+  })
+  for (let turn = 0; turn < 10; turn++) {
     if (budget.state() === 'hard') throw new Error('specialist_budget_exhausted')
     // Reserve the last half of the budget for a structured handoff, not
     // repeated transcript searches. The initial context already includes
     // inventory plus twelve chronological transcript samples.
     const mustSubmit = turn >= 5 || transcriptReads >= 3 || invalidSubmissions >= 2
     const turnTools = mustSubmit ? [submitSchemas[role]] : tools
-    await specialistEvent(ctx, budget, role, 'turn', { turn, transcriptReads, invalidSubmissions, forcedSubmit: mustSubmit, allowedTools: turnTools.map((t) => t.name) })\n    const response = await lunaChat({ messages, tools: turnTools, toolChoice: 'required' })
+    await specialistEvent(ctx, budget, role, 'turn', { turn, transcriptReads, invalidSubmissions, forcedSubmit: mustSubmit, allowedTools: turnTools.map((t) => t.name) })
+    const response = await lunaChat({ messages, tools: turnTools, toolChoice: 'required' })
     budget.steps++
     budget.addLuna(response.usage)
     messages.push(response.message)
@@ -332,7 +337,11 @@ export async function runEditorialRole(
     }
     for (const call of calls) {
       const name = call.function.name
-      const args = safeJson(call.function.arguments)\n      if (name === names[role]) await specialistEvent(ctx, budget, role, 'submit_attempt', {\n        turn, callId: call.id, proposal: selectionLogSummary(args),\n        malformedJson: args === null,\n      })
+      const args = safeJson(call.function.arguments)
+      if (name === names[role]) await specialistEvent(ctx, budget, role, 'submit_attempt', {
+        turn, callId: call.id, proposal: selectionLogSummary(args),
+        malformedJson: args === null,
+      })
       if (name === names[role] && args) {
         try {
         if (role === 'story') {
@@ -341,17 +350,27 @@ export async function runEditorialRole(
               args.beats.length > 10 || !args.beats.every((b) => typeof b === 'string')) {
             throw new Error('specialist_story_outline_invalid')
           }
-          await specialistEvent(ctx, budget, role, 'accepted', { turn, beatCount: args.beats.length })\n          return args\n        }\n        if (role === 'footage' || role === 'dialogue') {
+          await specialistEvent(ctx, budget, role, 'accepted', { turn, beatCount: args.beats.length })
+          return args
+        }
+        if (role === 'footage' || role === 'dialogue') {
           const allowed = role === 'dialogue'
             ? context.curatedSelections as EditorialSelection[] | undefined
             : undefined
-          const selections = snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)\n          await specialistEvent(ctx, budget, role, 'accepted', { turn, proposal: selectionLogSummary(args),\n            accepted: selections.map((s) => [s.startMs, s.endMs]),\n            movedEdges: selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||\n              s.endMs !== (args.selections as EditorialSelection[])[i]?.endMs).length,\n          })\n          return { selections }
+          const selections = snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
+          await specialistEvent(ctx, budget, role, 'accepted', { turn, proposal: selectionLogSummary(args),
+            accepted: selections.map((s) => [s.startMs, s.endMs]),
+            movedEdges: selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
+              s.endMs !== (args.selections as EditorialSelection[])[i]?.endMs).length,
+          })
+          return { selections }
         }
         if (typeof args.pass !== 'boolean' || !Array.isArray(args.issues) ||
             !args.issues.every((i) => typeof i === 'string')) {
           throw new Error('specialist_review_invalid')
         }
-        await specialistEvent(ctx, budget, role, 'accepted', { turn, pass: args.pass, issueCount: args.issues.length })\n        return { pass: args.pass, issues: args.issues.slice(0, 15) }
+        await specialistEvent(ctx, budget, role, 'accepted', { turn, pass: args.pass, issueCount: args.issues.length })
+        return { pass: args.pass, issues: args.issues.slice(0, 15) }
         } catch (error) {
           invalidSubmissions++
           const errorCode = String((error as Error)?.message ?? error).slice(0, 240)
@@ -373,7 +392,8 @@ export async function runEditorialRole(
             role: 'tool', tool_call_id: call.id,
             content: JSON.stringify({
               ok: false,
-              error: errorCode,\n              repairHint,
+              error: errorCode,
+              repairHint,
               instruction: 'Do not call get_transcript again. Correct and resubmit using legal source word edges.',
             }),
           })
@@ -381,7 +401,8 @@ export async function runEditorialRole(
         }
       }
       // Enforce read-only tools even if the model hallucinates a tool name.
-      if (!readTools[role].includes(name)) {\n        await specialistEvent(ctx, budget, role, 'forbidden_tool', { turn, name })
+      if (!readTools[role].includes(name)) {
+        await specialistEvent(ctx, budget, role, 'forbidden_tool', { turn, name })
         messages.push({ role: 'tool', tool_call_id: call.id, content: '{"ok":false,"error":"role_tool_forbidden"}' })
         continue
       }
@@ -399,7 +420,9 @@ export async function runEditorialRole(
       messages.push({ role: 'tool', tool_call_id: call.id, content: summarizeToolResult(name, result) })
     }
   }
-  await specialistEvent(ctx, budget, role, 'exhausted', { transcriptReads, invalidSubmissions },\n    `specialist_${role}_did_not_submit`)\n  throw new Error(`specialist_${role}_did_not_submit_after_${invalidSubmissions}_invalid_attempts`)
+  await specialistEvent(ctx, budget, role, 'exhausted', { transcriptReads, invalidSubmissions },
+    `specialist_${role}_did_not_submit`)
+  throw new Error(`specialist_${role}_did_not_submit_after_${invalidSubmissions}_invalid_attempts`)
 }
 
 function representativeTranscript(words: ClipWord[], range: [number, number]) {
