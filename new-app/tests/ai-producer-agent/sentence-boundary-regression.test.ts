@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/ai-producer-agent/log', () => ({
+  logAiProducerStep: vi.fn(async () => undefined),
+  redactArgs: (v: unknown) => v,
+}))
+vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
+  runTool: vi.fn(async () => ({ ok: false, summary: 'unused' })),
+}))
 import { verifyFinishedThoughts, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
 import type { ClipWord } from '@/lib/clips/edits'
 import type { EditorialSelection } from '@/lib/ai-producer-agent/specialists'
