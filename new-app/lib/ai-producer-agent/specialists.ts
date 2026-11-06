@@ -578,7 +578,9 @@ export async function runEditorialRole(
   const source = ctx.sources[0]
   if (!source?.rangeMs) throw new Error('specialist_source_window_missing')
   const highlightsMode = ctx.config.roughCutIntent === 'highlights'
-  const allowedTools = TOOL_SCHEMAS.filter((tool) => readTools[role].includes(tool.name))
+  const allowedTools = context.fullTranscriptWordIndexed === true
+    ? [] // Full context was supplied. No fragment-reading workflow.
+    : TOOL_SCHEMAS.filter((tool) => readTools[role].includes(tool.name))
   const wordFootage=role==='footage' && context.fullTranscriptWordIndexed===true
   const submitTool=wordFootage?footageWordsSubmission:submitSchemas[role]
   const tools = [...allowedTools,submitTool]
@@ -704,7 +706,7 @@ export async function runEditorialRole(
           await specialistEvent(ctx, budget, role, 'duration_advisory', { ...duration, acceptedDespiteDuration: duration.outsideTarget })
           await specialistEvent(ctx, budget, role, 'accepted', { turn, proposal: selectionLogSummary(args),
             accepted: selections.map((s) => [s.startMs, s.endMs]),
-            movedEdges: selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
+            movedEdges: wordFootage ? 0 : selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
               s.endMs !== (args.selections as EditorialSelection[])[i]?.endMs).length,
           })
           return { selections }
@@ -801,6 +803,8 @@ export async function createEditorialHandoff(
   const highlightsMode = ctx.config.roughCutIntent === 'highlights'
   const base = {
     instruction,
+    // Samples remain available for non-Story workflows; Story and Footage
+    // below explicitly replace them with the FULL original transcript.
     transcriptSamples: representativeTranscript(ctx.cache.words, source.rangeMs),
     observedMoments: ctx.cache.momentsSummary,
     inventory: ctx.cache.inventorySummary,
@@ -815,6 +819,10 @@ export async function createEditorialHandoff(
   try {
     story = await runEditorialRole(ctx, out, budget, 'story', {
       ...base,
+      transcriptSamples:undefined,
+      fullTranscriptWordIndexed:true,
+      fullTranscriptFormat:'[originalWordId, spokenWord] — ALL spoken words in source order, no omissions',
+      fullTranscript:completeTranscriptWords(ctx.cache.words,false),
       instruction: highlightsMode
         ? 'Define the editorial criteria for selecting independent, self-contained highlights. The payoff and ending fields express what makes a moment satisfying, not a fabricated shared narrative. Provide all structured creative-brief fields.'
         : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.',
@@ -847,10 +855,14 @@ export async function createEditorialHandoff(
   try {
     found = await runEditorialRole(ctx, out, budget, 'footage', {
       ...base, storyOutline: outline,
+      transcriptSamples:undefined,
+      fullTranscriptWordIndexed:true,
+      fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord] — FULL original source in chronological order',
+      fullTranscript:completeTranscriptWords(ctx.cache.words,true),
       instruction: highlightsMode
         ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
         : ctx.config.targetLengthS[1] <= 105
-        ? 'SHORT FILM PAPER EDIT: YOU OWN THE FINAL SELECTION. Analyze relevant moments across the recording, then return ONLY about 75–105 seconds of the strongest source-grounded spoken material in selections. This is the edit, NOT an inventory of relevant footage. Choose setup, development and real payoff; omit all tangents, repetition and extra context. Keep chronological source order and complete natural thoughts. A following boundary agent can only remove up to 3 seconds from each edge; it cannot compress your edit for you.'
+        ? 'SHORT STORY: You have the COMPLETE word-indexed source, the Story narrative, and every spoken word. Choose the actual final source passages by FIRST/LAST WORD IDS only. Read the full conversation before deciding. Preserve meaningful setup, development and payoff. Stop each passage at a genuinely complete sentence or thought, not at a conjunction or mid-quote. Aim for the requested duration without sacrificing sense. No later Finisher is coming to repair your cuts.'
         : 'Select coherent source intervals; evidence first, then editorial value.',
     })
   } catch (error) {
@@ -874,6 +886,21 @@ export async function createEditorialHandoff(
   let footage = found.selections as EditorialSelection[]
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
+  if (shortStory) {
+    // Story and Footage now have the complete source and Footage's selected
+    // words ARE the final cut. Do not run recursive Footage timestamp retries,
+    // semantic boundary reviewers or Dialogue's independent boundary guesses.
+    // Validation and word-safe execution have already happened in the
+    // deterministic resolver. Runtime is advisory, not a cut-point objective.
+    await specialistEvent(ctx,budget,'footage','full_transcript_word_edit_handoff',{
+      transcriptWords:ctx.cache.words.length,
+      passageCount:footage.length,
+      durationSeconds:selectionDurationS(footage),
+      targetSeconds:ctx.config.targetLengthS,
+      note:'Footage chose source-grounded first/last word IDs from the full transcript; no Finisher or Dialogue recut',
+    })
+    return {outline,footage,cutPlan:footage}
+  }
   // One targeted *editorial* retry instead of accepting a 20s excerpt as a
   // requested 90s story. Preserve original cuts if the revision is worse.
   const firstCoverage = shortStory
