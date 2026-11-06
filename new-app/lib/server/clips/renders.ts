@@ -16,6 +16,7 @@ import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { createId } from '@/lib/supabase/id'
+import { clipExportMediaReady } from '@/lib/clips/clip-export-media'
 
 const DEFAULT_EXPORTS_PAGE_SIZE = 40
 const MAX_EXPORTS_PAGE_SIZE = 100
@@ -289,8 +290,15 @@ export async function retryFailedRender(workspaceId: string, renderId: string) {
   if (!render) throw new Error('Not found')
   if (render.status !== 'FAILED') throw new Error('Only failed exports can be retried')
 
-  const clip = await prisma.clip.findUnique({ where: { id: render.clipId } })
-  if (!clip?.previewKey) throw new Error('Clip preview is not available')
+  const clip = await prisma.clip.findUnique({
+    where: { id: render.clipId },
+    include: { project: {
+      select: { settings: true, proxyKey: true, upload: { select: { key: true } } },
+    } },
+  })
+  if (!clip || !clipExportMediaReady(clip, clip.project)) {
+    throw new Error('Clip source media is not available')
+  }
 
   const activeJobs = await prisma.clipJob.findMany({
     where: {
