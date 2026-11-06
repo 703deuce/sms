@@ -57,9 +57,11 @@ function transcriptFor(words: ClipWord[], selections: EditorialSelection[]) {
     rangeMs: [s.startMs, s.endMs],
     // Include 3s of context at both ends, without allowing the model to
     // select intervals outside the curator's evidence.
-    speech: words.filter(w => w.e * 1000 > s.startMs - 3000 &&
+    wordEvidence: words.filter(w => w.e * 1000 > s.startMs - 3000 &&
       w.s * 1000 < s.endMs + 3000)
-      .map(w => w.w).join(' ').slice(0, 12000),
+      .slice(0, 950).map(w => ({
+        startMs: Math.round(w.s * 1000), endMs: Math.round(w.e * 1000), text: w.w,
+      })),
   }))
 }
 
