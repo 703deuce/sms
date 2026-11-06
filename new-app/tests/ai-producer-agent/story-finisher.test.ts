@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
-import { runStoryFinisher, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
+import { fullFinisherTranscript, runStoryFinisher, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
 import { createEditorialHandoff } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
@@ -62,6 +62,28 @@ const response = (name: string, args: unknown, id: string) => ({
 afterEach(() => __setLunaImpl(null))
 
 describe('source-verified Story Finisher', () => {
+  it('includes every authorized word even when transcript has more than 950 entries', () => {
+    const long = Array.from({ length: 1800 }, (_, i) => ({
+      w: i === 1799 ? 'very-last-word' : 'spoken',
+      s: 300.1 + i * 0.6, e: 300.3 + i * 0.6,
+    }))
+    const full = fullFinisherTranscript(long, [300000,1500000])
+    expect(full).toHaveLength(1800)
+    expect(full[1799]?.[2]).toBe('very-last-word')
+    expect(full[0]?.[0]).toBe(300100)
+  })
+  it('can extend a selected passage slightly for conversational context, never arbitrarily', () => {
+    const candidate = compressed.map(s => ({ ...s }))
+    candidate[1]!.startMs -= 12000
+    expect(() => verifyStoryFinish({
+      selections: candidate, payoff, editorialReason: 'Restore the question before the answer.',
+    }, footage, words, [300000,1500000], [75,105])).not.toThrow()
+    candidate[1]!.startMs -= 4000
+    expect(() => verifyStoryFinish({
+      selections: candidate, payoff, editorialReason: 'Too far before source selection.',
+    }, footage, words, [300000,1500000], [75,105]))
+      .toThrow('specialist_cut_outside_curated_footage')
+  })
   it('compresses the 187s story to approximately 95s and ends near the real payoff', () => {
     const valid = verifyStoryFinish({
       selections: compressed, payoff,
