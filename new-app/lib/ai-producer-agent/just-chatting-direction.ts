@@ -90,7 +90,7 @@ export const JUST_CHATTING_ROLE_DIRECTION = {
   assembly: `Build a restrained creator-ready edit with true source footage,
     subtle cuts, clean full-frame layout and optional readable faithful captions.
     Do not add music, SFX, zooms or titles unless there is a specific justified need.`,
-  qa: `Evaluate meaning, relevance, completeness, viewer promise, emotional
+  qa: `Evaluate meaning, context, relevance, completeness, viewer promise, emotional
     timing, rhythm, topic continuity, repetition, inappropriate overlays and
     questionable audio boundaries. Fail on unsupported evidence or distorted meaning.
     Flag uncertain acoustic quality for listening review rather than pretending to hear.`,
