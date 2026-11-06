@@ -209,11 +209,23 @@ export function verifyHighlightsFinish(
     }
     // Separate guards per moment, not just one total EDL: every highlight must
     // survive and no highlight can grow into a previously skipped section.
-    const selection = snapEditorialSelections([raw.selection], bounds, words, [original])[0]
-    if (!selection || selection.startMs < original.startMs || selection.endMs > original.endMs) {
+    const selection = raw.selection
+    if (!Number.isInteger(selection.startMs) || !Number.isInteger(selection.endMs) ||
+        selection.startMs < original.startMs || selection.endMs > original.endMs ||
+        selection.startMs < bounds[0] || selection.endMs > bounds[1]) {
       throw new Error('highlights_finisher_outside_curated_moment')
     }
     if (selection.endMs - selection.startMs < 3_000) throw new Error('highlights_finisher_moment_too_short')
+    if (sourceWords(words, selection.startMs, selection.endMs).length < 5)
+      throw new Error('highlights_finisher_no_speech_evidence')
+    // In dense ASR the next word may begin the same millisecond the prior
+    // one ends. Reject a true phoneme split; allow exact word transitions,
+    // leaving 30ms acoustic caution to the final validator/human audition.
+    if ([selection.startMs, selection.endMs].some(edge =>
+      words.some(w => edge > Math.round(w.s * 1000) + 30 &&
+        edge < Math.round(w.e * 1000) - 30))) {
+      throw new Error('highlights_finisher_cut_inside_word')
+    }
     if (raw.landing.startMs < selection.startMs || raw.landing.endMs > selection.endMs) {
       throw new Error('highlights_finisher_landing_not_retained')
     }
