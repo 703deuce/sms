@@ -93,7 +93,7 @@ describe('source-verified Story Finisher', () => {
     let n = 0
     __setLunaImpl(async ({ messages, tools }) => {
       expect(tools.map(t => t.name)).toEqual(['submit_story_finish'])
-      expect(messages[1]?.content).toContain('wordEvidence')
+      expect(messages[1]?.content).toContain('entireAuthorizedTranscript')
       return response('submit_story_finish', {
         selections: compressed,
         payoff: n++ === 0 ? { ...payoff, quote: 'a fabricated DUI payoff' } : payoff,
