@@ -198,6 +198,7 @@ export async function runEditorialRole(
       const name = call.function.name
       const args = safeJson(call.function.arguments)
       if (name === names[role] && args) {
+        try {
         if (role === 'story') {
           if (typeof args.logline !== 'string' || typeof args.audiencePromise !== 'string' ||
               !Array.isArray(args.beats) || args.beats.length < 3 ||
@@ -217,6 +218,20 @@ export async function runEditorialRole(
           throw new Error('specialist_review_invalid')
         }
         return { pass: args.pass, issues: args.issues.slice(0, 15) }
+        } catch (error) {
+          // Models sometimes choose an imprecise word boundary. Reject the
+          // proposal but give this specialist a chance to repair it before
+          // the entire twenty-minute run fails.
+          messages.push({
+            role: 'tool', tool_call_id: call.id,
+            content: JSON.stringify({
+              ok: false,
+              error: String((error as Error)?.message ?? error).slice(0, 240),
+              instruction: 'Revise the handoff using real source timestamps and resubmit.',
+            }),
+          })
+          continue
+        }
       }
       // Enforce read-only tools even if the model hallucinates a tool name.
       if (!readTools[role].includes(name)) {
