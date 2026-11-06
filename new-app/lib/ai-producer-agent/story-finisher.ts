@@ -507,6 +507,95 @@ const boundaryWordSubmission: ToolSchema = {
   },
 }
 
+
+/** A second, independent semantic judgement of the proposed *edge words*.
+ * This is still the same Finisher: never reselects a scene or changes beats. */
+type BoundaryReview = {
+  index: number
+  openingComplete: boolean
+  endingComplete: boolean
+  firstWordId: number
+  lastWordId: number
+  explanation: string
+}
+const boundaryReviewSubmission: ToolSchema = {
+  name: 'submit_story_boundary_review',
+  description: 'Check whether each proposed first/last word forms a complete spoken thought; correct only incomplete edges.',
+  parameters: {
+    type:'object',additionalProperties:false,
+    properties:{
+      reviews:{type:'array',minItems:1,maxItems:24,items:{
+        type:'object',additionalProperties:false,
+        properties:{
+          index:{type:'integer',minimum:0},
+          openingComplete:{type:'boolean'},
+          endingComplete:{type:'boolean'},
+          firstWordId:{type:'integer',minimum:0},
+          lastWordId:{type:'integer',minimum:0},
+          explanation:{type:'string'},
+        },
+        required:['index','openingComplete','endingComplete','firstWordId','lastWordId','explanation'],
+      }},
+    },
+    required:['reviews'],
+  },
+}
+
+function spokenPassages(selections: EditorialSelection[], words: ClipWord[]) {
+  return selections.map((s,index)=>({
+    index, startMs:s.startMs,endMs:s.endMs,
+    spokenWords:words.flatMap((w,id)=>Number.isFinite(w.s)&&Number.isFinite(w.e)&&
+      w.e*1000>s.startMs&&w.s*1000<s.endMs
+      ? [{id,text:w.w}]:[]),
+  }))
+}
+
+/** Accept valid reviewed edges individually. When the reviewer identifies an
+ * incomplete thought, test its proposed new word ID in the same deterministic
+ * scoped resolver. An uncorrected/invalid edge is explicitly marked unresolved,
+ * never silently promoted as an editorially complete success. */
+export function applyStoryBoundaryReview(
+  raw: unknown, initial: EditorialSelection[], candidate: EditorialSelection[],
+  words: ClipWord[], bounds: [number,number],
+): {selections:EditorialSelection[];unresolved:Array<{index:number;edge:'start'|'end';reason:string}>} {
+  const reviews=Array.isArray(raw)?raw:[]
+  const revised=candidate.map(x=>({...x}))
+  const unresolved:Array<{index:number;edge:'start'|'end';reason:string}>=[]
+  for(let index=0;index<candidate.length;index++){
+    const options=reviews.filter(r=>r && typeof r==='object'&&(r as BoundaryReview).index===index) as BoundaryReview[]
+    const review=options.length===1?options[0]:undefined
+    if(!review || typeof review.openingComplete!=='boolean'||typeof review.endingComplete!=='boolean'){
+      unresolved.push({index,edge:'start',reason:'no_semantic_review'})
+      unresolved.push({index,edge:'end',reason:'no_semantic_review'})
+      continue
+    }
+    if(review.openingComplete && review.endingComplete)continue
+    const nearby=resolveStoryWordBoundaries([{
+      index,firstWordId:review.firstWordId,lastWordId:review.lastWordId,
+    }],initial,words,bounds).selections[index]!
+    if(!review.openingComplete){
+      if(nearby.startMs!==candidate[index]!.startMs && nearby.startMs!==initial[index]!.startMs){
+        revised[index]!.startMs=nearby.startMs
+      }else{
+        unresolved.push({index,edge:'start',reason:'incomplete_opening_no_new_safe_word'})
+      }
+    }
+    if(!review.endingComplete){
+      if(nearby.endMs!==candidate[index]!.endMs && nearby.endMs!==initial[index]!.endMs){
+        revised[index]!.endMs=nearby.endMs
+      }else{
+        unresolved.push({index,edge:'end',reason:'incomplete_ending_no_new_safe_word'})
+      }
+    }
+    if(revised[index]!.endMs-revised[index]!.startMs<400){
+      revised[index]={...candidate[index]!}
+      unresolved.push({index,edge:'start',reason:'corrected_passage_would_collapse'})
+      unresolved.push({index,edge:'end',reason:'corrected_passage_would_collapse'})
+    }
+  }
+  return {selections:revised,unresolved}
+}
+
 const EDGE_SEARCH_MS = 1500
 const CONTEXT_SENTENCES = 2
 const SENTENCE_PAUSE_MS = 1400
@@ -688,27 +777,95 @@ export async function runStoryBoundaryFinisher(
   const response = await lunaChat({ messages, tools:[boundaryWordSubmission], toolChoice:'required' })
   budget.steps++
   budget.addLuna(response.usage)
-  const call = response.message.tool_calls?.find(c=>c.function.name === boundaryWordSubmission.name)
-  if (!call) {
+  const call = response.message.tool_calls?.find(c=>c.function.name===boundaryWordSubmission.name)
+  if(!call){
     await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',kind:'validate',
-      tool:'story_word_boundary_unavailable',resultSummary:'No word-ID decision; kept Footage edit'})
+      tool:'story_word_boundary_unavailable',resultSummary:'No word IDs; original Footage edges preserved'})
     return footage
   }
-  try {
-    const parsed = JSON.parse(call.function.arguments) as {passages?:unknown}
-    const result = resolveStoryWordBoundaries(parsed.passages,footage,words,source.rangeMs)
+  let initial:BoundaryPolishResult
+  try{
+    const parsed=JSON.parse(call.function.arguments) as {passages?:unknown}
+    initial=resolveStoryWordBoundaries(parsed.passages,footage,words,source.rangeMs)
+  }catch(error){
     await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',kind:'validate',
-      tool:'story_word_boundary_resolved',
-      argsSummary:JSON.stringify({diagnostics:result.diagnostics,
-        before:footage.map(s=>[s.startMs,s.endMs]),
-        after:result.selections.map(s=>[s.startMs,s.endMs])}).slice(0,4000),
-      resultSummary:'Word IDs deterministically resolved per passage; invalid edges retained unchanged'})
-    return result.selections
-  } catch (error) {
-    await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',kind:'validate',
-      tool:'story_word_boundary_unavailable',
-      error:String((error as Error).message).slice(0,200),
-      resultSummary:'Malformed word decisions; retained complete Footage edit'})
+      tool:'story_word_boundary_unavailable',error:String((error as Error).message).slice(0,200),
+      resultSummary:'Invalid word decision; original edges preserved'})
     return footage
   }
+  // The first model response only establishes valid PHYSICAL cut points.
+  // Another semantic look at the ACTUAL retained spoken words catches fluent
+  // timestamp choices that still finish on "Casey, he's like," or "church,".
+  let current=initial.selections
+  const unresolved=new Set<string>()
+  for(let pass=0;pass<2 && budget.state()!=='hard';pass++){
+    const reviewMessages:LunaMessage[]=[
+      {role:'system',content:[
+        'You are checking only the START and END of an already-selected spoken passage. You do NOT edit the movie.',
+        'Independently judge whether each first and last spoken phrase is a NATURALLY COMPLETE thought, using its nearby conversational context and the Story objective.',
+        'An ending such as "My dad took me to church," or "Casey, he is like," is NOT complete: the speaker is about to explain what happened or quote someone. An opening mid-answer with missing setup is also incomplete.',
+        'Do not mistake a timestamp-safe word for a semantically complete ending. An unfinished question, dangling setup or introduction to a quote must be corrected.',
+        'For each passage, set openingComplete and endingComplete. If incomplete, return the FIRST or LAST word ID that actually completes the SAME intended thought. If it is already complete, return the first/last retained word ID unchanged.',
+        'Only choose IDs supplied in that passage context; do not change story beats, drop passages, join gaps, or introduce another scene. A cut may be outside target seconds if the thought needs it.',
+      ].join('\n\n')},
+      {role:'user',content:JSON.stringify({
+        story:{logline:outline.logline,intendedPayoff:outline.intendedPayoff,
+          essentialSetup:outline.essentialSetup,endingRule:outline.endingRule},
+        passages:context,
+        actualProposedCut:spokenPassages(current,words),
+        instruction:'Review the actual words that would be heard after the proposed cuts. Flag dangling openings and endings; give grounded corrected word IDs when needed. Do not simply approve mechanically legal endpoints.',
+        ...(pass?{previousUnresolved:[...unresolved]}:{}),
+      })},
+    ]
+    let reviewed:Awaited<ReturnType<typeof lunaChat>>
+    try{
+      reviewed=await lunaChat({messages:reviewMessages,tools:[boundaryReviewSubmission],toolChoice:'required'})
+      budget.steps++
+      budget.addLuna(reviewed.usage)
+    }catch(error){
+      await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',kind:'validate',
+        tool:'story_word_boundary_review_failed',
+        error:String((error as Error).message).slice(0,200),
+        resultSummary:'Semantic review unavailable; preserve existing word-aligned draft'})
+      unresolved.add('semantic_review_unavailable')
+      break
+    }
+    const reviewCall=reviewed.message.tool_calls?.find(c=>c.function.name===boundaryReviewSubmission.name)
+    if(!reviewCall){
+      await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',kind:'validate',
+        tool:'story_word_boundary_review_missing',resultSummary:'Semantic acceptance not verified; keep current sourced cut'})
+      unresolved.add('semantic_review_missing')
+      break
+    }
+    let reviewInput:unknown
+    try{reviewInput=(JSON.parse(reviewCall.function.arguments) as {reviews?:unknown}).reviews}
+    catch{reviewInput=[]}
+    const decisions=Array.isArray(reviewInput)?reviewInput:[]
+    const accepted=applyStoryBoundaryReview(decisions,footage,current,words,source.rangeMs)
+    current=accepted.selections
+    unresolved.clear()
+    for(const issue of accepted.unresolved)unresolved.add(issue.index+':'+issue.edge+':'+issue.reason)
+    for(let i=0;i<footage.length;i++){
+      const r=decisions.find(d=>d&&typeof d==='object'&&(d as BoundaryReview).index===i) as BoundaryReview|undefined
+      if(!r || !r.openingComplete)unresolved.add(i+':start:needs_semantic_recheck')
+      if(!r || !r.endingComplete)unresolved.add(i+':end:needs_semantic_recheck')
+    }
+    await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',kind:'validate',
+      tool:'story_word_boundary_semantic_review',
+      argsSummary:JSON.stringify({pass,unresolved:[...unresolved],
+        before:initial.selections.map(x=>[x.startMs,x.endMs]),
+        after:current.map(x=>[x.startMs,x.endMs])}).slice(0,4000),
+      resultSummary:unresolved.size?'Some thought boundaries need correction':'All reviewed boundaries semantically complete'})
+    if(!unresolved.size)break
+  }
+  await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',kind:'validate',
+    tool:unresolved.size?'story_word_boundary_incomplete':'story_word_boundary_accepted',
+    argsSummary:JSON.stringify({unresolved:[...unresolved],
+      before:footage.map(s=>[s.startMs,s.endMs]),
+      after:current.map(s=>[s.startMs,s.endMs]),
+      physical:initial.diagnostics}).slice(0,4000),
+    resultSummary:unresolved.size?'Unresolved thought edges explicitly logged; editable cut preserved':
+      'Word-aligned boundaries passed semantic completeness review'})
+  return current
+
 }

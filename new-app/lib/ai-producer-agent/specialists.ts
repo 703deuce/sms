@@ -930,6 +930,7 @@ export async function createEditorialHandoff(
   // invents a payoff or changes the story. It only polishes the exact existing
   // footage edges with nearby conversational context.
   let finisher: EditorialHandoff['finisher']
+  let wordBoundaryReviewed = false
   const useFinisher = !highlightsMode &&
     ctx.config.editMode === 'just_chatting_rough_cut' &&
     maximumSeconds <= 135
@@ -940,6 +941,7 @@ export async function createEditorialHandoff(
       const originalDurationSeconds = selectionDurationS(footage)
       const polished = await runStoryBoundaryFinisher(ctx, budget, outline, footage)
       footage = polished
+      wordBoundaryReviewed = true
       await specialistEvent(ctx, budget, 'story', 'boundary_polish_handoff', {
         beforeSeconds: originalDurationSeconds, afterSeconds: selectionDurationS(footage),
         count: footage.length,
@@ -1094,6 +1096,19 @@ export async function createEditorialHandoff(
       })
       cutPlan = footage
     }
+  }
+  // A later Dialogue pass cannot silently undo word-aligned boundary decisions
+  // to reach a runtime. Preserve the Story Finisher's scoped cut boundaries,
+  // even when Dialogue proposes alternate cuts. Length remains advisory.
+  if (shortStory && wordBoundaryReviewed &&
+      (cutPlan.length !== footage.length || cutPlan.some((s,i) =>
+        s.startMs !== footage[i]!.startMs || s.endMs !== footage[i]!.endMs))) {
+    await specialistEvent(ctx, budget, 'dialogue', 'preserved_word_boundary_story', {
+      dialogueSeconds: selectionDurationS(cutPlan),
+      finishedSeconds: selectionDurationS(footage),
+      reason: 'dialogue_cannot_override_word_boundary_story_to_satisfy_duration',
+    })
+    cutPlan = footage
   }
   const duration = selectionDurationS(cutPlan)
   const [lo, hi] = ctx.config.targetLengthS
