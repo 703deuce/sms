@@ -114,7 +114,7 @@ describe('Highlights Finisher: independent endings', () => {
     let attempts=0
     __setLunaImpl(async ({tools,messages})=>{
       expect(tools.map(t=>t.name)).toEqual(['submit_highlights_finish'])
-      expect(messages[1]?.content).toContain('timedWords')
+      expect(messages[1]?.content).toContain('entireAuthorizedTranscript')
       const proposed=candidate()
       if(attempts++===0) proposed.moments[1]!.landing.quote='fictional phrase'
       return {
