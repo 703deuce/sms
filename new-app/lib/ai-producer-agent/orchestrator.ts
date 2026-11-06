@@ -17,7 +17,7 @@ import { estimateLunaUsd } from '@/lib/ai-producer-agent/cost'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
-import { createEditorialHandoff, runEditorialRole, type EditorialHandoff } from '@/lib/ai-producer-agent/specialists'
+import { createEditorialHandoff, runEditorialRole, snapEditorialSelections, type EditorialHandoff } from '@/lib/ai-producer-agent/specialists'
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
 import { buildJustChattingEvidence } from '@/lib/ai-producer-agent/just-chatting-evidence'
 
@@ -203,13 +203,26 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
  */
 async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: Budget) {
   const source = ctx.sources[0]
-  const cuts = out.editorialHandoff?.cutPlan
-  if (!source?.sourceId || !cuts?.length) throw new Error('rough_cut_approved_selections_missing')
+  const proposed = out.editorialHandoff?.cutPlan
+  if (!source?.sourceId || !source.rangeMs || !proposed?.length) throw new Error('rough_cut_approved_selections_missing')
+  // Final source-of-truth repair, after Dialogue and immediately before building.
+  // A snapped boundary must also pass the final draft validator's 30ms word guard.
+  const cuts = snapEditorialSelections(
+    proposed, source.rangeMs, ctx.cache.words ?? [], out.editorialHandoff?.footage,
+  )
+  out.editorialHandoff!.cutPlan = cuts
+  await logAiProducerStep({
+    runId: ctx.runId, stepIndex: ++budget.steps,
+    phase: 'plan', tool: 'rough_cut_final_boundary_check', kind: 'validate',
+    resultSummary: JSON.stringify({ cuts: cuts.length, movedEdges: cuts.reduce((n, c, i) =>
+      n + Number(c.startMs !== proposed[i]?.startMs) + Number(c.endMs !== proposed[i]?.endMs), 0) }),
+  })
   const title = `AI Producer rough cut · ${source.title ?? 'stream'}`
   const created = await sysTool(ctx, budget, 'plan', 'create_project', {
     title, sources: [source.sourceId], aspect: '16:9', outputType: out.outputType,
   }, out)
   if (!created.ok || !out.builder) throw new Error('rough_cut_builder_creation_failed: ' + created.summary)
+  out.builder.preserveApprovedEdges = true
   for (const cut of cuts) {
     const added = await sysTool(ctx, budget, 'plan', 'add_clip_segment', {
       sourceId: source.sourceId, srcInMs: cut.startMs, srcOutMs: cut.endMs,
