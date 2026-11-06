@@ -148,6 +148,8 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     out.notes.push('no valid plan')
     return
   }
+  // Persist the valid editable project before model QA; review cannot erase the draft.
+  await apply(ctx, out, budget)
   if (out.editorialHandoff && out.lastValid) {
     try {
     const review = await runEditorialRole(ctx, out, budget, 'qa', {
@@ -171,7 +173,6 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       out.notes.push('Editorial QA could not complete: ' + String((error as Error)?.message ?? error).slice(0, 250))
     }
   }
-  await apply(ctx, out, budget)
   for (; out.fixLoops < CAPS.maxFixLoops && budget.state() !== 'hard'; out.fixLoops++) {
     const pr = await sysTool(ctx, budget, 'preview_render', 'preview_render', { quality: 'draft' }, out)
     if (!pr.ok) {
