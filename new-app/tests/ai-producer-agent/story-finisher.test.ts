@@ -104,7 +104,39 @@ describe('source-verified Story Finisher', () => {
     const hint = finisherRepairHint([acrossGap], footage, [300000,1500000])
     expect(hint.invalid[0]).toMatchObject({ index: 0, problem: 'outside_curated_footage' })
   })
-  it('rejects output above the actual requested maximum, not a 20% grace range', () => {
+  it('keeps meaningful 1.7-second reaction cuts instead of rejecting the entire edit', () => {
+    const split = [...compressed.slice(0,-1),
+      part(600040,601750,'brief reaction'),part(602400,608040,'final spoken payoff')]
+    const result = verifyStoryFinish({
+      selections: split, payoff, editorialReason: 'Keep an intentional short reaction.',
+    }, footage, words, [300000,1500000],[75,105])
+    expect(result.selections).toHaveLength(split.length)
+    expect(result.selections[result.selections.length-2]?.endMs).toBe(601750)
+  })
+  it('reports real invalid reasons instead of an empty outside-range hint', () => {
+    const tooTiny = part(604000,604200)
+    const missingReason = { ...part(610000,612000), reason: '' }
+    const hint = finisherRepairHint([tooTiny,missingReason], footage, [300000,1500000],[75,105])
+    expect(hint.invalid).toEqual(expect.arrayContaining([
+      expect.objectContaining({ index: 0, problem: 'too_short_to_play' }),
+      expect.objectContaining({ index: 1, problem: 'missing_beat_or_reason' }),
+    ]))
+    expect(hint.instruction).toContain('Repair ONLY listed')
+  })
+  it('accepts a complete 106.0-second near miss without losing a good story', () => {
+    const near = compressed.map(s=>({ ...s }))
+    near[1]!.endMs += 10000
+    const result = verifyStoryFinish({
+      selections: near, payoff, editorialReason: 'Preserve complete payoff and setup.',
+    }, footage, words, [300000,1500000],[75,105])
+    expect(result.selections.reduce((n,s)=>n+(s.endMs-s.startMs),0)/1000)
+      .toBeCloseTo(106.015,2)
+    near[1]!.endMs += 4000
+    expect(()=>verifyStoryFinish({
+      selections: near,payoff,editorialReason: 'Too far above target.',
+    },footage,words,[300000,1500000],[75,105])).toThrow('finisher_still_over_target')
+  })
+  it('rejects a materially overlong edit rather than treating all durations as valid', () => {
     const tooLong = [...footage.slice(0, 5), part(600040, 631500)]
     // Source-grounded even when the selection extends deep into the curated tail.
     expect(() => verifyStoryFinish({
@@ -187,14 +219,11 @@ describe('source-verified Story Finisher', () => {
       endingCue: 'Stop after the relevant thought',
     }))
     expect(validateFootagePreferredEdits(hints, footage, [300000,1500000])).toHaveLength(6)
-    expect(() => validateFootagePreferredEdits(hints.slice(1), footage, [300000,1500000]))
-      .toThrow('footage_preferred_edit_count_mismatch')
+    expect(validateFootagePreferredEdits(hints.slice(1), footage, [300000,1500000])).toHaveLength(5)
     const outside = hints.map((h, i) => i === 1 ? { ...h, preferredEndMs: h.candidateEndMs + 1000 } : h)
-    expect(() => validateFootagePreferredEdits(outside, footage, [300000,1500000]))
-      .toThrow('footage_preferred_edit_invalid')
+    expect(validateFootagePreferredEdits(outside, footage, [300000,1500000])).toHaveLength(5)
     const overlapping = hints.map((h,i) => i === 1 ? { ...h, candidateStartMs: 310000 } : h)
-    expect(() => validateFootagePreferredEdits(overlapping, footage, [300000,1500000]))
-      .toThrow()
+    expect(validateFootagePreferredEdits(overlapping, footage, [300000,1500000])).toHaveLength(6)
   })
   it('passes Footage preferred tight cuts and semantic ending cues into Finisher', async () => {
     const hints = footage.map((selection, index) => ({
