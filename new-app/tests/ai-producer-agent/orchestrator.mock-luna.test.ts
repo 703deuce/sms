@@ -20,7 +20,7 @@ vi.mock('@/lib/server/db', () => {
       aiProducerAgentStep: { create: async ({ data }: { data: unknown }) => steps.push(data) },
       clipJob: { create: async () => ({ id: 'job1' }) },
       clip: {
-        findUniqueOrThrow: async () => ({ id: 'clip1', startMs: 0, endMs: 60_000, editsSaveVersion: 0 }),
+        findUniqueOrThrow: async () => ({ id: 'clip1', startMs: 0, endMs: 300_000, editsSaveVersion: 0 }),
       },
       clipProject: { findFirstOrThrow: async () => ({ uploadId: 'u1', settings: {}, title: 't' }) },
       $transaction: async (fn: (tx: unknown) => Promise<void>) =>
@@ -33,6 +33,12 @@ vi.mock('@/lib/server/db', () => {
     __steps: steps,
   }
 })
+
+vi.mock('@/lib/server/ai-producer-agent/rough-cut-source', () => ({
+  loadRoughCutWords: async () => Array.from({ length: 150 }, (_, i) => ({
+    w: 'word', s: i * 2 + 0.3, e: i * 2 + 0.8,
+  })),
+}))
 
 vi.mock('@/lib/server/ai-producer-agent/resolve-sources', () => ({
   resolveAiProducerSources: async (_ws: string, sources: unknown[]) => sources,
@@ -133,4 +139,54 @@ describe('orchestrator with mocked Luna', () => {
     b.steps = CAPS.hardSteps
     expect(b.state()).toBe('hard')
   })
+  it('creates an editable rough cut without waiting for assembly Luna tool calls', async () => {
+    const db = await import('@/lib/server/db')
+    const runs = (db as unknown as { __runs: Map<string, Record<string, unknown>> }).__runs
+    runs.set('run1', {
+      ...runs.get('run1'),
+      outputType: 'story',
+      config: {
+        editMode: 'just_chatting_rough_cut', targetLengthS: [180, 480],
+        memeSfx: 'off', music: 'none', exportOnFinish: false, geminiUsdCap: 3,
+      },
+      sourceSnapshot: [{
+        sourceId: 'src_A', kind: 'clip', projectId: 'p1', clipId: 'c0',
+        durationMs: 300_000, rangeMs: [0, 300_000],
+      }],
+    })
+    const selected = [
+      { startMs: 0, endMs: 55_000, beat: 'setup', reason: 'full context' },
+      { startMs: 140_000, endMs: 200_000, beat: 'payoff', reason: 'complete answer' },
+    ]
+    let calls = 0
+    const toolNames = ['submit_story_outline', 'submit_footage_selections',
+      'submit_dialogue_cut_plan', 'submit_editorial_review']
+    const submissions = [
+      { logline: 'The story', audiencePromise: 'Understand the answer', beats: ['setup', 'detail', 'payoff'] },
+      { selections: selected }, { selections: selected }, { pass: true, issues: [] },
+    ]
+    __setLunaImpl(async () => {
+      const idx = calls++
+      if (idx >= submissions.length) throw new Error('Unexpected Luna assembly call')
+      return {
+        message: {
+          role: 'assistant' as const, content: null,
+          tool_calls: [{
+            id: 'cut_' + idx, type: 'function' as const,
+            function: { name: toolNames[idx]!, arguments: JSON.stringify(submissions[idx]) },
+          }],
+        },
+        usage: { prompt_tokens: 100, completion_tokens: 30 },
+      }
+    })
+    await runAiProducerAgent('run1')
+    const run = runs.get('run1')
+    expect(run?.error).toBeNull()
+    expect(run?.status).toBe('ready')
+    expect(run?.resultProjectId).toBe('proj1')
+    expect(calls).toBe(4) // Story, Footage, Dialogue, QA; no Luna assembly.
+    const notes = run?.producerNotes as { outputs: { specialists: { approvedCuts: unknown[] } }[] }
+    expect(notes.outputs[0]?.specialists.approvedCuts).toHaveLength(2)
+  })
+
 })
