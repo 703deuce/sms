@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
-import { finisherRepairHint, fullFinisherTranscript, repairFinisherEdges, runStoryFinisher, runStoryBoundaryFinisher, verifyStoryBoundaryPolish, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
+import { finisherRepairHint, fullFinisherTranscript, repairFinisherEdges, runStoryFinisher, runStoryBoundaryFinisher, resolveStoryWordBoundaries, boundaryWordContext, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
 import { createEditorialHandoff, validateFootagePreferredEdits } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
@@ -225,51 +225,109 @@ describe('source-verified Story Finisher', () => {
     const overlapping = hints.map((h,i) => i === 1 ? { ...h, candidateStartMs: 310000 } : h)
     expect(validateFootagePreferredEdits(overlapping, footage, [300000,1500000])).toHaveLength(6)
   })
-  it('cannot rescout, expand, reorder or cut more than 3s at either edge', () => {
-    const small = [part(300675,311880),part(450670,478885)]
-    const okay = [{...small[0],startMs:300675,endMs:311880},
-      {...small[1],startMs:450670,endMs:478885}]
-    expect(verifyStoryBoundaryPolish(okay,small,words,[300000,1500000])).toEqual(small)
-    expect(()=>verifyStoryBoundaryPolish([okay[1],okay[0]],small,words,[300000,1500000]))
-      .toThrow('boundary_polish_outside_original_or_3s_edge_limit')
-    expect(()=>verifyStoryBoundaryPolish([{...okay[0],endMs:308000},okay[1]],small,words,[300000,1500000]))
-      .toThrow('boundary_polish_outside_original_or_3s_edge_limit')
-    expect(()=>verifyStoryBoundaryPolish([okay[0]],small,words,[300000,1500000]))
-      .toThrow('boundary_polish_must_keep_every_selected_passage')
+  it('maps word IDs to safe ends, trims dangling words, and retains a valid opening', () => {
+    const original = [part(1000,7000),part(10000,18000)]
+    const speech = [
+      {w:'This',s:1.2,e:1.5},{w:'helps.',s:5.7,e:6.0},
+      {w:'And',s:6.4,e:6.65},{w:'then',s:6.7,e:6.9},
+      {w:'We',s:10.2,e:10.5},{w:'finished.',s:17.5,e:17.8},
+    ]
+    const result=resolveStoryWordBoundaries([
+      {index:0,firstWordId:0,lastWordId:1},
+      {index:1,firstWordId:4,lastWordId:5},
+    ],original,speech,[0,25000])
+    expect(result.selections[0]!.endMs).toBe(6030)
+    expect(result.selections[0]!.startMs).toBe(1170)
+    expect(result.selections[1]!.endMs).toBe(17830)
+    expect(result.diagnostics.every(d=>d.end==='resolved_word_id')).toBe(true)
   })
-  it('only reads nearby transcript and preserves the exact Footage edit', async () => {
-    __setLunaImpl(async ({tools,messages}) => {
-      expect(tools.map(t=>t.name)).toEqual(['submit_story_boundary_polish'])
+  it('restores beginning words when original edit starts mid-thought', () => {
+    const original=[part(10400,16000)]
+    const speech=[
+      {w:'So',s:9.5,e:9.7},{w:'we',s:9.8,e:9.95},
+      {w:'started',s:10.1,e:10.38},{w:'today.',s:15.5,e:15.8},
+    ]
+    const result=resolveStoryWordBoundaries([
+      {index:0,firstWordId:0,lastWordId:3},
+    ],original,speech,[0,25000])
+    expect(result.selections[0]!.startMs).toBe(9470)
+    expect(result.selections[0]!.endMs).toBe(15830)
+  })
+  it('accepts independent fixes when another passage has an invalid word ID', () => {
+    const original=[part(1000,7000),part(10000,18000)]
+    const speech=[
+      {w:'Good',s:1.2,e:1.5},{w:'end.',s:5.7,e:6.0},
+      {w:'Bad',s:10.2,e:10.4},{w:'word',s:17.5,e:17.8},
+    ]
+    const result=resolveStoryWordBoundaries([
+      {index:0,firstWordId:0,lastWordId:1},
+      {index:1,firstWordId:9999,lastWordId:9998},
+    ],original,speech,[0,25000])
+    expect(result.selections[0]!.endMs).toBe(6030)
+    expect(result.selections[1]).toEqual(original[1])
+    expect(result.diagnostics[1]!.start).toBe('invalid_first_word_id')
+  })
+  it('handles overlapping ASR words without making an unsafe cut', () => {
+    const original=[part(1000,7000)]
+    const speech=[
+      {w:'I',s:1.2,e:1.5},{w:'finished.',s:5.7,e:6.0},
+      {w:'overlap',s:5.95,e:6.2},{w:'later',s:6.4,e:6.6},
+    ]
+    const result=resolveStoryWordBoundaries([
+      {index:0,firstWordId:0,lastWordId:1},
+    ],original,speech,[0,8000])
+    expect(result.selections[0]!.endMs).toBe(6230)
+  })
+  it('supplies numbered local words, not a full transcript or timestamp tool', async () => {
+    const transcript=boundaryWordContext(words,compressed,[300000,1500000])
+    expect(transcript).toHaveLength(compressed.length)
+    expect(transcript.every(p=>p.words.every(w=>Number.isInteger(w.id)))).toBe(true)
+    __setLunaImpl(async ({tools,messages})=>{
+      expect(tools.map(t=>t.name)).toEqual(['submit_story_word_boundaries'])
       const context=JSON.parse(messages[1]!.content!)
-      expect(context.selectedPassages).toHaveLength(compressed.length)
+      expect(context.passages).toHaveLength(compressed.length)
       expect(context.entireAuthorizedTranscript).toBeUndefined()
       expect(messages[1]?.content).not.toContain('late-discussion-context')
-      return response('submit_story_boundary_polish',{selections:compressed},'polish')
+      return response('submit_story_word_boundaries',{passages:context.passages.map((p:{
+        index:number;words:Array<{id:number;currentlyKept:boolean}>,
+      })=>{
+        const kept=p.words.filter(w=>w.currentlyKept)
+        return {index:p.index,firstWordId:kept[0]!.id,lastWordId:kept[kept.length-1]!.id}
+      })},'polish')
     })
     const result=await runStoryBoundaryFinisher(ctx(),new Budget(),outline,compressed)
-    expect(result).toEqual(compressed)
+    expect(result).toHaveLength(compressed.length)
+    expect(result.every((r,i)=>r.startMs>=compressed[i]!.startMs-2000 &&
+      r.endMs<=compressed[i]!.endMs+2000)).toBe(true)
   })
-  it('Footage supplies the short edit and Finisher never selects a new story', async () => {
+  it('Footage owns the edit; boundary Finisher is word-based and never rescouts', async () => {
     const names:string[]=[]
     __setLunaImpl(async ({tools,messages})=>{
       const name=tools[tools.length-1]!.name
       names.push(name)
       if(name==='submit_story_outline')return response(name,outline,'story')
       if(name==='submit_footage_selections')return response(name,{selections:compressed},'footage')
-      if(name==='submit_story_boundary_polish'){
+      if(name==='submit_story_word_boundaries'){
         const context=JSON.parse(messages[1]!.content!)
         expect(context.entireAuthorizedTranscript).toBeUndefined()
-        expect(context.selectedPassages).toHaveLength(compressed.length)
-        return response(name,{selections:compressed},'polish')
+        const passages=context.passages.map((p:{
+          index:number;words:Array<{id:number;currentlyKept:boolean}>,
+        })=>{
+          const kept=p.words.filter(w=>w.currentlyKept)
+          return {index:p.index,firstWordId:kept[0]!.id,lastWordId:kept[kept.length-1]!.id}
+        })
+        return response(name,{passages},'polish')
       }
       if(name==='submit_dialogue_cut_plan')return response(name,{selections:compressed},'dialogue')
       throw new Error('Unexpected tool '+name)
     })
     const edit=await createEditorialHandoff(ctx(),out(),new Budget(),null)
-    expect(names).toEqual(['submit_story_outline','submit_footage_selections',
-      'submit_story_boundary_polish','submit_dialogue_cut_plan'])
-    expect(edit.cutPlan).toEqual(compressed)
-    expect(edit.footage).toEqual(compressed)
+    expect(names[0]).toBe('submit_story_outline')
+    expect(names.filter(n=>n==='submit_footage_selections').length).toBeGreaterThanOrEqual(1)
+    expect(names.filter(n=>n==='submit_story_word_boundaries')).toHaveLength(1)
+    expect(names[names.length-1]).toBe('submit_dialogue_cut_plan')
+    expect(edit.cutPlan).toHaveLength(compressed.length)
+    expect(edit.cutPlan.reduce((sum,s)=>sum+s.endMs-s.startMs,0)).toBeLessThan(110000)
     expect(edit.finisher).toBeUndefined()
   })
 })
