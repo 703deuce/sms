@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { shortStoryCoverage } from '@/lib/ai-producer-agent/specialists'
 import type { ClipWord } from '@/lib/clips/edits'
+
+vi.mock('@/lib/ai-producer-agent/log', () => ({
+  logAiProducerStep: vi.fn(async () => undefined),
+  redactArgs: (a: unknown) => a,
+}))
+vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
+  runTool: vi.fn(async () => ({ ok: false, summary: 'not_used' })),
+}))
 
 const select = (startMs: number, endMs: number) => ({
   startMs, endMs, beat: 'story', reason: 'source-backed dialogue',
