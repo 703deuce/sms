@@ -17,6 +17,7 @@ function ctx(): ToolCtx {
     sources: [{ sourceId: 'recording', rangeMs: [300040, 1500040] }],
     config: { editMode: 'just_chatting_rough_cut', targetLengthS: [75, 105], memeSfx: 'off' },
     cache: { words: [] },
+    usedPayoffs: [],
   } as unknown as ToolCtx
 }
 function build(cuts: ReadonlyArray<readonly [number, number]>) {
