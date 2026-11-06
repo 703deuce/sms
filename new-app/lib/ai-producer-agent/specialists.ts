@@ -25,6 +25,12 @@ export type EditorialHandoff = {
   outline: { logline: string; beats: string[]; audiencePromise: string }
   footage: EditorialSelection[]
   cutPlan: EditorialSelection[]
+  finisher?: {
+    payoff: { startMs: number; endMs: number; quote: string }
+    editorialReason: string
+    originalDurationSeconds: number
+    finalDurationSeconds: number
+  }
   review?: { pass: boolean; issues: string[] }
 }
 
@@ -770,14 +776,47 @@ export async function createEditorialHandoff(
       })
     }
   }
+  // Story-only editorial compression is a separate job from collecting
+  // relevant Footage and cleaning Dialogue. Highlights keeps its independent
+  // multi-moment criteria; longer conversational edits retain natural pacing.
+  let finisher: EditorialHandoff['finisher']
+  const useFinisher = !highlightsMode &&
+    ctx.config.editMode === 'just_chatting_rough_cut' &&
+    maximumSeconds <= 135
+  if (useFinisher && budget.state() !== 'hard') {
+    try {
+      const { runStoryFinisher } = await import('@/lib/ai-producer-agent/story-finisher')
+      const originalDurationSeconds = selectionDurationS(footage)
+      const decision = await runStoryFinisher(ctx, budget, outline, footage)
+      footage = decision.selections
+      finisher = {
+        payoff: decision.payoff,
+        editorialReason: decision.editorialReason,
+        originalDurationSeconds,
+        finalDurationSeconds: selectionDurationS(footage),
+      }
+      await specialistEvent(ctx, budget, 'story', 'finisher_handoff', {
+        beforeSeconds: originalDurationSeconds,
+        afterSeconds: finisher.finalDurationSeconds,
+        payoffMs: [finisher.payoff.startMs, finisher.payoff.endMs],
+        cuts: footage.length,
+      })
+    } catch (error) {
+      // A model failure cannot erase a valid source-grounded editable draft.
+      await specialistEvent(ctx, budget, 'story', 'finisher_unavailable', {
+        errorCode: String((error as Error)?.message ?? error).slice(0, 200),
+      })
+    }
+  }
   let refined: Record<string, unknown>
   try {
     refined = await runEditorialRole(ctx, out, budget, 'dialogue', {
     ...base, storyOutline: outline, curatedSelections: footage,
+    ...(finisher ? { verifiedPayoff: finisher.payoff, finisherEditorialReason: finisher.editorialReason } : {}),
     instruction: highlightsMode
       ? 'Refine all DISTINCT curated highlights, preserving each independent setup and payoff. No cutting the reel down into one scene; no incomplete speech at highlight ends. Keep chronological, word-safe cuts inside curated intervals, and preserve total length without padding.'
       : shortStory
-      ? 'Refine the WHOLE multi-beat story, not one local anecdote. Keep sourced setup, development and payoff from the curated passages. Finish on a full sentence or deliberate resolved beat; avoid ellipses or trailing conjunctions. Never extend outside curated footage. Do not delete necessary beats just to tighten pacing.'
+      ? 'Refine the curated story without re-expanding it. Preserve the source-verified payoff and naturally complete ending chosen by Story Finisher when present. Do not remove the payoff, carry on into another topic, or extend outside curated footage. Protect precise phonemes and breaths; stay near the target duration.'
       : 'Refine whole-thought boundaries inside chosen footage; never select outside.',
     })
   } catch (error) {
@@ -829,6 +868,20 @@ export async function createEditorialHandoff(
       })
     }
   }
+  if (finisher) {
+    const payoff = finisher.payoff
+    const last = cutPlan[cutPlan.length - 1]
+    const retained = cutPlan.some(s =>
+      s.startMs <= payoff.startMs && s.endMs >= payoff.endMs)
+    const endsSoonAfter = Boolean(last && last.endMs - payoff.endMs <= 8000 &&
+      last.endMs >= payoff.endMs)
+    if (!retained || !endsSoonAfter) {
+      await specialistEvent(ctx, budget, 'dialogue', 'restored_story_finisher', {
+        reason: retained ? 'dialogue_overran_verified_payoff' : 'dialogue_removed_verified_payoff',
+      })
+      cutPlan = footage
+    }
+  }
   const duration = selectionDurationS(cutPlan)
   const [lo, hi] = ctx.config.targetLengthS
   if (duration < lo || duration > hi) {
@@ -843,5 +896,5 @@ export async function createEditorialHandoff(
       note: 'Deliver the best coherent editable cut even when shorter or longer than requested.',
     })
   }
-  return { outline, footage, cutPlan }
+  return { outline, footage, cutPlan, ...(finisher ? { finisher } : {}) }
 }
