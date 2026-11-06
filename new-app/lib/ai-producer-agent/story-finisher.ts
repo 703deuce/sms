@@ -104,14 +104,19 @@ export function repairFinisherEdges(raw: unknown, allowed: EditorialSelection[])
 
 /** Safe per-interval diagnostics: let the LLM repair the offending timestamp
  * without revealing transcripts or allowing a cut across excluded material. */
-export function finisherRepairHint(raw: unknown, footage: EditorialSelection[], bounds: [number, number]) {
+export function finisherRepairHint(raw: unknown, footage: EditorialSelection[], bounds: [number, number], target?: [number, number]) {
   const allowed = extendedRanges(footage, bounds)
   if (!Array.isArray(raw)) return { instruction: 'Submit valid chronological sourced intervals.' }
   const invalid = raw.flatMap((value: unknown, index: number) => {
     if (!value || typeof value !== 'object') return [{ index, problem: 'invalid_selection' }]
     const s = value as EditorialSelection
-    if (!Number.isInteger(s.startMs) || !Number.isInteger(s.endMs))
-      return [{ index, problem: 'invalid_timestamps' }]
+    if (!Number.isInteger(s.startMs) || !Number.isInteger(s.endMs) || s.endMs <= s.startMs ||
+        s.startMs < bounds[0] || s.endMs > bounds[1])
+      return [{ index, problem: 'invalid_source_range', proposed: [s.startMs,s.endMs] }]
+    if (typeof s.beat !== 'string' || typeof s.reason !== 'string' || !s.reason.trim())
+      return [{ index, problem: 'missing_beat_or_reason' }]
+    if (s.endMs - s.startMs < 400)
+      return [{ index, problem: 'too_short_to_play', durationMs: s.endMs - s.startMs }]
     if (allowed.some(a => s.startMs >= a.startMs && s.endMs <= a.endMs)) return []
     const nearest = [...allowed].sort((a,b) =>
       Math.abs(a.startMs-s.startMs)+Math.abs(a.endMs-s.endMs) -
@@ -119,8 +124,19 @@ export function finisherRepairHint(raw: unknown, footage: EditorialSelection[], 
     return [{ index, problem: 'outside_curated_footage', proposed: [s.startMs,s.endMs],
       nearestAllowed: nearest ? [nearest.startMs,nearest.endMs] : null }]
   })
-  return { invalid: invalid.slice(0,24),
-    instruction: 'Choose a SHORT excerpt entirely within ONE allowed source interval (or its 15-second context extension). Split a proposed interval crossing excluded gaps into separate sourced excerpts. You may omit unnecessary passages. Never expand into unrelated talk.' }
+  const totalSeconds = raw.reduce((sum: number, value: unknown) => {
+    const s = value as EditorialSelection | null
+    return sum + (s && Number.isFinite(s.startMs) && Number.isFinite(s.endMs) &&
+      s.endMs > s.startMs ? (s.endMs - s.startMs) / 1000 : 0)
+  }, 0)
+  const overSeconds = target ? Math.max(0, totalSeconds - target[1]) : 0
+  return { invalid: invalid.slice(0,24), totalSeconds,
+    ...(overSeconds ? { overSeconds: Number(overSeconds.toFixed(2)) } : {}),
+    instruction: invalid.length
+      ? 'Repair ONLY listed invalid pieces. Keep meaningful short reactions (at least 0.4s); drop unusably tiny clips, fix missing beat/reason, and split any range crossing unrelated source. Do not discard the otherwise valid story.'
+      : overSeconds
+        ? 'Cut approximately ' + overSeconds.toFixed(1) + ' seconds of optional setup or repetition, keeping the authentic final payoff. A near miss within 3 seconds over maximum is acceptable; do not blindly trim the ending.'
+        : 'All ranges are in authorized footage; if rejected, inspect source word-edge, payoff, and chronological constraints rather than moving to another source window.' }
 }
 
 /** Only accept a payoff actually spoken inside the final approved picture edit.
@@ -134,8 +150,8 @@ export function verifyStoryFinish(
   if (!proposal || typeof proposal !== 'object') throw new Error('finisher_invalid_submission')
   const p = proposal as Record<string, unknown>
   const allowed = extendedRanges(footage, bounds)
-  const selections = snapEditorialSelections(repairFinisherEdges(p.selections, allowed), bounds, words, allowed)
-  checkEditorialSelections(selections, bounds, words, allowed)
+  const selections = snapEditorialSelections(repairFinisherEdges(p.selections, allowed), bounds, words, allowed, 400)
+  checkEditorialSelections(selections, bounds, words, allowed, 400)
   if (!selections.length || typeof p.editorialReason !== 'string' || !p.editorialReason.trim()) {
     throw new Error('finisher_missing_editorial_decision')
   }
@@ -164,7 +180,9 @@ export function verifyStoryFinish(
   // Code verifies source-grounded selections, not grammar via a word blacklist.
   verifyFinishedThoughts(selections, words)
   const duration = seconds(selections)
-  if (duration > target[1]) throw new Error('finisher_still_over_target')
+  // A one-to-three-second near miss is a good edit, not a reason to discard it.
+  // Keep the complete thought instead of blindly shaving speech from the payoff.
+  if (duration > target[1] + 3) throw new Error('finisher_still_over_target')
   // Avoid a technically valid two-second soundbite framed as a complete story.
   if (duration < Math.max(25, target[0] * 0.75)) throw new Error('finisher_overshort_story')
   return { selections, payoff: {
@@ -390,7 +408,7 @@ export async function runStoryFinisher(
       'Footage has supplied TWO kinds of ranges: broad source candidates (authorized source material), and optional preferredEdits that identify the short section, purpose, and semantic ending. Treat preferredEdits as your first-pass PAPER EDIT. Do NOT simply preserve the broader source candidates. Verify each preferred ending against the FULL conversation. You may tighten, shift within authorized footage, split, or OMIT a suggested passage when doing so creates a more coherent cut. The editing target is the final selected seconds, not the combined candidate duration.',
       'Read the ENTIRE timed transcript for SEMANTIC UNDERSTANDING, but select footage ONLY inside the authorized candidate intervals (plus at most 15 seconds of nearby context when truly necessary). The full transcript is NOT an instruction to preserve surrounding sentences. Never propose one continuous interval across an omitted source gap. If relevant moments are separated by a gap, return separate intervals. You may omit any unneeded candidate.',
       'For EACH kept passage, find the first necessary spoken word and the LAST word that completes the relevant thought. Stop BEFORE the speaker starts a new tangent, even if that tangent appears in the same ASR paragraph. Do not continue to a later full stop merely to satisfy punctuation. Likewise, do not start halfway into an essential phrase. A spoken payoff must be a precise 2+ word quote in the LAST kept passage; stop within 8 seconds after it. Target the specified seconds by deleting redundant ideas, never by clipping blindly at a timer or padding.',
-      'Submit original absolute millisecond boundaries aligned to the FIRST and LAST required source words. Output 5–20 second spans when those suffice; long spans only when every included sentence is essential. Respect source order and chronology. Verify semantic completeness of ALL joins, not only the final ending. One concise 75–105s STORY is wanted, not a 260s source dump.',
+      'Submit original absolute millisecond boundaries aligned to the FIRST and LAST required source words. Output 5–20 second spans when those suffice, but a meaningful 1–2 second reaction is also allowed. Long spans only when every included sentence is essential. Respect source order and chronology. Verify semantic completeness of ALL joins, not only the final ending. Roughly 90 seconds is the creative target; a good cut 1–3 seconds beyond the nominal maximum is preferable to a broken thought.',
     ].join('\n\n') },
     { role: 'user', content: JSON.stringify({
       outline, targetSeconds: ctx.config.targetLengthS,
@@ -433,7 +451,7 @@ export async function runStoryFinisher(
     } catch (error) {
       reason = String((error as Error).message).slice(0, 200)
       const proposal = call ? (() => { try { return JSON.parse(call.function.arguments) as unknown } catch { return null } })() : null
-      const repairHint = finisherRepairHint((proposal as { selections?: unknown } | null)?.selections, footage, source.rangeMs)
+      const repairHint = finisherRepairHint((proposal as { selections?: unknown } | null)?.selections, footage, source.rangeMs, ctx.config.targetLengthS)
       await logAiProducerStep({
         runId: ctx.runId, stepIndex: budget.steps, phase: 'plan', kind: 'validate',
         tool: 'story_finisher_rejected', error: reason,
@@ -443,7 +461,7 @@ export async function runStoryFinisher(
       })
       if (call) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({
         ok: false, error: reason, repairHint,
-        instruction: 'Fix the SPECIFIC rejected intervals. Each proposed range must live inside one permitted passage, not cross an excluded gap. Shorten or omit candidate passages, preserve essential spoken payoff, and submit a semantic 75–105 second cut with precise first/last-word boundaries.',
+        instruction: repairHint.instruction,
       }) })
     }
   }
