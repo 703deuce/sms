@@ -22,6 +22,15 @@ vi.mock('@/lib/ai-producer-agent/story-finisher', () => ({
     },
     editorialReason: 'Keep existing test emphasis on Footage and Dialogue',
   })),
+  runHighlightsFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number;beat:string;reason:string}>) => ({
+    selections: footage,
+    moments: footage.map(selection => ({
+      selection,
+      landing: { startMs: selection.endMs - 1800, endMs: selection.endMs - 500, quote: 'word word' },
+      editorialReason: 'Mocked per-moment ending for legacy Highlights coverage test',
+    })),
+    editorialReason: 'Keep existing test focused on original highlight selection',
+  })),
 }))
 
 const sel = (startMs: number, endMs: number, beat = 'interesting moment') =>
