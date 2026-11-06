@@ -283,6 +283,39 @@ function selectionDurationS(selections: EditorialSelection[]): number {
   return selections.reduce((sum, s) => sum + (s.endMs - s.startMs), 0) / 1000
 }
 
+/**
+ * Editorial diagnostics, not an arbitrary requirement for long jumps.
+ * Contiguous material can be the right story, but when a 20-minute source
+ * produces an unfinished minute-long excerpt we must search alternatives.
+ */
+export function shortStoryCoverage(
+  selections: EditorialSelection[], words: ClipWord[], target: [number, number],
+  sourceRange: [number, number],
+) {
+  const durationSeconds = selectionDurationS(selections)
+  const sourceSpanMs = selections.length
+    ? selections[selections.length - 1]!.endMs - selections[0]!.startMs : 0
+  const longestSourceGapMs = selections.reduce((largest, seg, i) =>
+    i ? Math.max(largest, seg.startMs - selections[i - 1]!.endMs) : largest, 0)
+  const ending = selections[selections.length - 1]
+  const tailWords = ending
+    ? words.filter(w => w.e * 1000 > ending.startMs && w.s * 1000 < ending.endMs)
+      .sort((a, b) => a.s - b.s).slice(-8) : []
+  const lastWord = tailWords[tailWords.length - 1]?.w?.trim() ?? ''
+  const terminalSentence = /[.!?][\"'”’]?$/.test(lastWord) && !/\.{2,}[\"'”’]?$/.test(lastWord)
+  const enoughSourceToExplore = sourceRange[1] - sourceRange[0] >= 3 * 60_000
+  const localOnly = enoughSourceToExplore &&
+    sourceSpanMs <= Math.max(90_000, target[1] * 1000 * 1.2) &&
+    longestSourceGapMs < 8_000
+  return {
+    durationSeconds, sourceSpanMs, longestSourceGapMs,
+    lastWord, terminalSentence,
+    localOnly,
+    underTarget: durationSeconds < target[0],
+    needsReview: durationSeconds < target[0] || !terminalSentence || localOnly,
+  }
+}
+
 /** Duration targets guide editing quality but must not block a usable cut. */
 function durationAdvisory(selections: EditorialSelection[], target: [number, number]) {
   const actualSeconds = selectionDurationS(selections)
@@ -556,7 +589,8 @@ function representativeTranscript(words: ClipWord[], range: [number, number]) {
     const hits = words.filter((w) => w.s * 1000 < end && w.e * 1000 > start)
     return {
       rangeMs: [Math.round(start), Math.round(end)],
-      excerpt: hits.slice(0, 45).map((w) => w.w).join(' ').slice(0, 550),
+      excerpt: hits.slice(0, 25).map((w) => w.w).join(' ').slice(0, 300),
+      endingExcerpt: hits.slice(-25).map((w) => w.w).join(' ').slice(0, 300),
     }
   })
 }
@@ -597,7 +631,9 @@ export async function createEditorialHandoff(
   try {
     found = await runEditorialRole(ctx, out, budget, 'footage', {
       ...base, storyOutline: outline,
-      instruction: 'Select coherent source intervals; evidence first, then editorial value.',
+      instruction: ctx.config.targetLengthS[1] <= 105
+        ? 'SHORT FILM PAPER EDIT: First compare events and conversations across the entire source window. Choose one truthful story with setup, turning point and payoff, sourcing each beat from anywhere relevant in the 20 minutes. Do NOT take a nearly continuous 60–90 second stretch simply because it is easy to fill the requested time. Different recordings can support one story; here use separate ranges from the same recording whenever the narrative needs them. Editorial judgment is allowed: reorder ideas in your outline, but keep selected footage chronological and never invent connections. End at a finished sentence or genuine payoff. Select only relevant material.'
+        : 'Select coherent source intervals; evidence first, then editorial value.',
     })
   } catch (error) {
     // Last-resort, honest first-pass source selection. Keep an editable draft
@@ -622,25 +658,43 @@ export async function createEditorialHandoff(
   const shortStory = ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   // One targeted *editorial* retry instead of accepting a 20s excerpt as a
   // requested 90s story. Preserve original cuts if the revision is worse.
-  if (shortStory && selectionDurationS(footage) < minimumSeconds * 0.8 &&
-      budget.state() !== 'hard') {
+  const firstCoverage = shortStory
+    ? shortStoryCoverage(footage, ctx.cache.words, ctx.config.targetLengthS, source.rangeMs)
+    : null
+  if (firstCoverage?.needsReview && budget.state() !== 'hard') {
     const beforeSeconds = selectionDurationS(footage)
     try {
       const revised = await runEditorialRole(ctx, out, budget, 'footage', {
         ...base, storyOutline: outline,
         previousSelections: footage,
         previousDurationSeconds: beforeSeconds,
-        missingSecondsToMinimum: Math.round(minimumSeconds - beforeSeconds),
-        instruction: 'REVISION REQUIRED: Previous footage proposal is substantially too short and does not establish a complete setup-to-payoff story. Reinspect source evidence, select additional RELEVANT context, turning points, and conclusion from the same recording. Aim for the requested duration, never pad with unrelated footage. If the source truly lacks more story material, preserve the strongest complete short.',
+        previousCoverage: firstCoverage,
+        missingSecondsToMinimum: Math.max(0, Math.round(minimumSeconds - beforeSeconds)),
+        instruction: 'EDITORIAL REVISION: The initial cut is short, locally concentrated, or ends without a complete thought. Explore the FULL allowed source (not just the first selected minute) and identify stronger evidence for SETUP → DEVELOPMENT → PAYOFF. Find meaningful later/earlier passages and propose source-grounded cuts across the recording where appropriate. Do NOT merely pad with neighboring conversation; complete the story with a coherent, sentence-complete ending. Preserve useful existing moments and only replace when the story is demonstrably stronger. Chronological source order and truthful context required.',
       })
       const candidates = revised.selections as EditorialSelection[]
       const candidateSeconds = selectionDurationS(candidates)
-      // Favor a materially fuller edit without rewarding aimless overlong cuts.
-      if (candidateSeconds > beforeSeconds + 5 &&
-          candidateSeconds <= maximumSeconds * 1.5) {
+      const candidateCoverage = shortStoryCoverage(candidates, ctx.cache.words, ctx.config.targetLengthS, source.rangeMs)
+      // Do not replace a reasonable existing edit with a longer but weaker
+      // single excerpt. A complete ending or meaningful broader coverage can
+      // justify a shorter alternative; adding arbitrary seconds cannot.
+      const improvesEnding = !firstCoverage.terminalSentence && candidateCoverage.terminalSentence
+      const improvesCoverage = firstCoverage.localOnly && !candidateCoverage.localOnly
+      const improvesDuration = candidateSeconds >= minimumSeconds &&
+        beforeSeconds < minimumSeconds && !candidateCoverage.localOnly
+      const notWorse = candidateSeconds >= Math.min(beforeSeconds * 0.75, minimumSeconds * 0.8)
+      if (notWorse && candidateSeconds <= maximumSeconds * 1.5 &&
+          (improvesEnding || improvesCoverage || improvesDuration ||
+           (candidateSeconds > beforeSeconds + 5 && !candidateCoverage.localOnly))) {
         footage = candidates
         await specialistEvent(ctx, budget, 'footage', 'short_story_repaired', {
           beforeSeconds, afterSeconds: candidateSeconds, count: footage.length,
+          beforeCoverage: firstCoverage, afterCoverage: candidateCoverage,
+        })
+      } else {
+        await specialistEvent(ctx, budget, 'footage', 'short_story_revision_kept_original', {
+          beforeSeconds, candidateSeconds,
+          candidateCoverage,
         })
       }
     } catch (error) {
@@ -653,7 +707,9 @@ export async function createEditorialHandoff(
   try {
     refined = await runEditorialRole(ctx, out, budget, 'dialogue', {
     ...base, storyOutline: outline, curatedSelections: footage,
-    instruction: 'Refine whole-thought boundaries inside chosen footage; never select outside.',
+    instruction: shortStory
+      ? 'Refine the WHOLE multi-beat story, not one local anecdote. Keep sourced setup, development and payoff from the curated passages. Finish on a full sentence or deliberate resolved beat; avoid ellipses or trailing conjunctions. Never extend outside curated footage. Do not delete necessary beats just to tighten pacing.'
+      : 'Refine whole-thought boundaries inside chosen footage; never select outside.',
     })
   } catch (error) {
     await specialistEvent(ctx, budget, 'dialogue', 'fallback_to_footage', {
@@ -666,8 +722,17 @@ export async function createEditorialHandoff(
   // Dialogue can tighten joins, but must not silently erase the setup or payoff
   // that Footage already sourced. Prefer the fuller source-grounded selection
   // to an isolated excerpt when a requested short would otherwise collapse.
-  if (shortStory && selectionDurationS(cutPlan) < minimumSeconds * 0.8 &&
-      selectionDurationS(footage) > selectionDurationS(cutPlan) + 5) {
+  const dialogueCoverage = shortStory
+    ? shortStoryCoverage(cutPlan, ctx.cache.words, ctx.config.targetLengthS, source.rangeMs)
+    : null
+  const curatedCoverage = shortStory
+    ? shortStoryCoverage(footage, ctx.cache.words, ctx.config.targetLengthS, source.rangeMs)
+    : null
+  if (shortStory && dialogueCoverage && curatedCoverage &&
+      (selectionDurationS(cutPlan) < minimumSeconds * 0.8 && selectionDurationS(footage) > selectionDurationS(cutPlan) + 5 ||
+       dialogueCoverage.localOnly && !curatedCoverage.localOnly ||
+       !dialogueCoverage.terminalSentence && curatedCoverage.terminalSentence &&
+         selectionDurationS(footage) >= selectionDurationS(cutPlan) * 0.8)) {
     await specialistEvent(ctx, budget, 'dialogue', 'restored_curated_story', {
       dialogueSeconds: selectionDurationS(cutPlan),
       restoredSeconds: selectionDurationS(footage),
