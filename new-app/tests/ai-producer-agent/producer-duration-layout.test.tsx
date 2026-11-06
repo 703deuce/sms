@@ -15,7 +15,7 @@ describe('AI Producer conversation length and layout', () => {
       render(<NewEditDialog open onOpenChange={() => {}} defaultSources={[
         { sourceId: 'recording', kind: 'clip', projectId: 'p1', clipId: 'clip1', title: 'Interview' },
       ]} />)
-      fireEvent.change(screen.getByRole('combobox', { name: 'Output' }), { target: { value: 'rough_cut' } })
+      fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'rough_cut' } })
       fireEvent.change(screen.getByRole('combobox', { name: 'Desired edited length' }), { target: { value: '60' } })
       fireEvent.click(screen.getByTestId('ai-producer-agent-submit'))
       await waitFor(() => expect(fetchMock).toHaveBeenCalled())
