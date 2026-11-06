@@ -88,6 +88,7 @@ jobs:
             tests/ai-producer-agent/orchestrator.mock-luna.test.ts \
             tests/ai-producer-agent/ai-producer-export.test.ts \
             tests/ai-producer-agent/producer-duration-layout.test.tsx \
+            tests/ai-producer-agent/short-story-repair.test.ts \
             tests/ai-producer-agent/system-prompt.test.ts \
             tests/ai-producer-agent/validate.items.test.ts
 
