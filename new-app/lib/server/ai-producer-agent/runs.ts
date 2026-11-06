@@ -40,12 +40,19 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
   if (input.editMode === 'just_chatting_rough_cut' && input.outputType !== 'story') throw new Error('rough_cut_requires_story_output')
   if (input.editMode === 'just_chatting_rough_cut' && input.sources.length !== 1) throw new Error('rough_cut_single_source_only')
   if (input.editMode === 'just_chatting_rough_cut' && input.exportOnFinish) throw new Error('rough_cut_requires_review_before_export')
+  if (input.editMode === 'just_chatting_rough_cut' && input.targetLengthS) {
+    const [minS, maxS] = input.targetLengthS
+    if (!Number.isFinite(minS) || !Number.isFinite(maxS) ||
+        minS < 15 || maxS > 900 || maxS < minS) {
+      throw new Error('rough_cut_invalid_duration_range')
+    }
+  }
   const resolvedForConfig =
     input.outputType === 'auto' ? 'single_payoff' : input.outputType === 'story' ? 'story' : input.outputType
   const config: AiProducerRunConfig = {
     editMode: input.editMode,
     targetLengthS:
-      (input.editMode === 'just_chatting_rough_cut' ? [180, 480] : input.targetLengthS) ??
+      (input.editMode === 'just_chatting_rough_cut' ? input.targetLengthS ?? [180, 480] : input.targetLengthS) ??
       (resolvedForConfig === 'montage'
         ? [30, 60]
         : resolvedForConfig === 'story'
