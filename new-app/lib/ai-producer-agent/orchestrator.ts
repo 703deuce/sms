@@ -211,28 +211,38 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
   const source = ctx.sources[0]
   const proposed = out.editorialHandoff?.cutPlan
   if (!source?.sourceId || !source.rangeMs || !proposed?.length) throw new Error('rough_cut_approved_selections_missing')
-  // Final source-of-truth repair, after Dialogue and immediately before building.
-  // A snapped boundary must also pass the final draft validator's 30ms word guard.
-  const recovered = recoverEditorialSelections(
+  // Short Story baseline: the model made the editorial decision, and the
+  // word IDs were already converted to ORIGINAL source timestamps. Do not
+  // snap, recover, re-rank, drop or substitute these selected cuts during
+  // assembly. Record EXACTLY what we received and what will be executed.
+  const directStory = ctx.config.editMode === 'just_chatting_rough_cut' &&
+    ctx.config.roughCutIntent !== 'highlights' && ctx.config.targetLengthS[1] <= 105
+  const recovered = directStory ? null : recoverEditorialSelections(
     proposed, source.rangeMs, ctx.cache.words ?? [], out.editorialHandoff?.footage,
   )
-  // A Finisher's exact completed word edges are editorial commitments.
-  // Dense ASR sometimes has no 30ms silent gap after a finished sentence:
-  // the generic recovery pass can move a clean "Okay." cut into the next
-  // dangling "And". The Finisher already checked for true word splitting,
-  // source evidence, and the actual ending. Preserve its approved edges;
-  // report acoustic uncertainty for listening review instead.
   const verifiedFinisher = Boolean(out.editorialHandoff!.finisher || out.editorialHandoff!.highlightsFinisher)
-  const cuts = verifiedFinisher ? proposed
-    : recovered.selections.length ? recovered.selections : out.editorialHandoff!.footage
+  const cuts = directStory || verifiedFinisher ? proposed
+    : recovered!.selections.length ? recovered!.selections : out.editorialHandoff!.footage
   if (!cuts.length) throw new Error('rough_cut_no_usable_source_segments')
   out.editorialHandoff!.cutPlan = cuts
   await logAiProducerStep({
     runId: ctx.runId, stepIndex: ++budget.steps,
-    phase: 'plan', tool: 'rough_cut_final_boundary_check', kind: 'validate',
-    resultSummary: JSON.stringify({ cuts: cuts.length, dropped: recovered.dropped,
-      unsafeEdges: recovered.unsafeEdges, preservedFromFootage: !recovered.selections.length,
-      preservedFinisherEdges: verifiedFinisher }),
+    phase: 'plan', tool: directStory ? 'rough_cut_direct_cut_execution' : 'rough_cut_final_boundary_check',
+    kind: directStory ? 'system' : 'validate',
+    argsSummary: JSON.stringify({
+      mode: directStory ? 'exact_model_selected_timestamps' : 'legacy_boundary_recovery',
+      sourceRangeMs:source.rangeMs,
+      storyOutline:out.editorialHandoff!.outline,
+      originalCuts: proposed,
+      appliedCuts: cuts,
+      changedByAssembly: cuts.some((c,i)=>c.startMs!==proposed[i]?.startMs||c.endMs!==proposed[i]?.endMs),
+    }).slice(0,12000),
+    resultSummary: JSON.stringify({
+      cuts:cuts.length,durationMs:cuts.reduce((n,c)=>n+c.endMs-c.startMs,0),
+      directStory, dropped:recovered?.dropped??0,
+      unsafeEdges:recovered?.unsafeEdges??0,
+      preservedFinisherEdges:verifiedFinisher,
+    }),
   })
   const title = `AI Producer ${ctx.config.roughCutIntent === 'highlights' ? 'highlights' : 'rough cut'} · ${source.title ?? 'stream'}`
   const created = await sysTool(ctx, budget, 'plan', 'create_project', {
@@ -240,10 +250,23 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
   }, out)
   if (!created.ok || !out.builder) throw new Error('rough_cut_builder_creation_failed: ' + created.summary)
   out.builder.preserveApprovedEdges = true
-  for (const cut of cuts) {
+  for (const [index,cut] of cuts.entries()) {
+    await logAiProducerStep({
+      runId:ctx.runId,stepIndex:++budget.steps,phase:'plan',
+      tool:'rough_cut_segment_execution_attempt',kind:'system',
+      argsSummary:JSON.stringify({index,sourceId:source.sourceId,startMs:cut.startMs,endMs:cut.endMs,beat:cut.beat,reason:cut.reason}),
+      resultSummary:'Applying original model-selected source timestamps',
+    })
     const added = await sysTool(ctx, budget, 'plan', 'add_clip_segment', {
       sourceId: source.sourceId, srcInMs: cut.startMs, srcOutMs: cut.endMs,
     }, out)
+    await logAiProducerStep({
+      runId:ctx.runId,stepIndex:++budget.steps,phase:'plan',
+      tool:'rough_cut_segment_execution_result',kind:'system',
+      argsSummary:JSON.stringify({index,startMs:cut.startMs,endMs:cut.endMs}),
+      resultSummary:JSON.stringify({ok:added.ok,summary:added.summary}).slice(0,1000),
+      error:added.ok?undefined:added.summary,
+    })
     if (!added.ok) throw new Error('rough_cut_assembly_segment_failed: ' + added.summary)
   }
   const validation = await sysTool(ctx, budget, 'plan', 'validate_plan', {}, out)
@@ -252,6 +275,12 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
     throw new Error('rough_cut_validation_unavailable: ' + validation.summary)
   }
   out.lastValidation = report
+  await logAiProducerStep({
+    runId:ctx.runId,stepIndex:++budget.steps,phase:'plan',
+    tool:'rough_cut_validation_diagnostics',kind:'validate',
+    argsSummary:JSON.stringify({directStory,appliedCuts:cuts}).slice(0,12000),
+    resultSummary:JSON.stringify({hardFailures:report.hardFailures,warnings:report.warnings,droppedFields:report.droppedFields}).slice(0,12000),
+  })
   if (report.warnings.length) out.notes.push('Rough cut review warnings: ' +
     report.warnings.map((x) => x.code + (x.atSrcMs == null ? '' : '@' + x.atSrcMs)).slice(0, 25).join(', '))
   if (report.hardFailures.length) {

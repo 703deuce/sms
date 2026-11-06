@@ -205,37 +205,42 @@ const footageWordsSubmission:ToolSchema = {
   },
 }
 
-/** Word IDs are the editorial decision. Timestamps are derived, never
- * guessed by the model. Reject unsafe/no-speech edits with actionable errors.
- * This function is used only by the full-transcript Story mode. */
+/** A pure conversion, not an editorial validator: Footage selects the first
+ * and last word; apply their original ASR start/end timestamps exactly.
+ * Do not seek gaps, adjust to a different word, or second-guess the cut.
+ * Only reject references which cannot possibly be executed (missing IDs,
+ * negative/inverted time, out-of-source ranges or nonchronological cuts).
+ * ASR word overlaps can produce imperfect seams: record them as diagnostics,
+ * not as a reason to replace an entire story. */
 export function resolveFootageWordSelections(
-  raw:unknown, words:ClipWord[], bounds:[number,number],
+  raw: unknown, words: ClipWord[], bounds: [number,number],
 ): EditorialSelection[] {
-  if(!Array.isArray(raw)||raw.length<1||raw.length>24)
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 24)
     throw new Error('footage_word_selection_invalid_count')
-  const converted:EditorialSelection[]=[]
-  for(let i=0;i<raw.length;i++){
-    const item=raw[i] as Record<string,unknown>|null
-    if(!item||!Number.isInteger(item.firstWordId)||!Number.isInteger(item.lastWordId))
-      throw new Error('footage_word_ids_required_for_passage_'+i)
-    const firstId=item.firstWordId as number,lastId=item.lastWordId as number
-    const first=words[firstId],last=words[lastId]
-    if(!first||!last||!Number.isFinite(first.s)||!Number.isFinite(first.e)||
-      !Number.isFinite(last.s)||!Number.isFinite(last.e)||lastId<firstId||
-      first.e<=first.s||last.e<=last.s)
-      throw new Error('footage_invalid_or_reversed_word_ids_passage_'+i)
-    const startAnchor=Math.round(first.s*1000)-WORD_GUARD_MS
-    const endAnchor=Math.round(last.e*1000)+WORD_GUARD_MS
-    const startMs=nearestLegalEdge(startAnchor,'startMs',words,bounds,undefined,1500)
-    const endMs=nearestLegalEdge(endAnchor,'endMs',words,bounds,undefined,1500)
-    if(startMs===null||endMs===null||
-      startMs>Math.round(first.s*1000)-WORD_GUARD_MS ||
-      endMs<Math.round(last.e*1000)+WORD_GUARD_MS)
-      throw new Error('footage_word_boundary_no_safe_seam_passage_'+i)
-    converted.push({startMs,endMs,beat:String(item.beat??'').slice(0,90),
-      reason:String(item.reason??'').slice(0,320)})
+  const selected: EditorialSelection[] = []
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i] as Record<string,unknown> | null
+    if (!item || !Number.isInteger(item.firstWordId) || !Number.isInteger(item.lastWordId))
+      throw new Error('footage_word_ids_required_for_passage_' + i)
+    const firstId = item.firstWordId as number
+    const lastId = item.lastWordId as number
+    const first = words[firstId], last = words[lastId]
+    if (!first || !last || lastId < firstId ||
+        !Number.isFinite(first.s) || !Number.isFinite(last.e))
+      throw new Error('footage_invalid_or_reversed_word_ids_passage_' + i)
+    const startMs = Math.round(first.s * 1000)
+    const endMs = Math.round(last.e * 1000)
+    if (startMs < bounds[0] || endMs > bounds[1] || startMs >= endMs)
+      throw new Error('footage_invalid_source_timestamps_passage_' + i)
+    if (selected.length && startMs < selected[selected.length-1]!.endMs)
+      throw new Error('footage_nonchronological_or_overlapping_passage_' + i)
+    selected.push({
+      startMs, endMs,
+      beat: String(item.beat ?? '').slice(0,90),
+      reason: String(item.reason ?? '').slice(0,320),
+    })
   }
-  return validSelections(converted,bounds,words)
+  return selected
 }
 
 function safeJson(input: string): Record<string, unknown> | null {
@@ -537,7 +542,7 @@ function selectionLogSummary(args: Record<string, unknown> | null): string {
   return JSON.stringify({ count: selections.length, intervals: selections.slice(0, 24).map((r) => {
     if (!r || typeof r !== 'object') return { invalid: true }
     const item = r as Record<string, unknown>
-    return { startMs: item.startMs, endMs: item.endMs }
+    return { startMs: item.startMs, endMs: item.endMs, firstWordId: item.firstWordId, lastWordId: item.lastWordId, beat: item.beat }
   }) })
 }
 
@@ -551,7 +556,7 @@ async function specialistEvent(
   await logAiProducerStep({
     runId: ctx.runId, stepIndex: budget.steps,
     phase: 'plan', tool: `specialist_${role}_${event}`, kind: 'validate',
-    argsSummary: JSON.stringify(diagnostic).slice(0, 4000),
+    argsSummary: JSON.stringify(diagnostic).slice(0, 12000),
     resultSummary: event,
     error,
   })
@@ -625,6 +630,9 @@ export async function runEditorialRole(
   let invalidSubmissions = 0
   await specialistEvent(ctx, budget, role, 'start', {
     wordCount: ctx.cache.words?.length ?? 0, sourceRangeMs: source.rangeMs,
+    fullTranscriptDelivered: Array.isArray(context.fullTranscript),
+    deliveredTranscriptWordCount: Array.isArray(context.fullTranscript) ? context.fullTranscript.length : 0,
+    storyOutline: role === 'footage' ? context.storyOutline : undefined,
     allowedCount: Array.isArray(context.curatedSelections) ? context.curatedSelections.length : undefined,
   })
   for (let turn = 0; turn < 10; turn++) {
@@ -681,7 +689,7 @@ export async function runEditorialRole(
               !args.excludeAsides.every((v) => typeof v === 'string')) {
             throw new Error('specialist_story_outline_invalid')
           }
-          await specialistEvent(ctx, budget, role, 'accepted', { turn, beatCount: args.beats.length })
+          await specialistEvent(ctx, budget, role, 'accepted', { turn, beatCount: args.beats.length, storyDecision: args })
           return args
         }
         if (role === 'footage' || role === 'dialogue') {
@@ -704,6 +712,22 @@ export async function runEditorialRole(
               count: selections.length, originalError: String((firstError as Error).message),
             })
           }
+          if (wordFootage) {
+            await specialistEvent(ctx, budget, role, 'direct_word_cuts', {
+              turn, submittedWordIds: args.selections,
+              executedCutTimestamps: selections.map((s,i) => ({
+                passage: i, startMs: s.startMs, endMs: s.endMs,
+                durationMs: s.endMs-s.startMs,
+                firstWordId: (args.selections as Array<{firstWordId:number}>)[i]?.firstWordId,
+                lastWordId: (args.selections as Array<{lastWordId:number}>)[i]?.lastWordId,
+                firstWord: ctx.cache.words[(args.selections as Array<{firstWordId:number}>)[i]?.firstWordId]?.w,
+                lastWord: ctx.cache.words[(args.selections as Array<{lastWordId:number}>)[i]?.lastWordId]?.w,
+                cutStartInsideOtherWord: Boolean(wordAtUnsafeBoundary(s.startMs,ctx.cache.words)),
+                cutEndInsideOtherWord: Boolean(wordAtUnsafeBoundary(s.endMs,ctx.cache.words)),
+              })),
+              note: 'Cut times exactly match the chosen word timestamps, no snapping or boundary veto.',
+            })
+          }
           const duration = durationAdvisory(selections, ctx.config.targetLengthS)
           await specialistEvent(ctx, budget, role, 'duration_advisory', { ...duration, acceptedDespiteDuration: duration.outsideTarget })
           await specialistEvent(ctx, budget, role, 'accepted', { turn, proposal: selectionLogSummary(args),
@@ -717,7 +741,7 @@ export async function runEditorialRole(
             !args.issues.every((i) => typeof i === 'string')) {
           throw new Error('specialist_review_invalid')
         }
-        await specialistEvent(ctx, budget, role, 'accepted', { turn, pass: args.pass, issueCount: args.issues.length })
+        await specialistEvent(ctx, budget, role, 'accepted', { turn, pass: args.pass, issueCount: args.issues.length, issues: args.issues.slice(0,15) })
         return { pass: args.pass, issues: args.issues.slice(0, 15) }
         } catch (error) {
           invalidSubmissions++
@@ -726,7 +750,7 @@ export async function runEditorialRole(
             ? context.curatedSelections as EditorialSelection[] | undefined
             : undefined
           const repairHint = wordFootage
-            ? {instruction:'Use existing firstWordId/lastWordId from the full source transcript; make complete thoughts, maintain chronology, and avoid overlapping passages.',errorCode}
+            ? {instruction:'Only fix invalid or nonexistent word IDs or out-of-order ranges. Do not change editorial choices to satisfy seam heuristics.',errorCode}
             : (role === 'footage' || role === 'dialogue')
             ? selectionRepairHint(args.selections, ctx.cache.words ?? [], source.rangeMs, allowed)
             : {}
@@ -830,6 +854,15 @@ export async function createEditorialHandoff(
         : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.',
     })
   } catch (error) {
+    // Never invent a generic Story for this baseline. Surface the model failure
+    // instead of asking Footage to cut a story that Story never selected.
+    if (!highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105) {
+      await specialistEvent(ctx,budget,'story','story_decision_failed_no_fallback',{
+        errorCode:String((error as Error)?.message??error).slice(0,500),
+        sourceRangeMs:source.rangeMs,
+      },String((error as Error)?.message??error).slice(0,500))
+      throw error
+    }
     // An unavailable paper outline must not destroy a sourced editable draft.
     await specialistEvent(ctx, budget, 'story', 'fallback', {
       errorCode: String((error as Error)?.message ?? error).slice(0, 200),
@@ -853,6 +886,7 @@ export async function createEditorialHandoff(
     endingRule: String(story.endingRule),
     highlightCriteria: String(story.highlightCriteria),
   }
+  await specialistEvent(ctx,budget,'story','story_handoff',{outline,sourceRangeMs:source.rangeMs,transcriptWords:ctx.cache.words.length})
   let found: Record<string, unknown>
   try {
     found = await runEditorialRole(ctx, out, budget, 'footage', {
@@ -868,6 +902,17 @@ export async function createEditorialHandoff(
         : 'Select coherent source intervals; evidence first, then editorial value.',
     })
   } catch (error) {
+    // Never replace a Story agent's editorial plan with an unrelated source tail.
+    // Surface the execution failure and log it rather than publishing a fake edit.
+    if (!highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105) {
+      await specialistEvent(ctx, budget, 'footage', 'direct_cut_failed_no_fallback', {
+        errorCode: String((error as Error)?.message ?? error).slice(0,500),
+        selectedStory: outline,
+        sourceRangeMs: source.rangeMs,
+        note: 'Do not substitute unrelated footage; no fabricated fallback edit.',
+      }, String((error as Error)?.message ?? error).slice(0,500))
+      throw error
+    }
     // Last-resort, honest first-pass source selection. Keep an editable draft
     // rather than losing the upload to failed model submissions.
     const [start, end] = source.rangeMs
@@ -892,14 +937,16 @@ export async function createEditorialHandoff(
     // Story and Footage now have the complete source and Footage's selected
     // words ARE the final cut. Do not run recursive Footage timestamp retries,
     // semantic boundary reviewers or Dialogue's independent boundary guesses.
-    // Validation and word-safe execution have already happened in the
-    // deterministic resolver. Runtime is advisory, not a cut-point objective.
+    // The exact word start/end timestamps were applied with no seam repair,
+    // word-safety veto, duration gate or source-tail fallback.
     await specialistEvent(ctx,budget,'footage','full_transcript_word_edit_handoff',{
       transcriptWords:ctx.cache.words.length,
       passageCount:footage.length,
       durationSeconds:selectionDurationS(footage),
       targetSeconds:ctx.config.targetLengthS,
-      note:'Footage chose source-grounded first/last word IDs from the full transcript; no Finisher or Dialogue recut',
+      appliedCuts: footage,
+      storyDecision: outline,
+      note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
     })
     return {outline,footage,cutPlan:footage}
   }
