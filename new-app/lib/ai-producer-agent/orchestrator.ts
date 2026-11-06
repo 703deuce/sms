@@ -272,6 +272,19 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
     })
     if (!added.ok) throw new Error('rough_cut_assembly_segment_failed: ' + added.summary)
   }
+  // Only the short Story direct-cut baseline: gentle anti-click audio fades.
+  // Keep every approved timestamp and picture cut exactly where Footage chose.
+  if (directStory) {
+    out.builder.setStoryVoiceCutFades(15)
+    await logAiProducerStep({
+      runId:ctx.runId,stepIndex:++budget.steps,phase:'plan',
+      tool:'rough_cut_voice_microfades',kind:'system',
+      argsSummary:JSON.stringify({
+        fadeMs:15,passages:cuts.length,cutSourceTimestamps:cuts.map(c=>[c.startMs,c.endMs]),
+      }),
+      resultSummary:'15ms voice gain ramps at each segment start/end; source timestamps unchanged',
+    })
+  }
   const validation = await sysTool(ctx, budget, 'plan', 'validate_plan', {}, out)
   const report = validation.data as ValidationReport | undefined
   if (!validation.ok || !report || !Array.isArray(report.hardFailures)) {
