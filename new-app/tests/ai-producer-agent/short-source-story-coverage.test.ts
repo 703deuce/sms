@@ -80,30 +80,36 @@ describe('short-form narrative coverage', () => {
     expect(coverage.needsReview).toBe(true)
   })
 
-  it('revisits the full 20-minute source and prefers sourced distant beats', async () => {
-    const model = fakeModel([
-      ['submit_story_outline', outline],
-      ['submit_footage_selections', { selections: local }],
-      ['submit_footage_selections', { selections: distributed }],
-      ['submit_dialogue_cut_plan', { selections: distributed }],
+  it('lets Footage choose distant beats directly from the complete 20-minute transcript',async()=>{
+    const model=fakeModel([
+      ['submit_story_outline',outline],
+      ['submit_footage_word_selections',{selections:[
+        {firstWordId:0,lastWordId:25,beat:'setup',reason:'origin'},
+        {firstWordId:400,lastWordId:430,beat:'challenge',reason:'actual struggle'},
+        {firstWordId:820,lastWordId:855,beat:'payoff',reason:'actual recorded outcome'},
+      ]}],
     ])
-    const result = await createEditorialHandoff(context(), output(), new Budget(), null)
-    expect(model.count()).toBe(4)
-    expect(model.prompts[2]).toContain('previousCoverage')
-    expect(model.prompts[2]).toContain('FINAL STORY PAPER EDIT REVISION')
-    expect(result.cutPlan).toEqual(distributed)
-    expect(result.cutPlan[2]!.startMs - result.cutPlan[1]!.endMs).toBeGreaterThan(300_000)
+    const result=await createEditorialHandoff(context(),output(),new Budget(),null)
+    expect(model.count()).toBe(2)
+    expect(model.prompts[0]).toContain('fullTranscript')
+    expect(model.prompts[1]).toContain('fullTranscript')
+    expect(model.prompts[1]).not.toContain('transcriptSamples')
+    expect(result.cutPlan).toHaveLength(3)
+    expect(result.cutPlan[2]!.startMs-result.cutPlan[1]!.endMs).toBeGreaterThan(300000)
   })
 
-  it('does not force unrelated distant jumps when a follow-up offers no better footage', async () => {
-    const model = fakeModel([
-      ['submit_story_outline', outline],
-      ['submit_footage_selections', { selections: local }],
-      ['submit_footage_selections', { selections: local }],
-      ['submit_dialogue_cut_plan', { selections: local }],
+  it('does not fabricate unrelated distant beats to reach the duration target',async()=>{
+    const model=fakeModel([
+      ['submit_story_outline',outline],
+      ['submit_footage_word_selections',{selections:[
+        {firstWordId:0,lastWordId:20,beat:'setup',reason:'complete local thought'},
+        {firstWordId:24,lastWordId:50,beat:'resolution',reason:'coherent local outcome'},
+      ]}],
     ])
-    const result = await createEditorialHandoff(context(), output(), new Budget(), null)
-    expect(model.count()).toBe(4)
-    expect(result.cutPlan).toEqual(local)
+    const result=await createEditorialHandoff(context(),output(),new Budget(),null)
+    expect(model.count()).toBe(2)
+    expect(result.cutPlan).toHaveLength(2)
+    expect(result.cutPlan[1]!.startMs-result.cutPlan[0]!.endMs).toBeLessThan(5000)
+    expect(result.cutPlan.reduce((n,x)=>n+x.endMs-x.startMs,0)).toBeLessThan(75000)
   })
 })
