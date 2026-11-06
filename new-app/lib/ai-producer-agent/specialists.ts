@@ -199,7 +199,7 @@ const footageWordsSubmission:ToolSchema = {
   name:'submit_footage_word_selections',
   description:'Select the exact first and last spoken word IDs for each complete passage; deterministic code converts IDs to safe timestamps.',
   parameters:{type:'object',additionalProperties:false,
-    properties:{selections:{type:'array',minItems:2,maxItems:24,
+    properties:{selections:{type:'array',minItems:1,maxItems:24,
       items:footageWordSelection}},
     required:['selections'],
   },
@@ -578,8 +578,8 @@ export async function runEditorialRole(
   const source = ctx.sources[0]
   if (!source?.rangeMs) throw new Error('specialist_source_window_missing')
   const highlightsMode = ctx.config.roughCutIntent === 'highlights'
-  const allowedTools = context.fullTranscriptWordIndexed === true
-    ? [] // Full context was supplied. No fragment-reading workflow.
+  const allowedTools = Array.isArray(context.fullTranscript) && context.fullTranscriptWordIndexed === true
+    ? [] // Full word-indexed context was supplied. No fragment-reading workflow.
     : TOOL_SCHEMAS.filter((tool) => readTools[role].includes(tool.name))
   const wordFootage=role==='footage' && context.fullTranscriptWordIndexed===true
   const submitTool=wordFootage?footageWordsSubmission:submitSchemas[role]
@@ -587,9 +587,11 @@ export async function runEditorialRole(
   const messages: LunaMessage[] = [
     { role: 'system', content: [
       FILM_EDITING_THEORY, SPECIALIST_ROLES[role],
-      ...(context.fullTranscriptWordIndexed === true ? [
-        'You have the FULL original transcript in order, not snippets. No relevant speech is omitted. The source transcript contains original stable word IDs and millisecond timing. Read the whole conversation and select complete, contextual thoughts.',
-        'You make editorial decisions; deterministic code executes them. For Footage submit ONLY firstWordId and lastWordId with beat and reason, never startMs/endMs. Finish a thought before cutting; do not stop on an introductory conjunction, incomplete quote, question, or setup. Do not fabricate outcomes to fill the time target.'
+      ...(Array.isArray(context.fullTranscript) ? [
+        'You have the FULL original transcript in order, not snippets. No relevant speech is omitted. Read the whole conversation before making editorial decisions.',
+        ...(role==='footage' && context.fullTranscriptWordIndexed===true ? [
+          'You make editorial decisions; deterministic code executes them. Submit ONLY firstWordId and lastWordId with beat and reason, never startMs/endMs. Finish a thought before cutting; do not stop on an introductory conjunction, incomplete quote, question, or setup. Do not fabricate outcomes to fill the time target.'
+        ] : []),
       ] : []),
       ...(ctx.config.editMode === 'just_chatting_rough_cut'
         ? [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role],
@@ -856,7 +858,7 @@ export async function createEditorialHandoff(
     found = await runEditorialRole(ctx, out, budget, 'footage', {
       ...base, storyOutline: outline,
       transcriptSamples:undefined,
-      fullTranscriptWordIndexed:true,
+      fullTranscriptWordIndexed:!highlightsMode && ctx.config.editMode==='just_chatting_rough_cut' && ctx.config.targetLengthS[1]<=105,
       fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord] — FULL original source in chronological order',
       fullTranscript:completeTranscriptWords(ctx.cache.words,true),
       instruction: highlightsMode
