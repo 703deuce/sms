@@ -27,7 +27,7 @@ const trimmed = [
 ]
 const landings = [
   { startMs: 311050, endMs: 311850, quote: 'Come on over' },
-  { startMs: 703945, endMs: 704185, quote: 'Okay' },
+  { startMs: 703625, endMs: 704185, quote: 'he was Okay' },
   { startMs: 1146455, endMs: 1147575, quote: 'didn\'t know' },
 ]
 const wordEvidence = [
