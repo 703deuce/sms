@@ -124,7 +124,6 @@ export function verifyStoryFinish(
   if (!normalized(payoffSpeech).includes(normalized(payoff.quote))) {
     throw new Error('finisher_unsourced_payoff_quote')
   }
-  verifyFinishedThoughts(selections, words)
   const last = selections[selections.length - 1]!
   // Allow a natural brief reaction after the payoff, not another 99 seconds
   // of new subject matter. A different narrative may justify a longer edit,
@@ -137,6 +136,9 @@ export function verifyStoryFinish(
       /\.{2,}$/.test(lastWord)) {
     throw new Error('finisher_mid_sentence_ending')
   }
+  // Enforce sentence completeness after the established payoff/edge error
+  // diagnostics, so failures remain actionable instead of being masked.
+  verifyFinishedThoughts(selections, words)
   const duration = seconds(selections)
   if (duration > target[1] * 1.2) throw new Error('finisher_still_over_target')
   // Avoid a technically valid two-second soundbite framed as a complete story.
@@ -263,10 +265,10 @@ export function verifyHighlightsFinish(
       throw new Error('highlights_finisher_kept_talk_after_landing')
     }
     const spoken = sourceWords(words, selection.startMs, selection.endMs)
-    verifyFinishedThoughts([selection], words)
     if (!spoken.length || dangling(spoken[spoken.length - 1]!.w)) {
       throw new Error('highlights_finisher_mid_sentence_ending')
     }
+    verifyFinishedThoughts([selection], words)
     // Detect obvious mid-sentence cut-ins by requiring an actual sentence
     // boundary shortly before each selected opening, or source start. The
     // context rule is advisory elsewhere; here only an obvious dangling
