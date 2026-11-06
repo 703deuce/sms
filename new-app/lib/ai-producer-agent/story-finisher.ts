@@ -65,6 +65,34 @@ function transcriptFor(words: ClipWord[], selections: EditorialSelection[]) {
   }))
 }
 
+/** A legal millisecond is not an editorial sentence boundary.
+ * Check EVERY chosen join, not only the final passage. Deepgram can assign
+ * commas to dangling clauses, and a cut on the edge of "be" is still
+ * grammatically incomplete even if it doesn't split a word.
+ * Do not infer punctuation from the end of a random transcript window:
+ * examine only the exact retained words for each source selection.
+ */
+export function verifyFinishedThoughts(
+  selections: EditorialSelection[], words: ClipWord[],
+): void {
+  for (const [index, selection] of selections.entries()) {
+    const spoken = words.filter(w =>
+      w.e * 1000 > selection.startMs && w.s * 1000 < selection.endMs)
+      .sort((a,b) => a.s - b.s)
+    if (spoken.length < 2) throw new Error('finisher_segment_without_speech')
+    const tail = spoken[spoken.length-1]!.w.trim()
+    const terminal = /[.!?]["'”’]?$/.test(tail) && !/\\.{2,}["'”’]?$/.test(tail)
+    const hasPunctuation = spoken.some(w => /[.!?]["'”’]?$/.test(w.w.trim()))
+    const trailingFunction = /^(a|an|the|in|on|at|to|for|of|and|but|or|because|with|from|just|i|we|he|she|they|it|be|do|does|did|would|could|should|want|wanted|if|not|that|this|those|these)$/i.test(tail.replace(/[.,!?]+$/, ''))
+    // Missing ALL punctuation is an ASR limitation, not proof of a bad
+    // edit. But if the passage includes sentence punctuation then a cut on
+    // "course," or "over," is demonstrably not the last complete sentence.
+    if (trailingFunction || /\\.{2,}$/.test(tail) || (hasPunctuation && !terminal)) {
+      throw new Error('finisher_incomplete_segment_' + index)
+    }
+  }
+}
+
 /** Only accept a payoff actually spoken inside the final approved picture edit.
  * No fictional success, no arbitrary sentence cutoff and no slipping beyond
  * Footage's sourced candidate intervals.
@@ -96,6 +124,7 @@ export function verifyStoryFinish(
   if (!normalized(payoffSpeech).includes(normalized(payoff.quote))) {
     throw new Error('finisher_unsourced_payoff_quote')
   }
+  verifyFinishedThoughts(selections, words)
   const last = selections[selections.length - 1]!
   // Allow a natural brief reaction after the payoff, not another 99 seconds
   // of new subject matter. A different narrative may justify a longer edit,
@@ -111,7 +140,7 @@ export function verifyStoryFinish(
   const duration = seconds(selections)
   if (duration > target[1] * 1.2) throw new Error('finisher_still_over_target')
   // Avoid a technically valid two-second soundbite framed as a complete story.
-  if (duration < Math.min(target[0] * 0.5, 25)) throw new Error('finisher_overshort_story')
+  if (duration < Math.max(25, target[0] * 0.75)) throw new Error('finisher_overshort_story')
   return { selections, payoff: {
     startMs: payoff.startMs, endMs: payoff.endMs, quote: payoff.quote.slice(0, 180),
   }, editorialReason: p.editorialReason.slice(0, 500) }
@@ -332,7 +361,7 @@ export async function runStoryFinisher(
     { role: 'system', content: [
       'You are STORY FINISHER, a specialist between Footage and Dialogue. Your only jobs are: identify the ACTUAL recorded payoff, remove irrelevant surrounding talk, and end the story at a complete natural thought. Do not assemble media or change chronology.',
       'Use ONLY intervals inside the provided Footage selections; no invented quotes or events. You may shorten or omit passages, not add new footage. Do not conflate a promised outcome in the outline with evidence in the transcript. If the promised payoff does not exist in the sourced words, DO NOT fake it; the run preserves an editable draft flagged for review.',
-      'A source-backed payoff is a precise 2+ word quote and timestamp, included in the LAST selected passage. Keep only a short natural reaction after the payoff (<=8 seconds). Do not leave a dangling sentence. Aim for the target duration, not an overlong transcript dump. Preserve the essential setup, obstacle, and result.',
+      'A source-backed payoff is a precise 2+ word quote and timestamp, included in the LAST selected passage. Keep only a short natural reaction after the payoff (<=8 seconds). EVERY retained passage must END at a complete sentence, not a comma or connector; a word-safe boundary alone is not enough. If you end a sentence before a dangling continuation, stop at that sentence timestamp. Do not keep the lead-in to the next thought. Aim for the target duration (at least 75% of requested minimum), not a 51-second cut when 75-105 seconds were requested. Preserve essential setup, obstacle, and result.',
       'Use absolute source milliseconds and whole-word boundaries. Submit via submit_story_finish. The supplied segment transcripts are real ASR evidence, with 3 seconds on either side for context.',
     ].join('\n\n') },
     { role: 'user', content: JSON.stringify({
@@ -374,7 +403,7 @@ export async function runStoryFinisher(
       })
       if (call) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({
         ok: false, error: reason,
-        instruction: 'Only quote real retained speech, end within 8 seconds after payoff, use word-safe cut boundaries, stay within curated intervals and target duration. Resubmit.',
+        instruction: 'Every selected segment must end on an actual complete sentence with sentence-final punctuation where the transcript provides it (never a comma, dangling And, or clause fragment). Match spoken payoff words exactly, preserve target length, and stay within curated intervals. Resubmit.',
       }) })
     }
   }
