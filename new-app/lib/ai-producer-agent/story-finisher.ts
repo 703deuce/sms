@@ -81,13 +81,13 @@ export function verifyFinishedThoughts(
       .sort((a,b) => a.s - b.s)
     if (spoken.length < 2) throw new Error('finisher_segment_without_speech')
     const tail = spoken[spoken.length-1]!.w.trim()
-    const terminal = /[.!?]["'”’]?$/.test(tail) && !/\\.{2,}["'”’]?$/.test(tail)
+    const terminal = /[.!?]["'”’]?$/.test(tail) && !/\.{2,}["'”’]?$/.test(tail)
     const hasPunctuation = spoken.some(w => /[.!?]["'”’]?$/.test(w.w.trim()))
     const trailingFunction = /^(a|an|the|in|on|at|to|for|of|and|but|or|because|with|from|just|i|we|he|she|they|it|be|do|does|did|would|could|should|want|wanted|if|not|that|this|those|these)$/i.test(tail.replace(/[.,!?]+$/, ''))
     // Missing ALL punctuation is an ASR limitation, not proof of a bad
     // edit. But if the passage includes sentence punctuation then a cut on
     // "course," or "over," is demonstrably not the last complete sentence.
-    if (trailingFunction || /\\.{2,}$/.test(tail) || (hasPunctuation && !terminal)) {
+    if (trailingFunction || /\.{2,}$/.test(tail) || (hasPunctuation && !terminal)) {
       throw new Error('finisher_incomplete_segment_' + index)
     }
   }
@@ -204,7 +204,7 @@ function sourceWords(words: ClipWord[], startMs: number, endMs: number): ClipWor
 }
 function dangling(w: string): boolean {
   return /^(a|an|the|in|on|at|to|for|of|and|but|or|because|with|from|just|i|we|he|she|they|it)$/i.test(w.trim().replace(/[.,!?]+$/, '')) ||
-    /\\.{2,}$/.test(w.trim())
+    /\.{2,}$/.test(w.trim())
 }
 function verifySpokenQuote(words: ClipWord[], landing: StoryPayoff): void {
   if (!Number.isInteger(landing.startMs) || !Number.isInteger(landing.endMs) ||
@@ -263,6 +263,7 @@ export function verifyHighlightsFinish(
       throw new Error('highlights_finisher_kept_talk_after_landing')
     }
     const spoken = sourceWords(words, selection.startMs, selection.endMs)
+    verifyFinishedThoughts([selection], words)
     if (!spoken.length || dangling(spoken[spoken.length - 1]!.w)) {
       throw new Error('highlights_finisher_mid_sentence_ending')
     }
