@@ -7,6 +7,7 @@ import { lunaChat, type LunaMessage } from '@/lib/ai-producer-agent/luna-client'
 import { logAiProducerStep } from '@/lib/ai-producer-agent/log'
 import { checkEditorialSelections, snapEditorialSelections, type EditorialSelection, type EditorialOutline, type FootagePreferredEdit } from '@/lib/ai-producer-agent/specialists'
 import type { ToolSchema } from '@/lib/ai-producer-agent/tools/schemas'
+import { wordAtUnsafeBoundary } from '@/lib/ai-producer-agent/validate'
 
 export type StoryPayoff = { startMs: number; endMs: number; quote: string }
 export type StoryFinisherDecision = {
@@ -466,4 +467,129 @@ export async function runStoryFinisher(
     }
   }
   throw new Error(reason)
+}
+
+/**
+ * Short-Story boundary polish only. Footage already chose the movie; this pass
+ * may remove a few extra words at each edge, never rescout or rebuild a story.
+ * No entire-source transcript, separate preferred-edit arrays, or payoff search.
+ */
+const boundarySubmission: ToolSchema = {
+  name: 'submit_story_boundary_polish',
+  description: 'Polish only the existing first/last spoken words of each Story cut.',
+  parameters: {
+    type: 'object', additionalProperties: false,
+    properties: {
+      selections: {
+        type: 'array', minItems: 1, maxItems: 24,
+        items: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            startMs: { type: 'integer', minimum: 0 },
+            endMs: { type: 'integer', minimum: 0 },
+            beat: { type: 'string' },
+            reason: { type: 'string' },
+          },
+          required: ['startMs','endMs','beat','reason'],
+        },
+      },
+    },
+    required: ['selections'],
+  },
+}
+
+export function verifyStoryBoundaryPolish(
+  raw: unknown, original: EditorialSelection[], words: ClipWord[], bounds: [number, number],
+): EditorialSelection[] {
+  if (!Array.isArray(raw) || raw.length !== original.length)
+    throw new Error('boundary_polish_must_keep_every_selected_passage')
+  const polished: EditorialSelection[] = raw.map((entry, i) => {
+    const prior = original[i]!
+    if (!entry || typeof entry !== 'object') throw new Error('boundary_polish_invalid_entry')
+    const r = entry as Partial<EditorialSelection>
+    if (!Number.isInteger(r.startMs) || !Number.isInteger(r.endMs) ||
+      typeof r.startMs !== 'number' || typeof r.endMs !== 'number' ||
+      r.startMs < prior.startMs || r.endMs > prior.endMs ||
+      r.startMs > prior.startMs + 3_000 || r.endMs < prior.endMs - 3_000 ||
+      r.endMs <= r.startMs || r.startMs < bounds[0] || r.endMs > bounds[1]) {
+      throw new Error('boundary_polish_outside_original_or_3s_edge_limit')
+    }
+    // Only shift to a boundary that does not slice through an ASR word.
+    if (wordAtUnsafeBoundary(r.startMs, words) || wordAtUnsafeBoundary(r.endMs, words))
+      throw new Error('boundary_polish_edge_inside_word')
+    if (!words.some(w => w.e * 1000 > r.startMs! && w.s * 1000 < r.endMs!))
+      throw new Error('boundary_polish_no_spoken_words')
+    return { ...prior, startMs: r.startMs, endMs: r.endMs }
+  })
+  for (let i = 1; i < polished.length; i++)
+    if (polished[i]!.startMs < polished[i-1]!.endMs)
+      throw new Error('boundary_polish_overlapping_ranges')
+  return polished
+}
+
+export async function runStoryBoundaryFinisher(
+  ctx: ToolCtx, budget: Budget, outline: EditorialOutline,
+  footage: EditorialSelection[],
+): Promise<EditorialSelection[]> {
+  const source = ctx.sources[0]
+  const words = ctx.cache.words ?? []
+  if (!source?.rangeMs || !footage.length || !words.length) return footage
+  const contextMs = 10_000
+  const excerpts = footage.map((selection, index) => ({
+    index, selection,
+    transcript: fullFinisherTranscript(words, [
+      Math.max(source.rangeMs![0], selection.startMs - contextMs),
+      Math.min(source.rangeMs![1], selection.endMs + contextMs),
+    ]),
+  }))
+  const messages: LunaMessage[] = [
+    { role: 'system', content: [
+      'You are a BOUNDARY POLISHER, not an editor or story selector. The Footage Agent has already made the final short edit.',
+      'Keep EXACTLY the same cuts in the same order. Do not add, drop, move to another source moment, or change the story. Only remove extra words at the BEGINNING or END of each existing passage.',
+      'Each start may move FORWARD at most 3000ms; each end may move BACKWARD at most 3000ms. No expansions. If the present edge is already natural, return it unchanged.',
+      'Use the nearby transcript for conversational context and identify the last spoken word that completes the thought. Avoid dangling fragments or beginnings of new thoughts. Small authentic reactions are allowed.',
+      'Return the existing beat and reason for every interval. Use the original source millisecond timestamps and word-safe boundaries. Never target an exact duration or trim the payoff just to save seconds.',
+    ].join('\n\n') },
+    { role: 'user', content: JSON.stringify({
+      story: { logline: outline.logline, essentialSetup: outline.essentialSetup,
+        intendedPayoff: outline.intendedPayoff, endingRule: outline.endingRule },
+      selectedPassages: excerpts,
+      tupleFormat: '[sourceStartMs,sourceEndMs,word]',
+      instruction: 'Return one selection per input, same order. Trim only truly unnecessary edge words; keep everything else unchanged.',
+    }) },
+  ]
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (budget.state() === 'hard') break
+    const response = await lunaChat({ messages, tools: [boundarySubmission], toolChoice: 'required' })
+    budget.steps++
+    budget.addLuna(response.usage)
+    messages.push(response.message)
+    const call = response.message.tool_calls?.find(c => c.function.name === boundarySubmission.name)
+    try {
+      if (!call) throw new Error('boundary_polish_missing_submission')
+      const candidate = JSON.parse(call.function.arguments) as { selections?: unknown }
+      const result = verifyStoryBoundaryPolish(candidate.selections, footage, words, source.rangeMs)
+      await logAiProducerStep({
+        runId: ctx.runId, stepIndex: budget.steps, phase: 'plan',
+        tool: 'story_boundary_polish_accepted', kind: 'validate',
+        argsSummary: JSON.stringify({ before: footage.map(x=>[x.startMs,x.endMs]),
+          after: result.map(x=>[x.startMs,x.endMs]) }).slice(0,3000),
+        resultSummary: 'polished only original passage edges',
+      })
+      return result
+    } catch (error) {
+      const reason = String((error as Error).message).slice(0,200)
+      await logAiProducerStep({
+        runId: ctx.runId, stepIndex: budget.steps, phase: 'plan',
+        tool: 'story_boundary_polish_rejected', kind: 'validate',
+        error: reason, resultSummary: reason,
+      })
+      if (call) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({
+        ok:false,error:reason,
+        instruction:'Do not rethink the edit. Keep one passage per original, only tighten each start/end by up to 3 seconds, and preserve valid untouched edges.',
+      }) })
+    }
+  }
+  // A failed polish must NEVER erase the Footage cut.
+  return footage
 }
