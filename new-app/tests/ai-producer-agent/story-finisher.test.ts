@@ -232,7 +232,7 @@ describe('source-verified Story Finisher', () => {
     expect(verifyStoryBoundaryPolish(okay,small,words,[300000,1500000])).toEqual(small)
     expect(()=>verifyStoryBoundaryPolish([okay[1],okay[0]],small,words,[300000,1500000]))
       .toThrow('boundary_polish_outside_original_or_3s_edge_limit')
-    expect(()=>verifyStoryBoundaryPolish([{...okay[0],endMs:309000},okay[1]],small,words,[300000,1500000]))
+    expect(()=>verifyStoryBoundaryPolish([{...okay[0],endMs:308000},okay[1]],small,words,[300000,1500000]))
       .toThrow('boundary_polish_outside_original_or_3s_edge_limit')
     expect(()=>verifyStoryBoundaryPolish([okay[0]],small,words,[300000,1500000]))
       .toThrow('boundary_polish_must_keep_every_selected_passage')
