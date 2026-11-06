@@ -12,6 +12,12 @@ export function createProject(ctx: ToolCtx, out: OutputState, args: Record<strin
   out.builder = new DraftEditsBuilder(bounds, main, ctx.cache.words ?? [], ctx.rmsLookup ?? (() => []))
   out.builder.aspectRatio = ctx.config.editMode === 'just_chatting_rough_cut'
     ? '16:9' : (args.aspect as typeof out.builder.aspectRatio) ?? '9:16'
+  // Conversation edits default to the untouched full source frame. On a three-
+  // person two-shot, speaker_follow without face boxes zooms the ENTIRE frame.
+  // Creators can enable a verified speaker crop manually in the editor.
+  if (ctx.config.editMode === 'just_chatting_rough_cut') {
+    out.builder.setLayout('full_frame')
+  }
   out.pendingTitle = String(args.title ?? 'AI Producer edit')
   out.pendingSources = sources
   return { ok: true, summary: `builder ready main=${main}`, data: { mainSourceId: main } }

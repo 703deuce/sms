@@ -34,6 +34,7 @@ export function NewEditDialog({
   defaultSources: NewEditDialogSource[]
 }) {
   const [outputType, setOutputType] = useState<'single_payoff' | 'montage' | 'story' | 'auto' | 'rough_cut'>('auto')
+  const [durationPreset, setDurationPreset] = useState<'30' | '60' | '90' | '180-480' | '480-900'>('180-480')
   const [platform, setPlatform] = useState<'tiktok' | 'shorts' | 'reels'>('tiktok')
   const [instruction, setInstruction] = useState('')
   const [runId, setRunId] = useState<string | null>(null)
@@ -69,7 +70,13 @@ export function NewEditDialog({
                 sourceId: s.sourceId || `src_${i}`,
               })),
           outputType: outputType === 'rough_cut' ? 'story' : outputType,
-          ...(outputType === 'rough_cut' ? { editMode: 'just_chatting_rough_cut', targetLengthS: [180, 480] } : {}),
+          ...(outputType === 'rough_cut' ? {
+            editMode: 'just_chatting_rough_cut',
+            targetLengthS: ({
+              '30': [25, 40], '60': [50, 75], '90': [75, 105],
+              '180-480': [180, 480], '480-900': [480, 900],
+            } as Record<typeof durationPreset, [number, number]>)[durationPreset],
+          } : {}),
           platform,
           genre: 'irl_just_chatting',
           instruction: instruction.trim() || undefined,
@@ -83,7 +90,7 @@ export function NewEditDialog({
     } finally {
       setSubmitting(false)
     }
-  }, [defaultSources, instruction, outputType, platform])
+  }, [defaultSources, instruction, outputType, platform, durationPreset])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -115,7 +122,7 @@ export function NewEditDialog({
                   }
                 >
                   <option value="auto">Auto (decide from footage)</option>
-                  <option value="rough_cut">Just Chatting · rough cut (3–8 min)</option>
+                  <option value="rough_cut">AI interview / conversation cut</option>
                   <option value="single_payoff">Single setup → payoff</option>
                   <option value="montage">Montage</option>
                   <option value="story">Story (multi-beat / sources)</option>
@@ -135,9 +142,23 @@ export function NewEditDialog({
               </div>
             </div>
             {outputType === 'rough_cut' ? (
-              <p className="rounded-md border px-3 py-2 text-xs text-muted-foreground" data-testid="rough-cut-source-info">
-                Uses the last 20 minutes of the project's original recording (not its extracted clips) (minimum 5 minutes). Creates one new editable 3–8 minute rough cut with complete thoughts, conservative dialogue cuts, no automatic posting or paid visual generation. Review all cuts before export.
-              </p>
+              <div className="space-y-2">
+                <Label htmlFor="ai-producer-duration">Desired edited length</Label>
+                <select id="ai-producer-duration" data-testid="ai-producer-duration"
+                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  value={durationPreset}
+                  onChange={(e) => setDurationPreset(e.target.value as typeof durationPreset)}
+                >
+                  <option value="30">30 seconds · highlights</option>
+                  <option value="60">60 seconds · highlights</option>
+                  <option value="90">90 seconds · highlights</option>
+                  <option value="180-480">3–8 minutes · conversational edit</option>
+                  <option value="480-900">8–15 minutes · longer conversational edit</option>
+                </select>
+                <p className="rounded-md border px-3 py-2 text-xs text-muted-foreground" data-testid="rough-cut-source-info">
+                  Uses the source recording (up to its last 20 minutes; minimum 5 minutes). Short edits focus on a strong setup and payoff; longer edits preserve the conversation. The chosen length guides the AI, but it can deliver a shorter or longer editable cut if that makes a better story. Clean 16:9 framing by default; no auto-posting.
+                </p>
+              </div>
             ) : null}
             <div className="space-y-1">
               <Label>Optional instruction</Label>
