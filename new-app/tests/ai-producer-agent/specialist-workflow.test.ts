@@ -71,7 +71,10 @@ describe('AI Producer specialist execution', () => {
       expect(names).not.toContain('add_clip_segment')
       expect(names).not.toContain('create_project')
     }
-    expect(toolNames[0]).toContain('get_transcript')
+    // Story now has every transcript word in its initial context and has no
+    // reason to retrieve disconnected snippets.
+    expect(toolNames[0]).not.toContain('get_transcript')
+    expect(toolNames[0]).toContain('submit_story_outline')
     expect(toolNames[1]).toContain('analyze_visual')
     expect(toolNames[2]).toContain('get_audio_energy')
     expect(budget.steps).toBe(3)
