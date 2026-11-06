@@ -548,10 +548,19 @@ export function boundaryWordContext(
     // original selection even when it spans many sentences.
     const firstSentence=sentenceEndIndices.findIndex(e=>e>=first)
     const lastSentence=sentenceEndIndices.findIndex(e=>e>=last)
-    const contextFirstSentence=Math.max(0,firstSentence-CONTEXT_SENTENCES)
-    const contextLastSentence=Math.min(sentenceEndIndices.length-1,lastSentence+CONTEXT_SENTENCES)
-    const left=contextFirstSentence===0?0:sentenceEndIndices[contextFirstSentence-1]!+1
-    const right=sentenceEndIndices[contextLastSentence]!
+    let contextFirstSentence=Math.max(0,firstSentence-CONTEXT_SENTENCES)
+    let contextLastSentence=Math.min(sentenceEndIndices.length-1,lastSentence+CONTEXT_SENTENCES)
+    // A distant recording event is not neighboring sentence context. Never
+    // cross a conversational break (e.g. a word 13 minutes later), even if
+    // missing punctuation makes it the next ASR sentence.
+    let left=contextFirstSentence===0?0:sentenceEndIndices[contextFirstSentence-1]!+1
+    let right=sentenceEndIndices[contextLastSentence]!
+    for(let i=first;i>left;i--){
+      if(timed[i]!.startMs-timed[i-1]!.endMs>30000){left=i;break}
+    }
+    for(let i=last;i<right;i++){
+      if(timed[i+1]!.startMs-timed[i]!.endMs>30000){right=i;break}
+    }
     return {
       index,currentStartMs:selection.startMs,currentEndMs:selection.endMs,
       beat:selection.beat,purpose:selection.reason,
@@ -617,10 +626,10 @@ export function resolveStoryWordBoundaries(
     // The model is only allowed to extend into the surrounding sentence
     // context; trims must stay inside this original source passage.
     const leftLimit=Math.max(bounds[0],index?original[index-1]!.endMs:bounds[0],
-      context[index]!.words[0]?.startMs??prior.startMs)
+      (context[index]!.words[0]?.startMs??prior.startMs)-WORD_GUARD_MS)
     const rightLimit=Math.min(bounds[1],
       index+1<original.length?original[index+1]!.startMs:bounds[1],
-      context[index]!.words.at(-1)?.endMs??prior.endMs)
+      (context[index]!.words.at(-1)?.endMs??prior.endMs)+WORD_GUARD_MS)
     if(first && Number.isFinite(first.s)&&Number.isFinite(first.e) && first.e>first.s){
       const wordStart=Math.round(first.s*1000)
       if(wordStart>=leftLimit && wordStart<prior.endMs){
