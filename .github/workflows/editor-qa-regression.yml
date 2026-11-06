@@ -86,6 +86,7 @@ jobs:
             tests/ai-producer-agent/specialists.test.ts \
             tests/ai-producer-agent/specialist-workflow.test.ts \
             tests/ai-producer-agent/orchestrator.mock-luna.test.ts \
+            tests/ai-producer-agent/ai-producer-export.test.ts \
             tests/ai-producer-agent/system-prompt.test.ts \
             tests/ai-producer-agent/validate.items.test.ts
 
