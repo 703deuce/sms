@@ -74,7 +74,7 @@ const submitSchemas: Record<EditorialRole, ToolSchema> = {
   },
   dialogue: {
     name: names.dialogue,
-    description: 'Submit final whole-thought cutting boundaries inside the curated intervals; 3-8min total.',
+    description: 'Submit final whole-thought boundaries preserving the story beats and requested output length, inside curated intervals.',
     parameters: {
       type: 'object', additionalProperties: false,
       properties: { selections: { type: 'array', minItems: 2, maxItems: 24, items: selection } },
@@ -246,6 +246,12 @@ export function recoverEditorialSelections(
     // smallest safe adjustment first, then preserve original editorial bounds.
     let startMs = snappedStart ?? r.startMs
     let endMs = snappedEnd ?? r.endMs
+    // Long-range safety snapping must not silently erase an entire story beat.
+    // In dense ASR preserve the sourced candidate and flag its word edge.
+    if (endMs - startMs < Math.max(3000, (r.endMs - r.startMs) * 0.8)) {
+      startMs = r.startMs
+      endMs = r.endMs
+    }
     if (endMs - startMs < 3000) {
       startMs = r.startMs
       endMs = r.endMs
@@ -384,7 +390,7 @@ export async function runEditorialRole(
       outputTargetSeconds: ctx.config.targetLengthS,
       editingIntent: ctx.config.targetLengthS[1] <= 105 ? 'short_highlight' : 'conversational_long_form',
       ...((role === 'footage' || role === 'dialogue')
-        ? { selectionDurationInstruction: 'Aim for the requested duration with coherent story-driven selections. Duration is a preference, not a reason to withhold an editable cut. Never add irrelevant padding or invent footage.' }
+        ? { selectionDurationInstruction: 'Select enough sourced material for the specified target duration, retaining the beginning, essential development and payoff. Do not submit a lone isolated excerpt as a complete story. If there is truly insufficient relevant footage, submit the best complete edit without padding; the system will preserve that draft.' }
         : {}),
       ...(role === 'qa' && ctx.config.editMode === 'just_chatting_rough_cut'
         ? { requiredReviewChecks: JUST_CHATTING_REVIEW_CHECKS } : {}),
@@ -565,7 +571,9 @@ export async function createEditorialHandoff(
     transcriptSamples: representativeTranscript(ctx.cache.words, source.rangeMs),
     observedMoments: ctx.cache.momentsSummary,
     inventory: ctx.cache.inventorySummary,
-    audienceGoal: 'Coherent conversational 3–8 minute editable stream edit, never a shorts montage',
+    audienceGoal: ctx.config.targetLengthS[1] <= 105
+      ? 'A standalone short-form story with an understandable setup, development and payoff, targeting the requested duration'
+      : 'A coherent conversational long-form edit preserving context and natural pacing',
     editingPriorities: ['meaning and context','narrative payoff','natural dialogue and reactions','no repetition','restrained polish'],
   }
   let story: Record<string, unknown>
@@ -609,7 +617,38 @@ export async function createEditorialHandoff(
     })
     found = { selections: recovered.selections }
   }
-  const footage = found.selections as EditorialSelection[]
+  let footage = found.selections as EditorialSelection[]
+  const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
+  const shortStory = ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
+  // One targeted *editorial* retry instead of accepting a 20s excerpt as a
+  // requested 90s story. Preserve original cuts if the revision is worse.
+  if (shortStory && selectionDurationS(footage) < minimumSeconds * 0.8 &&
+      budget.state() !== 'hard') {
+    const beforeSeconds = selectionDurationS(footage)
+    try {
+      const revised = await runEditorialRole(ctx, out, budget, 'footage', {
+        ...base, storyOutline: outline,
+        previousSelections: footage,
+        previousDurationSeconds: beforeSeconds,
+        missingSecondsToMinimum: Math.round(minimumSeconds - beforeSeconds),
+        instruction: 'REVISION REQUIRED: Previous footage proposal is substantially too short and does not establish a complete setup-to-payoff story. Reinspect source evidence, select additional RELEVANT context, turning points, and conclusion from the same recording. Aim for the requested duration, never pad with unrelated footage. If the source truly lacks more story material, preserve the strongest complete short.',
+      })
+      const candidates = revised.selections as EditorialSelection[]
+      const candidateSeconds = selectionDurationS(candidates)
+      // Favor a materially fuller edit without rewarding aimless overlong cuts.
+      if (candidateSeconds > beforeSeconds + 5 &&
+          candidateSeconds <= maximumSeconds * 1.5) {
+        footage = candidates
+        await specialistEvent(ctx, budget, 'footage', 'short_story_repaired', {
+          beforeSeconds, afterSeconds: candidateSeconds, count: footage.length,
+        })
+      }
+    } catch (error) {
+      await specialistEvent(ctx, budget, 'footage', 'short_story_repair_unavailable', {
+        errorCode: String((error as Error)?.message ?? error).slice(0, 200),
+      })
+    }
+  }
   let refined: Record<string, unknown>
   try {
     refined = await runEditorialRole(ctx, out, budget, 'dialogue', {
@@ -623,10 +662,28 @@ export async function createEditorialHandoff(
     })
     refined = { selections: footage }
   }
-  const cutPlan = refined.selections as EditorialSelection[]
+  let cutPlan = refined.selections as EditorialSelection[]
+  // Dialogue can tighten joins, but must not silently erase the setup or payoff
+  // that Footage already sourced. Prefer the fuller source-grounded selection
+  // to an isolated excerpt when a requested short would otherwise collapse.
+  if (shortStory && selectionDurationS(cutPlan) < minimumSeconds * 0.8 &&
+      selectionDurationS(footage) > selectionDurationS(cutPlan) + 5) {
+    await specialistEvent(ctx, budget, 'dialogue', 'restored_curated_story', {
+      dialogueSeconds: selectionDurationS(cutPlan),
+      restoredSeconds: selectionDurationS(footage),
+      reason: 'dialogue_removed_required_story_or_duration',
+    })
+    cutPlan = footage
+  }
   const duration = selectionDurationS(cutPlan)
   const [lo, hi] = ctx.config.targetLengthS
   if (duration < lo || duration > hi) {
+    if (shortStory && duration < lo * 0.8) {
+      await specialistEvent(ctx, budget, 'dialogue', 'story_incomplete_best_effort', {
+        actualSeconds: duration, minimumSeconds: lo, cuts: cutPlan.length,
+        note: 'Source-grounded editable draft preserved; target not achieved.',
+      })
+    }
     await specialistEvent(ctx, budget, 'dialogue', 'handoff_duration_advisory', {
       actualSeconds: duration, minimumSeconds: lo, maximumSeconds: hi,
       note: 'Deliver the best coherent editable cut even when shorter or longer than requested.',
