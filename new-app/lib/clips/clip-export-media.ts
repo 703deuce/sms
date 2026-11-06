@@ -1,6 +1,6 @@
 import { isFullVideoSettings } from '@/lib/clips/full-video'
 
-/** FVfix2: full-video clips have no preview.mp4; export uses upload/proxy/segment keys. */
+/** Full-video and AI Producer draft clips have no preview.mp4; export uses the source recording. */
 export function clipExportMediaReady(
   clip: {
     previewKey: string | null
@@ -13,6 +13,10 @@ export function clipExportMediaReady(
   } | null,
 ): boolean {
   if (clip.previewKey) return true
-  if (!project || !isFullVideoSettings(project.settings)) return false
+  if (!project) return false
+  const settings = project.settings
+  const aiProducerDraft = settings && typeof settings === 'object' &&
+    !Array.isArray(settings) && typeof (settings as { aiProducerRunId?: unknown }).aiProducerRunId === 'string'
+  if (!isFullVideoSettings(settings) && !aiProducerDraft) return false
   return Boolean(clip.sourceSegKey || project.upload?.key || project.proxyKey)
 }
