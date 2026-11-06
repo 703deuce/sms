@@ -56,7 +56,7 @@ const fixed = [
 ]
 describe('aprun_788b211c: exact sentence-boundary failures', () => {
   it('rejects each of the five dangling transcript tails independently', () => {
-    for (const [segment, index] of bad.entries()) {
+    for (const [index, segment] of bad.entries()) {
       if (index === 4) continue // "CHP." is a real completed sentence.
       expect(() => verifyFinishedThoughts([segment], words))
         .toThrow('finisher_incomplete_segment_0')
