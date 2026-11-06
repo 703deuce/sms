@@ -33,8 +33,8 @@ export function NewEditDialog({
   onOpenChange: (open: boolean) => void
   defaultSources: NewEditDialogSource[]
 }) {
-  const [outputType, setOutputType] = useState<'single_payoff' | 'montage' | 'story' | 'auto' | 'rough_cut'>('auto')
-  const [durationPreset, setDurationPreset] = useState<'30' | '60' | '90' | '180-480' | '480-900'>('180-480')
+  const [outputType, setOutputType] = useState<'single_payoff' | 'montage' | 'story' | 'auto' | 'rough_cut' | 'rough_cut_highlights'>('auto')
+  const [durationPreset, setDurationPreset] = useState<'30' | '60' | '90' | '120' | '180-480' | '480-900'>('180-480')
   const [platform, setPlatform] = useState<'tiktok' | 'shorts' | 'reels'>('tiktok')
   const [instruction, setInstruction] = useState('')
   const [runId, setRunId] = useState<string | null>(null)
@@ -53,11 +53,12 @@ export function NewEditDialog({
     setSubmitting(true)
     setError(null)
     try {
+      const isRoughCut = outputType === 'rough_cut' || outputType === 'rough_cut_highlights'
       const res = await fetch('/api/ai-producer-agent/runs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          sources: outputType === 'rough_cut'
+          sources: isRoughCut
             ? (() => {
                 const projectIds = [...new Set(defaultSources.map((s) => s.projectId).filter(Boolean))]
                 if (projectIds.length !== 1) {
@@ -69,11 +70,12 @@ export function NewEditDialog({
                 ...s,
                 sourceId: s.sourceId || `src_${i}`,
               })),
-          outputType: outputType === 'rough_cut' ? 'story' : outputType,
-          ...(outputType === 'rough_cut' ? {
+          outputType: isRoughCut ? 'story' : outputType,
+          ...(isRoughCut ? {
+            roughCutIntent: outputType === 'rough_cut_highlights' ? 'highlights' : 'story',
             editMode: 'just_chatting_rough_cut',
             targetLengthS: ({
-              '30': [25, 40], '60': [50, 75], '90': [75, 105],
+              '30': [25, 40], '60': [50, 75], '90': [75, 105], '120': [105, 135],
               '180-480': [180, 480], '480-900': [480, 900],
             } as Record<typeof durationPreset, [number, number]>)[durationPreset],
           } : {}),
@@ -118,11 +120,16 @@ export function NewEditDialog({
                   className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                   value={outputType}
                   onChange={(e) =>
-                    setOutputType(e.target.value as 'single_payoff' | 'montage' | 'story' | 'auto' | 'rough_cut')
+                    (() => {
+                      const next = e.target.value as typeof outputType
+                      setOutputType(next)
+                      if (next === 'rough_cut_highlights') setDurationPreset('90')
+                    })()
                   }
                 >
                   <option value="auto">Auto (decide from footage)</option>
-                  <option value="rough_cut">AI interview / conversation cut</option>
+                  <option value="rough_cut">Conversation story / condensed edit</option>
+                  <option value="rough_cut_highlights">Highlights · best moments across recording</option>
                   <option value="single_payoff">Single setup → payoff</option>
                   <option value="montage">Montage</option>
                   <option value="story">Story (multi-beat / sources)</option>
@@ -141,7 +148,7 @@ export function NewEditDialog({
                 </select>
               </div>
             </div>
-            {outputType === 'rough_cut' ? (
+            {(outputType === 'rough_cut' || outputType === 'rough_cut_highlights') ? (
               <div className="space-y-2">
                 <Label htmlFor="ai-producer-duration">Desired edited length</Label>
                 <select id="ai-producer-duration" data-testid="ai-producer-duration"
@@ -149,14 +156,20 @@ export function NewEditDialog({
                   value={durationPreset}
                   onChange={(e) => setDurationPreset(e.target.value as typeof durationPreset)}
                 >
-                  <option value="30">30 seconds · highlights</option>
-                  <option value="60">60 seconds · highlights</option>
-                  <option value="90">90 seconds · highlights</option>
-                  <option value="180-480">3–8 minutes · conversational edit</option>
-                  <option value="480-900">8–15 minutes · longer conversational edit</option>
+                  <option value="30">30 seconds</option>
+                  <option value="60">60 seconds</option>
+                  <option value="90">90 seconds</option>
+                  <option value="120">2 minutes</option>
+                  {outputType === 'rough_cut' ? <>
+                    <option value="180-480">3–8 minutes · conversational edit</option>
+                    <option value="480-900">8–15 minutes · longer conversational edit</option>
+                  </> : null}
                 </select>
                 <p className="rounded-md border px-3 py-2 text-xs text-muted-foreground" data-testid="rough-cut-source-info">
-                  Uses the source recording (up to its last 20 minutes; minimum 5 minutes). Short edits focus on a strong setup and payoff; longer edits preserve the conversation. The chosen length guides the AI, but it can deliver a shorter or longer editable cut if that makes a better story. Clean 16:9 framing by default; no auto-posting.
+                  {outputType === 'rough_cut_highlights'
+                    ? 'Find several distinct, memorable source-backed moments across the recording, rather than cutting one continuous conversation. Each highlight must make sense on its own; no invented context or forced unrelated filler. Editable 16:9 draft, review before export.'
+                    : 'Find one cohesive conversation or story (which may remain continuous), or condense a longer discussion. Short edits need a complete ending. Editable 16:9 draft, review before export.'}
+                  {' '}Uses up to the final 20 minutes of the source recording (minimum 5 minutes).
                 </p>
               </div>
             ) : null}
