@@ -22,6 +22,7 @@ const createSchema = z.object({
     .min(1),
   outputType: z.enum(['single_payoff', 'montage', 'story', 'auto']),
   editMode: z.enum(['just_chatting_rough_cut']).optional(),
+  roughCutIntent: z.enum(['story', 'highlights']).optional(),
   genre: z.string().optional(),
   platform: z.enum(['tiktok', 'shorts', 'reels']).optional(),
   targetLengthS: z.tuple([z.number(), z.number()]).optional(),
