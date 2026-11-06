@@ -64,6 +64,7 @@ const wordEvidence = [
   { w: 'the', s: 1109.835, e: 1109.995 },
   { w: 'policies,', s: 1109.995, e: 1110.555 },
   { w: 'And', s: 1183.110, e: 1183.350 },
+  { w: 'full-context-beyond-moments', s: 1402.1, e: 1402.5 },
 ].sort((a,b) => a.s - b.s)
 const candidate = () => ({
   moments: trimmed.map((selection,i) => ({
@@ -115,6 +116,7 @@ describe('Highlights Finisher: independent endings', () => {
     __setLunaImpl(async ({tools,messages})=>{
       expect(tools.map(t=>t.name)).toEqual(['submit_highlights_finish'])
       expect(messages[1]?.content).toContain('entireAuthorizedTranscript')
+      expect(messages[1]?.content).toContain('full-context-beyond-moments')
       const proposed=candidate()
       if(attempts++===0) proposed.moments[1]!.landing.quote='fictional phrase'
       return {
