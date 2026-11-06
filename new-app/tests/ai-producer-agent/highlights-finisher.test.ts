@@ -100,12 +100,14 @@ describe('Highlights Finisher: independent endings', () => {
     expect(() => verifyHighlightsFinish(overlong,originals,wordEvidence,[300000,1500000],[50,75]))
       .toThrow('highlights_finisher_kept_talk_after_landing')
   })
-  it('rejects an unfinished ending or a missing curated highlight', () => {
+  it('uses source evidence rather than a last-word blacklist; still preserves every highlight', () => {
     const dangling = candidate()
     dangling.moments[1]!.selection=seg(691620,704695)
     dangling.moments[1]!.landing={startMs:704185,endMs:704665,quote:'Okay And'}
+    // A word list cannot determine whether this real recorded exchange is
+    // meaningful: the model reads full context and owns that decision.
     expect(() => verifyHighlightsFinish(dangling,originals,wordEvidence,[300000,1500000],[50,75]))
-      .toThrow('highlights_finisher_mid_sentence_ending')
+      .not.toThrow()
     const missing = candidate()
     missing.moments.splice(1,1)
     expect(() => verifyHighlightsFinish(missing,originals,wordEvidence,[300000,1500000],[50,75]))
