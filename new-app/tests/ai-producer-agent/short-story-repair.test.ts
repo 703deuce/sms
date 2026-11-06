@@ -93,6 +93,34 @@ describe('90-second story completion', () => {
     expect(cut.cutPlan.reduce((n, s) => n + s.endMs - s.startMs, 0)).toBe(89_000)
   })
 
+  it('replaces a 504s source-gathering draft with a coherent 326s revision', async () => {
+    const original = [
+      { startMs: 20000,endMs: 188000,beat:'setup',reason:'wide first passage' },
+      { startMs: 200000,endMs: 368000,beat:'development',reason:'wide second passage' },
+      { startMs: 390000,endMs: 558000,beat:'payoff',reason:'wide final passage' },
+    ]
+    const revised = [
+      { ...original[0],endMs: 128000 },
+      { ...original[1],endMs: 308000 },
+      { ...original[2],endMs: 500000 },
+    ]
+    const ctx = context()
+    ctx.sources[0]!.rangeMs = [0,700000]
+    ctx.cache.words = Array.from({ length: 1400 }, (_,i) => ({
+      w:'word',s:i*0.5+0.1,e:i*0.5+0.3,
+    }))
+    const calls = mockSequence([
+      ['submit_story_outline', outline],
+      ['submit_footage_selections', { selections: original }],
+      ['submit_footage_selections', { selections: revised }],
+      ['submit_dialogue_cut_plan', { selections: revised }],
+    ])
+    const edit = await createEditorialHandoff(ctx,output(),new Budget(),null)
+    expect(calls()).toBe(4)
+    expect(edit.footage).toEqual(revised)
+    expect(edit.cutPlan).toEqual(revised)
+  })
+
   it('restores curated story beats when Dialogue collapses a complete 90s edit', async () => {
     const calls = mockSequence([
       ['submit_story_outline', outline],
