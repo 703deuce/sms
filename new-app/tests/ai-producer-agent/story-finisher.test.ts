@@ -278,6 +278,57 @@ describe('source-verified Story Finisher', () => {
     ],original,speech,[0,8000])
     expect(result.selections[0]!.endMs).toBe(6230)
   })
+  it('includes full selected passage plus two entire sentences each side even for slow speech', () => {
+    const speech=[
+      {w:'Before.',s:0.1,e:12.0},
+      {w:'Long',s:13.0,e:23.0},{w:'preceding.',s:24,e:34},
+      {w:'Another',s:35,e:43},{w:'sentence.',s:44,e:52},
+      {w:'Selected',s:53,e:54},{w:'thought.',s:55,e:56},
+      {w:'Following',s:57,e:69},{w:'sentence.',s:70,e:80},
+      {w:'Even',s:81,e:90},{w:'later.',s:91,e:100},
+      {w:'Extra.',s:101,e:110},
+    ]
+    const selected=[part(53000,56000)]
+    const context=boundaryWordContext(speech,selected,[0,112000])
+    expect(context[0]!.words.map(w=>w.text)).toEqual([
+      'Long','preceding.','Another','sentence.','Selected','thought.',
+      'Following','sentence.','Even','later.',
+    ])
+    // A real 34-second late opening is legal if it belongs to nearby
+    // sentences, regardless of the former 2s limit.
+    const fixed=resolveStoryWordBoundaries([
+      {index:0,firstWordId:1,lastWordId:5},
+    ],selected,speech,[0,112000])
+    expect(fixed.selections[0]!.startMs).toBe(12970)
+    expect(fixed.selections[0]!.endMs).toBe(56030)
+  })
+  it('can trim an entire trailing sentence, not only three seconds', () => {
+    const speech=[
+      {w:'Important',s:10,e:12},{w:'conclusion.',s:13,e:14},
+      {w:'Unrelated',s:15,e:22},{w:'tangent.',s:23,e:31},
+      {w:'Next.',s:32,e:33},
+    ]
+    const original=[part(10000,31000)]
+    const result=resolveStoryWordBoundaries([
+      {index:0,firstWordId:0,lastWordId:1},
+    ],original,speech,[0,35000])
+    expect(result.selections[0]!.endMs).toBe(14030)
+    expect(result.diagnostics[0]!.end).toBe('resolved_word_id')
+  })
+  it('does not use unrelated word IDs beyond the two adjacent sentences', () => {
+    const speech=[
+      {w:'Unrelated.',s:1,e:2},{w:'Nearby.',s:5,e:6},
+      {w:'Before.',s:9,e:10},{w:'Chosen.',s:13,e:14},
+      {w:'After.',s:17,e:18},{w:'Later.',s:21,e:22},
+      {w:'Unrelated.',s:25,e:26},
+    ]
+    const selected=[part(13000,14000)]
+    const result=resolveStoryWordBoundaries([
+      {index:0,firstWordId:0,lastWordId:3},
+    ],selected,speech,[0,30000])
+    expect(result.selections[0]!.startMs).toBe(13000)
+    expect(result.diagnostics[0]!.start).toBe('invalid_or_unavailable_first_word_id')
+  })
   it('supplies numbered local words, not a full transcript or timestamp tool', async () => {
     const transcript=boundaryWordContext(words,compressed,[300000,1500000])
     expect(transcript).toHaveLength(compressed.length)
