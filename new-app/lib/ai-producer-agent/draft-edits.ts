@@ -73,6 +73,8 @@ export class DraftEditsBuilder {
   private e: ClipEditsV2
   private userCuts: { r: CutRange; kind: 'gap' | 'filler' | 'manual' }[] = []
   private musicTouched = false
+  /** Rough-cut specialist boundaries have already passed the shared word guard. */
+  preserveApprovedEdges = false
   aspectRatio: ClipEditsV2['aspectRatio'] = '9:16'
   private legacyMode = false
   mainSourceId: string
@@ -180,7 +182,7 @@ export class DraftEditsBuilder {
     for (let i = 1; i < chrono.length; i++) {
       const g0 = chrono[i - 1]!.srcOutMs
       const g1 = chrono[i]!.srcInMs
-      if (g1 > g0) gaps.push(this.refine([g0, g1], 'gap'))
+      if (g1 > g0) gaps.push(this.preserveApprovedEdges ? [g0, g1] : this.refine([g0, g1], 'gap'))
     }
     const cuts = this.userCuts.map((c) => this.refine(c.r, c.kind))
     this.e.trim = { in: trimIn, out: trimOut }

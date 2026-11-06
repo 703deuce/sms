@@ -30,6 +30,16 @@ export type Issue = {
 export type ValidationReport = { hardFailures: Issue[]; warnings: Issue[]; droppedFields: string[] }
 
 export const WORD_GUARD_MS = 30
+
+/** Shared guard used by specialists, assembly and the final draft validator.
+ * ASR milliseconds are rounded the same way in all three stages. */
+export function wordAtUnsafeBoundary(tMs: number, words: ClipWord[]): ClipWord | undefined {
+  return words.find((w) => {
+    const start = Math.round(w.s * 1000)
+    const end = Math.round(w.e * 1000)
+    return end > start && tMs > start - WORD_GUARD_MS && tMs < end + WORD_GUARD_MS
+  })
+}
 export const MIN_SEG_MS = 400
 export const MONTAGE_FLASH_MIN_MS = 150
 
@@ -120,11 +130,10 @@ export function validateDraft(b: DraftEditsBuilder, ctx: ValidationCtx): Validat
   const warn: Issue[] = []
   const H = (code: string, d: Partial<Issue> = {}) => hard.push({ code, severity: 'HARD', detail: '', ...d })
 
-  const words = ctx.words.map((w) => ({ w: w.w, s: Math.round(w.s * 1000), e: Math.round(w.e * 1000) }))
   const joins = [e.trim.in, e.trim.out, ...e.cutRanges.flat()]
   for (const t of joins) {
-    const w = words.find((x) => inside(t, x.s - WORD_GUARD_MS, x.e + WORD_GUARD_MS))
-    if (w) H('cut_in_word', { atSrcMs: t, detail: `"${w.w}" ${w.s}-${w.e}` })
+    const w = wordAtUnsafeBoundary(t, ctx.words)
+    if (w) H('cut_in_word', { atSrcMs: t, detail: `"${w.w}" ${Math.round(w.s * 1000)}-${Math.round(w.e * 1000)}` })
     if (ctx.laughs.some(([s, en]) => inside(t, s, en))) H('cut_in_laugh', { atSrcMs: t })
     if (ctx.reactions.some((r) => inside(t, r.s, r.e))) H('cut_in_reaction', { atSrcMs: t })
     if (ctx.bursts.some((x) => inside(t, x.s, x.e))) H('cut_in_burst', { atSrcMs: t })

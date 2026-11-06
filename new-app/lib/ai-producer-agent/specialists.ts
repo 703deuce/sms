@@ -12,6 +12,7 @@ import { logAiProducerStep, redactArgs } from '@/lib/ai-producer-agent/log'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_REVIEW_CHECKS } from '@/lib/ai-producer-agent/just-chatting-direction'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
+import { WORD_GUARD_MS, wordAtUnsafeBoundary } from '@/lib/ai-producer-agent/validate'
 
 export type EditorialRole = 'story' | 'footage' | 'dialogue' | 'qa'
 export type EditorialSelection = {
@@ -126,7 +127,7 @@ function validSelections(
     }
     // No cut through a retained word (30ms safety margin).
     for (const edge of [startMs, endMs]) {
-      if (words.some((w) => edge > w.s * 1000 + 30 && edge < w.e * 1000 - 30)) {
+      if (wordAtUnsafeBoundary(edge, words)) {
         throw new Error('specialist_cut_inside_word')
       }
     }
@@ -156,7 +157,7 @@ function nearestLegalEdge(
   if (edge < lo || edge > hi) return null
   const spans = words
     .filter((w) => Number.isFinite(w.s) && Number.isFinite(w.e) && w.e > w.s)
-    .map((w) => [Math.floor(w.s * 1000), Math.ceil(w.e * 1000)] as const)
+    .map((w) => [Math.round(w.s * 1000) - WORD_GUARD_MS, Math.round(w.e * 1000) + WORD_GUARD_MS] as const)
     .sort((a, b) => a[0] - b[0])
   // Build merged speaking intervals once; overlapping ASR words must not
   // trick the repair into moving to another word's interior.
@@ -168,12 +169,12 @@ function nearestLegalEdge(
   }
   const candidates = new Set<number>([edge, lo, hi])
   for (const [start, end] of merged) {
-    if (Math.abs(start - edge) <= 1500) candidates.add(Math.max(lo, start - 30))
-    if (Math.abs(end - edge) <= 1500) candidates.add(Math.min(hi, end + 30))
+    if (Math.abs(start - edge) <= 1500) candidates.add(Math.max(lo, start))
+    if (Math.abs(end - edge) <= 1500) candidates.add(Math.min(hi, end))
   }
   const legal = [...candidates].filter((c) =>
     c >= lo && c <= hi && Math.abs(c - edge) <= 1500 &&
-    !merged.some(([start, end]) => c > start + 30 && c < end - 30))
+    !wordAtUnsafeBoundary(c, words))
   // Ties favor keeping the beginning of a phrase and the end of a phrase.
   legal.sort((a, b) => Math.abs(a - edge) - Math.abs(b - edge) ||
     (kind === 'startMs' ? a - b : b - a))
