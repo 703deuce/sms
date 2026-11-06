@@ -18,6 +18,8 @@ import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
 import { createEditorialHandoff, runEditorialRole, type EditorialHandoff } from '@/lib/ai-producer-agent/specialists'
+import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
+import { buildJustChattingEvidence } from '@/lib/ai-producer-agent/just-chatting-evidence'
 
 export type Phase = AiProducerPhase
 
@@ -106,7 +108,7 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
   const messages: LunaMessage[] = [
     { role: 'system', content: [
       buildAgentSystemPromptForModel(ctx.promptArgs),
-      ...(out.editorialHandoff ? [FILM_EDITING_THEORY, SPECIALIST_ROLES.assembly] : []),
+      ...(out.editorialHandoff ? [FILM_EDITING_THEORY, SPECIALIST_ROLES.assembly, JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION.assembly] : []),
     ].join('\n\n') },
     {
       role: 'user',
@@ -147,7 +149,10 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       selections: out.editorialHandoff.cutPlan,
       timeline: out.lastValid,
       validation: out.lastValidation,
-      instruction: 'Identify incoherent transitions, missing context, unsupported acoustic claims, and any hard safety concerns. This is a decision review; no rendered video has been presented.',
+      actualTranscriptEvidence: buildJustChattingEvidence(
+        ctx.cache.words ?? [], ctx.sources[0]!.rangeMs!, out.editorialHandoff.cutPlan,
+      ),
+      instruction: 'Evaluate the source-grounded opening/closing dialogue for every chosen interval and the actual before/after words at EVERY join. Check context, meaning, repetition, reactions, payoff and unnecessary sections. A valid timeline is not necessarily a good edit. If an actual semantic issue is found, return pass=false with specifics. Acoustic joins still need a listening review: no rendered video or audio was supplied.',
     })
     out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
     out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
@@ -371,6 +376,7 @@ async function finishRun(
           story: o.story,
           validation: o.lastValidation,
           specialists: o.editorialHandoff ? {
+            version: JUST_CHATTING_DIRECTION_VERSION,
             story: o.editorialHandoff.outline,
             curatedCount: o.editorialHandoff.footage.length,
             approvedCuts: o.editorialHandoff.cutPlan,
