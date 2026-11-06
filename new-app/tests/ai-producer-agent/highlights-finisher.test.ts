@@ -64,6 +64,7 @@ const wordEvidence = [
   { w: 'the', s: 1109.835, e: 1109.995 },
   { w: 'policies,', s: 1109.995, e: 1110.555 },
   { w: 'And', s: 1183.110, e: 1183.350 },
+  { w: 'full-context-beyond-moments', s: 1402.1, e: 1402.5 },
 ].sort((a,b) => a.s - b.s)
 const candidate = () => ({
   moments: trimmed.map((selection,i) => ({
@@ -81,6 +82,15 @@ const ctx = (): ToolCtx => ({
 afterEach(() => __setLunaImpl(null))
 
 describe('Highlights Finisher: independent endings', () => {
+  it('allows a limited transcript-grounded opening outside the original highlight', () => {
+    const proposal = candidate()
+    proposal.moments[1]!.selection.startMs = originals[1]!.startMs - 2000
+    expect(() => verifyHighlightsFinish(proposal, originals, wordEvidence,[300000,1500000],[50,75]))
+      .not.toThrow()
+    proposal.moments[1]!.selection.startMs = originals[1]!.startMs - 16000
+    expect(() => verifyHighlightsFinish(proposal, originals, wordEvidence,[300000,1500000],[50,75]))
+      .toThrow('highlights_finisher_outside_curated_moment')
+  })
   it('shortens the real 112s 3-moment retest to ~47 seconds without collapsing diversity', () => {
     const result = verifyHighlightsFinish(candidate(), originals, wordEvidence, [300000,1500000],[50,75])
     expect(result.selections).toHaveLength(3)
@@ -99,12 +109,14 @@ describe('Highlights Finisher: independent endings', () => {
     expect(() => verifyHighlightsFinish(overlong,originals,wordEvidence,[300000,1500000],[50,75]))
       .toThrow('highlights_finisher_kept_talk_after_landing')
   })
-  it('rejects an unfinished ending or a missing curated highlight', () => {
+  it('uses source evidence rather than a last-word blacklist; still preserves every highlight', () => {
     const dangling = candidate()
     dangling.moments[1]!.selection=seg(691620,704695)
     dangling.moments[1]!.landing={startMs:704185,endMs:704665,quote:'Okay And'}
+    // A word list cannot determine whether this real recorded exchange is
+    // meaningful: the model reads full context and owns that decision.
     expect(() => verifyHighlightsFinish(dangling,originals,wordEvidence,[300000,1500000],[50,75]))
-      .toThrow('highlights_finisher_mid_sentence_ending')
+      .not.toThrow()
     const missing = candidate()
     missing.moments.splice(1,1)
     expect(() => verifyHighlightsFinish(missing,originals,wordEvidence,[300000,1500000],[50,75]))
@@ -114,7 +126,8 @@ describe('Highlights Finisher: independent endings', () => {
     let attempts=0
     __setLunaImpl(async ({tools,messages})=>{
       expect(tools.map(t=>t.name)).toEqual(['submit_highlights_finish'])
-      expect(messages[1]?.content).toContain('timedWords')
+      expect(messages[1]?.content).toContain('entireAuthorizedTranscript')
+      expect(messages[1]?.content).toContain('full-context-beyond-moments')
       const proposed=candidate()
       if(attempts++===0) proposed.moments[1]!.landing.quote='fictional phrase'
       return {
