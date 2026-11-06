@@ -109,7 +109,7 @@ function validSelections(
   words: ClipWord[],
   allowed?: EditorialSelection[],
 ): EditorialSelection[] {
-  if (!Array.isArray(raw) || raw.length < 2 || raw.length > 24) throw new Error('specialist_invalid_selection_count')
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 24) throw new Error('specialist_invalid_selection_count')
   const normalized: EditorialSelection[] = raw.map((entry) => {
     if (!entry || typeof entry !== 'object') throw new Error('specialist_invalid_selection')
     const r = entry as Record<string, unknown>
@@ -151,6 +151,7 @@ function nearestLegalEdge(
   edge: number, kind: 'startMs' | 'endMs',
   words: ClipWord[], bounds: [number, number],
   allowedRange?: [number, number],
+  maxShiftMs = 1500,
 ): number | null {
   const lo = Math.max(bounds[0], allowedRange?.[0] ?? bounds[0])
   const hi = Math.min(bounds[1], allowedRange?.[1] ?? bounds[1])
@@ -169,11 +170,11 @@ function nearestLegalEdge(
   }
   const candidates = new Set<number>([edge, lo, hi])
   for (const [start, end] of merged) {
-    if (Math.abs(start - edge) <= 1500) candidates.add(Math.max(lo, start))
-    if (Math.abs(end - edge) <= 1500) candidates.add(Math.min(hi, end))
+    if (Math.abs(start - edge) <= maxShiftMs) candidates.add(Math.max(lo, start))
+    if (Math.abs(end - edge) <= maxShiftMs) candidates.add(Math.min(hi, end))
   }
   const legal = [...candidates].filter((c) =>
-    c >= lo && c <= hi && Math.abs(c - edge) <= 1500 &&
+    c >= lo && c <= hi && Math.abs(c - edge) <= maxShiftMs &&
     !wordAtUnsafeBoundary(c, words))
   // Ties favor keeping the beginning of a phrase and the end of a phrase.
   legal.sort((a, b) => Math.abs(a - edge) - Math.abs(b - edge) ||
@@ -209,6 +210,67 @@ export function snapEditorialSelections(
     })
     return validSelections(repaired, bounds, words, allowed)
   }
+}
+
+/**
+ * Recovery path for noisy ASR: never send the model through seven retries for
+ * a single unsnappable word boundary. Respect source/curation/chronology and
+ * retain useful intervals even if no nearby word-safe gap exists. Such edges
+ * are explicitly flagged by draft validation for the editor to review.
+ */
+export function recoverEditorialSelections(
+  raw: unknown, bounds: [number, number], words: ClipWord[],
+  allowed?: EditorialSelection[],
+): { selections: EditorialSelection[]; dropped: number; unsafeEdges: number } {
+  const entries = Array.isArray(raw) ? raw.slice(0, 24) : []
+  const candidates: EditorialSelection[] = []
+  let dropped = 0
+  for (const v of entries) {
+    if (!v || typeof v !== 'object') { dropped++; continue }
+    const r = v as Partial<EditorialSelection>
+    if (!Number.isInteger(r.startMs) || !Number.isInteger(r.endMs) ||
+        typeof r.startMs !== 'number' || typeof r.endMs !== 'number' ||
+        r.startMs < bounds[0] || r.endMs > bounds[1] || r.endMs <= r.startMs ||
+        typeof r.beat !== 'string' || typeof r.reason !== 'string' || !r.reason.trim()) {
+      dropped++
+      continue
+    }
+    const curated = allowed?.find((a) => r.startMs! >= a.startMs && r.endMs! <= a.endMs)
+    if (allowed && !curated) { dropped++; continue }
+    const range = curated ? [curated.startMs, curated.endMs] as [number, number] : undefined
+    // Prefer genuine legal edges, searching farther than normal precision snapping.
+    // A null result means retain the proposed edge, not discard the entire run.
+    const snappedStart = nearestLegalEdge(r.startMs, 'startMs', words, bounds, range, 30_000)
+    const snappedEnd = nearestLegalEdge(r.endMs, 'endMs', words, bounds, range, 30_000)
+    // Do not let a remote legal edge collapse a useful interval. Try the
+    // smallest safe adjustment first, then preserve original editorial bounds.
+    let startMs = snappedStart ?? r.startMs
+    let endMs = snappedEnd ?? r.endMs
+    if (endMs - startMs < 3000) {
+      startMs = r.startMs
+      endMs = r.endMs
+    }
+    if (endMs - startMs < 3000 ||
+        words.filter((w) => w.e * 1000 > startMs && w.s * 1000 < endMs).length < 5) {
+      dropped++
+      continue
+    }
+    candidates.push({ startMs, endMs, beat: r.beat.slice(0, 90), reason: r.reason.slice(0, 320) })
+  }
+  // Preserve chronology while dropping overlapping or invalid proposals.
+  candidates.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs)
+  const selections: EditorialSelection[] = []
+  for (const item of candidates) {
+    if (selections.length && item.startMs < selections[selections.length - 1]!.endMs) {
+      dropped++
+      continue
+    }
+    selections.push(item)
+  }
+  return { selections, dropped,
+    unsafeEdges: selections.reduce((n, item) => n +
+      Number(Boolean(wordAtUnsafeBoundary(item.startMs, words))) +
+      Number(Boolean(wordAtUnsafeBoundary(item.endMs, words))), 0) }
 }
 
 function selectionDurationS(selections: EditorialSelection[]): number {
@@ -360,6 +422,16 @@ export async function runEditorialRole(
         turn, callId: call.id, proposal: selectionLogSummary(args),
         malformedJson: args === null,
       })
+      if (name === names[role] && !args) {
+        invalidSubmissions++
+        await specialistEvent(ctx, budget, role, 'rejected', {
+          turn, invalidSubmissions, errorCode: 'specialist_malformed_submission',
+        }, 'specialist_malformed_submission')
+        if (invalidSubmissions >= 2) throw new Error(`specialist_${role}_unusable_submissions`)
+        messages.push({ role: 'tool', tool_call_id: call.id,
+          content: '{"ok":false,"error":"specialist_malformed_submission","instruction":"Submit valid structured JSON."}' })
+        continue
+      }
       if (name === names[role] && args) {
         try {
         if (role === 'story') {
@@ -375,7 +447,19 @@ export async function runEditorialRole(
           const allowed = role === 'dialogue'
             ? context.curatedSelections as EditorialSelection[] | undefined
             : undefined
-          const selections = snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
+          let selections: EditorialSelection[]
+          let recovery: ReturnType<typeof recoverEditorialSelections> | undefined
+          try {
+            selections = snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
+          } catch (firstError) {
+            recovery = recoverEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
+            if (!recovery.selections.length) throw firstError
+            selections = recovery.selections
+            await specialistEvent(ctx, budget, role, 'server_recovered', {
+              turn, dropped: recovery.dropped, unsafeEdges: recovery.unsafeEdges,
+              count: selections.length, originalError: String((firstError as Error).message),
+            })
+          }
           const duration = durationAdvisory(selections, ctx.config.targetLengthS)
           await specialistEvent(ctx, budget, role, 'duration_advisory', { ...duration, acceptedDespiteDuration: duration.outsideTarget })
           await specialistEvent(ctx, budget, role, 'accepted', { turn, proposal: selectionLogSummary(args),
@@ -408,13 +492,18 @@ export async function runEditorialRole(
           // Models sometimes choose an imprecise word boundary. Reject the
           // proposal but give this specialist a chance to repair it before
           // the entire twenty-minute run fails.
+          if (invalidSubmissions >= 2) {
+            // Returning control to the orchestrator activates the source-grounded
+            // fallback; do not spend seven turns guessing the same impossible edge.
+            throw new Error(`specialist_${role}_unusable_submissions`)
+          }
           messages.push({
             role: 'tool', tool_call_id: call.id,
             content: JSON.stringify({
               ok: false,
               error: errorCode,
               repairHint,
-              instruction: 'Do not call get_transcript again. Correct and resubmit using legal source word edges.',
+              instruction: 'Correct and resubmit using sourced chronological intervals.',
             }),
           })
           continue
@@ -474,21 +563,61 @@ export async function createEditorialHandoff(
     audienceGoal: 'Coherent conversational 3–8 minute editable stream edit, never a shorts montage',
     editingPriorities: ['meaning and context','narrative payoff','natural dialogue and reactions','no repetition','restrained polish'],
   }
-  const story = await runEditorialRole(ctx, out, budget, 'story', base)
+  let story: Record<string, unknown>
+  try {
+    story = await runEditorialRole(ctx, out, budget, 'story', base)
+  } catch (error) {
+    // An unavailable paper outline must not destroy a sourced editable draft.
+    await specialistEvent(ctx, budget, 'story', 'fallback', {
+      errorCode: String((error as Error)?.message ?? error).slice(0, 200),
+    })
+    story = { logline: 'Source-grounded conversational rough cut',
+      audiencePromise: 'Review the best available recorded conversation',
+      beats: ['context', 'discussion', 'resolution'] }
+  }
   const outline = {
     logline: String(story.logline),
     audiencePromise: String(story.audiencePromise),
     beats: (story.beats as string[]).slice(0, 10),
   }
-  const found = await runEditorialRole(ctx, out, budget, 'footage', {
-    ...base, storyOutline: outline,
-    instruction: 'Select coherent source intervals; evidence first, then editorial value.',
-  })
+  let found: Record<string, unknown>
+  try {
+    found = await runEditorialRole(ctx, out, budget, 'footage', {
+      ...base, storyOutline: outline,
+      instruction: 'Select coherent source intervals; evidence first, then editorial value.',
+    })
+  } catch (error) {
+    // Last-resort, honest first-pass source selection. Keep an editable draft
+    // rather than losing the upload to failed model submissions.
+    const [start, end] = source.rangeMs
+    const targetMs = Math.min(end - start, Math.max(180_000, ctx.config.targetLengthS[0] * 1000))
+    const fallbackStart = Math.max(start, end - targetMs)
+    const provisional: EditorialSelection[] = [{
+      startMs: fallbackStart, endMs: end, beat: 'discussion',
+      reason: 'Fallback source selection; review and refine in the editor',
+    }]
+    const recovered = recoverEditorialSelections(provisional, source.rangeMs, ctx.cache.words)
+    if (!recovered.selections.length) throw error
+    await specialistEvent(ctx, budget, 'footage', 'fallback_to_source', {
+      errorCode: String((error as Error)?.message ?? error).slice(0, 200),
+      selectedMs: end - fallbackStart, unsafeEdges: recovered.unsafeEdges,
+    })
+    found = { selections: recovered.selections }
+  }
   const footage = found.selections as EditorialSelection[]
-  const refined = await runEditorialRole(ctx, out, budget, 'dialogue', {
+  let refined: Record<string, unknown>
+  try {
+    refined = await runEditorialRole(ctx, out, budget, 'dialogue', {
     ...base, storyOutline: outline, curatedSelections: footage,
     instruction: 'Refine whole-thought boundaries inside chosen footage; never select outside.',
-  })
+    })
+  } catch (error) {
+    await specialistEvent(ctx, budget, 'dialogue', 'fallback_to_footage', {
+      errorCode: String((error as Error)?.message ?? error).slice(0, 200),
+      count: footage.length,
+    })
+    refined = { selections: footage }
+  }
   const cutPlan = refined.selections as EditorialSelection[]
   const duration = selectionDurationS(cutPlan)
   const [lo, hi] = ctx.config.targetLengthS

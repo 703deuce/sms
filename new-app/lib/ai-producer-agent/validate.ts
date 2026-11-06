@@ -132,11 +132,18 @@ export function validateDraft(b: DraftEditsBuilder, ctx: ValidationCtx): Validat
 
   const joins = [e.trim.in, e.trim.out, ...e.cutRanges.flat()]
   for (const t of joins) {
+    // In a rough cut, dense/overlapping ASR may have no possible safe edge.
+    // Preserve a reversible draft and clearly flag these joins for manual review.
+    const J = (code: string, detail = '') => {
+      if (ctx.editMode === 'just_chatting_rough_cut')
+        warn.push({ code, severity: 'DEFAULT', atSrcMs: t, detail })
+      else H(code, { atSrcMs: t, detail })
+    }
     const w = wordAtUnsafeBoundary(t, ctx.words)
-    if (w) H('cut_in_word', { atSrcMs: t, detail: `"${w.w}" ${Math.round(w.s * 1000)}-${Math.round(w.e * 1000)}` })
-    if (ctx.laughs.some(([s, en]) => inside(t, s, en))) H('cut_in_laugh', { atSrcMs: t })
-    if (ctx.reactions.some((r) => inside(t, r.s, r.e))) H('cut_in_reaction', { atSrcMs: t })
-    if (ctx.bursts.some((x) => inside(t, x.s, x.e))) H('cut_in_burst', { atSrcMs: t })
+    if (w) J('cut_in_word', `"${w.w}" ${Math.round(w.s * 1000)}-${Math.round(w.e * 1000)}`)
+    if (ctx.laughs.some(([s, en]) => inside(t, s, en))) J('cut_in_laugh')
+    if (ctx.reactions.some((r) => inside(t, r.s, r.e))) J('cut_in_reaction')
+    if (ctx.bursts.some((x) => inside(t, x.s, x.e))) J('cut_in_burst')
   }
 
   const minSeg = ctx.editMode === 'just_chatting_rough_cut' ? 3000 :

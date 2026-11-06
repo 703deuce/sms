@@ -105,4 +105,44 @@ describe('AI Producer specialist execution', () => {
     expect(handoff.cutPlan).toEqual(selected)
   })
 
+  it('recovers an unsnappable Footage proposal without retrying seven times', async () => {
+    const selected = [
+      { startMs: 10_000, endMs: 20_000, beat: 'setup', reason: 'complete discussion' },
+      { startMs: 140_000, endMs: 190_000, beat: 'payoff', reason: 'complete follow-up' },
+    ]
+    const payload = [
+      ['submit_story_outline', { logline: 'Discussion', audiencePromise: 'A conversation',
+        beats: ['opening', 'discussion', 'conclusion'] }],
+      ['submit_footage_selections', { selections: selected }],
+      ['submit_dialogue_cut_plan', { selections: selected }],
+    ] as const
+    let called = 0
+    __setLunaImpl(async () => {
+      const [name, body] = payload[called++]!
+      return {
+        message: { role: 'assistant', content: null, tool_calls: [{
+          id: 'dense_' + called, type: 'function',
+          function: { name, arguments: JSON.stringify(body) },
+        }] },
+        usage: { prompt_tokens: 150, completion_tokens: 50 },
+      }
+    })
+    const dense = Array.from({ length: 350 }, (_, i) => ({
+      w: 'speech', s: i * 0.12, e: i * 0.12 + 0.15,
+    }))
+    const second = Array.from({ length: 100 }, (_, i) => ({
+      w: 'speech', s: 140 + i * 0.5, e: 140 + i * 0.5 + 0.2,
+    }))
+    const ctx = {
+      runId: 'dense-run', sources: [{ sourceId: 'source1', rangeMs: [0, 300_000] }],
+      cache: { words: [...dense, ...second], momentsSummary: [], inventorySummary: { rows: [] } },
+      config: { targetLengthS: [180, 480] },
+    } as unknown as ToolCtx
+    const out = { index: 0, outputType: 'story', builder: null, notes: [] } as unknown as OutputState
+    const handoff = await createEditorialHandoff(ctx, out, new Budget(), null)
+    expect(called).toBe(3)
+    expect(handoff.footage.length).toBeGreaterThan(0)
+    expect(handoff.cutPlan.length).toBeGreaterThan(0)
+  })
+
 })

@@ -6,7 +6,7 @@ vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
 vi.mock('@/lib/ai-producer-agent/log', () => ({
   logAiProducerStep: vi.fn(), redactArgs: (args: unknown) => args,
 }))
-import { checkEditorialSelections, snapEditorialSelections } from '@/lib/ai-producer-agent/specialists'
+import { checkEditorialSelections, snapEditorialSelections, recoverEditorialSelections } from '@/lib/ai-producer-agent/specialists'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
 import type { ClipWord } from '@/lib/clips/edits'
 
@@ -133,6 +133,37 @@ describe('AI Producer specialist editorial handoff', () => {
     expect(repaired).toHaveLength(2)
     expect(repaired.some((x, i) => x.startMs !== proposed[i]?.startMs || x.endMs !== proposed[i]?.endMs)).toBe(true)
     expect(checkEditorialSelections(repaired, [300_000, 430_000], crowded, windows)).toEqual(repaired)
+  })
+
+  it('salvages good Footage intervals when an ending has no legal gap in dense ASR', () => {
+    const dense: ClipWord[] = [
+      ...Array.from({ length: 1000 }, (_, i) => ({
+        w: 'speech', s: 1040 + i * 0.12, e: 1040 + i * 0.12 + 0.15,
+      })),
+      ...Array.from({ length: 40 }, (_, i) => ({
+        w: 'speech', s: 300 + i * 0.5, e: 300.2 + i * 0.5,
+      })),
+    ]
+    const raw = [
+      { startMs: 300_000, endMs: 318_000, beat: 'setup', reason: 'complete context' },
+      { startMs: 1041_000, endMs: 1065_000, beat: 'payoff', reason: 'dense conversation' },
+    ]
+    const result = recoverEditorialSelections(raw, [300_000, 1200_000], dense)
+    expect(result.selections.length).toBeGreaterThan(0)
+    expect(result.selections.every((x, i, a) => i === 0 || x.startMs >= a[i - 1]!.endMs)).toBe(true)
+    // An unavoidable mid-word edge is not a reason to lose the whole edit.
+    expect(result.unsafeEdges).toBeGreaterThan(0)
+  })
+
+  it('drops unusable proposals but preserves chronological valid footage', () => {
+    const raw = [
+      approved[0],
+      { ...approved[1], startMs: 320_000, endMs: 330_000 },
+      approved[1],
+    ]
+    const result = recoverEditorialSelections(raw, source, words)
+    expect(result.dropped).toBe(1)
+    expect(result.selections).toEqual(approved)
   })
 
 })
