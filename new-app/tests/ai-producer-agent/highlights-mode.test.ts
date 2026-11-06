@@ -12,6 +12,26 @@ vi.mock('@/lib/ai-producer-agent/log', () => ({
 vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
   runTool: vi.fn(async () => ({ ok: false, summary: 'not_used' })),
 }))
+vi.mock('@/lib/ai-producer-agent/story-finisher', () => ({
+  runStoryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => ({
+    selections: footage,
+    payoff: {
+      startMs: footage[footage.length-1]!.endMs - 2000,
+      endMs: footage[footage.length-1]!.endMs - 500,
+      quote: 'word word',
+    },
+    editorialReason: 'Keep existing test emphasis on Footage and Dialogue',
+  })),
+  runHighlightsFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number;beat:string;reason:string}>) => ({
+    selections: footage,
+    moments: footage.map(selection => ({
+      selection,
+      landing: { startMs: selection.endMs - 1800, endMs: selection.endMs - 500, quote: 'word word' },
+      editorialReason: 'Mocked per-moment ending for legacy Highlights coverage test',
+    })),
+    editorialReason: 'Keep existing test focused on original highlight selection',
+  })),
+}))
 
 const sel = (startMs: number, endMs: number, beat = 'interesting moment') =>
   ({ startMs, endMs, beat, reason: 'real memorable sourced exchange' })

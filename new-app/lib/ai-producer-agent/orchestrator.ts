@@ -156,6 +156,8 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     try {
     const review = await runEditorialRole(ctx, out, budget, 'qa', {
       outline: out.editorialHandoff.outline,
+      storyFinisher: out.editorialHandoff.finisher ?? null,
+      highlightsFinisher: out.editorialHandoff.highlightsFinisher ?? null,
       selections: out.editorialHandoff.cutPlan,
       timeline: out.lastValid,
       validation: out.lastValidation,
@@ -163,8 +165,8 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
         ctx.cache.words ?? [], ctx.sources[0]!.rangeMs!, out.editorialHandoff.cutPlan,
       ),
       instruction: ctx.config.roughCutIntent === 'highlights'
-        ? 'HIGHLIGHTS QA: Inspect the actual opening and closing transcript words for EVERY selected moment and the joins. Does the reel contain distinct memorable moments rather than consecutive breaths from one conversation? Is each highlight understandable with its own payoff or complete thought, without repetitiveness, misrepresented context or sentence fragments? Judge pacing and selected content, and report pass=false with specific timestamps if weak. No rendered audio was supplied; acoustic joins require listening review.'
-        : 'Evaluate the source-grounded opening/closing dialogue for every chosen interval and the actual before/after words at EVERY join. Check context, meaning, repetition, reactions, payoff and unnecessary sections. A valid timeline is not necessarily a good edit. If an actual semantic issue is found, return pass=false with specifics. Acoustic joins still need a listening review: no rendered video or audio was supplied.',
+        ? 'HIGHLIGHTS QA: Inspect actual opening and closing transcript words for EVERY selected moment and all joins. Use the Highlights Finisher verified landings: confirm every promised quote remains in the final footage and each highlight actually ends naturally. Check that no unrelated talk after a landing, incomplete opening, missing independent payoff, or overlong segment remains. Require distinct source moments, not breath cuts. If source words do not support the finishing choices, pass=false with precise timestamps. No rendered audio was supplied; acoustic joins require listening review.'
+        : 'Evaluate the source-grounded opening/closing dialogue for every chosen interval and the actual before/after words at EVERY join. Check context, meaning, repetition, reactions, payoff and unnecessary sections. If Story Finisher supplied a verified payoff, check that the LAST retained exchange contains that exact payoff and ends naturally without adding an unrelated topic or dangling phrase. A valid timeline is not necessarily a good edit. If an actual semantic issue is found, return pass=false with specifics. Acoustic joins still need a listening review: no rendered video or audio was supplied.',
     })
     out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
     out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
@@ -214,14 +216,23 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
   const recovered = recoverEditorialSelections(
     proposed, source.rangeMs, ctx.cache.words ?? [], out.editorialHandoff?.footage,
   )
-  const cuts = recovered.selections.length ? recovered.selections : out.editorialHandoff!.footage
+  // A Finisher's exact completed word edges are editorial commitments.
+  // Dense ASR sometimes has no 30ms silent gap after a finished sentence:
+  // the generic recovery pass can move a clean "Okay." cut into the next
+  // dangling "And". The Finisher already checked for true word splitting,
+  // source evidence, and the actual ending. Preserve its approved edges;
+  // report acoustic uncertainty for listening review instead.
+  const verifiedFinisher = Boolean(out.editorialHandoff!.finisher || out.editorialHandoff!.highlightsFinisher)
+  const cuts = verifiedFinisher ? proposed
+    : recovered.selections.length ? recovered.selections : out.editorialHandoff!.footage
   if (!cuts.length) throw new Error('rough_cut_no_usable_source_segments')
   out.editorialHandoff!.cutPlan = cuts
   await logAiProducerStep({
     runId: ctx.runId, stepIndex: ++budget.steps,
     phase: 'plan', tool: 'rough_cut_final_boundary_check', kind: 'validate',
     resultSummary: JSON.stringify({ cuts: cuts.length, dropped: recovered.dropped,
-      unsafeEdges: recovered.unsafeEdges, preservedFromFootage: !recovered.selections.length }),
+      unsafeEdges: recovered.unsafeEdges, preservedFromFootage: !recovered.selections.length,
+      preservedFinisherEdges: verifiedFinisher }),
   })
   const title = `AI Producer ${ctx.config.roughCutIntent === 'highlights' ? 'highlights' : 'rough cut'} · ${source.title ?? 'stream'}`
   const created = await sysTool(ctx, budget, 'plan', 'create_project', {

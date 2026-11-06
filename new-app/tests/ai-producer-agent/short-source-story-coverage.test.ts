@@ -11,6 +11,17 @@ vi.mock('@/lib/ai-producer-agent/log', () => ({
 vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
   runTool: vi.fn(async () => ({ ok: false, summary: 'not_used' })),
 }))
+vi.mock('@/lib/ai-producer-agent/story-finisher', () => ({
+  runStoryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => ({
+    selections: footage,
+    payoff: {
+      startMs: footage[footage.length-1]!.endMs - 2000,
+      endMs: footage[footage.length-1]!.endMs - 500,
+      quote: 'story story',
+    },
+    editorialReason: 'Isolated legacy Footage coverage behavior',
+  })),
+}))
 
 const local = [
   { startMs: 300_675, endMs: 322_175, beat: 'setup', reason: 'father and California' },
