@@ -148,7 +148,7 @@ const submitSchemas: Record<EditorialRole, ToolSchema> = {
   },
   footage: {
     name: names.footage,
-    description: 'Submit grounded candidate source intervals AND short preferred cuts with semantic ending cues.',
+    description: 'Submit the actual source-grounded chronological paper edit, not a candidate inventory.',
     parameters: {
       type: 'object', additionalProperties: false,
       properties: { selections: { type: 'array', minItems: 2, maxItems: 24, items: selection } },
