@@ -21,7 +21,7 @@ const local = [
 const spread = [
   sel(300_000, 324_000, 'surprise'),
   sel(620_000, 648_000, 'funny moment'),
-  sel(1_100_000, 1_139_000, 'insight'),
+  sel(1_100_000, 1_140_400, 'insight'),
 ]
 const words = Array.from({ length: 2400 }, (_, i) => ({
   w: i % 10 === 0 ? 'thing.' : 'word',
