@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
 import { createEditorialHandoff, completeTranscriptWords, resolveFootageWordSelections } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
+import { DraftEditsBuilder } from '@/lib/ai-producer-agent/draft-edits'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 
@@ -124,6 +125,26 @@ describe('full-transcript Story/Footage handoff',()=>{
     expect(edit).toHaveLength(1)
     expect(edit[0]).toMatchObject({startMs:10000,endMs:13750})
   })
+  it('adds short audio-only fades at selected Story joins without moving source cuts',()=>{
+    const builder=new DraftEditsBuilder({clipStartMs:0,clipEndMs:120000},'recording')
+    builder.preserveApprovedEdges=true
+    builder.addSegment({sourceId:'recording',srcInMs:10000,srcOutMs:40000})
+    builder.addSegment({sourceId:'recording',srcInMs:80000,srcOutMs:110000})
+    const before=builder.snapshot()
+    builder.setStoryVoiceCutFades(15)
+    const after=builder.snapshot()
+    expect(after.trim).toEqual(before.trim)
+    expect(after.cutRanges).toEqual(before.cutRanges)
+    expect(after.transitions).toEqual(before.transitions)
+    const envelope=after.keyframes?.find(k=>k.target==='voice'&&k.prop==='volume')
+    expect(envelope?.points).toEqual([
+      {tMs:0,v:0},{tMs:15,v:100},
+      {tMs:29985,v:100},{tMs:30000,v:0},{tMs:30015,v:100},
+      {tMs:59985,v:100},{tMs:60000,v:0},
+    ])
+    expect(after.keyframes?.some(k=>k.target==='video')).toBe(false)
+  })
+
   it('rejects malformed and reversed word IDs instead of treating them as timestamps',()=>{
     expect(()=>resolveFootageWordSelections([
       selection(95,40,'reversed'),selection(140,193,'another'),
