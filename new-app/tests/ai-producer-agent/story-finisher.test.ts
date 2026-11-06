@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
-import { finisherRepairHint, fullFinisherTranscript, repairFinisherEdges, runStoryFinisher, runStoryBoundaryFinisher, resolveStoryWordBoundaries, boundaryWordContext, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
+import { finisherRepairHint, fullFinisherTranscript, repairFinisherEdges, runStoryFinisher, runStoryBoundaryFinisher, resolveStoryWordBoundaries, boundaryWordContext, applyStoryBoundaryReview, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
 import { createEditorialHandoff, validateFootagePreferredEdits } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
@@ -329,11 +329,64 @@ describe('source-verified Story Finisher', () => {
     expect(result.selections[0]!.startMs).toBe(13000)
     expect(result.diagnostics[0]!.start).toBe('invalid_or_unavailable_first_word_id')
   })
+  it('rejects dangling speech despite a perfectly legal word boundary and repairs both examples', () => {
+    const source=[
+      {w:'My',s:1,e:1.2},{w:'dad',s:1.3,e:1.5},{w:'took',s:1.6,e:1.8},
+      {w:'me',s:1.9,e:2.0},{w:'to',s:2.1,e:2.2},{w:'church,',s:2.3,e:2.7},
+      {w:'where',s:2.8,e:3.0},{w:'I',s:3.1,e:3.2},{w:'met',s:3.3,e:3.5},
+      {w:'friends.',s:3.6,e:4.0},
+      {w:'Casey,',s:10,e:10.3},{w:"he's",s:10.4,e:10.6},
+      {w:'like,',s:10.7,e:11.0},{w:'you',s:11.1,e:11.3},
+      {w:'should',s:11.4,e:11.7},{w:'apply.',s:11.8,e:12.2},
+    ]
+    const original=[part(1000,2700),part(10000,11000)]
+    const initial=resolveStoryWordBoundaries([
+      {index:0,firstWordId:0,lastWordId:5},
+      {index:1,firstWordId:10,lastWordId:12},
+    ],original,source,[0,20000]).selections
+    expect(initial[0]!.endMs).toBe(2730)
+    expect(initial[1]!.endMs).toBe(11030)
+    const reviewed=applyStoryBoundaryReview([
+      {index:0,openingComplete:true,endingComplete:false,firstWordId:0,lastWordId:9,
+        explanation:'The church sentence ends after meeting friends'},
+      {index:1,openingComplete:true,endingComplete:false,firstWordId:10,lastWordId:15,
+        explanation:'Casey has not said the actual quote yet'},
+    ],original,initial,source,[0,20000])
+    expect(reviewed.selections[0]!.endMs).toBe(4030)
+    expect(reviewed.selections[1]!.endMs).toBe(12230)
+    expect(reviewed.unresolved).toEqual([])
+  })
+  it('keeps independently reviewed improvements when another passage cannot be repaired', () => {
+    const source=[
+      {w:'Complete.',s:1,e:1.3},{w:'Incomplete',s:2,e:2.3},
+      {w:'he',s:10,e:10.2},{w:'said,',s:10.3,e:10.6},
+    ]
+    const original=[part(1000,2300),part(10000,10600)]
+    const initially=[part(970,2330),part(9970,10630)]
+    const review=applyStoryBoundaryReview([
+      {index:0,openingComplete:true,endingComplete:false,firstWordId:0,lastWordId:0,
+        explanation:'Cut before tangent'},
+      {index:1,openingComplete:true,endingComplete:false,firstWordId:2,lastWordId:3,
+        explanation:'Quote is missing'},
+    ],original,initially,source,[0,20000])
+    expect(review.selections[0]!.endMs).toBe(1330)
+    expect(review.selections[1]!.endMs).toBe(10630)
+    expect(review.unresolved.some(x=>x.index===1&&x.edge==='end')).toBe(true)
+  })
   it('supplies numbered local words, not a full transcript or timestamp tool', async () => {
     const transcript=boundaryWordContext(words,compressed,[300000,1500000])
     expect(transcript).toHaveLength(compressed.length)
     expect(transcript.every(p=>p.words.every(w=>Number.isInteger(w.id)))).toBe(true)
     __setLunaImpl(async ({tools,messages})=>{
+      if(tools[0]?.name==='submit_story_boundary_review') {
+        const payload=JSON.parse(messages[1]!.content!)
+        expect(payload.actualProposedCut).toHaveLength(compressed.length)
+        return response('submit_story_boundary_review',{reviews:payload.actualProposedCut.map((p:{index:number;spokenWords:Array<{id:number}>})=>({
+          index:p.index,openingComplete:true,endingComplete:true,
+          firstWordId:p.spokenWords[0]!.id,lastWordId:p.spokenWords[p.spokenWords.length-1]!.id,
+          explanation:'Already complete for this fixture',
+        }))},'review')
+      }
       expect(tools.map(t=>t.name)).toEqual(['submit_story_word_boundaries'])
       const context=JSON.parse(messages[1]!.content!)
       expect(context.passages).toHaveLength(compressed.length)
@@ -358,6 +411,17 @@ describe('source-verified Story Finisher', () => {
       names.push(name)
       if(name==='submit_story_outline')return response(name,outline,'story')
       if(name==='submit_footage_selections')return response(name,{selections:compressed},'footage')
+      if(name==='submit_story_boundary_review'){
+        const p=JSON.parse(messages[1]!.content!)
+        return response(name,{reviews:p.actualProposedCut.map((segment:{
+          index:number;spokenWords:Array<{id:number}>,
+        })=>({
+          index:segment.index,openingComplete:true,endingComplete:true,
+          firstWordId:segment.spokenWords[0]!.id,
+          lastWordId:segment.spokenWords[segment.spokenWords.length-1]!.id,
+          explanation:'This mocked passage is complete',
+        }))},'review')
+      }
       if(name==='submit_story_word_boundaries'){
         const context=JSON.parse(messages[1]!.content!)
         expect(context.entireAuthorizedTranscript).toBeUndefined()
@@ -376,6 +440,7 @@ describe('source-verified Story Finisher', () => {
     expect(names[0]).toBe('submit_story_outline')
     expect(names.filter(n=>n==='submit_footage_selections').length).toBeGreaterThanOrEqual(1)
     expect(names.filter(n=>n==='submit_story_word_boundaries')).toHaveLength(1)
+    expect(names.filter(n=>n==='submit_story_boundary_review')).toHaveLength(1)
     expect(names[names.length-1]).toBe('submit_dialogue_cut_plan')
     expect(edit.cutPlan).toHaveLength(compressed.length)
     expect(edit.cutPlan.reduce((sum,s)=>sum+s.endMs-s.startMs,0)).toBeLessThan(110000)
