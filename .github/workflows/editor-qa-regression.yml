@@ -82,6 +82,7 @@ jobs:
             tests/silence-trim-polish.test.ts \
             tests/cleanup-proposals.test.ts \
             tests/ai-producer-agent/just-chatting-rough-cut.test.ts \
+            tests/ai-producer-agent/just-chatting-editorial-direction.test.ts \
             tests/ai-producer-agent/specialists.test.ts \
             tests/ai-producer-agent/specialist-workflow.test.ts \
             tests/ai-producer-agent/system-prompt.test.ts \

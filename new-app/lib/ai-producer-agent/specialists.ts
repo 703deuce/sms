@@ -10,6 +10,7 @@ import { summarizeToolResult } from '@/lib/ai-producer-agent/summarize'
 import type { Budget } from '@/lib/ai-producer-agent/budget'
 import { logAiProducerStep, redactArgs } from '@/lib/ai-producer-agent/log'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
+import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_REVIEW_CHECKS } from '@/lib/ai-producer-agent/just-chatting-direction'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 
 export type EditorialRole = 'story' | 'footage' | 'dialogue' | 'qa'
@@ -163,12 +164,16 @@ export async function runEditorialRole(
   const messages: LunaMessage[] = [
     { role: 'system', content: [
       FILM_EDITING_THEORY, SPECIALIST_ROLES[role],
+      ...(ctx.config.editMode === 'just_chatting_rough_cut'
+        ? [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role]] : []),
       'Tools are restricted by your role. Do not invent tool results. Submit one structured response with your submit tool.',
       'Work in original absolute source milliseconds. Do not flatten or export.',
     ].join('\n\n') },
     { role: 'user', content: JSON.stringify({
       ...context, sourceId: source.sourceId, sourceRangeMs: source.rangeMs,
       outputTargetSeconds: ctx.config.targetLengthS,
+      ...(role === 'qa' && ctx.config.editMode === 'just_chatting_rough_cut'
+        ? { requiredReviewChecks: JUST_CHATTING_REVIEW_CHECKS } : {}),
     }) },
   ]
   for (let turn = 0; turn < 8; turn++) {
@@ -193,6 +198,7 @@ export async function runEditorialRole(
       const name = call.function.name
       const args = safeJson(call.function.arguments)
       if (name === names[role] && args) {
+        try {
         if (role === 'story') {
           if (typeof args.logline !== 'string' || typeof args.audiencePromise !== 'string' ||
               !Array.isArray(args.beats) || args.beats.length < 3 ||
@@ -212,6 +218,20 @@ export async function runEditorialRole(
           throw new Error('specialist_review_invalid')
         }
         return { pass: args.pass, issues: args.issues.slice(0, 15) }
+        } catch (error) {
+          // Models sometimes choose an imprecise word boundary. Reject the
+          // proposal but give this specialist a chance to repair it before
+          // the entire twenty-minute run fails.
+          messages.push({
+            role: 'tool', tool_call_id: call.id,
+            content: JSON.stringify({
+              ok: false,
+              error: String((error as Error)?.message ?? error).slice(0, 240),
+              instruction: 'Revise the handoff using real source timestamps and resubmit.',
+            }),
+          })
+          continue
+        }
       }
       // Enforce read-only tools even if the model hallucinates a tool name.
       if (!readTools[role].includes(name)) {
@@ -260,7 +280,8 @@ export async function createEditorialHandoff(
     transcriptSamples: representativeTranscript(ctx.cache.words, source.rangeMs),
     observedMoments: ctx.cache.momentsSummary,
     inventory: ctx.cache.inventorySummary,
-    audienceGoal: 'Coherent conversational 3–8 minute rough cut, never a shorts montage',
+    audienceGoal: 'Coherent conversational 3–8 minute editable stream edit, never a shorts montage',
+    editingPriorities: ['meaning and context','narrative payoff','natural dialogue and reactions','no repetition','restrained polish'],
   }
   const story = await runEditorialRole(ctx, out, budget, 'story', base)
   const outline = {
