@@ -80,6 +80,32 @@ describe('AI Producer specialist editorial handoff', () => {
     ], source, words)).toThrow('invalid_source')
   })
 
+  it('repairs across overlapping ASR words instead of landing in another word', () => {
+    const denseWords: ClipWord[] = [
+      { w: 'a', s: 0.3, e: 0.8 },
+      { w: 'b', s: 0.7, e: 1.2 },
+      ...Array.from({ length: 12 }, (_, i) => ({ w: 'word', s: i + 2, e: i + 2.5 })),
+      ...Array.from({ length: 12 }, (_, i) => ({ w: 'word', s: i + 140, e: i + 140.5 })),
+    ]
+    const approvedDense = [
+      { ...approved[0], startMs: 740, endMs: 12_900 },
+      { ...approved[1], startMs: 140_000, endMs: 150_000 },
+    ]
+    const fixed = snapEditorialSelections(approvedDense, source, denseWords)
+    expect(fixed[0].startMs).toBe(270)
+    expect(checkEditorialSelections(fixed, source, denseWords)).toEqual(fixed)
+  })
+
+  it('does not silently move more than 1.5 seconds in uninterrupted dense speech', () => {
+    const denseWords: ClipWord[] = Array.from({ length: 80 }, (_, i) => ({
+      w: 'word', s: i * 0.1, e: i * 0.1 + 0.14,
+    }))
+    expect(() => snapEditorialSelections([
+      { ...approved[0], startMs: 4000, endMs: 16_000 },
+      { ...approved[1], startMs: 140_000, endMs: 150_000 },
+    ], source, [...denseWords, ...words.filter((w) => w.s >= 140)])).toThrow('cut_inside_word')
+  })
+
   it('rejects microcuts below three seconds', () => {
     expect(() => checkEditorialSelections([
       { ...approved[0], endMs: 2500 }, approved[1],
