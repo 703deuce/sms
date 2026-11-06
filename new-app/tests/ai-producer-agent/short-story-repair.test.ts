@@ -74,6 +74,34 @@ describe('full-transcript Story/Footage handoff',()=>{
     expect(edit.cutPlan[0]).toMatchObject({startMs:20100,endMs:47800})
     expect(edit.cutPlan[2]).toMatchObject({startMs:150100,endMs:183800})
   })
+  it('allows a 4-minute coherent Story selection without duration compression or another model pass',async()=>{
+    const long=[selection(0,479,'complete 4-minute narrative')]
+    let calls=0
+    __setLunaImpl(async ({messages,tools})=>{
+      const stage=calls++
+      const name=stage===0?'submit_story_outline':'submit_footage_word_selections'
+      expect(tools.map(t=>t.name)).toContain(name)
+      expect(messages[0]!.content).toContain('Ignore all duration targets')
+      const request=JSON.parse(messages[1]!.content!)
+      expect(request.runtimeTargetDisabled).toBe(true)
+      expect(request.outputTargetSeconds).toBeUndefined()
+      expect(request.fullTranscript).toHaveLength(600)
+      if(stage===1){
+        expect(request.selectionDurationInstruction).toContain('IGNORE runtime')
+        expect(request.preferredEditInstruction).not.toContain('90 seconds')
+      }
+      if(stage>1)throw Error('Cannot compress, re-review, or silently retry Story')
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'long-'+stage,type:'function',
+        function:{name,arguments:JSON.stringify(stage===0?outline:{selections:long})},
+      }]},usage:{prompt_tokens:500,completion_tokens:100}}
+    })
+    const edit=await createEditorialHandoff(context(),output(),new Budget(),null)
+    expect(calls).toBe(2)
+    expect(edit.cutPlan).toHaveLength(1)
+    expect(edit.cutPlan[0]).toMatchObject({startMs:100,endMs:239800})
+    expect(edit.cutPlan[0]!.endMs-edit.cutPlan[0]!.startMs).toBeGreaterThan(200000)
+  })
   it('does not silently trim a source transcript to twelve overview windows',()=>{
     expect(completeTranscriptWords(words,false)).toHaveLength(600)
     expect(completeTranscriptWords(words,true)[599]).toEqual([599,299600,299800,'final-word.'])
