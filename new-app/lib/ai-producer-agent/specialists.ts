@@ -210,6 +210,31 @@ export function snapEditorialSelections(
   }
 }
 
+function selectionDurationS(selections: EditorialSelection[]): number {
+  return selections.reduce((sum, s) => sum + (s.endMs - s.startMs), 0) / 1000
+}
+
+/**
+ * Footage must leave room for Dialogue to tighten speech; Dialogue itself must
+ * satisfy the final output constraint. Never pad with unsupported material.
+ */
+function selectionDurationRequirement(role: EditorialRole, target: [number, number]) {
+  const [minS, maxS] = target
+  const minRequiredS = role === 'footage'
+    ? Math.min(maxS, Math.ceil(minS * 1.1))
+    : minS
+  return { minRequiredS, maxS }
+}
+
+function validateSelectionDuration(
+  selections: EditorialSelection[], role: EditorialRole, target: [number, number],
+): void {
+  const { minRequiredS, maxS } = selectionDurationRequirement(role, target)
+  const actualS = selectionDurationS(selections)
+  if (actualS < minRequiredS) throw new Error('specialist_selections_too_short')
+  if (actualS > maxS) throw new Error('specialist_selections_too_long')
+}
+
 function selectionRepairHint(
   raw: unknown, words: ClipWord[], bounds: [number, number],
   allowed?: EditorialSelection[],
@@ -301,6 +326,10 @@ export async function runEditorialRole(
     { role: 'user', content: JSON.stringify({
       ...context, sourceId: source.sourceId, sourceRangeMs: source.rangeMs,
       outputTargetSeconds: ctx.config.targetLengthS,
+      ...((role === 'footage' || role === 'dialogue')
+        ? { selectionDurationRequirement: selectionDurationRequirement(role, ctx.config.targetLengthS),
+            selectionDurationInstruction: 'Duration is a hard acceptance constraint; choose complete, relevant, non-overlapping chronological source passages. Footage needs a 10% dialogue-trim buffer. Dialogue must remain within the actual final target.' }
+        : {}),
       ...(role === 'qa' && ctx.config.editMode === 'just_chatting_rough_cut'
         ? { requiredReviewChecks: JUST_CHATTING_REVIEW_CHECKS } : {}),
     }) },
@@ -358,6 +387,7 @@ export async function runEditorialRole(
             ? context.curatedSelections as EditorialSelection[] | undefined
             : undefined
           const selections = snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
+          validateSelectionDuration(selections, role, ctx.config.targetLengthS)
           await specialistEvent(ctx, budget, role, 'accepted', { turn, proposal: selectionLogSummary(args),
             accepted: selections.map((s) => [s.startMs, s.endMs]),
             movedEdges: selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
@@ -380,6 +410,20 @@ export async function runEditorialRole(
           const repairHint = (role === 'footage' || role === 'dialogue')
             ? selectionRepairHint(args.selections, ctx.cache.words ?? [], source.rangeMs, allowed)
             : {}
+          if ((errorCode === 'specialist_selections_too_short' || errorCode === 'specialist_selections_too_long') &&
+              (role === 'footage' || role === 'dialogue')) {
+            const selections = Array.isArray(args.selections) ? args.selections as EditorialSelection[] : []
+            const actualSeconds = selections.every((s) => Number.isFinite(s?.startMs) && Number.isFinite(s?.endMs))
+              ? selectionDurationS(selections) : null
+            const requirement = selectionDurationRequirement(role, ctx.config.targetLengthS)
+            Object.assign(repairHint, {
+              actualSeconds, ...requirement,
+              deficitSeconds: actualSeconds === null ? null : Math.max(0, requirement.minRequiredS - actualSeconds),
+              instruction: role === 'footage'
+                ? 'Add relevant, non-overlapping chronological intervals from the source inventory until the minimum duration including the Dialogue buffer is met; remain within the maximum. Do not pad with irrelevant material.'
+                : 'Expand whole-thought intervals only within curated Footage boundaries, retaining chronology and legal word edges. Reach the final minimum without inventing footage. If the curated material cannot support it, do not fabricate duration.',
+            })
+          }
           await specialistEvent(ctx, budget, role, 'rejected', {
             turn, invalidSubmissions, errorCode,
             proposal: selectionLogSummary(args),
@@ -470,7 +514,7 @@ export async function createEditorialHandoff(
     instruction: 'Refine whole-thought boundaries inside chosen footage; never select outside.',
   })
   const cutPlan = refined.selections as EditorialSelection[]
-  const duration = cutPlan.reduce((sum, s) => sum + s.endMs - s.startMs, 0) / 1000
+  const duration = selectionDurationS(cutPlan)
   const [lo, hi] = ctx.config.targetLengthS
   if (duration < lo || duration > hi) throw new Error('specialist_cut_plan_duration_outside_target')
   return { outline, footage, cutPlan }
