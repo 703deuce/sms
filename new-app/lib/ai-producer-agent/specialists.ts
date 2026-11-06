@@ -31,6 +31,15 @@ export type EditorialHandoff = {
     originalDurationSeconds: number
     finalDurationSeconds: number
   }
+  highlightsFinisher?: {
+    moments: Array<{
+      selection: EditorialSelection
+      landing: { startMs: number; endMs: number; quote: string }
+      editorialReason: string
+    }>
+    originalDurationSeconds: number
+    finalDurationSeconds: number
+  }
   review?: { pass: boolean; issues: string[] }
 }
 
@@ -808,13 +817,40 @@ export async function createEditorialHandoff(
       })
     }
   }
+  let highlightsFinisher: EditorialHandoff['highlightsFinisher']
+  if (highlightsMode && footage.length >= 2 && budget.state() !== 'hard') {
+    try {
+      const { runHighlightsFinisher } = await import('@/lib/ai-producer-agent/story-finisher')
+      const originalDurationSeconds = selectionDurationS(footage)
+      const decision = await runHighlightsFinisher(ctx, budget, outline, footage)
+      footage = decision.selections
+      highlightsFinisher = {
+        moments: decision.moments,
+        originalDurationSeconds,
+        finalDurationSeconds: selectionDurationS(footage),
+      }
+      await specialistEvent(ctx, budget, 'footage', 'highlights_finisher_handoff', {
+        beforeSeconds: originalDurationSeconds,
+        afterSeconds: highlightsFinisher.finalDurationSeconds,
+        moments: footage.length,
+        landings: highlightsFinisher.moments.map(m => [m.landing.startMs,m.landing.endMs]),
+      })
+    } catch (error) {
+      // Preserve the originally sourced moments; never pretend their dialogue
+      // has been polished when the Finisher cannot verify spoken landings.
+      await specialistEvent(ctx, budget, 'footage', 'highlights_finisher_unavailable', {
+        errorCode: String((error as Error)?.message ?? error).slice(0,200),
+      })
+    }
+  }
   let refined: Record<string, unknown>
   try {
     refined = await runEditorialRole(ctx, out, budget, 'dialogue', {
     ...base, storyOutline: outline, curatedSelections: footage,
     ...(finisher ? { verifiedPayoff: finisher.payoff, finisherEditorialReason: finisher.editorialReason } : {}),
+    ...(highlightsFinisher ? { verifiedHighlightLandings: highlightsFinisher.moments.map(m => m.landing) } : {}),
     instruction: highlightsMode
-      ? 'Refine all DISTINCT curated highlights, preserving each independent setup and payoff. No cutting the reel down into one scene; no incomplete speech at highlight ends. Keep chronological, word-safe cuts inside curated intervals, and preserve total length without padding.'
+      ? 'Preserve each DISTINCT curated highlight and its own verified source-spoken landing. Refine precise audio boundaries only. Never drop a curated moment, trim out its verified landing quote, start mid-phrase, or continue beyond the approved ending. Keep chronological, word-safe cuts and the approved total length.'
       : shortStory
       ? 'Refine the curated story without re-expanding it. Preserve the source-verified payoff and naturally complete ending chosen by Story Finisher when present. Do not remove the payoff, carry on into another topic, or extend outside curated footage. Protect precise phonemes and breaths; stay near the target duration.'
       : 'Refine whole-thought boundaries inside chosen footage; never select outside.',
@@ -882,6 +918,27 @@ export async function createEditorialHandoff(
       cutPlan = footage
     }
   }
+  if (highlightsFinisher) {
+    // Dialogue may adjust word edges but cannot undo the Finisher's verified
+    // per-highlight decisions or return to the original overlong passages.
+    const originals = highlightsFinisher.moments
+    const preserved = cutPlan.length === originals.length &&
+      originals.every((m,i) => {
+        const s = cutPlan[i]
+        return Boolean(s && s.startMs >= m.selection.startMs &&
+          s.endMs <= m.selection.endMs &&
+          s.startMs <= m.landing.startMs &&
+          s.endMs >= m.landing.endMs &&
+          s.endMs - m.landing.endMs <= 4_000)
+      })
+    if (!preserved) {
+      await specialistEvent(ctx, budget, 'dialogue', 'restored_finished_highlights', {
+        reason: 'dialogue_removed_moment_or_landing_or_extended_approved_range',
+        approvedCount: originals.length, dialogueCount: cutPlan.length,
+      })
+      cutPlan = footage
+    }
+  }
   const duration = selectionDurationS(cutPlan)
   const [lo, hi] = ctx.config.targetLengthS
   if (duration < lo || duration > hi) {
@@ -896,5 +953,5 @@ export async function createEditorialHandoff(
       note: 'Deliver the best coherent editable cut even when shorter or longer than requested.',
     })
   }
-  return { outline, footage, cutPlan, ...(finisher ? { finisher } : {}) }
+  return { outline, footage, cutPlan, ...(finisher ? { finisher } : {}), ...(highlightsFinisher ? { highlightsFinisher } : {}) }
 }
