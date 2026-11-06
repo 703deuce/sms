@@ -35,7 +35,13 @@ const distributed = [
   { startMs: 1_120_000, endMs: 1_155_000, beat: 'payoff', reason: 'actual outcome' },
 ]
 const outline = { logline: 'A personal transformation', audiencePromise: 'What changed and why',
-  beats: ['setup', 'challenge', 'payoff'] }
+  beats: ['setup', 'challenge', 'payoff'],
+  intendedPayoff: 'The meaningful recorded conclusion',
+  essentialSetup: 'Enough context for an independent viewer',
+  excludeAsides: [],
+  endingRule: 'End when the recorded point resolves',
+  highlightCriteria: 'Standalone, distinct moments',
+}
 const words = Array.from({ length: 1200 }, (_, i) => ({
   w: i === 66 ? 'just...' : 'story.',
   s: 300.4 + i, e: 300.6 + i,
