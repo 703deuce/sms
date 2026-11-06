@@ -8,7 +8,13 @@ export function createProject(ctx: ToolCtx, out: OutputState, args: Record<strin
   const sources = (args.sources as string[]) ?? ctx.sources.map((s) => s.sourceId)
   const main = sources[0] ?? ctx.sources[0]?.sourceId
   if (!main) return { ok: false, summary: 'no main source' }
-  const bounds = provisionalBounds(ctx)
+  // The rough-cut specialist returns ABSOLUTE timestamps in the source recording.
+  // A nonzero clipStartMs here makes normalizeEdits' legacy-relative migration
+  // add the source-window offset a second time when the trim happens to fit
+  // within the window's length (observed: +300040ms on a 90s run).
+  const bounds = ctx.config.editMode === 'just_chatting_rough_cut'
+    ? absoluteSourceBounds(ctx)
+    : provisionalBounds(ctx)
   out.builder = new DraftEditsBuilder(bounds, main, ctx.cache.words ?? [], ctx.rmsLookup ?? (() => []))
   out.builder.aspectRatio = ctx.config.editMode === 'just_chatting_rough_cut'
     ? '16:9' : (args.aspect as typeof out.builder.aspectRatio) ?? '9:16'
@@ -163,4 +169,10 @@ function provisionalBounds(ctx: ToolCtx) {
   const start = src?.rangeMs?.[0] ?? 0
   const end = src?.rangeMs?.[1] ?? start + 120_000
   return { clipStartMs: start, clipEndMs: end, trimMinMs: 0, trimMaxMs: end + 60_000 }
+}
+
+/** Absolute-recording timebase for sourced rough cuts; never window-relative. */
+function absoluteSourceBounds(ctx: ToolCtx) {
+  const end = ctx.sources[0]?.rangeMs?.[1] ?? 120_000
+  return { clipStartMs: 0, clipEndMs: end, trimMinMs: 0, trimMaxMs: end }
 }
