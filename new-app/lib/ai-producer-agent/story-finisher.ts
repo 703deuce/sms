@@ -164,7 +164,7 @@ export function verifyStoryFinish(
   // Code verifies source-grounded selections, not grammar via a word blacklist.
   verifyFinishedThoughts(selections, words)
   const duration = seconds(selections)
-  if (duration > target[1] * 1.2) throw new Error('finisher_still_over_target')
+  if (duration > target[1]) throw new Error('finisher_still_over_target')
   // Avoid a technically valid two-second soundbite framed as a complete story.
   if (duration < Math.max(25, target[0] * 0.75)) throw new Error('finisher_overshort_story')
   return { selections, payoff: {
@@ -377,12 +377,14 @@ export async function runStoryFinisher(
   ctx: ToolCtx, budget: Budget,
   outline: EditorialOutline,
   footage: EditorialSelection[],
+  mode: 'normal' | 'rescue' = 'normal',
 ): Promise<StoryFinisherDecision> {
   const words = ctx.cache.words ?? []
   const source = ctx.sources[0]
   if (!source?.rangeMs || !words.length || !footage.length) throw new Error('finisher_source_unavailable')
   const messages: LunaMessage[] = [
     { role: 'system', content: [
+      ...(mode === 'rescue' ? ['RECOVERY PASS: Earlier proposals were rejected. You MUST compress from the original curated Footage into a valid concise story. The full transcript is for understanding, not expanded source eligibility. Prefer several 5–20 second intervals wholly inside the candidate passages. Omit candidates and filler freely. Never span an excluded gap. Submit under the hard maximum runtime.'] : []),
       'You are STORY FINISHER, a PRECISION COMPRESSION EDITOR between Footage and Dialogue. The Story creative brief identifies the intended narrative, not facts. Verify the real payoff in the recording. Footage selections are CANDIDATES, not paragraphs you must keep. Shorten each to the few essential spoken seconds, or OMIT it completely. Retain the minimum truthful setup, development and payoff for the requested runtime.',
       'Read the ENTIRE timed transcript for SEMANTIC UNDERSTANDING, but select footage ONLY inside the authorized candidate intervals (plus at most 15 seconds of nearby context when truly necessary). The full transcript is NOT an instruction to preserve surrounding sentences. Never propose one continuous interval across an omitted source gap. If relevant moments are separated by a gap, return separate intervals. You may omit any unneeded candidate.',
       'For EACH kept passage, find the first necessary spoken word and the LAST word that completes the relevant thought. Stop BEFORE the speaker starts a new tangent, even if that tangent appears in the same ASR paragraph. Do not continue to a later full stop merely to satisfy punctuation. Likewise, do not start halfway into an essential phrase. A spoken payoff must be a precise 2+ word quote in the LAST kept passage; stop within 8 seconds after it. Target the specified seconds by deleting redundant ideas, never by clipping blindly at a timer or padding.',
@@ -403,7 +405,7 @@ export async function runStoryFinisher(
     }) },
   ]
   let reason = 'finisher_no_usable_decision'
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < (mode === 'rescue' ? 2 : 3); attempt++) {
     if (budget.state() === 'hard') throw new Error('finisher_budget_exhausted')
     const response = await lunaChat({ messages, tools: [submission], toolChoice: 'required' })
     budget.steps++
