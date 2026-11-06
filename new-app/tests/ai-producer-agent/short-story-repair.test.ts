@@ -12,6 +12,17 @@ vi.mock('@/lib/ai-producer-agent/log', () => ({
 vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
   runTool: vi.fn(async () => ({ ok: false, summary: 'not_used' })),
 }))
+vi.mock('@/lib/ai-producer-agent/story-finisher', () => ({
+  runStoryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => ({
+    selections: footage,
+    payoff: {
+      startMs: footage[footage.length-1]!.endMs - 2000,
+      endMs: footage[footage.length-1]!.endMs - 500,
+      quote: 'word word',
+    },
+    editorialReason: 'Keep existing test emphasis on Footage and Dialogue',
+  })),
+}))
 
 const brief = [
   { startMs: 20_000, endMs: 44_000, beat: 'setup', reason: 'a short source-grounded quote' },
