@@ -5,7 +5,7 @@ import type { Budget } from '@/lib/ai-producer-agent/budget'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
 import { lunaChat, type LunaMessage } from '@/lib/ai-producer-agent/luna-client'
 import { logAiProducerStep } from '@/lib/ai-producer-agent/log'
-import { checkEditorialSelections, snapEditorialSelections, type EditorialSelection, type EditorialOutline } from '@/lib/ai-producer-agent/specialists'
+import { checkEditorialSelections, snapEditorialSelections, type EditorialSelection, type EditorialOutline, type FootagePreferredEdit } from '@/lib/ai-producer-agent/specialists'
 import type { ToolSchema } from '@/lib/ai-producer-agent/tools/schemas'
 
 export type StoryPayoff = { startMs: number; endMs: number; quote: string }
@@ -378,6 +378,7 @@ export async function runStoryFinisher(
   outline: EditorialOutline,
   footage: EditorialSelection[],
   mode: 'normal' | 'rescue' = 'normal',
+  preferredEdits?: FootagePreferredEdit[],
 ): Promise<StoryFinisherDecision> {
   const words = ctx.cache.words ?? []
   const source = ctx.sources[0]
@@ -386,6 +387,7 @@ export async function runStoryFinisher(
     { role: 'system', content: [
       ...(mode === 'rescue' ? ['RECOVERY PASS: Earlier proposals were rejected. You MUST compress from the original curated Footage into a valid concise story. The full transcript is for understanding, not expanded source eligibility. Prefer several 5–20 second intervals wholly inside the candidate passages. Omit candidates and filler freely. Never span an excluded gap. Submit under the hard maximum runtime.'] : []),
       'You are STORY FINISHER, a PRECISION COMPRESSION EDITOR between Footage and Dialogue. The Story creative brief identifies the intended narrative, not facts. Verify the real payoff in the recording. Footage selections are CANDIDATES, not paragraphs you must keep. Shorten each to the few essential spoken seconds, or OMIT it completely. Retain the minimum truthful setup, development and payoff for the requested runtime.',
+      'Footage has supplied TWO kinds of ranges: broad source candidates (authorized source material), and optional preferredEdits that identify the short section, purpose, and semantic ending. Treat preferredEdits as your first-pass PAPER EDIT. Do NOT simply preserve the broader source candidates. Verify each preferred ending against the FULL conversation. You may tighten, shift within authorized footage, split, or OMIT a suggested passage when doing so creates a more coherent cut. The editing target is the final selected seconds, not the combined candidate duration.',
       'Read the ENTIRE timed transcript for SEMANTIC UNDERSTANDING, but select footage ONLY inside the authorized candidate intervals (plus at most 15 seconds of nearby context when truly necessary). The full transcript is NOT an instruction to preserve surrounding sentences. Never propose one continuous interval across an omitted source gap. If relevant moments are separated by a gap, return separate intervals. You may omit any unneeded candidate.',
       'For EACH kept passage, find the first necessary spoken word and the LAST word that completes the relevant thought. Stop BEFORE the speaker starts a new tangent, even if that tangent appears in the same ASR paragraph. Do not continue to a later full stop merely to satisfy punctuation. Likewise, do not start halfway into an essential phrase. A spoken payoff must be a precise 2+ word quote in the LAST kept passage; stop within 8 seconds after it. Target the specified seconds by deleting redundant ideas, never by clipping blindly at a timer or padding.',
       'Submit original absolute millisecond boundaries aligned to the FIRST and LAST required source words. Output 5–20 second spans when those suffice; long spans only when every included sentence is essential. Respect source order and chronology. Verify semantic completeness of ALL joins, not only the final ending. One concise 75–105s STORY is wanted, not a 260s source dump.',
@@ -399,9 +401,10 @@ export async function runStoryFinisher(
         endingRule: outline.endingRule,
       },
       originalSeconds: seconds(footage), curatedSelections: footage,
+      ...(preferredEdits?.length ? { preferredEdits, preferredTotalSeconds: preferredEdits.reduce((sum, item) => sum + (item.preferredEndMs - item.preferredStartMs), 0) / 1000 } : {}),
       entireAuthorizedTranscript: fullFinisherTranscript(words, source.rangeMs),
       wordTupleFormat: '[sourceStartMs,sourceEndMs,spokenWord]',
-      instruction: 'Return only the precise necessary source-word intervals. Omit digressions, repeated explanations and candidate passages that do not earn their seconds. Do not treat full-transcript context as material to keep. For each kept interval set its end to the last word of the relevant complete thought, BEFORE the next sentence or tangent begins; never keep a trailing sentence fragment. Verify source-spoken payoff and target length.',
+      instruction: 'Begin with preferredEdits as suggested cuts, not mandatory boundaries. Check their intendedPoint and endingCue for each passage against the full source, and retain only the strongest relevant spoken words. Return only the precise necessary source-word intervals. Omit digressions, repeated explanations and candidate passages that do not earn their seconds. Do not treat full-transcript context as material to keep. For each kept interval set its end to the last word of the relevant complete thought, BEFORE the next sentence or tangent begins; never keep a trailing sentence fragment. Verify source-spoken payoff and target length.',
     }) },
   ]
   let reason = 'finisher_no_usable_decision'
