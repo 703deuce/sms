@@ -240,8 +240,16 @@ export function recoverEditorialSelections(
     const range = curated ? [curated.startMs, curated.endMs] as [number, number] : undefined
     // Prefer genuine legal edges, searching farther than normal precision snapping.
     // A null result means retain the proposed edge, not discard the entire run.
-    const startMs = nearestLegalEdge(r.startMs, 'startMs', words, bounds, range, 30_000) ?? r.startMs
-    const endMs = nearestLegalEdge(r.endMs, 'endMs', words, bounds, range, 30_000) ?? r.endMs
+    const snappedStart = nearestLegalEdge(r.startMs, 'startMs', words, bounds, range, 30_000)
+    const snappedEnd = nearestLegalEdge(r.endMs, 'endMs', words, bounds, range, 30_000)
+    // Do not let a remote legal edge collapse a useful interval. Try the
+    // smallest safe adjustment first, then preserve original editorial bounds.
+    let startMs = snappedStart ?? r.startMs
+    let endMs = snappedEnd ?? r.endMs
+    if (endMs - startMs < 3000) {
+      startMs = r.startMs
+      endMs = r.endMs
+    }
     if (endMs - startMs < 3000 ||
         words.filter((w) => w.e * 1000 > startMs && w.s * 1000 < endMs).length < 5) {
       dropped++
