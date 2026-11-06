@@ -13,6 +13,7 @@ vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
 }))
 vi.mock('@/lib/ai-producer-agent/story-finisher', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai-producer-agent/story-finisher')>()),
+  runStoryBoundaryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => footage),
   runStoryFinisher: vi.fn(async (_ctx: unknown, _budget: unknown, _outline: unknown, footage: Array<{startMs:number;endMs:number}>) => ({
     selections: footage,
     payoff: {
@@ -89,7 +90,7 @@ describe('short-form narrative coverage', () => {
     const result = await createEditorialHandoff(context(), output(), new Budget(), null)
     expect(model.count()).toBe(4)
     expect(model.prompts[2]).toContain('previousCoverage')
-    expect(model.prompts[2]).toContain('Explore the FULL allowed source')
+    expect(model.prompts[2]).toContain('FINAL STORY PAPER EDIT REVISION')
     expect(result.cutPlan).toEqual(distributed)
     expect(result.cutPlan[2]!.startMs - result.cutPlan[1]!.endMs).toBeGreaterThan(300_000)
   })
