@@ -41,6 +41,8 @@ const words = [
     w, s: 604.1 + i * 0.4, e: 604.3 + i * 0.4,
   })),
   { w: 'In', s: 698.1, e: 698.3 }, { w: 'the', s: 698.5, e: 698.7 },
+  // Outside every selected passage: only a genuinely full transcript includes it.
+  { w: 'late-discussion-context', s: 1401.1, e: 1401.4 },
 ]
 const ctx = (): ToolCtx => ({
   runId: 'real-187s-regression',
@@ -94,6 +96,7 @@ describe('source-verified Story Finisher', () => {
     __setLunaImpl(async ({ messages, tools }) => {
       expect(tools.map(t => t.name)).toEqual(['submit_story_finish'])
       expect(messages[1]?.content).toContain('entireAuthorizedTranscript')
+      expect(messages[1]?.content).toContain('late-discussion-context')
       return response('submit_story_finish', {
         selections: compressed,
         payoff: n++ === 0 ? { ...payoff, quote: 'a fabricated DUI payoff' } : payoff,
