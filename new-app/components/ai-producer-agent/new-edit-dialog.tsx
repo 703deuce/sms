@@ -56,10 +56,18 @@ export function NewEditDialog({
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          sources: defaultSources.map((s, i) => ({
-            ...s,
-            sourceId: s.sourceId || `src_${i}`,
-          })),
+          sources: outputType === 'rough_cut'
+            ? (() => {
+                const projectIds = [...new Set(defaultSources.map((s) => s.projectId).filter(Boolean))]
+                if (projectIds.length !== 1) {
+                  throw new Error('Just Chatting rough cut needs one full recording project, not a clip selection')
+                }
+                return [{ sourceId: 'recording', kind: 'upload' as const, projectId: projectIds[0] }]
+              })()
+            : defaultSources.map((s, i) => ({
+                ...s,
+                sourceId: s.sourceId || `src_${i}`,
+              })),
           outputType: outputType === 'rough_cut' ? 'story' : outputType,
           ...(outputType === 'rough_cut' ? { editMode: 'just_chatting_rough_cut', targetLengthS: [180, 480] } : {}),
           platform,
@@ -128,7 +136,7 @@ export function NewEditDialog({
             </div>
             {outputType === 'rough_cut' ? (
               <p className="rounded-md border px-3 py-2 text-xs text-muted-foreground" data-testid="rough-cut-source-info">
-                Uses the last 20 minutes of the selected recording (minimum 5 minutes). Creates one new editable 3–8 minute rough cut with complete thoughts, conservative dialogue cuts, no automatic posting or paid visual generation. Review all cuts before export.
+                Uses the last 20 minutes of the project's original recording (not its extracted clips) (minimum 5 minutes). Creates one new editable 3–8 minute rough cut with complete thoughts, conservative dialogue cuts, no automatic posting or paid visual generation. Review all cuts before export.
               </p>
             ) : null}
             <div className="space-y-1">
