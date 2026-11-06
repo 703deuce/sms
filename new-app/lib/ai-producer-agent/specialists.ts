@@ -371,13 +371,18 @@ export async function runEditorialRole(
     { role: 'system', content: [
       FILM_EDITING_THEORY, SPECIALIST_ROLES[role],
       ...(ctx.config.editMode === 'just_chatting_rough_cut'
-        ? [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role]] : []),
+        ? [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role],
+          ctx.config.targetLengthS[1] <= 105
+            ? 'SHORT HIGHLIGHT OVERRIDE: Produce one concise 30–90 second standalone edit from the strongest sourced exchange. Prioritize an immediate understandable hook, essential context, and a satisfying payoff. Remove digressions and repetition. Short-form compression is intentional; do NOT follow the long-form pacing guidance. Respect meaning, chronology, and honest reactions. Target seconds supplied in the request.'
+            : 'LONG CONVERSATION EDIT: Preserve natural context and pacing with complete thoughts. The target duration is advisory, not a failure gate.',
+        ] : []),
       'Tools are restricted by your role. Do not invent tool results. Submit one structured response with your submit tool.',
       'Work in original absolute source milliseconds. Do not flatten or export.',
     ].join('\n\n') },
     { role: 'user', content: JSON.stringify({
       ...context, sourceId: source.sourceId, sourceRangeMs: source.rangeMs,
       outputTargetSeconds: ctx.config.targetLengthS,
+      editingIntent: ctx.config.targetLengthS[1] <= 105 ? 'short_highlight' : 'conversational_long_form',
       ...((role === 'footage' || role === 'dialogue')
         ? { selectionDurationInstruction: 'Aim for the requested duration with coherent story-driven selections. Duration is a preference, not a reason to withhold an editable cut. Never add irrelevant padding or invent footage.' }
         : {}),
@@ -590,7 +595,7 @@ export async function createEditorialHandoff(
     // Last-resort, honest first-pass source selection. Keep an editable draft
     // rather than losing the upload to failed model submissions.
     const [start, end] = source.rangeMs
-    const targetMs = Math.min(end - start, Math.max(180_000, ctx.config.targetLengthS[0] * 1000))
+    const targetMs = Math.min(end - start, Math.max(30_000, ctx.config.targetLengthS[0] * 1000))
     const fallbackStart = Math.max(start, end - targetMs)
     const provisional: EditorialSelection[] = [{
       startMs: fallbackStart, endMs: end, beat: 'discussion',
