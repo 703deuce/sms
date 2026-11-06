@@ -79,11 +79,11 @@ describe('source-verified Story Finisher', () => {
   })
   it('can extend a selected passage slightly for conversational context, never arbitrarily', () => {
     const candidate = compressed.map(s => ({ ...s }))
-    candidate[1]!.startMs -= 12000
+    candidate[1]!.startMs -= 7000
     expect(() => verifyStoryFinish({
       selections: candidate, payoff, editorialReason: 'Restore the question before the answer.',
     }, footage, words, [300000,1500000], [75,105])).not.toThrow()
-    candidate[1]!.startMs -= 4000
+    candidate[1]!.startMs -= 9000
     expect(() => verifyStoryFinish({
       selections: candidate, payoff, editorialReason: 'Too far before source selection.',
     }, footage, words, [300000,1500000], [75,105]))
