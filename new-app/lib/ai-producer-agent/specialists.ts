@@ -939,6 +939,21 @@ export async function createEditorialHandoff(
       cutPlan = footage
     }
   }
+  // Recheck the ACTUAL post-Dialogue result before handing it to assembly.
+  // A clean Finisher proposal can be ruined by a later model's boundary edits.
+  // Restore the verified Finisher plan instead of silently publishing a
+  // syntactically legal but mid-thought cut.
+  if (finisher || highlightsFinisher) {
+    const { verifyFinishedThoughts } = await import('@/lib/ai-producer-agent/story-finisher')
+    try {
+      verifyFinishedThoughts(cutPlan, ctx.cache.words ?? [])
+    } catch (error) {
+      await specialistEvent(ctx, budget, 'dialogue', 'restored_complete_sentences', {
+        reason: String((error as Error)?.message ?? error).slice(0, 200),
+      })
+      cutPlan = footage
+    }
+  }
   const duration = selectionDurationS(cutPlan)
   const [lo, hi] = ctx.config.targetLengthS
   if (duration < lo || duration > hi) {
