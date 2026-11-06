@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
+vi.mock('@/components/ai-producer-agent/run-progress', () => ({ RunProgress: () => null }))
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { NewEditDialog } from '@/components/ai-producer-agent/new-edit-dialog'
 import { createProject } from '@/lib/ai-producer-agent/tools/edit'
