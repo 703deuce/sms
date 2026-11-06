@@ -741,7 +741,7 @@ export async function runEditorialRole(
             !args.issues.every((i) => typeof i === 'string')) {
           throw new Error('specialist_review_invalid')
         }
-        await specialistEvent(ctx, budget, role, 'accepted', { turn, pass: args.pass, issueCount: args.issues.length })
+        await specialistEvent(ctx, budget, role, 'accepted', { turn, pass: args.pass, issueCount: args.issues.length, issues: args.issues.slice(0,15) })
         return { pass: args.pass, issues: args.issues.slice(0, 15) }
         } catch (error) {
           invalidSubmissions++
@@ -854,6 +854,15 @@ export async function createEditorialHandoff(
         : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.',
     })
   } catch (error) {
+    // Never invent a generic Story for this baseline. Surface the model failure
+    // instead of asking Footage to cut a story that Story never selected.
+    if (!highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105) {
+      await specialistEvent(ctx,budget,'story','story_decision_failed_no_fallback',{
+        errorCode:String((error as Error)?.message??error).slice(0,500),
+        sourceRangeMs:source.rangeMs,
+      },String((error as Error)?.message??error).slice(0,500))
+      throw error
+    }
     // An unavailable paper outline must not destroy a sourced editable draft.
     await specialistEvent(ctx, budget, 'story', 'fallback', {
       errorCode: String((error as Error)?.message ?? error).slice(0, 200),
@@ -877,6 +886,7 @@ export async function createEditorialHandoff(
     endingRule: String(story.endingRule),
     highlightCriteria: String(story.highlightCriteria),
   }
+  await specialistEvent(ctx,budget,'story','story_handoff',{outline,sourceRangeMs:source.rangeMs,transcriptWords:ctx.cache.words.length})
   let found: Record<string, unknown>
   try {
     found = await runEditorialRole(ctx, out, budget, 'footage', {
