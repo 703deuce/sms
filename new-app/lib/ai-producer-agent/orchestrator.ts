@@ -164,9 +164,12 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       actualTranscriptEvidence: buildJustChattingEvidence(
         ctx.cache.words ?? [], ctx.sources[0]!.rangeMs!, out.editorialHandoff.cutPlan,
       ),
+      editorialBaseline: ctx.config.roughCutIntent !== 'highlights' && ctx.config.targetLengthS[1] <= 105
+        ? 'Judge one complete, coherent story and exact word boundaries ONLY. Do not score runtime, 90-second compliance, shortness, or the number of passages.'
+        : undefined,
       instruction: ctx.config.roughCutIntent === 'highlights'
         ? 'HIGHLIGHTS QA: Inspect actual opening and closing transcript words for EVERY selected moment and all joins. Use the Highlights Finisher verified landings: confirm every promised quote remains in the final footage and each highlight actually ends naturally. Check that no unrelated talk after a landing, incomplete opening, missing independent payoff, or overlong segment remains. Require distinct source moments, not breath cuts. If source words do not support the finishing choices, pass=false with precise timestamps. No rendered audio was supplied; acoustic joins require listening review.'
-        : 'Evaluate the source-grounded opening/closing dialogue for every chosen interval and the actual before/after words at EVERY join. Check context, meaning, repetition, reactions, payoff and unnecessary sections. If Story Finisher supplied a verified payoff, check that the LAST retained exchange contains that exact payoff and ends naturally without adding an unrelated topic or dangling phrase. A valid timeline is not necessarily a good edit. If an actual semantic issue is found, return pass=false with specifics. Acoustic joins still need a listening review: no rendered video or audio was supplied.',
+        : 'EDITORIAL BASELINE (NO LENGTH TARGET): Judge only whether ONE specific story is coherently told from a clear opening through an actual recorded ending, whether the moments belong to that story, whether each selected passage begins and ends naturally, and whether any important connecting information is missing or repeated. Ignore duration entirely: two, three, four or more minutes are acceptable. Do not fail QA due to runtime or number of passages. Flag precise transcript words and source timestamps for every true editorial issue. Do not infer audio quality without listening.',
     })
     out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
     out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
