@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
-import { finisherRepairHint, fullFinisherTranscript, repairFinisherEdges, runStoryFinisher, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
+import { finisherRepairHint, fullFinisherTranscript, repairFinisherEdges, runStoryFinisher, runStoryBoundaryFinisher, verifyStoryBoundaryPolish, verifyStoryFinish } from '@/lib/ai-producer-agent/story-finisher'
 import { createEditorialHandoff, validateFootagePreferredEdits } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
@@ -225,62 +225,51 @@ describe('source-verified Story Finisher', () => {
     const overlapping = hints.map((h,i) => i === 1 ? { ...h, candidateStartMs: 310000 } : h)
     expect(validateFootagePreferredEdits(overlapping, footage, [300000,1500000])).toHaveLength(6)
   })
-  it('passes Footage preferred tight cuts and semantic ending cues into Finisher', async () => {
-    const hints = footage.map((selection, index) => ({
-      candidateStartMs: selection.startMs,
-      candidateEndMs: selection.endMs,
-      preferredStartMs: selection.startMs,
-      preferredEndMs: selection.startMs + Math.min(5000, selection.endMs - selection.startMs),
-      intendedPoint: 'Required beat ' + index,
-      endingCue: 'End before the next idea, beat ' + index,
-    }))
-    __setLunaImpl(async ({ tools, messages }) => {
-      const name = tools[tools.length-1]!.name
-      if (name === 'submit_story_outline') return response(name, outline, 's')
-      if (name === 'submit_footage_selections') {
-        expect(messages[1]?.content).toContain('preferredEditInstruction')
-        return response(name, { selections: footage, preferredEdits: hints }, 'f')
-      }
-      if (name === 'submit_story_finish') {
-        const supplied = JSON.parse(messages[1]!.content!)
-        expect(supplied.preferredEdits).toEqual(hints)
-        expect(supplied.preferredEdits[5].endingCue).toContain('End before the next idea')
-        expect(supplied.entireAuthorizedTranscript).toBeDefined()
-        return response(name, {
-          selections: compressed, payoff, editorialReason: 'Trim the source to useful thoughts',
-        }, 'finish')
-      }
-      if (name === 'submit_dialogue_cut_plan')
-        return response(name, { selections: compressed }, 'd')
-      throw new Error('Unexpected role ' + name)
-    })
-    const edit = await createEditorialHandoff(ctx(), out(), new Budget(), null)
-    expect(edit.preferredEdits).toEqual(hints)
-    expect(edit.cutPlan).toEqual(compressed)
+  it('cannot rescout, expand, reorder or cut more than 3s at either edge', () => {
+    const small = [part(300675,311880),part(450670,478885)]
+    const okay = [{...small[0],startMs:300675,endMs:311880},
+      {...small[1],startMs:450670,endMs:478885}]
+    expect(verifyStoryBoundaryPolish(okay,small,words,[300000,1500000])).toEqual(small)
+    expect(()=>verifyStoryBoundaryPolish([okay[1],okay[0]],small,words,[300000,1500000]))
+      .toThrow('boundary_polish_outside_original_or_3s_edge_limit')
+    expect(()=>verifyStoryBoundaryPolish([{...okay[0],endMs:309000},okay[1]],small,words,[300000,1500000]))
+      .toThrow('boundary_polish_outside_original_or_3s_edge_limit')
+    expect(()=>verifyStoryBoundaryPolish([okay[0]],small,words,[300000,1500000]))
+      .toThrow('boundary_polish_must_keep_every_selected_passage')
   })
-  it('invokes Finisher between Footage and Dialogue and preserves its verified ending', async () => {
-    const names: string[] = []
-    __setLunaImpl(async ({ tools, messages }) => {
-      const name = tools[tools.length - 1]!.name
-      names.push(name)
-      if (name === 'submit_story_outline') return response(name, outline, 's')
-      if (name === 'submit_footage_selections') return response(name, { selections: footage }, 'f')
-      if (name === 'submit_story_finish') return response(name, {
-        selections: compressed, payoff, editorialReason: 'End at verified passing of test',
-      }, 'finish')
-      if (name === 'submit_dialogue_cut_plan') {
-        expect(messages[1]?.content).toContain('verifiedPayoff')
-        // If Dialogue expands beyond the approval it cannot override the finisher.
-        return response(name, { selections: compressed }, 'd')
-      }
-      throw new Error('Unexpected role ' + name)
+  it('only reads nearby transcript and preserves the exact Footage edit', async () => {
+    __setLunaImpl(async ({tools,messages}) => {
+      expect(tools.map(t=>t.name)).toEqual(['submit_story_boundary_polish'])
+      const context=JSON.parse(messages[1]!.content!)
+      expect(context.selectedPassages).toHaveLength(compressed.length)
+      expect(context.entireAuthorizedTranscript).toBeUndefined()
+      expect(messages[1]?.content).not.toContain('late-discussion-context')
+      return response('submit_story_boundary_polish',{selections:compressed},'polish')
     })
-    const edit = await createEditorialHandoff(ctx(), out(), new Budget(), null)
-    expect(names).toEqual([
-      'submit_story_outline','submit_footage_selections','submit_footage_selections','submit_story_finish','submit_dialogue_cut_plan',
-    ])
-    expect(edit.finisher?.payoff).toEqual(payoff)
+    const result=await runStoryBoundaryFinisher(ctx(),new Budget(),outline,compressed)
+    expect(result).toEqual(compressed)
+  })
+  it('Footage supplies the short edit and Finisher never selects a new story', async () => {
+    const names:string[]=[]
+    __setLunaImpl(async ({tools,messages})=>{
+      const name=tools[tools.length-1]!.name
+      names.push(name)
+      if(name==='submit_story_outline')return response(name,outline,'story')
+      if(name==='submit_footage_selections')return response(name,{selections:compressed},'footage')
+      if(name==='submit_story_boundary_polish'){
+        const context=JSON.parse(messages[1]!.content!)
+        expect(context.entireAuthorizedTranscript).toBeUndefined()
+        expect(context.selectedPassages).toHaveLength(compressed.length)
+        return response(name,{selections:compressed},'polish')
+      }
+      if(name==='submit_dialogue_cut_plan')return response(name,{selections:compressed},'dialogue')
+      throw new Error('Unexpected tool '+name)
+    })
+    const edit=await createEditorialHandoff(ctx(),out(),new Budget(),null)
+    expect(names).toEqual(['submit_story_outline','submit_footage_selections',
+      'submit_story_boundary_polish','submit_dialogue_cut_plan'])
     expect(edit.cutPlan).toEqual(compressed)
     expect(edit.footage).toEqual(compressed)
+    expect(edit.finisher).toBeUndefined()
   })
 })
