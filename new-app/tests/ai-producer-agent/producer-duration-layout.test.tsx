@@ -30,6 +30,29 @@ describe('AI Producer conversation length and layout', () => {
     }
   })
 
+  it('sends a separate Highlights intent with the two-minute target without changing Story mode', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true, json: async () => ({ data: { runId: 'highlights1' } }),
+    } as Response)
+    try {
+      render(<NewEditDialog open onOpenChange={() => {}} defaultSources={[
+        { sourceId: 'recording', kind: 'clip', projectId: 'p1', clipId: 'clip1', title: 'Interview' },
+      ]} />)
+      fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'rough_cut_highlights' } })
+      fireEvent.change(screen.getByRole('combobox', { name: 'Desired edited length' }), { target: { value: '120' } })
+      fireEvent.click(screen.getByTestId('ai-producer-agent-submit'))
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+      const request = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit)?.body))
+      expect(request.outputType).toBe('story')
+      expect(request.editMode).toBe('just_chatting_rough_cut')
+      expect(request.roughCutIntent).toBe('highlights')
+      expect(request.targetLengthS).toEqual([105, 135])
+      expect(request.sources).toEqual([{ sourceId: 'recording', kind: 'upload', projectId: 'p1' }])
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
   it('starts a clean 16:9 source frame with no speaker-wide zoom or headline band', () => {
     const ctx = {
       sources: [{ sourceId: 'src1', rangeMs: [0, 300_000] }],

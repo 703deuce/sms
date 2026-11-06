@@ -116,15 +116,17 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     {
       role: 'user',
       content: JSON.stringify({
-        task: ctx.config.editMode === 'just_chatting_rough_cut' ? 'make_long_form_rough_cut' : 'make_edit',
+        task: ctx.config.roughCutIntent === 'highlights' ? 'make_source_highlights' : ctx.config.editMode === 'just_chatting_rough_cut' ? 'make_long_form_rough_cut' : 'make_edit',
         outputIndex: out.index,
         outputType: out.outputType,
         config: ctx.config,
         instruction,
         sources: ctx.sources.map((s) => ({ sourceId: s.sourceId, durationMs: s.durationMs, rangeMs: s.rangeMs, title: s.title })),
         transcriptWordCount: ctx.cache.words?.length ?? 0,
-        editorialGoal: ctx.config.editMode === 'just_chatting_rough_cut'
-          ? 'Select complete, coherent conversational sections from all twenty minutes; do not make a shorts montage. Use get_transcript in bounded ranges before deciding cut boundaries.' : undefined,
+        editorialGoal: ctx.config.roughCutIntent === 'highlights'
+          ? 'Curate distinct self-contained interesting moments across the authorized recording; no continuous-scene breath-cut reel, no unrelated padding.'
+          : ctx.config.editMode === 'just_chatting_rough_cut'
+            ? 'Select complete coherent conversations with a real ending. Use bounded transcript evidence.' : undefined,
         moments: ctx.cache.momentsSummary,
         inventory: ctx.cache.inventory,
         editorialHandoff: out.editorialHandoff ?? undefined,
@@ -160,7 +162,9 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       actualTranscriptEvidence: buildJustChattingEvidence(
         ctx.cache.words ?? [], ctx.sources[0]!.rangeMs!, out.editorialHandoff.cutPlan,
       ),
-      instruction: 'Evaluate the source-grounded opening/closing dialogue for every chosen interval and the actual before/after words at EVERY join. Check context, meaning, repetition, reactions, payoff and unnecessary sections. A valid timeline is not necessarily a good edit. If an actual semantic issue is found, return pass=false with specifics. Acoustic joins still need a listening review: no rendered video or audio was supplied.',
+      instruction: ctx.config.roughCutIntent === 'highlights'
+        ? 'HIGHLIGHTS QA: Inspect the actual opening and closing transcript words for EVERY selected moment and the joins. Does the reel contain distinct memorable moments rather than consecutive breaths from one conversation? Is each highlight understandable with its own payoff or complete thought, without repetitiveness, misrepresented context or sentence fragments? Judge pacing and selected content, and report pass=false with specific timestamps if weak. No rendered audio was supplied; acoustic joins require listening review.'
+        : 'Evaluate the source-grounded opening/closing dialogue for every chosen interval and the actual before/after words at EVERY join. Check context, meaning, repetition, reactions, payoff and unnecessary sections. A valid timeline is not necessarily a good edit. If an actual semantic issue is found, return pass=false with specifics. Acoustic joins still need a listening review: no rendered video or audio was supplied.',
     })
     out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
     out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
@@ -219,7 +223,7 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
     resultSummary: JSON.stringify({ cuts: cuts.length, dropped: recovered.dropped,
       unsafeEdges: recovered.unsafeEdges, preservedFromFootage: !recovered.selections.length }),
   })
-  const title = `AI Producer rough cut · ${source.title ?? 'stream'}`
+  const title = `AI Producer ${ctx.config.roughCutIntent === 'highlights' ? 'highlights' : 'rough cut'} · ${source.title ?? 'stream'}`
   const created = await sysTool(ctx, budget, 'plan', 'create_project', {
     title, sources: [source.sourceId], aspect: '16:9', outputType: out.outputType,
   }, out)

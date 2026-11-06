@@ -13,6 +13,8 @@ export type AiProducerOutputType = 'single_payoff' | 'montage' | 'story' | 'auto
 
 export type AiProducerRunConfig = {
   editMode?: 'just_chatting_rough_cut'
+  /** Story preserves one narrative; highlights curates multiple standalone moments. */
+  roughCutIntent?: 'story' | 'highlights'
   targetLengthS: [number, number]
   music: 'none' | 'library'
   memeSfx: 'off' | 'subtle' | 'meme'

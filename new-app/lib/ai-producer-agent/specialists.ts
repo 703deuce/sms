@@ -279,6 +279,24 @@ export function recoverEditorialSelections(
       Number(Boolean(wordAtUnsafeBoundary(item.endMs, words))), 0) }
 }
 
+/** Source-gap diversity is measured in the original recording, not in export seconds.
+ * Breaths and filler cuts do not count as separate highlights. No arbitrary
+ * number of jumps is imposed when the recording has fewer usable moments.
+ */
+export function highlightsCoverage(
+  selections: EditorialSelection[], target: [number, number],
+) {
+  const durationSeconds = selections.reduce((n, s) => n + (s.endMs - s.startMs), 0) / 1000
+  const distinctMomentCount = selections.length
+    ? 1 + selections.slice(1).filter((s, i) => s.startMs - selections[i]!.endMs >= 8_000).length
+    : 0
+  const minimumDistinct = target[1] <= 45 ? 2 : 3
+  return {
+    durationSeconds, distinctMomentCount, minimumDistinct,
+    needsRevision: durationSeconds < target[0] || distinctMomentCount < minimumDistinct,
+  }
+}
+
 function selectionDurationS(selections: EditorialSelection[]): number {
   return selections.reduce((sum, s) => sum + (s.endMs - s.startMs), 0) / 1000
 }
@@ -412,6 +430,7 @@ export async function runEditorialRole(
 ): Promise<Record<string, unknown>> {
   const source = ctx.sources[0]
   if (!source?.rangeMs) throw new Error('specialist_source_window_missing')
+  const highlightsMode = ctx.config.roughCutIntent === 'highlights'
   const allowedTools = TOOL_SCHEMAS.filter((tool) => readTools[role].includes(tool.name))
   const tools = [...allowedTools, submitSchemas[role]]
   const messages: LunaMessage[] = [
@@ -423,15 +442,20 @@ export async function runEditorialRole(
             ? 'SHORT HIGHLIGHT OVERRIDE: Produce one concise 30–90 second standalone edit from the strongest sourced exchange. Prioritize an immediate understandable hook, essential context, and a satisfying payoff. Remove digressions and repetition. Short-form compression is intentional; do NOT follow the long-form pacing guidance. Respect meaning, chronology, and honest reactions. Target seconds supplied in the request.'
             : 'LONG CONVERSATION EDIT: Preserve natural context and pacing with complete thoughts. The target duration is advisory, not a failure gate.',
         ] : []),
+      ...(highlightsMode ? [
+        'HIGHLIGHTS MODE OVERRIDE: Curate several DISTINCT memorable moments across the WHOLE available source, not one continuous scene with breath cuts. Each moment must be independently understandable and interesting; authentic jokes, surprising answers, revealing quotes, reactions or sharp insights are welcome. Select 2 distinct moments for very short highlights and ideally 3+ for 60–120 seconds, without forcing weak filler. Do not pretend unrelated moments form one chronological story. Avoid repetitive quotes, fabricated context, misleading juxtapositions, dangling sentences, or cuts inside words. Source-order chronological output is required.'
+      ] : []),
       'Tools are restricted by your role. Do not invent tool results. Submit one structured response with your submit tool.',
       'Work in original absolute source milliseconds. Do not flatten or export.',
     ].join('\n\n') },
     { role: 'user', content: JSON.stringify({
       ...context, sourceId: source.sourceId, sourceRangeMs: source.rangeMs,
       outputTargetSeconds: ctx.config.targetLengthS,
-      editingIntent: ctx.config.targetLengthS[1] <= 105 ? 'short_highlight' : 'conversational_long_form',
+      editingIntent: highlightsMode ? 'multi_moment_highlights' : ctx.config.targetLengthS[1] <= 105 ? 'short_story' : 'conversational_long_form',
       ...((role === 'footage' || role === 'dialogue')
-        ? { selectionDurationInstruction: 'Select enough sourced material for the specified target duration, retaining the beginning, essential development and payoff. Do not submit a lone isolated excerpt as a complete story. If there is truly insufficient relevant footage, submit the best complete edit without padding; the system will preserve that draft.' }
+        ? { selectionDurationInstruction: highlightsMode
+          ? 'Find distinct self-contained highlights from different source moments. Do not count adjacent breath cuts as different moments. Choose compelling footage up to the duration target without padding; finish each excerpt on a complete thought.'
+          : 'Select enough sourced material for the specified target duration, retaining the beginning, essential development and payoff. Do not submit a lone isolated excerpt as a complete story. If there is truly insufficient relevant footage, submit the best complete edit without padding; the system will preserve that draft.' }
         : {}),
       ...(role === 'qa' && ctx.config.editMode === 'just_chatting_rough_cut'
         ? { requiredReviewChecks: JUST_CHATTING_REVIEW_CHECKS } : {}),
@@ -608,14 +632,17 @@ export async function createEditorialHandoff(
 ): Promise<EditorialHandoff> {
   const source = ctx.sources[0]
   if (!source?.rangeMs || !ctx.cache.words?.length) throw new Error('rough_cut_transcript_missing')
+  const highlightsMode = ctx.config.roughCutIntent === 'highlights'
   const base = {
     instruction,
     transcriptSamples: representativeTranscript(ctx.cache.words, source.rangeMs),
     observedMoments: ctx.cache.momentsSummary,
     inventory: ctx.cache.inventorySummary,
-    audienceGoal: ctx.config.targetLengthS[1] <= 105
-      ? 'A standalone short-form story with an understandable setup, development and payoff, targeting the requested duration'
-      : 'A coherent conversational long-form edit preserving context and natural pacing',
+    audienceGoal: highlightsMode
+      ? 'A highlight reel of multiple distinct, entertaining, independently comprehensible moments across the whole source, with honest context and complete thoughts'
+      : ctx.config.targetLengthS[1] <= 105
+        ? 'A standalone short-form story with an understandable setup, development and payoff, targeting the requested duration'
+        : 'A coherent conversational long-form edit preserving context and natural pacing',
     editingPriorities: ['meaning and context','narrative payoff','natural dialogue and reactions','no repetition','restrained polish'],
   }
   let story: Record<string, unknown>
@@ -639,7 +666,9 @@ export async function createEditorialHandoff(
   try {
     found = await runEditorialRole(ctx, out, budget, 'footage', {
       ...base, storyOutline: outline,
-      instruction: ctx.config.targetLengthS[1] <= 105
+      instruction: highlightsMode
+        ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
+        : ctx.config.targetLengthS[1] <= 105
         ? 'SHORT FILM PAPER EDIT: First compare events and conversations across the entire source window. Choose one truthful story with setup, turning point and payoff, sourcing each beat from anywhere relevant in the 20 minutes. Do NOT take a nearly continuous 60–90 second stretch simply because it is easy to fill the requested time. Different recordings can support one story; here use separate ranges from the same recording whenever the narrative needs them. Editorial judgment is allowed: reorder ideas in your outline, but keep selected footage chronological and never invent connections. End at a finished sentence or genuine payoff. Select only relevant material.'
         : 'Select coherent source intervals; evidence first, then editorial value.',
     })
@@ -663,12 +692,42 @@ export async function createEditorialHandoff(
   }
   let footage = found.selections as EditorialSelection[]
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
-  const shortStory = ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
+  const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   // One targeted *editorial* retry instead of accepting a 20s excerpt as a
   // requested 90s story. Preserve original cuts if the revision is worse.
   const firstCoverage = shortStory
     ? shortStoryCoverage(footage, ctx.cache.words, ctx.config.targetLengthS, source.rangeMs)
     : null
+  const firstHighlightsCoverage = highlightsMode
+    ? highlightsCoverage(footage, ctx.config.targetLengthS)
+    : null
+  if (firstHighlightsCoverage?.needsRevision && budget.state() !== 'hard') {
+    const before = footage
+    try {
+      const revision = await runEditorialRole(ctx, out, budget, 'footage', {
+        ...base, storyOutline: outline, previousSelections: before,
+        previousCoverage: firstHighlightsCoverage,
+        instruction: 'HIGHLIGHTS REVISION: The proposal uses adjacent segments like one excerpt, or is too short. Search DIFFERENT locations across the whole authorized source. Curate the strongest self-contained, non-repetitive moments with distinct source gaps (not breath cuts). Retain complete context and sentence endings for every highlight, and target the requested total length. Never pad with weak or unrelated footage.',
+      })
+      const candidates = revision.selections as EditorialSelection[]
+      const after = highlightsCoverage(candidates, ctx.config.targetLengthS)
+      const beforeScore = firstHighlightsCoverage.distinctMomentCount
+      if (after.distinctMomentCount > beforeScore &&
+          after.durationSeconds >= Math.min(firstHighlightsCoverage.durationSeconds * 0.65, minimumSeconds * 0.7) &&
+          after.durationSeconds <= maximumSeconds * 1.5) {
+        footage = candidates
+        await specialistEvent(ctx, budget, 'footage', 'highlights_repaired', {
+          before: firstHighlightsCoverage, after,
+        })
+      } else {
+        await specialistEvent(ctx, budget, 'footage', 'highlights_revision_kept_original', { before: firstHighlightsCoverage, after })
+      }
+    } catch (error) {
+      await specialistEvent(ctx, budget, 'footage', 'highlights_repair_unavailable', {
+        errorCode: String((error as Error)?.message ?? error).slice(0, 200),
+      })
+    }
+  }
   if (firstCoverage?.needsReview && budget.state() !== 'hard') {
     const beforeSeconds = selectionDurationS(footage)
     try {
@@ -715,7 +774,9 @@ export async function createEditorialHandoff(
   try {
     refined = await runEditorialRole(ctx, out, budget, 'dialogue', {
     ...base, storyOutline: outline, curatedSelections: footage,
-    instruction: shortStory
+    instruction: highlightsMode
+      ? 'Refine all DISTINCT curated highlights, preserving each independent setup and payoff. No cutting the reel down into one scene; no incomplete speech at highlight ends. Keep chronological, word-safe cuts inside curated intervals, and preserve total length without padding.'
+      : shortStory
       ? 'Refine the WHOLE multi-beat story, not one local anecdote. Keep sourced setup, development and payoff from the curated passages. Finish on a full sentence or deliberate resolved beat; avoid ellipses or trailing conjunctions. Never extend outside curated footage. Do not delete necessary beats just to tighten pacing.'
       : 'Refine whole-thought boundaries inside chosen footage; never select outside.',
     })
@@ -747,6 +808,26 @@ export async function createEditorialHandoff(
       reason: 'dialogue_removed_required_story_or_duration',
     })
     cutPlan = footage
+  }
+  if (highlightsMode) {
+    const approved = highlightsCoverage(footage, ctx.config.targetLengthS)
+    const refinedCoverage = highlightsCoverage(cutPlan, ctx.config.targetLengthS)
+    // Dialogue may refine boundaries but must not silently discard a distinct
+    // highlight chosen by the scouting agent.
+    if (approved.distinctMomentCount > refinedCoverage.distinctMomentCount ||
+        (approved.durationSeconds >= minimumSeconds &&
+         refinedCoverage.durationSeconds < minimumSeconds * 0.8)) {
+      await specialistEvent(ctx, budget, 'dialogue', 'restored_curated_highlights', {
+        approved, refined: refinedCoverage,
+      })
+      cutPlan = footage
+    }
+    const finalCoverage = highlightsCoverage(cutPlan, ctx.config.targetLengthS)
+    if (finalCoverage.needsRevision) {
+      await specialistEvent(ctx, budget, 'dialogue', 'highlights_best_effort', {
+        ...finalCoverage, note: 'Preserve editable draft; highlight diversity or length remains below target.',
+      })
+    }
   }
   const duration = selectionDurationS(cutPlan)
   const [lo, hi] = ctx.config.targetLengthS
