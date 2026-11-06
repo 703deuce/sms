@@ -49,7 +49,13 @@ const words = Array.from({ length: 2400 }, (_, i) => ({
   s: 300 + i * 0.5 + 0.1,
   e: 300 + i * 0.5 + 0.3,
 }))
-const outline = { logline: 'Best moments of this interview', audiencePromise: 'Three revealing exchanges', beats: ['surprise', 'humor', 'insight'] }
+const outline = { logline: 'Best moments of this interview', audiencePromise: 'Three revealing exchanges', beats: ['surprise', 'humor', 'insight'],
+  intendedPayoff: 'The meaningful recorded conclusion',
+  essentialSetup: 'Enough context for an independent viewer',
+  excludeAsides: [],
+  endingRule: 'End when the recorded point resolves',
+  highlightCriteria: 'Standalone, distinct moments',
+}
 
 function ctx(intent: 'story' | 'highlights' = 'highlights'): ToolCtx {
   return {

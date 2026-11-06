@@ -37,6 +37,11 @@ const outline = {
   logline: 'A discussion moves from problem to resolution',
   audiencePromise: 'Understand what happened',
   beats: ['setup', 'development', 'payoff'],
+  intendedPayoff: 'Passing the written test on the second attempt',
+  essentialSetup: 'Language struggle and initial failure',
+  excludeAsides: ['Unrelated ride-along discussion'],
+  endingRule: 'Stop at the complete spoken resolution',
+  highlightCriteria: 'Separate memorable moments with standalone conclusions',
 }
 function context(): ToolCtx {
   return {

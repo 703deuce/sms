@@ -5,7 +5,7 @@ import type { Budget } from '@/lib/ai-producer-agent/budget'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
 import { lunaChat, type LunaMessage } from '@/lib/ai-producer-agent/luna-client'
 import { logAiProducerStep } from '@/lib/ai-producer-agent/log'
-import { checkEditorialSelections, snapEditorialSelections, type EditorialSelection } from '@/lib/ai-producer-agent/specialists'
+import { checkEditorialSelections, snapEditorialSelections, type EditorialSelection, type EditorialOutline } from '@/lib/ai-producer-agent/specialists'
 import type { ToolSchema } from '@/lib/ai-producer-agent/tools/schemas'
 
 export type StoryPayoff = { startMs: number; endMs: number; quote: string }
@@ -268,7 +268,7 @@ export function verifyHighlightsFinish(
 
 export async function runHighlightsFinisher(
   ctx: ToolCtx, budget: Budget,
-  outline: { logline: string; audiencePromise: string; beats: string[] },
+  outline: EditorialOutline,
   footage: EditorialSelection[],
 ): Promise<HighlightsFinisherDecision> {
   const words = ctx.cache.words ?? []
@@ -277,7 +277,7 @@ export async function runHighlightsFinisher(
   const messages: LunaMessage[] = [
     { role: 'system', content: [
       'You are HIGHLIGHTS FINISHER, the same editorial completion specialist as Story Finisher, but with a DIFFERENT completion criterion.',
-      'There is NO single shared narrative payoff. Each curated highlight must be independently interesting and comprehensible, with its own setup and source-spoken punchline, revelation, conclusion or natural landing.',
+      'There is NO single shared narrative payoff. Each curated highlight must be independently interesting and comprehensible, with its own setup and source-spoken punchline, revelation, conclusion or natural landing. Use the Story creative brief for overall editorial taste, and the INDIVIDUAL moment intent to determine the correct separate ending of EACH moment. Verify every proposed landing is spoken and actually resolves that moment; an intent is NOT evidence.',
       'Preserve ONE source interval per curated highlight in original order. You may adjust each start/end by up to 15 seconds beyond the curator\'s original interval when the FULL transcript shows a needed setup or complete ending. Do not lose a highlight, pick unrelated moments or turn the reel into a single continuous scene.',
       'Choose a whole-thought beginning and ending for EACH interval. Never end with "And", "In the", a dangling clause, or an incomplete question. Do not claim quotes not literally spoken. Give a 2+ word timed landing quote near each end, then stop (max 4 seconds after landing).',
       'Read the ENTIRE authorized timed transcript, including the earlier question and the later answer for each moment. Judge the whole exchange, not its last word or punctuation. Keep source-referenced absolute milliseconds and submit one submit_highlights_finish tool call.',
@@ -285,6 +285,14 @@ export async function runHighlightsFinisher(
     { role: 'user', content: JSON.stringify({
       outline, targetSeconds: ctx.config.targetLengthS,
       originalSeconds: seconds(footage), curatedHighlights: footage,
+      perHighlightIntent: footage.map((selection, index) => ({
+        index,
+        sourceRangeMs: [selection.startMs, selection.endMs],
+        intendedMoment: selection.beat,
+        whyItWasSelected: selection.reason,
+        editorialCriterion: outline.highlightCriteria,
+        desiredEnding: 'The complete, source-supported resolution or landing of THIS moment, not a forced story-wide payoff',
+      })),
       entireAuthorizedTranscript: fullFinisherTranscript(words, source.rangeMs),
       wordTupleFormat: '[sourceStartMs,sourceEndMs,spokenWord]',
       instruction: 'Return the same number of highlights as supplied, but each shorter and independently complete. Choose separate verified spoken landing quotes. Prioritize conversational meaning and a clean ending for all moments.',
@@ -326,7 +334,7 @@ export async function runHighlightsFinisher(
 
 export async function runStoryFinisher(
   ctx: ToolCtx, budget: Budget,
-  outline: { logline: string; audiencePromise: string; beats: string[] },
+  outline: EditorialOutline,
   footage: EditorialSelection[],
 ): Promise<StoryFinisherDecision> {
   const words = ctx.cache.words ?? []
@@ -334,17 +342,23 @@ export async function runStoryFinisher(
   if (!source?.rangeMs || !words.length || !footage.length) throw new Error('finisher_source_unavailable')
   const messages: LunaMessage[] = [
     { role: 'system', content: [
-      'You are STORY FINISHER, a specialist between Footage and Dialogue. Your only jobs are: identify the ACTUAL recorded payoff, remove irrelevant surrounding talk, and end the story at a complete natural thought. Do not assemble media or change chronology.',
+      'You are STORY FINISHER, a specialist between Footage and Dialogue. The Story agent has explicitly supplied intendedPayoff, essentialSetup, excludeAsides and endingRule. Use those to understand WHICH narrative you are finishing. They are creative intentions, NOT verified facts. Compare them with the full source and select the ACTUAL recorded outcome. Retain its essential setup, remove irrelevant talk, end at the last meaningful complete thought, and never fabricate the intended resolution.',
       'Read the ENTIRE source transcript to understand the full conversation, including the question before a candidate and the outcome afterward. You may extend a Footage interval by up to 15 seconds on either side to capture a missing question or natural complete ending, but only if semantically part of that selected moment. Never invent speech or a payoff; if no real resolution exists, do not fake one.',
       'A source-backed payoff is a precise 2+ word quote and timestamp, included in the LAST selected passage. Keep only a short natural reaction after the payoff (<=8 seconds). EVERY retained passage must END at a complete sentence, not a comma or connector; a word-safe boundary alone is not enough. If you end a sentence before a dangling continuation, stop at that sentence timestamp. Do not keep the lead-in to the next thought. Aim for the target duration (at least 75% of requested minimum), not a 51-second cut when 75-105 seconds were requested. Preserve essential setup, obstacle, and result.',
       'Use absolute source milliseconds and whole-word boundaries. The input contains EVERY authorized ASR word with original timestamps, not selected snippets. Read the full narrative to decide where thoughts start and truly resolve. Sentence punctuation alone is not enough. The 15-second per-side extension is a maximum permission, not an invitation to pad.',
     ].join('\n\n') },
     { role: 'user', content: JSON.stringify({
       outline, targetSeconds: ctx.config.targetLengthS,
+      storyIntent: {
+        intendedPayoff: outline.intendedPayoff,
+        essentialSetup: outline.essentialSetup,
+        excludeAsides: outline.excludeAsides,
+        endingRule: outline.endingRule,
+      },
       originalSeconds: seconds(footage), curatedSelections: footage,
       entireAuthorizedTranscript: fullFinisherTranscript(words, source.rangeMs),
       wordTupleFormat: '[sourceStartMs,sourceEndMs,spokenWord]',
-      instruction: 'Decide where the story ACTUALLY resolves. Cut redundant adjacent talk, especially after the verified payoff. Keep a coherent complete story. Return all retained intervals and verified payoff quote with matching timestamps.',
+      instruction: 'Use storyIntent as a plan, but VERIFY the intended resolution in the actual words. If it is absent, do not claim success or invent an ending. Keep the essential setup, exclude unrelated asides, and stop when the actual source-supported payoff fulfills the audience promise. Return exact recorded payoff words, timestamp, and all kept intervals.',
     }) },
   ]
   let reason = 'finisher_no_usable_decision'

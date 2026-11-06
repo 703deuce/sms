@@ -31,6 +31,11 @@ const outline = {
   logline: 'How a learner recovered from a failed entrance test',
   beats: ['challenge', 'first failure', 'prepared and passed'],
   audiencePromise: 'Learn how the candidate passed on her second attempt',
+  intendedPayoff: 'Passing the written test on the second attempt',
+  essentialSetup: 'Language struggle and initial failure',
+  excludeAsides: ['Unrelated ride-along discussion'],
+  endingRule: 'Stop at the complete spoken resolution',
+  highlightCriteria: 'Separate memorable moments with standalone conclusions',
 }
 const words = [
   ...footage.flatMap((s, i) => Array.from({ length: 6 }, (_, j) => ({
@@ -119,6 +124,14 @@ describe('source-verified Story Finisher', () => {
       expect(tools.map(t => t.name)).toEqual(['submit_story_finish'])
       expect(messages[1]?.content).toContain('entireAuthorizedTranscript')
       expect(messages[1]?.content).toContain('late-discussion-context')
+      const userContext = JSON.parse(messages[1]!.content)
+      expect(userContext.storyIntent).toEqual({
+        intendedPayoff: outline.intendedPayoff,
+        essentialSetup: outline.essentialSetup,
+        excludeAsides: outline.excludeAsides,
+        endingRule: outline.endingRule,
+      })
+      expect(userContext.outline.audiencePromise).toBe(outline.audiencePromise)
       return response('submit_story_finish', {
         selections: compressed,
         payoff: n++ === 0 ? { ...payoff, quote: 'a fabricated DUI payoff' } : payoff,

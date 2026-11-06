@@ -25,7 +25,12 @@ describe('AI Producer specialist execution', () => {
       { startMs: 140_000, endMs: 290_000, beat: 'payoff', reason: 'complete follow-up' },
     ]
     const submissions = [
-      { logline: 'A streamer explains and reacts to a story', audiencePromise: 'Understand the topic', beats: ['setup','detail','payoff'] },
+      { logline: 'A streamer explains and reacts to a story', audiencePromise: 'Understand the topic', beats: ['setup','detail','payoff'],
+  intendedPayoff: 'Actual recorded result to verify',
+  essentialSetup: 'Source-grounded setup',
+  excludeAsides: [],
+  endingRule: 'Finish on a complete resolution',
+  highlightCriteria: 'Independent, compelling moments' },
       { selections: selected },
       { selections: selected },
     ]
@@ -77,7 +82,12 @@ describe('AI Producer specialist execution', () => {
       { startMs: 140_000, endMs: 200_000, beat: 'payoff', reason: 'complete response' },
     ]
     const submissions = [
-      ['submit_story_outline', { logline: 'A story', audiencePromise: 'Context', beats: ['setup', 'detail', 'payoff'] }],
+      ['submit_story_outline', { logline: 'A story', audiencePromise: 'Context', beats: ['setup', 'detail', 'payoff'],
+  intendedPayoff: 'Actual recorded result to verify',
+  essentialSetup: 'Source-grounded setup',
+  excludeAsides: [],
+  endingRule: 'Finish on a complete resolution',
+  highlightCriteria: 'Independent, compelling moments' }],
       ['submit_footage_selections', { selections: selected }],
       ['submit_dialogue_cut_plan', { selections: selected }],
     ] as const
@@ -112,7 +122,12 @@ describe('AI Producer specialist execution', () => {
     ]
     const payload = [
       ['submit_story_outline', { logline: 'Discussion', audiencePromise: 'A conversation',
-        beats: ['opening', 'discussion', 'conclusion'] }],
+        beats: ['opening', 'discussion', 'conclusion'],
+  intendedPayoff: 'Actual recorded result to verify',
+  essentialSetup: 'Source-grounded setup',
+  excludeAsides: [],
+  endingRule: 'Finish on a complete resolution',
+  highlightCriteria: 'Independent, compelling moments' }],
       ['submit_footage_selections', { selections: selected }],
       ['submit_dialogue_cut_plan', { selections: selected }],
     ] as const

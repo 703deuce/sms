@@ -14,6 +14,20 @@ import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_C
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 import { WORD_GUARD_MS, wordAtUnsafeBoundary } from '@/lib/ai-producer-agent/validate'
 
+/** A creative brief, not a claim that the described outcome occurred.
+ * The Finisher must independently verify that the intended payoff is spoken.
+ */
+export type EditorialOutline = {
+  logline: string
+  audiencePromise: string
+  beats: string[]
+  intendedPayoff: string
+  essentialSetup: string
+  excludeAsides: string[]
+  endingRule: string
+  highlightCriteria: string
+}
+
 export type EditorialRole = 'story' | 'footage' | 'dialogue' | 'qa'
 export type EditorialSelection = {
   startMs: number
@@ -22,7 +36,7 @@ export type EditorialSelection = {
   reason: string
 }
 export type EditorialHandoff = {
-  outline: { logline: string; beats: string[]; audiencePromise: string }
+  outline: EditorialOutline
   footage: EditorialSelection[]
   cutPlan: EditorialSelection[]
   finisher?: {
@@ -74,8 +88,14 @@ const submitSchemas: Record<EditorialRole, ToolSchema> = {
         logline: jsonString,
         audiencePromise: jsonString,
         beats: { type: 'array', minItems: 3, maxItems: 10, items: jsonString },
+        intendedPayoff: jsonString,
+        essentialSetup: jsonString,
+        excludeAsides: { type: 'array', maxItems: 10, items: jsonString },
+        endingRule: jsonString,
+        highlightCriteria: jsonString,
       },
-      required: ['logline', 'audiencePromise', 'beats'],
+      required: ['logline', 'audiencePromise', 'beats',
+        'intendedPayoff', 'essentialSetup', 'excludeAsides', 'endingRule', 'highlightCriteria'],
     },
   },
   footage: {
@@ -528,7 +548,11 @@ export async function runEditorialRole(
         if (role === 'story') {
           if (typeof args.logline !== 'string' || typeof args.audiencePromise !== 'string' ||
               !Array.isArray(args.beats) || args.beats.length < 3 ||
-              args.beats.length > 10 || !args.beats.every((b) => typeof b === 'string')) {
+              args.beats.length > 10 || !args.beats.every((b) => typeof b === 'string') ||
+              !['intendedPayoff','essentialSetup','endingRule','highlightCriteria']
+                .every(k => typeof args[k] === 'string' && (args[k] as string).trim().length > 0) ||
+              !Array.isArray(args.excludeAsides) || args.excludeAsides.length > 10 ||
+              !args.excludeAsides.every((v) => typeof v === 'string')) {
             throw new Error('specialist_story_outline_invalid')
           }
           await specialistEvent(ctx, budget, role, 'accepted', { turn, beatCount: args.beats.length })
@@ -662,7 +686,12 @@ export async function createEditorialHandoff(
   }
   let story: Record<string, unknown>
   try {
-    story = await runEditorialRole(ctx, out, budget, 'story', base)
+    story = await runEditorialRole(ctx, out, budget, 'story', {
+      ...base,
+      instruction: highlightsMode
+        ? 'Define the editorial criteria for selecting independent, self-contained highlights. The payoff and ending fields express what makes a moment satisfying, not a fabricated shared narrative. Provide all structured creative-brief fields.'
+        : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.',
+    })
   } catch (error) {
     // An unavailable paper outline must not destroy a sourced editable draft.
     await specialistEvent(ctx, budget, 'story', 'fallback', {
@@ -670,12 +699,22 @@ export async function createEditorialHandoff(
     })
     story = { logline: 'Source-grounded conversational rough cut',
       audiencePromise: 'Review the best available recorded conversation',
-      beats: ['context', 'discussion', 'resolution'] }
+      beats: ['context', 'discussion', 'resolution'],
+      intendedPayoff: 'Determine the actual recorded resolution; do not assume the outcome',
+      essentialSetup: 'Include enough recorded context to understand what happened',
+      excludeAsides: [],
+      endingRule: 'Stop once the genuine, source-supported idea resolves naturally',
+      highlightCriteria: 'Select individually interesting exchanges with their own complete landing' }
   }
-  const outline = {
+  const outline: EditorialOutline = {
     logline: String(story.logline),
     audiencePromise: String(story.audiencePromise),
     beats: (story.beats as string[]).slice(0, 10),
+    intendedPayoff: String(story.intendedPayoff),
+    essentialSetup: String(story.essentialSetup),
+    excludeAsides: (story.excludeAsides as string[]).slice(0, 10),
+    endingRule: String(story.endingRule),
+    highlightCriteria: String(story.highlightCriteria),
   }
   let found: Record<string, unknown>
   try {

@@ -162,7 +162,12 @@ describe('orchestrator with mocked Luna', () => {
     const toolNames = ['submit_story_outline', 'submit_footage_selections',
       'submit_dialogue_cut_plan', 'submit_editorial_review']
     const submissions = [
-      { logline: 'The story', audiencePromise: 'Understand the answer', beats: ['setup', 'detail', 'payoff'] },
+      { logline: 'The story', audiencePromise: 'Understand the answer', beats: ['setup', 'detail', 'payoff'],
+  intendedPayoff: 'Actual recorded result to verify',
+  essentialSetup: 'Source-grounded setup',
+  excludeAsides: [],
+  endingRule: 'Finish on a complete resolution',
+  highlightCriteria: 'Independent, compelling moments' },
       { selections: selected }, { selections: selected }, { pass: true, issues: [] },
     ]
     __setLunaImpl(async () => {
