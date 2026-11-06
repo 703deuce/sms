@@ -137,7 +137,7 @@ describe('AI Producer specialist editorial handoff', () => {
 
   it('salvages good Footage intervals when an ending has no legal gap in dense ASR', () => {
     const dense: ClipWord[] = [
-      ...Array.from({ length: 250 }, (_, i) => ({
+      ...Array.from({ length: 1000 }, (_, i) => ({
         w: 'speech', s: 1040 + i * 0.12, e: 1040 + i * 0.12 + 0.15,
       })),
       ...Array.from({ length: 40 }, (_, i) => ({
