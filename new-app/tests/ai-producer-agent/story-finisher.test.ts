@@ -297,7 +297,7 @@ describe('source-verified Story Finisher', () => {
     // A real 34-second late opening is legal if it belongs to nearby
     // sentences, regardless of the former 2s limit.
     const fixed=resolveStoryWordBoundaries([
-      {index:0,firstWordId:1,lastWordId:5},
+      {index:0,firstWordId:1,lastWordId:6},
     ],selected,speech,[0,112000])
     expect(fixed.selections[0]!.startMs).toBe(12970)
     expect(fixed.selections[0]!.endMs).toBe(56030)
