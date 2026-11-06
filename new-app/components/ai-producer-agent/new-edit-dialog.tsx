@@ -119,13 +119,11 @@ export function NewEditDialog({
                 <select
                   className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                   value={outputType}
-                  onChange={(e) =>
-                    (() => {
-                      const next = e.target.value as typeof outputType
-                      setOutputType(next)
-                      if (next === 'rough_cut_highlights') setDurationPreset('90')
-                    })()
-                  }
+                  onChange={(e) => {
+                    const next = e.target.value as typeof outputType
+                    setOutputType(next)
+                    if (next === 'rough_cut_highlights') setDurationPreset('90')
+                  }}
                 >
                   <option value="auto">Auto (decide from footage)</option>
                   <option value="rough_cut">Conversation story / condensed edit</option>
