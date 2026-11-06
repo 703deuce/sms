@@ -587,6 +587,7 @@ export async function runEditorialRole(
     ? [] // Full word-indexed context was supplied. No fragment-reading workflow.
     : TOOL_SCHEMAS.filter((tool) => readTools[role].includes(tool.name))
   const wordFootage=role==='footage' && context.fullTranscriptWordIndexed===true
+  const storyObservation=ctx.config.editMode==='just_chatting_rough_cut' && !highlightsMode && ctx.config.targetLengthS[1]<=105
   const submitTool=wordFootage?footageWordsSubmission:submitSchemas[role]
   const tools = [...allowedTools,submitTool]
   const messages: LunaMessage[] = [
@@ -599,10 +600,12 @@ export async function runEditorialRole(
         ] : []),
       ] : []),
       ...(ctx.config.editMode === 'just_chatting_rough_cut'
-        ? [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role],
-          ctx.config.targetLengthS[1] <= 105
+        ? [...(storyObservation && (role==='story'||role==='footage'||role==='qa') ? [] : [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role]]),
+          ...(storyObservation ? [
+            'EDITORIAL BASELINE EXPERIMENT: Ignore all duration targets, runtime ceilings and 90-second requirements. The goal is ONE best coherent story from the authorized full transcript, whether it takes two, three, four minutes or another natural length. Identify a meaningful beginning, development and actual ending. Keep only the speech that supports that ONE story; do not concatenate every related topic. Choose complete naturally spoken thought boundaries. The deterministic tool will execute your selections unchanged. No later agent will compress, fix or substitute them.',
+          ] : [ctx.config.targetLengthS[1] <= 105
             ? 'SHORT HIGHLIGHT OVERRIDE: Produce one concise 30–90 second standalone edit from the strongest sourced exchange. Prioritize an immediate understandable hook, essential context, and a satisfying payoff. Remove digressions and repetition. Short-form compression is intentional; do NOT follow the long-form pacing guidance. Respect meaning, chronology, and honest reactions. Target seconds supplied in the request.'
-            : 'LONG CONVERSATION EDIT: Preserve natural context and pacing with complete thoughts. The target duration is advisory, not a failure gate.',
+            : 'LONG CONVERSATION EDIT: Preserve natural context and pacing with complete thoughts. The target duration is advisory, not a failure gate.']),
         ] : []),
       ...(highlightsMode ? [
         'HIGHLIGHTS MODE OVERRIDE: Curate several DISTINCT memorable moments across the WHOLE available source, not one continuous scene with breath cuts. Each moment must be independently understandable and interesting; authentic jokes, surprising answers, revealing quotes, reactions or sharp insights are welcome. Select 2 distinct moments for very short highlights and ideally 3+ for 60–120 seconds, without forcing weak filler. Do not pretend unrelated moments form one chronological story. Avoid repetitive quotes, fabricated context, misleading juxtapositions, dangling sentences, or cuts inside words. Source-order chronological output is required.'
@@ -612,14 +615,15 @@ export async function runEditorialRole(
     ].join('\n\n') },
     { role: 'user', content: JSON.stringify({
       ...context, sourceId: source.sourceId, sourceRangeMs: source.rangeMs,
-      outputTargetSeconds: ctx.config.targetLengthS,
+      ...(storyObservation ? {runtimeTargetDisabled:true,experiment:'narrative_coherence_and_boundary_selection_only'} : {outputTargetSeconds:ctx.config.targetLengthS}),
       editingIntent: highlightsMode ? 'multi_moment_highlights' : ctx.config.targetLengthS[1] <= 105 ? 'short_story' : 'conversational_long_form',
       ...(role === 'footage' && !highlightsMode &&
         ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105
-        ? { preferredEditInstruction: 'SHORT STORY: selections ARE THE FINAL PAPER EDIT, not a source inventory. Return only the concise chronological excerpts you intend to appear in the finished video, roughly the requested 90 seconds. Do not return a separate preferredEdits array. A later boundary-polish pass only removes stray edge words and will NOT choose the story again.' } : {}),
+        ? { preferredEditInstruction: 'STORY BASELINE: the selections ARE the complete final narrative, not a list of candidate moments. Choose a coherent beginning, development and ending with no length target. Do not assemble multiple loosely related stories; omit unrelated or redundant material. Return word IDs and let code cut exactly there; no other agent will trim the selections.' } : {}),
       ...((role === 'footage' || role === 'dialogue')
         ? { selectionDurationInstruction: highlightsMode
           ? 'Find distinct self-contained highlights from different source moments. Do not count adjacent breath cuts as different moments. Choose compelling footage up to the duration target without padding; finish each excerpt on a complete thought.'
+          : storyObservation ? 'For this baseline, IGNORE runtime. Find the complete spoken passages that tell ONE compelling story from opening to resolution. Cut irrelevant digressions and repeated points, but never trim for a duration target. Select accurate starts and endings from the transcript and report exactly those word IDs.'
           : 'For short Story, selections are the ACTUAL EDIT roughly within the target seconds, not hundreds of seconds of candidate footage. Cut whole irrelevant phrases and tangents; keep the setup, development and payoff. Do not pad or cut mid-thought. If truly insufficient material exists, submit the most coherent short edit.' }
         : {}),
       ...(role === 'qa' && ctx.config.editMode === 'just_chatting_rough_cut'
@@ -729,7 +733,8 @@ export async function runEditorialRole(
             })
           }
           const duration = durationAdvisory(selections, ctx.config.targetLengthS)
-          await specialistEvent(ctx, budget, role, 'duration_advisory', { ...duration, acceptedDespiteDuration: duration.outsideTarget })
+          await specialistEvent(ctx, budget, role, storyObservation ? 'runtime_ignored_observation' : 'duration_advisory',
+            storyObservation ? { actualSeconds:selectionDurationS(selections), runtimeTargetDisabled:true } : { ...duration, acceptedDespiteDuration: duration.outsideTarget })
           await specialistEvent(ctx, budget, role, 'accepted', { turn, proposal: selectionLogSummary(args),
             accepted: selections.map((s) => [s.startMs, s.endMs]),
             movedEdges: wordFootage ? 0 : selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
@@ -837,7 +842,7 @@ export async function createEditorialHandoff(
     audienceGoal: highlightsMode
       ? 'A highlight reel of multiple distinct, entertaining, independently comprehensible moments across the whole source, with honest context and complete thoughts'
       : ctx.config.targetLengthS[1] <= 105
-        ? 'A standalone short-form story with an understandable setup, development and payoff, targeting the requested duration'
+        ? 'A focused, independently understandable story with full setup, development and an actual recorded payoff. Experimental baseline: ignore the target duration; prioritize complete natural passages and coherent narrative.'
         : 'A coherent conversational long-form edit preserving context and natural pacing',
     editingPriorities: ['meaning and context','narrative payoff','natural dialogue and reactions','no repetition','restrained polish'],
   }
@@ -898,7 +903,7 @@ export async function createEditorialHandoff(
       instruction: highlightsMode
         ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
         : ctx.config.targetLengthS[1] <= 105
-        ? 'SHORT STORY: You have the COMPLETE word-indexed source, the Story narrative, and every spoken word. Choose the actual final source passages by FIRST/LAST WORD IDS only. Read the full conversation before deciding. Preserve meaningful setup, development and payoff. Stop each passage at a genuinely complete sentence or thought, not at a conjunction or mid-quote. Aim for the requested duration without sacrificing sense. No later Finisher is coming to repair your cuts.'
+        ? 'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source, Story plan, and every spoken word. Choose actual final passages by FIRST/LAST WORD IDS. IGNORE 90 seconds and ALL runtime targets. Tell ONE complete narrative from beginning through genuine recorded resolution, trimming irrelevant tangents but not the story for length. Select complete sentences, not mid-phrase edges. No later Finisher or Dialogue recut will repair your boundaries.'
         : 'Select coherent source intervals; evidence first, then editorial value.',
     })
   } catch (error) {
@@ -944,6 +949,8 @@ export async function createEditorialHandoff(
       passageCount:footage.length,
       durationSeconds:selectionDurationS(footage),
       targetSeconds:ctx.config.targetLengthS,
+      runtimeTargetDisabled:true,
+      editorialBaseline:'story_coherence_and_cut_boundaries',
       appliedCuts: footage,
       storyDecision: outline,
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
