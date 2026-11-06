@@ -151,23 +151,7 @@ const submitSchemas: Record<EditorialRole, ToolSchema> = {
     description: 'Submit grounded candidate source intervals AND short preferred cuts with semantic ending cues.',
     parameters: {
       type: 'object', additionalProperties: false,
-      properties: {
-        selections: { type: 'array', minItems: 2, maxItems: 24, items: selection },
-        // Optional for existing workflows and Highlights; required by the
-        // short Story prompt, with safe fallback for older model responses.
-        preferredEdits: { type: 'array', minItems: 2, maxItems: 24,
-          items: { type: 'object', additionalProperties: false,
-            properties: {
-              candidateStartMs: { type: 'integer', minimum: 0 },
-              candidateEndMs: { type: 'integer', minimum: 0 },
-              preferredStartMs: { type: 'integer', minimum: 0 },
-              preferredEndMs: { type: 'integer', minimum: 0 },
-              intendedPoint: jsonString, endingCue: jsonString,
-            },
-            required: ['candidateStartMs','candidateEndMs','preferredStartMs','preferredEndMs','intendedPoint','endingCue'],
-          },
-        },
-      },
+      properties: { selections: { type: 'array', minItems: 2, maxItems: 24, items: selection } },
       required: ['selections'],
     },
   },
@@ -645,11 +629,6 @@ export async function runEditorialRole(
               count: selections.length, originalError: String((firstError as Error).message),
             })
           }
-          const preferredEdits = role === 'footage' && !highlightsMode &&
-            ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105 &&
-            args.preferredEdits !== undefined
-            ? validateFootagePreferredEdits(args.preferredEdits, selections, source.rangeMs)
-            : undefined
           const duration = durationAdvisory(selections, ctx.config.targetLengthS)
           await specialistEvent(ctx, budget, role, 'duration_advisory', { ...duration, acceptedDespiteDuration: duration.outsideTarget })
           await specialistEvent(ctx, budget, role, 'accepted', { turn, proposal: selectionLogSummary(args),
@@ -657,7 +636,7 @@ export async function runEditorialRole(
             movedEdges: selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
               s.endMs !== (args.selections as EditorialSelection[])[i]?.endMs).length,
           })
-          return { selections, ...(preferredEdits?.length ? { preferredEdits } : {}) }
+          return { selections }
         }
         if (typeof args.pass !== 'boolean' || !Array.isArray(args.issues) ||
             !args.issues.every((i) => typeof i === 'string')) {
@@ -820,7 +799,6 @@ export async function createEditorialHandoff(
     found = { selections: recovered.selections }
   }
   let footage = found.selections as EditorialSelection[]
-  let preferredEdits = found.preferredEdits as FootagePreferredEdit[] | undefined
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   // One targeted *editorial* retry instead of accepting a 20s excerpt as a
@@ -887,7 +865,6 @@ export async function createEditorialHandoff(
           (improvesEnding || improvesCoverage || improvesDuration ||
            (candidateSeconds > beforeSeconds + 5 && !candidateCoverage.localOnly)))) {
         footage = candidates
-        preferredEdits = revised.preferredEdits as FootagePreferredEdit[] | undefined
         await specialistEvent(ctx, budget, 'footage', 'short_story_repaired', {
           beforeSeconds, afterSeconds: candidateSeconds, count: footage.length,
           beforeCoverage: firstCoverage, afterCoverage: candidateCoverage,
@@ -933,7 +910,6 @@ export async function createEditorialHandoff(
         if (afterSeconds >= minimumSeconds * 0.65 &&
             afterSeconds < beforeSeconds - 2) {
           footage = candidate
-          preferredEdits = undefined
           await specialistEvent(ctx, budget, 'footage', 'final_short_edit_accepted', {
             beforeSeconds, afterSeconds, attempt, count: candidate.length,
           })
@@ -1133,5 +1109,5 @@ export async function createEditorialHandoff(
       note: 'Deliver the best coherent editable cut even when shorter or longer than requested.',
     })
   }
-  return { outline, footage, cutPlan, ...(preferredEdits?.length ? { preferredEdits } : {}), ...(finisher ? { finisher } : {}), ...(highlightsFinisher ? { highlightsFinisher } : {}) }
+  return { outline, footage, cutPlan, ...(finisher ? { finisher } : {}), ...(highlightsFinisher ? { highlightsFinisher } : {}) }
 }
