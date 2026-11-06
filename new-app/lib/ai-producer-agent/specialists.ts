@@ -303,14 +303,11 @@ export function shortStoryCoverage(
       .sort((a, b) => a.s - b.s).slice(-8) : []
   const lastWord = tailWords[tailWords.length - 1]?.w?.trim() ?? ''
   const terminalSentence = /[.!?][\"'”’]?$/.test(lastWord) && !/\.{2,}[\"'”’]?$/.test(lastWord)
-  // ASR from some providers has no punctuation at all: don't mistake that
-  // absence of metadata for evidence that every sentence is unfinished.
-  const punctuationAvailable = words.some(w => /[.!?][\"'”’]?$/.test(w.w))
   // Some ASR providers omit ALL punctuation. In that case absence of a
   // period is not proof of a broken ending. An ellipsis or dangling function
   // word is still actionable evidence of an unfinished thought.
   const punctuationAvailable = words.some((w) => /[.!?]$/.test(w.w.trim()))
-  const explicitDangling = /\\.{2,}$/.test(lastWord) ||
+  const explicitDangling = /\.{2,}$/.test(lastWord) ||
     /^(and|but|because|so|then|just|to|the|a|an|i|we|you|they|he|she|it|of|for|with|that|when|if)$/i.test(lastWord.replace(/[,.!?]+$/, ''))
   const endingNeedsReview = !terminalSentence && (punctuationAvailable || explicitDangling)
   const enoughSourceToExplore = sourceRange[1] - sourceRange[0] >= 3 * 60_000
@@ -322,7 +319,8 @@ export function shortStoryCoverage(
     lastWord, terminalSentence,
     localOnly,
     underTarget: durationSeconds < target[0],
-    needsReview: durationSeconds < target[0] || (punctuationAvailable && !terminalSentence) || localOnly,
+    endingNeedsReview,
+    needsReview: durationSeconds < target[0] || endingNeedsReview || localOnly,
   }
 }
 
