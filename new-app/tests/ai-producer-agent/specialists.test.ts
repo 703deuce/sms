@@ -6,7 +6,7 @@ vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
 vi.mock('@/lib/ai-producer-agent/log', () => ({
   logAiProducerStep: vi.fn(), redactArgs: (args: unknown) => args,
 }))
-import { checkEditorialSelections } from '@/lib/ai-producer-agent/specialists'
+import { checkEditorialSelections, snapEditorialSelections } from '@/lib/ai-producer-agent/specialists'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
 import type { ClipWord } from '@/lib/clips/edits'
 
@@ -61,6 +61,23 @@ describe('AI Producer specialist editorial handoff', () => {
       approved[0],
       { ...approved[1], startMs: 296_000, endMs: 299_500 },
     ], source, words)).toThrow('no_speech_evidence')
+  })
+
+  it('repairs only sub-300ms word-edge errors and then fully revalidates', () => {
+    const repaired = snapEditorialSelections([
+      { ...approved[0], startMs: 500, endMs: 110_000 },
+      approved[1],
+    ], source, words)
+    expect(repaired[0].startMs).toBe(270)
+    expect(repaired[1]).toEqual(approved[1])
+    expect(() => snapEditorialSelections([
+      { ...approved[0], startMs: 500, endMs: 110_000 },
+      { ...approved[1], startMs: 116_000 },
+    ], source, words, approved)).toThrow('outside_curated')
+    expect(() => snapEditorialSelections([
+      { ...approved[0], startMs: -100 },
+      approved[1],
+    ], source, words)).toThrow('invalid_source')
   })
 
   it('rejects microcuts below three seconds', () => {
