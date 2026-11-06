@@ -422,6 +422,16 @@ export async function runEditorialRole(
         turn, callId: call.id, proposal: selectionLogSummary(args),
         malformedJson: args === null,
       })
+      if (name === names[role] && !args) {
+        invalidSubmissions++
+        await specialistEvent(ctx, budget, role, 'rejected', {
+          turn, invalidSubmissions, errorCode: 'specialist_malformed_submission',
+        }, 'specialist_malformed_submission')
+        if (invalidSubmissions >= 2) throw new Error(`specialist_${role}_unusable_submissions`)
+        messages.push({ role: 'tool', tool_call_id: call.id,
+          content: '{"ok":false,"error":"specialist_malformed_submission","instruction":"Submit valid structured JSON."}' })
+        continue
+      }
       if (name === names[role] && args) {
         try {
         if (role === 'story') {
@@ -482,13 +492,18 @@ export async function runEditorialRole(
           // Models sometimes choose an imprecise word boundary. Reject the
           // proposal but give this specialist a chance to repair it before
           // the entire twenty-minute run fails.
+          if (invalidSubmissions >= 2) {
+            // Returning control to the orchestrator activates the source-grounded
+            // fallback; do not spend seven turns guessing the same impossible edge.
+            throw new Error(`specialist_${role}_unusable_submissions`)
+          }
           messages.push({
             role: 'tool', tool_call_id: call.id,
             content: JSON.stringify({
               ok: false,
               error: errorCode,
               repairHint,
-              instruction: 'Do not call get_transcript again. Correct and resubmit using legal source word edges.',
+              instruction: 'Correct and resubmit using sourced chronological intervals.',
             }),
           })
           continue
