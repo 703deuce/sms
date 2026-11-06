@@ -67,7 +67,7 @@ const wordEvidence = [
 ].sort((a,b) => a.s - b.s)
 const candidate = () => ({
   moments: trimmed.map((selection,i) => ({
-    selection, landing: landings[i],
+    selection: { ...selection }, landing: { ...landings[i]! },
     editorialReason: 'Standalone setup with a source-backed closing line',
   })),
   editorialReason: 'Trim each distinct sourced moment separately and keep the original three moments',
