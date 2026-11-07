@@ -37,6 +37,7 @@ export function NewEditDialog({
   const [durationPreset, setDurationPreset] = useState<'30' | '60' | '90' | '120' | '180-480' | '480-900'>('180-480')
   const [platform, setPlatform] = useState<'tiktok' | 'shorts' | 'reels'>('tiktok')
   const [instruction, setInstruction] = useState('')
+  const [visualAudio, setVisualAudio] = useState(true)
   const [runId, setRunId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -74,6 +75,7 @@ export function NewEditDialog({
           ...(isRoughCut ? {
             roughCutIntent: outputType === 'rough_cut_highlights' ? 'highlights' : 'story',
             editMode: 'just_chatting_rough_cut',
+            visualEvidenceMode: visualAudio ? 'visual_audio' : 'transcript_baseline',
             targetLengthS: ({
               '30': [25, 40], '60': [50, 75], '90': [75, 105], '120': [105, 135],
               '180-480': [180, 480], '480-900': [480, 900],
@@ -92,7 +94,7 @@ export function NewEditDialog({
     } finally {
       setSubmitting(false)
     }
-  }, [defaultSources, instruction, outputType, platform, durationPreset])
+  }, [defaultSources, instruction, outputType, platform, durationPreset, visualAudio])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -148,6 +150,10 @@ export function NewEditDialog({
             </div>
             {(outputType === 'rough_cut' || outputType === 'rough_cut_highlights') ? (
               <div className="space-y-2">
+                <label className="flex items-start gap-2 rounded-md border p-3 text-sm" htmlFor="ai-producer-visual-audio">
+                  <input id="ai-producer-visual-audio" data-testid="ai-producer-visual-audio" type="checkbox" checked={visualAudio} onChange={e => setVisualAudio(e.target.checked)} className="mt-1" />
+                  <span><strong>Visual + audio evidence (experiment)</strong><span className="block text-xs text-muted-foreground">Gemini low-detail video frames and source audio alongside transcript; uncheck to repeat the previous transcript-based baseline.</span></span>
+                </label>
                 <Label htmlFor="ai-producer-duration">Desired edited length</Label>
                 <select id="ai-producer-duration" data-testid="ai-producer-duration"
                   className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"

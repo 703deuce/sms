@@ -16,6 +16,7 @@ import * as analysis from '@/lib/ai-producer-agent/tools/analysis'
 import * as edit from '@/lib/ai-producer-agent/tools/edit'
 import { renderPreview } from '@/lib/server/ai-producer-agent/preview'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
+import type { VisualMomentEvidence } from '@/lib/ai-producer-agent/visual-evidence'
 import { buildRmsLookup } from '@/lib/ai-producer-agent/tools/analysis'
 
 export type ToolResult = { ok: boolean; summary: string; data?: unknown; costUsd?: number }
@@ -29,6 +30,7 @@ export type ToolCtx = {
   cache: {
     moments?: Record<string, unknown>[]
     momentsSummary?: Record<string, unknown>[]
+    visualEvidence?: { coarse: VisualMomentEvidence[]; focused: VisualMomentEvidence[]; metadata: Record<string,unknown> }
     inventory?: { links?: { kind: string }[]; beats?: unknown[] }
     inventorySummary?: unknown
     words?: ClipWord[]

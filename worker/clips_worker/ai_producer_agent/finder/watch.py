@@ -402,6 +402,8 @@ def make_watch_proxy(
     dest: Path,
     start_s: float = 0.0,
     end_s: float | None = None,
+    *,
+    force_audio: bool = False,
 ) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["ffmpeg", "-y", "-v", "error"]
@@ -411,7 +413,7 @@ def make_watch_proxy(
     if end_s is not None and end_s > start_s:
         cmd.extend(["-t", f"{end_s - start_s:.3f}"])
     vf = _watch_proxy_video_filter()
-    if video_picker_keep_audio():
+    if force_audio or video_picker_keep_audio():
         cmd.extend(
             [
                 "-vf",
@@ -2285,17 +2287,24 @@ def watch_upload_range(
     scratch: Path,
     target_clip_len_s: int | None = None,
     sentences: list[Any] | None = None,
+    transcript_text: str | None = None,
+    fps_override: float | None = None,
+    media_resolution_override: str | None = None,
+    model_override: str | None = None,
+    force_audio: bool = False,
 ) -> tuple[list[dict], list[float], dict[str, Any]]:
     start_s = max(0.0, range_start_ms / 1000.0)
     end_s = range_end_ms / 1000.0 if range_end_ms > range_start_ms else start_s + 60.0
     duration_s = max(1, int(end_s - start_s))
     proxy = scratch / "video_picker_upload.mp4"
-    make_watch_proxy(src_video, proxy, start_s, end_s)
+    make_watch_proxy(src_video, proxy, start_s, end_s, force_audio=force_audio)
     transcript = (
         format_timestamped_transcript(sentences or [], range_start_ms, range_end_ms)
         if sentences
         else ""
     )
+    if transcript_text is not None:
+        transcript = transcript_text[:60000]
     moments, meta = watch_video_file(
         proxy,
         duration_s=duration_s,
@@ -2304,6 +2313,10 @@ def watch_upload_range(
         transcript_text=transcript,
         source_video=src_video,
         scratch=scratch,
+        model_override=model_override,
+        fps_override=fps_override,
+        media_resolution_override=media_resolution_override,
+        use_labeled_frames=True if force_audio else None,
         trim_start_s=start_s,
         trim_end_s=end_s,
         fail_open=False,

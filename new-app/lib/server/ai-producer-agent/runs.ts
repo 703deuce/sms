@@ -17,6 +17,7 @@ export type CreateAiProducerRunInput = {
   outputType: AiProducerOutputType
   editMode?: 'just_chatting_rough_cut'
   roughCutIntent?: 'story' | 'highlights'
+  visualEvidenceMode?: 'transcript_baseline' | 'visual_audio'
   genre?: string
   platform?: 'tiktok' | 'shorts' | 'reels'
   targetLengthS?: [number, number]
@@ -54,6 +55,7 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
   const config: AiProducerRunConfig = {
     editMode: input.editMode,
     roughCutIntent: input.editMode === 'just_chatting_rough_cut' ? input.roughCutIntent ?? 'story' : undefined,
+    visualEvidenceMode: input.editMode === 'just_chatting_rough_cut' ? input.visualEvidenceMode ?? 'transcript_baseline' : undefined,
     targetLengthS:
       (input.editMode === 'just_chatting_rough_cut' ? input.targetLengthS ?? [180, 480] : input.targetLengthS) ??
       (resolvedForConfig === 'montage'
