@@ -8,7 +8,7 @@ import type { AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
 export async function enqueueAiProducerAnalyzeJob(input: {
   runId: string
   projectId: string
-  mode: 'best_moments' | 'story_search' | 'inventory'
+  mode: 'best_moments' | 'story_search' | 'inventory' | 'visual_detail'
   sources: AiProducerSourceRef[]
   query?: string
   targetClipLenS?: number
