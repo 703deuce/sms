@@ -1,7 +1,7 @@
 import type { ClipWord } from '@/lib/clips/edits'
 import type { EditorialSelection } from '@/lib/ai-producer-agent/specialists'
 import type { VisualMomentEvidence } from '@/lib/ai-producer-agent/visual-evidence'
-import { wordAtUnsafeBoundary, WORD_GUARD_MS } from '@/lib/ai-producer-agent/validate'
+import { wordAtUnsafeBoundary } from '@/lib/ai-producer-agent/validate'
 
 export type VisualBeatCandidate = VisualMomentEvidence & {
   id: string
