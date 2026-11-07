@@ -133,6 +133,9 @@ export async function buildToolCtx(run: {
         layoutAt: () => ({ contentType: 'irl', mode: 'fit_blur' }),
         outputType: out.outputType,
         editMode: config.editMode,
+        directStoryWordCuts: config.editMode === 'just_chatting_rough_cut' &&
+          config.roughCutIntent !== 'highlights' && config.targetLengthS[1] <= 105 &&
+          Boolean(out.editorialHandoff) && Boolean(out.builder?.preserveApprovedEdges),
         sourceRangeMs: sources[0]?.rangeMs,
         audioEvidenceAvailable: Boolean(ctx.cache.rmsFrames?.length),
         targetLengthS: config.targetLengthS,
