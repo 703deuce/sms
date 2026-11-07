@@ -226,7 +226,7 @@ export async function refineVisualStoryEvidence(
       tool:'visual_evidence_focus_ready',kind:'validate',
       argsSummary:JSON.stringify({windows,observations:focus.length,model:'gemini-3.1-flash-lite',
         fps:1,mediaResolution:'MEDIA_RESOLUTION_LOW',originalAudioAttached:true}),
-      resultSummary:`1fps detailed observations: ${focus.length}`,costUsd:Number.isFinite(cost)?cost:undefined})
+      resultSummary:`1fps detailed observations: ${focus.length}`,estUsd:Number.isFinite(cost)?cost:undefined})
   }catch(error){
     // Gemini failure can never replace or invalidate the proven transcript edit.
     await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'ingest',
