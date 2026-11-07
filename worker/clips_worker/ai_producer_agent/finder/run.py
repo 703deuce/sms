@@ -47,9 +47,29 @@ def run_analyze_payload(
         return story_mod.run_story_search(sources=sources, query=str(payload.get("query") or ""), scratch=scratch)
     if mode == "inventory":
         return inventory_mod.run_inventory(sources=sources, scratch=scratch, conn=conn, run_id=run_id)
-    # best_moments (default)
+    # Existing best-moments path is unchanged when visualEvidence is absent.
+    # Experimental Story path explicitly joins low-detail labeled frames,
+    # original audio and the already-authoritative ASR transcript in Gemini.
+    evidence = payload.get("visualEvidence")
+    visual = evidence if isinstance(evidence, dict) and evidence.get("enabled") is True else None
+    if mode == "visual_detail" and visual is None:
+        raise ValueError("visual_detail_requires_visual_evidence")
+    if visual:
+        fps = (1.0 if mode == "visual_detail" else 1.0 / 3.0)
+        model = str(visual.get("model") or "gemini-3.1-flash-lite")
+        resolution = "MEDIA_RESOLUTION_LOW"
+    else:
+        fps = None
+        model = None
+        resolution = None
     moments: list[dict] = []
-    meta_agg: dict[str, Any] = {"mode": mode, "sources": len(sources), "est_usd": 0.0}
+    meta_agg: dict[str, Any] = {
+        "mode": mode, "sources": len(sources), "est_usd": 0.0,
+        "visual_audio_enabled": bool(visual),
+        "fps": fps, "media_resolution": resolution, "model_requested": model,
+        "original_audio_attached": bool(visual),
+        "deepgram_transcript_attached": bool(visual and visual.get("transcriptText")),
+    }
     for src in sources:
         storage_key = str(src.get("storageKey") or "")
         if not storage_key:
@@ -59,6 +79,38 @@ def run_analyze_payload(
         range_ms = src.get("rangeMs") or [0, None]
         start_ms = int(range_ms[0] or 0)
         end_ms = int(range_ms[1] or 0) if range_ms[1] is not None else 0
+        if mode == "visual_detail":
+            # Only the few model-selected coarse regions are inspected at 1 fps.
+            windows = list(visual.get("focusWindows") or [])[:3] if visual else []
+            source_end = end_ms if end_ms > start_ms else int(src.get("durationMs") or 0)
+            for index, window in enumerate(windows):
+                if not isinstance(window, dict):
+                    continue
+                lo = max(start_ms, int(window.get("startMs") or 0))
+                hi = min(source_end, int(window.get("endMs") or 0))
+                if hi - lo < 1500 or hi - lo > 45000:
+                    continue
+                region = scratch / f"focus_{index}"
+                region.mkdir(parents=True, exist_ok=True)
+                excerpt = str(window.get("transcriptText") or "")[:12000]
+                refined, _curve, meta = watch_upload_range(
+                    local,
+                    range_start_ms=lo, range_end_ms=hi,
+                    scratch=region, target_clip_len_s=int(payload.get("targetClipLenS") or 30),
+                    transcript_text=excerpt,
+                    fps_override=fps,
+                    media_resolution_override=resolution,
+                    model_override=model,
+                    force_audio=True,
+                )
+                for moment in refined:
+                    moment["sourceId"] = src.get("sourceId")
+                    moment["evidence_tier"] = "focused_1fps"
+                    moment["inspection_window_ms"] = [lo, hi]
+                moments.extend(refined)
+                meta_agg["est_usd"] += float(meta.get("est_usd") or 0)
+                meta_agg["focus_windows_analyzed"] = int(meta_agg.get("focus_windows_analyzed") or 0) + 1
+            continue
         if end_ms > start_ms:
             scratch.mkdir(parents=True, exist_ok=True)
             moments_part, _curve, meta = watch_upload_range(
@@ -67,14 +119,27 @@ def run_analyze_payload(
                 range_end_ms=end_ms,
                 scratch=scratch,
                 target_clip_len_s=int(payload.get("targetClipLenS") or 30),
+                transcript_text=str(visual.get("transcriptText") or "")[:60000] if visual else None,
+                fps_override=fps,
+                media_resolution_override=resolution,
+                model_override=model,
+                force_audio=bool(visual),
             )
         else:
             dur_s = max(1, int((src.get("durationMs") or 60_000) // 1000))
-            moments_part, meta = watch_video_file(local, duration_s=dur_s, chunk_label=str(src.get("sourceId") or "src"))
+            moments_part, meta = watch_video_file(
+                local, duration_s=dur_s, chunk_label=str(src.get("sourceId") or "src"),
+                transcript_text=str(visual.get("transcriptText") or "")[:60000] if visual else "",
+                fps_override=fps, media_resolution_override=resolution,
+                model_override=model, use_labeled_frames=True if visual else None,
+            )
         for m in moments_part:
             m["sourceId"] = src.get("sourceId")
+            if visual:
+                m["evidence_tier"] = "coarse_3s"
         moments.extend(moments_part)
         meta_agg["est_usd"] = float(meta_agg.get("est_usd") or 0) + float(meta.get("est_usd") or 0)
     duration_s = max(1, int((sources[0].get("durationMs") or 60_000) // 1000))
-    moments, _stats = validate_and_normalize_moments(moments, duration_s=duration_s)
+    if mode != "visual_detail":
+        moments, _stats = validate_and_normalize_moments(moments, duration_s=duration_s)
     return {"moments": moments, "meta": meta_agg}
