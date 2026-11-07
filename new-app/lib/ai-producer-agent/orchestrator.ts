@@ -165,6 +165,13 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       storyFinisher: out.editorialHandoff.finisher ?? null,
       highlightsFinisher: out.editorialHandoff.highlightsFinisher ?? null,
       selections: out.editorialHandoff.cutPlan,
+      ...(ctx.config.visualEvidenceMode==='visual_audio' && ctx.cache.visualEvidence ? {
+        visualAudioEvidence: ctx.cache.visualEvidence,
+        selectedVisualBeats:out.editorialHandoff.outline.visualBeats??[],
+        includedVisualActions:out.editorialHandoff.visualActions??[],
+        omittedVisualActions:out.editorialHandoff.visualActionOmissions??[],
+        visualQAInstruction:'Compare candidate visual action/reaction/payoff evidence against final selections. Flag a high-value visual event omitted from the actual edit if it clearly belongs in this story, with evidence timestamps and the reason it matters. Also inspect whether selected visual actions have their visible setup and reaction. Do not assume a candidate must be included merely because Gemini rated it highly; do not invent visual continuity or claim audio seam quality without listening.',
+      } : {}),
       timeline: out.lastValid,
       validation: out.lastValidation,
       actualTranscriptEvidence: buildJustChattingEvidence(
@@ -244,6 +251,8 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
       storyOutline:out.editorialHandoff!.outline,
       originalCuts: proposed,
       appliedCuts: cuts,
+      sourceGroundedVisualActions:out.editorialHandoff!.visualActions??[],
+      visualActionOmissions:out.editorialHandoff!.visualActionOmissions??[],
       changedByAssembly: cuts.some((c,i)=>c.startMs!==proposed[i]?.startMs||c.endMs!==proposed[i]?.endMs),
     }).slice(0,12000),
     resultSummary: JSON.stringify({
@@ -268,6 +277,7 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
     })
     const added = await sysTool(ctx, budget, 'plan', 'add_clip_segment', {
       sourceId: source.sourceId, srcInMs: cut.startMs, srcOutMs: cut.endMs,
+      beat:cut.kind==='visual_action' ? 'visual_action' : cut.beat,
     }, out)
     await logAiProducerStep({
       runId:ctx.runId,stepIndex:++budget.steps,phase:'plan',

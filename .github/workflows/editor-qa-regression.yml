@@ -98,7 +98,8 @@ jobs:
             tests/ai-producer-agent/short-source-story-coverage.test.ts \
             tests/ai-producer-agent/system-prompt.test.ts \
             tests/ai-producer-agent/validate.items.test.ts \
-            tests/ai-producer-agent/visual-evidence.test.ts
+            tests/ai-producer-agent/visual-evidence.test.ts \
+            tests/ai-producer-agent/visual-action-beats.test.ts
 
   captions-worker-regression:
     runs-on: ubuntu-latest

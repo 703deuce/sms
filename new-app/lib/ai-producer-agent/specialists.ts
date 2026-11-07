@@ -13,6 +13,7 @@ import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/f
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_REVIEW_CHECKS } from '@/lib/ai-producer-agent/just-chatting-direction'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 import { WORD_GUARD_MS, wordAtUnsafeBoundary } from '@/lib/ai-producer-agent/validate'
+import { buildVisualBeatCandidates, validateStoryVisualBeats, resolveVisualActionRequests, combineSpeechWithVisualActions, type StoryVisualBeat, type VisualActionSelection } from '@/lib/ai-producer-agent/visual-action-beats'
 
 /** A creative brief, not a claim that the described outcome occurred.
  * The Finisher must independently verify that the intended payoff is spoken.
@@ -26,6 +27,7 @@ export type EditorialOutline = {
   excludeAsides: string[]
   endingRule: string
   highlightCriteria: string
+  visualBeats?: StoryVisualBeat[]
 }
 
 export type EditorialRole = 'story' | 'footage' | 'dialogue' | 'qa'
@@ -34,6 +36,8 @@ export type EditorialSelection = {
   endMs: number
   beat: string
   reason: string
+  kind?: 'visual_action'
+  visualBeatId?: string
 }
 /** Footage's own short first-pass edit inside a wider source candidate.
  * The Finisher is free to adjust, split or omit it; never a mandatory cut. */
@@ -86,6 +90,9 @@ export type EditorialHandoff = {
   outline: EditorialOutline
   footage: EditorialSelection[]
   cutPlan: EditorialSelection[]
+  /** Source-grounded visual action selections, preserved separately from Flow word edits. */
+  visualActions?: VisualActionSelection[]
+  visualActionOmissions?: Array<{id:string;reason:string}>
   /** Flow Editor edits are a separate, source-grounded pass; Footage original is retained. */
   flowReview?: {
     originalCuts: EditorialSelection[]
@@ -210,6 +217,31 @@ const footageWordsSubmission:ToolSchema = {
     properties:{selections:{type:'array',minItems:1,maxItems:24,
       items:footageWordSelection}},
     required:['selections'],
+  },
+}
+
+/** Optional visual mode: existing Story/Footage schemas stay unchanged for baseline. */
+const storyWithVisualBeatsSubmission:ToolSchema={
+  name:names.story,
+  description:'Submit a coherent story outline and explicitly choose visual events that could make it entertaining; references must be real observed IDs.',
+  parameters:{type:'object',additionalProperties:false,
+    properties:{...(submitSchemas.story.parameters.properties as Record<string,unknown>),
+      visualBeats:{type:'array',maxItems:6,items:{type:'object',additionalProperties:false,
+        properties:{id:jsonString,whyFunnyToWatch:jsonString,narrativePurpose:jsonString},
+        required:['id','whyFunnyToWatch','narrativePurpose']}}},
+    required:[...(submitSchemas.story.parameters.required as string[]),'visualBeats'],
+  },
+}
+const footageWithVisualActionsSubmission:ToolSchema={
+  name:footageWordsSubmission.name,
+  description:'Select exact word-ID dialogue passages AND optional source-grounded silent/visual action ranges from Story-approved visual beat IDs.',
+  parameters:{type:'object',additionalProperties:false,
+    properties:{...(footageWordsSubmission.parameters.properties as Record<string,unknown>),
+      visualActions:{type:'array',maxItems:8,items:{type:'object',additionalProperties:false,
+        properties:{visualBeatId:jsonString,startMs:{type:'integer',minimum:0},
+          endMs:{type:'integer',minimum:0},beat:jsonString,reason:jsonString},
+        required:['visualBeatId','startMs','endMs','beat','reason']}}},
+    required:['selections','visualActions'],
   },
 }
 
@@ -838,18 +870,23 @@ export async function runEditorialRole(
     : TOOL_SCHEMAS.filter((tool) => readTools[role].includes(tool.name))
   const wordFootage=role==='footage' && context.fullTranscriptWordIndexed===true
   const storyObservation=ctx.config.editMode==='just_chatting_rough_cut' && !highlightsMode && ctx.config.targetLengthS[1]<=105
-  const submitTool=wordFootage?footageWordsSubmission:submitSchemas[role]
+  const visualStory=storyObservation && ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence)
+  const candidates=visualStory ? buildVisualBeatCandidates(
+    ctx.cache.visualEvidence?.coarse??[],ctx.cache.visualEvidence?.focused??[]) : []
+  const submitTool=visualStory && role==='story' ? storyWithVisualBeatsSubmission
+    : visualStory && wordFootage ? footageWithVisualActionsSubmission
+    : wordFootage ? footageWordsSubmission : submitSchemas[role]
   const tools = [...allowedTools,submitTool]
   const messages: LunaMessage[] = [
     { role: 'system', content: [
       FILM_EDITING_THEORY, SPECIALIST_ROLES[role],
       ...(ctx.config.visualEvidenceMode==='visual_audio' && (role==='story'||role==='footage') && ctx.cache.visualEvidence ? [
-        'VISUAL+AUDIO STORY EXPERIMENT: You have time-aligned Gemini observations from low-resolution video frames and the ORIGINAL source audio, alongside the complete authoritative ASR transcript. The coarse frame pass samples about every 3 seconds; a few candidate regions were rechecked at 1 fps. Distinguish model-observed visual actions from transcript facts; each observation is uncertain and could miss short or silent action. Pay attention to real visual reveals, physical comedy, expressions and causal action; a stretch of thin dialogue may be an important on-screen event. Do not force all candidate observations into the edit. Story may build the most coherent narrative that uses visually meaningful events. Footage selects exact source word IDs for speech, and may retain the speech around an observed action to preserve context. Never fabricate dialogue, invent source timestamps, infer unobserved events, or silently shift approved word cuts. Silent-only clips require a separate future cutter capability; do not claim they were selected.',
+        'VISUAL+AUDIO STORY EXPERIMENT: You have time-aligned Gemini observations from low-resolution video frames and the ORIGINAL audio, alongside authoritative ASR. Frame observations are uncertain, not confirmed ground truth. Look for physical comedy, visual reveals, genuine reactions, frustrations and payoffs even when the transcript is thin. Story: visual beats are FIRST-CLASS optional narrative candidates; explicitly choose observed candidate IDs with whyFunnyToWatch and narrativePurpose, rather than fitting every event into a preselected speech plot. Do not force unrelated events. Footage: select word IDs for speech AND optional observed visual-only source intervals in visualActions. Choose the action start/end within the referenced evidence timestamp range; maintain complete visible actions where possible and avoid cutting through spoken words. Do not invent visual events or source timestamps. Original audio remains attached. Flow edits dialogue only; visual range selection is independently validated and preserved.',
       ] : []),
       ...(Array.isArray(context.fullTranscript) ? [
         'You have the FULL original transcript in order, not snippets. No relevant speech is omitted. Read the whole conversation before making editorial decisions.',
         ...(role==='footage' && context.fullTranscriptWordIndexed===true ? [
-          'You make editorial decisions; deterministic code executes them. Submit ONLY firstWordId and lastWordId with beat and reason, never startMs/endMs. Finish a thought before cutting; do not stop on an introductory conjunction, incomplete quote, question, or setup. Do not fabricate outcomes to fill the time target.'
+          'For dialogue selections submit ONLY firstWordId and lastWordId; deterministic code executes them. In visual mode only, the separate visualActions array may have source startMs/endMs bounded by Story-approved visual candidate IDs. Finish spoken thoughts; never invent outcomes or times.'
         ] : []),
       ] : []),
       ...(ctx.config.editMode === 'just_chatting_rough_cut'
@@ -868,6 +905,8 @@ export async function runEditorialRole(
     ].join('\n\n') },
     { role: 'user', content: JSON.stringify({
       ...context, sourceId: source.sourceId, sourceRangeMs: source.rangeMs,
+      ...(visualStory && (role==='story'||role==='footage') ? {visualBeatCandidates:candidates,
+        visualBeatInstruction:'These are observed time-bounded event CANDIDATES, not mandatory clips. Story should choose events worth watching; Footage may retain silent portions as source-ms visualActions only when Story approved the ID. Never use a transcript word timestamp as a made-up action timestamp.'} : {}),
       ...(storyObservation ? {runtimeTargetDisabled:true,experiment:'narrative_coherence_and_boundary_selection_only'} : {outputTargetSeconds:ctx.config.targetLengthS}),
       editingIntent: highlightsMode ? 'multi_moment_highlights' : ctx.config.targetLengthS[1] <= 105 ? 'short_story' : 'conversational_long_form',
       ...(role === 'footage' && !highlightsMode &&
@@ -946,7 +985,9 @@ export async function runEditorialRole(
               !args.excludeAsides.every((v) => typeof v === 'string')) {
             throw new Error('specialist_story_outline_invalid')
           }
-          await specialistEvent(ctx, budget, role, 'accepted', { turn, beatCount: args.beats.length, storyDecision: args })
+          if(visualStory)args.visualBeats=validateStoryVisualBeats(args.visualBeats,candidates)
+          await specialistEvent(ctx, budget, role, 'accepted', { turn, beatCount: args.beats.length, storyDecision: args,
+            visualBeats: visualStory ? args.visualBeats : undefined })
           return args
         }
         if (role === 'footage' || role === 'dialogue') {
@@ -954,6 +995,12 @@ export async function runEditorialRole(
             ? context.curatedSelections as EditorialSelection[] | undefined
             : undefined
           let selections: EditorialSelection[]
+          let visualActions:VisualActionSelection[]=[]
+          if(visualStory && wordFootage) {
+            visualActions=resolveVisualActionRequests(args.visualActions,candidates,
+              (context.storyOutline as EditorialOutline | undefined)?.visualBeats??[],
+              ctx.cache.words??[],source.rangeMs)
+          }
           let recovery: ReturnType<typeof recoverEditorialSelections> | undefined
           try {
             selections = wordFootage
@@ -992,8 +1039,9 @@ export async function runEditorialRole(
             accepted: selections.map((s) => [s.startMs, s.endMs]),
             movedEdges: wordFootage ? 0 : selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
               s.endMs !== (args.selections as EditorialSelection[])[i]?.endMs).length,
+            visualActions: visualStory ? visualActions : undefined,
           })
-          return { selections }
+          return { selections, ...(visualStory && wordFootage ? {visualActions} : {}) }
         }
         if (typeof args.pass !== 'boolean' || !Array.isArray(args.issues) ||
             !args.issues.every((i) => typeof i === 'string')) {
@@ -1147,6 +1195,9 @@ export async function createEditorialHandoff(
     excludeAsides: (story.excludeAsides as string[]).slice(0, 10),
     endingRule: String(story.endingRule),
     highlightCriteria: String(story.highlightCriteria),
+    ...(ctx.config.visualEvidenceMode==='visual_audio' && !highlightsMode && ctx.config.targetLengthS[1]<=105 ? {
+      visualBeats: (story.visualBeats as StoryVisualBeat[] | undefined)??[],
+    } : {}),
   }
   await specialistEvent(ctx,budget,'story','story_handoff',{outline,sourceRangeMs:source.rangeMs,transcriptWords:ctx.cache.words.length,
     visualAudioEvidenceUsed:ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence),
@@ -1196,6 +1247,7 @@ export async function createEditorialHandoff(
     found = { selections: recovered.selections }
   }
   let footage = found.selections as EditorialSelection[]
+  const visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   if (shortStory) {
@@ -1224,13 +1276,19 @@ export async function createEditorialHandoff(
       },errorCode)
       reviewed={cutPlan:footage,review:{originalCuts:footage.map(c=>({...c})),changes:[],applied:false,note:'Flow review unavailable: '+errorCode}}
     }
+    const combined=combineSpeechWithVisualActions(reviewed.cutPlan,visualActions,ctx.cache.words,source.rangeMs)
+    await specialistEvent(ctx,budget,'footage','visual_actions_handoff',{
+      proposed:visualActions,selected:combined.included,omitted:combined.omitted,
+      finalCutCount:combined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',
+    })
     await specialistEvent(ctx,budget,'flow','handoff',{
-      originalCutCount:footage.length,finalCutCount:reviewed.cutPlan.length,
-      originalCuts:footage,finalCuts:reviewed.cutPlan,
+      originalCutCount:footage.length,finalCutCount:combined.cutPlan.length,
+      originalCuts:footage,finalCuts:combined.cutPlan,
       changes:reviewed.review.changes,
       untouchedOriginalFootage:true,
     })
-    return {outline,footage,cutPlan:reviewed.cutPlan,flowReview:reviewed.review}
+    return {outline,footage,cutPlan:combined.cutPlan,flowReview:reviewed.review,
+      visualActions:combined.included,visualActionOmissions:combined.omitted}
   }
   // One targeted *editorial* retry instead of accepting a 20s excerpt as a
   // requested 90s story. Preserve original cuts if the revision is worse.
