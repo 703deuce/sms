@@ -81,10 +81,15 @@ function mockRoles(items: Array<[string, Record<string, unknown>]>) {
       expect(messages[1]?.content).toContain('HIGHLIGHTS REVISION')
       expect(messages[1]?.content).toContain('previousCoverage')
     }
+    const args=item[0]==='submit_story_flow_review'
+      ? {...item[1],joinReviews:JSON.parse(messages[1]!.content!).joinedTransitions.map((j:{leftIndex:number;rightIndex:number})=>({
+          leftIndex:j.leftIndex,rightIndex:j.rightIndex,status:'flows',reason:'The full thought connects to the next',
+        }))}
+      : item[1]
     return {
       message: { role: 'assistant', content: null, tool_calls: [{
         id: 'highlights-call-' + n, type: 'function',
-        function: { name: item[0], arguments: JSON.stringify(item[1]) },
+        function: { name: item[0], arguments: JSON.stringify(args) },
       }] },
       usage: { prompt_tokens: 40, completion_tokens: 20 },
     }
