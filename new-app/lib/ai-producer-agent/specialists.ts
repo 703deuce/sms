@@ -843,6 +843,9 @@ export async function runEditorialRole(
   const messages: LunaMessage[] = [
     { role: 'system', content: [
       FILM_EDITING_THEORY, SPECIALIST_ROLES[role],
+      ...(ctx.config.visualEvidenceMode==='visual_audio' && (role==='story'||role==='footage') && ctx.cache.visualEvidence ? [
+        'VISUAL+AUDIO STORY EXPERIMENT: You have time-aligned Gemini observations from low-resolution video frames and the ORIGINAL source audio, alongside the complete authoritative ASR transcript. The coarse frame pass samples about every 3 seconds; a few candidate regions were rechecked at 1 fps. Distinguish model-observed visual actions from transcript facts; each observation is uncertain and could miss short or silent action. Pay attention to real visual reveals, physical comedy, expressions and causal action; a stretch of thin dialogue may be an important on-screen event. Do not force all candidate observations into the edit. Story may build the most coherent narrative that uses visually meaningful events. Footage selects exact source word IDs for speech, and may retain the speech around an observed action to preserve context. Never fabricate dialogue, invent source timestamps, infer unobserved events, or silently shift approved word cuts. Silent-only clips require a separate future cutter capability; do not claim they were selected.',
+      ] : []),
       ...(Array.isArray(context.fullTranscript) ? [
         'You have the FULL original transcript in order, not snippets. No relevant speech is omitted. Read the whole conversation before making editorial decisions.',
         ...(role==='footage' && context.fullTranscriptWordIndexed===true ? [
@@ -1089,6 +1092,10 @@ export async function createEditorialHandoff(
     transcriptSamples: representativeTranscript(ctx.cache.words, source.rangeMs),
     observedMoments: ctx.cache.momentsSummary,
     inventory: ctx.cache.inventorySummary,
+    ...(ctx.config.visualEvidenceMode==='visual_audio' && ctx.cache.visualEvidence ? {
+      visualAudioEvidence:ctx.cache.visualEvidence,
+      visualAudioEvidenceDisclaimer:'Gemini video/audio observations are candidate evidence, not guaranteed facts; ASR word IDs remain authoritative for speech cuts. No frame-based cut execution in this experiment.',
+    } : {}),
     audienceGoal: highlightsMode
       ? 'A highlight reel of multiple distinct, entertaining, independently comprehensible moments across the whole source, with honest context and complete thoughts'
       : ctx.config.targetLengthS[1] <= 105
@@ -1141,7 +1148,10 @@ export async function createEditorialHandoff(
     endingRule: String(story.endingRule),
     highlightCriteria: String(story.highlightCriteria),
   }
-  await specialistEvent(ctx,budget,'story','story_handoff',{outline,sourceRangeMs:source.rangeMs,transcriptWords:ctx.cache.words.length})
+  await specialistEvent(ctx,budget,'story','story_handoff',{outline,sourceRangeMs:source.rangeMs,transcriptWords:ctx.cache.words.length,
+    visualAudioEvidenceUsed:ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence),
+    visualObservationCounts:ctx.cache.visualEvidence?{coarse:ctx.cache.visualEvidence.coarse.length,focused:ctx.cache.visualEvidence.focused.length}:undefined,
+  })
   let found: Record<string, unknown>
   try {
     found = await runEditorialRole(ctx, out, budget, 'footage', {
