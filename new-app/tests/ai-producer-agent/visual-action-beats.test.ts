@@ -60,6 +60,32 @@ describe('Story visual beats and Footage source-time actions',()=>{
     expect(merged.cutPlan).toHaveLength(1)
     expect(merged.omitted[0]?.reason).toBe('covered_by_speech_or_unsafe_edges')
   })
+  it('retains the uncovered five-second tape-action tail when a speech cut overlaps its opening',()=>{
+    const story=validateStoryVisualBeats([{id:'visual_0',whyFunnyToWatch:'tape',narrativePurpose:'comedy'}],candidates)
+    const actions=resolveVisualActionRequests([
+      {visualBeatId:'visual_0',startMs:6000,endMs:12000,beat:'tape fight',reason:'actual visual action'},
+    ],candidates,story,words,bounds)
+    // The incoming action starts inside the spoken passage, but its final
+    // ~5s is genuine uncovered source footage that must not be thrown away.
+    const merged=combineSpeechWithVisualActions(
+      [{startMs:1000,endMs:7000,beat:'dialogue',reason:'original voice'}],actions,words,bounds)
+    expect(merged.included).toHaveLength(1)
+    expect(merged.included[0]!.startMs).toBeGreaterThanOrEqual(7000)
+    expect(merged.included[0]!.endMs).toBe(12000)
+    expect(merged.included[0]!.endMs-merged.included[0]!.startMs).toBeGreaterThan(4000)
+  })
+  it('nudges the uncovered edge off a real spoken word instead of dropping the whole action',()=>{
+    const story=validateStoryVisualBeats([{id:'visual_0',whyFunnyToWatch:'tape',narrativePurpose:'comedy'}],candidates)
+    const action=resolveVisualActionRequests([
+      {visualBeatId:'visual_0',startMs:6000,endMs:12000,beat:'action',reason:'observed'},
+    ],candidates,story,words,bounds)
+    const wordy:ClipWord[]=[{w:'overlap',s:6.85,e:7.4}]
+    const merged=combineSpeechWithVisualActions(
+      [{startMs:1000,endMs:7000,beat:'speech',reason:'spoken'}],action,wordy,bounds)
+    expect(merged.included).toHaveLength(1)
+    expect(merged.included[0]!.startMs).toBeGreaterThan(7430)
+    expect(merged.included[0]!.endMs).toBe(12000)
+  })
   it('keeps safe nonoverlapping part of a visual event and logs the reduction',()=>{
     const story=validateStoryVisualBeats([{id:'visual_0',whyFunnyToWatch:'funny',narrativePurpose:'setup'}],candidates)
     const actions=resolveVisualActionRequests([{visualBeatId:'visual_0',startMs:6000,endMs:12000,beat:'action',reason:'keep'}],candidates,story,words,bounds)
