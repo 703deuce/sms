@@ -354,7 +354,7 @@ export async function runStoryFlowReview(
   const originalCuts=originals.map(c=>({...c}))
   const joined=originals.map((sel,i)=>({
     passageIndex:i,...originalPassageWords(words,sel),
-    startMs:sel.startMs,endMs:sel.endMs,beat:sel.beat,dialogue:originalPassageWords(words,sel).dialogue,
+    startMs:sel.startMs,endMs:sel.endMs,beat:sel.beat,
   }))
   await specialistEvent(ctx,budget,'flow','start',{
     sourceRangeMs:bounds,wordCount:words.length,
@@ -729,7 +729,7 @@ function selectionLogSummary(args: Record<string, unknown> | null): string {
 
 /** Structured console + persisted DB entries share the same event payload. */
 async function specialistEvent(
-  ctx: ToolCtx, budget: Budget, role: EditorialRole, event: string,
+  ctx: ToolCtx, budget: Budget, role: EditorialRole | 'flow', event: string,
   diagnostic: Record<string, unknown>, error?: string,
 ) {
   const payload = { runId: ctx.runId, role, event, ...diagnostic }
@@ -1135,7 +1135,16 @@ export async function createEditorialHandoff(
       storyDecision: outline,
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
     })
-    const reviewed=await runStoryFlowReview(ctx,budget,outline,footage)
+    let reviewed:Awaited<ReturnType<typeof runStoryFlowReview>>
+    try {
+      reviewed=await runStoryFlowReview(ctx,budget,outline,footage)
+    } catch (error) {
+      const errorCode=String((error as Error)?.message??error).slice(0,400)
+      await specialistEvent(ctx,budget,'flow','review_unavailable_kept_footage',{
+        errorCode,originalCuts:footage,note:'No changes applied; preserve every model-selected Footage cut without guessing replacements',
+      },errorCode)
+      reviewed={cutPlan:footage,review:{originalCuts:footage.map(c=>({...c})),changes:[],applied:false,note:'Flow review unavailable: '+errorCode}}
+    }
     await specialistEvent(ctx,budget,'flow','handoff',{
       originalCutCount:footage.length,finalCutCount:reviewed.cutPlan.length,
       originalCuts:footage,finalCuts:reviewed.cutPlan,
