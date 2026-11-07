@@ -13,7 +13,7 @@ import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/f
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_REVIEW_CHECKS } from '@/lib/ai-producer-agent/just-chatting-direction'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 import { WORD_GUARD_MS, wordAtUnsafeBoundary } from '@/lib/ai-producer-agent/validate'
-import { buildVisualBeatCandidates, validateStoryVisualBeats, resolveVisualActionRequests, recoverVisualActionRequests, combineSpeechWithVisualActions, type StoryVisualBeat, type VisualActionSelection } from '@/lib/ai-producer-agent/visual-action-beats'
+import { buildVisualBeatCandidates, validateStoryVisualBeats, recoverVisualActionRequests, combineSpeechWithVisualActions, type StoryVisualBeat, type VisualActionSelection } from '@/lib/ai-producer-agent/visual-action-beats'
 
 /** A creative brief, not a claim that the described outcome occurred.
  * The Finisher must independently verify that the intended payoff is spoken.
