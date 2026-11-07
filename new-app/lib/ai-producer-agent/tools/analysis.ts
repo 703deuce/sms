@@ -5,6 +5,8 @@ import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 import { enqueueAiProducerAnalyzeJob, waitForClipJobDone } from '@/lib/server/ai-producer-agent/enqueue-analyze'
 import { framesFromSamples } from '@/lib/clips/cuts-quality/cut-boundary-refine'
 import type { RmsFrames } from '@/lib/ai-producer-agent/draft-edits'
+import { timestampedAsrForVisual, visualMomentsWithAsr, chooseVisualFocusWindows } from '@/lib/ai-producer-agent/visual-evidence'
+import { logAiProducerStep } from '@/lib/ai-producer-agent/log'
 
 export async function findMoments(
   ctx: import('@/lib/ai-producer-agent/tools/registry').ToolCtx,
@@ -18,6 +20,11 @@ export async function findMoments(
   const mode = String(args.mode ?? 'best_moments') as 'best_moments' | 'story_search' | 'inventory'
   const anchor = ctx.sources[0]?.projectId
   if (!anchor) return { ok: false, summary: 'no anchor project' }
+  const visualStory = ctx.config.editMode === 'just_chatting_rough_cut' &&
+    ctx.config.visualEvidenceMode === 'visual_audio' && mode === 'best_moments'
+  const sourceRange = ctx.sources[0]?.rangeMs
+  const transcriptText = visualStory && sourceRange
+    ? timestampedAsrForVisual(ctx.cache.words ?? [], sourceRange) : undefined
   const job = await enqueueAiProducerAnalyzeJob({
     runId: ctx.runId,
     projectId: anchor,
@@ -25,6 +32,9 @@ export async function findMoments(
     sources: ctx.sources,
     query: typeof args.query === 'string' ? args.query : undefined,
     targetClipLenS: Number(args.targetClipLenS ?? ctx.config.targetLengthS?.[1] ?? 30),
+    ...(visualStory ? { visualEvidence: {
+      enabled:true,model:'gemini-3.1-flash-lite',transcriptText,
+    } } : {}),
   })
   const finished = await waitForClipJobDone(job.id).catch(() => null)
   const payload = (finished?.payload ?? {}) as { analyzeResult?: Record<string, unknown> }
@@ -43,6 +53,30 @@ export async function findMoments(
     if (moments.length) {
       ctx.cache.moments = moments
       ctx.cache.momentsSummary = moments.slice(0, 30)
+      if (visualStory && sourceRange) {
+        ctx.cache.visualEvidence = {
+          coarse: visualMomentsWithAsr(moments,ctx.cache.words??[],sourceRange,'coarse_3s'),
+          focused:[],
+          metadata: {
+            model:String((result.meta as Record<string,unknown> | undefined)?.model_requested??'gemini-3.1-flash-lite'),
+            fps:1/3, mediaResolution:'MEDIA_RESOLUTION_LOW',
+            originalAudioAttached:Boolean((result.meta as Record<string,unknown> | undefined)?.original_audio_attached),
+            asrTranscriptAttached:Boolean(transcriptText),
+          },
+        }
+        // Inventory is a second copy of the picker video-analysis job.
+        // Reuse the new pass's observations instead of rescanning at 0.25 fps.
+        const rows=moments.map(m=>({
+          sourceId:m.sourceId,start_s:m.start_s,end_s:m.end_s,peak_s:m.peak_s,
+          beat_type:m.category??'moment',energy:m.score,
+          laugh:String(m.category??'').toLowerCase().includes('laugh'),
+          reaction:String(m.what_happened??'').toLowerCase().includes('reaction'),
+          quote:m.what_happened,visual_action:m.why_it_works,
+          topic:m.content_type,callback_candidates:[],
+        }))
+        ctx.cache.inventory = {rows} as typeof ctx.cache.inventory
+        ctx.cache.inventorySummary = {rows:rows.slice(0,45)}
+      }
     }
   }
   const meta = result.meta && typeof result.meta === 'object' ? result.meta as Record<string, unknown> : null
@@ -141,4 +175,64 @@ export async function selfReview(ctx: import('@/lib/ai-producer-agent/tools/regi
 
 export function ingestFramesFromWorker(samples: { tMs: number; rms: number }[]) {
   return framesFromSamples(samples, 10, 5)
+}
+
+/** Optional second look at promising regions with 1 fps labeled frames,
+ * original audio and the same source-grounded Deepgram words. This only
+ * produces evidence. It never writes cuts, selects a story, or changes Flow. */
+export async function refineVisualStoryEvidence(
+  ctx: import('@/lib/ai-producer-agent/tools/registry').ToolCtx,
+  budget: Budget,
+) {
+  if (ctx.config.editMode!=='just_chatting_rough_cut' ||
+      ctx.config.visualEvidenceMode!=='visual_audio' ||
+      !ctx.cache.visualEvidence || !ctx.cache.moments?.length) return
+  const source=ctx.sources[0]
+  if (!source?.rangeMs || !source.projectId) return
+  const windows=chooseVisualFocusWindows(ctx.cache.moments,source.rangeMs)
+  if(!windows.length || !budget.canSpendGemini(0.50)) {
+    await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'ingest',
+      tool:'visual_evidence_focus_skipped',kind:'validate',
+      argsSummary:JSON.stringify({windowCount:windows.length,budgetRemaining:budget.remainingGemini()}),
+      resultSummary:'No focus windows or insufficient budget'})
+    return
+  }
+  try {
+    const job=await enqueueAiProducerAnalyzeJob({
+      runId:ctx.runId,projectId:source.projectId,mode:'visual_detail',
+      sources:[source],targetClipLenS:45,
+      visualEvidence:{
+        enabled:true,model:'gemini-3.1-flash-lite',
+        focusWindows:windows.map(([startMs,endMs])=>({
+          startMs,endMs,
+          transcriptText:timestampedAsrForVisual(ctx.cache.words??[],[startMs,endMs],12_000),
+        })),
+      },
+    })
+    const done=await waitForClipJobDone(job.id)
+    const payload=done.payload as {analyzeResult?:{moments?:Record<string,unknown>[];meta?:Record<string,unknown>}} | null
+    const result=payload?.analyzeResult
+    if(!result)throw Error('visual_focus_result_missing')
+    const focus=visualMomentsWithAsr(result.moments,ctx.cache.words??[],source.rangeMs,'focused_1fps',24)
+    ctx.cache.visualEvidence.focused=focus
+    ctx.cache.visualEvidence.metadata={
+      ...ctx.cache.visualEvidence.metadata,focusFps:1,
+      focusWindows:windows,focusedObservations:focus.length,
+      actualFocusWindows:Number(result.meta?.focus_windows_analyzed??0),
+    }
+    const cost=Number(result.meta?.est_usd??0)
+    if(Number.isFinite(cost))budget.addGemini(cost)
+    await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'ingest',
+      tool:'visual_evidence_focus_ready',kind:'validate',
+      argsSummary:JSON.stringify({windows,observations:focus.length,model:'gemini-3.1-flash-lite',
+        fps:1,mediaResolution:'MEDIA_RESOLUTION_LOW',originalAudioAttached:true}),
+      resultSummary:`1fps detailed observations: ${focus.length}`,costUsd:Number.isFinite(cost)?cost:undefined})
+  }catch(error){
+    // Gemini failure can never replace or invalidate the proven transcript edit.
+    await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'ingest',
+      tool:'visual_evidence_focus_unavailable',kind:'validate',
+      argsSummary:JSON.stringify({windows}),
+      resultSummary:'Retained coarse visual observations',
+      error:String((error as Error)?.message??error).slice(0,250)})
+  }
 }
