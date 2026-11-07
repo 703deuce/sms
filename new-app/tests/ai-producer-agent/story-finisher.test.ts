@@ -425,7 +425,10 @@ describe('source-verified Story Finisher', () => {
       if(name==='submit_story_flow_review'){
         expect(request.assembledPassages).toHaveLength(2)
         expect(request.storyOutline).toMatchObject({logline:outline.logline})
-        return response(name,{assessment:'Both passages flow naturally',changes:[]},'flow')
+        return response(name,{assessment:'Both passages flow naturally',
+          joinReviews:request.joinedTransitions.map((j:{leftIndex:number;rightIndex:number})=>({
+            leftIndex:j.leftIndex,rightIndex:j.rightIndex,status:'flows',reason:'The neighboring thoughts connect cleanly',
+          })),changes:[]},'flow')
       }
       throw new Error('Unexpected legacy repair agent '+name)
     })
