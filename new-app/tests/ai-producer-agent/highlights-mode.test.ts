@@ -125,9 +125,10 @@ describe('distinct highlights mode', () => {
         {firstWordId:640,lastWordId:695,beat:'funny moment',reason:'complete funny thought'},
         {firstWordId:1600,lastWordId:1679,beat:'insight',reason:'full payoff'},
       ] }],
+      ['submit_story_flow_review', {assessment:'The full Story selections flow without revision',changes:[]}],
     ])
     const edit = await createEditorialHandoff(ctx('story'), output(), new Budget(), null)
-    expect(calls()).toBe(2)
+    expect(calls()).toBe(3)
     expect(edit.cutPlan).toHaveLength(3)
     expect(edit.cutPlan).toEqual(edit.footage)
     expect(highlightsCoverage(edit.cutPlan,[75,105]).distinctMomentCount).toBe(3)
