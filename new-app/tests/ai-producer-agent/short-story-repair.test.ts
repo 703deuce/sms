@@ -3,6 +3,7 @@ import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
 import { createEditorialHandoff, completeTranscriptWords, resolveFootageWordSelections } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
 import { DraftEditsBuilder } from '@/lib/ai-producer-agent/draft-edits'
+import { validateDraft, type ValidationCtx } from '@/lib/ai-producer-agent/validate'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 
@@ -143,6 +144,25 @@ describe('full-transcript Story/Footage handoff',()=>{
       {tMs:59985,v:100},{tMs:60000,v:0},
     ])
     expect(after.keyframes?.some(k=>k.target==='video')).toBe(false)
+  })
+
+  it('permits the 2.96-second direct Story opener while keeping older rough-cut minimum',()=>{
+    const b=new DraftEditsBuilder({clipStartMs:0,clipEndMs:300000},'recording')
+    b.preserveApprovedEdges=true
+    b.addSegment({sourceId:'recording',srcInMs:10000,srcOutMs:12960})
+    b.addSegment({sourceId:'recording',srcInMs:20000,srcOutMs:27000})
+    const ctx={
+      words:[],laughs:[],reactions:[],bursts:[],
+      layoutAt:()=>null,outputType:'story',
+      editMode:'just_chatting_rough_cut',
+      sourceRangeMs:[0,300000],audioEvidenceAvailable:false,
+      targetLengthS:[75,105],memeSfx:'off',payoffSrc:[],
+    } as ValidationCtx
+    const direct=validateDraft(b,{...ctx,directStoryWordCuts:true})
+    expect(direct.hardFailures.some(i=>i.code==='segment_too_short')).toBe(false)
+    const legacy=validateDraft(b,{...ctx,directStoryWordCuts:false})
+    expect(legacy.hardFailures.some(i=>i.code==='segment_too_short' && i.detail==='2960ms')).toBe(true)
+    expect(b.snapshot().cutRanges).toEqual([[12960,20000]])
   })
 
   it('rejects malformed and reversed word IDs instead of treating them as timestamps',()=>{

@@ -12,6 +12,8 @@ export type ValidationCtx = {
   layoutAt: (srcMs: number) => { contentType: string; mode: string } | null
   outputType: 'single_payoff' | 'montage' | 'story'
   editMode?: 'just_chatting_rough_cut'
+  /** Direct Story word-ID execution: don't reject valid spoken passages for arbitrary minimum length. */
+  directStoryWordCuts?: boolean
   sourceRangeMs?: [number, number]
   audioEvidenceAvailable?: boolean
   targetLengthS: [number, number]
@@ -146,10 +148,16 @@ export function validateDraft(b: DraftEditsBuilder, ctx: ValidationCtx): Validat
     if (ctx.bursts.some((x) => inside(t, x.s, x.e))) J('cut_in_burst')
   }
 
-  const minSeg = ctx.editMode === 'just_chatting_rough_cut' ? 3000 :
-    ctx.outputType === 'montage' ? MONTAGE_FLASH_MIN_MS : MIN_SEG_MS
-  for (const [s, en] of orderedKeepSegments(e)) {
-    if (en - s < minSeg) H('segment_too_short', { atSrcMs: s, detail: `${en - s}ms` })
+  // The direct Story baseline intentionally preserves Footage's word-timestamp cuts.
+  // A 2.96s opening (or any positive, source-grounded phrase) must not be vetoed
+  // by an arbitrary 3s rough-cut minimum. Zero/negative, overlapping and
+  // out-of-bounds selections still fail the structural checks below.
+  if (!ctx.directStoryWordCuts) {
+    const minSeg = ctx.editMode === 'just_chatting_rough_cut' ? 3000 :
+      ctx.outputType === 'montage' ? MONTAGE_FLASH_MIN_MS : MIN_SEG_MS
+    for (const [s, en] of orderedKeepSegments(e)) {
+      if (en - s < minSeg) H('segment_too_short', { atSrcMs: s, detail: `${en - s}ms` })
+    }
   }
 
   const zoom = (e.keyframes ?? []).find((k) => k.target === 'video' && k.prop === 'scale')
