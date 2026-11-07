@@ -13,7 +13,7 @@ import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/f
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_REVIEW_CHECKS } from '@/lib/ai-producer-agent/just-chatting-direction'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 import { WORD_GUARD_MS, wordAtUnsafeBoundary } from '@/lib/ai-producer-agent/validate'
-import { buildVisualBeatCandidates, validateStoryVisualBeats, resolveVisualActionRequests, combineSpeechWithVisualActions, type StoryVisualBeat, type VisualActionSelection } from '@/lib/ai-producer-agent/visual-action-beats'
+import { buildVisualBeatCandidates, validateStoryVisualBeats, resolveVisualActionRequests, recoverVisualActionRequests, combineSpeechWithVisualActions, type StoryVisualBeat, type VisualActionSelection } from '@/lib/ai-producer-agent/visual-action-beats'
 
 /** A creative brief, not a claim that the described outcome occurred.
  * The Finisher must independently verify that the intended payoff is spoken.
@@ -996,11 +996,10 @@ export async function runEditorialRole(
             : undefined
           let selections: EditorialSelection[]
           let visualActions:VisualActionSelection[]=[]
-          if(visualStory && wordFootage) {
-            visualActions=resolveVisualActionRequests(args.visualActions,candidates,
-              (context.storyOutline as EditorialOutline | undefined)?.visualBeats??[],
-              ctx.cache.words??[],source.rangeMs)
-          }
+          let visualActionOmissions:Array<{id:string;reason:string}>=[]
+          let visualActionRepairs:Array<{id:string;original:[number,number];repaired:[number,number]}>=[]
+          // Validate the spoken edit FIRST. Optional visual action mistakes
+          // never discard a source-grounded, coherent word-ID selection.
           let recovery: ReturnType<typeof recoverEditorialSelections> | undefined
           try {
             selections = wordFootage
@@ -1014,6 +1013,19 @@ export async function runEditorialRole(
             await specialistEvent(ctx, budget, role, 'server_recovered', {
               turn, dropped: recovery.dropped, unsafeEdges: recovery.unsafeEdges,
               count: selections.length, originalError: String((firstError as Error).message),
+            })
+          }
+          if (visualStory && wordFootage) {
+            const recoveredVisual=recoverVisualActionRequests(args.visualActions,candidates,
+              (context.storyOutline as EditorialOutline | undefined)?.visualBeats??[],
+              ctx.cache.words??[],source.rangeMs)
+            visualActions=recoveredVisual.selections
+            visualActionOmissions=recoveredVisual.omitted
+            visualActionRepairs=recoveredVisual.repairs
+            await specialistEvent(ctx,budget,role,'visual_action_validation',{
+              turn,submitted:args.visualActions,accepted:visualActions,
+              repaired:visualActionRepairs,omitted:visualActionOmissions,
+              speechSelectionsPreserved:selections.length,
             })
           }
           if (wordFootage) {
@@ -1040,8 +1052,10 @@ export async function runEditorialRole(
             movedEdges: wordFootage ? 0 : selections.filter((s, i) => s.startMs !== (args.selections as EditorialSelection[])[i]?.startMs ||
               s.endMs !== (args.selections as EditorialSelection[])[i]?.endMs).length,
             visualActions: visualStory ? visualActions : undefined,
+            visualActionRepairs:visualStory ? visualActionRepairs : undefined,
+            visualActionOmissions:visualStory ? visualActionOmissions : undefined,
           })
-          return { selections, ...(visualStory && wordFootage ? {visualActions} : {}) }
+          return { selections, ...(visualStory && wordFootage ? {visualActions,visualActionOmissions} : {}) }
         }
         if (typeof args.pass !== 'boolean' || !Array.isArray(args.issues) ||
             !args.issues.every((i) => typeof i === 'string')) {
@@ -1248,6 +1262,7 @@ export async function createEditorialHandoff(
   }
   let footage = found.selections as EditorialSelection[]
   const visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
+  const submittedVisualOmissions=(found.visualActionOmissions as Array<{id:string;reason:string}>|undefined)??[]
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   if (shortStory) {
@@ -1278,7 +1293,7 @@ export async function createEditorialHandoff(
     }
     const combined=combineSpeechWithVisualActions(reviewed.cutPlan,visualActions,ctx.cache.words,source.rangeMs)
     await specialistEvent(ctx,budget,'footage','visual_actions_handoff',{
-      proposed:visualActions,selected:combined.included,omitted:combined.omitted,
+      proposed:visualActions,selected:combined.included,omitted:[...submittedVisualOmissions,...combined.omitted],
       finalCutCount:combined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',
     })
     await specialistEvent(ctx,budget,'flow','handoff',{
@@ -1288,7 +1303,7 @@ export async function createEditorialHandoff(
       untouchedOriginalFootage:true,
     })
     return {outline,footage,cutPlan:combined.cutPlan,flowReview:reviewed.review,
-      visualActions:combined.included,visualActionOmissions:combined.omitted}
+      visualActions:combined.included,visualActionOmissions:[...submittedVisualOmissions,...combined.omitted]}
   }
   // One targeted *editorial* retry instead of accepting a 20s excerpt as a
   // requested 90s story. Preserve original cuts if the revision is worse.
