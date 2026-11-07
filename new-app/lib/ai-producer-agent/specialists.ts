@@ -92,6 +92,7 @@ export type EditorialHandoff = {
     changes: Array<{ passageIndex: number; action: 'replace' | 'remove'; reason: string; before: EditorialSelection; after?: EditorialSelection }>
     applied: boolean
     note: string
+    joinReviews?: Array<{leftIndex:number;rightIndex:number;status:'flows'|'needs_change';reason:string}>
   }
   preferredEdits?: FootagePreferredEdit[]
   finisher?: {
@@ -263,6 +264,16 @@ const flowReviewTool: ToolSchema = {
     type:'object',additionalProperties:false,
     properties:{
       assessment:{type:'string'},
+      joinReviews:{type:'array',maxItems:23,items:{
+        type:'object',additionalProperties:false,
+        properties:{
+          leftIndex:{type:'integer',minimum:0},
+          rightIndex:{type:'integer',minimum:1},
+          status:{type:'string',enum:['flows','needs_change']},
+          reason:{type:'string'},
+        },
+        required:['leftIndex','rightIndex','status','reason'],
+      }},
       changes:{type:'array',maxItems:24,items:{
         type:'object',additionalProperties:false,
         properties:{
@@ -275,7 +286,7 @@ const flowReviewTool: ToolSchema = {
         required:['passageIndex','action','reason'],
       }},
     },
-    required:['assessment','changes'],
+    required:['assessment','joinReviews','changes'],
   },
 }
 
@@ -285,6 +296,56 @@ type FlowChange = {
   firstWordId?:number
   lastWordId?:number
   reason:string
+}
+
+/** Audition the EDITED dialogue in playback order: each seam is a pair of
+ * actual spoken tails/heads, not nearby source-time ranges. Do not mistake
+ * a source-contiguous sentence boundary for independent semantic context. */
+export function storyFlowJoinEvidence(
+  passages: Array<{passageIndex:number;dialogue:string}>,
+) {
+  return passages.slice(1).map((right,i) => {
+    const left=passages[i]!
+    const lastWords=left.dialogue.trim().split(/\\s+/).slice(-24).join(' ')
+    const firstWords=right.dialogue.trim().split(/\\s+/).slice(0,24).join(' ')
+    return {leftIndex:i,rightIndex:i+1,
+      leftEnding:lastWords,rightOpening:firstWords,
+      heardTogether:lastWords+' | CUT | '+firstWords,
+    }
+  })
+}
+
+/** Require an explicit judgement for EVERY final inter-passage join.
+ * A seam flagged as broken must have a proposed edit affecting one of
+ * its two sides; do not silently accept a list of acknowledged defects. */
+export function validateStoryFlowJoinReviews(
+  raw: unknown, passageCount:number,
+  changes:Array<{passageIndex:number;action:'replace'|'remove'}>,
+) {
+  if (!Array.isArray(raw) || raw.length!==Math.max(0,passageCount-1))
+    throw Error('flow_join_reviews_missing_expected_'+Math.max(0,passageCount-1))
+  const seen=new Set<number>()
+  const changed=new Set(changes.map(c=>c.passageIndex))
+  const checks:Array<{leftIndex:number;rightIndex:number;status:'flows'|'needs_change';reason:string}>=[]
+  for (const item of raw) {
+    if (!item || typeof item!=='object')throw Error('flow_join_review_invalid_entry')
+    const c=item as Record<string,unknown>
+    if (!Number.isInteger(c.leftIndex) || !Number.isInteger(c.rightIndex) ||
+      (c.rightIndex as number)!==(c.leftIndex as number)+1 ||
+      (c.leftIndex as number)<0 || (c.rightIndex as number)>=passageCount ||
+      seen.has(c.leftIndex as number))
+      throw Error('flow_join_review_invalid_or_duplicate_index_'+c.leftIndex)
+    if (c.status!=='flows' && c.status!=='needs_change')
+      throw Error('flow_join_review_invalid_status_'+c.leftIndex)
+    if (typeof c.reason!=='string' || !c.reason.trim())
+      throw Error('flow_join_review_missing_reason_'+c.leftIndex)
+    if (c.status==='needs_change' && !changed.has(c.leftIndex as number) && !changed.has(c.rightIndex as number))
+      throw Error('flow_unresolved_join_'+c.leftIndex+'_'+c.rightIndex)
+    seen.add(c.leftIndex as number)
+    checks.push({leftIndex:c.leftIndex as number,rightIndex:c.rightIndex as number,
+      status:c.status,reason:c.reason.slice(0,500)})
+  }
+  return checks.sort((a,b)=>a.leftIndex-b.leftIndex)
 }
 
 function originalPassageWords(words: ClipWord[], selection: EditorialSelection) {
@@ -356,6 +417,7 @@ export async function runStoryFlowReview(
     passageIndex:i,...originalPassageWords(words,sel),
     startMs:sel.startMs,endMs:sel.endMs,beat:sel.beat,
   }))
+  const joinedTransitions=storyFlowJoinEvidence(joined)
   await specialistEvent(ctx,budget,'flow','start',{
     sourceRangeMs:bounds,wordCount:words.length,
     passageCount:originals.length,originalCuts,joinedWordSpans:joined.map(({passageIndex,firstWordId,lastWordId})=>({passageIndex,firstWordId,lastWordId})),
@@ -365,11 +427,13 @@ export async function runStoryFlowReview(
     {role:'system',content:[
       FILM_EDITING_THEORY,
       'FLOW EDITOR. You are a separate supervising dialogue editor AFTER Story and Footage have selected source passages. Review the COMPLETE assembled dialogue as a viewer hears it. Read the ENTIRE original word-indexed transcript for missing setup at passage beginnings, dangling ends, incomplete phrases, pronouns without referents, repetition, and non-sequiturs between passages. Fix only actual editorial problems. For every good passage, make NO change. You may extend/contract a passage by returning a different first/last original word ID, or remove a passage when it cannot serve the story. You may NEVER invent dialogue, reorder passages, choose new unrelated stories, or use a runtime target. No 90-second constraint. In particular, a short standalone opening can be excellent. Do not try to fix an audible pop: no audio was provided, and separate audio fades handle sound artifacts. Keep every unaffected passage unchanged. Your replacements are literal source cuts, not suggestions. Do not use cuts to satisfy a silence/seam heuristic. Source timestamps will be resolved from exact word IDs. You are not doing a duration compression pass.',
+      'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.',
     ].join('\n\n')},
     {role:'user',content:JSON.stringify({
       task:'Review the complete assembled story for continuity, self-contained dialogue and natural transitions. Return ONLY necessary corrections.',
       storyOutline:outline,
       assembledPassages:joined,
+      joinedTransitions,
       fullOriginalTranscriptFormat:'[originalWordId,sourceStartMs,sourceEndMs,spokenWord] in original chronology',
       fullOriginalTranscript:completeTranscriptWords(words,true),
       sourceRangeMs:bounds,
@@ -391,18 +455,23 @@ export async function runStoryFlowReview(
     await specialistEvent(ctx,budget,'flow','proposal',{
       attempt,assessment:typeof proposal?.assessment==='string'?proposal.assessment.slice(0,600):null,
       changes:proposal?.changes??null,
+      joinReviews:proposal?.joinReviews??null,
       originalCuts,
     })
     try {
       if (!call || !proposal || typeof proposal.assessment!=='string') throw Error('flow_missing_structured_review')
       const applied=applyStoryFlowChanges(proposal.changes,originals,words,bounds)
+      const joinReviews=validateStoryFlowJoinReviews(proposal.joinReviews,originals.length,applied.changes)
+      const finalPassages=applied.finalCuts.map((sel,i)=>({passageIndex:i,dialogue:originalPassageWords(words,sel).dialogue}))
+      const finalJoins=storyFlowJoinEvidence(finalPassages)
       const review={
         originalCuts,changes:applied.changes,applied:applied.changes.length>0,
-        note:proposal.assessment.slice(0,600),
+        note:proposal.assessment.slice(0,600),joinReviews,
       }
       await specialistEvent(ctx,budget,'flow','accepted',{
         attempt,assessment:review.note,
         originalCuts,finalCuts:applied.finalCuts,changes:review.changes,
+        joinReviews,finalJoins,
         unchangedPassages:originals.length-applied.changes.length,
         finalDurationSeconds:selectionDurationS(applied.finalCuts),
         runtimeTargetDisabled:true,
@@ -416,7 +485,7 @@ export async function runStoryFlowReview(
       },errorCode)
       if (attempt===1) throw Error('flow_review_invalid_after_retry: '+errorCode)
       if(call)messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({
-        ok:false,error:errorCode,instruction:'Recheck source word IDs, chronology and exact failing passage. Submit changes only for actual flow problems, without touching good passages.',
+        ok:false,error:errorCode,instruction:'Recheck original source word IDs, chronology and the failing passage. Include a specific joinReviews judgement for every adjacent passage pair. If any join needs_change, include a replace/remove action for one side; keep good passages unchanged.',
       })})
       else messages.push({role:'user',content:'Please submit the structured flow review tool response.'})
     }
