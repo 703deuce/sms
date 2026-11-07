@@ -86,6 +86,13 @@ export type EditorialHandoff = {
   outline: EditorialOutline
   footage: EditorialSelection[]
   cutPlan: EditorialSelection[]
+  /** Flow Editor edits are a separate, source-grounded pass; Footage original is retained. */
+  flowReview?: {
+    originalCuts: EditorialSelection[]
+    changes: Array<{ passageIndex: number; action: 'replace' | 'remove'; reason: string; before: EditorialSelection; after?: EditorialSelection }>
+    applied: boolean
+    note: string
+  }
   preferredEdits?: FootagePreferredEdit[]
   finisher?: {
     payoff: { startMs: number; endMs: number; quote: string }
@@ -241,6 +248,180 @@ export function resolveFootageWordSelections(
     })
   }
   return selected
+}
+
+/** A single independent narrative-flow review after Footage. The specialist
+ * sees the entire assembled dialogue and the entire original word-indexed
+ * source. Its ONLY editing powers are replacing a passage's first/last word
+ * or dropping a redundant passage. No duration target, gap finder, seam
+ * search, deterministic trimming or narrative substitution.
+ */
+const flowReviewTool: ToolSchema = {
+  name:'submit_story_flow_review',
+  description:'Return ONLY needed corrections to selected passages; omit every already-good passage.',
+  parameters:{
+    type:'object',additionalProperties:false,
+    properties:{
+      assessment:{type:'string'},
+      changes:{type:'array',maxItems:24,items:{
+        type:'object',additionalProperties:false,
+        properties:{
+          passageIndex:{type:'integer',minimum:0},
+          action:{type:'string',enum:['replace','remove']},
+          firstWordId:{type:'integer',minimum:0},
+          lastWordId:{type:'integer',minimum:0},
+          reason:{type:'string'},
+        },
+        required:['passageIndex','action','reason'],
+      }},
+    },
+    required:['assessment','changes'],
+  },
+}
+
+type FlowChange = {
+  passageIndex:number
+  action:'replace'|'remove'
+  firstWordId?:number
+  lastWordId?:number
+  reason:string
+}
+
+function originalPassageWords(words: ClipWord[], selection: EditorialSelection) {
+  const firstWordId=words.findIndex(w=>Math.round(w.s*1000)===selection.startMs)
+  const lastWordId=words.findLastIndex(w=>Math.round(w.e*1000)===selection.endMs)
+  if (firstWordId<0 || lastWordId<firstWordId) throw new Error('flow_original_word_boundary_not_found')
+  return {firstWordId,lastWordId,
+    dialogue:words.slice(firstWordId,lastWordId+1).map(w=>w.w).join(' ')}
+}
+
+/** Exported for isolated tests: only model-authorized corrections are applied.
+ * No heuristics repair or replace an invalid revision. A bad proposal is
+ * rejected with a passage-specific explanation for a model resubmission.
+ */
+export function applyStoryFlowChanges(
+  raw: unknown, originals: EditorialSelection[], words: ClipWord[], bounds: [number,number],
+) {
+  if (!Array.isArray(raw) || raw.length>24) throw Error('flow_invalid_change_count')
+  const edits=new Map<number,FlowChange>()
+  for (const item of raw) {
+    if (!item || typeof item!=='object') throw Error('flow_change_not_object')
+    const c=item as FlowChange
+    if (!Number.isInteger(c.passageIndex) || c.passageIndex<0 ||
+      c.passageIndex>=originals.length || edits.has(c.passageIndex))
+      throw Error('flow_invalid_or_duplicate_passage_index_'+c.passageIndex)
+    if (c.action!=='replace' && c.action!=='remove') throw Error('flow_invalid_action_passage_'+c.passageIndex)
+    if (typeof c.reason!=='string' || !c.reason.trim()) throw Error('flow_missing_reason_passage_'+c.passageIndex)
+    if (c.action==='replace' && (!Number.isInteger(c.firstWordId) || !Number.isInteger(c.lastWordId)))
+      throw Error('flow_missing_word_ids_passage_'+c.passageIndex)
+    edits.set(c.passageIndex,c)
+  }
+  const finalCuts:EditorialSelection[]=[]
+  const changes:Array<{passageIndex:number;action:'replace'|'remove';reason:string;before:EditorialSelection;after?:EditorialSelection}>=[]
+  for (let i=0;i<originals.length;i++) {
+    const before=originals[i]!
+    const edit=edits.get(i)
+    if (!edit) {finalCuts.push(before);continue}
+    if (edit.action==='remove') {
+      changes.push({passageIndex:i,action:'remove',reason:edit.reason,before})
+      continue
+    }
+    const converted=resolveFootageWordSelections([{
+      firstWordId:edit.firstWordId,lastWordId:edit.lastWordId,
+      beat:before.beat,reason:edit.reason,
+    }],words,bounds)[0]!
+    if (converted.startMs===before.startMs && converted.endMs===before.endMs) {
+      finalCuts.push(before)
+      continue
+    }
+    finalCuts.push(converted)
+    changes.push({passageIndex:i,action:'replace',reason:edit.reason,before,after:converted})
+  }
+  if (!finalCuts.length) throw Error('flow_cannot_remove_every_passage')
+  for (let i=1;i<finalCuts.length;i++) {
+    if (finalCuts[i]!.startMs<finalCuts[i-1]!.endMs)
+      throw Error('flow_overlap_after_revision_near_passage_'+i)
+  }
+  return {finalCuts,changes}
+}
+
+export async function runStoryFlowReview(
+  ctx: ToolCtx, budget: Budget, outline: EditorialOutline, originals: EditorialSelection[],
+):Promise<{cutPlan:EditorialSelection[];review:NonNullable<EditorialHandoff['flowReview']>}> {
+  const words=ctx.cache.words??[]
+  const bounds=ctx.sources[0]?.rangeMs
+  if (!bounds || !words.length || !originals.length) throw Error('flow_source_missing')
+  const originalCuts=originals.map(c=>({...c}))
+  const joined=originals.map((sel,i)=>({
+    passageIndex:i,...originalPassageWords(words,sel),
+    startMs:sel.startMs,endMs:sel.endMs,beat:sel.beat,
+  }))
+  await specialistEvent(ctx,budget,'flow','start',{
+    sourceRangeMs:bounds,wordCount:words.length,
+    passageCount:originals.length,originalCuts,joinedWordSpans:joined.map(({passageIndex,firstWordId,lastWordId})=>({passageIndex,firstWordId,lastWordId})),
+    runtimeTargetDisabled:true,
+  })
+  const messages:LunaMessage[]=[
+    {role:'system',content:[
+      FILM_EDITING_THEORY,
+      'FLOW EDITOR. You are a separate supervising dialogue editor AFTER Story and Footage have selected source passages. Review the COMPLETE assembled dialogue as a viewer hears it. Read the ENTIRE original word-indexed transcript for missing setup at passage beginnings, dangling ends, incomplete phrases, pronouns without referents, repetition, and non-sequiturs between passages. Fix only actual editorial problems. For every good passage, make NO change. You may extend/contract a passage by returning a different first/last original word ID, or remove a passage when it cannot serve the story. You may NEVER invent dialogue, reorder passages, choose new unrelated stories, or use a runtime target. No 90-second constraint. In particular, a short standalone opening can be excellent. Do not try to fix an audible pop: no audio was provided, and separate audio fades handle sound artifacts. Keep every unaffected passage unchanged. Your replacements are literal source cuts, not suggestions. Do not use cuts to satisfy a silence/seam heuristic. Source timestamps will be resolved from exact word IDs. You are not doing a duration compression pass.',
+    ].join('\n\n')},
+    {role:'user',content:JSON.stringify({
+      task:'Review the complete assembled story for continuity, self-contained dialogue and natural transitions. Return ONLY necessary corrections.',
+      storyOutline:outline,
+      assembledPassages:joined,
+      fullOriginalTranscriptFormat:'[originalWordId,sourceStartMs,sourceEndMs,spokenWord] in original chronology',
+      fullOriginalTranscript:completeTranscriptWords(words,true),
+      sourceRangeMs:bounds,
+      constraints:{runtimeTargetDisabled:true,maxPassages:24,retainGoodPassages:true,wordIdsOnly:true},
+    })},
+  ]
+  for (let attempt=0;attempt<2;attempt++) {
+    if (budget.state()==='hard') throw Error('flow_budget_exhausted')
+    const result=await lunaChat({messages,tools:[flowReviewTool],toolChoice:'required'})
+    budget.steps++;budget.addLuna(result.usage)
+    await logAiProducerStep({
+      runId:ctx.runId,stepIndex:budget.steps,phase:'plan',tool:'specialist_flow',
+      kind:'luna',resultSummary:'Flow editorial review response',
+      tokensIn:result.usage?.prompt_tokens,tokensOut:result.usage?.completion_tokens,
+    })
+    messages.push(result.message)
+    const call=(result.message.tool_calls??[]).find(c=>c.function.name===flowReviewTool.name)
+    const proposal=call?safeJson(call.function.arguments):null
+    await specialistEvent(ctx,budget,'flow','proposal',{
+      attempt,assessment:typeof proposal?.assessment==='string'?proposal.assessment.slice(0,600):null,
+      changes:proposal?.changes??null,
+      originalCuts,
+    })
+    try {
+      if (!call || !proposal || typeof proposal.assessment!=='string') throw Error('flow_missing_structured_review')
+      const applied=applyStoryFlowChanges(proposal.changes,originals,words,bounds)
+      const review={
+        originalCuts,changes:applied.changes,applied:applied.changes.length>0,
+        note:proposal.assessment.slice(0,600),
+      }
+      await specialistEvent(ctx,budget,'flow','accepted',{
+        attempt,assessment:review.note,
+        originalCuts,finalCuts:applied.finalCuts,changes:review.changes,
+        unchangedPassages:originals.length-applied.changes.length,
+        finalDurationSeconds:selectionDurationS(applied.finalCuts),
+        runtimeTargetDisabled:true,
+      })
+      return {cutPlan:applied.finalCuts,review}
+    } catch(error) {
+      const errorCode=String((error as Error).message).slice(0,250)
+      await specialistEvent(ctx,budget,'flow','rejected',{
+        attempt,errorCode,proposal:proposal?.changes??null,
+        note:'Flow proposal rejected WITHOUT modifying any original cut',
+      },errorCode)
+      if (attempt===1) throw Error('flow_review_invalid_after_retry: '+errorCode)
+      if(call)messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({
+        ok:false,error:errorCode,instruction:'Recheck source word IDs, chronology and exact failing passage. Submit changes only for actual flow problems, without touching good passages.',
+      })})
+      else messages.push({role:'user',content:'Please submit the structured flow review tool response.'})
+    }
+  }
+  throw Error('flow_review_no_result')
 }
 
 function safeJson(input: string): Record<string, unknown> | null {
@@ -548,7 +729,7 @@ function selectionLogSummary(args: Record<string, unknown> | null): string {
 
 /** Structured console + persisted DB entries share the same event payload. */
 async function specialistEvent(
-  ctx: ToolCtx, budget: Budget, role: EditorialRole, event: string,
+  ctx: ToolCtx, budget: Budget, role: EditorialRole | 'flow', event: string,
   diagnostic: Record<string, unknown>, error?: string,
 ) {
   const payload = { runId: ctx.runId, role, event, ...diagnostic }
@@ -939,11 +1120,10 @@ export async function createEditorialHandoff(
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   if (shortStory) {
-    // Story and Footage now have the complete source and Footage's selected
-    // words ARE the final cut. Do not run recursive Footage timestamp retries,
-    // semantic boundary reviewers or Dialogue's independent boundary guesses.
-    // The exact word start/end timestamps were applied with no seam repair,
-    // word-safety veto, duration gate or source-tail fallback.
+    // Footage's original word-ID cuts are preserved as an auditable baseline.
+    // A separate, optional one-pass Flow Editor may repair actual narrative
+    // context before deterministic assembly. No seam search, Finisher, Dialogue,
+    // compression, or source-tail substitution.
     await specialistEvent(ctx,budget,'footage','full_transcript_word_edit_handoff',{
       transcriptWords:ctx.cache.words.length,
       passageCount:footage.length,
@@ -955,7 +1135,23 @@ export async function createEditorialHandoff(
       storyDecision: outline,
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
     })
-    return {outline,footage,cutPlan:footage}
+    let reviewed:Awaited<ReturnType<typeof runStoryFlowReview>>
+    try {
+      reviewed=await runStoryFlowReview(ctx,budget,outline,footage)
+    } catch (error) {
+      const errorCode=String((error as Error)?.message??error).slice(0,400)
+      await specialistEvent(ctx,budget,'flow','review_unavailable_kept_footage',{
+        errorCode,originalCuts:footage,note:'No changes applied; preserve every model-selected Footage cut without guessing replacements',
+      },errorCode)
+      reviewed={cutPlan:footage,review:{originalCuts:footage.map(c=>({...c})),changes:[],applied:false,note:'Flow review unavailable: '+errorCode}}
+    }
+    await specialistEvent(ctx,budget,'flow','handoff',{
+      originalCutCount:footage.length,finalCutCount:reviewed.cutPlan.length,
+      originalCuts:footage,finalCuts:reviewed.cutPlan,
+      changes:reviewed.review.changes,
+      untouchedOriginalFootage:true,
+    })
+    return {outline,footage,cutPlan:reviewed.cutPlan,flowReview:reviewed.review}
   }
   // One targeted *editorial* retry instead of accepting a 20s excerpt as a
   // requested 90s story. Preserve original cuts if the revision is worse.

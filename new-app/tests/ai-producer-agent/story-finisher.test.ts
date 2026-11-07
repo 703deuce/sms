@@ -410,8 +410,9 @@ describe('source-verified Story Finisher', () => {
       const name=tools[tools.length-1]!.name
       names.push(name)
       const request=JSON.parse(messages[1]!.content!)
-      expect(request.fullTranscript).toHaveLength(words.length)
-      expect(request.fullTranscript.at(-1).at(-1)).toBe('late-discussion-context')
+      const fullWords=name==='submit_story_flow_review'?request.fullOriginalTranscript:request.fullTranscript
+      expect(fullWords).toHaveLength(words.length)
+      expect(fullWords.at(-1).at(-1)).toBe('late-discussion-context')
       if(name==='submit_story_outline')return response(name,outline,'story')
       if(name==='submit_footage_word_selections'){
         expect(request.transcriptSamples).toBeUndefined()
@@ -421,10 +422,15 @@ describe('source-verified Story Finisher', () => {
           {firstWordId:12,lastWordId:20,beat:'development',reason:'second complete source thought'},
         ]},'footage')
       }
+      if(name==='submit_story_flow_review'){
+        expect(request.assembledPassages).toHaveLength(2)
+        expect(request.storyOutline).toMatchObject({logline:outline.logline})
+        return response(name,{assessment:'Both passages flow naturally',changes:[]},'flow')
+      }
       throw new Error('Unexpected legacy repair agent '+name)
     })
     const edit=await createEditorialHandoff(ctx(),out(),new Budget(),null)
-    expect(names).toEqual(['submit_story_outline','submit_footage_word_selections'])
+    expect(names).toEqual(['submit_story_outline','submit_footage_word_selections','submit_story_flow_review'])
     expect(edit.cutPlan).toEqual(edit.footage)
     expect(edit.cutPlan).toHaveLength(2)
     expect(edit.finisher).toBeUndefined()

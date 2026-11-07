@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
-import { createEditorialHandoff, completeTranscriptWords, resolveFootageWordSelections } from '@/lib/ai-producer-agent/specialists'
+import { createEditorialHandoff, completeTranscriptWords, resolveFootageWordSelections, applyStoryFlowChanges } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
 import { DraftEditsBuilder } from '@/lib/ai-producer-agent/draft-edits'
 import { validateDraft, type ValidationCtx } from '@/lib/ai-producer-agent/validate'
@@ -43,23 +43,29 @@ function run(choices:typeof complete, transcriptCheck=true){
   let calls=0
   __setLunaImpl(async ({messages,tools})=>{
     const stage=calls++
-    const name=stage===0?'submit_story_outline':'submit_footage_word_selections'
+    const name=stage===0?'submit_story_outline':stage===1?'submit_footage_word_selections':'submit_story_flow_review'
     expect(tools.some(t=>t.name===name)).toBe(true)
     const payload=JSON.parse(messages[1]!.content!)
     if(transcriptCheck){
       expect(payload.transcriptSamples).toBeUndefined()
-      expect(payload.fullTranscript).toHaveLength(words.length)
-      expect(payload.fullTranscript[599][0]).toBe(599)
-      expect(payload.fullTranscript[599].at(-1)).toBe('final-word.')
+      const source=stage===2?payload.fullOriginalTranscript:payload.fullTranscript
+      expect(source).toHaveLength(words.length)
+      expect(source[599][0]).toBe(599)
+      expect(source[599].at(-1)).toBe('final-word.')
     }
     if(stage===1){
       expect(payload.storyOutline.logline).toBe(outline.logline)
       expect(payload.fullTranscript[40]).toEqual([40,20100,20300,'word'])
     }
-    if(stage>1)throw Error('Unexpected Finisher/Dialogue re-edit')
+    if(stage===2){
+      expect(payload.assembledPassages).toHaveLength(choices.length)
+      expect(payload.storyOutline.logline).toBe(outline.logline)
+      expect(payload.constraints.runtimeTargetDisabled).toBe(true)
+    }
+    if(stage>2)throw Error('Unexpected Finisher/Dialogue re-edit')
     return {message:{role:'assistant',content:null,tool_calls:[{
       id:'stage-'+stage,type:'function',
-      function:{name,arguments:JSON.stringify(stage===0?outline:{selections:choices})},
+      function:{name,arguments:JSON.stringify(stage===0?outline:stage===1?{selections:choices}:{assessment:'All selected passages flow naturally',changes:[]})},
     }]},usage:{prompt_tokens:500,completion_tokens:100}}
   })
   return ()=>calls
@@ -70,7 +76,7 @@ describe('full-transcript Story/Footage handoff',()=>{
   it('delivers the entire recording to Story and every timestamped word to Footage',async()=>{
     const calls=run(complete)
     const edit=await createEditorialHandoff(context(),output(),new Budget(),null)
-    expect(calls()).toBe(2)
+    expect(calls()).toBe(3)
     expect(edit.cutPlan).toHaveLength(3)
     expect(edit.cutPlan).toEqual(edit.footage)
     expect(edit.cutPlan[0]).toMatchObject({startMs:20100,endMs:47800})
@@ -81,28 +87,86 @@ describe('full-transcript Story/Footage handoff',()=>{
     let calls=0
     __setLunaImpl(async ({messages,tools})=>{
       const stage=calls++
-      const name=stage===0?'submit_story_outline':'submit_footage_word_selections'
+      const name=stage===0?'submit_story_outline':stage===1?'submit_footage_word_selections':'submit_story_flow_review'
       expect(tools.map(t=>t.name)).toContain(name)
-      expect(messages[0]!.content).toContain('Ignore all duration targets')
+      expect(messages[0]!.content).toContain(stage===2 ? 'No 90-second constraint' : 'Ignore all duration targets')
       const request=JSON.parse(messages[1]!.content!)
-      expect(request.runtimeTargetDisabled).toBe(true)
-      expect(request.outputTargetSeconds).toBeUndefined()
-      expect(request.fullTranscript).toHaveLength(600)
+      if(stage<2) {
+        expect(request.runtimeTargetDisabled).toBe(true)
+        expect(request.outputTargetSeconds).toBeUndefined()
+        expect(request.fullTranscript).toHaveLength(600)
+      } else {
+        expect(request.constraints.runtimeTargetDisabled).toBe(true)
+        expect(request.fullOriginalTranscript).toHaveLength(600)
+      }
       if(stage===1){
         expect(request.selectionDurationInstruction).toContain('IGNORE runtime')
         expect(request.preferredEditInstruction).not.toContain('90 seconds')
       }
-      if(stage>1)throw Error('Cannot compress, re-review, or silently retry Story')
+      if(stage>2)throw Error('Cannot compress, re-review, or silently retry Story')
       return {message:{role:'assistant',content:null,tool_calls:[{
         id:'long-'+stage,type:'function',
-        function:{name,arguments:JSON.stringify(stage===0?outline:{selections:long})},
+        function:{name,arguments:JSON.stringify(stage===0?outline:stage===1?{selections:long}:{assessment:'Already a complete coherent story',changes:[]})},
       }]},usage:{prompt_tokens:500,completion_tokens:100}}
     })
     const edit=await createEditorialHandoff(context(),output(),new Budget(),null)
-    expect(calls).toBe(2)
+    expect(calls).toBe(3)
     expect(edit.cutPlan).toHaveLength(1)
     expect(edit.cutPlan[0]).toMatchObject({startMs:100,endMs:239800})
     expect(edit.cutPlan[0]!.endMs-edit.cutPlan[0]!.startMs).toBeGreaterThan(200000)
+  })
+  it('lets Flow add missing context and keep all unrelated passages unchanged',async()=>{
+    const originally=[selection(20,28,'setup'),selection(80,85,'explanation'),selection(150,165,'payoff')]
+    const expected=resolveFootageWordSelections(originally,words,[0,300000])
+    let stage=0
+    __setLunaImpl(async ({messages,tools})=>{
+      const n=stage++
+      const name=n===0?'submit_story_outline':n===1?'submit_footage_word_selections':'submit_story_flow_review'
+      expect(tools.some(t=>t.name===name)).toBe(true)
+      if(n===2) {
+        const prompt=JSON.parse(messages[1]!.content!)
+        expect(prompt.fullOriginalTranscript).toHaveLength(words.length)
+        expect(prompt.assembledPassages).toHaveLength(3)
+        expect(prompt.assembledPassages[1]).toMatchObject({firstWordId:80,lastWordId:85})
+        expect(prompt.assembledPassages[1].dialogue).toBe('word word word word word word')
+      }
+      if(n>2)throw Error('Unexpected extra stage')
+      const args=n===0?outline:n===1?{selections:originally}:{
+        assessment:'Passage 2 starts without the necessary context; the other two flow.',
+        changes:[{passageIndex:1,action:'replace',firstWordId:72,lastWordId:85,reason:'Restore setup before the explanation'}],
+      }
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'flow-stage-'+n,type:'function',function:{name,arguments:JSON.stringify(args)},
+      }]},usage:{prompt_tokens:500,completion_tokens:100}}
+    })
+    const edit=await createEditorialHandoff(context(),output(),new Budget(),null)
+    expect(stage).toBe(3)
+    expect(edit.footage).toEqual(expected)
+    expect(edit.cutPlan).toHaveLength(3)
+    expect(edit.cutPlan[0]).toEqual(expected[0])
+    expect(edit.cutPlan[1]).toMatchObject({startMs:36100,endMs:42800})
+    expect(edit.cutPlan[2]).toEqual(expected[2])
+    expect(edit.flowReview?.changes).toHaveLength(1)
+    expect(edit.flowReview?.changes[0]).toMatchObject({passageIndex:1,action:'replace',reason:'Restore setup before the explanation'})
+  })
+  it('allows Flow to remove an unnecessary passage without rewriting its neighbors',()=>{
+    const original=resolveFootageWordSelections(complete,words,[0,300000])
+    const changed=applyStoryFlowChanges([{passageIndex:1,action:'remove',reason:'Redundant detail'}],original,words,[0,300000])
+    expect(changed.finalCuts).toEqual([original[0],original[2]])
+    expect(changed.changes).toHaveLength(1)
+  })
+  it('rejects overlap, invalid word IDs, and duplicate changes rather than snapping or guessing',()=>{
+    const original=resolveFootageWordSelections(complete,words,[0,300000])
+    expect(()=>applyStoryFlowChanges([
+      {passageIndex:1,action:'replace',firstWordId:90,lastWordId:330,reason:'overlap'},
+    ],original,words,[0,300000])).toThrow('flow_overlap_after_revision')
+    expect(()=>applyStoryFlowChanges([
+      {passageIndex:1,action:'replace',firstWordId:9999,lastWordId:10001,reason:'invalid'},
+    ],original,words,[0,300000])).toThrow('footage_invalid_or_reversed_word_ids')
+    expect(()=>applyStoryFlowChanges([
+      {passageIndex:1,action:'remove',reason:'a'},
+      {passageIndex:1,action:'remove',reason:'b'},
+    ],original,words,[0,300000])).toThrow('flow_invalid_or_duplicate_passage_index')
   })
   it('does not silently trim a source transcript to twelve overview windows',()=>{
     expect(completeTranscriptWords(words,false)).toHaveLength(600)
@@ -112,7 +176,7 @@ describe('full-transcript Story/Footage handoff',()=>{
     const one=[selection(100,280,'complete speech')]
     const calls=run(one as typeof complete)
     const edit=await createEditorialHandoff(context(),output(),new Budget(),null)
-    expect(calls()).toBe(2)
+    expect(calls()).toBe(3)
     expect(edit.cutPlan).toHaveLength(1)
     expect(edit.cutPlan[0]).toMatchObject({startMs:50100,endMs:140300})
   })
