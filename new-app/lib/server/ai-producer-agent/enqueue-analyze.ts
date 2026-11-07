@@ -12,6 +12,12 @@ export async function enqueueAiProducerAnalyzeJob(input: {
   sources: AiProducerSourceRef[]
   query?: string
   targetClipLenS?: number
+  visualEvidence?: {
+    enabled: boolean
+    model?: string
+    transcriptText?: string
+    focusWindows?: Array<{ startMs:number; endMs:number; transcriptText:string }>
+  }
 }) {
   const prisma = getPrisma()
   const job = await prisma.clipJob.create({
@@ -26,6 +32,7 @@ export async function enqueueAiProducerAnalyzeJob(input: {
         sources: input.sources,
         query: input.query,
         targetClipLenS: input.targetClipLenS,
+        visualEvidence: input.visualEvidence,
       }),
     },
   })
