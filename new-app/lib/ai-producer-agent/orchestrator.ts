@@ -277,7 +277,9 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
     })
     const added = await sysTool(ctx, budget, 'plan', 'add_clip_segment', {
       sourceId: source.sourceId, srcInMs: cut.startMs, srcOutMs: cut.endMs,
-      beat:cut.kind==='visual_action' ? 'visual_action' : cut.beat,
+      // add_clip_segment.beat only accepts a fixed enum. The editorial
+      // beat is free text and is already logged above; never pass it as an
+      // execution enum (including "visual_action").
     }, out)
     await logAiProducerStep({
       runId:ctx.runId,stepIndex:++budget.steps,phase:'plan',
