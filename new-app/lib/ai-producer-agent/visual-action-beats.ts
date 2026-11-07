@@ -107,6 +107,89 @@ export function resolveVisualActionRequests(
   return result
 }
 
+/** Repair minor model timestamp errors ONLY within the observed Gemini range.
+ * A visual action is optional, not a reason to reject an otherwise valid
+ * complete spoken edit. Never manufacture evidence or move farther than the
+ * explicit tolerance. No unsafe word-edge becomes an executed cut. */
+export function recoverVisualActionRequests(
+  raw: unknown, candidates:VisualBeatCandidate[],
+  selectedStoryBeats:StoryVisualBeat[], words:ClipWord[], bounds:[number,number],
+  maxEdgeShiftMs=1500,
+):{
+  selections:VisualActionSelection[]
+  omitted:Array<{id:string;reason:string}>
+  repairs:Array<{id:string;original:[number,number];repaired:[number,number]}>
+} {
+  const selections:VisualActionSelection[]=[]
+  const omitted:Array<{id:string;reason:string}>=[]
+  const repairs:Array<{id:string;original:[number,number];repaired:[number,number]}>=[]
+  if(!Array.isArray(raw))return {selections,omitted:[{id:'unknown',reason:'visual_actions_not_array'}],repairs}
+  const chosen=new Set(selectedStoryBeats.map(x=>x.id))
+  // A bad extra action must not invalidate all safe dialogue or the other
+  // visual actions. Cap processing without treating excess as valid.
+  for(const [i,entry] of raw.entries()) {
+    const item=entry && typeof entry==='object' ? entry as Record<string,unknown> : {}
+    const id=typeof item.visualBeatId==='string'?item.visualBeatId:'unknown_'+i
+    if(i>=8) {omitted.push({id,reason:'visual_action_count_cap'});continue}
+    const candidate=candidates.find(c=>c.id===id)
+    if(!candidate||!chosen.has(id)) {
+      omitted.push({id,reason:'visual_action_missing_story_evidence'});continue
+    }
+    if(!Number.isInteger(item.startMs)||!Number.isInteger(item.endMs) ||
+      typeof item.beat!=='string'||!item.beat.trim()||
+      typeof item.reason!=='string'||!item.reason.trim()) {
+      omitted.push({id,reason:'visual_action_malformed'});continue
+    }
+    const original:[number,number]=[item.startMs as number,item.endMs as number]
+    const lo=Math.max(bounds[0],candidate.sourceRangeMs[0])
+    const hi=Math.min(bounds[1],candidate.sourceRangeMs[1])
+    // Only repair model edges slightly outside the ACTUALLY observed range.
+    // A proposed event elsewhere in the recording is not the same event.
+    if(original[1]<=original[0] || original[1]-original[0]>45_000 ||
+      original[0]<lo-maxEdgeShiftMs || original[0]>hi ||
+      original[1]>hi+maxEdgeShiftMs || original[1]<lo) {
+      omitted.push({id,reason:'visual_action_outside_observed_source'});continue
+    }
+    const requested:[number,number]=[
+      Math.max(lo,original[0]),Math.min(hi,original[1]),
+    ]
+    const safeEdge=(edge:number,kind:'start'|'end')=>{
+      if(!wordAtUnsafeBoundary(edge,words))return edge
+      const candidatesMs=new Set<number>([lo,hi])
+      // ASR boundaries plus 30ms guard are legal only after verifying the
+      // resulting edge against ALL words, including overlapping ASR words.
+      for(const w of words){
+        const a=Math.round(w.s*1000),b=Math.round(w.e*1000)
+        if(b<=a || a>edge+maxEdgeShiftMs+50 || b<edge-maxEdgeShiftMs-50)continue
+        candidatesMs.add(a-31)
+        candidatesMs.add(b+31)
+      }
+      return [...candidatesMs]
+        .filter(t=>t>=lo&&t<=hi&&Math.abs(t-edge)<=maxEdgeShiftMs &&
+          !wordAtUnsafeBoundary(t,words))
+        .sort((a,b)=>Math.abs(a-edge)-Math.abs(b-edge) ||
+          (kind==='start'?a-b:b-a))[0]??null
+    }
+    const start=safeEdge(requested[0],'start')
+    const end=safeEdge(requested[1],'end')
+    if(start===null||end===null||end-start<700||end-start>45_000){
+      omitted.push({id,reason:'visual_action_no_safe_source_interval'});continue
+    }
+    const final:VisualActionSelection={
+      kind:'visual_action',visualBeatId:id,startMs:start,endMs:end,
+      beat:(item.beat as string).slice(0,90),reason:(item.reason as string).slice(0,320),
+    }
+    if(selections.some(x=>Math.max(x.startMs,final.startMs)<Math.min(x.endMs,final.endMs))){
+      omitted.push({id,reason:'visual_action_overlaps_another_action'});continue
+    }
+    selections.push(final)
+    if(original[0]!==start || original[1]!==end)
+      repairs.push({id,original,repaired:[start,end]})
+  }
+  selections.sort((a,b)=>a.startMs-b.startMs)
+  return {selections,omitted,repairs}
+}
+
 /** Keep chronological complete speech passages intact. Any visual ranges
  * overlapping spoken content are trimmed to the uncovered source gap,
  * preferably at observed silent boundaries. Never make overlapping/duplicate
