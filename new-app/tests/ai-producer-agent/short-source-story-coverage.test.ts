@@ -64,8 +64,13 @@ function fakeModel(steps: Array<[string, Record<string, unknown>]>) {
     if (!name) throw Error('unexpected extra editorial call')
     expect(tools.some(t => t.name === name)).toBe(true)
     prompts.push(messages[1]?.content ?? '')
+    const enriched=name==='submit_story_flow_review'
+      ? {...args,joinReviews:JSON.parse(messages[1]!.content!).joinedTransitions.map((j:{leftIndex:number;rightIndex:number})=>({
+          leftIndex:j.leftIndex,rightIndex:j.rightIndex,status:'flows',reason:'This story beat continues naturally',
+        }))}
+      : args
     return { message: { role: 'assistant', content: null, tool_calls: [{
-      id: 'step' + n, type: 'function', function: { name, arguments: JSON.stringify(args) },
+      id: 'step' + n, type: 'function', function: { name, arguments: JSON.stringify(enriched) },
     }] }, usage: { prompt_tokens: 50, completion_tokens: 50 } }
   })
   return { count: () => n, prompts }
