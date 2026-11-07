@@ -95,3 +95,58 @@ def test_legacy_baseline_does_not_force_visual_audio_defaults(finder, monkeypatc
     assert recorded[0]["fps_override"] is None
     assert recorded[0]["transcript_text"] is None
     assert result["meta"]["visual_audio_enabled"] is False
+
+
+def test_one_failed_focused_window_does_not_erase_later_observations(finder, monkeypatch):
+    observed = []
+
+    def watch(_local, **kwargs):
+        observed.append(kwargs)
+        if len(observed) == 1:
+            raise ValueError("no_valid_moments_after_normalize")
+        return ([{"start_s": kwargs["range_start_ms"] / 1000,
+                  "end_s": kwargs["range_start_ms"] / 1000 + 2,
+                  "what_happened": "short visual reaction"}], [],
+                {"est_usd": 0.003, "normalize_rejects": {}})
+
+    monkeypatch.setattr(finder, "watch_upload_range", watch)
+    result = finder.run_analyze_payload(
+        MagicMock(), job={"id": "focus-partial"}, progress=lambda *_: None,
+        payload={
+            "mode": "visual_detail", "sources": [_source()],
+            "visualEvidence": {
+                "enabled": True,
+                "focusWindows": [
+                    {"startMs": 12000, "endMs": 24000, "transcriptText": "first"},
+                    {"startMs": 50000, "endMs": 61000, "transcriptText": "second"},
+                    {"startMs": 92000, "endMs": 104000, "transcriptText": "third"},
+                ],
+            },
+        },
+    )
+    assert len(observed) == 3
+    assert all(item["min_moment_s"] == 1.0 for item in observed)
+    assert len(result["moments"]) == 2
+    assert result["meta"]["focus_windows_failed"] == 1
+    assert result["meta"]["focus_windows_analyzed"] == 2
+    assert [r["status"] for r in result["meta"]["focus_window_results"]] == [
+        "failed", "ok", "ok",
+    ]
+    assert result["meta"]["focus_window_results"][0]["reason"] == "no_valid_moments_after_normalize"
+
+
+def test_focused_normalization_accepts_real_two_second_observation():
+    from clips_worker.ai_producer_agent.finder.watch import validate_and_normalize_moments
+    raw = [{
+        "start_s": 0.5, "end_s": 2.5, "peak_s": 1.5, "hook_s": 0.5,
+        "what_happened": "silent reaction", "category": "reaction",
+        "why_it_works": "visual physical comedy", "score": 0.9,
+    }]
+    focused, focused_rejects = validate_and_normalize_moments(
+        raw, 12, min_moment_s=1.0,
+    )
+    regular, regular_rejects = validate_and_normalize_moments(raw, 12)
+    assert len(focused) == 1
+    assert focused_rejects.get("span_too_short", 0) == 0
+    assert len(regular) == 0
+    assert regular_rejects["span_too_short"] == 1

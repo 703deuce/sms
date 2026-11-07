@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { approvedRoughCutSegmentArgs } from '@/lib/ai-producer-agent/assembly-segment-args'
+
 import { getPrisma } from '@/lib/server/db'
 import { verifyEdlCaptionSync } from '@/lib/clips/cuts-quality/edl-invariant'
 import { buildAgentSystemPromptForModel } from '@/lib/ai-producer-agent/prompts'
@@ -275,10 +277,8 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
       argsSummary:JSON.stringify({index,sourceId:source.sourceId,startMs:cut.startMs,endMs:cut.endMs,beat:cut.beat,reason:cut.reason}),
       resultSummary:'Applying original model-selected source timestamps',
     })
-    const added = await sysTool(ctx, budget, 'plan', 'add_clip_segment', {
-      sourceId: source.sourceId, srcInMs: cut.startMs, srcOutMs: cut.endMs,
-      beat:cut.kind==='visual_action' ? 'visual_action' : cut.beat,
-    }, out)
+    const added = await sysTool(ctx, budget, 'plan', 'add_clip_segment',
+      approvedRoughCutSegmentArgs(source.sourceId, cut), out)
     await logAiProducerStep({
       runId:ctx.runId,stepIndex:++budget.steps,phase:'plan',
       tool:'rough_cut_segment_execution_result',kind:'system',

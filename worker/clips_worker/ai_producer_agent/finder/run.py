@@ -93,16 +93,28 @@ def run_analyze_payload(
                 region = scratch / f"focus_{index}"
                 region.mkdir(parents=True, exist_ok=True)
                 excerpt = str(window.get("transcriptText") or "")[:12000]
-                refined, _curve, meta = watch_upload_range(
-                    local,
-                    range_start_ms=lo, range_end_ms=hi,
-                    scratch=region, target_clip_len_s=int(payload.get("targetClipLenS") or 30),
-                    transcript_text=excerpt,
-                    fps_override=fps,
-                    media_resolution_override=resolution,
-                    model_override=model,
-                    force_audio=True,
-                )
+                # Each focused window is an observation, NOT a standalone
+                # clip candidate. 1s physical reactions should not be erased
+                # by the regular clipper's minimum 5s moment gate.
+                try:
+                    refined, _curve, meta = watch_upload_range(
+                        local,
+                        range_start_ms=lo, range_end_ms=hi,
+                        scratch=region, target_clip_len_s=int(payload.get("targetClipLenS") or 30),
+                        transcript_text=excerpt,
+                        fps_override=fps,
+                        media_resolution_override=resolution,
+                        model_override=model,
+                        force_audio=True,
+                        min_moment_s=1.0,
+                    )
+                except Exception as exc:
+                    meta_agg.setdefault("focus_window_results", []).append({
+                        "index": index, "sourceRangeMs": [lo, hi],
+                        "status": "failed", "reason": str(exc)[:300],
+                    })
+                    meta_agg["focus_windows_failed"] = int(meta_agg.get("focus_windows_failed") or 0) + 1
+                    continue
                 for moment in refined:
                     moment["sourceId"] = src.get("sourceId")
                     moment["evidence_tier"] = "focused_1fps"
@@ -110,6 +122,11 @@ def run_analyze_payload(
                 moments.extend(refined)
                 meta_agg["est_usd"] += float(meta.get("est_usd") or 0)
                 meta_agg["focus_windows_analyzed"] = int(meta_agg.get("focus_windows_analyzed") or 0) + 1
+                meta_agg.setdefault("focus_window_results", []).append({
+                    "index": index, "sourceRangeMs": [lo, hi],
+                    "status": "ok", "observations": len(refined),
+                    "normalizeRejects": meta.get("normalize_rejects") or {},
+                })
             continue
         if end_ms > start_ms:
             scratch.mkdir(parents=True, exist_ok=True)

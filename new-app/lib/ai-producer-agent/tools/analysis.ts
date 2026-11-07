@@ -219,13 +219,18 @@ export async function refineVisualStoryEvidence(
       ...ctx.cache.visualEvidence.metadata,focusFps:1,
       focusWindows:windows,focusedObservations:focus.length,
       actualFocusWindows:Number(result.meta?.focus_windows_analyzed??0),
+      failedFocusWindows:Number(result.meta?.focus_windows_failed??0),
+      focusWindowResults:Array.isArray(result.meta?.focus_window_results)
+        ? result.meta.focus_window_results : [],
     }
     const cost=Number(result.meta?.est_usd??0)
     if(Number.isFinite(cost))budget.addGemini(cost)
     await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'ingest',
       tool:'visual_evidence_focus_ready',kind:'validate',
       argsSummary:JSON.stringify({windows,observations:focus.length,model:'gemini-3.1-flash-lite',
-        fps:1,mediaResolution:'MEDIA_RESOLUTION_LOW',originalAudioAttached:true}),
+        fps:1,mediaResolution:'MEDIA_RESOLUTION_LOW',originalAudioAttached:true,
+        windowResults:result.meta?.focus_window_results??[],
+        failedWindows:result.meta?.focus_windows_failed??0}),
       resultSummary:`1fps detailed observations: ${focus.length}`,estUsd:Number.isFinite(cost)?cost:undefined})
   }catch(error){
     // Gemini failure can never replace or invalidate the proven transcript edit.
