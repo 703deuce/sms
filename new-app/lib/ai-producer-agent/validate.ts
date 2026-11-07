@@ -141,7 +141,13 @@ export function validateDraft(b: DraftEditsBuilder, ctx: ValidationCtx): Validat
         warn.push({ code, severity: 'DEFAULT', atSrcMs: t, detail })
       else H(code, { atSrcMs: t, detail })
     }
-    const w = wordAtUnsafeBoundary(t, ctx.words)
+    // Direct Story cuts are intentionally pinned to the ASR first-word start
+    // and last-word end. The generic 30ms word guard also flags EXACTLY those
+    // legal edges as "inside a word", producing false warnings at every join.
+    // Other workflows retain their existing conservative 30ms guard.
+    const approvedWordEdge = ctx.directStoryWordCuts && ctx.words.some(w =>
+      Math.round(w.s * 1000) === t || Math.round(w.e * 1000) === t)
+    const w = approvedWordEdge ? undefined : wordAtUnsafeBoundary(t, ctx.words)
     if (w) J('cut_in_word', `"${w.w}" ${Math.round(w.s * 1000)}-${Math.round(w.e * 1000)}`)
     if (ctx.laughs.some(([s, en]) => inside(t, s, en))) J('cut_in_laugh')
     if (ctx.reactions.some((r) => inside(t, r.s, r.e))) J('cut_in_reaction')

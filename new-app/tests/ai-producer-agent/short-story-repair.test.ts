@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
-import { createEditorialHandoff, completeTranscriptWords, resolveFootageWordSelections, applyStoryFlowChanges } from '@/lib/ai-producer-agent/specialists'
+import { createEditorialHandoff, completeTranscriptWords, resolveFootageWordSelections, applyStoryFlowChanges, storyFlowJoinEvidence, validateStoryFlowJoinReviews } from '@/lib/ai-producer-agent/specialists'
 import { Budget } from '@/lib/ai-producer-agent/budget'
 import { DraftEditsBuilder } from '@/lib/ai-producer-agent/draft-edits'
 import { validateDraft, type ValidationCtx } from '@/lib/ai-producer-agent/validate'
@@ -39,6 +39,7 @@ const selection=(firstWordId:number,lastWordId:number,beat:string)=>({
 const complete=[
   selection(40,95,'setup'),selection(140,193,'development'),selection(300,367,'payoff'),
 ]
+const allJoinChecks=(n:number)=>Array.from({length:Math.max(0,n-1)},(_,i)=>({leftIndex:i,rightIndex:i+1,status:'flows',reason:'The adjacent thoughts form a complete transition'}))
 function run(choices:typeof complete, transcriptCheck=true){
   let calls=0
   __setLunaImpl(async ({messages,tools})=>{
@@ -65,7 +66,7 @@ function run(choices:typeof complete, transcriptCheck=true){
     if(stage>2)throw Error('Unexpected Finisher/Dialogue re-edit')
     return {message:{role:'assistant',content:null,tool_calls:[{
       id:'stage-'+stage,type:'function',
-      function:{name,arguments:JSON.stringify(stage===0?outline:stage===1?{selections:choices}:{assessment:'All selected passages flow naturally',changes:[]})},
+      function:{name,arguments:JSON.stringify(stage===0?outline:stage===1?{selections:choices}:{assessment:'All selected passages flow naturally',joinReviews:allJoinChecks(choices.length),changes:[]})},
     }]},usage:{prompt_tokens:500,completion_tokens:100}}
   })
   return ()=>calls
@@ -106,7 +107,7 @@ describe('full-transcript Story/Footage handoff',()=>{
       if(stage>2)throw Error('Cannot compress, re-review, or silently retry Story')
       return {message:{role:'assistant',content:null,tool_calls:[{
         id:'long-'+stage,type:'function',
-        function:{name,arguments:JSON.stringify(stage===0?outline:stage===1?{selections:long}:{assessment:'Already a complete coherent story',changes:[]})},
+        function:{name,arguments:JSON.stringify(stage===0?outline:stage===1?{selections:long}:{assessment:'Already a complete coherent story',joinReviews:[],changes:[]})},
       }]},usage:{prompt_tokens:500,completion_tokens:100}}
     })
     const edit=await createEditorialHandoff(context(),output(),new Budget(),null)
@@ -133,6 +134,8 @@ describe('full-transcript Story/Footage handoff',()=>{
       if(n>2)throw Error('Unexpected extra stage')
       const args=n===0?outline:n===1?{selections:originally}:{
         assessment:'Passage 2 starts without the necessary context; the other two flow.',
+        joinReviews:[{leftIndex:0,rightIndex:1,status:'needs_change',reason:'Passage 2 opening lacks setup'},
+          {leftIndex:1,rightIndex:2,status:'flows',reason:'Complete neighboring thought'}],
         changes:[{passageIndex:1,action:'replace',firstWordId:72,lastWordId:85,reason:'Restore setup before the explanation'}],
       }
       return {message:{role:'assistant',content:null,tool_calls:[{
@@ -148,6 +151,34 @@ describe('full-transcript Story/Footage handoff',()=>{
     expect(edit.cutPlan[2]).toEqual(expected[2])
     expect(edit.flowReview?.changes).toHaveLength(1)
     expect(edit.flowReview?.changes[0]).toMatchObject({passageIndex:1,action:'replace',reason:'Restore setup before the explanation'})
+  })
+  it('exposes every adjacent pair with actual ending and opening words',()=>{
+    const joins=storyFlowJoinEvidence([
+      {passageIndex:0,dialogue:'This is my context. So you may be asking,'},
+      {passageIndex:1,dialogue:'That is a factor, but there is another reason.'},
+      {passageIndex:2,dialogue:'I prefer PC gaming.'},
+    ])
+    expect(joins).toHaveLength(2)
+    expect(joins[0]).toMatchObject({leftIndex:0,rightIndex:1,
+      leftEnding:'This is my context. So you may be asking,',
+      rightOpening:'That is a factor, but there is another reason.'})
+    expect(joins[0]!.heardTogether).toContain('asking, | CUT | That is a factor')
+  })
+  it('rejects missing/duplicate seam coverage or an acknowledged join with no fix',()=>{
+    const noChange:Array<{passageIndex:number;action:'replace'|'remove'}>=[]
+    expect(()=>validateStoryFlowJoinReviews([],3,noChange)).toThrow('flow_join_reviews_missing_expected_2')
+    expect(()=>validateStoryFlowJoinReviews([
+      {leftIndex:0,rightIndex:1,status:'flows',reason:'good'},
+      {leftIndex:0,rightIndex:1,status:'flows',reason:'duplicate'},
+    ],3,noChange)).toThrow('flow_join_review_invalid_or_duplicate_index')
+    expect(()=>validateStoryFlowJoinReviews([
+      {leftIndex:0,rightIndex:1,status:'needs_change',reason:'Orphaned setup'},
+      {leftIndex:1,rightIndex:2,status:'flows',reason:'good'},
+    ],3,noChange)).toThrow('flow_unresolved_join_0_1')
+    expect(validateStoryFlowJoinReviews([
+      {leftIndex:0,rightIndex:1,status:'needs_change',reason:'Fix missing setup'},
+      {leftIndex:1,rightIndex:2,status:'flows',reason:'good'},
+    ],3,[{passageIndex:1,action:'replace'}])).toHaveLength(2)
   })
   it('allows Flow to remove an unnecessary passage without rewriting its neighbors',()=>{
     const original=resolveFootageWordSelections(complete,words,[0,300000])
@@ -227,6 +258,15 @@ describe('full-transcript Story/Footage handoff',()=>{
     const legacy=validateDraft(b,{...ctx,directStoryWordCuts:false})
     expect(legacy.hardFailures.some(i=>i.code==='segment_too_short' && i.detail==='2960ms')).toBe(true)
     expect(b.snapshot().cutRanges).toEqual([[12960,20000]])
+    const overlaps=validateDraft(b,{...ctx,directStoryWordCuts:true,words:[
+      {w:'opening',s:10,e:12.96},{w:'resolution',s:20,e:27},
+    ]})
+    expect(overlaps.warnings.filter(i=>i.code==='cut_in_word')).toHaveLength(0)
+    const legacyWithGuard=validateDraft(b,{...ctx,directStoryWordCuts:false,words:[
+      {w:'opening',s:10,e:12.96},{w:'resolution',s:20,e:27},
+    ]})
+    expect(legacyWithGuard.warnings.some(i=>i.code==='cut_in_word')).toBe(true)
+
   })
 
   it('rejects malformed and reversed word IDs instead of treating them as timestamps',()=>{
