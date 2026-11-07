@@ -73,7 +73,13 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
     if (ctx.config.editMode === 'just_chatting_rough_cut' && !ctx.cache.moments?.length) {
       throw new Error('rough_cut_requires_real_video_analysis')
     }
-    if (ctx.sources.length > 1 || run.outputType !== 'single_payoff') {
+    if (ctx.config.visualEvidenceMode === 'visual_audio' &&
+        ctx.config.editMode === 'just_chatting_rough_cut') {
+      // Reuse the coarse video+audio+ASR observations for inventory.
+      // The legacy second inventory scan would discard ASR and re-run Gemini.
+      const { refineVisualStoryEvidence } = await import('@/lib/ai-producer-agent/tools/analysis')
+      await refineVisualStoryEvidence(ctx,budget)
+    } else if (ctx.sources.length > 1 || run.outputType !== 'single_payoff') {
       await sysTool(ctx, budget, 'inventory', 'find_moments', { mode: 'inventory' })
     }
     ctx.decideInput.momentCount = ctx.cache.moments?.length ?? 0
