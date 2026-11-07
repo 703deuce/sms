@@ -573,8 +573,9 @@ def validate_and_normalize_moments(
     *,
     chunk_offset_s: float = 0.0,
     max_span_s: float | None = None,
+    min_moment_s: float = _MIN_MOMENT_S,
 ) -> tuple[list[dict], dict[str, int]]:
-    """Clamp times, enforce ordering, drop spans <5s; add legacy t_s/reason fields."""
+    """Clamp times and reject spans below the caller's minimum (5s for clipper)."""
     from clips_worker.decision_log import decision_log
 
     dur = max(1.0, float(duration_s))
@@ -596,7 +597,7 @@ def validate_and_normalize_moments(
             rejects["time_parse"] = rejects.get("time_parse", 0) + 1
             decision_log("normalize", "reject", reason="time_parse", input=_sanitize_moment_preview(row))
             continue
-        if end <= start or (end - start) < _MIN_MOMENT_S:
+        if end <= start or (end - start) < min_moment_s:
             rejects["span_too_short"] = rejects.get("span_too_short", 0) + 1
             decision_log(
                 "normalize",
@@ -1760,6 +1761,7 @@ def watch_video_file(
     use_labeled_frames: bool | None = None,
     user_text_override: str | None = None,
     is_single_chunk: bool = False,
+    min_moment_s: float = _MIN_MOMENT_S,
 ) -> tuple[list[dict], dict[str, Any]]:
     """Gemini Flash video watch. Fail-open after retries unless fail_open=False."""
     meta: dict[str, Any] = {
@@ -2135,6 +2137,7 @@ def watch_video_file(
                     float(duration_s),
                     chunk_offset_s=0.0,
                     max_span_s=max_span,
+                    min_moment_s=min_moment_s,
                 )
                 meta["normalize_rejects"] = normalize_rejects
                 if prior_moments:
@@ -2292,6 +2295,7 @@ def watch_upload_range(
     media_resolution_override: str | None = None,
     model_override: str | None = None,
     force_audio: bool = False,
+    min_moment_s: float = _MIN_MOMENT_S,
 ) -> tuple[list[dict], list[float], dict[str, Any]]:
     start_s = max(0.0, range_start_ms / 1000.0)
     end_s = range_end_ms / 1000.0 if range_end_ms > range_start_ms else start_s + 60.0
@@ -2320,6 +2324,7 @@ def watch_upload_range(
         trim_start_s=start_s,
         trim_end_s=end_s,
         fail_open=False,
+        min_moment_s=min_moment_s,
     )
     curve = moments_to_per_second(
         [
