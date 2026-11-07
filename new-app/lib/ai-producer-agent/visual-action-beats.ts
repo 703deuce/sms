@@ -190,6 +190,26 @@ export function recoverVisualActionRequests(
   return {selections,omitted,repairs}
 }
 
+/** Find a safe edge in an uncovered action gap without leaving the
+ * observed action or touching another retained dialogue passage. The
+ * ordinary 30ms guard remains authoritative. */
+function safeUncoveredActionEdge(
+  requested:number,lo:number,hi:number,kind:'start'|'end',words:ClipWord[],
+  maxShiftMs=1500,
+):number|null {
+  if(hi<=lo)return null
+  const options=new Set<number>([requested,lo,hi])
+  for(const w of words) {
+    const a=Math.round(w.s*1000),b=Math.round(w.e*1000)
+    if(b<a || a>requested+maxShiftMs+60 || b<requested-maxShiftMs-60)continue
+    options.add(a-31);options.add(b+31)
+  }
+  return [...options].filter(t=>t>=lo&&t<=hi &&
+    Math.abs(t-requested)<=maxShiftMs && !wordAtUnsafeBoundary(t,words))
+    .sort((a,b)=>Math.abs(a-requested)-Math.abs(b-requested) ||
+      (kind==='start'?a-b:b-a))[0]??null
+}
+
 /** Keep chronological complete speech passages intact. Any visual ranges
  * overlapping spoken content are trimmed to the uncovered source gap,
  * preferably at observed silent boundaries. Never make overlapping/duplicate
@@ -214,12 +234,24 @@ export function combineSpeechWithVisualActions(
       cursor=Math.max(cursor,seg.endMs)
     }
     if(cursor<action.endMs)free.push([cursor,action.endMs])
-    const valid=free.filter(([s,e])=>e-s>=700 &&
-      s>=bounds[0] && e<=bounds[1] &&
-      !wordAtUnsafeBoundary(s,words) && !wordAtUnsafeBoundary(e,words))
+    // A speech passage may cover the START of a visual action while an
+    // important five-second silent tail is still uncovered. Recheck edges
+    // against the uncovered interval instead of rejecting its original
+    // overlapping endpoints outright.
+    const valid=free.map(([lo,hi])=>{
+      const start=safeUncoveredActionEdge(lo,Math.max(lo,bounds[0]),Math.min(hi,bounds[1]),'start',words)
+      const end=safeUncoveredActionEdge(hi,Math.max(lo,bounds[0]),Math.min(hi,bounds[1]),'end',words)
+      return start===null||end===null ? null : [start,end] as [number,number]
+    }).filter((span):span is [number,number]=>span!==null&&span[1]-span[0]>=700)
       .sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]))
     const best=valid[0]
-    if(!best){omitted.push({id:action.visualBeatId,reason:'covered_by_speech_or_unsafe_edges'});continue}
+    if(!best){
+      omitted.push({id:action.visualBeatId,
+        reason:free.length
+          ? 'uncovered_action_gap_has_no_safe_edges:'+JSON.stringify(free)
+          : 'covered_by_speech_or_unsafe_edges'})
+      continue
+    }
     const final:VisualActionSelection={...action,startMs:best[0],endMs:best[1]}
     included.push(final)
     retained.push(final)
