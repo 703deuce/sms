@@ -88,12 +88,14 @@ describe('short-form narrative coverage', () => {
         {firstWordId:400,lastWordId:430,beat:'challenge',reason:'actual struggle'},
         {firstWordId:820,lastWordId:855,beat:'payoff',reason:'actual recorded outcome'},
       ]}],
+      ['submit_story_flow_review',{assessment:'Narrative is complete',changes:[]}],
     ])
     const result=await createEditorialHandoff(context(),output(),new Budget(),null)
-    expect(model.count()).toBe(2)
+    expect(model.count()).toBe(3)
     expect(model.prompts[0]).toContain('fullTranscript')
     expect(model.prompts[1]).toContain('fullTranscript')
     expect(model.prompts[1]).not.toContain('transcriptSamples')
+    expect(model.prompts[2]).toContain('fullOriginalTranscript')
     expect(result.cutPlan).toHaveLength(3)
     expect(result.cutPlan[2]!.startMs-result.cutPlan[1]!.endMs).toBeGreaterThan(300000)
   })
@@ -105,9 +107,10 @@ describe('short-form narrative coverage', () => {
         {firstWordId:0,lastWordId:20,beat:'setup',reason:'complete local thought'},
         {firstWordId:24,lastWordId:50,beat:'resolution',reason:'coherent local outcome'},
       ]}],
+      ['submit_story_flow_review',{assessment:'No extra beats needed',changes:[]}],
     ])
     const result=await createEditorialHandoff(context(),output(),new Budget(),null)
-    expect(model.count()).toBe(2)
+    expect(model.count()).toBe(3)
     expect(result.cutPlan).toHaveLength(2)
     expect(result.cutPlan[1]!.startMs-result.cutPlan[0]!.endMs).toBeLessThan(5000)
     expect(result.cutPlan.reduce((n,x)=>n+x.endMs-x.startMs,0)).toBeLessThan(75000)
