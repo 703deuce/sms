@@ -19,13 +19,22 @@ function requireEnv(name: string) {
   return value;
 }
 
+/** Browser/RLS key — legacy anon JWT or newer publishable key (same Coolify slot: use ANON_KEY). */
+export function resolveSupabaseAnonKey(): string {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+  );
+}
+
 export function getSupabaseUrl() {
   return requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 }
 
 /** Browser / anon client — respects RLS. */
 export function createBrowserSupabase() {
-  return createClient(getSupabaseUrl(), requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"), {
+  return createClient(getSupabaseUrl(), resolveSupabaseAnonKey(), {
     auth: { persistSession: true, autoRefreshToken: true },
   });
 }
