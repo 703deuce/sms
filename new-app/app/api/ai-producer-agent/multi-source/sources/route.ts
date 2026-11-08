@@ -5,7 +5,7 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 /** Only workspace-owned uploads with real source video and transcribed
- * records are offered for the three-video experiment. */
+ * records are offered for the multi-source experiment; silent videos are valid. */
 export async function GET(){
   const disabled=aiProducerAgentDisabledResponse()
   if(disabled)return disabled
@@ -23,6 +23,6 @@ export async function GET(){
       durationMs:p.upload?.durationMs??(p.rangeEndMs-p.rangeStartMs),
       hasTranscript:Boolean(p.transcriptKey) ||
         (Array.isArray(p.transcriptWords)&&p.transcriptWords.length>=30),
-    })).filter(p=>p.hasTranscript)}})
+    }))}})
   }catch(error){return jsonError(error,500)}
 }
