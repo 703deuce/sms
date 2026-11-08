@@ -10,9 +10,10 @@ export type StreamerShortMode = 'clip_moment_v1' | 'clip_story_v1'
 
 /** Two opt-in, specialist-agent-powered clip products. Never invokes the
  * historic highlights picker or overwrites long-form gaming mode. */
-export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDurationMs}:{
+export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDurationMs,videoAvailable}:{
   projectId:string
   ready:boolean
+  videoAvailable:boolean
   sourceStartMs:number
   sourceDurationMs:number
 }) {
@@ -117,7 +118,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
                 Math.floor((sourceDurationMs-15_000)/60_000),Number(e.target.value)||0)))} />
           </label>
         ):null}
-        <Button size="sm" onClick={()=>void create()} disabled={!ready||running}>
+        <Button size="sm" onClick={()=>void create()} disabled={!ready||!videoAvailable||running}>
           {running?<Loader2 className="mr-2 size-4 animate-spin"/>:<Sparkles className="mr-2 size-4"/>}
           {running?'Agents editing…':'Create AI clip'}
         </Button>
@@ -129,6 +130,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         The long-form gaming mode is unchanged.
       </p>
       {!ready?<p className="mt-2 text-xs">Source must finish importing first.</p>:null}
+      {ready&&!videoAvailable?<p className="mt-2 text-xs text-amber-600">This VOD uses audio-first streaming without a stored source video. Agent clips require an uploaded video segment; the automatic on-demand Twitch/Kick video handoff is not connected yet.</p>:null}
       {running?<p role="status" className="mt-2 text-xs">AI clip status: {status}. The finished edit opens in Clip Studio.</p>:null}
       {error?<p role="alert" className="mt-2 text-xs text-destructive">{error}</p>:null}
     </section>
