@@ -162,7 +162,7 @@ describe('isolated Clean Take mode',()=>{
         id:'repair_'+selections,type:'function',function:{name,arguments:JSON.stringify(args)},
       }]}}
     })
-    const result=await planCleanTake([a],undefined,undefined,e=>events.push(e))
+    const result=await planCleanTake([a],undefined,undefined,e=>{events.push(e)})
     expect(selections).toBe(3)
     expect(failures[0]).toContain('clean_take_overlapping_selected_takes:selection_1')
     expect(failures[1]).toContain('clean_take_invalid_text:title')
