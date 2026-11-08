@@ -51,6 +51,21 @@ describe('multi-source finished video assembly via existing E5b renderer',()=>{
     expect(saved.layout.mode).toBe('full_frame')
     expect(saved.aspectRatio).toBe('16:9')
   })
+  it('renders a source-qualified silent visual-only action with its original source audio',()=>{
+    const bounds={clipStartMs:10000,clipEndMs:16000,trimMinMs:0,trimMaxMs:16000}
+    const visualCuts=[
+      cuts[0]!,
+      {...cuts[1]!,kind:'visual_action' as const,firstWordId:-1,lastWordId:-1,
+        visualBeatId:'b:visual_0',startMs:40000,endMs:45500},
+    ]
+    const visualPlan:MultiStoryPlan={...plan,cuts:visualCuts,estimatedDurationMs:11500}
+    const draft=buildMultiStoryInsertEdits(defaultEdits(bounds),visualPlan,
+      [uploads[0]!,uploads[1]!])
+    expect(draft.inserts).toHaveLength(1)
+    expect(draft.inserts![0]!.inMs).toBe(40000)
+    expect(draft.inserts![0]!.durMs).toBe(5500)
+    expect(insertAudio(draft.inserts![0]!)).toBe('source')
+  })
   it('rejects silent clamping of a selected sentence after the uploaded video ends',()=>{
     const bounds={clipStartMs:10000,clipEndMs:16000,trimMinMs:0,trimMaxMs:16000}
     const tooShort=[uploads[0]!,{...uploads[1]!,durationMs:36000},...uploads.slice(2)]
