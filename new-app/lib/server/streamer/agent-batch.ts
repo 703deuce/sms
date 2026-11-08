@@ -5,29 +5,15 @@ import {getPrisma} from '@/lib/server/db'
 import {streamerAgentWindows} from '@/lib/streamer/agent-windows'
 import {createAgentVideoWindow} from '@/lib/server/streamer/agent-window-source'
 import {createAiProducerAgentRun} from '@/lib/server/ai-producer-agent/runs'
+import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
+import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
+  type StreamerAgentBatch as AgentBatch,type StreamerAgentMode as Mode}
+  from '@/lib/streamer/agent-batch-contract'
+export {readStreamerAgentBatch} from '@/lib/streamer/agent-batch-contract'
 
-type Mode='clip_moment_v1'|'clip_story_v1'
-type Result={projectId:string;clipId:string;startMin:number}
-type AgentBatch={
-  id:string;status:'running'|'done'|'canceled'
-  mode:Mode;seconds:30|60|90;index:number;total:number
-  sourceStartMs:number;sourceDurationMs:number
-  preparedProjectId?:string;runId?:string
-  completed:Result[];errors:string[];startedAt:string
-}
-function asSettings(raw:unknown):Record<string,unknown>{
-  return raw&&typeof raw==='object'&&!Array.isArray(raw)?
-    raw as Record<string,unknown>:{}
-}
-export function readStreamerAgentBatch(raw:unknown):AgentBatch|null{
-  const v=asSettings(raw).agentClipBatch
-  if(!v||typeof v!=='object'||Array.isArray(v))return null
-  const b=v as AgentBatch
-  return typeof b.id==='string'&&
-    ['running','done','canceled'].includes(b.status)?b:null
-}
 export async function startStreamerAgentBatch(workspaceId:string,projectId:string,
   mode:Mode,seconds:30|60|90){
+  if(!aiProducerAgentServerEnabled())throw Error('ai_producer_agent_disabled')
   const prisma=getPrisma()
   const source=await prisma.clipProject.findFirst({
     where:{id:projectId,workspaceId,deletedAt:null,status:'READY'},
