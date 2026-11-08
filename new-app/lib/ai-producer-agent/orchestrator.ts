@@ -79,6 +79,17 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       }
       outputs.push(out)
       await runMultiSourceStoryOutput(ctx,out,budget,run.instruction)
+    } else if(ctx.config.storyMode==='clean_take_v1'){
+      // Dedicated raw recording cleanup. Do not modify or enter legacy
+      // single-source Story, rough cut or multi-source documentary logic.
+      const {runCleanTakeOutput}=await import(
+        '@/lib/server/ai-producer-agent/run-clean-take'
+      )
+      const out:OutputState={
+        index:0,outputType:'story',builder:null,replans:0,fixLoops:0,notes:[],
+      }
+      outputs.push(out)
+      await runCleanTakeOutput(ctx,out,budget,run.instruction)
     } else {
     await sysTool(ctx, budget, 'ingest', 'find_moments', {
       mode: 'best_moments', limit: ctx.config.editMode === 'just_chatting_rough_cut' ? 30 : 12,
