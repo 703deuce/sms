@@ -1344,8 +1344,15 @@ export async function createEditorialHandoff(
   const source = ctx.sources[0]
   if (!source?.rangeMs || !ctx.cache.words?.length) throw new Error('rough_cut_transcript_missing')
   const highlightsMode = ctx.config.roughCutIntent === 'highlights'
+  const momentClip = ctx.config.storyMode === 'clip_moment_v1'
+  const storyClip = ctx.config.storyMode === 'clip_story_v1'
+  const clipBrief = momentClip
+    ? 'SINGLE MOMENT CLIP: Find one great source event with the actual opening context, event, reaction and payoff. Return exactly ONE continuous source passage, without montage, unrelated padding or jump cuts. Honor the requested short-form target.'
+    : storyClip
+      ? 'SHORT STORY CLIP: Form one meaningful setup, escalation and genuine source-recorded payoff from multiple nonoverlapping passages. Honor the short-form target; this is NOT the existing long-form gaming mode.'
+      : null
   const base = {
-    instruction,
+    instruction: clipBrief ? [clipBrief,instruction??''].filter(Boolean).join(' ') : instruction,
     // Samples remain available for non-Story workflows; Story and Footage
     // below explicitly replace them with the FULL original transcript.
     transcriptSamples: representativeTranscript(ctx.cache.words, source.rangeMs),
@@ -1355,7 +1362,9 @@ export async function createEditorialHandoff(
       visualAudioEvidence:ctx.cache.visualEvidence,
       visualAudioEvidenceDisclaimer:'Gemini video/audio observations are candidate evidence, not guaranteed facts; ASR word IDs remain authoritative for speech cuts. No frame-based cut execution in this experiment.',
     } : {}),
-    audienceGoal: highlightsMode
+    audienceGoal: momentClip ? 'One unbroken source event with intelligible setup and complete payoff'
+      : storyClip ? 'A tight story assembled from multiple grounded passages with a real payoff'
+      : highlightsMode
       ? 'A highlight reel of multiple distinct, entertaining, independently comprehensible moments across the whole source, with honest context and complete thoughts'
       : ctx.config.targetLengthS[1] <= 105
         ? 'A focused, independently understandable story with full setup, development and an actual recorded payoff. Experimental baseline: ignore the target duration; prioritize complete natural passages and coherent narrative.'
@@ -1370,9 +1379,9 @@ export async function createEditorialHandoff(
       fullTranscriptWordIndexed:true,
       fullTranscriptFormat:'[originalWordId, spokenWord] — ALL spoken words in source order, no omissions',
       fullTranscript:completeTranscriptWords(ctx.cache.words,false),
-      instruction: highlightsMode
+      instruction: clipBrief ?? (highlightsMode
         ? 'Define the editorial criteria for selecting independent, self-contained highlights. The payoff and ending fields express what makes a moment satisfying, not a fabricated shared narrative. Provide all structured creative-brief fields.'
-        : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.',
+        : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.'),
     })
   } catch (error) {
     // Never invent a generic Story for this baseline. Surface the model failure
@@ -1422,11 +1431,11 @@ export async function createEditorialHandoff(
       fullTranscriptWordIndexed:!highlightsMode && ctx.config.editMode==='just_chatting_rough_cut' && ctx.config.targetLengthS[1]<=105,
       fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord] — FULL original source in chronological order',
       fullTranscript:completeTranscriptWords(ctx.cache.words,true),
-      instruction: highlightsMode
+      instruction: clipBrief ?? (highlightsMode
         ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
         : ctx.config.targetLengthS[1] <= 105
         ? 'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source, Story plan, and every spoken word. Choose actual final passages by FIRST/LAST WORD IDS. IGNORE 90 seconds and ALL runtime targets. Tell ONE complete narrative from beginning through genuine recorded resolution, trimming irrelevant tangents but not the story for length. Select complete sentences, not mid-phrase edges. No later Finisher or Dialogue recut will repair your boundaries.'
-        : 'Select coherent source intervals; evidence first, then editorial value.',
+        : 'Select coherent source intervals; evidence first, then editorial value.'),
     })
   } catch (error) {
     // Never replace a Story agent's editorial plan with an unrelated source tail.
@@ -1468,6 +1477,25 @@ export async function createEditorialHandoff(
     submittedVisualOmissions=[...submittedVisualOmissions,...completed.omitted]
   }
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
+  if(momentClip){
+    // Never silently publish a stitched reel in Single Moment mode.
+    if(footage.length!==1 || footage[0]?.kind==='visual_action')
+      throw Error('clip_moment_requires_one_continuous_source_passage')
+    const first=footage[0]!
+    const seconds=(first.endMs-first.startMs)/1000
+    if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds+12)
+      throw Error('clip_moment_duration_outside_target:'+seconds.toFixed(1))
+    const reviewed=await runStoryFlowReview(ctx,budget,outline,footage)
+    if(reviewed.cutPlan.length!==1 ||
+      reviewed.cutPlan[0]?.startMs!==first.startMs ||
+      reviewed.cutPlan[0]?.endMs!==first.endMs){
+      await specialistEvent(ctx,budget,'flow','moment_preserve_source_continuity',{
+        original:first,proposed:reviewed.cutPlan,
+      })
+    }
+    return {outline,footage,cutPlan:footage,flowReview:reviewed.review,
+      visualActions:[],visualActionOmissions:[]}
+  }
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   if (shortStory) {
     // Footage's original word-ID cuts are preserved as an auditable baseline.
@@ -1479,8 +1507,8 @@ export async function createEditorialHandoff(
       passageCount:footage.length,
       durationSeconds:selectionDurationS(footage),
       targetSeconds:ctx.config.targetLengthS,
-      runtimeTargetDisabled:true,
-      editorialBaseline:'story_coherence_and_cut_boundaries',
+      runtimeTargetDisabled:!storyClip,
+      editorialBaseline:storyClip?'short_story_clip_with_payoff':'story_coherence_and_cut_boundaries',
       appliedCuts: footage,
       storyDecision: outline,
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
@@ -1496,6 +1524,11 @@ export async function createEditorialHandoff(
       reviewed={cutPlan:footage,review:{originalCuts:footage.map(c=>({...c})),changes:[],applied:false,note:'Flow review unavailable: '+errorCode}}
     }
     const combined=combineSpeechWithVisualActions(reviewed.cutPlan,visualActions,ctx.cache.words,source.rangeMs)
+    if(storyClip){
+      const seconds=selectionDurationS(combined.cutPlan)
+      if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds+12)
+        throw Error('clip_story_duration_outside_target:'+seconds.toFixed(1))
+    }
     await specialistEvent(ctx,budget,'footage','visual_actions_handoff',{
       proposed:visualActions,selected:combined.included,omitted:[...submittedVisualOmissions,...combined.omitted],
       finalCutCount:combined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',
