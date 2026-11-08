@@ -90,7 +90,12 @@ def run_stream_agent_prepare_job(conn, job: dict, post_progress) -> None:
         duration_ms = int(round(duration_s * 1000))
         if duration_ms < 12_000 or duration_ms > MAX_WINDOW_MS + 10_000:
             raise RuntimeError("stream_agent_window_duration_invalid")
-        words = rebase_window_words(parent["transcriptWords"], start_ms, end_ms)
+        # STREAM_ANALYZE stores ASR in the source media's local timebase.
+        # A manually trimmed or rolling VOD can begin at nonzero absolute ms.
+        source_base_ms = int(parent["rangeStartMs"] or 0)
+        words = rebase_window_words(
+            parent["transcriptWords"],start_ms-source_base_ms,end_ms-source_base_ms
+        )
         # The existing multiagent planner requires real ASR word IDs.
         if len(words) < 8:
             raise RuntimeError("stream_agent_window_requires_transcript")
