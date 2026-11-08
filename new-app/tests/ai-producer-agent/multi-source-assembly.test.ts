@@ -2,7 +2,7 @@ import {describe,expect,it} from 'vitest'
 import {defaultEdits,normalizeEdits} from '@/lib/clips/edits'
 import {buildMultiStoryInsertEdits} from '@/lib/ai-producer-agent/multi-source-assembly'
 import type {MultiStoryPlan} from '@/lib/ai-producer-agent/multi-source-story'
-import {insertWindows} from '@/lib/clips/editor/inserts'
+import {insertWindows,insertAudio} from '@/lib/clips/editor/inserts'
 
 const cuts=[
   {sourceId:'a',sourceProjectId:'proj_a',firstWordId:0,lastWordId:10,
@@ -37,7 +37,7 @@ describe('multi-source finished video assembly via existing E5b renderer',()=>{
     expect(draft.sources?.map(x=>x.refId)).toEqual([
       'upload_a','upload_b','upload_a','upload_c',
     ])
-    expect(draft.inserts?.map(x=>[x.sourceId,x.inMs,x.durMs,x.audio,x.append])).toEqual([
+    expect(draft.inserts?.map(x=>[x.sourceId,x.inMs,x.durMs,insertAudio(x),x.append])).toEqual([
       ['multi_1',30000,8000,'source',true],
       ['multi_2',44000,6000,'source',true],
       ['multi_3',60000,10000,'source',true],
