@@ -81,6 +81,51 @@ def test_focused_visual_story_rechecks_limited_windows_at_one_fps(finder, monkey
     assert result["moments"][0]["inspection_window_ms"] == [12000, 24000]
 
 
+
+def test_focus_offsets_to_original_recording_time_not_trim_relative(finder, monkeypatch):
+    """A late-game 1fps observed Bowser reaction must still exist at 850s."""
+    src = {**_source(), "rangeMs": [178894, 1378894],
+           "durationMs": 1378894}
+    monkeypatch.setattr(finder, "watch_upload_range", lambda _local, **kwargs: (
+        [{"start_s": 0.5, "end_s": 3.5, "peak_s": 2.0,
+          "hook_s": 0.5, "what_happened": "Bowser visual"}],
+        [], {"est_usd": 0.003}))
+    result = finder.run_analyze_payload(
+        MagicMock(), job={"id":"offset-focus"}, progress=lambda *_: None,
+        payload={"mode":"visual_detail", "sources":[src],
+            "visualEvidence":{"enabled":True,"focusWindows":[
+                {"startMs":847100,"endMs":861100,"transcriptText":"gameplay"}
+            ]}},
+    )
+    row = result["moments"][0]
+    assert row["start_s"] == pytest.approx(847.6)
+    assert row["end_s"] == pytest.approx(850.6)
+    assert row["source_time_origin_ms"] == 847100
+    from clips_worker.ai_producer_agent.finder.run import source_absolute_visual_moments
+    assert source_absolute_visual_moments([{"start_s":0,"end_s":2}], 0) == [
+        {"start_s":0.0,"end_s":2.0,"source_time_origin_ms":0}
+    ]
+
+
+def test_coarse_trimmed_proxy_uses_original_recording_timestamps_only_in_visual_mode(finder, monkeypatch):
+    src = {**_source(),"rangeMs":[178894,1378894],
+           "durationMs":1378894}
+    monkeypatch.setattr(finder, "watch_upload_range", lambda _local, **kwargs: (
+        [{"start_s":8,"end_s":12,"peak_s":10,
+          "what_happened":"real observed speedrun"}],[],
+        {"est_usd":0.004}))
+    for enabled in (True,False):
+        payload={"mode":"best_moments","sources":[src]}
+        if enabled:
+            payload["visualEvidence"]={"enabled":True,"transcriptText":"[0s] words"}
+        result=finder.run_analyze_payload(
+            MagicMock(),job={"id":"offset-coarse-"+str(enabled)},
+            progress=lambda *_: None,payload=payload)
+        assert result["moments"][0]["start_s"] == pytest.approx(
+            186.894 if enabled else 8)
+        assert result["meta"]["times_are_source_absolute"] is enabled
+
+
 def test_legacy_baseline_does_not_force_visual_audio_defaults(finder, monkeypatch):
     recorded = []
     def watch(_local, **kwargs):
