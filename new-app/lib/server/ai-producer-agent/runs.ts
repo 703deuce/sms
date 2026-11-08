@@ -69,7 +69,7 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
     ...(multiStory ? { storyMode: 'multi_source_story_v1' as const } : {}),
     ...(cleanTake ? { storyMode: 'clean_take_v1' as const } : {}),
     roughCutIntent: input.editMode === 'just_chatting_rough_cut' ? input.roughCutIntent ?? 'story' : undefined,
-    visualEvidenceMode: multiStory ? 'visual_audio' : cleanTake ? 'transcript_baseline' :
+    visualEvidenceMode: multiStory || cleanTake ? 'visual_audio' :
       input.editMode === 'just_chatting_rough_cut' ? input.visualEvidenceMode ?? 'transcript_baseline' : undefined,
     targetLengthS:
       (input.editMode === 'just_chatting_rough_cut' ? input.targetLengthS ?? [180, 480] : input.targetLengthS) ??
