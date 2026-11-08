@@ -5,10 +5,11 @@ import Link from 'next/link'
 import {Sparkles,Loader2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {aiProducerAgentPublicEnabled} from '@/lib/ai-producer-agent/flags'
+import {streamerAgentWindows,MAX_AGENT_SOURCE_WINDOW_MS} from '@/lib/streamer/agent-windows'
 
 export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'
 type FinishedClip={projectId:string;clipId:string;startMin:number}
-const WINDOW_MS=20*60_000
+const WINDOW_MS=MAX_AGENT_SOURCE_WINDOW_MS
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms))
 async function requestJson(url:string,opts?:RequestInit){
   const response=await fetch(url,{cache:'no-store',...opts})
@@ -99,20 +100,8 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     canceled.current=false
     setRunning(true);setCompleted([]);setErrors([])
     try{
-      const endOfSource=sourceStartMs+sourceDurationMs
-      const windows:Array<[number,number]>=[]
-      if(allWindows){
-        for(let at=sourceStartMs;at<endOfSource;at+=WINDOW_MS){
-          const end=Math.min(endOfSource,at+WINDOW_MS)
-          if(end-at>=15_000)windows.push([at,end])
-        }
-      }else{
-        const start=sourceStartMs+windowStartMin*60_000
-        const end=Math.min(endOfSource,start+WINDOW_MS)
-        if(end-start<15_000)throw Error('Choose at least 15 seconds of source video')
-        windows.push([start,end])
-      }
-      if(windows.length===0)throw Error('No valid video windows in this recording')
+      const windows=streamerAgentWindows(sourceStartMs,sourceDurationMs,
+        allWindows,windowStartMin)
       for(const [index,[start,end]] of windows.entries()){
         if(canceled.current)break
         setStatus(`Window ${index+1}/${windows.length}: preparing`)
