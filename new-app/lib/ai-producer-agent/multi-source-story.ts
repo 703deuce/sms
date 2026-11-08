@@ -100,6 +100,10 @@ const flowTool:ToolSchema={
       corrections:{type:'array',maxItems:32,items:{type:'object',additionalProperties:false,
         properties:{index:wordId,firstWordId:wordId,lastWordId:wordId,reason:stringField},
         required:['index','firstWordId','lastWordId','reason']}},
+      joinReviews:{type:'array',maxItems:47,items:{type:'object',additionalProperties:false,
+        properties:{leftIndex:wordId,rightIndex:wordId,
+          status:{type:'string',enum:['flows','needs_change']},reason:stringField},
+        required:['leftIndex','rightIndex','status','reason']}},
       justification:stringField},
     required:['selectionIndices','justification'],
   },
@@ -281,7 +285,7 @@ export async function planMultiSourceStory(
         .slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
   }))
   const reviewed=await submit(flowTool,
-    'FLOW EDITOR: Examine the complete assembled spoken material in the desired sequence AND the full original transcripts. Reorder when truthful, remove redundant selections, correct incomplete dialogue by firstWordId/lastWordId using ORIGINAL source-local IDs. Preserve visual-only cuts and their observed bounds. Use selectionIndices for retained ORIGINAL indices in final order and corrections for ORIGINAL dialogue indices only. Do not manufacture conversation between speakers. Evaluate every adjacent transition; explain your editorial choices. Unchanged passages need no correction.',
+    'FLOW EDITOR: Examine the complete assembled spoken material in the desired sequence AND the full original transcripts. Reorder when truthful, remove redundant selections, correct incomplete dialogue by firstWordId/lastWordId using ORIGINAL source-local IDs. Preserve visual-only cuts and their observed bounds. Use selectionIndices for retained ORIGINAL indices in final order and corrections for ORIGINAL dialogue indices only. Do not manufacture conversation between speakers. Audit EVERY final adjacent join with joinReviews (leftIndex/rightIndex are FINAL OUTPUT indices). For needs_change also supply a correction affecting either passage, or remove the weak passage instead. Explain your editorial choices. Unchanged passages need no correction.',
     {outline,passages,sources:evidence,
       joinedTransitions:passages.slice(1).map((right,i)=>({
         leftIndex:i,rightIndex:i+1,
@@ -318,6 +322,22 @@ export async function planMultiSourceStory(
           Math.max(final[i]!.startMs,final[j]!.startMs)<
           Math.min(final[i]!.endMs,final[j]!.endMs))
           throw Error('multisource_flow_overlapping_source')
+      const reviews=a.joinReviews
+      if(!Array.isArray(reviews)||reviews.length!==Math.max(0,final.length-1))
+        throw Error('multisource_flow_missing_join_reviews')
+      const seen=new Set<number>()
+      for(const review of reviews){
+        const join=object(review),left=join.leftIndex,right=join.rightIndex
+        if(!Number.isInteger(left)||right!==(left as number)+1||
+          (left as number)<0||(right as number)>=final.length||
+          seen.has(left as number)||!['flows','needs_change'].includes(String(join.status))||
+          !String(join.reason??'').trim())
+          throw Error('multisource_flow_invalid_join_review')
+        if(join.status==='needs_change'&&!changed.has((order as number[])[left as number]!)&&
+          !changed.has((order as number[])[right as number]!))
+          throw Error('multisource_flow_unrepaired_join')
+        seen.add(left as number)
+      }
       nonempty(a.justification)
       return final
     },onUsage) as ExecutableMultiStoryCut[]
