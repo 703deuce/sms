@@ -73,6 +73,7 @@ export type MultiSourceQaRevisionResult={
   reason:string
   removed:number
   repaired:number
+  skippedCorrections?:Array<{index:unknown;reason:string}>
 }
 
 /** ONE optional editorial revision. Source-local word IDs remain authoritative.
@@ -89,7 +90,7 @@ export async function reviseMultiSourceStoryFromQa(
   const passages=plan.cuts.map((cut,index)=>{
     const source=inputs.find(x=>x.source.sourceId===cut.sourceId)!
     const words=source.words
-    const from=Math.max(0,cut.firstWordId-45),to=Math.min(words.length,cut.lastWordId+46)
+    const from=Math.max(0,cut.firstWordId-150),to=Math.min(words.length,cut.lastWordId+151)
     return {index,kind:cut.kind??'dialogue',sourceId:cut.sourceId,
       beatId:cut.beatId,firstWordId:cut.firstWordId,lastWordId:cut.lastWordId,
       startMs:cut.startMs,endMs:cut.endMs,reason:cut.reason,
@@ -98,12 +99,14 @@ export async function reviseMultiSourceStoryFromQa(
         words.slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
       surroundingWords:cut.kind==='visual_action'?[]:
         words.slice(from,to).map((w,i)=>[from+i,w.w]),
+      permittedFirstWordId:cut.kind==='visual_action'?null:from,
+      permittedLastWordId:cut.kind==='visual_action'?null:to-1,
     }
   })
   const sourceSummary=inputs.map(({source})=>({sourceId:source.sourceId,title:source.title}))
   const response=await lunaChat({tools:[revisionSchema],toolChoice:'required',messages:[
     {role:'system',content:
-      'You are the FINAL EDITOR for a factual multi-recording documentary. Resolve specific issues reported by independent editorial QA, especially: intelligible opening, context before a separate interview begins, no false implied reply between independently recorded speakers, a satisfying evidence-supported ending, and visual action usefulness. Only use existing selected passages and their real source-local nearby transcript words. Use selectionIndices ORIGINAL indices, optionally omit weak passages or correct dialogue firstWordId/lastWordId. Do not correct visual_action passages or invent footage. Do not force equal source durations or use an irrelevant third source. A dominant source is fine if the whole film has a coherent perspective. If no safe improvement exists, leave all passages unchanged. Source identities must stay independent. No target runtime.'},
+      'You are the FINAL EDITOR for a factual multi-recording documentary. Resolve specific issues reported by independent editorial QA, especially: intelligible opening, context before a separate interview begins, no false implied reply between independently recorded speakers, a satisfying evidence-supported ending, and visual action usefulness. Only use existing selected passages and their real source-local nearby transcript words. Each passage provides permittedFirstWordId and permittedLastWordId; ALL boundary corrections MUST stay inside these explicit source-local bounds. Never use word IDs from a different recording. Use selectionIndices ORIGINAL indices, optionally omit weak passages or correct dialogue firstWordId/lastWordId. Do not correct visual_action passages or invent footage. Do not force equal source durations or use an irrelevant third source. A dominant source is fine if the whole film has a coherent perspective. If no safe improvement exists, leave all passages unchanged. Source identities must stay independent. No target runtime.'},
     {role:'user',content:JSON.stringify({outline:plan.outline,issues,
       sourceSummary,passages,editableDialogueIndices:passages.filter(p=>p.kind==='dialogue').map(p=>p.index),
       visualOnlyIndices:passages.filter(p=>p.kind==='visual_action').map(p=>p.index)})},
@@ -122,34 +125,69 @@ export async function reviseMultiSourceStoryFromQa(
       throw Error('qa_revision_invalid_order')
     const adjusted=plan.cuts.map(x=>({...x}))
     const changed=new Set<number>()
+    const skippedCorrections:Array<{index:unknown;reason:string}>=[]
     const corrections=proposal.corrections??[]
     if(!Array.isArray(corrections)||corrections.length>32)
       throw Error('qa_revision_invalid_corrections')
+    // One model's bad edge must not block other safe edits. Accept only actual
+    // source-local word spans. The final assembly is validated as a whole.
     for(const entry of corrections){
-      if(!entry||typeof entry!=='object')throw Error('qa_revision_invalid_correction')
+      if(!entry||typeof entry!=='object'){
+        skippedCorrections.push({index:null,reason:'invalid_correction_object'})
+        continue
+      }
       const correction=entry as Record<string,unknown>
       const index=correction.index
       if(!Number.isInteger(index)||(index as number)<0||
-         (index as number)>=plan.cuts.length||
-         changed.has(index as number))throw Error('qa_revision_invalid_index')
+         (index as number)>=plan.cuts.length||changed.has(index as number)){
+        skippedCorrections.push({index,reason:'invalid_or_duplicate_original_index'})
+        continue
+      }
+      if(!(indices as number[]).includes(index as number)){
+        skippedCorrections.push({index,reason:'correction_on_removed_passage'})
+        continue
+      }
       const old=adjusted[index as number]!
-      if(old.kind==='visual_action')throw Error('qa_revision_cannot_change_visual_action')
+      if(old.kind==='visual_action'){
+        skippedCorrections.push({index,reason:'visual_action_has_no_word_ids'})
+        continue
+      }
       const source=inputs.find(s=>s.source.sourceId===old.sourceId)!
       const first=correction.firstWordId,last=correction.lastWordId
       if(!Number.isInteger(first)||!Number.isInteger(last)||
-        (first as number)<Math.max(0,old.firstWordId-45)||
-        (last as number)>Math.min(source.words.length-1,old.lastWordId+45))
-        throw Error('qa_revision_outside_local_word_context')
-      const cut=validateMultiStoryCuts([{
-        sourceId:old.sourceId,beatId:old.beatId,
-        firstWordId:first,lastWordId:last,
-        reason:typeof correction.reason==='string'&&correction.reason.trim()
-          ? correction.reason:old.reason,
-      }],inputs,plan.outline)[0]!
-      adjusted[index as number]=cut
-      changed.add(index as number)
+        (first as number)<Math.max(0,old.firstWordId-150)||
+        (last as number)>Math.min(source.words.length-1,old.lastWordId+150)){
+        skippedCorrections.push({index,reason:'outside_local_word_context'})
+        continue
+      }
+      try{
+        const cut=validateMultiStoryCuts([{
+          sourceId:old.sourceId,beatId:old.beatId,
+          firstWordId:first,lastWordId:last,
+          reason:typeof correction.reason==='string'&&correction.reason.trim()
+            ? correction.reason:old.reason,
+        }],inputs,plan.outline)[0]!
+        adjusted[index as number]=cut
+        changed.add(index as number)
+      }catch(error){
+        skippedCorrections.push({index,reason:String((error as Error).message).slice(0,120)})
+      }
     }
+    // Resolve an overlapping revised boundary conservatively by restoring the
+    // ORIGINAL cut at the offending correction, preserving unrelated repairs.
     const revised=(indices as number[]).map(index=>adjusted[index]!)
+    const overlaps=(left:typeof revised[number],right:typeof revised[number])=>
+      left.sourceId===right.sourceId&&
+      Math.max(left.startMs,right.startMs)<Math.min(left.endMs,right.endMs)
+    for(let i=0;i<indices.length;i++){
+      const index=indices[i] as number
+      if(!changed.has(index))continue
+      if(revised.some((other,j)=>i!==j&&overlaps(revised[i]!,other))){
+        revised[i]=plan.cuts[index]!
+        changed.delete(index)
+        skippedCorrections.push({index,reason:'reverted_overlapping_correction'})
+      }
+    }
     // Revalidate the ENTIRE approved edit, including cross-source overlap.
     validateMultiStoryCuts(revised,inputs,plan.outline)
     const revisedPlan:MultiStoryPlan={...plan,cuts:revised,
@@ -159,7 +197,7 @@ export async function reviseMultiSourceStoryFromQa(
       indices.some((value,i)=>value!==i)
     return {plan:applied?revisedPlan:plan,applied,
       reason:applied?'source_grounded_qa_revision_applied':'no_changes_proposed',
-      removed,repaired:changed.size}
+      removed,repaired:changed.size,skippedCorrections}
   }catch(error){
     return {plan,applied:false,
       reason:'qa_revision_rejected:'+String((error as Error).message).slice(0,120),
