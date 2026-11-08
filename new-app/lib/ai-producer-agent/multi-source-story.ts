@@ -394,7 +394,22 @@ export async function planMultiSourceStory(
       dialogueSelected:selections.filter(c=>c.kind!=='visual_action').length}})
   const passages=selections.map((cut,index)=>({
     index,...cut,
-    speakerTurns:cut.kind==='visual_action'?[]:(()=>{\n      const source=inputs.find(x=>x.source.sourceId===cut.sourceId)!\n      const words=source.words.slice(cut.firstWordId,cut.lastWordId+1)\n      const turns:Array<{speakerId:number|null;startWordId:number;endWordId:number;text:string}>=[]\n      words.forEach((w,i)=>{\n        const speakerId=typeof w.spk==='number'?w.spk:null\n        const previous=turns[turns.length-1]\n        if(previous&&previous.speakerId===speakerId){\n          previous.endWordId=cut.firstWordId+i\n          previous.text+=' '+w.w\n        }else turns.push({speakerId,startWordId:cut.firstWordId+i,\n          endWordId:cut.firstWordId+i,text:w.w})\n      })\n      return turns\n    })(),\n    dialogue:cut.kind==='visual_action'?'[Visual action / original on-location sound]':
+    speakerTurns:cut.kind==='visual_action'?[]:(()=>{
+      const source=inputs.find(x=>x.source.sourceId===cut.sourceId)!
+      const words=source.words.slice(cut.firstWordId,cut.lastWordId+1)
+      const turns:Array<{speakerId:number|null;startWordId:number;endWordId:number;text:string}>=[]
+      words.forEach((w,i)=>{
+        const speakerId=typeof w.spk==='number'?w.spk:null
+        const previous=turns[turns.length-1]
+        if(previous&&previous.speakerId===speakerId){
+          previous.endWordId=cut.firstWordId+i
+          previous.text+=' '+w.w
+        }else turns.push({speakerId,startWordId:cut.firstWordId+i,
+          endWordId:cut.firstWordId+i,text:w.w})
+      })
+      return turns
+    })(),
+    dialogue:cut.kind==='visual_action'?'[Visual action / original on-location sound]':
       inputs.find(x=>x.source.sourceId===cut.sourceId)!.words
         .slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
   }))
@@ -406,7 +421,8 @@ export async function planMultiSourceStory(
     {outline,passages,sources:evidence,editableDialogueIndices:dialogueIndices,
       visualOnlyIndices,
       correctionIndexRule:'Always refer to the ORIGINAL passage.index, not its final position in selectionIndices. Only editableDialogueIndices can have firstWordId/lastWordId corrections.',
-      speakerTurnNote:'speakerId is only a source-local diarization hint. It does not prove visible identity or distinguish all off-camera speakers. Preserve meaningful question-answer pairs, and assess whether a reporter question is orphaned before a cut.',\n      joinedTransitions:passages.slice(1).map((right,i)=>({
+      speakerTurnNote:'speakerId is only a source-local diarization hint. It does not prove visible identity or distinguish all off-camera speakers. Preserve meaningful question-answer pairs, and assess whether a reporter question is orphaned before a cut.',
+      joinedTransitions:passages.slice(1).map((right,i)=>({
         leftIndex:i,rightIndex:i+1,
         leftEnding:passages[i]!.dialogue.split(' ').slice(-25).join(' '),
         rightOpening:right.dialogue.split(' ').slice(0,25).join(' '),
