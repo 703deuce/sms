@@ -1,5 +1,4 @@
 import 'server-only'
-import type { Prisma } from '@prisma/client'
 import {createId} from '@/lib/supabase/id'
 import {getPrisma} from '@/lib/server/db'
 
@@ -31,7 +30,7 @@ export async function createAgentVideoWindow(workspaceId:string,body:{
     throw Error('stream_agent_source_transcript_not_ready')
   const projectId=createId('proj')
   const jobId=createId('job')
-  await prisma.$transaction(async tx=>{
+  await prisma.$transaction(async (tx:Pick<typeof prisma,'clipProject'|'clipJob'>)=>{
     await tx.clipProject.create({data:{
       id:projectId,workspaceId,createdById:source.createdById,
       title:`Agent source · ${source.title} · ${Math.floor(body.rangeStartMs/60_000)}m`,
@@ -40,7 +39,7 @@ export async function createAgentVideoWindow(workspaceId:string,body:{
         rangeStartMs:0,rangeEndMs:duration,
         sourceAgentParentProjectId:source.id,
         sourceWindowMs:[body.rangeStartMs,body.rangeEndMs],
-      })) as Prisma.InputJsonValue,
+      })),
       sourceKind:'stream_agent_window',sourceUrl:source.sourceUrl,
       rangeStartMs:0,rangeEndMs:duration,
       status:'PREPARING',stage:'Preparing VOD video window',progress:0,
