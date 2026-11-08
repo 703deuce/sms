@@ -14,7 +14,7 @@ from pathlib import Path
 from psycopg2.extras import RealDictCursor
 
 from clips_worker.import_url import probe_video, upload_source_key
-from clips_worker.storage import upload_file
+from clips_worker.storage import upload_file, download_object
 from clips_worker.streamer.ytdlp import download_video
 
 
@@ -60,7 +60,7 @@ def run_stream_agent_prepare_job(conn, job: dict, post_progress) -> None:
 
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
-            SELECT p."workspaceId",p."rangeStartMs",p."rangeEndMs",p."transcriptWords",
+            SELECT p."workspaceId",p."rangeStartMs",p."rangeEndMs",p."transcriptWords",p."transcriptKey",
                    p.status,v.url,v.platform
             FROM clip_projects p JOIN stream_vods v ON v."projectId"=p.id
             WHERE p.id=%s AND p."deletedAt" IS NULL
@@ -93,8 +93,13 @@ def run_stream_agent_prepare_job(conn, job: dict, post_progress) -> None:
         # STREAM_ANALYZE stores ASR in the source media's local timebase.
         # A manually trimmed or rolling VOD can begin at nonzero absolute ms.
         source_base_ms = int(parent["rangeStartMs"] or 0)
+        original_words = parent["transcriptWords"]
+        if not original_words and parent.get("transcriptKey"):
+            transcript_path = Path(td) / "original_words.json"
+            download_object(str(parent["transcriptKey"]), transcript_path)
+            original_words = json.loads(transcript_path.read_text(encoding="utf-8"))
         words = rebase_window_words(
-            parent["transcriptWords"],start_ms-source_base_ms,end_ms-source_base_ms
+            original_words,start_ms-source_base_ms,end_ms-source_base_ms
         )
         # The existing multiagent planner requires real ASR word IDs.
         if len(words) < 8:
