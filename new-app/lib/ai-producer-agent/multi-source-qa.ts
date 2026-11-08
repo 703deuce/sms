@@ -25,6 +25,16 @@ export async function reviewMultiSourceStory(
     return {index,sourceId:cut.sourceId,sourceProjectId:cut.sourceProjectId,
       kind:cut.kind??'dialogue',startMs:cut.startMs,endMs:cut.endMs,
       beatId:cut.beatId,visualBeatId:cut.visualBeatId,
+      speakerTurns:cut.kind==='visual_action'?[]:(()=>{
+        const turns:Array<{speakerId:number|null;startWordId:number;endWordId:number}>= []
+        src?.words.slice(cut.firstWordId,cut.lastWordId+1).forEach((w,i)=>{
+          const speakerId=typeof w.spk==='number'?w.spk:null
+          const last=turns[turns.length-1]
+          if(last&&last.speakerId===speakerId)last.endWordId=cut.firstWordId+i
+          else turns.push({speakerId,startWordId:cut.firstWordId+i,endWordId:cut.firstWordId+i})
+        })
+        return turns
+      })(),
       content:cut.kind==='visual_action'
         ? (src?.visualObservations??[]).find((o,i)=>
             cut.visualBeatId===cut.sourceId+':visual_'+i)?.observation??'[visual action]'
@@ -36,7 +46,7 @@ export async function reviewMultiSourceStory(
   }))
   const response=await lunaChat({tools:[schema],toolChoice:'required',messages:[
     {role:'system',content:
-      'Independent documentary STORY QA. Audit the actual selected words and source-observed visuals in FINAL playback order. Check narrative comprehensibility, missing setup, incomplete sentence ends/starts, cross-speaker joins, misleading implied conversation, repeated beats, visual action completeness, and truthful source-supported ending. Visual observations come from Gemini video+original audio and are uncertain. Do not assert acoustic quality or that you watched a render. Report concrete source-qualified issues; do not fail on length or require all uploaded sources.'},
+      'Independent documentary STORY QA. Audit the actual selected words and source-observed visuals in FINAL playback order. Check narrative comprehensibility, missing setup, incomplete sentence ends/starts, cross-speaker joins, misleading implied conversation, repeated beats, visual action completeness, and truthful source-supported ending. Specifically AUDIT press-conference question-answer dependencies: if a reporter/interviewer asks a question and the edit cuts to another video before the original respondent answers, flag an orphan question even when the next clip seems thematically relevant. Conversely, allow questions that are intentionally framed as unanswered. Source-local speaker IDs are diarization hints, not guaranteed identities or visual face matches. Visual observations come from Gemini video+original audio and are uncertain. Do not assert acoustic quality or that you watched a render. Report concrete source-qualified issues; do not fail on length or require all uploaded sources.'},
     {role:'user',content:JSON.stringify({outline:plan.outline,selected,evidence,
       joinedTransitions:selected.slice(1).map((right,i)=>({
         fromSource:selected[i]!.sourceId,toSource:right.sourceId,
@@ -95,6 +105,16 @@ export async function reviseMultiSourceStoryFromQa(
       beatId:cut.beatId,firstWordId:cut.firstWordId,lastWordId:cut.lastWordId,
       startMs:cut.startMs,endMs:cut.endMs,reason:cut.reason,
       visualBeatId:cut.visualBeatId,
+      speakerTurns:cut.kind==='visual_action'?[]:(()=>{
+        const turns:Array<{speakerId:number|null;startWordId:number;endWordId:number}>=[]
+        words.slice(cut.firstWordId,cut.lastWordId+1).forEach((w,i)=>{
+          const speakerId=typeof w.spk==='number'?w.spk:null
+          const previous=turns[turns.length-1]
+          if(previous&&previous.speakerId===speakerId)previous.endWordId=cut.firstWordId+i
+          else turns.push({speakerId,startWordId:cut.firstWordId+i,endWordId:cut.firstWordId+i})
+        })
+        return turns
+      })(),
       selectedWords:cut.kind==='visual_action'?'[observed visual-only action]':
         words.slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
       surroundingWords:cut.kind==='visual_action'?[]:
@@ -106,7 +126,7 @@ export async function reviseMultiSourceStoryFromQa(
   const sourceSummary=inputs.map(({source})=>({sourceId:source.sourceId,title:source.title}))
   const response=await lunaChat({tools:[revisionSchema],toolChoice:'required',messages:[
     {role:'system',content:
-      'You are the FINAL EDITOR for a factual multi-recording documentary. Resolve specific issues reported by independent editorial QA, especially: intelligible opening, context before a separate interview begins, no false implied reply between independently recorded speakers, a satisfying evidence-supported ending, and visual action usefulness. Only use existing selected passages and their real source-local nearby transcript words. Each passage provides permittedFirstWordId and permittedLastWordId; ALL boundary corrections MUST stay inside these explicit source-local bounds. Never use word IDs from a different recording. Use selectionIndices ORIGINAL indices, optionally omit weak passages or correct dialogue firstWordId/lastWordId. Do not correct visual_action passages or invent footage. Do not force equal source durations or use an irrelevant third source. A dominant source is fine if the whole film has a coherent perspective. If no safe improvement exists, leave all passages unchanged. Source identities must stay independent. No target runtime.'},
+      'You are the FINAL EDITOR for a factual multi-recording documentary. Resolve specific issues reported by independent editorial QA, especially: intelligible opening, context before a separate interview begins, intact press-conference question + answer exchanges or removal of orphan questions, no false implied reply between independently recorded speakers, a satisfying evidence-supported ending, and visual action usefulness. Only use existing selected passages and their real source-local nearby transcript words. Each passage provides permittedFirstWordId and permittedLastWordId; ALL boundary corrections MUST stay inside these explicit source-local bounds. Never use word IDs from a different recording. Use selectionIndices ORIGINAL indices, optionally omit weak passages or correct dialogue firstWordId/lastWordId. Do not correct visual_action passages or invent footage. Do not force equal source durations or use an irrelevant third source. A dominant source is fine if the whole film has a coherent perspective. If no safe improvement exists, leave all passages unchanged. Source identities must stay independent. No target runtime.'},
     {role:'user',content:JSON.stringify({outline:plan.outline,issues,
       sourceSummary,passages,editableDialogueIndices:passages.filter(p=>p.kind==='dialogue').map(p=>p.index),
       visualOnlyIndices:passages.filter(p=>p.kind==='visual_action').map(p=>p.index)})},
