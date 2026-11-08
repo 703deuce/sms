@@ -301,6 +301,33 @@ describe('isolated multi-source story planner',()=>{
     ])
     expect(fix.plan.cuts[0]!.sourceProjectId).toBe('proj_a')
   })
+  it('retains valid QA speech fixes when a different requested correction exceeds source context',async()=>{
+    const cuts=validateMultiStoryCuts([
+      {sourceId:'a',firstWordId:4,lastWordId:7,beatId:'setup',reason:'opening'},
+      {sourceId:'b',firstWordId:9,lastWordId:11,beatId:'payoff',reason:'ending'},
+    ],[a,b,c],outline)
+    const plan={mode:'multi_source_story_v1' as const,outline,cuts,
+      estimatedDurationMs:cuts.reduce((n,c)=>n+c.endMs-c.startMs,0)}
+    __setLunaImpl(async ({tools})=>({
+      message:{role:'assistant',content:null,tool_calls:[{
+        id:'qa_partial',type:'function',function:{name:tools[0]!.name,
+          arguments:JSON.stringify({selectionIndices:[0,1],corrections:[
+            {index:0,firstWordId:2,lastWordId:7,reason:'complete opening'},
+            {index:1,firstWordId:400,lastWordId:420,reason:'invented beyond available transcript'},
+          ],justification:'Clean opening and ending'}),
+        },
+      }]}
+    }))
+    const revision=await reviseMultiSourceStoryFromQa(plan,[a,b,c],
+      ['Start and end should stand alone'])
+    expect(revision.applied).toBe(true)
+    expect(revision.repaired).toBe(1)
+    expect(revision.skippedCorrections).toEqual([{
+      index:1,reason:'outside_local_word_context',
+    }])
+    expect(revision.plan.cuts[0]).toMatchObject({sourceId:'a',firstWordId:2,lastWordId:7})
+    expect(revision.plan.cuts[1]).toMatchObject({sourceId:'b',firstWordId:9,lastWordId:11})
+  })
   it('rejects a QA proposal that tries to change an observed visual-only action',async()=>{
     const visual={...c,words:[],visualObservations:[{
       startMs:30000,endMs:42000,observation:'Silent reaction',
@@ -330,7 +357,10 @@ describe('isolated multi-source story planner',()=>{
       ['Improve the transition'])
     expect(revised.applied).toBe(false)
     expect(revised.plan).toBe(plan)
-    expect(revised.reason).toContain('cannot_change_visual_action')
+    expect(revised.reason).toBe('no_changes_proposed')
+    expect(revised.skippedCorrections).toEqual([{
+      index:1,reason:'visual_action_has_no_word_ids',
+    }])
     expect(revised.plan.cuts[1]).toMatchObject({kind:'visual_action',
       sourceId:'c',startMs:31000,endMs:41000})
   })
