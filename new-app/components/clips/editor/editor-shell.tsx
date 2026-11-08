@@ -265,6 +265,7 @@ export function EditorShell({
   editorAssets = null,
   onEditorMediaError,
   compact = false,
+  clipperStudio = false,
 }: {
   projectId: string
   projectTitle?: string
@@ -302,6 +303,8 @@ export function EditorShell({
   onEditorMediaError?: () => void
   /** FIX2 R7: compact (Opus-style) clip editor: no Properties column, the timeline is collapsible (closed by default). */
   compact?: boolean
+  /** Dedicated short-form editor UI, powered by existing editing and export components. */
+  clipperStudio?: boolean
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
@@ -398,8 +401,8 @@ export function EditorShell({
   /** MENUBAR1: last top-menu command for the Timeline (seq bumps on every click). */
   const [timelineMenuCmd, setTimelineMenuCmd] = useState<{ cmd: TimelineMenuCommand; seq: number } | null>(null)
   useEffect(() => {
-    setLayoutView(readClipEditorLayoutView())
-  }, [])
+    setLayoutView(clipperStudio ? 'script' : readClipEditorLayoutView())
+  }, [clipperStudio])
   useEffect(() => {
     if (unifiedWorkspaceActive || layoutView !== 'timeline' || band === 'mobile') return
     const storage = typeof window === 'undefined' ? null : window.localStorage
@@ -3601,6 +3604,30 @@ export function EditorShell({
             ) : <OpenInFullVideoButton clipId={clipId} />
           }
         />
+      {clipperStudio ? (
+        <nav aria-label="Clipper editing tools" data-testid="clipper-studio-tools"
+          className="flex min-h-12 flex-wrap items-center gap-1 border-b border-border bg-card px-3 py-1.5">
+          <span className="mr-3 text-xs font-semibold text-foreground">Clip Studio</span>
+          {([
+            ['transcript','Trim words'],['layout','Gameplay & facecam'],
+            ['captions','Captions'],['text','Text & stickers'],
+            ['broll','B-roll'],['audio','Audio'],['effects','Effects'],
+            ['templates','Layouts & presets'],
+          ] as const).map(([id,label]) => (
+            <Button key={id} type="button" size="sm"
+              variant="ghost" className="h-8 text-xs"
+              onClick={() => openToolPanel(id)}>{label}</Button>
+          ))}
+          <Button type="button" size="sm" variant={cropMode ? 'default' : 'outline'}
+            className="h-8 text-xs" aria-pressed={cropMode}
+            onClick={() => { setCropMode(v=>!v); openToolPanel('layout') }}>
+            {cropMode ? 'Finish crop' : 'Crop on canvas'}
+          </Button>
+          <span className="ml-auto text-xs text-muted-foreground">
+            Select layers in the preview to drag, resize or reposition
+          </span>
+        </nav>
+      ) : null}
       {/* File > Versions / History and the project menu keep the full version manager accessible without a top-bar button. */}
       <div className="absolute left-24 top-9 z-40 h-px w-px overflow-visible" data-testid="editor-versions-anchor">
         <EditorVersionsMenu
