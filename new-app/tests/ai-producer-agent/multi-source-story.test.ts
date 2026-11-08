@@ -3,7 +3,7 @@ import type {ClipWord} from '@/lib/clips/edits'
 import type {MultiStorySource,MultiStoryOutline} from '@/lib/ai-producer-agent/multi-source-story'
 import {validateMultiStorySources,validateMultiStoryOutline,validateMultiStoryCuts,planMultiSourceStory} from '@/lib/ai-producer-agent/multi-source-story'
 import {__setLunaImpl} from '@/lib/ai-producer-agent/luna-client'
-import {reviewMultiSourceStory} from '@/lib/ai-producer-agent/multi-source-qa'
+import {reviewMultiSourceStory,reviseMultiSourceStoryFromQa} from '@/lib/ai-producer-agent/multi-source-qa'
 
 const make=(id:string,project:string,offset=0):MultiStorySource=>({
   source:{sourceId:id,kind:'upload',projectId:project,
@@ -274,6 +274,65 @@ describe('isolated multi-source story planner',()=>{
         {index:10,reason:'visual_action_has_no_word_ids'},
         {index:11,reason:'nonexistent_original_passage'},
       ]})
+  })
+  it('bounded QA repair improves a weak opener and final statement while preserving other sources',async()=>{
+    const cuts=validateMultiStoryCuts([
+      {sourceId:'a',firstWordId:4,lastWordId:7,beatId:'setup',reason:'weak opening'},
+      {sourceId:'b',firstWordId:8,lastWordId:12,beatId:'payoff',reason:'weak ending'},
+    ],[a,b,c],outline)
+    __setLunaImpl(async ({tools})=>({
+      message:{role:'assistant',content:null,tool_calls:[{
+        id:'qa_fix',type:'function',function:{name:tools[0]!.name,
+          arguments:JSON.stringify({selectionIndices:[0,1],corrections:[
+            {index:0,firstWordId:2,lastWordId:7,reason:'restore setup'},
+            {index:1,firstWordId:8,lastWordId:15,reason:'finish thought'},
+          ],justification:'Complete opening and ending from original recordings'}),
+        },
+      }]}
+    }))
+    const draft={mode:'multi_source_story_v1' as const,outline,cuts,
+      estimatedDurationMs:cuts.reduce((n,c)=>n+c.endMs-c.startMs,0)}
+    const fix=await reviseMultiSourceStoryFromQa(draft,[a,b,c],[
+      'The opening begins mid-thought','The ending lacks a conclusion',
+    ])
+    expect(fix).toMatchObject({applied:true,removed:0,repaired:2})
+    expect(fix.plan.cuts.map(c=>[c.sourceId,c.firstWordId,c.lastWordId])).toEqual([
+      ['a',2,7],['b',8,15],
+    ])
+    expect(fix.plan.cuts[0]!.sourceProjectId).toBe('proj_a')
+  })
+  it('rejects a QA proposal that tries to change an observed visual-only action',async()=>{
+    const visual={...c,words:[],visualObservations:[{
+      startMs:30000,endMs:42000,observation:'Silent reaction',
+    }]}
+    const storyboard=validateMultiStoryOutline({...outline,visualBeats:[{
+      id:'c:visual_0',sourceId:'c',startMs:30000,endMs:42000,
+      purpose:'Show the reaction',
+    }],beats:[...outline.beats,{id:'visual',purpose:'reaction',sourceIds:['c']}]},
+      [a,b,visual])
+    const cuts=validateMultiStoryCuts([
+      {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'setup'},
+      {sourceId:'c',kind:'visual_action',visualBeatId:'c:visual_0',
+        startMs:31000,endMs:41000,beatId:'visual',reason:'real reaction'},
+    ],[a,b,visual],storyboard)
+    const plan={mode:'multi_source_story_v1' as const,outline:storyboard,cuts,
+      estimatedDurationMs:15000}
+    __setLunaImpl(async ({tools})=>({
+      message:{role:'assistant',content:null,tool_calls:[{
+        id:'qa_bad',type:'function',function:{name:tools[0]!.name,
+          arguments:JSON.stringify({selectionIndices:[0,1],corrections:[{
+            index:1,firstWordId:0,lastWordId:3,reason:'invalid change',
+          }],justification:'unsafe'}),
+        },
+      }]}
+    }))
+    const revised=await reviseMultiSourceStoryFromQa(plan,[a,b,visual],
+      ['Improve the transition'])
+    expect(revised.applied).toBe(false)
+    expect(revised.plan).toBe(plan)
+    expect(revised.reason).toContain('cannot_change_visual_action')
+    expect(revised.plan.cuts[1]).toMatchObject({kind:'visual_action',
+      sourceId:'c',startMs:31000,endMs:41000})
   })
   it('uses three separate LLM specialist passes and returns exact validated source-aware cuts',async()=>{
     let n=0
