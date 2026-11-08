@@ -11,7 +11,7 @@ export type CleanTakeObservation={startMs:number;endMs:number;observation:string
 export type CleanTakeSource={source:AiProducerSourceRef;words:ClipWord[];visualObservations?:CleanTakeObservation[];visualEvidence?:{originalAudioAttached:boolean;asrTranscriptAttached:boolean;coarseCount:number;focusedCount:number}}
 export type CleanTakeDecision={sourceId:string;firstWordId?:number;lastWordId?:number;startMs?:number;endMs?:number;observationIndex?:number;kind?:'dialogue'|'media_moment';reason:string}
 export type CleanTakePlan=MultiStoryPlan & {mode:'clean_take_v1'}
-export type CleanTakeEvent={stage:'take_selection'|'review';attempt:number;status:'accepted'|'rejected'|'fallback';reason?:string;cuts?:number;sourceSequence?:string[]}
+export type CleanTakeEvent={stage:'take_selection'|'review';attempt:number;status:'accepted'|'rejected'|'fallback';reason?:string;cuts?:number;sourceSequence?:string[];repairHint?:string;invalidSelectionIndex?:number;proposalSummary?:Array<{index:number;sourceId:string;kind:string;startMs:number|null;endMs:number|null;firstWordId:number|null;lastWordId:number|null;observationIndex:number|null}>}
 export type CleanTakeObserver=(event:CleanTakeEvent)=>void|Promise<void>
 
 const text={type:'string'} as const
@@ -39,8 +39,8 @@ const reviewSchema:ToolSchema={
     pass:{type:'boolean'},issues:{type:'array',maxItems:12,items:text},
   },required:['pass','issues']},
 }
-function nonempty(v:unknown):string{
-  if(typeof v!=='string'||!v.trim())throw Error('clean_take_invalid_text')
+function nonempty(v:unknown,field='text'):string{
+  if(typeof v!=='string'||!v.trim())throw Error('clean_take_invalid_text:'+field)
   return v.trim().slice(0,600)
 }
 function object(v:unknown):Record<string,unknown>{
@@ -64,9 +64,9 @@ export function validateCleanTakeSelections(raw:unknown,inputs:CleanTakeSource[]
     throw Error('clean_take_invalid_selection_count')
   const byId=new Map(inputs.map(s=>[s.source.sourceId,s]))
   const cuts:ExecutableMultiStoryCut[]=[]
-  for(const item of raw){
-    const obj=object(item),sourceId=nonempty(obj.sourceId),src=byId.get(sourceId)
-    if(!src)throw Error('clean_take_invalid_source')
+  for(const [index,item] of raw.entries()){
+    const obj=object(item),sourceId=nonempty(obj.sourceId,'selection_'+index+'.sourceId'),src=byId.get(sourceId)
+    if(!src)throw Error('clean_take_invalid_source:selection_'+index+':'+sourceId)
     const mediaOnly=obj.kind==='media_moment'
     if(obj.kind!==undefined&&obj.kind!=='dialogue'&&!mediaOnly)
       throw Error('clean_take_invalid_cut_kind')
@@ -76,44 +76,48 @@ export function validateCleanTakeSelections(raw:unknown,inputs:CleanTakeSource[]
       // The supplied source video/audio observation must substantiate the
       // actual time range. A transcript cannot veto a meaningful silent clip.
       if(!Number.isInteger(obj.observationIndex))
-        throw Error('clean_take_media_evidence_required')
+        throw Error('clean_take_media_evidence_required:selection_'+index)
       const observation=src.visualObservations?.[obj.observationIndex as number]
       if(!observation||!Number.isInteger(obj.startMs)||!Number.isInteger(obj.endMs))
-        throw Error('clean_take_media_evidence_required')
+        throw Error('clean_take_media_evidence_required:selection_'+index+':observationIndex='+obj.observationIndex)
       startMs=obj.startMs as number
       endMs=obj.endMs as number
       if(startMs<observation.startMs||endMs>observation.endMs||
          endMs-startMs<400||endMs-startMs>60000)
-        throw Error('clean_take_media_cut_outside_observation')
+        throw Error('clean_take_media_cut_outside_observation:selection_'+index+':source='+sourceId+':proposed=['+startMs+','+endMs+']:allowed=['+observation.startMs+','+observation.endMs+']:minDuration=400:maxDuration=60000')
       // Word timing is ONLY a mechanical safety check at the edges.
       // Whether to retain the action/performance belongs to the media model.
       if(wordAtUnsafeBoundary(startMs,src.words)||
          wordAtUnsafeBoundary(endMs,src.words))
-        throw Error('clean_take_media_cut_inside_spoken_word')
+        throw Error('clean_take_media_cut_inside_spoken_word:selection_'+index+':source='+sourceId+':edges=['+startMs+','+endMs+']')
     }else{
       const firstRaw=obj.firstWordId,lastRaw=obj.lastWordId
       if(!Number.isInteger(firstRaw)||!Number.isInteger(lastRaw)||
          (firstRaw as number)<0||(lastRaw as number)<(firstRaw as number)||
          (lastRaw as number)>=src.words.length)
-        throw Error('clean_take_invalid_word_range')
+        throw Error('clean_take_invalid_word_range:selection_'+index+':source='+sourceId+':validWordIds=0..'+(src.words.length-1))
       first=firstRaw as number;last=lastRaw as number
       startMs=Math.round(src.words[first]!.s*1000)
       endMs=Math.round(src.words[last]!.e*1000)
     }
     if(endMs-startMs<400||startMs<src.source.rangeMs![0]||
        endMs>src.source.rangeMs![1])
-      throw Error('clean_take_cut_outside_recording')
+      throw Error('clean_take_cut_outside_recording:selection_'+index+':source='+sourceId+':allowed='+JSON.stringify(src.source.rangeMs))
     // Retakes are not repeated in the output; don't play the same source
     // interval twice, even if the LLM assigns a different reason.
-    if(cuts.some(c=>c.sourceId===sourceId&&
-      Math.max(c.startMs,startMs)<Math.min(c.endMs,endMs)))
-      throw Error('clean_take_overlapping_selected_takes')
+    const overlappingIndex=cuts.findIndex(c=>c.sourceId===sourceId&&
+      Math.max(c.startMs,startMs)<Math.min(c.endMs,endMs))
+    if(overlappingIndex>=0)
+      throw Error('clean_take_overlapping_selected_takes:selection_'+index+
+        ':conflictsWith='+overlappingIndex+':source='+sourceId+
+        ':proposed=['+startMs+','+endMs+']:existing=['+
+        cuts[overlappingIndex]!.startMs+','+cuts[overlappingIndex]!.endMs+']')
     cuts.push({
       sourceId,sourceProjectId:src.source.projectId!,
       firstWordId:first,lastWordId:last,
       startMs,endMs,beatId:'clean_take',
       ...(mediaOnly?{kind:'visual_action' as const}:{}),
-      reason:nonempty(obj.reason),
+      reason:nonempty(obj.reason,'selection_'+index+'.reason'),
     })
   }
   return cuts
@@ -178,19 +182,46 @@ export async function planCleanTake(
       if(!call)throw Error('clean_take_required_tool_missing')
       const parsed=object(JSON.parse(call.function.arguments))
       cuts=validateCleanTakeSelections(parsed.selections,inputs)
-      nonempty(parsed.title);nonempty(parsed.summary);nonempty(parsed.endingRule)
+      nonempty(parsed.title,'title');nonempty(parsed.summary,'summary');nonempty(parsed.endingRule,'endingRule')
       chosen=parsed
       await onEvent?.({stage:'take_selection',attempt,status:'accepted',cuts:cuts.length,
         sourceSequence:cuts.map(c=>c.sourceId)})
       break
     }catch(error){
       const reason=String((error as Error).message)
-      await onEvent?.({stage:'take_selection',attempt,status:'rejected',reason})
+      const match=reason.match(/selection_(\d+)/)
+      const invalidSelectionIndex=match?Number(match[1]):undefined
+      const proposalSummary=call?(()=>{
+        try{
+          const selections=object(JSON.parse(call.function.arguments)).selections
+          if(!Array.isArray(selections))return []
+          return selections.slice(0,48).map((item,index)=>{
+            const row=item&&typeof item==='object'?item as Record<string,unknown>:{}
+            return {index,sourceId:String(row.sourceId??'').slice(0,70),
+              kind:String(row.kind??'dialogue').slice(0,30),
+              startMs:typeof row.startMs==='number'?row.startMs:null,
+              endMs:typeof row.endMs==='number'?row.endMs:null,
+              firstWordId:typeof row.firstWordId==='number'?row.firstWordId:null,
+              lastWordId:typeof row.lastWordId==='number'?row.lastWordId:null,
+              observationIndex:typeof row.observationIndex==='number'?row.observationIndex:null}
+          })
+        }catch{return []}
+      })():[]
+      const repairHint=reason.startsWith('clean_take_invalid_text')?
+        'Provide nonempty title, summary, endingRule and selection reasons.':
+        reason.startsWith('clean_take_overlapping_selected_takes')?
+          'Two selected ranges from the same recording overlap. Keep the stronger take or split into truly non-overlapping parts; do not duplicate playback.':
+        reason.startsWith('clean_take_media_cut_outside_observation')?
+          'The media_moment interval must lie entirely inside the referenced observation timestamps. If a longer demonstration is needed, use a valid dialogue span or an independently supported observation; never stretch its evidence.':
+          'Fix the indexed invalid selection using the stated source-local bounds; preserve other coherent takes.'
+      await onEvent?.({stage:'take_selection',attempt,status:'rejected',reason,
+        repairHint,invalidSelectionIndex,proposalSummary})
       if(attempt===3)throw Error('clean_take_unusable_submissions:'+reason)
       if(call)messages.push(reply.message,{
         role:'tool',tool_call_id:call.id,
         content:JSON.stringify({ok:false,error:reason,
-          instruction:'Repair only invalid source-local word IDs, overlapping spans, or schema. Keep good completed takes; do not invent material.'}),
+          invalidSelectionIndex,repairHint,proposalSummary,
+          instruction:'Resubmit the COMPLETE proposal, keeping valid items unchanged where possible. Correct the specific invalid selection and required metadata. Do not invent footage. Dialogue uses word IDs; media_moment timestamps must fit entirely within their observation interval.'}),
       })
       else messages.push(reply.message,{role:'user',content:'Call submit_clean_take with exact source-local word IDs.'})
     }
