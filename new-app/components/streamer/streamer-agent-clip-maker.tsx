@@ -10,11 +10,14 @@ export type StreamerShortMode = 'clip_moment_v1' | 'clip_story_v1'
 
 /** Two opt-in, specialist-agent-powered clip products. Never invokes the
  * historic highlights picker or overwrites long-form gaming mode. */
-export function StreamerAgentClipMaker({projectId, ready}:{
+export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDurationMs}:{
   projectId:string
   ready:boolean
+  sourceStartMs:number
+  sourceDurationMs:number
 }) {
   const router=useRouter()
+  const [windowStartMin,setWindowStartMin]=useState(()=>Math.max(0,Math.floor((sourceDurationMs-20*60_000)/60_000)))
   const [mode,setMode]=useState<StreamerShortMode>('clip_moment_v1')
   const [seconds,setSeconds]=useState<30|60|90>(60)
   const [runId,setRunId]=useState<string|null>(null)
@@ -59,10 +62,13 @@ export function StreamerAgentClipMaker({projectId, ready}:{
   const create=async()=>{
     setError(null);setRunId(null);setStatus('queued')
     try{
+      const windowStart=sourceStartMs+windowStartMin*60_000
+      const windowEnd=Math.min(sourceStartMs+sourceDurationMs,windowStart+20*60_000)
+      if(windowEnd-windowStart<15_000)throw Error('Select a source window of at least 15 seconds')
       const response=await fetch('/api/ai-producer-agent/runs',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
-          sources:[{sourceId:'stream_recording',kind:'stream',projectId}],
+          sources:[{sourceId:'stream_recording',kind:'stream',projectId,rangeMs:[windowStart,windowEnd]}],
           outputType:'story',storyMode:mode,
           targetLengthS:[Math.max(15,seconds-10),Math.min(105,seconds+10)],
           visualEvidenceMode:'visual_audio',exportOnFinish:true,
@@ -100,6 +106,17 @@ export function StreamerAgentClipMaker({projectId, ready}:{
           <option value={60}>60 seconds</option>
           <option value={90}>90 seconds</option>
         </select>
+        {sourceDurationMs>20*60_000?(
+          <label className="flex items-center gap-2 text-xs">
+            Start minute
+            <input aria-label="VOD window starting minute" type="number" step={1} min={0}
+              max={Math.max(0,Math.floor((sourceDurationMs-15_000)/60_000))}
+              className="h-9 w-20 rounded-md border border-border bg-background px-2 text-sm"
+              value={windowStartMin} disabled={running}
+              onChange={e=>setWindowStartMin(Math.max(0,Math.min(
+                Math.floor((sourceDurationMs-15_000)/60_000),Number(e.target.value)||0)))} />
+          </label>
+        ):null}
         <Button size="sm" onClick={()=>void create()} disabled={!ready||running}>
           {running?<Loader2 className="mr-2 size-4 animate-spin"/>:<Sparkles className="mr-2 size-4"/>}
           {running?'Agents editing…':'Create AI clip'}
@@ -107,7 +124,9 @@ export function StreamerAgentClipMaker({projectId, ready}:{
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         New specialist-agent pipeline. Single Moment keeps one continuous scene;
-        Story Clip can assemble different moments. The long-form gaming mode is unchanged.
+        Story Clip can assemble different moments. Each run inspects an explicitly selected
+        segment of up to 20 minutes; full-stream batch discovery is not yet enabled.
+        The long-form gaming mode is unchanged.
       </p>
       {!ready?<p className="mt-2 text-xs">Source must finish importing first.</p>:null}
       {running?<p role="status" className="mt-2 text-xs">AI clip status: {status}. The finished edit opens in Clip Studio.</p>:null}
