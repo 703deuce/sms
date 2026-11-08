@@ -226,6 +226,49 @@ function preview(cuts:ExecutableMultiStoryCut[],inputs:CleanTakeSource[]){
         .slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
   }))
 }
+/** Source-grounded context available at every proposed join. The LLM must
+ * decide whether a missing setup is necessary, using the real previous output
+ * and source dialogue around both edges. No lexical/regex guessing. */
+export function cleanTakeContinuityEvidence(cuts:ExecutableMultiStoryCut[],inputs:CleanTakeSource[]){
+  const byId=new Map(inputs.map(x=>[x.source.sourceId,x]))
+  const dialogue=(sourceId:string,first:number,last:number)=>{
+    const words=byId.get(sourceId)?.words??[]
+    if(first<0||last<first)return ''
+    return words.slice(Math.max(0,first),Math.min(words.length,last+1))
+      .map(w=>w.w).join(' ')
+  }
+  return cuts.map((cut,index)=>{
+    const src=byId.get(cut.sourceId)
+    const words=src?.words??[]
+    const prior=cuts[index-1],next=cuts[index+1]
+    const preceding=cut.firstWordId>=0?Math.max(0,cut.firstWordId-50):-1
+    const following=cut.lastWordId>=0?Math.min(words.length-1,cut.lastWordId+50):-1
+    return {
+      index,sourceId:cut.sourceId,
+      selected:cut.kind==='visual_action'?'[original observed video/audio moment]':
+        dialogue(cut.sourceId,cut.firstWordId,cut.lastWordId),
+      sourceBefore:cut.firstWordId>=0?{
+        wordIdRange:[preceding,cut.firstWordId-1],
+        text:dialogue(cut.sourceId,preceding,cut.firstWordId-1),
+      }:null,
+      sourceAfter:cut.lastWordId>=0?{
+        wordIdRange:[cut.lastWordId+1,following],
+        text:dialogue(cut.sourceId,cut.lastWordId+1,following),
+      }:null,
+      previousInFinal:prior?{
+        index:index-1,sourceId:prior.sourceId,
+        text:prior.kind==='visual_action'?'[observed original video/audio]':
+          dialogue(prior.sourceId,prior.firstWordId,prior.lastWordId),
+      }:null,
+      nextInFinal:next?{
+        index:index+1,sourceId:next.sourceId,
+        text:next.kind==='visual_action'?'[observed original video/audio]':
+          dialogue(next.sourceId,next.firstWordId,next.lastWordId),
+      }:null,
+    }
+  })
+}
+
 /**
  * Isolated recording-cleanup mode. A creator may speak naturally, restart a
  * sentence, retry a paragraph, change their mind, or record additional takes.
@@ -252,6 +295,8 @@ export async function planCleanTake(
       'Select the strongest COMPLETE take of each idea; when a speaker restarts and corrects themself, favor the later accurate fluent take if supported, not both mistaken and corrected versions. Preserve the intended message and chronological/logical section order, but source recordings can be revisited when they contain replacement takes. Keep intentional rhetorical repetition, emotion, pauses and conversational tone. Do not delete all fillers mechanically, cut mid-word, or create unnatural jump cuts.',
       'BEFORE selecting any clips, infer the recording\'s PROGRAM INTENT from the WHOLE transcript, source video observations, and original audio: what actual episode/presentation is being made, its main subject, audience, speaker roles and intended beginning/development/ending. This may be an interview, vlog, travel report, instructional video, or raw repeated takes. Judge each candidate against that specific intended program, not whether the words are vaguely related to the venue. Distinguish on-program dialogue, genuine relevant spontaneous moments, discarded retakes, unrelated side conversations, off-camera direction, camera framing/tracking, lighting/microphone/recording setup, rehearsal and after-take chatter. Exclude production directions even when sandwiched between interesting spoken content. Do not treat a camera reset as a charming conversation beat merely because it has genuine words. Keep an incidental moment only if it actually serves the episode subject and is independently understandable.',
       'When the useful discussion resumes INSIDE a long candidate span that also contains setup or false starts, split it into precise real word-ID intervals instead of including the entire contaminated range. Check the ACTUAL words between each chosen firstWordId and lastWordId: selection reasons must describe what is truly inside those boundaries, not claim chatter was omitted when it was retained. Preserve complete thoughts and question-answer context; do not trim every conversational hesitation indiscriminately.',
+      'AUDIENCE CONTEXT RULE: Build the final sequence as if the viewer has seen ONLY retained clips, never removed sections. Before each retained answer, reaction, pronoun, "yes", "that", "there", or unexplained reference, inspect the missing lead-in from the FULL transcript and video/audio evidence. If the prior selected material does not establish what is being discussed, RETAIN the minimum natural, on-subject setup (question, introduction, antecedent or explanation) from the real recording, including when it occurs in an earlier otherwise dropped passage. If source setup is truly unavailable, remove the dependent fragment instead of fabricating context. The setup may belong to a previous selected clip, but must actually appear in the finished timeline, not merely exist in the original footage. Do not clip off the setup just to shorten the video.',
+      'NATURAL CUT RULE: Prefer complete conversational thoughts and understandable question-answer exchanges over tiny atomized snippets. Reject starts mid-sentence and endings mid-clause, isolated sentence fragments (for example "Just the depth of"), dropped referents, and contextless reactions even when source word IDs and timings validate. Correct by restoring actual nearby source words or choosing a complete alternate take. Retain a natural amount of human pacing and transitions; do not leave obviously unrelated phone/camera setup chatter. Do not remove valid context for the sake of a shorter duration.',
       'Treat an interview question and its relevant answer as an exchange. Do not splice answers to different questions or present separate sessions as one continuous exchange.',
       'Choose dialogue cuts using source-local exact firstWordId/lastWordId. ALSO independently choose valuable REAL VIDEO/AUDIO moments using kind=media_moment, observationIndex, source-local startMs/endMs bounded to that time-coded observed event. For media_moment do NOT supply word IDs. This is especially important for demonstrations, on-screen reactions, a revealing gesture or expressive silence, audio cues, and nonverbal performance. Do not demand speech or transcript evidence for a nonverbal beat. The media observations are autonomous editing evidence, not just supporting captions. Exclude bad attempts in the gaps. Keep complete sentences or coherent paragraphs. Every retained segment must flow into the next as a real speaker would mean it. Pick all meaningful completed content—not merely a few viral highlights. No fixed length, target number of cuts, or source quota.',
       'Actively inspect the VIDEO/AUDIO evidence for meaningful shots that the transcript missed, and allow a media_moment to win even with no useful dialogue. Do not include every observed clip: each must make the final presentation better, preserve original audio and fit the creator intention. For each proposed retained take cross-check the video/audio observations for flubs, grimaces, resets, coughs, off-camera interruptions, visible cuts, delivery, and genuine conversational pauses. Check both sides of every join for a plausible visual/acoustic seam and flag unverified seams for final rendered-media audition. You may keep adjacent genuine takes, intercut recordings, or leave extended untouched sections. Source IDs are NOT speaker identities. Return one final ordered list with reasons and a few notes explaining the abandoned retakes.',
@@ -339,9 +384,11 @@ export async function planCleanTake(
       {role:'system',content:[
         'Independent CLEAN TAKE editorial QA. Use the original FULL transcript plus source-aligned timestamped video observations and ORIGINAL audio observations in the supplied evidence. Check each retained clip and its joins for visual reset, apparent delivery issues, framing changes and vocal hesitations where observations support them; explicitly distinguish observed effects from unknown effects requiring render playback. Evaluate the selected words in final playback order against the source recording and original transcript. Detect duplicate takes of the same idea, an abandoned sentence mistakenly retained, correction followed by an earlier wrong version, lost questions/answers, grammatical hard cuts, essential missing context, dangling ending, or filler removal that distorts meaning.',
         'First identify the actual program intent and primary subject from the complete original recording, not a generic assumption that all related-location conversation belongs. For EACH selected passage inspect every word in the selected first-to-last word-ID span. Flag off-topic tangents, camera positioning, camera tracking, framing instructions, recording restarts, abandoned takes, production-only instructions, and dangling clauses embedded inside otherwise relevant passages. A reason claiming an excluded false start does not make it excluded: compare against the selected transcript. Keep authentic related spontaneity and necessary interview questions and answers. Give exact actionable QA issues based on source words; do not rubber-stamp the first proposal.',
+        'CRITICAL CONTEXT-CONTINUITY AUDIT: Read the selected segments in FINAL playback order, not source order, and use the supplied per-cut continuityEvidence. Assume the viewer has ZERO access to discarded footage. For each join, ask whether previousInFinal actually establishes the context for selected, and whether omitted sourceBefore contains an essential question, subject identification, antecedent, setup, or natural sentence beginning. Check sourceAfter for dangling endings or missing resolution. An intro or answer must be intelligible on first hearing without unseen context. Flag orphaned answers (including "yes", "that", pronouns, callbacks), isolated fragments, mid-sentence starts, abruptly terminated clauses, and unexplained context jumps. Never pass a revision simply because a word boundary is mechanically legal. For each issue say what real source setup to restore or whether to drop an unrecoverable fragment. Do not demand every possible original sentence, filler, or irrelevant production chatter.',
         'Do NOT fail because source segments are numerous, few, or long. Natural filler/hesitation may be intentional. Do not claim you listened to the final MP4 or saw the visual seams. Give specific, actionable, source-grounded issues.',
       ].join(' ')},
       {role:'user',content:JSON.stringify({outline,selected:preview(cuts,inputs),
+        continuityEvidence:cleanTakeContinuityEvidence(cuts,inputs),
         originalTranscripts:transcripts(inputs),droppedTakeReasons})},
     ]})
     onUsage?.(result.usage)
@@ -368,12 +415,14 @@ export async function planCleanTake(
           'CLEAN TAKE REPAIR EDITOR: You have the entire original source transcript AND timestamped video-frame plus original-audio observations from the same media analysis. Use all three modalities to evaluate proposed retakes, awkward performance, join continuity and visual delivery. Do not infer actual final audio playback from observations. You have a validated first edit. Independent QA found concrete issues. Produce a BETTER complete final edit, not commentary.',
           'Repair dialogue OR independent media_moment cuts, grounded in the same observed original video/audio intervals with their observationIndex. Do not force nonverbal footage into word-ID spans. Correct duplicated retakes, broken sentences, dropped essential context, orphan questions or rough joins only using ORIGINAL local source word IDs. Do not invent words or delete intentional meaning. Preserve all other successful takes. You may reselect, split, remove or reorder real spans. One final ordered list.',
           'Before editing, restate mentally the actual episode subject and audience inferred from the entire source. Repair ALL substantiated QA findings that involve irrelevant camera/setup chatter, unrelated conversations and abandoned starts, including faults INSIDE selected spans rather than only at segment boundaries. The new firstWordId and lastWordId must isolate the intended words. Never claim unwanted words were removed while leaving them inside a retained span. Do not discard relevant, coherent spontaneous reactions or interview Q&A just because they are informal.',
+          'RESTORE LOST CONTEXT: Use the per-cut continuityEvidence to compare the retained playback sequence to missing sourceBefore and sourceAfter. When an otherwise worthwhile answer or reaction is incomprehensible because the cut removed its on-topic setup, restore the minimum complete actual question/lead-in/antecedent from earlier source word IDs. It can be a separate passage or an expanded boundary, but must be present BEFORE that answer in the revised final playback order. Conversely delete an isolated fragment if source evidence cannot supply a coherent beginning and ending. Do not manufacture context or preserve irrelevant production directions. Avoid aggressively shaving natural speech or breathing room merely to maximize compression. Verify EACH join as the viewer will experience it.',
           'Every selection MUST include the exact original sourceId from the supplied source list and a nonempty reason. Dialogue requires valid source-local firstWordId and lastWordId. Video/audio-only actions require the original observationIndex and observed source-local timestamps. Do not omit sourceId while copying or splitting a passage.',
           'Never prioritize hitting a duration or removing every natural filler over the coherent performance.',
         ].join(' ')},
         {role:'user',content:JSON.stringify({
           instruction:instruction??null,originalTranscripts:transcripts(inputs),
-          firstEdit:{outline:plan.outline,selected:preview(plan.cuts,inputs)},
+          firstEdit:{outline:plan.outline,selected:preview(plan.cuts,inputs),
+            continuityEvidence:cleanTakeContinuityEvidence(plan.cuts,inputs)},
           qaIssues:review.issues,
         })},
       ]
@@ -423,10 +472,12 @@ export async function planCleanTake(
       const revisedReviewResponse=await lunaChat({tools:[reviewSchema],toolChoice:'required',messages:[
         {role:'system',content:[
           'Independent clean talking-head EDIT REVIEW using full transcript, video and ORIGINAL audio observations. Evaluate retained performance, visual composition/gestures, audio delivery, false starts, cuts, context, closing and prior QA concerns against time-aligned observations; note issues where evidence is missing. Judge the full edited transcript, retained best takes, cuts, context, closing and prior QA concerns. Do not reward shortening alone. Do not assert render audio or visual seams you did not inspect.',
+          'Use continuityEvidence on the REVISED FINAL playback order to verify previousInFinal actually provides the necessary setup for each answer. SourceBefore is source context, NOT material the viewer heard unless restored as a retained cut. If a previous QA issue about orphaned questions, missing antecedents or dangling thoughts still exists, explicitly fail and report it. Do not let improved cut precision substitute for audience comprehension.',
           'Respond pass=true only when no important duplicate retakes, abandoned takes, dangling thoughts, or misleading discontinuities remain.',
         ].join(' ')},
         {role:'user',content:JSON.stringify({
           outline:revisedOutline,selected:preview(revisedCuts,inputs),
+          continuityEvidence:cleanTakeContinuityEvidence(revisedCuts,inputs),
           originalTranscripts:transcripts(inputs),priorIssues:review.issues,
         })},
       ]})
