@@ -141,7 +141,7 @@ export async function runMultiSourceStoryOutput(
       budget.addLuna(usage)
     })
     await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
-      phase:'review',tool:'multisource_editorial_qa',kind:'validate',
+      phase:'validate',tool:'multisource_editorial_qa',kind:'validate',
       resultSummary:JSON.stringify(review).slice(0,12000)})
     if(!review.pass)
       out.notes.push(...review.issues.slice(0,10).map(issue=>'Editorial QA: '+issue))
@@ -149,7 +149,7 @@ export async function runMultiSourceStoryOutput(
     out.notes.push('Multi-source editorial QA unavailable: '+
       String((error as Error).message).slice(0,180))
     await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
-      phase:'review',tool:'multisource_editorial_qa_unavailable',kind:'validate',
+      phase:'validate',tool:'multisource_editorial_qa_unavailable',kind:'validate',
       error:String((error as Error).message).slice(0,250)})
   }
   const created=await createMultiSourceStoryOutput({
