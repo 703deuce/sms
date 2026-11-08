@@ -55,7 +55,7 @@ export async function findMoments(
       ctx.cache.momentsSummary = moments.slice(0, 30)
       if (visualStory && sourceRange) {
         ctx.cache.visualEvidence = {
-          coarse: visualMomentsWithAsr(moments,ctx.cache.words??[],sourceRange,'coarse_3s'),
+          coarse: visualMomentsWithAsr(moments,ctx.cache.words??[],sourceRange,'coarse_1fps'),
           focused:[],
           metadata: {
             model:String((result.meta as Record<string,unknown> | undefined)?.model_requested??'gemini-3.1-flash-lite'),
