@@ -111,8 +111,8 @@ export function NewEditDialog({
           <div className="space-y-4">
             <div className="rounded-md border p-3 text-sm">
               <strong>Story editing mode</strong>
-              <p className="mt-1 text-muted-foreground">This dialog keeps the original single-source editor. For a new story across three independent recordings, choose the separate mode.</p>
-              <a href="/ai-producer-agent/multi-source" className="mt-2 inline-block underline underline-offset-2">Switch to multi-source story (3 videos)</a>
+              <p className="mt-1 text-muted-foreground">This dialog keeps the original single-source editor. For a new story across two to five independent recordings, choose the separate mode.</p>
+              <a href="/ai-producer-agent/multi-source" className="mt-2 inline-block underline underline-offset-2">Switch to multi-source story (2–5 videos)</a>
             </div>
             <div className="space-y-2">
               <Label>Sources</Label>
