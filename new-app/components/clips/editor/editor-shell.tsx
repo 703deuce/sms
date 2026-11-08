@@ -3618,6 +3618,42 @@ export function EditorShell({
               variant="ghost" className="h-8 text-xs"
               onClick={() => openToolPanel(id)}>{label}</Button>
           ))}
+          <div className="flex items-center gap-1 rounded-md border border-border px-1"
+            data-testid="streamer-layout-switch">
+            {([
+              ['facecam_stack','Stack'],['facecam_pip','Facecam PiP'],['fill','Gameplay fill'],
+              ['fit_blur','Fit & blur'],
+            ] as const).map(([mode,label])=><Button key={mode} type="button"
+              size="sm" variant={edits.layout.mode===mode?'default':'ghost'}
+              className="h-7 px-2 text-xs"
+              onClick={()=>{setLayoutModeAtSource(playheadSourceMs,mode);openToolPanel('layout')}}>
+              {label}
+            </Button>)}
+            <Button type="button" variant="outline" size="sm" className="h-7 text-xs"
+              onClick={()=>splitLayoutAtSource(playheadSourceMs)}>Split layout here</Button>
+          </div>
+          <Button type="button" size="sm" variant={edits.chatOverlay?.enabled?'default':'outline'}
+            className="h-8 text-xs" disabled={!streamChatAvailable}
+            title={streamChatAvailable?'Show or hide recorded stream chat':
+              streamChatToggleHint??'No recorded chat for this source'}
+            onClick={()=>setEdits({...edits,chatOverlay:{
+              ...edits.chatOverlay,enabled:!edits.chatOverlay?.enabled,
+              position:edits.chatOverlay?.position??'bottom',
+            }})}>
+            Chat overlay
+          </Button>
+          {streamChatAvailable&&edits.chatOverlay?.enabled?
+            <select aria-label="Stream chat overlay position"
+              className="h-8 rounded-md border border-border bg-background px-1 text-xs"
+              value={edits.chatOverlay.position??'bottom'}
+              onChange={e=>setEdits({...edits,chatOverlay:{
+                ...edits.chatOverlay,position:e.target.value as
+                  'gameplay_left'|'gameplay_right'|'bottom',
+              }})}>
+              <option value="bottom">Chat bottom</option>
+              <option value="gameplay_left">Chat left</option>
+              <option value="gameplay_right">Chat right</option>
+            </select>:null}
           <Button type="button" size="sm" variant={cropMode ? 'default' : 'outline'}
             className="h-8 text-xs" aria-pressed={cropMode}
             onClick={() => { setCropMode(v=>!v); openToolPanel('layout') }}>

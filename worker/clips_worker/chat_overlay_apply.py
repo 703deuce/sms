@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Any
 
 
+def original_chat_range_ms(start_ms: int, end_ms: int, offset_ms: int) -> tuple[int,int]:
+    if offset_ms < 0 or end_ms <= start_ms:
+        raise ValueError('chat_overlay_invalid_source_range')
+    return start_ms+offset_ms,end_ms+offset_ms
+
+
 def try_apply_chat_overlay(
     out_mp4: Path,
     work_dir: Path,
@@ -40,8 +46,10 @@ def try_apply_chat_overlay(
             decision_log("render", "chat_overlay_skipped", reason="no_vod")
             return
         msgs = load_vod_chat_messages(conn, vod)
-        abs_start = int(edits.get("trim", {}).get("in") or clip_start_ms)
-        abs_end = int(edits.get("trim", {}).get("out") or clip_end_ms)
+        local_start = int(edits.get("trim", {}).get("in") or clip_start_ms)
+        local_end = int(edits.get("trim", {}).get("out") or clip_end_ms)
+        abs_start,abs_end = original_chat_range_ms(
+            local_start,local_end,int(vod.get("sourceOffsetMs") or 0))
         lines = chat_lines_for_clip(
             msgs,
             clip_start_abs_ms=abs_start,

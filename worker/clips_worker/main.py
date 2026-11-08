@@ -471,6 +471,12 @@ def handle_stream_import(conn, job: dict) -> None:
     _mark_job_done(conn, job["id"])
 
 
+def handle_stream_agent_prepare(conn, job: dict) -> None:
+    from clips_worker.streamer.agent_prepare_job import run_stream_agent_prepare_job
+    run_stream_agent_prepare_job(conn, job, post_progress_resilient)
+    _mark_job_done(conn, job["id"])
+
+
 def handle_stream_analyze(conn, job: dict) -> None:
     from clips_worker.streamer.analyze_job import run_stream_analyze_job
 
@@ -555,6 +561,7 @@ def handle_bg_matte_preview(conn, job: dict) -> None:
 DISPATCH: dict[str, object] = {
     "IMPORT_URL": handle_import_url,
     "STREAM_IMPORT": handle_stream_import,
+    "STREAM_AGENT_PREPARE": handle_stream_agent_prepare,
     "STREAM_ANALYZE": handle_stream_analyze,
     "STREAM_RENDER": handle_stream_render,
     "STREAM_RELAYOUT": handle_stream_relayout,

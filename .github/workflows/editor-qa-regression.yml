@@ -10,6 +10,8 @@ on:
       - "new-app/lib/server/ai-producer-agent/**"
       - "new-app/app/api/ai-producer-agent/**"
       - "worker/clips_worker/ai_producer_agent/**"
+      - "worker/clips_worker/streamer/agent_prepare_job.py"
+      - "worker/tests/test_stream_agent_prepare.py"
       - "new-app/lib/clips/**"
       - "new-app/tests/**"
       - "worker/clips_worker/captions_ass.py"
@@ -103,7 +105,8 @@ jobs:
             tests/ai-producer-agent/assembly-segment-args.test.ts \
             tests/ai-producer-agent/multi-source-story.test.ts \
             tests/ai-producer-agent/clean-take.test.ts \
-            tests/ai-producer-agent/multi-source-assembly.test.ts
+            tests/ai-producer-agent/multi-source-assembly.test.ts \
+            tests/streamer-agent-windows.test.ts
 
   captions-worker-regression:
     runs-on: ubuntu-latest
@@ -125,8 +128,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile visual worker modules
-        run: python -m py_compile worker/clips_worker/ai_producer_agent/finder/*.py worker/tests/test_ai_producer_visual_audio.py
+        run: python -m py_compile worker/clips_worker/ai_producer_agent/finder/*.py worker/clips_worker/streamer/agent_prepare_job.py worker/tests/test_ai_producer_visual_audio.py worker/tests/test_stream_agent_prepare.py
       - name: Install isolated test dependencies
         run: python -m pip install pytest requests boto3
-      - name: Exercise 3s / 1fps Gemini audio ASR contracts (mocked, no external calls)
-        run: PYTHONPATH=worker python -m pytest -q worker/tests/test_ai_producer_visual_audio.py
+      - name: Exercise Gemini visual contracts and streamer video source-window alignment
+        run: PYTHONPATH=worker python -m pytest -q worker/tests/test_ai_producer_visual_audio.py worker/tests/test_stream_agent_prepare.py
