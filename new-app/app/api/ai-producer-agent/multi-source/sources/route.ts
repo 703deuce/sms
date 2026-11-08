@@ -15,13 +15,14 @@ export async function GET(){
       where:{workspaceId,deletedAt:null,uploadId:{not:null},
         upload:{status:'COMPLETE',mime:{startsWith:'video/'}}},
       select:{id:true,title:true,rangeStartMs:true,rangeEndMs:true,
-        transcriptWords:true,upload:{select:{durationMs:true}}},
+        transcriptWords:true,transcriptKey:true,upload:{select:{durationMs:true}}},
       orderBy:{updatedAt:'desc'},take:100,
     })
     return NextResponse.json({data:{sources:rows.map(p=>({
       projectId:p.id,title:p.title,
       durationMs:p.upload?.durationMs??(p.rangeEndMs-p.rangeStartMs),
-      hasTranscript:Array.isArray(p.transcriptWords)&&p.transcriptWords.length>=30,
+      hasTranscript:Boolean(p.transcriptKey) ||
+        (Array.isArray(p.transcriptWords)&&p.transcriptWords.length>=30),
     })).filter(p=>p.hasTranscript)}})
   }catch(error){return jsonError(error,500)}
 }
