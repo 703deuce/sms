@@ -3,6 +3,7 @@ import type {ClipWord} from '@/lib/clips/edits'
 import type {MultiStorySource,MultiStoryOutline} from '@/lib/ai-producer-agent/multi-source-story'
 import {validateMultiStorySources,validateMultiStoryOutline,validateMultiStoryCuts,planMultiSourceStory} from '@/lib/ai-producer-agent/multi-source-story'
 import {__setLunaImpl} from '@/lib/ai-producer-agent/luna-client'
+import {reviewMultiSourceStory} from '@/lib/ai-producer-agent/multi-source-qa'
 
 const make=(id:string,project:string,offset=0):MultiStorySource=>({
   source:{sourceId:id,kind:'upload',projectId:project,
@@ -21,9 +22,9 @@ const outline:MultiStoryOutline={title:'A shared problem',logline:'Two people re
 
 afterEach(()=>__setLunaImpl(null))
 describe('isolated multi-source story planner',()=>{
-  it('requires exactly three independent validated sources',()=>{
-    expect(()=>validateMultiStorySources([a])).toThrow('exactly_3')
-    expect(()=>validateMultiStorySources([a,b])).toThrow('exactly_3')
+  it('supports 2-5 independent validated sources',()=>{
+    expect(()=>validateMultiStorySources([a])).toThrow('2_to_5')
+    expect(()=>validateMultiStorySources([a,b])).not.toThrow()
     expect(()=>validateMultiStorySources([a,a,c])).toThrow('duplicate')
     expect(()=>validateMultiStorySources([a,b,c])).not.toThrow()
   })
@@ -74,7 +75,7 @@ describe('isolated multi-source story planner',()=>{
         name==='submit_multi_source_footage'?{selections:[
           {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'opening'},
           {sourceId:'b',firstWordId:9,lastWordId:11,beatId:'payoff',reason:'ending'},
-        ]}:{selectionIndices:[0,1],justification:'Supported progression'}
+        ]}:{selectionIndices:[0,1],joinReviews:[{leftIndex:0,rightIndex:1,status:'flows',reason:'Logical transition'}],justification:'Supported progression'}
       return {message:{role:'assistant',content:null,tool_calls:[{
         id:'call_'+(++n),type:'function',function:{name,arguments:JSON.stringify(args)},
       }]}}
@@ -87,12 +88,87 @@ describe('isolated multi-source story planner',()=>{
       expect(step.payload.sources[2].sourceId).toBe('c')
       expect(step.payload.sources[0].transcript).toHaveLength(40)
       expect(step.payload.sources[1].transcript).toHaveLength(40)
-      expect(step.payload.sources[0].visualObservations).toEqual(first.visualObservations)
-      expect(step.payload.sources[1].visualObservations).toEqual(second.visualObservations)
+      expect(step.payload.sources[0].visualObservations).toEqual(
+        first.visualObservations!.map((o,i)=>({...o,id:'a:visual_'+i})))
+      expect(step.payload.sources[1].visualObservations).toEqual(
+        second.visualObservations!.map((o,i)=>({...o,id:'b:visual_'+i})))
     }
     expect(seen.map(x=>x.name)).toEqual([
       'submit_multi_source_story','submit_multi_source_footage','submit_multi_source_flow',
     ])
+  })
+  it('allows a Story-approved silent visual-only source cut with exact observed bounds',()=>{
+    const visual={...c,words:[],visualObservations:[
+      {startMs:30000,endMs:42000,observation:'A silent experiment visibly fails'},
+    ]}
+    const storyboard=validateMultiStoryOutline({...outline,visualBeats:[{
+      id:'c:visual_0',sourceId:'c',startMs:30000,endMs:42000,
+      purpose:'show the failure instead of describing it',
+    }],beats:[...outline.beats,{id:'visual',purpose:'visual proof',sourceIds:['c']}]},[a,b,visual])
+    const chosen=validateMultiStoryCuts([
+      {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'setup'},
+      {sourceId:'c',kind:'visual_action',visualBeatId:'c:visual_0',
+        startMs:31000,endMs:41500,beatId:'visual',reason:'show silent failure'},
+    ],[a,b,visual],storyboard)
+    expect(chosen[1]).toMatchObject({kind:'visual_action',sourceId:'c',
+      sourceProjectId:'proj_c',startMs:31000,endMs:41500,firstWordId:-1})
+    expect(()=>validateMultiStoryCuts([{
+      sourceId:'c',kind:'visual_action',visualBeatId:'c:visual_0',
+      startMs:29000,endMs:41500,beatId:'visual',reason:'unobserved expansion',
+    }],[a,b,visual],storyboard)).toThrow('outside_observation')
+  })
+  it('lets Flow correct word boundaries and remove weak cuts without changing source identity',async()=>{
+    let step=0
+    __setLunaImpl(async ({tools})=>{
+      const name=tools[0]!.name
+      const args=name==='submit_multi_source_story'?outline:
+        name==='submit_multi_source_footage'?{selections:[
+          {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'begin'},
+          {sourceId:'a',firstWordId:8,lastWordId:10,beatId:'conflict',reason:'weak'},
+          {sourceId:'b',firstWordId:9,lastWordId:11,beatId:'payoff',reason:'ending'},
+        ]}:{selectionIndices:[0,2],corrections:[{
+          index:0,firstWordId:1,lastWordId:5,reason:'complete the opening thought',
+        }],joinReviews:[{leftIndex:0,rightIndex:1,status:'flows',reason:'Transition completes the lesson'}],justification:'Removed repetition'}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'call_'+(++step),type:'function',function:{name,arguments:JSON.stringify(args)},
+      }]}}
+    })
+    const plan=await planMultiSourceStory([a,b,c])
+    expect(plan.cuts).toHaveLength(2)
+    expect(plan.cuts[0]).toMatchObject({sourceId:'a',sourceProjectId:'proj_a',
+      startMs:2000,endMs:11000,firstWordId:1,lastWordId:5})
+    expect(plan.cuts[1]).toMatchObject({sourceId:'b',startMs:18000,endMs:23000})
+  })
+  it('QA examines source-tagged dialogue and silent visual-only action in final playback order',async()=>{
+    let seen:any=null
+    __setLunaImpl(async ({tools,messages})=>{
+      seen=JSON.parse(String(messages[1]!.content))
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'qa-1',type:'function',function:{name:tools[0]!.name,
+          arguments:JSON.stringify({pass:false,issues:[
+            'Source b reaction could imply a false response to source a',
+          ]})},
+      }]}}
+    })
+    const source={...b,visualObservations:[{
+      startMs:24000,endMs:34000,observation:'Quietly turns to a broken device',
+    }]}
+    const review=await reviewMultiSourceStory({
+      mode:'multi_source_story_v1',outline,cuts:[
+        {sourceId:'a',sourceProjectId:'proj_a',firstWordId:2,lastWordId:4,
+          startMs:4000,endMs:9000,beatId:'setup',reason:'opening'},
+        {sourceId:'b',sourceProjectId:'proj_b',firstWordId:-1,lastWordId:-1,
+          startMs:25000,endMs:33000,beatId:'conflict',reason:'visual reaction',
+          visualBeatId:'b:visual_0',kind:'visual_action'},
+      ],estimatedDurationMs:13000,
+    },[a,source,c])
+    expect(review.pass).toBe(false)
+    expect(review.issues[0]).toContain('false response')
+    expect(seen.selected).toHaveLength(2)
+    expect(seen.selected[1]).toMatchObject({
+      sourceId:'b',kind:'visual_action',startMs:25000,endMs:33000,
+      content:'Quietly turns to a broken device',
+    })
   })
   it('uses three separate LLM specialist passes and returns exact validated source-aware cuts',async()=>{
     let n=0
@@ -102,7 +178,7 @@ describe('isolated multi-source story planner',()=>{
         name==='submit_multi_source_footage'?{selections:[
           {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'opening'},
           {sourceId:'b',firstWordId:9,lastWordId:11,beatId:'payoff',reason:'ending'},
-        ]}:{selectionIndices:[0,1],justification:'Logical progression'}
+        ]}:{selectionIndices:[0,1],joinReviews:[{leftIndex:0,rightIndex:1,status:'flows',reason:'Natural close'}],justification:'Logical progression'}
       n++
       return {message:{role:'assistant',content:null,tool_calls:[{
         id:'call_'+n,type:'function',function:{name,arguments:JSON.stringify(args)},

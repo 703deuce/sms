@@ -50,10 +50,10 @@ export default function MultiSourceStoryExperiment(){
   const toggle=(id:string)=>{
     setSelected(current=>current.includes(id)
       ? current.filter(x=>x!==id)
-      : current.length>=3?current:[...current,id])
+      : current.length>=5?current:[...current,id])
   }
   const start=async()=>{
-    if(selected.length!==3)return
+    if(selected.length<2||selected.length>5)return
     setLoading(true);setError('');setRun(null);setExportStatus(null)
     try{
       const body={
@@ -82,24 +82,24 @@ export default function MultiSourceStoryExperiment(){
     <div>
       <nav aria-label="AI editing modes" className="mb-3 flex gap-3 text-sm">
         <a className="rounded-md border px-3 py-2" href="/app/clips">Single-source story</a>
-        <span className="rounded-md border border-blue-500 px-3 py-2 font-semibold" aria-current="page">Multi-source story · 3 videos</span>
+        <span className="rounded-md border border-blue-500 px-3 py-2 font-semibold" aria-current="page">Multi-source story · 2–5 videos</span>
       </nav>
       <p className="text-sm text-neutral-500">AI Producer · Experimental mode</p>
       <h1 className="text-2xl font-semibold">Multi-source Story Editor</h1>
       <p className="mt-2 text-sm text-neutral-500">
-        Choose exactly 3 recordings on the same subject. Story discovers one truthful narrative,
+        Choose 2–5 recordings on the same subject. Story discovers one truthful narrative,
         Footage selects source-specific passages, and Flow assembles a finished video with
         the original video and audio. The existing single-source Story mode is unchanged.
       </p>
     </div>
     <section className="space-y-2">
-      <h2 className="font-medium">Source recordings ({selected.length}/3 selected)</h2>
+      <h2 className="font-medium">Source recordings ({selected.length}/5 selected)</h2>
       {sources.length===0?<p className="text-sm text-neutral-500">
-        No videos with transcripts available yet. Upload and transcribe source recordings first.
+        No eligible uploaded videos yet. Upload recordings first; silent visual footage is allowed.
       </p>:sources.map(source=><label key={source.projectId}
         className="flex cursor-pointer items-center gap-3 rounded-lg border p-3">
         <input type="checkbox" checked={selected.includes(source.projectId)}
-          disabled={!selected.includes(source.projectId)&&selected.length>=3}
+          disabled={!selected.includes(source.projectId)&&selected.length>=5}
           onChange={()=>toggle(source.projectId)}/>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{source.title}</span>
@@ -115,7 +115,7 @@ export default function MultiSourceStoryExperiment(){
         className="w-full rounded-lg border bg-transparent p-3 text-sm"/>
     </label>
     <button type="button" onClick={start}
-      disabled={loading||selected.length!==3||Boolean(run&&!['failed','ready','capped','canceled'].includes(run.status))}
+      disabled={loading||selected.length<2||Boolean(run&&!['failed','ready','capped','canceled'].includes(run.status))}
       className="rounded-lg bg-blue-600 px-5 py-3 font-medium text-white disabled:opacity-50">
       {loading?'Starting…':'Build one finished multi-source story'}
     </button>

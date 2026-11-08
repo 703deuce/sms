@@ -18,12 +18,12 @@ import type { Budget } from '@/lib/ai-producer-agent/budget'
 export async function runMultiSourceStoryOutput(
   ctx:ToolCtx,out:OutputState,budget:Budget,instruction:string|null,
 ):Promise<void>{
-  if(ctx.sources.length!==3)
-    throw Error('multisource_requires_exactly_3_sources')
+  if(ctx.sources.length<2||ctx.sources.length>5)
+    throw Error('multisource_requires_2_to_5_sources')
   const inputs:MultiStorySource[]=[]
   for(const source of ctx.sources){
     if(!source.projectId||!source.rangeMs)throw Error('multisource_source_requires_project')
-    const words=await loadRoughCutWords(ctx.workspaceId,source)
+    const words=await loadRoughCutWords(ctx.workspaceId,source,0)
     inputs.push({source,words})
   }
   validateMultiStorySources(inputs)
@@ -48,7 +48,8 @@ export async function runMultiSourceStoryOutput(
       input.visualObservations=visualMomentsWithAsr(
         result.moments,input.words,source.rangeMs!,'coarse_3s',35,
       ).map(m=>({startMs:m.sourceRangeMs[0],endMs:m.sourceRangeMs[1],
-        observation:m.observation+'; '+(m.whyInteresting??'')}))
+        observation:m.observation,whyInteresting:m.whyInteresting,
+        spokenContext:m.spokenContext,category:m.category,analysisTier:m.analysisTier}))
       const cost=Number(result.meta?.est_usd??0)
       if(Number.isFinite(cost)&&cost>=0)budget.addGemini(cost)
       await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
@@ -84,7 +85,9 @@ export async function runMultiSourceStoryOutput(
           )
           input.visualObservations.push(...focused.map(m=>({
             startMs:m.sourceRangeMs[0],endMs:m.sourceRangeMs[1],
-            observation:'[focused_1fps] '+m.observation+'; '+(m.whyInteresting??''),
+            observation:m.observation,whyInteresting:m.whyInteresting,
+            spokenContext:m.spokenContext,category:m.category,
+            analysisTier:m.analysisTier,
           })))
           const focusedCost=Number(focusedResult.meta?.est_usd??0)
           if(Number.isFinite(focusedCost)&&focusedCost>=0)budget.addGemini(focusedCost)
@@ -132,6 +135,26 @@ export async function runMultiSourceStoryOutput(
     }).slice(0,12000),
     resultSummary:JSON.stringify({sourcesUsed:[...new Set(plan.cuts.map(c=>c.sourceId))],
       cuts:plan.cuts.length,estimatedDurationMs:plan.estimatedDurationMs})})
+  // Independent editorial QA happens before the render, but cannot silently
+  // replace or destroy a source-grounded edit. Surface problems for Grok review.
+  try {
+    const { reviewMultiSourceStory }=await import('@/lib/ai-producer-agent/multi-source-qa')
+    const review=await reviewMultiSourceStory(plan,inputs,usage=>{
+      budget.steps++
+      budget.addLuna(usage)
+    })
+    await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+      phase:'validate',tool:'multisource_editorial_qa',kind:'validate',
+      resultSummary:JSON.stringify(review).slice(0,12000)})
+    if(!review.pass)
+      out.notes.push(...review.issues.slice(0,10).map(issue=>'Editorial QA: '+issue))
+  }catch(error){
+    out.notes.push('Multi-source editorial QA unavailable: '+
+      String((error as Error).message).slice(0,180))
+    await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+      phase:'validate',tool:'multisource_editorial_qa_unavailable',kind:'validate',
+      error:String((error as Error).message).slice(0,250)})
+  }
   const created=await createMultiSourceStoryOutput({
     workspaceId:ctx.workspaceId,createdById:ctx.createdById,
     runId:ctx.runId,inputs,plan,

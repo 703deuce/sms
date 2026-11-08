@@ -11,6 +11,7 @@ import type { AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
 export async function loadRoughCutWords(
   workspaceId: string,
   source: AiProducerSourceRef,
+  minimumWords = 30,
 ): Promise<ClipWord[]> {
   if (!source.rangeMs) throw new Error('rough_cut_range_missing')
   const [start, end] = source.rangeMs
@@ -40,6 +41,6 @@ export async function loadRoughCutWords(
   }
   const scoped = words.filter((w) => Number.isFinite(w.s) && Number.isFinite(w.e) &&
     w.e > w.s && w.e * 1000 > start && w.s * 1000 < end)
-  if (scoped.length < 30) throw new Error('rough_cut_requires_transcript_words')
+  if (scoped.length < minimumWords) throw new Error('rough_cut_requires_transcript_words')
   return scoped
 }

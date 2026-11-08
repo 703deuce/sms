@@ -10,8 +10,13 @@ import type { ToolSchema } from '@/lib/ai-producer-agent/tools/schemas'
 export type MultiStorySource={
   source:AiProducerSourceRef
   words:ClipWord[]
-  visualObservations?:Array<{startMs:number;endMs:number;observation:string}>
+  visualObservations?:Array<{
+    startMs:number;endMs:number;observation:string
+    whyInteresting?:string;category?:string;spokenContext?:string
+    analysisTier?:'coarse_3s'|'focused_1fps'
+  }>
 }
+export type MultiStoryVisualBeat={id:string;sourceId:string;startMs:number;endMs:number;purpose:string}
 export type MultiStoryBeat={
   id:string
   purpose:string
@@ -22,6 +27,7 @@ export type MultiStoryOutline={
   logline:string
   beats:MultiStoryBeat[]
   endingRule:string
+  visualBeats?:MultiStoryVisualBeat[]
 }
 export type MultiStoryCut={
   sourceId:string
@@ -29,6 +35,10 @@ export type MultiStoryCut={
   lastWordId:number
   beatId:string
   reason:string
+  kind?:'dialogue'|'visual_action'
+  visualBeatId?:string
+  startMs?:number
+  endMs?:number
 }
 export type ExecutableMultiStoryCut=MultiStoryCut&{
   sourceProjectId:string
@@ -45,6 +55,14 @@ export type MultiStoryPlan={
 const stringField={type:'string'} as const
 const stringArray={type:'array',items:stringField} as const
 const wordId={type:'integer',minimum:0} as const
+const visualBeatSchema={type:'object',additionalProperties:false,properties:{
+  id:stringField,sourceId:stringField,startMs:{type:'integer',minimum:0},
+  endMs:{type:'integer',minimum:1},purpose:stringField,
+},required:['id','sourceId','startMs','endMs','purpose']} as const
+const visualActionSchema={type:'object',additionalProperties:false,properties:{
+  sourceId:stringField,visualBeatId:stringField,startMs:{type:'integer',minimum:0},
+  endMs:{type:'integer',minimum:1},beatId:stringField,reason:stringField,
+},required:['sourceId','visualBeatId','startMs','endMs','beatId','reason']} as const
 const storyTool:ToolSchema={
   name:'submit_multi_source_story',
   description:'Discover ONE coherent narrative from independent sources, without inventing speaker relationships.',
@@ -52,6 +70,7 @@ const storyTool:ToolSchema={
     type:'object',additionalProperties:false,
     properties:{
       title:stringField,logline:stringField,endingRule:stringField,
+      visualBeats:{type:'array',maxItems:16,items:visualBeatSchema},
       beats:{type:'array',minItems:3,maxItems:9,items:{
         type:'object',additionalProperties:false,
         properties:{id:stringField,purpose:stringField,sourceIds:stringArray},
@@ -66,7 +85,8 @@ const footageTool:ToolSchema={
   parameters:{
     type:'object',additionalProperties:false,
     properties:{
-      selections:{type:'array',minItems:2,maxItems:32,items:{
+      visualActions:{type:'array',maxItems:16,items:visualActionSchema},
+      selections:{type:'array',minItems:1,maxItems:32,items:{
         type:'object',additionalProperties:false,
         properties:{sourceId:stringField,firstWordId:wordId,lastWordId:wordId,
           beatId:stringField,reason:stringField},
@@ -77,12 +97,19 @@ const footageTool:ToolSchema={
 }
 const flowTool:ToolSchema={
   name:'submit_multi_source_flow',
-  description:'Approve the source-grounded order of proposed passages. Return indices into supplied selections.',
+  description:'Order, trim and remove cross-source dialogue and visual passages, checking every transition.',
   parameters:{
     type:'object',additionalProperties:false,
-    properties:{selectionIndices:{type:'array',minItems:2,maxItems:32,items:wordId},
+    properties:{selectionIndices:{type:'array',minItems:1,maxItems:48,items:wordId},
+      corrections:{type:'array',maxItems:32,items:{type:'object',additionalProperties:false,
+        properties:{index:wordId,firstWordId:wordId,lastWordId:wordId,reason:stringField},
+        required:['index','firstWordId','lastWordId','reason']}},
+      joinReviews:{type:'array',maxItems:47,items:{type:'object',additionalProperties:false,
+        properties:{leftIndex:wordId,rightIndex:wordId,
+          status:{type:'string',enum:['flows','needs_change']},reason:stringField},
+        required:['leftIndex','rightIndex','status','reason']}},
       justification:stringField},
-    required:['selectionIndices','justification'],
+    required:['selectionIndices','joinReviews','justification'],
   },
 }
 function object(value:unknown):Record<string,unknown>{
@@ -94,13 +121,13 @@ function nonempty(value:unknown):string{
   return value.trim().slice(0,600)
 }
 export function validateMultiStorySources(inputs:MultiStorySource[]):void{
-  if(inputs.length!==3)throw Error('multisource_requires_exactly_3_sources')
+  if(inputs.length<2||inputs.length>5)throw Error('multisource_requires_2_to_5_sources')
   const ids=new Set<string>()
   const projects=new Set<string>()
   for(const {source,words} of inputs){
     if(!source.sourceId||ids.has(source.sourceId)||!source.projectId ||
       projects.has(source.projectId)||!source.rangeMs ||
-      source.rangeMs[1]<=source.rangeMs[0]||words.length<30)
+      source.rangeMs[1]<=source.rangeMs[0])
       throw Error('multisource_source_invalid_or_duplicate')
     ids.add(source.sourceId);projects.add(source.projectId)
   }
@@ -118,13 +145,27 @@ export function validateMultiStoryOutline(raw:unknown,inputs:MultiStorySource[])
     seen.add(id)
     return {id,purpose:nonempty(b.purpose),sourceIds:[...new Set(b.sourceIds as string[])]}
   })
+  const observed=inputs.flatMap(({source,visualObservations})=>
+    (visualObservations??[]).map((o,i)=>({sourceId:source.sourceId,
+      id:source.sourceId+':visual_'+i,startMs:o.startMs,endMs:o.endMs})))
+  const chosen=Array.isArray(obj.visualBeats)?obj.visualBeats:[]
+  if(chosen.length>16)throw Error('multisource_too_many_visual_beats')
+  const visualBeats:MultiStoryVisualBeat[]=chosen.map(v=>{
+    const b=object(v),id=nonempty(b.id),sourceId=nonempty(b.sourceId)
+    const candidate=observed.find(x=>x.id===id&&x.sourceId===sourceId)
+    if(!candidate||candidate.startMs!==b.startMs||candidate.endMs!==b.endMs)
+      throw Error('multisource_visual_beat_not_observed')
+    return {id,sourceId,startMs:candidate.startMs,endMs:candidate.endMs,purpose:nonempty(b.purpose)}
+  })
+  if(new Set(visualBeats.map(x=>x.id)).size!==visualBeats.length)
+    throw Error('multisource_duplicate_visual_beat')
   return {title:nonempty(obj.title),logline:nonempty(obj.logline),
-    endingRule:nonempty(obj.endingRule),beats:normalized}
+    endingRule:nonempty(obj.endingRule),beats:normalized,visualBeats}
 }
 export function validateMultiStoryCuts(
   raw:unknown,inputs:MultiStorySource[],outline:MultiStoryOutline,
 ):ExecutableMultiStoryCut[]{
-  if(!Array.isArray(raw)||raw.length<2||raw.length>32)throw Error('multisource_invalid_cut_count')
+  if(!Array.isArray(raw)||raw.length<1||raw.length>48)throw Error('multisource_invalid_cut_count')
   const sources=new Map(inputs.map(s=>[s.source.sourceId,s]))
   const beats=new Map(outline.beats.map(b=>[b.id,b]))
   const selected:ExecutableMultiStoryCut[]=[]
@@ -134,6 +175,25 @@ export function validateMultiStoryCuts(
     const source=sources.get(sourceId),beat=beats.get(beatId)
     if(!source||!beat||!beat.sourceIds.includes(sourceId))
       throw Error('multisource_cut_wrong_source_or_beat')
+    if(row.kind==='visual_action'){
+      const visualBeatId=nonempty(row.visualBeatId)
+      const approved=outline.visualBeats?.find(v=>v.id===visualBeatId&&v.sourceId===sourceId)
+      const startMs=row.startMs,endMs=row.endMs
+      if(!approved||!Number.isInteger(startMs)||!Number.isInteger(endMs)||
+        (startMs as number)<approved.startMs||(endMs as number)>approved.endMs||
+        (endMs as number)-(startMs as number)<700||
+        (endMs as number)-(startMs as number)>45000)
+        throw Error('multisource_visual_action_outside_observation')
+      const unsafe=(edge:number)=>source.words.some(w=>
+        edge>Math.round(w.s*1000)+30&&edge<Math.round(w.e*1000)-30)
+      if(unsafe(startMs as number)||unsafe(endMs as number))
+        throw Error('multisource_visual_action_word_edge')
+      selected.push({sourceId,sourceProjectId:source.source.projectId!,
+        firstWordId:-1,lastWordId:-1,beatId,reason:nonempty(row.reason),
+        startMs:startMs as number,endMs:endMs as number,
+        kind:'visual_action',visualBeatId})
+      continue
+    }
     const first=row.firstWordId,last=row.lastWordId
     if(!Number.isInteger(first)||!Number.isInteger(last)||
       (first as number)<0||(last as number)<(first as number)||
@@ -151,9 +211,13 @@ export function validateMultiStoryCuts(
       firstWordId:first as number,lastWordId:last as number,
       beatId,reason:nonempty(row.reason),startMs,endMs})
   }
-  // A multi-source edit must actually use several sources, not concatenate
-  // snippets from the first upload and pretend to be a multi-source story.
-  if(new Set(selected.map(x=>x.sourceId)).size<2)throw Error('multisource_only_one_source_used')
+  // Do not duplicate source video/audio by overlapping a speech and silent action.
+  for(let i=0;i<selected.length;i++)
+    for(let j=i+1;j<selected.length;j++)
+      if(selected[i]!.sourceId===selected[j]!.sourceId&&
+        Math.max(selected[i]!.startMs,selected[j]!.startMs)<
+        Math.min(selected[i]!.endMs,selected[j]!.endMs))
+        throw Error('multisource_overlapping_visual_or_speech')
   return selected
 }
 async function submit(
@@ -195,29 +259,93 @@ export async function planMultiSourceStory(
     sourceId:source.sourceId,title:source.title,
     rangeMs:source.rangeMs,
     transcript:words.map((w,i)=>[i,Math.round(w.s*1000),Math.round(w.e*1000),w.w]),
-    visualObservations:visualObservations??[],
+    visualObservations:(visualObservations??[]).map((o,i)=>({...o,id:source.sourceId+':visual_'+i})),
   }))
   const outline=await submit(storyTool,
-    'You are the Story Director for a FINISHED multi-source documentary-style video, not a highlight montage. Independently discover the strongest ONE truthful narrative from the recordings. Design a setup, development, meaningful reveal or insight, and ending. Never invent a conclusion or imply separately recorded people were talking to each other. You may omit an irrelevant source. Story beat sourceIds must refer to real supplied recordings.',
+    'STORY DIRECTOR: Examine ALL independent recordings together before choosing ONE truthful, compelling narrative. Gemini examined video frames with ORIGINAL audio and transcript; time-aligned visual observations are first-class evidence, including silent reactions and actions. Discover what the footage supports, do not force a generic arc or equal screen time. Explicitly nominate helpful visualBeats by observation ID, sourceId and EXACT observed start/end timestamps. Return visualBeats:[] if none. No invented conversation or conclusion.',
     {instruction:instruction??'Find the strongest complete story supported by the footage.',sources:evidence},
     a=>validateMultiStoryOutline(a,inputs),onUsage) as MultiStoryOutline
   const selections=await submit(footageTool,
-    'You are the Footage Editor. Select only exact first and last WORD IDs from the correct source, using sourceId for EVERY selection. Construct the approved story from complete spoken thoughts, reactions and relevant visual context. Source time is always local to the selected source. Do not invent quotes, source IDs, events, or use global word indices. Return final edit passages, not candidate highlights.',
+    'FOOTAGE EDITOR: Use the entire footage evidence and story outline. Select complete dialogue by exact per-source word IDs in selections, PLUS independent source-grounded visualActions for approved Story visualBeats even if there is NO speech. Every visual action needs correct sourceId, visualBeatId, beatId and original millisecond bounds within observed event, with boundaries outside words. Prefer complete visible actions/reactions. Exclude portions already used by dialogue; never duplicate overlapping source material or invent visual actions. Return final cuts, not an inventory; no imposed duration.',
     {outline,sources:evidence},
-    a=>validateMultiStoryCuts(a.selections,inputs,outline),onUsage) as ExecutableMultiStoryCut[]
-  const indices=await submit(flowTool,
-    'You are the Flow Editor. Order the selected passages into one honest, coherent FINISHED story. Preserve complete statements, context, relationships and a source-grounded ending. Return each retained input index exactly once; reorder only if the sequence remains truthful. No deceptive implied conversation or invented response.',
-    {outline,selections},
+    a=>{
+      // Match the existing single-source behavior: reject a bad optional visual
+      // action individually, NEVER discard an otherwise valid dialogue edit.
+      let accepted=validateMultiStoryCuts(
+        Array.isArray(a.selections)?a.selections:[],inputs,outline)
+      const visual=Array.isArray(a.visualActions)?a.visualActions:[]
+      for(const entry of visual.slice(0,16)){
+        try {
+          const candidate={...object(entry),kind:'visual_action'}
+          accepted=validateMultiStoryCuts([...accepted,candidate],inputs,outline)
+        }catch{/* Unverified visual action omitted; real dialogue remains intact. */}
+      }
+      return accepted
+    },onUsage) as ExecutableMultiStoryCut[]
+  const passages=selections.map((cut,index)=>({
+    index,...cut,
+    dialogue:cut.kind==='visual_action'?'[Visual action / original on-location sound]':
+      inputs.find(x=>x.source.sourceId===cut.sourceId)!.words
+        .slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
+  }))
+  const reviewed=await submit(flowTool,
+    'FLOW EDITOR: Examine the complete assembled spoken material in the desired sequence AND the full original transcripts. Reorder when truthful, remove redundant selections, correct incomplete dialogue by firstWordId/lastWordId using ORIGINAL source-local IDs. Preserve visual-only cuts and their observed bounds. Use selectionIndices for retained ORIGINAL indices in final order and corrections for ORIGINAL dialogue indices only. Do not manufacture conversation between speakers. Audit EVERY final adjacent join with joinReviews (leftIndex/rightIndex are FINAL OUTPUT indices). For needs_change also supply a correction affecting either passage, or remove the weak passage instead. Explain your editorial choices. Unchanged passages need no correction.',
+    {outline,passages,sources:evidence,
+      joinedTransitions:passages.slice(1).map((right,i)=>({
+        leftIndex:i,rightIndex:i+1,
+        leftEnding:passages[i]!.dialogue.split(' ').slice(-25).join(' '),
+        rightOpening:right.dialogue.split(' ').slice(0,25).join(' '),
+      }))},
     a=>{
       const order=a.selectionIndices
-      if(!Array.isArray(order)||order.length!==selections.length||
+      if(!Array.isArray(order)||order.length<1||order.length>selections.length||
         order.some(x=>!Number.isInteger(x)||x<0||x>=selections.length)||
-        new Set(order).size!==selections.length)
+        new Set(order).size!==order.length)
         throw Error('multisource_invalid_flow_order')
+      const adjusted=selections.map(x=>({...x}))
+      const changed=new Set<number>()
+      const corrections=Array.isArray(a.corrections)?a.corrections:[]
+      for(const entry of corrections){
+        const correction=object(entry),index=correction.index
+        if(!Number.isInteger(index)||(index as number)<0||
+          (index as number)>=selections.length||changed.has(index as number)||
+          adjusted[index as number]!.kind==='visual_action')
+          throw Error('multisource_flow_invalid_correction')
+        const previous=adjusted[index as number]!
+        const checked=validateMultiStoryCuts([{
+          sourceId:previous.sourceId,beatId:previous.beatId,
+          reason:nonempty(correction.reason),
+          firstWordId:correction.firstWordId,lastWordId:correction.lastWordId,
+        }],inputs,outline)[0]!
+        adjusted[index as number]=checked
+        changed.add(index as number)
+      }
+      const final=(order as number[]).map(i=>adjusted[i]!)
+      for(let i=0;i<final.length;i++)for(let j=i+1;j<final.length;j++)
+        if(final[i]!.sourceId===final[j]!.sourceId&&
+          Math.max(final[i]!.startMs,final[j]!.startMs)<
+          Math.min(final[i]!.endMs,final[j]!.endMs))
+          throw Error('multisource_flow_overlapping_source')
+      const reviews=a.joinReviews
+      if(!Array.isArray(reviews)||reviews.length!==Math.max(0,final.length-1))
+        throw Error('multisource_flow_missing_join_reviews')
+      const seen=new Set<number>()
+      for(const review of reviews){
+        const join=object(review),left=join.leftIndex,right=join.rightIndex
+        if(!Number.isInteger(left)||right!==(left as number)+1||
+          (left as number)<0||(right as number)>=final.length||
+          seen.has(left as number)||!['flows','needs_change'].includes(String(join.status))||
+          !String(join.reason??'').trim())
+          throw Error('multisource_flow_invalid_join_review')
+        if(join.status==='needs_change'&&!changed.has((order as number[])[left as number]!)&&
+          !changed.has((order as number[])[right as number]!))
+          throw Error('multisource_flow_unrepaired_join')
+        seen.add(left as number)
+      }
       nonempty(a.justification)
-      return order as number[]
-    },onUsage) as number[]
-  const cuts=indices.map(i=>selections[i]!)
+      return final
+    },onUsage) as ExecutableMultiStoryCut[]
+  const cuts=reviewed
   return {mode:'multi_source_story_v1',outline,cuts,
     estimatedDurationMs:cuts.reduce((n,c)=>n+c.endMs-c.startMs,0)}
 }
