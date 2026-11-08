@@ -35,6 +35,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
   const [completed,setCompleted]=useState<FinishedClip[]>([])
   const [errors,setErrors]=useState<string[]>([])
   const canceled=useRef(false)
+  const manualRunning=useRef(false)
   const [batchId,setBatchId]=useState<string|null>(null)
   useEffect(()=>()=>{canceled.current=true},[])
   // The entire-VOD batch is durable: project settings and worker jobs survive
@@ -50,7 +51,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
           completed:FinishedClip[];errors:string[]
         }
         if(stopped)return
-        if(data?.id){
+        if(data?.id&&!manualRunning.current){
           setBatchId(data.id)
           setCompleted(data.completed??[])
           setErrors(data.errors??[])
@@ -142,6 +143,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         durableStarted=true
         return
       }
+      manualRunning.current=true
       const windows=streamerAgentWindows(sourceStartMs,sourceDurationMs,
         false,windowStartMin)
       for(const [index,[start,end]] of windows.entries()){
@@ -157,7 +159,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         }
       }
       if(!canceled.current)setStatus('Complete')
-    }finally{if(!durableStarted)setRunning(false)}
+    }finally{manualRunning.current=false;if(!durableStarted)setRunning(false)}
   }
 
   async function cancelBatch(){
