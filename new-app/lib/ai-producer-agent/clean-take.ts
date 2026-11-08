@@ -5,10 +5,11 @@ import type {AiProducerSourceRef} from '@/lib/ai-producer-agent/types'
 import {lunaChat,type LunaUsage,type LunaMessage} from '@/lib/ai-producer-agent/luna-client'
 import type {ToolSchema} from '@/lib/ai-producer-agent/tools/schemas'
 import type {ExecutableMultiStoryCut,MultiStoryPlan} from '@/lib/ai-producer-agent/multi-source-story'
+import {wordAtUnsafeBoundary} from '@/lib/ai-producer-agent/validate'
 
 export type CleanTakeObservation={startMs:number;endMs:number;observation:string;whyInteresting?:string;spokenContext?:string;category?:string;analysisTier:'coarse_3s'|'focused_1fps'}
 export type CleanTakeSource={source:AiProducerSourceRef;words:ClipWord[];visualObservations?:CleanTakeObservation[];visualEvidence?:{originalAudioAttached:boolean;asrTranscriptAttached:boolean;coarseCount:number;focusedCount:number}}
-export type CleanTakeDecision={sourceId:string;firstWordId:number;lastWordId:number;reason:string}
+export type CleanTakeDecision={sourceId:string;firstWordId?:number;lastWordId?:number;startMs?:number;endMs?:number;observationIndex?:number;kind?:'dialogue'|'media_moment';reason:string}
 export type CleanTakePlan=MultiStoryPlan & {mode:'clean_take_v1'}
 export type CleanTakeEvent={stage:'take_selection'|'review';attempt:number;status:'accepted'|'rejected'|'fallback';reason?:string;cuts?:number;sourceSequence?:string[]}
 export type CleanTakeObserver=(event:CleanTakeEvent)=>void|Promise<void>
@@ -22,8 +23,11 @@ const selectionSchema:ToolSchema={
     title:text,summary:text,endingRule:text,
     selections:{type:'array',minItems:1,maxItems:48,items:{
       type:'object',additionalProperties:false,properties:{
-        sourceId:text,firstWordId:wordId,lastWordId:wordId,reason:text,
-      },required:['sourceId','firstWordId','lastWordId','reason'],
+        sourceId:text,firstWordId:wordId,lastWordId:wordId,
+        kind:{type:'string',enum:['dialogue','media_moment']},
+        startMs:{type:'integer',minimum:0},endMs:{type:'integer',minimum:1},
+        observationIndex:wordId,reason:text,
+      },required:['sourceId','reason'],
     }},
     droppedTakeReasons:{type:'array',maxItems:24,items:text},
   },required:['title','summary','endingRule','selections']},
@@ -63,13 +67,39 @@ export function validateCleanTakeSelections(raw:unknown,inputs:CleanTakeSource[]
   for(const item of raw){
     const obj=object(item),sourceId=nonempty(obj.sourceId),src=byId.get(sourceId)
     if(!src)throw Error('clean_take_invalid_source')
-    const first=obj.firstWordId,last=obj.lastWordId
-    if(!Number.isInteger(first)||!Number.isInteger(last)||
-       (first as number)<0||(last as number)<(first as number)||
-       (last as number)>=src.words.length)
-      throw Error('clean_take_invalid_word_range')
-    const startMs=Math.round(src.words[first as number]!.s*1000)
-    const endMs=Math.round(src.words[last as number]!.e*1000)
+    const mediaOnly=obj.kind==='media_moment'
+    if(obj.kind!==undefined&&obj.kind!=='dialogue'&&!mediaOnly)
+      throw Error('clean_take_invalid_cut_kind')
+    let first=-1,last=-1,startMs:number,endMs:number
+    if(mediaOnly){
+      // Visual or acoustic footage is allowed WITHOUT transcript word IDs.
+      // The supplied source video/audio observation must substantiate the
+      // actual time range. A transcript cannot veto a meaningful silent clip.
+      if(!Number.isInteger(obj.observationIndex))
+        throw Error('clean_take_media_evidence_required')
+      const observation=src.visualObservations?.[obj.observationIndex as number]
+      if(!observation||!Number.isInteger(obj.startMs)||!Number.isInteger(obj.endMs))
+        throw Error('clean_take_media_evidence_required')
+      startMs=obj.startMs as number
+      endMs=obj.endMs as number
+      if(startMs<observation.startMs||endMs>observation.endMs||
+         endMs-startMs<400||endMs-startMs>60000)
+        throw Error('clean_take_media_cut_outside_observation')
+      // Word timing is ONLY a mechanical safety check at the edges.
+      // Whether to retain the action/performance belongs to the media model.
+      if(wordAtUnsafeBoundary(startMs,src.words)||
+         wordAtUnsafeBoundary(endMs,src.words))
+        throw Error('clean_take_media_cut_inside_spoken_word')
+    }else{
+      const firstRaw=obj.firstWordId,lastRaw=obj.lastWordId
+      if(!Number.isInteger(firstRaw)||!Number.isInteger(lastRaw)||
+         (firstRaw as number)<0||(lastRaw as number)<(firstRaw as number)||
+         (lastRaw as number)>=src.words.length)
+        throw Error('clean_take_invalid_word_range')
+      first=firstRaw as number;last=lastRaw as number
+      startMs=Math.round(src.words[first]!.s*1000)
+      endMs=Math.round(src.words[last]!.e*1000)
+    }
     if(endMs-startMs<400||startMs<src.source.rangeMs![0]||
        endMs>src.source.rangeMs![1])
       throw Error('clean_take_cut_outside_recording')
@@ -80,8 +110,9 @@ export function validateCleanTakeSelections(raw:unknown,inputs:CleanTakeSource[]
       throw Error('clean_take_overlapping_selected_takes')
     cuts.push({
       sourceId,sourceProjectId:src.source.projectId!,
-      firstWordId:first as number,lastWordId:last as number,
+      firstWordId:first,lastWordId:last,
       startMs,endMs,beatId:'clean_take',
+      ...(mediaOnly?{kind:'visual_action' as const}:{}),
       reason:nonempty(obj.reason),
     })
   }
@@ -92,16 +123,19 @@ function transcripts(inputs:CleanTakeSource[]){
     sourceId:source.sourceId,title:source.title,rangeMs:source.rangeMs,
     // Full source transcript, not snippets around heuristically detected fillers.
     words:words.map((w,i)=>[i,Math.round(w.s*1000),Math.round(w.e*1000),w.w,w.spk??null]),
-    visualAudioObservations:inputs.find(x=>x.source.sourceId===source.sourceId)?.visualObservations??[],
+    visualAudioObservations:(inputs.find(x=>x.source.sourceId===source.sourceId)?.visualObservations??[])
+      .map((observation,observationIndex)=>({observationIndex,...observation})),
     visualEvidence:inputs.find(x=>x.source.sourceId===source.sourceId)?.visualEvidence??null,
   }))
 }
 function preview(cuts:ExecutableMultiStoryCut[],inputs:CleanTakeSource[]){
   return cuts.map((cut,index)=>({
     index,sourceId:cut.sourceId,startMs:cut.startMs,endMs:cut.endMs,
+    kind:cut.kind??'dialogue',
     reason:cut.reason,firstWordId:cut.firstWordId,lastWordId:cut.lastWordId,
-    text:inputs.find(s=>s.source.sourceId===cut.sourceId)!.words
-      .slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
+    text:cut.kind==='visual_action'?'[Selected direct video/original-audio moment]':
+      inputs.find(s=>s.source.sourceId===cut.sourceId)!.words
+        .slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
   }))
 }
 /**
@@ -126,11 +160,11 @@ export async function planCleanTake(
   const messages:LunaMessage[]=[
     {role:'system',content:[
       'CLEAN TAKE EDITOR: Produce ONE polished, truthful, natural talking-head video from one or more recordings of the SAME intended presentation/session.',
-      'Use THREE modalities together for EVERY editing choice: FULL word-ID transcript, timestamped Gemini visual observations from video FRAMES, and Gemini observations of ORIGINAL audio/speech delivery. These are observations, not direct playback by this model. Prefer complete confident takes with better delivery, stable eye contact/framing, natural gestures and continuity; weigh against spoken correctness. If an observation does not address a claimed vocal or visual quality, do not infer it. All selected word IDs must come from source transcripts, never observations. Understand the ENTIRE original transcript before editing. Identify intended message/sections, false starts, repeated attempts at a sentence or paragraph, correction of factual errors, unwanted ums/ahs, flubs, restarts, and long tangents.',
+      'Give video and original audio equal authority to suggest, preserve, discard or favor a take independently of whether speech is present. Evidence from video/audio can outweigh a transcript-only preference. Use THREE modalities together for EVERY editing choice: FULL word-ID transcript, timestamped Gemini visual observations from video FRAMES, and Gemini observations of ORIGINAL audio/speech delivery. These are observations, not direct playback by this model. Prefer complete confident takes with better delivery, stable eye contact/framing, natural gestures and continuity; weigh against spoken correctness. If an observation does not address a claimed vocal or visual quality, do not infer it. All selected word IDs must come from source transcripts, never observations. Understand the ENTIRE original transcript before editing. Identify intended message/sections, false starts, repeated attempts at a sentence or paragraph, correction of factual errors, unwanted ums/ahs, flubs, restarts, and long tangents.',
       'Select the strongest COMPLETE take of each idea; when a speaker restarts and corrects themself, favor the later accurate fluent take if supported, not both mistaken and corrected versions. Preserve the intended message and chronological/logical section order, but source recordings can be revisited when they contain replacement takes. Keep intentional rhetorical repetition, emotion, pauses and conversational tone. Do not delete all fillers mechanically, cut mid-word, or create unnatural jump cuts.',
       'Treat an interview question and its relevant answer as an exchange. Do not splice answers to different questions or present separate sessions as one continuous exchange.',
-      'Use source-local exact word IDs for each retained span. Exclude bad attempts in the gaps. Keep complete sentences or coherent paragraphs. Every retained segment must flow into the next as a real speaker would mean it. Pick all meaningful completed content—not merely a few viral highlights. No fixed length, target number of cuts, or source quota.',
-      'For each proposed retained take cross-check the video/audio observations for flubs, grimaces, resets, coughs, off-camera interruptions, visible cuts, delivery, and genuine conversational pauses. Check both sides of every join for a plausible visual/acoustic seam and flag unverified seams for final rendered-media audition. You may keep adjacent genuine takes, intercut recordings, or leave extended untouched sections. Source IDs are NOT speaker identities. Return one final ordered list with reasons and a few notes explaining the abandoned retakes.',
+      'Choose dialogue cuts using source-local exact firstWordId/lastWordId. ALSO independently choose valuable REAL VIDEO/AUDIO moments using kind=media_moment, observationIndex, source-local startMs/endMs bounded to that time-coded observed event. For media_moment do NOT supply word IDs. This is especially important for demonstrations, on-screen reactions, a revealing gesture or expressive silence, audio cues, and nonverbal performance. Do not demand speech or transcript evidence for a nonverbal beat. The media observations are autonomous editing evidence, not just supporting captions. Exclude bad attempts in the gaps. Keep complete sentences or coherent paragraphs. Every retained segment must flow into the next as a real speaker would mean it. Pick all meaningful completed content—not merely a few viral highlights. No fixed length, target number of cuts, or source quota.',
+      'Actively inspect the VIDEO/AUDIO evidence for meaningful shots that the transcript missed, and allow a media_moment to win even with no useful dialogue. Do not include every observed clip: each must make the final presentation better, preserve original audio and fit the creator intention. For each proposed retained take cross-check the video/audio observations for flubs, grimaces, resets, coughs, off-camera interruptions, visible cuts, delivery, and genuine conversational pauses. Check both sides of every join for a plausible visual/acoustic seam and flag unverified seams for final rendered-media audition. You may keep adjacent genuine takes, intercut recordings, or leave extended untouched sections. Source IDs are NOT speaker identities. Return one final ordered list with reasons and a few notes explaining the abandoned retakes.',
     ].join(' ')},
     {role:'user',content:JSON.stringify({instruction:instruction??'Clean the performance, preserving its meaning and natural delivery.',sources:transcripts(inputs)})},
   ]
@@ -204,7 +238,7 @@ export async function planCleanTake(
       const revisionResponse=await lunaChat({tools:[selectionSchema],toolChoice:'required',messages:[
         {role:'system',content:[
           'CLEAN TAKE REPAIR EDITOR: You have the entire original source transcript AND timestamped video-frame plus original-audio observations from the same media analysis. Use all three modalities to evaluate proposed retakes, awkward performance, join continuity and visual delivery. Do not infer actual final audio playback from observations. You have a validated first edit. Independent QA found concrete issues. Produce a BETTER complete final edit, not commentary.',
-          'Correct duplicated retakes, broken sentences, dropped essential context, orphan questions or rough joins only using ORIGINAL local source word IDs. Do not invent words or delete intentional meaning. Preserve all other successful takes. You may reselect, split, remove or reorder real spans. One final ordered list.',
+          'Repair dialogue OR independent media_moment cuts, grounded in the same observed original video/audio intervals with their observationIndex. Do not force nonverbal footage into word-ID spans. Correct duplicated retakes, broken sentences, dropped essential context, orphan questions or rough joins only using ORIGINAL local source word IDs. Do not invent words or delete intentional meaning. Preserve all other successful takes. You may reselect, split, remove or reorder real spans. One final ordered list.',
           'Never prioritize hitting a duration or removing every natural filler over the coherent performance.',
         ].join(' ')},
         {role:'user',content:JSON.stringify({
@@ -218,8 +252,8 @@ export async function planCleanTake(
       if(!call)throw Error('clean_take_revision_missing_tool')
       const parsed=object(JSON.parse(call.function.arguments))
       const revisedCuts=validateCleanTakeSelections(parsed.selections,inputs)
-      const changed=JSON.stringify(revisedCuts.map(c=>[c.sourceId,c.firstWordId,c.lastWordId]))!==
-        JSON.stringify(plan.cuts.map(c=>[c.sourceId,c.firstWordId,c.lastWordId]))
+      const changed=JSON.stringify(revisedCuts.map(c=>[c.sourceId,c.startMs,c.endMs,c.kind]))!==
+        JSON.stringify(plan.cuts.map(c=>[c.sourceId,c.startMs,c.endMs,c.kind]))
       if(!changed)throw Error('clean_take_revision_no_change')
       const revisedOutline={
         ...plan.outline,title:nonempty(parsed.title),logline:nonempty(parsed.summary),
