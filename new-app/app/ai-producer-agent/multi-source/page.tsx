@@ -9,6 +9,7 @@ export default function MultiSourceStoryExperiment(){
   const [selected,setSelected]=useState<string[]>([])
   const [instruction,setInstruction]=useState('')
   const [run,setRun]=useState<Run|null>(null)
+  const [exportStatus,setExportStatus]=useState<{status:string;url?:string|null;error?:string|null}|null>(null)
   const [error,setError]=useState('')
   const [loading,setLoading]=useState(false)
   useEffect(()=>{
@@ -31,6 +32,21 @@ export default function MultiSourceStoryExperiment(){
     const timer=setInterval(check,4000)
     return()=>{active=false;clearInterval(timer)}
   },[run?.id,run?.status])
+  useEffect(()=>{
+    if(!run?.resultClipId)return
+    let active=true
+    const check=async()=>{
+      try{
+        const response=await fetch('/api/ai-producer-agent/multi-source/exports/'+
+          encodeURIComponent(run.resultClipId!))
+        const data=await response.json()
+        if(active&&data?.data)setExportStatus(data.data)
+      }catch{/* leave last known export state */}
+    }
+    void check()
+    const timer=setInterval(check,5000)
+    return()=>{active=false;clearInterval(timer)}
+  },[run?.resultClipId])
   const toggle=(id:string)=>{
     setSelected(current=>current.includes(id)
       ? current.filter(x=>x!==id)
@@ -38,7 +54,7 @@ export default function MultiSourceStoryExperiment(){
   }
   const start=async()=>{
     if(selected.length<2||selected.length>5)return
-    setLoading(true);setError('')
+    setLoading(true);setError('');setRun(null);setExportStatus(null)
     try{
       const body={
         storyMode:'multi_source_story_v1',outputType:'story',
@@ -106,12 +122,19 @@ export default function MultiSourceStoryExperiment(){
         {run.phase?' · '+run.phase:''}</p>
       <p className="break-all text-xs text-neutral-500">{run.id}</p>
       {run.error&&<p role="alert" className="text-sm text-red-600">{run.error}</p>}
-      {run.resultProjectId&&<p className="text-sm">
-        Finished edit project: <code>{run.resultProjectId}</code>
-        <span className="block text-xs text-neutral-500">
-          The render job is queued separately. Check the project's export status before publishing.
-        </span>
-      </p>}
+      {run.resultProjectId&&<div className="space-y-2 text-sm">
+        <p>Editable project: <code>{run.resultProjectId}</code></p>
+        <p>MP4 export: <strong>{exportStatus?.status??'pending'}</strong></p>
+        {exportStatus?.error&&<p className="text-red-600">{exportStatus.error}</p>}
+        {exportStatus?.url&&<a href={exportStatus.url}
+          className="inline-block rounded-lg bg-blue-600 px-4 py-2 font-medium text-white">
+          Open finished MP4
+        </a>}
+        <p className="text-xs text-neutral-500">
+          The finished video is available when the separate render reaches READY.
+          The source-aware project remains editable.
+        </p>
+      </div>}
     </section>}
   </main>
 }
