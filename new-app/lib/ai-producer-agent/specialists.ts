@@ -316,6 +316,22 @@ export function recoverFootageWordSelections(
 }
 
 /** Failure diagnostics expose indexed word bounds, never the full transcript. */
+/** Evaluate complete authored submissions, not simply the number of salvaged cuts.
+ * Both story endpoints must survive before a failed proposal is eligible
+ * for provisional recovery. A missing opening or payoff must be repaired by
+ * the model instead of silently exporting a truncated story. */
+export function footageRecoveryQuality(
+  recovery:ReturnType<typeof recoverFootageWordSelections>, raw:unknown,
+):number {
+  if(!Array.isArray(raw)||raw.length<2||recovery.selections.length<2)return -1
+  if(recovery.retainedIndices[0]!==0 ||
+     recovery.retainedIndices[recovery.retainedIndices.length-1]!==raw.length-1)return -1
+  // Prefer preserving more of the author's actual proposed edit, not
+  // rewarding a longer submission full of invalid overlapping guesses.
+  return (recovery.selections.length / raw.length)*1000 -
+    recovery.rejected.length
+}
+
 function footageWordRepairHint(
   raw:unknown,words:ClipWord[],bounds:[number,number],
 ){
@@ -324,6 +340,9 @@ function footageWordRepairHint(
   return {
     rejected:partial.rejected.slice(0,12),
     retainedPassages:partial.retainedIndices,
+    sourceRangeMs:bounds,
+    availableWordIdRange:[0,words.length-1],
+    recoveryHasOpeningAndEnding:footageRecoveryQuality(partial,raw)>=0,
     suggestedRule:'Every passage must be source-chronological and nonoverlapping. Use exact firstWordId/lastWordId. A huge start-to-end range is not a final story beat. Repair the indexed invalid selection; keep valid complete story beats and the real closing payoff.',
     precedingValidEndMs:previous?.endMs??null,
   }
@@ -937,7 +956,7 @@ export async function runEditorialRole(
       ...(Array.isArray(context.fullTranscript) ? [
         'You have the FULL original transcript in order, not snippets. No relevant speech is omitted. Read the whole conversation before making editorial decisions.',
         ...(role==='footage' && context.fullTranscriptWordIndexed===true ? [
-          'For dialogue selections submit ONLY firstWordId and lastWordId; deterministic code executes them. In visual mode only, the separate visualActions array may have source startMs/endMs bounded by Story-approved visual candidate IDs. Finish spoken thoughts; never invent outcomes or times.'
+          'For dialogue selections submit ONLY firstWordId and lastWordId from the supplied indexed full transcript. These IDs are ZERO-BASED INDEXES, not timestamps, speaker identifiers, segment numbers or milliseconds. Each firstWordId must be <= lastWordId; passages must follow their original source order and NEVER overlap. Do not submit one enormous span that swallows later individual beats. Always preserve the actual opening and closing/payoff passages as distinct sourced selections. Deterministic code alone converts these IDs into source timestamps. In visual mode only, the separate visualActions array may have source startMs/endMs bounded by Story-approved visual candidate IDs. Finish spoken thoughts; never invent outcomes or times.'
         ] : []),
       ] : []),
       ...(ctx.config.editMode === 'just_chatting_rough_cut'
@@ -976,6 +995,7 @@ export async function runEditorialRole(
   let transcriptReads = 0
   let invalidSubmissions = 0
   let bestWordRecovery:ReturnType<typeof recoverFootageWordSelections>|null=null
+  let bestWordRecoveryQuality=-1
   let bestRawVisualActions:unknown=null
   let bestValidVisualCount=0
   await specialistEvent(ctx, budget, role, 'start', {
@@ -1138,8 +1158,11 @@ export async function runEditorialRole(
           // the entire twenty-minute run fails.
           if(wordFootage){
             const recovered=recoverFootageWordSelections(args.selections,ctx.cache.words??[],source.rangeMs)
-            if(recovered.selections.length>(bestWordRecovery?.selections.length??0))
+            const quality=footageRecoveryQuality(recovered,args.selections)
+            if(quality>bestWordRecoveryQuality){
               bestWordRecovery=recovered
+              bestWordRecoveryQuality=quality
+            }
             // Visual/audio event proposals are independent of dialogue
             // validation. A later response may improve game footage even
             // when it contains fewer valid speech passages.
@@ -1162,7 +1185,7 @@ export async function runEditorialRole(
             // produced two or more genuine nonoverlapping word passages,
             // retain them as an explicitly provisional paper edit; the
             // independent Flow specialist gets the real chosen story next.
-            if(wordFootage&&bestWordRecovery&&bestWordRecovery.selections.length>=2){
+            if(wordFootage&&bestWordRecovery&&bestWordRecoveryQuality>=0){
               const selectionList=bestWordRecovery.selections
               let visualActions:VisualActionSelection[]=[]
               let visualActionOmissions:Array<{id:string;reason:string}>=[]
@@ -1174,7 +1197,8 @@ export async function runEditorialRole(
                 visualActionOmissions=visual.omitted
               }
               await specialistEvent(ctx,budget,role,'source_word_recovery',{
-                attempts:invalidSubmissions,retainedOriginalIndices:bestWordRecovery.retainedIndices,
+                attempts:invalidSubmissions,provisionalQuality:bestWordRecoveryQuality,
+                openingAndEndingRetained:true,retainedOriginalIndices:bestWordRecovery.retainedIndices,
                 rejectedOriginalIndices:bestWordRecovery.rejected,selected:selectionList.map(x=>[x.startMs,x.endMs]),
                 acceptedVisualActions:visualActions,visualActionOmissions,
                 note:'Real source-word passages retained for independent Flow review, not fabricated fallback.'})
