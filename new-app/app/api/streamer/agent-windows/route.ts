@@ -1,10 +1,9 @@
-import { NextResponse } from 'next/server'
-import { z } from 'zod'
-import type { Prisma } from '@prisma/client'
-import { createId } from '@/lib/supabase/id'
-import { resolveWorkspaceId } from '@/lib/server/workspace'
-import { getPrisma } from '@/lib/server/db'
-import { jsonError } from '@/lib/server/api-error'
+import {NextResponse} from 'next/server'
+import {z} from 'zod'
+import {resolveWorkspaceId} from '@/lib/server/workspace'
+import {getPrisma} from '@/lib/server/db'
+import {jsonError} from '@/lib/server/api-error'
+import {createAgentVideoWindow} from '@/lib/server/streamer/agent-window-source'
 
 const requestSchema=z.object({
   parentProjectId:z.string().min(1),
@@ -12,59 +11,12 @@ const requestSchema=z.object({
   rangeEndMs:z.number().int().min(1),
 })
 
-/** Prepare a VIDEO source from an authorized audio-first streamer VOD.
- * A bounded job downloads only requested original footage. It cannot
- * download an entire multi-hour recording or consume arbitrary URLs. */
 export async function POST(request:Request){
   try{
     const workspaceId=await resolveWorkspaceId()
     const body=requestSchema.parse(await request.json())
-    const duration=body.rangeEndMs-body.rangeStartMs
-    if(duration<15_000||duration>1_200_000)
-      throw Error('stream_agent_window_must_be_15_seconds_to_20_minutes')
-    const prisma=getPrisma()
-    const source=await prisma.clipProject.findFirst({
-      where:{id:body.parentProjectId,workspaceId,deletedAt:null,status:'READY'},
-      include:{streamVod:{include:{channel:true}},upload:true},
-    })
-    if(!source?.streamVod||!['twitch','kick'].includes(source.streamVod.platform))
-      throw Error('stream_agent_source_not_ready_or_not_twitch_kick')
-    const connected=source.streamVod.channel?.status==='CONNECTED' &&
-      !source.streamVod.channel?.deletedAt
-    if(!source.streamVod.url)
-      throw Error('stream_agent_video_source_missing')
-    if(!source.streamVod.attestedAt&&!connected)
-      throw Error('stream_agent_original_vod_permission_required')
-    if(body.rangeStartMs<source.rangeStartMs||
-      body.rangeEndMs>source.rangeEndMs)
-      throw Error('stream_agent_window_outside_original_source')
-    if(!source.transcriptWords&&!source.transcriptKey)
-      throw Error('stream_agent_source_transcript_not_ready')
-    const projectId=createId('proj')
-    const jobId=createId('job')
-    await prisma.$transaction(async tx=>{
-      await tx.clipProject.create({data:{
-        id:projectId,workspaceId,createdById:source.createdById,
-        title:`Agent source · ${source.title} · ${Math.floor(body.rangeStartMs/60_000)}m`,
-        settings:JSON.parse(JSON.stringify({
-          ...((source.settings??{}) as Record<string,unknown>),
-          rangeStartMs:0,rangeEndMs:duration,
-          sourceAgentParentProjectId:source.id,
-          sourceWindowMs:[body.rangeStartMs,body.rangeEndMs],
-        })) as Prisma.InputJsonValue,
-        sourceKind:'stream_agent_window',sourceUrl:source.sourceUrl,
-        rangeStartMs:0,rangeEndMs:duration,
-        status:'PREPARING',stage:'Preparing VOD video window',progress:0,
-      }})
-      await tx.clipJob.create({data:{
-        id:jobId,projectId,type:'STREAM_AGENT_PREPARE',
-        status:'QUEUED',priority:10,maxAttempts:2,
-        payload:{parentProjectId:source.id,
-          rangeStartMs:body.rangeStartMs,rangeEndMs:body.rangeEndMs},
-      }})
-    })
-    return NextResponse.json({data:{projectId,jobId,status:'PREPARING'}})
-  }catch(err){return jsonError(err,400)}
+    return NextResponse.json({data:await createAgentVideoWindow(workspaceId,body)})
+  }catch(error){return jsonError(error,400)}
 }
 
 export async function GET(request:Request){

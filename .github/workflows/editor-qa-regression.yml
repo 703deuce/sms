@@ -11,6 +11,9 @@ on:
       - "new-app/app/api/ai-producer-agent/**"
       - "worker/clips_worker/ai_producer_agent/**"
       - "worker/clips_worker/streamer/agent_prepare_job.py"
+      - "worker/clips_worker/streamer/agent_batch_job.py"
+      - "new-app/lib/server/streamer/agent-batch.ts"
+      - "new-app/lib/streamer/agent-batch-contract.ts"
       - "worker/tests/test_stream_agent_prepare.py"
       - "new-app/lib/clips/**"
       - "new-app/tests/**"
@@ -37,6 +40,13 @@ jobs:
           cache: pnpm
           cache-dependency-path: new-app/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - name: Streamer agent batch typecheck
+        run: |
+          NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false > /tmp/streamer-tsc.txt 2>&1 || true
+          if grep -E '^(app/api/(streamer/agent-|internal/streamer/agent-)|lib/server/streamer/agent-|lib/streamer/agent-batch|components/streamer/streamer-agent-clip-maker).*error TS' /tmp/streamer-tsc.txt; then
+            echo "Streamer agent batch TypeScript errors" >&2
+            exit 1
+          fi
       - name: Editor import and hook guards
         run: |
           pnpm run verify:editor-shell-import
@@ -106,7 +116,8 @@ jobs:
             tests/ai-producer-agent/multi-source-story.test.ts \
             tests/ai-producer-agent/clean-take.test.ts \
             tests/ai-producer-agent/multi-source-assembly.test.ts \
-            tests/streamer-agent-windows.test.ts
+            tests/streamer-agent-windows.test.ts \
+            tests/streamer-agent-batch-contract.test.ts
 
   captions-worker-regression:
     runs-on: ubuntu-latest
@@ -128,7 +139,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile visual worker modules
-        run: python -m py_compile worker/clips_worker/ai_producer_agent/finder/*.py worker/clips_worker/streamer/agent_prepare_job.py worker/tests/test_ai_producer_visual_audio.py worker/tests/test_stream_agent_prepare.py
+        run: python -m py_compile worker/clips_worker/ai_producer_agent/finder/*.py worker/clips_worker/streamer/agent_prepare_job.py worker/clips_worker/streamer/agent_batch_job.py worker/tests/test_ai_producer_visual_audio.py worker/tests/test_stream_agent_prepare.py
       - name: Install isolated test dependencies
         run: python -m pip install pytest requests boto3
       - name: Exercise Gemini visual contracts and streamer video source-window alignment

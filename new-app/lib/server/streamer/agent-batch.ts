@@ -1,0 +1,168 @@
+import 'server-only'
+import {createId} from '@/lib/supabase/id'
+import {getPrisma} from '@/lib/server/db'
+import {streamerAgentWindows} from '@/lib/streamer/agent-windows'
+import {createAgentVideoWindow} from '@/lib/server/streamer/agent-window-source'
+import {createAiProducerAgentRun} from '@/lib/server/ai-producer-agent/runs'
+import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
+import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
+  type StreamerAgentBatch as AgentBatch,type StreamerAgentMode as Mode}
+  from '@/lib/streamer/agent-batch-contract'
+export {readStreamerAgentBatch} from '@/lib/streamer/agent-batch-contract'
+
+export async function startStreamerAgentBatch(workspaceId:string,projectId:string,
+  mode:Mode,seconds:30|60|90){
+  if(!aiProducerAgentServerEnabled())throw Error('ai_producer_agent_disabled')
+  const prisma=getPrisma()
+  const source=await prisma.clipProject.findFirst({
+    where:{id:projectId,workspaceId,deletedAt:null,status:'READY'},
+    include:{streamVod:{include:{channel:true}}},
+  })
+  if(!source?.streamVod||!['twitch','kick'].includes(source.streamVod.platform))
+    throw Error('stream_agent_batch_requires_ready_twitch_kick_vod')
+  if(!source.streamVod.url)throw Error('stream_agent_batch_vod_url_missing')
+  if(!source.streamVod.attestedAt&&
+    !(source.streamVod.channel?.status==='CONNECTED'&&!source.streamVod.channel?.deletedAt))
+    throw Error('stream_agent_batch_source_permission_required')
+  const current=readStreamerAgentBatch(source.settings)
+  if(current?.status==='running')throw Error('stream_agent_batch_already_running')
+  const windows=streamerAgentWindows(source.rangeStartMs,
+    source.rangeEndMs-source.rangeStartMs,true)
+  // Do not launch unbounded costs on a malformed duration.
+  if(windows.length>32)throw Error('stream_agent_batch_exceeds_32_windows')
+  const batch:AgentBatch={
+    id:createId('sagent'),status:'running',mode,seconds,
+    index:0,total:windows.length,sourceStartMs:source.rangeStartMs,
+    sourceDurationMs:source.rangeEndMs-source.rangeStartMs,
+    completed:[],errors:[],startedAt:new Date().toISOString(),
+  }
+  await prisma.$transaction(async (tx:Pick<typeof prisma,'clipProject'|'clipJob'>)=>{
+    await tx.clipProject.update({where:{id:projectId},data:{
+      settings:JSON.parse(JSON.stringify({...asSettings(source.settings),
+        agentClipBatch:batch})),
+    }})
+    await tx.clipJob.create({data:{
+      id:createId('job'),projectId,type:'STREAM_AGENT_BATCH',
+      status:'QUEUED',priority:10,maxAttempts:2,payload:{batchId:batch.id},
+    }})
+  })
+  return batch
+}
+async function persistStep(projectId:string,expectedId:string,next:AgentBatch){
+  const prisma=getPrisma()
+  await prisma.$transaction(async (tx:Pick<typeof prisma,'clipProject'|'clipJob'>)=>{
+    const project=await tx.clipProject.findUniqueOrThrow({where:{id:projectId}})
+    const current=readStreamerAgentBatch(project.settings)
+    if(current?.id!==expectedId||current.status!=='running')return
+    await tx.clipProject.update({where:{id:projectId},data:{
+      settings:JSON.parse(JSON.stringify({
+        ...asSettings(project.settings),agentClipBatch:next,
+      })),
+    }})
+    if(next.status==='running'){
+      await tx.clipJob.create({data:{
+        id:createId('job'),projectId,type:'STREAM_AGENT_BATCH',
+        status:'QUEUED',priority:10,maxAttempts:2,
+        runAfter:new Date(Date.now()+20_000),payload:{batchId:expectedId},
+      }})
+    }
+  })
+}
+/** Called only by the authenticated clips worker, one durable step per job.
+ * One window and one AI Producer run remain active at a time. */
+export async function tickStreamerAgentBatch(projectId:string,batchId:string){
+  const prisma=getPrisma()
+  const p=await prisma.clipProject.findUnique({where:{id:projectId}})
+  const batch=readStreamerAgentBatch(p?.settings)
+  if(!p||!batch||batch.id!==batchId||batch.status!=='running')
+    return {status:'not_active'}
+  const windows=streamerAgentWindows(batch.sourceStartMs,
+    batch.sourceDurationMs,true)
+  const next:AgentBatch={...batch,completed:[...batch.completed],
+    errors:[...batch.errors]}
+  if(next.index>=windows.length){
+    next.status='done'
+    await persistStep(projectId,batchId,next)
+    return {status:'done'}
+  }
+  const [start,end]=windows[next.index]!
+  if(next.runId){
+    const run=await prisma.aiProducerAgentRun.findFirst({
+      where:{id:next.runId,workspaceId:p.workspaceId},
+      select:{status:true,resultProjectId:true,resultClipId:true,error:true},
+    })
+    if(run&&['ready','done','failed','canceled','capped'].includes(run.status)){
+      if(['ready','done'].includes(run.status)&&run.resultClipId&&run.resultProjectId){
+        next.completed.push({clipId:run.resultClipId,
+          projectId:run.resultProjectId,
+          startMin:Math.floor((start-next.sourceStartMs)/60_000)})
+      }else{
+        next.errors.push(`Window ${next.index+1}: ${run?.error??'No valid clip'}`)
+      }
+      next.runId=undefined;next.preparedProjectId=undefined
+      next.index++
+      if(next.index>=windows.length)next.status='done'
+    }
+  }else if(next.preparedProjectId){
+    const prepared=await prisma.clipProject.findFirst({
+      where:{id:next.preparedProjectId,workspaceId:p.workspaceId},
+      select:{status:true,rangeEndMs:true,uploadId:true,
+        jobs:{where:{type:'STREAM_AGENT_PREPARE'},take:1,
+          orderBy:{createdAt:'desc'},select:{status:true,error:true}}},
+    })
+    if(prepared?.status==='READY'&&prepared.uploadId){
+      try{
+        const run=await createAiProducerAgentRun(p.workspaceId,null,{
+          sources:[{sourceId:'stream_recording',kind:'stream',
+            projectId:next.preparedProjectId,rangeMs:[0,prepared.rangeEndMs]}],
+          outputType:'story',storyMode:next.mode,
+          targetLengthS:[Math.max(15,next.seconds-10),
+            Math.min(105,next.seconds+10)],
+          visualEvidenceMode:'visual_audio',exportOnFinish:true,
+          instruction:next.mode==='clip_moment_v1'
+            ? 'Choose a continuous streamer action with genuine setup and reaction.'
+            : 'Create one short narrative from distinct source-grounded beats.',
+        })
+        next.runId=run.id
+      }catch(err){
+        // Other workspace AI work may be active. The next queued batch tick
+        // will retry, rather than dropping a prepared video or publishing fake clips.
+        const reason=String((err as Error).message)
+        if(reason!=='ai_producer_agent_run_in_progress'){
+          next.errors.push(`Window ${next.index+1}: ${reason.slice(0,160)}`)
+          next.preparedProjectId=undefined;next.index++
+        }
+      }
+    }else if(prepared?.status==='FAILED'||
+      prepared?.jobs[0]?.status==='FAILED'||!prepared){
+      next.errors.push(`Window ${next.index+1}: ${prepared?.jobs[0]?.error??'Video preparation failed'}`)
+      next.preparedProjectId=undefined;next.index++
+    }
+    if(next.index>=windows.length)next.status='done'
+  }else{
+    try{
+      const prepared=await createAgentVideoWindow(p.workspaceId,{
+        parentProjectId:projectId,rangeStartMs:start,rangeEndMs:end})
+      next.preparedProjectId=prepared.projectId
+    }catch(err){
+      next.errors.push(`Window ${next.index+1}: ${String((err as Error).message).slice(0,160)}`)
+      next.index++
+      if(next.index>=windows.length)next.status='done'
+    }
+  }
+  await persistStep(projectId,batchId,next)
+  return {status:next.status,index:next.index,total:next.total}
+}
+export async function cancelStreamerAgentBatch(workspaceId:string,projectId:string){
+  const prisma=getPrisma()
+  const project=await prisma.clipProject.findFirst({
+    where:{id:projectId,workspaceId,deletedAt:null}})
+  if(!project)throw Error('not_found')
+  const current=readStreamerAgentBatch(project.settings)
+  if(!current||current.status!=='running')return false
+  await prisma.clipProject.update({where:{id:projectId},data:{
+    settings:JSON.parse(JSON.stringify({...asSettings(project.settings),
+      agentClipBatch:{...current,status:'canceled'}})),
+  }})
+  return true
+}
