@@ -95,7 +95,7 @@ export default function MultiSourceStoryExperiment(){
     <section className="space-y-2">
       <h2 className="font-medium">Source recordings ({selected.length}/5 selected)</h2>
       {sources.length===0?<p className="text-sm text-neutral-500">
-        No videos with transcripts available yet. Upload and transcribe source recordings first.
+        No eligible uploaded videos yet. Upload recordings first; silent visual footage is allowed.
       </p>:sources.map(source=><label key={source.projectId}
         className="flex cursor-pointer items-center gap-3 rounded-lg border p-3">
         <input type="checkbox" checked={selected.includes(source.projectId)}
