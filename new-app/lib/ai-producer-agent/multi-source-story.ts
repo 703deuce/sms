@@ -10,7 +10,11 @@ import type { ToolSchema } from '@/lib/ai-producer-agent/tools/schemas'
 export type MultiStorySource={
   source:AiProducerSourceRef
   words:ClipWord[]
-  visualObservations?:Array<{startMs:number;endMs:number;observation:string}>
+  visualObservations?:Array<{
+    startMs:number;endMs:number;observation:string
+    whyInteresting?:string;category?:string;spokenContext?:string
+    analysisTier?:'coarse_3s'|'focused_1fps'
+  }>
 }
 export type MultiStoryVisualBeat={id:string;sourceId:string;startMs:number;endMs:number;purpose:string}
 export type MultiStoryBeat={
