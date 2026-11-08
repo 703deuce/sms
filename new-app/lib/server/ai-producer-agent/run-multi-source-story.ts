@@ -123,7 +123,7 @@ export async function runMultiSourceStoryOutput(
         error:String((err as Error).message).slice(0,200)})
     }
   }
-  const plan=await planMultiSourceStory(inputs,instruction??undefined,usage=>{
+  let plan=await planMultiSourceStory(inputs,instruction??undefined,usage=>{
     budget.steps++
     budget.addLuna(usage)
   },async event=>{
@@ -148,6 +148,17 @@ export async function runMultiSourceStoryOutput(
     if(status==='rejected'||status==='exhausted')
       console.warn('[ai-producer:multisource:submission]',JSON.stringify(diagnostic))
   })
+  const sourceDurations=inputs.map(input=>({
+    sourceId:input.source.sourceId,
+    availableWords:input.words.length,
+    selectedMs:plan.cuts.filter(c=>c.sourceId===input.source.sourceId)
+      .reduce((n,c)=>n+c.endMs-c.startMs,0),
+    passageCount:plan.cuts.filter(c=>c.sourceId===input.source.sourceId).length,
+  }))
+  await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+    phase:'validate',tool:'multisource_source_coverage',kind:'validate',
+    resultSummary:JSON.stringify({sources:sourceDurations,
+      note:'Descriptive only; no equal-time or minimum-source quota.'})})
   await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
     phase:'plan',tool:'multisource_story_footage_flow_handoff',kind:'validate',
     argsSummary:JSON.stringify({
@@ -167,8 +178,42 @@ export async function runMultiSourceStoryOutput(
     await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
       phase:'validate',tool:'multisource_editorial_qa',kind:'validate',
       resultSummary:JSON.stringify(review).slice(0,12000)})
-    if(!review.pass)
+    if(!review.pass && review.issues.length){
+      // One bounded revision pass; preserve the already-valid plan on errors
+      // or if a second independent review does not improve the issue count.
+      const {reviseMultiSourceStoryFromQa}=await import('@/lib/ai-producer-agent/multi-source-qa')
+      if(budget.state()!=='hard'){
+        const revision=await reviseMultiSourceStoryFromQa(plan,inputs,review.issues,usage=>{
+          budget.steps++
+          budget.addLuna(usage)
+        })
+        await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+          phase:'validate',tool:'multisource_qa_revision_proposal',kind:'validate',
+          resultSummary:JSON.stringify({applied:revision.applied,
+            reason:revision.reason,removed:revision.removed,repaired:revision.repaired,
+            originalCuts:plan.cuts.length,revisedCuts:revision.plan.cuts.length})})
+        if(revision.applied){
+          const revisedReview=await reviewMultiSourceStory(revision.plan,inputs,usage=>{
+            budget.steps++
+            budget.addLuna(usage)
+          })
+          const improved=revisedReview.issues.length<review.issues.length||
+            (revisedReview.pass&&!review.pass)
+          await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+            phase:'validate',tool:'multisource_qa_revision_decision',kind:'validate',
+            resultSummary:JSON.stringify({accepted:improved,
+              beforeIssues:review.issues.length,afterIssues:revisedReview.issues.length,
+              afterPass:revisedReview.pass})})
+          if(improved){
+            plan=revision.plan
+            out.notes.push('Editorial QA revision improved paper edit: '+
+              review.issues.length+' to '+revisedReview.issues.length+' concerns.')
+            review.issues=revisedReview.issues
+          }
+        }
+      }
       out.notes.push(...review.issues.slice(0,10).map(issue=>'Editorial QA: '+issue))
+    }
   }catch(error){
     out.notes.push('Multi-source editorial QA unavailable: '+
       String((error as Error).message).slice(0,180))
