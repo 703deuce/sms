@@ -73,6 +73,58 @@ describe('isolated Clean Take mode',()=>{
       })
     }
   })
+  it('lets a direct video/audio observation select a real nonverbal moment without any transcript word IDs',async()=>{
+    const selection={
+      sourceId:'a',kind:'media_moment',observationIndex:0,
+      startMs:0,endMs:1200,reason:'On-camera visual performance before spoken dialogue',
+    }
+    const validated=validateCleanTakeSelections([selection],[a])
+    expect(validated[0]).toMatchObject({
+      sourceId:'a',kind:'visual_action',startMs:0,endMs:1200,
+      firstWordId:-1,lastWordId:-1,
+    })
+    expect(()=>validateCleanTakeSelections([{...selection,observationIndex:99}],[a]))
+      .toThrow('clean_take_media_evidence_required')
+    expect(()=>validateCleanTakeSelections([{...selection,endMs:15000}],[a]))
+      .toThrow('clean_take_media_cut_outside_observation')
+  })
+  it('allows a media-led cut and a corrected dialogue take in the same ordered export',async()=>{
+    const calls:string[]=[]
+    __setLunaImpl(async ({tools,messages})=>{
+      const name=tools[0]!.name
+      calls.push(name)
+      const payload=JSON.parse(String(messages[1]!.content))
+      if(name==='submit_clean_take'){
+        expect(payload.sources[0].visualAudioObservations[0]).toMatchObject({
+          observationIndex:0,startMs:0,endMs:10500,
+        })
+      }
+      const args=name==='submit_clean_take'?{
+        title:'Original delivery',summary:'One polished presentation',
+        endingRule:'Real concluding statement',selections:[
+          {sourceId:'a',kind:'media_moment',observationIndex:0,
+            startMs:0,endMs:1200,reason:'Nonverbal camera action'},
+          {sourceId:'a',firstWordId:10,lastWordId:14,reason:'Correct fluent take'},
+        ],
+      }:{pass:true,issues:[]}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'mode_'+calls.length,type:'function',function:{name,arguments:JSON.stringify(args)},
+      }]}}
+    })
+    const result=await planCleanTake([a])
+    expect(result.plan.cuts.map(c=>[c.kind??'dialogue',c.startMs,c.endMs]))
+      .toEqual([['visual_action',0,1200],['dialogue',15000,22000]])
+    const edits=buildMultiStoryInsertEdits(
+      defaultEdits({clipStartMs:0,clipEndMs:1200,trimMinMs:0,trimMaxMs:120000}),
+      result.plan,
+      [{id:'upl_a',durationMs:120000,label:'raw.mp4'},
+       {id:'upl_a',durationMs:120000,label:'raw.mp4'}],
+    )
+    expect(insertWindows([[0,1200]],edits.inserts)[0]).toMatchObject({
+      startMs:1200,endMs:8200,audio:'source',
+    })
+    expect(calls).toEqual(['submit_clean_take','review_clean_take'])
+  })
   it('permits a single recording and validates exact non-overlapping best-take cuts',()=>{
     expect(validateCleanTakeSelections([
       {sourceId:'a',firstWordId:10,lastWordId:14,reason:'fluent second attempt'},
