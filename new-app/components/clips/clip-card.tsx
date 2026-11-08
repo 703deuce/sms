@@ -87,7 +87,9 @@ export function ClipCard({
       ? normalizeEdits(clip.edits, { clipStartMs: clip.startMs, clipEndMs: clip.endMs })
       : undefined
 
-  const editorHref = `/app/clips/${projectId}/edit/${clip.id}`
+  const editorHref = isStreamer
+    ? `/app/clips/${projectId}/studio/${clip.id}`
+    : `/app/clips/${projectId}/edit/${clip.id}`
 
   const openEditor = () => {
     router.push(editorHref)
