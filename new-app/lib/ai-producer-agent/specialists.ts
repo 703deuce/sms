@@ -283,6 +283,52 @@ export function resolveFootageWordSelections(
   return selected
 }
 
+
+/** Recover the genuine, individually valid word-ID passages from a proposed
+ * paper edit without inventing footage, sorting a story into a new order, or
+ * allowing a broad accidental span to swallow earlier cuts. This is only
+ * used after model submission failures, before the independent Flow review. */
+export function recoverFootageWordSelections(
+  raw:unknown,words:ClipWord[],bounds:[number,number],
+):{selections:EditorialSelection[];retainedIndices:number[];rejected:Array<{index:number;reason:string;firstWordId:number|null;lastWordId:number|null}>}{
+  const selections:EditorialSelection[]=[]
+  const retainedIndices:number[]=[]
+  const rejected:Array<{index:number;reason:string;firstWordId:number|null;lastWordId:number|null}>=[]
+  if(!Array.isArray(raw))return {selections,retainedIndices,rejected}
+  for(const [index,entry] of raw.slice(0,24).entries()){
+    const item=entry&&typeof entry==='object'?entry as Record<string,unknown>:{}
+    const firstWordId=typeof item.firstWordId==='number'?item.firstWordId:null
+    const lastWordId=typeof item.lastWordId==='number'?item.lastWordId:null
+    try{
+      const [cut]=resolveFootageWordSelections([item],words,bounds)
+      if(!cut)throw Error('footage_empty_passage')
+      if(!cut.beat.trim()||!cut.reason.trim())throw Error('footage_missing_beat_or_reason')
+      if(selections.length&&cut.startMs<selections[selections.length-1]!.endMs)
+        throw Error('footage_nonchronological_or_overlapping_passage')
+      selections.push(cut)
+      retainedIndices.push(index)
+    }catch(error){
+      rejected.push({index,reason:String((error as Error).message),
+        firstWordId,lastWordId})
+    }
+  }
+  return {selections,retainedIndices,rejected}
+}
+
+/** Failure diagnostics expose indexed word bounds, never the full transcript. */
+function footageWordRepairHint(
+  raw:unknown,words:ClipWord[],bounds:[number,number],
+){
+  const partial=recoverFootageWordSelections(raw,words,bounds)
+  const previous=partial.selections.at(-1)
+  return {
+    rejected:partial.rejected.slice(0,12),
+    retainedPassages:partial.retainedIndices,
+    suggestedRule:'Every passage must be source-chronological and nonoverlapping. Use exact firstWordId/lastWordId. A huge start-to-end range is not a final story beat. Repair the indexed invalid selection; keep valid complete story beats and the real closing payoff.',
+    precedingValidEndMs:previous?.endMs??null,
+  }
+}
+
 /** A single independent narrative-flow review after Footage. The specialist
  * sees the entire assembled dialogue and the entire original word-indexed
  * source. Its ONLY editing powers are replacing a passage's first/last word
@@ -821,7 +867,12 @@ function selectionRepairHint(
 function selectionLogSummary(args: Record<string, unknown> | null): string {
   const selections = args?.selections
   if (!Array.isArray(selections)) return JSON.stringify({ keys: Object.keys(args ?? {}) })
-  return JSON.stringify({ count: selections.length, intervals: selections.slice(0, 24).map((r) => {
+  return JSON.stringify({ count: selections.length,
+    visualActionRefs:Array.isArray(args?.visualActions)?args.visualActions.slice(0,8).map(v=>{
+      const row=v&&typeof v==='object'?v as Record<string,unknown>:{}
+      return {visualBeatId:row.visualBeatId,startMs:row.startMs,endMs:row.endMs}
+    }):[],
+    intervals: selections.slice(0, 24).map((r) => {
     if (!r || typeof r !== 'object') return { invalid: true }
     const item = r as Record<string, unknown>
     return { startMs: item.startMs, endMs: item.endMs, firstWordId: item.firstWordId, lastWordId: item.lastWordId, beat: item.beat }
@@ -924,6 +975,9 @@ export async function runEditorialRole(
   ]
   let transcriptReads = 0
   let invalidSubmissions = 0
+  let bestWordRecovery:ReturnType<typeof recoverFootageWordSelections>|null=null
+  let bestRawVisualActions:unknown=null
+  let bestValidVisualCount=0
   await specialistEvent(ctx, budget, role, 'start', {
     wordCount: ctx.cache.words?.length ?? 0, sourceRangeMs: source.rangeMs,
     fullTranscriptDelivered: Array.isArray(context.fullTranscript),
@@ -1006,7 +1060,7 @@ export async function runEditorialRole(
               ? resolveFootageWordSelections(args.selections,ctx.cache.words??[],source.rangeMs)
               : snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
           } catch (firstError) {
-            if(wordFootage)throw firstError // Never reinterpret word IDs as milliseconds.
+            if(wordFootage)throw firstError // Repair only as source-local word IDs, never reinterpret them as milliseconds.
             recovery = recoverEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
             if (!recovery.selections.length) throw firstError
             selections = recovery.selections
@@ -1070,7 +1124,7 @@ export async function runEditorialRole(
             ? context.curatedSelections as EditorialSelection[] | undefined
             : undefined
           const repairHint = wordFootage
-            ? {instruction:'Only fix invalid or nonexistent word IDs or out-of-order ranges. Do not change editorial choices to satisfy seam heuristics.',errorCode}
+            ? {...footageWordRepairHint(args.selections,ctx.cache.words??[],source.rangeMs),errorCode}
             : (role === 'footage' || role === 'dialogue')
             ? selectionRepairHint(args.selections, ctx.cache.words ?? [], source.rangeMs, allowed)
             : {}
@@ -1082,9 +1136,50 @@ export async function runEditorialRole(
           // Models sometimes choose an imprecise word boundary. Reject the
           // proposal but give this specialist a chance to repair it before
           // the entire twenty-minute run fails.
-          if (invalidSubmissions >= 2) {
-            // Returning control to the orchestrator activates the source-grounded
-            // fallback; do not spend seven turns guessing the same impossible edge.
+          if(wordFootage){
+            const recovered=recoverFootageWordSelections(args.selections,ctx.cache.words??[],source.rangeMs)
+            if(recovered.selections.length>(bestWordRecovery?.selections.length??0))
+              bestWordRecovery=recovered
+            // Visual/audio event proposals are independent of dialogue
+            // validation. A later response may improve game footage even
+            // when it contains fewer valid speech passages.
+            if(visualStory){
+              const visual=recoverVisualActionRequests(args.visualActions,candidates,
+                (context.storyOutline as EditorialOutline|undefined)?.visualBeats??[],
+                ctx.cache.words??[],source.rangeMs)
+              if(visual.selections.length>bestValidVisualCount){
+                bestValidVisualCount=visual.selections.length
+                bestRawVisualActions=args.visualActions
+              }
+              await specialistEvent(ctx,budget,role,'visual_actions_after_word_rejection',{
+                turn,valid:visual.selections.length,omitted:visual.omitted,
+                retainedIndependently:bestValidVisualCount,
+              })
+            }
+          }
+          if(invalidSubmissions >= (wordFootage?3:2)){
+            // Never fabricate a generic source-tail replacement. If the LLM
+            // produced two or more genuine nonoverlapping word passages,
+            // retain them as an explicitly provisional paper edit; the
+            // independent Flow specialist gets the real chosen story next.
+            if(wordFootage&&bestWordRecovery&&bestWordRecovery.selections.length>=2){
+              const selectionList=bestWordRecovery.selections
+              let visualActions:VisualActionSelection[]=[]
+              let visualActionOmissions:Array<{id:string;reason:string}>=[]
+              if(visualStory){
+                const visual=recoverVisualActionRequests(bestRawVisualActions,candidates,
+                  (context.storyOutline as EditorialOutline|undefined)?.visualBeats??[],
+                  ctx.cache.words??[],source.rangeMs)
+                visualActions=visual.selections
+                visualActionOmissions=visual.omitted
+              }
+              await specialistEvent(ctx,budget,role,'source_word_recovery',{
+                attempts:invalidSubmissions,retainedOriginalIndices:bestWordRecovery.retainedIndices,
+                rejectedOriginalIndices:bestWordRecovery.rejected,selected:selectionList.map(x=>[x.startMs,x.endMs]),
+                acceptedVisualActions:visualActions,visualActionOmissions,
+                note:'Real source-word passages retained for independent Flow review, not fabricated fallback.'})
+              return {selections:selectionList,visualActions,visualActionOmissions}
+            }
             throw new Error(`specialist_${role}_unusable_submissions`)
           }
           messages.push({
@@ -1093,7 +1188,9 @@ export async function runEditorialRole(
               ok: false,
               error: errorCode,
               repairHint,
-              instruction: 'Correct and resubmit using sourced chronological intervals.',
+              instruction: wordFootage
+                ? 'Resubmit the COMPLETE final edit using source-chronological, nonoverlapping exact word-ID passages. Keep good cuts, replace huge accidental spans, and retain genuine ending and story setup. Visual actions must be bounded to Story-approved observations.'
+                : 'Correct and resubmit using sourced chronological intervals.',
             }),
           })
           continue
@@ -1139,6 +1236,82 @@ function representativeTranscript(words: ClipWord[], range: [number, number]) {
       endingExcerpt: hits.slice(-25).map((w) => w.w).join(' ').slice(0, 300),
     }
   })
+}
+
+/** Only when Story approved meaningful observed visuals but Footage returned
+ * none: give gameplay its own small, media-led selection opportunity.
+ * No visual clips are mandatory, and all chosen spans are validated against
+ * original source timestamps and observed audio/video evidence. */
+const visualCompletionTool:ToolSchema={
+  name:'submit_story_visual_action_completion',
+  description:'Independently consider already Story-approved visual/audio events for nonduplicative insertion.',
+  parameters:{type:'object',additionalProperties:false,properties:{
+    visualActions:{type:'array',maxItems:6,items:{
+      type:'object',additionalProperties:false,properties:{
+        visualBeatId:jsonString,startMs:{type:'integer',minimum:0},
+        endMs:{type:'integer',minimum:1},beat:jsonString,reason:jsonString,
+      },required:['visualBeatId','startMs','endMs','beat','reason'],
+    }},
+    rationale:jsonString,
+  },required:['visualActions','rationale']},
+}
+
+export async function completeMissingStoryVisualActions(
+  ctx:ToolCtx,budget:Budget,outline:EditorialOutline,
+  speech:EditorialSelection[],
+):Promise<{selections:VisualActionSelection[];omitted:Array<{id:string;reason:string}>}> {
+  const source=ctx.sources[0],words=ctx.cache.words??[]
+  const approved=outline.visualBeats??[]
+  if(!source?.rangeMs||!approved.length||!ctx.cache.visualEvidence)
+    return {selections:[],omitted:[]}
+  const candidates=buildVisualBeatCandidates(ctx.cache.visualEvidence.coarse??[],
+    ctx.cache.visualEvidence.focused??[])
+  const allowed=candidates.filter(c=>approved.some(a=>a.id===c.id))
+  if(!allowed.length)return {selections:[],omitted:approved.map(a=>({
+    id:a.id,reason:'story_visual_evidence_not_found',
+  }))}
+  try{
+    const reply=await lunaChat({tools:[visualCompletionTool],toolChoice:'required',
+      messages:[
+        {role:'system',content:[
+          'You are the independent GAMEPLAY VISUAL FOOTAGE EDITOR. The story is chosen and word-exact spoken passages are locked. You have real timestamped video/original-audio Gemini observations already approved as relevant by Story.',
+          'Select ONLY the visually significant actions or original-audio events that would improve this ONE true story. Keep source-chronological events. The source timestamps are absolute. Refer to the exact approved visualBeatId and a clip wholly inside its actual observation range. Do not invent an event or extend an observed interval.',
+          'Do not duplicate an action already fully visible in the selected speech footage. An empty array is valid if every valuable moment is already covered by dialogue video or would be unrelated. Video actions should not require a spoken word ID. No quota; quality over quantity.',
+        ].join(' ')},
+        {role:'user',content:JSON.stringify({
+          approvedEvents:allowed.map(c=>({id:c.id,sourceRangeMs:c.sourceRangeMs,
+            observation:c.observation,whyInteresting:c.whyInteresting,
+            spokenContext:c.spokenContext,analysisTier:c.analysisTier})),
+          approvedPurpose:approved,selectedSpeechWindows:speech.map(x=>[x.startMs,x.endMs]),
+          sourceRangeMs:source.rangeMs,
+        })},
+      ]})
+    budget.steps++
+    budget.addLuna(reply.usage)
+    const call=reply.message.tool_calls?.find(x=>
+      x.function.name===visualCompletionTool.name)
+    if(!call)throw Error('visual_completion_missing_submission')
+    const proposed=safeJson(call.function.arguments)
+    if(!proposed||!Array.isArray(proposed.visualActions))
+      throw Error('visual_completion_invalid_submission')
+    const recovered=recoverVisualActionRequests(proposed.visualActions,candidates,
+      approved,words,source.rangeMs)
+    await specialistEvent(ctx,budget,'footage','independent_visual_completion',{
+      proposed:selectionLogSummary({selections:[],visualActions:proposed.visualActions}),
+      accepted:recovered.selections,omitted:recovered.omitted,
+      rationale:String(proposed.rationale??'').slice(0,500),
+    })
+    return {selections:recovered.selections,omitted:recovered.omitted}
+  }catch(error){
+    const reason=String((error as Error)?.message??error).slice(0,230)
+    await specialistEvent(ctx,budget,'footage','independent_visual_completion_unavailable',{
+      reason,approvedBeatIds:approved.map(a=>a.id),
+      note:'Original sourced speech remains available; do not substitute unobserved gameplay.',
+    })
+    return {selections:[],omitted:approved.map(a=>({
+      id:a.id,reason:'visual_completion_unavailable:'+reason,
+    }))}
+  }
 }
 
 export async function createEditorialHandoff(
@@ -1261,8 +1434,15 @@ export async function createEditorialHandoff(
     found = { selections: recovered.selections }
   }
   let footage = found.selections as EditorialSelection[]
-  const visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
-  const submittedVisualOmissions=(found.visualActionOmissions as Array<{id:string;reason:string}>|undefined)??[]
+  let visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
+  let submittedVisualOmissions=(found.visualActionOmissions as Array<{id:string;reason:string}>|undefined)??[]
+  if(!highlightsMode&&ctx.config.editMode==='just_chatting_rough_cut'&&
+     ctx.config.visualEvidenceMode==='visual_audio'&&ctx.config.targetLengthS[1]<=105&&
+     !visualActions.length&&(outline.visualBeats?.length??0)>0){
+    const completed=await completeMissingStoryVisualActions(ctx,budget,outline,footage)
+    visualActions=completed.selections
+    submittedVisualOmissions=[...submittedVisualOmissions,...completed.omitted]
+  }
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   if (shortStory) {

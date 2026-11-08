@@ -6,7 +6,7 @@ vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
 vi.mock('@/lib/ai-producer-agent/log', () => ({
   logAiProducerStep: vi.fn(), redactArgs: (args: unknown) => args,
 }))
-import { checkEditorialSelections, snapEditorialSelections, recoverEditorialSelections } from '@/lib/ai-producer-agent/specialists'
+import { checkEditorialSelections, snapEditorialSelections, recoverEditorialSelections, recoverFootageWordSelections, resolveFootageWordSelections } from '@/lib/ai-producer-agent/specialists'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
 import type { ClipWord } from '@/lib/clips/edits'
 
@@ -27,6 +27,40 @@ describe('AI Producer specialist editorial handoff', () => {
     expect(SPECIALIST_ROLES.dialogue).toContain('DIALOGUE/CUT EDITOR')
     expect(SPECIALIST_ROLES.assembly).toContain('PICTURE EDITOR')
     expect(SPECIALIST_ROLES.qa).toContain('QUALITY CONTROL')
+  })
+
+  it('recovers the real Super Mario gameplay Footage failure without fabricating, sorting, or including broad overlaps', () => {
+    const start=178894
+    const gameWords:ClipWord[]=Array.from({length:1251},(_,i)=>({
+      w:'game_'+i,s:(start+i*750)/1000,e:(start+i*750+350)/1000,
+    }))
+    const bounds:[number,number]=[start,1378894]
+    const ids=[
+      [253,264],[306,323],[341,349],[555,559],[738,752],
+      [797,809],[853,861],[882,897],[1016,1028],
+      [113,1219],[1220,1231],
+    ]
+    const proposals=ids.map(([firstWordId,lastWordId],i)=>({
+      firstWordId,lastWordId,beat:i===9?'broken giant acceptance':i===10?'real closing': 'beat '+i,
+      reason:i===9?'invalid overlapping monster cut': 'recorded gaming story beat',
+    }))
+    expect(()=>resolveFootageWordSelections(proposals,gameWords,bounds))
+      .toThrow('footage_nonchronological_or_overlapping_passage_9')
+    const recovered=recoverFootageWordSelections(proposals,gameWords,bounds)
+    expect(recovered.retainedIndices).toEqual([0,1,2,3,4,5,6,7,8,10])
+    expect(recovered.rejected).toMatchObject([{index:9,
+      reason:'footage_nonchronological_or_overlapping_passage'}])
+    expect(recovered.selections).toHaveLength(10)
+    expect(recovered.selections[9]!.endMs).toBe(Math.round(gameWords[1231]!.e*1000))
+    expect(recovered.selections.every((c,i,a)=>i===0||
+      c.startMs>=a[i-1]!.endMs)).toBe(true)
+    // On the second actual invalid attempt word 806 revisits the time
+    // already selected at 797–809; never repeat or sort it into the edit.
+    const second=[...proposals.slice(0,8),{
+      firstWordId:806,lastWordId:809,beat:'backwards',reason:'duplicate PB confirmation',
+    },...proposals.slice(9)]
+    const recoveredSecond=recoverFootageWordSelections(second,gameWords,bounds)
+    expect(recoveredSecond.rejected.map(x=>x.index)).toEqual([8,9])
   })
 
   it('accepts chronological sourced whole-thought footage', () => {

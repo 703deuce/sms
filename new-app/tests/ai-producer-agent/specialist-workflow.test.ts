@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
 import { Budget } from '@/lib/ai-producer-agent/budget'
-import { createEditorialHandoff } from '@/lib/ai-producer-agent/specialists'
+import { createEditorialHandoff, runEditorialRole, completeMissingStoryVisualActions } from '@/lib/ai-producer-agent/specialists'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 
@@ -16,6 +16,111 @@ vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
 afterEach(() => __setLunaImpl(null))
 
 describe('AI Producer specialist execution', () => {
+  it('independently considers an observed silent gaming beat after Footage omitted all video actions',async()=>{
+    const observations=[{sourceRangeMs:[210_000,218_000] as [number,number],
+      observation:'Visible game win screen and physical celebration',
+      whyInteresting:'A real victory confirms the payoff',category:'gaming',
+      spokenContext:'',analysisTier:'coarse_3s' as const}]
+    const words=Array.from({length:80},(_,i)=>({w:'speech',s:i,e:i+0.3}))
+    let checked=0
+    __setLunaImpl(async ({tools,messages})=>{
+      checked++
+      expect(tools.map(t=>t.name)).toEqual(['submit_story_visual_action_completion'])
+      const payload=JSON.parse(String(messages[1]!.content))
+      expect(payload.approvedEvents[0].sourceRangeMs).toEqual([210_000,218_000])
+      expect(payload.selectedSpeechWindows).toEqual([[10_000,30_000]])
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'visual_'+checked,type:'function',
+        function:{name:'submit_story_visual_action_completion',
+          arguments:JSON.stringify({visualActions:[{
+            visualBeatId:'visual_0',startMs:210_100,endMs:215_000,
+            beat:'Observed real win',reason:'Game result is visible without dialogue',
+          }],rationale:'Keep the game payoff even with no speech'}),
+        },
+      }]},usage:{prompt_tokens:140,completion_tokens:60}}
+    })
+    const ctx={runId:'visual-game',sources:[{sourceId:'recording',
+      rangeMs:[0,300_000]}],cache:{words,visualEvidence:{
+      coarse:observations,focused:[],metadata:{originalAudioAttached:true},
+    }},config:{visualEvidenceMode:'visual_audio'}} as unknown as ToolCtx
+    const result=await completeMissingStoryVisualActions(ctx,new Budget(),{
+      logline:'Gaming victory',audiencePromise:'See the win',
+      beats:['setup','gameplay','finish'],essentialSetup:'Actual run',
+      intendedPayoff:'Actual win',endingRule:'Finish with reality',
+      excludeAsides:[],highlightCriteria:'Real events',
+      visualBeats:[{id:'visual_0',whyFunnyToWatch:'Real game victory',
+        narrativePurpose:'Payoff'}],
+    },[{startMs:10_000,endMs:30_000,beat:'setup',reason:'Spoken context'}])
+    expect(checked).toBe(1)
+    expect(result.selections).toMatchObject([{kind:'visual_action',
+      visualBeatId:'visual_0',startMs:210_100,endMs:215_000}])
+  })
+
+  it('recovers actual game Footage submissions and retains independently observed gameplay actions after the third indexed repair',async()=>{
+    const start=178894
+    const words=Array.from({length:1251},(_,i)=>({
+      w:'game_'+i,s:(start+i*750)/1000,e:(start+i*750+350)/1000,
+    }))
+    const idPairs=[
+      [253,264],[306,323],[341,349],[555,559],[738,752],
+      [797,809],[853,861],[882,897],[1016,1028],
+      [113,1219],[1220,1231],
+    ]
+    const visualActions=[{
+      visualBeatId:'visual_0',startMs:1_180_000,endMs:1_185_000,
+      beat:'Recorded gameplay victory',reason:'Observed visual release',
+    }]
+    let turn=0
+    __setLunaImpl(async ({tools,messages})=>{
+      expect(tools.map(t=>t.name)).toContain('submit_footage_word_selections')
+      const ids=idPairs.map(([firstWordId,lastWordId],i)=>({
+        firstWordId,lastWordId,
+        beat:i===9?'bad oversized segment':'game beat '+i,
+        reason:'Recorded chronological story event',
+      }))
+      if(turn===1){
+        // Backward word IDs from the actual second live submission.
+        ids[8]={firstWordId:806,lastWordId:809,
+          beat:'duplicate',reason:'Incorrect backward repeat'}
+      }
+      if(turn===2){
+        const feedback=messages.filter(m=>m.role==='tool').at(-1)
+        expect(String(feedback?.content)).toContain('retainedPassages')
+        expect(String(feedback?.content)).toContain('nonoverlapping')
+      }
+      const actionProposal=turn===1?visualActions:[]
+      turn++
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'game_'+turn,type:'function',
+        function:{name:'submit_footage_word_selections',
+          arguments:JSON.stringify({selections:ids,visualActions:actionProposal})},
+      }]},usage:{prompt_tokens:100,completion_tokens:25}}
+    })
+    const ctx={
+      runId:'game-recovery',sources:[{sourceId:'recording',rangeMs:[start,1378894]}],
+      cache:{words,visualEvidence:{coarse:[{
+        sourceRangeMs:[1_180_000,1_185_000],
+        observation:'Victory cutscene on screen',
+        whyInteresting:'Recorded finish',category:'gameplay',
+        spokenContext:'',analysisTier:'coarse_3s',
+      }],focused:[],metadata:{originalAudioAttached:true}}},
+      config:{editMode:'just_chatting_rough_cut',roughCutIntent:'story',
+        targetLengthS:[75,105],visualEvidenceMode:'visual_audio'},
+    } as unknown as ToolCtx
+    const out={index:0,outputType:'story',builder:null,notes:[]} as unknown as OutputState
+    const result=await runEditorialRole(ctx,out,new Budget(),'footage',{
+      fullTranscriptWordIndexed:true,fullTranscript:words.map((w,i)=>[i,w.s,w.e,w.w]),
+      storyOutline:{visualBeats:[{id:'visual_0',whyFunnyToWatch:'On-screen victory',
+        narrativePurpose:'True gameplay payoff'}]},
+    })
+    expect(turn).toBe(3)
+    expect((result.selections as unknown[])).toHaveLength(10)
+    expect((result.visualActions as Array<{startMs:number;endMs:number}>)[0])
+      .toMatchObject({startMs:1_180_000,endMs:1_185_000})
+    expect((result.selections as Array<{startMs:number;endMs:number}>)
+      .every((c,i,a)=>i===0||c.startMs>=a[i-1]!.endMs)).toBe(true)
+  })
+
   it('invokes distinct role prompts and isolated tool menus, carrying a validated handoff', async () => {
     const sequence = ['submit_story_outline', 'submit_footage_selections', 'submit_dialogue_cut_plan']
     const toolNames: string[][] = []
