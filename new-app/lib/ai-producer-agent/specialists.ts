@@ -283,6 +283,52 @@ export function resolveFootageWordSelections(
   return selected
 }
 
+
+/** Recover the genuine, individually valid word-ID passages from a proposed
+ * paper edit without inventing footage, sorting a story into a new order, or
+ * allowing a broad accidental span to swallow earlier cuts. This is only
+ * used after model submission failures, before the independent Flow review. */
+export function recoverFootageWordSelections(
+  raw:unknown,words:ClipWord[],bounds:[number,number],
+):{selections:EditorialSelection[];retainedIndices:number[];rejected:Array<{index:number;reason:string;firstWordId:number|null;lastWordId:number|null}>}{
+  const selections:EditorialSelection[]=[]
+  const retainedIndices:number[]=[]
+  const rejected:Array<{index:number;reason:string;firstWordId:number|null;lastWordId:number|null}>=[]
+  if(!Array.isArray(raw))return {selections,retainedIndices,rejected}
+  for(const [index,entry] of raw.slice(0,24).entries()){
+    const item=entry&&typeof entry==='object'?entry as Record<string,unknown>:{}
+    const firstWordId=typeof item.firstWordId==='number'?item.firstWordId:null
+    const lastWordId=typeof item.lastWordId==='number'?item.lastWordId:null
+    try{
+      const [cut]=resolveFootageWordSelections([item],words,bounds)
+      if(!cut)throw Error('footage_empty_passage')
+      if(!cut.beat.trim()||!cut.reason.trim())throw Error('footage_missing_beat_or_reason')
+      if(selections.length&&cut.startMs<selections[selections.length-1]!.endMs)
+        throw Error('footage_nonchronological_or_overlapping_passage')
+      selections.push(cut)
+      retainedIndices.push(index)
+    }catch(error){
+      rejected.push({index,reason:String((error as Error).message),
+        firstWordId,lastWordId})
+    }
+  }
+  return {selections,retainedIndices,rejected}
+}
+
+/** Failure diagnostics expose indexed word bounds, never the full transcript. */
+function footageWordRepairHint(
+  raw:unknown,words:ClipWord[],bounds:[number,number],
+){
+  const partial=recoverFootageWordSelections(raw,words,bounds)
+  const previous=partial.selections.at(-1)
+  return {
+    rejected:partial.rejected.slice(0,12),
+    retainedPassages:partial.retainedIndices,
+    suggestedRule:'Every passage must be source-chronological and nonoverlapping. Use exact firstWordId/lastWordId. A huge start-to-end range is not a final story beat. Repair the indexed invalid selection; keep valid complete story beats and the real closing payoff.',
+    precedingValidEndMs:previous?.endMs??null,
+  }
+}
+
 /** A single independent narrative-flow review after Footage. The specialist
  * sees the entire assembled dialogue and the entire original word-indexed
  * source. Its ONLY editing powers are replacing a passage's first/last word
@@ -924,6 +970,8 @@ export async function runEditorialRole(
   ]
   let transcriptReads = 0
   let invalidSubmissions = 0
+  let bestWordRecovery:ReturnType<typeof recoverFootageWordSelections>|null=null
+  let bestRawVisualActions:unknown=null
   await specialistEvent(ctx, budget, role, 'start', {
     wordCount: ctx.cache.words?.length ?? 0, sourceRangeMs: source.rangeMs,
     fullTranscriptDelivered: Array.isArray(context.fullTranscript),
@@ -1006,7 +1054,7 @@ export async function runEditorialRole(
               ? resolveFootageWordSelections(args.selections,ctx.cache.words??[],source.rangeMs)
               : snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
           } catch (firstError) {
-            if(wordFootage)throw firstError // Never reinterpret word IDs as milliseconds.
+            if(wordFootage)throw firstError // Repair only as source-local word IDs, never reinterpret them as milliseconds.
             recovery = recoverEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
             if (!recovery.selections.length) throw firstError
             selections = recovery.selections
@@ -1070,7 +1118,7 @@ export async function runEditorialRole(
             ? context.curatedSelections as EditorialSelection[] | undefined
             : undefined
           const repairHint = wordFootage
-            ? {instruction:'Only fix invalid or nonexistent word IDs or out-of-order ranges. Do not change editorial choices to satisfy seam heuristics.',errorCode}
+            ? {...footageWordRepairHint(args.selections,ctx.cache.words??[],source.rangeMs),errorCode}
             : (role === 'footage' || role === 'dialogue')
             ? selectionRepairHint(args.selections, ctx.cache.words ?? [], source.rangeMs, allowed)
             : {}
@@ -1082,9 +1130,36 @@ export async function runEditorialRole(
           // Models sometimes choose an imprecise word boundary. Reject the
           // proposal but give this specialist a chance to repair it before
           // the entire twenty-minute run fails.
-          if (invalidSubmissions >= 2) {
-            // Returning control to the orchestrator activates the source-grounded
-            // fallback; do not spend seven turns guessing the same impossible edge.
+          if(wordFootage){
+            const recovered=recoverFootageWordSelections(args.selections,ctx.cache.words??[],source.rangeMs)
+            if(recovered.selections.length>(bestWordRecovery?.selections.length??0)){
+              bestWordRecovery=recovered
+              bestRawVisualActions=args.visualActions
+            }
+          }
+          if(invalidSubmissions >= (wordFootage?3:2)){
+            // Never fabricate a generic source-tail replacement. If the LLM
+            // produced two or more genuine nonoverlapping word passages,
+            // retain them as an explicitly provisional paper edit; the
+            // independent Flow specialist gets the real chosen story next.
+            if(wordFootage&&bestWordRecovery&&bestWordRecovery.selections.length>=2){
+              const selectionList=bestWordRecovery.selections
+              let visualActions:VisualActionSelection[]=[]
+              let visualActionOmissions:Array<{id:string;reason:string}>=[]
+              if(visualStory){
+                const visual=recoverVisualActionRequests(bestRawVisualActions,candidates,
+                  (context.storyOutline as EditorialOutline|undefined)?.visualBeats??[],
+                  ctx.cache.words??[],source.rangeMs)
+                visualActions=visual.selections
+                visualActionOmissions=visual.omitted
+              }
+              await specialistEvent(ctx,budget,role,'source_word_recovery',{
+                attempts:invalidSubmissions,retainedOriginalIndices:bestWordRecovery.retainedIndices,
+                rejectedOriginalIndices:bestWordRecovery.rejected,selected:selectionList.map(x=>[x.startMs,x.endMs]),
+                acceptedVisualActions:visualActions,visualActionOmissions,
+                note:'Real source-word passages retained for independent Flow review, not fabricated fallback.'})
+              return {selections:selectionList,visualActions,visualActionOmissions}
+            }
             throw new Error(`specialist_${role}_unusable_submissions`)
           }
           messages.push({
@@ -1093,7 +1168,9 @@ export async function runEditorialRole(
               ok: false,
               error: errorCode,
               repairHint,
-              instruction: 'Correct and resubmit using sourced chronological intervals.',
+              instruction: wordFootage
+                ? 'Resubmit the COMPLETE final edit using source-chronological, nonoverlapping exact word-ID passages. Keep good cuts, replace huge accidental spans, and retain genuine ending and story setup. Visual actions must be bounded to Story-approved observations.'
+                : 'Correct and resubmit using sourced chronological intervals.',
             }),
           })
           continue
