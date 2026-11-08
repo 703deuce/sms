@@ -254,26 +254,64 @@ export async function planMultiSourceStory(
     visualObservations:(visualObservations??[]).map((o,i)=>({...o,id:source.sourceId+':visual_'+i})),
   }))
   const outline=await submit(storyTool,
-    'You are the Story Director for a FINISHED multi-source documentary-style video, not a highlight montage. Independently discover the strongest ONE truthful narrative from the recordings. Design a setup, development, meaningful reveal or insight, and ending. Never invent a conclusion or imply separately recorded people were talking to each other. You may omit an irrelevant source. Story beat sourceIds must refer to real supplied recordings.',
+    'STORY DIRECTOR: Examine ALL independent recordings together before choosing ONE truthful, compelling narrative. Gemini examined video frames with ORIGINAL audio and transcript; time-aligned visual observations are first-class evidence, including silent reactions and actions. Discover what the footage supports, do not force a generic arc or equal screen time. Explicitly nominate helpful visualBeats by observation ID, sourceId and EXACT observed start/end timestamps. Return visualBeats:[] if none. No invented conversation or conclusion.',
     {instruction:instruction??'Find the strongest complete story supported by the footage.',sources:evidence},
     a=>validateMultiStoryOutline(a,inputs),onUsage) as MultiStoryOutline
   const selections=await submit(footageTool,
-    'You are the Footage Editor. Select only exact first and last WORD IDs from the correct source, using sourceId for EVERY selection. Construct the approved story from complete spoken thoughts, reactions and relevant visual context. Source time is always local to the selected source. Do not invent quotes, source IDs, events, or use global word indices. Return final edit passages, not candidate highlights.',
+    'FOOTAGE EDITOR: Use the entire footage evidence and story outline. Select complete dialogue by exact per-source word IDs in selections, PLUS independent source-grounded visualActions for approved Story visualBeats even if there is NO speech. Every visual action needs correct sourceId, visualBeatId, beatId and original millisecond bounds within observed event, with boundaries outside words. Prefer complete visible actions/reactions. Exclude portions already used by dialogue; never duplicate overlapping source material or invent visual actions. Return final cuts, not an inventory; no imposed duration.',
     {outline,sources:evidence},
-    a=>validateMultiStoryCuts(a.selections,inputs,outline),onUsage) as ExecutableMultiStoryCut[]
-  const indices=await submit(flowTool,
-    'You are the Flow Editor. Order the selected passages into one honest, coherent FINISHED story. Preserve complete statements, context, relationships and a source-grounded ending. Return each retained input index exactly once; reorder only if the sequence remains truthful. No deceptive implied conversation or invented response.',
-    {outline,selections},
+    a=>validateMultiStoryCuts([
+      ...(Array.isArray(a.selections)?a.selections:[]),
+      ...(Array.isArray(a.visualActions)?a.visualActions.map(v=>({...object(v),kind:'visual_action'})):[]),
+    ],inputs,outline),onUsage) as ExecutableMultiStoryCut[]
+  const passages=selections.map((cut,index)=>({
+    index,...cut,
+    dialogue:cut.kind==='visual_action'?'[Visual action / original on-location sound]':
+      inputs.find(x=>x.source.sourceId===cut.sourceId)!.words
+        .slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
+  }))
+  const reviewed=await submit(flowTool,
+    'FLOW EDITOR: Examine the complete assembled spoken material in the desired sequence AND the full original transcripts. Reorder when truthful, remove redundant selections, correct incomplete dialogue by firstWordId/lastWordId using ORIGINAL source-local IDs. Preserve visual-only cuts and their observed bounds. Use selectionIndices for retained ORIGINAL indices in final order and corrections for ORIGINAL dialogue indices only. Do not manufacture conversation between speakers. Evaluate every adjacent transition; explain your editorial choices. Unchanged passages need no correction.',
+    {outline,passages,sources:evidence,
+      joinedTransitions:passages.slice(1).map((right,i)=>({
+        leftIndex:i,rightIndex:i+1,
+        leftEnding:passages[i]!.dialogue.split(' ').slice(-25).join(' '),
+        rightOpening:right.dialogue.split(' ').slice(0,25).join(' '),
+      }))},
     a=>{
       const order=a.selectionIndices
-      if(!Array.isArray(order)||order.length!==selections.length||
+      if(!Array.isArray(order)||order.length<1||order.length>selections.length||
         order.some(x=>!Number.isInteger(x)||x<0||x>=selections.length)||
-        new Set(order).size!==selections.length)
+        new Set(order).size!==order.length)
         throw Error('multisource_invalid_flow_order')
+      const adjusted=selections.map(x=>({...x}))
+      const changed=new Set<number>()
+      const corrections=Array.isArray(a.corrections)?a.corrections:[]
+      for(const entry of corrections){
+        const correction=object(entry),index=correction.index
+        if(!Number.isInteger(index)||(index as number)<0||
+          (index as number)>=selections.length||changed.has(index as number)||
+          adjusted[index as number]!.kind==='visual_action')
+          throw Error('multisource_flow_invalid_correction')
+        const previous=adjusted[index as number]!
+        const checked=validateMultiStoryCuts([{
+          sourceId:previous.sourceId,beatId:previous.beatId,
+          reason:nonempty(correction.reason),
+          firstWordId:correction.firstWordId,lastWordId:correction.lastWordId,
+        }],inputs,outline)[0]!
+        adjusted[index as number]=checked
+        changed.add(index as number)
+      }
+      const final=(order as number[]).map(i=>adjusted[i]!)
+      for(let i=0;i<final.length;i++)for(let j=i+1;j<final.length;j++)
+        if(final[i]!.sourceId===final[j]!.sourceId&&
+          Math.max(final[i]!.startMs,final[j]!.startMs)<
+          Math.min(final[i]!.endMs,final[j]!.endMs))
+          throw Error('multisource_flow_overlapping_source')
       nonempty(a.justification)
-      return order as number[]
-    },onUsage) as number[]
-  const cuts=indices.map(i=>selections[i]!)
+      return final
+    },onUsage) as ExecutableMultiStoryCut[]
+  const cuts=reviewed
   return {mode:'multi_source_story_v1',outline,cuts,
     estimatedDurationMs:cuts.reduce((n,c)=>n+c.endMs-c.startMs,0)}
 }
