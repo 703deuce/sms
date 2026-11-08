@@ -7,7 +7,7 @@ import type {ToolSchema} from '@/lib/ai-producer-agent/tools/schemas'
 import type {ExecutableMultiStoryCut,MultiStoryPlan} from '@/lib/ai-producer-agent/multi-source-story'
 import {wordAtUnsafeBoundary} from '@/lib/ai-producer-agent/validate'
 
-export type CleanTakeObservation={startMs:number;endMs:number;observation:string;whyInteresting?:string;spokenContext?:string;category?:string;analysisTier:'coarse_3s'|'focused_1fps'}
+export type CleanTakeObservation={startMs:number;endMs:number;observation:string;whyInteresting?:string;spokenContext?:string;category?:string;analysisTier:'coarse_3s'|'coarse_1fps'|'focused_1fps'}
 export type CleanTakeSource={source:AiProducerSourceRef;words:ClipWord[];visualObservations?:CleanTakeObservation[];visualEvidence?:{originalAudioAttached:boolean;asrTranscriptAttached:boolean;coarseCount:number;focusedCount:number}}
 export type CleanTakeDecision={sourceId:string;firstWordId?:number;lastWordId?:number;startMs?:number;endMs?:number;observationIndex?:number;kind?:'dialogue'|'media_moment';reason:string}
 export type CleanTakePlan=MultiStoryPlan & {mode:'clean_take_v1'}
