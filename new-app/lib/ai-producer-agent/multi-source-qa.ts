@@ -105,7 +105,17 @@ export async function reviseMultiSourceStoryFromQa(
       beatId:cut.beatId,firstWordId:cut.firstWordId,lastWordId:cut.lastWordId,
       startMs:cut.startMs,endMs:cut.endMs,reason:cut.reason,
       visualBeatId:cut.visualBeatId,
-      speakerTurns:cut.kind==='visual_action'?[]:(()=>{\n        const turns:Array<{speakerId:number|null;startWordId:number;endWordId:number}>=[]\n        words.slice(cut.firstWordId,cut.lastWordId+1).forEach((w,i)=>{\n          const speakerId=typeof w.spk==='number'?w.spk:null\n          const previous=turns[turns.length-1]\n          if(previous&&previous.speakerId===speakerId)previous.endWordId=cut.firstWordId+i\n          else turns.push({speakerId,startWordId:cut.firstWordId+i,endWordId:cut.firstWordId+i})\n        })\n        return turns\n      })(),\n      selectedWords:cut.kind==='visual_action'?'[observed visual-only action]':
+      speakerTurns:cut.kind==='visual_action'?[]:(()=>{
+        const turns:Array<{speakerId:number|null;startWordId:number;endWordId:number}>=[]
+        words.slice(cut.firstWordId,cut.lastWordId+1).forEach((w,i)=>{
+          const speakerId=typeof w.spk==='number'?w.spk:null
+          const previous=turns[turns.length-1]
+          if(previous&&previous.speakerId===speakerId)previous.endWordId=cut.firstWordId+i
+          else turns.push({speakerId,startWordId:cut.firstWordId+i,endWordId:cut.firstWordId+i})
+        })
+        return turns
+      })(),
+      selectedWords:cut.kind==='visual_action'?'[observed visual-only action]':
         words.slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
       surroundingWords:cut.kind==='visual_action'?[]:
         words.slice(from,to).map((w,i)=>[from+i,w.w]),
