@@ -350,6 +350,49 @@ describe('isolated Clean Take mode',()=>{
       'proj_a','proj_b','proj_a',
     ])
   })
+  it('repairs a rejected QA sourceId then replaces camera chatter with the actual interview answer',async()=>{
+    let selections=0,reviews=0
+    const events:Array<{stage:string;status:string;reason?:string}>=[]
+    __setLunaImpl(async ({tools,messages})=>{
+      const name=tools[0]!.name
+      if(name==='submit_clean_take')selections++
+      if(name==='review_clean_take')reviews++
+      if(selections===3 && name==='submit_clean_take'){
+        const feedback=JSON.parse(String(messages.filter(m=>m.role==='tool').at(-1)?.content??'{}'))
+        expect(feedback.error).toContain('clean_take_invalid_text:selection_0.sourceId')
+        expect(feedback.instruction).toContain('sourceId')
+      }
+      const selectionsArg=selections===1?[
+        {sourceId:'a',firstWordId:5,lastWordId:14,reason:'setup mixed with answer'},
+        {sourceId:'a',firstWordId:20,lastWordId:29,reason:'closing'},
+      ]:selections===2?[
+        {firstWordId:10,lastWordId:14,reason:'corrected answer missing sourceId'},
+        {sourceId:'a',firstWordId:20,lastWordId:29,reason:'closing'},
+      ]:[
+        {sourceId:'a',firstWordId:10,lastWordId:14,reason:'actual complete answer'},
+        {sourceId:'a',firstWordId:20,lastWordId:29,reason:'closing'},
+      ]
+      const args=name==='submit_clean_take'?{
+        title:'Interview',summary:'Complete subject',
+        endingRule:'Finish topic',selections:selectionsArg,
+      }:reviews===1?{pass:false,issues:['Camera rehearsal inside the opening selection']}:
+        {pass:true,issues:[]}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'qa_retry_'+selections+'_'+reviews,type:'function',
+        function:{name,arguments:JSON.stringify(args)},
+      }]}}
+    })
+    const result=await planCleanTake([a],undefined,undefined,event=>{events.push(event)})
+    expect(selections).toBe(3)
+    expect(reviews).toBe(2)
+    expect(events).toContainEqual(expect.objectContaining({
+      stage:'review',status:'rejected',
+    }))
+    expect(result.plan.cuts.map(c=>[c.firstWordId,c.lastWordId]))
+      .toEqual([[10,14],[20,29]])
+    expect(result.review.pass).toBe(true)
+  })
+
   it('repairs an invalid span via model feedback instead of changing test data',async()=>{
     let calls=0
     __setLunaImpl(async ({tools})=>{
