@@ -4,6 +4,7 @@ import {__setLunaImpl} from '@/lib/ai-producer-agent/luna-client'
 import {validateCleanTakeSelections,planCleanTake,type CleanTakeSource} from '@/lib/ai-producer-agent/clean-take'
 import {buildMultiStoryInsertEdits} from '@/lib/ai-producer-agent/multi-source-assembly'
 import {defaultEdits} from '@/lib/clips/edits'
+import {insertWindows} from '@/lib/clips/editor/inserts'
 
 const make=(id:string):CleanTakeSource=>({
   source:{sourceId:id,kind:'upload',projectId:'proj_'+id,
@@ -73,7 +74,12 @@ describe('isolated Clean Take mode',()=>{
        {id:'upl_a',durationMs:120000,label:'raw.mp4'}],
     )
     expect(edits.trim).toEqual({in:15000,out:22000})
-    expect(edits.inserts?.[0]).toMatchObject({inMs:30000,durMs:14500,append:true,audio:'source'})
+    expect(edits.inserts?.[0]).toMatchObject({inMs:30000,durMs:14500,append:true})
+    // normalizeInserts omits audio='source' by design; the effective E5b
+    // playback window MUST still carry the original selected recording audio.
+    expect(insertWindows([[15000,22000]],edits.inserts)[0]).toMatchObject({
+      inMs:30000,durMs:14500,audio:'source',startMs:7000,endMs:21500,
+    })
   })
   it('allows one session to contain replacement takes from several recordings without generating a documentary',async()=>{
     __setLunaImpl(async ({tools})=>{
