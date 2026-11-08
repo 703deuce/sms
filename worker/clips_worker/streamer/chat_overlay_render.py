@@ -29,7 +29,37 @@ def load_vod_for_project(conn, project_id: str) -> dict[str, Any] | None:
             (project_id,),
         )
         row = cur.fetchone()
-    return dict(row) if row else None
+        if row:
+            return dict(row)
+        # Agent clips live in a dedicated editable project. Their source
+        # window metadata points back to the original, workspace-owned VOD;
+        # do not discard real stream chat merely because the editor project
+        # is separate from the import project.
+        cur.execute('SELECT settings, "workspaceId" FROM clip_projects WHERE id=%s', (project_id,))
+        project = cur.fetchone()
+        if not project:
+            return None
+        settings = project["settings"] or {}
+        if isinstance(settings, str):
+            settings = json.loads(settings)
+        origin = settings.get("sourceAgentParentProjectId") if isinstance(settings, dict) else None
+        window = settings.get("sourceWindowMs") if isinstance(settings, dict) else None
+        if not isinstance(origin, str) or not origin:
+            return None
+        cur.execute("""
+            SELECT v.*, p."workspaceId"
+            FROM stream_vods v
+            JOIN clip_projects p ON p.id=v."projectId"
+            WHERE v."projectId"=%s AND p."workspaceId"=%s
+            LIMIT 1
+        """, (origin, project["workspaceId"]))
+        row = cur.fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        if isinstance(window, list) and len(window)==2:
+            result["sourceOffsetMs"]=int(window[0])
+        return result
 
 
 def chat_overlay_enabled(edits: dict) -> bool:
