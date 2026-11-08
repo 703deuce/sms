@@ -18,8 +18,8 @@ import type { Budget } from '@/lib/ai-producer-agent/budget'
 export async function runMultiSourceStoryOutput(
   ctx:ToolCtx,out:OutputState,budget:Budget,instruction:string|null,
 ):Promise<void>{
-  if(ctx.sources.length!==3)
-    throw Error('multisource_requires_exactly_3_sources')
+  if(ctx.sources.length<2||ctx.sources.length>5)
+    throw Error('multisource_requires_2_to_5_sources')
   const inputs:MultiStorySource[]=[]
   for(const source of ctx.sources){
     if(!source.projectId||!source.rangeMs)throw Error('multisource_source_requires_project')
