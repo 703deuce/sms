@@ -26,14 +26,6 @@ export function readStreamerAgentBatch(raw:unknown):AgentBatch|null{
   return typeof b.id==='string'&&
     ['running','done','canceled'].includes(b.status)?b:null
 }
-async function schedule(parentProjectId:string,batchId:string,delaySec=0){
-  return getPrisma().clipJob.create({data:{
-    id:createId('job'),projectId:parentProjectId,type:'STREAM_AGENT_BATCH',
-    status:'QUEUED',priority:10,maxAttempts:2,
-    runAfter:new Date(Date.now()+delaySec*1000),
-    payload:{batchId},
-  }})
-}
 export async function startStreamerAgentBatch(workspaceId:string,projectId:string,
   mode:Mode,seconds:30|60|90){
   const prisma=getPrisma()
