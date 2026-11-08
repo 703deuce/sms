@@ -28,6 +28,27 @@ def _scratch_for_job(job_id: str) -> Path:
     return d
 
 
+def source_absolute_visual_moments(
+    moments: list[dict], start_ms: int,
+) -> list[dict]:
+    """Gemini watches trimmed proxies with t=0 at the crop start.
+
+    Return original-recording timestamps for visual+audio evidence. Regular
+    non-visual clipper mode keeps its existing coordinate contract.
+    """
+    offset_s = start_ms / 1000.0
+    result: list[dict] = []
+    for moment in moments:
+        item = dict(moment)
+        for field in ("start_s", "end_s", "peak_s", "hook_s"):
+            val = item.get(field)
+            if isinstance(val, (float, int)):
+                item[field] = round(float(val) + offset_s, 3)
+        item["source_time_origin_ms"] = start_ms
+        result.append(item)
+    return result
+
+
 def run_analyze_payload(
     conn,
     *,
@@ -69,6 +90,7 @@ def run_analyze_payload(
         "fps": fps, "media_resolution": resolution, "model_requested": model,
         "original_audio_attached": bool(visual),
         "deepgram_transcript_attached": bool(visual and visual.get("transcriptText")),
+        "times_are_source_absolute": bool(visual),
     }
     for src in sources:
         storage_key = str(src.get("storageKey") or "")
@@ -115,11 +137,14 @@ def run_analyze_payload(
                     })
                     meta_agg["focus_windows_failed"] = int(meta_agg.get("focus_windows_failed") or 0) + 1
                     continue
-                for moment in refined:
+                # Focus analysis times are relative to its own proxy.
+                # Make them absolute BEFORE source-aligned TS evidence filters.
+                absolute = source_absolute_visual_moments(refined, lo)
+                for moment in absolute:
                     moment["sourceId"] = src.get("sourceId")
                     moment["evidence_tier"] = "focused_1fps"
                     moment["inspection_window_ms"] = [lo, hi]
-                moments.extend(refined)
+                moments.extend(absolute)
                 meta_agg["est_usd"] += float(meta.get("est_usd") or 0)
                 meta_agg["focus_windows_analyzed"] = int(meta_agg.get("focus_windows_analyzed") or 0) + 1
                 meta_agg.setdefault("focus_window_results", []).append({
@@ -150,6 +175,11 @@ def run_analyze_payload(
                 fps_override=fps, media_resolution_override=resolution,
                 model_override=model, use_labeled_frames=True if visual else None,
             )
+        # Watch of a source trim returns proxy-relative times; otherwise
+        # candidates after the crop start appear at the wrong original time.
+        # Keep the legacy nonvisual path unchanged.
+        if visual and end_ms > start_ms:
+            moments_part = source_absolute_visual_moments(moments_part, start_ms)
         for m in moments_part:
             m["sourceId"] = src.get("sourceId")
             if visual:
