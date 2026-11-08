@@ -126,6 +126,27 @@ export async function runMultiSourceStoryOutput(
   const plan=await planMultiSourceStory(inputs,instruction??undefined,usage=>{
     budget.steps++
     budget.addLuna(usage)
+  },async event=>{
+    // Durable per-attempt diagnostics. Never log raw transcripts, video
+    // URLs, model prompt bodies or full tool-call arguments.
+    const {stage,attempt,status,errorCode,errorDetail,
+      tokensIn,tokensOut,durationMs,...details}=event
+    const diagnostic={
+      stage,attempt,status,errorCode:errorCode??null,
+      errorDetail:errorDetail??null,...details,
+    }
+    await logAiProducerStep({
+      runId:ctx.runId,stepIndex:++budget.steps,phase:'plan',
+      tool:'multisource_'+stage+'_'+status,
+      kind:status==='rejected'||status==='exhausted'?'validate':'luna',
+      argsSummary:JSON.stringify({stage,attempt,...details}).slice(0,4000),
+      resultSummary:JSON.stringify({status,errorCode}).slice(0,4000),
+      error:status==='rejected'||status==='exhausted'
+        ? (errorDetail??errorCode??'multisource_submission_invalid'):undefined,
+      durationMs,tokensIn,tokensOut,
+    })
+    if(status==='rejected'||status==='exhausted')
+      console.warn('[ai-producer:multisource:submission]',JSON.stringify(diagnostic))
   })
   await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
     phase:'plan',tool:'multisource_story_footage_flow_handoff',kind:'validate',

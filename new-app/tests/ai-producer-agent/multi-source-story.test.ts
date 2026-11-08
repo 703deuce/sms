@@ -170,6 +170,60 @@ describe('isolated multi-source story planner',()=>{
       content:'Quietly turns to a broken device',
     })
   })
+  it('logs the responsible specialist, invalid proposal and the accepted repair',async()=>{
+    const events:import('@/lib/ai-producer-agent/multi-source-story').MultiSourceSpecialistEvent[]=[]
+    let calls=0
+    __setLunaImpl(async ({tools})=>{
+      const name=tools[0]!.name
+      const args=name==='submit_multi_source_story'
+        ? ++calls===1?{...outline,beats:[...outline.beats.slice(0,2),
+            {id:'payoff',purpose:'end',sourceIds:['invented_source']}]}
+          :outline
+        :name==='submit_multi_source_footage'?{selections:[
+          {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'begin'},
+          {sourceId:'b',firstWordId:9,lastWordId:11,beatId:'payoff',reason:'end'},
+        ]}:{selectionIndices:[0,1],joinReviews:[{
+          leftIndex:0,rightIndex:1,status:'flows',reason:'Honest transition',
+        }],justification:'coherent'}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'call_'+calls,type:'function',function:{name,arguments:JSON.stringify(args)},
+      }]}}
+    })
+    const plan=await planMultiSourceStory([a,b,c],undefined,undefined,async event=>{
+      events.push(event)
+    })
+    expect(plan.cuts).toHaveLength(2)
+    expect(events.filter(e=>e.stage==='story').map(e=>e.status)).toEqual([
+      'start','rejected','accepted',
+    ])
+    const rejected=events.find(e=>e.status==='rejected')!
+    expect(rejected.stage).toBe('story')
+    expect(rejected.errorCode).toBe('multisource_invalid_beat_sources')
+    expect(rejected.proposalSummary?.beatsCount).toBe(3)
+    expect(JSON.stringify(rejected)).not.toContain('word0')
+    expect(events.filter(e=>e.status==='accepted').map(e=>e.stage)).toEqual([
+      'story','footage','flow',
+    ])
+  })
+  it('reports terminal specialist and validation cause after three failed repairs',async()=>{
+    const events:import('@/lib/ai-producer-agent/multi-source-story').MultiSourceSpecialistEvent[]=[]
+    __setLunaImpl(async ({tools})=>{
+      const name=tools[0]!.name
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'bad',type:'function',function:{name,arguments:JSON.stringify({
+          ...outline,beats:[{id:'wrong',purpose:'wrong',sourceIds:['missing']}],
+        })},
+      }]}}
+    })
+    await expect(planMultiSourceStory([a,b,c],undefined,undefined,e=>{
+      events.push(e)
+    })).rejects.toThrow('multisource_story_unusable_submissions:multisource_invalid_beats')
+    expect(events.filter(e=>e.status==='rejected')).toHaveLength(3)
+    expect(events.at(-1)).toMatchObject({
+      stage:'story',status:'exhausted',attempt:3,errorCode:'multisource_invalid_beats',
+    })
+    expect(events.some(e=>e.stage==='footage')).toBe(false)
+  })
   it('uses three separate LLM specialist passes and returns exact validated source-aware cuts',async()=>{
     let n=0
     __setLunaImpl(async ({tools})=>{

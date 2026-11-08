@@ -220,39 +220,133 @@ export function validateMultiStoryCuts(
         throw Error('multisource_overlapping_visual_or_speech')
   return selected
 }
+/**
+ * Diagnostics are intentionally small and source-safe: never persist full
+ * transcripts, LLM prompts, raw responses or media URLs in step logs.
+ * A failing model submission is evidence, not an instruction to change cuts.
+ */
+export type MultiSourceSpecialistEvent={
+  stage:'story'|'footage'|'flow'
+  attempt:number
+  status:'start'|'accepted'|'rejected'|'exhausted'
+  errorCode?:string
+  errorDetail?:string
+  toolCallPresent?:boolean
+  submittedToolName?:string
+  argumentBytes?:number
+  proposalSummary?:Record<string,unknown>
+  durationMs?:number
+  tokensIn?:number
+  tokensOut?:number
+}
+export type MultiSourceSpecialistObserver=
+  (event:MultiSourceSpecialistEvent)=>Promise<void>|void
+
+function diagnosticProposal(value:Record<string,unknown>):Record<string,unknown>{
+  const selections=Array.isArray(value.selections)?value.selections:[]
+  const visualActions=Array.isArray(value.visualActions)?value.visualActions:[]
+  const beats=Array.isArray(value.beats)?value.beats:[]
+  const indices=Array.isArray(value.selectionIndices)?value.selectionIndices:[]
+  const changes=Array.isArray(value.corrections)?value.corrections:[]
+  const joins=Array.isArray(value.joinReviews)?value.joinReviews:[]
+  const small=(values:unknown[])=>values.slice(0,4).map(row=>{
+    if(!row||typeof row!=='object')return typeof row
+    const obj=row as Record<string,unknown>
+    return Object.fromEntries(
+      ['sourceId','beatId','visualBeatId','id','firstWordId','lastWordId',
+        'startMs','endMs','index','leftIndex','rightIndex','status']
+        .filter(k=>k in obj).map(k=>[k,obj[k]]))
+  })
+  return {
+    keys:Object.keys(value).slice(0,18),
+    beatsCount:beats.length,beatsSample:small(beats),
+    selectionsCount:selections.length,selectionsSample:small(selections),
+    visualActionsCount:visualActions.length,visualActionsSample:small(visualActions),
+    selectionIndicesCount:indices.length,selectionIndicesSample:indices.slice(0,12),
+    correctionsCount:changes.length,correctionsSample:small(changes),
+    joinReviewsCount:joins.length,joinReviewsSample:small(joins),
+  }
+}
+function errorCode(error:unknown):string{
+  const message=String((error as Error)?.message??error)
+  // Errors raised by our validators use stable snake_case identifiers.
+  return /^[a-z][a-z0-9_]{2,120}$/.test(message)?message:'invalid_json_or_submission'
+}
 async function submit(
   tool:ToolSchema,system:string,user:unknown,
   validate:(value:Record<string,unknown>)=>unknown,
   onUsage?:(usage:import('@/lib/ai-producer-agent/luna-client').LunaUsage|undefined)=>void,
+  onEvent?:MultiSourceSpecialistObserver,
 ):Promise<unknown>{
+  const stage=tool.name==='submit_multi_source_story'?'story':
+    tool.name==='submit_multi_source_footage'?'footage':'flow'
+  const notify=async (event:Omit<MultiSourceSpecialistEvent,'stage'>)=>
+    onEvent?.({...event,stage})
   const messages:import('@/lib/ai-producer-agent/luna-client').LunaMessage[]=[
     {role:'system',content:system},{role:'user',content:JSON.stringify(user)},
   ]
-  for(let attempt=0;attempt<3;attempt++){
-    const response=await lunaChat({messages,tools:[tool],toolChoice:'required'})
-    onUsage?.(response.usage)
+  let lastError='no_tool_call'
+  await notify({attempt:0,status:'start'})
+  for(let attempt=1;attempt<=3;attempt++){
+    const started=Date.now()
+    let response:Awaited<ReturnType<typeof lunaChat>>
+    try {
+      response=await lunaChat({messages,tools:[tool],toolChoice:'required'})
+      onUsage?.(response.usage)
+    }catch(error){
+      lastError='model_request_failed'
+      await notify({attempt,status:'rejected',errorCode:lastError,
+        errorDetail:String((error as Error)?.message??error).slice(0,400),
+        durationMs:Date.now()-started})
+      // Model transport failure should not be mistaken for a validation error.
+      throw Error('multisource_'+stage+'_model_request_failed')
+    }
+    const info={durationMs:Date.now()-started,
+      tokensIn:response.usage?.prompt_tokens,
+      tokensOut:response.usage?.completion_tokens}
     const call=response.message.tool_calls?.find(c=>c.function.name===tool.name)
     if(!call){
-      messages.push(response.message,{role:'user',content:'Submit the required structured tool call.'})
+      lastError='required_tool_call_missing'
+      await notify({attempt,status:'rejected',errorCode:lastError,
+        toolCallPresent:false,
+        submittedToolName:response.message.tool_calls?.[0]?.function.name,
+        ...info})
+      messages.push(response.message,
+        {role:'user',content:'Call '+tool.name+' with the required schema. Do not send prose.'})
       continue
     }
+    let proposal:Record<string,unknown>|undefined
     try{
-      return validate(object(JSON.parse(call.function.arguments)))
-    }catch(e){
+      proposal=object(JSON.parse(call.function.arguments))
+      const accepted=validate(proposal)
+      await notify({attempt,status:'accepted',toolCallPresent:true,
+        submittedToolName:call.function.name,
+        argumentBytes:call.function.arguments.length,
+        proposalSummary:diagnosticProposal(proposal),...info})
+      return accepted
+    }catch(error){
+      lastError=errorCode(error)
+      await notify({attempt,status:'rejected',errorCode:lastError,
+        errorDetail:String((error as Error)?.message??error).slice(0,400),
+        toolCallPresent:true,submittedToolName:call.function.name,
+        argumentBytes:call.function.arguments.length,
+        proposalSummary:proposal?diagnosticProposal(proposal):undefined,...info})
       messages.push(response.message,{
         role:'tool',tool_call_id:call.id,
-        content:JSON.stringify({ok:false,error:String((e as Error).message),
-          instruction:'Repair source IDs, word IDs, beat IDs, or source ranges. Never invent footage.'}),
+        content:JSON.stringify({ok:false,error:String((error as Error)?.message??error),
+          instruction:'Repair the exact invalid source IDs, word IDs, beat IDs, visual observation ranges or join reviews. Do not invent footage. Use the expected tool schema.'}),
       })
     }
   }
-  throw Error('multisource_specialist_unusable_submissions')
+  await notify({attempt:3,status:'exhausted',errorCode:lastError})
+  throw Error('multisource_'+stage+'_unusable_submissions:'+lastError)
 }
 /** Produces a validated creative decision, not an MP4. The separate
  * multi-source render pipeline must consume these source-aware cuts. */
 export async function planMultiSourceStory(
   inputs:MultiStorySource[],instruction?:string,
   onUsage?:(usage:import('@/lib/ai-producer-agent/luna-client').LunaUsage|undefined)=>void,
+  onEvent?:MultiSourceSpecialistObserver,
 ):Promise<MultiStoryPlan>{
   validateMultiStorySources(inputs)
   const evidence=inputs.map(({source,words,visualObservations})=>({
@@ -264,7 +358,7 @@ export async function planMultiSourceStory(
   const outline=await submit(storyTool,
     'STORY DIRECTOR: Examine ALL independent recordings together before choosing ONE truthful, compelling narrative. Gemini examined video frames with ORIGINAL audio and transcript; time-aligned visual observations are first-class evidence, including silent reactions and actions. Discover what the footage supports, do not force a generic arc or equal screen time. Explicitly nominate helpful visualBeats by observation ID, sourceId and EXACT observed start/end timestamps. Return visualBeats:[] if none. No invented conversation or conclusion.',
     {instruction:instruction??'Find the strongest complete story supported by the footage.',sources:evidence},
-    a=>validateMultiStoryOutline(a,inputs),onUsage) as MultiStoryOutline
+    a=>validateMultiStoryOutline(a,inputs),onUsage,onEvent) as MultiStoryOutline
   const selections=await submit(footageTool,
     'FOOTAGE EDITOR: Use the entire footage evidence and story outline. Select complete dialogue by exact per-source word IDs in selections, PLUS independent source-grounded visualActions for approved Story visualBeats even if there is NO speech. Every visual action needs correct sourceId, visualBeatId, beatId and original millisecond bounds within observed event, with boundaries outside words. Prefer complete visible actions/reactions. Exclude portions already used by dialogue; never duplicate overlapping source material or invent visual actions. Return final cuts, not an inventory; no imposed duration.',
     {outline,sources:evidence},
@@ -281,7 +375,7 @@ export async function planMultiSourceStory(
         }catch{/* Unverified visual action omitted; real dialogue remains intact. */}
       }
       return accepted
-    },onUsage) as ExecutableMultiStoryCut[]
+    },onUsage,onEvent) as ExecutableMultiStoryCut[]
   const passages=selections.map((cut,index)=>({
     index,...cut,
     dialogue:cut.kind==='visual_action'?'[Visual action / original on-location sound]':
@@ -344,7 +438,7 @@ export async function planMultiSourceStory(
       }
       nonempty(a.justification)
       return final
-    },onUsage) as ExecutableMultiStoryCut[]
+    },onUsage,onEvent) as ExecutableMultiStoryCut[]
   const cuts=reviewed
   return {mode:'multi_source_story_v1',outline,cuts,
     estimatedDurationMs:cuts.reduce((n,c)=>n+c.endMs-c.startMs,0)}
