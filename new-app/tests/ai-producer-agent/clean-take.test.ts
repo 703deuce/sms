@@ -1,7 +1,7 @@
 import {describe,it,expect,afterEach} from 'vitest'
 import type {ClipWord} from '@/lib/clips/edits'
 import {__setLunaImpl} from '@/lib/ai-producer-agent/luna-client'
-import {validateCleanTakeSelections,planCleanTake,type CleanTakeSource} from '@/lib/ai-producer-agent/clean-take'
+import {validateCleanTakeSelections,repairCleanTakeMediaSelections,planCleanTake,type CleanTakeSource} from '@/lib/ai-producer-agent/clean-take'
 import {buildMultiStoryInsertEdits} from '@/lib/ai-producer-agent/multi-source-assembly'
 import {defaultEdits} from '@/lib/clips/edits'
 import {insertWindows} from '@/lib/clips/editor/inserts'
@@ -125,6 +125,88 @@ describe('isolated Clean Take mode',()=>{
     })
     expect(calls).toEqual(['submit_clean_take','review_clean_take'])
   })
+  it('repairs actual Cinestudy-style word-interior media edges inside their observation, preserving dialogue',()=>{
+    const source:CleanTakeSource={...a,
+      words:Array.from({length:120},(_,i):ClipWord=>({
+        w:'spoken'+i,s:i*.4,e:i*.4+.28,spk:0,
+      })),
+      visualObservations:[{startMs:11000,endMs:17000,
+        observation:'Observed on-camera action and original audio',analysisTier:'focused_1fps'}],
+    }
+    const original=[
+      {sourceId:'a',kind:'media_moment',observationIndex:0,startMs:11500,endMs:16500,reason:'observed action'},
+      {sourceId:'a',firstWordId:60,lastWordId:68,reason:'real corrected explanation'},
+    ]
+    expect(()=>validateCleanTakeSelections(original,[source]))
+      .toThrow('clean_take_media_cut_inside_spoken_word')
+    const fixed=repairCleanTakeMediaSelections(original,[source])
+    expect(fixed.repairs).toHaveLength(1)
+    expect(fixed.omitted).toHaveLength(0)
+    const validated=validateCleanTakeSelections(fixed.selections,[source])
+    expect(validated).toHaveLength(2)
+    expect(validated[0]!.startMs).toBeGreaterThanOrEqual(11000)
+    expect(validated[0]!.endMs).toBeLessThanOrEqual(17000)
+    expect(validated[1]).toMatchObject({firstWordId:60,lastWordId:68})
+  })
+
+  it('repairs the final 200-ms Cinestudy media proposal only inside observed source evidence',()=>{
+    const source:CleanTakeSource={...a,words:[],visualObservations:[{
+      startMs:459800,endMs:464800,observation:'Actual filmed reaction',
+      analysisTier:'focused_1fps',
+    }]}
+    source.words=[{w:'spoken',s:460.1,e:460.4}]
+    const proposal=[{sourceId:'a',kind:'media_moment',observationIndex:0,
+      startMs:463800,endMs:464000,reason:'real observed reaction'}]
+    expect(()=>validateCleanTakeSelections(proposal,[source]))
+      .toThrow('clean_take_media_cut_outside_observation')
+    // Use an actual recording range containing the late source observation.
+    const late={...source,source:{...source.source,rangeMs:[0,1051028] as [number,number]}}
+    const normalized=repairCleanTakeMediaSelections(proposal,[late])
+    expect(normalized.repairs).toHaveLength(1)
+    expect(normalized.omitted).toHaveLength(0)
+    const result=validateCleanTakeSelections(normalized.selections,[late])
+    expect(result[0]!.endMs-result[0]!.startMs).toBeGreaterThanOrEqual(400)
+    expect(result[0]!.startMs).toBeGreaterThanOrEqual(459800)
+    expect(result[0]!.endMs).toBeLessThanOrEqual(464800)
+  })
+
+  it('keeps selected real dialogue when optional observed media cannot fit safely',()=>{
+    const conflicting=[{sourceId:'a',kind:'media_moment',observationIndex:1,
+      startMs:15000,endMs:22000,reason:'already covered by dialogue'},
+      {sourceId:'a',firstWordId:10,lastWordId:14,reason:'correct complete spoken take'}]
+    const result=repairCleanTakeMediaSelections(conflicting,[a])
+    expect(result.omitted).toMatchObject([{index:0,
+      reason:'no_safe_observed_nonoverlapping_media_interval'}])
+    expect(validateCleanTakeSelections(result.selections,[a])).toMatchObject([{
+      firstWordId:10,lastWordId:14,
+    }])
+  })
+
+  it('executes Clean Take QA after repairing media boundaries without spending three full proposal retries',async()=>{
+    let submissions=0
+    __setLunaImpl(async({tools})=>{
+      const name=tools[0]!.name
+      if(name==='submit_clean_take')submissions++
+      const payload=name==='submit_clean_take'?{
+        title:'Best filmed delivery',summary:'Complete original source performance',
+        endingRule:'Finished final paragraph',
+        selections:[
+          {sourceId:'a',kind:'media_moment',observationIndex:0,
+            startMs:1200,endMs:1700,reason:'visible performance'},
+          {sourceId:'a',firstWordId:20,lastWordId:29,reason:'correct completed take'},
+        ],
+      }:{pass:true,issues:[]}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'ct_recover_'+submissions,type:'function',
+        function:{name,arguments:JSON.stringify(payload)},
+      }]}}
+    })
+    const result=await planCleanTake([a])
+    expect(submissions).toBe(1)
+    expect(result.plan.cuts).toHaveLength(2)
+    expect(result.review.pass).toBe(true)
+  })
+
   it('recovers overlapping takes and missing metadata through indexed repair hints while keeping valid source cuts',async()=>{
     const events:Array<{status:string;reason?:string;invalidSelectionIndex?:number;repairHint?:string;proposalSummary?:unknown[]}>= []
     const failures:string[]=[]
