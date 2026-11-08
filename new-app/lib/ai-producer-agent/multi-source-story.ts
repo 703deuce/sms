@@ -228,7 +228,7 @@ export function validateMultiStoryCuts(
 export type MultiSourceSpecialistEvent={
   stage:'story'|'footage'|'flow'
   attempt:number
-  status:'start'|'accepted'|'rejected'|'exhausted'
+  status:'start'|'accepted'|'rejected'|'exhausted'|'filtered'
   errorCode?:string
   errorDetail?:string
   toolCallPresent?:boolean
@@ -382,9 +382,14 @@ export async function planMultiSourceStory(
       inputs.find(x=>x.source.sourceId===cut.sourceId)!.words
         .slice(cut.firstWordId,cut.lastWordId+1).map(w=>w.w).join(' '),
   }))
+  const dialogueIndices=passages.filter(p=>p.kind!=='visual_action').map(p=>p.index)
+  const visualOnlyIndices=passages.filter(p=>p.kind==='visual_action').map(p=>p.index)
+  let ignoredFlowCorrections:Array<{index:unknown;reason:string}>=[]
   const reviewed=await submit(flowTool,
-    'FLOW EDITOR: Examine the complete assembled spoken material in the desired sequence AND the full original transcripts. Reorder when truthful, remove redundant selections, correct incomplete dialogue by firstWordId/lastWordId using ORIGINAL source-local IDs. Preserve visual-only cuts and their observed bounds. Use selectionIndices for retained ORIGINAL indices in final order and corrections for ORIGINAL dialogue indices only. Do not manufacture conversation between speakers. Audit EVERY final adjacent join with joinReviews (leftIndex/rightIndex are FINAL OUTPUT indices). For needs_change also supply a correction affecting either passage, or remove the weak passage instead. Explain your editorial choices. Unchanged passages need no correction.',
-    {outline,passages,sources:evidence,
+    'FLOW EDITOR: Examine the complete assembled spoken material in the desired sequence AND the full original transcripts. Reorder when truthful, remove redundant selections, correct incomplete dialogue by firstWordId/lastWordId using ORIGINAL source-local IDs. CRITICAL: corrections.index is an ORIGINAL input passage index, NOT the position in selectionIndices. ONLY indices in editableDialogueIndices may be corrected with word IDs. Indices in visualOnlyIndices are VISUAL-ONLY footage with no word IDs: preserve them unchanged or OMIT them from selectionIndices; NEVER include them in corrections. Return no corrections for passages you are retaining unchanged. Do not manufacture conversation between speakers. Audit EVERY final adjacent join with joinReviews (leftIndex/rightIndex are FINAL OUTPUT indices). For needs_change also supply a valid dialogue correction affecting either passage, or omit the weak passage. Explain your editorial choices.',
+    {outline,passages,sources:evidence,editableDialogueIndices:dialogueIndices,
+      visualOnlyIndices,
+      correctionIndexRule:'Always refer to the ORIGINAL passage.index, not its final position in selectionIndices. Only editableDialogueIndices can have firstWordId/lastWordId corrections.',
       joinedTransitions:passages.slice(1).map((right,i)=>({
         leftIndex:i,rightIndex:i+1,
         leftEnding:passages[i]!.dialogue.split(' ').slice(-25).join(' '),
@@ -399,12 +404,24 @@ export async function planMultiSourceStory(
       const adjusted=selections.map(x=>({...x}))
       const changed=new Set<number>()
       const corrections=Array.isArray(a.corrections)?a.corrections:[]
+      // Word corrections targeting a silent action are categorically invalid:
+      // retain the real visual unchanged (or allow Flow to omit it through the
+      // final order). Do not throw away every good speech edit for this.
+      const ignored:Array<{index:unknown;reason:string}>=[]
       for(const entry of corrections){
         const correction=object(entry),index=correction.index
         if(!Number.isInteger(index)||(index as number)<0||
-          (index as number)>=selections.length||changed.has(index as number)||
-          adjusted[index as number]!.kind==='visual_action')
-          throw Error('multisource_flow_invalid_correction')
+          (index as number)>=selections.length){
+          ignored.push({index,reason:'nonexistent_original_passage'})
+          continue
+        }
+        if(adjusted[index as number]!.kind==='visual_action'){
+          ignored.push({index,reason:'visual_action_has_no_word_ids'})
+          continue
+        }
+        if(changed.has(index as number)){
+          throw Error('multisource_flow_duplicate_dialogue_correction_at_'+index)
+        }
         const previous=adjusted[index as number]!
         const checked=validateMultiStoryCuts([{
           sourceId:previous.sourceId,beatId:previous.beatId,
@@ -414,6 +431,7 @@ export async function planMultiSourceStory(
         adjusted[index as number]=checked
         changed.add(index as number)
       }
+      ignoredFlowCorrections=ignored
       const final=(order as number[]).map(i=>adjusted[i]!)
       for(let i=0;i<final.length;i++)for(let j=i+1;j<final.length;j++)
         if(final[i]!.sourceId===final[j]!.sourceId&&
@@ -439,6 +457,12 @@ export async function planMultiSourceStory(
       nonempty(a.justification)
       return final
     },onUsage,onEvent) as ExecutableMultiStoryCut[]
+  if(ignoredFlowCorrections.length){
+    await onEvent?.({stage:'flow',attempt:0,status:'filtered',
+      errorCode:'multisource_flow_non_dialogue_corrections_ignored',
+      proposalSummary:{ignoredCorrections:ignoredFlowCorrections,
+        dialogueIndices,visualOnlyIndices}})
+  }
   const cuts=reviewed
   return {mode:'multi_source_story_v1',outline,cuts,
     estimatedDurationMs:cuts.reduce((n,c)=>n+c.endMs-c.startMs,0)}

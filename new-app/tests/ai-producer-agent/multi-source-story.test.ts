@@ -224,6 +224,57 @@ describe('isolated multi-source story planner',()=>{
     })
     expect(events.some(e=>e.stage==='footage')).toBe(false)
   })
+  it('keeps source-accurate silent visuals when Flow mistakenly submits word edits for them',async()=>{
+    const events:import('@/lib/ai-producer-agent/multi-source-story').MultiSourceSpecialistEvent[]=[]
+    const silent={...c,words:[],visualObservations:[{
+      startMs:30000,endMs:38000,observation:'Silent action establishes the stakes',
+    }]}
+    const visualOutline={...outline,visualBeats:[{
+      id:'c:visual_0',sourceId:'c',startMs:30000,endMs:38000,
+      purpose:'show what happened',
+    }],beats:[...outline.beats,{id:'visual',purpose:'silent action',sourceIds:['c']}]}
+    const dialogue=Array.from({length:10},(_,i)=>({
+      sourceId:'a',firstWordId:i*3,lastWordId:i*3+1,
+      beatId:'setup',reason:'spoken passage '+i,
+    }))
+    __setLunaImpl(async ({tools})=>{
+      const name=tools[0]!.name
+      const args=name==='submit_multi_source_story'?visualOutline:
+        name==='submit_multi_source_footage'?{
+          selections:dialogue,visualActions:[{
+            sourceId:'c',visualBeatId:'c:visual_0',startMs:31000,endMs:37000,
+            beatId:'visual',reason:'visual proof',
+          }],
+        }:{
+          selectionIndices:Array.from({length:11},(_,i)=>i),
+          corrections:[
+            {index:0,firstWordId:0,lastWordId:2,reason:'complete sentence'},
+            {index:10,firstWordId:4,lastWordId:9,reason:'erroneously word-edit visual'},
+            {index:11,firstWordId:2,lastWordId:3,reason:'nonexistent cut'},
+          ],
+          joinReviews:Array.from({length:10},(_,i)=>({
+            leftIndex:i,rightIndex:i+1,status:'flows',reason:'credible join',
+          })),
+          justification:'Keep authentic reactions and original dialogue',
+        }
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'call'+name,type:'function',function:{name,arguments:JSON.stringify(args)},
+      }]}}
+    })
+    const plan=await planMultiSourceStory([a,b,silent],undefined,undefined,e=>{
+      events.push(e)
+    })
+    expect(plan.cuts).toHaveLength(11)
+    expect(plan.cuts[0]).toMatchObject({sourceId:'a',firstWordId:0,lastWordId:2})
+    expect(plan.cuts[10]).toMatchObject({kind:'visual_action',sourceId:'c',
+      startMs:31000,endMs:37000,firstWordId:-1,lastWordId:-1})
+    expect(events.filter(e=>e.stage==='flow'&&e.status==='rejected')).toHaveLength(0)
+    expect(events.find(e=>e.stage==='flow'&&e.status==='filtered')?.proposalSummary)
+      .toMatchObject({ignoredCorrections:[
+        {index:10,reason:'visual_action_has_no_word_ids'},
+        {index:11,reason:'nonexistent_original_passage'},
+      ]})
+  })
   it('uses three separate LLM specialist passes and returns exact validated source-aware cuts',async()=>{
     let n=0
     __setLunaImpl(async ({tools})=>{
