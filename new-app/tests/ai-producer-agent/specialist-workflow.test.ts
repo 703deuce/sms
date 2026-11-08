@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { __setLunaImpl } from '@/lib/ai-producer-agent/luna-client'
 import { Budget } from '@/lib/ai-producer-agent/budget'
-import { createEditorialHandoff, runEditorialRole } from '@/lib/ai-producer-agent/specialists'
+import { createEditorialHandoff, runEditorialRole, completeMissingStoryVisualActions } from '@/lib/ai-producer-agent/specialists'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 
@@ -16,6 +16,46 @@ vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
 afterEach(() => __setLunaImpl(null))
 
 describe('AI Producer specialist execution', () => {
+  it('independently considers an observed silent gaming beat after Footage omitted all video actions',async()=>{
+    const observations=[{sourceRangeMs:[210_000,218_000] as [number,number],
+      observation:'Visible game win screen and physical celebration',
+      whyInteresting:'A real victory confirms the payoff',category:'gaming',
+      spokenContext:'',analysisTier:'coarse_3s' as const}]
+    const words=Array.from({length:80},(_,i)=>({w:'speech',s:i,e:i+0.3}))
+    let checked=0
+    __setLunaImpl(async ({tools,messages})=>{
+      checked++
+      expect(tools.map(t=>t.name)).toEqual(['submit_story_visual_action_completion'])
+      const payload=JSON.parse(String(messages[1]!.content))
+      expect(payload.approvedEvents[0].sourceRangeMs).toEqual([210_000,218_000])
+      expect(payload.selectedSpeechWindows).toEqual([[10_000,30_000]])
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'visual_'+checked,type:'function',
+        function:{name:'submit_story_visual_action_completion',
+          arguments:JSON.stringify({visualActions:[{
+            visualBeatId:'visual_0',startMs:210_100,endMs:215_000,
+            beat:'Observed real win',reason:'Game result is visible without dialogue',
+          }],rationale:'Keep the game payoff even with no speech'}),
+        },
+      }]},usage:{prompt_tokens:140,completion_tokens:60}}
+    })
+    const ctx={runId:'visual-game',sources:[{sourceId:'recording',
+      rangeMs:[0,300_000]}],cache:{words,visualEvidence:{
+      coarse:observations,focused:[],metadata:{originalAudioAttached:true},
+    }},config:{visualEvidenceMode:'visual_audio'}} as unknown as ToolCtx
+    const result=await completeMissingStoryVisualActions(ctx,new Budget(),{
+      logline:'Gaming victory',audiencePromise:'See the win',
+      beats:['setup','gameplay','finish'],essentialSetup:'Actual run',
+      intendedPayoff:'Actual win',endingRule:'Finish with reality',
+      excludeAsides:[],highlightCriteria:'Real events',
+      visualBeats:[{id:'visual_0',whyFunnyToWatch:'Real game victory',
+        narrativePurpose:'Payoff'}],
+    },[{startMs:10_000,endMs:30_000,beat:'setup',reason:'Spoken context'}])
+    expect(checked).toBe(1)
+    expect(result.selections).toMatchObject([{kind:'visual_action',
+      visualBeatId:'visual_0',startMs:210_100,endMs:215_000}])
+  })
+
   it('recovers actual game Footage submissions and retains independently observed gameplay actions after the third indexed repair',async()=>{
     const start=178894
     const words=Array.from({length:1251},(_,i)=>({
