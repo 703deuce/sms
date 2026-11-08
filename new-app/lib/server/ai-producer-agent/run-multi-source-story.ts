@@ -191,6 +191,7 @@ export async function runMultiSourceStoryOutput(
           phase:'validate',tool:'multisource_qa_revision_proposal',kind:'validate',
           resultSummary:JSON.stringify({applied:revision.applied,
             reason:revision.reason,removed:revision.removed,repaired:revision.repaired,
+            skippedCorrections:revision.skippedCorrections??[],
             originalCuts:plan.cuts.length,revisedCuts:revision.plan.cuts.length})})
         if(revision.applied){
           const revisedReview=await reviewMultiSourceStory(revision.plan,inputs,usage=>{
