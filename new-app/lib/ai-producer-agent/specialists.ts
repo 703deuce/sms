@@ -1478,9 +1478,32 @@ export async function createEditorialHandoff(
     found = { selections: recovered.selections }
   }
   let footage = found.selections as EditorialSelection[]
+  if(momentClip){
+    // The shared Footage schema permits multi-cut stories. Explicitly repair
+    // that output for this isolated one-take product rather than silently
+    // choosing one of several unreviewed fragments.
+    for(let attempt=1;attempt<=2;attempt++){
+      const seconds=footage.length===1
+        ?(footage[0]!.endMs-footage[0]!.startMs)/1000:0
+      if(footage.length===1&&footage[0]?.kind!=='visual_action'&&
+        seconds>=Math.max(5,ctx.config.targetLengthS[0]-12)&&
+        seconds<=ctx.config.targetLengthS[1]+12)break
+      const corrected=await runEditorialRole(ctx,out,budget,'footage',{
+        ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
+        fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
+        fullTranscript:completeTranscriptWords(ctx.cache.words,true),
+        invalidPriorFootage:footage,
+        instruction:'CORRECT THE SINGLE-MOMENT CLIP: The previous selection was not exactly ONE source-contiguous event of the requested duration. Return exactly one word-ID first/last passage that contains a genuine setup, action, reaction and full ending. Do not return a cut list, collage or montage; no invented words.',
+      })
+      footage=corrected.selections as EditorialSelection[]
+      await specialistEvent(ctx,budget,'footage','single_moment_correction',{
+        attempt,selectionCount:footage.length,durationSeconds:selectionDurationS(footage),
+      })
+    }
+  }
   let visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
   let submittedVisualOmissions=(found.visualActionOmissions as Array<{id:string;reason:string}>|undefined)??[]
-  if(!highlightsMode&&ctx.config.editMode==='just_chatting_rough_cut'&&
+  if(!momentClip&&!highlightsMode&&ctx.config.editMode==='just_chatting_rough_cut'&&
      ctx.config.visualEvidenceMode==='visual_audio'&&ctx.config.targetLengthS[1]<=105&&
      !visualActions.length&&(outline.visualBeats?.length??0)>0){
     const completed=await completeMissingStoryVisualActions(ctx,budget,outline,footage)
