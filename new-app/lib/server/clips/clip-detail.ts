@@ -210,6 +210,13 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       ? storage.getObjectSizeBytes(sourceKey).catch(() => null)
       : Promise.resolve(null)
 
+  // Agent-made streamer clips inherit chat/layout metadata from the original
+  // authorized stream, even though their editable video is a separate window.
+  // Never fetch another workspace's stream metadata by a client supplied ID.
+  const projectSettings = project.settings && typeof project.settings === 'object' &&
+    !Array.isArray(project.settings) ? project.settings as Record<string,unknown> : {}
+  const originId = typeof projectSettings.sourceAgentParentProjectId === 'string'
+    ? projectSettings.sourceAgentParentProjectId : project.id
   const [
     bounds,
     projectTranscript,
@@ -234,8 +241,8 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     cropRawP,
     segmentSizeP,
     uploadSourceSizeP,
-    prisma.streamVod.findUnique({
-      where: { projectId: project.id },
+    prisma.streamVod.findFirst({
+      where: { projectId: originId, workspaceId },
       select: { chatSource: true, chatMessages: true, sourceType: true, state: true, channelId: true },
     }),
     previewKey
