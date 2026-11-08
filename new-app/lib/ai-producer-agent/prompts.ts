@@ -17,6 +17,7 @@ export type AgentPromptContext = {
   resolvedOutputType?: 'single_payoff' | 'montage' | 'story'
   platform: 'tiktok' | 'shorts' | 'reels'
   editMode?: 'just_chatting_rough_cut'
+  clipAgentMode?: 'moment' | 'story'
 }
 
 function readText(root: string, name: string): string {
@@ -69,6 +70,17 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
       : ''
   const template = outputTemplateSection(ctx)
   const platform = platformTargetSection(ctx.platform)
+  if(ctx.clipAgentMode){
+    return [
+      readText(PROMPTS_ROOT,'system.md'),
+      readText(RULEPACK_ROOT,'core-source.md') || readText(RULEPACK_ROOT,'core.md'),
+      ctx.clipAgentMode==='moment'
+        ? 'STREAMER SINGLE MOMENT CLIP: Reuse the approved Story, Footage, Flow, QA and source validation pipeline, but produce exactly one continuous source interval with real setup, action, reaction and payoff. Do not montage or artificially splice separate events. Honor the requested short-form duration and source boundaries.'
+        : 'STREAMER AI STORY CLIP: Reuse the approved Story, Footage, Flow and QA agents to construct one coherent short-form mini-story out of multiple grounded source sections. Keep context and payoff, respect the short-form duration, and never rewrite the original long-form gaming video.',
+      outputTemplateSection(ctx),
+      platformTargetSection(ctx.platform),
+    ].filter(Boolean).join('\n\n---\n\n')
+  }
   if (ctx.editMode === 'just_chatting_rough_cut') {
     // Short-form pack limits and payoff caps do not apply to this long edit.
     const longForm = readText(RULEPACK_ROOT, 'just_chatting_rough_cut.md')

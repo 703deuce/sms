@@ -16,7 +16,7 @@ export type CreateAiProducerRunInput = {
   sources: AiProducerSourceRef[]
   outputType: AiProducerOutputType
   editMode?: 'just_chatting_rough_cut'
-  storyMode?: 'single_source_v1' | 'multi_source_story_v1' | 'clean_take_v1'
+  storyMode?: 'single_source_v1' | 'multi_source_story_v1' | 'clean_take_v1' | 'clip_moment_v1' | 'clip_story_v1'
   roughCutIntent?: 'story' | 'highlights'
   visualEvidenceMode?: 'transcript_baseline' | 'visual_audio'
   genre?: string
@@ -41,6 +41,11 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
   const genre = input.genre ?? 'irl_just_chatting'
   const multiStory = input.storyMode === 'multi_source_story_v1'
   const cleanTake = input.storyMode === 'clean_take_v1'
+  const aiClip = input.storyMode === 'clip_moment_v1' || input.storyMode === 'clip_story_v1'
+  if (aiClip && (input.sources.length !== 1 || input.outputType !== 'story' || input.editMode || input.roughCutIntent))
+    throw Error('clipper_agent_requires_one_source_and_story_output')
+  if (aiClip && input.targetLengthS && (input.targetLengthS[0] < 15 || input.targetLengthS[1] > 105 || input.targetLengthS[1] < input.targetLengthS[0]))
+    throw Error('clipper_agent_target_must_be_15_to_105_seconds')
   if(cleanTake && (input.sources.length<1||input.sources.length>5||
     input.outputType!=='story'||input.editMode||input.roughCutIntent||
     input.music==='library'||input.memeSfx==='meme'))
@@ -65,26 +70,27 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
   const resolvedForConfig =
     input.outputType === 'auto' ? 'single_payoff' : input.outputType === 'story' ? 'story' : input.outputType
   const config: AiProducerRunConfig = {
-    editMode: input.editMode,
+    editMode: aiClip ? 'just_chatting_rough_cut' : input.editMode,
     ...(multiStory ? { storyMode: 'multi_source_story_v1' as const } : {}),
     ...(cleanTake ? { storyMode: 'clean_take_v1' as const } : {}),
-    roughCutIntent: input.editMode === 'just_chatting_rough_cut' ? input.roughCutIntent ?? 'story' : undefined,
-    visualEvidenceMode: multiStory || cleanTake ? 'visual_audio' :
+    ...(aiClip ? { storyMode: input.storyMode } : {}),
+    roughCutIntent: aiClip ? 'story' : input.editMode === 'just_chatting_rough_cut' ? input.roughCutIntent ?? 'story' : undefined,
+    visualEvidenceMode: multiStory || cleanTake || aiClip ? 'visual_audio' :
       input.editMode === 'just_chatting_rough_cut' ? input.visualEvidenceMode ?? 'transcript_baseline' : undefined,
     targetLengthS:
-      (input.editMode === 'just_chatting_rough_cut' ? input.targetLengthS ?? [180, 480] : input.targetLengthS) ??
+      (aiClip ? input.targetLengthS ?? [30, 60] : input.editMode === 'just_chatting_rough_cut' ? input.targetLengthS ?? [180, 480] : input.targetLengthS) ??
       (resolvedForConfig === 'montage'
         ? [30, 60]
         : resolvedForConfig === 'story'
           ? defaultTargetLengthS('story')
           : [15, 30]),
     music:
-      multiStory || cleanTake ? 'none' : input.music ??
+      multiStory || cleanTake || aiClip ? 'none' : input.music ??
       (input.editMode === 'just_chatting_rough_cut' ? 'none' : resolvedForConfig === 'montage' || resolvedForConfig === 'story' ? 'library' : 'none'),
-    memeSfx: multiStory || cleanTake || input.editMode === 'just_chatting_rough_cut' ? 'off' : input.memeSfx ?? 'subtle',
-    exportOnFinish: multiStory || cleanTake ? input.exportOnFinish !== false : Boolean(input.exportOnFinish),
+    memeSfx: multiStory || cleanTake || aiClip || input.editMode === 'just_chatting_rough_cut' ? 'off' : input.memeSfx ?? 'subtle',
+    exportOnFinish: multiStory || cleanTake || aiClip ? input.exportOnFinish !== false : Boolean(input.exportOnFinish),
     geminiUsdCap: AI_PRODUCER_AGENT_GEMINI_USD_CAP,
-    maxEditsPerRun: multiStory || cleanTake || input.editMode === 'just_chatting_rough_cut' ? 1 : AI_PRODUCER_MAX_EDITS_PER_RUN,
+    maxEditsPerRun: multiStory || cleanTake || aiClip || input.editMode === 'just_chatting_rough_cut' ? 1 : AI_PRODUCER_MAX_EDITS_PER_RUN,
   }
   const id = createId('aprun')
   const row = await getPrisma().aiProducerAgentRun.create({

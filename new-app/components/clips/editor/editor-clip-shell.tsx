@@ -46,6 +46,7 @@ export function EditorClipShell(props: {
   streamChannelId: string | null
   fullVideo: boolean
   editorAssets: EditorAssets | null
+  clipperStudio?: boolean
 }) {
   const fallbacks = useMemo(
     () =>
@@ -115,6 +116,7 @@ export function EditorClipShell(props: {
         editorAssets={props.editorAssets}
         onEditorMediaError={onPrimaryMediaError}
         compact={!props.fullVideo}
+        clipperStudio={props.clipperStudio === true}
       />
     </ClipperSurfaceErrorBoundary>
   )

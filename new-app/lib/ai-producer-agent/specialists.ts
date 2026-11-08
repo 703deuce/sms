@@ -939,8 +939,10 @@ export async function runEditorialRole(
     ? [] // Full word-indexed context was supplied. No fragment-reading workflow.
     : TOOL_SCHEMAS.filter((tool) => readTools[role].includes(tool.name))
   const wordFootage=role==='footage' && context.fullTranscriptWordIndexed===true
-  const storyObservation=ctx.config.editMode==='just_chatting_rough_cut' && !highlightsMode && ctx.config.targetLengthS[1]<=105
-  const visualStory=storyObservation && ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence)
+  const agentMoment=ctx.config.storyMode==='clip_moment_v1'
+  const agentStory=ctx.config.storyMode==='clip_story_v1'
+  const storyObservation=ctx.config.editMode==='just_chatting_rough_cut' && !highlightsMode && !agentMoment && !agentStory && ctx.config.targetLengthS[1]<=105
+  const visualStory=(storyObservation||agentStory) && ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence)
   const candidates=visualStory ? buildVisualBeatCandidates(
     ctx.cache.visualEvidence?.coarse??[],ctx.cache.visualEvidence?.focused??[]) : []
   const submitTool=visualStory && role==='story' ? storyWithVisualBeatsSubmission
@@ -967,6 +969,11 @@ export async function runEditorialRole(
             ? 'SHORT HIGHLIGHT OVERRIDE: Produce one concise 30–90 second standalone edit from the strongest sourced exchange. Prioritize an immediate understandable hook, essential context, and a satisfying payoff. Remove digressions and repetition. Short-form compression is intentional; do NOT follow the long-form pacing guidance. Respect meaning, chronology, and honest reactions. Target seconds supplied in the request.'
             : 'LONG CONVERSATION EDIT: Preserve natural context and pacing with complete thoughts. The target duration is advisory, not a failure gate.']),
         ] : []),
+      ...(agentMoment ? [
+        'SINGLE CONTINUOUS STREAMER MOMENT: This is NOT a montage or the long-form story baseline. Story must choose ONE powerful event from the supplied original recording. Footage must submit exactly ONE firstWordId/lastWordId interval spanning its necessary lead-in, action, genuine reaction and finished payoff. No isolated fragments, artificial joins or extra candidate moments. Respect the target seconds. Flow/QA verify completeness but MUST NOT introduce cuts or reorder footage.',
+      ] : agentStory ? [
+        'STREAMER SHORT STORY CLIP: Select several real passages from ONE event, not a documentary or a highlights compilation. Build an understandable setup, escalation, and completed payoff within the requested 30/60/90 second target. Complete source-grounded word boundaries, maintain sequence. Prioritize relevant visual/gameplay actions. Keep the long-form gaming producer unchanged.',
+      ] : []),
       ...(highlightsMode ? [
         'HIGHLIGHTS MODE OVERRIDE: Curate several DISTINCT memorable moments across the WHOLE available source, not one continuous scene with breath cuts. Each moment must be independently understandable and interesting; authentic jokes, surprising answers, revealing quotes, reactions or sharp insights are welcome. Select 2 distinct moments for very short highlights and ideally 3+ for 60–120 seconds, without forcing weak filler. Do not pretend unrelated moments form one chronological story. Avoid repetitive quotes, fabricated context, misleading juxtapositions, dangling sentences, or cuts inside words. Source-order chronological output is required.'
       ] : []),
@@ -978,12 +985,16 @@ export async function runEditorialRole(
       ...(visualStory && (role==='story'||role==='footage') ? {visualBeatCandidates:candidates,
         visualBeatInstruction:'These are observed time-bounded event CANDIDATES, not mandatory clips. Story should choose events worth watching; Footage may retain silent portions as source-ms visualActions only when Story approved the ID. Never use a transcript word timestamp as a made-up action timestamp.'} : {}),
       ...(storyObservation ? {runtimeTargetDisabled:true,experiment:'narrative_coherence_and_boundary_selection_only'} : {outputTargetSeconds:ctx.config.targetLengthS}),
-      editingIntent: highlightsMode ? 'multi_moment_highlights' : ctx.config.targetLengthS[1] <= 105 ? 'short_story' : 'conversational_long_form',
+      editingIntent: agentMoment ? 'single_continuous_streamer_moment' : agentStory ? 'short_streamer_story_clip' : highlightsMode ? 'multi_moment_highlights' : ctx.config.targetLengthS[1] <= 105 ? 'short_story' : 'conversational_long_form',
       ...(role === 'footage' && !highlightsMode &&
-        ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105
+        ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105 && !agentMoment && !agentStory
         ? { preferredEditInstruction: 'STORY BASELINE: the selections ARE the complete final narrative, not a list of candidate moments. Choose a coherent beginning, development and ending with no length target. Do not assemble multiple loosely related stories; omit unrelated or redundant material. Return word IDs and let code cut exactly there; no other agent will trim the selections.' } : {}),
       ...((role === 'footage' || role === 'dialogue')
-        ? { selectionDurationInstruction: highlightsMode
+        ? { selectionDurationInstruction: agentMoment
+          ? 'Exactly ONE contiguous source span only. Pick complete action and reaction with natural start/end inside the target seconds; do not concatenate separate scenes.'
+          : agentStory
+          ? 'Actual final short-form source selections with meaningful setup, escalation and payoff. Use original word IDs and honor the selected duration target.'
+          : highlightsMode
           ? 'Find distinct self-contained highlights from different source moments. Do not count adjacent breath cuts as different moments. Choose compelling footage up to the duration target without padding; finish each excerpt on a complete thought.'
           : storyObservation ? 'For this baseline, IGNORE runtime. Find the complete spoken passages that tell ONE compelling story from opening to resolution. Cut irrelevant digressions and repeated points, but never trim for a duration target. Select accurate starts and endings from the transcript and report exactly those word IDs.'
           : 'For short Story, selections are the ACTUAL EDIT roughly within the target seconds, not hundreds of seconds of candidate footage. Cut whole irrelevant phrases and tangents; keep the setup, development and payoff. Do not pad or cut mid-thought. If truly insufficient material exists, submit the most coherent short edit.' }
@@ -1344,8 +1355,15 @@ export async function createEditorialHandoff(
   const source = ctx.sources[0]
   if (!source?.rangeMs || !ctx.cache.words?.length) throw new Error('rough_cut_transcript_missing')
   const highlightsMode = ctx.config.roughCutIntent === 'highlights'
+  const momentClip = ctx.config.storyMode === 'clip_moment_v1'
+  const storyClip = ctx.config.storyMode === 'clip_story_v1'
+  const clipBrief = momentClip
+    ? 'SINGLE MOMENT CLIP: Find one great source event with the actual opening context, event, reaction and payoff. Return exactly ONE continuous source passage, without montage, unrelated padding or jump cuts. Honor the requested short-form target.'
+    : storyClip
+      ? 'SHORT STORY CLIP: Form one meaningful setup, escalation and genuine source-recorded payoff from multiple nonoverlapping passages. Honor the short-form target; this is NOT the existing long-form gaming mode.'
+      : null
   const base = {
-    instruction,
+    instruction: clipBrief ? [clipBrief,instruction??''].filter(Boolean).join(' ') : instruction,
     // Samples remain available for non-Story workflows; Story and Footage
     // below explicitly replace them with the FULL original transcript.
     transcriptSamples: representativeTranscript(ctx.cache.words, source.rangeMs),
@@ -1355,7 +1373,9 @@ export async function createEditorialHandoff(
       visualAudioEvidence:ctx.cache.visualEvidence,
       visualAudioEvidenceDisclaimer:'Gemini video/audio observations are candidate evidence, not guaranteed facts; ASR word IDs remain authoritative for speech cuts. No frame-based cut execution in this experiment.',
     } : {}),
-    audienceGoal: highlightsMode
+    audienceGoal: momentClip ? 'One unbroken source event with intelligible setup and complete payoff'
+      : storyClip ? 'A tight story assembled from multiple grounded passages with a real payoff'
+      : highlightsMode
       ? 'A highlight reel of multiple distinct, entertaining, independently comprehensible moments across the whole source, with honest context and complete thoughts'
       : ctx.config.targetLengthS[1] <= 105
         ? 'A focused, independently understandable story with full setup, development and an actual recorded payoff. Experimental baseline: ignore the target duration; prioritize complete natural passages and coherent narrative.'
@@ -1370,9 +1390,9 @@ export async function createEditorialHandoff(
       fullTranscriptWordIndexed:true,
       fullTranscriptFormat:'[originalWordId, spokenWord] — ALL spoken words in source order, no omissions',
       fullTranscript:completeTranscriptWords(ctx.cache.words,false),
-      instruction: highlightsMode
+      instruction: clipBrief ?? (highlightsMode
         ? 'Define the editorial criteria for selecting independent, self-contained highlights. The payoff and ending fields express what makes a moment satisfying, not a fabricated shared narrative. Provide all structured creative-brief fields.'
-        : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.',
+        : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.'),
     })
   } catch (error) {
     // Never invent a generic Story for this baseline. Surface the model failure
@@ -1422,11 +1442,11 @@ export async function createEditorialHandoff(
       fullTranscriptWordIndexed:!highlightsMode && ctx.config.editMode==='just_chatting_rough_cut' && ctx.config.targetLengthS[1]<=105,
       fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord] — FULL original source in chronological order',
       fullTranscript:completeTranscriptWords(ctx.cache.words,true),
-      instruction: highlightsMode
+      instruction: clipBrief ?? (highlightsMode
         ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
         : ctx.config.targetLengthS[1] <= 105
         ? 'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source, Story plan, and every spoken word. Choose actual final passages by FIRST/LAST WORD IDS. IGNORE 90 seconds and ALL runtime targets. Tell ONE complete narrative from beginning through genuine recorded resolution, trimming irrelevant tangents but not the story for length. Select complete sentences, not mid-phrase edges. No later Finisher or Dialogue recut will repair your boundaries.'
-        : 'Select coherent source intervals; evidence first, then editorial value.',
+        : 'Select coherent source intervals; evidence first, then editorial value.'),
     })
   } catch (error) {
     // Never replace a Story agent's editorial plan with an unrelated source tail.
@@ -1458,9 +1478,32 @@ export async function createEditorialHandoff(
     found = { selections: recovered.selections }
   }
   let footage = found.selections as EditorialSelection[]
+  if(momentClip){
+    // The shared Footage schema permits multi-cut stories. Explicitly repair
+    // that output for this isolated one-take product rather than silently
+    // choosing one of several unreviewed fragments.
+    for(let attempt=1;attempt<=2;attempt++){
+      const seconds=footage.length===1
+        ?(footage[0]!.endMs-footage[0]!.startMs)/1000:0
+      if(footage.length===1&&footage[0]?.kind!=='visual_action'&&
+        seconds>=Math.max(5,ctx.config.targetLengthS[0]-12)&&
+        seconds<=ctx.config.targetLengthS[1]+12)break
+      const corrected=await runEditorialRole(ctx,out,budget,'footage',{
+        ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
+        fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
+        fullTranscript:completeTranscriptWords(ctx.cache.words,true),
+        invalidPriorFootage:footage,
+        instruction:'CORRECT THE SINGLE-MOMENT CLIP: The previous selection was not exactly ONE source-contiguous event of the requested duration. Return exactly one word-ID first/last passage that contains a genuine setup, action, reaction and full ending. Do not return a cut list, collage or montage; no invented words.',
+      })
+      footage=corrected.selections as EditorialSelection[]
+      await specialistEvent(ctx,budget,'footage','single_moment_correction',{
+        attempt,selectionCount:footage.length,durationSeconds:selectionDurationS(footage),
+      })
+    }
+  }
   let visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
   let submittedVisualOmissions=(found.visualActionOmissions as Array<{id:string;reason:string}>|undefined)??[]
-  if(!highlightsMode&&ctx.config.editMode==='just_chatting_rough_cut'&&
+  if(!momentClip&&!highlightsMode&&ctx.config.editMode==='just_chatting_rough_cut'&&
      ctx.config.visualEvidenceMode==='visual_audio'&&ctx.config.targetLengthS[1]<=105&&
      !visualActions.length&&(outline.visualBeats?.length??0)>0){
     const completed=await completeMissingStoryVisualActions(ctx,budget,outline,footage)
@@ -1468,6 +1511,25 @@ export async function createEditorialHandoff(
     submittedVisualOmissions=[...submittedVisualOmissions,...completed.omitted]
   }
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
+  if(momentClip){
+    // Never silently publish a stitched reel in Single Moment mode.
+    if(footage.length!==1 || footage[0]?.kind==='visual_action')
+      throw Error('clip_moment_requires_one_continuous_source_passage')
+    const first=footage[0]!
+    const seconds=(first.endMs-first.startMs)/1000
+    if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds+12)
+      throw Error('clip_moment_duration_outside_target:'+seconds.toFixed(1))
+    const reviewed=await runStoryFlowReview(ctx,budget,outline,footage)
+    if(reviewed.cutPlan.length!==1 ||
+      reviewed.cutPlan[0]?.startMs!==first.startMs ||
+      reviewed.cutPlan[0]?.endMs!==first.endMs){
+      await specialistEvent(ctx,budget,'flow','moment_preserve_source_continuity',{
+        original:first,proposed:reviewed.cutPlan,
+      })
+    }
+    return {outline,footage,cutPlan:footage,flowReview:reviewed.review,
+      visualActions:[],visualActionOmissions:[]}
+  }
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   if (shortStory) {
     // Footage's original word-ID cuts are preserved as an auditable baseline.
@@ -1479,8 +1541,8 @@ export async function createEditorialHandoff(
       passageCount:footage.length,
       durationSeconds:selectionDurationS(footage),
       targetSeconds:ctx.config.targetLengthS,
-      runtimeTargetDisabled:true,
-      editorialBaseline:'story_coherence_and_cut_boundaries',
+      runtimeTargetDisabled:!storyClip,
+      editorialBaseline:storyClip?'short_story_clip_with_payoff':'story_coherence_and_cut_boundaries',
       appliedCuts: footage,
       storyDecision: outline,
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
@@ -1496,6 +1558,11 @@ export async function createEditorialHandoff(
       reviewed={cutPlan:footage,review:{originalCuts:footage.map(c=>({...c})),changes:[],applied:false,note:'Flow review unavailable: '+errorCode}}
     }
     const combined=combineSpeechWithVisualActions(reviewed.cutPlan,visualActions,ctx.cache.words,source.rangeMs)
+    if(storyClip){
+      const seconds=selectionDurationS(combined.cutPlan)
+      if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds+12)
+        throw Error('clip_story_duration_outside_target:'+seconds.toFixed(1))
+    }
     await specialistEvent(ctx,budget,'footage','visual_actions_handoff',{
       proposed:visualActions,selected:combined.included,omitted:[...submittedVisualOmissions,...combined.omitted],
       finalCutCount:combined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',

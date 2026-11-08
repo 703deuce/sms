@@ -27,6 +27,7 @@ import type { ClipProjectSettings } from '@/lib/clips/settings'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { MontageDialog } from '@/components/streamer/montage-dialog'
+import { StreamerAgentClipMaker } from '@/components/streamer/streamer-agent-clip-maker'
 import { MontageProgress } from '@/components/streamer/montage-progress'
 import { Clapperboard, Film, FileText, Sparkles } from 'lucide-react'
 import Link from 'next/link'
@@ -97,6 +98,7 @@ export function ProjectClipsView({
   fromLink,
   createdAt,
   sourceDurationMs = 0,
+  sourceStartMs = 0,
   isStreamer = false,
   initialProgress = 0,
   initialStage = null,
@@ -117,6 +119,7 @@ export function ProjectClipsView({
   fromLink?: boolean
   createdAt?: string
   sourceDurationMs?: number
+  sourceStartMs?: number
   isStreamer?: boolean
   initialProgress?: number
   initialStage?: string | null
@@ -428,7 +431,7 @@ export function ProjectClipsView({
                 } catch {
                   /* ignore */
                 }
-                router.push(`/app/clips/${projectId}/edit/${clips[0].id}`)
+                router.push(`/app/clips/${projectId}/${isStreamer ? 'studio' : 'edit'}/${clips[0].id}`)
               }}
             >
               <FileText className="mr-1 size-4" />
@@ -451,6 +454,7 @@ export function ProjectClipsView({
           </div>
         }
       />
+      {isStreamer ? <StreamerAgentClipMaker projectId={projectId} ready={status === 'READY'} videoAvailable={projectHasUpload} sourceStartMs={sourceStartMs} sourceDurationMs={sourceDurationMs} /> : null}
       {status === 'FAILED' && !showResults ? (
         <Panel title="Project" description="This upload could not be processed.">
           <ProjectFailedAlert
