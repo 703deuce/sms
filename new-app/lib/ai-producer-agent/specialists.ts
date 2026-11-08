@@ -1238,6 +1238,82 @@ function representativeTranscript(words: ClipWord[], range: [number, number]) {
   })
 }
 
+/** Only when Story approved meaningful observed visuals but Footage returned
+ * none: give gameplay its own small, media-led selection opportunity.
+ * No visual clips are mandatory, and all chosen spans are validated against
+ * original source timestamps and observed audio/video evidence. */
+const visualCompletionTool:ToolSchema={
+  name:'submit_story_visual_action_completion',
+  description:'Independently consider already Story-approved visual/audio events for nonduplicative insertion.',
+  parameters:{type:'object',additionalProperties:false,properties:{
+    visualActions:{type:'array',maxItems:6,items:{
+      type:'object',additionalProperties:false,properties:{
+        visualBeatId:jsonString,startMs:{type:'integer',minimum:0},
+        endMs:{type:'integer',minimum:1},beat:jsonString,reason:jsonString,
+      },required:['visualBeatId','startMs','endMs','beat','reason'],
+    }},
+    rationale:jsonString,
+  },required:['visualActions','rationale']},
+}
+
+export async function completeMissingStoryVisualActions(
+  ctx:ToolCtx,budget:Budget,outline:EditorialOutline,
+  speech:EditorialSelection[],
+):Promise<{selections:VisualActionSelection[];omitted:Array<{id:string;reason:string}>}> {
+  const source=ctx.sources[0],words=ctx.cache.words??[]
+  const approved=outline.visualBeats??[]
+  if(!source?.rangeMs||!approved.length||!ctx.cache.visualEvidence)
+    return {selections:[],omitted:[]}
+  const candidates=buildVisualBeatCandidates(ctx.cache.visualEvidence.coarse??[],
+    ctx.cache.visualEvidence.focused??[])
+  const allowed=candidates.filter(c=>approved.some(a=>a.id===c.id))
+  if(!allowed.length)return {selections:[],omitted:approved.map(a=>({
+    id:a.id,reason:'story_visual_evidence_not_found',
+  }))}
+  try{
+    const reply=await lunaChat({tools:[visualCompletionTool],toolChoice:'required',
+      messages:[
+        {role:'system',content:[
+          'You are the independent GAMEPLAY VISUAL FOOTAGE EDITOR. The story is chosen and word-exact spoken passages are locked. You have real timestamped video/original-audio Gemini observations already approved as relevant by Story.',
+          'Select ONLY the visually significant actions or original-audio events that would improve this ONE true story. Keep source-chronological events. The source timestamps are absolute. Refer to the exact approved visualBeatId and a clip wholly inside its actual observation range. Do not invent an event or extend an observed interval.',
+          'Do not duplicate an action already fully visible in the selected speech footage. An empty array is valid if every valuable moment is already covered by dialogue video or would be unrelated. Video actions should not require a spoken word ID. No quota; quality over quantity.',
+        ].join(' ')},
+        {role:'user',content:JSON.stringify({
+          approvedEvents:allowed.map(c=>({id:c.id,sourceRangeMs:c.sourceRangeMs,
+            observation:c.observation,whyInteresting:c.whyInteresting,
+            spokenContext:c.spokenContext,analysisTier:c.analysisTier})),
+          approvedPurpose:approved,selectedSpeechWindows:speech.map(x=>[x.startMs,x.endMs]),
+          sourceRangeMs:source.rangeMs,
+        })},
+      ]})
+    budget.steps++
+    budget.addLuna(reply.usage)
+    const call=reply.message.tool_calls?.find(x=>
+      x.function.name===visualCompletionTool.name)
+    if(!call)throw Error('visual_completion_missing_submission')
+    const proposed=safeJson(call.function.arguments)
+    if(!proposed||!Array.isArray(proposed.visualActions))
+      throw Error('visual_completion_invalid_submission')
+    const recovered=recoverVisualActionRequests(proposed.visualActions,candidates,
+      approved,words,source.rangeMs)
+    await specialistEvent(ctx,budget,'footage','independent_visual_completion',{
+      proposed:selectionLogSummary({selections:[],visualActions:proposed.visualActions}),
+      accepted:recovered.selections,omitted:recovered.omitted,
+      rationale:String(proposed.rationale??'').slice(0,500),
+    })
+    return {selections:recovered.selections,omitted:recovered.omitted}
+  }catch(error){
+    const reason=String((error as Error)?.message??error).slice(0,230)
+    await specialistEvent(ctx,budget,'footage','independent_visual_completion_unavailable',{
+      reason,approvedBeatIds:approved.map(a=>a.id),
+      note:'Original sourced speech remains available; do not substitute unobserved gameplay.',
+    })
+    return {selections:[],omitted:approved.map(a=>({
+      id:a.id,reason:'visual_completion_unavailable:'+reason,
+    }))}
+  }
+}
+
 export async function createEditorialHandoff(
   ctx: ToolCtx, out: OutputState, budget: Budget, instruction: string | null,
 ): Promise<EditorialHandoff> {
@@ -1358,8 +1434,15 @@ export async function createEditorialHandoff(
     found = { selections: recovered.selections }
   }
   let footage = found.selections as EditorialSelection[]
-  const visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
-  const submittedVisualOmissions=(found.visualActionOmissions as Array<{id:string;reason:string}>|undefined)??[]
+  let visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
+  let submittedVisualOmissions=(found.visualActionOmissions as Array<{id:string;reason:string}>|undefined)??[]
+  if(!highlightsMode&&ctx.config.editMode==='just_chatting_rough_cut'&&
+     ctx.config.visualEvidenceMode==='visual_audio'&&ctx.config.targetLengthS[1]<=105&&
+     !visualActions.length&&(outline.visualBeats?.length??0)>0){
+    const completed=await completeMissingStoryVisualActions(ctx,budget,outline,footage)
+    visualActions=completed.selections
+    submittedVisualOmissions=[...submittedVisualOmissions,...completed.omitted]
+  }
   const [minimumSeconds, maximumSeconds] = ctx.config.targetLengthS
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
   if (shortStory) {
