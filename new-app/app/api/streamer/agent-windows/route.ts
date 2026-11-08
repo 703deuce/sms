@@ -44,6 +44,7 @@ export async function POST(request:Request){
         title:`Agent source · ${source.title} · ${Math.floor(body.rangeStartMs/60_000)}m`,
         settings:JSON.parse(JSON.stringify({
           ...((source.settings??{}) as Record<string,unknown>),
+          rangeStartMs:0,rangeEndMs:duration,
           sourceAgentParentProjectId:source.id,
           sourceWindowMs:[body.rangeStartMs,body.rangeEndMs],
         })) as Prisma.InputJsonValue,
