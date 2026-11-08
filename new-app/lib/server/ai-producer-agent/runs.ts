@@ -40,10 +40,10 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
   await assertNoConcurrentRun(workspaceId)
   const genre = input.genre ?? 'irl_just_chatting'
   const multiStory = input.storyMode === 'multi_source_story_v1'
-  if (multiStory && (input.sources.length!==3 ||
+  if (multiStory && ((input.sources.length<2 || input.sources.length>5) ||
       input.outputType!=='story' || input.editMode || input.roughCutIntent ||
       input.music==='library' || input.memeSfx==='meme')) {
-    throw new Error('multi_source_story_requires_exactly_3_sources_story_output_and_separate_mode')
+    throw new Error('multi_source_story_requires_2_to_5_sources_story_output_and_separate_mode')
   }
   if (genre !== 'irl_just_chatting') throw new Error('genre_not_supported')
   if (input.roughCutIntent && input.editMode !== 'just_chatting_rough_cut') throw new Error('rough_cut_intent_requires_rough_cut_mode')
