@@ -21,3 +21,8 @@ export function clipAgentSourceWindow(source: AiProducerSourceRef): AiProducerSo
     throw Error('clip_agent_requires_bounded_source_window')
   return {...source,rangeMs:[start,end],durationMs:end-start}
 }
+
+/** Less commentary is common in games; never loosen existing long-form ingest. */
+export function minimumAgentTranscriptWords(storyMode?:string):number{
+  return storyMode==='clip_moment_v1'||storyMode==='clip_story_v1'?8:30
+}
