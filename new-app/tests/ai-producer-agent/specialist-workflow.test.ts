@@ -48,11 +48,12 @@ describe('AI Producer specialist execution', () => {
         expect(String(feedback?.content)).toContain('retainedPassages')
         expect(String(feedback?.content)).toContain('nonoverlapping')
       }
+      const actionProposal=turn===1?visualActions:[]
       turn++
       return {message:{role:'assistant',content:null,tool_calls:[{
         id:'game_'+turn,type:'function',
         function:{name:'submit_footage_word_selections',
-          arguments:JSON.stringify({selections:ids,visualActions})},
+          arguments:JSON.stringify({selections:ids,visualActions:actionProposal})},
       }]},usage:{prompt_tokens:100,completion_tokens:25}}
     })
     const ctx={
