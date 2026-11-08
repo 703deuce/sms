@@ -16,7 +16,7 @@ export type CreateAiProducerRunInput = {
   sources: AiProducerSourceRef[]
   outputType: AiProducerOutputType
   editMode?: 'just_chatting_rough_cut'
-  storyMode?: 'single_source_v1' | 'multi_source_story_v1'
+  storyMode?: 'single_source_v1' | 'multi_source_story_v1' | 'clean_take_v1'
   roughCutIntent?: 'story' | 'highlights'
   visualEvidenceMode?: 'transcript_baseline' | 'visual_audio'
   genre?: string
