@@ -260,10 +260,20 @@ export async function planMultiSourceStory(
   const selections=await submit(footageTool,
     'FOOTAGE EDITOR: Use the entire footage evidence and story outline. Select complete dialogue by exact per-source word IDs in selections, PLUS independent source-grounded visualActions for approved Story visualBeats even if there is NO speech. Every visual action needs correct sourceId, visualBeatId, beatId and original millisecond bounds within observed event, with boundaries outside words. Prefer complete visible actions/reactions. Exclude portions already used by dialogue; never duplicate overlapping source material or invent visual actions. Return final cuts, not an inventory; no imposed duration.',
     {outline,sources:evidence},
-    a=>validateMultiStoryCuts([
-      ...(Array.isArray(a.selections)?a.selections:[]),
-      ...(Array.isArray(a.visualActions)?a.visualActions.map(v=>({...object(v),kind:'visual_action'})):[]),
-    ],inputs,outline),onUsage) as ExecutableMultiStoryCut[]
+    a=>{
+      // Match the existing single-source behavior: reject a bad optional visual
+      // action individually, NEVER discard an otherwise valid dialogue edit.
+      let accepted=validateMultiStoryCuts(
+        Array.isArray(a.selections)?a.selections:[],inputs,outline)
+      const visual=Array.isArray(a.visualActions)?a.visualActions:[]
+      for(const entry of visual.slice(0,16)){
+        try {
+          const candidate={...object(entry),kind:'visual_action'}
+          accepted=validateMultiStoryCuts([...accepted,candidate],inputs,outline)
+        }catch{/* Unverified visual action omitted; real dialogue remains intact. */}
+      }
+      return accepted
+    },onUsage) as ExecutableMultiStoryCut[]
   const passages=selections.map((cut,index)=>({
     index,...cut,
     dialogue:cut.kind==='visual_action'?'[Visual action / original on-location sound]':
