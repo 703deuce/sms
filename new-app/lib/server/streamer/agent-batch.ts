@@ -1,5 +1,4 @@
 import 'server-only'
-import type {Prisma} from '@prisma/client'
 import {createId} from '@/lib/supabase/id'
 import {getPrisma} from '@/lib/server/db'
 import {streamerAgentWindows} from '@/lib/streamer/agent-windows'
@@ -37,10 +36,10 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
     sourceDurationMs:source.rangeEndMs-source.rangeStartMs,
     completed:[],errors:[],startedAt:new Date().toISOString(),
   }
-  await prisma.$transaction(async tx=>{
+  await prisma.$transaction(async (tx:Pick<typeof prisma,'clipProject'|'clipJob'>)=>{
     await tx.clipProject.update({where:{id:projectId},data:{
       settings:JSON.parse(JSON.stringify({...asSettings(source.settings),
-        agentClipBatch:batch})) as Prisma.InputJsonValue,
+        agentClipBatch:batch})),
     }})
     await tx.clipJob.create({data:{
       id:createId('job'),projectId,type:'STREAM_AGENT_BATCH',
@@ -51,14 +50,14 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
 }
 async function persistStep(projectId:string,expectedId:string,next:AgentBatch){
   const prisma=getPrisma()
-  await prisma.$transaction(async tx=>{
+  await prisma.$transaction(async (tx:Pick<typeof prisma,'clipProject'|'clipJob'>)=>{
     const project=await tx.clipProject.findUniqueOrThrow({where:{id:projectId}})
     const current=readStreamerAgentBatch(project.settings)
     if(current?.id!==expectedId||current.status!=='running')return
     await tx.clipProject.update({where:{id:projectId},data:{
       settings:JSON.parse(JSON.stringify({
         ...asSettings(project.settings),agentClipBatch:next,
-      })) as Prisma.InputJsonValue,
+      })),
     }})
     if(next.status==='running'){
       await tx.clipJob.create({data:{
@@ -163,7 +162,7 @@ export async function cancelStreamerAgentBatch(workspaceId:string,projectId:stri
   if(!current||current.status!=='running')return false
   await prisma.clipProject.update({where:{id:projectId},data:{
     settings:JSON.parse(JSON.stringify({...asSettings(project.settings),
-      agentClipBatch:{...current,status:'canceled'}})) as Prisma.InputJsonValue,
+      agentClipBatch:{...current,status:'canceled'}})),
   }})
   return true
 }
