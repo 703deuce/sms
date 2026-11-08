@@ -1,5 +1,6 @@
 """Source-window preparation must keep ASR aligned to the downloaded MP4."""
 from clips_worker.streamer.agent_prepare_job import rebase_window_words, MAX_WINDOW_MS
+from clips_worker.chat_overlay_apply import original_chat_range_ms
 
 
 def test_rebase_preserves_only_selected_original_words_and_local_times():
@@ -32,3 +33,9 @@ def test_supports_object_wrapped_words_and_bounded_windows():
     assert rebase_window_words({"words": [
         {"w": "hello", "s": 2.0, "e": 3.0}
     ]}, 0, 5_000)[0]["w"] == "hello"
+
+
+def test_stream_chat_replay_times_follow_original_vod_not_local_window():
+    # 30m into the original VOD, a 12s generated clip begins 4s into the
+    # downloaded agent window. Chat is read in ORIGINAL VOD coordinates.
+    assert original_chat_range_ms(4_000,16_000,1_800_000) == (1_804_000,1_816_000)
