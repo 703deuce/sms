@@ -46,7 +46,7 @@ export type ExecutableMultiStoryCut=MultiStoryCut&{
   endMs:number
 }
 export type MultiStoryPlan={
-  mode:'multi_source_story_v1'
+  mode:'multi_source_story_v1'|'clean_take_v1'
   outline:MultiStoryOutline
   cuts:ExecutableMultiStoryCut[]
   estimatedDurationMs:number
