@@ -25,11 +25,15 @@ export async function POST(request:Request){
     const prisma=getPrisma()
     const source=await prisma.clipProject.findFirst({
       where:{id:body.parentProjectId,workspaceId,deletedAt:null,status:'READY'},
-      include:{streamVod:true,upload:true},
+      include:{streamVod:{include:{channel:true}},upload:true},
     })
     if(!source?.streamVod||!['twitch','kick'].includes(source.streamVod.platform))
       throw Error('stream_agent_source_not_ready_or_not_twitch_kick')
-    if(!source.streamVod.url||!source.streamVod.attestedAt)
+    const connected=source.streamVod.channel?.status==='CONNECTED' &&
+      !source.streamVod.channel?.deletedAt
+    if(!source.streamVod.url&& !source.uploadId)
+      throw Error('stream_agent_video_source_missing')
+    if(!source.streamVod.attestedAt&&!connected)
       throw Error('stream_agent_original_vod_permission_required')
     if(body.rangeStartMs<source.rangeStartMs||
       body.rangeEndMs>source.rangeEndMs)
