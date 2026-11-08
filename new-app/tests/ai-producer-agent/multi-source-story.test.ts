@@ -147,6 +147,44 @@ describe('isolated multi-source story planner',()=>{
       'submit_multi_source_story','submit_multi_source_footage','submit_multi_source_flow',
     ])
   })
+  it('provides source-local diarized reporter turns to Story, Footage, Flow and editorial QA',async()=>{
+    const reporter={...b,words:b.words.map((word,i)=>({
+      ...word,spk:i>=7&&i<=10?2:1,
+      w:i===7?'What':i===8?'happened?':
+        i===9?'Please':i===10?'explain.':word.w,
+    }))}
+    const captured:Array<{name:string;payload:any}>=[]
+    __setLunaImpl(async ({tools,messages})=>{
+      const name=tools[0]!.name
+      captured.push({name,payload:JSON.parse(String(messages[1]!.content))})
+      const args=name==='submit_multi_source_story'?outline:
+        name==='submit_multi_source_footage'?{selections:[
+          {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'context'},
+          {sourceId:'b',firstWordId:5,lastWordId:13,beatId:'conflict',reason:'question and answer'},
+        ]}:name==='submit_multi_source_flow'?{
+          selectionIndices:[0,1],
+          joinReviews:[{leftIndex:0,rightIndex:1,status:'flows',reason:'Independent exchange'}],
+          justification:'Preserve original interview question and answer',
+        }:{pass:true,issues:[]}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'speaker_'+name,type:'function',function:{name,arguments:JSON.stringify(args)},
+      }]}}
+    })
+    const inputs=[a,reporter,c]
+    const plan=await planMultiSourceStory(inputs)
+    const speech=reporter.words[7]!
+    expect(captured[0]!.payload.sources[1].transcript[7]).toEqual([
+      7,Math.round(speech.s*1000),Math.round(speech.e*1000),speech.w,2,
+    ])
+    const flow=captured.find(x=>x.name==='submit_multi_source_flow')!.payload
+    expect(flow.passages[1].speakerTurns.map((t:{speakerId:number})=>t.speakerId))
+      .toEqual([1,2,1])
+    expect(flow.speakerTurnNote).toContain('source-local diarization')
+    await reviewMultiSourceStory(plan,inputs)
+    const qa=captured.find(x=>x.name==='submit_multi_source_editorial_review')!.payload
+    expect(qa.selected[1].speakerTurns.map((t:{speakerId:number})=>t.speakerId))
+      .toEqual([1,2,1])
+  })
   it('allows a Story-approved silent visual-only source cut with exact observed bounds',()=>{
     const visual={...c,words:[],visualObservations:[
       {startMs:30000,endMs:42000,observation:'A silent experiment visibly fails'},
