@@ -6,7 +6,7 @@ vi.mock('@/lib/ai-producer-agent/tools/registry', () => ({
 vi.mock('@/lib/ai-producer-agent/log', () => ({
   logAiProducerStep: vi.fn(), redactArgs: (args: unknown) => args,
 }))
-import { checkEditorialSelections, snapEditorialSelections, recoverEditorialSelections, recoverFootageWordSelections, resolveFootageWordSelections } from '@/lib/ai-producer-agent/specialists'
+import { checkEditorialSelections, snapEditorialSelections, recoverEditorialSelections, recoverFootageWordSelections, footageRecoveryQuality, resolveFootageWordSelections } from '@/lib/ai-producer-agent/specialists'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
 import type { ClipWord } from '@/lib/clips/edits'
 
@@ -61,6 +61,46 @@ describe('AI Producer specialist editorial handoff', () => {
     },...proposals.slice(9)]
     const recoveredSecond=recoverFootageWordSelections(second,gameWords,bounds)
     expect(recoveredSecond.rejected.map(x=>x.index)).toEqual([8,9])
+  })
+
+  it('recovery never emits an authored story with its opening or ending missing', () => {
+    const valid = [
+      { firstWordId:1,lastWordId:5,beat:'opening',reason:'real opening' },
+      { firstWordId:10,lastWordId:15,beat:'development',reason:'real middle' },
+      { firstWordId:20,lastWordId:25,beat:'payoff',reason:'real ending' },
+    ]
+    const openingMissing=[{...valid[0],firstWordId:-1},...valid.slice(1)]
+    const endingMissing=[...valid.slice(0,2),{...valid[2],lastWordId:9999}]
+    const openingRecovery=recoverFootageWordSelections(openingMissing,words,source)
+    const endingRecovery=recoverFootageWordSelections(endingMissing,words,source)
+    expect(openingRecovery.selections).toHaveLength(2)
+    expect(endingRecovery.selections).toHaveLength(2)
+    expect(footageRecoveryQuality(openingRecovery,openingMissing)).toBe(-1)
+    expect(footageRecoveryQuality(endingRecovery,endingMissing)).toBe(-1)
+    expect(footageRecoveryQuality(recoverFootageWordSelections(valid,words,source),valid))
+      .toBeGreaterThan(0)
+  })
+
+  it('ranks the proportion of genuinely valid cuts instead of rewarding noisy proposals', () => {
+    const good=[
+      {firstWordId:1,lastWordId:5,beat:'opening',reason:'story setup'},
+      {firstWordId:20,lastWordId:25,beat:'ending',reason:'story payoff'},
+    ]
+    const noisy=[good[0],...Array.from({length:8},(_,i)=>({
+      firstWordId:6+i,lastWordId:7+i,beat:'overlap '+i,reason:'bad duplicate cut',
+    })),good[1]]
+    const reliable=recoverFootageWordSelections(good,words,source)
+    const unreliable=recoverFootageWordSelections(noisy,words,source)
+    expect(unreliable.selections.length).toBeGreaterThan(reliable.selections.length)
+    expect(footageRecoveryQuality(reliable,good))
+      .toBeGreaterThan(footageRecoveryQuality(unreliable,noisy))
+  })
+
+  it('never interprets out-of-range word IDs as usable millisecond boundaries', () => {
+    const bad=[{firstWordId:words.length,lastWordId:words.length+3,beat:'fake',reason:'not sourced'}]
+    expect(()=>resolveFootageWordSelections(bad,words,source))
+      .toThrow('footage_invalid_or_reversed_word_ids_passage_0')
+    expect(recoverFootageWordSelections(bad,words,source).selections).toEqual([])
   })
 
   it('accepts chronological sourced whole-thought footage', () => {
