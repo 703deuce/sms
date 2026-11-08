@@ -16,6 +16,7 @@ export type CreateAiProducerRunInput = {
   sources: AiProducerSourceRef[]
   outputType: AiProducerOutputType
   editMode?: 'just_chatting_rough_cut'
+  storyMode?: 'single_source_v1' | 'multi_source_story_v1'
   roughCutIntent?: 'story' | 'highlights'
   visualEvidenceMode?: 'transcript_baseline' | 'visual_audio'
   genre?: string
@@ -38,6 +39,12 @@ export async function assertNoConcurrentRun(workspaceId: string) {
 export async function createAiProducerAgentRun(workspaceId: string, userId: string | null, input: CreateAiProducerRunInput) {
   await assertNoConcurrentRun(workspaceId)
   const genre = input.genre ?? 'irl_just_chatting'
+  const multiStory = input.storyMode === 'multi_source_story_v1'
+  if (multiStory && (input.sources.length<2 || input.sources.length>5 ||
+      input.outputType!=='story' || input.editMode || input.roughCutIntent ||
+      input.music==='library' || input.memeSfx==='meme')) {
+    throw new Error('multi_source_story_requires_2_to_5_sources_story_output_and_separate_mode')
+  }
   if (genre !== 'irl_just_chatting') throw new Error('genre_not_supported')
   if (input.roughCutIntent && input.editMode !== 'just_chatting_rough_cut') throw new Error('rough_cut_intent_requires_rough_cut_mode')
   if (input.editMode === 'just_chatting_rough_cut' && input.outputType !== 'story') throw new Error('rough_cut_requires_story_output')
@@ -54,8 +61,10 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
     input.outputType === 'auto' ? 'single_payoff' : input.outputType === 'story' ? 'story' : input.outputType
   const config: AiProducerRunConfig = {
     editMode: input.editMode,
+    storyMode: multiStory ? 'multi_source_story_v1' : 'single_source_v1',
     roughCutIntent: input.editMode === 'just_chatting_rough_cut' ? input.roughCutIntent ?? 'story' : undefined,
-    visualEvidenceMode: input.editMode === 'just_chatting_rough_cut' ? input.visualEvidenceMode ?? 'transcript_baseline' : undefined,
+    visualEvidenceMode: multiStory ? 'visual_audio' :
+      input.editMode === 'just_chatting_rough_cut' ? input.visualEvidenceMode ?? 'transcript_baseline' : undefined,
     targetLengthS:
       (input.editMode === 'just_chatting_rough_cut' ? input.targetLengthS ?? [180, 480] : input.targetLengthS) ??
       (resolvedForConfig === 'montage'
@@ -64,12 +73,12 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
           ? defaultTargetLengthS('story')
           : [15, 30]),
     music:
-      input.music ??
+      multiStory ? 'none' : input.music ??
       (input.editMode === 'just_chatting_rough_cut' ? 'none' : resolvedForConfig === 'montage' || resolvedForConfig === 'story' ? 'library' : 'none'),
-    memeSfx: input.editMode === 'just_chatting_rough_cut' ? 'off' : input.memeSfx ?? 'subtle',
-    exportOnFinish: Boolean(input.exportOnFinish),
+    memeSfx: multiStory || input.editMode === 'just_chatting_rough_cut' ? 'off' : input.memeSfx ?? 'subtle',
+    exportOnFinish: multiStory ? input.exportOnFinish !== false : Boolean(input.exportOnFinish),
     geminiUsdCap: AI_PRODUCER_AGENT_GEMINI_USD_CAP,
-    maxEditsPerRun: input.editMode === 'just_chatting_rough_cut' ? 1 : AI_PRODUCER_MAX_EDITS_PER_RUN,
+    maxEditsPerRun: multiStory || input.editMode === 'just_chatting_rough_cut' ? 1 : AI_PRODUCER_MAX_EDITS_PER_RUN,
   }
   const id = createId('aprun')
   const row = await getPrisma().aiProducerAgentRun.create({
