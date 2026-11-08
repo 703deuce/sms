@@ -6,7 +6,8 @@ import {lunaChat,type LunaUsage,type LunaMessage} from '@/lib/ai-producer-agent/
 import type {ToolSchema} from '@/lib/ai-producer-agent/tools/schemas'
 import type {ExecutableMultiStoryCut,MultiStoryPlan} from '@/lib/ai-producer-agent/multi-source-story'
 
-export type CleanTakeSource={source:AiProducerSourceRef;words:ClipWord[]}
+export type CleanTakeObservation={startMs:number;endMs:number;observation:string;whyInteresting?:string;spokenContext?:string;category?:string;analysisTier:'coarse_3s'|'focused_1fps'}
+export type CleanTakeSource={source:AiProducerSourceRef;words:ClipWord[];visualObservations?:CleanTakeObservation[];visualEvidence?:{originalAudioAttached:boolean;asrTranscriptAttached:boolean;coarseCount:number;focusedCount:number}}
 export type CleanTakeDecision={sourceId:string;firstWordId:number;lastWordId:number;reason:string}
 export type CleanTakePlan=MultiStoryPlan & {mode:'clean_take_v1'}
 export type CleanTakeEvent={stage:'take_selection'|'review';attempt:number;status:'accepted'|'rejected'|'fallback';reason?:string;cuts?:number;sourceSequence?:string[]}
@@ -91,6 +92,8 @@ function transcripts(inputs:CleanTakeSource[]){
     sourceId:source.sourceId,title:source.title,rangeMs:source.rangeMs,
     // Full source transcript, not snippets around heuristically detected fillers.
     words:words.map((w,i)=>[i,Math.round(w.s*1000),Math.round(w.e*1000),w.w,w.spk??null]),
+    visualAudioObservations:inputs.find(x=>x.source.sourceId===source.sourceId)?.visualObservations??[],
+    visualEvidence:inputs.find(x=>x.source.sourceId===source.sourceId)?.visualEvidence??null,
   }))
 }
 function preview(cuts:ExecutableMultiStoryCut[],inputs:CleanTakeSource[]){
@@ -113,14 +116,21 @@ export async function planCleanTake(
   onEvent?:CleanTakeObserver,
 ):Promise<{plan:CleanTakePlan;review:{pass:boolean;issues:string[]};droppedTakeReasons:string[]}>{
   validateCleanTakeSources(inputs)
+  // A transcript-only model must never masquerade as multimodal Clean Take.
+  for(const source of inputs){
+    if(!source.visualEvidence?.originalAudioAttached||
+       !source.visualEvidence.asrTranscriptAttached||
+       !source.visualEvidence.coarseCount||!source.visualObservations?.length)
+      throw Error('clean_take_requires_video_audio_transcript_evidence')
+  }
   const messages:LunaMessage[]=[
     {role:'system',content:[
       'CLEAN TAKE EDITOR: Produce ONE polished, truthful, natural talking-head video from one or more recordings of the SAME intended presentation/session.',
-      'Understand the ENTIRE original transcript before editing. Identify intended message/sections, false starts, repeated attempts at a sentence or paragraph, correction of factual errors, unwanted ums/ahs, flubs, restarts, and long tangents.',
+      'Use THREE modalities together for EVERY editing choice: FULL word-ID transcript, timestamped Gemini visual observations from video FRAMES, and Gemini observations of ORIGINAL audio/speech delivery. These are observations, not direct playback by this model. Prefer complete confident takes with better delivery, stable eye contact/framing, natural gestures and continuity; weigh against spoken correctness. If an observation does not address a claimed vocal or visual quality, do not infer it. All selected word IDs must come from source transcripts, never observations. Understand the ENTIRE original transcript before editing. Identify intended message/sections, false starts, repeated attempts at a sentence or paragraph, correction of factual errors, unwanted ums/ahs, flubs, restarts, and long tangents.',
       'Select the strongest COMPLETE take of each idea; when a speaker restarts and corrects themself, favor the later accurate fluent take if supported, not both mistaken and corrected versions. Preserve the intended message and chronological/logical section order, but source recordings can be revisited when they contain replacement takes. Keep intentional rhetorical repetition, emotion, pauses and conversational tone. Do not delete all fillers mechanically, cut mid-word, or create unnatural jump cuts.',
       'Treat an interview question and its relevant answer as an exchange. Do not splice answers to different questions or present separate sessions as one continuous exchange.',
       'Use source-local exact word IDs for each retained span. Exclude bad attempts in the gaps. Keep complete sentences or coherent paragraphs. Every retained segment must flow into the next as a real speaker would mean it. Pick all meaningful completed content—not merely a few viral highlights. No fixed length, target number of cuts, or source quota.',
-      'You may keep adjacent genuine takes, intercut recordings, or leave extended untouched sections. Source IDs are NOT speaker identities. Return one final ordered list with reasons and a few notes explaining the abandoned retakes.',
+      'For each proposed retained take cross-check the video/audio observations for flubs, grimaces, resets, coughs, off-camera interruptions, visible cuts, delivery, and genuine conversational pauses. Check both sides of every join for a plausible visual/acoustic seam and flag unverified seams for final rendered-media audition. You may keep adjacent genuine takes, intercut recordings, or leave extended untouched sections. Source IDs are NOT speaker identities. Return one final ordered list with reasons and a few notes explaining the abandoned retakes.',
     ].join(' ')},
     {role:'user',content:JSON.stringify({instruction:instruction??'Clean the performance, preserving its meaning and natural delivery.',sources:transcripts(inputs)})},
   ]
@@ -166,7 +176,7 @@ export async function planCleanTake(
   try{
     const result=await lunaChat({tools:[reviewSchema],toolChoice:'required',messages:[
       {role:'system',content:[
-        'Independent CLEAN TAKE editorial QA. Evaluate the selected words in final playback order against the source recording and original transcript. Detect duplicate takes of the same idea, an abandoned sentence mistakenly retained, correction followed by an earlier wrong version, lost questions/answers, grammatical hard cuts, essential missing context, dangling ending, or filler removal that distorts meaning.',
+        'Independent CLEAN TAKE editorial QA. Use the original FULL transcript plus source-aligned timestamped video observations and ORIGINAL audio observations in the supplied evidence. Check each retained clip and its joins for visual reset, apparent delivery issues, framing changes and vocal hesitations where observations support them; explicitly distinguish observed effects from unknown effects requiring render playback. Evaluate the selected words in final playback order against the source recording and original transcript. Detect duplicate takes of the same idea, an abandoned sentence mistakenly retained, correction followed by an earlier wrong version, lost questions/answers, grammatical hard cuts, essential missing context, dangling ending, or filler removal that distorts meaning.',
         'Do NOT fail because source segments are numerous, few, or long. Natural filler/hesitation may be intentional. Do not claim you listened to the final MP4 or saw the visual seams. Give specific, actionable, source-grounded issues.',
       ].join(' ')},
       {role:'user',content:JSON.stringify({outline,selected:preview(cuts,inputs),
@@ -193,7 +203,7 @@ export async function planCleanTake(
     try{
       const revisionResponse=await lunaChat({tools:[selectionSchema],toolChoice:'required',messages:[
         {role:'system',content:[
-          'CLEAN TAKE REPAIR EDITOR: You have the entire original source transcript and a validated first edit. Independent QA found concrete issues. Produce a BETTER complete final edit, not commentary.',
+          'CLEAN TAKE REPAIR EDITOR: You have the entire original source transcript AND timestamped video-frame plus original-audio observations from the same media analysis. Use all three modalities to evaluate proposed retakes, awkward performance, join continuity and visual delivery. Do not infer actual final audio playback from observations. You have a validated first edit. Independent QA found concrete issues. Produce a BETTER complete final edit, not commentary.',
           'Correct duplicated retakes, broken sentences, dropped essential context, orphan questions or rough joins only using ORIGINAL local source word IDs. Do not invent words or delete intentional meaning. Preserve all other successful takes. You may reselect, split, remove or reorder real spans. One final ordered list.',
           'Never prioritize hitting a duration or removing every natural filler over the coherent performance.',
         ].join(' ')},
@@ -217,7 +227,7 @@ export async function planCleanTake(
       }
       const revisedReviewResponse=await lunaChat({tools:[reviewSchema],toolChoice:'required',messages:[
         {role:'system',content:[
-          'Independent clean talking-head EDIT REVIEW. Judge the full edited transcript, retained best takes, cuts, context, closing and prior QA concerns. Do not reward shortening alone. Do not assert render audio or visual seams you did not inspect.',
+          'Independent clean talking-head EDIT REVIEW using full transcript, video and ORIGINAL audio observations. Evaluate retained performance, visual composition/gestures, audio delivery, false starts, cuts, context, closing and prior QA concerns against time-aligned observations; note issues where evidence is missing. Judge the full edited transcript, retained best takes, cuts, context, closing and prior QA concerns. Do not reward shortening alone. Do not assert render audio or visual seams you did not inspect.',
           'Respond pass=true only when no important duplicate retakes, abandoned takes, dangling thoughts, or misleading discontinuities remain.',
         ].join(' ')},
         {role:'user',content:JSON.stringify({

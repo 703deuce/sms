@@ -15,11 +15,64 @@ const make=(id:string):CleanTakeSource=>({
       i===14?'point.':'word_'+i,
     s:i*1.5,e:i*1.5+1,spk:0,
   })),
+  visualObservations:[
+    {startMs:0,endMs:10500,observation:'Speaker flubs then visibly resets and looks down.',
+      whyInteresting:'Original audio has an interrupted sentence and noticeable false start.',
+      spokenContext:'Um, Wait, restart.',analysisTier:'coarse_3s'},
+    {startMs:15000,endMs:22000,observation:'Speaker faces camera and completes their thought.',
+      whyInteresting:'Original audio delivers the sentence fluently in one take.',
+      spokenContext:'Here is the real point.',analysisTier:'focused_1fps'},
+  ],
+  visualEvidence:{originalAudioAttached:true,asrTranscriptAttached:true,
+    coarseCount:1,focusedCount:1},
 })
 const a=make('a'),b=make('b')
 afterEach(()=>__setLunaImpl(null))
 
 describe('isolated Clean Take mode',()=>{
+  it('refuses to edit silently using only transcript when video/original audio evidence is missing',async()=>{
+    await expect(planCleanTake([{...a,visualObservations:[],
+      visualEvidence:{...a.visualEvidence!,originalAudioAttached:false,coarseCount:0}}]))
+      .rejects.toThrow('clean_take_requires_video_audio_transcript_evidence')
+  })
+  it('carries frame and original-audio evidence into BOTH QA revision and second independent QA',async()=>{
+    const checks:{name:string;payload:any}[]=[]
+    let selections=0,reviews=0
+    __setLunaImpl(async ({tools,messages})=>{
+      const name=tools[0]!.name
+      const payload=JSON.parse(String(messages[1]!.content))
+      checks.push({name,payload})
+      if(name==='submit_clean_take')selections++
+      if(name==='review_clean_take')reviews++
+      const args=name==='submit_clean_take'?{
+        title:'Fluent',summary:'A corrected performance',
+        endingRule:'A real completed sentence',
+        selections:selections===1?[
+          {sourceId:'a',firstWordId:0,lastWordId:6,reason:'bad first take'},
+        ]:[
+          {sourceId:'a',firstWordId:10,lastWordId:14,reason:'good replacement take'},
+        ],
+      }:reviews===1?{pass:false,issues:['Opening contains an audible false start and visible reset']}:
+        {pass:true,issues:[]}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'clean_evidence_'+checks.length,type:'function',
+        function:{name,arguments:JSON.stringify(args)},
+      }]}}
+    })
+    const r=await planCleanTake([a])
+    expect(r.plan.cuts[0]?.firstWordId).toBe(10)
+    expect(r.review.pass).toBe(true)
+    expect(checks.map(x=>x.name)).toEqual([
+      'submit_clean_take','review_clean_take','submit_clean_take','review_clean_take',
+    ])
+    for(const check of checks){
+      const sources=check.payload.sources??check.payload.originalTranscripts
+      expect(sources?.[0].visualAudioObservations).toHaveLength(2)
+      expect(sources?.[0].visualEvidence).toMatchObject({
+        originalAudioAttached:true,asrTranscriptAttached:true,
+      })
+    }
+  })
   it('permits a single recording and validates exact non-overlapping best-take cuts',()=>{
     expect(validateCleanTakeSelections([
       {sourceId:'a',firstWordId:10,lastWordId:14,reason:'fluent second attempt'},
@@ -43,8 +96,13 @@ describe('isolated Clean Take mode',()=>{
       const payload=JSON.parse(String(messages[1]!.content))
       if(tool==='submit_clean_take'){
         expect(payload.sources).toHaveLength(1)
+        expect(payload.sources[0].visualEvidence).toMatchObject({originalAudioAttached:true,asrTranscriptAttached:true,focusedCount:1})
+        expect(payload.sources[0].visualAudioObservations.map((o:{analysisTier:string})=>o.analysisTier)).toEqual(['coarse_3s','focused_1fps'])
         expect(payload.sources[0].words).toHaveLength(60)
         expect(payload.sources[0].words[5][3]).toBe('Wait,')
+      }else if(tool==='review_clean_take'){
+        expect(payload.originalTranscripts[0].visualAudioObservations).toHaveLength(2)
+        expect(payload.originalTranscripts[0].visualEvidence.originalAudioAttached).toBe(true)
       }
       const args=tool==='submit_clean_take'?{
         title:'My cleaned talking head',
@@ -62,7 +120,9 @@ describe('isolated Clean Take mode',()=>{
     })
     const result=await planCleanTake([a])
     expect(called).toEqual(['submit_clean_take','review_clean_take'])
-    expect(result.plan.mode).toBe('clean_take_v1')
+    const selectionEvidence=called[0]
+    expect(selectionEvidence).toBe('submit_clean_take')
+        expect(result.plan.mode).toBe('clean_take_v1')
     expect(result.plan.cuts.map(c=>[c.sourceId,c.firstWordId,c.lastWordId]))
       .toEqual([['a',10,14],['a',20,29]])
     expect(result.droppedTakeReasons).toHaveLength(1)
