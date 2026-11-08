@@ -95,6 +95,8 @@ export async function buildToolCtx(run: {
       resolvedOutputType: config.resolvedOutputType,
       platform: run.platform as AgentPromptContext['platform'],
       editMode: config.editMode,
+      clipAgentMode: config.storyMode==='clip_moment_v1'?'moment':
+        config.storyMode==='clip_story_v1'?'story':undefined,
     },
     markUsed(out) {
       for (const seg of out.builder?.segs ?? []) {
