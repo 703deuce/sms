@@ -125,6 +125,58 @@ describe('isolated Clean Take mode',()=>{
     })
     expect(calls).toEqual(['submit_clean_take','review_clean_take'])
   })
+  it('recovers overlapping takes and missing metadata through indexed repair hints while keeping valid source cuts',async()=>{
+    const events:Array<{status:string;reason?:string;invalidSelectionIndex?:number;repairHint?:string;proposalSummary?:unknown[]}>= []
+    const failures:string[]=[]
+    let selections=0
+    __setLunaImpl(async ({tools,messages})=>{
+      const name=tools[0]!.name
+      if(name==='submit_clean_take')selections++
+      if(selections===2&&name==='submit_clean_take'){
+        const previous=messages.filter(m=>m.role==='tool').at(-1)
+        const feedback=JSON.parse(String(previous?.content??'{}'))
+        failures.push(feedback.error)
+        expect(feedback.invalidSelectionIndex).toBe(1)
+        expect(feedback.proposalSummary).toHaveLength(2)
+        expect(feedback.repairHint).toContain('overlap')
+      }
+      if(selections===3&&name==='submit_clean_take'){
+        const previous=messages.filter(m=>m.role==='tool').at(-1)
+        const feedback=JSON.parse(String(previous?.content??'{}'))
+        failures.push(feedback.error)
+        expect(feedback.repairHint).toContain('title')
+      }
+      const selectionsArg=selections===1?[
+        {sourceId:'a',firstWordId:10,lastWordId:14,reason:'complete explanation'},
+        {sourceId:'a',firstWordId:12,lastWordId:18,reason:'overlap mistake'},
+      ]:[
+        {sourceId:'a',firstWordId:10,lastWordId:14,reason:'complete explanation'},
+        {sourceId:'a',firstWordId:20,lastWordId:29,reason:'complete conclusion'},
+      ]
+      const args=name==='submit_clean_take'?{
+        title:selections===2?'':'Polished recording',
+        summary:'Complete explanation',
+        endingRule:'A real conclusion',selections:selectionsArg,
+      }:{pass:true,issues:[]}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'repair_'+selections,type:'function',function:{name,arguments:JSON.stringify(args)},
+      }]}}
+    })
+    const result=await planCleanTake([a],undefined,undefined,e=>{events.push(e)})
+    expect(selections).toBe(3)
+    expect(failures[0]).toContain('clean_take_overlapping_selected_takes:selection_1')
+    expect(failures[1]).toContain('clean_take_invalid_text:title')
+    expect(events.filter(x=>x.status==='rejected')).toHaveLength(2)
+    expect(result.plan.cuts.map(c=>[c.firstWordId,c.lastWordId]))
+      .toEqual([[10,14],[20,29]])
+    expect(result.review.pass).toBe(true)
+  })
+  it('shows precise allowed observed media interval when a media-led selection is outside evidence',()=>{
+    expect(()=>validateCleanTakeSelections([{
+      sourceId:'a',kind:'media_moment',observationIndex:0,
+      startMs:9000,endMs:17000,reason:'needs properly observed footage',
+    }],[a])).toThrow('allowed=[0,10500]')
+  })
   it('permits a single recording and validates exact non-overlapping best-take cuts',()=>{
     expect(validateCleanTakeSelections([
       {sourceId:'a',firstWordId:10,lastWordId:14,reason:'fluent second attempt'},
