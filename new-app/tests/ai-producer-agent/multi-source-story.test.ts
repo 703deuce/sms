@@ -88,8 +88,10 @@ describe('isolated multi-source story planner',()=>{
       expect(step.payload.sources[2].sourceId).toBe('c')
       expect(step.payload.sources[0].transcript).toHaveLength(40)
       expect(step.payload.sources[1].transcript).toHaveLength(40)
-      expect(step.payload.sources[0].visualObservations).toEqual(first.visualObservations)
-      expect(step.payload.sources[1].visualObservations).toEqual(second.visualObservations)
+      expect(step.payload.sources[0].visualObservations).toEqual(
+        first.visualObservations!.map((o,i)=>({...o,id:'a:visual_'+i})))
+      expect(step.payload.sources[1].visualObservations).toEqual(
+        second.visualObservations!.map((o,i)=>({...o,id:'b:visual_'+i})))
     }
     expect(seen.map(x=>x.name)).toEqual([
       'submit_multi_source_story','submit_multi_source_footage','submit_multi_source_flow',
