@@ -105,7 +105,7 @@ const flowTool:ToolSchema={
           status:{type:'string',enum:['flows','needs_change']},reason:stringField},
         required:['leftIndex','rightIndex','status','reason']}},
       justification:stringField},
-    required:['selectionIndices','justification'],
+    required:['selectionIndices','joinReviews','justification'],
   },
 }
 function object(value:unknown):Record<string,unknown>{
