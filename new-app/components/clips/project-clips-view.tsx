@@ -428,7 +428,7 @@ export function ProjectClipsView({
                 } catch {
                   /* ignore */
                 }
-                router.push(`/app/clips/${projectId}/edit/${clips[0].id}`)
+                router.push(`/app/clips/${projectId}/${isStreamer ? 'studio' : 'edit'}/${clips[0].id}`)
               }}
             >
               <FileText className="mr-1 size-4" />
