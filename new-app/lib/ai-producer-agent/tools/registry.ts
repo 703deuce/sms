@@ -3,7 +3,7 @@ import 'server-only'
 import { getPrisma } from '@/lib/server/db'
 import { resolveAiProducerSources } from '@/lib/server/ai-producer-agent/resolve-sources'
 import { loadRoughCutWords } from '@/lib/server/ai-producer-agent/rough-cut-source'
-import { roughCutSourceWindow } from '@/lib/ai-producer-agent/rough-cut-window'
+import { roughCutSourceWindow,clipAgentSourceWindow } from '@/lib/ai-producer-agent/rough-cut-window'
 import { createAiProducerOutputProject } from '@/lib/server/ai-producer-agent/create-output-project'
 import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 import type { AiProducerRunConfig, AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
@@ -68,8 +68,10 @@ export async function buildToolCtx(run: {
   const sourcesRaw = (run.sourceSnapshot ?? []) as AiProducerSourceRef[]
   const allSources = await resolveAiProducerSources(run.workspaceId, sourcesRaw)
   const lockedSingleSource = config.storyMode !== 'multi_source_story_v1'
-  const sources = lockedSingleSource && config.editMode === 'just_chatting_rough_cut'
-    ? allSources.map(roughCutSourceWindow) : allSources
+  const agentClip = config.storyMode === 'clip_moment_v1' || config.storyMode === 'clip_story_v1'
+  const sources = agentClip ? allSources.map(clipAgentSourceWindow)
+    : lockedSingleSource && config.editMode === 'just_chatting_rough_cut'
+      ? allSources.map(roughCutSourceWindow) : allSources
   const roughWords = lockedSingleSource && config.editMode === 'just_chatting_rough_cut'
     ? await loadRoughCutWords(run.workspaceId, sources[0]!) : []
   const totalSourceMs = sources.reduce((acc, s) => acc + (s.durationMs ?? 0), 0)
