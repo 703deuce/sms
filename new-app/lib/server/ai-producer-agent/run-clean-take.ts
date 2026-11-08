@@ -127,7 +127,13 @@ export async function runCleanTakeOutput(
       phase:event.stage==='review'?'validate':'plan',
       tool:'clean_take_'+event.stage+'_'+event.status,
       kind:event.status==='rejected'?'validate':'luna',
-      resultSummary:JSON.stringify(event).slice(0,4000),
+      argsSummary:event.proposalSummary?JSON.stringify({
+        attempt:event.attempt,invalidSelectionIndex:event.invalidSelectionIndex,
+        proposalSummary:event.proposalSummary,
+      }).slice(0,12000):undefined,
+      resultSummary:JSON.stringify({stage:event.stage,status:event.status,
+        attempt:event.attempt,reason:event.reason,repairHint:event.repairHint,
+        cuts:event.cuts,sourceSequence:event.sourceSequence}).slice(0,4000),
       error:event.status==='rejected'?event.reason:undefined,
     })
   })
