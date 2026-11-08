@@ -477,6 +477,11 @@ def handle_stream_agent_prepare(conn, job: dict) -> None:
     _mark_job_done(conn, job["id"])
 
 
+def handle_stream_agent_batch(conn, job: dict) -> None:
+    from clips_worker.streamer.agent_batch_job import handle_stream_agent_batch as advance
+    advance(conn, job)
+
+
 def handle_stream_analyze(conn, job: dict) -> None:
     from clips_worker.streamer.analyze_job import run_stream_analyze_job
 
@@ -562,6 +567,7 @@ DISPATCH: dict[str, object] = {
     "IMPORT_URL": handle_import_url,
     "STREAM_IMPORT": handle_stream_import,
     "STREAM_AGENT_PREPARE": handle_stream_agent_prepare,
+    "STREAM_AGENT_BATCH": handle_stream_agent_batch,
     "STREAM_ANALYZE": handle_stream_analyze,
     "STREAM_RENDER": handle_stream_render,
     "STREAM_RELAYOUT": handle_stream_relayout,
