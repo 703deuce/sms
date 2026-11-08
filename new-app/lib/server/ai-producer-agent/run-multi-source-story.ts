@@ -46,7 +46,7 @@ export async function runMultiSourceStoryOutput(
         moments?:Record<string,unknown>[];meta?:Record<string,unknown>}}|null)?.analyzeResult
       if(!result)throw Error('multisource_visual_analysis_missing')
       input.visualObservations=visualMomentsWithAsr(
-        result.moments,input.words,source.rangeMs!,'coarse_3s',35,
+        result.moments,input.words,source.rangeMs!,'coarse_1fps',35,
       ).map(m=>({startMs:m.sourceRangeMs[0],endMs:m.sourceRangeMs[1],
         observation:m.observation,whyInteresting:m.whyInteresting,
         spokenContext:m.spokenContext,category:m.category,analysisTier:m.analysisTier}))
