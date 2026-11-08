@@ -55,11 +55,11 @@ export async function findMoments(
       ctx.cache.momentsSummary = moments.slice(0, 30)
       if (visualStory && sourceRange) {
         ctx.cache.visualEvidence = {
-          coarse: visualMomentsWithAsr(moments,ctx.cache.words??[],sourceRange,'coarse_3s'),
+          coarse: visualMomentsWithAsr(moments,ctx.cache.words??[],sourceRange,'coarse_1fps'),
           focused:[],
           metadata: {
             model:String((result.meta as Record<string,unknown> | undefined)?.model_requested??'gemini-3.1-flash-lite'),
-            fps:1/3, mediaResolution:'MEDIA_RESOLUTION_LOW',
+            fps:1, mediaResolution:'MEDIA_RESOLUTION_LOW',
             originalAudioAttached:Boolean((result.meta as Record<string,unknown> | undefined)?.original_audio_attached),
             asrTranscriptAttached:Boolean(transcriptText),
           },

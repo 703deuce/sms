@@ -76,7 +76,9 @@ def run_analyze_payload(
     if mode == "visual_detail" and visual is None:
         raise ValueError("visual_detail_requires_visual_evidence")
     if visual:
-        fps = (1.0 if mode == "visual_detail" else 1.0 / 3.0)
+        # Both the initial whole-source watch and focused follow-up use 1 fps.
+        # Shared by single-source Story, multi-source Story and Clean Take.
+        fps = 1.0
         model = str(visual.get("model") or "gemini-3.1-flash-lite")
         resolution = "MEDIA_RESOLUTION_LOW"
     else:
@@ -102,7 +104,7 @@ def run_analyze_payload(
         start_ms = int(range_ms[0] or 0)
         end_ms = int(range_ms[1] or 0) if range_ms[1] is not None else 0
         if mode == "visual_detail":
-            # Only the few model-selected coarse regions are inspected at 1 fps.
+            # Only the few model-selected first-pass regions are revisited at 1 fps.
             windows = list(visual.get("focusWindows") or [])[:3] if visual else []
             source_end = end_ms if end_ms > start_ms else int(src.get("durationMs") or 0)
             for index, window in enumerate(windows):
@@ -183,7 +185,7 @@ def run_analyze_payload(
         for m in moments_part:
             m["sourceId"] = src.get("sourceId")
             if visual:
-                m["evidence_tier"] = "coarse_3s"
+                m["evidence_tier"] = "coarse_1fps"
         moments.extend(moments_part)
         meta_agg["est_usd"] = float(meta_agg.get("est_usd") or 0) + float(meta.get("est_usd") or 0)
     duration_s = max(1, int((sources[0].get("durationMs") or 60_000) // 1000))

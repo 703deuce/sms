@@ -6,7 +6,7 @@ export type VisualMomentEvidence = {
   whyInteresting: string
   category: string
   spokenContext: string
-  analysisTier: 'coarse_3s' | 'focused_1fps'
+  analysisTier: 'coarse_3s' | 'coarse_1fps' | 'focused_1fps'
 }
 
 /** Use only existing ASR words. These are source-relative timestamps for the
@@ -51,7 +51,7 @@ function description(row:Record<string,unknown>) {
 /** Never label a raw model observation a proven on-screen fact. */
 export function visualMomentsWithAsr(
   raw:unknown, words:ClipWord[], range:[number,number],
-  tier:'coarse_3s'|'focused_1fps', maxRows=30,
+  tier:'coarse_3s'|'coarse_1fps'|'focused_1fps', maxRows=30,
 ):VisualMomentEvidence[] {
   if(!Array.isArray(raw)) return []
   const evidence:VisualMomentEvidence[]=[]

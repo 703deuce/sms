@@ -44,7 +44,7 @@ export async function runCleanTakeOutput(
     }}|null)?.analyzeResult
     if(!analysis)throw Error('clean_take_multimodal_analysis_unavailable')
     const coarse=visualMomentsWithAsr(
-      analysis.moments,input.words,source.rangeMs!,'coarse_3s',50)
+      analysis.moments,input.words,source.rangeMs!,'coarse_1fps',50)
     const attached=analysis.meta?.original_audio_attached===true
     if(!attached||coarse.length===0)
       throw Error('clean_take_video_original_audio_observations_missing')

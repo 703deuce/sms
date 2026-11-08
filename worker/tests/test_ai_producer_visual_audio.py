@@ -21,7 +21,7 @@ def _source():
     }
 
 
-def test_coarse_visual_story_uses_three_second_low_frames_original_audio_asr(finder, monkeypatch):
+def test_first_pass_uses_one_second_low_frames_original_audio_asr(finder, monkeypatch):
     recorded = []
 
     def watch(_local, **kwargs):
@@ -41,12 +41,39 @@ def test_coarse_visual_story_uses_three_second_low_frames_original_audio_asr(fin
         },
     )
     assert len(recorded) == 1
-    assert recorded[0]["fps_override"] == pytest.approx(1 / 3)
+    assert recorded[0]["fps_override"] == pytest.approx(1.0)
     assert recorded[0]["media_resolution_override"] == "MEDIA_RESOLUTION_LOW"
     assert recorded[0]["force_audio"] is True
     assert "Deepgram" in recorded[0]["transcript_text"]
-    assert result["moments"][0]["evidence_tier"] == "coarse_3s"
+    assert result["moments"][0]["evidence_tier"] == "coarse_1fps"
     assert result["meta"]["original_audio_attached"] is True
+    assert result["meta"]["fps"] == pytest.approx(1.0)
+    assert result["meta"]["media_resolution"] == "MEDIA_RESOLUTION_LOW"
+
+
+@pytest.mark.parametrize("story_mode", [
+    "single_source_story_v1", "multi_source_story_v1", "clean_take_v1",
+])
+def test_each_story_mode_uses_same_low_resolution_one_fps_first_pass(finder, monkeypatch, story_mode):
+    captured = []
+    def watch(_local, **kwargs):
+        captured.append(kwargs)
+        return ([{"start_s": 1, "end_s": 9, "what_happened": "presenter"}],
+                [], {"est_usd": 0.01})
+    monkeypatch.setattr(finder, "watch_upload_range", watch)
+    result = finder.run_analyze_payload(
+        MagicMock(), job={"id": "fps-" + story_mode}, progress=lambda *_: None,
+        payload={
+            "mode": "best_moments", "storyMode": story_mode, "sources": [_source()],
+            "visualEvidence": {"enabled": True, "model": "gemini-3.1-flash-lite",
+                               "transcriptText": "on-topic dialogue"},
+        },
+    )
+    assert len(captured) == 1
+    assert captured[0]["fps_override"] == 1.0
+    assert captured[0]["media_resolution_override"] == "MEDIA_RESOLUTION_LOW"
+    assert captured[0]["force_audio"] is True
+    assert result["moments"][0]["evidence_tier"] == "coarse_1fps"
 
 
 def test_focused_visual_story_rechecks_limited_windows_at_one_fps(finder, monkeypatch):
