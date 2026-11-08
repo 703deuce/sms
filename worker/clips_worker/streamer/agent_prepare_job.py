@@ -44,6 +44,8 @@ def rebase_window_words(raw, start_ms: int, end_ms: int) -> list[dict]:
         a["e"] = min((end_ms - start_ms) / 1000, e - start_ms / 1000)
         if a["e"] > a["s"]:
             out.append(a)
+    for index, word in enumerate(out):
+        word["i"] = index
     return out
 
 
