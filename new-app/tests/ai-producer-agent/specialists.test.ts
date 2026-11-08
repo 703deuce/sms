@@ -86,9 +86,13 @@ describe('AI Producer specialist editorial handoff', () => {
       {firstWordId:1,lastWordId:5,beat:'opening',reason:'story setup'},
       {firstWordId:20,lastWordId:25,beat:'ending',reason:'story payoff'},
     ]
-    const noisy=[good[0],...Array.from({length:8},(_,i)=>({
-      firstWordId:6+i,lastWordId:7+i,beat:'overlap '+i,reason:'bad duplicate cut',
-    })),good[1]]
+    const noisy=[good[0],
+      ...[6,9,12,15].map(i=>({firstWordId:i,lastWordId:i+1,beat:'middle',reason:'valid but fragmented'})),
+      ...Array.from({length:6},(_,i)=>({
+        firstWordId:-10-i,lastWordId:-1,beat:'invalid '+i,reason:'nonexistent transcript IDs',
+      })),
+      good[1],
+    ]
     const reliable=recoverFootageWordSelections(good,words,source)
     const unreliable=recoverFootageWordSelections(noisy,words,source)
     expect(unreliable.selections.length).toBeGreaterThan(reliable.selections.length)
