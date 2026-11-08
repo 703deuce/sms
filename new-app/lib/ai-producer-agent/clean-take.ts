@@ -157,7 +157,7 @@ export async function planCleanTake(
     endingRule:nonempty(chosen!.endingRule),
     beats:[{id:'clean_take',purpose:'Polished complete presentation, best complete takes in coherent order',sourceIds}],
   }
-  const plan:CleanTakePlan={mode:'clean_take_v1',outline,cuts,
+  let plan:CleanTakePlan={mode:'clean_take_v1',outline,cuts,
     estimatedDurationMs:cuts.reduce((n,c)=>n+c.endMs-c.startMs,0)}
   const droppedTakeReasons=Array.isArray(chosen!.droppedTakeReasons)
     ? chosen!.droppedTakeReasons.filter((v):v is string=>typeof v==='string').slice(0,24)
@@ -185,6 +185,66 @@ export async function planCleanTake(
   }catch(error){
     await onEvent?.({stage:'review',attempt:1,status:'fallback',
       reason:String((error as Error).message).slice(0,250)})
+  }
+  // One bounded rewrite from independent QA. This is the same original
+  // transcript and word validator, not text reconstruction. Keep the initial
+  // renderable plan if the revision is invalid or independent QA does not improve.
+  if(!review.pass && review.issues.length && review.issues[0]!=='Editorial review unavailable'){
+    try{
+      const revisionResponse=await lunaChat({tools:[selectionSchema],toolChoice:'required',messages:[
+        {role:'system',content:[
+          'CLEAN TAKE REPAIR EDITOR: You have the entire original source transcript and a validated first edit. Independent QA found concrete issues. Produce a BETTER complete final edit, not commentary.',
+          'Correct duplicated retakes, broken sentences, dropped essential context, orphan questions or rough joins only using ORIGINAL local source word IDs. Do not invent words or delete intentional meaning. Preserve all other successful takes. You may reselect, split, remove or reorder real spans. One final ordered list.',
+          'Never prioritize hitting a duration or removing every natural filler over the coherent performance.',
+        ].join(' ')},
+        {role:'user',content:JSON.stringify({
+          instruction:instruction??null,originalTranscripts:transcripts(inputs),
+          firstEdit:{outline:plan.outline,selected:preview(plan.cuts,inputs)},
+          qaIssues:review.issues,
+        })},
+      ]})
+      onUsage?.(revisionResponse.usage)
+      const call=revisionResponse.message.tool_calls?.find(c=>c.function.name===selectionSchema.name)
+      if(!call)throw Error('clean_take_revision_missing_tool')
+      const parsed=object(JSON.parse(call.function.arguments))
+      const revisedCuts=validateCleanTakeSelections(parsed.selections,inputs)
+      const changed=JSON.stringify(revisedCuts.map(c=>[c.sourceId,c.firstWordId,c.lastWordId]))!==
+        JSON.stringify(plan.cuts.map(c=>[c.sourceId,c.firstWordId,c.lastWordId]))
+      if(!changed)throw Error('clean_take_revision_no_change')
+      const revisedOutline={
+        ...plan.outline,title:nonempty(parsed.title),logline:nonempty(parsed.summary),
+        endingRule:nonempty(parsed.endingRule),
+      }
+      const revisedReviewResponse=await lunaChat({tools:[reviewSchema],toolChoice:'required',messages:[
+        {role:'system',content:[
+          'Independent clean talking-head EDIT REVIEW. Judge the full edited transcript, retained best takes, cuts, context, closing and prior QA concerns. Do not reward shortening alone. Do not assert render audio or visual seams you did not inspect.',
+          'Respond pass=true only when no important duplicate retakes, abandoned takes, dangling thoughts, or misleading discontinuities remain.',
+        ].join(' ')},
+        {role:'user',content:JSON.stringify({
+          outline:revisedOutline,selected:preview(revisedCuts,inputs),
+          originalTranscripts:transcripts(inputs),priorIssues:review.issues,
+        })},
+      ]})
+      onUsage?.(revisedReviewResponse.usage)
+      const qaCall=revisedReviewResponse.message.tool_calls?.find(x=>x.function.name===reviewSchema.name)
+      if(!qaCall)throw Error('clean_take_revision_review_missing')
+      const qaObj=object(JSON.parse(qaCall.function.arguments))
+      if(typeof qaObj.pass!=='boolean'||!Array.isArray(qaObj.issues)||
+        qaObj.issues.some(x=>typeof x!=='string'))throw Error('clean_take_revision_review_invalid')
+      const revisedReview={pass:qaObj.pass,issues:qaObj.issues.slice(0,12).map((x:string)=>x.slice(0,450))}
+      const improved=(revisedReview.pass&&!review.pass)||
+        revisedReview.issues.length<review.issues.length
+      await onEvent?.({stage:'review',attempt:2,status:improved?'accepted':'fallback',
+        cuts:revisedCuts.length,reason:improved?'qa_repair_improved':'qa_repair_no_improvement'})
+      if(improved){
+        plan={...plan,outline:revisedOutline,cuts:revisedCuts,
+          estimatedDurationMs:revisedCuts.reduce((total,c)=>total+c.endMs-c.startMs,0)}
+        review=revisedReview
+      }
+    }catch(error){
+      await onEvent?.({stage:'review',attempt:2,status:'fallback',
+        reason:'qa_repair_rejected:'+String((error as Error).message).slice(0,180)})
+    }
   }
   return {plan,review,droppedTakeReasons}
 }
