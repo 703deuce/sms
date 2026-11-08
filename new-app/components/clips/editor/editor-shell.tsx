@@ -3624,8 +3624,12 @@ export function EditorShell({
             {cropMode ? 'Finish crop' : 'Crop on canvas'}
           </Button>
           <span className="ml-auto text-xs text-muted-foreground">
-            Select layers in the preview to drag, resize or reposition
+            Drag layers on the live preview
           </span>
+          <Button size="sm" variant="outline" nativeButton={false}
+            render={<a href={`/app/clips/${projectId}/edit/${clipId}`} />}>
+            Full editor
+          </Button>
         </nav>
       ) : null}
       {/* File > Versions / History and the project menu keep the full version manager accessible without a top-bar button. */}
