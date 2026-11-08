@@ -98,6 +98,7 @@ export function ProjectClipsView({
   fromLink,
   createdAt,
   sourceDurationMs = 0,
+  sourceStartMs = 0,
   isStreamer = false,
   initialProgress = 0,
   initialStage = null,
@@ -118,6 +119,7 @@ export function ProjectClipsView({
   fromLink?: boolean
   createdAt?: string
   sourceDurationMs?: number
+  sourceStartMs?: number
   isStreamer?: boolean
   initialProgress?: number
   initialStage?: string | null
@@ -452,7 +454,7 @@ export function ProjectClipsView({
           </div>
         }
       />
-      {isStreamer ? <StreamerAgentClipMaker projectId={projectId} ready={status === 'READY'} /> : null}
+      {isStreamer ? <StreamerAgentClipMaker projectId={projectId} ready={status === 'READY'} sourceStartMs={sourceStartMs} sourceDurationMs={sourceDurationMs} /> : null}
       {status === 'FAILED' && !showResults ? (
         <Panel title="Project" description="This upload could not be processed.">
           <ProjectFailedAlert
