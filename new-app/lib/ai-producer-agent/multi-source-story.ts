@@ -119,7 +119,7 @@ export function validateMultiStorySources(inputs:MultiStorySource[]):void{
   for(const {source,words} of inputs){
     if(!source.sourceId||ids.has(source.sourceId)||!source.projectId ||
       projects.has(source.projectId)||!source.rangeMs ||
-      source.rangeMs[1]<=source.rangeMs[0]||words.length<30)
+      source.rangeMs[1]<=source.rangeMs[0])
       throw Error('multisource_source_invalid_or_duplicate')
     ids.add(source.sourceId);projects.add(source.projectId)
   }
