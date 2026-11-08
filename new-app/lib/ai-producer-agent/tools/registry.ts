@@ -3,7 +3,7 @@ import 'server-only'
 import { getPrisma } from '@/lib/server/db'
 import { resolveAiProducerSources } from '@/lib/server/ai-producer-agent/resolve-sources'
 import { loadRoughCutWords } from '@/lib/server/ai-producer-agent/rough-cut-source'
-import { roughCutSourceWindow,clipAgentSourceWindow } from '@/lib/ai-producer-agent/rough-cut-window'
+import { roughCutSourceWindow,clipAgentSourceWindow,minimumAgentTranscriptWords } from '@/lib/ai-producer-agent/rough-cut-window'
 import { createAiProducerOutputProject } from '@/lib/server/ai-producer-agent/create-output-project'
 import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 import type { AiProducerRunConfig, AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
@@ -73,7 +73,7 @@ export async function buildToolCtx(run: {
     : lockedSingleSource && config.editMode === 'just_chatting_rough_cut'
       ? allSources.map(roughCutSourceWindow) : allSources
   const roughWords = lockedSingleSource && config.editMode === 'just_chatting_rough_cut'
-    ? await loadRoughCutWords(run.workspaceId,sources[0]!,agentClip?8:30) : []
+    ? await loadRoughCutWords(run.workspaceId,sources[0]!,minimumAgentTranscriptWords(config.storyMode)) : []
   const totalSourceMs = sources.reduce((acc, s) => acc + (s.durationMs ?? 0), 0)
   const ctx: ToolCtx = {
     runId: run.id,
