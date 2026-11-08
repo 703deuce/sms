@@ -40,6 +40,13 @@ jobs:
           cache: pnpm
           cache-dependency-path: new-app/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - name: Streamer agent batch typecheck
+        run: |
+          NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false > /tmp/streamer-tsc.txt 2>&1 || true
+          if grep -E '^(app/api/(streamer/agent-|internal/streamer/agent-)|lib/server/streamer/agent-|lib/streamer/agent-batch|components/streamer/streamer-agent-clip-maker).*error TS' /tmp/streamer-tsc.txt; then
+            echo "Streamer agent batch TypeScript errors" >&2
+            exit 1
+          fi
       - name: Editor import and hook guards
         run: |
           pnpm run verify:editor-shell-import
