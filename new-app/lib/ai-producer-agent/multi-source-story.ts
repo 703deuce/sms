@@ -12,6 +12,7 @@ export type MultiStorySource={
   words:ClipWord[]
   visualObservations?:Array<{startMs:number;endMs:number;observation:string}>
 }
+export type MultiStoryVisualBeat={id:string;sourceId:string;startMs:number;endMs:number;purpose:string}
 export type MultiStoryBeat={
   id:string
   purpose:string
@@ -22,6 +23,7 @@ export type MultiStoryOutline={
   logline:string
   beats:MultiStoryBeat[]
   endingRule:string
+  visualBeats?:MultiStoryVisualBeat[]
 }
 export type MultiStoryCut={
   sourceId:string
@@ -29,6 +31,10 @@ export type MultiStoryCut={
   lastWordId:number
   beatId:string
   reason:string
+  kind?:'dialogue'|'visual_action'
+  visualBeatId?:string
+  startMs?:number
+  endMs?:number
 }
 export type ExecutableMultiStoryCut=MultiStoryCut&{
   sourceProjectId:string
@@ -45,6 +51,14 @@ export type MultiStoryPlan={
 const stringField={type:'string'} as const
 const stringArray={type:'array',items:stringField} as const
 const wordId={type:'integer',minimum:0} as const
+const visualBeatSchema={type:'object',additionalProperties:false,properties:{
+  id:stringField,sourceId:stringField,startMs:{type:'integer',minimum:0},
+  endMs:{type:'integer',minimum:1},purpose:stringField,
+},required:['id','sourceId','startMs','endMs','purpose']} as const
+const visualActionSchema={type:'object',additionalProperties:false,properties:{
+  sourceId:stringField,visualBeatId:stringField,startMs:{type:'integer',minimum:0},
+  endMs:{type:'integer',minimum:1},beatId:stringField,reason:stringField,
+},required:['sourceId','visualBeatId','startMs','endMs','beatId','reason']} as const
 const storyTool:ToolSchema={
   name:'submit_multi_source_story',
   description:'Discover ONE coherent narrative from independent sources, without inventing speaker relationships.',
@@ -52,6 +66,7 @@ const storyTool:ToolSchema={
     type:'object',additionalProperties:false,
     properties:{
       title:stringField,logline:stringField,endingRule:stringField,
+      visualBeats:{type:'array',maxItems:16,items:visualBeatSchema},
       beats:{type:'array',minItems:3,maxItems:9,items:{
         type:'object',additionalProperties:false,
         properties:{id:stringField,purpose:stringField,sourceIds:stringArray},
@@ -66,7 +81,8 @@ const footageTool:ToolSchema={
   parameters:{
     type:'object',additionalProperties:false,
     properties:{
-      selections:{type:'array',minItems:2,maxItems:32,items:{
+      visualActions:{type:'array',maxItems:16,items:visualActionSchema},
+      selections:{type:'array',minItems:1,maxItems:32,items:{
         type:'object',additionalProperties:false,
         properties:{sourceId:stringField,firstWordId:wordId,lastWordId:wordId,
           beatId:stringField,reason:stringField},
@@ -77,10 +93,13 @@ const footageTool:ToolSchema={
 }
 const flowTool:ToolSchema={
   name:'submit_multi_source_flow',
-  description:'Approve the source-grounded order of proposed passages. Return indices into supplied selections.',
+  description:'Order, trim and remove cross-source dialogue and visual passages, checking every transition.',
   parameters:{
     type:'object',additionalProperties:false,
-    properties:{selectionIndices:{type:'array',minItems:2,maxItems:32,items:wordId},
+    properties:{selectionIndices:{type:'array',minItems:1,maxItems:48,items:wordId},
+      corrections:{type:'array',maxItems:32,items:{type:'object',additionalProperties:false,
+        properties:{index:wordId,firstWordId:wordId,lastWordId:wordId,reason:stringField},
+        required:['index','firstWordId','lastWordId','reason']}},
       justification:stringField},
     required:['selectionIndices','justification'],
   },
@@ -94,7 +113,7 @@ function nonempty(value:unknown):string{
   return value.trim().slice(0,600)
 }
 export function validateMultiStorySources(inputs:MultiStorySource[]):void{
-  if(inputs.length!==3)throw Error('multisource_requires_exactly_3_sources')
+  if(inputs.length<2||inputs.length>5)throw Error('multisource_requires_2_to_5_sources')
   const ids=new Set<string>()
   const projects=new Set<string>()
   for(const {source,words} of inputs){
@@ -118,13 +137,27 @@ export function validateMultiStoryOutline(raw:unknown,inputs:MultiStorySource[])
     seen.add(id)
     return {id,purpose:nonempty(b.purpose),sourceIds:[...new Set(b.sourceIds as string[])]}
   })
+  const observed=inputs.flatMap(({source,visualObservations})=>
+    (visualObservations??[]).map((o,i)=>({sourceId:source.sourceId,
+      id:source.sourceId+':visual_'+i,startMs:o.startMs,endMs:o.endMs})))
+  const chosen=Array.isArray(obj.visualBeats)?obj.visualBeats:[]
+  if(chosen.length>16)throw Error('multisource_too_many_visual_beats')
+  const visualBeats:MultiStoryVisualBeat[]=chosen.map(v=>{
+    const b=object(v),id=nonempty(b.id),sourceId=nonempty(b.sourceId)
+    const candidate=observed.find(x=>x.id===id&&x.sourceId===sourceId)
+    if(!candidate||candidate.startMs!==b.startMs||candidate.endMs!==b.endMs)
+      throw Error('multisource_visual_beat_not_observed')
+    return {id,sourceId,startMs:candidate.startMs,endMs:candidate.endMs,purpose:nonempty(b.purpose)}
+  })
+  if(new Set(visualBeats.map(x=>x.id)).size!==visualBeats.length)
+    throw Error('multisource_duplicate_visual_beat')
   return {title:nonempty(obj.title),logline:nonempty(obj.logline),
-    endingRule:nonempty(obj.endingRule),beats:normalized}
+    endingRule:nonempty(obj.endingRule),beats:normalized,visualBeats}
 }
 export function validateMultiStoryCuts(
   raw:unknown,inputs:MultiStorySource[],outline:MultiStoryOutline,
 ):ExecutableMultiStoryCut[]{
-  if(!Array.isArray(raw)||raw.length<2||raw.length>32)throw Error('multisource_invalid_cut_count')
+  if(!Array.isArray(raw)||raw.length<1||raw.length>48)throw Error('multisource_invalid_cut_count')
   const sources=new Map(inputs.map(s=>[s.source.sourceId,s]))
   const beats=new Map(outline.beats.map(b=>[b.id,b]))
   const selected:ExecutableMultiStoryCut[]=[]
@@ -134,6 +167,25 @@ export function validateMultiStoryCuts(
     const source=sources.get(sourceId),beat=beats.get(beatId)
     if(!source||!beat||!beat.sourceIds.includes(sourceId))
       throw Error('multisource_cut_wrong_source_or_beat')
+    if(row.kind==='visual_action'){
+      const visualBeatId=nonempty(row.visualBeatId)
+      const approved=outline.visualBeats?.find(v=>v.id===visualBeatId&&v.sourceId===sourceId)
+      const startMs=row.startMs,endMs=row.endMs
+      if(!approved||!Number.isInteger(startMs)||!Number.isInteger(endMs)||
+        (startMs as number)<approved.startMs||(endMs as number)>approved.endMs||
+        (endMs as number)-(startMs as number)<700||
+        (endMs as number)-(startMs as number)>45000)
+        throw Error('multisource_visual_action_outside_observation')
+      const unsafe=(edge:number)=>source.words.some(w=>
+        edge>Math.round(w.s*1000)+30&&edge<Math.round(w.e*1000)-30)
+      if(unsafe(startMs as number)||unsafe(endMs as number))
+        throw Error('multisource_visual_action_word_edge')
+      selected.push({sourceId,sourceProjectId:source.source.projectId!,
+        firstWordId:-1,lastWordId:-1,beatId,reason:nonempty(row.reason),
+        startMs:startMs as number,endMs:endMs as number,
+        kind:'visual_action',visualBeatId})
+      continue
+    }
     const first=row.firstWordId,last=row.lastWordId
     if(!Number.isInteger(first)||!Number.isInteger(last)||
       (first as number)<0||(last as number)<(first as number)||
@@ -151,9 +203,13 @@ export function validateMultiStoryCuts(
       firstWordId:first as number,lastWordId:last as number,
       beatId,reason:nonempty(row.reason),startMs,endMs})
   }
-  // A multi-source edit must actually use several sources, not concatenate
-  // snippets from the first upload and pretend to be a multi-source story.
-  if(new Set(selected.map(x=>x.sourceId)).size<2)throw Error('multisource_only_one_source_used')
+  // Do not duplicate source video/audio by overlapping a speech and silent action.
+  for(let i=0;i<selected.length;i++)
+    for(let j=i+1;j<selected.length;j++)
+      if(selected[i]!.sourceId===selected[j]!.sourceId&&
+        Math.max(selected[i]!.startMs,selected[j]!.startMs)<
+        Math.min(selected[i]!.endMs,selected[j]!.endMs))
+        throw Error('multisource_overlapping_visual_or_speech')
   return selected
 }
 async function submit(
@@ -195,7 +251,7 @@ export async function planMultiSourceStory(
     sourceId:source.sourceId,title:source.title,
     rangeMs:source.rangeMs,
     transcript:words.map((w,i)=>[i,Math.round(w.s*1000),Math.round(w.e*1000),w.w]),
-    visualObservations:visualObservations??[],
+    visualObservations:(visualObservations??[]).map((o,i)=>({...o,id:source.sourceId+':visual_'+i})),
   }))
   const outline=await submit(storyTool,
     'You are the Story Director for a FINISHED multi-source documentary-style video, not a highlight montage. Independently discover the strongest ONE truthful narrative from the recordings. Design a setup, development, meaningful reveal or insight, and ending. Never invent a conclusion or imply separately recorded people were talking to each other. You may omit an irrelevant source. Story beat sourceIds must refer to real supplied recordings.',
