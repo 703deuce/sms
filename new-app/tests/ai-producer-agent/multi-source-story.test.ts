@@ -74,7 +74,7 @@ describe('isolated multi-source story planner',()=>{
         name==='submit_multi_source_footage'?{selections:[
           {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'opening'},
           {sourceId:'b',firstWordId:9,lastWordId:11,beatId:'payoff',reason:'ending'},
-        ]}:{selectionIndices:[0,1],justification:'Supported progression'}
+        ]}:{selectionIndices:[0,1],joinReviews:[{leftIndex:0,rightIndex:1,status:'flows',reason:'Logical transition'}],justification:'Supported progression'}
       return {message:{role:'assistant',content:null,tool_calls:[{
         id:'call_'+(++n),type:'function',function:{name,arguments:JSON.stringify(args)},
       }]}}
@@ -125,7 +125,7 @@ describe('isolated multi-source story planner',()=>{
           {sourceId:'b',firstWordId:9,lastWordId:11,beatId:'payoff',reason:'ending'},
         ]}:{selectionIndices:[0,2],corrections:[{
           index:0,firstWordId:1,lastWordId:5,reason:'complete the opening thought',
-        }],justification:'Removed repetition'}
+        }],joinReviews:[{leftIndex:0,rightIndex:1,status:'flows',reason:'Transition completes the lesson'}],justification:'Removed repetition'}
       return {message:{role:'assistant',content:null,tool_calls:[{
         id:'call_'+(++step),type:'function',function:{name,arguments:JSON.stringify(args)},
       }]}}
@@ -144,7 +144,7 @@ describe('isolated multi-source story planner',()=>{
         name==='submit_multi_source_footage'?{selections:[
           {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'opening'},
           {sourceId:'b',firstWordId:9,lastWordId:11,beatId:'payoff',reason:'ending'},
-        ]}:{selectionIndices:[0,1],justification:'Logical progression'}
+        ]}:{selectionIndices:[0,1],joinReviews:[{leftIndex:0,rightIndex:1,status:'flows',reason:'Natural close'}],justification:'Logical progression'}
       n++
       return {message:{role:'assistant',content:null,tool_calls:[{
         id:'call_'+n,type:'function',function:{name,arguments:JSON.stringify(args)},
