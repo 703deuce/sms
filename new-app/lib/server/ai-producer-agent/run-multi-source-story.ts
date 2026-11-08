@@ -48,7 +48,8 @@ export async function runMultiSourceStoryOutput(
       input.visualObservations=visualMomentsWithAsr(
         result.moments,input.words,source.rangeMs!,'coarse_3s',35,
       ).map(m=>({startMs:m.sourceRangeMs[0],endMs:m.sourceRangeMs[1],
-        observation:m.observation+'; '+(m.whyInteresting??'')}))
+        observation:m.observation,whyInteresting:m.whyInteresting,
+        spokenContext:m.spokenContext,category:m.category,analysisTier:m.analysisTier}))
       const cost=Number(result.meta?.est_usd??0)
       if(Number.isFinite(cost)&&cost>=0)budget.addGemini(cost)
       await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
@@ -84,7 +85,9 @@ export async function runMultiSourceStoryOutput(
           )
           input.visualObservations.push(...focused.map(m=>({
             startMs:m.sourceRangeMs[0],endMs:m.sourceRangeMs[1],
-            observation:'[focused_1fps] '+m.observation+'; '+(m.whyInteresting??''),
+            observation:m.observation,whyInteresting:m.whyInteresting,
+            spokenContext:m.spokenContext,category:m.category,
+            analysisTier:m.analysisTier,
           })))
           const focusedCost=Number(focusedResult.meta?.est_usd??0)
           if(Number.isFinite(focusedCost)&&focusedCost>=0)budget.addGemini(focusedCost)
