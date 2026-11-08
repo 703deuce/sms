@@ -55,6 +55,43 @@ describe('isolated multi-source story planner',()=>{
       {sourceId:'b',firstWordId:3,lastWordId:5,beatId:'conflict',reason:'b'},
     ],[a,b],outline)).toThrow('wrong_source_or_beat')
   })
+  it('passes per-recording Gemini video/audio observations with full transcripts to Story and Footage',async()=>{
+    const seen:Array<{name:string;payload:any}>=[]
+    let n=0
+    const first={...a,visualObservations:[
+      {startMs:4000,endMs:8000,observation:'[coarse_3s] speaker opens a box'},
+      {startMs:4500,endMs:6500,observation:'[focused_1fps] speaker reacts to damaged contents'},
+    ]}
+    const second={...b,visualObservations:[
+      {startMs:10000,endMs:15000,observation:'[focused_1fps] speaker demonstrates repair'},
+    ]}
+    __setLunaImpl(async ({tools,messages})=>{
+      const name=tools[0]!.name
+      const payload=JSON.parse(String(messages[1]!.content))
+      seen.push({name,payload})
+      const args=name==='submit_multi_source_story'?outline:
+        name==='submit_multi_source_footage'?{selections:[
+          {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'opening'},
+          {sourceId:'b',firstWordId:9,lastWordId:11,beatId:'payoff',reason:'ending'},
+        ]}:{selectionIndices:[0,1],justification:'Supported progression'}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'call_'+(++n),type:'function',function:{name,arguments:JSON.stringify(args)},
+      }]}}
+    })
+    await planMultiSourceStory([first,second])
+    for(const step of seen.filter(x=>x.name!=='submit_multi_source_flow')){
+      expect(step.payload.sources).toHaveLength(2)
+      expect(step.payload.sources[0].sourceId).toBe('a')
+      expect(step.payload.sources[1].sourceId).toBe('b')
+      expect(step.payload.sources[0].transcript).toHaveLength(40)
+      expect(step.payload.sources[1].transcript).toHaveLength(40)
+      expect(step.payload.sources[0].visualObservations).toEqual(first.visualObservations)
+      expect(step.payload.sources[1].visualObservations).toEqual(second.visualObservations)
+    }
+    expect(seen.map(x=>x.name)).toEqual([
+      'submit_multi_source_story','submit_multi_source_footage','submit_multi_source_flow',
+    ])
+  })
   it('uses three separate LLM specialist passes and returns exact validated source-aware cuts',async()=>{
     let n=0
     __setLunaImpl(async ({tools})=>{
