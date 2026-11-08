@@ -1,7 +1,7 @@
 import {describe,it,expect,afterEach} from 'vitest'
 import type {ClipWord} from '@/lib/clips/edits'
 import {__setLunaImpl} from '@/lib/ai-producer-agent/luna-client'
-import {validateCleanTakeSelections,repairCleanTakeMediaSelections,planCleanTake,type CleanTakeSource} from '@/lib/ai-producer-agent/clean-take'
+import {validateCleanTakeSelections,repairCleanTakeMediaSelections,cleanTakeContinuityEvidence,planCleanTake,type CleanTakeSource} from '@/lib/ai-producer-agent/clean-take'
 import {buildMultiStoryInsertEdits} from '@/lib/ai-producer-agent/multi-source-assembly'
 import {defaultEdits} from '@/lib/clips/edits'
 import {insertWindows} from '@/lib/clips/editor/inserts'
@@ -390,6 +390,77 @@ describe('isolated Clean Take mode',()=>{
     }))
     expect(result.plan.cuts.map(c=>[c.firstWordId,c.lastWordId]))
       .toEqual([[10,14],[20,29]])
+    expect(result.review.pass).toBe(true)
+  })
+
+  it('exposes missing source setup separately from what the final viewer actually heard',()=>{
+    const cuts=validateCleanTakeSelections([
+      {sourceId:'a',firstWordId:20,lastWordId:29,reason:'different finished subject'},
+      {sourceId:'a',firstWordId:10,lastWordId:14,reason:'dependent answer without its question'},
+    ],[a])
+    const joins=cleanTakeContinuityEvidence(cuts,[a])
+    expect(joins[1]!.previousInFinal?.text).toContain('word_20')
+    expect(joins[1]!.sourceBefore?.wordIdRange).toEqual([0,9])
+    expect(joins[1]!.sourceBefore?.text).toContain('Wait,')
+    expect(joins[1]!.selected).toBe('Here is the real point.')
+    expect(joins[1]!.nextInFinal).toBeNull()
+  })
+
+  it('restores genuine earlier question/setup when final output retained only an orphan answer',async()=>{
+    const raw=make('context')
+    raw.words=[
+      {w:'What',s:0,e:.4},{w:'made',s:.5,e:.9},
+      {w:'this',s:1,e:1.4},{w:'festival?',s:1.5,e:2.1},
+      {w:'The',s:2.5,e:2.9},{w:'costumes',s:3,e:3.5},
+      {w:'did.',s:3.6,e:4.1},{w:'Anyway.',s:5,e:5.6},
+      {w:'The',s:7,e:7.5},{w:'music',s:7.6,e:8.1},
+      {w:'was',s:8.2,e:8.6},{w:'great.',s:8.7,e:9.2},
+    ]
+    let selections=0,reviews=0
+    const captured:Array<{phase:string;payload:any;system:string}>=[]
+    __setLunaImpl(async ({tools,messages})=>{
+      const name=tools[0]!.name
+      const payload=JSON.parse(String(messages[1]!.content))
+      captured.push({phase:name,payload,system:String(messages[0]!.content)})
+      if(name==='submit_clean_take')selections++
+      if(name==='review_clean_take')reviews++
+      if(name==='review_clean_take'&&reviews===1){
+        expect(payload.continuityEvidence[0].sourceBefore.text)
+          .toContain('What made this festival?')
+        expect(payload.continuityEvidence[0].previousInFinal).toBeNull()
+        expect(String(messages[0]!.content)).toContain('ZERO access to discarded footage')
+      }
+      if(name==='submit_clean_take'&&selections===2){
+        expect(payload.firstEdit.continuityEvidence[0].sourceBefore.text)
+          .toContain('What made this festival?')
+        expect(String(messages[0]!.content)).toContain('RESTORE LOST CONTEXT')
+      }
+      if(name==='review_clean_take'&&reviews===2){
+        expect(payload.continuityEvidence[0].selected)
+          .toBe('What made this festival?')
+        expect(payload.continuityEvidence[1].previousInFinal.text)
+          .toBe('What made this festival?')
+      }
+      const proposal=name==='submit_clean_take'?{
+        title:'Festival interview',summary:'The festival experience',endingRule:'Finish',
+        selections:selections===1?[
+          {sourceId:'context',firstWordId:4,lastWordId:6,reason:'isolated answer'},
+        ]:[
+          {sourceId:'context',firstWordId:0,lastWordId:3,reason:'real question'},
+          {sourceId:'context',firstWordId:4,lastWordId:6,reason:'complete relevant answer'},
+        ],
+      }:reviews===1?{pass:false,issues:['The answer lacks its question in playback']}:
+        {pass:true,issues:[]}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'context_'+selections+'_'+reviews,type:'function',
+        function:{name,arguments:JSON.stringify(proposal)},
+      }]}}
+    })
+    const result=await planCleanTake([raw])
+    expect(selections).toBe(2)
+    expect(reviews).toBe(2)
+    expect(result.plan.cuts.map(c=>[c.firstWordId,c.lastWordId]))
+      .toEqual([[0,3],[4,6]])
     expect(result.review.pass).toBe(true)
   })
 
