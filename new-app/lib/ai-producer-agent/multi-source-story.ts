@@ -94,7 +94,7 @@ function nonempty(value:unknown):string{
   return value.trim().slice(0,600)
 }
 export function validateMultiStorySources(inputs:MultiStorySource[]):void{
-  if(inputs.length<2||inputs.length>5)throw Error('multisource_requires_2_to_5_sources')
+  if(inputs.length!==3)throw Error('multisource_requires_exactly_3_sources')
   const ids=new Set<string>()
   const projects=new Set<string>()
   for(const {source,words} of inputs){

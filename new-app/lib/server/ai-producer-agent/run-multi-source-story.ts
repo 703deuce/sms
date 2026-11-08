@@ -6,7 +6,7 @@ import { loadRoughCutWords } from '@/lib/server/ai-producer-agent/rough-cut-sour
 import { createMultiSourceStoryOutput } from '@/lib/server/ai-producer-agent/create-multi-source-output'
 import { enqueueAiProducerAnalyzeJob,waitForClipJobDone } from '@/lib/server/ai-producer-agent/enqueue-analyze'
 import { planMultiSourceStory,validateMultiStorySources,type MultiStorySource } from '@/lib/ai-producer-agent/multi-source-story'
-import { timestampedAsrForVisual,visualMomentsWithAsr } from '@/lib/ai-producer-agent/visual-evidence'
+import { timestampedAsrForVisual,visualMomentsWithAsr,chooseVisualFocusWindows } from '@/lib/ai-producer-agent/visual-evidence'
 import { logAiProducerStep } from '@/lib/ai-producer-agent/log'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
@@ -18,8 +18,8 @@ import type { Budget } from '@/lib/ai-producer-agent/budget'
 export async function runMultiSourceStoryOutput(
   ctx:ToolCtx,out:OutputState,budget:Budget,instruction:string|null,
 ):Promise<void>{
-  if(ctx.sources.length<2||ctx.sources.length>5)
-    throw Error('multisource_requires_2_to_5_sources')
+  if(ctx.sources.length!==3)
+    throw Error('multisource_requires_exactly_3_sources')
   const inputs:MultiStorySource[]=[]
   for(const source of ctx.sources){
     if(!source.projectId||!source.rangeMs)throw Error('multisource_source_requires_project')
@@ -57,6 +57,58 @@ export async function runMultiSourceStoryOutput(
         resultSummary:JSON.stringify({observations:input.visualObservations.length,
           sourceId:source.sourceId}),durationMs:Date.now()-started,
         estUsd:Number.isFinite(cost)?cost:undefined})
+      // Same second-pass Gemini video + ORIGINAL audio + source-aligned ASR
+      // used by single-source visual_audio. Keep the source identity local;
+      // an observation from one interview must never be attributed to another.
+      const windows=chooseVisualFocusWindows(result.moments,source.rangeMs!,3)
+      if(windows.length && budget.canSpendGemini(0.50)){
+        try {
+          const focusJob=await enqueueAiProducerAnalyzeJob({
+            runId:ctx.runId,projectId:source.projectId!,mode:'visual_detail',
+            sources:[source],targetClipLenS:45,
+            visualEvidence:{
+              enabled:true,model:'gemini-3.1-flash-lite',
+              focusWindows:windows.map(([startMs,endMs])=>({
+                startMs,endMs,
+                transcriptText:timestampedAsrForVisual(input.words,[startMs,endMs],12_000),
+              })),
+            },
+          })
+          const focusedDone=await waitForClipJobDone(focusJob.id)
+          const focusedResult=(focusedDone.payload as {analyzeResult?:{
+            moments?:Record<string,unknown>[];meta?:Record<string,unknown>
+          }}|null)?.analyzeResult
+          if(!focusedResult)throw Error('multisource_visual_focus_missing')
+          const focused=visualMomentsWithAsr(
+            focusedResult.moments,input.words,source.rangeMs!,'focused_1fps',24,
+          )
+          input.visualObservations.push(...focused.map(m=>({
+            startMs:m.sourceRangeMs[0],endMs:m.sourceRangeMs[1],
+            observation:'[focused_1fps] '+m.observation+'; '+(m.whyInteresting??''),
+          })))
+          const focusedCost=Number(focusedResult.meta?.est_usd??0)
+          if(Number.isFinite(focusedCost)&&focusedCost>=0)budget.addGemini(focusedCost)
+          await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+            phase:'ingest',tool:'multisource_visual_focus_ready',kind:'validate',
+            argsSummary:JSON.stringify({sourceId:source.sourceId,windows,
+              originalAudioAttached:focusedResult.meta?.original_audio_attached,
+              focusWindowResults:focusedResult.meta?.focus_window_results??[]}),
+            resultSummary:JSON.stringify({focusedObservations:focused.length,
+              coarseObservations:input.visualObservations.length-focused.length}),
+            estUsd:Number.isFinite(focusedCost)?focusedCost:undefined})
+        }catch(focusError){
+          // Detailed video review is additive. Preserve the coarse evidence.
+          await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+            phase:'ingest',tool:'multisource_visual_focus_unavailable',kind:'validate',
+            argsSummary:JSON.stringify({sourceId:source.sourceId,windows}),
+            error:String((focusError as Error).message).slice(0,250)})
+        }
+      }else{
+        await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+          phase:'ingest',tool:'multisource_visual_focus_skipped',kind:'validate',
+          argsSummary:JSON.stringify({sourceId:source.sourceId,windowCount:windows.length}),
+          resultSummary:windows.length?'Gemini budget insufficient':'No focus candidates'})
+      }
     }catch(err){
       // A failed Gemini pass cannot make real source speech invalid. Preserve
       // the failure as evidence so Story can be audited against transcript-only.
