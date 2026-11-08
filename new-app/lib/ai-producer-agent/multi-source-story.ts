@@ -159,12 +159,14 @@ export function validateMultiStoryCuts(
 async function submit(
   tool:ToolSchema,system:string,user:unknown,
   validate:(value:Record<string,unknown>)=>unknown,
+  onUsage?:(usage:import('@/lib/ai-producer-agent/luna-client').LunaUsage|undefined)=>void,
 ):Promise<unknown>{
   const messages:import('@/lib/ai-producer-agent/luna-client').LunaMessage[]=[
     {role:'system',content:system},{role:'user',content:JSON.stringify(user)},
   ]
   for(let attempt=0;attempt<3;attempt++){
     const response=await lunaChat({messages,tools:[tool],toolChoice:'required'})
+    onUsage?.(response.usage)
     const call=response.message.tool_calls?.find(c=>c.function.name===tool.name)
     if(!call){
       messages.push(response.message,{role:'user',content:'Submit the required structured tool call.'})
@@ -186,6 +188,7 @@ async function submit(
  * multi-source render pipeline must consume these source-aware cuts. */
 export async function planMultiSourceStory(
   inputs:MultiStorySource[],instruction?:string,
+  onUsage?:(usage:import('@/lib/ai-producer-agent/luna-client').LunaUsage|undefined)=>void,
 ):Promise<MultiStoryPlan>{
   validateMultiStorySources(inputs)
   const evidence=inputs.map(({source,words,visualObservations})=>({
@@ -197,11 +200,11 @@ export async function planMultiSourceStory(
   const outline=await submit(storyTool,
     'You are the Story Director for a FINISHED multi-source documentary-style video, not a highlight montage. Independently discover the strongest ONE truthful narrative from the recordings. Design a setup, development, meaningful reveal or insight, and ending. Never invent a conclusion or imply separately recorded people were talking to each other. You may omit an irrelevant source. Story beat sourceIds must refer to real supplied recordings.',
     {instruction:instruction??'Find the strongest complete story supported by the footage.',sources:evidence},
-    a=>validateMultiStoryOutline(a,inputs)) as MultiStoryOutline
+    a=>validateMultiStoryOutline(a,inputs),onUsage) as MultiStoryOutline
   const selections=await submit(footageTool,
     'You are the Footage Editor. Select only exact first and last WORD IDs from the correct source, using sourceId for EVERY selection. Construct the approved story from complete spoken thoughts, reactions and relevant visual context. Source time is always local to the selected source. Do not invent quotes, source IDs, events, or use global word indices. Return final edit passages, not candidate highlights.',
     {outline,sources:evidence},
-    a=>validateMultiStoryCuts(a.selections,inputs,outline)) as ExecutableMultiStoryCut[]
+    a=>validateMultiStoryCuts(a.selections,inputs,outline),onUsage) as ExecutableMultiStoryCut[]
   const indices=await submit(flowTool,
     'You are the Flow Editor. Order the selected passages into one honest, coherent FINISHED story. Preserve complete statements, context, relationships and a source-grounded ending. Return each retained input index exactly once; reorder only if the sequence remains truthful. No deceptive implied conversation or invented response.',
     {outline,selections},
@@ -213,7 +216,7 @@ export async function planMultiSourceStory(
         throw Error('multisource_invalid_flow_order')
       nonempty(a.justification)
       return order as number[]
-    }) as number[]
+    },onUsage) as number[]
   const cuts=indices.map(i=>selections[i]!)
   return {mode:'multi_source_story_v1',outline,cuts,
     estimatedDurationMs:cuts.reduce((n,c)=>n+c.endMs-c.startMs,0)}
