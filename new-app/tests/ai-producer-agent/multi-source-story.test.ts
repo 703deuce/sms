@@ -33,6 +33,56 @@ describe('isolated multi-source story planner',()=>{
       ...outline.beats.slice(0,2),{id:'payoff',purpose:'ending',sourceIds:['fake']},
     ]},[a,b,c])).toThrow('invalid_beat_sources')
   })
+  it('lets Flow intercut three recordings repeatedly, then keep consecutive clips from one source',async()=>{
+    const montage:MultiStoryOutline={
+      ...outline,beats:[
+        {id:'setup',purpose:'establish the event',sourceIds:['a','b','c']},
+        {id:'conflict',purpose:'different first-hand perspectives',sourceIds:['a','b','c']},
+        {id:'payoff',purpose:'revisit the first witness to conclude',sourceIds:['a','b','c']},
+      ],
+    }
+    const events:import('@/lib/ai-producer-agent/multi-source-story').MultiSourceSpecialistEvent[]=[]
+    const selected=[
+      {sourceId:'a',firstWordId:2,lastWordId:3,beatId:'setup',reason:'opening source a'},
+      {sourceId:'a',firstWordId:8,lastWordId:9,beatId:'payoff',reason:'return to a'},
+      {sourceId:'a',firstWordId:14,lastWordId:15,beatId:'payoff',reason:'keep a for ending'},
+      {sourceId:'b',firstWordId:4,lastWordId:5,beatId:'conflict',reason:'new view from b'},
+      {sourceId:'c',firstWordId:6,lastWordId:7,beatId:'conflict',reason:'source c explains'},
+      {sourceId:'c',firstWordId:10,lastWordId:11,beatId:'conflict',reason:'revisit source c'},
+    ]
+    const proposedOrder=[0,4,3,5,1,2] // a -> c -> b -> c -> a -> a
+    __setLunaImpl(async ({tools,messages})=>{
+      const name=tools[0]!.name
+      if(name==='submit_multi_source_flow'){
+        const request=JSON.parse(String(messages[1]!.content))
+        expect(request.passages.map((p:{sourceId:string})=>p.sourceId))
+          .toEqual(['a','a','a','b','c','c'])
+      }
+      const args=name==='submit_multi_source_story'?montage:
+        name==='submit_multi_source_footage'?{selections:selected}:
+        {selectionIndices:proposedOrder,
+          joinReviews:Array.from({length:5},(_,i)=>({
+            leftIndex:i,rightIndex:i+1,status:'flows',
+            reason:'Independent sources contribute distinct story context',
+          })),
+          justification:'Return to witnesses by narrative relevance, not upload order'}
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'intercut_'+name,type:'function',function:{name,arguments:JSON.stringify(args)},
+      }]}}
+    })
+    const plan=await planMultiSourceStory([a,b,c],undefined,undefined,event=>{events.push(event)})
+    expect(plan.cuts.map(c=>c.sourceId)).toEqual(['a','c','b','c','a','a'])
+    expect(plan.cuts.map(c=>c.firstWordId)).toEqual([2,6,4,10,8,14])
+    expect(plan.cuts.map(c=>c.sourceProjectId)).toEqual([
+      'proj_a','proj_c','proj_b','proj_c','proj_a','proj_a',
+    ])
+    expect(events.find(e=>e.stage==='flow'&&
+      e.status==='filtered'&&e.proposalSummary?.sourceSwitches===4)
+      ?.proposalSummary).toMatchObject({
+        finalSourceSequence:['a','c','b','c','a','a'],
+        sourceSwitches:4,uniqueSources:3,
+      })
+  })
   it('preserves local word IDs per source and permits interwoven source order',()=>{
     const cuts=validateMultiStoryCuts([
       {sourceId:'a',firstWordId:2,lastWordId:4,beatId:'setup',reason:'opening'},
