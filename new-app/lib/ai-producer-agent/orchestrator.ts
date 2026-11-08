@@ -68,6 +68,18 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
 
   await setRunStatus(runId, 'running', 'ingest')
   try {
+    if (ctx.config.storyMode === 'multi_source_story_v1') {
+      // Explicit opt-in. Never run the locked single-source Story, Footage,
+      // Flow, validator or assembly path on mixed source timestamps.
+      const { runMultiSourceStoryOutput } = await import(
+        '@/lib/server/ai-producer-agent/run-multi-source-story'
+      )
+      const out:OutputState = {
+        index:0,outputType:'story',builder:null,replans:0,fixLoops:0,notes:[],
+      }
+      outputs.push(out)
+      await runMultiSourceStoryOutput(ctx,out,budget,run.instruction)
+    } else {
     await sysTool(ctx, budget, 'ingest', 'find_moments', {
       mode: 'best_moments', limit: ctx.config.editMode === 'just_chatting_rough_cut' ? 30 : 12,
       targetClipLenS: ctx.config.editMode === 'just_chatting_rough_cut' ? 60 : undefined,
@@ -95,6 +107,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       }
       await runOneOutput(ctx, out, budget, run.instruction)
       if (out.story) ctx.markUsed(out)
+    }
     }
     if (budget.cappedBy) status = 'capped'
     if (!outputs.some((o) => o.projectId)) {

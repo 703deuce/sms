@@ -67,9 +67,10 @@ export async function buildToolCtx(run: {
   const config = (run.config ?? {}) as AiProducerRunConfig
   const sourcesRaw = (run.sourceSnapshot ?? []) as AiProducerSourceRef[]
   const allSources = await resolveAiProducerSources(run.workspaceId, sourcesRaw)
-  const sources = config.editMode === 'just_chatting_rough_cut'
+  const lockedSingleSource = config.storyMode !== 'multi_source_story_v1'
+  const sources = lockedSingleSource && config.editMode === 'just_chatting_rough_cut'
     ? allSources.map(roughCutSourceWindow) : allSources
-  const roughWords = config.editMode === 'just_chatting_rough_cut'
+  const roughWords = lockedSingleSource && config.editMode === 'just_chatting_rough_cut'
     ? await loadRoughCutWords(run.workspaceId, sources[0]!) : []
   const totalSourceMs = sources.reduce((acc, s) => acc + (s.durationMs ?? 0), 0)
   const ctx: ToolCtx = {

@@ -12,6 +12,8 @@ export type AiProducerSourceRef = {
 export type AiProducerOutputType = 'single_payoff' | 'montage' | 'story' | 'auto'
 
 export type AiProducerRunConfig = {
+  /** Explicitly selected experiment; absent means the locked single-source implementation. */
+  storyMode?: 'single_source_v1' | 'multi_source_story_v1'
   editMode?: 'just_chatting_rough_cut'
   /** Story preserves one narrative; highlights curates multiple standalone moments. */
   roughCutIntent?: 'story' | 'highlights'
