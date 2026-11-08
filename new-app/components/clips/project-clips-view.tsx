@@ -454,7 +454,7 @@ export function ProjectClipsView({
           </div>
         }
       />
-      {isStreamer ? <StreamerAgentClipMaker projectId={projectId} ready={status === 'READY'} sourceStartMs={sourceStartMs} sourceDurationMs={sourceDurationMs} /> : null}
+      {isStreamer ? <StreamerAgentClipMaker projectId={projectId} ready={status === 'READY'} videoAvailable={projectHasUpload} sourceStartMs={sourceStartMs} sourceDurationMs={sourceDurationMs} /> : null}
       {status === 'FAILED' && !showResults ? (
         <Panel title="Project" description="This upload could not be processed.">
           <ProjectFailedAlert
