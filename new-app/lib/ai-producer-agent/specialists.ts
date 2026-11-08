@@ -867,7 +867,12 @@ function selectionRepairHint(
 function selectionLogSummary(args: Record<string, unknown> | null): string {
   const selections = args?.selections
   if (!Array.isArray(selections)) return JSON.stringify({ keys: Object.keys(args ?? {}) })
-  return JSON.stringify({ count: selections.length, intervals: selections.slice(0, 24).map((r) => {
+  return JSON.stringify({ count: selections.length,
+    visualActionRefs:Array.isArray(args?.visualActions)?args.visualActions.slice(0,8).map(v=>{
+      const row=v&&typeof v==='object'?v as Record<string,unknown>:{}
+      return {visualBeatId:row.visualBeatId,startMs:row.startMs,endMs:row.endMs}
+    }):[],
+    intervals: selections.slice(0, 24).map((r) => {
     if (!r || typeof r !== 'object') return { invalid: true }
     const item = r as Record<string, unknown>
     return { startMs: item.startMs, endMs: item.endMs, firstWordId: item.firstWordId, lastWordId: item.lastWordId, beat: item.beat }
@@ -972,6 +977,7 @@ export async function runEditorialRole(
   let invalidSubmissions = 0
   let bestWordRecovery:ReturnType<typeof recoverFootageWordSelections>|null=null
   let bestRawVisualActions:unknown=null
+  let bestValidVisualCount=0
   await specialistEvent(ctx, budget, role, 'start', {
     wordCount: ctx.cache.words?.length ?? 0, sourceRangeMs: source.rangeMs,
     fullTranscriptDelivered: Array.isArray(context.fullTranscript),
@@ -1132,9 +1138,23 @@ export async function runEditorialRole(
           // the entire twenty-minute run fails.
           if(wordFootage){
             const recovered=recoverFootageWordSelections(args.selections,ctx.cache.words??[],source.rangeMs)
-            if(recovered.selections.length>(bestWordRecovery?.selections.length??0)){
+            if(recovered.selections.length>(bestWordRecovery?.selections.length??0))
               bestWordRecovery=recovered
-              bestRawVisualActions=args.visualActions
+            // Visual/audio event proposals are independent of dialogue
+            // validation. A later response may improve game footage even
+            // when it contains fewer valid speech passages.
+            if(visualStory){
+              const visual=recoverVisualActionRequests(args.visualActions,candidates,
+                (context.storyOutline as EditorialOutline|undefined)?.visualBeats??[],
+                ctx.cache.words??[],source.rangeMs)
+              if(visual.selections.length>bestValidVisualCount){
+                bestValidVisualCount=visual.selections.length
+                bestRawVisualActions=args.visualActions
+              }
+              await specialistEvent(ctx,budget,role,'visual_actions_after_word_rejection',{
+                turn,valid:visual.selections.length,omitted:visual.omitted,
+                retainedIndependently:bestValidVisualCount,
+              })
             }
           }
           if(invalidSubmissions >= (wordFootage?3:2)){
