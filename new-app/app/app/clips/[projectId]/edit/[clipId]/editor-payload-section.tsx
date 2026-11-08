@@ -7,10 +7,12 @@ export async function EditorPayloadSection({
   workspaceId,
   projectId,
   clipId,
+  clipperStudio = false,
 }: {
   workspaceId: string
   projectId: string
   clipId: string
+  clipperStudio?: boolean
 }) {
   let data
   try {
@@ -63,6 +65,7 @@ export async function EditorPayloadSection({
       streamChannelId={data.streamChannelId}
       fullVideo={isFullVideoSettings(data.project.settings)}
       editorAssets={data.editorAssets ?? null}
+      clipperStudio={clipperStudio}
     />
   )
 }
