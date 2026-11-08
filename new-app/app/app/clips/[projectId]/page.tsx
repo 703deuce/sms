@@ -173,6 +173,7 @@ export default async function ClipProjectPage({
         fromLink={Boolean(project.sourceUrl)}
         createdAt={project.createdAt.toISOString()}
         sourceDurationMs={sourceDurationMs}
+        sourceStartMs={project.rangeStartMs}
         isStreamer={Boolean(streamVod)}
         initialProgress={liveStatus?.progress ?? 0}
         initialStage={liveStatus?.stage ?? null}
