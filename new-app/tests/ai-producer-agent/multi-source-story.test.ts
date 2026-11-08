@@ -3,6 +3,7 @@ import type {ClipWord} from '@/lib/clips/edits'
 import type {MultiStorySource,MultiStoryOutline} from '@/lib/ai-producer-agent/multi-source-story'
 import {validateMultiStorySources,validateMultiStoryOutline,validateMultiStoryCuts,planMultiSourceStory} from '@/lib/ai-producer-agent/multi-source-story'
 import {__setLunaImpl} from '@/lib/ai-producer-agent/luna-client'
+import {reviewMultiSourceStory} from '@/lib/ai-producer-agent/multi-source-qa'
 
 const make=(id:string,project:string,offset=0):MultiStorySource=>({
   source:{sourceId:id,kind:'upload',projectId:project,
@@ -135,6 +136,37 @@ describe('isolated multi-source story planner',()=>{
     expect(plan.cuts[0]).toMatchObject({sourceId:'a',sourceProjectId:'proj_a',
       startMs:2000,endMs:11000,firstWordId:1,lastWordId:5})
     expect(plan.cuts[1]).toMatchObject({sourceId:'b',startMs:18000,endMs:23000})
+  })
+  it('QA examines source-tagged dialogue and silent visual-only action in final playback order',async()=>{
+    let seen:any=null
+    __setLunaImpl(async ({tools,messages})=>{
+      seen=JSON.parse(String(messages[1]!.content))
+      return {message:{role:'assistant',content:null,tool_calls:[{
+        id:'qa-1',type:'function',function:{name:tools[0]!.name,
+          arguments:JSON.stringify({pass:false,issues:[
+            'Source b reaction could imply a false response to source a',
+          ]})},
+      }]}}
+    })
+    const source={...b,visualObservations:[{
+      startMs:24000,endMs:34000,observation:'Quietly turns to a broken device',
+    }]}
+    const review=await reviewMultiSourceStory({
+      mode:'multi_source_story_v1',outline,cuts:[
+        {sourceId:'a',sourceProjectId:'proj_a',firstWordId:2,lastWordId:4,
+          startMs:4000,endMs:9000,beatId:'setup',reason:'opening'},
+        {sourceId:'b',sourceProjectId:'proj_b',firstWordId:-1,lastWordId:-1,
+          startMs:25000,endMs:33000,beatId:'conflict',reason:'visual reaction',
+          visualBeatId:'b:visual_0',kind:'visual_action'},
+      ],estimatedDurationMs:13000,
+    },[a,source,c])
+    expect(review.pass).toBe(false)
+    expect(review.issues[0]).toContain('false response')
+    expect(seen.selected).toHaveLength(2)
+    expect(seen.selected[1]).toMatchObject({
+      sourceId:'b',kind:'visual_action',startMs:25000,endMs:33000,
+      content:'Quietly turns to a broken device',
+    })
   })
   it('uses three separate LLM specialist passes and returns exact validated source-aware cuts',async()=>{
     let n=0
