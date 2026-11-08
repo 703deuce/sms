@@ -132,6 +132,26 @@ export async function runMultiSourceStoryOutput(
     }).slice(0,12000),
     resultSummary:JSON.stringify({sourcesUsed:[...new Set(plan.cuts.map(c=>c.sourceId))],
       cuts:plan.cuts.length,estimatedDurationMs:plan.estimatedDurationMs})})
+  // Independent editorial QA happens before the render, but cannot silently
+  // replace or destroy a source-grounded edit. Surface problems for Grok review.
+  try {
+    const { reviewMultiSourceStory }=await import('@/lib/ai-producer-agent/multi-source-qa')
+    const review=await reviewMultiSourceStory(plan,inputs,usage=>{
+      budget.steps++
+      budget.addLuna(usage)
+    })
+    await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+      phase:'review',tool:'multisource_editorial_qa',kind:'validate',
+      resultSummary:JSON.stringify(review).slice(0,12000)})
+    if(!review.pass)
+      out.notes.push(...review.issues.slice(0,10).map(issue=>'Editorial QA: '+issue))
+  }catch(error){
+    out.notes.push('Multi-source editorial QA unavailable: '+
+      String((error as Error).message).slice(0,180))
+    await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+      phase:'review',tool:'multisource_editorial_qa_unavailable',kind:'validate',
+      error:String((error as Error).message).slice(0,250)})
+  }
   const created=await createMultiSourceStoryOutput({
     workspaceId:ctx.workspaceId,createdById:ctx.createdById,
     runId:ctx.runId,inputs,plan,
