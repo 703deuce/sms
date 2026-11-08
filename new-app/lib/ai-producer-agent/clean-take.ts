@@ -122,6 +122,90 @@ export function validateCleanTakeSelections(raw:unknown,inputs:CleanTakeSource[]
   }
   return cuts
 }
+/** Normalize optional video/audio moments to actual safe source boundaries.
+ * The creative selection and observation are immutable evidence; only move
+ * mechanical edges within the same observed event. Dialogue word-ID selections
+ * are never moved, skipped, or reinterpreted. Unrecoverable optional media is
+ * omitted rather than rejecting an otherwise valid talking-head paper edit. */
+export function repairCleanTakeMediaSelections(raw:unknown,inputs:CleanTakeSource[]):{
+  selections:unknown;repairs:Array<{index:number;from:[number,number];to:[number,number]}>;
+  omitted:Array<{index:number;reason:string}>;
+}{
+  if(!Array.isArray(raw))return {selections:raw,repairs:[],omitted:[]}
+  const byId=new Map(inputs.map(x=>[x.source.sourceId,x]))
+  const repairs:Array<{index:number;from:[number,number];to:[number,number]}>=[]
+  const omitted:Array<{index:number;reason:string}>=[]
+  const kept:Array<Record<string,unknown>>=[]
+  const speechWindows:Array<{sourceId:string;startMs:number;endMs:number}>=[]
+  for(const row of raw){
+    if(!row||typeof row!=='object'||Array.isArray(row))continue
+    const item=row as Record<string,unknown>
+    if(item.kind==='media_moment')continue
+    const src=byId.get(String(item.sourceId??''))
+    const first=item.firstWordId,last=item.lastWordId
+    if(src&&Number.isInteger(first)&&Number.isInteger(last)&&
+      (first as number)>=0&&(last as number)>=(first as number)&&
+      (last as number)<src.words.length){
+      speechWindows.push({sourceId:src.source.sourceId,
+        startMs:Math.round(src.words[first as number]!.s*1000),
+        endMs:Math.round(src.words[last as number]!.e*1000)})
+    }
+  }
+  const overlaps=(a:number,b:number,c:number,d:number)=>Math.max(a,c)<Math.min(b,d)
+  for(const [index,entry] of raw.entries()){
+    if(!entry||typeof entry!=='object'||Array.isArray(entry)){
+      kept.push(entry as Record<string,unknown>);continue
+    }
+    const item=entry as Record<string,unknown>
+    if(item.kind!=='media_moment'){kept.push(item);continue}
+    const src=byId.get(String(item.sourceId??''))
+    const observation=src?.visualObservations?.[item.observationIndex as number]
+    const start=item.startMs,end=item.endMs
+    if(!src||!observation||!Number.isInteger(start)||!Number.isInteger(end)||
+      observation.endMs-observation.startMs<400){
+      omitted.push({index,reason:'missing_or_unusable_observed_media'});continue
+    }
+    const range=src.source.rangeMs!
+    const low=Math.max(observation.startMs,range[0])
+    const high=Math.min(observation.endMs,range[1])
+    if(high-low<400){omitted.push({index,reason:'observation_shorter_than_safe_cut'});continue}
+    const unsafe=(ms:number)=>Boolean(wordAtUnsafeBoundary(ms,src.words))
+    // Search 20-ms increments no more than 800 ms from the submitted edges.
+    // A too-short media action can be extended to 400 ms ONLY inside the
+    // original observed event and with legal original-audio word boundaries.
+    const candidateEdges=(original:number,minimum:number,maximum:number)=>{
+      const options:number[]=[]
+      for(let offset=0;offset<=800;offset+=20){
+        for(const candidate of offset===0?[original]:[original-offset,original+offset]){
+          if(candidate>=minimum&&candidate<=maximum&&!unsafe(candidate))
+            options.push(candidate)
+        }
+      }
+      return options
+    }
+    const begins=candidateEdges(start as number,low,high-400)
+    const ends=candidateEdges(end as number,low+400,high)
+    let best:[number,number]|null=null,score=Infinity
+    for(const a of begins)for(const b of ends){
+      if(b-a<400||b-a>60000)continue
+      if(speechWindows.some(w=>w.sourceId===src.source.sourceId&&overlaps(a,b,w.startMs,w.endMs)))continue
+      if(kept.some(w=>w.kind==='media_moment'&&w.sourceId===src.source.sourceId&&
+        typeof w.startMs==='number'&&typeof w.endMs==='number'&&
+        overlaps(a,b,w.startMs,w.endMs)))continue
+      const cost=Math.abs(a-(start as number))+Math.abs(b-(end as number))
+      if(cost<score){score=cost;best=[a,b]}
+    }
+    if(!best){
+      omitted.push({index,reason:'no_safe_observed_nonoverlapping_media_interval'})
+      continue
+    }
+    const [a,b]=best
+    if(a!==start||b!==end)repairs.push({index,from:[start as number,end as number],to:best})
+    kept.push({...item,startMs:a,endMs:b})
+  }
+  return {selections:kept,repairs,omitted}
+}
+
 function transcripts(inputs:CleanTakeSource[]){
   return inputs.map(({source,words})=>({
     sourceId:source.sourceId,title:source.title,rangeMs:source.rangeMs,
@@ -181,7 +265,17 @@ export async function planCleanTake(
     try{
       if(!call)throw Error('clean_take_required_tool_missing')
       const parsed=object(JSON.parse(call.function.arguments))
-      cuts=validateCleanTakeSelections(parsed.selections,inputs)
+      // Normalize bounded, optional video-only cuts once before strict
+      // validation. A mechanically invalid media edge must not make the
+      // model re-author dozens of otherwise valid dialogue takes.
+      const mediaRepair=repairCleanTakeMediaSelections(parsed.selections,inputs)
+      cuts=validateCleanTakeSelections(mediaRepair.selections,inputs)
+      if(mediaRepair.repairs.length||mediaRepair.omitted.length){
+        await onEvent?.({stage:'take_selection',attempt,status:'fallback',
+          reason:JSON.stringify({mediaBoundaryRepairs:mediaRepair.repairs,
+            omittedUnexecutableMedia:mediaRepair.omitted}).slice(0,1600),
+          cuts:cuts.length})
+      }
       nonempty(parsed.title,'title');nonempty(parsed.summary,'summary');nonempty(parsed.endingRule,'endingRule')
       chosen=parsed
       await onEvent?.({stage:'take_selection',attempt,status:'accepted',cuts:cuts.length,
@@ -282,7 +376,8 @@ export async function planCleanTake(
       const call=revisionResponse.message.tool_calls?.find(c=>c.function.name===selectionSchema.name)
       if(!call)throw Error('clean_take_revision_missing_tool')
       const parsed=object(JSON.parse(call.function.arguments))
-      const revisedCuts=validateCleanTakeSelections(parsed.selections,inputs)
+      const revisedMedia=repairCleanTakeMediaSelections(parsed.selections,inputs)
+      const revisedCuts=validateCleanTakeSelections(revisedMedia.selections,inputs)
       const changed=JSON.stringify(revisedCuts.map(c=>[c.sourceId,c.startMs,c.endMs,c.kind]))!==
         JSON.stringify(plan.cuts.map(c=>[c.sourceId,c.startMs,c.endMs,c.kind]))
       if(!changed)throw Error('clean_take_revision_no_change')
