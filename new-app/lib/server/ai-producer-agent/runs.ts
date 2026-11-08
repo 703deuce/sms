@@ -61,7 +61,7 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
     input.outputType === 'auto' ? 'single_payoff' : input.outputType === 'story' ? 'story' : input.outputType
   const config: AiProducerRunConfig = {
     editMode: input.editMode,
-    storyMode: multiStory ? 'multi_source_story_v1' : 'single_source_v1',
+    ...(multiStory ? { storyMode: 'multi_source_story_v1' as const } : {}),
     roughCutIntent: input.editMode === 'just_chatting_rough_cut' ? input.roughCutIntent ?? 'story' : undefined,
     visualEvidenceMode: multiStory ? 'visual_audio' :
       input.editMode === 'just_chatting_rough_cut' ? input.visualEvidenceMode ?? 'transcript_baseline' : undefined,
