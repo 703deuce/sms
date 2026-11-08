@@ -23,7 +23,7 @@ export async function runMultiSourceStoryOutput(
   const inputs:MultiStorySource[]=[]
   for(const source of ctx.sources){
     if(!source.projectId||!source.rangeMs)throw Error('multisource_source_requires_project')
-    const words=await loadRoughCutWords(ctx.workspaceId,source)
+    const words=await loadRoughCutWords(ctx.workspaceId,source,0)
     inputs.push({source,words})
   }
   validateMultiStorySources(inputs)
