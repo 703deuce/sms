@@ -35,7 +35,38 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
   const [completed,setCompleted]=useState<FinishedClip[]>([])
   const [errors,setErrors]=useState<string[]>([])
   const canceled=useRef(false)
+  const [batchId,setBatchId]=useState<string|null>(null)
   useEffect(()=>()=>{canceled.current=true},[])
+  // The entire-VOD batch is durable: project settings and worker jobs survive
+  // refresh, logout and browser closure. Reattach to it when reopening the page.
+  useEffect(()=>{
+    let stopped=false
+    let timer:ReturnType<typeof setTimeout>|undefined
+    const poll=async()=>{
+      try{
+        const data=await requestJson('/api/streamer/agent-batches?projectId='+
+          encodeURIComponent(projectId)) as null|{
+          id:string;status:string;index:number;total:number
+          completed:FinishedClip[];errors:string[]
+        }
+        if(stopped)return
+        if(data?.id){
+          setBatchId(data.id)
+          setCompleted(data.completed??[])
+          setErrors(data.errors??[])
+          setStatus(data.status==='running'?
+            `Batch window ${Math.min(data.total,data.index+1)}/${data.total}`:
+            data.status==='done'?'Complete':data.status)
+          setRunning(data.status==='running')
+        }
+      }catch{
+        // A transient status lookup failure cannot cancel queued worker jobs.
+      }
+      if(!stopped)timer=setTimeout(poll,5000)
+    }
+    void poll()
+    return ()=>{stopped=true;if(timer)clearTimeout(timer)}
+  },[projectId])
   if(!aiProducerAgentPublicEnabled())return null
 
   async function prepareSource(startMs:number,endMs:number){
@@ -99,9 +130,20 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     if(running)return
     canceled.current=false
     setRunning(true);setCompleted([]);setErrors([])
+    let durableStarted=false
     try{
+      if(allWindows){
+        const batch=await requestJson('/api/streamer/agent-batches',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({projectId,mode,seconds,action:'start'}),
+        }) as {id:string;status:string;total:number}
+        setBatchId(batch.id)
+        setStatus(`Batch queued: ${batch.total} source windows`)
+        durableStarted=true
+        return
+      }
       const windows=streamerAgentWindows(sourceStartMs,sourceDurationMs,
-        allWindows,windowStartMin)
+        false,windowStartMin)
       for(const [index,[start,end]] of windows.entries()){
         if(canceled.current)break
         setStatus(`Window ${index+1}/${windows.length}: preparing`)
@@ -115,7 +157,19 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         }
       }
       if(!canceled.current)setStatus('Complete')
-    }finally{setRunning(false)}
+    }finally{if(!durableStarted)setRunning(false)}
+  }
+
+  async function cancelBatch(){
+    if(!batchId)return
+    try{
+      await requestJson('/api/streamer/agent-batches',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({projectId,action:'cancel'}),
+      })
+      setStatus('canceled')
+      setRunning(false)
+    }catch(e){setErrors(prev=>[...prev,String((e as Error).message)])}
   }
 
   return <section className="rounded-xl border border-border bg-card p-4"
@@ -155,6 +209,8 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
             onChange={e=>setAllWindows(e.target.checked)}/>
           Analyze entire VOD (in 20-minute batches)
         </label>:null}
+      {running&&batchId?<Button size="sm" variant="outline"
+        onClick={()=>void cancelBatch()}>Stop batch</Button>:null}
       <Button size="sm" disabled={!ready||running||sourceDurationMs<15_000}
         onClick={()=>void create()}>
         {running?<Loader2 className="mr-2 size-4 animate-spin"/>:
@@ -166,7 +222,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
       Twitch/Kick sources are fetched as bounded video windows when needed.
       Each batch runs the newer specialist agents and produces an editable Clip Studio result.
       Your long-form gaming editor is unchanged.
-      {allWindows?' Keep this page open for the entire batch.':''}
+      {allWindows?' This full-VOD batch continues after you close the page.':''}
     </p>
     {!ready?<p className="mt-2 text-xs">Finish importing the stream before generating clips.</p>:null}
     {running?<p className="mt-2 text-xs" role="status">{status}</p>:null}
