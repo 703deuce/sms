@@ -11,8 +11,6 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from psycopg2.extras import RealDictCursor
-
 from clips_worker.import_url import probe_video, upload_source_key
 from clips_worker.storage import upload_file, download_object
 from clips_worker.streamer.ytdlp import download_video
@@ -50,6 +48,7 @@ def rebase_window_words(raw, start_ms: int, end_ms: int) -> list[dict]:
 
 
 def run_stream_agent_prepare_job(conn, job: dict, post_progress) -> None:
+    from psycopg2.extras import RealDictCursor
     payload = job.get("payload") or {}
     if isinstance(payload, str):
         payload = json.loads(payload)
