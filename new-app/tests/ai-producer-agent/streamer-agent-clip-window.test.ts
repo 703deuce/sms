@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest'
-import {clipAgentSourceWindow,roughCutSourceWindow} from '@/lib/ai-producer-agent/rough-cut-window'
+import {clipAgentSourceWindow,roughCutSourceWindow,minimumAgentTranscriptWords} from '@/lib/ai-producer-agent/rough-cut-window'
 import {buildAgentSystemPrompt} from '@/lib/ai-producer-agent/prompts'
 
 describe('streamer agent clip mode source isolation',()=>{
@@ -42,5 +42,14 @@ describe('agent-powered clipping prompt isolation',()=>{
     const p=buildAgentSystemPrompt(args)
     expect(p).toContain('You are editing a long-form Just Chatting stream')
     expect(p).not.toContain('STREAMER SINGLE MOMENT CLIP')
+  })
+})
+
+describe('streamer word minimum contract',()=>{
+  it('accepts speech-light gameplay while preserving long-form minimum',()=>{
+    expect(minimumAgentTranscriptWords('clip_moment_v1')).toBe(8)
+    expect(minimumAgentTranscriptWords('clip_story_v1')).toBe(8)
+    expect(minimumAgentTranscriptWords('single_source_v1')).toBe(30)
+    expect(minimumAgentTranscriptWords()).toBe(30)
   })
 })
