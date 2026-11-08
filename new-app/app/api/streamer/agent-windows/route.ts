@@ -31,7 +31,7 @@ export async function POST(request:Request){
       throw Error('stream_agent_source_not_ready_or_not_twitch_kick')
     const connected=source.streamVod.channel?.status==='CONNECTED' &&
       !source.streamVod.channel?.deletedAt
-    if(!source.streamVod.url&& !source.uploadId)
+    if(!source.streamVod.url)
       throw Error('stream_agent_video_source_missing')
     if(!source.streamVod.attestedAt&&!connected)
       throw Error('stream_agent_original_vod_permission_required')
