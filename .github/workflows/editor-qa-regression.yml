@@ -102,6 +102,7 @@ jobs:
             tests/ai-producer-agent/visual-action-beats.test.ts \
             tests/ai-producer-agent/assembly-segment-args.test.ts \
             tests/ai-producer-agent/multi-source-story.test.ts \
+            tests/ai-producer-agent/clean-take.test.ts \
             tests/ai-producer-agent/multi-source-assembly.test.ts
 
   captions-worker-regression:

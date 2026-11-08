@@ -81,10 +81,14 @@ export async function createMultiSourceStoryOutput(args:{
   await prisma.clip.update({
     where:{id:created.clipId},
     data:{aiMeta:toPrismaJson({
-      aiProducerRunId:runId,multiSourceStory:{
+      aiProducerRunId:runId,
+      ...(plan.mode==='clean_take_v1'?{cleanTake:{
         mode:plan.mode,outline:plan.outline,cuts:plan.cuts,
         durationMs:plan.estimatedDurationMs,
-      },
+      }}:{multiSourceStory:{
+        mode:plan.mode,outline:plan.outline,cuts:plan.cuts,
+        durationMs:plan.estimatedDurationMs,
+      }}),
     })},
   })
   return {...created,durationMs:plan.estimatedDurationMs}
