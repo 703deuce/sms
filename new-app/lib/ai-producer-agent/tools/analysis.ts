@@ -59,7 +59,7 @@ export async function findMoments(
           focused:[],
           metadata: {
             model:String((result.meta as Record<string,unknown> | undefined)?.model_requested??'gemini-3.1-flash-lite'),
-            fps:1/3, mediaResolution:'MEDIA_RESOLUTION_LOW',
+            fps:1, mediaResolution:'MEDIA_RESOLUTION_LOW',
             originalAudioAttached:Boolean((result.meta as Record<string,unknown> | undefined)?.original_audio_attached),
             asrTranscriptAttached:Boolean(transcriptText),
           },
