@@ -1031,6 +1031,8 @@ export async function runEditorialRole(
   const agentMoment=ctx.config.storyMode==='clip_moment_v1'
   const agentStory=ctx.config.storyMode==='clip_story_v1'
   const storyObservation=ctx.config.editMode==='just_chatting_rough_cut' && !highlightsMode && !agentMoment && !agentStory && ctx.config.targetLengthS[1]<=105
+  const storyBaseline=storyObservation||agentStory
+  const clipTarget=ctx.config.targetLengthS.join('–')
   const visualStory=(storyObservation||agentStory) && ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence)
   const candidates=visualStory ? buildVisualBeatCandidates(
     ctx.cache.visualEvidence?.coarse??[],ctx.cache.visualEvidence?.focused??[]) : []
@@ -1051,8 +1053,10 @@ export async function runEditorialRole(
         ] : []),
       ] : []),
       ...(ctx.config.editMode === 'just_chatting_rough_cut'
-        ? [...(storyObservation && (role==='story'||role==='footage'||role==='qa') ? [] : [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role]]),
-          ...(storyObservation ? [
+        ? [...(storyBaseline && (role==='story'||role==='footage'||role==='qa') ? [] : [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role]]),
+          ...(agentStory ? [
+            'SHORT STORY CLIP BASELINE: the same editorial rules as the AI Producer Story — ONE coherent story with meaningful beginning, development and recorded ending, complete natural thought boundaries — but the finished runtime must add up to '+clipTarget+' seconds. Assemble several chronological non-overlapping original passages (typically 2–6) whose durations SUM to the target. Drop weak passages rather than cut mid-thought. Never pad.',
+          ] : storyObservation ? [
             'EDITORIAL BASELINE EXPERIMENT: Ignore all duration targets, runtime ceilings and 90-second requirements. The goal is ONE best coherent story from the authorized full transcript, whether it takes two, three, four minutes or another natural length. Identify a meaningful beginning, development and actual ending. Keep only the speech that supports that ONE story; do not concatenate every related topic. Choose complete naturally spoken thought boundaries. The deterministic tool will execute your selections unchanged. No later agent will compress, fix or substitute them.',
           ] : [ctx.config.targetLengthS[1] <= 105
             ? 'SHORT HIGHLIGHT OVERRIDE: Produce one concise 30–90 second standalone edit from the strongest sourced exchange. Prioritize an immediate understandable hook, essential context, and a satisfying payoff. Remove digressions and repetition. Short-form compression is intentional; do NOT follow the long-form pacing guidance. Respect meaning, chronology, and honest reactions. Target seconds supplied in the request.'
@@ -1060,8 +1064,6 @@ export async function runEditorialRole(
         ] : []),
       ...(agentMoment ? [
         'SINGLE CONTINUOUS STREAMER MOMENT: This is NOT a montage or the long-form story baseline. Story must choose ONE powerful event from the supplied original recording. Footage must submit exactly ONE firstWordId/lastWordId interval spanning its necessary lead-in, action, genuine reaction and finished payoff. No isolated fragments, artificial joins or extra candidate moments. Respect the target seconds. Flow/QA verify completeness but MUST NOT introduce cuts or reorder footage.',
-      ] : agentStory ? [
-        'STREAMER SHORT STORY CLIP: Select several real passages from ONE event, not a documentary or a highlights compilation. Build an understandable setup, escalation, and completed payoff within the requested 30/60/90 second target. Complete source-grounded word boundaries, maintain sequence. Prioritize relevant visual/gameplay actions. Keep the long-form gaming producer unchanged.',
       ] : []),
       ...(highlightsMode ? [
         'HIGHLIGHTS MODE OVERRIDE: Curate several DISTINCT memorable moments across the WHOLE available source, not one continuous scene with breath cuts. Each moment must be independently understandable and interesting; authentic jokes, surprising answers, revealing quotes, reactions or sharp insights are welcome. Select 2 distinct moments for very short highlights and ideally 3+ for 60–120 seconds, without forcing weak filler. Do not pretend unrelated moments form one chronological story. Avoid repetitive quotes, fabricated context, misleading juxtapositions, dangling sentences, or cuts inside words. Source-order chronological output is required.'
@@ -1076,13 +1078,15 @@ export async function runEditorialRole(
       ...(storyObservation ? {runtimeTargetDisabled:true,experiment:'narrative_coherence_and_boundary_selection_only'} : {outputTargetSeconds:ctx.config.targetLengthS}),
       editingIntent: agentMoment ? 'single_continuous_streamer_moment' : agentStory ? 'short_streamer_story_clip' : highlightsMode ? 'multi_moment_highlights' : ctx.config.targetLengthS[1] <= 105 ? 'short_story' : 'conversational_long_form',
       ...(role === 'footage' && !highlightsMode &&
-        ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105 && !agentMoment && !agentStory
-        ? { preferredEditInstruction: 'STORY BASELINE: the selections ARE the complete final narrative, not a list of candidate moments. Choose a coherent beginning, development and ending with no length target. Do not assemble multiple loosely related stories; omit unrelated or redundant material. Return word IDs and let code cut exactly there; no other agent will trim the selections.' } : {}),
+        ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105 && !agentMoment
+        ? { preferredEditInstruction: agentStory
+          ? 'STORY BASELINE: selections ARE the complete final narrative, not candidates. Choose a coherent setup, development and recorded payoff, with all passages summing to '+clipTarget+' seconds. Use word IDs, omit off-topic material and preserve natural endings.'
+          : 'STORY BASELINE: the selections ARE the complete final narrative, not a list of candidate moments. Choose a coherent beginning, development and ending with no length target. Do not assemble multiple loosely related stories; omit unrelated or redundant material. Return word IDs and let code cut exactly there; no other agent will trim the selections.' } : {}),
       ...((role === 'footage' || role === 'dialogue')
         ? { selectionDurationInstruction: agentMoment
           ? 'Exactly ONE contiguous source span only. Pick complete action and reaction with natural start/end inside the target seconds; do not concatenate separate scenes.'
           : agentStory
-          ? 'Actual final short-form source selections with meaningful setup, escalation and payoff. Use original word IDs and honor the selected duration target.'
+          ? 'Selections are the FINAL edit, not candidates. Sum of passage durations must land in '+clipTarget+' seconds (hard limit '+Math.max(15,ctx.config.targetLengthS[0]-12)+'–'+(ctx.config.targetLengthS[1]+12)+'). Use 2+ passages when the story contains a detour. Never select one huge span containing material Story excluded; preserve complete opening and payoff.'
           : highlightsMode
           ? 'Find distinct self-contained highlights from different source moments. Do not count adjacent breath cuts as different moments. Choose compelling footage up to the duration target without padding; finish each excerpt on a complete thought.'
           : storyObservation ? 'For this baseline, IGNORE runtime. Find the complete spoken passages that tell ONE compelling story from opening to resolution. Cut irrelevant digressions and repeated points, but never trim for a duration target. Select accurate starts and endings from the transcript and report exactly those word IDs.'
