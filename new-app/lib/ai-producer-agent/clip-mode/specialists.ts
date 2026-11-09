@@ -1495,9 +1495,9 @@ export async function createEditorialHandoff(
   const momentClip = ctx.config.storyMode === 'clip_moment_v1'
   const storyClip = ctx.config.storyMode === 'clip_story_v1'
   const clipBrief = momentClip
-    ? 'SINGLE MOMENT CLIP: Find one great source event with the actual opening context, event, reaction and payoff. Return exactly ONE continuous source passage, without montage, unrelated padding or jump cuts. Honor the requested short-form target. excludeAsides must lie OUTSIDE that span. An unrelated middle detour cannot be removed; choose a different continuous event, start after it, or accept it as part of the moment.'
+    ? 'SINGLE MOMENT CLIP: Find one great source event with the actual opening context, event, reaction and payoff. Return exactly ONE continuous source passage, without montage, unrelated padding or jump cuts. Runtime is flexible (15 seconds, 40 seconds, or longer); never pad a strong moment for length. excludeAsides must lie OUTSIDE that span. An unrelated middle detour cannot be removed; choose a different continuous event, start after it, or accept it as part of the moment.'
     : storyClip
-      ? 'SHORT STORY CLIP: Form one meaningful setup, escalation and genuine source-recorded payoff from multiple nonoverlapping passages. Honor the short-form target; this is NOT the existing long-form gaming mode.'
+      ? 'SHORT STORY CLIP: Form one meaningful setup, escalation and genuine source-recorded payoff from multiple nonoverlapping passages. Choose a coherent short story; the requested duration is a preference, never a reason to pad, cut off payoff or fail.'
       : null
   const base = {
     instruction: clipBrief ? [clipBrief,instruction??''].filter(Boolean).join(' ') : instruction,
@@ -1582,7 +1582,7 @@ export async function createEditorialHandoff(
       fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord] — FULL original source in chronological order',
       fullTranscript:completeTranscriptWords(ctx.cache.words,true),
       instruction: storyClip
-        ? [clipBrief,'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source and Story plan. Choose actual final passages by FIRST/LAST WORD IDS. Tell ONE complete narrative from recorded setup through the genuine payoff, trimming irrelevant tangents. Select complete sentences, not mid-phrase edges. Each selection\'s seconds are (endMs-startMs)/1000 from the indexed transcript; report the running total in each reason. The sum must approach '+ctx.config.targetLengthS.join('–')+' seconds.'].join(' ')
+        ? [clipBrief,'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source and Story plan. Choose actual final passages by FIRST/LAST WORD IDS. Tell ONE complete narrative from recorded setup through the genuine payoff, trimming irrelevant tangents. Select complete sentences, not mid-phrase edges. Each selection\'s seconds are (endMs-startMs)/1000 from the indexed transcript; report the running total in each reason. Use as much sourced footage as this natural story needs; no length compliance is required.'].join(' ')
         : clipBrief ?? (highlightsMode
         ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
         : ctx.config.targetLengthS[1] <= 105
@@ -1619,47 +1619,8 @@ export async function createEditorialHandoff(
     found = { selections: recovered.selections }
   }
   let footage = found.selections as EditorialSelection[]
-  if(momentClip){
-    // One-take shorts remain source-contiguous. Try to improve the nominal
-    // duration but never replace a valid candidate with a worse one.
-    const [min,max]=ctx.config.targetLengthS
-    const distance=(seconds:number)=>seconds<min?min-seconds:seconds>max?seconds-max:0
-    let best=footage
-    for(let attempt=1;attempt<=2;attempt++){
-      const seconds=best.length===1?(best[0]!.endMs-best[0]!.startMs)/1000:0
-      if(best.length===1&&best[0]?.kind!=='visual_action'&&seconds>=min&&seconds<=max)break
-      try{
-        const corrected=await runEditorialRole(ctx,out,budget,'footage',{
-          ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
-          fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
-          fullTranscript:completeTranscriptWords(ctx.cache.words,true),
-          invalidPriorFootage:best,
-          previousDurationSeconds:seconds,targetSeconds:[min,max],
-          instruction:'SINGLE MOMENT LENGTH REPAIR: Return exactly ONE continuous original source passage as close as possible to '+min+'–'+max+' seconds by moving only the first/last word. Never remove the middle; if no complete moment fits, return the most complete one and explain why.',
-        })
-        const candidate=corrected.selections as EditorialSelection[]
-        const candidateSeconds=candidate.length===1
-          ?(candidate[0]!.endMs-candidate[0]!.startMs)/1000:0
-        const valid=candidate.length===1&&candidate[0]?.kind!=='visual_action'&&
-          candidateSeconds>0&&candidateSeconds<=max+20
-        if(valid&&(
-          best.length!==1||best[0]?.kind==='visual_action'||
-          distance(candidateSeconds)<distance(seconds))){
-          best=candidate
-        }
-        await specialistEvent(ctx,budget,'footage','single_moment_correction',{
-          attempt,selectionCount:candidate.length,durationSeconds:candidateSeconds,
-          accepted:best===candidate,
-        })
-      }catch(error){
-        await specialistEvent(ctx,budget,'footage','single_moment_correction_unavailable',{
-          attempt,errorCode:String((error as Error)?.message??error).slice(0,250),
-        })
-        break
-      }
-    }
-    footage=best
-  }
+  // Keep the Footage agent's best complete moment. A second pass aimed solely
+  // at 60s repeatedly padded unrelated talk and overrode the Story ending.
   let visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
   let submittedVisualOmissions=(found.visualActionOmissions as Array<{id:string;reason:string}>|undefined)??[]
   if(!momentClip&&!highlightsMode&&ctx.config.editMode==='just_chatting_rough_cut'&&
@@ -1722,7 +1683,7 @@ export async function createEditorialHandoff(
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
     })
     if(storyClip){
-      const targetMid=maximumSeconds // 30/60/90 second clip preset, not midpoint of allowed bounds
+      const targetMid=maximumSeconds
       const desiredLo=Math.max(15,targetMid-10)
       const desiredHi=targetMid+10
       const distance=(value:number)=>value<desiredLo?desiredLo-value:value>desiredHi?value-desiredHi:0
@@ -1732,7 +1693,9 @@ export async function createEditorialHandoff(
       for(let attempt=0;attempt<5&&budget.state()!=='hard';attempt++){
         const coverage=storyCoverage(footage,targetMid)
         const duration=coverage.durationSeconds
-        if(coverage.separated&&duration>=desiredLo&&duration<=desiredHi)break
+        // A coherent story with genuine separate source moments is enough.
+        // Do not make additional model calls just to reach 50–70 seconds.
+        if(coverage.separated)break
         await specialistEvent(ctx,budget,'footage','story_search_more_moments',{
           attempt,sourceRangeMs:source.rangeMs,previousSelections:footage,
           durationSeconds:duration,gapsMs:coverage.gapsMs,
@@ -1779,9 +1742,7 @@ export async function createEditorialHandoff(
       const finalCoverage=storyCoverage(footage,targetMid)
       if(!finalCoverage.separated)
         throw Error('clip_story_requires_distinct_source_passages')
-      if(finalCoverage.durationSeconds<desiredLo||finalCoverage.durationSeconds>desiredHi)
-        out.notes.push('Complete separated story retained with length ranking penalty: '+
-          finalCoverage.durationSeconds.toFixed(1)+'s vs preferred '+desiredLo+'-'+desiredHi+'s')
+      // Runtime is telemetry only. No duration penalty or publication veto.
     }
     let reviewed:Awaited<ReturnType<typeof runStoryFlowReview>>
     try {
@@ -1799,8 +1760,6 @@ export async function createEditorialHandoff(
     let finalCombined=combined
     if(storyClip){
       const target=maximumSeconds
-      const preferredLo=Math.max(15,target-10),preferredHi=target+10
-      const preferenceDistance=(n:number)=>n<preferredLo?preferredLo-n:n>preferredHi?n-preferredHi:0
       const candidates=[
         combined,
         {cutPlan:reviewed.cutPlan,included:[],omitted:submittedVisualOmissions},
@@ -1813,18 +1772,13 @@ export async function createEditorialHandoff(
       const viable=candidates.filter(candidate=>
         storyCoverage(candidate.cutPlan,target).separated)
       if(!viable.length)throw Error('clip_story_requires_distinct_source_passages')
-      finalCombined=viable.sort((a,b)=>
-        preferenceDistance(selectionDurationS(a.cutPlan))-
-        preferenceDistance(selectionDurationS(b.cutPlan)))[0]!
-      const seconds=selectionDurationS(finalCombined.cutPlan)
-      if(preferenceDistance(seconds)>0){
-        out.notes.push('Story runtime '+seconds.toFixed(1)+'s outside preferred '+
-          preferredLo+'-'+preferredHi+'s; kept complete distinct story with ranking penalty')
-        await specialistEvent(ctx,budget,'footage','short_story_clip_duration_advisory',{
-          durationSeconds:seconds,targetSeconds:[preferredLo,preferredHi],
-          note:'No filler or fabricated moments added',
-        })
-      }
+      // Flow takes precedence if it preserves distinct moments; never undo
+      // a cleaner editorial decision to chase a target length.
+      finalCombined=viable[0]!
+      await specialistEvent(ctx,budget,'footage','story_duration_informational',{
+        durationSeconds:selectionDurationS(finalCombined.cutPlan),targetSeconds:target,
+        note:'No editorial penalty, forced padding or forced truncation',
+      })
     }
     if(storyClip&&!storyCoverage(finalCombined.cutPlan).separated)
       throw Error('clip_story_requires_distinct_source_passages')
