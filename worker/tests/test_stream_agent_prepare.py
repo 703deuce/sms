@@ -39,3 +39,10 @@ def test_stream_chat_replay_times_follow_original_vod_not_local_window():
     # 30m into the original VOD, a 12s generated clip begins 4s into the
     # downloaded agent window. Chat is read in ORIGINAL VOD coordinates.
     assert original_chat_range_ms(4_000,16_000,1_800_000) == (1_804_000,1_816_000)
+
+
+def test_silent_video_window_is_valid_media_input():
+    # No dialogue is not equivalent to no visual event; the subsequent
+    # Gemini visual-only specialist verifies the actual content.
+    assert rebase_window_words([], 1_200_000, 1_260_000) == []
+    assert rebase_window_words({"words": []}, 0, 60_000) == []
