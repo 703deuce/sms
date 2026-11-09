@@ -185,6 +185,8 @@ export default async function ClipProjectPage({
         asrLanguage={projectSettings.asrLanguage}
         editorProjectId={projectSettings.fromFullVideoProjectId ?? project.id}
         projectHasUpload={Boolean(project.uploadId && !isFullVideoSettings(projectSettings))}
+        autoAgentClipMode={projectSettings.autoAgentClipMode}
+        autoAgentClipSeconds={projectSettings.autoAgentClipSeconds}
       />
     </Page>
   )
