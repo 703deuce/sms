@@ -1681,9 +1681,7 @@ export async function createEditorialHandoff(
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
     })
     if(storyClip){
-      const targetMid=maximumSeconds
-      const desiredLo=Math.max(15,targetMid-10)
-      const desiredHi=targetMid+10
+      const targetMid=maximumSeconds // reporting only; no duration gate
       // Duration is never a Story quality or selection criterion.
       // Footage can request distant source moments, not just slightly extend
       // an adjacent 29-second trim. Each repair receives the FULL transcript,
@@ -1697,8 +1695,7 @@ export async function createEditorialHandoff(
         await specialistEvent(ctx,budget,'footage','story_search_more_moments',{
           attempt,sourceRangeMs:source.rangeMs,previousSelections:footage,
           durationSeconds:duration,gapsMs:coverage.gapsMs,
-          missingSeconds:Math.max(0,desiredLo-duration),
-          desiredSeconds:[desiredLo,desiredHi],
+          note:'Search more genuinely separated source regions, not longer footage',
         })
         try{
           const revised=await runEditorialRole(ctx,out,budget,'footage',{
@@ -1707,7 +1704,6 @@ export async function createEditorialHandoff(
             fullTranscript:completeTranscriptWords(ctx.cache.words,true),
             previousSelections:footage,
             previousDurationSeconds:duration,
-            targetSeconds:[desiredLo,desiredHi],
             otherObservedMoments:ctx.cache.momentsSummary,
             instruction:[
               'STORY CLIP SEARCH AND REPAIR:',
