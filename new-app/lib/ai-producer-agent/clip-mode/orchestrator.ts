@@ -19,10 +19,11 @@ import { estimateLunaUsd } from '@/lib/ai-producer-agent/cost'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
-import { createEditorialHandoff, runEditorialRole, recoverEditorialSelections, type EditorialHandoff } from '@/lib/ai-producer-agent/clip-mode/specialists'
+import { createEditorialHandoff, runEditorialRole, recoverEditorialSelections, completeTranscriptWords, type EditorialHandoff } from '@/lib/ai-producer-agent/clip-mode/specialists'
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
 import {candidateWindows,overlapFraction,rankCandidate,type ClipCandidate} from '@/lib/ai-producer-agent/clip-mode/candidates'
 import {storyCoverage} from '@/lib/ai-producer-agent/clip-mode/story-coverage'
+import {clipEditorialAudit,clipEditorialInstructions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {createSourceClip,publishClipScore,discardClip} from '@/lib/server/ai-producer-agent/clip-mode-store'
 import type {ClipWord} from '@/lib/clips/edits'
 import { buildJustChattingEvidence } from '@/lib/ai-producer-agent/just-chatting-evidence'
@@ -103,12 +104,14 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       outputs.push(out)
       // Single Moment stays restricted to one local region. Story agents must
       // inspect the WHOLE authorized recording to seek genuinely separate beats.
+      const contextStart=Math.max(source.rangeMs?.[0]??0,candidate.startMs-12000)
+      const contextEnd=Math.min(source.rangeMs?.[1]??candidate.endMs,candidate.endMs+6500)
       const scopedWords=mode==='story'?(ctx.cache.words??[]):
         (ctx.cache.words??[]).filter((word:ClipWord)=>
-          word.e*1000>=candidate.startMs&&word.s*1000<=candidate.endMs)
+          word.e*1000>=contextStart&&word.s*1000<=contextEnd)
       if(scopedWords.length<8){out.notes.push('skipped: no transcript context for candidate');continue}
       const scopedSource=mode==='story'?source:
-        {...source,rangeMs:[candidate.startMs,candidate.endMs] as [number,number]}
+        {...source,rangeMs:[contextStart,contextEnd] as [number,number]}
       const candidateCtx:ToolCtx={...ctx,sources:[scopedSource],
         cache:{...ctx.cache,words:scopedWords,momentsSummary:mode==='story'
           ? ctx.cache.momentsSummary
@@ -130,10 +133,16 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
              'INDEPENDENT STORY CANDIDATE '+String(candidate.index+1)+':',
              'Anchor this distinct story at observed event '+candidate.label,
              'near original source time '+Math.round(candidate.peakMs/1000)+' seconds.',
-             'Find additional relevant moments in other source regions and form a coherent '+
-               ctx.config.targetLengthS[1]+' second story with real gaps.',
+             'Find additional relevant moments from distinct original source regions. Build one coherent complete story of whatever natural length; do not pad toward a preset.',
              'Other candidate stories must not all be a copy of the same source event.'].join(' ')
-          : run.instruction)
+          : [run.instruction??'',
+              'INDEPENDENT SINGLE-MOMENT CANDIDATE '+String(candidate.index+1)+':',
+              'Anchor this clip at the finder event '+candidate.label,
+              'around original source time '+Math.round(candidate.peakMs/1000)+' seconds.',
+              'If the first spoken line refers backward, include ONLY the necessary preceding setup sentence or two.',
+              'Inspect the next 6.5 seconds after the proposed ending for a meaning-changing qualification.',
+              'Let Flow choose the natural ending. Never pad to the requested target length.'].join(' '),
+          ctx.cache.words??[])
         if(!out.projectId||!out.clipId||!out.editorialHandoff?.cutPlan.length){
           out.notes.push('No valid editorial output')
           continue
@@ -146,16 +155,47 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           out.projectId=undefined;out.clipId=undefined
           continue
         }
+        const safetyRisks=clipEditorialAudit(cuts,ctx.cache.words??[])
+        await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
+          tool:'clip_editorial_safety_audit',kind:'validate',
+          argsSummary:JSON.stringify({clipId:out.clipId,candidateIndex:candidate.index}),
+          resultSummary:JSON.stringify({point:out.editorialHandoff.outline.logline,risks:safetyRisks}).slice(0,3600)})
         const qa=out.editorialHandoff.review
         // An LLM may still mention preset length in QA prose. Strip only
         // duration-only criticisms; leave actual continuity/content flaws.
         const substantiveIssues=(qa?.issues??[]).filter(issue=>
           !/^(?:the )?(?:selected |final |clip |edit |story )?(?:intervals? total |duration |runtime |length |clip is too short|clip is too long|below the requested|above the requested)/i.test(issue.trim()) &&
           !/duration (?:is |of |below |above )|seconds? (?:below |above )|length target|runtime target/i.test(issue))
-        const qaPass=qa?.pass===true || Boolean(qa&&!substantiveIssues.length)
-        if(qa)out.editorialHandoff.review={pass:qaPass,issues:substantiveIssues}
+        // Regex can detect a suspicious "but", not whether it changes
+        // meaning. Ground the final decision in the explicit model QA, which
+        // saw the complete original transcript and the flagged risk spans.
+        const criticalStructural=safetyRisks.filter(r=>
+          r.code==='invalid_passage'||r.code==='chronology')
+        const meaningfulFailure=qa?.pass===false&&substantiveIssues.some(issue=>
+          /qualif|mislead|misrepresent|changed meaning|false impression|missing setup|payoff before|unresolved referen|context missing/i.test(issue))
+        // A model may mistakenly fail QA solely for 15/30/60-second preset
+        // compliance. These are explicitly *not* editorial quality defects.
+        const durationOnlyModelFailure=Boolean(qa&&qa.pass===false&&
+          (qa.issues?.length??0)>0&&substantiveIssues.length===0)
+        const qaPass:boolean|null=criticalStructural.length>0?false:
+          qa?(Boolean(qa.pass)||durationOnlyModelFailure)&&substantiveIssues.length===0:null
+        const safetyIssues=safetyRisks.map(r=>r.code+': '+r.detail)
+        const combinedIssues=[...substantiveIssues,
+          ...(qaPass===true?[]:safetyIssues)]
+        // Missing model QA remains unknown, not a fabricated false or pass.
+        out.editorialHandoff.review=qaPass===null?undefined:
+          {pass:qaPass,issues:combinedIssues}
+        // Fail confirmed meaning distortion, deterministic broken chronology,
+        // or unresolved qualification where independent QA was unavailable.
+        if(criticalStructural.length||meaningfulFailure||
+          (!qa&&safetyRisks.some(r=>r.code==='missing_qualification'))){
+          await discardClip(ctx.workspaceId,out.clipId)
+          out.notes.push('Rejected at editorial QA: '+combinedIssues.join('; ').slice(0,420))
+          out.projectId=undefined;out.clipId=undefined
+          continue
+        }
         const score=rankCandidate({finderScore:candidate.finderScore,
-          qaPass:qa?qaPass:null,issues:substantiveIssues.length,
+          qaPass,issues:combinedIssues.length,
           durationSeconds,targetS:ctx.config.targetLengthS[1]})
         successful.push({out,candidate,score,durationSeconds})
       }catch(error){
@@ -229,7 +269,8 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
   }
 }
 
-async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, instruction: string | null) {
+async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget,
+  instruction: string | null, fullSourceWords: ClipWord[] = ctx.cache.words??[]) {
   if (ctx.config.editMode === 'just_chatting_rough_cut') {
     out.editorialHandoff = await createEditorialHandoff(ctx, out, budget, instruction)
   }
@@ -287,6 +328,10 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       storyFinisher: out.editorialHandoff.finisher ?? null,
       highlightsFinisher: out.editorialHandoff.highlightsFinisher ?? null,
       selections: out.editorialHandoff.cutPlan,
+      fullTranscriptWordIndexed:true,
+      fullTranscriptFormat:'[originalWordId,sourceStartMs,sourceEndMs,spokenWord] — COMPLETE authorized source',
+      fullTranscript:completeTranscriptWords(fullSourceWords,true),
+      flaggedContextAndQualificationRisks:clipEditorialAudit(out.editorialHandoff.cutPlan,fullSourceWords),
       ...(ctx.config.visualEvidenceMode==='visual_audio' && ctx.cache.visualEvidence ? {
         visualAudioEvidence: ctx.cache.visualEvidence,
         selectedVisualBeats:out.editorialHandoff.outline.visualBeats??[],
@@ -302,9 +347,9 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       editorialBaseline: ctx.config.roughCutIntent !== 'highlights' && ctx.config.targetLengthS[1] <= 105
         ? 'Judge one complete, coherent story and exact word boundaries ONLY. Do not score runtime, 90-second compliance, shortness, or the number of passages.'
         : undefined,
-      instruction: ctx.config.roughCutIntent === 'highlights'
+      instruction: [clipEditorialInstructions(),ctx.config.roughCutIntent === 'highlights'
         ? 'HIGHLIGHTS QA: Inspect actual opening and closing transcript words for EVERY selected moment and all joins. Use the Highlights Finisher verified landings: confirm every promised quote remains in the final footage and each highlight actually ends naturally. Check that no unrelated talk after a landing, incomplete opening, missing independent payoff, or overlong segment remains. Require distinct source moments, not breath cuts. If source words do not support the finishing choices, pass=false with precise timestamps. No rendered audio was supplied; acoustic joins require listening review.'
-        : 'EDITORIAL BASELINE (NO LENGTH TARGET): Judge only whether ONE specific story is coherently told from a clear opening through an actual recorded ending, whether the moments belong to that story, whether each selected passage begins and ends naturally, and whether any important connecting information is missing or repeated. Ignore duration entirely: two, three, four or more minutes are acceptable. Do not fail QA due to runtime or number of passages. Flag precise transcript words and source timestamps for every true editorial issue. Do not infer audio quality without listening.',
+        : 'EDITORIAL BASELINE (NO LENGTH TARGET): Judge whether one specific story is coherently told from a clear opening through its recorded ending. Inspect the first words for missing setup and the NEXT 6.5 seconds of ORIGINAL source after each end for a meaning-changing qualifier, negation, exception or conclusion. Check that every stitched passage makes sense with only earlier OUTPUT passages. If a meaning-changing qualifier is omitted, pass=false with source-word evidence and an exact repair hint. A short complete 15-second edit is valid; never penalize length or number of passages. Verify titles/caption proper-name spelling against evidence; do not pretend ASR guarantees spelling. Do not infer audio quality without listening.'].join(' '),
     })
     out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
     out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
