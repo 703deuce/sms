@@ -3,12 +3,14 @@ import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { getMotionStyle } from '@/lib/server/clips/motion-styles'
 import { editorPreviewDurationMs } from '@/lib/clips/editor-preview-edits'
 import { suggestTextMotionGraphics } from '@/lib/clips/motion-graphics/suggest'
 
 const Input = z.object({
   style: z.enum(['minimal', 'narrative', 'gaming', 'tech']),
   instruction: z.string().max(1000).optional(),
+  profileId: z.string().min(1).max(128).optional(),
 }).strict()
 
 /** Creates a REVIEWABLE plan; does not mutate the clip or bypass existing editor save CAS. */
@@ -17,6 +19,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const workspaceId = await resolveWorkspaceId()
     const { id: clipId } = await ctx.params
     const body = Input.parse(await request.json())
+    const profile = body.profileId ? await getMotionStyle(workspaceId, body.profileId) : null
+    if (body.profileId && !profile) return NextResponse.json({ error: 'Style profile not found' }, { status: 404 })
     const data = await getClipEditorPayload(workspaceId, clipId)
     if (!data) return NextResponse.json({ error: 'Clip not found' }, { status: 404 })
     const words = data.words.map((w, index) => ({ ...w, i: w.i ?? w.idx ?? index }))
@@ -31,6 +35,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       durationMs,
       format: aspect as '9:16' | '16:9' | '1:1',
       style: body.style,
+      profile,
       instruction: body.instruction,
     })
     return NextResponse.json({
