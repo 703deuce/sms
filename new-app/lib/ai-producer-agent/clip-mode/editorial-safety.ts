@@ -33,7 +33,10 @@ export function clipEditorialAudit(
     const inside=at(words,cut.startMs,cut.endMs)
     if(!inside.length)continue // visual-only moments need visual QA, never fake ASR findings
     const first=phrase(inside.slice(0,5)).toLowerCase()
-    if(REF_OPEN.test(first)){
+    // A stitched story may legitimately open a later passage with "so" when
+    // its preceding output passage already supplied the antecedent. Flow does
+    // the semantic join audit for those. Flag only the first audible opening.
+    if(i===0&&REF_OPEN.test(first)){
       issues.push({code:'referential_opening',detail:'Opening may refer to missing setup: '+first.slice(0,75),passageIndex:i})
     }
     const tail=phrase(inside.slice(-7))
