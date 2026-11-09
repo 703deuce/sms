@@ -8,13 +8,15 @@ import { sourceToOutput, timebaseFor } from '@/lib/clips/editor/clip-timeline'
 
 export type MotionStyleChoice = 'minimal' | 'narrative' | 'gaming' | 'tech'
 export type MotionTextEvidence = { id: string; startMs: number; endMs: number; text: string }
-export function transcriptEvidence(words: ClipWord[], edits: ClipEditsV2, max = 120): MotionTextEvidence[] {
+export function transcriptEvidence(words: ClipWord[], edits: ClipEditsV2, max = 120,
+  range?: readonly [number, number]): MotionTextEvidence[] {
   const sourceWords = words.map((w, index) => ({ ...w, i: w.i ?? w.idx ?? index }))
   const tb = timebaseFor(editorPreviewEdits(edits, sourceWords))
   const mapped = words.map((w) => {
     const mid = sourceToOutput(tb, (w.s + w.e) * 500)
     return mid == null ? null : { at: Math.round(mid), word: w.w }
-  }).filter((x): x is { at: number; word: string } => x !== null)
+  }).filter((x): x is { at: number; word: string } => x !== null &&
+    (!range || (x.at >= range[0] && x.at < range[1])))
     .sort((a, b) => a.at - b.at)
   // Group into short, time-addressable excerpts to prevent hallucinated context.
   const blocks: MotionTextEvidence[] = []
@@ -72,17 +74,24 @@ export async function suggestTextMotionGraphics(args: {
   words: ClipWord[]
   edits: ClipEditsV2
   durationMs: number
+  rangeMs?: readonly [number, number]
   format: '9:16' | '16:9' | '1:1'
   style: MotionStyleChoice
   profile?: StyleProfile | null
   instruction?: string
   mode?: MotionPlan['mode']
 }): Promise<{ plan: MotionPlan; usage: { promptTokens: number; completionTokens: number }; evidenceCount: number }> {
-  if (args.durationMs < 500 || args.durationMs > 10 * 60_000)
+  if (args.durationMs < 500 || args.durationMs > 24 * 60 * 60_000)
     throw new Error('motion_generation_duration_out_of_range')
-  const evidence = transcriptEvidence(args.words, args.edits)
+  const requested = args.rangeMs ?? [0, args.durationMs]
+  const [rangeStart, rangeEnd] = requested
+  if (!Number.isInteger(rangeStart) || !Number.isInteger(rangeEnd) ||
+      rangeStart < 0 || rangeEnd > args.durationMs || rangeEnd <= rangeStart ||
+      rangeEnd - rangeStart > 10 * 60_000 || rangeEnd - rangeStart < 500)
+    throw new Error('motion_generation_invalid_time_window')
+  const evidence = transcriptEvidence(args.words, args.edits, 120, [rangeStart, rangeEnd])
   if (!evidence.length) throw new Error('motion_generation_requires_transcript')
-  if (evidence[evidence.length - 1]!.endMs < args.durationMs - 15000)
+  if (evidence[evidence.length - 1]!.endMs < rangeEnd - 15000)
     throw new Error('motion_generation_evidence_incomplete')
   const response = await lunaChat({
     messages: [
@@ -106,6 +115,7 @@ export async function suggestTextMotionGraphics(args: {
       ].join(' ') },
       { role: 'user', content: JSON.stringify({
         outputDurationMs: args.durationMs,
+        allowedWindowMs: [rangeStart, rangeEnd],
         format: args.format,
         style: args.style,
         mode: args.mode ?? 'single_source_story',
@@ -133,12 +143,13 @@ export async function suggestTextMotionGraphics(args: {
   } : style[args.style]
   const seen = new Set<string>()
   const graphics = rows.map((r) => {
-    const id = String(r.id ?? '')
+    const id = 'w' + rangeStart + '_' + String(r.id ?? '')
     const e = byId.get(String(r.passageId))
     if (!e || seen.has(id)) throw new Error('motion_agent_unknown_or_duplicate_evidence')
     seen.add(id)
     const startMs = Number(r.startMs), endMs = Number(r.endMs)
     if (!Number.isInteger(startMs) || !Number.isInteger(endMs) ||
+        startMs < rangeStart || endMs > rangeEnd ||
         startMs < e.startMs - 350 || endMs > e.endMs + 1600 ||
         endMs <= startMs || endMs - startMs < 500 || endMs - startMs > 5000)
       throw new Error('motion_agent_ungrounded_timing')
