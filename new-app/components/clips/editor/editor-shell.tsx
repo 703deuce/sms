@@ -68,6 +68,7 @@ import { clipLayoutChip, clipTypeBadge, clipWhySummary, type ClipAiMeta } from '
 import { PlayerControls } from '@/components/clips/editor/player-controls'
 import { Timeline, type TimelineMenuCommand } from '@/components/clips/editor/timeline'
 import { TextPanel } from '@/components/clips/editor/text-panel'
+import { MotionGraphicsPanel } from '@/components/clips/editor/motion-graphics-panel'
 import { TemplatesPanel } from '@/components/clips/editor/templates-panel'
 import { ColorPanel, type ColorTarget } from '@/components/clips/editor/color-panel'
 import { EffectsBrowser } from '@/components/clips/editor/effects-browser'
@@ -2611,6 +2612,13 @@ export function EditorShell({
             onRefresh={refreshDubs}
             dubs={dubs}
           />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
+      {panelMounted('motion') ? (
+        <div className={on('motion') ? 'p-3' : 'hidden'} aria-hidden={!on('motion')} data-testid="editor-panel-motion">
+          <EditorPanelErrorBoundary label="AI Motion">
+            <MotionGraphicsPanel clipId={clipId} edits={edits} onEdits={setEdits} />
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
