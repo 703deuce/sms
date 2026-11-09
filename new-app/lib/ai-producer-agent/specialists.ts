@@ -1701,7 +1701,9 @@ export async function createEditorialHandoff(
       proposedSeconds>=Math.max(5,minimumSeconds-12)&&
       proposedSeconds<=maximumSeconds+12&&distance(proposedSeconds)<=distance(seconds))
     const finalCut=useTrim?proposed!:first
-    await specialistEvent(ctx,budget,'flow',useTrim?'moment_flow_trim_applied':'moment_preserve_source_continuity',{
+    await specialistEvent(ctx,budget,'flow',useTrim&&
+      (finalCut.startMs!==first.startMs||finalCut.endMs!==first.endMs)
+      ?'moment_flow_trim_applied':'moment_preserve_source_continuity',{
       original:first,proposed:reviewed.cutPlan,finalCut,
     })
     return {outline,footage,cutPlan:[finalCut],flowReview:reviewed.review,
