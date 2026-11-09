@@ -1,12 +1,17 @@
 export type StreamerAgentMode='clip_moment_v1'|'clip_story_v1'
+import type {AgentClipCandidate} from '@/lib/streamer/agent-clip-ranking'
 export type StreamerAgentBatchResult={
   projectId:string;clipId:string;startMin:number
+  score?:number;rank?:number;candidateId?:string;reason?:string;category?:string
 }
 export type StreamerAgentBatch={
   id:string;status:'running'|'done'|'canceled'
   mode:StreamerAgentMode;seconds:30|60|90;index:number;total:number
   sourceStartMs:number;sourceDurationMs:number
   preparedProjectId?:string;runId?:string
+  discoveryJobId?:string;candidates?:AgentClipCandidate[];candidateIndex?:number
+  /** How many candidate clips were discovered for each source window. */
+  discoveredCount?:number
   completed:StreamerAgentBatchResult[];errors:string[];startedAt:string
 }
 export function streamerAgentSettings(raw:unknown):Record<string,unknown>{
