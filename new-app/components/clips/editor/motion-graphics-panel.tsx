@@ -98,14 +98,14 @@ export function MotionGraphicsPanel(props: {
     if (!plan) return
     const result = addTextBackedMotionPlan(props.edits, plan)
     if (!result.ok) { setError(result.code + ': ' + result.detail); return }
-    props.onEdits(result.edits)
+    props.onEdits({ ...result.edits, motionPlan: plan })
     setNotice('Applied as editable Text layers. Export uses the existing text animation renderer.')
     setError(''); setPlan(null); setSourceVersion(null)
   }
 
   function clearGenerated() {
     const ids = aiItems.map(i => i.id.slice(3))
-    props.onEdits(removeTextBackedMotionGraphics(props.edits, ids))
+    props.onEdits({ ...removeTextBackedMotionGraphics(props.edits, ids), motionPlan: undefined })
     setNotice('Removed generated motion text; your other editor content is unchanged.')
     setPlan(null); setError('')
   }
