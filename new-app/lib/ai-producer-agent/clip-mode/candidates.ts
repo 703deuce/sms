@@ -40,7 +40,8 @@ export function overlapFraction(a:readonly SourcePassage[],b:readonly SourcePass
 }
 export function rankCandidate(score:{finderScore:number;qaPass:boolean|null;issues:number;durationSeconds:number;targetS:number}){
   const qa=Math.max(0,Math.min(100,(score.qaPass===true?92:score.qaPass===false?57:70)-Math.min(40,score.issues*7)))
-  const durationPenalty=Math.min(35,Math.round(Math.max(0,Math.abs(score.durationSeconds-score.targetS)-10)*.7))
-  const durationScore=100-durationPenalty
-  return Math.max(0,Math.min(100,Math.round(qa*.45+score.finderScore*.35+durationScore*.20-durationPenalty*.3)))
+  // Runtime must not affect quality. A great 15s moment can beat a mediocre 60s one.
+  // Preserve the 45/35/20 rubric, with 20% objective validity of the edit.
+  const objective=Number.isFinite(score.durationSeconds)&&score.durationSeconds>0?100:0
+  return Math.max(0,Math.min(100,Math.round(qa*.45+score.finderScore*.35+objective*.20)))
 }

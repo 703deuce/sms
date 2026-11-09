@@ -101,14 +101,19 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       const out:OutputState={index:candidate.index,outputType:mode==='moment'?'single_payoff':'story',
         builder:null,replans:0,fixLoops:0,notes:[]}
       outputs.push(out)
-      const scopedWords=(ctx.cache.words??[]).filter((word:ClipWord)=>
-        word.e*1000>=candidate.startMs&&word.s*1000<=candidate.endMs)
+      // Single Moment stays restricted to one local region. Story agents must
+      // inspect the WHOLE authorized recording to seek genuinely separate beats.
+      const scopedWords=mode==='story'?(ctx.cache.words??[]):
+        (ctx.cache.words??[]).filter((word:ClipWord)=>
+          word.e*1000>=candidate.startMs&&word.s*1000<=candidate.endMs)
       if(scopedWords.length<8){out.notes.push('skipped: no transcript context for candidate');continue}
-      const scopedSource={...source,rangeMs:[candidate.startMs,candidate.endMs] as [number,number]}
+      const scopedSource=mode==='story'?source:
+        {...source,rangeMs:[candidate.startMs,candidate.endMs] as [number,number]}
       const candidateCtx:ToolCtx={...ctx,sources:[scopedSource],
-        cache:{...ctx.cache,words:scopedWords,momentsSummary:[{
-          peakMs:candidate.peakMs,score:candidate.finderScore,description:candidate.label,
-        }]}}
+        cache:{...ctx.cache,words:scopedWords,momentsSummary:mode==='story'
+          ? ctx.cache.momentsSummary
+          : [{peakMs:candidate.peakMs,score:candidate.finderScore,
+              description:candidate.label}]}}
       candidateCtx.createOutputProject=async (target)=>{
         const segs=target.builder?.segs??[]
         const startMs=Math.max(0,Math.min(...segs.map(seg=>seg.srcInMs))-2000)
@@ -120,7 +125,15 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       }
       const clipBudget=new Budget()
       try{
-        await runOneOutput(candidateCtx,out,clipBudget,run.instruction)
+        await runOneOutput(candidateCtx,out,clipBudget,mode==='story'
+          ? [run.instruction??'',
+             'INDEPENDENT STORY CANDIDATE '+String(candidate.index+1)+':',
+             'Anchor this distinct story at observed event '+candidate.label,
+             'near original source time '+Math.round(candidate.peakMs/1000)+' seconds.',
+             'Find additional relevant moments in other source regions and form a coherent '+
+               ctx.config.targetLengthS[1]+' second story with real gaps.',
+             'Other candidate stories must not all be a copy of the same source event.'].join(' ')
+          : run.instruction)
         if(!out.projectId||!out.clipId||!out.editorialHandoff?.cutPlan.length){
           out.notes.push('No valid editorial output')
           continue
@@ -134,8 +147,15 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           continue
         }
         const qa=out.editorialHandoff.review
+        // An LLM may still mention preset length in QA prose. Strip only
+        // duration-only criticisms; leave actual continuity/content flaws.
+        const substantiveIssues=(qa?.issues??[]).filter(issue=>
+          !/^(?:the )?(?:selected |final |clip |edit |story )?(?:intervals? total |duration |runtime |length |clip is too short|clip is too long|below the requested|above the requested)/i.test(issue.trim()) &&
+          !/duration (?:is |of |below |above )|seconds? (?:below |above )|length target|runtime target/i.test(issue))
+        const qaPass=qa?.pass===true || Boolean(qa&&!substantiveIssues.length)
+        if(qa)out.editorialHandoff.review={pass:qaPass,issues:substantiveIssues}
         const score=rankCandidate({finderScore:candidate.finderScore,
-          qaPass:qa?.pass??null,issues:qa?.issues?.length??0,
+          qaPass:qa?qaPass:null,issues:substantiveIssues.length,
           durationSeconds,targetS:ctx.config.targetLengthS[1]})
         successful.push({out,candidate,score,durationSeconds})
       }catch(error){
@@ -168,6 +188,27 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         issues:item.out.editorialHandoff?.review?.issues??[],
         candidateIndex:item.candidate.index,durationSeconds:item.durationSeconds,
         mode:ctx.config.storyMode!})
+      // Post-edit Motion is a decision stage, not the caption preset. It can
+      // generate zero graphics; failures leave the usable clip intact.
+      try{
+        const {autoPlanClipMotion}=await import('@/lib/server/ai-producer-agent/clip-mode-motion')
+        const motion=await autoPlanClipMotion({
+          workspaceId:ctx.workspaceId,clipId:item.out.clipId!,mode,
+          instruction:run.instruction,
+        })
+        await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'apply',
+          tool:'clip_motion_graphics_'+motion.status,kind:'system',
+          argsSummary:JSON.stringify({clipId:item.out.clipId,candidate:item.candidate.index}),
+          resultSummary:JSON.stringify(motion)})
+        item.out.notes.push('Motion graphics: '+motion.status+' ('+motion.count+')')
+      }catch(error){
+        const reason=String((error as Error)?.message??error).slice(0,220)
+        await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'apply',
+          tool:'clip_motion_graphics_failed',kind:'validate',
+          argsSummary:JSON.stringify({clipId:item.out.clipId,candidate:item.candidate.index}),
+          error:reason})
+        item.out.notes.push('Motion graphics unavailable: '+reason)
+      }
       if(ctx.config.exportOnFinish)await queueClipExport(ctx,item.out,budget)
     }
     await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'finish',
@@ -617,8 +658,10 @@ async function finishRun(
   error?: string,
 ) {
   const prisma = getPrisma()
-  const projectIds = [...new Set(outputs.map((o) => o.projectId).filter(Boolean) as string[])]
-  const first = outputs.find((o) => o.projectId)
+  const published = outputs.filter((o) => Boolean(o.projectId&&o.clipId))
+  const projectIds = [...new Set(published.map((o) => o.projectId!))]
+  const clipIds = published.map((o) => o.clipId!)
+  const first = published[0]
   const lunaUsd = estimateLunaUsd(budget.lunaIn, budget.lunaOut)
   const costUsd = lunaUsd + budget.geminiUsd
   const terminalStatus = status === 'done' ? 'ready' : status
@@ -632,6 +675,11 @@ async function finishRun(
       resultClipId: first?.clipId ?? null,
       outputProjectIds: toPrismaJson(projectIds),
       producerNotes: toPrismaJson({
+        publishedClipCount: clipIds.length,
+        publishedClipIds: clipIds,
+        sourceProjectIds: projectIds,
+        // outputProjectIds is a legacy project list (one uploaded project),
+        // not the number of generated clips. Keep every clip ID explicitly.
         outputs: outputs.map((o) => ({
           index: o.index,
           projectId: o.projectId,

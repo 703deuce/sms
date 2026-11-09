@@ -30,11 +30,11 @@ describe('independent short clip modes',()=>{
    expect(coverage.separated).toBe(true)
    expect(coverage.durationSeconds).toBe(50)
  })
- it('keeps shorter genuine moments with ranking penalty',()=>{
+ it('ranks 26s and 60s moments equally when their content quality is equal',()=>{
    const short=rankCandidate({finderScore:90,qaPass:true,issues:0,durationSeconds:26,targetS:60})
    const full=rankCandidate({finderScore:90,qaPass:true,issues:0,durationSeconds:60,targetS:60})
    expect(short).toBeGreaterThan(0)
-   expect(short).toBeLessThan(full)
+   expect(short).toBe(full)
  })
  it('dedupes overlapping cut plans independent of ranking',()=>{
    expect(overlapFraction([{startMs:0,endMs:30000}],[{startMs:3000,endMs:29000}])).toBeGreaterThan(.35)
