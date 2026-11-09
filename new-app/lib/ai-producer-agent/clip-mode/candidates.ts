@@ -44,5 +44,5 @@ export function rankCandidate(score:{finderScore:number;qaPass:boolean|null;issu
   // by a large reaction or the clip approaching its requested runtime.
   const qa=Math.max(0,Math.min(100,(score.qaPass===true?95:score.qaPass===false?20:65)-Math.min(55,score.issues*9)))
   const objective=Number.isFinite(score.durationSeconds)&&score.durationSeconds>0?100:0
-  return Math.max(0,Math.min(100,Math.round(qa*.65+score.finderScore*.20+objective*.15)))
+  return Math.max(0,Math.min(100,Math.round(qa*.70+score.finderScore*.15+objective*.15)))
 }
