@@ -80,7 +80,7 @@ export function applyProducerTool(
       }
     }
     case 'set_title':
-      return { edits: base, summary: `Title → ${String(call.args.title || '')}` }
+      return { edits: base, summary: 'No title change made: use add_text_overlay for visible title cards' }
     case 'add_text_overlay': {
       const text = String(call.args.text ?? '').trim()
       const kind = String(call.args.kind ?? 'title_card')
