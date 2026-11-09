@@ -102,9 +102,9 @@ def run_stream_agent_prepare_job(conn, job: dict, post_progress) -> None:
         words = rebase_window_words(
             original_words,start_ms-source_base_ms,end_ms-source_base_ms
         )
-        # The existing multiagent planner requires real ASR word IDs.
-        if len(words) < 8:
-            raise RuntimeError("stream_agent_window_requires_transcript")
+        # Clip specialists can use actual observed video events without spoken
+        # dialogue. Empty ASR is not a reason to discard the prepared footage;
+        # the clip-only source-time validation requires real Gemini observations.
         upload_id = f"upl_{uuid.uuid4().hex}"
         key = upload_source_key(str(parent["workspaceId"]), upload_id, "mp4")
         upload_file(key, dest, "video/mp4")
