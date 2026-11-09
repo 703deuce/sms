@@ -9,7 +9,7 @@ import {resolveAiProducerSources} from '@/lib/server/ai-producer-agent/resolve-s
 import {loadRoughCutWords} from '@/lib/server/ai-producer-agent/rough-cut-source'
 import {timestampedAsrForVisual} from '@/lib/ai-producer-agent/visual-evidence'
 import {scoreFinishedAgentClip} from '@/lib/streamer/agent-clip-scoring'
-import {rankAgentClipCandidates,rankedCompletedAgentClips,sameFinishedCut}
+import {rankAgentClipCandidates,rankedCompletedAgentClips,sameFinishedCut,suggestedAgentCandidateCount}
   from '@/lib/streamer/agent-clip-ranking'
 import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
 import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
@@ -296,10 +296,8 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
     }else if(discovery.status==='DONE'){
       const payload=discovery.payload as Record<string,unknown>|null
       const response=payload?.analyzeResult as Record<string,unknown>|undefined
-      const availableMs=scopedWindow[1]-scopedWindow[0]
-      const count=next.mode==='clip_moment_v1'
-        ?Math.min(8,Math.max(1,Math.ceil(availableMs/30_000)))
-        :Math.min(8,Math.max(1,Math.ceil(availableMs/(next.seconds*1_500))))
+      const count=suggestedAgentCandidateCount(
+        scopedWindow[1]-scopedWindow[0],next.seconds,next.mode)
       const candidates=rankAgentClipCandidates(response?.moments,scopedWindow,next.seconds,count)
       if(!candidates.length){
         next.errors.push('Discovery window '+(next.index+1)+': no real source-grounded moments')
