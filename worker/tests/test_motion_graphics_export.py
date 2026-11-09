@@ -27,11 +27,12 @@ def _frame(path: Path, seconds: float) -> bytes:
 
 @pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"),
                     reason="FFmpeg required")
-def test_generated_text_and_shape_render_in_real_mp4(tmp_path: Path) -> None:
+@pytest.mark.parametrize('width,height', [(360, 640), (640, 360), (480, 480)])
+def test_generated_text_and_shape_render_in_real_mp4(tmp_path: Path, width: int, height: int) -> None:
     src = tmp_path / "raw.mp4"
     output = tmp_path / "motion.mp4"
     _run("ffmpeg", "-y", "-v", "error",
-         "-f", "lavfi", "-i", "color=c=black:s=360x640:r=30:d=2.0",
+         "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r=30:d=2.0",
          "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=2",
          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
          "-shortest", str(src))
@@ -61,13 +62,13 @@ def test_generated_text_and_shape_render_in_real_mp4(tmp_path: Path) -> None:
             },
         ],
     }
-    assert text_items_ass(edits, w=360, h=640)
-    rendered = apply_text_items(src, output, edits, play_w=360, play_h=640)
+    assert text_items_ass(edits, w=width, h=height)
+    rendered = apply_text_items(src, output, edits, play_w=width, play_h=height)
     assert rendered == output and output.is_file()
     assert output.stat().st_size > 10_000
     # Compare actual decoded images, not planned overlay metadata.
     base_mid, rendered_mid = _frame(src, 1.0), _frame(output, 1.0)
-    assert len(base_mid) == len(rendered_mid) == 360 * 640 * 3
+    assert len(base_mid) == len(rendered_mid) == width * height * 3
     changed = sum(a != b for a, b in zip(base_mid, rendered_mid))
     assert changed > 900, "Text/shape did not appear in the real MP4"
     # No graphic is scheduled at the beginning or end of the composition.
