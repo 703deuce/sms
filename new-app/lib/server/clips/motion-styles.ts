@@ -9,7 +9,7 @@ export async function listMotionStyles(workspaceId: string) {
     where: { workspaceId, deletedAt: null },
     orderBy: { updatedAt: 'desc' }, take: 100,
   })
-  return rows.flatMap(row => {
+  return rows.flatMap((row: { data: unknown; updatedAt: Date }) => {
     const parsed = StyleProfileSchema.safeParse(row.data)
     return parsed.success ? [{ ...parsed.data, updatedAt: row.updatedAt.toISOString() }] : []
   })
