@@ -74,7 +74,21 @@ def resolve_analyze_window_ms(vod: dict, payload: dict) -> tuple[int, int]:
         else (vod.get("rangeEndMs") or vod.get("durationMs") or 0)
     )
     real_ms = int(vod.get("durationMs") or 0)
-    if real_ms > 0 and window_end_ms > real_ms:
+    requested_ms = window_end_ms - window_start_ms
+    if requested_ms <= 0 or window_start_ms < 0:
+        raise RuntimeError("range_outside_media")
+
+    # Imported archive sections retain their original stream timestamps, while
+    # durationMs describes just the downloaded section. Comparing e.g. an
+    # absolute 60:00-70:00 range to a 10-minute section rejects valid media.
+    # Keep absolute timestamps here: clip persistence and render offset logic
+    # translate them into section-local timestamps later.
+    section_local_duration = (
+        window_start_ms > 0
+        and real_ms > 0
+        and abs(real_ms - requested_ms) <= 2_000
+    )
+    if real_ms > 0 and not section_local_duration and window_end_ms > real_ms:
         window_end_ms = real_ms
     if window_start_ms >= window_end_ms:
         raise RuntimeError("range_outside_media")
