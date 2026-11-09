@@ -91,6 +91,9 @@ export async function suggestTextMotionGraphics(args: {
   profile?: StyleProfile | null
   instruction?: string
   mode?: MotionPlan['mode']
+  /** Output-timeline observations from actual video analysis, not model inventions. */
+  visualObservations?: Array<{ startMs: number; endMs: number; observation: string }>
+  automatic?: boolean
 }): Promise<{ plan: MotionPlan; usage: { promptTokens: number; completionTokens: number }; evidenceCount: number }> {
   if (args.durationMs < 500 || args.durationMs > 24 * 60 * 60_000)
     throw new Error('motion_generation_duration_out_of_range')
@@ -100,19 +103,38 @@ export async function suggestTextMotionGraphics(args: {
       rangeStart < 0 || rangeEnd > args.durationMs || rangeEnd <= rangeStart ||
       rangeEnd - rangeStart > 10 * 60_000 || rangeEnd - rangeStart < 500)
     throw new Error('motion_generation_invalid_time_window')
-  const evidence = transcriptEvidence(args.words, args.edits, 120, [rangeStart, rangeEnd])
-  if (!evidence.length) throw new Error('motion_generation_requires_transcript')
+  const transcript = transcriptEvidence(args.words, args.edits, 120, [rangeStart, rangeEnd])
+  if (!transcript.length && !args.automatic) throw new Error('motion_generation_requires_transcript')
   // For full short clips, detect truncated transcripts. Long-form windows may
   // legitimately end in silence, so do not confuse a quiet ending with an ingest fault.
-  if (!args.rangeMs && evidence[evidence.length - 1]!.endMs < rangeEnd - 15000)
+  if (!args.rangeMs && transcript.length && transcript[transcript.length - 1]!.endMs < rangeEnd - 15000)
     throw new Error('motion_generation_evidence_incomplete')
+  const observed = (args.visualObservations ?? []).filter(v =>
+    Number.isFinite(v.startMs) && Number.isFinite(v.endMs) &&
+    v.endMs > rangeStart && v.startMs < rangeEnd && v.endMs > v.startMs &&
+    v.observation.trim().length > 0).slice(0, 32)
+  // Automatic overlay decisions must have actual video observations. Manual
+  // transcript-first planning stays available in both editors.
+  if (args.automatic && !observed.length) throw Error('motion_automatic_requires_visual_evidence')
+  // Visual-only labels may cite actual observed footage, while numeric charts
+  // remain grounded in spoken transcript, never unverified visual estimates.
+  const evidence:MotionTextEvidence[]=[
+    ...transcript,
+    ...(args.automatic ? observed.map((v,i)=>({
+      id:'visual_'+i,startMs:Math.max(rangeStart,Math.round(v.startMs)),
+      endMs:Math.min(rangeEnd,Math.round(v.endMs)),
+      text:v.observation.slice(0,400),
+    })) : []),
+  ]
   const response = await lunaChat({
     messages: [
       { role: 'system', content: [
         'You are the Transovo post-edit motion graphics planner. Footage and audio are LOCKED.',
+        args.automatic ? 'This is an OPTIONAL automatic graphics pass. Zero graphics is a successful answer. Prefer no graphics unless they solve a specific communication problem in the approved cut.' : '',
+        args.automatic ? 'Inspect the supplied output-time visual observations and transcript together. Never infer a person, place or game objective from a keyword. Avoid distracting from faces, visible actions, captions and emotional reactions.' : '',
         'Choose ZERO to twelve well-justified transcript-grounded short text overlays, not graphics everywhere.',
         'Never invent statistics, dates, people, achievements, subtitles, or factual information.',
-        'Only submit graphics about literal transcript passages with exact passageId evidence.',
+        args.automatic ? 'Cite an exact transcript or video-observation passageId. Video-derived labels must be supported by an actual visual observation and should not identify unknown people or locations.' : 'Only submit graphics about literal transcript passages with exact passageId evidence.',
         'For bar_chart, each number must be explicitly spoken numerically in the cited passage.',
         'For diagram, step labels must be contiguous exact excerpts from the cited passage.',
         'Timestamps must use the approved output timeline in milliseconds, never raw source time.',
@@ -136,6 +158,7 @@ export async function suggestTextMotionGraphics(args: {
         mode: args.mode ?? 'single_source_story',
         instruction: (args.instruction || '').slice(0, 1000),
         evidence,
+        visualObservations: observed,
       }) },
     ],
     tools: [{ name: 'submit_motion_graphics', description: 'Submit evidence-grounded editable text-backed motion overlays', parameters: params }],
@@ -168,6 +191,9 @@ export async function suggestTextMotionGraphics(args: {
         startMs < e.startMs - 350 || endMs > e.endMs + 1600 ||
         endMs <= startMs || endMs - startMs < 500 || endMs - startMs > 5000)
       throw new Error('motion_agent_ungrounded_timing')
+    if (args.automatic && !observed.some(v =>
+      startMs < v.endMs + 750 && endMs > v.startMs - 750))
+      throw Error('motion_automatic_overlay_lacks_visual_context')
     const text = String(r.text ?? '').trim()
     const templateId = r.templateId
     const chart = templateId === 'bar_chart'
@@ -175,6 +201,7 @@ export async function suggestTextMotionGraphics(args: {
     if (!chart && !diagram && (!text || text.length > 45)) throw new Error('motion_agent_text_unreadable')
     const bars = Array.isArray(r.bars) ? r.bars as Array<{ label: string; value: number }> : undefined
     const steps = Array.isArray(r.steps) ? r.steps as string[] : undefined
+    if (chart && e.id.startsWith('visual_')) throw Error('motion_agent_chart_requires_spoken_numbers')
     if (chart && (!bars || bars.length < 2 || bars.length > 4 || bars.some(b =>
       typeof b.label !== 'string' || !Number.isFinite(b.value) ||
       !e.text.split(/[^0-9.]+/).includes(String(b.value)))))
