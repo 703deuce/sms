@@ -7,33 +7,10 @@ import { addTextBackedMotionPlan } from '@/lib/clips/motion-graphics/text-adapte
 import { motionSafeRect } from '@/lib/clips/motion-graphics/safe-zones'
 import { editorPreviewEdits, editorPreviewDurationMs } from '@/lib/clips/editor-preview-edits'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
+import { visualObservationsInOutput } from '@/lib/clips/motion-graphics/visual-output-evidence'
 import type { ClipWord } from '@/lib/clips/edits'
 import type { VisualMomentEvidence } from '@/lib/ai-producer-agent/visual-evidence'
 import type { MotionPlan } from '@/lib/clips/motion-graphics/contract'
-
-/** Actual video-analysis observations projected into the locked output EDL.
- * Never treat speech-only content or removed source footage as visual evidence. */
-export function visualObservationsInOutput(
-  observations: readonly VisualMomentEvidence[],
-  tb: ReturnType<typeof timebaseFor>,
-): Array<{startMs:number;endMs:number;observation:string}> {
-  const mapped: Array<{startMs:number;endMs:number;observation:string}> = []
-  for (const observation of observations) {
-    const [start,end] = observation.sourceRangeMs
-    for (let i=0;i<tb.segs.length;i++) {
-      const [a,b]=tb.segs[i]!
-      const lo=Math.max(a,start),hi=Math.min(b,end)
-      if (hi-lo<250)continue
-      const offset=tb.starts[i]!
-      mapped.push({
-        startMs:Math.round(offset+lo-a),
-        endMs:Math.round(offset+hi-a),
-        observation:observation.observation.slice(0,650),
-      })
-    }
-  }
-  return mapped.sort((a,b)=>a.startMs-b.startMs).slice(0,32)
-}
 
 export type AutomaticMotionOutcome = {
   status:'applied'|'skipped'
