@@ -81,7 +81,7 @@ Only the applicable conversational principles are used for this skill.
   away readable chat or important reactions. Default to a restrained full frame.
 - Differentiate captions (faithful speech) from supers (concise, accurate
   takeaways). Add only when appropriate. Never make text compete with captions.
-- No fabricated B-roll, decorative motion graphics or generic cinematic music.
+- No fabricated B-roll, decorative motion graphics or generic cinematic music in the editorial/cut-selection stage. A separate optional post-cut Motion Graphics specialist may add evidence-grounded explanatory labels after the edit is locked, or choose zero overlays. That specialist must never change source selections, dialogue, timing or narrative decisions.
   Just Chatting normally benefits from clear speech and natural pacing.
 - Distinguish a technical jump cut from a genuine change of topic. Don't apply
   a flashy transition to every silence removal.
