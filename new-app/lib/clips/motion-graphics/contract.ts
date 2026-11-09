@@ -40,6 +40,9 @@ export const MotionGraphicSchema = z.object({
   beatId: Id.optional(),
   sourceEvidenceId: Id.optional(),
   text: z.string().max(400).optional(),
+  /** Data for code-drawn chart/diagram templates (not executable code). */
+  bars: z.array(z.object({ label: z.string().min(1).max(30), value: z.number().finite().min(0).max(1000000000) }).strict()).min(1).max(6).optional(),
+  steps: z.array(z.string().min(1).max(60)).min(2).max(5).optional(),
   box: Rect,
   zIndex: z.number().int().min(0).max(1000),
   style: z.object({
