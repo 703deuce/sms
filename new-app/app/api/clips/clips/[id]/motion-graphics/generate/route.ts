@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { MotionModeSchema } from '@/lib/clips/motion-graphics/contract'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -11,6 +12,7 @@ const Input = z.object({
   style: z.enum(['minimal', 'narrative', 'gaming', 'tech']),
   instruction: z.string().max(1000).optional(),
   profileId: z.string().min(1).max(128).optional(),
+  mode: MotionModeSchema.optional(),
 }).strict()
 
 /** Creates a REVIEWABLE plan; does not mutate the clip or bypass existing editor save CAS. */
@@ -36,6 +38,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       format: aspect as '9:16' | '16:9' | '1:1',
       style: body.style,
       profile,
+      mode: body.mode,
       instruction: body.instruction,
     })
     return NextResponse.json({
