@@ -22,9 +22,9 @@ async function requestJson(url:string,opts?:RequestInit){
 /** Streams can be audio-first: on demand prepare only the selected video window.
  * Runs are sequential to respect AI Producer workspace concurrency limits.
  * Each completed clip persists even when the browser leaves a multi-window run. */
-export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDurationMs,videoAvailable}:{
+export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDurationMs,videoAvailable,sourceKind='stream'}:{
   projectId:string;ready:boolean;sourceStartMs:number;sourceDurationMs:number
-  videoAvailable:boolean
+  videoAvailable:boolean;sourceKind?:'stream'|'upload'
 }){
   const [mode,setMode]=useState<StreamerShortMode>('clip_moment_v1')
   const [seconds,setSeconds]=useState<30|60|90>(60)
@@ -98,7 +98,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     const started=await requestJson('/api/ai-producer-agent/runs',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        sources:[{sourceId:'stream_recording',kind:'stream',
+        sources:[{sourceId:sourceKind==='upload'?'uploaded_recording':'stream_recording',kind:sourceKind,
           projectId:local.projectId,rangeMs:local.rangeMs}],
         outputType:'story',storyMode:mode,
         targetLengthS:[Math.max(15,seconds-10),Math.min(105,seconds+10)],
@@ -197,7 +197,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
       </select>
       {sourceDurationMs>WINDOW_MS&&!allWindows?
         <label className="flex items-center gap-2 text-xs">Start minute
-          <input aria-label="VOD window starting minute" type="number" min={0} step={1}
+          <input aria-label="Source window starting minute" type="number" min={0} step={1}
             max={Math.max(0,Math.floor((sourceDurationMs-15_000)/60_000))}
             value={windowStartMin} disabled={running}
             className="h-9 w-20 rounded-md border border-border bg-background px-2"
@@ -209,7 +209,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         <label className="flex items-center gap-2 text-xs">
           <input type="checkbox" checked={allWindows} disabled={running}
             onChange={e=>setAllWindows(e.target.checked)}/>
-          Analyze entire VOD (in 20-minute batches)
+          Analyze entire {sourceKind==='upload'?'video':'VOD'} (in 20-minute batches)
         </label>:null}
       {running&&batchId?<Button size="sm" variant="outline"
         onClick={()=>void cancelBatch()}>Stop batch</Button>:null}
@@ -221,12 +221,12 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
       </Button>
     </div>
     <p className="mt-2 text-xs text-muted-foreground">
-      Twitch/Kick sources are fetched as bounded video windows when needed.
-      Each batch runs the newer specialist agents and produces an editable Clip Studio result.
-      Your long-form gaming editor is unchanged.
+      {sourceKind==='stream'?'Twitch/Kick sources are fetched as bounded video windows when needed.':'Your uploaded video is used directly without another download.'}
+      Each batch runs the same specialist agents and produces an editable Clip Studio result.
+      Your long-form editing mode is unchanged.
       {allWindows?' This full-VOD batch continues after you close the page.':''}
     </p>
-    {!ready?<p className="mt-2 text-xs">Finish importing the stream before generating clips.</p>:null}
+    {!ready?<p className="mt-2 text-xs">Finish processing the source before generating agent clips.</p>:null}
     {running?<p className="mt-2 text-xs" role="status">{status}</p>:null}
     {completed.length?<div className="mt-3 flex flex-wrap gap-2">
       {completed.map((clip,i)=>
