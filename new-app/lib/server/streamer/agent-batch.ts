@@ -37,8 +37,7 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
   }else if(!source.uploadId||!source.upload){
     throw Error('agent_clip_batch_requires_uploaded_video')
   }
-  if(!source.transcriptWords&&!source.transcriptKey)
-    throw Error('agent_clip_batch_requires_source_transcript')
+  // Video-only events are valid candidates. Only READY source media is mandatory.
   const current=readStreamerAgentBatch(source.settings)
   if(current?.status==='running')throw Error('stream_agent_batch_already_running')
   if(opts?.onlyIfAbsent && asSettings(source.settings).agentClipBatch)
@@ -330,7 +329,7 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
         kind:isUploaded?'upload':'stream',projectId:sourceProjectId,
         rangeMs:scopedWindow,
       }])
-      const words=await loadRoughCutWords(p.workspaceId,source[0]!,8)
+      const words=await loadRoughCutWords(p.workspaceId,source[0]!,0)
       const job=await enqueueAiProducerAnalyzeJob({
         runId:batch.id,projectId:sourceProjectId,mode:'best_moments',
         sources:source, targetClipLenS:next.seconds,
