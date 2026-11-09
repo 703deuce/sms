@@ -62,6 +62,19 @@ function run(choices:typeof complete, transcriptCheck=true){
       expect(payload.assembledPassages).toHaveLength(choices.length)
       expect(payload.storyOutline.logline).toBe(outline.logline)
       expect(payload.constraints.runtimeTargetDisabled).toBe(true)
+      // Golden baseline contract: the original Producer Flow tool never gains
+      // 'split' and the baseline prompts never gain clip-only instructions.
+      const flow=tools.find(t=>t.name==='submit_story_flow_review')
+      expect((flow?.parameters as any)?.properties?.changes?.items?.properties?.action?.enum)
+        .toEqual(['replace','remove'])
+      expect(messages[0]!.content).not.toContain('SINGLE CONTINUOUS MOMENT MODE')
+      expect(messages[0]!.content).not.toContain('SHORT STORY CLIP:')
+      expect(payload.constraints).toEqual({
+        runtimeTargetDisabled:true,maxPassages:24,retainGoodPassages:true,wordIdsOnly:true,
+      })
+    }
+    if(stage===0||stage===1){
+      expect(messages[0]!.content).not.toContain('SHORT STORY CLIP BASELINE')
     }
     if(stage>2)throw Error('Unexpected Finisher/Dialogue re-edit')
     return {message:{role:'assistant',content:null,tool_calls:[{
