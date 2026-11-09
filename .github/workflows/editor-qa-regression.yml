@@ -109,6 +109,8 @@ jobs:
             tests/ai-producer-agent/just-chatting-rough-cut.test.ts \
             tests/ai-producer-agent/just-chatting-editorial-direction.test.ts \
             tests/ai-producer-agent/specialists.test.ts \
+            tests/ai-producer-agent/clip-editorial-safety.test.ts \
+            tests/ai-producer-agent/clip-multi-output.test.ts \
             tests/ai-producer-agent/specialist-workflow.test.ts \
             tests/ai-producer-agent/orchestrator.mock-luna.test.ts \
             tests/ai-producer-agent/ai-producer-export.test.ts \
