@@ -32,7 +32,7 @@ export const MotionGraphicSchema = z.object({
   id: Id,
   templateId: z.enum([
     'kinetic_type', 'lower_third', 'callout', 'stat_counter',
-    'steps', 'diagram', 'screen_frame', 'presenter_window',
+    'steps', 'diagram', 'bar_chart', 'screen_frame', 'presenter_window',
     'gaming_highlight', 'title_card',
   ]),
   startMs: z.number().int().min(0),
