@@ -1726,7 +1726,7 @@ export async function createEditorialHandoff(
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
     })
     if(storyClip){
-      const targetMid=(minimumSeconds+maximumSeconds)/2
+      const targetMid=maximumSeconds // 30/60/90 second clip preset, not midpoint of allowed bounds
       const desiredLo=Math.max(15,targetMid-10)
       const desiredHi=targetMid+10
       const distance=(value:number)=>value<desiredLo?desiredLo-value:value>desiredHi?value-desiredHi:0
