@@ -178,7 +178,9 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         const safetyIssues=safetyRisks.map(r=>r.code+': '+r.detail)
         const combinedIssues=[...substantiveIssues,
           ...(qaPass===true?[]:safetyIssues)]
-        out.editorialHandoff.review={pass:qaPass===true,issues:combinedIssues}
+        // Missing model QA remains unknown, not a fabricated false or pass.
+        out.editorialHandoff.review=qaPass===null?undefined:
+          {pass:qaPass,issues:combinedIssues}
         // Fail confirmed meaning distortion, deterministic broken chronology,
         // or unresolved qualification where independent QA was unavailable.
         if(criticalStructural.length||meaningfulFailure||
