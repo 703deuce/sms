@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { getPrisma } from '@/lib/server/db'
+import { createId } from '@/lib/supabase/id'
 import { resolveAiProducerSources } from '@/lib/server/ai-producer-agent/resolve-sources'
 import { loadRoughCutWords } from '@/lib/server/ai-producer-agent/rough-cut-source'
 import { roughCutSourceWindow,clipAgentSourceWindow,minimumAgentTranscriptWords } from '@/lib/ai-producer-agent/rough-cut-window'
@@ -112,6 +113,29 @@ export async function buildToolCtx(run: {
       const title =
         out.pendingTitle ??
         `AI Producer: ${out.outputType} · ${sources[0]?.title ?? 'edit'} · ${new Date().toISOString().slice(0, 10)}`
+      if (agentClip) {
+        // Clip modes create outputs on the uploaded/source project; the Producer
+        // modes still create separate editable output projects as before.
+        const sourceProjectId = sources[0]?.projectId
+        if (!sourceProjectId) throw new Error('clip_mode_missing_source_project')
+        const clipId = createId('clip')
+        const prisma = getPrisma()
+        await prisma.$transaction(async tx => {
+          const original = await tx.clipProject.findFirst({
+            where: { id: sourceProjectId, workspaceId: run.workspaceId, deletedAt: null },
+            select: { id: true },
+          })
+          if (!original) throw new Error('clip_mode_source_project_not_found')
+          await tx.clip.create({ data: {
+            id: clipId, projectId: sourceProjectId, workspaceId: run.workspaceId,
+            title, reason: 'ai_producer', startMs: clipStartMs,
+            endMs: clipEndMs, edits: {}, editsSaveVersion: 0,
+            aiMeta: { aiProducerRunId: run.id, clipMode: config.storyMode },
+            score: 0, scores: {},
+          } })
+        })
+        return { projectId: sourceProjectId, clipId }
+      }
       return createAiProducerOutputProject({
         workspaceId: run.workspaceId,
         createdById: ctx.createdById,
