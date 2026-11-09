@@ -3,6 +3,8 @@ import 'server-only'
 import type { Budget } from '@/lib/ai-producer-agent/budget'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 import { enqueueAiProducerAnalyzeJob, waitForClipJobDone } from '@/lib/server/ai-producer-agent/enqueue-analyze'
+import { analyzeWaitTimeoutMs } from '@/lib/ai-producer-agent/rough-cut-window'
+import { topicQueryFromInstruction } from '@/lib/ai-producer-agent/clip-mode/topic-search'
 import { framesFromSamples } from '@/lib/clips/cuts-quality/cut-boundary-refine'
 import type { RmsFrames } from '@/lib/ai-producer-agent/draft-edits'
 import { timestampedAsrForVisual, visualMomentsWithAsr, chooseVisualFocusWindows } from '@/lib/ai-producer-agent/visual-evidence'
@@ -25,18 +27,24 @@ export async function findMoments(
   const sourceRange = ctx.sources[0]?.rangeMs
   const transcriptText = visualStory && sourceRange
     ? timestampedAsrForVisual(ctx.cache.words ?? [], sourceRange) : undefined
+  const topicQuery = typeof args.query === 'string' && args.query.trim()
+    ? args.query.trim()
+    : topicQueryFromInstruction(ctx.decideInput.instruction)
+  const sourceMs = (ctx.sources[0]?.rangeMs
+    ? ctx.sources[0]!.rangeMs[1]-ctx.sources[0]!.rangeMs[0]
+    : ctx.sources[0]?.durationMs) || 0
   const job = await enqueueAiProducerAnalyzeJob({
     runId: ctx.runId,
     projectId: anchor,
     mode,
     sources: ctx.sources,
-    query: typeof args.query === 'string' ? args.query : undefined,
+    query: topicQuery || undefined,
     targetClipLenS: Number(args.targetClipLenS ?? ctx.config.targetLengthS?.[1] ?? 30),
     ...(visualStory ? { visualEvidence: {
       enabled:true,model:'gemini-3.1-flash-lite',transcriptText,
     } } : {}),
   })
-  const finished = await waitForClipJobDone(job.id).catch(() => null)
+  const finished = await waitForClipJobDone(job.id, analyzeWaitTimeoutMs(sourceMs)).catch(() => null)
   const payload = (finished?.payload ?? {}) as { analyzeResult?: Record<string, unknown> }
   const result = payload.analyzeResult ?? {}
   if (!finished || !payload.analyzeResult) {
@@ -155,8 +163,9 @@ export function buildRmsLookup(frames: { tMs: number; rms: number }[]): RmsFrame
   }
 }
 
-export async function layoutInfo(_ctx: import('@/lib/ai-producer-agent/tools/registry').ToolCtx) {
-  return { ok: true, summary: 'layout', data: { contentType: 'irl', mode: 'fit_blur' }, costUsd: 0 }
+export async function layoutInfo(ctx: import('@/lib/ai-producer-agent/tools/registry').ToolCtx) {
+  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+  return { ok: true, summary: 'layout', data: { contentType: 'irl', mode: clipMode?'speaker_follow':'fit_blur' }, costUsd: 0 }
 }
 
 export async function beats() {

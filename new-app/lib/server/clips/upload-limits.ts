@@ -4,10 +4,12 @@ import { storageDriverName, usesS3CompatibleMultipart } from '@/lib/storage/driv
 
 /** Per-object limit on many Supabase buckets (raise in dashboard when plan allows). */
 export const SUPABASE_OBJECT_MAX_BYTES_DEFAULT = 50 * 1024 * 1024
-export const CLIPS_UPLOAD_MAX_BYTES_STREAMER_DEFAULT = 20 * 1024 * 1024 * 1024
-/** Regular clipper uploads (multipart/TUS resumable). */
-export const CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT = 3 * 1024 * 1024 * 1024
+export const CLIPS_UPLOAD_MAX_BYTES_STREAMER_DEFAULT = 30 * 1024 * 1024 * 1024
+/** Regular clipper uploads (multipart/TUS resumable). Matches Opus Pro's 30 GB cap. */
+export const CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT = 30 * 1024 * 1024 * 1024
 export const CLIPS_APP_CHUNK_BYTES = 8 * 1024 * 1024
+/** Official Opus and Vizard duration cap: 10 hours / 600 minutes. */
+export const CLIPS_UPLOAD_MAX_DURATION_MS = 10 * 60 * 60 * 1000
 
 export function supabaseObjectMaxBytes(): number {
   const raw = process.env.SUPABASE_OBJECT_MAX_BYTES?.trim() || process.env.SUPABASE_BUCKET_FILE_SIZE_LIMIT?.trim()
@@ -29,6 +31,15 @@ export function clipUploadMaxBytes(): number {
     if (Number.isFinite(n) && n > 0) return Math.floor(n)
   }
   return CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT
+}
+
+export function clipUploadMaxDurationMs(): number {
+  const raw = process.env.CLIPS_MAX_UPLOAD_DURATION_MS?.trim()
+  if (raw) {
+    const n = Number(raw)
+    if (Number.isFinite(n) && n > 0) return Math.floor(n)
+  }
+  return CLIPS_UPLOAD_MAX_DURATION_MS
 }
 
 export function formatClipUploadMaxLabel(bytes: number): string {
@@ -56,6 +67,7 @@ export function clipUploadLimitsPublic() {
   const policyMaxBytes = clipUploadMaxBytes()
   const effectiveMaxBytes = clipUploadEffectiveMaxBytes()
   const objectMax = usesS3CompatibleMultipart() ? policyMaxBytes : supabaseObjectMaxBytes()
+  const maxDurationMs = clipUploadMaxDurationMs()
   return {
     /** Effective limit — use for UI hints and client-side rejection. */
     maxBytes: effectiveMaxBytes,
@@ -69,5 +81,7 @@ export function clipUploadLimitsPublic() {
     supabaseObjectMaxBytes: objectMax,
     supabaseObjectMaxLabel: formatClipUploadMaxLabel(objectMax),
     usesStagingAboveObjectMax: false,
+    maxDurationMs,
+    maxDurationHours: maxDurationMs / (60 * 60 * 1000),
   }
 }

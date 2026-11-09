@@ -2,25 +2,37 @@ import { describe, expect, it } from 'vitest'
 import {
   clipUploadEffectiveMaxBytes,
   clipUploadMaxBytes,
+  clipUploadMaxDurationMs,
+  clipUploadLimitsPublic,
   formatClipUploadMaxLabel,
+  CLIPS_UPLOAD_MAX_DURATION_MS,
 } from '@/lib/server/clips/upload-limits'
 import { shouldStoreUploadOnStaging } from '@/lib/server/clips/upload-staging'
 import { shouldUseAppChunkedUpload } from '@/lib/server/clips/upload-limits'
 
 describe('upload limits', () => {
-  it('formats MB labels', () => {
+  it('formats MB and GB labels', () => {
     expect(formatClipUploadMaxLabel(50 * 1024 * 1024)).toBe('50 MB')
     expect(formatClipUploadMaxLabel(20 * 1024 * 1024 * 1024)).toBe('20 GB')
+    expect(formatClipUploadMaxLabel(30 * 1024 * 1024 * 1024)).toBe('30 GB')
   })
 
-  it('defaults clipper max to 20 GB when env unset', () => {
+  it('defaults clipper max to 30 GB and 10 hours when env unset', () => {
     const prev = process.env.CLIPS_UPLOAD_MAX_BYTES
     const prevS = process.env.STREAMER_UPLOAD_MAX_BYTES
+    const prevD = process.env.CLIPS_MAX_UPLOAD_DURATION_MS
+    const prevC = process.env.CLIPS_MAX_UPLOAD_BYTES
     delete process.env.CLIPS_UPLOAD_MAX_BYTES
     delete process.env.STREAMER_UPLOAD_MAX_BYTES
-    expect(clipUploadMaxBytes()).toBe(3 * 1024 * 1024 * 1024)
+    delete process.env.CLIPS_MAX_UPLOAD_DURATION_MS
+    delete process.env.CLIPS_MAX_UPLOAD_BYTES
+    expect(clipUploadMaxBytes()).toBe(30 * 1024 * 1024 * 1024)
+    expect(clipUploadMaxDurationMs()).toBe(CLIPS_UPLOAD_MAX_DURATION_MS)
+    expect(clipUploadLimitsPublic().maxDurationHours).toBe(10)
     if (prev !== undefined) process.env.CLIPS_UPLOAD_MAX_BYTES = prev
     if (prevS !== undefined) process.env.STREAMER_UPLOAD_MAX_BYTES = prevS
+    if (prevD !== undefined) process.env.CLIPS_MAX_UPLOAD_DURATION_MS = prevD
+    if (prevC !== undefined) process.env.CLIPS_MAX_UPLOAD_BYTES = prevC
   })
 
   it('never uses local disk staging for workers', () => {

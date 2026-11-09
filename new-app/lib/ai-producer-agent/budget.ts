@@ -19,6 +19,15 @@ export class Budget {
   geminiUsd = 0
   cappedBy: string | null = null
   readonly t0 = Date.now()
+  readonly wallClockMs: number
+  readonly hardSteps: number
+  readonly softSteps: number
+
+  constructor(opts?: {wallClockMs?: number; hardSteps?: number; softSteps?: number}) {
+    this.wallClockMs = opts?.wallClockMs ?? CAPS.wallClockMs
+    this.hardSteps = opts?.hardSteps ?? CAPS.hardSteps
+    this.softSteps = opts?.softSteps ?? CAPS.softSteps
+  }
 
   addLuna(u?: { prompt_tokens?: number; completion_tokens?: number }) {
     this.lunaIn += u?.prompt_tokens ?? 0
@@ -31,9 +40,9 @@ export class Budget {
 
   state(): 'ok' | 'soft' | 'hard' {
     const hard =
-      this.steps >= CAPS.hardSteps
+      this.steps >= this.hardSteps
         ? 'steps'
-        : Date.now() - this.t0 > CAPS.wallClockMs
+        : Date.now() - this.t0 > this.wallClockMs
           ? 'wall_clock'
           : this.lunaIn > CAPS.lunaInputTokens
             ? 'luna_in'
@@ -44,7 +53,7 @@ export class Budget {
       this.cappedBy ??= hard
       return 'hard'
     }
-    return this.steps >= CAPS.softSteps ? 'soft' : 'ok'
+    return this.steps >= this.softSteps ? 'soft' : 'ok'
   }
 
   canSpendGemini(estUsd: number) {

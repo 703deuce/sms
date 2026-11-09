@@ -1083,6 +1083,19 @@ def resolve_video_picker_stream_ranges(duration_ms: int) -> list[tuple[int, int]
     return plan_chunks(dur, chunk_ms, overlap_ms)
 
 
+def plan_upload_watch_ranges(range_start_ms: int, range_end_ms: int) -> list[tuple[int, int]]:
+    """Invisible analysis chunks for a single authorized source range.
+
+    Times are absolute in the original file. A 20-minute or shorter range stays
+    one watch; longer files are sliced so Story/Moment can still select and
+    stitch across the whole episode after a global merge.
+    """
+    start = max(0, int(range_start_ms))
+    end = max(start + 1, int(range_end_ms))
+    rel = resolve_video_picker_stream_ranges(end - start)
+    return [(start + a, start + b) for a, b in rel]
+
+
 def _gemini_transient_status(status: int) -> bool:
     # 429 is quota — retrying burns free-tier budget; fall through to lite model instead.
     return status in (503, 502, 504) or status >= 500
@@ -2282,6 +2295,55 @@ def watch_video_file(
         return _fail_open(str(exc)[:300], last_status, None)
 
 
+def _watch_upload_slice(
+    src_video: Path,
+    *,
+    range_start_ms: int,
+    range_end_ms: int,
+    scratch: Path,
+    chunk_label: str,
+    target_clip_len_s: int | None = None,
+    sentences: list[Any] | None = None,
+    transcript_text: str | None = None,
+    fps_override: float | None = None,
+    media_resolution_override: str | None = None,
+    model_override: str | None = None,
+    force_audio: bool = False,
+    min_moment_s: float = _MIN_MOMENT_S,
+) -> tuple[list[dict], dict[str, Any]]:
+    start_s = max(0.0, range_start_ms / 1000.0)
+    end_s = range_end_ms / 1000.0 if range_end_ms > range_start_ms else start_s + 60.0
+    duration_s = max(1, int(end_s - start_s))
+    proxy = scratch / f"video_picker_upload_{chunk_label}.mp4"
+    make_watch_proxy(src_video, proxy, start_s, end_s, force_audio=force_audio)
+    transcript = (
+        format_timestamped_transcript(sentences or [], range_start_ms, range_end_ms)
+        if sentences
+        else ""
+    )
+    if transcript_text is not None:
+        transcript = transcript_text[:60000]
+    moments, meta = watch_video_file(
+        proxy,
+        duration_s=duration_s,
+        chunk_label=chunk_label,
+        target_clip_len_s=target_clip_len_s,
+        transcript_text=transcript,
+        source_video=src_video,
+        scratch=scratch,
+        model_override=model_override,
+        fps_override=fps_override,
+        media_resolution_override=media_resolution_override,
+        use_labeled_frames=True if force_audio else None,
+        trim_start_s=start_s,
+        trim_end_s=end_s,
+        fail_open=False,
+        min_moment_s=min_moment_s,
+    )
+    # Return times relative to the slice start (same contract as a single watch).
+    return moments, meta
+
+
 def watch_upload_range(
     src_video: Path,
     *,
@@ -2300,42 +2362,53 @@ def watch_upload_range(
     start_s = max(0.0, range_start_ms / 1000.0)
     end_s = range_end_ms / 1000.0 if range_end_ms > range_start_ms else start_s + 60.0
     duration_s = max(1, int(end_s - start_s))
-    proxy = scratch / "video_picker_upload.mp4"
-    make_watch_proxy(src_video, proxy, start_s, end_s, force_audio=force_audio)
-    transcript = (
-        format_timestamped_transcript(sentences or [], range_start_ms, range_end_ms)
-        if sentences
-        else ""
-    )
-    if transcript_text is not None:
-        transcript = transcript_text[:60000]
-    moments, meta = watch_video_file(
-        proxy,
-        duration_s=duration_s,
-        chunk_label="regular",
-        target_clip_len_s=target_clip_len_s,
-        transcript_text=transcript,
-        source_video=src_video,
-        scratch=scratch,
-        model_override=model_override,
-        fps_override=fps_override,
-        media_resolution_override=media_resolution_override,
-        use_labeled_frames=True if force_audio else None,
-        trim_start_s=start_s,
-        trim_end_s=end_s,
-        fail_open=False,
-        min_moment_s=min_moment_s,
-    )
+    slices = plan_upload_watch_ranges(range_start_ms, range_end_ms if range_end_ms > range_start_ms else range_start_ms + 60_000)
+    all_moments: list[dict] = []
+    meta_agg: dict[str, Any] = {"chunks": len(slices), "ok_chunks": 0, "est_usd": 0.0}
+    for index, (lo, hi) in enumerate(slices):
+        region = scratch / f"upload_chunk_{index}"
+        region.mkdir(parents=True, exist_ok=True)
+        moments, meta = _watch_upload_slice(
+            src_video,
+            range_start_ms=lo,
+            range_end_ms=hi,
+            scratch=region,
+            chunk_label=f"upload_{index}",
+            target_clip_len_s=target_clip_len_s,
+            sentences=sentences,
+            transcript_text=transcript_text,
+            fps_override=fps_override,
+            media_resolution_override=media_resolution_override,
+            model_override=model_override,
+            force_audio=force_audio,
+            min_moment_s=min_moment_s,
+        )
+        # Convert slice-relative times into times relative to the authorized
+        # range start so the caller contract stays unchanged.
+        offset_s = (lo - range_start_ms) / 1000.0
+        for moment in moments:
+            for key in ("start_s", "end_s", "peak_s", "hook_s", "t_s"):
+                try:
+                    moment[key] = round(float(moment.get(key) or 0) + offset_s, 3)
+                except (TypeError, ValueError):
+                    pass
+        all_moments.extend(moments)
+        if meta.get("ok", True):
+            meta_agg["ok_chunks"] += 1
+        meta_agg["est_usd"] = float(meta_agg.get("est_usd") or 0) + float(meta.get("est_usd") or 0)
+    if len(slices) > 1:
+        overlap_s = video_picker_stream_overlap_s()
+        all_moments = merge_stream_moments(all_moments, overlap_s, mode="peak_window")
     curve = moments_to_per_second(
         [
             {
                 **m,
-                "start_s": float(m["start_s"]) - start_s,
-                "end_s": float(m["end_s"]) - start_s,
-                "peak_s": float(m["peak_s"]) - start_s,
+                "start_s": float(m.get("start_s") or 0),
+                "end_s": float(m.get("end_s") or 0),
+                "peak_s": float(m.get("peak_s") or 0),
             }
-            for m in moments
+            for m in all_moments
         ],
         duration_s,
     )
-    return moments, curve, meta
+    return all_moments, curve, meta_agg
