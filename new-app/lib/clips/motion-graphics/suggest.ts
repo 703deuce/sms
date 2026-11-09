@@ -54,8 +54,12 @@ const params = {
         startMs: { type: 'integer', minimum: 0 },
         endMs: { type: 'integer', minimum: 1 },
         text: { type: 'string', maxLength: 180 },
-        templateId: { enum: ['kinetic_type', 'lower_third', 'callout', 'stat_counter', 'steps', 'title_card', 'gaming_highlight'] },
+        templateId: { enum: ['kinetic_type', 'lower_third', 'callout', 'stat_counter', 'steps', 'title_card', 'gaming_highlight', 'diagram', 'bar_chart'] },
         rationale: { type: 'string', maxLength: 250 },
+        steps: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string', maxLength: 60 } },
+        bars: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'object', additionalProperties: false,
+          properties: { label: { type: 'string', maxLength: 30 }, value: { type: 'number', minimum: 0 } },
+          required: ['label', 'value'] } },
       },
       required: ['id', 'passageId', 'startMs', 'endMs', 'text', 'templateId', 'rationale'],
     } },
@@ -86,6 +90,8 @@ export async function suggestTextMotionGraphics(args: {
         'Choose ZERO to twelve well-justified transcript-grounded short text overlays, not graphics everywhere.',
         'Never invent statistics, dates, people, achievements, subtitles, or factual information.',
         'Only submit graphics about literal transcript passages with exact passageId evidence.',
+        'For bar_chart, each number must be explicitly spoken numerically in the cited passage.',
+        'For diagram, step labels must be contiguous exact excerpts from the cited passage.',
         'Timestamps must use the approved output timeline in milliseconds, never raw source time.',
         'Each graphic lasts 500 to 5000 ms, and must overlap its cited passage.',
         'Use short readable text under 45 characters; avoid platform chrome, captions and gameplay HUD.',
@@ -130,16 +136,34 @@ export async function suggestTextMotionGraphics(args: {
         endMs <= startMs || endMs - startMs < 500 || endMs - startMs > 5000)
       throw new Error('motion_agent_ungrounded_timing')
     const text = String(r.text ?? '').trim()
-    if (!text || text.length > 45) throw new Error('motion_agent_text_unreadable')
     const templateId = r.templateId
+    const chart = templateId === 'bar_chart'
+    const diagram = templateId === 'diagram'
+    if (!chart && !diagram && (!text || text.length > 45)) throw new Error('motion_agent_text_unreadable')
+    const bars = Array.isArray(r.bars) ? r.bars as Array<{ label: string; value: number }> : undefined
+    const steps = Array.isArray(r.steps) ? r.steps as string[] : undefined
+    if (chart && (!bars || bars.length < 2 || bars.length > 4 || bars.some(b =>
+      typeof b.label !== 'string' || !Number.isFinite(b.value) ||
+      !new RegExp('(^|[^0-9])' + String(b.value).replace(/[.*+?^$\\{\\}()|[\\]\\\\]/g, '\\\\    const text = String(r.text ?? '').trim()
+    if (!text || text.length > 45) throw new Error('motion_agent_text_unreadable')
+    const templateId = r.templateId') + '([^0-9]|$)').test(e.text))))
+      throw new Error('motion_agent_chart_values_not_in_source')
+    if (diagram && (!steps || steps.length < 2 || steps.length > 4 ||
+      steps.some(t => typeof t !== 'string' || !e.text.toLowerCase().includes(t.toLowerCase()))))
+      throw new Error('motion_agent_diagram_not_in_source')
     if (typeof templateId !== 'string') throw new Error('motion_agent_missing_template')
     return {
       id, templateId,
       startMs, endMs,
-      sourceEvidenceId: e.id, text,
-      box: args.format === '9:16'
-        ? { x: .16, y: .26, width: .48, height: .105 }
-        : { x: .18, y: .15, width: .58, height: .16 },
+      sourceEvidenceId: e.id, text: text || undefined,
+      ...(chart ? { bars } : {}), ...(diagram ? { steps } : {}),
+      box: chart || diagram
+        ? (args.format === '9:16'
+          ? { x: .15, y: .20, width: .54, height: .40 }
+          : { x: .16, y: .12, width: .66, height: .52 })
+        : args.format === '9:16'
+          ? { x: .16, y: .26, width: .48, height: .105 }
+          : { x: .18, y: .15, width: .58, height: .16 },
       zIndex: 20, style: { ...palette },
       intro: { kind: 'slide' as const, durationMs: 220, easing: 'out' as const },
       outro: { kind: 'fade' as const, durationMs: 220, easing: 'in' as const },
@@ -151,7 +175,9 @@ export async function suggestTextMotionGraphics(args: {
     version: 1, mode: args.mode ?? 'streamer_continuous', styleProfileId: args.profile?.id ?? null,
     fps: 30, durationMs: args.durationMs, format: args.format, graphics,
   }
-  const checked = validateMotionPlan(plan, { evidenceIds: new Set(byId.keys()) })
+  const safeRect = args.format === '9:16' ? { x: .12, y: .125, width: .58, height: .53 } :
+    { x: .08, y: .08, width: .84, height: .84 }
+  const checked = validateMotionPlan(plan, { evidenceIds: new Set(byId.keys()), safeRect })
   if (!checked.ok) throw new Error('motion_agent_invalid_plan:' + JSON.stringify(checked.issues).slice(0, 1000))
   return {
     plan: checked.plan, evidenceCount: evidence.length,
