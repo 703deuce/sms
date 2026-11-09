@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest'
-import {clipEditorialAudit,clipEditorialInstructions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {clipEditorialAudit,clipEditorialInstructions,repairClipBoundaries,shouldVetoPublish} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {selectMomentFlowTrim} from '@/lib/ai-producer-agent/clip-mode/moment-flow'
 const words=(text:string,startMs=0,spacingMs=380)=>
   text.split(' ').map((w,i)=>({w,s:(startMs+i*spacingMs)/1000,e:(startMs+i*spacingMs+320)/1000}))
@@ -50,5 +50,62 @@ describe('clip-only editorial policy from video review',()=>{
   for(const part of ['point','setup','qualifier','payoff','proper-name','face and mouth']){
     expect(rule).toContain(part)
   }
+ })
+ it('flags a stammered I-mean false start like the #1079 interview opening',()=>{
+  const w=words('I mean, president Obama did what he did, and in doing that, me to do what I am doing. I get to do what I do because president Obama did what he did.')
+  const risk=clipEditorialAudit([{startMs:0,endMs:8000}],w)
+  expect(risk.some(x=>x.code==='false_start_opening'||x.code==='referential_opening')).toBe(true)
+ })
+ it('flags a mid-sentence ending without terminal punctuation',()=>{
+  const w=words('Rights are about the ability to make those choices. Similarly, I do not need anybody to understand')
+  const endMs=Math.round(w[w.length-1]!.e*1000)
+  expect(clipEditorialAudit([{startMs:0,endMs}],w)
+   .some(x=>x.code==='unfinished_ending')).toBe(true)
+ })
+ it('flags an answer that refers to a removed interviewer exchange',()=>{
+  const w=[
+    ...words('Do you feel tension between your faith and the party?',0,400),
+    ...words('You keep talking about cultural liberalism, and I am talking about constitutional rights.',20000,400),
+  ]
+  const risk=clipEditorialAudit([
+    {startMs:0,endMs:4000},
+    {startMs:20000,endMs:32000},
+  ],w)
+  expect(risk.some(x=>x.code==='cut_context_reference')).toBe(true)
+ })
+ it('repairs a false-start opening and a mid-sentence ending, or restores a cut question',()=>{
+  const opening=words('I mean, president Obama did what he did. I get to do what I do because president Obama built this.')
+  const repaired=repairClipBoundaries([{startMs:0,endMs:Math.round(opening[opening.length-1]!.e*1000)}],opening)
+  expect(repaired.repaired).toBe(true)
+  expect(repaired.cuts[0]!.startMs).toBeGreaterThan(0)
+
+  const mid=words('Rights protect the ability to choose. Similarly I do not need anybody to understand the rest')
+  // Give the last clause no period; earlier sentence has one.
+  mid[4]!.w='choose.'
+  const midEnd=Math.round(mid[mid.length-1]!.e*1000)
+  const fixedEnd=repairClipBoundaries([{startMs:0,endMs:midEnd}],mid)
+  expect(fixedEnd.cuts[0]!.endMs).toBeLessThan(midEnd)
+
+  const q=words('Do you feel any tension between your faith and the party?',0,400)
+  q[q.length-1]!.w='party?'
+  const a=words('You keep talking about cultural liberalism and I am talking about rights.',20000,400)
+  a[a.length-1]!.w='rights.'
+  const restored=repairClipBoundaries([
+    {startMs:0,endMs:2000},
+    {startMs:20000,endMs:Math.round(a[a.length-1]!.e*1000)},
+  ],[...q,...a])
+  expect(restored.cuts[1]!.startMs).toBeLessThan(20000)
+ })
+ it('vetoes publish when QA or the audit finds a broken opening, ending, or cut context',()=>{
+  expect(shouldVetoPublish({
+    risks:[{code:'unfinished_ending',detail:'mid-sentence',passageIndex:0}],
+    qaPass:false,
+    qaIssues:['Editorial QA: ending is mid-sentence'],
+  })).toBe(true)
+  expect(shouldVetoPublish({
+    risks:[],
+    qaPass:true,
+    qaIssues:[],
+  })).toBe(false)
  })
 })

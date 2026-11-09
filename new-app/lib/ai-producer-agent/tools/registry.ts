@@ -137,7 +137,7 @@ export async function buildToolCtx(run: {
         laughs: ctx.cache.laughs ?? [],
         reactions: [],
         bursts: ctx.cache.bursts ?? [],
-        layoutAt: () => ({ contentType: 'irl', mode: 'fit_blur' }),
+        layoutAt: () => ({ contentType: 'irl', mode: (config.storyMode==='clip_moment_v1'||config.storyMode==='clip_story_v1')?'speaker_follow':'fit_blur' }),
         outputType: out.outputType,
         editMode: config.editMode,
         directStoryWordCuts: config.editMode === 'just_chatting_rough_cut' &&
@@ -227,3 +227,6 @@ export async function runTool(
       return { ok: false, summary: `unknown tool ${name}` }
   }
 }
+
+
+</cursor_untrusted_data_1337>

@@ -3,6 +3,10 @@
  */
 import type { SourcePassage } from './story-coverage'
 export type ClipCandidate={index:number;startMs:number;endMs:number;peakMs:number;finderScore:number;label:string}
+export function clipCandidateLimit(sourceMs:number,base=12):number{
+  const hours=Math.max(0,sourceMs)/3_600_000
+  return Math.min(18,Math.max(base,Math.round(hours*16)))
+}
 export function candidateWindows(moments:readonly Record<string,unknown>[],range:[number,number],mode:'moment'|'story',targetS:number,maxCandidates=9):ClipCandidate[]{
   const parse=(m:Record<string,unknown>,i:number):ClipCandidate|null=>{
     const start=Number(m.start_ms??(Number(m.start_s)*1000))
@@ -44,5 +48,9 @@ export function rankCandidate(score:{finderScore:number;qaPass:boolean|null;issu
   // by a large reaction or the clip approaching its requested runtime.
   const qa=Math.max(0,Math.min(100,(score.qaPass===true?95:score.qaPass===false?20:65)-Math.min(55,score.issues*9)))
   const objective=Number.isFinite(score.durationSeconds)&&score.durationSeconds>0?100:0
-  return Math.max(0,Math.min(100,Math.round(qa*.70+score.finderScore*.15+objective*.15)))
+  // Soft duration adherence: natural length wins, but large overshoots
+  // should not outrank a complete clip that honors the requested target.
+  const overshoot=score.targetS>0&&score.durationSeconds>score.targetS*1.25
+    ? Math.min(20,(score.durationSeconds-score.targetS*1.25)/score.targetS*20):0
+  return Math.max(0,Math.min(100,Math.round(qa*.70+score.finderScore*.15+objective*.15-overshoot)))
 }

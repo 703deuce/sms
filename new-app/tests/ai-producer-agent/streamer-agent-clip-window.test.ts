@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest'
-import {clipAgentSourceWindow,roughCutSourceWindow,minimumAgentTranscriptWords} from '@/lib/ai-producer-agent/rough-cut-window'
+import {clipAgentSourceWindow,roughCutSourceWindow,minimumAgentTranscriptWords,MAX_CLIP_AGENT_SOURCE_MS,clipAnalysisChunks,clipAgentWallClockMs,analyzeWaitTimeoutMs} from '@/lib/ai-producer-agent/rough-cut-window'
 import {buildAgentSystemPrompt} from '@/lib/ai-producer-agent/prompts'
 
 describe('streamer agent clip mode source isolation',()=>{
@@ -11,15 +11,30 @@ describe('streamer agent clip mode source isolation',()=>{
     expect(clipAgentSourceWindow(make([182000,212000])).rangeMs).toEqual([182000,212000])
     expect(clipAgentSourceWindow(make([400000,1600000])).rangeMs).toEqual([400000,1600000])
   })
-  it('does not pretend to inspect all of a long stream by silently taking the last 20 minutes',()=>{
-    expect(()=>clipAgentSourceWindow(make([0,3600000])))
-      .toThrow('clip_agent_requires_bounded_source_window')
+  it('allows a full 65-minute interview or a 10-hour episode as one run',()=>{
+    expect(clipAgentSourceWindow(make([0,3_931_162])).rangeMs).toEqual([0,3_931_162])
+    expect(clipAgentSourceWindow(make([0,MAX_CLIP_AGENT_SOURCE_MS])).rangeMs)
+      .toEqual([0,MAX_CLIP_AGENT_SOURCE_MS])
   })
-  it('rejects undersized sources and retains locked long form behavior',()=>{
+  it('does not silently take the last 20 minutes of a long source',()=>{
+    expect(clipAgentSourceWindow(make([0,3600000])).rangeMs).toEqual([0,3600000])
+    expect(clipAgentSourceWindow(make([0,3600000])).durationMs).toBe(3600000)
+  })
+  it('rejects sources shorter than 15 seconds or longer than 10 hours',()=>{
     expect(()=>clipAgentSourceWindow(make([0,14000])))
       .toThrow('clip_agent_source_too_short')
+    expect(()=>clipAgentSourceWindow(make([0,MAX_CLIP_AGENT_SOURCE_MS+1000])))
+      .toThrow('clip_agent_source_exceeds_max_duration')
     expect(roughCutSourceWindow(make([0,3600000])).rangeMs)
       .toEqual([2400000,3600000])
+  })
+  it('plans invisible analysis chunks across a long episode, then covers the whole span',()=>{
+    const chunks=clipAnalysisChunks(0,3_931_162)
+    expect(chunks[0]).toEqual([0,1_200_000])
+    expect(chunks.at(-1)?.[1]).toBe(3_931_162)
+    expect(chunks).toHaveLength(4)
+    expect(clipAgentWallClockMs(3_931_162)).toBeGreaterThan(45*60_000)
+    expect(analyzeWaitTimeoutMs(3_931_162)).toBeGreaterThan(20*60_000)
   })
 })
 

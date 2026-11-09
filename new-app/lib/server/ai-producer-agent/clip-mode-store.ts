@@ -28,6 +28,10 @@ export async function publishClipScore(input:{
   workspaceId:string;clipId:string;runId:string;
   score:number;finderScore:number;qaPass:boolean|null;issues:string[];
   durationSeconds:number;candidateIndex:number;mode:string
+  whyThisClip?:string
+  stitchSegments?:Array<{startMs:number;endMs:number}>
+  contextBridges?:Array<{atMs:number;text:string;passageIndex:number}>
+  topics?:string[]
 }){
   await getPrisma().clip.updateMany({
     where:{id:input.clipId,workspaceId:input.workspaceId},
@@ -39,6 +43,11 @@ export async function publishClipScore(input:{
         finderScore:input.finderScore,editorialQaPass:input.qaPass,
         editorialIssues:input.issues.slice(0,10),
         candidateIndex:input.candidateIndex,durationSeconds:input.durationSeconds,
+        whyThisClip:input.whyThisClip??null,
+        stitchSegments:input.stitchSegments??[],
+        contextBridges:input.contextBridges??[],
+        topics:input.topics??[],
+        editableStitchSegments:true,
       },
     },
   })
