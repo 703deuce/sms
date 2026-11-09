@@ -1,6 +1,7 @@
 import 'server-only'
 import { lunaChat } from '@/lib/ai-producer-agent/luna-client'
 import { validateMotionPlan, type MotionPlan, type StyleProfile } from './contract'
+import { motionSafeRect } from './safe-zones'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { sourceToOutput, timebaseFor } from '@/lib/clips/editor/clip-timeline'
@@ -178,8 +179,7 @@ export async function suggestTextMotionGraphics(args: {
     version: 1, mode: args.mode ?? 'single_source_story', styleProfileId: args.profile?.id ?? null,
     fps: 30, durationMs: args.durationMs, format: args.format, graphics,
   }
-  const safeRect = args.format === '9:16' ? { x: .12, y: .125, width: .58, height: .53 } :
-    { x: .08, y: .08, width: .84, height: .84 }
+  const safeRect = motionSafeRect(args.format)
   const checked = validateMotionPlan(plan, { evidenceIds: new Set(byId.keys()), safeRect })
   if (!checked.ok) throw new Error('motion_agent_invalid_plan:' + JSON.stringify(checked.issues).slice(0, 1000))
   return {
