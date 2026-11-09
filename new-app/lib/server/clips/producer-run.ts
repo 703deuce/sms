@@ -92,7 +92,11 @@ export function runProducerOnClip(
   // E4fix: no-op summaries ("No music to mix", …) are not changes.
   const summaryCount = appliedProducerSummaries(applied.summaries).length
   const fieldCount = countProducerFieldChanges(edits, applied.edits)
-  const changeCount = Math.max(summaryCount, fieldCount)
+  // Tool summaries are not evidence of a successful editor mutation.
+  // In particular, unsupported tools and legacy set_title must not enable
+  // the Accept button or claim that anything was applied.
+  const changed=JSON.stringify(edits)!==JSON.stringify(applied.edits)
+  const changeCount=changed?Math.max(1,summaryCount,fieldCount):0
   const captionReply = assistantReply
     ? sanitizeProducerCaptionReply(assistantReply, edits, applied.edits, wantedCaptions)
     : undefined
