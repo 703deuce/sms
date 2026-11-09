@@ -50,6 +50,13 @@ jobs:
             echo "Streamer agent batch TypeScript errors" >&2
             exit 1
           fi
+      - name: Motion graphics scoped TypeScript typecheck
+        run: |
+          NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false > /tmp/motion-tsc.txt 2>&1 || true
+          if grep -E '^(lib/clips/motion-graphics/|components/clips/editor/motion-graphics-panel|lib/server/clips/motion-styles|app/api/clips/motion-styles/|app/api/clips/clips/.*/motion-graphics/|lib/clips/edits.ts).*error TS' /tmp/motion-tsc.txt; then
+            echo "Motion graphics TypeScript errors" >&2
+            exit 1
+          fi
       - name: Editor import and hook guards
         run: |
           pnpm run verify:editor-shell-import
