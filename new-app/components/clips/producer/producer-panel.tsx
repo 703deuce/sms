@@ -79,7 +79,7 @@ export function ProducerPanel({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
-          dryRun ? { message: text, dryRun: true, planOnly: true } : { message: text },
+          dryRun ? { message: text, dryRun: true } : { message: text },
         ),
       })
       if (!res.ok) throw new Error(await res.text())
