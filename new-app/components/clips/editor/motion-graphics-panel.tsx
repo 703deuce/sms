@@ -17,8 +17,11 @@ export function MotionGraphicsPanel(props: {
   clipId: string
   edits: ClipEditsV2
   onEdits: (next: ClipEditsV2) => void
+  durationMs: number
 }) {
   const [style, setStyle] = useState<Style>('narrative')
+  const [windowStartMinute, setWindowStartMinute] = useState(0)
+  const [draftWindow, setDraftWindow] = useState<readonly [number, number] | null>(null)
   const [mode, setMode] = useState<MotionPlan['mode']>('single_source_story')
   const [profiles, setProfiles] = useState<StyleProfile[]>([])
   const [profileId, setProfileId] = useState('')
@@ -58,10 +61,14 @@ export function MotionGraphicsPanel(props: {
   async function generate() {
     setGenerating(true); setError(''); setNotice(''); setPlan(null); setExcludedGraphicIds([])
     const snapshot = canonicalEditsJson(props.edits)
+    const startMs = Math.min(Math.max(0, Math.round(windowStartMinute * 60000)), Math.max(0, props.durationMs - 500))
+    const rangeMs: readonly [number, number] | undefined = props.durationMs > 600000
+      ? [startMs, Math.min(props.durationMs, startMs + 600000)] : undefined
     try {
       const res = await fetch('/api/clips/clips/' + encodeURIComponent(props.clipId) + '/motion-graphics/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ style, mode, instruction, ...(profileId ? { profileId } : {}) }),
+        body: JSON.stringify({ style, mode, instruction, ...(rangeMs ? { rangeMs } : {}),
+          ...(profileId ? { profileId } : {}) }),
       })
       const body: unknown = await res.json()
       if (!res.ok) {
@@ -74,6 +81,7 @@ export function MotionGraphicsPanel(props: {
       if (!parsed.success) throw new Error('Agent returned an invalid motion graphics plan')
       setSourceVersion(data?.basedOnEditsSaveVersion ?? null)
       draftSnapshot.current = snapshot
+      setDraftWindow(rangeMs ?? [0, props.durationMs])
       setPlan(parsed.data)
       setNotice(parsed.data.graphics.length
         ? 'Review these suggestions and apply them to editable Text layers.'
@@ -226,7 +234,10 @@ export function MotionGraphicsPanel(props: {
       const result = MotionPlanSchema.safeParse((data as { data?: { plan?: unknown } }).data?.plan)
       if (res.status === 429) throw new Error('AI revision hourly limit reached. Try again after the reset window.')
       if (!res.ok || !result.success) throw new Error('Could not revise the selected graphic')
-      if (!plan) draftSnapshot.current = canonicalEditsJson(props.edits)
+      if (!plan) {
+        draftSnapshot.current = canonicalEditsJson(props.edits)
+        setDraftWindow(null)
+      }
       setExcludedGraphicIds([])
       setPlan(result.data); setNotice('Review your targeted revision, then Apply to editable timeline.')
       setRevisionInstruction('')
@@ -252,14 +263,23 @@ export function MotionGraphicsPanel(props: {
         if (draftSnapshot.current !== canonicalEditsJson(props.edits))
           throw new Error('Timeline changed during verification. Generate a new plan.')
       }
-    const selectedPlan = { ...plan, graphics: plan.graphics.filter(g => !excludedGraphicIds.includes(g.id)) }
+    const accepted = plan.graphics.filter(g => !excludedGraphicIds.includes(g.id))
+    const oldPlan = props.edits.motionPlan
+    // Long-form generation replaces only suggestions within the selected window.
+    // Other previously approved graphic groups remain part of the same editable plan.
+    const retainedGraphics = draftWindow && props.durationMs > 600000 && oldPlan &&
+      oldPlan.format === plan.format && oldPlan.mode === plan.mode && oldPlan.durationMs === plan.durationMs
+      ? oldPlan.graphics.filter(g => g.endMs <= draftWindow[0] || g.startMs >= draftWindow[1])
+      : []
+    const selectedPlan = { ...plan, graphics: [...retainedGraphics, ...accepted] }
     const old = props.edits.motionPlan
     const baseEdits = old ? removeTextBackedMotionGraphics(props.edits, old.graphics.map(g => g.id)) : props.edits
     const result = addTextBackedMotionPlan(baseEdits, selectedPlan)
     if (!result.ok) { setError(result.code + ': ' + result.detail); return }
     props.onEdits({ ...result.edits, motionPlan: selectedPlan })
     setNotice('Applied as editable Text layers. Export uses the existing text animation renderer.')
-    setError(''); setPlan(null); setExcludedGraphicIds([]); setSourceVersion(null); draftSnapshot.current = null
+    setError(''); setPlan(null); setExcludedGraphicIds([]); setDraftWindow(null);
+    setSourceVersion(null); draftSnapshot.current = null
     } catch (err) { setError((err as Error).message || 'Could not apply graphics') }
     finally { setApplying(false) }
   }
@@ -268,7 +288,7 @@ export function MotionGraphicsPanel(props: {
     const ids = props.edits.motionPlan?.graphics.map(g => g.id) ?? []
     props.onEdits({ ...removeTextBackedMotionGraphics(props.edits, ids), motionPlan: undefined })
     setNotice('Removed generated motion text; your other editor content is unchanged.')
-    setPlan(null); setExcludedGraphicIds([]); setError(''); draftSnapshot.current = null
+    setPlan(null); setExcludedGraphicIds([]); setDraftWindow(null); setError(''); draftSnapshot.current = null
   }
 
   return (
@@ -292,6 +312,15 @@ export function MotionGraphicsPanel(props: {
           <option value="streamer_long_form">Streamer Long-form</option>
         </select>
       </label>
+      {props.durationMs > 600000 ? (
+        <label className="block space-y-1 text-xs">
+          <span>Long-form planning window — start minute (10 minute maximum per request)</span>
+          <input type="number" min={0} max={Math.max(0, Math.floor(props.durationMs / 60000))}
+            step={1} className="w-full rounded border bg-background p-2 text-sm" value={windowStartMinute}
+            onChange={e => setWindowStartMinute(Math.max(0, Number(e.target.value) || 0))} />
+          <span className="block text-muted-foreground">Only graphics in the selected output-timeline window are regenerated. Previously approved graphics outside that window are retained.</span>
+        </label>
+      ) : null}
       <label className="block space-y-1 text-xs">
         <span>Motion style</span>
         <select className="w-full rounded border bg-background p-2 text-sm" value={style}
