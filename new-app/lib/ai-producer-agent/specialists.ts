@@ -236,6 +236,45 @@ const footageWordsSubmission:ToolSchema = {
   },
 }
 
+/** Clip-only schema: a source-timecut is valid when actual video observations
+ * support it, without fabricating an ASR word ID or forcing silent speech. */
+const clipVisualFootageSubmission:ToolSchema={
+  name:names.footage,
+  description:'Select 1-24 original video time spans supported by actual observed video, even if no one speaks.',
+  parameters:{type:'object',additionalProperties:false,
+    properties:{selections:{type:'array',minItems:1,maxItems:24,items:selection}},
+    required:['selections'],
+  },
+}
+export function validateClipVisualSelections(
+  raw:unknown,bounds:[number,number],
+  observations:readonly {sourceRangeMs:[number,number]}[],
+  maxMs:number,continuous:boolean,
+):EditorialSelection[]{
+  if(!Array.isArray(raw)||raw.length<1||raw.length>24)
+    throw Error('clip_visual_invalid_selection_count')
+  if(continuous&&raw.length!==1)throw Error('clip_visual_moment_must_be_continuous')
+  const cuts:EditorialSelection[]=[]
+  for(const value of raw){
+    if(!value||typeof value!=='object')throw Error('clip_visual_selection_not_object')
+    const row=value as Record<string,unknown>
+    const start=Number(row.startMs),end=Number(row.endMs)
+    if(!Number.isInteger(start)||!Number.isInteger(end)||start<bounds[0]||
+      end>bounds[1]||end-start<1000)
+      throw Error('clip_visual_selection_out_of_bounds')
+    const overlap=observations.some(o=>
+      Math.min(end,o.sourceRangeMs[1])-Math.max(start,o.sourceRangeMs[0])>=250)
+    if(!overlap)throw Error('clip_visual_selection_without_observed_evidence')
+    if(cuts.length&&start<cuts[cuts.length-1]!.endMs)
+      throw Error('clip_visual_selection_overlaps_or_reorders')
+    cuts.push({startMs:start,endMs:end,beat:String(row.beat??'visual action').slice(0,90),
+      reason:String(row.reason??'Observed visual action').slice(0,320)})
+  }
+  const duration=cuts.reduce((n,c)=>n+c.endMs-c.startMs,0)
+  if(duration>maxMs)throw Error('clip_visual_exceeds_maximum_runtime')
+  return cuts
+}
+
 /** Optional visual mode: existing Story/Footage schemas stay unchanged for baseline. */
 const storyWithVisualBeatsSubmission:ToolSchema={
   name:names.story,
