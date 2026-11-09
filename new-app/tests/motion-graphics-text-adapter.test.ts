@@ -91,12 +91,15 @@ describe('motion plan adapter to existing editor & FFmpeg text layers', () => {
       id: 'chart', templateId: 'bar_chart', text: undefined,
       box: { x: .15, y: .15, width: .75, height: .4 },
       bars: [{ label: 'Earlier', value: 20 }, { label: 'Later', value: 40 }],
+      keyframes: [{ atMs: 0, opacity: 0 }, { atMs: 500, opacity: 1 }],
     }] }
     const result = addTextBackedMotionPlan(base, chartPlan)
     if (!result.ok) throw new Error(result.detail)
     const approved = { ...result.edits, motionPlan: chartPlan }
     const after = removeTextBackedMotionGraphics(approved, ['chart'])
     expect(after.textItems).toEqual([])
+    expect(result.edits.keyframes?.length).toBe(result.edits.textItems?.length)
+    expect(after.keyframes).toEqual([])
   })
   it('preserves the old approved graphic when the new plan has a different ID until replaced explicitly', () => {
     const first = addTextBackedMotionPlan(base, plan)
