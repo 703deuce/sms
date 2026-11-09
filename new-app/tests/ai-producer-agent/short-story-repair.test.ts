@@ -246,7 +246,7 @@ describe('full-transcript Story/Footage handoff',()=>{
     expect(()=>one([{firstWordId:140,lastWordId:140,reason:'one'},
       {firstWordId:180,lastWordId:193,reason:'two'}])).toThrow('flow_split_span_too_short_passage_1')
     expect(()=>one([{firstWordId:140,lastWordId:165,reason:'one'},
-      {firstWordId:180,lastWordId:300,reason:'two'}])).toThrow('flow_split_outside_original_passage_1')
+      {firstWordId:180,lastWordId:300,reason:'two'}])).toThrow('flow_overlap_after_revision_near_passage_')
   })
   it('preserves Producer baseline extension while clip moment can only tighten ends',()=>{
     const originals=resolveFootageWordSelections(complete,words,[0,300000])
