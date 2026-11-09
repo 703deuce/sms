@@ -66,6 +66,15 @@ export function rankAgentClipCandidates(raw:unknown,
   }
   return selected
 }
+/** Source-time comparison of approved FINAL edits. Never deduplicate solely
+ * because broad discovery context windows overlap. */
+export function sameFinishedCut(a:readonly [number,number][],b:readonly [number,number][]):boolean{
+  if(!a.length||!b.length)return false
+  const length=(cuts:readonly [number,number][])=>cuts.reduce((n,[s,e])=>n+Math.max(0,e-s),0)
+  const overlap=a.reduce((sum,[s,e])=>sum+b.reduce((part,[bs,be])=>
+    part+Math.max(0,Math.min(e,be)-Math.max(s,bs)),0),0)
+  return overlap/Math.max(1,Math.min(length(a),length(b)))>0.85
+}
 export function rankedCompletedAgentClips<T extends {score?:number;startMin:number;qaPass?:boolean}>(
   results:readonly T[]):Array<T&{rank:number}>{
   return [...results].sort((a,b)=>Number(b.qaPass===true)-Number(a.qaPass===true)||
