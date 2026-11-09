@@ -1665,7 +1665,35 @@ export async function createEditorialHandoff(
     }
     const proposed=reviewed.cutPlan.length===1?reviewed.cutPlan[0]:null
     // A legitimate inward Flow trim is authoritative even if shorter.
-    const {selection:finalCut,accepted:useTrim}=selectMomentFlowTrim(first,proposed)
+    const {selection:initialCut,accepted:useTrim}=selectMomentFlowTrim(first,proposed,
+      {maxEarlierSetupMs:12000,maxLaterConclusionMs:6500})
+    let finalCut=initialCut
+    // Only revisit a specific failed editorial check; never recut for length.
+    const initialRisks=clipEditorialAudit([finalCut],ctx.cache.words)
+    if(initialRisks.length&&budget.state()!=='hard'){
+      await specialistEvent(ctx,budget,'flow','moment_context_and_meaning_retry',{
+        initialRisks,first,attemptedCut:finalCut,
+      })
+      try{
+        const repair=await runStoryFlowReview(ctx,budget,outline,[finalCut],{mode:'moment'})
+        const proposedRepair=repair.cutPlan.length===1?repair.cutPlan[0]:null
+        const safelyBounded=selectMomentFlowTrim(first,proposedRepair,
+          {maxEarlierSetupMs:12000,maxLaterConclusionMs:6500})
+        if(safelyBounded.accepted){
+          const remaining=clipEditorialAudit([safelyBounded.selection],ctx.cache.words)
+          if(remaining.length<initialRisks.length){
+            finalCut=safelyBounded.selection
+            await specialistEvent(ctx,budget,'flow','moment_context_and_meaning_repaired',{
+              before:initialRisks,after:remaining,finalCut,
+            })
+          }
+        }
+      }catch(error){
+        await specialistEvent(ctx,budget,'flow','moment_context_repair_unavailable',{
+          reason:String((error as Error)?.message??error).slice(0,220),
+        })
+      }
+    }
     await specialistEvent(ctx,budget,'flow',useTrim&&
       (finalCut.startMs!==first.startMs||finalCut.endMs!==first.endMs)
       ?'moment_flow_trim_applied':'moment_preserve_source_continuity',{
@@ -1761,6 +1789,31 @@ export async function createEditorialHandoff(
     }
     const combined=combineSpeechWithVisualActions(reviewed.cutPlan,visualActions,ctx.cache.words,source.rangeMs)
     let finalCombined=combined
+    if(storyClip){
+      const initialRisks=clipEditorialAudit(finalCombined.cutPlan,ctx.cache.words)
+      if(initialRisks.length&&budget.state()!=='hard'){
+        await specialistEvent(ctx,budget,'flow','story_context_and_meaning_retry',{
+          point:outline.logline,risks:initialRisks,
+        })
+        try{
+          const repair=await runStoryFlowReview(ctx,budget,outline,finalCombined.cutPlan,{mode:'story'})
+          const repaired=combineSpeechWithVisualActions(repair.cutPlan,visualActions,ctx.cache.words,source.rangeMs)
+          const remaining=clipEditorialAudit(repaired.cutPlan,ctx.cache.words)
+          if(remaining.length<initialRisks.length &&
+            storyCoverage(repaired.cutPlan).separated){
+            finalCombined=repaired
+            reviewed=repair
+            await specialistEvent(ctx,budget,'flow','story_context_and_meaning_repaired',{
+              priorRisks:initialRisks,remainingRisks:remaining,
+            })
+          }
+        }catch(error){
+          await specialistEvent(ctx,budget,'flow','story_context_repair_unavailable',{
+            reason:String((error as Error)?.message??error).slice(0,220),
+          })
+        }
+      }
+    }
     if(storyClip){
       const target=maximumSeconds
       const candidates=[
