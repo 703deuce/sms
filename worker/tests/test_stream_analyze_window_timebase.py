@@ -24,7 +24,7 @@ def test_full_media_range_clamps_at_file_end():
 
 
 def test_fully_outside_full_media_is_rejected():
-    vod = {"rangeStartMs": 600_000, "rangeEndMs": 900_000, "durationMs": 300_000}
+    vod = {"rangeStartMs": 600_000, "rangeEndMs": 950_000, "durationMs": 300_000}
     with pytest.raises(RuntimeError, match="range_outside_media"):
         resolve_analyze_window_ms(vod, {})
 
