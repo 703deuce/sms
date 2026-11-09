@@ -133,6 +133,25 @@ export function validateMotionPlan(
       last = key.atMs
     }
   }
+  // Prevent independently generated overlays from occupying the same screen
+  // space at the same moment. Each chart/diagram is one high-level graphic;
+  // its internal shape and text layers are intentionally grouped elsewhere.
+  for (let i = 0; i < plan.graphics.length; i++) {
+    const a = plan.graphics[i]!
+    for (let j = i + 1; j < plan.graphics.length; j++) {
+      const b = plan.graphics[j]!
+      const overlapTime = Math.min(a.endMs, b.endMs) - Math.max(a.startMs, b.startMs)
+      if (overlapTime <= 300) continue
+      const ix = Math.max(0, Math.min(a.box.x + a.box.width, b.box.x + b.box.width) - Math.max(a.box.x, b.box.x))
+      const iy = Math.max(0, Math.min(a.box.y + a.box.height, b.box.y + b.box.height) - Math.max(a.box.y, b.box.y))
+      const intersection = ix * iy
+      const smallerArea = Math.min(a.box.width * a.box.height, b.box.width * b.box.height)
+      if (smallerArea > 0 && intersection / smallerArea > 0.1) {
+        issues.push({ graphicId: b.id, code: 'overlapping_graphics',
+          message: `Graphics ${a.id} and ${b.id} would obscure each other on screen` })
+      }
+    }
+  }
   return issues.length ? { ok: false, issues } : { ok: true, plan }
 }
 
