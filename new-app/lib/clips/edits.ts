@@ -54,6 +54,7 @@ import { normalizeLayerFx, type LayerFx } from '@/lib/clips/editor/layer-fx'
 import { normalizeMarkers, type Marker } from '@/lib/clips/editor/markers'
 import { normalizeDisabledItems, normalizeGroups, type ItemGroup } from '@/lib/clips/editor/item-flags'
 import { normalizeSpeakerNames } from '@/lib/clips/editor/transcript-edit'
+import { validateMotionPlan, type MotionPlan } from '@/lib/clips/motion-graphics/contract'
 import { normalizeTimelineOpts, type TimelineOpts } from '@/lib/clips/editor/timeline-opts'
 
 export type CutRange = [number, number]
@@ -228,6 +229,8 @@ export type ClipEditsV2 = {
   tracks?: Track[]
   /** E4 text items on the Text lane (output ms; keyframe target `text:<id>`). */
   textItems?: TextItem[]
+  /** AI motion plan provenance; textItems remain the authoritative editable/rendered layers. */
+  motionPlan?: MotionPlan
   /** G3a manual caption lines (typed / SRT-VTT import), output ms; replace transcript words in the burned captions. */
   captionLines?: CaptionLine[]
   /** E4 color looks (Adjust + Filters): whole video, per Video item (source range), per B-roll id. */
@@ -587,6 +590,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.layerProps?.length) payload.layerProps = null
   if (!edits.tracks?.length) payload.tracks = null
   if (!edits.textItems?.length) payload.textItems = null
+  if (!edits.motionPlan) payload.motionPlan = null
   if (!edits.captionLines?.length) payload.captionLines = null
   if (!edits.color) payload.color = null
   if (!edits.adjustLayers?.length) payload.adjustLayers = null
@@ -730,6 +734,10 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     layerProps: normalizeLayerProps(o.layerProps),
     tracks: normalizeTracks(o.tracks),
     textItems: normalizeTextItems(o.textItems),
+    motionPlan: (() => {
+      const checked = validateMotionPlan(o.motionPlan)
+      return checked.ok ? checked.plan : undefined
+    })(),
     captionLines: normalizeCaptionLinesEdits(o.captionLines),
     color: normalizeColorEdits(o.color),
     adjustLayers: normalizeAdjustLayers(o.adjustLayers),

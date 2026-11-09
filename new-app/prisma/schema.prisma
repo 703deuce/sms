@@ -10530,3 +10530,33 @@ model ClipLut {
   @@index([workspaceId], map: "clip_luts_workspace_idx")
   @@map("clip_luts")
 }
+
+
+/// Workspace-owned reusable brand and motion style metadata. Reference assets
+/// remain in the existing workspace-scoped media storage.
+model MotionStyleProfile {
+  id          String    @id
+  workspaceId String
+  name        String
+  data        Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([workspaceId, deletedAt])
+  @@map("motion_style_profiles")
+}
+
+
+/// Atomic, workspace-scoped hourly request budget for paid Motion Graphics AI calls.
+/// These limits prevent burst charges; usage is still recorded in ai_usage.
+model MotionRequestLimit {
+  workspaceId String
+  kind        String
+  windowStart DateTime
+  used        Int      @default(0)
+
+  @@id([workspaceId, kind, windowStart])
+  @@index([windowStart])
+  @@map("motion_request_limits")
+}

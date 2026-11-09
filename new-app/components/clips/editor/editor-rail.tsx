@@ -27,6 +27,7 @@ export type EditorPanelId =
   | 'dub'
   | 'brand'
   | 'text'
+  | 'motion'
   | 'templates'
   | 'color'
   | 'media'
