@@ -111,7 +111,6 @@ export function ProjectClipsView({
   editorProjectId,
   projectHasUpload = false,
   autoAgentClipMode,
-  autoAgentClipSeconds = 60,
 }: {
   projectId: string
   projectTitle: string
