@@ -34,6 +34,7 @@ export function MotionGraphicsPanel(props: {
   const [generating, setGenerating] = useState(false)
   const [revisionInstruction, setRevisionInstruction] = useState('')
   const [revising, setRevising] = useState(false)
+  const [applying, setApplying] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [sourceVersion, setSourceVersion] = useState<number | null>(null)
@@ -192,12 +193,24 @@ export function MotionGraphicsPanel(props: {
     finally { setRevising(false) }
   }
 
-  function apply() {
-    if (!plan) return
+  async function apply() {
+    if (!plan || applying) return
     if (draftSnapshot.current !== canonicalEditsJson(props.edits)) {
       setError('Timeline changed since this motion draft was created. Generate a new plan to protect your edits.')
       return
     }
+    setApplying(true)
+    try {
+      if (sourceVersion != null) {
+        const response = await fetch('/api/clips/clips/' + encodeURIComponent(props.clipId), { cache: 'no-store' })
+        if (!response.ok) throw new Error('Unable to verify current saved editor version')
+        const body: unknown = await response.json()
+        const current = (body as { data?: { clip?: { editsSaveVersion?: number } } }).data?.clip?.editsSaveVersion
+        if (current == null || current !== sourceVersion)
+          throw new Error('Another edit was saved after this draft. Generate again to avoid replacing newer work.')
+        if (draftSnapshot.current !== canonicalEditsJson(props.edits))
+          throw new Error('Timeline changed during verification. Generate a new plan.')
+      }
     const old = props.edits.motionPlan
     const baseEdits = old ? removeTextBackedMotionGraphics(props.edits, old.graphics.map(g => g.id)) : props.edits
     const result = addTextBackedMotionPlan(baseEdits, plan)
@@ -205,6 +218,8 @@ export function MotionGraphicsPanel(props: {
     props.onEdits({ ...result.edits, motionPlan: plan })
     setNotice('Applied as editable Text layers. Export uses the existing text animation renderer.')
     setError(''); setPlan(null); setSourceVersion(null); draftSnapshot.current = null
+    } catch (err) { setError((err as Error).message || 'Could not apply graphics') }
+    finally { setApplying(false) }
   }
 
   function clearGenerated() {
@@ -323,9 +338,9 @@ export function MotionGraphicsPanel(props: {
           {sourceVersion != null ? <p className="text-xs text-muted-foreground">
             Generated from saved edit version {sourceVersion}. Review if you've edited the timeline since then.
           </p> : null}
-          <button type="button" onClick={apply}
+          <button type="button" onClick={() => void apply()} disabled={applying}
             className="w-full rounded border px-3 py-2 text-sm disabled:opacity-50">
-            Apply to editable timeline
+            {applying ? 'Checking latest edits…' : 'Apply to editable timeline'}
           </button>
         </div>
       ) : null}
