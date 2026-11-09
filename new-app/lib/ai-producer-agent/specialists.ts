@@ -556,8 +556,6 @@ export function applyStoryFlowChanges(
         if(span.endMs-span.startMs<1000)throw Error('flow_split_span_too_short_passage_'+i)
         if(k>0&&span.startMs<spans[k-1]!.endMs)
           throw Error('flow_split_overlap_passage_'+i)
-        if(span.startMs<before.startMs||span.endMs>before.endMs)
-          throw Error('flow_split_outside_original_passage_'+i)
       }
       finalCuts.push(...spans)
       changes.push({passageIndex:i,action:'split',reason:edit.reason,before,afterSpans:spans})
@@ -578,7 +576,7 @@ export function applyStoryFlowChanges(
     changes.push({passageIndex:i,action:'replace',reason:edit.reason,before,after:converted})
   }
   if(!finalCuts.length)throw Error('flow_cannot_remove_every_passage')
-  if(finalCuts.length>24)throw Error('flow_too_many_final_passages')
+  if(opts.allowSplit&&finalCuts.length>24)throw Error('flow_too_many_final_passages')
   for(let i=1;i<finalCuts.length;i++){
     if(finalCuts[i]!.startMs<finalCuts[i-1]!.endMs)
       throw Error('flow_overlap_after_revision_near_passage_'+i)
@@ -614,7 +612,7 @@ export async function runStoryFlowReview(
       ...(opts.mode==='moment' ? ['SINGLE CONTINUOUS MOMENT MODE: exactly one source passage. Only allow no change or ONE end-trimming replace of passageIndex 0. NEVER remove, split or excise the middle. If an aside occurs inside, accept it or trim an END. Target seconds '+JSON.stringify(opts.targetSeconds??[])] : opts.mode==='story' ? ['SHORT STORY CLIP: assemble several true source passages that sum to '+JSON.stringify(opts.targetSeconds??[])+' seconds, hard limits '+JSON.stringify(opts.hardWindowSeconds??[])+'. Splits may remove off-topic middle detours using split action with 2-6 chronological non-overlapping word ID spans. Never send two changes for the same passageIndex.'] : []),
       (opts.mode==='baseline' ? 'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.' : 'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.'.replace(
         'replace/remove change',
-        'replace/remove/split change'
+        opts.mode==='moment'?'replace end-trim change':'replace/remove/split change'
       )),
     ].join('\n\n')},
     {role:'user',content:JSON.stringify({
