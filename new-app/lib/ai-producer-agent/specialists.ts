@@ -1127,13 +1127,15 @@ export async function runEditorialRole(
   const wordFootage=role==='footage' && context.fullTranscriptWordIndexed===true
   const agentMoment=ctx.config.storyMode==='clip_moment_v1'
   const agentStory=ctx.config.storyMode==='clip_story_v1'
+  const clipVisualOnly=(agentMoment||agentStory)&&context.visualOnly===true
   const storyObservation=ctx.config.editMode==='just_chatting_rough_cut' && !highlightsMode && !agentMoment && !agentStory && ctx.config.targetLengthS[1]<=105
   const storyBaseline=storyObservation||agentStory
   const clipTarget=ctx.config.targetLengthS.join('–')
-  const visualStory=(storyObservation||agentStory) && ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence)
+  const visualStory=(storyObservation||agentStory||agentMoment) && ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence)
   const candidates=visualStory ? buildVisualBeatCandidates(
     ctx.cache.visualEvidence?.coarse??[],ctx.cache.visualEvidence?.focused??[]) : []
-  const submitTool=(agentMoment||agentStory)&&role==='qa'?clipQaSubmission
+  const submitTool=clipVisualOnly&&role==='footage'?clipVisualFootageSubmission
+    : (agentMoment||agentStory)&&role==='qa'?clipQaSubmission
     : visualStory && role==='story' ? storyWithVisualBeatsSubmission
     : visualStory && wordFootage ? footageWithVisualActionsSubmission
     : wordFootage ? footageWordsSubmission : submitSchemas[role]
@@ -1278,11 +1280,15 @@ export async function runEditorialRole(
           // never discard a source-grounded, coherent word-ID selection.
           let recovery: ReturnType<typeof recoverEditorialSelections> | undefined
           try {
-            selections = wordFootage
+            selections = clipVisualOnly && role==='footage'
+              ? validateClipVisualSelections(args.selections,source.rangeMs,
+                  [...(ctx.cache.visualEvidence?.coarse??[]),...(ctx.cache.visualEvidence?.focused??[])],
+                  ctx.config.targetLengthS[1]*1000,agentMoment)
+              : wordFootage
               ? resolveFootageWordSelections(args.selections,ctx.cache.words??[],source.rangeMs)
               : snapEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
           } catch (firstError) {
-            if(wordFootage)throw firstError // Repair only as source-local word IDs, never reinterpret them as milliseconds.
+            if(wordFootage||clipVisualOnly)throw firstError // No fake word IDs or unsupported visual ranges.
             recovery = recoverEditorialSelections(args.selections, source.rangeMs, ctx.cache.words ?? [], allowed)
             if (!recovery.selections.length) throw firstError
             selections = recovery.selections
@@ -1353,7 +1359,7 @@ export async function runEditorialRole(
           const repairHint = wordFootage
             ? {...footageWordRepairHint(args.selections,ctx.cache.words??[],source.rangeMs),errorCode}
             : (role === 'footage' || role === 'dialogue')
-            ? selectionRepairHint(args.selections, ctx.cache.words ?? [], source.rangeMs, allowed)
+            ? clipVisualOnly?{errorCode,rule:'Use observed source timestamps, no invented video'}:selectionRepairHint(args.selections, ctx.cache.words ?? [], source.rangeMs, allowed)
             : {}
           await specialistEvent(ctx, budget, role, 'rejected', {
             turn, invalidSubmissions, errorCode,
