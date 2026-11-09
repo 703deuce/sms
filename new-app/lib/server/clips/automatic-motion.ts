@@ -6,7 +6,7 @@ import { suggestTextMotionGraphics, type MotionStyleChoice } from '@/lib/clips/m
 import { addTextBackedMotionPlan } from '@/lib/clips/motion-graphics/text-adapter'
 import { motionSafeRect } from '@/lib/clips/motion-graphics/safe-zones'
 import { editorPreviewEdits, editorPreviewDurationMs } from '@/lib/clips/editor-preview-edits'
-import { sourceToOutput, timebaseFor } from '@/lib/clips/editor/clip-timeline'
+import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import type { ClipWord } from '@/lib/clips/edits'
 import type { VisualMomentEvidence } from '@/lib/ai-producer-agent/visual-evidence'
 import type { MotionPlan } from '@/lib/clips/motion-graphics/contract'
