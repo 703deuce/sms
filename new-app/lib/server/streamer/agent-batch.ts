@@ -1,4 +1,5 @@
 import 'server-only'
+import type {Prisma} from '@prisma/client'
 import {createId} from '@/lib/supabase/id'
 import {getPrisma} from '@/lib/server/db'
 import {streamerAgentWindows} from '@/lib/streamer/agent-windows'
@@ -46,7 +47,7 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
     sourceDurationMs:source.rangeEndMs-source.rangeStartMs,
     completed:[],errors:[],startedAt:new Date().toISOString(),
   }
-  await prisma.$transaction(async (tx)=>{
+  await prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
     if(opts?.onlyIfAbsent){
       const n=await tx.$executeRaw`
         UPDATE clip_projects
