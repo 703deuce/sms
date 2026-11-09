@@ -30,6 +30,7 @@ def collect_bulky_stream_keys(
     vod_id: str,
     state: dict,
     clip_rows: list[dict],
+    platform: str | None = None,
 ) -> list[str]:
     keys: list[str | None] = [stream_audio_key(workspace_id, vod_id)]
     if state.get("audioKey"):
@@ -38,7 +39,7 @@ def collect_bulky_stream_keys(
         keys.append(str(state["chatKey"]))
     if state.get("analysisProxyKey"):
         keys.append(str(state["analysisProxyKey"]))
-    if state.get("localUploadKey"):
+    if state.get("localUploadKey") and platform != 'upload':
         keys.append(str(state["localUploadKey"]))
     if state.get("windowCaptureVideoKey"):
         keys.append(str(state["windowCaptureVideoKey"]))
