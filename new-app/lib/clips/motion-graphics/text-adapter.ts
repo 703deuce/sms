@@ -10,6 +10,7 @@ import type { TextItem } from '@/lib/clips/editor/text-items'
 import type { TextAnim, TextAnimEdge } from '@/lib/clips/render-plan/text-anim'
 import { validateMotionPlan, type MotionPlan, type MotionGraphic } from './contract'
 import { expandedShapeGraphic, isGraphicItemId } from './primitives'
+import { motionKeyframeTracks } from './keyframe-adapter'
 
 /** Existing worker's two engines use the same `edits.textItems` schema. */
 export const TEXT_BACKED_TEMPLATES = [
@@ -78,7 +79,6 @@ export function addTextBackedMotionPlan(
     if (g.templateId !== 'diagram' && g.templateId !== 'bar_chart' &&
         (!g.text?.trim() || Array.from(g.text).length > TEXT_MAX_CHARS))
       return { ok: false, code: 'missing_or_long_text', detail: g.id }
-    if (g.keyframes.length) return { ok: false, code: 'custom_keyframes_not_mapped', detail: g.id }
     if (g.intro.kind === 'draw' || g.outro.kind === 'draw' || g.intro.kind === 'count_up' ||
         g.outro.kind === 'count_up' || g.intro.kind === 'type_on' && g.templateId !== 'kinetic_type')
       return { ok: false, code: 'unsupported_animation', detail: g.id }
@@ -92,10 +92,14 @@ export function addTextBackedMotionPlan(
   const retained = prev.filter(t => !plan.graphics.some(g =>
     previouslyApprovedIds.has(g.id) && isGraphicItemId(t.id, g.id)))
   let generated: TextItem[]
+  let generatedKeyframes: NonNullable<ClipEditsV2['keyframes']>
   try {
-    generated = plan.graphics.flatMap(g =>
-      g.templateId === 'diagram' || g.templateId === 'bar_chart'
-        ? expandedShapeGraphic(g, plan.format) : [asText(g)])
+    const groups = plan.graphics.map(g => ({ graphic: g,
+      items: g.templateId === 'diagram' || g.templateId === 'bar_chart'
+        ? expandedShapeGraphic(g, plan.format) : [asText(g)] }))
+    generated = groups.flatMap(group => group.items)
+    generatedKeyframes = groups.flatMap(group =>
+      motionKeyframeTracks(group.graphic, group.items.map(item => item.id)))
   } catch (err) {
     return { ok: false, code: 'invalid_shape_data', detail: String((err as Error).message) }
   }
@@ -107,13 +111,22 @@ export function addTextBackedMotionPlan(
   const normalized = normalizeTextItems(items, plan.durationMs) ?? []
   if (normalized.length !== items.length)
     return { ok: false, code: 'text_normalization_failed', detail: 'One or more items cannot be rendered' }
-  return { ok: true, edits: { ...edits, textItems: normalized },
+  const previousTracks = (edits.keyframes ?? []).filter(track =>
+    !track.target.startsWith('text:') ||
+    !plan.graphics.some(g => previouslyApprovedIds.has(g.id) &&
+      isGraphicItemId(track.target.slice(5), g.id)))
+  return { ok: true, edits: { ...edits, textItems: normalized,
+    keyframes: [...previousTracks, ...generatedKeyframes] },
     addedIds: generated.map(g => g.id) }
 }
 
 /** Remove only generated graphics; manual text, captions and EDL stay untouched. */
 export function removeTextBackedMotionGraphics(edits: ClipEditsV2, ids: readonly string[]): ClipEditsV2 {
   const approved = new Set(edits.motionPlan?.graphics.map(g => g.id) ?? [])
-  return { ...edits, textItems: edits.textItems?.filter(item =>
-    !ids.some(id => approved.has(id) && isGraphicItemId(item.id, id))) }
+  const owned = (itemId: string) => ids.some(id => approved.has(id) && isGraphicItemId(itemId, id))
+  return { ...edits,
+    textItems: edits.textItems?.filter(item => !owned(item.id)),
+    keyframes: edits.keyframes?.filter(track =>
+      !track.target.startsWith('text:') || !owned(track.target.slice(5))),
+  }
 }
