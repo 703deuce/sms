@@ -176,7 +176,8 @@ export function ProducerPopover({
           onApplyEdits={(e, n, before) => onAccept(e, before, n)}
           onUndo={onUndo}
           onProposal={(e, n, before, summaries) => {
-            if (n <= 0) return
+            if (n <= 0 || JSON.stringify(e) === JSON.stringify(before)) return
+            setPlanTools(null)
             setProposal({ edits: e, changeCount: n, before, summaries: appliedProducerSummaries(summaries) })
             setPreviewing(false)
             onAudition(null)
