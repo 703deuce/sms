@@ -1528,8 +1528,8 @@ export async function createEditorialHandoff(
       fullTranscriptFormat:'[originalWordId, spokenWord] — ALL spoken words in source order, no omissions',
       fullTranscript:completeTranscriptWords(ctx.cache.words,false),
       instruction: storyClip
-        ? [clipBrief,'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact. Let the edit stop naturally; time is informational.'].join(' ')
-        : clipBrief ?? (highlightsMode
+        ? [clipBrief,instruction??'','Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact. Let the edit stop naturally; time is informational.'].join(' ')
+        : (clipBrief ? [clipBrief,instruction??''].filter(Boolean).join(' ') : null) ?? (highlightsMode
         ? 'Define the editorial criteria for selecting independent, self-contained highlights. The payoff and ending fields express what makes a moment satisfying, not a fabricated shared narrative. Provide all structured creative-brief fields.'
         : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.'),
     })
@@ -1582,8 +1582,8 @@ export async function createEditorialHandoff(
       fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord] — FULL original source in chronological order',
       fullTranscript:completeTranscriptWords(ctx.cache.words,true),
       instruction: storyClip
-        ? [clipBrief,'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source and Story plan. Choose actual final passages by FIRST/LAST WORD IDS. Tell ONE complete narrative from recorded setup through the genuine payoff, trimming irrelevant tangents. Select complete sentences, not mid-phrase edges. Each selection\'s seconds are (endMs-startMs)/1000 from the indexed transcript; report the running total in each reason. Use as much sourced footage as this natural story needs; no length compliance is required.'].join(' ')
-        : clipBrief ?? (highlightsMode
+        ? [clipBrief,instruction??'','STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source and Story plan. Choose actual final passages by FIRST/LAST WORD IDS. Tell ONE complete narrative from recorded setup through the genuine payoff, trimming irrelevant tangents. Select complete sentences, not mid-phrase edges. Each selection\'s seconds are (endMs-startMs)/1000 from the indexed transcript; report the running total in each reason. Use as much sourced footage as this natural story needs; no length compliance is required.'].join(' ')
+        : (clipBrief ? [clipBrief,instruction??''].filter(Boolean).join(' ') : null) ?? (highlightsMode
         ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
         : ctx.config.targetLengthS[1] <= 105
         ? 'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source, Story plan, and every spoken word. Choose actual final passages by FIRST/LAST WORD IDS. IGNORE 90 seconds and ALL runtime targets. Tell ONE complete narrative from beginning through genuine recorded resolution, trimming irrelevant tangents but not the story for length. Select complete sentences, not mid-phrase edges. No later Finisher or Dialogue recut will repair your boundaries.'
