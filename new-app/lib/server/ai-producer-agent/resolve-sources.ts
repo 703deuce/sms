@@ -36,11 +36,11 @@ export async function resolveAiProducerSources(workspaceId: string, sources: AiP
       const projectRange: [number,number] = [project.rangeStartMs,project.rangeEndMs]
       // Streamer agent clip requests may inspect a selected 20-min source window.
       // Never trust a client-supplied storageKey or out-of-project time interval.
-      const requested = src.kind==='stream' ? src.rangeMs : undefined
+      const requested = src.kind==='stream' || src.kind==='upload' ? src.rangeMs : undefined
       if(requested && (!requested.every(Number.isFinite) ||
         requested[0] < projectRange[0] || requested[1] > projectRange[1] ||
         requested[1] <= requested[0]))
-        throw Error('streamer_clip_window_out_of_source_bounds')
+        throw Error('agent_clip_window_out_of_source_bounds')
       const rangeMs = requested ?? projectRange
       out.push({
         ...src,
