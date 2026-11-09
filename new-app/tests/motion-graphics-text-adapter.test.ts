@@ -28,7 +28,7 @@ describe('motion plan adapter to existing editor & FFmpeg text layers', () => {
   it('replaces the same AI layer ID while retaining other editor text', () => {
     const first = addTextBackedMotionPlan(base, plan)
     if (!first.ok) throw new Error(first.detail)
-    const second = addTextBackedMotionPlan(first.edits, { ...plan,
+    const second = addTextBackedMotionPlan({ ...first.edits, motionPlan: plan }, { ...plan,
       graphics: [{ ...plan.graphics[0], text: 'UPDATED' }] })
     expect(second.ok).toBe(true)
     if (second.ok) expect(second.edits.textItems?.filter(t => t.id === 'mg_score')).toHaveLength(1)
@@ -42,7 +42,7 @@ describe('motion plan adapter to existing editor & FFmpeg text layers', () => {
   it('removes an AI graphic without deleting a manual item', () => {
     const result = addTextBackedMotionPlan(base, plan)
     if (!result.ok) throw new Error(result.detail)
-    expect(removeTextBackedMotionGraphics(result.edits, ['score']).textItems).toEqual([])
+    expect(removeTextBackedMotionGraphics({ ...result.edits, motionPlan: plan }, ['score']).textItems).toEqual([])
   })
   it('compiles a data-driven infographic into editable shape and text layers', () => {
     const diagram = { ...plan, graphics: [{
@@ -77,4 +77,33 @@ describe('motion plan adapter to existing editor & FFmpeg text layers', () => {
     expect(addTextBackedMotionPlan(base, chart).ok).toBe(false)
   })
 
+  it('does not overwrite a manually authored text layer with a generated-looking ID', () => {
+    const first = addTextBackedMotionPlan(base, plan)
+    if (!first.ok) throw new Error(first.detail)
+    const manual = { ...first.edits, motionPlan: undefined }
+    const collision = addTextBackedMotionPlan(manual, plan)
+    expect(collision.ok).toBe(false)
+    if (!collision.ok) expect(collision.code).toBe('id_collision')
+    expect(removeTextBackedMotionGraphics(manual, ['score']).textItems).toEqual(first.edits.textItems)
+  })
+  it('removes every child shape and label of an approved AI chart, but preserves manual text', () => {
+    const chartPlan: MotionPlan = { ...plan, graphics: [{ ...plan.graphics[0],
+      id: 'chart', templateId: 'bar_chart', text: undefined,
+      box: { x: .15, y: .15, width: .75, height: .4 },
+      bars: [{ label: 'Earlier', value: 20 }, { label: 'Later', value: 40 }],
+    }] }
+    const result = addTextBackedMotionPlan(base, chartPlan)
+    if (!result.ok) throw new Error(result.detail)
+    const approved = { ...result.edits, motionPlan: chartPlan }
+    const after = removeTextBackedMotionGraphics(approved, ['chart'])
+    expect(after.textItems).toEqual([])
+  })
+  it('preserves the old approved graphic when the new plan has a different ID until replaced explicitly', () => {
+    const first = addTextBackedMotionPlan(base, plan)
+    if (!first.ok) throw new Error(first.detail)
+    const next = { ...plan, graphics: [{ ...plan.graphics[0], id: 'new' }] }
+    const second = addTextBackedMotionPlan({ ...first.edits, motionPlan: plan }, next)
+    if (!second.ok) throw new Error(second.detail)
+    expect(second.edits.textItems?.map(i => i.id).sort()).toEqual(['mg_new', 'mg_score'])
+  })
 })
