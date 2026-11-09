@@ -611,7 +611,7 @@ export async function runStoryFlowReview(
         'or use a runtime target. No 90-second constraint.',
         'or alter the approved narrative. Use the supplied mode-specific time target only; never pad, invent or force unrelated material.'
       )),
-      ...(opts.mode==='moment' ? ['SINGLE CONTINUOUS MOMENT MODE: exactly one source passage. Only allow no change or ONE end-trimming replace of passageIndex 0. NEVER remove, split or excise the middle. If an aside occurs inside, accept it or trim an END. Target seconds '+JSON.stringify(opts.targetSeconds??[])] : opts.mode==='story' ? ['SHORT STORY CLIP: assemble several true source passages that sum to '+JSON.stringify(opts.targetSeconds??[])+' seconds, hard limits '+JSON.stringify(opts.hardWindowSeconds??[])+'. Splits may remove off-topic middle detours using split action with 2-6 chronological non-overlapping word ID spans. Never send two changes for the same passageIndex.'] : []),
+      ...(opts.mode==='moment' ? ['SINGLE CONTINUOUS MOMENT MODE: exactly one source passage. Only allow no change or ONE end-trimming replace of passageIndex 0. NEVER remove, split or excise the middle. If an aside occurs inside, accept it or trim an END. Target seconds '+JSON.stringify(opts.targetSeconds??[])] : opts.mode==='story' ? ['SHORT STORY CLIP: preserve a complete coherent source-grounded story. Duration is advisory: do not expand clean endings or weaken narrative to hit a preset. Splits may remove off-topic middle detours using chronological word ID spans. At least two source moment clusters must come from distinct parts of the recording. Never send two changes for the same passageIndex.'] : []),
       (opts.mode==='baseline' ? 'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.' : 'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.'.replace(
         'replace/remove change',
         opts.mode==='moment'?'replace end-trim change':'replace/remove/split change'
@@ -1099,7 +1099,7 @@ export async function runEditorialRole(
       ...(ctx.config.editMode === 'just_chatting_rough_cut'
         ? [...(storyBaseline && (role==='story'||role==='footage'||role==='qa') ? [] : [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role]]),
           ...(agentStory ? [
-            'SHORT STORY CLIP BASELINE: the same editorial rules as the AI Producer Story — ONE coherent story with meaningful beginning, development and recorded ending, complete natural thought boundaries — but the finished runtime must add up to '+clipTarget+' seconds. Assemble several chronological non-overlapping original passages (typically 2–6) whose durations SUM to the target. Drop weak passages rather than cut mid-thought. Never pad.',
+            'SHORT STORY CLIP BASELINE: make ONE coherent story with a meaningful beginning, development and recorded ending. Draw from at least two genuinely different source moments. Runtime is advisory only; do not add filler or cut a payoff to reach '+clipTarget+' seconds. Preserve complete natural thought boundaries.',
           ] : storyObservation ? [
             'EDITORIAL BASELINE EXPERIMENT: Ignore all duration targets, runtime ceilings and 90-second requirements. The goal is ONE best coherent story from the authorized full transcript, whether it takes two, three, four minutes or another natural length. Identify a meaningful beginning, development and actual ending. Keep only the speech that supports that ONE story; do not concatenate every related topic. Choose complete naturally spoken thought boundaries. The deterministic tool will execute your selections unchanged. No later agent will compress, fix or substitute them.',
           ] : [ctx.config.targetLengthS[1] <= 105
@@ -1528,7 +1528,7 @@ export async function createEditorialHandoff(
       fullTranscriptFormat:'[originalWordId, spokenWord] — ALL spoken words in source order, no omissions',
       fullTranscript:completeTranscriptWords(ctx.cache.words,false),
       instruction: storyClip
-        ? [clipBrief,'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact. Sum the included real story beats to the requested '+ctx.config.targetLengthS.join('–')+' seconds.'].join(' ')
+        ? [clipBrief,'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact. Let the edit stop naturally; time is informational.'].join(' ')
         : clipBrief ?? (highlightsMode
         ? 'Define the editorial criteria for selecting independent, self-contained highlights. The payoff and ending fields express what makes a moment satisfying, not a fabricated shared narrative. Provide all structured creative-brief fields.'
         : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.'),
@@ -1686,7 +1686,7 @@ export async function createEditorialHandoff(
       const targetMid=maximumSeconds
       const desiredLo=Math.max(15,targetMid-10)
       const desiredHi=targetMid+10
-      const distance=(value:number)=>value<desiredLo?desiredLo-value:value>desiredHi?value-desiredHi:0
+      // Duration is never a Story quality or selection criterion.
       // Footage can request distant source moments, not just slightly extend
       // an adjacent 29-second trim. Each repair receives the FULL transcript,
       // original candidate/outline, and explicit failed source-gap evidence.
@@ -1713,9 +1713,9 @@ export async function createEditorialHandoff(
             otherObservedMoments:ctx.cache.momentsSummary,
             instruction:[
               'STORY CLIP SEARCH AND REPAIR:',
-              'The clip must have at least TWO distinct source passages with >=2500ms of removed original video between every adjacent chosen passage.',
+              'The clip must contain at least TWO genuinely separated moment REGIONS (>=2500ms original-source gap between clusters). Small cuts within one region do not invalidate a story.',
               'Search the ENTIRE provided source transcript and observed moments for missing setup, escalation, reaction and genuine payoff, including distant times.',
-              'For this '+targetMid+' second target, SUM all kept passage lengths to '+desiredLo+'-'+desiredHi+' seconds.',
+              'Do not try to reach the nominal '+targetMid+' second preset; deliver the strongest complete narrative even when 15 or 40 seconds.',
               'Do not concatenate consecutive snippets from the same continuous scene; do not fabricate context or add unrelated filler.',
               'Keep valid prior moments when useful, but replace the whole plan if needed to find a real multi-moment story.',
               'Use exact transcript word IDs and complete natural boundaries.',
@@ -1726,8 +1726,7 @@ export async function createEditorialHandoff(
           // Separation is mandatory. Prefer real separated stories even when
           // still short, then let further passes add meaningful beats.
           const improved=next.separated&&!coverage.separated ||
-            next.separated===coverage.separated && distance(next.durationSeconds)<distance(duration) ||
-            !coverage.separated && next.gapsMs.filter(g=>g>=2500).length>coverage.gapsMs.filter(g=>g>=2500).length
+            (!coverage.separated&&next.distinctMoments>coverage.distinctMoments)
           await specialistEvent(ctx,budget,'footage','story_search_more_moments_result',{
             attempt,accepted:improved,durationSeconds:next.durationSeconds,
             separated:next.separated,gapsMs:next.gapsMs,
@@ -1747,8 +1746,7 @@ export async function createEditorialHandoff(
     let reviewed:Awaited<ReturnType<typeof runStoryFlowReview>>
     try {
       reviewed=await runStoryFlowReview(ctx,budget,outline,footage,
-        storyClip?{mode:'story',targetSeconds:[minimumSeconds,maximumSeconds],
-          hardWindowSeconds:[Math.max(15,minimumSeconds-12),maximumSeconds+12]}:{mode:'baseline'})
+        storyClip?{mode:'story'}:{mode:'baseline'})
     } catch (error) {
       const errorCode=String((error as Error)?.message??error).slice(0,400)
       await specialistEvent(ctx,budget,'flow','review_unavailable_kept_footage',{
