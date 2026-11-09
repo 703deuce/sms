@@ -73,7 +73,7 @@ export async function buildToolCtx(run: {
     : lockedSingleSource && config.editMode === 'just_chatting_rough_cut'
       ? allSources.map(roughCutSourceWindow) : allSources
   const roughWords = lockedSingleSource && config.editMode === 'just_chatting_rough_cut'
-    ? await loadRoughCutWords(run.workspaceId,sources[0]!,minimumAgentTranscriptWords(config.storyMode)) : []
+    ? await loadRoughCutWords(run.workspaceId,sources[0]!,agentClip?0:minimumAgentTranscriptWords(config.storyMode)) : []
   const totalSourceMs = sources.reduce((acc, s) => acc + (s.durationMs ?? 0), 0)
   const ctx: ToolCtx = {
     runId: run.id,
