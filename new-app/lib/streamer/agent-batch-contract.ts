@@ -3,6 +3,7 @@ import type {AgentClipCandidate} from '@/lib/streamer/agent-clip-ranking'
 export type StreamerAgentBatchResult={
   projectId:string;clipId:string;startMin:number
   score?:number;rank?:number;candidateId?:string;reason?:string;category?:string
+  qaPass?:boolean
 }
 export type StreamerAgentBatch={
   id:string;status:'running'|'done'|'canceled'
