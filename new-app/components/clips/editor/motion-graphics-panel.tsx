@@ -33,6 +33,7 @@ export function MotionGraphicsPanel(props: {
   const [analyzedStyle, setAnalyzedStyle] = useState<StyleProfile | null>(null)
   const [instruction, setInstruction] = useState('')
   const [plan, setPlan] = useState<MotionPlan | null>(null)
+  const [excludedGraphicIds, setExcludedGraphicIds] = useState<string[]>([])
   const [generating, setGenerating] = useState(false)
   const [revisionInstruction, setRevisionInstruction] = useState('')
   const [revising, setRevising] = useState(false)
@@ -55,7 +56,7 @@ export function MotionGraphicsPanel(props: {
   const aiItems = props.edits.textItems?.filter(i => i.id.startsWith('mg_')) ?? []
 
   async function generate() {
-    setGenerating(true); setError(''); setNotice(''); setPlan(null)
+    setGenerating(true); setError(''); setNotice(''); setPlan(null); setExcludedGraphicIds([])
     const snapshot = canonicalEditsJson(props.edits)
     try {
       const res = await fetch('/api/clips/clips/' + encodeURIComponent(props.clipId) + '/motion-graphics/generate', {
@@ -223,6 +224,7 @@ export function MotionGraphicsPanel(props: {
       const result = MotionPlanSchema.safeParse((data as { data?: { plan?: unknown } }).data?.plan)
       if (!res.ok || !result.success) throw new Error('Could not revise the selected graphic')
       if (!plan) draftSnapshot.current = canonicalEditsJson(props.edits)
+      setExcludedGraphicIds([])
       setPlan(result.data); setNotice('Review your targeted revision, then Apply to editable timeline.')
       setRevisionInstruction('')
     } catch (e) { setError((e as Error).message) }
@@ -247,13 +249,14 @@ export function MotionGraphicsPanel(props: {
         if (draftSnapshot.current !== canonicalEditsJson(props.edits))
           throw new Error('Timeline changed during verification. Generate a new plan.')
       }
+    const selectedPlan = { ...plan, graphics: plan.graphics.filter(g => !excludedGraphicIds.includes(g.id)) }
     const old = props.edits.motionPlan
     const baseEdits = old ? removeTextBackedMotionGraphics(props.edits, old.graphics.map(g => g.id)) : props.edits
-    const result = addTextBackedMotionPlan(baseEdits, plan)
+    const result = addTextBackedMotionPlan(baseEdits, selectedPlan)
     if (!result.ok) { setError(result.code + ': ' + result.detail); return }
-    props.onEdits({ ...result.edits, motionPlan: plan })
+    props.onEdits({ ...result.edits, motionPlan: selectedPlan })
     setNotice('Applied as editable Text layers. Export uses the existing text animation renderer.')
-    setError(''); setPlan(null); setSourceVersion(null); draftSnapshot.current = null
+    setError(''); setPlan(null); setExcludedGraphicIds([]); setSourceVersion(null); draftSnapshot.current = null
     } catch (err) { setError((err as Error).message || 'Could not apply graphics') }
     finally { setApplying(false) }
   }
@@ -262,7 +265,7 @@ export function MotionGraphicsPanel(props: {
     const ids = props.edits.motionPlan?.graphics.map(g => g.id) ?? []
     props.onEdits({ ...removeTextBackedMotionGraphics(props.edits, ids), motionPlan: undefined })
     setNotice('Removed generated motion text; your other editor content is unchanged.')
-    setPlan(null); setError(''); draftSnapshot.current = null
+    setPlan(null); setExcludedGraphicIds([]); setError(''); draftSnapshot.current = null
   }
 
   return (
@@ -376,11 +379,18 @@ export function MotionGraphicsPanel(props: {
       {plan ? (
         <div className="space-y-2 rounded border p-2">
           <p className="text-xs font-semibold">Review {plan.graphics.length} proposed graphics</p>
+          <p className="text-xs text-muted-foreground">Select which graphics to add; rejected suggestions will not be rendered or saved.</p>
           {!plan.graphics.length ? <p className="text-xs">Applying this plan removes previously generated graphics without changing manual layers.</p> : null}
           <ul className="max-h-60 space-y-1 overflow-auto">
             {plan.graphics.map(g => (
               <li key={g.id} className="rounded bg-muted/50 p-2 text-xs">
-                <strong>{g.text || g.steps?.join(' → ') || g.bars?.map(b => b.label + ': ' + b.value).join(', ') || g.templateId}</strong> · {(g.startMs / 1000).toFixed(1)}–{(g.endMs / 1000).toFixed(1)}s
+                <label className="flex items-start gap-2">
+                  <input type="checkbox" checked={!excludedGraphicIds.includes(g.id)}
+                    onChange={e => setExcludedGraphicIds(current => e.target.checked
+                      ? current.filter(id => id !== g.id) : [...current, g.id])} />
+                  <span><strong>{g.text || g.steps?.join(' → ') || g.bars?.map(b => b.label + ': ' + b.value).join(', ') || g.templateId}</strong>
+                    {' · '}{(g.startMs / 1000).toFixed(1)}–{(g.endMs / 1000).toFixed(1)}s</span>
+                </label>
                 <div className="text-muted-foreground">{g.rationale}</div>
               </li>
             ))}
