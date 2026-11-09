@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { MotionModeSchema } from '@/lib/clips/motion-graphics/contract'
 import { jsonError } from '@/lib/server/api-error'
+import { recordOpenAiJsonUsage } from '@/lib/server/clips/ai-usage'
+import { GPT_6_LUNA_MODEL_ID } from '@/lib/server/ai/gpt-6-luna-chat'
 import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { getMotionStyle } from '@/lib/server/clips/motion-styles'
@@ -41,6 +43,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       profile,
       mode: body.mode,
       instruction: body.instruction,
+    })
+    await recordOpenAiJsonUsage({ workspaceId, clipId,
+      model: GPT_6_LUNA_MODEL_ID,
+      promptTokens: result.usage.promptTokens,
+      completionTokens: result.usage.completionTokens,
     })
     return NextResponse.json({
       data: {
