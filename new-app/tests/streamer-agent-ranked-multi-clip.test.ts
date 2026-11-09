@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest'
-import {rankAgentClipCandidates,rankedCompletedAgentClips}
+import {rankAgentClipCandidates,rankedCompletedAgentClips,sameFinishedCut}
   from '@/lib/streamer/agent-clip-ranking'
 import {streamerAgentWindows} from '@/lib/streamer/agent-windows'
 import {readStreamerAgentBatch} from '@/lib/streamer/agent-batch-contract'
@@ -45,6 +45,18 @@ describe('ranked multi-result AI clipper',()=>{
       {clipId:'c',score:82,startMin:2},
     ])
     expect(ranked.map(x=>[x.clipId,x.rank])).toEqual([['b',1],['c',2],['a',3]])
+  })
+  it('suppresses duplicated FINAL cuts, but not different clips with overlapping context',()=>{
+    expect(sameFinishedCut([[10000,40000]],[[11000,39000]])).toBe(true)
+    expect(sameFinishedCut([[10000,30000],[50000,80000]],[[70000,95000]])).toBe(false)
+    expect(sameFinishedCut([],[[10000,40000]])).toBe(false)
+  })
+  it('ranks QA-passing edits ahead of higher-scoring but QA-failing edits',()=>{
+    const ranked=rankedCompletedAgentClips([
+      {clipId:'highScout',score:95,startMin:0,qaPass:false},
+      {clipId:'approved',score:88,startMin:1,qaPass:true},
+    ])
+    expect(ranked.map(x=>x.clipId)).toEqual(['approved','highScout'])
   })
   it('preserves durable batch progress and ranked clip results after reload',()=>{
     const batch={id:'sagent_one',status:'running',mode:'clip_story_v1',
