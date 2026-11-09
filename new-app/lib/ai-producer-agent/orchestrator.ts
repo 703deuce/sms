@@ -1,4 +1,5 @@
 import 'server-only'
+import {createId} from '@/lib/supabase/id'
 
 import { approvedRoughCutSegmentArgs } from '@/lib/ai-producer-agent/assembly-segment-args'
 
@@ -243,6 +244,26 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     await loop(ctx, out, budget, messages, 'self_review')
     if (out.lastValid !== before && out.lastValid) await ctx.writeDraft(out, out.lastValid)
   }
+  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+  if(clipMode&&ctx.config.exportOnFinish&&out.projectId&&out.clipId&&out.lastValid){
+    const renderId=createId('render')
+    await getPrisma().$transaction(async tx=>{
+      await tx.clipRender.create({data:{
+        id:renderId,clipId:out.clipId!,workspaceId:ctx.workspaceId,
+        status:'QUEUED',format:'mp4',resolution:'720p',aspectRatio:'9:16',
+        filename:(out.editorialHandoff?.outline.logline??'AI clip').replace(/[\\/\\:*?\"<>|]/g,'').slice(0,80)+'.mp4',
+        watermark:false,
+      }})
+      await tx.clipJob.create({data:{
+        id:createId('job'),projectId:out.projectId!,clipId:out.clipId!,
+        type:'RENDER_CLIP',status:'QUEUED',payload:{renderId},
+      }})
+    })
+    out.notes.push('Finished MP4 export queued: '+renderId)
+    await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+      phase:'apply',tool:'clip_agent_export_queued',kind:'system',
+      resultSummary:JSON.stringify({renderId,projectId:out.projectId,clipId:out.clipId})})
+  }
 }
 
 /**
@@ -288,9 +309,12 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
       preservedFinisherEdges:verifiedFinisher,
     }),
   })
-  const title = `AI Producer ${ctx.config.roughCutIntent === 'highlights' ? 'highlights' : 'rough cut'} · ${source.title ?? 'stream'}`
+  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+  const title=clipMode
+    ? `AI ${ctx.config.storyMode==='clip_moment_v1'?'moment':'story'} clip · ${source.title??'video'}`
+    : `AI Producer ${ctx.config.roughCutIntent === 'highlights' ? 'highlights' : 'rough cut'} · ${source.title ?? 'stream'}`
   const created = await sysTool(ctx, budget, 'plan', 'create_project', {
-    title, sources: [source.sourceId], aspect: '16:9', outputType: out.outputType,
+    title, sources: [source.sourceId], aspect: clipMode?'9:16':'16:9', outputType: out.outputType,
   }, out)
   if (!created.ok || !out.builder) throw new Error('rough_cut_builder_creation_failed: ' + created.summary)
   out.builder.preserveApprovedEdges = true
