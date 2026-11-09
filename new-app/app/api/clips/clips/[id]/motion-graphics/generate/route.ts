@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { MotionModeSchema } from '@/lib/clips/motion-graphics/contract'
 import { jsonError } from '@/lib/server/api-error'
+import { reserveMotionRequest } from '@/lib/server/clips/motion-request-limit'
 import { recordOpenAiJsonUsage } from '@/lib/server/clips/ai-usage'
 import { GPT_6_LUNA_MODEL_ID } from '@/lib/server/ai/gpt-6-luna-chat'
 import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
@@ -34,6 +35,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const aspect = data.edits.aspectRatio ?? '9:16'
     if (!['9:16', '16:9', '1:1'].includes(aspect))
       return NextResponse.json({ error: 'Select 9:16, 16:9, or 1:1 first' }, { status: 422 })
+    const budget = await reserveMotionRequest(workspaceId, 'generate')
+    if (!budget.ok) return NextResponse.json({ error: 'motion_hourly_limit', retryAfterSec: budget.retryAfterSec },
+      { status: 429, headers: { 'Retry-After': String(budget.retryAfterSec) } })
     const result = await suggestTextMotionGraphics({
       edits: data.edits,
       words: data.words,
