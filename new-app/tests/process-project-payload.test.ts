@@ -19,4 +19,21 @@ describe('buildProcessProjectJobPayload', () => {
     const byo = buildProcessProjectJobPayload(defaultClipSettings({ byo: true }))
     expect(byo).toEqual({ ...base, byo: true })
   })
+  it('agent-only mode transcribes without classic picking',()=>{
+    expect(buildProcessProjectJobPayload(defaultClipSettings({
+      autoAgentClipMode:'clip_moment_v1',autoAgentClipSeconds:30,
+    }))).toMatchObject({agentOnly:true,agentClipMode:'clip_moment_v1',agentClipSeconds:30})
+    expect(buildProcessProjectJobPayload(defaultClipSettings({
+      autoAgentClipMode:'clip_story_v1',
+    }))).toMatchObject({agentOnly:true,agentClipMode:'clip_story_v1',agentClipSeconds:60})
+  })
+  it('existing full-video and BYO settings take priority over agent-only',()=>{
+    for(const extra of [{byo:true},{fullVideo:true}]){
+      const payload=buildProcessProjectJobPayload(defaultClipSettings({
+        autoAgentClipMode:'clip_moment_v1',...extra,
+      }))
+      expect(payload).not.toHaveProperty('agentOnly')
+    }
+    expect(buildProcessProjectJobPayload(defaultClipSettings())).not.toHaveProperty('agentOnly')
+  })
 })
