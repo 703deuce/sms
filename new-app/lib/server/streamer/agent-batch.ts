@@ -246,7 +246,21 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
       }
     }
   }else if(sourceProjectId){
-    try{
+    // Do not analyze a Twitch/Kick prepared source before its download and
+    // transcript transaction has committed READY. It may still be PREPARING.
+    const prepared=!isUploaded?await prisma.clipProject.findFirst({
+      where:{id:sourceProjectId,workspaceId:p.workspaceId},
+      select:{status:true,uploadId:true,
+        jobs:{where:{type:'STREAM_AGENT_PREPARE'},take:1,
+          orderBy:{createdAt:'desc'},select:{status:true,error:true}}},
+    }):null
+    if(prepared&&(prepared.status==='FAILED'||prepared.jobs[0]?.status==='FAILED')){
+      next.errors.push('Window '+(next.index+1)+': '+
+        (prepared.jobs[0]?.error??'Video preparation failed'))
+      moveWindow()
+    }else if(!isUploaded&&(!prepared||prepared.status!=='READY'||!prepared.uploadId)){
+      // Next durable tick retries once actual source and ASR are ready.
+    }else try{
       const source=await resolveAiProducerSources(p.workspaceId,[{
         sourceId:isUploaded?'uploaded_recording':'stream_recording',
         kind:isUploaded?'upload':'stream',projectId:sourceProjectId,
@@ -263,20 +277,6 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
     }catch(err){
       next.errors.push('Discovery window '+(next.index+1)+': '+
         String((err as Error).message).slice(0,180))
-      moveWindow()
-    }
-  }else if(next.preparedProjectId){
-    // A streamer-prepared window is not an independent clip and must not be
-    // handed directly to Producer until video and transcript are both ready.
-    const prepared=await prisma.clipProject.findFirst({
-      where:{id:next.preparedProjectId,workspaceId:p.workspaceId},
-      select:{status:true,uploadId:true,
-        jobs:{where:{type:'STREAM_AGENT_PREPARE'},take:1,
-          orderBy:{createdAt:'desc'},select:{status:true,error:true}}},
-    })
-    if(prepared?.status==='FAILED'||prepared?.jobs[0]?.status==='FAILED'||!prepared){
-      next.errors.push('Window '+(next.index+1)+': '+
-        (prepared?.jobs[0]?.error??'Video preparation failed'))
       moveWindow()
     }
   }else{
