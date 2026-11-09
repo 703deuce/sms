@@ -23,6 +23,7 @@ import { createEditorialHandoff, runEditorialRole, recoverEditorialSelections, t
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
 import {candidateWindows,overlapFraction,rankCandidate,type ClipCandidate} from '@/lib/ai-producer-agent/clip-mode/candidates'
 import {storyCoverage} from '@/lib/ai-producer-agent/clip-mode/story-coverage'
+import {clipEditorialAudit} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {createSourceClip,publishClipScore,discardClip} from '@/lib/server/ai-producer-agent/clip-mode-store'
 import type {ClipWord} from '@/lib/clips/edits'
 import { buildJustChattingEvidence } from '@/lib/ai-producer-agent/just-chatting-evidence'
@@ -103,12 +104,14 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       outputs.push(out)
       // Single Moment stays restricted to one local region. Story agents must
       // inspect the WHOLE authorized recording to seek genuinely separate beats.
+      const contextStart=Math.max(source.rangeMs?.[0]??0,candidate.startMs-12000)
+      const contextEnd=Math.min(source.rangeMs?.[1]??candidate.endMs,candidate.endMs+6500)
       const scopedWords=mode==='story'?(ctx.cache.words??[]):
         (ctx.cache.words??[]).filter((word:ClipWord)=>
-          word.e*1000>=candidate.startMs&&word.s*1000<=candidate.endMs)
+          word.e*1000>=contextStart&&word.s*1000<=contextEnd)
       if(scopedWords.length<8){out.notes.push('skipped: no transcript context for candidate');continue}
       const scopedSource=mode==='story'?source:
-        {...source,rangeMs:[candidate.startMs,candidate.endMs] as [number,number]}
+        {...source,rangeMs:[contextStart,contextEnd] as [number,number]}
       const candidateCtx:ToolCtx={...ctx,sources:[scopedSource],
         cache:{...ctx.cache,words:scopedWords,momentsSummary:mode==='story'
           ? ctx.cache.momentsSummary
@@ -133,7 +136,13 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
              'Find additional relevant moments in other source regions and form a coherent '+
                ctx.config.targetLengthS[1]+' second story with real gaps.',
              'Other candidate stories must not all be a copy of the same source event.'].join(' ')
-          : run.instruction)
+          : [run.instruction??'',
+              'INDEPENDENT SINGLE-MOMENT CANDIDATE '+String(candidate.index+1)+':',
+              'Anchor this clip at the finder event '+candidate.label,
+              'around original source time '+Math.round(candidate.peakMs/1000)+' seconds.',
+              'If the first spoken line refers backward, include ONLY the necessary preceding setup sentence or two.',
+              'Inspect the next 6.5 seconds after the proposed ending for a meaning-changing qualification.',
+              'Let Flow choose the natural ending. Never pad to the requested target length.'].join(' '))
         if(!out.projectId||!out.clipId||!out.editorialHandoff?.cutPlan.length){
           out.notes.push('No valid editorial output')
           continue
@@ -146,16 +155,32 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           out.projectId=undefined;out.clipId=undefined
           continue
         }
+        const safetyRisks=clipEditorialAudit(cuts,ctx.cache.words??[])
+        await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
+          tool:'clip_editorial_safety_audit',kind:'validate',
+          argsSummary:JSON.stringify({clipId:out.clipId,candidateIndex:candidate.index}),
+          resultSummary:JSON.stringify({point:out.editorialHandoff.outline.logline,risks:safetyRisks}).slice(0,3600)})
         const qa=out.editorialHandoff.review
         // An LLM may still mention preset length in QA prose. Strip only
         // duration-only criticisms; leave actual continuity/content flaws.
         const substantiveIssues=(qa?.issues??[]).filter(issue=>
           !/^(?:the )?(?:selected |final |clip |edit |story )?(?:intervals? total |duration |runtime |length |clip is too short|clip is too long|below the requested|above the requested)/i.test(issue.trim()) &&
           !/duration (?:is |of |below |above )|seconds? (?:below |above )|length target|runtime target/i.test(issue))
-        const qaPass=qa?.pass===true || Boolean(qa&&!substantiveIssues.length)
-        if(qa)out.editorialHandoff.review={pass:qaPass,issues:substantiveIssues}
+        const safetyIssues=safetyRisks.map(r=>r.code+': '+r.detail)
+        const combinedIssues=[...substantiveIssues,...safetyIssues]
+        const qaPass=safetyRisks.length===0&&
+          (qa?.pass===true || Boolean(qa&&!substantiveIssues.length))
+        out.editorialHandoff.review={pass:qaPass,issues:combinedIssues}
+        // A meaning-changing omitted qualification is a hard QA failure,
+        // not a duration issue. Do not publish a knowingly misleading cut.
+        if(safetyRisks.some(r=>r.code==='missing_qualification'||r.code==='invalid_passage')){
+          await discardClip(ctx.workspaceId,out.clipId)
+          out.notes.push('Rejected at editorial QA: '+safetyIssues.join('; ').slice(0,420))
+          out.projectId=undefined;out.clipId=undefined
+          continue
+        }
         const score=rankCandidate({finderScore:candidate.finderScore,
-          qaPass:qa?qaPass:null,issues:substantiveIssues.length,
+          qaPass,issues:combinedIssues.length,
           durationSeconds,targetS:ctx.config.targetLengthS[1]})
         successful.push({out,candidate,score,durationSeconds})
       }catch(error){
