@@ -157,7 +157,7 @@ def purge_stream_bulky_storage(conn, vod_id: str, *, reason: str = "success") ->
         cur.execute(
             """
             UPDATE stream_vods
-            SET state = %s::jsonb, "sourceDeletedAt" = COALESCE("sourceDeletedAt", NOW()), "updatedAt" = NOW()
+            SET state = %s::jsonb, "sourceDeletedAt" = CASE WHEN platform = 'upload' THEN "sourceDeletedAt" ELSE COALESCE("sourceDeletedAt", NOW()) END, "updatedAt" = NOW()
             WHERE id = %s
             """,
             (json.dumps(state), vod_id),
