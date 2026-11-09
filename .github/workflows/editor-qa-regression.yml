@@ -130,6 +130,7 @@ jobs:
             tests/ai-producer-agent/multi-source-assembly.test.ts \
             tests/streamer-agent-windows.test.ts \
             tests/streamer-agent-batch-contract.test.ts \
+            tests/streamer-agent-ranked-multi-clip.test.ts \
             tests/motion-graphics-contract.test.ts \
             tests/motion-graphics-text-adapter.test.ts \
             tests/motion-request-limit.test.ts
