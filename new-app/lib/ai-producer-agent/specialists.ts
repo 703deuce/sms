@@ -1639,7 +1639,7 @@ export async function createEditorialHandoff(
         const candidateSeconds=candidate.length===1
           ?(candidate[0]!.endMs-candidate[0]!.startMs)/1000:0
         const valid=candidate.length===1&&candidate[0]?.kind!=='visual_action'&&
-          candidateSeconds>=Math.max(5,min-12)&&candidateSeconds<=max+12
+          candidateSeconds>0&&candidateSeconds<=max+20
         if(valid&&(
           best.length!==1||best[0]?.kind==='visual_action'||
           distance(candidateSeconds)<distance(seconds))){
@@ -1674,8 +1674,8 @@ export async function createEditorialHandoff(
       throw Error('clip_moment_requires_one_continuous_source_passage')
     const first=footage[0]!
     const seconds=(first.endMs-first.startMs)/1000
-    if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds+12)
-      throw Error('clip_moment_duration_outside_target:'+seconds.toFixed(1))
+    if(seconds<=0)
+      throw Error('clip_moment_empty_source_passage')
     if(seconds<minimumSeconds||seconds>maximumSeconds){
       out.notes.push('Single moment duration '+seconds.toFixed(1)+'s vs target '+minimumSeconds+'–'+maximumSeconds+'s')
     }
@@ -1698,8 +1698,8 @@ export async function createEditorialHandoff(
       duration>maximumSeconds?duration-maximumSeconds:0
     const useTrim=Boolean(proposed&&proposed.kind!=='visual_action'&&
       proposed.startMs>=first.startMs&&proposed.endMs<=first.endMs&&
-      proposedSeconds>=Math.max(5,minimumSeconds-12)&&
-      proposedSeconds<=maximumSeconds+12&&distance(proposedSeconds)<=distance(seconds))
+      proposedSeconds>0&&
+      proposedSeconds<=maximumSeconds+20&&distance(proposedSeconds)<=distance(seconds))
     const finalCut=useTrim?proposed!:first
     await specialistEvent(ctx,budget,'flow',useTrim&&
       (finalCut.startMs!==first.startMs||finalCut.endMs!==first.endMs)
@@ -1788,8 +1788,8 @@ export async function createEditorialHandoff(
         finalCombined=[...candidateSets].sort((a,b)=>
           distance(selectionDurationS(a.cutPlan))-distance(selectionDurationS(b.cutPlan)))[0]!
         const seconds=selectionDurationS(finalCombined.cutPlan)
-        if(seconds<15||seconds>maximumSeconds+20)
-          throw Error('clip_story_duration_outside_target:'+seconds.toFixed(1))
+        if(seconds<=0)
+          throw Error('clip_story_empty_source_passages')
         out.notes.push('AI story duration '+seconds.toFixed(1)+'s outside target '+
           minimumSeconds+'–'+maximumSeconds+'s; best complete sourced story retained')
         await specialistEvent(ctx,budget,'footage','short_story_clip_duration_advisory',{
@@ -1798,8 +1798,8 @@ export async function createEditorialHandoff(
         })
       }
     }
-    if(storyClip&&finalCombined.cutPlan.length<2)
-      throw Error('clip_story_requires_multiple_source_passages')
+    // A complete source-grounded story may be a single passage. A stitched story
+    // is preferred when useful, but is never a publication requirement.
     await specialistEvent(ctx,budget,'footage','visual_actions_handoff',{
       proposed:visualActions,selected:finalCombined.included,omitted:[...submittedVisualOmissions,...finalCombined.omitted],
       finalCutCount:finalCombined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',
