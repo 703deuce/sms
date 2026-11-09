@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { analyzeMotionReferenceImages } from '@/lib/clips/motion-graphics/reference-analyzer'
 import { jsonError } from '@/lib/server/api-error'
+import { recordAiUsage } from '@/lib/server/clips/ai-usage'
+import { geminiVisionTokenCostMicros } from '@/lib/server/ai/gemini-flash-lite'
 
 const Body = z.object({
   authorized: z.literal(true),
@@ -20,7 +22,7 @@ const Body = z.object({
  */
 export async function POST(request: Request) {
   try {
-    await resolveWorkspaceId()
+    const workspaceId = await resolveWorkspaceId()
     const raw = await request.text()
     if (raw.length > 8_500_000) return NextResponse.json({ error: 'Images too large' }, { status: 413 })
     const body = Body.parse(JSON.parse(raw))
@@ -38,6 +40,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid JPEG file' }, { status: 400 })
     }
     const result = await analyzeMotionReferenceImages(decoded, body.instructions)
+    await recordAiUsage({ workspaceId, usage: {
+      provider: 'gemini', model: result.model,
+      units: result.usage.promptTokens + result.usage.outputTokens,
+      unitType: 'tokens',
+      costUsdMicros: geminiVisionTokenCostMicros(result.usage.promptTokens, result.usage.outputTokens),
+    } })
     return NextResponse.json({ data: result })
   } catch (err) {
     if (err instanceof z.ZodError || err instanceof SyntaxError)
