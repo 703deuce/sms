@@ -47,6 +47,17 @@ export type OutputState = {
 const activeRuns = new Set<string>()
 
 export async function runAiProducerAgent(runId: string): Promise<void> {
+  // Route only the two short-clip modes into their own agent pipeline.
+  // Producer Story, Multi-Source Story and Clean Take remain exactly as before.
+  const modeRun=await getPrisma().aiProducerAgentRun.findUnique({
+    where:{id:runId},select:{config:true},
+  })
+  const storyMode=(modeRun?.config as {storyMode?:string}|null)?.storyMode
+  if(storyMode==='clip_moment_v1'||storyMode==='clip_story_v1'){
+    const {runClipAgent}=await import('@/lib/ai-producer-agent/clip-mode/orchestrator')
+    await runClipAgent(runId)
+    return
+  }
   if (activeRuns.has(runId)) return
   activeRuns.add(runId)
   try {
