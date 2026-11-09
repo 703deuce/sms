@@ -250,6 +250,3 @@ export async function refineVisualStoryEvidence(
       error:String((error as Error)?.message??error).slice(0,250)})
   }
 }
-
-
-</cursor_untrusted_data_1337>

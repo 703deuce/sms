@@ -227,6 +227,3 @@ export async function runTool(
       return { ok: false, summary: `unknown tool ${name}` }
   }
 }
-
-
-</cursor_untrusted_data_1337>

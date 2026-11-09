@@ -79,12 +79,14 @@ describe('clip-only editorial policy from video review',()=>{
   expect(repaired.repaired).toBe(true)
   expect(repaired.cuts[0]!.startMs).toBeGreaterThan(0)
 
-  const mid=words('Rights protect the ability to choose. Similarly I do not need anybody to understand the rest')
-  // Give the last clause no period; earlier sentence has one.
-  mid[4]!.w='choose.'
-  const midEnd=Math.round(mid[mid.length-1]!.e*1000)
-  const fixedEnd=repairClipBoundaries([{startMs:0,endMs:midEnd}],mid)
+  const mid=words('Rights protect the ability to make those choices for everyone in this country.')
+  mid[mid.length-1]!.w='country.'
+  const tail=words('Similarly I do not need anybody to understand the rest', 12000, 380)
+  const all=[...mid,...tail]
+  const midEnd=Math.round(all[all.length-1]!.e*1000)
+  const fixedEnd=repairClipBoundaries([{startMs:0,endMs:midEnd}],all)
   expect(fixedEnd.cuts[0]!.endMs).toBeLessThan(midEnd)
+  expect(fixedEnd.cuts[0]!.endMs).toBeGreaterThanOrEqual(3000)
 
   const q=words('Do you feel any tension between your faith and the party?',0,400)
   q[q.length-1]!.w='party?'

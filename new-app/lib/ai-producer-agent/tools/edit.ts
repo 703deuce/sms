@@ -178,6 +178,3 @@ function absoluteSourceBounds(ctx: ToolCtx) {
   const end = ctx.sources[0]?.rangeMs?.[1] ?? 120_000
   return { clipStartMs: 0, clipEndMs: end, trimMinMs: 0, trimMaxMs: end }
 }
-
-
-</cursor_untrusted_data_1337>

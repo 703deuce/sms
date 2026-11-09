@@ -195,7 +195,7 @@ export function repairClipBoundaries(
         cut.endMs=extended
         notes.push('Extended a mid-sentence ending to the next complete sentence')
       }else{
-        const trimmed=lastCompletedEnd(words,cut.startMs+3000,cut.endMs)
+        const trimmed=lastCompletedEnd(words,cut.startMs,cut.endMs)
         if(trimmed!=null&&trimmed<cut.endMs&&trimmed-cut.startMs>=3000){
           cut.endMs=trimmed
           notes.push('Trimmed a mid-sentence ending back to the last complete sentence')
