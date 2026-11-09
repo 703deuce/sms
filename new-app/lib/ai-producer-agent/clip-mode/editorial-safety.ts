@@ -176,8 +176,9 @@ export function repairClipBoundaries(
       if(CUT_CONTEXT_OPEN.test(first)&&gapHasQuestion(words,prevEnd,cut.startMs)){
         const question=at(words,prevEnd,cut.startMs)
         const qDur=((question.at(-1)?.e??0)-(question[0]?.s??0))*1000
-        if(question.length&&qDur>0&&qDur<=8000&&(question[0]!.s*1000)>=floor){
-          cut.startMs=Math.round(question[0]!.s*1000)
+        const qStart=Math.round(question[0]!.s*1000)
+        if(question.length&&qDur>0&&qDur<=8000&&qStart>=prevEnd){
+          cut.startMs=qStart
           notes.push('Restored the preceding question so the answer is self-contained')
         }else{
           const qText=phrase(question).replace(/\s+/g,' ').trim().slice(0,80)

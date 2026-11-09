@@ -88,15 +88,18 @@ describe('clip-only editorial policy from video review',()=>{
   expect(fixedEnd.cuts[0]!.endMs).toBeLessThan(midEnd)
   expect(fixedEnd.cuts[0]!.endMs).toBeGreaterThanOrEqual(3000)
 
-  const q=words('Do you feel any tension between your faith and the party?',0,400)
+  const setup=words('I have been covering this debate for years now.',0,400)
+  setup[setup.length-1]!.w='now.'
+  const q=words('Do you feel any tension between your faith and the party?',8000,400)
   q[q.length-1]!.w='party?'
   const a=words('You keep talking about cultural liberalism and I am talking about rights.',20000,400)
   a[a.length-1]!.w='rights.'
   const restored=repairClipBoundaries([
-    {startMs:0,endMs:2000},
+    {startMs:0,endMs:Math.round(setup[setup.length-1]!.e*1000)},
     {startMs:20000,endMs:Math.round(a[a.length-1]!.e*1000)},
-  ],[...q,...a])
+  ],[...setup,...q,...a])
   expect(restored.cuts[1]!.startMs).toBeLessThan(20000)
+  expect(restored.cuts[1]!.startMs).toBeGreaterThanOrEqual(8000)
  })
  it('vetoes publish when QA or the audit finds a broken opening, ending, or cut context',()=>{
   expect(shouldVetoPublish({
