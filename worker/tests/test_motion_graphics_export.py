@@ -38,6 +38,10 @@ def test_generated_text_and_shape_render_in_real_mp4(tmp_path: Path, width: int,
          "-shortest", str(src))
     edits = {
         "v": 2,
+        "keyframes": [
+            {"target": "text:mg_sample", "prop": "rotation",
+             "value": 0, "points": [{"tMs": 0, "v": 0}, {"tMs": 800, "v": 15}]},
+        ],
         "textItems": [
             {
                 "id": "mg_sample",
