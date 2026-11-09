@@ -168,9 +168,11 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           !/duration (?:is |of |below |above )|seconds? (?:below |above )|length target|runtime target/i.test(issue))
         const safetyIssues=safetyRisks.map(r=>r.code+': '+r.detail)
         const combinedIssues=[...substantiveIssues,...safetyIssues]
-        const qaPass=safetyRisks.length===0&&
-          (qa?.pass===true || Boolean(qa&&!substantiveIssues.length))
-        out.editorialHandoff.review={pass:qaPass,issues:combinedIssues}
+        // Preserve an actual negative QA decision even when it returned no
+        // issue strings. Missing QA is UNKNOWN, never silently called pass.
+        const qaPass:boolean|null=safetyRisks.length>0?false:
+          qa?Boolean(qa.pass)&&substantiveIssues.length===0:null
+        out.editorialHandoff.review={pass:qaPass===true,issues:combinedIssues}
         // A meaning-changing omitted qualification is a hard QA failure,
         // not a duration issue. Do not publish a knowingly misleading cut.
         if(safetyRisks.some(r=>r.code==='missing_qualification'||r.code==='invalid_passage')){
