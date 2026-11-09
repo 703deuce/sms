@@ -36,6 +36,11 @@ describe('independent short clip modes',()=>{
    expect(short).toBeGreaterThan(0)
    expect(short).toBe(full)
  })
+ it('clear self-contained clip outranks higher-reaction clip that failed QA',()=>{
+   const complete=rankCandidate({finderScore:45,qaPass:true,issues:0,durationSeconds:18,targetS:60})
+   const sensationalButBroken=rankCandidate({finderScore:99,qaPass:false,issues:2,durationSeconds:60,targetS:60})
+   expect(complete).toBeGreaterThan(sensationalButBroken)
+ })
  it('dedupes overlapping cut plans independent of ranking',()=>{
    expect(overlapFraction([{startMs:0,endMs:30000}],[{startMs:3000,endMs:29000}])).toBeGreaterThan(.35)
    expect(overlapFraction([{startMs:0,endMs:30000}],[{startMs:60000,endMs:90000}])).toBe(0)
