@@ -1,4 +1,5 @@
 import { storyCoverage } from '@/lib/ai-producer-agent/clip-mode/story-coverage'
+import { selectMomentFlowTrim } from '@/lib/ai-producer-agent/clip-mode/moment-flow'
 import 'server-only'
 
 import type { ClipWord } from '@/lib/clips/edits'
@@ -1693,13 +1694,8 @@ export async function createEditorialHandoff(
         changes:[],applied:false,note:'Flow review unavailable: '+errorCode}}
     }
     const proposed=reviewed.cutPlan.length===1?reviewed.cutPlan[0]:null
-    const proposedSeconds=proposed?(proposed.endMs-proposed.startMs)/1000:0
-    // Flow owns the editorial landing. A safe inward trim is authoritative:
-    // never extend the clip again merely to approach the nominal length.
-    const useTrim=Boolean(proposed&&proposed.kind!=='visual_action'&&
-      proposed.startMs>=first.startMs&&proposed.endMs<=first.endMs&&
-      proposed.endMs>proposed.startMs&&proposedSeconds>0)
-    const finalCut=useTrim?proposed!:first
+    // A legitimate inward Flow trim is authoritative even if shorter.
+    const {selection:finalCut,accepted:useTrim}=selectMomentFlowTrim(first,proposed)
     await specialistEvent(ctx,budget,'flow',useTrim&&
       (finalCut.startMs!==first.startMs||finalCut.endMs!==first.endMs)
       ?'moment_flow_trim_applied':'moment_preserve_source_continuity',{
