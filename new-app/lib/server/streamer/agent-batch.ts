@@ -169,7 +169,7 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
   if(next.runId){
     const run=await prisma.aiProducerAgentRun.findFirst({
       where:{id:next.runId,workspaceId:p.workspaceId},
-      select:{status:true,resultProjectId:true,resultClipId:true,error:true},
+      select:{status:true,resultProjectId:true,resultClipId:true,error:true,producerNotes:true},
     })
     if(run&&['ready','done','failed','canceled','capped'].includes(run.status)){
       const candidate=next.candidates?.[candidateIndex]
@@ -182,10 +182,17 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
         // positive editorial score yet. No fixed/fabricated 95/100 scores.
         const finalScore=Number(rendered?.score)>0?Number(rendered?.score):
           candidate?.score??0
+        const outputNotes=run.producerNotes as Record<string,unknown>|null
+        const outputs=Array.isArray(outputNotes?.outputs)?outputNotes.outputs:[]
+        const firstOutput=outputs[0] as Record<string,unknown>|undefined
+        const specialists=firstOutput?.specialists as Record<string,unknown>|undefined
+        const review=specialists?.review as Record<string,unknown>|undefined
+        const qaPass=review?.pass===true
         next.completed.push({clipId:run.resultClipId,projectId:run.resultProjectId,
-          startMin:Math.floor((sourceWindowStart-next.sourceStartMs)/60_000),
+          startMin:Math.floor(((isUploaded?0:sourceWindowStart)+
+            (candidate?.rangeMs[0]??scopedWindow[0])-next.sourceStartMs)/60_000),
           score:Math.max(0,Math.min(100,Math.round(finalScore))),
-          candidateId:candidate?.id,reason:candidate?.reason,category:candidate?.category})
+          candidateId:candidate?.id,reason:candidate?.reason,category:candidate?.category,qaPass})
         next.completed=rankedCompletedAgentClips(next.completed)
       }else{
         next.errors.push('Candidate '+(candidateIndex+1)+' in window '+(next.index+1)+
