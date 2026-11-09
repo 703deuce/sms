@@ -133,8 +133,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
              'INDEPENDENT STORY CANDIDATE '+String(candidate.index+1)+':',
              'Anchor this distinct story at observed event '+candidate.label,
              'near original source time '+Math.round(candidate.peakMs/1000)+' seconds.',
-             'Find additional relevant moments in other source regions and form a coherent '+
-               ctx.config.targetLengthS[1]+' second story with real gaps.',
+             'Find additional relevant moments from distinct original source regions. Build one coherent complete story of whatever natural length; do not pad toward a preset.',
              'Other candidate stories must not all be a copy of the same source event.'].join(' ')
           : [run.instruction??'',
               'INDEPENDENT SINGLE-MOMENT CANDIDATE '+String(candidate.index+1)+':',
@@ -142,7 +141,8 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
               'around original source time '+Math.round(candidate.peakMs/1000)+' seconds.',
               'If the first spoken line refers backward, include ONLY the necessary preceding setup sentence or two.',
               'Inspect the next 6.5 seconds after the proposed ending for a meaning-changing qualification.',
-              'Let Flow choose the natural ending. Never pad to the requested target length.'].join(' '))
+              'Let Flow choose the natural ending. Never pad to the requested target length.'].join(' '),
+          ctx.cache.words??[])
         if(!out.projectId||!out.clipId||!out.editorialHandoff?.cutPlan.length){
           out.notes.push('No valid editorial output')
           continue
@@ -265,7 +265,8 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
   }
 }
 
-async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, instruction: string | null) {
+async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget,
+  instruction: string | null, fullSourceWords: ClipWord[] = ctx.cache.words??[]) {
   if (ctx.config.editMode === 'just_chatting_rough_cut') {
     out.editorialHandoff = await createEditorialHandoff(ctx, out, budget, instruction)
   }
@@ -325,8 +326,8 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       selections: out.editorialHandoff.cutPlan,
       fullTranscriptWordIndexed:true,
       fullTranscriptFormat:'[originalWordId,sourceStartMs,sourceEndMs,spokenWord] — COMPLETE authorized source',
-      fullTranscript:completeTranscriptWords(ctx.cache.words??[],true),
-      flaggedContextAndQualificationRisks:clipEditorialAudit(out.editorialHandoff.cutPlan,ctx.cache.words??[]),
+      fullTranscript:completeTranscriptWords(fullSourceWords,true),
+      flaggedContextAndQualificationRisks:clipEditorialAudit(out.editorialHandoff.cutPlan,fullSourceWords),
       ...(ctx.config.visualEvidenceMode==='visual_audio' && ctx.cache.visualEvidence ? {
         visualAudioEvidence: ctx.cache.visualEvidence,
         selectedVisualBeats:out.editorialHandoff.outline.visualBeats??[],
