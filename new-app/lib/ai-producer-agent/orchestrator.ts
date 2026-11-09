@@ -221,6 +221,30 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       out.notes.push('Editorial QA could not complete: ' + String((error as Error)?.message ?? error).slice(0, 250))
     }
   }
+  // Motion is a separate optional specialist: editorial cuts stay locked.
+  // It may deliberately choose zero overlays; failures never erase a valid cut.
+  if (out.clipId && out.projectId &&
+      (ctx.config.storyMode === 'clip_moment_v1' || ctx.config.storyMode === 'clip_story_v1') &&
+      process.env.AI_MOTION_AUTO_ENABLED !== 'false') {
+    try {
+      const { applyAutomaticClipMotion } = await import('@/lib/server/clips/automatic-motion')
+      const result = await applyAutomaticClipMotion({
+        workspaceId: ctx.workspaceId, clipId: out.clipId,
+        visualEvidence: ctx.cache.visualEvidence,
+        mode: ctx.config.storyMode === 'clip_moment_v1'
+          ? 'streamer_continuous' : 'streamer_story_clip',
+      })
+      out.notes.push('Motion graphics: ' + result.reason)
+      if (result.status === 'applied') {
+        const { getClipEditorPayload } = await import('@/lib/server/clips/clip-detail')
+        const updated = await getClipEditorPayload(ctx.workspaceId, out.clipId)
+        if (updated) out.lastValid = updated.edits
+      }
+    } catch (error) {
+      out.notes.push('Motion graphics skipped: ' +
+        String((error as Error)?.message ?? error).slice(0,180))
+    }
+  }
   for (; out.fixLoops < CAPS.maxFixLoops && budget.state() !== 'hard'; out.fixLoops++) {
     const pr = await sysTool(ctx, budget, 'preview_render', 'preview_render', { quality: 'draft' }, out)
     if (!pr.ok) {
