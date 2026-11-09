@@ -375,10 +375,7 @@ const flowReviewTool: ToolSchema = {
         type:'object',additionalProperties:false,
         properties:{
           passageIndex:{type:'integer',minimum:0},
-          action:{type:'string',enum:['replace','remove','split']},
-          spans:{type:'array',minItems:2,maxItems:6,items:{type:'object',additionalProperties:false,
-            properties:{firstWordId:{type:'integer',minimum:0},lastWordId:{type:'integer',minimum:0},reason:{type:'string'}},
-            required:['firstWordId','lastWordId','reason']}},
+          action:{type:'string',enum:['replace','remove']},
           firstWordId:{type:'integer',minimum:0},
           lastWordId:{type:'integer',minimum:0},
           reason:{type:'string'},
@@ -387,6 +384,42 @@ const flowReviewTool: ToolSchema = {
       }},
     },
     required:['assessment','joinReviews','changes'],
+  },
+}
+
+
+/** Distinct tool schema ONLY for the two clip modes. The original AI Producer
+ * Flow tool schema, name, prompts and validation remain byte-equivalent. */
+const clipFlowReviewTool:ToolSchema = {
+  name:'submit_story_flow_review',
+  description:'Return ONLY needed corrections to selected passages; omit every already-good passage.',
+  parameters:{
+    type:'object',additionalProperties:false,
+    properties:{
+      assessment:{type:'string'},
+      joinReviews:{type:'array',maxItems:23,items:{
+        type:'object',additionalProperties:false,
+        properties:{
+          leftIndex:{type:'integer',minimum:0},rightIndex:{type:'integer',minimum:1},
+          status:{type:'string',enum:['flows','needs_change']},reason:{type:'string'},
+        },required:['leftIndex','rightIndex','status','reason'],
+      }},
+      changes:{type:'array',maxItems:24,items:{
+        type:'object',additionalProperties:false,
+        properties:{
+          passageIndex:{type:'integer',minimum:0},
+          action:{type:'string',enum:['replace','remove','split']},
+          firstWordId:{type:'integer',minimum:0},lastWordId:{type:'integer',minimum:0},
+          spans:{type:'array',minItems:2,maxItems:6,items:{
+            type:'object',additionalProperties:false,
+            properties:{firstWordId:{type:'integer',minimum:0},
+              lastWordId:{type:'integer',minimum:0},reason:{type:'string'}},
+            required:['firstWordId','lastWordId','reason'],
+          }},
+          reason:{type:'string'},
+        },required:['passageIndex','action','reason'],
+      }},
+    },required:['assessment','joinReviews','changes'],
   },
 }
 
@@ -592,7 +625,7 @@ export async function runStoryFlowReview(
   ]
   for (let attempt=0;attempt<2;attempt++) {
     if (budget.state()==='hard') throw Error('flow_budget_exhausted')
-    const result=await lunaChat({messages,tools:[flowReviewTool],toolChoice:'required'})
+    const result=await lunaChat({messages,tools:[opts.mode==='baseline'?flowReviewTool:clipFlowReviewTool],toolChoice:'required'})
     budget.steps++;budget.addLuna(result.usage)
     await logAiProducerStep({
       runId:ctx.runId,stepIndex:budget.steps,phase:'plan',tool:'specialist_flow',
