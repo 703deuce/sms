@@ -1,6 +1,15 @@
 /** Ranked discovery candidates are independent of clip assembly. The old
  * picker supplied multiple ranked results; this module only preserves that
  * PRODUCT contract. Evidence comes from the new video+audio+ASR finder. */
+/** Tunable discovery cap, NOT a forced number of publishes. Each candidate
+ * may be rejected or deduplicated, and each has its own agent run. */
+export function suggestedAgentCandidateCount(sourceMs:number,targetSeconds:number,
+  mode:'clip_moment_v1'|'clip_story_v1'):number{
+  if(!Number.isFinite(sourceMs)||sourceMs<=0||!Number.isFinite(targetSeconds)||targetSeconds<=0)return 0
+  return mode==='clip_moment_v1'
+    ?Math.min(8,Math.max(1,Math.ceil(sourceMs/30_000)))
+    :Math.min(8,Math.max(1,Math.ceil(sourceMs/(targetSeconds*1_500))))
+}
 export type AgentClipCandidate={
   id:string;rangeMs:[number,number];score:number
   reason:string;category:string;title:string
