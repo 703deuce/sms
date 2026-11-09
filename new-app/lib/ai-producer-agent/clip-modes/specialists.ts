@@ -1766,7 +1766,7 @@ export async function createEditorialHandoff(
         const candidateSeconds=candidate.length===1
           ?(candidate[0]!.endMs-candidate[0]!.startMs)/1000:0
         const valid=candidate.length===1&&candidate[0]?.kind!=='visual_action'&&
-          candidateSeconds>=Math.max(5,min-12)&&candidateSeconds<=max+12
+          candidateSeconds>=Math.max(5,min-12)&&candidateSeconds<=max
         if(valid&&(
           best.length!==1||best[0]?.kind==='visual_action'||
           distance(candidateSeconds)<distance(seconds))){
@@ -1801,7 +1801,7 @@ export async function createEditorialHandoff(
       throw Error('clip_moment_requires_one_continuous_source_passage')
     const first=footage[0]!
     const seconds=(first.endMs-first.startMs)/1000
-    if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds+12)
+    if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds)
       throw Error('clip_moment_duration_outside_target:'+seconds.toFixed(1))
     if(seconds<minimumSeconds||seconds>maximumSeconds){
       out.notes.push('Single moment duration '+seconds.toFixed(1)+'s vs target '+minimumSeconds+'–'+maximumSeconds+'s')
@@ -1826,7 +1826,7 @@ export async function createEditorialHandoff(
     const useTrim=Boolean(proposed&&proposed.kind!=='visual_action'&&
       proposed.startMs>=first.startMs&&proposed.endMs<=first.endMs&&
       proposedSeconds>=Math.max(5,minimumSeconds-12)&&
-      proposedSeconds<=maximumSeconds+12&&distance(proposedSeconds)<=distance(seconds))
+      proposedSeconds<=maximumSeconds&&distance(proposedSeconds)<=distance(seconds))
     const finalCut=useTrim?proposed!:first
     await specialistEvent(ctx,budget,'flow',useTrim&&
       (finalCut.startMs!==first.startMs||finalCut.endMs!==first.endMs)
@@ -1899,7 +1899,7 @@ export async function createEditorialHandoff(
     let finalCombined=combined
     if(storyClip){
       const distance=(n:number)=>n<minimumSeconds?minimumSeconds-n:n>maximumSeconds?n-maximumSeconds:0
-      const hardMin=Math.max(15,minimumSeconds-12),hardMax=maximumSeconds+12
+      const hardMin=Math.max(1,Math.min(15,minimumSeconds)),hardMax=maximumSeconds
       const candidateSets=[
         combined,
         {cutPlan:reviewed.cutPlan,included:[],omitted:submittedVisualOmissions},
@@ -1915,7 +1915,7 @@ export async function createEditorialHandoff(
         finalCombined=[...candidateSets].sort((a,b)=>
           distance(selectionDurationS(a.cutPlan))-distance(selectionDurationS(b.cutPlan)))[0]!
         const seconds=selectionDurationS(finalCombined.cutPlan)
-        if(seconds<15||seconds>maximumSeconds+20)
+        if(seconds<1||seconds>maximumSeconds)
           throw Error('clip_story_duration_outside_target:'+seconds.toFixed(1))
         out.notes.push('AI story duration '+seconds.toFixed(1)+'s outside target '+
           minimumSeconds+'–'+maximumSeconds+'s; best complete sourced story retained')
