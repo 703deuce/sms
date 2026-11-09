@@ -1798,29 +1798,31 @@ export async function createEditorialHandoff(
     const combined=combineSpeechWithVisualActions(reviewed.cutPlan,visualActions,ctx.cache.words,source.rangeMs)
     let finalCombined=combined
     if(storyClip){
-      const distance=(n:number)=>n<minimumSeconds?minimumSeconds-n:n>maximumSeconds?n-maximumSeconds:0
-      const hardMin=Math.max(15,minimumSeconds-12),hardMax=maximumSeconds+12
-      const candidateSets=[
+      const target=maximumSeconds
+      const preferredLo=Math.max(15,target-10),preferredHi=target+10
+      const preferenceDistance=(n:number)=>n<preferredLo?preferredLo-n:n>preferredHi?n-preferredHi:0
+      const candidates=[
         combined,
         {cutPlan:reviewed.cutPlan,included:[],omitted:submittedVisualOmissions},
         combineSpeechWithVisualActions(footage,visualActions,ctx.cache.words,source.rangeMs),
         {cutPlan:footage,included:[],omitted:submittedVisualOmissions},
       ]
-      const valid=candidateSets.find(candidate=>{
-        const duration=selectionDurationS(candidate.cutPlan)
-        return duration>=hardMin&&duration<=hardMax
-      })
-      if(valid)finalCombined=valid
-      else{
-        finalCombined=[...candidateSets].sort((a,b)=>
-          distance(selectionDurationS(a.cutPlan))-distance(selectionDurationS(b.cutPlan)))[0]!
-        const seconds=selectionDurationS(finalCombined.cutPlan)
-        if(seconds<=0) throw Error('clip_story_empty_source_passages')
-        out.notes.push('AI story duration '+seconds.toFixed(1)+'s outside target '+
-          minimumSeconds+'–'+maximumSeconds+'s; best complete sourced story retained')
+      // Never choose an adjacent pseudo-story just because its runtime fits.
+      // Prefer the Flow-reviewed story when it lands in range; otherwise keep
+      // the best distinct, complete source-backed alternative near the target.
+      const viable=candidates.filter(candidate=>
+        storyCoverage(candidate.cutPlan,target).separated)
+      if(!viable.length)throw Error('clip_story_requires_distinct_source_passages')
+      finalCombined=viable.sort((a,b)=>
+        preferenceDistance(selectionDurationS(a.cutPlan))-
+        preferenceDistance(selectionDurationS(b.cutPlan)))[0]!
+      const seconds=selectionDurationS(finalCombined.cutPlan)
+      if(preferenceDistance(seconds)>0){
+        out.notes.push('Story runtime '+seconds.toFixed(1)+'s outside preferred '+
+          preferredLo+'-'+preferredHi+'s; kept complete distinct story with ranking penalty')
         await specialistEvent(ctx,budget,'footage','short_story_clip_duration_advisory',{
-          durationSeconds:seconds,targetSeconds:[minimumSeconds,maximumSeconds],
-          note:'Short/long complete story allowed rather than failing or padding',
+          durationSeconds:seconds,targetSeconds:[preferredLo,preferredHi],
+          note:'No filler or fabricated moments added',
         })
       }
     }
