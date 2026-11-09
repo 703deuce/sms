@@ -73,7 +73,7 @@ export function sameFinishedCut(a:readonly [number,number][],b:readonly [number,
   const length=(cuts:readonly [number,number][])=>cuts.reduce((n,[s,e])=>n+Math.max(0,e-s),0)
   const overlap=a.reduce((sum,[s,e])=>sum+b.reduce((part,[bs,be])=>
     part+Math.max(0,Math.min(e,be)-Math.max(s,bs)),0),0)
-  return overlap/Math.max(1,Math.min(length(a),length(b)))>0.85
+  return overlap/Math.max(1,Math.min(length(a),length(b)))>0.35
 }
 export function rankedCompletedAgentClips<T extends {score?:number;startMin:number;qaPass?:boolean}>(
   results:readonly T[]):Array<T&{rank:number}>{
