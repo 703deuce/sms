@@ -8,7 +8,7 @@ import {aiProducerAgentPublicEnabled} from '@/lib/ai-producer-agent/flags'
 import {MAX_AGENT_SOURCE_WINDOW_MS} from '@/lib/streamer/agent-windows'
 
 export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'
-type FinishedClip={projectId:string;clipId:string;startMin:number;rank?:number;score?:number;reason?:string;category?:string}
+type FinishedClip={projectId:string;clipId:string;startMin:number;rank?:number;score?:number;reason?:string;category?:string;qaPass?:boolean}
 const WINDOW_MS=MAX_AGENT_SOURCE_WINDOW_MS
 async function requestJson(url:string,opts?:RequestInit){
   const response=await fetch(url,{cache:'no-store',...opts})
@@ -147,13 +147,24 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     </p>
     {!ready?<p className="mt-2 text-xs">Finish processing the source before generating agent clips.</p>:null}
     {running?<p className="mt-2 text-xs" role="status">{status}</p>:null}
-    {completed.length?<div className="mt-3 flex flex-wrap gap-2">
+    {completed.length?<div className="mt-3 grid gap-2 sm:grid-cols-2" data-testid="ranked-agent-clips">
       {completed.map((clip,i)=>
-        <Link key={clip.projectId+clip.clipId}
-          className="rounded-md border border-border px-3 py-2 text-xs underline"
-          href={`/app/clips/${clip.projectId}/studio/${clip.clipId}`}>
-          #{clip.rank??i+1} · {clip.score!=null?clip.score+'/100 · ':''}Source {clip.startMin}m · Edit
-        </Link>)}
+        <div key={clip.projectId+clip.clipId}
+          className="rounded-md border border-border p-3 text-xs">
+          <div className="mb-1 flex items-center gap-2">
+            <strong>#{clip.rank??i+1} Ranked clip</strong>
+            {clip.score!=null?<span className="text-muted-foreground">Discovery {clip.score}/100</span>:null}
+          </div>
+          {clip.reason?<p className="mb-2 line-clamp-3 text-muted-foreground">{clip.reason}</p>:null}
+          <div className="flex justify-between gap-3">
+            <span className="text-muted-foreground">
+              Source {clip.startMin}m{clip.qaPass?' · QA approved':''}
+            </span>
+            <Link className="font-medium underline" href={`/app/clips/${clip.projectId}/studio/${clip.clipId}`}>
+              Edit clip
+            </Link>
+          </div>
+        </div>)}
     </div>:null}
     {errors.map((error,i)=><p key={i} role="alert"
       className="mt-2 text-xs text-destructive">{error}</p>)}
