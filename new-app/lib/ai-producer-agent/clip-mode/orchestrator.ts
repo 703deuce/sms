@@ -147,8 +147,15 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           continue
         }
         const qa=out.editorialHandoff.review
+        // An LLM may still mention preset length in QA prose. Strip only
+        // duration-only criticisms; leave actual continuity/content flaws.
+        const substantiveIssues=(qa?.issues??[]).filter(issue=>
+          !/^(?:the )?(?:selected |final |clip |edit |story )?(?:intervals? total |duration |runtime |length |clip is too short|clip is too long|below the requested|above the requested)/i.test(issue.trim()) &&
+          !/duration (?:is |of |below |above )|seconds? (?:below |above )|length target|runtime target/i.test(issue))
+        const qaPass=qa?.pass===true || Boolean(qa&&!substantiveIssues.length)
+        if(qa)out.editorialHandoff.review={pass:qaPass,issues:substantiveIssues}
         const score=rankCandidate({finderScore:candidate.finderScore,
-          qaPass:qa?.pass??null,issues:qa?.issues?.length??0,
+          qaPass:qa?qaPass:null,issues:substantiveIssues.length,
           durationSeconds,targetS:ctx.config.targetLengthS[1]})
         successful.push({out,candidate,score,durationSeconds})
       }catch(error){
@@ -181,6 +188,27 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         issues:item.out.editorialHandoff?.review?.issues??[],
         candidateIndex:item.candidate.index,durationSeconds:item.durationSeconds,
         mode:ctx.config.storyMode!})
+      // Post-edit Motion is a decision stage, not the caption preset. It can
+      // generate zero graphics; failures leave the usable clip intact.
+      try{
+        const {autoPlanClipMotion}=await import('@/lib/server/ai-producer-agent/clip-mode-motion')
+        const motion=await autoPlanClipMotion({
+          workspaceId:ctx.workspaceId,clipId:item.out.clipId!,mode,
+          instruction:run.instruction,
+        })
+        await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'apply',
+          tool:'clip_motion_graphics_'+motion.status,kind:'system',
+          argsSummary:JSON.stringify({clipId:item.out.clipId,candidate:item.candidate.index}),
+          resultSummary:JSON.stringify(motion)})
+        item.out.notes.push('Motion graphics: '+motion.status+' ('+motion.count+')')
+      }catch(error){
+        const reason=String((error as Error)?.message??error).slice(0,220)
+        await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'apply',
+          tool:'clip_motion_graphics_failed',kind:'validate',
+          argsSummary:JSON.stringify({clipId:item.out.clipId,candidate:item.candidate.index}),
+          error:reason})
+        item.out.notes.push('Motion graphics unavailable: '+reason)
+      }
       if(ctx.config.exportOnFinish)await queueClipExport(ctx,item.out,budget)
     }
     await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'finish',
