@@ -31,6 +31,8 @@ export function MotionGraphicsPanel(props: {
   const [instruction, setInstruction] = useState('')
   const [plan, setPlan] = useState<MotionPlan | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [revisionInstruction, setRevisionInstruction] = useState('')
+  const [revising, setRevising] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [sourceVersion, setSourceVersion] = useState<number | null>(null)
@@ -127,9 +129,29 @@ export function MotionGraphicsPanel(props: {
     finally { setSavingStyle(false) }
   }
 
+  async function reviseSelected() {
+    const candidate = plan ?? props.edits.motionPlan
+    if (!candidate || !revisionInstruction.trim()) return
+    setRevising(true); setError('')
+    try {
+      const res = await fetch('/api/clips/clips/' + encodeURIComponent(props.clipId) + '/motion-graphics/revise', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: candidate, instruction: revisionInstruction }),
+      })
+      const data: unknown = await res.json()
+      const result = MotionPlanSchema.safeParse((data as { data?: { plan?: unknown } }).data?.plan)
+      if (!res.ok || !result.success) throw new Error('Could not revise the selected graphic')
+      setPlan(result.data); setNotice('Review your targeted revision, then Apply to editable timeline.')
+      setRevisionInstruction('')
+    } catch (e) { setError((e as Error).message) }
+    finally { setRevising(false) }
+  }
+
   function apply() {
     if (!plan) return
-    const result = addTextBackedMotionPlan(props.edits, plan)
+    const old = props.edits.motionPlan
+    const baseEdits = old ? removeTextBackedMotionGraphics(props.edits, old.graphics.map(g => g.id)) : props.edits
+    const result = addTextBackedMotionPlan(baseEdits, plan)
     if (!result.ok) { setError(result.code + ': ' + result.detail); return }
     props.onEdits({ ...result.edits, motionPlan: plan })
     setNotice('Applied as editable Text layers. Export uses the existing text animation renderer.')
@@ -218,6 +240,19 @@ export function MotionGraphicsPanel(props: {
       </button>
       {error ? <p className="text-xs text-destructive" role="alert">{error}</p> : null}
       {notice ? <p className="text-xs" role="status">{notice}</p> : null}
+      {(plan || props.edits.motionPlan) ? (
+        <div className="space-y-2 rounded border p-2">
+          <p className="text-xs font-semibold">Refine a graphic with natural language</p>
+          <textarea className="w-full rounded border bg-background p-2 text-xs" rows={2}
+            placeholder="Make the score callout smaller; change it to green; remove it"
+            maxLength={1000} value={revisionInstruction}
+            onChange={e => setRevisionInstruction(e.target.value)} />
+          <button type="button" className="rounded border px-3 py-2 text-xs disabled:opacity-50"
+            disabled={!revisionInstruction.trim() || revising} onClick={() => void reviseSelected()}>
+            {revising ? 'Revising…' : 'Revise one graphic'}
+          </button>
+        </div>
+      ) : null}
       {plan ? (
         <div className="space-y-2 rounded border p-2">
           <p className="text-xs font-semibold">Review {plan.graphics.length} proposed graphics</p>
