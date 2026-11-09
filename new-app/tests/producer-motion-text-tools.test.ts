@@ -29,6 +29,14 @@ describe('real AI Producer text changes',()=>{
   expect(result.edits.textItems).toEqual(base.textItems)
   expect(result.summary).toMatch(/No text overlay added/)
  })
+ it('never claims to add a lower-third beyond the end of a shorter clip',()=>{
+  const shortBounds={clipStartMs:0,clipEndMs:26000}
+  const base=defaultEdits(shortBounds)
+  const result=applyProducerTool(base,shortBounds,{name:'add_text_overlay',
+    args:{kind:'lower_third',text:'Too late',atMs:30000,durationMs:3000}})
+  expect(result.edits.textItems).toEqual(base.textItems)
+  expect(result.summary).toMatch(/outside the finished clip/)
+ })
  it('exposes Motion Graphics as its own visible editor tool',()=>{
   const groups=editorRailGroups(false)
   expect(groups.find(x=>x.id==='motion')?.label).toBe('Motion Graphics')
