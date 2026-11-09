@@ -17,6 +17,7 @@ const Input = z.object({
   instruction: z.string().max(1000).optional(),
   profileId: z.string().min(1).max(128).optional(),
   mode: MotionModeSchema.optional(),
+  rangeMs: z.tuple([z.number().int().min(0), z.number().int().positive()]).optional(),
 }).strict()
 
 /** Creates a REVIEWABLE plan; does not mutate the clip or bypass existing editor save CAS. */
@@ -38,10 +39,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const budget = await reserveMotionRequest(workspaceId, 'generate')
     if (!budget.ok) return NextResponse.json({ error: 'motion_hourly_limit', retryAfterSec: budget.retryAfterSec },
       { status: 429, headers: { 'Retry-After': String(budget.retryAfterSec) } })
+    if (durationMs > 600000 && !body.rangeMs)
+      return NextResponse.json({ error: 'motion_generation_requires_window_for_long_clip' }, { status: 422 })
     const result = await suggestTextMotionGraphics({
       edits: data.edits,
       words: data.words,
       durationMs,
+      rangeMs: body.rangeMs,
       format: aspect as '9:16' | '16:9' | '1:1',
       style: body.style,
       profile,
