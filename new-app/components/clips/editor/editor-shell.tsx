@@ -2618,7 +2618,7 @@ export function EditorShell({
       {panelMounted('motion') ? (
         <div className={on('motion') ? 'p-3' : 'hidden'} aria-hidden={!on('motion')} data-testid="editor-panel-motion">
           <EditorPanelErrorBoundary label="AI Motion">
-            <MotionGraphicsPanel clipId={clipId} edits={edits} onEdits={setEdits} />
+            <MotionGraphicsPanel clipId={clipId} edits={edits} onEdits={setEdits} durationMs={outDur} />
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
