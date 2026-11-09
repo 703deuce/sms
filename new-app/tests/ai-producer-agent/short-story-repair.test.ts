@@ -199,6 +199,51 @@ describe('full-transcript Story/Footage handoff',()=>{
       {passageIndex:1,action:'remove',reason:'b'},
     ],original,words,[0,300000])).toThrow('flow_invalid_or_duplicate_passage_index')
   })
+  it('allows multiple trims within one passage only in clip story mode',()=>{
+    const originals=resolveFootageWordSelections(complete,words,[0,300000])
+    const split={passageIndex:1,action:'split',reason:'Remove detour',spans:[
+      {firstWordId:140,lastWordId:155,reason:'setup'},
+      {firstWordId:175,lastWordId:193,reason:'payoff'},
+    ]}
+    const outcome=applyStoryFlowChanges([split],originals,words,[0,300000],{allowSplit:true})
+    expect(outcome.finalCuts).toHaveLength(4)
+    expect(outcome.changes[0]?.action).toBe('split')
+    expect(outcome.finalCuts[0]).toEqual(originals[0])
+    expect(outcome.finalCuts[3]).toEqual(originals[2])
+    expect(()=>applyStoryFlowChanges([split],originals,words,[0,300000]))
+      .toThrow('flow_split_not_allowed_in_mode')
+  })
+  it('coalesces the production multi-replace shape only in clip story mode',()=>{
+    const originals=resolveFootageWordSelections(complete,words,[0,300000])
+    const changes=[
+      {passageIndex:1,action:'replace',reason:'first',firstWordId:140,lastWordId:151},
+      {passageIndex:1,action:'replace',reason:'second',firstWordId:180,lastWordId:193},
+    ]
+    expect(applyStoryFlowChanges(changes,originals,words,[0,300000],{allowSplit:true}).finalCuts).toHaveLength(4)
+    expect(()=>applyStoryFlowChanges(changes,originals,words,[0,300000]))
+      .toThrow('flow_invalid_or_duplicate_passage_index_1')
+  })
+  it('rejects overlapping, too-short and out-of-bounds split spans',()=>{
+    const originals=resolveFootageWordSelections(complete,words,[0,300000])
+    const one=(spans:Array<{firstWordId:number;lastWordId:number;reason:string}>)=>
+      applyStoryFlowChanges([{passageIndex:1,action:'split',reason:'detour',spans}],
+        originals,words,[0,300000],{allowSplit:true})
+    expect(()=>one([{firstWordId:140,lastWordId:165,reason:'one'},
+      {firstWordId:160,lastWordId:193,reason:'two'}])).toThrow('flow_split_overlap_passage_1')
+    expect(()=>one([{firstWordId:140,lastWordId:140,reason:'one'},
+      {firstWordId:180,lastWordId:193,reason:'two'}])).toThrow('flow_split_span_too_short_passage_1')
+    expect(()=>one([{firstWordId:140,lastWordId:165,reason:'one'},
+      {firstWordId:180,lastWordId:300,reason:'two'}])).toThrow('flow_split_outside_original_passage_1')
+  })
+  it('preserves Producer baseline extension while clip moment can only tighten ends',()=>{
+    const originals=resolveFootageWordSelections(complete,words,[0,300000])
+    const expanded={passageIndex:1,action:'replace',reason:'missing setup',
+      firstWordId:135,lastWordId:193}
+    expect(applyStoryFlowChanges([expanded],originals,words,[0,300000]).finalCuts[1]?.startMs)
+      .toBeLessThan(originals[1]!.startMs)
+    expect(()=>applyStoryFlowChanges([expanded],originals,words,[0,300000],
+      {allowSplit:false,momentEndTrimOnly:true})).toThrow('flow_moment_only_end_trim')
+  })
   it('does not silently trim a source transcript to twelve overview windows',()=>{
     expect(completeTranscriptWords(words,false)).toHaveLength(600)
     expect(completeTranscriptWords(words,true)[599]).toEqual([599,299600,299800,'final-word.'])
