@@ -173,8 +173,12 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           r.code==='invalid_passage'||r.code==='chronology')
         const meaningfulFailure=qa?.pass===false&&substantiveIssues.some(issue=>
           /qualif|mislead|misrepresent|changed meaning|false impression|missing setup|payoff before|unresolved referen|context missing/i.test(issue))
+        // A model may mistakenly fail QA solely for 15/30/60-second preset
+        // compliance. These are explicitly *not* editorial quality defects.
+        const durationOnlyModelFailure=Boolean(qa&&qa.pass===false&&
+          (qa.issues?.length??0)>0&&substantiveIssues.length===0)
         const qaPass:boolean|null=criticalStructural.length>0?false:
-          qa?Boolean(qa.pass)&&substantiveIssues.length===0:null
+          qa?(Boolean(qa.pass)||durationOnlyModelFailure)&&substantiveIssues.length===0:null
         const safetyIssues=safetyRisks.map(r=>r.code+': '+r.detail)
         const combinedIssues=[...substantiveIssues,
           ...(qaPass===true?[]:safetyIssues)]
