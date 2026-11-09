@@ -240,7 +240,7 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
             kind:isUploaded?'upload':'stream',projectId:sourceProjectId,
             rangeMs:candidate.rangeMs}],
           outputType:'story',storyMode:next.mode,
-          targetLengthS:[Math.max(15,next.seconds-10),Math.min(105,next.seconds+10)],
+          targetLengthS:[15,next.seconds],
           visualEvidenceMode:'visual_audio',exportOnFinish:true,
           instruction:(next.mode==='clip_moment_v1'
             ? 'Produce ONE unbroken original-source moment, no internal cuts.'
