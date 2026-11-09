@@ -9,6 +9,7 @@ import { loadClipWords, PRODUCER_SYSTEM_CLIP, runProducerOnClip } from '@/lib/se
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { createId } from '@/lib/supabase/id'
+import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -133,21 +134,24 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         const words = await loadClipWords(workspaceId, clip.projectId, clipId, project?.transcriptWords)
         const applied = runProducerOnClip(edits, bounds, enrichedTools, words, llm.reply, userMessage)
 
-        send('message', { role: 'assistant', content: applied.reply ?? llm.reply })
+        // Do not report success until the editor's versioned save confirms
+        // that actual edits persisted. A no-op can never claim "added".
+        const saved = applied.changeCount > 0
+          ? await writeClipEditsOrThrow(clipId,bounds,clip.editsSaveVersion,
+              () => applied.edits)
+          : null
+        const reply = applied.changeCount > 0
+          ? 'Applied and saved '+applied.changeCount+' editable change(s).'
+          : applied.reply ?? 'No changes were made.'
+        send('message', { role: 'assistant', content: reply })
         send('tools', {
           summaries: applied.summaries,
           pendingPaid: applied.pendingPaid,
           plan: enrichedTools,
         })
-        send('edits', { edits: applied.edits, changeCount: applied.changeCount })
+        if(saved)send('edits',{edits:saved.edits,changeCount:applied.changeCount})
 
         const prisma = getPrisma()
-        if (applied.changeCount > 0) {
-          await prisma.clip.update({
-            where: { id: clipId },
-            data: { edits: applied.edits as object },
-          })
-        }
         let thread = await prisma.producerThread.findUnique({ where: { clipId } })
         if (!thread) {
           thread = await prisma.producerThread.create({
@@ -161,7 +165,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
               id: createId('pmsg'),
               threadId: thread.id,
               role: 'assistant',
-              content: applied.reply ?? llm.reply,
+              content: reply,
               toolCalls: (llm.tools ?? []) as object,
             },
           ],
