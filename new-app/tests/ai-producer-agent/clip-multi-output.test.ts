@@ -41,6 +41,11 @@ describe('independent short clip modes',()=>{
    const sensationalButBroken=rankCandidate({finderScore:99,qaPass:false,issues:2,durationSeconds:60,targetS:60})
    expect(complete).toBeGreaterThan(sensationalButBroken)
  })
+ it('verified complete clip outranks maximum-reaction unreviewed footage',()=>{
+   const clear=rankCandidate({finderScore:0,qaPass:true,issues:0,durationSeconds:15,targetS:60})
+   const unknown=rankCandidate({finderScore:100,qaPass:null,issues:0,durationSeconds:60,targetS:60})
+   expect(clear).toBeGreaterThan(unknown)
+ })
  it('dedupes overlapping cut plans independent of ranking',()=>{
    expect(overlapFraction([{startMs:0,endMs:30000}],[{startMs:3000,endMs:29000}])).toBeGreaterThan(.35)
    expect(overlapFraction([{startMs:0,endMs:30000}],[{startMs:60000,endMs:90000}])).toBe(0)
