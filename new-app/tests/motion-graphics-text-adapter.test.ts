@@ -44,4 +44,37 @@ describe('motion plan adapter to existing editor & FFmpeg text layers', () => {
     if (!result.ok) throw new Error(result.detail)
     expect(removeTextBackedMotionGraphics(result.edits, ['score']).textItems).toEqual([])
   })
+  it('compiles a data-driven infographic into editable shape and text layers', () => {
+    const diagram = { ...plan, graphics: [{
+      ...plan.graphics[0], id: 'how_it_works', templateId: 'diagram' as const,
+      text: undefined,
+      box: { x: .12, y: .2, width: .7, height: .45 },
+      steps: ['Record', 'Clip', 'Publish'],
+    }] }
+    const result = addTextBackedMotionPlan(base, diagram)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.edits.textItems?.some(t => t.kind === 'shape')).toBe(true)
+    expect(result.edits.textItems?.some(t => t.text === 'Publish')).toBe(true)
+    expect(result.edits.textItems?.every(t => t.id.startsWith('mg_how_it_works__'))).toBe(true)
+  })
+  it('renders chart bars only from explicit validated numeric data', () => {
+    const chart = { ...plan, graphics: [{
+      ...plan.graphics[0], id: 'revenue', templateId: 'bar_chart' as const,
+      text: undefined,
+      box: { x: .15, y: .15, width: .75, height: .4 },
+      bars: [{ label: '2025', value: 20 }, { label: '2026', value: 40 }],
+    }] }
+    const result = addTextBackedMotionPlan(base, chart)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.edits.textItems?.filter(t => t.kind === 'shape')).toHaveLength(2)
+    expect(result.edits.textItems?.filter(t => t.text === '40')).toHaveLength(1)
+  })
+  it('rejects graphic charts without values', () => {
+    const chart = { ...plan, graphics: [{ ...plan.graphics[0],
+      templateId: 'bar_chart' as const, bars: [] }] }
+    expect(addTextBackedMotionPlan(base, chart).ok).toBe(false)
+  })
+
 })
