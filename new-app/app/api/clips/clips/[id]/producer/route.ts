@@ -105,7 +105,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           }
         })
 
-        send('plan', { tools: enrichedTools, reply: llm.reply })
+        if(!dryRun)send('plan', { tools: enrichedTools, reply: llm.reply })
 
         if (planOnly && !dryRun) {
           send('message', { role: 'assistant',
