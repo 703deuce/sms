@@ -19,7 +19,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const body = Input.parse(await request.json())
     const data = await getClipEditorPayload(workspaceId, clipId)
     if (!data) return NextResponse.json({ error: 'Clip not found' }, { status: 404 })
-    const durationMs = editorPreviewDurationMs(data.edits, data.words)
+    const words = data.words.map((w, index) => ({ ...w, i: w.i ?? w.idx ?? index }))
+    const durationMs = editorPreviewDurationMs(data.edits, words)
     // Unsupported project aspect formats must not silently generate mispositioned overlays.
     const aspect = data.edits.aspectRatio ?? '9:16'
     if (!['9:16', '16:9', '1:1'].includes(aspect))
