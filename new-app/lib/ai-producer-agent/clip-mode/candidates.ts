@@ -39,9 +39,10 @@ export function overlapFraction(a:readonly SourcePassage[],b:readonly SourcePass
   return intersection/Math.max(1,Math.min(duration(a),duration(b)))
 }
 export function rankCandidate(score:{finderScore:number;qaPass:boolean|null;issues:number;durationSeconds:number;targetS:number}){
-  const qa=Math.max(0,Math.min(100,(score.qaPass===true?92:score.qaPass===false?57:70)-Math.min(40,score.issues*7)))
-  // Runtime must not affect quality. A great 15s moment can beat a mediocre 60s one.
-  // Preserve the 45/35/20 rubric, with 20% objective validity of the edit.
+  // Narrative clarity, independent comprehensibility and truthful completion
+  // outweigh the finder reaction. A failed QA should never be redeemed just
+  // by a large reaction or the clip approaching its requested runtime.
+  const qa=Math.max(0,Math.min(100,(score.qaPass===true?95:score.qaPass===false?20:65)-Math.min(55,score.issues*9)))
   const objective=Number.isFinite(score.durationSeconds)&&score.durationSeconds>0?100:0
-  return Math.max(0,Math.min(100,Math.round(qa*.45+score.finderScore*.35+objective*.20)))
+  return Math.max(0,Math.min(100,Math.round(qa*.65+score.finderScore*.20+objective*.15)))
 }
