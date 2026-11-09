@@ -9,11 +9,12 @@ import { normalizeTextItems, TEXT_MAX_ITEMS, TEXT_MAX_CHARS } from '@/lib/clips/
 import type { TextItem } from '@/lib/clips/editor/text-items'
 import type { TextAnim, TextAnimEdge } from '@/lib/clips/render-plan/text-anim'
 import { validateMotionPlan, type MotionPlan, type MotionGraphic } from './contract'
+import { expandedShapeGraphic, isGraphicItemId } from './primitives'
 
 /** Existing worker's two engines use the same `edits.textItems` schema. */
 export const TEXT_BACKED_TEMPLATES = [
   'kinetic_type', 'lower_third', 'callout', 'stat_counter',
-  'steps', 'title_card', 'gaming_highlight',
+  'steps', 'title_card', 'gaming_highlight', 'diagram', 'bar_chart',
 ] as const
 
 const supportsText = new Set<string>(TEXT_BACKED_TEMPLATES)
@@ -74,7 +75,8 @@ export function addTextBackedMotionPlan(
   const plan: MotionPlan = validation.plan
   for (const g of plan.graphics) {
     if (!supportsText.has(g.templateId)) return { ok: false, code: 'unsupported_template', detail: g.templateId }
-    if (!g.text?.trim() || Array.from(g.text).length > TEXT_MAX_CHARS)
+    if (g.templateId !== 'diagram' && g.templateId !== 'bar_chart' &&
+        (!g.text?.trim() || Array.from(g.text).length > TEXT_MAX_CHARS))
       return { ok: false, code: 'missing_or_long_text', detail: g.id }
     if (g.keyframes.length) return { ok: false, code: 'custom_keyframes_not_mapped', detail: g.id }
     if (g.intro.kind === 'draw' || g.outro.kind === 'draw' || g.intro.kind === 'count_up' ||
@@ -84,22 +86,26 @@ export function addTextBackedMotionPlan(
   const prev = edits.textItems ?? []
   // Updated AI graphics with the same IDs are replaced, while ALL manually
   // created text items and unrelated AI graphics survive unmodified.
-  const replaceIds = new Set(plan.graphics.map(g => 'mg_' + g.id))
-  const retained = prev.filter(t => !replaceIds.has(t.id))
-  if (retained.length + plan.graphics.length > TEXT_MAX_ITEMS)
+  const retained = prev.filter(t => !plan.graphics.some(g => isGraphicItemId(t.id, g.id)))
+  let generated: TextItem[]
+  try {
+    generated = plan.graphics.flatMap(g =>
+      g.templateId === 'diagram' || g.templateId === 'bar_chart'
+        ? expandedShapeGraphic(g, plan.format) : [asText(g)])
+  } catch (err) {
+    return { ok: false, code: 'invalid_shape_data', detail: String((err as Error).message) }
+  }
+  if (retained.length + generated.length > TEXT_MAX_ITEMS)
     return { ok: false, code: 'text_capacity', detail: 'Existing text item limit exceeded' }
-  if (plan.graphics.some(g => retained.some(t => t.id === 'mg_' + g.id)))
-    return { ok: false, code: 'id_collision', detail: 'Generated ID collides with retained item' }
-  const items = [...retained, ...plan.graphics.map(asText)]
+  const items = [...retained, ...generated]
   const normalized = normalizeTextItems(items, plan.durationMs) ?? []
   if (normalized.length !== items.length)
     return { ok: false, code: 'text_normalization_failed', detail: 'One or more items cannot be rendered' }
   return { ok: true, edits: { ...edits, textItems: normalized },
-    addedIds: plan.graphics.map(g => 'mg_' + g.id) }
+    addedIds: generated.map(g => g.id) }
 }
 
 /** Remove only generated graphics; manual text, captions and EDL stay untouched. */
 export function removeTextBackedMotionGraphics(edits: ClipEditsV2, ids: readonly string[]): ClipEditsV2 {
-  const remove = new Set(ids.map(id => 'mg_' + id))
-  return { ...edits, textItems: edits.textItems?.filter(item => !remove.has(item.id)) }
+  return { ...edits, textItems: edits.textItems?.filter(item => !ids.some(id => isGraphicItemId(item.id, id))) }
 }
