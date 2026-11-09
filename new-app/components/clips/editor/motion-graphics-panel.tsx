@@ -65,6 +65,7 @@ export function MotionGraphicsPanel(props: {
       })
       const body: unknown = await res.json()
       if (!res.ok) {
+        if (res.status === 429) throw new Error('Motion AI hourly limit reached. Try again after the reset window.')
         const issue = (body as { error?: string })?.error
         throw new Error(issue || 'Motion graphics generation failed')
       }
@@ -143,7 +144,8 @@ export function MotionGraphicsPanel(props: {
       })
       const payload: unknown = await res.json()
       const parsed = StyleProfileSchema.safeParse((payload as { data?: { profile?: unknown } }).data?.profile)
-      if (!res.ok || !parsed.success) throw new Error('Unable to analyze these screenshots')
+      if (res.status === 429) throw new Error('Reference analysis hourly limit reached. Try again after the reset window.')
+      if (!res.ok || !parsed.success) throw new Error('Unable to analyze these references')
       setAnalyzedStyle(parsed.data); setNewStyleName(parsed.data.name)
       setNotice('Reference palette and typography analyzed. Give the style a name and save it.')
     } catch (e) { setError((e as Error).message) }
@@ -222,6 +224,7 @@ export function MotionGraphicsPanel(props: {
       })
       const data: unknown = await res.json()
       const result = MotionPlanSchema.safeParse((data as { data?: { plan?: unknown } }).data?.plan)
+      if (res.status === 429) throw new Error('AI revision hourly limit reached. Try again after the reset window.')
       if (!res.ok || !result.success) throw new Error('Could not revise the selected graphic')
       if (!plan) draftSnapshot.current = canonicalEditsJson(props.edits)
       setExcludedGraphicIds([])
@@ -274,7 +277,7 @@ export function MotionGraphicsPanel(props: {
         <h3 className="text-sm font-semibold">AI Motion Graphics</h3>
         <p className="mt-1 text-xs text-muted-foreground">
           Generate transcript-grounded, editable animated text using the existing preview and export engine.
-          This first renderer supports text, highlights, and lower thirds — not charts or presenter masking.
+          Supports text, highlights, lower thirds, bar charts and step diagrams using editable timeline layers. Presenter masking and subject tracking are not yet supported.
         </p>
       </div>
       <label className="block space-y-1 text-xs">
@@ -338,7 +341,7 @@ export function MotionGraphicsPanel(props: {
         </label>
         <button type="button" className="rounded border px-3 py-2 text-xs disabled:opacity-50"
           disabled={(!referenceFiles.length && !referenceVideo) || !referenceAuthorized || analyzingReferences || referenceFiles.some(f => f.size > 2_000_000 || !['image/jpeg','image/png'].includes(f.type)) || Boolean(referenceVideo && (referenceVideo.size > 150_000_000 || !['video/mp4', 'video/webm'].includes(referenceVideo.type)))}
-          onClick={() => void analyzeReferences()}>{analyzingReferences ? 'Analyzing…' : 'Analyze screenshots'}</button>
+          onClick={() => void analyzeReferences()}>{analyzingReferences ? 'Analyzing…' : 'Analyze references'}</button>
         {analyzedStyle ? <p className="text-xs">Suggested: {analyzedStyle.name} · {analyzedStyle.brandColors.join(', ')} · {analyzedStyle.fontFamilies.join(', ')}</p> : null}
       </div>
       <div className="space-y-1">
