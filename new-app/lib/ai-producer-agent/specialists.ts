@@ -117,7 +117,7 @@ export type EditorialHandoff = {
     originalDurationSeconds: number
     finalDurationSeconds: number
   }
-  review?: { pass: boolean; issues: string[] }
+  review?: { pass: boolean; issues: string[]; rating?:number; rationale?:string }
 }
 
 const names: Record<EditorialRole, string> = {
