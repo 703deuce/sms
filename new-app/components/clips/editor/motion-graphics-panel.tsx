@@ -23,6 +23,10 @@ export function MotionGraphicsPanel(props: {
   const [profileId, setProfileId] = useState('')
   const [newStyleName, setNewStyleName] = useState('')
   const [savingStyle, setSavingStyle] = useState(false)
+  const [referenceFiles, setReferenceFiles] = useState<File[]>([])
+  const [referenceAuthorized, setReferenceAuthorized] = useState(false)
+  const [analyzingReferences, setAnalyzingReferences] = useState(false)
+  const [analyzedStyle, setAnalyzedStyle] = useState<StyleProfile | null>(null)
   const [instruction, setInstruction] = useState('')
   const [plan, setPlan] = useState<MotionPlan | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -69,6 +73,32 @@ export function MotionGraphicsPanel(props: {
     }
   }
 
+  async function analyzeReferences() {
+    if (!referenceFiles.length || !referenceAuthorized) return
+    setAnalyzingReferences(true); setError('')
+    try {
+      const images = await Promise.all(referenceFiles.map(async file => {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
+          reader.onerror = () => reject(new Error('Could not read screenshot'))
+          reader.readAsDataURL(file)
+        })
+        return { mimeType: file.type, base64 }
+      }))
+      const res = await fetch('/api/clips/motion-styles/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authorized: true, images, instructions: instruction }),
+      })
+      const payload: unknown = await res.json()
+      const parsed = StyleProfileSchema.safeParse((payload as { data?: { profile?: unknown } }).data?.profile)
+      if (!res.ok || !parsed.success) throw new Error('Unable to analyze these screenshots')
+      setAnalyzedStyle(parsed.data); setNewStyleName(parsed.data.name)
+      setNotice('Reference palette and typography analyzed. Give the style a name and save it.')
+    } catch (e) { setError((e as Error).message) }
+    finally { setAnalyzingReferences(false) }
+  }
+
   async function createStyle() {
     if (!newStyleName.trim()) return
     setSavingStyle(true); setError('')
@@ -79,16 +109,18 @@ export function MotionGraphicsPanel(props: {
     try {
       const res = await fetch('/api/clips/motion-styles', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: 1, name: newStyleName.trim(), brandColors: palette,
-          fontFamilies: [font], templateIds: ['kinetic_type', 'lower_third', 'callout'],
-          motionDensity: style === 'minimal' ? 'minimal' : style === 'gaming' ? 'dynamic' : 'balanced',
-          references: [], instructions: instruction }),
+        body: JSON.stringify({ version: 1, name: newStyleName.trim(),
+          brandColors: analyzedStyle?.brandColors ?? palette,
+          fontFamilies: analyzedStyle?.fontFamilies ?? [font],
+          templateIds: analyzedStyle?.templateIds ?? ['kinetic_type', 'lower_third', 'callout'],
+          motionDensity: analyzedStyle?.motionDensity ?? (style === 'minimal' ? 'minimal' : style === 'gaming' ? 'dynamic' : 'balanced'),
+          references: [], instructions: analyzedStyle?.instructions ?? instruction }),
       })
       const body: unknown = await res.json()
       const parsed = StyleProfileSchema.safeParse((body as { data?: unknown }).data)
       if (!res.ok || !parsed.success) throw new Error('Could not save style profile')
       setProfiles(prev => [parsed.data, ...prev])
-      setProfileId(parsed.data.id); setNewStyleName('')
+      setProfileId(parsed.data.id); setNewStyleName(''); setAnalyzedStyle(null)
       setNotice('Saved workspace style profile. It can be selected in other clips.')
     } catch (e) { setError((e as Error).message) }
     finally { setSavingStyle(false) }
@@ -134,6 +166,23 @@ export function MotionGraphicsPanel(props: {
           {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </label>
+      <div className="space-y-2 rounded border p-2">
+        <p className="text-xs font-semibold">Analyze reference screenshots</p>
+        <p className="text-xs text-muted-foreground">Up to three JPEG/PNG screenshots (2 MB each). Extract an original palette and typography; video motion cannot be inferred precisely from still images.</p>
+        <input type="file" accept="image/jpeg,image/png" multiple className="w-full text-xs"
+          onChange={e => {
+            const chosen = Array.from(e.target.files ?? []).slice(0, 3)
+            setReferenceFiles(chosen); setAnalyzedStyle(null); setReferenceAuthorized(false)
+          }} />
+        <label className="flex gap-2 text-xs items-start">
+          <input type="checkbox" checked={referenceAuthorized} onChange={e => setReferenceAuthorized(e.target.checked)} />
+          <span>I have permission to use these reference images for style analysis.</span>
+        </label>
+        <button type="button" className="rounded border px-3 py-2 text-xs disabled:opacity-50"
+          disabled={!referenceFiles.length || !referenceAuthorized || analyzingReferences || referenceFiles.some(f => f.size > 2_000_000 || !['image/jpeg','image/png'].includes(f.type))}
+          onClick={() => void analyzeReferences()}>{analyzingReferences ? 'Analyzing…' : 'Analyze screenshots'}</button>
+        {analyzedStyle ? <p className="text-xs">Suggested: {analyzedStyle.name} · {analyzedStyle.brandColors.join(', ')} · {analyzedStyle.fontFamilies.join(', ')}</p> : null}
+      </div>
       <div className="space-y-1">
         <label className="text-xs" htmlFor="motion-new-style">Save current preset as a reusable profile</label>
         <div className="flex gap-2">
