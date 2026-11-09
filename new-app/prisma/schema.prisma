@@ -10546,3 +10546,17 @@ model MotionStyleProfile {
   @@index([workspaceId, deletedAt])
   @@map("motion_style_profiles")
 }
+
+
+/// Atomic, workspace-scoped hourly request budget for paid Motion Graphics AI calls.
+/// These limits prevent burst charges; usage is still recorded in ai_usage.
+model MotionRequestLimit {
+  workspaceId String
+  kind        String
+  windowStart DateTime
+  used        Int      @default(0)
+
+  @@id([workspaceId, kind, windowStart])
+  @@index([windowStart])
+  @@map("motion_request_limits")
+}
