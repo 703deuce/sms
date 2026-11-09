@@ -11,6 +11,8 @@ const start=z.object({
   mode:z.enum(['clip_moment_v1','clip_story_v1']),
   seconds:z.union([z.literal(30),z.literal(60),z.literal(90)]),
   action:z.literal('start').optional(),
+  allWindows:z.boolean().optional(),
+  selectedStartMin:z.number().int().min(0).optional(),
 })
 export async function POST(request:Request){
   try{
@@ -23,7 +25,8 @@ export async function POST(request:Request){
     }
     const args=start.parse(body)
     return NextResponse.json({data:await startStreamerAgentBatch(workspaceId,
-      args.projectId,args.mode,args.seconds)})
+      args.projectId,args.mode,args.seconds,
+      {allWindows:args.allWindows,selectedStartMin:args.selectedStartMin})})
   }catch(error){return jsonError(error,400)}
 }
 export async function GET(request:Request){
