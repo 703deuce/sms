@@ -45,14 +45,24 @@ def _cleanup_defer_reason(conn, vod_id: str, state: dict, project_id: str) -> st
         cur.execute(
             """
             SELECT 1 FROM clip_jobs
-            WHERE "projectId"=%s AND type IN ('STREAM_IMPORT','STREAM_ANALYZE','STREAM_RENDER')
+            WHERE "projectId"=%s AND type IN ('STREAM_IMPORT','STREAM_ANALYZE','STREAM_RENDER',
+                'STREAM_AGENT_BATCH','AI_PRODUCER_AGENT_RUN','AI_PRODUCER_AGENT_ANALYZE')
               AND status IN ('QUEUED','RUNNING')
             LIMIT 1
             """,
             (project_id,),
         )
         if cur.fetchone():
-            return "pending_stream_jobs"
+            return "pending_stream_or_agent_jobs"
+        cur.execute(
+            """SELECT settings->'agentClipBatch'->>'status' AS s,
+                      settings->>'autoAgentClipMode' AS m
+               FROM clip_projects WHERE id=%s""",
+            (project_id,),
+        )
+        row = cur.fetchone()
+        if row and (row[0] == 'running' or (row[1] and row[0] is None)):
+            return 'agent_batch_pending'
     return None
 
 
@@ -60,7 +70,7 @@ def purge_stream_bulky_storage(conn, vod_id: str, *, reason: str = "success") ->
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             """
-            SELECT v."workspaceId", v.state, v."projectId"
+            SELECT v."workspaceId", v.state, v."projectId", v.platform
             FROM stream_vods v
             WHERE v.id = %s
             """,
@@ -105,6 +115,7 @@ def purge_stream_bulky_storage(conn, vod_id: str, *, reason: str = "success") ->
         vod_id=vod_id,
         state=state,
         clip_rows=clip_rows,
+        platform=row['platform'],
     )
     freed = delete_storage_keys(keys, vod_id=vod_id, reason=reason)
 
@@ -121,7 +132,8 @@ def purge_stream_bulky_storage(conn, vod_id: str, *, reason: str = "success") ->
     state.pop("audioKey", None)
     state.pop("chatKey", None)
     state.pop("analysisProxyKey", None)
-    state.pop("localUploadKey", None)
+    if row['platform'] != 'upload':
+        state.pop('localUploadKey', None)
     state.pop("frames", None)
     if lean_chunks:
         state["chunks"] = lean_chunks
@@ -145,7 +157,7 @@ def purge_stream_bulky_storage(conn, vod_id: str, *, reason: str = "success") ->
         cur.execute(
             """
             UPDATE stream_vods
-            SET state = %s::jsonb, "sourceDeletedAt" = COALESCE("sourceDeletedAt", NOW()), "updatedAt" = NOW()
+            SET state = %s::jsonb, "sourceDeletedAt" = CASE WHEN platform = 'upload' THEN "sourceDeletedAt" ELSE COALESCE("sourceDeletedAt", NOW()) END, "updatedAt" = NOW()
             WHERE id = %s
             """,
             (json.dumps(state), vod_id),

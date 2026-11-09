@@ -188,7 +188,15 @@ def run_analyze_payload(
                 m["evidence_tier"] = "coarse_1fps"
         moments.extend(moments_part)
         meta_agg["est_usd"] = float(meta_agg.get("est_usd") or 0) + float(meta.get("est_usd") or 0)
-    duration_s = max(1, int((sources[0].get("durationMs") or 60_000) // 1000))
+    if visual:
+        ends = []
+        for source in sources:
+            window = source.get("rangeMs") or [0, None]
+            if window[1] is not None and int(window[1] or 0) > int(window[0] or 0):
+                ends.append(int(window[1]))
+        duration_s = max(1, (max(ends) // 1000) + 1) if ends else max(1, int((sources[0].get("durationMs") or 60_000) // 1000))
+    else:
+        duration_s = max(1, int((sources[0].get("durationMs") or 60_000) // 1000))
     if mode != "visual_detail":
         moments, _stats = validate_and_normalize_moments(moments, duration_s=duration_s)
     return {"moments": moments, "meta": meta_agg}

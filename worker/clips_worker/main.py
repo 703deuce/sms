@@ -345,7 +345,8 @@ def process_job(conn, job: dict) -> None:
 
         _ = probe_duration(src)
         audio_wav = td_path / "audio.wav"
-        extract_wav_for_picker(src, audio_wav)
+        if payload.get('agentOnly') is not True:
+            extract_wav_for_picker(src, audio_wav)
         byo_job = payload.get("byo") is True
         if words:
             log(f"resume: skipping transcribe ({len(words)} words on project)")
@@ -387,6 +388,18 @@ def process_job(conn, job: dict) -> None:
                     **tx_meta.as_progress_fields(),
                 },
             )
+
+        if payload.get('agentOnly') is True:
+            from clips_worker.pipeline import mark_project_ready
+
+            mark_project_ready(conn, project['id'])
+            post_progress(job['id'], {
+                'projectStatus': 'READY', 'stage': 'ready', 'progress': 100,
+                'transcriptWords': words, 'jobStatus': 'DONE', 'error': None,
+            })
+            _mark_job_done(conn, job['id'])
+            log(f"finished agent-only job={job['id']} (classic picker skipped)")
+            return
 
         if byo_job:
             from clips_worker.byo_clip_job import finalize_byo_clip

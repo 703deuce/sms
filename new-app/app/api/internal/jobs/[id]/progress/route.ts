@@ -109,6 +109,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       stepPct: body.stepPct,
     })
 
+    if(body.projectStatus==='READY' && body.jobStatus==='DONE' && job.type==='PROCESS_PROJECT'){
+      try{
+        const {maybeAutoStartUploadAgentBatch}=await import('@/lib/server/streamer/agent-batch')
+        await maybeAutoStartUploadAgentBatch(job.projectId)
+      }catch(error){
+        console.error('[clipper:agent] auto_start_hook_failed',{projectId:job.projectId,error:String(error)})
+      }
+    }
     return NextResponse.json({ data: { ok: true } })
   } catch (err) {
     return jsonError(err, 400)

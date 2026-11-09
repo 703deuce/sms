@@ -27,8 +27,8 @@ def handle_stream_agent_batch(conn, job: dict) -> None:
               os.environ.get("INTEGRATION_SECRET_KEY") or "").strip()
     if not secret:
         raise RuntimeError("stream_agent_batch_worker_secret_missing")
-    base = (os.environ.get("APP_URL") or
-            os.environ.get("NEXT_PUBLIC_APP_URL") or "http://127.0.0.1:3000").rstrip("/")
+    from clips_worker.main import progress_base_urls
+    base = progress_base_urls()[0].rstrip('/')
     body = json.dumps({"projectId": project_id, "batchId": batch_id})
     request = urllib.request.Request(
         base + "/api/internal/streamer/agent-batches/tick",

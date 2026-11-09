@@ -17,10 +17,13 @@ export const EXPORT_RENDER_JOB_TYPES = new Set([
   'RENDER_EXPORT',
 ])
 
+export const AGENT_SIDE_JOB_TYPES = new Set(['AI_PRODUCER_AGENT_ANALYZE','AI_PRODUCER_AGENT_RUN','STREAM_AGENT_BATCH'])
+
 export function skipClipProjectPatchForWorkerProgress(input: {
   jobType?: string
   projectSourceKind?: string | null
 }): boolean {
+  if (input.jobType && AGENT_SIDE_JOB_TYPES.has(input.jobType)) return true
   if (input.jobType === 'MUSIC' && input.projectSourceKind === 't2v') return true
   if (input.jobType && EXPORT_RENDER_JOB_TYPES.has(input.jobType)) return true
   return false

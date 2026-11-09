@@ -24,3 +24,10 @@ def test_collect_bulky_keys_keeps_signals_only_in_chunk_meta():
     assert state["chunks"]["0"]["wordsKey"] in keys
     assert state["chunks"]["0"]["signalsKey"] not in keys
     assert "source_seg.mp4" not in " ".join(keys)
+
+
+def test_uploaded_master_survives_stream_cleanup():
+    state = {"localUploadKey": "ws/ws_1/uploads/upl_1/source.mp4"}
+    args = dict(workspace_id="ws_1", vod_id="vod_1", state=state, clip_rows=[])
+    assert state["localUploadKey"] not in collect_bulky_stream_keys(**args,platform="upload")
+    assert state["localUploadKey"] in collect_bulky_stream_keys(**args,platform="twitch")

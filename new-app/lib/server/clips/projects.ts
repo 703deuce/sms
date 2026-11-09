@@ -147,6 +147,10 @@ export async function createClipProject(
       rangeEndMs: upload.durationMs || 0,
     }
   }
+  if (settings.autoAgentClipMode && !settings.byo && !settings.fullVideo) {
+    const { aiProducerAgentServerEnabled } = await import('@/lib/ai-producer-agent/flags')
+    if (!aiProducerAgentServerEnabled()) throw new Error('ai_producer_agent_disabled')
+  }
   const rangeEnd = settings.byo
     ? settings.rangeEndMs
     : settings.rangeEndMs || upload.durationMs || 0
