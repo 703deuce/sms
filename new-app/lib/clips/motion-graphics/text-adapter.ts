@@ -86,7 +86,7 @@ export function addTextBackedMotionPlan(
   const prev = edits.textItems ?? []
   // Updated AI graphics with the same IDs are replaced, while ALL manually
   // created text items and unrelated AI graphics survive unmodified.
-  const retained = prev.filter(t => !plan.graphics.some(g => isGraphicItemId(t.id, g.id)))
+  // Only a previously approved motion plan can authorize replacing generated IDs.\n  // A manually created Text item with the same prefix must never be overwritten.\n  const previouslyApprovedIds = new Set(edits.motionPlan?.graphics.map(g => g.id) ?? [])\n  const retained = prev.filter(t => !plan.graphics.some(g =>\n    previouslyApprovedIds.has(g.id) && isGraphicItemId(t.id, g.id)))
   let generated: TextItem[]
   try {
     generated = plan.graphics.flatMap(g =>
@@ -97,7 +97,7 @@ export function addTextBackedMotionPlan(
   }
   if (retained.length + generated.length > TEXT_MAX_ITEMS)
     return { ok: false, code: 'text_capacity', detail: 'Existing text item limit exceeded' }
-  const items = [...retained, ...generated]
+  if (generated.some(g => retained.some(t => t.id === g.id)))\n    return { ok: false, code: 'id_collision', detail: 'Existing editable Text item uses a generated graphic ID' }\n  const items = [...retained, ...generated]
   const normalized = normalizeTextItems(items, plan.durationMs) ?? []
   if (normalized.length !== items.length)
     return { ok: false, code: 'text_normalization_failed', detail: 'One or more items cannot be rendered' }
@@ -107,5 +107,5 @@ export function addTextBackedMotionPlan(
 
 /** Remove only generated graphics; manual text, captions and EDL stay untouched. */
 export function removeTextBackedMotionGraphics(edits: ClipEditsV2, ids: readonly string[]): ClipEditsV2 {
-  return { ...edits, textItems: edits.textItems?.filter(item => !ids.some(id => isGraphicItemId(item.id, id))) }
+  const approved = new Set(edits.motionPlan?.graphics.map(g => g.id) ?? [])\n  return { ...edits, textItems: edits.textItems?.filter(item =>\n    !ids.some(id => approved.has(id) && isGraphicItemId(item.id, id))) }
 }
