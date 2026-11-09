@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { createProject, createProjectFromLink, estimateCredits } from '@/lib/clips-api'
 import { validateImportUrlForSubmit, YOUTUBE_UNSUPPORTED_MSG } from '@/lib/clips/import-url'
 import { defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
+import { aiProducerAgentPublicEnabled } from '@/lib/ai-producer-agent/flags'
 import { initialNewProjectSettings } from '@/lib/clips/new-project-initial'
 import { BYO_DURATION_ERROR } from '@/lib/clips/byo-project'
 import {
@@ -153,7 +154,9 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           ? defaultClipSettings({ ...settings, byo: true, fullVideo: true })
           : projectIntent === 'byo'
             ? defaultClipSettings({ ...settings, byo: true })
-            : defaultClipSettings({...settings,autoAgentClipMode:agentClipMode,autoAgentClipSeconds:agentClipSeconds})
+            : aiProducerAgentPublicEnabled()
+              ? defaultClipSettings({...settings,autoAgentClipMode:agentClipMode,autoAgentClipSeconds:agentClipSeconds})
+              : settings
       if (projectIntent === 'byo' && durationMs > 180_000) {
         toast.error(BYO_DURATION_ERROR)
         return
@@ -261,7 +264,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           ))}
         </fieldset>
       ) : null}
-      {tab==='upload'&&projectIntent==='find'?(
+      {tab==='upload'&&projectIntent==='find'&&aiProducerAgentPublicEnabled()?(
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-border p-3" data-testid="upload-agent-mode">
           <label className="text-sm font-medium" htmlFor="upload-agent-mode">Agent clip mode</label>
           <select id="upload-agent-mode" value={agentClipMode}
