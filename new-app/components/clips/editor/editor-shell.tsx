@@ -3619,6 +3619,7 @@ export function EditorShell({
           {([
             ['transcript','Trim words'],['layout','Gameplay & facecam'],
             ['captions','Captions'],['text','Text & stickers'],
+            ['motion','Motion Graphics'],
             ['broll','B-roll'],['audio','Audio'],['effects','Effects'],
             ['templates','Layouts & presets'],
           ] as const).map(([id,label]) => (
