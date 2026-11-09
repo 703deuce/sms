@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { MotionPlanSchema, StyleProfileSchema, type StyleProfile, type MotionPlan } from '@/lib/clips/motion-graphics/contract'
+import { MotionModeSchema, MotionPlanSchema, StyleProfileSchema, type StyleProfile, type MotionPlan } from '@/lib/clips/motion-graphics/contract'
 import { addTextBackedMotionPlan, removeTextBackedMotionGraphics } from '@/lib/clips/motion-graphics/text-adapter'
 
 type Style = 'minimal' | 'narrative' | 'gaming' | 'tech'
@@ -19,6 +19,7 @@ export function MotionGraphicsPanel(props: {
   onEdits: (next: ClipEditsV2) => void
 }) {
   const [style, setStyle] = useState<Style>('narrative')
+  const [mode, setMode] = useState<MotionPlan['mode']>('single_source_story')
   const [profiles, setProfiles] = useState<StyleProfile[]>([])
   const [profileId, setProfileId] = useState('')
   const [newStyleName, setNewStyleName] = useState('')
@@ -51,7 +52,7 @@ export function MotionGraphicsPanel(props: {
     try {
       const res = await fetch('/api/clips/clips/' + encodeURIComponent(props.clipId) + '/motion-graphics/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ style, instruction, ...(profileId ? { profileId } : {}) }),
+        body: JSON.stringify({ style, mode, instruction, ...(profileId ? { profileId } : {}) }),
       })
       const body: unknown = await res.json()
       if (!res.ok) {
@@ -151,6 +152,18 @@ export function MotionGraphicsPanel(props: {
           This first renderer supports text, highlights, and lower thirds — not charts or presenter masking.
         </p>
       </div>
+      <label className="block space-y-1 text-xs">
+        <span>Editing mode</span>
+        <select className="w-full rounded border bg-background p-2 text-sm" value={mode}
+          onChange={e => { const parsed = MotionModeSchema.safeParse(e.target.value); if (parsed.success) setMode(parsed.data) }}>
+          <option value="single_source_story">Single-source Story</option>
+          <option value="multi_source_story">Multi-source Story</option>
+          <option value="clean_take">Clean Take</option>
+          <option value="streamer_continuous">Streamer Continuous</option>
+          <option value="streamer_story_clip">Streamer Story Clip</option>
+          <option value="streamer_long_form">Streamer Long-form</option>
+        </select>
+      </label>
       <label className="block space-y-1 text-xs">
         <span>Motion style</span>
         <select className="w-full rounded border bg-background p-2 text-sm" value={style}
