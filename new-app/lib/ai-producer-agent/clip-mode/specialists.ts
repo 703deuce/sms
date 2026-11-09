@@ -1694,12 +1694,11 @@ export async function createEditorialHandoff(
     }
     const proposed=reviewed.cutPlan.length===1?reviewed.cutPlan[0]:null
     const proposedSeconds=proposed?(proposed.endMs-proposed.startMs)/1000:0
-    const distance=(duration:number)=>duration<minimumSeconds?minimumSeconds-duration:
-      duration>maximumSeconds?duration-maximumSeconds:0
+    // Flow owns the editorial landing. A safe inward trim is authoritative:
+    // never extend the clip again merely to approach the nominal length.
     const useTrim=Boolean(proposed&&proposed.kind!=='visual_action'&&
       proposed.startMs>=first.startMs&&proposed.endMs<=first.endMs&&
-      proposedSeconds>0&&
-      proposedSeconds<=maximumSeconds+20&&distance(proposedSeconds)<=distance(seconds))
+      proposed.endMs>proposed.startMs&&proposedSeconds>0)
     const finalCut=useTrim?proposed!:first
     await specialistEvent(ctx,budget,'flow',useTrim&&
       (finalCut.startMs!==first.startMs||finalCut.endMs!==first.endMs)
@@ -1727,53 +1726,66 @@ export async function createEditorialHandoff(
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
     })
     if(storyClip){
-      const duration=selectionDurationS(footage)
-      const distance=(n:number)=>n<minimumSeconds?minimumSeconds-n:n>maximumSeconds?n-maximumSeconds:0
-      if(distance(duration)>0&&budget.state()!=='hard'){
+      const targetMid=(minimumSeconds+maximumSeconds)/2
+      const desiredLo=Math.max(15,targetMid-10)
+      const desiredHi=targetMid+10
+      const distance=(value:number)=>value<desiredLo?desiredLo-value:value>desiredHi?value-desiredHi:0
+      // Footage can request distant source moments, not just slightly extend
+      // an adjacent 29-second trim. Each repair receives the FULL transcript,
+      // original candidate/outline, and explicit failed source-gap evidence.
+      for(let attempt=0;attempt<5&&budget.state()!=='hard';attempt++){
+        const coverage=storyCoverage(footage,targetMid)
+        const duration=coverage.durationSeconds
+        if(coverage.separated&&duration>=desiredLo&&duration<=desiredHi)break
+        await specialistEvent(ctx,budget,'footage','story_search_more_moments',{
+          attempt,sourceRangeMs:source.rangeMs,previousSelections:footage,
+          durationSeconds:duration,gapsMs:coverage.gapsMs,
+          missingSeconds:Math.max(0,desiredLo-duration),
+          desiredSeconds:[desiredLo,desiredHi],
+        })
         try{
-          const revision=await runEditorialRole(ctx,out,budget,'footage',{
+          const revised=await runEditorialRole(ctx,out,budget,'footage',{
             ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
             fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
             fullTranscript:completeTranscriptWords(ctx.cache.words,true),
-            previousSelections:footage.map(sel=>({...sel,seconds:(sel.endMs-sel.startMs)/1000})),
-            previousDurationSeconds:duration,targetSeconds:[minimumSeconds,maximumSeconds],
-            instruction:duration>maximumSeconds
-              ? 'SHORT STORY LENGTH REPAIR: too long. Drop weaker complete passages or cut out source detours. SUM the finished passages into target. Keep opening and actual payoff.'
-              : 'SHORT STORY LENGTH REPAIR: too short. Add the next essential actual passage (setup, escalation or reaction) from the SAME story so passages SUM to target. Do not pad or invent; return the best complete story when source lacks material.',
+            previousSelections:footage,
+            previousDurationSeconds:duration,
+            targetSeconds:[desiredLo,desiredHi],
+            otherObservedMoments:ctx.cache.momentsSummary,
+            instruction:[
+              'STORY CLIP SEARCH AND REPAIR:',
+              'The clip must have at least TWO distinct source passages with >=2500ms of removed original video between every adjacent chosen passage.',
+              'Search the ENTIRE provided source transcript and observed moments for missing setup, escalation, reaction and genuine payoff, including distant times.',
+              'For this '+targetMid+' second target, SUM all kept passage lengths to '+desiredLo+'-'+desiredHi+' seconds.',
+              'Do not concatenate consecutive snippets from the same continuous scene; do not fabricate context or add unrelated filler.',
+              'Keep valid prior moments when useful, but replace the whole plan if needed to find a real multi-moment story.',
+              'Use exact transcript word IDs and complete natural boundaries.',
+            ].join(' '),
           })
-          const candidate=revision.selections as EditorialSelection[]
-          const revisedSeconds=selectionDurationS(candidate)
-          if(candidate.length&&distance(revisedSeconds)<distance(duration)){
-            footage=candidate
-            await specialistEvent(ctx,budget,'footage','short_story_clip_length_repaired',{
-              beforeSeconds:duration,afterSeconds:revisedSeconds,
-            })
-          }
+          const candidate=revised.selections as EditorialSelection[]
+          const next=storyCoverage(candidate,targetMid)
+          // Separation is mandatory. Prefer real separated stories even when
+          // still short, then let further passes add meaningful beats.
+          const improved=next.separated&&!coverage.separated ||
+            next.separated===coverage.separated && distance(next.durationSeconds)<distance(duration) ||
+            !coverage.separated && next.gapsMs.filter(g=>g>=2500).length>coverage.gapsMs.filter(g=>g>=2500).length
+          await specialistEvent(ctx,budget,'footage','story_search_more_moments_result',{
+            attempt,accepted:improved,durationSeconds:next.durationSeconds,
+            separated:next.separated,gapsMs:next.gapsMs,
+          })
+          if(improved)footage=candidate
         }catch(error){
-          await specialistEvent(ctx,budget,'footage','short_story_clip_length_repair_unavailable',{
-            errorCode:String((error as Error)?.message??error).slice(0,260),
+          await specialistEvent(ctx,budget,'footage','story_search_more_moments_unavailable',{
+            attempt,errorCode:String((error as Error)?.message??error).slice(0,260),
           })
         }
       }
-    }
-    if(storyClip){
-      for(let attempt=0;attempt<2&&!storyCoverage(footage).separated;attempt++){
-        const prior=storyCoverage(footage)
-        await specialistEvent(ctx,budget,'footage','adjacent_passages_rejected',{
-          attempt,gapsMs:prior.gapsMs,durationSeconds:prior.durationSeconds,
-        })
-        const revision=await runEditorialRole(ctx,out,budget,'footage',{
-          ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
-          fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
-          fullTranscript:completeTranscriptWords(ctx.cache.words,true),
-          previousSelections:footage,targetSeconds:ctx.config.targetLengthS,
-          instruction:'REJECTED: Your story was one continuous trim masquerading as separate moments. Pick multiple genuine source regions, each successive kept passage separated by at least 2500ms of REMOVED ORIGINAL VIDEO. Build a meaningful setup/escalation/payoff, favor 50-70s for a 60s request, no invented filler.',
-        })
-        const next=revision.selections as EditorialSelection[]
-        if(storyCoverage(next).separated)footage=next
-      }
-      if(!storyCoverage(footage).separated)
+      const finalCoverage=storyCoverage(footage,targetMid)
+      if(!finalCoverage.separated)
         throw Error('clip_story_requires_distinct_source_passages')
+      if(finalCoverage.durationSeconds<desiredLo||finalCoverage.durationSeconds>desiredHi)
+        out.notes.push('Complete separated story retained with length ranking penalty: '+
+          finalCoverage.durationSeconds.toFixed(1)+'s vs preferred '+desiredLo+'-'+desiredHi+'s')
     }
     let reviewed:Awaited<ReturnType<typeof runStoryFlowReview>>
     try {
