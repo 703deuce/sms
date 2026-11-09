@@ -25,6 +25,7 @@ export function MotionGraphicsPanel(props: {
   const [newStyleName, setNewStyleName] = useState('')
   const [savingStyle, setSavingStyle] = useState(false)
   const [referenceFiles, setReferenceFiles] = useState<File[]>([])
+  const [referenceVideo, setReferenceVideo] = useState<File | null>(null)
   const [referenceAuthorized, setReferenceAuthorized] = useState(false)
   const [analyzingReferences, setAnalyzingReferences] = useState(false)
   const [analyzedStyle, setAnalyzedStyle] = useState<StyleProfile | null>(null)
@@ -77,18 +78,58 @@ export function MotionGraphicsPanel(props: {
   }
 
   async function analyzeReferences() {
-    if (!referenceFiles.length || !referenceAuthorized) return
+    if ((!referenceFiles.length && !referenceVideo) || !referenceAuthorized) return
     setAnalyzingReferences(true); setError('')
     try {
-      const images = await Promise.all(referenceFiles.map(async file => {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
-          reader.onerror = () => reject(new Error('Could not read screenshot'))
-          reader.readAsDataURL(file)
-        })
-        return { mimeType: file.type, base64 }
-      }))
+      let images: { mimeType: string; base64: string; frameTimeMs?: number }[]
+      if (referenceVideo) {
+        // Decode and sample reference video locally; do not upload the original video.
+        const url = URL.createObjectURL(referenceVideo)
+        const video = document.createElement('video')
+        try {
+          video.muted = true; video.preload = 'auto'; video.src = url
+          await new Promise<void>((resolve, reject) => {
+            video.onloadedmetadata = () => resolve()
+            video.onerror = () => reject(new Error('Cannot decode reference video'))
+            video.load()
+          })
+          if (!Number.isFinite(video.duration) || video.duration <= 0)
+            throw new Error('Reference video duration is invalid')
+          const canvas = document.createElement('canvas')
+          const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight))
+          canvas.width = Math.max(1, Math.round(video.videoWidth * scale))
+          canvas.height = Math.max(1, Math.round(video.videoHeight * scale))
+          const context = canvas.getContext('2d')
+          if (!context) throw new Error('Could not sample reference video')
+          images = []
+          for (const fraction of [.15, .5, .85]) {
+            const at = Math.min(Math.max(.02, video.duration * fraction), Math.max(.02, video.duration - .01))
+            await new Promise<void>((resolve, reject) => {
+              video.onseeked = () => resolve()
+              video.onerror = () => reject(new Error('Reference seek failed'))
+              video.currentTime = at
+            })
+            context.drawImage(video, 0, 0, canvas.width, canvas.height)
+            images.push({
+              mimeType: 'image/jpeg',
+              base64: canvas.toDataURL('image/jpeg', .72).split(',')[1] ?? '',
+              frameTimeMs: Math.round(at * 1000),
+            })
+          }
+        } finally {
+          video.removeAttribute('src'); video.load(); URL.revokeObjectURL(url)
+        }
+      } else {
+        images = await Promise.all(referenceFiles.map(async file => {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
+            reader.onerror = () => reject(new Error('Could not read screenshot'))
+            reader.readAsDataURL(file)
+          })
+          return { mimeType: file.type, base64 }
+        }))
+      }
       const res = await fetch('/api/clips/motion-styles/analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ authorized: true, images, instructions: instruction }),
@@ -203,18 +244,24 @@ export function MotionGraphicsPanel(props: {
       </label>
       <div className="space-y-2 rounded border p-2">
         <p className="text-xs font-semibold">Analyze reference screenshots</p>
-        <p className="text-xs text-muted-foreground">Up to three JPEG/PNG screenshots (2 MB each). Extract an original palette and typography; video motion cannot be inferred precisely from still images.</p>
+        <p className="text-xs text-muted-foreground">Up to three JPEG/PNG screenshots (2 MB each), or an authorized video (up to 150 MB). Extract original color, typography, and approximate motion styling.</p>
         <input type="file" accept="image/jpeg,image/png" multiple className="w-full text-xs"
           onChange={e => {
             const chosen = Array.from(e.target.files ?? []).slice(0, 3)
-            setReferenceFiles(chosen); setAnalyzedStyle(null); setReferenceAuthorized(false)
+            setReferenceFiles(chosen); setReferenceVideo(null); setAnalyzedStyle(null); setReferenceAuthorized(false)
+          }} />
+        <p className="text-xs text-muted-foreground">Or choose one authorized MP4/WebM reference video. Three frames are sampled locally; the video itself is not uploaded.</p>
+        <input type="file" accept="video/mp4,video/webm" className="w-full text-xs"
+          onChange={e => {
+            const selected = e.target.files?.[0] ?? null
+            setReferenceVideo(selected); setReferenceFiles([]); setAnalyzedStyle(null); setReferenceAuthorized(false)
           }} />
         <label className="flex gap-2 text-xs items-start">
           <input type="checkbox" checked={referenceAuthorized} onChange={e => setReferenceAuthorized(e.target.checked)} />
           <span>I have permission to use these reference images for style analysis.</span>
         </label>
         <button type="button" className="rounded border px-3 py-2 text-xs disabled:opacity-50"
-          disabled={!referenceFiles.length || !referenceAuthorized || analyzingReferences || referenceFiles.some(f => f.size > 2_000_000 || !['image/jpeg','image/png'].includes(f.type))}
+          disabled={(!referenceFiles.length && !referenceVideo) || !referenceAuthorized || analyzingReferences || referenceFiles.some(f => f.size > 2_000_000 || !['image/jpeg','image/png'].includes(f.type)) || Boolean(referenceVideo && (referenceVideo.size > 150_000_000 || !['video/mp4', 'video/webm'].includes(referenceVideo.type)))}
           onClick={() => void analyzeReferences()}>{analyzingReferences ? 'Analyzing…' : 'Analyze screenshots'}</button>
         {analyzedStyle ? <p className="text-xs">Suggested: {analyzedStyle.name} · {analyzedStyle.brandColors.join(', ')} · {analyzedStyle.fontFamilies.join(', ')}</p> : null}
       </div>
