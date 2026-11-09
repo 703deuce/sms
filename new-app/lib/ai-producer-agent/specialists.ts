@@ -1682,9 +1682,41 @@ export async function createEditorialHandoff(
       storyDecision: outline,
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
     })
+    if(storyClip){
+      const duration=selectionDurationS(footage)
+      const distance=(n:number)=>n<minimumSeconds?minimumSeconds-n:n>maximumSeconds?n-maximumSeconds:0
+      if(distance(duration)>0&&budget.state()!=='hard'){
+        try{
+          const revision=await runEditorialRole(ctx,out,budget,'footage',{
+            ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
+            fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
+            fullTranscript:completeTranscriptWords(ctx.cache.words,true),
+            previousSelections:footage.map(sel=>({...sel,seconds:(sel.endMs-sel.startMs)/1000})),
+            previousDurationSeconds:duration,targetSeconds:[minimumSeconds,maximumSeconds],
+            instruction:duration>maximumSeconds
+              ? 'SHORT STORY LENGTH REPAIR: too long. Drop weaker complete passages or cut out source detours. SUM the finished passages into target. Keep opening and actual payoff.'
+              : 'SHORT STORY LENGTH REPAIR: too short. Add the next essential actual passage (setup, escalation or reaction) from the SAME story so passages SUM to target. Do not pad or invent; return the best complete story when source lacks material.',
+          })
+          const candidate=revision.selections as EditorialSelection[]
+          const revisedSeconds=selectionDurationS(candidate)
+          if(candidate.length&&distance(revisedSeconds)<distance(duration)){
+            footage=candidate
+            await specialistEvent(ctx,budget,'footage','short_story_clip_length_repaired',{
+              beforeSeconds:duration,afterSeconds:revisedSeconds,
+            })
+          }
+        }catch(error){
+          await specialistEvent(ctx,budget,'footage','short_story_clip_length_repair_unavailable',{
+            errorCode:String((error as Error)?.message??error).slice(0,260),
+          })
+        }
+      }
+    }
     let reviewed:Awaited<ReturnType<typeof runStoryFlowReview>>
     try {
-      reviewed=await runStoryFlowReview(ctx,budget,outline,footage)
+      reviewed=await runStoryFlowReview(ctx,budget,outline,footage,
+        storyClip?{mode:'story',targetSeconds:[minimumSeconds,maximumSeconds],
+          hardWindowSeconds:[Math.max(15,minimumSeconds-12),maximumSeconds+12]}:{mode:'baseline'})
     } catch (error) {
       const errorCode=String((error as Error)?.message??error).slice(0,400)
       await specialistEvent(ctx,budget,'flow','review_unavailable_kept_footage',{
@@ -1693,23 +1725,47 @@ export async function createEditorialHandoff(
       reviewed={cutPlan:footage,review:{originalCuts:footage.map(c=>({...c})),changes:[],applied:false,note:'Flow review unavailable: '+errorCode}}
     }
     const combined=combineSpeechWithVisualActions(reviewed.cutPlan,visualActions,ctx.cache.words,source.rangeMs)
+    let finalCombined=combined
     if(storyClip){
-      const seconds=selectionDurationS(combined.cutPlan)
-      if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds+12)
-        throw Error('clip_story_duration_outside_target:'+seconds.toFixed(1))
+      const distance=(n:number)=>n<minimumSeconds?minimumSeconds-n:n>maximumSeconds?n-maximumSeconds:0
+      const hardMin=Math.max(15,minimumSeconds-12),hardMax=maximumSeconds+12
+      const candidateSets=[
+        combined,
+        {cutPlan:reviewed.cutPlan,included:[],omitted:submittedVisualOmissions},
+        combineSpeechWithVisualActions(footage,visualActions,ctx.cache.words,source.rangeMs),
+        {cutPlan:footage,included:[],omitted:submittedVisualOmissions},
+      ]
+      const valid=candidateSets.find(candidate=>{
+        const duration=selectionDurationS(candidate.cutPlan)
+        return duration>=hardMin&&duration<=hardMax
+      })
+      if(valid)finalCombined=valid
+      else{
+        finalCombined=[...candidateSets].sort((a,b)=>
+          distance(selectionDurationS(a.cutPlan))-distance(selectionDurationS(b.cutPlan)))[0]!
+        const seconds=selectionDurationS(finalCombined.cutPlan)
+        if(seconds<15||seconds>maximumSeconds+20)
+          throw Error('clip_story_duration_outside_target:'+seconds.toFixed(1))
+        out.notes.push('AI story duration '+seconds.toFixed(1)+'s outside target '+
+          minimumSeconds+'–'+maximumSeconds+'s; best complete sourced story retained')
+        await specialistEvent(ctx,budget,'footage','short_story_clip_duration_advisory',{
+          durationSeconds:seconds,targetSeconds:[minimumSeconds,maximumSeconds],
+          note:'Short/long complete story allowed rather than failing or padding',
+        })
+      }
     }
     await specialistEvent(ctx,budget,'footage','visual_actions_handoff',{
-      proposed:visualActions,selected:combined.included,omitted:[...submittedVisualOmissions,...combined.omitted],
-      finalCutCount:combined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',
+      proposed:visualActions,selected:finalCombined.included,omitted:[...submittedVisualOmissions,...finalCombined.omitted],
+      finalCutCount:finalCombined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',
     })
     await specialistEvent(ctx,budget,'flow','handoff',{
-      originalCutCount:footage.length,finalCutCount:combined.cutPlan.length,
-      originalCuts:footage,finalCuts:combined.cutPlan,
+      originalCutCount:footage.length,finalCutCount:finalCombined.cutPlan.length,
+      originalCuts:footage,finalCuts:finalCombined.cutPlan,
       changes:reviewed.review.changes,
       untouchedOriginalFootage:true,
     })
-    return {outline,footage,cutPlan:combined.cutPlan,flowReview:reviewed.review,
-      visualActions:combined.included,visualActionOmissions:[...submittedVisualOmissions,...combined.omitted]}
+    return {outline,footage,cutPlan:finalCombined.cutPlan,flowReview:reviewed.review,
+      visualActions:finalCombined.included,visualActionOmissions:[...submittedVisualOmissions,...finalCombined.omitted]}
   }
   // One targeted *editorial* retry instead of accepting a 20s excerpt as a
   // requested 90s story. Preserve original cuts if the revision is worse.
