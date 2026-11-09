@@ -102,8 +102,8 @@ export function applyProducerTool(
         style: { ...preset.style },
         presetId: preset.id,
       }
-      const items = normalizeTextItems([...(base.textItems ?? []), item], startMs + durationMs)
-      if (!items || items.length !== (base.textItems?.length ?? 0) + 1)
+      const items = normalizeTextItems([item], startMs + durationMs)
+      if (!items || items.length !== 1)
         return { edits: base, summary: 'No text overlay added: failed editor validation' }
       return { edits: { ...base, textItems: [...(base.textItems ?? []), item] },
         summary: 'Added editable ' + (kind === 'lower_third' ? 'lower-third' : 'title card') +
