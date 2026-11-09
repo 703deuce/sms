@@ -8,9 +8,10 @@ import { sourceToOutput, timebaseFor } from '@/lib/clips/editor/clip-timeline'
 export type MotionStyleChoice = 'minimal' | 'narrative' | 'gaming' | 'tech'
 export type MotionTextEvidence = { id: string; startMs: number; endMs: number; text: string }
 export function transcriptEvidence(words: ClipWord[], edits: ClipEditsV2, max = 120): MotionTextEvidence[] {
-  const tb = timebaseFor(editorPreviewEdits(edits, words))
+  const sourceWords = words.map((w, index) => ({ ...w, i: w.i ?? w.idx ?? index }))
+  const tb = timebaseFor(editorPreviewEdits(edits, sourceWords))
   const mapped = words.map((w) => {
-    const mid = sourceToOutput(tb, (w.s + w.e) / 2)
+    const mid = sourceToOutput(tb, (w.s + w.e) * 500)
     return mid == null ? null : { at: Math.round(mid), word: w.w }
   }).filter((x): x is { at: number; word: string } => x !== null)
     .sort((a, b) => a.at - b.at)
