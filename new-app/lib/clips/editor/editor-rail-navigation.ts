@@ -8,6 +8,7 @@ import {
   Music2,
   Type,
   Wand2,
+  Sparkles,
 } from 'lucide-react'
 import type { EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
@@ -16,6 +17,7 @@ export type EditorRailGroupId =
   | 'script'
   | 'captions'
   | 'text'
+  | 'motion'
   | 'media'
   | 'audio'
   | 'effects'
@@ -43,7 +45,10 @@ export function editorRailGroups(aiExtras: boolean = clipEditorAiExtrasEnabled()
       ],
     },
     { id: 'captions', label: 'Captions', icon: Captions, tabs: [{ id: 'captions', tabLabel: 'Captions' }] },
-    { id: 'text', label: 'Text', icon: Type, tabs: [{ id: 'text', tabLabel: 'Text' }, { id: 'motion', tabLabel: 'AI Motion' }] },
+    { id: 'text', label: 'Text', icon: Type, tabs: [{ id: 'text', tabLabel: 'Text' }] },
+    // Motion is a top-level visible tool, not a hidden subtab under Text.
+    { id: 'motion', label: 'Motion Graphics', icon: Sparkles,
+      tabs: [{ id: 'motion', tabLabel: 'AI Motion Graphics' }] },
     {
       id: 'media',
       label: 'Media',
@@ -125,6 +130,8 @@ export const INVENTORY_RAIL_LABEL_TO_PANEL: Record<string, EditorPanelId> = {
   Captions: 'captions',
   Text: 'text',
   Motion: 'motion',
+  'Motion Graphics': 'motion',
+  'AI Motion': 'motion',
   Media: 'media',
   'B-roll': 'broll',
   Cover: 'thumbnail',
