@@ -96,7 +96,7 @@ export type EditorialHandoff = {
   /** Flow Editor edits are a separate, source-grounded pass; Footage original is retained. */
   flowReview?: {
     originalCuts: EditorialSelection[]
-    changes: Array<{ passageIndex: number; action: 'replace' | 'remove'; reason: string; before: EditorialSelection; after?: EditorialSelection }>
+    changes: Array<{ passageIndex: number; action: 'replace' | 'remove' | 'split'; reason: string; before: EditorialSelection; after?: EditorialSelection; afterSpans?: EditorialSelection[] }>
     applied: boolean
     note: string
     joinReviews?: Array<{leftIndex:number;rightIndex:number;status:'flows'|'needs_change';reason:string}>
@@ -387,9 +387,46 @@ const flowReviewTool: ToolSchema = {
   },
 }
 
+
+/** Distinct tool schema ONLY for the two clip modes. The original AI Producer
+ * Flow tool schema, name, prompts and validation remain byte-equivalent. */
+const clipFlowReviewTool:ToolSchema = {
+  name:'submit_story_flow_review',
+  description:'Return ONLY needed corrections to selected passages; omit every already-good passage.',
+  parameters:{
+    type:'object',additionalProperties:false,
+    properties:{
+      assessment:{type:'string'},
+      joinReviews:{type:'array',maxItems:23,items:{
+        type:'object',additionalProperties:false,
+        properties:{
+          leftIndex:{type:'integer',minimum:0},rightIndex:{type:'integer',minimum:1},
+          status:{type:'string',enum:['flows','needs_change']},reason:{type:'string'},
+        },required:['leftIndex','rightIndex','status','reason'],
+      }},
+      changes:{type:'array',maxItems:24,items:{
+        type:'object',additionalProperties:false,
+        properties:{
+          passageIndex:{type:'integer',minimum:0},
+          action:{type:'string',enum:['replace','remove','split']},
+          firstWordId:{type:'integer',minimum:0},lastWordId:{type:'integer',minimum:0},
+          spans:{type:'array',minItems:2,maxItems:6,items:{
+            type:'object',additionalProperties:false,
+            properties:{firstWordId:{type:'integer',minimum:0},
+              lastWordId:{type:'integer',minimum:0},reason:{type:'string'}},
+            required:['firstWordId','lastWordId','reason'],
+          }},
+          reason:{type:'string'},
+        },required:['passageIndex','action','reason'],
+      }},
+    },required:['assessment','joinReviews','changes'],
+  },
+}
+
 type FlowChange = {
   passageIndex:number
-  action:'replace'|'remove'
+  action:'replace'|'remove'|'split'
+  spans?:Array<{firstWordId:number;lastWordId:number;reason:string}>
   firstWordId?:number
   lastWordId?:number
   reason:string
@@ -417,7 +454,7 @@ export function storyFlowJoinEvidence(
  * its two sides; do not silently accept a list of acknowledged defects. */
 export function validateStoryFlowJoinReviews(
   raw: unknown, passageCount:number,
-  changes:Array<{passageIndex:number;action:'replace'|'remove'}>,
+  changes:Array<{passageIndex:number;action:'replace'|'remove'|'split'}>,
 ) {
   if (!Array.isArray(raw) || raw.length!==Math.max(0,passageCount-1))
     throw Error('flow_join_reviews_missing_expected_'+Math.max(0,passageCount-1))
@@ -459,45 +496,89 @@ function originalPassageWords(words: ClipWord[], selection: EditorialSelection) 
  */
 export function applyStoryFlowChanges(
   raw: unknown, originals: EditorialSelection[], words: ClipWord[], bounds: [number,number],
+  opts:{allowSplit:boolean;momentEndTrimOnly?:boolean}={allowSplit:false},
 ) {
   if (!Array.isArray(raw) || raw.length>24) throw Error('flow_invalid_change_count')
-  const edits=new Map<number,FlowChange>()
+  const changesInput:FlowChange[]=[]
   for (const item of raw) {
-    if (!item || typeof item!=='object') throw Error('flow_change_not_object')
-    const c=item as FlowChange
+    if (!item || typeof item!=='object')throw Error('flow_change_not_object')
+    changesInput.push(item as FlowChange)
+  }
+  // Flow historically emitted multiple replaces of the same passage to omit an
+  // interior detour. That is exactly one split, not multiple independent edits.
+  const groups=new Map<number,FlowChange[]>()
+  for(const c of changesInput)groups.set(c.passageIndex,[...(groups.get(c.passageIndex)??[]),c])
+  const prepared:FlowChange[]=[]
+  for(const [index,entries] of groups){
+    if(opts.allowSplit&&entries.length>1&&entries.every(c=>c.action==='replace'&&
+        Number.isInteger(c.firstWordId)&&Number.isInteger(c.lastWordId))){
+      const spans=entries.map(c=>({firstWordId:c.firstWordId!,lastWordId:c.lastWordId!,reason:c.reason}))
+        .sort((x,y)=>x.firstWordId-y.firstWordId)
+      prepared.push({passageIndex:index,action:'split',reason:'Remove source detour within passage',spans})
+    }else prepared.push(...entries)
+  }
+  const edits=new Map<number,FlowChange>()
+  for (const c of prepared) {
     if (!Number.isInteger(c.passageIndex) || c.passageIndex<0 ||
       c.passageIndex>=originals.length || edits.has(c.passageIndex))
       throw Error('flow_invalid_or_duplicate_passage_index_'+c.passageIndex)
-    if (c.action!=='replace' && c.action!=='remove') throw Error('flow_invalid_action_passage_'+c.passageIndex)
-    if (typeof c.reason!=='string' || !c.reason.trim()) throw Error('flow_missing_reason_passage_'+c.passageIndex)
+    if (c.action!=='replace' && c.action!=='remove' && c.action!=='split')
+      throw Error('flow_invalid_action_passage_'+c.passageIndex)
+    if (typeof c.reason!=='string' || !c.reason.trim())
+      throw Error('flow_missing_reason_passage_'+c.passageIndex)
+    if (c.action==='split'){
+      if(!opts.allowSplit)throw Error('flow_split_not_allowed_in_mode')
+      if(!Array.isArray(c.spans)||c.spans.length<2||c.spans.length>6)
+        throw Error('flow_split_invalid_span_count_passage_'+c.passageIndex)
+    }
     if (c.action==='replace' && (!Number.isInteger(c.firstWordId) || !Number.isInteger(c.lastWordId)))
       throw Error('flow_missing_word_ids_passage_'+c.passageIndex)
     edits.set(c.passageIndex,c)
   }
   const finalCuts:EditorialSelection[]=[]
-  const changes:Array<{passageIndex:number;action:'replace'|'remove';reason:string;before:EditorialSelection;after?:EditorialSelection}>=[]
-  for (let i=0;i<originals.length;i++) {
+  const changes:Array<{passageIndex:number;action:'replace'|'remove'|'split';reason:string;
+    before:EditorialSelection;after?:EditorialSelection;afterSpans?:EditorialSelection[]}>= []
+  for (let i=0;i<originals.length;i++){
     const before=originals[i]!
     const edit=edits.get(i)
-    if (!edit) {finalCuts.push(before);continue}
-    if (edit.action==='remove') {
+    if(!edit){finalCuts.push(before);continue}
+    if(edit.action==='remove'){
       changes.push({passageIndex:i,action:'remove',reason:edit.reason,before})
+      continue
+    }
+    if(edit.action==='split'){
+      const spans=edit.spans!.map(span=>resolveFootageWordSelections([{
+        firstWordId:span.firstWordId,lastWordId:span.lastWordId,
+        beat:before.beat,reason:span.reason,
+      }],words,bounds)[0]!)
+      for(let k=0;k<spans.length;k++){
+        const span=spans[k]!
+        if(span.endMs-span.startMs<1000)throw Error('flow_split_span_too_short_passage_'+i)
+        if(k>0&&span.startMs<spans[k-1]!.endMs)
+          throw Error('flow_split_overlap_passage_'+i)
+      }
+      finalCuts.push(...spans)
+      changes.push({passageIndex:i,action:'split',reason:edit.reason,before,afterSpans:spans})
       continue
     }
     const converted=resolveFootageWordSelections([{
       firstWordId:edit.firstWordId,lastWordId:edit.lastWordId,
       beat:before.beat,reason:edit.reason,
     }],words,bounds)[0]!
-    if (converted.startMs===before.startMs && converted.endMs===before.endMs) {
-      finalCuts.push(before)
-      continue
+    if(converted.startMs===before.startMs&&converted.endMs===before.endMs){
+      finalCuts.push(before);continue
+    }
+    if(opts.momentEndTrimOnly&&(converted.startMs<before.startMs||converted.endMs>before.endMs)){
+      // Single moment Flow can only tighten ends, never extend to unrelated material.
+      throw Error('flow_moment_only_end_trim')
     }
     finalCuts.push(converted)
     changes.push({passageIndex:i,action:'replace',reason:edit.reason,before,after:converted})
   }
-  if (!finalCuts.length) throw Error('flow_cannot_remove_every_passage')
-  for (let i=1;i<finalCuts.length;i++) {
-    if (finalCuts[i]!.startMs<finalCuts[i-1]!.endMs)
+  if(!finalCuts.length)throw Error('flow_cannot_remove_every_passage')
+  if(opts.allowSplit&&finalCuts.length>24)throw Error('flow_too_many_final_passages')
+  for(let i=1;i<finalCuts.length;i++){
+    if(finalCuts[i]!.startMs<finalCuts[i-1]!.endMs)
       throw Error('flow_overlap_after_revision_near_passage_'+i)
   }
   return {finalCuts,changes}
@@ -505,6 +586,7 @@ export function applyStoryFlowChanges(
 
 export async function runStoryFlowReview(
   ctx: ToolCtx, budget: Budget, outline: EditorialOutline, originals: EditorialSelection[],
+  opts:{mode:'moment'|'story'|'baseline';targetSeconds?:[number,number];hardWindowSeconds?:[number,number]}={mode:'baseline'},
 ):Promise<{cutPlan:EditorialSelection[];review:NonNullable<EditorialHandoff['flowReview']>}> {
   const words=ctx.cache.words??[]
   const bounds=ctx.sources[0]?.rangeMs
@@ -523,8 +605,15 @@ export async function runStoryFlowReview(
   const messages:LunaMessage[]=[
     {role:'system',content:[
       FILM_EDITING_THEORY,
-      'FLOW EDITOR. You are a separate supervising dialogue editor AFTER Story and Footage have selected source passages. Review the COMPLETE assembled dialogue as a viewer hears it. Read the ENTIRE original word-indexed transcript for missing setup at passage beginnings, dangling ends, incomplete phrases, pronouns without referents, repetition, and non-sequiturs between passages. Fix only actual editorial problems. For every good passage, make NO change. You may extend/contract a passage by returning a different first/last original word ID, or remove a passage when it cannot serve the story. You may NEVER invent dialogue, reorder passages, choose new unrelated stories, or use a runtime target. No 90-second constraint. In particular, a short standalone opening can be excellent. Do not try to fix an audible pop: no audio was provided, and separate audio fades handle sound artifacts. Keep every unaffected passage unchanged. Your replacements are literal source cuts, not suggestions. Do not use cuts to satisfy a silence/seam heuristic. Source timestamps will be resolved from exact word IDs. You are not doing a duration compression pass.',
-      'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.',
+      (opts.mode==='baseline' ? 'FLOW EDITOR. You are a separate supervising dialogue editor AFTER Story and Footage have selected source passages. Review the COMPLETE assembled dialogue as a viewer hears it. Read the ENTIRE original word-indexed transcript for missing setup at passage beginnings, dangling ends, incomplete phrases, pronouns without referents, repetition, and non-sequiturs between passages. Fix only actual editorial problems. For every good passage, make NO change. You may extend/contract a passage by returning a different first/last original word ID, or remove a passage when it cannot serve the story. You may NEVER invent dialogue, reorder passages, choose new unrelated stories, or use a runtime target. No 90-second constraint. In particular, a short standalone opening can be excellent. Do not try to fix an audible pop: no audio was provided, and separate audio fades handle sound artifacts. Keep every unaffected passage unchanged. Your replacements are literal source cuts, not suggestions. Do not use cuts to satisfy a silence/seam heuristic. Source timestamps will be resolved from exact word IDs. You are not doing a duration compression pass.' : 'FLOW EDITOR. You are a separate supervising dialogue editor AFTER Story and Footage have selected source passages. Review the COMPLETE assembled dialogue as a viewer hears it. Read the ENTIRE original word-indexed transcript for missing setup at passage beginnings, dangling ends, incomplete phrases, pronouns without referents, repetition, and non-sequiturs between passages. Fix only actual editorial problems. For every good passage, make NO change. You may extend/contract a passage by returning a different first/last original word ID, or remove a passage when it cannot serve the story. You may NEVER invent dialogue, reorder passages, choose new unrelated stories, or use a runtime target. No 90-second constraint. In particular, a short standalone opening can be excellent. Do not try to fix an audible pop: no audio was provided, and separate audio fades handle sound artifacts. Keep every unaffected passage unchanged. Your replacements are literal source cuts, not suggestions. Do not use cuts to satisfy a silence/seam heuristic. Source timestamps will be resolved from exact word IDs. You are not doing a duration compression pass.'.replace(
+        'or use a runtime target. No 90-second constraint.',
+        'or alter the approved narrative. Use the supplied mode-specific time target only; never pad, invent or force unrelated material.'
+      )),
+      ...(opts.mode==='moment' ? ['SINGLE CONTINUOUS MOMENT MODE: exactly one source passage. Only allow no change or ONE end-trimming replace of passageIndex 0. NEVER remove, split or excise the middle. If an aside occurs inside, accept it or trim an END. Target seconds '+JSON.stringify(opts.targetSeconds??[])] : opts.mode==='story' ? ['SHORT STORY CLIP: assemble several true source passages that sum to '+JSON.stringify(opts.targetSeconds??[])+' seconds, hard limits '+JSON.stringify(opts.hardWindowSeconds??[])+'. Splits may remove off-topic middle detours using split action with 2-6 chronological non-overlapping word ID spans. Never send two changes for the same passageIndex.'] : []),
+      (opts.mode==='baseline' ? 'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.' : 'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.'.replace(
+        'replace/remove change',
+        opts.mode==='moment'?'replace end-trim change':'replace/remove/split change'
+      )),
     ].join('\n\n')},
     {role:'user',content:JSON.stringify({
       task:'Review the complete assembled story for continuity, self-contained dialogue and natural transitions. Return ONLY necessary corrections.',
@@ -534,12 +623,13 @@ export async function runStoryFlowReview(
       fullOriginalTranscriptFormat:'[originalWordId,sourceStartMs,sourceEndMs,spokenWord] in original chronology',
       fullOriginalTranscript:completeTranscriptWords(words,true),
       sourceRangeMs:bounds,
-      constraints:{runtimeTargetDisabled:true,maxPassages:24,retainGoodPassages:true,wordIdsOnly:true},
+      constraints:{runtimeTargetDisabled:opts.mode==='baseline',maxPassages:opts.mode==='moment'?1:24,retainGoodPassages:true,wordIdsOnly:true,
+        ...(opts.mode!=='baseline'?{splitAllowed:opts.mode==='story',targetSeconds:opts.targetSeconds,hardWindowSeconds:opts.hardWindowSeconds}:{}),},
     })},
   ]
   for (let attempt=0;attempt<2;attempt++) {
     if (budget.state()==='hard') throw Error('flow_budget_exhausted')
-    const result=await lunaChat({messages,tools:[flowReviewTool],toolChoice:'required'})
+    const result=await lunaChat({messages,tools:[opts.mode==='baseline'?flowReviewTool:clipFlowReviewTool],toolChoice:'required'})
     budget.steps++;budget.addLuna(result.usage)
     await logAiProducerStep({
       runId:ctx.runId,stepIndex:budget.steps,phase:'plan',tool:'specialist_flow',
@@ -557,7 +647,9 @@ export async function runStoryFlowReview(
     })
     try {
       if (!call || !proposal || typeof proposal.assessment!=='string') throw Error('flow_missing_structured_review')
-      const applied=applyStoryFlowChanges(proposal.changes,originals,words,bounds)
+      const applied=opts.mode==='baseline'
+        ? applyStoryFlowChanges(proposal.changes,originals,words,bounds)
+        : applyStoryFlowChanges(proposal.changes,originals,words,bounds,{allowSplit:opts.mode==='story',momentEndTrimOnly:opts.mode==='moment'})
       const joinReviews=validateStoryFlowJoinReviews(proposal.joinReviews,originals.length,applied.changes)
       const finalPassages=applied.finalCuts.map((sel,i)=>({passageIndex:i,dialogue:originalPassageWords(words,sel).dialogue}))
       const finalJoins=storyFlowJoinEvidence(finalPassages)
@@ -571,7 +663,8 @@ export async function runStoryFlowReview(
         joinReviews,finalJoins,
         unchangedPassages:originals.length-applied.changes.length,
         finalDurationSeconds:selectionDurationS(applied.finalCuts),
-        runtimeTargetDisabled:true,
+        runtimeTargetDisabled:opts.mode==='baseline',
+        ...(opts.mode==='story'?{internalSplitJoins:applied.changes.filter(c=>c.action==='split').map(c=>({passageIndex:c.passageIndex,spans:c.afterSpans?.length??0}))}:{}),
       })
       return {cutPlan:applied.finalCuts,review}
     } catch(error) {
@@ -580,6 +673,44 @@ export async function runStoryFlowReview(
         attempt,errorCode,proposal:proposal?.changes??null,
         note:'Flow proposal rejected WITHOUT modifying any original cut',
       },errorCode)
+      if(attempt===1&&opts.mode!=='baseline'&&proposal&&Array.isArray(proposal.changes)){
+        // Optional clip-mode partial salvage: only accept individually valid,
+        // uniquely indexed repairs, and ONLY if every flagged original join
+        // remains covered. Never silently accept a broken seam.
+        const input=proposal.changes.filter((c):c is FlowChange=>
+          Boolean(c)&&typeof c==='object'&&Number.isInteger(c.passageIndex)) as FlowChange[]
+        const counts=new Map<number,number>()
+        for(const item of input)counts.set(item.passageIndex,(counts.get(item.passageIndex)??0)+1)
+        const surviving:FlowChange[]=[]
+        for(const item of input){
+          if(counts.get(item.passageIndex)!==1)continue
+          try{
+            applyStoryFlowChanges([item],originals,words,bounds,{
+              allowSplit:opts.mode==='story',momentEndTrimOnly:opts.mode==='moment',
+            })
+            surviving.push(item)
+          }catch{/* invalid change excluded */}
+        }
+        if(surviving.length&&surviving.length<input.length){
+          try{
+            const applied=applyStoryFlowChanges(surviving,originals,words,bounds,{
+              allowSplit:opts.mode==='story',momentEndTrimOnly:opts.mode==='moment',
+            })
+            const joinReviews=validateStoryFlowJoinReviews(
+              proposal.joinReviews,originals.length,applied.changes)
+            const review={
+              originalCuts,changes:applied.changes,applied:applied.changes.length>0,
+              note:'partial: '+(input.length-surviving.length)+' invalid changes dropped',
+              joinReviews,
+            }
+            await specialistEvent(ctx,budget,'flow','accepted_partial',{
+              originalCuts,finalCuts:applied.finalCuts,changes:applied.changes,joinReviews,
+              droppedInvalidChanges:input.length-surviving.length,
+            })
+            return {cutPlan:applied.finalCuts,review}
+          }catch{/* preserve caller's original Footage on unsafe partial repair */}
+        }
+      }
       if (attempt===1) throw Error('flow_review_invalid_after_retry: '+errorCode)
       if(call)messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({
         ok:false,error:errorCode,instruction:'Recheck original source word IDs, chronology and the failing passage. Include a specific joinReviews judgement for every adjacent passage pair. If any join needs_change, include a replace/remove action for one side; keep good passages unchanged.',
@@ -942,6 +1073,8 @@ export async function runEditorialRole(
   const agentMoment=ctx.config.storyMode==='clip_moment_v1'
   const agentStory=ctx.config.storyMode==='clip_story_v1'
   const storyObservation=ctx.config.editMode==='just_chatting_rough_cut' && !highlightsMode && !agentMoment && !agentStory && ctx.config.targetLengthS[1]<=105
+  const storyBaseline=storyObservation||agentStory
+  const clipTarget=ctx.config.targetLengthS.join('–')
   const visualStory=(storyObservation||agentStory) && ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence)
   const candidates=visualStory ? buildVisualBeatCandidates(
     ctx.cache.visualEvidence?.coarse??[],ctx.cache.visualEvidence?.focused??[]) : []
@@ -962,8 +1095,10 @@ export async function runEditorialRole(
         ] : []),
       ] : []),
       ...(ctx.config.editMode === 'just_chatting_rough_cut'
-        ? [...(storyObservation && (role==='story'||role==='footage'||role==='qa') ? [] : [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role]]),
-          ...(storyObservation ? [
+        ? [...(storyBaseline && (role==='story'||role==='footage'||role==='qa') ? [] : [JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION[role]]),
+          ...(agentStory ? [
+            'SHORT STORY CLIP BASELINE: the same editorial rules as the AI Producer Story — ONE coherent story with meaningful beginning, development and recorded ending, complete natural thought boundaries — but the finished runtime must add up to '+clipTarget+' seconds. Assemble several chronological non-overlapping original passages (typically 2–6) whose durations SUM to the target. Drop weak passages rather than cut mid-thought. Never pad.',
+          ] : storyObservation ? [
             'EDITORIAL BASELINE EXPERIMENT: Ignore all duration targets, runtime ceilings and 90-second requirements. The goal is ONE best coherent story from the authorized full transcript, whether it takes two, three, four minutes or another natural length. Identify a meaningful beginning, development and actual ending. Keep only the speech that supports that ONE story; do not concatenate every related topic. Choose complete naturally spoken thought boundaries. The deterministic tool will execute your selections unchanged. No later agent will compress, fix or substitute them.',
           ] : [ctx.config.targetLengthS[1] <= 105
             ? 'SHORT HIGHLIGHT OVERRIDE: Produce one concise 30–90 second standalone edit from the strongest sourced exchange. Prioritize an immediate understandable hook, essential context, and a satisfying payoff. Remove digressions and repetition. Short-form compression is intentional; do NOT follow the long-form pacing guidance. Respect meaning, chronology, and honest reactions. Target seconds supplied in the request.'
@@ -971,8 +1106,6 @@ export async function runEditorialRole(
         ] : []),
       ...(agentMoment ? [
         'SINGLE CONTINUOUS STREAMER MOMENT: This is NOT a montage or the long-form story baseline. Story must choose ONE powerful event from the supplied original recording. Footage must submit exactly ONE firstWordId/lastWordId interval spanning its necessary lead-in, action, genuine reaction and finished payoff. No isolated fragments, artificial joins or extra candidate moments. Respect the target seconds. Flow/QA verify completeness but MUST NOT introduce cuts or reorder footage.',
-      ] : agentStory ? [
-        'STREAMER SHORT STORY CLIP: Select several real passages from ONE event, not a documentary or a highlights compilation. Build an understandable setup, escalation, and completed payoff within the requested 30/60/90 second target. Complete source-grounded word boundaries, maintain sequence. Prioritize relevant visual/gameplay actions. Keep the long-form gaming producer unchanged.',
       ] : []),
       ...(highlightsMode ? [
         'HIGHLIGHTS MODE OVERRIDE: Curate several DISTINCT memorable moments across the WHOLE available source, not one continuous scene with breath cuts. Each moment must be independently understandable and interesting; authentic jokes, surprising answers, revealing quotes, reactions or sharp insights are welcome. Select 2 distinct moments for very short highlights and ideally 3+ for 60–120 seconds, without forcing weak filler. Do not pretend unrelated moments form one chronological story. Avoid repetitive quotes, fabricated context, misleading juxtapositions, dangling sentences, or cuts inside words. Source-order chronological output is required.'
@@ -987,13 +1120,15 @@ export async function runEditorialRole(
       ...(storyObservation ? {runtimeTargetDisabled:true,experiment:'narrative_coherence_and_boundary_selection_only'} : {outputTargetSeconds:ctx.config.targetLengthS}),
       editingIntent: agentMoment ? 'single_continuous_streamer_moment' : agentStory ? 'short_streamer_story_clip' : highlightsMode ? 'multi_moment_highlights' : ctx.config.targetLengthS[1] <= 105 ? 'short_story' : 'conversational_long_form',
       ...(role === 'footage' && !highlightsMode &&
-        ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105 && !agentMoment && !agentStory
-        ? { preferredEditInstruction: 'STORY BASELINE: the selections ARE the complete final narrative, not a list of candidate moments. Choose a coherent beginning, development and ending with no length target. Do not assemble multiple loosely related stories; omit unrelated or redundant material. Return word IDs and let code cut exactly there; no other agent will trim the selections.' } : {}),
+        ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105 && !agentMoment
+        ? { preferredEditInstruction: agentStory
+          ? 'STORY BASELINE: selections ARE the complete final narrative, not candidates. Choose a coherent setup, development and recorded payoff, with all passages summing to '+clipTarget+' seconds. Use word IDs, omit off-topic material and preserve natural endings.'
+          : 'STORY BASELINE: the selections ARE the complete final narrative, not a list of candidate moments. Choose a coherent beginning, development and ending with no length target. Do not assemble multiple loosely related stories; omit unrelated or redundant material. Return word IDs and let code cut exactly there; no other agent will trim the selections.' } : {}),
       ...((role === 'footage' || role === 'dialogue')
         ? { selectionDurationInstruction: agentMoment
           ? 'Exactly ONE contiguous source span only. Pick complete action and reaction with natural start/end inside the target seconds; do not concatenate separate scenes.'
           : agentStory
-          ? 'Actual final short-form source selections with meaningful setup, escalation and payoff. Use original word IDs and honor the selected duration target.'
+          ? 'Selections are the FINAL edit, not candidates. Sum of passage durations must land in '+clipTarget+' seconds (hard limit '+Math.max(15,ctx.config.targetLengthS[0]-12)+'–'+(ctx.config.targetLengthS[1]+12)+'). Use 2+ passages when the story contains a detour. Never select one huge span containing material Story excluded; preserve complete opening and payoff.'
           : highlightsMode
           ? 'Find distinct self-contained highlights from different source moments. Do not count adjacent breath cuts as different moments. Choose compelling footage up to the duration target without padding; finish each excerpt on a complete thought.'
           : storyObservation ? 'For this baseline, IGNORE runtime. Find the complete spoken passages that tell ONE compelling story from opening to resolution. Cut irrelevant digressions and repeated points, but never trim for a duration target. Select accurate starts and endings from the transcript and report exactly those word IDs.'
@@ -1358,7 +1493,7 @@ export async function createEditorialHandoff(
   const momentClip = ctx.config.storyMode === 'clip_moment_v1'
   const storyClip = ctx.config.storyMode === 'clip_story_v1'
   const clipBrief = momentClip
-    ? 'SINGLE MOMENT CLIP: Find one great source event with the actual opening context, event, reaction and payoff. Return exactly ONE continuous source passage, without montage, unrelated padding or jump cuts. Honor the requested short-form target.'
+    ? 'SINGLE MOMENT CLIP: Find one great source event with the actual opening context, event, reaction and payoff. Return exactly ONE continuous source passage, without montage, unrelated padding or jump cuts. Honor the requested short-form target. excludeAsides must lie OUTSIDE that span. An unrelated middle detour cannot be removed; choose a different continuous event, start after it, or accept it as part of the moment.'
     : storyClip
       ? 'SHORT STORY CLIP: Form one meaningful setup, escalation and genuine source-recorded payoff from multiple nonoverlapping passages. Honor the short-form target; this is NOT the existing long-form gaming mode.'
       : null
@@ -1390,7 +1525,9 @@ export async function createEditorialHandoff(
       fullTranscriptWordIndexed:true,
       fullTranscriptFormat:'[originalWordId, spokenWord] — ALL spoken words in source order, no omissions',
       fullTranscript:completeTranscriptWords(ctx.cache.words,false),
-      instruction: clipBrief ?? (highlightsMode
+      instruction: storyClip
+        ? [clipBrief,'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact. Sum the included real story beats to the requested '+ctx.config.targetLengthS.join('–')+' seconds.'].join(' ')
+        : clipBrief ?? (highlightsMode
         ? 'Define the editorial criteria for selecting independent, self-contained highlights. The payoff and ending fields express what makes a moment satisfying, not a fabricated shared narrative. Provide all structured creative-brief fields.'
         : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.'),
     })
@@ -1442,7 +1579,9 @@ export async function createEditorialHandoff(
       fullTranscriptWordIndexed:!highlightsMode && ctx.config.editMode==='just_chatting_rough_cut' && ctx.config.targetLengthS[1]<=105,
       fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord] — FULL original source in chronological order',
       fullTranscript:completeTranscriptWords(ctx.cache.words,true),
-      instruction: clipBrief ?? (highlightsMode
+      instruction: storyClip
+        ? [clipBrief,'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source and Story plan. Choose actual final passages by FIRST/LAST WORD IDS. Tell ONE complete narrative from recorded setup through the genuine payoff, trimming irrelevant tangents. Select complete sentences, not mid-phrase edges. Each selection\'s seconds are (endMs-startMs)/1000 from the indexed transcript; report the running total in each reason. The sum must approach '+ctx.config.targetLengthS.join('–')+' seconds.'].join(' ')
+        : clipBrief ?? (highlightsMode
         ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
         : ctx.config.targetLengthS[1] <= 105
         ? 'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source, Story plan, and every spoken word. Choose actual final passages by FIRST/LAST WORD IDS. IGNORE 90 seconds and ALL runtime targets. Tell ONE complete narrative from beginning through genuine recorded resolution, trimming irrelevant tangents but not the story for length. Select complete sentences, not mid-phrase edges. No later Finisher or Dialogue recut will repair your boundaries.'
@@ -1479,27 +1618,45 @@ export async function createEditorialHandoff(
   }
   let footage = found.selections as EditorialSelection[]
   if(momentClip){
-    // The shared Footage schema permits multi-cut stories. Explicitly repair
-    // that output for this isolated one-take product rather than silently
-    // choosing one of several unreviewed fragments.
+    // One-take shorts remain source-contiguous. Try to improve the nominal
+    // duration but never replace a valid candidate with a worse one.
+    const [min,max]=ctx.config.targetLengthS
+    const distance=(seconds:number)=>seconds<min?min-seconds:seconds>max?seconds-max:0
+    let best=footage
     for(let attempt=1;attempt<=2;attempt++){
-      const seconds=footage.length===1
-        ?(footage[0]!.endMs-footage[0]!.startMs)/1000:0
-      if(footage.length===1&&footage[0]?.kind!=='visual_action'&&
-        seconds>=Math.max(5,ctx.config.targetLengthS[0]-12)&&
-        seconds<=ctx.config.targetLengthS[1]+12)break
-      const corrected=await runEditorialRole(ctx,out,budget,'footage',{
-        ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
-        fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
-        fullTranscript:completeTranscriptWords(ctx.cache.words,true),
-        invalidPriorFootage:footage,
-        instruction:'CORRECT THE SINGLE-MOMENT CLIP: The previous selection was not exactly ONE source-contiguous event of the requested duration. Return exactly one word-ID first/last passage that contains a genuine setup, action, reaction and full ending. Do not return a cut list, collage or montage; no invented words.',
-      })
-      footage=corrected.selections as EditorialSelection[]
-      await specialistEvent(ctx,budget,'footage','single_moment_correction',{
-        attempt,selectionCount:footage.length,durationSeconds:selectionDurationS(footage),
-      })
+      const seconds=best.length===1?(best[0]!.endMs-best[0]!.startMs)/1000:0
+      if(best.length===1&&best[0]?.kind!=='visual_action'&&seconds>=min&&seconds<=max)break
+      try{
+        const corrected=await runEditorialRole(ctx,out,budget,'footage',{
+          ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
+          fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
+          fullTranscript:completeTranscriptWords(ctx.cache.words,true),
+          invalidPriorFootage:best,
+          previousDurationSeconds:seconds,targetSeconds:[min,max],
+          instruction:'SINGLE MOMENT LENGTH REPAIR: Return exactly ONE continuous original source passage as close as possible to '+min+'–'+max+' seconds by moving only the first/last word. Never remove the middle; if no complete moment fits, return the most complete one and explain why.',
+        })
+        const candidate=corrected.selections as EditorialSelection[]
+        const candidateSeconds=candidate.length===1
+          ?(candidate[0]!.endMs-candidate[0]!.startMs)/1000:0
+        const valid=candidate.length===1&&candidate[0]?.kind!=='visual_action'&&
+          candidateSeconds>=Math.max(5,min-12)&&candidateSeconds<=max+12
+        if(valid&&(
+          best.length!==1||best[0]?.kind==='visual_action'||
+          distance(candidateSeconds)<distance(seconds))){
+          best=candidate
+        }
+        await specialistEvent(ctx,budget,'footage','single_moment_correction',{
+          attempt,selectionCount:candidate.length,durationSeconds:candidateSeconds,
+          accepted:best===candidate,
+        })
+      }catch(error){
+        await specialistEvent(ctx,budget,'footage','single_moment_correction_unavailable',{
+          attempt,errorCode:String((error as Error)?.message??error).slice(0,250),
+        })
+        break
+      }
     }
+    footage=best
   }
   let visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
   let submittedVisualOmissions=(found.visualActionOmissions as Array<{id:string;reason:string}>|undefined)??[]
@@ -1519,15 +1676,37 @@ export async function createEditorialHandoff(
     const seconds=(first.endMs-first.startMs)/1000
     if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds+12)
       throw Error('clip_moment_duration_outside_target:'+seconds.toFixed(1))
-    const reviewed=await runStoryFlowReview(ctx,budget,outline,footage)
-    if(reviewed.cutPlan.length!==1 ||
-      reviewed.cutPlan[0]?.startMs!==first.startMs ||
-      reviewed.cutPlan[0]?.endMs!==first.endMs){
-      await specialistEvent(ctx,budget,'flow','moment_preserve_source_continuity',{
-        original:first,proposed:reviewed.cutPlan,
-      })
+    if(seconds<minimumSeconds||seconds>maximumSeconds){
+      out.notes.push('Single moment duration '+seconds.toFixed(1)+'s vs target '+minimumSeconds+'–'+maximumSeconds+'s')
     }
-    return {outline,footage,cutPlan:footage,flowReview:reviewed.review,
+    let reviewed:Awaited<ReturnType<typeof runStoryFlowReview>>
+    try{
+      reviewed=await runStoryFlowReview(ctx,budget,outline,footage,{
+        mode:'moment',targetSeconds:[minimumSeconds,maximumSeconds],
+      })
+    }catch(error){
+      const errorCode=String((error as Error)?.message??error).slice(0,400)
+      await specialistEvent(ctx,budget,'flow','review_unavailable_kept_footage',{
+        errorCode,originalCuts:footage,note:'One continuous span preserved after unavailable Flow',
+      },errorCode)
+      reviewed={cutPlan:footage,review:{originalCuts:footage.map(c=>({...c})),
+        changes:[],applied:false,note:'Flow review unavailable: '+errorCode}}
+    }
+    const proposed=reviewed.cutPlan.length===1?reviewed.cutPlan[0]:null
+    const proposedSeconds=proposed?(proposed.endMs-proposed.startMs)/1000:0
+    const distance=(duration:number)=>duration<minimumSeconds?minimumSeconds-duration:
+      duration>maximumSeconds?duration-maximumSeconds:0
+    const useTrim=Boolean(proposed&&proposed.kind!=='visual_action'&&
+      proposed.startMs>=first.startMs&&proposed.endMs<=first.endMs&&
+      proposedSeconds>=Math.max(5,minimumSeconds-12)&&
+      proposedSeconds<=maximumSeconds+12&&distance(proposedSeconds)<=distance(seconds))
+    const finalCut=useTrim?proposed!:first
+    await specialistEvent(ctx,budget,'flow',useTrim&&
+      (finalCut.startMs!==first.startMs||finalCut.endMs!==first.endMs)
+      ?'moment_flow_trim_applied':'moment_preserve_source_continuity',{
+      original:first,proposed:reviewed.cutPlan,finalCut,
+    })
+    return {outline,footage,cutPlan:[finalCut],flowReview:reviewed.review,
       visualActions:[],visualActionOmissions:[]}
   }
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
@@ -1547,9 +1726,41 @@ export async function createEditorialHandoff(
       storyDecision: outline,
       note:'Exact selected word timestamps were applied unchanged; no Finisher, Dialogue or source-tail fallback',
     })
+    if(storyClip){
+      const duration=selectionDurationS(footage)
+      const distance=(n:number)=>n<minimumSeconds?minimumSeconds-n:n>maximumSeconds?n-maximumSeconds:0
+      if(distance(duration)>0&&budget.state()!=='hard'){
+        try{
+          const revision=await runEditorialRole(ctx,out,budget,'footage',{
+            ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
+            fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
+            fullTranscript:completeTranscriptWords(ctx.cache.words,true),
+            previousSelections:footage.map(sel=>({...sel,seconds:(sel.endMs-sel.startMs)/1000})),
+            previousDurationSeconds:duration,targetSeconds:[minimumSeconds,maximumSeconds],
+            instruction:duration>maximumSeconds
+              ? 'SHORT STORY LENGTH REPAIR: too long. Drop weaker complete passages or cut out source detours. SUM the finished passages into target. Keep opening and actual payoff.'
+              : 'SHORT STORY LENGTH REPAIR: too short. Add the next essential actual passage (setup, escalation or reaction) from the SAME story so passages SUM to target. Do not pad or invent; return the best complete story when source lacks material.',
+          })
+          const candidate=revision.selections as EditorialSelection[]
+          const revisedSeconds=selectionDurationS(candidate)
+          if(candidate.length&&distance(revisedSeconds)<distance(duration)){
+            footage=candidate
+            await specialistEvent(ctx,budget,'footage','short_story_clip_length_repaired',{
+              beforeSeconds:duration,afterSeconds:revisedSeconds,
+            })
+          }
+        }catch(error){
+          await specialistEvent(ctx,budget,'footage','short_story_clip_length_repair_unavailable',{
+            errorCode:String((error as Error)?.message??error).slice(0,260),
+          })
+        }
+      }
+    }
     let reviewed:Awaited<ReturnType<typeof runStoryFlowReview>>
     try {
-      reviewed=await runStoryFlowReview(ctx,budget,outline,footage)
+      reviewed=await runStoryFlowReview(ctx,budget,outline,footage,
+        storyClip?{mode:'story',targetSeconds:[minimumSeconds,maximumSeconds],
+          hardWindowSeconds:[Math.max(15,minimumSeconds-12),maximumSeconds+12]}:{mode:'baseline'})
     } catch (error) {
       const errorCode=String((error as Error)?.message??error).slice(0,400)
       await specialistEvent(ctx,budget,'flow','review_unavailable_kept_footage',{
@@ -1558,23 +1769,49 @@ export async function createEditorialHandoff(
       reviewed={cutPlan:footage,review:{originalCuts:footage.map(c=>({...c})),changes:[],applied:false,note:'Flow review unavailable: '+errorCode}}
     }
     const combined=combineSpeechWithVisualActions(reviewed.cutPlan,visualActions,ctx.cache.words,source.rangeMs)
+    let finalCombined=combined
     if(storyClip){
-      const seconds=selectionDurationS(combined.cutPlan)
-      if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds+12)
-        throw Error('clip_story_duration_outside_target:'+seconds.toFixed(1))
+      const distance=(n:number)=>n<minimumSeconds?minimumSeconds-n:n>maximumSeconds?n-maximumSeconds:0
+      const hardMin=Math.max(15,minimumSeconds-12),hardMax=maximumSeconds+12
+      const candidateSets=[
+        combined,
+        {cutPlan:reviewed.cutPlan,included:[],omitted:submittedVisualOmissions},
+        combineSpeechWithVisualActions(footage,visualActions,ctx.cache.words,source.rangeMs),
+        {cutPlan:footage,included:[],omitted:submittedVisualOmissions},
+      ]
+      const valid=candidateSets.find(candidate=>{
+        const duration=selectionDurationS(candidate.cutPlan)
+        return duration>=hardMin&&duration<=hardMax
+      })
+      if(valid)finalCombined=valid
+      else{
+        finalCombined=[...candidateSets].sort((a,b)=>
+          distance(selectionDurationS(a.cutPlan))-distance(selectionDurationS(b.cutPlan)))[0]!
+        const seconds=selectionDurationS(finalCombined.cutPlan)
+        if(seconds<15||seconds>maximumSeconds+20)
+          throw Error('clip_story_duration_outside_target:'+seconds.toFixed(1))
+        out.notes.push('AI story duration '+seconds.toFixed(1)+'s outside target '+
+          minimumSeconds+'–'+maximumSeconds+'s; best complete sourced story retained')
+        await specialistEvent(ctx,budget,'footage','short_story_clip_duration_advisory',{
+          durationSeconds:seconds,targetSeconds:[minimumSeconds,maximumSeconds],
+          note:'Short/long complete story allowed rather than failing or padding',
+        })
+      }
     }
+    if(storyClip&&finalCombined.cutPlan.length<2)
+      throw Error('clip_story_requires_multiple_source_passages')
     await specialistEvent(ctx,budget,'footage','visual_actions_handoff',{
-      proposed:visualActions,selected:combined.included,omitted:[...submittedVisualOmissions,...combined.omitted],
-      finalCutCount:combined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',
+      proposed:visualActions,selected:finalCombined.included,omitted:[...submittedVisualOmissions,...finalCombined.omitted],
+      finalCutCount:finalCombined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',
     })
     await specialistEvent(ctx,budget,'flow','handoff',{
-      originalCutCount:footage.length,finalCutCount:combined.cutPlan.length,
-      originalCuts:footage,finalCuts:combined.cutPlan,
+      originalCutCount:footage.length,finalCutCount:finalCombined.cutPlan.length,
+      originalCuts:footage,finalCuts:finalCombined.cutPlan,
       changes:reviewed.review.changes,
       untouchedOriginalFootage:true,
     })
-    return {outline,footage,cutPlan:combined.cutPlan,flowReview:reviewed.review,
-      visualActions:combined.included,visualActionOmissions:[...submittedVisualOmissions,...combined.omitted]}
+    return {outline,footage,cutPlan:finalCombined.cutPlan,flowReview:reviewed.review,
+      visualActions:finalCombined.included,visualActionOmissions:[...submittedVisualOmissions,...finalCombined.omitted]}
   }
   // One targeted *editorial* retry instead of accepting a 20s excerpt as a
   // requested 90s story. Preserve original cuts if the revision is worse.
