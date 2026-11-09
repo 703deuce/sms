@@ -106,4 +106,29 @@ describe('motion plan adapter to existing editor & FFmpeg text layers', () => {
     if (!second.ok) throw new Error(second.detail)
     expect(second.edits.textItems?.map(i => i.id).sort()).toEqual(['mg_new', 'mg_score'])
   })
+  it('maps AI position, scale, rotation and opacity to editable item-local keyframes', () => {
+    const animated: MotionPlan = { ...plan, graphics: [{
+      ...plan.graphics[0], keyframes: [
+        { atMs: 0, x: .5, y: .25, scale: 1, rotation: 0, opacity: 0 },
+        { atMs: 350, x: .6, y: .3, scale: 1.25, rotation: 15, opacity: 1 },
+      ],
+    }] }
+    const result = addTextBackedMotionPlan(base, animated)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.edits.keyframes?.map(t => t.prop).sort())
+      .toEqual(['opacity', 'rotation', 'scale', 'x', 'y'])
+    expect(result.edits.keyframes?.find(t => t.prop === 'x')?.points[1]?.v).toBeCloseTo(10)
+    const clean = removeTextBackedMotionGraphics({ ...result.edits, motionPlan: animated }, ['score'])
+    expect(clean.keyframes).toEqual([])
+    expect(clean.textItems).toEqual([])
+  })
+  it('rejects unsupported keyframe scale instead of letting export silently clamp it', () => {
+    const animated: MotionPlan = { ...plan, graphics: [{
+      ...plan.graphics[0], keyframes: [{ atMs: 100, scale: 7 }],
+    }] }
+    const result = addTextBackedMotionPlan(base, animated)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.code).toBe('invalid_shape_data')
+  })
 })
