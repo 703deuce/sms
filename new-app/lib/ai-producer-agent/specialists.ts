@@ -1798,6 +1798,8 @@ export async function createEditorialHandoff(
         })
       }
     }
+    if(storyClip&&finalCombined.cutPlan.length<2)
+      throw Error('clip_story_requires_multiple_source_passages')
     await specialistEvent(ctx,budget,'footage','visual_actions_handoff',{
       proposed:visualActions,selected:finalCombined.included,omitted:[...submittedVisualOmissions,...finalCombined.omitted],
       finalCutCount:finalCombined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',
