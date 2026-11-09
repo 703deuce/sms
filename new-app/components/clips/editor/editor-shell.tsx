@@ -3494,6 +3494,7 @@ export function EditorShell({
             { id: 'cleanup', label: 'Clean up (fillers, gaps, retakes)', onSelect: () => openToolPanel('cleanup') },
             { id: 'pacing', label: 'Pacing check', onSelect: () => runPalette('pacing') },
             { id: 'producer', label: 'AI Producer', onSelect: () => setProducerOpen(true) },
+            { id: 'motion-graphics', label: 'AI Motion Graphics', onSelect: () => openToolPanel('motion') },
             { id: 'captions', label: 'Captions & translate', onSelect: () => openToolPanel('captions') },
             { id: 'repurpose', label: 'Repurpose (chapters, show notes)', onSelect: () => openToolPanel('repurpose') },
           ],
