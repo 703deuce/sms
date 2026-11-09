@@ -193,6 +193,22 @@ const submitSchemas: Record<EditorialRole, ToolSchema> = {
 }
 
 
+/** Quality grade is requested ONLY for clip-mode QA; Producer legacy QA
+ * remains the original pass/issues schema and prompt. */
+const clipQaSubmission:ToolSchema={
+  name:names.qa,
+  description:'Review the final clip and rate its video/audio/story impact, using only present modalities.',
+  parameters:{type:'object',additionalProperties:false,
+    properties:{
+      pass:{type:'boolean'},
+      issues:{type:'array',maxItems:15,items:jsonString},
+      rating:{type:'integer',minimum:0,maximum:100},
+      rationale:{type:'string'},
+    },
+    required:['pass','issues','rating','rationale'],
+  },
+}
+
 /** Complete original ASR; never sample or omit words from Story / short Story
  * Footage. Original array indices are stable IDs throughout the handoff. */
 export function completeTranscriptWords(words: ClipWord[], withTiming: boolean) {
@@ -1078,7 +1094,8 @@ export async function runEditorialRole(
   const visualStory=(storyObservation||agentStory) && ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence)
   const candidates=visualStory ? buildVisualBeatCandidates(
     ctx.cache.visualEvidence?.coarse??[],ctx.cache.visualEvidence?.focused??[]) : []
-  const submitTool=visualStory && role==='story' ? storyWithVisualBeatsSubmission
+  const submitTool=(agentMoment||agentStory)&&role==='qa'?clipQaSubmission
+    : visualStory && role==='story' ? storyWithVisualBeatsSubmission
     : visualStory && wordFootage ? footageWithVisualActionsSubmission
     : wordFootage ? footageWordsSubmission : submitSchemas[role]
   const tools = [...allowedTools,submitTool]
@@ -1277,12 +1294,17 @@ export async function runEditorialRole(
           })
           return { selections, ...(visualStory && wordFootage ? {visualActions,visualActionOmissions} : {}) }
         }
+        if ((agentMoment||agentStory) && (
+          !Number.isInteger(args.rating) || Number(args.rating)<0 || Number(args.rating)>100 ||
+          typeof args.rationale!=='string' || !String(args.rationale).trim()))
+          throw new Error('clip_qa_rating_required')
         if (typeof args.pass !== 'boolean' || !Array.isArray(args.issues) ||
             !args.issues.every((i) => typeof i === 'string')) {
           throw new Error('specialist_review_invalid')
         }
         await specialistEvent(ctx, budget, role, 'accepted', { turn, pass: args.pass, issueCount: args.issues.length, issues: args.issues.slice(0,15) })
-        return { pass: args.pass, issues: args.issues.slice(0, 15) }
+        return { pass: args.pass, issues: args.issues.slice(0, 15),
+          ...((agentMoment||agentStory)?{rating:args.rating as number,rationale:String(args.rationale).slice(0,800)}:{}) }
         } catch (error) {
           invalidSubmissions++
           const errorCode = String((error as Error)?.message ?? error).slice(0, 240)
