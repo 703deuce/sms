@@ -33,11 +33,11 @@ describe('motion plan adapter to existing editor & FFmpeg text layers', () => {
     expect(second.ok).toBe(true)
     if (second.ok) expect(second.edits.textItems?.filter(t => t.id === 'mg_score')).toHaveLength(1)
   })
-  it('rejects non-text templates instead of silently ignoring them', () => {
+  it('rejects diagrams missing required step data instead of silently ignoring them', () => {
     const p = { ...plan, graphics: [{ ...plan.graphics[0], templateId: 'diagram' }] }
     const result = addTextBackedMotionPlan(base, p)
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.code).toBe('unsupported_template')
+    if (!result.ok) expect(result.code).toBe('invalid_shape_data')
   })
   it('removes an AI graphic without deleting a manual item', () => {
     const result = addTextBackedMotionPlan(base, plan)
