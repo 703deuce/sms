@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { MotionPlanSchema, type MotionPlan } from '@/lib/clips/motion-graphics/contract'
+import { MotionPlanSchema, StyleProfileSchema, type StyleProfile, type MotionPlan } from '@/lib/clips/motion-graphics/contract'
 import { addTextBackedMotionPlan, removeTextBackedMotionGraphics } from '@/lib/clips/motion-graphics/text-adapter'
 
 type Style = 'minimal' | 'narrative' | 'gaming' | 'tech'
@@ -19,12 +19,27 @@ export function MotionGraphicsPanel(props: {
   onEdits: (next: ClipEditsV2) => void
 }) {
   const [style, setStyle] = useState<Style>('narrative')
+  const [profiles, setProfiles] = useState<StyleProfile[]>([])
+  const [profileId, setProfileId] = useState('')
+  const [newStyleName, setNewStyleName] = useState('')
+  const [savingStyle, setSavingStyle] = useState(false)
   const [instruction, setInstruction] = useState('')
   const [plan, setPlan] = useState<MotionPlan | null>(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [sourceVersion, setSourceVersion] = useState<number | null>(null)
+  useEffect(() => {
+    let live = true
+    void fetch('/api/clips/motion-styles').then(r => r.ok ? r.json() : Promise.reject()).then((v: { data?: unknown[] }) => {
+      if (!live) return
+      setProfiles((v.data ?? []).flatMap(item => {
+        const parsed = StyleProfileSchema.safeParse(item)
+        return parsed.success ? [parsed.data] : []
+      }))
+    }).catch(() => { if (live) setProfiles([]) })
+    return () => { live = false }
+  }, [])
   const aiItems = props.edits.textItems?.filter(i => i.id.startsWith('mg_')) ?? []
 
   async function generate() {
@@ -32,7 +47,7 @@ export function MotionGraphicsPanel(props: {
     try {
       const res = await fetch('/api/clips/clips/' + encodeURIComponent(props.clipId) + '/motion-graphics/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ style, instruction }),
+        body: JSON.stringify({ style, instruction, ...(profileId ? { profileId } : {}) }),
       })
       const body: unknown = await res.json()
       if (!res.ok) {
@@ -52,6 +67,31 @@ export function MotionGraphicsPanel(props: {
     } finally {
       setGenerating(false)
     }
+  }
+
+  async function createStyle() {
+    if (!newStyleName.trim()) return
+    setSavingStyle(true); setError('')
+    const palette = style === 'gaming' ? ['#FFFFFF', '#FACC15'] :
+      style === 'tech' ? ['#FFFFFF', '#34D399'] :
+      style === 'narrative' ? ['#FFFFFF', '#22D3EE'] : ['#FFFFFF', '#4ADE80']
+    const font = style === 'gaming' ? 'Bangers' : style === 'tech' ? 'Anton' : 'Montserrat'
+    try {
+      const res = await fetch('/api/clips/motion-styles', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: 1, name: newStyleName.trim(), brandColors: palette,
+          fontFamilies: [font], templateIds: ['kinetic_type', 'lower_third', 'callout'],
+          motionDensity: style === 'minimal' ? 'minimal' : style === 'gaming' ? 'dynamic' : 'balanced',
+          references: [], instructions: instruction }),
+      })
+      const body: unknown = await res.json()
+      const parsed = StyleProfileSchema.safeParse((body as { data?: unknown }).data)
+      if (!res.ok || !parsed.success) throw new Error('Could not save style profile')
+      setProfiles(prev => [parsed.data, ...prev])
+      setProfileId(parsed.data.id); setNewStyleName('')
+      setNotice('Saved workspace style profile. It can be selected in other clips.')
+    } catch (e) { setError((e as Error).message) }
+    finally { setSavingStyle(false) }
   }
 
   function apply() {
@@ -86,6 +126,24 @@ export function MotionGraphicsPanel(props: {
           {PRESETS.map(p => <option value={p.id} key={p.id}>{p.label}</option>)}
         </select>
       </label>
+      <label className="block space-y-1 text-xs">
+        <span>Saved Style Profile</span>
+        <select className="w-full rounded border bg-background p-2 text-sm" value={profileId}
+          onChange={e => setProfileId(e.target.value)}>
+          <option value="">Use the preset above</option>
+          {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </label>
+      <div className="space-y-1">
+        <label className="text-xs" htmlFor="motion-new-style">Save current preset as a reusable profile</label>
+        <div className="flex gap-2">
+          <input id="motion-new-style" className="min-w-0 flex-1 rounded border bg-background p-2 text-sm"
+            value={newStyleName} maxLength={100} placeholder="My creator style"
+            onChange={e => setNewStyleName(e.target.value)} />
+          <button type="button" className="rounded border px-2 text-xs" disabled={!newStyleName.trim() || savingStyle}
+            onClick={() => void createStyle()}>{savingStyle ? 'Saving…' : 'Save'}</button>
+        </div>
+      </div>
       <label className="block space-y-1 text-xs">
         <span>Additional creative direction (optional)</span>
         <textarea className="min-h-20 w-full rounded border bg-background p-2 text-sm"
