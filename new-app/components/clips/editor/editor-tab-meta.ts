@@ -16,6 +16,7 @@ export const TAB_META: Record<
   dub: { label: 'Dub', hint: 'Translate & AI voice (uses credits)' },
   brand: { label: 'Brand', hint: 'Logo, colors & fonts from your kit' },
   text: { label: 'Text', hint: 'Titles & text layers on the Text lane' },
+  motion: { label: 'AI Motion', hint: 'Generate editable animated graphics' },
   templates: { label: 'Templates', hint: 'Layouts, caption & text styles, brand kits' },
   color: { label: 'Effects', hint: 'Effects, filters & adjustments' },
   media: { label: 'Media', hint: 'Your uploads, camera angles & multicam' },
