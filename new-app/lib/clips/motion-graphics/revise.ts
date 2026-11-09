@@ -1,6 +1,7 @@
 import 'server-only'
 import { lunaChat } from '@/lib/ai-producer-agent/luna-client'
-import { patchMotionGraphics, type MotionPlan } from './contract'
+import { patchMotionGraphics, validateMotionPlan, type MotionPlan } from './contract'
+import { motionSafeRect } from './safe-zones'
 
 const parameters = {
   type: 'object', additionalProperties: false,
@@ -46,7 +47,10 @@ export async function reviseMotionPlan(plan: MotionPlan, feedback: string): Prom
   const graphic = plan.graphics.find(g => g.id === id)
   if (!graphic) throw new Error('motion_revision_unknown_target')
   if (payload.action === 'remove') {
-    return { plan: { ...plan, graphics: plan.graphics.filter(g => g.id !== id) }, usage }
+    const next = validateMotionPlan({ ...plan, graphics: plan.graphics.filter(g => g.id !== id) },
+      { safeRect: motionSafeRect(plan.format) })
+    if (!next.ok) throw new Error('motion_revision_invalid_plan')
+    return { plan: next.plan, usage }
   }
   let patch: Partial<typeof graphic>
   const num = (key: string, fallback: number) => {
@@ -81,5 +85,7 @@ export async function reviseMotionPlan(plan: MotionPlan, feedback: string): Prom
   } else throw new Error('motion_revision_unsupported_action')
   const result = patchMotionGraphics(plan, [{ id, patch }])
   if (!result.ok) throw new Error('motion_revision_invalid_patch')
-  return { plan: result.plan, usage }
+  const checked = validateMotionPlan(result.plan, { safeRect: motionSafeRect(plan.format) })
+  if (!checked.ok) throw new Error('motion_revision_outside_safe_zone')
+  return { plan: checked.plan, usage }
 }
