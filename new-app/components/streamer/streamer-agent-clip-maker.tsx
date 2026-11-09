@@ -1,16 +1,15 @@
 'use client'
 
-import {useEffect,useRef,useState} from 'react'
+import {useEffect,useState} from 'react'
 import Link from 'next/link'
 import {Sparkles,Loader2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {aiProducerAgentPublicEnabled} from '@/lib/ai-producer-agent/flags'
-import {streamerAgentWindows,MAX_AGENT_SOURCE_WINDOW_MS} from '@/lib/streamer/agent-windows'
+import {MAX_AGENT_SOURCE_WINDOW_MS} from '@/lib/streamer/agent-windows'
 
 export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'
-type FinishedClip={projectId:string;clipId:string;startMin:number}
+type FinishedClip={projectId:string;clipId:string;startMin:number;rank?:number;score?:number;reason?:string;category?:string}
 const WINDOW_MS=MAX_AGENT_SOURCE_WINDOW_MS
-const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms))
 async function requestJson(url:string,opts?:RequestInit){
   const response=await fetch(url,{cache:'no-store',...opts})
   const json=await response.json()
@@ -34,10 +33,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
   const [status,setStatus]=useState('idle')
   const [completed,setCompleted]=useState<FinishedClip[]>([])
   const [errors,setErrors]=useState<string[]>([])
-  const canceled=useRef(false)
-  const manualRunning=useRef(false)
   const [batchId,setBatchId]=useState<string|null>(null)
-  useEffect(()=>()=>{canceled.current=true},[])
   // The entire-VOD batch is durable: project settings and worker jobs survive
   // refresh, logout and browser closure. Reattach to it when reopening the page.
   useEffect(()=>{
@@ -51,7 +47,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
           completed:FinishedClip[];errors:string[]
         }
         if(stopped)return
-        if(data?.id&&!manualRunning.current){
+        if(data?.id){
           setBatchId(data.id)
           setCompleted(data.completed??[])
           setErrors(data.errors??[])
@@ -70,96 +66,21 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
   },[projectId])
   if(!aiProducerAgentPublicEnabled())return null
 
-  async function prepareSource(startMs:number,endMs:number){
-    if(videoAvailable)return {projectId,rangeMs:[startMs,endMs] as [number,number]}
-    setStatus('Fetching actual source video')
-    const created=await requestJson('/api/streamer/agent-windows',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({parentProjectId:projectId,rangeStartMs:startMs,rangeEndMs:endMs}),
-    }) as {projectId:string}
-    // Poll durable worker preparation, never assume a queued job has completed.
-    for(let i=0;i<240&&!canceled.current;i++){
-      const info=await requestJson('/api/streamer/agent-windows?projectId='+
-        encodeURIComponent(created.projectId)) as {
-          ready:boolean;durationMs:number;error?:string;jobStatus?:string;status:string}
-      if(info.ready)return {projectId:created.projectId,
-        rangeMs:[0,info.durationMs] as [number,number]}
-      if(info.status==='FAILED'||info.status==='CANCELED'||info.jobStatus==='FAILED')
-        throw Error(info.error??'Source video could not be prepared')
-      await sleep(3000)
-    }
-    throw Error('Source preparation did not finish in this session')
-  }
-
-  async function runWindow(startMs:number,endMs:number){
-    const local=await prepareSource(startMs,endMs)
-    if(canceled.current)throw Error('Session closed')
-    setStatus('Running Story, Footage, Flow and QA')
-    const started=await requestJson('/api/ai-producer-agent/runs',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        sources:[{sourceId:sourceKind==='upload'?'uploaded_recording':'stream_recording',kind:sourceKind,
-          projectId:local.projectId,rangeMs:local.rangeMs}],
-        outputType:'story',storyMode:mode,
-        targetLengthS:[Math.max(15,seconds-10),Math.min(105,seconds+10)],
-        visualEvidenceMode:'visual_audio',exportOnFinish:true,
-        instruction:mode==='clip_moment_v1'
-          ? 'Select one real continuous gaming/streaming event with full setup, action and reaction.'
-          : 'Build one compelling source-grounded short story from multiple real passages.',
-      }),
-    }) as {runId:string}
-    for(let i=0;i<600&&!canceled.current;i++){
-      const data=await requestJson('/api/ai-producer-agent/runs/'+
-        encodeURIComponent(started.runId)) as {run:{
-          status:string;error?:string|null;resultProjectId?:string|null;resultClipId?:string|null}}
-      const run=data.run
-      setStatus('Agent run: '+run.status)
-      if(['ready','done'].includes(run.status)){
-        if(!run.resultProjectId||!run.resultClipId)
-          throw Error('Agent completed without an editable clip')
-        return {projectId:run.resultProjectId,clipId:run.resultClipId,
-          startMin:Math.floor((startMs-sourceStartMs)/60_000)}
-      }
-      if(['failed','capped','canceled'].includes(run.status))
-        throw Error(run.error??'Agent did not finish the clip')
-      await sleep(3000)
-    }
-    throw Error('Agent run did not finish in this session')
-  }
-
   async function create(){
     if(running)return
-    canceled.current=false
-    setRunning(true);setCompleted([]);setErrors([])
-    let durableStarted=false
+    setRunning(true);setErrors([])
     try{
-      if(allWindows){
-        const batch=await requestJson('/api/streamer/agent-batches',{
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({projectId,mode,seconds,action:'start'}),
-        }) as {id:string;status:string;total:number}
-        setBatchId(batch.id)
-        setStatus(`Batch queued: ${batch.total} source windows`)
-        durableStarted=true
-        return
-      }
-      manualRunning.current=true
-      const windows=streamerAgentWindows(sourceStartMs,sourceDurationMs,
-        false,windowStartMin)
-      for(const [index,[start,end]] of windows.entries()){
-        if(canceled.current)break
-        setStatus(`Window ${index+1}/${windows.length}: preparing`)
-        try{
-          const clip=await runWindow(start,end)
-          if(canceled.current)break
-          setCompleted(prev=>[...prev,clip])
-        }catch(e){
-          if(canceled.current)break
-          setErrors(prev=>[...prev,`Window ${index+1}: ${String((e as Error).message)}`])
-        }
-      }
-      if(!canceled.current)setStatus('Complete')
-    }finally{manualRunning.current=false;if(!durableStarted)setRunning(false)}
+      const batch=await requestJson('/api/streamer/agent-batches',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({projectId,mode,seconds,allWindows,
+          selectedStartMin:allWindows?0:windowStartMin,action:'start'}),
+      }) as {id:string;status:string;total:number}
+      setBatchId(batch.id)
+      setStatus('Finding and ranking candidate moments, then producing clips')
+    }catch(e){
+      setErrors(prev=>[...prev,String((e as Error).message)])
+      setRunning(false)
+    }
   }
 
   async function cancelBatch(){
@@ -185,8 +106,8 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
       <select aria-label="AI clipping mode" value={mode} disabled={running}
         onChange={e=>setMode(e.target.value as StreamerShortMode)}
         className="h-9 rounded-md border border-border bg-background px-2 text-sm">
-        <option value="clip_moment_v1">Single continuous moment</option>
-        <option value="clip_story_v1">AI story clip (multiple moments)</option>
+        <option value="clip_moment_v1">Ranked continuous clips</option>
+        <option value="clip_story_v1">Ranked stitched story clips</option>
       </select>
       <select aria-label="Clip target duration" value={seconds} disabled={running}
         onChange={e=>setSeconds(Number(e.target.value) as 30|60|90)}
@@ -222,9 +143,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     </div>
     <p className="mt-2 text-xs text-muted-foreground">
       {sourceKind==='stream'?'Twitch/Kick sources are fetched as bounded video windows when needed.':'Your uploaded video is used directly without another download.'}
-      Each batch runs the same specialist agents and produces an editable Clip Studio result.
-      Your long-form editing mode is unchanged.
-      {allWindows?' This full-VOD batch continues after you close the page.':''}
+      Each source window first discovers and ranks multiple moments from video, audio and transcript. Each ranked moment is then edited independently by the Story, Footage, Flow and QA agents, exported, and stays editable in Clip Studio. The batch continues even if you close the page. Your long-form editing mode is unchanged.
     </p>
     {!ready?<p className="mt-2 text-xs">Finish processing the source before generating agent clips.</p>:null}
     {running?<p className="mt-2 text-xs" role="status">{status}</p>:null}
@@ -233,7 +152,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         <Link key={clip.projectId+clip.clipId}
           className="rounded-md border border-border px-3 py-2 text-xs underline"
           href={`/app/clips/${clip.projectId}/studio/${clip.clipId}`}>
-          Clip {i+1} · Source {clip.startMin}m · Edit
+          #{clip.rank??i+1} · {clip.score!=null?clip.score+'/100 · ':''}Source {clip.startMin}m · Edit
         </Link>)}
     </div>:null}
     {errors.map((error,i)=><p key={i} role="alert"
