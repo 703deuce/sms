@@ -1451,7 +1451,7 @@ export async function createEditorialHandoff(
   const momentClip = ctx.config.storyMode === 'clip_moment_v1'
   const storyClip = ctx.config.storyMode === 'clip_story_v1'
   const clipBrief = momentClip
-    ? 'SINGLE MOMENT CLIP: Find one great source event with the actual opening context, event, reaction and payoff. Return exactly ONE continuous source passage, without montage, unrelated padding or jump cuts. Honor the requested short-form target.'
+    ? 'SINGLE MOMENT CLIP: Find one great source event with the actual opening context, event, reaction and payoff. Return exactly ONE continuous source passage, without montage, unrelated padding or jump cuts. Honor the requested short-form target. excludeAsides must lie OUTSIDE that span. An unrelated middle detour cannot be removed; choose a different continuous event, start after it, or accept it as part of the moment.'
     : storyClip
       ? 'SHORT STORY CLIP: Form one meaningful setup, escalation and genuine source-recorded payoff from multiple nonoverlapping passages. Honor the short-form target; this is NOT the existing long-form gaming mode.'
       : null
@@ -1483,7 +1483,9 @@ export async function createEditorialHandoff(
       fullTranscriptWordIndexed:true,
       fullTranscriptFormat:'[originalWordId, spokenWord] — ALL spoken words in source order, no omissions',
       fullTranscript:completeTranscriptWords(ctx.cache.words,false),
-      instruction: clipBrief ?? (highlightsMode
+      instruction: storyClip
+        ? [clipBrief,'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact. Sum the included real story beats to the requested '+ctx.config.targetLengthS.join('–')+' seconds.'].join(' ')
+        : clipBrief ?? (highlightsMode
         ? 'Define the editorial criteria for selecting independent, self-contained highlights. The payoff and ending fields express what makes a moment satisfying, not a fabricated shared narrative. Provide all structured creative-brief fields.'
         : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.'),
     })
@@ -1535,7 +1537,9 @@ export async function createEditorialHandoff(
       fullTranscriptWordIndexed:!highlightsMode && ctx.config.editMode==='just_chatting_rough_cut' && ctx.config.targetLengthS[1]<=105,
       fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord] — FULL original source in chronological order',
       fullTranscript:completeTranscriptWords(ctx.cache.words,true),
-      instruction: clipBrief ?? (highlightsMode
+      instruction: storyClip
+        ? [clipBrief,'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source and Story plan. Choose actual final passages by FIRST/LAST WORD IDS. Tell ONE complete narrative from recorded setup through the genuine payoff, trimming irrelevant tangents. Select complete sentences, not mid-phrase edges. Each selection\'s seconds are (endMs-startMs)/1000 from the indexed transcript; report the running total in each reason. The sum must approach '+ctx.config.targetLengthS.join('–')+' seconds.'].join(' ')
+        : clipBrief ?? (highlightsMode
         ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
         : ctx.config.targetLengthS[1] <= 105
         ? 'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source, Story plan, and every spoken word. Choose actual final passages by FIRST/LAST WORD IDS. IGNORE 90 seconds and ALL runtime targets. Tell ONE complete narrative from beginning through genuine recorded resolution, trimming irrelevant tangents but not the story for length. Select complete sentences, not mid-phrase edges. No later Finisher or Dialogue recut will repair your boundaries.'
@@ -1572,27 +1576,45 @@ export async function createEditorialHandoff(
   }
   let footage = found.selections as EditorialSelection[]
   if(momentClip){
-    // The shared Footage schema permits multi-cut stories. Explicitly repair
-    // that output for this isolated one-take product rather than silently
-    // choosing one of several unreviewed fragments.
+    // One-take shorts remain source-contiguous. Try to improve the nominal
+    // duration but never replace a valid candidate with a worse one.
+    const [min,max]=ctx.config.targetLengthS
+    const distance=(seconds:number)=>seconds<min?min-seconds:seconds>max?seconds-max:0
+    let best=footage
     for(let attempt=1;attempt<=2;attempt++){
-      const seconds=footage.length===1
-        ?(footage[0]!.endMs-footage[0]!.startMs)/1000:0
-      if(footage.length===1&&footage[0]?.kind!=='visual_action'&&
-        seconds>=Math.max(5,ctx.config.targetLengthS[0]-12)&&
-        seconds<=ctx.config.targetLengthS[1]+12)break
-      const corrected=await runEditorialRole(ctx,out,budget,'footage',{
-        ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
-        fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
-        fullTranscript:completeTranscriptWords(ctx.cache.words,true),
-        invalidPriorFootage:footage,
-        instruction:'CORRECT THE SINGLE-MOMENT CLIP: The previous selection was not exactly ONE source-contiguous event of the requested duration. Return exactly one word-ID first/last passage that contains a genuine setup, action, reaction and full ending. Do not return a cut list, collage or montage; no invented words.',
-      })
-      footage=corrected.selections as EditorialSelection[]
-      await specialistEvent(ctx,budget,'footage','single_moment_correction',{
-        attempt,selectionCount:footage.length,durationSeconds:selectionDurationS(footage),
-      })
+      const seconds=best.length===1?(best[0]!.endMs-best[0]!.startMs)/1000:0
+      if(best.length===1&&best[0]?.kind!=='visual_action'&&seconds>=min&&seconds<=max)break
+      try{
+        const corrected=await runEditorialRole(ctx,out,budget,'footage',{
+          ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
+          fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
+          fullTranscript:completeTranscriptWords(ctx.cache.words,true),
+          invalidPriorFootage:best,
+          previousDurationSeconds:seconds,targetSeconds:[min,max],
+          instruction:'SINGLE MOMENT LENGTH REPAIR: Return exactly ONE continuous original source passage as close as possible to '+min+'–'+max+' seconds by moving only the first/last word. Never remove the middle; if no complete moment fits, return the most complete one and explain why.',
+        })
+        const candidate=corrected.selections as EditorialSelection[]
+        const candidateSeconds=candidate.length===1
+          ?(candidate[0]!.endMs-candidate[0]!.startMs)/1000:0
+        const valid=candidate.length===1&&candidate[0]?.kind!=='visual_action'&&
+          candidateSeconds>=Math.max(5,min-12)&&candidateSeconds<=max+12
+        if(valid&&(
+          best.length!==1||best[0]?.kind==='visual_action'||
+          distance(candidateSeconds)<distance(seconds))){
+          best=candidate
+        }
+        await specialistEvent(ctx,budget,'footage','single_moment_correction',{
+          attempt,selectionCount:candidate.length,durationSeconds:candidateSeconds,
+          accepted:best===candidate,
+        })
+      }catch(error){
+        await specialistEvent(ctx,budget,'footage','single_moment_correction_unavailable',{
+          attempt,errorCode:String((error as Error)?.message??error).slice(0,250),
+        })
+        break
+      }
     }
+    footage=best
   }
   let visualActions = (found.visualActions as VisualActionSelection[] | undefined)??[]
   let submittedVisualOmissions=(found.visualActionOmissions as Array<{id:string;reason:string}>|undefined)??[]
@@ -1612,15 +1634,35 @@ export async function createEditorialHandoff(
     const seconds=(first.endMs-first.startMs)/1000
     if(seconds<Math.max(5,minimumSeconds-12)||seconds>maximumSeconds+12)
       throw Error('clip_moment_duration_outside_target:'+seconds.toFixed(1))
-    const reviewed=await runStoryFlowReview(ctx,budget,outline,footage)
-    if(reviewed.cutPlan.length!==1 ||
-      reviewed.cutPlan[0]?.startMs!==first.startMs ||
-      reviewed.cutPlan[0]?.endMs!==first.endMs){
-      await specialistEvent(ctx,budget,'flow','moment_preserve_source_continuity',{
-        original:first,proposed:reviewed.cutPlan,
-      })
+    if(seconds<minimumSeconds||seconds>maximumSeconds){
+      out.notes.push('Single moment duration '+seconds.toFixed(1)+'s vs target '+minimumSeconds+'–'+maximumSeconds+'s')
     }
-    return {outline,footage,cutPlan:footage,flowReview:reviewed.review,
+    let reviewed:Awaited<ReturnType<typeof runStoryFlowReview>>
+    try{
+      reviewed=await runStoryFlowReview(ctx,budget,outline,footage,{
+        mode:'moment',targetSeconds:[minimumSeconds,maximumSeconds],
+      })
+    }catch(error){
+      const errorCode=String((error as Error)?.message??error).slice(0,400)
+      await specialistEvent(ctx,budget,'flow','review_unavailable_kept_footage',{
+        errorCode,originalCuts:footage,note:'One continuous span preserved after unavailable Flow',
+      },errorCode)
+      reviewed={cutPlan:footage,review:{originalCuts:footage.map(c=>({...c})),
+        changes:[],applied:false,note:'Flow review unavailable: '+errorCode}}
+    }
+    const proposed=reviewed.cutPlan.length===1?reviewed.cutPlan[0]:null
+    const proposedSeconds=proposed?(proposed.endMs-proposed.startMs)/1000:0
+    const distance=(duration:number)=>duration<minimumSeconds?minimumSeconds-duration:
+      duration>maximumSeconds?duration-maximumSeconds:0
+    const useTrim=Boolean(proposed&&proposed.kind!=='visual_action'&&
+      proposed.startMs>=first.startMs&&proposed.endMs<=first.endMs&&
+      proposedSeconds>=Math.max(5,minimumSeconds-12)&&
+      proposedSeconds<=maximumSeconds+12&&distance(proposedSeconds)<=distance(seconds))
+    const finalCut=useTrim?proposed!:first
+    await specialistEvent(ctx,budget,'flow',useTrim?'moment_flow_trim_applied':'moment_preserve_source_continuity',{
+      original:first,proposed:reviewed.cutPlan,finalCut,
+    })
+    return {outline,footage,cutPlan:[finalCut],flowReview:reviewed.review,
       visualActions:[],visualActionOmissions:[]}
   }
   const shortStory = !highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && maximumSeconds <= 105
