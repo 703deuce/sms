@@ -66,8 +66,9 @@ export function rankAgentClipCandidates(raw:unknown,
   }
   return selected
 }
-export function rankedCompletedAgentClips<T extends {score?:number;startMin:number}>(
+export function rankedCompletedAgentClips<T extends {score?:number;startMin:number;qaPass?:boolean}>(
   results:readonly T[]):Array<T&{rank:number}>{
-  return [...results].sort((a,b)=>(b.score??0)-(a.score??0)||
+  return [...results].sort((a,b)=>Number(b.qaPass===true)-Number(a.qaPass===true)||
+    (b.score??0)-(a.score??0)||
     a.startMin-b.startMin).map((r,i)=>({...r,rank:i+1}))
 }
