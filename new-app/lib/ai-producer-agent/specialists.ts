@@ -1551,10 +1551,70 @@ export async function completeMissingStoryVisualActions(
   }
 }
 
+/** Clip-only pathway when real video and audio observations exist but the source
+ * has no usable spoken transcript. Story and Footage still make individual
+ * model decisions; dialogue-based Flow is intentionally a no-op because
+ * there are no original word boundaries to edit. Existing Producer untouched. */
+async function createVisualOnlyClipHandoff(
+  ctx:ToolCtx,out:OutputState,budget:Budget,instruction:string|null,
+):Promise<EditorialHandoff>{
+  const source=ctx.sources[0]
+  if(!source?.rangeMs)throw Error('clip_visual_source_missing')
+  const evidence=ctx.cache.visualEvidence
+  const observed=[...(evidence?.coarse??[]),...(evidence?.focused??[])]
+  if(!observed.length)throw Error('clip_visual_requires_real_video_observations')
+  const continuous=ctx.config.storyMode==='clip_moment_v1'
+  const base={
+    instruction,visualOnly:true,visualAudioEvidence:evidence,
+    observedMoments:ctx.cache.momentsSummary,
+    inventory:ctx.cache.inventorySummary,
+    targetMaximumSeconds:ctx.config.targetLengthS[1],
+    visualOnlyRule:'Real video and original recorded audio are sufficient. No spoken words are required. Select only intervals supported by the actual visual observations. Audio may be silent. Never invent words, action, people, locations or timestamps.',
+  }
+  const story=await runEditorialRole(ctx,out,budget,'story',{
+    ...base,
+    instruction:'VIDEO-ONLY '+(continuous?'CONTINUOUS MOMENT':'STITCHED STORY')+
+      ': Identify the source-grounded actual visual setup, action and payoff. '+(instruction??'')+
+      ' Use the observed original timestamps, not imaginary dialogue.',
+  })
+  const outline:EditorialOutline={
+    logline:String(story.logline),audiencePromise:String(story.audiencePromise),
+    beats:(story.beats as string[]).slice(0,10),
+    intendedPayoff:String(story.intendedPayoff),
+    essentialSetup:String(story.essentialSetup),
+    excludeAsides:(story.excludeAsides as string[]).slice(0,10),
+    endingRule:String(story.endingRule),
+    highlightCriteria:String(story.highlightCriteria),
+    visualBeats:story.visualBeats as StoryVisualBeat[]|undefined,
+  }
+  const footage=await runEditorialRole(ctx,out,budget,'footage',{
+    ...base,storyOutline:outline,
+    instruction:'Use ORIGINAL video timecodes in milliseconds. Select '+
+      (continuous?'EXACTLY ONE continuous event; trim only ends.':
+        'several relevant source-grounded chronological visual beats if they improve the story.')+
+      ' Result must be no longer than '+ctx.config.targetLengthS[1]+
+      ' seconds. Shorter coherent edits are acceptable. No speech is needed.'+
+      (instruction??''),
+  })
+  const selections=footage.selections as EditorialSelection[]
+  if(!selections.length)throw Error('clip_visual_no_valid_footage')
+  await specialistEvent(ctx,budget,'flow','visual_only_no_dialogue_to_cut',{
+    sourceCuts:selections,note:'Flow preserves approved original visual source spans; no transcript was available and no synthetic dialogue cuts were created.',
+  })
+  return {outline,footage:selections,cutPlan:selections,
+    visualActions:[],visualActionOmissions:[],
+    flowReview:{originalCuts:selections.map(x=>({...x})),changes:[],
+      applied:false,note:'Visual-only Flow: no dialogue to trim; original observed footage preserved'},
+  }
+}
+
 export async function createEditorialHandoff(
   ctx: ToolCtx, out: OutputState, budget: Budget, instruction: string | null,
 ): Promise<EditorialHandoff> {
   const source = ctx.sources[0]
+  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+  if(clipMode && source?.rangeMs && !(ctx.cache.words?.length))
+    return createVisualOnlyClipHandoff(ctx,out,budget,instruction)
   if (!source?.rangeMs || !ctx.cache.words?.length) throw new Error('rough_cut_transcript_missing')
   const highlightsMode = ctx.config.roughCutIntent === 'highlights'
   const momentClip = ctx.config.storyMode === 'clip_moment_v1'
