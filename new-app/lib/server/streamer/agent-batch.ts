@@ -174,6 +174,22 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
     if(run&&['ready','done','failed','canceled','capped'].includes(run.status)){
       const candidate=next.candidates?.[candidateIndex]
       if(['ready','done'].includes(run.status)&&run.resultClipId&&run.resultProjectId){
+        const render=await prisma.clipRender.findFirst({
+          where:{clipId:run.resultClipId,workspaceId:p.workspaceId},
+          orderBy:{createdAt:'desc'},
+          select:{status:true,outputKey:true,error:true,id:true},
+        })
+        // Producer READY means cuts were saved, not that its MP4 has exported.
+        // Keep the durable cursor on this candidate until RENDER_CLIP finishes.
+        if(render?.status==='QUEUED'||render?.status==='RENDERING'){
+          await persistStep(projectId,batchId,next)
+          return {status:'waiting_for_mp4',index:next.index,total:next.total,
+            candidateIndex,renderId:render.id}
+        }
+        if(!render||render.status!=='READY'||!render.outputKey){
+          next.errors.push('Candidate '+(candidateIndex+1)+': MP4 export failed or missing ('+
+            (render?.error??render?.status??'no render')+')')
+        }else{
         const rendered=await prisma.clip.findFirst({
           where:{id:run.resultClipId,workspaceId:p.workspaceId,deletedAt:null},
           select:{score:true},
@@ -203,6 +219,7 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
           score:Math.max(0,Math.min(100,Math.round(finalScore))),
           candidateId:candidate?.id,reason:candidate?.reason,category:candidate?.category,qaPass,sourceCutsMs})
         next.completed=rankedCompletedAgentClips(next.completed)
+        }
       }else{
         next.errors.push('Candidate '+(candidateIndex+1)+' in window '+(next.index+1)+
           ': '+(run?.error??'No valid clip'))
