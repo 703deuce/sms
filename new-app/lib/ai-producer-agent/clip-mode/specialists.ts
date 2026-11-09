@@ -1,5 +1,6 @@
 import { storyCoverage } from '@/lib/ai-producer-agent/clip-mode/story-coverage'
 import { selectMomentFlowTrim } from '@/lib/ai-producer-agent/clip-mode/moment-flow'
+import {clipEditorialInstructions,clipEditorialAudit} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import 'server-only'
 
 import type { ClipWord } from '@/lib/clips/edits'
@@ -498,7 +499,7 @@ function originalPassageWords(words: ClipWord[], selection: EditorialSelection) 
  */
 export function applyStoryFlowChanges(
   raw: unknown, originals: EditorialSelection[], words: ClipWord[], bounds: [number,number],
-  opts:{allowSplit:boolean;momentEndTrimOnly?:boolean}={allowSplit:false},
+  opts:{allowSplit:boolean;momentEndTrimOnly?:boolean;momentContextMs?:number;momentConclusionMs?:number}={allowSplit:false},
 ) {
   if (!Array.isArray(raw) || raw.length>24) throw Error('flow_invalid_change_count')
   const changesInput:FlowChange[]=[]
@@ -570,9 +571,11 @@ export function applyStoryFlowChanges(
     if(converted.startMs===before.startMs&&converted.endMs===before.endMs){
       finalCuts.push(before);continue
     }
-    if(opts.momentEndTrimOnly&&(converted.startMs<before.startMs||converted.endMs>before.endMs)){
-      // Single moment Flow can only tighten ends, never extend to unrelated material.
-      throw Error('flow_moment_only_end_trim')
+    if(opts.momentEndTrimOnly&&
+       (converted.startMs<before.startMs-(opts.momentContextMs??0)||
+        converted.endMs>before.endMs+(opts.momentConclusionMs??0))){
+      // Only bounded original source can restore a setup or late qualifier.
+      throw Error('flow_moment_context_extension_exceeds_safe_window')
     }
     finalCuts.push(converted)
     changes.push({passageIndex:i,action:'replace',reason:edit.reason,before,after:converted})
@@ -607,25 +610,27 @@ export async function runStoryFlowReview(
   const messages:LunaMessage[]=[
     {role:'system',content:[
       FILM_EDITING_THEORY,
+      ...(opts.mode!=='baseline'?[clipEditorialInstructions()]:[]),
       (opts.mode==='baseline' ? 'FLOW EDITOR. You are a separate supervising dialogue editor AFTER Story and Footage have selected source passages. Review the COMPLETE assembled dialogue as a viewer hears it. Read the ENTIRE original word-indexed transcript for missing setup at passage beginnings, dangling ends, incomplete phrases, pronouns without referents, repetition, and non-sequiturs between passages. Fix only actual editorial problems. For every good passage, make NO change. You may extend/contract a passage by returning a different first/last original word ID, or remove a passage when it cannot serve the story. You may NEVER invent dialogue, reorder passages, choose new unrelated stories, or use a runtime target. No 90-second constraint. In particular, a short standalone opening can be excellent. Do not try to fix an audible pop: no audio was provided, and separate audio fades handle sound artifacts. Keep every unaffected passage unchanged. Your replacements are literal source cuts, not suggestions. Do not use cuts to satisfy a silence/seam heuristic. Source timestamps will be resolved from exact word IDs. You are not doing a duration compression pass.' : 'FLOW EDITOR. You are a separate supervising dialogue editor AFTER Story and Footage have selected source passages. Review the COMPLETE assembled dialogue as a viewer hears it. Read the ENTIRE original word-indexed transcript for missing setup at passage beginnings, dangling ends, incomplete phrases, pronouns without referents, repetition, and non-sequiturs between passages. Fix only actual editorial problems. For every good passage, make NO change. You may extend/contract a passage by returning a different first/last original word ID, or remove a passage when it cannot serve the story. You may NEVER invent dialogue, reorder passages, choose new unrelated stories, or use a runtime target. No 90-second constraint. In particular, a short standalone opening can be excellent. Do not try to fix an audible pop: no audio was provided, and separate audio fades handle sound artifacts. Keep every unaffected passage unchanged. Your replacements are literal source cuts, not suggestions. Do not use cuts to satisfy a silence/seam heuristic. Source timestamps will be resolved from exact word IDs. You are not doing a duration compression pass.'.replace(
         'or use a runtime target. No 90-second constraint.',
         'or alter the approved narrative. Use the supplied mode-specific time target only; never pad, invent or force unrelated material.'
       )),
-      ...(opts.mode==='moment' ? ['SINGLE CONTINUOUS MOMENT MODE: exactly one source passage. Only allow no change or ONE end-trimming replace of passageIndex 0. NEVER remove, split or excise the middle. If an aside occurs inside, accept it or trim an END. Length is advisory; never keep a detour to fill a preset.'] : opts.mode==='story' ? ['SHORT STORY CLIP: preserve a complete coherent source-grounded story. Duration is advisory: do not expand clean endings or weaken narrative to hit a preset. Splits may remove off-topic middle detours using chronological word ID spans. At least two source moment clusters must come from distinct parts of the recording. Never send two changes for the same passageIndex.'] : []),
+      ...(opts.mode==='moment' ? ['SINGLE CONTINUOUS MOMENT MODE: exactly one source passage. You may adjust the START earlier by at most 12 seconds ONLY to restore one or two missing setup sentences, or adjust the END later by at most 6.5 seconds ONLY to restore an omitted qualification or actual conclusion. Use exact word IDs. Do not reorder or split the source. Never expand just for runtime; a clean 15 or 32 second ending is preferable to padding.'] : opts.mode==='story' ? ['SHORT STORY CLIP: preserve a complete coherent source-grounded story. Duration is advisory: do not expand clean endings or weaken narrative to hit a preset. Splits may remove off-topic middle detours using chronological word ID spans. At least two source moment clusters must come from distinct parts of the recording. Never send two changes for the same passageIndex.'] : []),
       (opts.mode==='baseline' ? 'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.' : 'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.'.replace(
         'replace/remove change',
         opts.mode==='moment'?'replace end-trim change':'replace/remove/split change'
       )),
     ].join('\n\n')},
     {role:'user',content:JSON.stringify({
-      task:'Review the complete assembled story for continuity, self-contained dialogue and natural transitions. Return ONLY necessary corrections.',
+      task:'Review the complete assembled story for continuity, self-contained dialogue, meaning-changing qualifiers and natural transitions. State its one-sentence claim/story/joke; verify the first words have setup and the final words include any meaningful qualification in the next 6.5 source seconds. Return ONLY necessary word-ID corrections.',
       storyOutline:outline,
       assembledPassages:joined,
       joinedTransitions,
       fullOriginalTranscriptFormat:'[originalWordId,sourceStartMs,sourceEndMs,spokenWord] in original chronology',
       fullOriginalTranscript:completeTranscriptWords(words,true),
       sourceRangeMs:bounds,
-      constraints:{runtimeTargetDisabled:opts.mode==='baseline',maxPassages:opts.mode==='moment'?1:24,retainGoodPassages:true,wordIdsOnly:true,
+      initialEditorialRiskAudit:clipEditorialAudit(originals,words),
+      constraints:{runtimeTargetDisabled:true,maxPassages:opts.mode==='moment'?1:24,retainGoodPassages:true,wordIdsOnly:true,
         ...(opts.mode!=='baseline'?{splitAllowed:opts.mode==='story',targetSeconds:opts.targetSeconds,hardWindowSeconds:opts.hardWindowSeconds}:{}),},
     })},
   ]
@@ -651,7 +656,9 @@ export async function runStoryFlowReview(
       if (!call || !proposal || typeof proposal.assessment!=='string') throw Error('flow_missing_structured_review')
       const applied=opts.mode==='baseline'
         ? applyStoryFlowChanges(proposal.changes,originals,words,bounds)
-        : applyStoryFlowChanges(proposal.changes,originals,words,bounds,{allowSplit:opts.mode==='story',momentEndTrimOnly:opts.mode==='moment'})
+        : applyStoryFlowChanges(proposal.changes,originals,words,bounds,{allowSplit:opts.mode==='story',momentEndTrimOnly:opts.mode==='moment',
+          momentContextMs:opts.mode==='moment'?12000:0,
+          momentConclusionMs:opts.mode==='moment'?6500:0})
       const joinReviews=validateStoryFlowJoinReviews(proposal.joinReviews,originals.length,applied.changes)
       const finalPassages=applied.finalCuts.map((sel,i)=>({passageIndex:i,dialogue:originalPassageWords(words,sel).dialogue}))
       const finalJoins=storyFlowJoinEvidence(finalPassages)
@@ -689,6 +696,8 @@ export async function runStoryFlowReview(
           try{
             applyStoryFlowChanges([item],originals,words,bounds,{
               allowSplit:opts.mode==='story',momentEndTrimOnly:opts.mode==='moment',
+          momentContextMs:opts.mode==='moment'?12000:0,
+          momentConclusionMs:opts.mode==='moment'?6500:0,
             })
             surviving.push(item)
           }catch{/* invalid change excluded */}
@@ -697,6 +706,8 @@ export async function runStoryFlowReview(
           try{
             const applied=applyStoryFlowChanges(surviving,originals,words,bounds,{
               allowSplit:opts.mode==='story',momentEndTrimOnly:opts.mode==='moment',
+          momentContextMs:opts.mode==='moment'?12000:0,
+          momentConclusionMs:opts.mode==='moment'?6500:0,
             })
             const joinReviews=validateStoryFlowJoinReviews(
               proposal.joinReviews,originals.length,applied.changes)
@@ -1500,7 +1511,7 @@ export async function createEditorialHandoff(
       ? 'SHORT STORY CLIP: Form one meaningful setup, escalation and genuine source-recorded payoff from multiple nonoverlapping passages. Choose a coherent short story; the requested duration is a preference, never a reason to pad, cut off payoff or fail.'
       : null
   const base = {
-    instruction: clipBrief ? [clipBrief,instruction??''].filter(Boolean).join(' ') : instruction,
+    instruction: clipBrief ? [clipEditorialInstructions(),clipBrief,instruction??''].filter(Boolean).join(' ') : instruction,
     // Samples remain available for non-Story workflows; Story and Footage
     // below explicitly replace them with the FULL original transcript.
     transcriptSamples: representativeTranscript(ctx.cache.words, source.rangeMs),
@@ -1528,8 +1539,8 @@ export async function createEditorialHandoff(
       fullTranscriptFormat:'[originalWordId, spokenWord] — ALL spoken words in source order, no omissions',
       fullTranscript:completeTranscriptWords(ctx.cache.words,false),
       instruction: storyClip
-        ? [clipBrief,instruction??'','Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact. Let the edit stop naturally; time is informational.'].join(' ')
-        : (clipBrief ? [clipBrief,instruction??''].filter(Boolean).join(' ') : null) ?? (highlightsMode
+        ? [clipEditorialInstructions(),clipBrief,instruction??'','Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact. Let the edit stop naturally; time is informational.'].join(' ')
+        : (clipBrief ? [clipEditorialInstructions(),clipBrief,instruction??''].filter(Boolean).join(' ') : null) ?? (highlightsMode
         ? 'Define the editorial criteria for selecting independent, self-contained highlights. The payoff and ending fields express what makes a moment satisfying, not a fabricated shared narrative. Provide all structured creative-brief fields.'
         : 'Define the main story, intended resolution (as a hypothesis to VERIFY in the source), essential setup, off-topic material to exclude, and exact editorial condition for a natural ending. Provide all structured creative-brief fields. Do not assert an unconfirmed outcome as fact.'),
     })
@@ -1582,8 +1593,8 @@ export async function createEditorialHandoff(
       fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord] — FULL original source in chronological order',
       fullTranscript:completeTranscriptWords(ctx.cache.words,true),
       instruction: storyClip
-        ? [clipBrief,instruction??'','STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source and Story plan. Choose actual final passages by FIRST/LAST WORD IDS. Tell ONE complete narrative from recorded setup through the genuine payoff, trimming irrelevant tangents. Select complete sentences, not mid-phrase edges. Each selection\'s seconds are (endMs-startMs)/1000 from the indexed transcript; report the running total in each reason. Use as much sourced footage as this natural story needs; no length compliance is required.'].join(' ')
-        : (clipBrief ? [clipBrief,instruction??''].filter(Boolean).join(' ') : null) ?? (highlightsMode
+        ? [clipEditorialInstructions(),clipBrief,instruction??'','STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source and Story plan. Choose actual final passages by FIRST/LAST WORD IDS. Tell ONE complete narrative from recorded setup through the genuine payoff, trimming irrelevant tangents. Select complete sentences, not mid-phrase edges. Each selection\'s seconds are (endMs-startMs)/1000 from the indexed transcript; report the running total in each reason. Use as much sourced footage as this natural story needs; no length compliance is required.'].join(' ')
+        : (clipBrief ? [clipEditorialInstructions(),clipBrief,instruction??''].filter(Boolean).join(' ') : null) ?? (highlightsMode
         ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
         : ctx.config.targetLengthS[1] <= 105
         ? 'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source, Story plan, and every spoken word. Choose actual final passages by FIRST/LAST WORD IDS. IGNORE 90 seconds and ALL runtime targets. Tell ONE complete narrative from beginning through genuine recorded resolution, trimming irrelevant tangents but not the story for length. Select complete sentences, not mid-phrase edges. No later Finisher or Dialogue recut will repair your boundaries.'
