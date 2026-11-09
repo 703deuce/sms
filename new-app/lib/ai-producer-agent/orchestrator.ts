@@ -21,6 +21,7 @@ import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
 import { createEditorialHandoff, runEditorialRole, recoverEditorialSelections, type EditorialHandoff } from '@/lib/ai-producer-agent/specialists'
+import * as clipModeSpecialists from '@/lib/ai-producer-agent/clip-modes/specialists'
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
 import { buildJustChattingEvidence } from '@/lib/ai-producer-agent/just-chatting-evidence'
 
@@ -136,7 +137,9 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
 
 async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, instruction: string | null) {
   if (ctx.config.editMode === 'just_chatting_rough_cut') {
-    out.editorialHandoff = await createEditorialHandoff(ctx, out, budget, instruction)
+    out.editorialHandoff = (ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1')
+      ? await clipModeSpecialists.createEditorialHandoff(ctx,out,budget,instruction)
+      : await createEditorialHandoff(ctx, out, budget, instruction)
   }
   if (out.editorialHandoff) {
     await assembleApprovedRoughCut(ctx, out, budget)
@@ -187,7 +190,9 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
   await apply(ctx, out, budget)
   if (out.editorialHandoff && out.lastValid) {
     try {
-    const review = await runEditorialRole(ctx, out, budget, 'qa', {
+    const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+    const qaRole=clipMode?clipModeSpecialists.runEditorialRole:runEditorialRole
+    const review = await qaRole(ctx, out, budget, 'qa', {
       outline: out.editorialHandoff.outline,
       storyFinisher: out.editorialHandoff.finisher ?? null,
       highlightsFinisher: out.editorialHandoff.highlightsFinisher ?? null,
@@ -204,14 +209,18 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       actualTranscriptEvidence: buildJustChattingEvidence(
         ctx.cache.words ?? [], ctx.sources[0]!.rangeMs!, out.editorialHandoff.cutPlan,
       ),
-      editorialBaseline: ctx.config.roughCutIntent !== 'highlights' && ctx.config.targetLengthS[1] <= 105
+      editorialBaseline: clipMode
+        ? 'Clip QA: rate the complete finished clip on 0–100 based on impact, coherence, source truthfulness and actual visual/audio evidence. Missing speech or sound is not a defect. A shorter coherent story is valid; selected duration is a maximum, not a quota.'
+        : ctx.config.roughCutIntent !== 'highlights' && ctx.config.targetLengthS[1] <= 105
         ? 'Judge one complete, coherent story and exact word boundaries ONLY. Do not score runtime, 90-second compliance, shortness, or the number of passages.'
         : undefined,
       instruction: ctx.config.roughCutIntent === 'highlights'
         ? 'HIGHLIGHTS QA: Inspect actual opening and closing transcript words for EVERY selected moment and all joins. Use the Highlights Finisher verified landings: confirm every promised quote remains in the final footage and each highlight actually ends naturally. Check that no unrelated talk after a landing, incomplete opening, missing independent payoff, or overlong segment remains. Require distinct source moments, not breath cuts. If source words do not support the finishing choices, pass=false with precise timestamps. No rendered audio was supplied; acoustic joins require listening review.'
         : 'EDITORIAL BASELINE (NO LENGTH TARGET): Judge only whether ONE specific story is coherently told from a clear opening through an actual recorded ending, whether the moments belong to that story, whether each selected passage begins and ends naturally, and whether any important connecting information is missing or repeated. Ignore duration entirely: two, three, four or more minutes are acceptable. Do not fail QA due to runtime or number of passages. Flag precise transcript words and source timestamps for every true editorial issue. Do not infer audio quality without listening.',
     })
-    out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
+    out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[],
+      ...(clipMode&&typeof review.rating==='number'&&Number.isFinite(review.rating)?
+        {rating:Math.max(0,Math.min(100,Math.round(review.rating))),rationale:String(review.rationale??'').slice(0,800)}:{}) }
     out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
     if (!out.editorialHandoff.review.pass) {
       // QA findings belong on the editable draft. Do not discard an otherwise
