@@ -50,6 +50,8 @@ jobs:
             echo "Streamer agent batch TypeScript errors" >&2
             exit 1
           fi
+      - name: Generate Prisma client for motion type validation
+        run: pnpm exec prisma generate --schema=prisma/schema.prisma
       - name: Motion graphics scoped TypeScript typecheck
         run: |
           NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false > /tmp/motion-tsc.txt 2>&1 || true
