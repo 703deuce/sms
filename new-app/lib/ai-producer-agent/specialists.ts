@@ -673,6 +673,44 @@ export async function runStoryFlowReview(
         attempt,errorCode,proposal:proposal?.changes??null,
         note:'Flow proposal rejected WITHOUT modifying any original cut',
       },errorCode)
+      if(attempt===1&&opts.mode!=='baseline'&&proposal&&Array.isArray(proposal.changes)){
+        // Optional clip-mode partial salvage: only accept individually valid,
+        // uniquely indexed repairs, and ONLY if every flagged original join
+        // remains covered. Never silently accept a broken seam.
+        const input=proposal.changes.filter((c):c is FlowChange=>
+          Boolean(c)&&typeof c==='object'&&Number.isInteger(c.passageIndex)) as FlowChange[]
+        const counts=new Map<number,number>()
+        for(const item of input)counts.set(item.passageIndex,(counts.get(item.passageIndex)??0)+1)
+        const surviving:FlowChange[]=[]
+        for(const item of input){
+          if(counts.get(item.passageIndex)!==1)continue
+          try{
+            applyStoryFlowChanges([item],originals,words,bounds,{
+              allowSplit:opts.mode==='story',momentEndTrimOnly:opts.mode==='moment',
+            })
+            surviving.push(item)
+          }catch{/* invalid change excluded */}
+        }
+        if(surviving.length&&surviving.length<input.length){
+          try{
+            const applied=applyStoryFlowChanges(surviving,originals,words,bounds,{
+              allowSplit:opts.mode==='story',momentEndTrimOnly:opts.mode==='moment',
+            })
+            const joinReviews=validateStoryFlowJoinReviews(
+              proposal.joinReviews,originals.length,applied.changes)
+            const review={
+              originalCuts,changes:applied.changes,applied:applied.changes.length>0,
+              note:'partial: '+(input.length-surviving.length)+' invalid changes dropped',
+              joinReviews,
+            }
+            await specialistEvent(ctx,budget,'flow','accepted_partial',{
+              originalCuts,finalCuts:applied.finalCuts,changes:applied.changes,joinReviews,
+              droppedInvalidChanges:input.length-surviving.length,
+            })
+            return {cutPlan:applied.finalCuts,review}
+          }catch{/* preserve caller's original Footage on unsafe partial repair */}
+        }
+      }
       if (attempt===1) throw Error('flow_review_invalid_after_retry: '+errorCode)
       if(call)messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({
         ok:false,error:errorCode,instruction:'Recheck original source word IDs, chronology and the failing passage. Include a specific joinReviews judgement for every adjacent passage pair. If any join needs_change, include a replace/remove action for one side; keep good passages unchanged.',
