@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest'
-import {rankAgentClipCandidates,rankedCompletedAgentClips,sameFinishedCut}
+import {rankAgentClipCandidates,rankedCompletedAgentClips,sameFinishedCut,suggestedAgentCandidateCount}
   from '@/lib/streamer/agent-clip-ranking'
 import {streamerAgentWindows} from '@/lib/streamer/agent-windows'
 import {readStreamerAgentBatch} from '@/lib/streamer/agent-batch-contract'
@@ -10,6 +10,12 @@ const moment=(start_s:number,end_s:number,score:number,what_happened:string)=>({
   category:'reaction',
 })
 describe('ranked multi-result AI clipper',()=>{
+  it('suggests multiple continuous candidates and fewer stitched stories without forced quotas',()=>{
+    expect(suggestedAgentCandidateCount(180000,60,'clip_moment_v1')).toBe(6)
+    expect(suggestedAgentCandidateCount(180000,60,'clip_story_v1')).toBe(2)
+    expect(suggestedAgentCandidateCount(180000,30,'clip_story_v1')).toBe(4)
+    expect(suggestedAgentCandidateCount(20*60_000,60,'clip_moment_v1')).toBe(8)
+  })
   it('discovers six distinct real events from a three minute upload in BOTH modes',()=>{
     const raw=[
       moment(9,23,.65,'first'),moment(35,48,.95,'second'),
