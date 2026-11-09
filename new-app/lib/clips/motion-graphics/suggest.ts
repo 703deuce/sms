@@ -144,9 +144,7 @@ export async function suggestTextMotionGraphics(args: {
     const steps = Array.isArray(r.steps) ? r.steps as string[] : undefined
     if (chart && (!bars || bars.length < 2 || bars.length > 4 || bars.some(b =>
       typeof b.label !== 'string' || !Number.isFinite(b.value) ||
-      !new RegExp('(^|[^0-9])' + String(b.value).replace(/[.*+?^$\\{\\}()|[\\]\\\\]/g, '\\\\    const text = String(r.text ?? '').trim()
-    if (!text || text.length > 45) throw new Error('motion_agent_text_unreadable')
-    const templateId = r.templateId') + '([^0-9]|$)').test(e.text))))
+      !e.text.split(/[^0-9.]+/).includes(String(b.value)))))
       throw new Error('motion_agent_chart_values_not_in_source')
     if (diagram && (!steps || steps.length < 2 || steps.length > 4 ||
       steps.some(t => typeof t !== 'string' || !e.text.toLowerCase().includes(t.toLowerCase()))))
