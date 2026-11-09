@@ -11,6 +11,8 @@ _STREAM_PIPELINE_FAILURE_TYPES = frozenset(
     }
 )
 
+_AGENT_SIDE_JOB_TYPES = frozenset({"AI_PRODUCER_AGENT_ANALYZE", "AI_PRODUCER_AGENT_RUN", "STREAM_AGENT_BATCH"})
+
 # Export/deliver jobs must not mark clip_projects FAILED (REGRESSION_BATCH1b §A).
 _EXPORT_JOB_TYPES = frozenset(
     {
@@ -33,6 +35,8 @@ def terminal_failure_progress_payload(job_type: str, msg: str) -> dict:
         }
     if (job_type or "").startswith("STREAM_"):
         return {"jobStatus": "FAILED"}
+    if job_type in _AGENT_SIDE_JOB_TYPES:
+        return {"jobStatus": "FAILED", "error": user_facing_job_error(msg)}
     if job_type in _EXPORT_JOB_TYPES:
         return {
             "jobStatus": "FAILED",
