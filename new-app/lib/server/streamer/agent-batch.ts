@@ -16,14 +16,22 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
   const prisma=getPrisma()
   const source=await prisma.clipProject.findFirst({
     where:{id:projectId,workspaceId,deletedAt:null,status:'READY'},
-    include:{streamVod:{include:{channel:true}}},
+    include:{streamVod:{include:{channel:true}},upload:true},
   })
-  if(!source?.streamVod||!['twitch','kick'].includes(source.streamVod.platform))
-    throw Error('stream_agent_batch_requires_ready_twitch_kick_vod')
-  if(!source.streamVod.url)throw Error('stream_agent_batch_vod_url_missing')
-  if(!source.streamVod.attestedAt&&
-    !(source.streamVod.channel?.status==='CONNECTED'&&!source.streamVod.channel?.deletedAt))
-    throw Error('stream_agent_batch_source_permission_required')
+  if(!source)throw Error('agent_clip_source_not_ready')
+  const isStream=Boolean(source.streamVod)
+  if(isStream){
+    if(!['twitch','kick'].includes(source.streamVod!.platform))
+      throw Error('stream_agent_batch_requires_twitch_kick_vod')
+    if(!source.streamVod!.url)throw Error('stream_agent_batch_vod_url_missing')
+    if(!source.streamVod!.attestedAt&&
+      !(source.streamVod!.channel?.status==='CONNECTED'&&!source.streamVod!.channel?.deletedAt))
+      throw Error('stream_agent_batch_source_permission_required')
+  }else if(!source.uploadId||!source.upload){
+    throw Error('agent_clip_batch_requires_uploaded_video')
+  }
+  if(!source.transcriptWords&&!source.transcriptKey)
+    throw Error('agent_clip_batch_requires_source_transcript')
   const current=readStreamerAgentBatch(source.settings)
   if(current?.status==='running')throw Error('stream_agent_batch_already_running')
   const windows=streamerAgentWindows(source.rangeStartMs,
@@ -139,6 +147,29 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
       next.preparedProjectId=undefined;next.index++
     }
     if(next.index>=windows.length)next.status='done'
+  }else if(p.uploadId && !p.streamVod){
+    // Uploaded videos already have real video and transcript; no VOD fetch or
+    // STREAM_AGENT_PREPARE job is necessary. Use the same specialist run.
+    try{
+      const run=await createAiProducerAgentRun(p.workspaceId,null,{
+        sources:[{sourceId:'uploaded_recording',kind:'upload',projectId,
+          rangeMs:[start,end]}],
+        outputType:'story',storyMode:next.mode,
+        targetLengthS:[Math.max(15,next.seconds-10),Math.min(105,next.seconds+10)],
+        visualEvidenceMode:'visual_audio',exportOnFinish:true,
+        instruction:next.mode==='clip_moment_v1'
+          ? 'Choose one genuine continuous moment with setup, action and reaction.'
+          : 'Create one coherent narrative from distinct original source beats.',
+      })
+      next.runId=run.id
+    }catch(err){
+      const reason=String((err as Error).message)
+      if(reason!=='ai_producer_agent_run_in_progress'){
+        next.errors.push(`Window ${next.index+1}: ${reason.slice(0,160)}`)
+        next.index++
+        if(next.index>=windows.length)next.status='done'
+      }
+    }
   }else{
     try{
       const prepared=await createAgentVideoWindow(p.workspaceId,{
