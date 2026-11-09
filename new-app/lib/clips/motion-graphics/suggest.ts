@@ -1,6 +1,6 @@
 import 'server-only'
 import { lunaChat } from '@/lib/ai-producer-agent/luna-client'
-import { validateMotionPlan, type MotionPlan } from './contract'
+import { validateMotionPlan, type MotionPlan, type StyleProfile } from './contract'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { sourceToOutput, timebaseFor } from '@/lib/clips/editor/clip-timeline'
@@ -69,6 +69,7 @@ export async function suggestTextMotionGraphics(args: {
   durationMs: number
   format: '9:16' | '16:9' | '1:1'
   style: MotionStyleChoice
+  profile?: StyleProfile | null
   instruction?: string
   mode?: MotionPlan['mode']
 }): Promise<{ plan: MotionPlan; usage: { promptTokens: number; completionTokens: number }; evidenceCount: number }> {
@@ -111,7 +112,12 @@ export async function suggestTextMotionGraphics(args: {
   const rows = (raw as { graphics: Array<Record<string, unknown>> }).graphics
   if (rows.length > 12) throw new Error('motion_agent_excessive_graphics')
   const byId = new Map(evidence.map(e => [e.id, e]))
-  const palette = style[args.style]
+  const palette = args.profile ? {
+    textColor: args.profile.brandColors[0]!,
+    accentColor: args.profile.brandColors[1] ?? args.profile.brandColors[0]!,
+    backgroundColor: '#0F172A',
+    fontFamily: args.profile.fontFamilies[0]!,
+  } : style[args.style]
   const seen = new Set<string>()
   const graphics = rows.map((r) => {
     const id = String(r.id ?? '')
@@ -142,7 +148,7 @@ export async function suggestTextMotionGraphics(args: {
     }
   })
   const plan = {
-    version: 1, mode: args.mode ?? 'streamer_continuous', styleProfileId: null,
+    version: 1, mode: args.mode ?? 'streamer_continuous', styleProfileId: args.profile?.id ?? null,
     fps: 30, durationMs: args.durationMs, format: args.format, graphics,
   }
   const checked = validateMotionPlan(plan, { evidenceIds: new Set(byId.keys()) })
