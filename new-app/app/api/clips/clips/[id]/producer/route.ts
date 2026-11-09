@@ -107,9 +107,24 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
         send('plan', { tools: enrichedTools, reply: llm.reply })
 
-        if (planOnly || dryRun) {
-          send('message', { role: 'assistant', content: llm.reply })
+        if (planOnly && !dryRun) {
+          send('message', { role: 'assistant',
+            content: 'This is only a proposed plan. No edits have been made.' })
           send('tools', { summaries: [], pendingPaid: [], plan: enrichedTools })
+          return
+        }
+        if(dryRun){
+          const project=await getPrisma().clipProject.findUnique({where:{id:clip.projectId}})
+          const words=await loadClipWords(workspaceId,clip.projectId,clipId,project?.transcriptWords)
+          const applied=runProducerOnClip(edits,bounds,enrichedTools,words,llm.reply,userMessage)
+          // No persisted change and no 'I added it' assertion before Accept.
+          const answer=applied.changeCount>0
+            ? 'I prepared '+applied.changeCount+' editable change(s). Review the proposal and press Accept to apply it. Nothing has been saved yet.'
+            : 'I could not create an editable change for this request. Nothing was added. Try the AI Motion Graphics panel for generated graphics.'
+          send('message',{role:'assistant',content:answer})
+          send('tools',{summaries:applied.summaries,pendingPaid:applied.pendingPaid,plan:[]})
+          if(applied.changeCount>0)
+            send('edits',{edits:applied.edits,changeCount:applied.changeCount})
           return
         }
 
