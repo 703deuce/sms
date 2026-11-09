@@ -100,6 +100,11 @@ export function applyProducerTool(
         x: kind === 'lower_third' ? 12 : 50,
         y: kind === 'lower_third' ? 72 : 30,
         style: { ...preset.style },
+        anim: {
+          in: { type: kind === 'title_card' ? 'pop' as const : 'slide_up' as const,
+            unit: 'block' as const, durMs: 250 },
+          out: { type: 'fade' as const, unit: 'block' as const, durMs: 200 },
+        },
         presetId: preset.id,
       }
       const items = normalizeTextItems([item], startMs + durationMs)
