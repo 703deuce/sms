@@ -204,7 +204,9 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
       actualTranscriptEvidence: buildJustChattingEvidence(
         ctx.cache.words ?? [], ctx.sources[0]!.rangeMs!, out.editorialHandoff.cutPlan,
       ),
-      editorialBaseline: ctx.config.roughCutIntent !== 'highlights' && ctx.config.targetLengthS[1] <= 105
+      editorialBaseline: (ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1')
+        ? 'Clip QA: rate the complete finished clip on 0–100 based on impact, coherence, source truthfulness and recorded visual/audio evidence. Speech is optional: a silent but excellent visual moment must be eligible for a high grade. Do not penalize absent transcript or quiet audio. The selected length is a maximum, not a target to fill.'
+        : ctx.config.roughCutIntent !== 'highlights' && ctx.config.targetLengthS[1] <= 105
         ? 'Judge one complete, coherent story and exact word boundaries ONLY. Do not score runtime, 90-second compliance, shortness, or the number of passages.'
         : undefined,
       instruction: ctx.config.roughCutIntent === 'highlights'
