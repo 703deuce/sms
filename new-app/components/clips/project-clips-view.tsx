@@ -111,6 +111,7 @@ export function ProjectClipsView({
   editorProjectId,
   projectHasUpload = false,
   autoAgentClipMode,
+  autoAgentClipError,
 }: {
   projectId: string
   projectTitle: string
@@ -136,6 +137,7 @@ export function ProjectClipsView({
   projectHasUpload?: boolean
   autoAgentClipMode?: 'clip_moment_v1'|'clip_story_v1'
   autoAgentClipSeconds?: 30|60|90
+  autoAgentClipError?: string
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
   const router = useRouter()
@@ -457,6 +459,7 @@ export function ProjectClipsView({
           </div>
         }
       />
+      {autoAgentClipError ? <p role="alert" className="mb-3 text-sm text-destructive">AI Agent Clipper could not start: {autoAgentClipError}</p> : null}
       {(isStreamer || (projectHasUpload && !byoProject)) ? <StreamerAgentClipMaker projectId={projectId} ready={status === 'READY'} videoAvailable={projectHasUpload} sourceKind={isStreamer?'stream':'upload'} sourceStartMs={sourceStartMs} sourceDurationMs={sourceDurationMs} /> : null}
       {status === 'FAILED' && !showResults ? (
         <Panel title="Project" description="This upload could not be processed.">
