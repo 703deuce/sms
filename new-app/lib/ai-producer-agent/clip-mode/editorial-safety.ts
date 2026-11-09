@@ -9,11 +9,11 @@ export type EditorialRisk={
   detail:string
   passageIndex:number
 }
-const REF_OPEN=/^(?:that'?s why|like i said|as i said|as we said|as mentioned|so|and|this|that|those|these|it|they|he|she|which|because|but|anyway|again)\b/i
+const REF_OPEN=/^(?:that(?:'s| is) why|like i said|as i said|as we said|as mentioned|so|and|this|that|those|these|it|they|he|she|which|because|but|anyway|again)\b/i
 const QUAL_OPEN=/^(?:but|however|unless|except|only if|as long as|provided that|on the other hand|the catch is|with one exception|not if)\b/i
 const DANGLING=/\b(?:but|because|if|unless|although|however|which|so|and|the thing is|what i mean is)\s*[,—-]?$/i
 function phrase(words:readonly TimedWord[]):string{
-  return words.map(x=>x.w).join(' ').replace(/\s+([,.;:!?])/g,'$1').trim()
+  return words.map(x=>x.w).join(' ').replace(/[\u2018\u2019]/g,"'").replace(/\s+([,.;:!?])/g,'$1').trim()
 }
 function at(words:readonly TimedWord[],from:number,to:number):TimedWord[]{
   return words.filter(w=>w.e*1000>from&&w.s*1000<to)
