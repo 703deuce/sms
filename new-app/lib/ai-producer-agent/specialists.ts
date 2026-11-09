@@ -1,3 +1,4 @@
+import { storyCoverage } from '@/lib/ai-producer-agent/clip-mode/story-coverage'
 import 'server-only'
 
 import type { ClipWord } from '@/lib/clips/edits'
@@ -1756,6 +1757,28 @@ export async function createEditorialHandoff(
         }
       }
     }
+    if(storyClip){
+      // An adjacent three-way cut is just one continuous source trim, not a
+      // story assembled from independent moments. Retry Footage with the
+      // observed rejection, then drop this candidate if it remains adjacent.
+      for(let attempt=0;attempt<2 && !storyCoverage(footage).separated;attempt++){
+        const rejected=storyCoverage(footage)
+        await specialistEvent(ctx,budget,'footage','story_adjacent_passages_rejected',{
+          attempt,gapsMs:rejected.gapsMs,durationSeconds:rejected.durationSeconds,
+        })
+        const repaired=await runEditorialRole(ctx,out,budget,'footage',{
+          ...base,storyOutline:outline,fullTranscriptWordIndexed:true,
+          fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord]',
+          fullTranscript:completeTranscriptWords(ctx.cache.words,true),
+          previousSelections:footage,
+          instruction:'CLIP STORY REJECTION: Proposed passages were adjacent or overlapping. Find TWO OR MORE genuinely different source moments from separate source regions: every consecutive chosen passage MUST have at least 2500ms of EXCLUDED ORIGINAL SOURCE between them. Keep one coherent setup, development and payoff and approach 50-70 seconds when supported. A single continuous excerpt split into three is INVALID. Do not add unrelated filler.',
+        })
+        const proposed=repaired.selections as EditorialSelection[]
+        if(storyCoverage(proposed).separated) footage=proposed
+      }
+      if(!storyCoverage(footage).separated)
+        throw Error('clip_story_requires_distinct_source_moments')
+    }
     let reviewed:Awaited<ReturnType<typeof runStoryFlowReview>>
     try {
       reviewed=await runStoryFlowReview(ctx,budget,outline,footage,
@@ -1800,6 +1823,16 @@ export async function createEditorialHandoff(
     }
     // A complete source-grounded story may be a single passage. A stitched story
     // is preferred when useful, but is never a publication requirement.
+    if(storyClip && !storyCoverage(finalCombined.cutPlan).separated){
+      // Flow or visual-action combination may have collapsed the independent
+      // selections back into one continuous trim. Never publish that as Story.
+      throw Error('clip_story_flow_collapsed_distinct_moments')
+    }
+    if(storyClip){
+      const coverage=storyCoverage(finalCombined.cutPlan)
+      if(coverage.durationPenalty)
+        out.notes.push('Clip story runtime ranking penalty: '+coverage.durationPenalty)
+    }
     await specialistEvent(ctx,budget,'footage','visual_actions_handoff',{
       proposed:visualActions,selected:finalCombined.included,omitted:[...submittedVisualOmissions,...finalCombined.omitted],
       finalCutCount:finalCombined.cutPlan.length,visualMode:ctx.config.visualEvidenceMode==='visual_audio',
