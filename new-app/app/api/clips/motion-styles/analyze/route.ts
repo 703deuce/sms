@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { analyzeMotionReferenceImages } from '@/lib/clips/motion-graphics/reference-analyzer'
 import { jsonError } from '@/lib/server/api-error'
+import { reserveMotionRequest } from '@/lib/server/clips/motion-request-limit'
 import { recordAiUsage } from '@/lib/server/clips/ai-usage'
 import { geminiVisionTokenCostMicros } from '@/lib/server/ai/gemini-flash-lite'
 
@@ -39,6 +40,9 @@ export async function POST(request: Request) {
       if (image.mimeType === 'image/jpeg' && (image.bytes[0] !== 255 || image.bytes[1] !== 216))
         return NextResponse.json({ error: 'Invalid JPEG file' }, { status: 400 })
     }
+    const budget = await reserveMotionRequest(workspaceId, 'analyze_reference')
+    if (!budget.ok) return NextResponse.json({ error: 'motion_hourly_limit', retryAfterSec: budget.retryAfterSec },
+      { status: 429, headers: { 'Retry-After': String(budget.retryAfterSec) } })
     const result = await analyzeMotionReferenceImages(decoded, body.instructions)
     await recordAiUsage({ workspaceId, usage: {
       provider: 'gemini', model: result.model,
