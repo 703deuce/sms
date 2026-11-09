@@ -33,7 +33,7 @@ templates use the current text/shape burn pipeline and require no After Effects.
 - No AI-generated unrestricted React/Remotion components, complex masked presenters, 3D particles or tracked callouts
 - No automated object tracking or per-frame occlusion analysis of gameplay/presenters
 - The motion planner uses transcript evidence; it does not yet consume the entire Gemini visual/audio observations handoff
-- Synchronous planning limits inputs to 10 minutes, and relies on a live editor browser session
+- Synchronous planning limits each request to a 10-minute output-timeline window; long recordings can be processed in selected windows, but this still relies on a live editor browser session
 - No persistent async motion planning job queue, progress/cancel/resume or dedicated render cache
 - Timeline Text layer rendering supports existing animation engine but complex infographic shapes are separate text/shape pieces
 - No robust video-level QA of all rendered frames beyond a synthetic smoke proof
@@ -81,3 +81,13 @@ full AI Motion Graphics specification. Keep PR draft/unmerged until acceptance g
 remaining pre-merge gates above and the original product-specification gaps are
 completed and independently verified. No release approval is implied by a synthetic
 render smoke test or an individual green GitHub action.
+
+## Additional integration completed during follow-up
+
+- [x] Selective per-graphic approval instead of an all-or-nothing generated plan.
+- [x] Long-form output clips can request bounded 10-minute planning windows; previously approved graphics outside the selected window remain in the plan.
+- [x] Generated spatial keyframes are converted to editable item-local `edits.keyframes` tracks (position/scale/rotation/opacity), including synchronized chart/diagram children.
+- [x] Removing grouped graphics cleans their generated keyframe tracks as well as their text and vector shapes.
+- [x] Custom keyframes are included in real FFmpeg MP4 smoke tests, alongside three output aspect ratios.
+
+**Still required before production merge:** complete latest CI; dedicated async full-length generation/queue; visual-aware scene/subject placement; advanced masking/tracking; staging database migration, browser save/reload and multi-format real-upload exports; non-regression across the existing six editor workflows. The current windowed long-form feature is NOT a replacement for the planned automated full-length agent.
