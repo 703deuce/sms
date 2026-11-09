@@ -57,3 +57,27 @@ where within product scope, then require:
 
 This branch contains partial integrated functionality, **not** the complete feature promised in the
 full AI Motion Graphics specification. Keep PR draft/unmerged until acceptance gates are met.
+
+## Pre-merge audit pass (additional changes)
+
+- [x] Prevent an AI regeneration from overwriting a manually authored Text layer whose ID resembles an AI layer.
+- [x] Remove all child Text/shape items belonging to an approved chart or diagram, without deleting manual assets.
+- [x] Guard draft apply against in-browser edit changes and remote `editsSaveVersion` changes.
+- [x] Allow review approval/rejection of individual suggestions without further model calls.
+- [x] Add unintended spatial/temporal graphic collision validation.
+- [x] Use the same conservative format-specific safe-zone rules for generation and AI revisions.
+- [x] Add profile rename and delete controls (existing saved clip graphics remain intact).
+- [x] Record AI revision model usage, in addition to initial generation and reference analysis usage.
+- [x] Add atomic per-workspace hourly request budgets with `429 Retry-After` for chargeable model operations, using an additive DB migration.
+- [x] Expand synthetic FFmpeg MP4 pixel-and-audio smoke to portrait, landscape and square.
+- [x] Add dedicated validation tests for approval groups, collision protection and usage-limit windows.
+- [ ] Run the *latest* full PR checks; earlier commits passing does not mean subsequent commits are green.
+- [ ] Run authenticated browser upload/clip → generate → selectively approve → undo/redo → save/reload → export verification for real footage.
+- [ ] Verify source image/video reference authorization, model charging and production request-limit migration on a staging environment.
+- [ ] Add robust long-form asynchronous chunk planning, cancel/resume and video/visual-aware dynamic motion decisions.
+- [ ] Verify full 1:1, 16:9 and 9:16 exports against representative real clips, not just synthetic video.
+
+**Release decision: HOLD.** New features and fixes must stay in this PR until the
+remaining pre-merge gates above and the original product-specification gaps are
+completed and independently verified. No release approval is implied by a synthetic
+render smoke test or an individual green GitHub action.
