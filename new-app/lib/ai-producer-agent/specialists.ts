@@ -555,6 +555,7 @@ export function applyStoryFlowChanges(
 
 export async function runStoryFlowReview(
   ctx: ToolCtx, budget: Budget, outline: EditorialOutline, originals: EditorialSelection[],
+  opts:{mode:'moment'|'story'|'baseline';targetSeconds?:[number,number];hardWindowSeconds?:[number,number]}={mode:'baseline'},
 ):Promise<{cutPlan:EditorialSelection[];review:NonNullable<EditorialHandoff['flowReview']>}> {
   const words=ctx.cache.words??[]
   const bounds=ctx.sources[0]?.rangeMs
@@ -574,6 +575,7 @@ export async function runStoryFlowReview(
     {role:'system',content:[
       FILM_EDITING_THEORY,
       'FLOW EDITOR. You are a separate supervising dialogue editor AFTER Story and Footage have selected source passages. Review the COMPLETE assembled dialogue as a viewer hears it. Read the ENTIRE original word-indexed transcript for missing setup at passage beginnings, dangling ends, incomplete phrases, pronouns without referents, repetition, and non-sequiturs between passages. Fix only actual editorial problems. For every good passage, make NO change. You may extend/contract a passage by returning a different first/last original word ID, or remove a passage when it cannot serve the story. You may NEVER invent dialogue, reorder passages, choose new unrelated stories, or use a runtime target. No 90-second constraint. In particular, a short standalone opening can be excellent. Do not try to fix an audible pop: no audio was provided, and separate audio fades handle sound artifacts. Keep every unaffected passage unchanged. Your replacements are literal source cuts, not suggestions. Do not use cuts to satisfy a silence/seam heuristic. Source timestamps will be resolved from exact word IDs. You are not doing a duration compression pass.',
+      ...(opts.mode==='moment' ? ['SINGLE CONTINUOUS MOMENT MODE: exactly one source passage. Only allow no change or ONE end-trimming replace of passageIndex 0. NEVER remove, split or excise the middle. If an aside occurs inside, accept it or trim an END. Target seconds '+JSON.stringify(opts.targetSeconds??[])] : opts.mode==='story' ? ['SHORT STORY CLIP: assemble several true source passages that sum to '+JSON.stringify(opts.targetSeconds??[])+' seconds, hard limits '+JSON.stringify(opts.hardWindowSeconds??[])+'. Splits may remove off-topic middle detours using split action with 2-6 chronological non-overlapping word ID spans. Never send two changes for the same passageIndex.'] : []),
       'MANDATORY ADJACENT-JOIN AUDIT: Separately read every numbered leftEnding | CUT | rightOpening pair from joinedTransitions as if spoken continuously. A complete paragraph by itself can still fail when its previous/next excerpt leaves an unanswered question, orphaned conjunction, unexplained pronoun, missing subject, or abrupt topic jump. For each pair provide exactly one joinReviews entry (leftIndex, rightIndex, flows or needs_change, specific reason). For needs_change, you MUST submit an explicit replace/remove change for one of those passages, based on actual source word IDs. Check that the edited last words of A will make sense immediately before the edited first words of B. If one repair introduces a new dependency at another join, revise that too. Preserve already-coherent joins; never pad for length or fabricate material. Reject incomplete transitions such as ending So you may be asking, followed by That is a factor, or openings is the fact that / even those ultra wide / about playing on PC without sufficient local context. Do not mark a broken seam as flows just because it is grammatically plausible in the original, longer source.',
     ].join('\n\n')},
     {role:'user',content:JSON.stringify({
@@ -584,7 +586,8 @@ export async function runStoryFlowReview(
       fullOriginalTranscriptFormat:'[originalWordId,sourceStartMs,sourceEndMs,spokenWord] in original chronology',
       fullOriginalTranscript:completeTranscriptWords(words,true),
       sourceRangeMs:bounds,
-      constraints:{runtimeTargetDisabled:true,maxPassages:24,retainGoodPassages:true,wordIdsOnly:true},
+      constraints:{runtimeTargetDisabled:opts.mode==='baseline',maxPassages:opts.mode==='moment'?1:24,retainGoodPassages:true,wordIdsOnly:true,
+        ...(opts.mode!=='baseline'?{splitAllowed:opts.mode==='story',targetSeconds:opts.targetSeconds,hardWindowSeconds:opts.hardWindowSeconds}:{}),},
     })},
   ]
   for (let attempt=0;attempt<2;attempt++) {
@@ -607,7 +610,9 @@ export async function runStoryFlowReview(
     })
     try {
       if (!call || !proposal || typeof proposal.assessment!=='string') throw Error('flow_missing_structured_review')
-      const applied=applyStoryFlowChanges(proposal.changes,originals,words,bounds)
+      const applied=opts.mode==='baseline'
+        ? applyStoryFlowChanges(proposal.changes,originals,words,bounds)
+        : applyStoryFlowChanges(proposal.changes,originals,words,bounds,{allowSplit:opts.mode==='story'})
       const joinReviews=validateStoryFlowJoinReviews(proposal.joinReviews,originals.length,applied.changes)
       const finalPassages=applied.finalCuts.map((sel,i)=>({passageIndex:i,dialogue:originalPassageWords(words,sel).dialogue}))
       const finalJoins=storyFlowJoinEvidence(finalPassages)
@@ -621,7 +626,8 @@ export async function runStoryFlowReview(
         joinReviews,finalJoins,
         unchangedPassages:originals.length-applied.changes.length,
         finalDurationSeconds:selectionDurationS(applied.finalCuts),
-        runtimeTargetDisabled:true,
+        runtimeTargetDisabled:opts.mode==='baseline',
+        ...(opts.mode==='story'?{internalSplitJoins:applied.changes.filter(c=>c.action==='split').map(c=>({passageIndex:c.passageIndex,spans:c.afterSpans?.length??0}))}:{}),
       })
       return {cutPlan:applied.finalCuts,review}
     } catch(error) {
