@@ -80,7 +80,7 @@ async function persistStep(projectId:string,expectedId:string,next:AgentBatch){
  * One window and one AI Producer run remain active at a time. */
 export async function tickStreamerAgentBatch(projectId:string,batchId:string){
   const prisma=getPrisma()
-  const p=await prisma.clipProject.findUnique({where:{id:projectId}})
+  const p=await prisma.clipProject.findUnique({where:{id:projectId},include:{streamVod:{select:{id:true}}}})
   const batch=readStreamerAgentBatch(p?.settings)
   if(!p||!batch||batch.id!==batchId||batch.status!=='running')
     return {status:'not_active'}
