@@ -91,7 +91,9 @@ export async function suggestTextMotionGraphics(args: {
     throw new Error('motion_generation_invalid_time_window')
   const evidence = transcriptEvidence(args.words, args.edits, 120, [rangeStart, rangeEnd])
   if (!evidence.length) throw new Error('motion_generation_requires_transcript')
-  if (evidence[evidence.length - 1]!.endMs < rangeEnd - 15000)
+  // For full short clips, detect truncated transcripts. Long-form windows may
+  // legitimately end in silence, so do not confuse a quiet ending with an ingest fault.
+  if (!args.rangeMs && evidence[evidence.length - 1]!.endMs < rangeEnd - 15000)
     throw new Error('motion_generation_evidence_incomplete')
   const response = await lunaChat({
     messages: [
