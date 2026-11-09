@@ -270,7 +270,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           <select id="upload-agent-mode" value={agentClipMode}
             onChange={e=>setAgentClipMode(e.target.value as 'clip_moment_v1'|'clip_story_v1')}
             className="h-9 rounded-md border border-border bg-background px-2 text-sm">
-            <option value="clip_moment_v1">Single continuous moment</option>
+            <option value="clip_moment_v1">Find multiple continuous clips</option>
             <option value="clip_story_v1">AI story from multiple moments</option>
           </select>
           <select aria-label="Agent target length" value={agentClipSeconds}
