@@ -8,6 +8,7 @@ import {enqueueAiProducerAnalyzeJob} from '@/lib/server/ai-producer-agent/enqueu
 import {resolveAiProducerSources} from '@/lib/server/ai-producer-agent/resolve-sources'
 import {loadRoughCutWords} from '@/lib/server/ai-producer-agent/rough-cut-source'
 import {timestampedAsrForVisual} from '@/lib/ai-producer-agent/visual-evidence'
+import {scoreFinishedAgentClip} from '@/lib/streamer/agent-clip-scoring'
 import {rankAgentClipCandidates,rankedCompletedAgentClips,sameFinishedCut}
   from '@/lib/streamer/agent-clip-ranking'
 import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
@@ -190,35 +191,60 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
           next.errors.push('Candidate '+(candidateIndex+1)+': MP4 export failed or missing ('+
             (render?.error??render?.status??'no render')+')')
         }else{
-        const rendered=await prisma.clip.findFirst({
-          where:{id:run.resultClipId,workspaceId:p.workspaceId,deletedAt:null},
-          select:{score:true},
-        })
-        // Keep the scout score when the result clip has no independent
-        // positive editorial score yet. No fixed/fabricated 95/100 scores.
-        const finalScore=Number(rendered?.score)>0?Number(rendered?.score):
-          candidate?.score??0
         const outputNotes=run.producerNotes as Record<string,unknown>|null
         const outputs=Array.isArray(outputNotes?.outputs)?outputNotes.outputs:[]
         const firstOutput=outputs[0] as Record<string,unknown>|undefined
         const specialists=firstOutput?.specialists as Record<string,unknown>|undefined
         const review=specialists?.review as Record<string,unknown>|undefined
         const qaPass=review?.pass===true
+        const rating=typeof review?.rating==='number'&&Number.isFinite(review.rating)?
+          Number(review.rating):undefined
         const rawCuts=Array.isArray(specialists?.approvedCuts)?specialists.approvedCuts:[]
         const sourceCutsMs:Array<[number,number]>=rawCuts.filter((item):item is Record<string,unknown>=>
           !!item&&typeof item==='object'&& !Array.isArray(item)).map(item=>
           [Number(item.startMs)+(isUploaded?0:sourceWindowStart),
             Number(item.endMs)+(isUploaded?0:sourceWindowStart)] as [number,number]).filter(([start,end])=>
           Number.isFinite(start)&&Number.isFinite(end)&&end>start)
+        const resultDuration=sourceCutsMs.reduce((sum,[a,b])=>sum+b-a,0)
+        const composite=scoreFinishedAgentClip({
+          qaRating:rating,finderRating:candidate?.score??0,
+          objective:{
+            sourceBounded:sourceCutsMs.length>0&&sourceCutsMs.every(([a,b])=>
+              a>=sourceWindowStart&&b<=sourceWindowEnd),
+            noOverlaps:sourceCutsMs.every(([a,b],i)=>i===0||a>=sourceCutsMs[i-1]![1]),
+            durationMs:resultDuration,maxDurationMs:next.seconds*1000,
+            hasOutput:Boolean(render.outputKey),
+          },
+        })
         const duplicate=sourceCutsMs.length>0&&next.completed.some(done=>
           sameFinishedCut(sourceCutsMs,done.sourceCutsMs??[]))
         if(duplicate){
           next.errors.push('Candidate '+(candidateIndex+1)+': similar finished cut already ranked; duplicate hidden')
-        }else next.completed.push({clipId:run.resultClipId,projectId:run.resultProjectId,
-          startMin:Math.floor(((isUploaded?0:sourceWindowStart)+
-            (candidate?.rangeMs[0]??scopedWindow[0])-next.sourceStartMs)/60_000),
-          score:Math.max(0,Math.min(100,Math.round(finalScore))),
-          candidateId:candidate?.id,reason:candidate?.reason,category:candidate?.category,qaPass,sourceCutsMs})
+        }else{
+          // Do not claim a weighted score without a real QA grade.
+          // Persist actual scoring evidence on the normal clip, so the
+          // existing project gallery sorts finished results by score.
+          const score=composite.score??Math.max(0,Math.min(100,candidate?.score??0))
+          await prisma.clip.update({
+            where:{id:run.resultClipId},
+            data:{
+              score,
+              scores:JSON.parse(JSON.stringify({
+                ...(composite.score!==null?{total:composite.score}:{}),
+                qa:composite.qaRating,finder:composite.finderRating,
+                objective:composite.objectiveRating,
+                weights:composite.weights,qaAvailable:composite.qaRating!==null,
+              })),
+              title:candidate?.title??'AI clip',
+              reason:candidate?.reason??null,
+            },
+          })
+          next.completed.push({clipId:run.resultClipId,projectId:run.resultProjectId,
+            startMin:Math.floor(((isUploaded?0:sourceWindowStart)+
+              (candidate?.rangeMs[0]??scopedWindow[0])-next.sourceStartMs)/60_000),
+            score, candidateId:candidate?.id,reason:candidate?.reason,
+            category:candidate?.category,qaPass,sourceCutsMs})
+        }
         next.completed=rankedCompletedAgentClips(next.completed)
         }
       }else{
