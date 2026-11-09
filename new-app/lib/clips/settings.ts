@@ -95,6 +95,9 @@ export const clipProjectSettingsSchema = z.object({
   blank: z.boolean().optional(),
   /** CL-05: found-clips project → source full-video project id. */
   fromFullVideoProjectId: z.string().optional(),
+  /** Start the same durable Story/Footage/Flow/QA clipper after upload processing. */
+  autoAgentClipMode: z.enum(['clip_moment_v1','clip_story_v1']).optional(),
+  autoAgentClipSeconds: z.union([z.literal(30),z.literal(60),z.literal(90)]).optional(),
   /** TX-30: transcription language for new uploads (unset = English). */
   asrLanguage: z
     .enum(['auto', 'en', 'es', 'fr', 'de', 'pt', 'it', 'nl'])
