@@ -96,7 +96,7 @@ export type EditorialHandoff = {
   /** Flow Editor edits are a separate, source-grounded pass; Footage original is retained. */
   flowReview?: {
     originalCuts: EditorialSelection[]
-    changes: Array<{ passageIndex: number; action: 'replace' | 'remove'; reason: string; before: EditorialSelection; after?: EditorialSelection }>
+    changes: Array<{ passageIndex: number; action: 'replace' | 'remove' | 'split'; reason: string; before: EditorialSelection; after?: EditorialSelection; afterSpans?: EditorialSelection[] }>
     applied: boolean
     note: string
     joinReviews?: Array<{leftIndex:number;rightIndex:number;status:'flows'|'needs_change';reason:string}>
@@ -496,7 +496,7 @@ function originalPassageWords(words: ClipWord[], selection: EditorialSelection) 
  */
 export function applyStoryFlowChanges(
   raw: unknown, originals: EditorialSelection[], words: ClipWord[], bounds: [number,number],
-  opts:{allowSplit:boolean}={allowSplit:false},
+  opts:{allowSplit:boolean;momentEndTrimOnly?:boolean}={allowSplit:false},
 ) {
   if (!Array.isArray(raw) || raw.length>24) throw Error('flow_invalid_change_count')
   const changesInput:FlowChange[]=[]
@@ -570,7 +570,7 @@ export function applyStoryFlowChanges(
     if(converted.startMs===before.startMs&&converted.endMs===before.endMs){
       finalCuts.push(before);continue
     }
-    if(!opts.allowSplit&&(converted.startMs<before.startMs||converted.endMs>before.endMs)){
+    if(opts.momentEndTrimOnly&&(converted.startMs<before.startMs||converted.endMs>before.endMs)){
       // Single moment Flow can only tighten ends, never extend to unrelated material.
       throw Error('flow_moment_only_end_trim')
     }
@@ -645,7 +645,7 @@ export async function runStoryFlowReview(
       if (!call || !proposal || typeof proposal.assessment!=='string') throw Error('flow_missing_structured_review')
       const applied=opts.mode==='baseline'
         ? applyStoryFlowChanges(proposal.changes,originals,words,bounds)
-        : applyStoryFlowChanges(proposal.changes,originals,words,bounds,{allowSplit:opts.mode==='story'})
+        : applyStoryFlowChanges(proposal.changes,originals,words,bounds,{allowSplit:opts.mode==='story',momentEndTrimOnly:opts.mode==='moment'})
       const joinReviews=validateStoryFlowJoinReviews(proposal.joinReviews,originals.length,applied.changes)
       const finalPassages=applied.finalCuts.map((sel,i)=>({passageIndex:i,dialogue:originalPassageWords(words,sel).dialogue}))
       const finalJoins=storyFlowJoinEvidence(finalPassages)
