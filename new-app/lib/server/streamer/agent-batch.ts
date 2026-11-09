@@ -8,7 +8,7 @@ import {enqueueAiProducerAnalyzeJob} from '@/lib/server/ai-producer-agent/enqueu
 import {resolveAiProducerSources} from '@/lib/server/ai-producer-agent/resolve-sources'
 import {loadRoughCutWords} from '@/lib/server/ai-producer-agent/rough-cut-source'
 import {timestampedAsrForVisual} from '@/lib/ai-producer-agent/visual-evidence'
-import {rankAgentClipCandidates,rankedCompletedAgentClips}
+import {rankAgentClipCandidates,rankedCompletedAgentClips,sameFinishedCut}
   from '@/lib/streamer/agent-clip-ranking'
 import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
 import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
@@ -188,11 +188,20 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
         const specialists=firstOutput?.specialists as Record<string,unknown>|undefined
         const review=specialists?.review as Record<string,unknown>|undefined
         const qaPass=review?.pass===true
-        next.completed.push({clipId:run.resultClipId,projectId:run.resultProjectId,
+        const rawCuts=Array.isArray(specialists?.approvedCuts)?specialists.approvedCuts:[]
+        const sourceCutsMs:Array<[number,number]>=rawCuts.filter((item):item is Record<string,unknown>=>
+          !!item&&typeof item==='object'&& !Array.isArray(item)).map(item=>
+          [Number(item.startMs),Number(item.endMs)] as [number,number]).filter(([start,end])=>
+          Number.isFinite(start)&&Number.isFinite(end)&&end>start)
+        const duplicate=sourceCutsMs.length>0&&next.completed.some(done=>
+          sameFinishedCut(sourceCutsMs,done.sourceCutsMs??[]))
+        if(duplicate){
+          next.errors.push('Candidate '+(candidateIndex+1)+': similar finished cut already ranked; duplicate hidden')
+        }else next.completed.push({clipId:run.resultClipId,projectId:run.resultProjectId,
           startMin:Math.floor(((isUploaded?0:sourceWindowStart)+
             (candidate?.rangeMs[0]??scopedWindow[0])-next.sourceStartMs)/60_000),
           score:Math.max(0,Math.min(100,Math.round(finalScore))),
-          candidateId:candidate?.id,reason:candidate?.reason,category:candidate?.category,qaPass})
+          candidateId:candidate?.id,reason:candidate?.reason,category:candidate?.category,qaPass,sourceCutsMs})
         next.completed=rankedCompletedAgentClips(next.completed)
       }else{
         next.errors.push('Candidate '+(candidateIndex+1)+' in window '+(next.index+1)+
