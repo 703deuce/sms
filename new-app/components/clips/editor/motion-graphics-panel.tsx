@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { useEffect, useRef, useState } from 'react'
+import { canonicalEditsJson, type ClipEditsV2 } from '@/lib/clips/edits'
 import { MotionModeSchema, MotionPlanSchema, StyleProfileSchema, type StyleProfile, type MotionPlan } from '@/lib/clips/motion-graphics/contract'
 import { addTextBackedMotionPlan, removeTextBackedMotionGraphics } from '@/lib/clips/motion-graphics/text-adapter'
 
@@ -37,6 +37,7 @@ export function MotionGraphicsPanel(props: {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [sourceVersion, setSourceVersion] = useState<number | null>(null)
+  const draftSnapshot = useRef<string | null>(null)
   useEffect(() => {
     let live = true
     void fetch('/api/clips/motion-styles').then(r => r.ok ? r.json() : Promise.reject()).then((v: { data?: unknown[] }) => {
@@ -52,6 +53,7 @@ export function MotionGraphicsPanel(props: {
 
   async function generate() {
     setGenerating(true); setError(''); setNotice(''); setPlan(null)
+    const snapshot = canonicalEditsJson(props.edits)
     try {
       const res = await fetch('/api/clips/clips/' + encodeURIComponent(props.clipId) + '/motion-graphics/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -66,6 +68,7 @@ export function MotionGraphicsPanel(props: {
       const parsed = MotionPlanSchema.safeParse(data?.plan)
       if (!parsed.success) throw new Error('Agent returned an invalid motion graphics plan')
       setSourceVersion(data?.basedOnEditsSaveVersion ?? null)
+      draftSnapshot.current = snapshot
       setPlan(parsed.data)
       setNotice(parsed.data.graphics.length
         ? 'Review these suggestions and apply them to editable Text layers.'
@@ -182,6 +185,7 @@ export function MotionGraphicsPanel(props: {
       const data: unknown = await res.json()
       const result = MotionPlanSchema.safeParse((data as { data?: { plan?: unknown } }).data?.plan)
       if (!res.ok || !result.success) throw new Error('Could not revise the selected graphic')
+      if (!plan) draftSnapshot.current = canonicalEditsJson(props.edits)
       setPlan(result.data); setNotice('Review your targeted revision, then Apply to editable timeline.')
       setRevisionInstruction('')
     } catch (e) { setError((e as Error).message) }
@@ -190,20 +194,24 @@ export function MotionGraphicsPanel(props: {
 
   function apply() {
     if (!plan) return
+    if (draftSnapshot.current !== canonicalEditsJson(props.edits)) {
+      setError('Timeline changed since this motion draft was created. Generate a new plan to protect your edits.')
+      return
+    }
     const old = props.edits.motionPlan
     const baseEdits = old ? removeTextBackedMotionGraphics(props.edits, old.graphics.map(g => g.id)) : props.edits
     const result = addTextBackedMotionPlan(baseEdits, plan)
     if (!result.ok) { setError(result.code + ': ' + result.detail); return }
     props.onEdits({ ...result.edits, motionPlan: plan })
     setNotice('Applied as editable Text layers. Export uses the existing text animation renderer.')
-    setError(''); setPlan(null); setSourceVersion(null)
+    setError(''); setPlan(null); setSourceVersion(null); draftSnapshot.current = null
   }
 
   function clearGenerated() {
-    const ids = aiItems.map(i => i.id.slice(3))
+    const ids = props.edits.motionPlan?.graphics.map(g => g.id) ?? []
     props.onEdits({ ...removeTextBackedMotionGraphics(props.edits, ids), motionPlan: undefined })
     setNotice('Removed generated motion text; your other editor content is unchanged.')
-    setPlan(null); setError('')
+    setPlan(null); setError(''); draftSnapshot.current = null
   }
 
   return (
@@ -303,10 +311,11 @@ export function MotionGraphicsPanel(props: {
       {plan ? (
         <div className="space-y-2 rounded border p-2">
           <p className="text-xs font-semibold">Review {plan.graphics.length} proposed graphics</p>
+          {!plan.graphics.length ? <p className="text-xs">Applying this plan removes previously generated graphics without changing manual layers.</p> : null}
           <ul className="max-h-60 space-y-1 overflow-auto">
             {plan.graphics.map(g => (
               <li key={g.id} className="rounded bg-muted/50 p-2 text-xs">
-                <strong>{g.text}</strong> · {(g.startMs / 1000).toFixed(1)}–{(g.endMs / 1000).toFixed(1)}s
+                <strong>{g.text || g.steps?.join(' → ') || g.bars?.map(b => b.label + ': ' + b.value).join(', ') || g.templateId}</strong> · {(g.startMs / 1000).toFixed(1)}–{(g.endMs / 1000).toFixed(1)}s
                 <div className="text-muted-foreground">{g.rationale}</div>
               </li>
             ))}
@@ -314,7 +323,7 @@ export function MotionGraphicsPanel(props: {
           {sourceVersion != null ? <p className="text-xs text-muted-foreground">
             Generated from saved edit version {sourceVersion}. Review if you've edited the timeline since then.
           </p> : null}
-          <button type="button" onClick={apply} disabled={plan.graphics.length === 0}
+          <button type="button" onClick={apply}
             className="w-full rounded border px-3 py-2 text-sm disabled:opacity-50">
             Apply to editable timeline
           </button>
@@ -322,7 +331,7 @@ export function MotionGraphicsPanel(props: {
       ) : null}
       {aiItems.length ? (
         <div className="space-y-2">
-          <p className="text-xs">{aiItems.length} generated text layers in this clip.</p>
+          <p className="text-xs">{aiItems.length} generated text/shape layers in this clip.</p>
           <button type="button" className="rounded border px-3 py-2 text-xs" onClick={clearGenerated}>
             Remove generated graphics
           </button>
