@@ -207,7 +207,8 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
         const rawCuts=Array.isArray(specialists?.approvedCuts)?specialists.approvedCuts:[]
         const sourceCutsMs:Array<[number,number]>=rawCuts.filter((item):item is Record<string,unknown>=>
           !!item&&typeof item==='object'&& !Array.isArray(item)).map(item=>
-          [Number(item.startMs),Number(item.endMs)] as [number,number]).filter(([start,end])=>
+          [Number(item.startMs)+(isUploaded?0:sourceWindowStart),
+            Number(item.endMs)+(isUploaded?0:sourceWindowStart)] as [number,number]).filter(([start,end])=>
           Number.isFinite(start)&&Number.isFinite(end)&&end>start)
         const duplicate=sourceCutsMs.length>0&&next.completed.some(done=>
           sameFinishedCut(sourceCutsMs,done.sourceCutsMs??[]))
