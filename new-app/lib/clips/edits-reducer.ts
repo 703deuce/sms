@@ -12,12 +12,14 @@ import { createId } from '@/lib/supabase/id'
 import { normalizeSetCaptionsArgs, resolvedCaptionStyle } from '@/lib/clips/producer-captions'
 import { defaultEdits, type ClipBounds, type ClipEditsV2, type ClipWord } from '@/lib/clips/edits'
 import { applySilenceTrimToEdits } from '@/lib/clips/silence-trim'
+import { textPreset, normalizeTextItems, TEXT_MAX_ITEMS } from '@/lib/clips/editor/text-items'
 
 export type ProducerToolName =
   | 'trim'
   | 'set_captions'
   | 'set_layout'
   | 'set_title'
+  | 'add_text_overlay'
   | 'set_music_mix'
   | 'add_sfx'
   | 'remove_broll'
@@ -78,7 +80,40 @@ export function applyProducerTool(
       }
     }
     case 'set_title':
-      return { edits: base, summary: `Title → ${String(call.args.title || '')}` }
+      return { edits: base, summary: 'No title change made: use add_text_overlay for visible title cards' }
+    case 'add_text_overlay': {
+      const text = String(call.args.text ?? '').trim()
+      const kind = String(call.args.kind ?? 'title_card')
+      const startMs = Number(call.args.atMs ?? 0)
+      const durationMs = Number(call.args.durationMs ?? 3000)
+      if (!text || text.length > 180 || !Number.isInteger(startMs) || startMs < 0 ||
+          !Number.isInteger(durationMs) || durationMs < 500 || durationMs > 10000 ||
+          !['title_card', 'lower_third'].includes(kind)) {
+        return { edits: base, summary: 'No text overlay added: invalid text, type or timing' }
+      }
+      if ((base.textItems?.length ?? 0) >= TEXT_MAX_ITEMS)
+        return { edits: base, summary: 'No text overlay added: layer limit reached' }
+      const preset = textPreset(kind === 'lower_third' ? 'caption_left' : 'title_white_on_dark_blur')!
+      const item = {
+        id: createId('txt'),
+        text, startMs, endMs: startMs + durationMs,
+        x: kind === 'lower_third' ? 12 : 50,
+        y: kind === 'lower_third' ? 72 : 30,
+        style: { ...preset.style },
+        anim: {
+          in: { type: kind === 'title_card' ? 'pop' as const : 'slide_up' as const,
+            unit: 'block' as const, durMs: 250 },
+          out: { type: 'fade' as const, unit: 'block' as const, durMs: 200 },
+        },
+        presetId: preset.id,
+      }
+      const items = normalizeTextItems([item], startMs + durationMs)
+      if (!items || items.length !== 1)
+        return { edits: base, summary: 'No text overlay added: failed editor validation' }
+      return { edits: { ...base, textItems: [...(base.textItems ?? []), item] },
+        summary: 'Added editable ' + (kind === 'lower_third' ? 'lower-third' : 'title card') +
+          ' at ' + startMs + ' ms' }
+    }
     case 'set_music_mix': {
       const music = base.audio?.music
       if (!music) return { edits: base, summary: 'No music to mix' }
