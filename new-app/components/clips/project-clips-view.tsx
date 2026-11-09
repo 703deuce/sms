@@ -173,27 +173,6 @@ export function ProjectClipsView({
     (initialStatus === 'READY' && initialClips != null) ||
     (initialStatus === 'FAILED' && initialClips != null && initialClips.length > 0)
   const [status, setStatus] = useState(initialStatus)
-  // Upload projects opt into the exact same durable agent batch used for Twitch/Kick.
-  // First check persisted batch state so refreshes never launch a duplicate run.
-  useEffect(()=>{
-    if(status!=='READY'||isStreamer||!projectHasUpload||!autoAgentClipMode)return
-    let canceled=false
-    const activate=async()=>{
-      try{
-        const response=await fetch(`/api/streamer/agent-batches?projectId=${encodeURIComponent(projectId)}`,{cache:'no-store'})
-        if(!response.ok)throw Error('agent_batch_status_unavailable')
-        const json=await response.json()
-        if(canceled||json.data)return
-        const started=await fetch('/api/streamer/agent-batches',{
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({projectId,mode:autoAgentClipMode,seconds:autoAgentClipSeconds,action:'start'}),
-        })
-        if(!started.ok)console.error('[clipper:agent] automatic upload run unavailable',await started.text())
-      }catch(err){console.error('[clipper:agent] automatic upload run failed',err)}
-    }
-    void activate()
-    return ()=>{canceled=true}
-  },[status,isStreamer,projectHasUpload,autoAgentClipMode,autoAgentClipSeconds,projectId])
   const [clips, setClips] = useState<ClipCardData[]>(initialClips ?? [])
   const [clipSort, setClipSort] = useState<'score' | 'timeline' | 'title'>('score')
   const displayedClips = [...clips].sort((a,b) => clipSort === 'timeline' ? a.startMs - b.startMs : clipSort === 'title' ? a.title.localeCompare(b.title) : b.score - a.score)
@@ -595,7 +574,9 @@ export function ProjectClipsView({
               ) : null
             }
           >
-            {clips.length === 0 ? (
+            {clips.length === 0 && autoAgentClipMode ? (
+              <EmptyState icon={Clapperboard} title="AI Agent Clipper" description="Agent clips appear in the AI Agent panel above as the batch finishes. No classic picker clips were created." />
+            ) : clips.length === 0 ? (
               <EmptyState
                 icon={Clapperboard}
                 title={failureCopy?.title ?? 'No clips found'}
