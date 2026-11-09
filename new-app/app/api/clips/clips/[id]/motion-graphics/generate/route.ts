@@ -6,6 +6,7 @@ import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { getMotionStyle } from '@/lib/server/clips/motion-styles'
 import { editorPreviewDurationMs } from '@/lib/clips/editor-preview-edits'
+import type { ClipWord } from '@/lib/clips/edits'
 import { suggestTextMotionGraphics } from '@/lib/clips/motion-graphics/suggest'
 
 const Input = z.object({
@@ -25,7 +26,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (body.profileId && !profile) return NextResponse.json({ error: 'Style profile not found' }, { status: 404 })
     const data = await getClipEditorPayload(workspaceId, clipId)
     if (!data) return NextResponse.json({ error: 'Clip not found' }, { status: 404 })
-    const words = data.words.map((w, index) => ({ ...w, i: w.i ?? w.idx ?? index }))
+    const words = data.words.map((w: ClipWord, index: number) => ({ ...w, i: w.i ?? w.idx ?? index }))
     const durationMs = editorPreviewDurationMs(data.edits, words)
     // Unsupported project aspect formats must not silently generate mispositioned overlays.
     const aspect = data.edits.aspectRatio ?? '9:16'
