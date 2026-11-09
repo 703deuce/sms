@@ -9,6 +9,7 @@ const Body = z.object({
   images: z.array(z.object({
     mimeType: z.enum(['image/jpeg', 'image/png']),
     base64: z.string().min(100).max(2_800_000),
+    frameTimeMs: z.number().int().min(0).max(86400000).optional(),
   }).strict()).min(1).max(3),
   instructions: z.string().max(1000).optional(),
 }).strict()
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
     const decoded = body.images.map(i => ({
       mimeType: i.mimeType,
       bytes: Buffer.from(i.base64, 'base64'),
+      frameTimeMs: i.frameTimeMs,
     }))
     for (const image of decoded) {
       if (image.bytes.length > 2_000_000 || image.bytes.length < 100)
