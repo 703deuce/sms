@@ -8,6 +8,7 @@ export type StreamerAgentBatch={
   id:string;status:'running'|'done'|'canceled'
   mode:StreamerAgentMode;seconds:30|60|90;index:number;total:number
   sourceStartMs:number;sourceDurationMs:number
+  allWindows?:boolean;selectedStartMin?:number
   preparedProjectId?:string;runId?:string
   discoveryJobId?:string;candidates?:AgentClipCandidate[];candidateIndex?:number
   /** How many candidate clips were discovered for each source window. */
