@@ -17,7 +17,7 @@ import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
 export {readStreamerAgentBatch} from '@/lib/streamer/agent-batch-contract'
 
 export async function startStreamerAgentBatch(workspaceId:string,projectId:string,
-  mode:Mode,seconds:30|60|90,opts?:{onlyIfAbsent?:boolean}){
+  mode:Mode,seconds:30|60|90,opts?:{onlyIfAbsent?:boolean;allWindows?:boolean;selectedStartMin?:number}){
   if(!aiProducerAgentServerEnabled())throw Error('ai_producer_agent_disabled')
   const prisma=getPrisma()
   const source=await prisma.clipProject.findFirst({
@@ -42,14 +42,17 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
   if(current?.status==='running')throw Error('stream_agent_batch_already_running')
   if(opts?.onlyIfAbsent && asSettings(source.settings).agentClipBatch)
     throw Error('agent_clip_batch_already_exists')
+  const allWindows=opts?.allWindows??true
+  const selectedStartMin=opts?.selectedStartMin??0
   const windows=streamerAgentWindows(source.rangeStartMs,
-    source.rangeEndMs-source.rangeStartMs,true)
+    source.rangeEndMs-source.rangeStartMs,allWindows,selectedStartMin)
   // Do not launch unbounded costs on a malformed duration.
   if(windows.length>32)throw Error('stream_agent_batch_exceeds_32_windows')
   const batch:AgentBatch={
     id:createId('sagent'),status:'running',mode,seconds,
     index:0,total:windows.length,sourceStartMs:source.rangeStartMs,
     sourceDurationMs:source.rangeEndMs-source.rangeStartMs,
+    allWindows,selectedStartMin,
     completed:[],errors:[],startedAt:new Date().toISOString(),
   }
   await prisma.$transaction(async (tx:Pick<typeof prisma,'clipProject'|'clipJob'|'$executeRaw'>)=>{
@@ -137,7 +140,8 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
   const batch=readStreamerAgentBatch(p?.settings)
   if(!p||!batch||batch.id!==batchId||batch.status!=='running')
     return {status:'not_active'}
-  const windows=streamerAgentWindows(batch.sourceStartMs,batch.sourceDurationMs,true)
+  const windows=streamerAgentWindows(batch.sourceStartMs,batch.sourceDurationMs,
+    batch.allWindows??true,batch.selectedStartMin??0)
   const next:AgentBatch={...batch,completed:[...batch.completed],errors:[...batch.errors],
     candidates:batch.candidates?[...batch.candidates]:undefined}
   const moveWindow=()=>{
