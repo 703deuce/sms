@@ -11,7 +11,7 @@ import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
 export {readStreamerAgentBatch} from '@/lib/streamer/agent-batch-contract'
 
 export async function startStreamerAgentBatch(workspaceId:string,projectId:string,
-  mode:Mode,seconds:30|60|90){
+  mode:Mode,seconds:30|60|90,opts?:{onlyIfAbsent?:boolean}){
   if(!aiProducerAgentServerEnabled())throw Error('ai_producer_agent_disabled')
   const prisma=getPrisma()
   const source=await prisma.clipProject.findFirst({
@@ -19,7 +19,7 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
     include:{streamVod:{include:{channel:true}},upload:true},
   })
   if(!source)throw Error('agent_clip_source_not_ready')
-  const isStream=Boolean(source.streamVod)
+  const isStream=Boolean(source.streamVod && source.streamVod.platform!=='upload')
   if(isStream){
     if(!['twitch','kick'].includes(source.streamVod!.platform))
       throw Error('stream_agent_batch_requires_twitch_kick_vod')
@@ -34,6 +34,8 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
     throw Error('agent_clip_batch_requires_source_transcript')
   const current=readStreamerAgentBatch(source.settings)
   if(current?.status==='running')throw Error('stream_agent_batch_already_running')
+  if(opts?.onlyIfAbsent && asSettings(source.settings).agentClipBatch)
+    throw Error('agent_clip_batch_already_exists')
   const windows=streamerAgentWindows(source.rangeStartMs,
     source.rangeEndMs-source.rangeStartMs,true)
   // Do not launch unbounded costs on a malformed duration.
@@ -44,11 +46,20 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
     sourceDurationMs:source.rangeEndMs-source.rangeStartMs,
     completed:[],errors:[],startedAt:new Date().toISOString(),
   }
-  await prisma.$transaction(async (tx:Pick<typeof prisma,'clipProject'|'clipJob'>)=>{
-    await tx.clipProject.update({where:{id:projectId},data:{
-      settings:JSON.parse(JSON.stringify({...asSettings(source.settings),
-        agentClipBatch:batch})),
-    }})
+  await prisma.$transaction(async (tx)=>{
+    if(opts?.onlyIfAbsent){
+      const n=await tx.$executeRaw`
+        UPDATE clip_projects
+        SET settings=jsonb_set(COALESCE(settings,'{}'::jsonb),'{agentClipBatch}',${JSON.stringify(batch)}::jsonb),
+            "updatedAt"=NOW()
+        WHERE id=${projectId} AND (settings->'agentClipBatch') IS NULL
+      `
+      if(n!==1)throw Error('agent_clip_batch_already_exists')
+    }else{
+      await tx.clipProject.update({where:{id:projectId},data:{
+        settings:JSON.parse(JSON.stringify({...asSettings(source.settings),agentClipBatch:batch})),
+      }})
+    }
     await tx.clipJob.create({data:{
       id:createId('job'),projectId,type:'STREAM_AGENT_BATCH',
       status:'QUEUED',priority:10,maxAttempts:2,payload:{batchId:batch.id},
@@ -56,6 +67,37 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
   })
   return batch
 }
+/** Safe to call after any READY PROCESS_PROJECT worker callback.
+ * A single SQL CAS and the batch job insertion share one transaction. */
+export async function maybeAutoStartUploadAgentBatch(projectId:string){
+  const prisma=getPrisma()
+  const p=await prisma.clipProject.findUnique({where:{id:projectId},
+    select:{workspaceId:true,status:true,deletedAt:true,uploadId:true,settings:true}})
+  if(!p||p.deletedAt||p.status!=='READY'||!p.uploadId)return null
+  const settings=asSettings(p.settings)
+  const mode=settings.autoAgentClipMode
+  if(mode!=='clip_moment_v1'&&mode!=='clip_story_v1')return null
+  if(settings.agentClipBatch)return null
+  const value=Number(settings.autoAgentClipSeconds)
+  const seconds=(value===30||value===90?value:60) as 30|60|90
+  try{
+    return await startStreamerAgentBatch(p.workspaceId,projectId,mode,seconds,
+      {onlyIfAbsent:true})
+  }catch(error){
+    const reason=String((error as Error).message)
+    if(reason==='agent_clip_batch_already_exists')return null
+    console.error('[clipper:agent] auto_start_failed',{projectId,reason})
+    // Never overwrite an independently started batch or newer settings.
+    await prisma.$executeRaw`
+      UPDATE clip_projects
+      SET settings=jsonb_set(COALESCE(settings,'{}'::jsonb),'{autoAgentClipError}',
+        ${JSON.stringify(reason.slice(0,200))}::jsonb)
+      WHERE id=${projectId} AND (settings->'agentClipBatch') IS NULL
+    `.catch(()=>null)
+    return null
+  }
+}
+
 async function persistStep(projectId:string,expectedId:string,next:AgentBatch){
   const prisma=getPrisma()
   await prisma.$transaction(async (tx:Pick<typeof prisma,'clipProject'|'clipJob'>)=>{
@@ -80,7 +122,7 @@ async function persistStep(projectId:string,expectedId:string,next:AgentBatch){
  * One window and one AI Producer run remain active at a time. */
 export async function tickStreamerAgentBatch(projectId:string,batchId:string){
   const prisma=getPrisma()
-  const p=await prisma.clipProject.findUnique({where:{id:projectId},include:{streamVod:{select:{id:true}}}})
+  const p=await prisma.clipProject.findUnique({where:{id:projectId},include:{streamVod:{select:{id:true,platform:true}}}})
   const batch=readStreamerAgentBatch(p?.settings)
   if(!p||!batch||batch.id!==batchId||batch.status!=='running')
     return {status:'not_active'}
@@ -147,7 +189,7 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
       next.preparedProjectId=undefined;next.index++
     }
     if(next.index>=windows.length)next.status='done'
-  }else if(p.uploadId && !p.streamVod){
+  }else if(p.uploadId && (!p.streamVod || p.streamVod.platform==='upload')){
     // Uploaded videos already have real video and transcript; no VOD fetch or
     // STREAM_AGENT_PREPARE job is necessary. Use the same specialist run.
     try{
