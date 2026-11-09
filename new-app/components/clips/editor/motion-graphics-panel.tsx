@@ -22,6 +22,8 @@ export function MotionGraphicsPanel(props: {
   const [mode, setMode] = useState<MotionPlan['mode']>('single_source_story')
   const [profiles, setProfiles] = useState<StyleProfile[]>([])
   const [profileId, setProfileId] = useState('')
+  const [renameProfileName, setRenameProfileName] = useState('')
+  const [managingProfile, setManagingProfile] = useState(false)
   const [newStyleName, setNewStyleName] = useState('')
   const [savingStyle, setSavingStyle] = useState(false)
   const [referenceFiles, setReferenceFiles] = useState<File[]>([])
@@ -147,6 +149,40 @@ export function MotionGraphicsPanel(props: {
     finally { setAnalyzingReferences(false) }
   }
 
+  async function renameSelectedProfile() {
+    const profile = profiles.find(p => p.id === profileId)
+    if (!profile || !renameProfileName.trim() || managingProfile) return
+    setManagingProfile(true); setError('')
+    try {
+      const { id: _id, ...existing } = profile
+      const response = await fetch('/api/clips/motion-styles/' + encodeURIComponent(profile.id), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...existing, name: renameProfileName.trim() }),
+      })
+      const body: unknown = await response.json()
+      const parsed = StyleProfileSchema.safeParse((body as { data?: unknown }).data)
+      if (!response.ok || !parsed.success) throw new Error('Could not rename the saved style')
+      setProfiles(current => current.map(p => p.id === profile.id ? parsed.data : p))
+      setRenameProfileName('')
+      setNotice('Saved style renamed.')
+    } catch (err) { setError((err as Error).message) }
+    finally { setManagingProfile(false) }
+  }
+
+  async function deleteSelectedProfile() {
+    const profile = profiles.find(p => p.id === profileId)
+    if (!profile || managingProfile || !window.confirm('Delete saved style "' + profile.name + '"? Existing graphics will not change.')) return
+    setManagingProfile(true); setError('')
+    try {
+      const response = await fetch('/api/clips/motion-styles/' + encodeURIComponent(profile.id), { method: 'DELETE' })
+      if (!response.ok) throw new Error('Could not delete saved style')
+      setProfiles(current => current.filter(p => p.id !== profile.id))
+      setProfileId(''); setRenameProfileName('')
+      setNotice('Saved style deleted; graphics already applied to clips remain unchanged.')
+    } catch (err) { setError((err as Error).message) }
+    finally { setManagingProfile(false) }
+  }
+
   async function createStyle() {
     if (!newStyleName.trim()) return
     setSavingStyle(true); setError('')
@@ -265,6 +301,20 @@ export function MotionGraphicsPanel(props: {
           {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </label>
+      {profileId ? (
+        <div className="space-y-2 rounded border p-2">
+          <label className="block text-xs" htmlFor="motion-profile-rename">Rename selected style</label>
+          <input id="motion-profile-rename" className="w-full rounded border bg-background p-2 text-sm"
+            placeholder={profiles.find(p => p.id === profileId)?.name || 'Style name'}
+            maxLength={100} value={renameProfileName} onChange={e => setRenameProfileName(e.target.value)} />
+          <div className="flex gap-2">
+            <button type="button" className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+              disabled={!renameProfileName.trim() || managingProfile} onClick={() => void renameSelectedProfile()}>Rename</button>
+            <button type="button" className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+              disabled={managingProfile} onClick={() => void deleteSelectedProfile()}>Delete saved style</button>
+          </div>
+        </div>
+      ) : null}
       <div className="space-y-2 rounded border p-2">
         <p className="text-xs font-semibold">Analyze reference screenshots</p>
         <p className="text-xs text-muted-foreground">Up to three JPEG/PNG screenshots (2 MB each), or an authorized video (up to 150 MB). Extract original color, typography, and approximate motion styling.</p>
