@@ -32,5 +32,10 @@ export function buildProcessProjectJobPayload(
   if (parsed.success && parsed.data.byo === true) {
     return { ...base, byo: true }
   }
+  if (parsed.success && parsed.data.autoAgentClipMode) return {
+    ...base, agentOnly: true,
+    agentClipMode: parsed.data.autoAgentClipMode,
+    agentClipSeconds: parsed.data.autoAgentClipSeconds ?? 60,
+  }
   return base
 }
