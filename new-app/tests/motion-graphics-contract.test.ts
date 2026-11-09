@@ -48,4 +48,18 @@ describe('AI motion graphics plan validation', () => {
   it('does not allow patching graphic identity', () => {
     expect(patchMotionGraphics(sample, [{ id: 'g1', patch: { id: 'g2' } }]).ok).toBe(false)
   })
+  it('prevents simultaneous graphics from obscuring each other', () => {
+    const bad = structuredClone(sample)
+    bad.graphics.push({ ...bad.graphics[0]!, id: 'g2',
+      startMs: 1200, endMs: 2900, text: 'Another graphic' })
+    const result = validateMotionPlan(bad)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.issues.some(i => i.code === 'overlapping_graphics')).toBe(true)
+  })
+  it('permits graphics occupying different positions or times', () => {
+    const good = structuredClone(sample)
+    good.graphics.push({ ...good.graphics[0]!, id: 'g2',
+      startMs: 3000, endMs: 4800, text: 'Second event' })
+    expect(validateMotionPlan(good).ok).toBe(true)
+  })
 })
