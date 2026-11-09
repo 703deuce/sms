@@ -211,7 +211,11 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
         ? 'HIGHLIGHTS QA: Inspect actual opening and closing transcript words for EVERY selected moment and all joins. Use the Highlights Finisher verified landings: confirm every promised quote remains in the final footage and each highlight actually ends naturally. Check that no unrelated talk after a landing, incomplete opening, missing independent payoff, or overlong segment remains. Require distinct source moments, not breath cuts. If source words do not support the finishing choices, pass=false with precise timestamps. No rendered audio was supplied; acoustic joins require listening review.'
         : 'EDITORIAL BASELINE (NO LENGTH TARGET): Judge only whether ONE specific story is coherently told from a clear opening through an actual recorded ending, whether the moments belong to that story, whether each selected passage begins and ends naturally, and whether any important connecting information is missing or repeated. Ignore duration entirely: two, three, four or more minutes are acceptable. Do not fail QA due to runtime or number of passages. Flag precise transcript words and source timestamps for every true editorial issue. Do not infer audio quality without listening.',
     })
-    out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
+    out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[],
+      ...((ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1') &&
+      typeof review.rating==='number' && Number.isFinite(review.rating)
+        ? {rating:Math.max(0,Math.min(100,Math.round(review.rating))),
+          rationale:String(review.rationale??'').slice(0,800)}:{}) }
     out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
     if (!out.editorialHandoff.review.pass) {
       // QA findings belong on the editable draft. Do not discard an otherwise
