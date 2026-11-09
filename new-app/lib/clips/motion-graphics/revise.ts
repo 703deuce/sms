@@ -14,7 +14,7 @@ const parameters = {
   },
   required: ['targetId', 'action'],
 }
-export async function reviseMotionPlan(plan: MotionPlan, feedback: string): Promise<MotionPlan> {
+export async function reviseMotionPlan(plan: MotionPlan, feedback: string): Promise<{ plan: MotionPlan; usage: { promptTokens: number; completionTokens: number } }> {
   if (!feedback.trim() || feedback.length > 1000) throw new Error('motion_invalid_feedback')
   const response = await lunaChat({
     messages: [
@@ -36,6 +36,7 @@ export async function reviseMotionPlan(plan: MotionPlan, feedback: string): Prom
     tools: [{ name: 'edit_motion_graphic', description: 'Choose one existing graphic and a constrained edit', parameters }],
     toolChoice: 'required',
   })
+  const usage = { promptTokens: response.usage?.prompt_tokens ?? 0, completionTokens: response.usage?.completion_tokens ?? 0 }
   const tool = response.message.tool_calls?.find(t => t.function.name === 'edit_motion_graphic')
   if (!tool) throw new Error('motion_revision_missing_edit')
   let payload: Record<string, unknown>
@@ -45,7 +46,7 @@ export async function reviseMotionPlan(plan: MotionPlan, feedback: string): Prom
   const graphic = plan.graphics.find(g => g.id === id)
   if (!graphic) throw new Error('motion_revision_unknown_target')
   if (payload.action === 'remove') {
-    return { ...plan, graphics: plan.graphics.filter(g => g.id !== id) }
+    return { plan: { ...plan, graphics: plan.graphics.filter(g => g.id !== id) }, usage }
   }
   let patch: Partial<typeof graphic>
   const num = (key: string, fallback: number) => {
@@ -80,5 +81,5 @@ export async function reviseMotionPlan(plan: MotionPlan, feedback: string): Prom
   } else throw new Error('motion_revision_unsupported_action')
   const result = patchMotionGraphics(plan, [{ id, patch }])
   if (!result.ok) throw new Error('motion_revision_invalid_patch')
-  return result.plan
+  return { plan: result.plan, usage }
 }
