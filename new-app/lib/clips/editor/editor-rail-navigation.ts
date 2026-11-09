@@ -43,7 +43,7 @@ export function editorRailGroups(aiExtras: boolean = clipEditorAiExtrasEnabled()
       ],
     },
     { id: 'captions', label: 'Captions', icon: Captions, tabs: [{ id: 'captions', tabLabel: 'Captions' }] },
-    { id: 'text', label: 'Text', icon: Type, tabs: [{ id: 'text', tabLabel: 'Text' }] },
+    { id: 'text', label: 'Text', icon: Type, tabs: [{ id: 'text', tabLabel: 'Text' }, { id: 'motion', tabLabel: 'AI Motion' }] },
     {
       id: 'media',
       label: 'Media',
@@ -124,6 +124,7 @@ export const INVENTORY_RAIL_LABEL_TO_PANEL: Record<string, EditorPanelId> = {
   Cleanup: 'cleanup',
   Captions: 'captions',
   Text: 'text',
+  Motion: 'motion',
   Media: 'media',
   'B-roll': 'broll',
   Cover: 'thumbnail',
