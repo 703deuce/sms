@@ -375,7 +375,10 @@ const flowReviewTool: ToolSchema = {
         type:'object',additionalProperties:false,
         properties:{
           passageIndex:{type:'integer',minimum:0},
-          action:{type:'string',enum:['replace','remove']},
+          action:{type:'string',enum:['replace','remove','split']},
+          spans:{type:'array',minItems:2,maxItems:6,items:{type:'object',additionalProperties:false,
+            properties:{firstWordId:{type:'integer',minimum:0},lastWordId:{type:'integer',minimum:0},reason:{type:'string'}},
+            required:['firstWordId','lastWordId','reason']}},
           firstWordId:{type:'integer',minimum:0},
           lastWordId:{type:'integer',minimum:0},
           reason:{type:'string'},
@@ -389,7 +392,8 @@ const flowReviewTool: ToolSchema = {
 
 type FlowChange = {
   passageIndex:number
-  action:'replace'|'remove'
+  action:'replace'|'remove'|'split'
+  spans?:Array<{firstWordId:number;lastWordId:number;reason:string}>
   firstWordId?:number
   lastWordId?:number
   reason:string
@@ -417,7 +421,7 @@ export function storyFlowJoinEvidence(
  * its two sides; do not silently accept a list of acknowledged defects. */
 export function validateStoryFlowJoinReviews(
   raw: unknown, passageCount:number,
-  changes:Array<{passageIndex:number;action:'replace'|'remove'}>,
+  changes:Array<{passageIndex:number;action:'replace'|'remove'|'split'}>,
 ) {
   if (!Array.isArray(raw) || raw.length!==Math.max(0,passageCount-1))
     throw Error('flow_join_reviews_missing_expected_'+Math.max(0,passageCount-1))
@@ -459,45 +463,91 @@ function originalPassageWords(words: ClipWord[], selection: EditorialSelection) 
  */
 export function applyStoryFlowChanges(
   raw: unknown, originals: EditorialSelection[], words: ClipWord[], bounds: [number,number],
+  opts:{allowSplit:boolean}={allowSplit:false},
 ) {
   if (!Array.isArray(raw) || raw.length>24) throw Error('flow_invalid_change_count')
-  const edits=new Map<number,FlowChange>()
+  const changesInput:FlowChange[]=[]
   for (const item of raw) {
-    if (!item || typeof item!=='object') throw Error('flow_change_not_object')
-    const c=item as FlowChange
+    if (!item || typeof item!=='object')throw Error('flow_change_not_object')
+    changesInput.push(item as FlowChange)
+  }
+  // Flow historically emitted multiple replaces of the same passage to omit an
+  // interior detour. That is exactly one split, not multiple independent edits.
+  const groups=new Map<number,FlowChange[]>()
+  for(const c of changesInput)groups.set(c.passageIndex,[...(groups.get(c.passageIndex)??[]),c])
+  const prepared:FlowChange[]=[]
+  for(const [index,entries] of groups){
+    if(opts.allowSplit&&entries.length>1&&entries.every(c=>c.action==='replace'&&
+        Number.isInteger(c.firstWordId)&&Number.isInteger(c.lastWordId))){
+      const spans=entries.map(c=>({firstWordId:c.firstWordId!,lastWordId:c.lastWordId!,reason:c.reason}))
+        .sort((x,y)=>x.firstWordId-y.firstWordId)
+      prepared.push({passageIndex:index,action:'split',reason:'Remove source detour within passage',spans})
+    }else prepared.push(...entries)
+  }
+  const edits=new Map<number,FlowChange>()
+  for (const c of prepared) {
     if (!Number.isInteger(c.passageIndex) || c.passageIndex<0 ||
       c.passageIndex>=originals.length || edits.has(c.passageIndex))
       throw Error('flow_invalid_or_duplicate_passage_index_'+c.passageIndex)
-    if (c.action!=='replace' && c.action!=='remove') throw Error('flow_invalid_action_passage_'+c.passageIndex)
-    if (typeof c.reason!=='string' || !c.reason.trim()) throw Error('flow_missing_reason_passage_'+c.passageIndex)
+    if (c.action!=='replace' && c.action!=='remove' && c.action!=='split')
+      throw Error('flow_invalid_action_passage_'+c.passageIndex)
+    if (typeof c.reason!=='string' || !c.reason.trim())
+      throw Error('flow_missing_reason_passage_'+c.passageIndex)
+    if (c.action==='split'){
+      if(!opts.allowSplit)throw Error('flow_split_not_allowed_in_mode')
+      if(!Array.isArray(c.spans)||c.spans.length<2||c.spans.length>6)
+        throw Error('flow_split_invalid_span_count_passage_'+c.passageIndex)
+    }
     if (c.action==='replace' && (!Number.isInteger(c.firstWordId) || !Number.isInteger(c.lastWordId)))
       throw Error('flow_missing_word_ids_passage_'+c.passageIndex)
     edits.set(c.passageIndex,c)
   }
   const finalCuts:EditorialSelection[]=[]
-  const changes:Array<{passageIndex:number;action:'replace'|'remove';reason:string;before:EditorialSelection;after?:EditorialSelection}>=[]
-  for (let i=0;i<originals.length;i++) {
+  const changes:Array<{passageIndex:number;action:'replace'|'remove'|'split';reason:string;
+    before:EditorialSelection;after?:EditorialSelection;afterSpans?:EditorialSelection[]}>= []
+  for (let i=0;i<originals.length;i++){
     const before=originals[i]!
     const edit=edits.get(i)
-    if (!edit) {finalCuts.push(before);continue}
-    if (edit.action==='remove') {
+    if(!edit){finalCuts.push(before);continue}
+    if(edit.action==='remove'){
       changes.push({passageIndex:i,action:'remove',reason:edit.reason,before})
+      continue
+    }
+    if(edit.action==='split'){
+      const spans=edit.spans!.map(span=>resolveFootageWordSelections([{
+        firstWordId:span.firstWordId,lastWordId:span.lastWordId,
+        beat:before.beat,reason:span.reason,
+      }],words,bounds)[0]!)
+      for(let k=0;k<spans.length;k++){
+        const span=spans[k]!
+        if(span.endMs-span.startMs<1000)throw Error('flow_split_span_too_short_passage_'+i)
+        if(k>0&&span.startMs<spans[k-1]!.endMs)
+          throw Error('flow_split_overlap_passage_'+i)
+        if(span.startMs<before.startMs||span.endMs>before.endMs)
+          throw Error('flow_split_outside_original_passage_'+i)
+      }
+      finalCuts.push(...spans)
+      changes.push({passageIndex:i,action:'split',reason:edit.reason,before,afterSpans:spans})
       continue
     }
     const converted=resolveFootageWordSelections([{
       firstWordId:edit.firstWordId,lastWordId:edit.lastWordId,
       beat:before.beat,reason:edit.reason,
     }],words,bounds)[0]!
-    if (converted.startMs===before.startMs && converted.endMs===before.endMs) {
-      finalCuts.push(before)
-      continue
+    if(converted.startMs===before.startMs&&converted.endMs===before.endMs){
+      finalCuts.push(before);continue
+    }
+    if(!opts.allowSplit&&(converted.startMs<before.startMs||converted.endMs>before.endMs)){
+      // Single moment Flow can only tighten ends, never extend to unrelated material.
+      throw Error('flow_moment_only_end_trim')
     }
     finalCuts.push(converted)
     changes.push({passageIndex:i,action:'replace',reason:edit.reason,before,after:converted})
   }
-  if (!finalCuts.length) throw Error('flow_cannot_remove_every_passage')
-  for (let i=1;i<finalCuts.length;i++) {
-    if (finalCuts[i]!.startMs<finalCuts[i-1]!.endMs)
+  if(!finalCuts.length)throw Error('flow_cannot_remove_every_passage')
+  if(finalCuts.length>24)throw Error('flow_too_many_final_passages')
+  for(let i=1;i<finalCuts.length;i++){
+    if(finalCuts[i]!.startMs<finalCuts[i-1]!.endMs)
       throw Error('flow_overlap_after_revision_near_passage_'+i)
   }
   return {finalCuts,changes}
