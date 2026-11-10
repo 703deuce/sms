@@ -1,0 +1,148 @@
+name: Release
+description: Release readiness record with risk class, reviews, rollback, and production verification.
+title: "[Release]: "
+labels: ["type:release"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for a release or deploy. Prefix comments with `[Agent: <role>]`.
+        Separate code written, tests passed, deployed, and verified in production.
+        Never deploy or modify the SMS worker or Coolify app3.
+        Verify web deploys with `/api/health` `commitSha`.
+  - type: dropdown
+    id: owner
+    attributes:
+      label: Owner (one accountable)
+      description: The single accountable owner for this release (usually Backend or DevOps).
+      options:
+        - chief-of-staff
+        - researcher
+        - product-manager
+        - backend
+        - frontend
+        - landing-pages
+        - qa
+        - video-quality
+        - security
+        - devops
+        - support
+        - growth
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+    validations:
+      required: true
+  - type: dropdown
+    id: risk_class
+    attributes:
+      label: Risk class
+      description: High-risk changes also need the relevant reviews and John's approval. See team/RELEASE_POLICY.md.
+      options:
+        - low
+        - high
+    validations:
+      required: true
+  - type: textarea
+    id: components
+    attributes:
+      label: Affected components
+      description: Apps, workers, infrastructure, and migrations included in this release.
+    validations:
+      required: true
+  - type: textarea
+    id: changes
+    attributes:
+      label: Changes
+      description: What is being released, with linked PR(s) and issue(s).
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Release conditions, required checks, and protected behavior that must still work.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What must be true before the release is called successful, including production verification.
+    validations:
+      required: true
+  - type: textarea
+    id: qa_signoff
+    attributes:
+      label: QA sign-off
+      description: Independent QA result, evidence link, and agent name. Write "not required" only if the release policy says so, and explain why.
+    validations:
+      required: true
+  - type: textarea
+    id: video_signoff
+    attributes:
+      label: Video Quality sign-off
+      description: Required for clip, edit, render, or AI pipeline changes. Otherwise write "not applicable" and why.
+    validations:
+      required: true
+  - type: textarea
+    id: security_signoff
+    attributes:
+      label: Security sign-off
+      description: Required for auth, billing, storage, or permission changes. Otherwise write "not applicable" and why.
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback plan
+      description: How to revert or mitigate if the release fails. Destructive database rollback is not allowed without John.
+    validations:
+      required: true
+  - type: textarea
+    id: deploy_verification
+    attributes:
+      label: Deploy verification (`/api/health` commitSha)
+      description: After deploy, record the `/api/health` `commitSha`, the expected git SHA, the time checked, and whether they match. Do not claim production verification without this. A deploy taking more than 15 minutes must be investigated, not waited out.
+    validations:
+      required: true
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status
+      options:
+        - Backlog
+        - Specifying
+        - Ready
+        - Building
+        - Review
+        - Testing
+        - Blocked
+        - Approved
+        - Deployed
+        - Done
+      default: 4
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Required reviews, CI checks, migrations, or owner approvals still outstanding. Write "None" if there are none.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Distinguish code written, tests passed, deployed, and verified in production. Only claim what has been verified.
+    validations:
+      required: true

@@ -1,0 +1,109 @@
+name: QA
+description: QA assignment or test report with a test plan, results, and evidence.
+title: "[QA]: "
+labels: ["type:qa"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for independent QA work. Prefix comments with `[Agent: <role>]`.
+        The bot that wrote the code cannot be the only one certifying it.
+        Test actual behavior, not just whether code compiles.
+  - type: dropdown
+    id: owner
+    attributes:
+      label: Owner (one accountable)
+      description: The single accountable QA owner for this test cycle.
+      options:
+        - chief-of-staff
+        - researcher
+        - product-manager
+        - backend
+        - frontend
+        - landing-pages
+        - qa
+        - video-quality
+        - security
+        - devops
+        - support
+        - growth
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+    validations:
+      required: true
+  - type: textarea
+    id: components
+    attributes:
+      label: Affected components
+      description: Features, PRs, workflows, and environments under test.
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Acceptance criteria and protected existing behavior that must be verified.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What must pass before this QA item can approve the change.
+    validations:
+      required: true
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: Test plan
+      description: Cases to run (normal path, edge cases, failures, recovery, regressions). Include environment and commit SHA.
+    validations:
+      required: true
+  - type: textarea
+    id: test_results
+    attributes:
+      label: Test results (with evidence)
+      description: Exact pass/fail results, commands or checks run, logs, screenshots, and links. Never claim a test passed unless it was executed and the result verified. Do not paste secrets, tokens, cookies, or signed URLs.
+    validations:
+      required: true
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status
+      options:
+        - Backlog
+        - Specifying
+        - Ready
+        - Building
+        - Review
+        - Testing
+        - Blocked
+        - Approved
+        - Deployed
+        - Done
+      default: 5
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Linked PR, related bugs, Video Quality or Security reviews. Write "None" if there are none.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Summarize verification. Distinguish tests passed from deployed and from verified in production.
+    validations:
+      required: true

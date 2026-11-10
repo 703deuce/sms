@@ -1,0 +1,94 @@
+name: Research
+description: Research brief or investigation with evidence, sources, and a recommended next step.
+title: "[Research]: "
+labels: ["type:research"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for competitive, customer, or technical research. Prefix comments with `[Agent: <role>]`.
+        Distinguish confirmed facts, anecdotes, speculation, and recommendations. Include sources and dates.
+  - type: dropdown
+    id: owner
+    attributes:
+      label: Owner (one accountable)
+      description: The single accountable owner for this research item.
+      options:
+        - chief-of-staff
+        - researcher
+        - product-manager
+        - backend
+        - frontend
+        - landing-pages
+        - qa
+        - video-quality
+        - security
+        - devops
+        - support
+        - growth
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+    validations:
+      required: true
+  - type: textarea
+    id: components
+    attributes:
+      label: Affected components
+      description: Product areas, markets, or systems this research concerns.
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Questions to answer, scope, and what would make the brief useful.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What the completed brief must contain (problem, evidence, sources, competitor approaches, recommended next step, etc.).
+    validations:
+      required: true
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status
+      options:
+        - Backlog
+        - Specifying
+        - Ready
+        - Building
+        - Review
+        - Testing
+        - Blocked
+        - Approved
+        - Deployed
+        - Done
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Related issues, prior briefs, or missing access. Write "None" if there are none.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Sources, links, publication dates, and confidence. Do not present guesses as observed facts.
+    validations:
+      required: true
