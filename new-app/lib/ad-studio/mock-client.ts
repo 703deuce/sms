@@ -79,6 +79,7 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
   const runs = new Map<string, AdStudioRun>()
   const createKeys = new Map<string, string>()
   const confirmKeys = new Map<string, string>()
+  const retryRenderKeys = new Map<string, string>()
   const ticks = new Map<string, number>()
   let seq = 0
   let assetSeq = 0
@@ -231,6 +232,19 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
       }
       ticks.set(runId, 0)
       return save(run, { status: 'generating', error: null })
+    },
+
+    async retryRender(runId, key) {
+      const run = runs.get(runId)
+      if (!run) throw new AdStudioHttpError(404, 'RUN_NOT_FOUND', 'Run not found.')
+      const prior = retryRenderKeys.get(runId)
+      if (prior === key && (run.status === 'stitching' || run.status === 'done')) return copy(run)
+      if (run.status !== 'failed' || run.error?.code !== 'RENDER_ERROR' || run.canRetryRender !== true) {
+        throw new AdStudioHttpError(409, 'INVALID_PARAMS', 'Only a completed-generation render failure can be retried.')
+      }
+      retryRenderKeys.set(runId, key)
+      ticks.set(runId, 0)
+      return save(run, { status: 'stitching', error: null, canRetryRender: false, completedAt: null })
     },
 
     async createCommercial(runId, body) {
