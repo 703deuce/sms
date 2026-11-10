@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { enqueueAiProducerAnalyzeJob } from '@/lib/server/ai-producer-agent/enqueue-analyze'
+import { ytEnqueueAnalyze } from '@/lib/youtube-video/pipeline/yt-find-moments'
 import { chooseVisualFocusWindows, timestampedAsrForVisual } from '@/lib/ai-producer-agent/visual-evidence'
 import type { YtObservation, YtTranscriptWord } from '@/lib/youtube-video/pipeline/yt-types'
 
@@ -16,13 +16,13 @@ export async function ytRefineVisualStoryEvidence(input: {
   }))
   const windows=chooseVisualFocusWindows(candidates,range,3)
   if (!windows.length) return null
-  const job=await enqueueAiProducerAnalyzeJob({
-    runId:input.runId,projectId:input.projectId,mode:'visual_detail',
-    sources:[{
+  return ytEnqueueAnalyze({
+    runId:input.runId,projectId:input.projectId,mode:'visual_detail',pass:'focused',
+    source:{
       sourceId:input.sourceId,kind:'upload',projectId:input.projectId,
       storageKey:input.storageKey,rangeMs:range,
       durationMs:input.endMs-input.startMs,
-    }],
+    },
     targetClipLenS:60,
     visualEvidence:{
       enabled:true,model:'gemini-3.1-flash-lite',
@@ -32,5 +32,4 @@ export async function ytRefineVisualStoryEvidence(input: {
       })),
     },
   })
-  return job.id
 }
