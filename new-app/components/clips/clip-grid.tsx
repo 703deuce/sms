@@ -23,6 +23,7 @@ export type ClipCardData = {
   resultKind?: UnifiedClipKind
   needsReview?: boolean
   needsReviewReasons?: string[]
+  projectId?: string
 }
 
 export function ClipGrid({
@@ -62,7 +63,7 @@ export function ClipGrid({
           </div>
           <ClipCard
             clip={c}
-            projectId={projectId}
+            projectId={c.projectId || projectId}
             onDownload={onDownload}
             onHidden={onHidden}
             onChanged={onChanged}
