@@ -65,6 +65,7 @@ export type AdStudioClient = {
   confirm: (runId: string, idempotencyKey: string) => Promise<AdStudioRun>
   cancel: (runId: string) => Promise<AdStudioRun>
   continueRun: (runId: string) => Promise<AdStudioRun>
+  retryRender: (runId: string, idempotencyKey: string) => Promise<AdStudioRun>
   createCommercial: (
     runId: string,
     body: { variantId: string; idempotencyKey: string; voiceId?: string; voiceoverEnabled?: boolean },
@@ -127,6 +128,15 @@ export function createAdStudioClient(): AdStudioClient {
     async continueRun(runId) {
       const result = await jsonRequest<RunEnvelope>(`/api/ad-studio/runs/${encodeURIComponent(runId)}/continue`, {
         method: 'POST',
+      })
+      return result.run
+    },
+
+    async retryRender(runId, idempotencyKey) {
+      const result = await jsonRequest<RunEnvelope>(`/api/ad-studio/runs/${encodeURIComponent(runId)}/retry-render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ idempotencyKey }),
       })
       return result.run
     },
