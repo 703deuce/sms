@@ -5,6 +5,7 @@ import {
   exportAiCaptionsRun,
   getAiCaptionsRun,
   getAiCaptionsSrt,
+  listAiCaptionsRuns,
   listAiCaptionsStyles,
 } from '@/lib/ai-captions/runs'
 import { AiCaptionsError } from '@/lib/ai-captions/errors'
@@ -217,6 +218,88 @@ describe('ai-captions runs', () => {
     expect(ready.result!.captionsEnabled).toBe(true)
     expect(ready.result!.editorUrl).toContain('/app/video-editor/proj_from_upl_1/edit/')
     expect(ready.result!.editorUrl).toContain('?tab=captions')
+  })
+
+  it('returns human history titles in one workspace-scoped batch and never promotes raw project IDs', async () => {
+    const sources = sourceMap([
+      { projectId: 'proj_named', durationMs: 5_000, words: shortWords },
+      { projectId: 'proj_asset', assetId: 'asset_named', durationMs: 5_000, words: shortWords },
+      { projectId: 'proj_upload', uploadId: 'upl_named', durationMs: 5_000, words: shortWords },
+    ])
+    const deps = testDeps({ sources })
+    const createdProject = await createAiCaptionsRun('ws_1', null,
+      { clientRequestId: 'req-title-project', source: { kind: 'project', projectId: 'proj_named' } }, null, deps)
+    const createdAsset = await createAiCaptionsRun('ws_1', null,
+      { clientRequestId: 'req-title-asset', source: { kind: 'asset', projectId: 'proj_asset', assetId: 'asset_named' } }, null, deps)
+    const createdUpload = await createAiCaptionsRun('ws_1', null,
+      { clientRequestId: 'req-title-upload', source: { kind: 'upload', uploadId: 'upl_named' } }, null, deps)
+
+    await deps.store.create({
+      id: 'acr_old_missing',
+      workspaceId: 'ws_1',
+      status: 'failed',
+      stage: 'prepare',
+      progressPercent: 25,
+      failureCode: 'source_not_found',
+      failureMessage: 'Source missing',
+      clientRequestId: 'req-old-missing',
+      requestHash: 'hash-old-missing',
+      source: { kind: 'project', projectId: 'proj_deleted' },
+      ingestedProjectId: 'proj_deleted',
+      styleId: 'clean_white',
+      creditEstimate: 10,
+      result: null,
+      createdById: null,
+      createdAt: '2026-11-09T12:00:00.000Z',
+      updatedAt: '2026-11-09T12:00:00.000Z',
+    })
+    await deps.store.create({
+      id: 'acr_other_workspace',
+      workspaceId: 'ws_2',
+      status: 'failed',
+      stage: 'prepare',
+      progressPercent: 25,
+      failureCode: 'source_not_found',
+      failureMessage: 'Source missing',
+      clientRequestId: 'req-other-workspace',
+      requestHash: 'hash-other-workspace',
+      source: { kind: 'project', projectId: 'proj_other_ws' },
+      ingestedProjectId: 'proj_other_ws',
+      styleId: 'clean_white',
+      creditEstimate: 10,
+      result: null,
+      createdById: null,
+      createdAt: '2026-11-09T12:00:00.000Z',
+      updatedAt: '2026-11-09T12:00:00.000Z',
+    })
+
+    const calls: Array<{ workspaceId: string; count: number }> = []
+    deps.resolveDisplayTitles = async (workspaceId, refs) => {
+      calls.push({ workspaceId, count: refs.length })
+      const titles: Record<string, string> = {}
+      for (const ref of refs) {
+        if (ref.runId === createdProject.view.runId) titles[ref.runId] = 'Launch interview'
+        if (ref.runId === createdAsset.view.runId) titles[ref.runId] = 'Duplicate filename'
+        if (ref.runId === createdUpload.view.runId) titles[ref.runId] = 'Duplicate filename'
+      }
+      return titles
+    }
+
+    const history = await listAiCaptionsRuns('ws_1', deps)
+    expect(calls).toEqual([{ workspaceId: 'ws_1', count: 4 }])
+    expect(history).toHaveLength(4)
+    expect(history.find((row) => row.runId === createdProject.view.runId)?.displayTitle).toBe('Launch interview')
+    expect(history.find((row) => row.runId === createdAsset.view.runId)?.displayTitle).toBe('Duplicate filename')
+    expect(history.find((row) => row.runId === createdUpload.view.runId)?.displayTitle).toBe('Duplicate filename')
+    expect(history.find((row) => row.runId === 'acr_old_missing')?.displayTitle).toBe('Caption video · Nov 9, 2026')
+    expect(history.some((row) => row.runId === 'acr_other_workspace')).toBe(false)
+    expect(history.map((row) => row.displayTitle)).not.toContain('proj_named')
+
+    calls.length = 0
+    const detail = await getAiCaptionsRun('ws_1', createdProject.view.runId, deps)
+    expect(detail.displayTitle).toBe('Launch interview')
+    expect(detail.sourceTitle).toBe('Launch interview')
+    expect(calls).toEqual([{ workspaceId: 'ws_1', count: 1 }])
   })
 
   it('rejects a source that is not ready and a missing idempotency collision is not a dollar error'

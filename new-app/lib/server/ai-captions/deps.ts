@@ -20,6 +20,64 @@ import { createCaptionsOnlyProject } from '@/lib/server/ai-captions/create-proje
 
 type PrismaClient = ReturnType<typeof getPrisma>
 
+function filenameStem(filename: string | null | undefined): string | null {
+  const value = filename?.trim()
+  if (!value) return null
+  const stem = value.replace(/\.[^.]+$/, '').trim()
+  return stem || null
+}
+
+function meaningfulProjectTitle(title: string | null | undefined, projectId: string): string | null {
+  const value = title?.trim()
+  if (!value || value === projectId || /^proj_[a-z0-9_-]+$/i.test(value)) return null
+  return value
+}
+
+async function resolveCaptionRunDisplayTitles(
+  workspaceId: string,
+  refs: ReadonlyArray<{ runId: string; projectId: string | null; uploadId: string | null }>,
+): Promise<Record<string, string>> {
+  const prisma = getPrisma()
+  const projectIds = [...new Set(refs.flatMap((ref) => ref.projectId ? [ref.projectId] : []))]
+  const uploadIds = [...new Set(refs.flatMap((ref) => ref.uploadId ? [ref.uploadId] : []))]
+  const [projects, uploads] = await prisma.$transaction([
+    prisma.clipProject.findMany({
+      where: { workspaceId, id: { in: projectIds } },
+      select: {
+        id: true,
+        title: true,
+        uploadId: true,
+        upload: { select: { filename: true } },
+      },
+    }),
+    prisma.clipUpload.findMany({
+      where: { workspaceId, id: { in: uploadIds } },
+      select: { id: true, filename: true },
+    }),
+  ])
+  const projectById = new Map(projects.map((project) => [project.id, project]))
+  const uploadById = new Map(uploads.map((upload) => [upload.id, upload]))
+  const titles: Record<string, string> = {}
+
+  for (const ref of refs) {
+    const project = ref.projectId ? projectById.get(ref.projectId) : undefined
+    const title =
+      (project ? meaningfulProjectTitle(project.title, project.id) : null) ??
+      filenameStem(project?.upload?.filename) ??
+      filenameStem(ref.uploadId ? uploadById.get(ref.uploadId)?.filename : null)
+    if (title) titles[ref.runId] = title
+  }
+
+  console.info('[ai-captions:history] title_batch_resolved', {
+    workspaceId,
+    runs: refs.length,
+    projects: projects.length,
+    uploads: uploads.length,
+    resolved: Object.keys(titles).length,
+  })
+  return titles
+}
+
 function asWords(raw: unknown): TranscriptWord[] | null {
   if (!Array.isArray(raw) || !raw.length) return null
   const words: TranscriptWord[] = []
@@ -370,6 +428,7 @@ export function productionRunDeps(): AiCaptionsRunDeps {
     store: prismaAiCaptionsStore(),
     prefs: prismaAiCaptionsPrefs(),
     pipeline: productionPipeline(),
+    resolveDisplayTitles: resolveCaptionRunDisplayTitles,
   }
 }
 

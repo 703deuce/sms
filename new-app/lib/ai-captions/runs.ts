@@ -24,6 +24,14 @@ export type AiCaptionsRunDeps = {
   store: AiCaptionsRunStore
   prefs: AiCaptionsPrefs
   pipeline: AiCaptionsPipelineDeps
+  /**
+   * Resolve source labels in one workspace-scoped batch. Optional so tests/older adapters
+   * remain compatible without a database-backed resolver.
+   */
+  resolveDisplayTitles?: (
+    workspaceId: string,
+    refs: ReadonlyArray<{ runId: string; projectId: string | null; uploadId: string | null }>,
+  ) => Promise<Record<string, string>>
   now?: () => Date
 }
 
@@ -31,7 +39,55 @@ function nowIso(deps: AiCaptionsRunDeps): string {
   return (deps.now ?? (() => new Date()))().toISOString()
 }
 
-function toView(row: AiCaptionsRunRecord): AiCaptionsRunView {
+function projectIdFor(row: AiCaptionsRunRecord): string | null {
+  return row.ingestedProjectId ?? row.result?.projectId ?? (
+    row.source.kind === 'project' || row.source.kind === 'asset' ? row.source.projectId : null
+  )
+}
+
+function fallbackDisplayTitle(createdAt?: string): string {
+  const parsed = createdAt ? Date.parse(createdAt) : Number.NaN
+  if (!Number.isFinite(parsed)) return 'Caption video'
+  const date = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(parsed))
+  return `Caption video · ${date}`
+}
+
+async function displayTitlesForRows(
+  workspaceId: string,
+  rows: readonly AiCaptionsRunRecord[],
+  deps: AiCaptionsRunDeps,
+): Promise<Record<string, string>> {
+  if (!rows.length || !deps.resolveDisplayTitles) return {}
+  const refs = rows.map((row) => ({
+    runId: row.id,
+    projectId: projectIdFor(row),
+    uploadId: row.source.kind === 'upload' ? row.source.uploadId : null,
+  }))
+  try {
+    const titles = await deps.resolveDisplayTitles(workspaceId, refs)
+    console.info('[ai-captions:history] title_lookup_complete', {
+      workspaceId,
+      runs: rows.length,
+      resolved: Object.keys(titles).length,
+    })
+    return titles
+  } catch (err) {
+    console.warn('[ai-captions:history] title_lookup_failed', {
+      workspaceId,
+      runs: rows.length,
+      errorType: err instanceof Error ? err.name : 'unknown',
+    })
+    return {}
+  }
+}
+
+function toView(row: AiCaptionsRunRecord, resolvedDisplayTitle?: string): AiCaptionsRunView {
+  const displayTitle = resolvedDisplayTitle?.trim() || fallbackDisplayTitle(row.createdAt)
   return {
     runId: row.id,
     status: row.status,
@@ -41,9 +97,9 @@ function toView(row: AiCaptionsRunRecord): AiCaptionsRunView {
     failureMessage: row.failureMessage,
     creditEstimate: row.creditEstimate,
     styleId: row.styleId,
-    projectId: row.ingestedProjectId ?? row.result?.projectId ?? (
-      row.source.kind === 'project' || row.source.kind === 'asset' ? row.source.projectId : null
-    ),
+    projectId: projectIdFor(row),
+    displayTitle,
+    sourceTitle: displayTitle,
     result: row.result,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -132,10 +188,11 @@ export async function createAiCaptionsRun(
 export async function listAiCaptionsRuns(workspaceId: string, deps: AiCaptionsRunDeps): Promise<AiCaptionsRunView[]> {
   console.info('[ai-captions:runs] list_begin', { workspaceId })
   const rows = await deps.store.list(workspaceId, 40)
+  const titles = await displayTitlesForRows(workspaceId, rows, deps)
   console.info('[ai-captions:runs] list_complete', { workspaceId, count: rows.length })
   // Only send lightweight result metadata for history cards; full transcript loads on selection.
   return rows.map((row) => {
-    const view = toView(row)
+    const view = toView(row, titles[row.id])
     return view.result ? { ...view, result: { ...view.result, words: [], lines: [] } } : view
   })
 }
@@ -158,8 +215,9 @@ export async function getAiCaptionsRun(
       })
     }
   }
+  const titles = await displayTitlesForRows(workspaceId, [advanced], deps)
   console.info('[ai-captions:runs] get_complete', { runId, status: advanced.status, stage: advanced.stage })
-  return toView(advanced)
+  return toView(advanced, titles[advanced.id])
 }
 
 async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Promise<AiCaptionsRunRecord> {

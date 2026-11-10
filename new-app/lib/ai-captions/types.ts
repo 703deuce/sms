@@ -98,6 +98,10 @@ export type AiCaptionsRunView = {
   creditEstimate: number | null
   styleId: string | null
   projectId: string | null
+  /** Human-readable source label for history/detail UI. IDs remain separate for routing/diagnostics. */
+  displayTitle?: string
+  /** Backward-compatible alias for consumers that describe this as the source title. */
+  sourceTitle?: string
   result: AiCaptionsResult | null
   createdAt?: string
   updatedAt?: string

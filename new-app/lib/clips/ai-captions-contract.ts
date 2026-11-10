@@ -98,6 +98,9 @@ export type AiCaptionsRun = {
   creditEstimate: number | null
   styleId: string | null
   projectId: string | null
+  /** Human-readable source label. Never use project/run IDs as the primary visible title. */
+  displayTitle?: string
+  sourceTitle?: string
   result: AiCaptionsResult | null
   createdAt?: string
   updatedAt?: string

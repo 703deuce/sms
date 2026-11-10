@@ -117,6 +117,37 @@ describe('AI Captions workspace', () => {
   })
   afterEach(() => cleanup())
 
+  it('renders human history titles, selects by run id, and reloads history on remount', async () => {
+    const historyRun = {
+      runId: 'run_history',
+      status: 'ready' as const,
+      stage: 'ready' as const,
+      progressPercent: 100,
+      failureCode: null,
+      failureMessage: null,
+      creditEstimate: CAPTIONS_RUN_CREDITS,
+      styleId: 'clean_white',
+      projectId: 'proj_history',
+      displayTitle: 'Customer interview',
+      sourceTitle: 'Customer interview',
+      createdAt: '2026-11-10T12:00:00.000Z',
+      result: { ...readyResult, clipId: 'clip_history', projectId: 'proj_history' },
+    }
+    listAiCaptionsRuns.mockResolvedValue([historyRun])
+    getAiCaptionsRun.mockResolvedValue(historyRun)
+
+    render(<AiCaptionsWorkspace />)
+    await waitFor(() => expect(screen.getByText('Customer interview')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Open caption run Customer interview' }))
+    await waitFor(() => expect(getAiCaptionsRun).toHaveBeenCalledWith('run_history'))
+    expect(screen.queryByText('proj_history')).toBeNull()
+
+    cleanup()
+    render(<AiCaptionsWorkspace />)
+    await waitFor(() => expect(listAiCaptionsRuns.mock.calls.length).toBeGreaterThanOrEqual(2))
+    expect(screen.getByText('Customer interview')).toBeTruthy()
+  })
+
   it('uploads, starts a captions run, shows preparing, then Edit opens the Captions tab', async () => {
     createAiCaptionsRun.mockResolvedValue({
       runId: 'run_1',
