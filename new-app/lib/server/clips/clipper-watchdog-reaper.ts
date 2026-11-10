@@ -89,6 +89,11 @@ export async function reapClipperProgressStalls(): Promise<number> {
     }
 
     const failMsg = watchdogUserMessage(job.type, snap.phase)
+    console.info('[clips:timeout]', {
+      projectId: job.projectId, runId: null, lastStage: snap.phase,
+      idleMs: Math.max(0, now - new Date(snap.lastChangeAt).getTime()),
+      action: 'fail_stalled_worker_job', jobId: job.id,
+    })
     console.info('[clipper:watchdog]', {
       action: 'fail',
       jobId: job.id,
