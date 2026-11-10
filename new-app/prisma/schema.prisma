@@ -10701,6 +10701,9 @@ model AdStudioRun {
   creditCharged   Int?
   projectId       String?
   clipId          String?
+  voiceoverStatus String?
+  voiceoverStorageKey String?
+  voiceoverDurationMs Int?
   errorCode       String?
   errorMessage    String?
   createdAt       DateTime @default(now())

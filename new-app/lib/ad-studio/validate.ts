@@ -13,6 +13,8 @@ export const adBriefSchema = z.object({
   durationSec: z.union([z.literal(15), z.literal(30)]),
   imageAssetIds: z.array(asset).max(15),
   logoAssetId: asset.optional(),
+  voiceId: asset.optional(),
+  voiceoverEnabled: z.boolean().optional(),
 }).strict()
 export const adModeSchema = z.enum(['storyline','image_to_ad'])
 export const adKeySchema = z.string().trim().min(8).max(160)
