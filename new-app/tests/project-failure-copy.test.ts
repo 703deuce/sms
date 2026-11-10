@@ -9,13 +9,15 @@ describe('project-failure-copy', () => {
       error: 'No complete, self-contained moments found.',
     })
     expect(copy?.kind).toBe('no_clips')
-    expect(copy?.retryLabel).toContain('retry')
+    expect(copy?.retryLabel).toMatch(/retry/i)
+    expect(copy?.message).not.toMatch(/Talking mode/i)
   })
 
   it('maps silent empty ready to ready_empty default', () => {
     const copy = describeClipProjectFailure({ status: 'READY', clipCount: 0 })
     expect(copy?.kind).toBe('ready_empty')
-    expect(copy?.message).toMatch(/no clips were saved/i)
+    expect(copy?.message).toMatch(/no Story or Continuous clips were saved/i)
+    expect(copy?.message).not.toMatch(/Talking mode|longer segment/i)
   })
 
   it('maps transcribe errors', () => {

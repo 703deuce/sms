@@ -48,8 +48,8 @@ export function describeClipProjectFailure(input: {
         title: 'No clips found',
         message:
           safeError ||
-          'We could not find complete, self-contained moments in this segment. Try a longer clip, different range, or Talking mode.',
-        retryLabel: 'Adjust and retry',
+          'We could not find Story or Continuous clips in this video. Retry processing to run again.',
+        retryLabel: 'Retry processing',
       }
     }
     if (safeError) {
@@ -64,7 +64,7 @@ export function describeClipProjectFailure(input: {
       kind: 'ready_empty',
       title: 'No clips to show',
       message:
-        'Processing finished but no clips were saved. Try a longer segment, Talking mode, or retry processing.',
+        'Processing finished, but no Story or Continuous clips were saved. Retry processing to run again.',
       retryLabel: 'Retry processing',
     }
   }

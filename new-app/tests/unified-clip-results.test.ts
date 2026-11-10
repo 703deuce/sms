@@ -96,6 +96,21 @@ describe('unified clip results adapter', () => {
     expect(clip?.needsReviewReasons).toEqual(['unfinished_ending'])
   })
 
+  it('maps thumbnailUrl / playbackUrl aliases when posterUrl and previewUrl are absent', () => {
+    const clip = adaptListProjectClip({
+      id: 'clip_alias',
+      title: 'Alias thumb',
+      type: 'continuous',
+      score: 70,
+      startMs: 0,
+      endMs: 18000,
+      thumbnailUrl: 'https://cdn.example/thumb.jpg',
+      playbackUrl: 'https://cdn.example/play.mp4',
+    })
+    expect(clip?.posterUrl).toBe('https://cdn.example/thumb.jpg')
+    expect(clip?.previewUrl).toBe('https://cdn.example/play.mp4')
+  })
+
   it('does not re-dedupe overlapping clips; the backend list is already final', () => {
     const rows = adaptListProjectClips([
       { id: 'a', title: 'Story', type: 'story', score: 90, startMs: 0, endMs: 20_000 },

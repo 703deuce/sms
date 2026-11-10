@@ -5,20 +5,21 @@ export function UnifiedClipProgress({
   clipsReady = 0,
   clipsTotal = 0,
   etaSec = 0,
-  stage = null,
+  stage = 'Starting',
 }: {
   clipsReady?: number
   clipsTotal?: number
   etaSec?: number
   stage?: string | null
 }) {
-  const etaLine = etaSec > 0 ? `ETA ${formatEtaSeconds(etaSec)}` : 'Finding Story and Continuous clips…'
+  const stageLabel = (stage ?? 'Starting').replace(/_/g, ' ')
+  const etaLine = etaSec > 0 ? `ETA ${formatEtaSeconds(etaSec)}` : stageLabel === 'Starting' ? 'Starting' : 'Finding Story and Continuous clips…'
   const detail =
     clipsTotal > 0
       ? `${clipsReady} of ${clipsTotal} ready`
-      : stage
-        ? stage.replace(/_/g, ' ')
-        : 'This usually takes a few minutes.'
+      : stageLabel === 'Starting'
+        ? 'Finding Story and Continuous clips…'
+        : stageLabel
   return (
     <div
       className="flex flex-col gap-4 rounded-xl border border-border bg-card/60 p-5"

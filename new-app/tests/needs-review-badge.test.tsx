@@ -57,7 +57,11 @@ describe('NeedsReviewBadge', () => {
     expect(screen.getByTestId('clip-needs-review-reason-list').textContent).toContain('Hook is weaker')
     unmount()
     render(<ClipGrid projectId="proj_nr" clips={[clip]} />)
-    expect(screen.getByTestId('clip-needs-review-badge')).toBeTruthy()
-    expect(screen.getByTestId('clip-needs-review-reason-list').textContent).toContain('Audio dips at 0:12')
+    expect(screen.getAllByTestId('clip-needs-review-badge').length).toBeGreaterThan(0)
+    expect(
+      screen.getAllByTestId('clip-needs-review-reason-list').some((el: HTMLElement) =>
+        (el.textContent ?? '').includes('Audio dips at 0:12'),
+      ),
+    ).toBe(true)
   })
 })

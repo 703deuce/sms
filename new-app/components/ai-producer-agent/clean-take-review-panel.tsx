@@ -267,7 +267,7 @@ export function CleanTakeReviewPanel({
     }
   }
 
-  const editorHref = `/app/clips/${projectId}/edit/${clipId}`
+  const editorHref = `/app/video-editor/${projectId}/edit/${clipId}`
 
   if (loading) {
     return (

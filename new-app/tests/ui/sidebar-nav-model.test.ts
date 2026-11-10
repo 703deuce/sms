@@ -20,6 +20,7 @@ describe('sidebar model', () => {
       'editor',
       'record',
       'ai-video',
+      'studio',
       'media',
       'brand',
       'templates',
@@ -34,6 +35,7 @@ describe('sidebar model', () => {
       home: '/app',
       clips: '/app/clips/new',
       editor: '/app/video-editor',
+      studio: '/app/studio',
       record: '/app/rooms/new',
       'ai-video': '/app/ai-video/new',
       templates: '/app/clips/templates',
@@ -64,11 +66,13 @@ describe('sidebar model', () => {
       'Editor project',
       'Recording',
       'AI Video',
+      'AI Studio',
     ])
     expect(Object.fromEntries(items.map((i: { id: string; href: string }) => [i.id, i.href]))).toMatchObject({
       'create-clip': '/app/clips/new',
       'create-editor': '/app/video-editor/new',
       'create-ai-video': '/app/ai-video/new',
+      'create-studio': '/app/studio',
     })
     expect(createMenuItems({ ...ALL, scriptEditor: true }).find((i: { id: string; href: string }) => i.id === 'create-editor')?.href).toBe(
       '/app/video-editor',
@@ -105,6 +109,7 @@ describe('sidebar model', () => {
     ['/app/ai-video/templates', '', 'templates'],
     ['/app/rooms', '', 'record'],
     ['/app/record', '', 'record'],
+    ['/app/studio', '', 'studio'],
     ['/app/streamer', '', 'streamer'],
     ['/app/settings/billing', '', 'settings'],
     ['/app/help', '', 'learn'],

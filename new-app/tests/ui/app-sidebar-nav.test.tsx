@@ -84,6 +84,7 @@ describe('AppSidebar nav', () => {
       'editor',
       'record',
       'ai-video',
+      'studio',
       'media',
       'brand',
       'templates',

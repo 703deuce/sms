@@ -3,7 +3,7 @@ export const hrefs = {
   app: '/app',
   clips: '/app/clips',
   clipsNew: '/app/clips/new',
-  editorNew: '/app/clips/new?intent=full',
+  editorNew: '/app/video-editor/new',
   streamer: '/app/streamer',
   rooms: '/app/rooms',
   record: '/app/record',
