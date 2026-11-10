@@ -31,7 +31,7 @@ export type YoutubeSharedCheckpoint = {
   completed: YoutubeSharedWindow[]
 }
 
-type SharedArgs = {
+export type SharedArgs = {
   runId: string
   workspaceId: string
   createdById: string | null
