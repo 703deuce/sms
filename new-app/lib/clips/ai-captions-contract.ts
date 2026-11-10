@@ -97,6 +97,7 @@ export type AiCaptionsRun = {
   result: AiCaptionsResult | null
   createdAt?: string
   updatedAt?: string
+  source?: AiCaptionsSource
 }
 
 export type AiCaptionsCreateData = {

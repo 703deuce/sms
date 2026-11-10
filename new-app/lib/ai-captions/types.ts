@@ -100,6 +100,7 @@ export type AiCaptionsRunView = {
   result: AiCaptionsResult | null
   createdAt?: string
   updatedAt?: string
+  source?: AiCaptionsSource
 }
 
 export type AiCaptionsStylesView = {

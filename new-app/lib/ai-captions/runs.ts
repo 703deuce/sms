@@ -47,6 +47,7 @@ function toView(row: AiCaptionsRunRecord): AiCaptionsRunView {
     result: row.result,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    source: row.source,
   }
 }
 
@@ -132,7 +133,11 @@ export async function listAiCaptionsRuns(workspaceId: string, deps: AiCaptionsRu
   console.info('[ai-captions:runs] list_begin', { workspaceId })
   const rows = await deps.store.list(workspaceId, 40)
   console.info('[ai-captions:runs] list_complete', { workspaceId, count: rows.length })
-  return rows.map(toView)
+  // Only send lightweight result metadata for history cards; full transcript loads on selection.
+  return rows.map((row) => {
+    const view = toView(row)
+    return view.result ? { ...view, result: { ...view.result, words: [], lines: [] } } : view
+  })
 }
 
 export async function getAiCaptionsRun(
