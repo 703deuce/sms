@@ -7,6 +7,20 @@ describe('youtube-video runs', () => {
   it('creates from an upload, waits for a choice, then writes one clip result', async () => {
     const source = sourceFromWords('proj_ready', podcastScript, 'Interview')
     const deps = testDeps(new Map([['proj_ready', source]]))
+    // Two genuine options require a user choice; one option auto-selects.
+    deps.pipeline.proposeOptions = () => [
+      {
+        id: 'opt_first', title: 'First story', premise: 'A coherent beginning and ending',
+        beats: [
+          { label: 'Opening', sourceId: 'proj_ready', startMs: 0, endMs: 6000 },
+          { label: 'Ending', sourceId: 'proj_ready', startMs: 36000, endMs: 43000 },
+        ],
+      },
+      {
+        id: 'opt_second', title: 'Second story', premise: 'Another story',
+        beats: [{ label: 'Moment', sourceId: 'proj_ready', startMs: 16000, endMs: 24000 }],
+      },
+    ]
     const created = await createYoutubeVideoRun(
       'ws_1',
       null,
@@ -97,10 +111,12 @@ describe('youtube-video runs', () => {
       null,
       deps,
     )
-    expect(fromUrl.view.status).toBe('awaiting_choice')
-    expect(fromUpload.view.status).toBe('awaiting_choice')
-    expect(fromUrl.view.options?.map((option) => option.id)).toEqual(fromUpload.view.options?.map((option) => option.id))
-    expect(fromUrl.view.options?.[0]?.premise).toEqual(fromUpload.view.options?.[0]?.premise)
+    expect(fromUrl.view.status).toBe('ready')
+    expect(fromUpload.view.status).toBe('ready')
+    expect(fromUrl.view.options).toBeNull()
+    expect(fromUpload.view.options).toBeNull()
+    expect(fromUrl.view.result?.plan.premise).toEqual(fromUpload.view.result?.plan.premise)
+    expect(fromUrl.view.result?.plan.beats).toEqual(fromUpload.view.result?.plan.beats)
   })
 
   it('waits instead of returning HTTP 400, then advances when an upload becomes READY', async () => {
@@ -117,9 +133,9 @@ describe('youtube-video runs', () => {
     expect((await getYoutubeVideoRun('ws_wait', created.view.runId, deps)).status).toBe('waiting_for_source')
     ready.set('proj_pending', sourceFromWords('proj_pending', podcastScript))
     const advanced = await getYoutubeVideoRun('ws_wait', created.view.runId, deps)
-    expect(advanced.status).toBe('awaiting_choice')
-    expect(advanced.options?.length).toBeGreaterThan(0)
-    expect((await getYoutubeVideoRun('ws_wait', created.view.runId, deps)).options).toEqual(advanced.options)
+    expect(advanced.status).toBe('ready')
+    expect(advanced.result?.clipId).toBe('clip_out')
+    expect((await getYoutubeVideoRun('ws_wait', created.view.runId, deps)).result).toEqual(advanced.result)
   })
 
   it('imports a URL only once while its project is transcribing', async () => {
@@ -141,7 +157,7 @@ describe('youtube-video runs', () => {
     await getYoutubeVideoRun('ws_pending_url', created.view.runId, deps)
     expect(imports).toBe(1)
     ready.set('proj_imported_pending', sourceFromWords('proj_imported_pending', podcastScript))
-    expect((await getYoutubeVideoRun('ws_pending_url', created.view.runId, deps)).status).toBe('awaiting_choice')
+    expect((await getYoutubeVideoRun('ws_pending_url', created.view.runId, deps)).status).toBe('ready')
     expect(imports).toBe(1)
   })
   it('auto-selects the only supported story without asking the viewer to choose', async () => {
