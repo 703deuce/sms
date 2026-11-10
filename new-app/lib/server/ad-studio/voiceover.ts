@@ -49,6 +49,9 @@ export async function ensureAdVoiceover(
     const generated = await ttsWithTimestamps({ text, voice: adVoiceSettings(input.voiceId ?? plan?.voiceId) })
     const durationMs = durationMsFromAlignment(generated.alignment)
     if (durationMs <= 0 || !generated.audio.length) throw new Error('Empty voiceover')
+    // Keep the planned timeline fixed. A too-long narration must never be
+    // silently truncated by the editor or exporter.
+    if (durationMs > input.durationSec * 1000) throw new Error('Voiceover exceeds the planned commercial duration')
     const storageKey = `ws/${workspaceId}/ad-studio/${runId}/voiceover.mp3`
     await getClipStorage().putBytes(storageKey, generated.audio, 'audio/mpeg')
     await db.adStudioRun.updateMany({ where: { id: runId, workspaceId, voiceoverStatus: 'generating' },

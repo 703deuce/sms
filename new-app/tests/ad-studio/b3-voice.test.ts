@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { adVoiceSettings } from '@/lib/ad-studio/voice'
 import { DEFAULT_T2V_VOICE } from '@/lib/t2v/voice-defaults'
 describe('Ad Studio B3d voice choice', () => {
