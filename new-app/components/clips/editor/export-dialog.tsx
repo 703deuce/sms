@@ -73,7 +73,12 @@ import {
   type DeliverQuality,
 } from '@/lib/clips/export-deliver'
 import type { InOut } from '@/lib/clips/editor/timeline-edit-ops'
-import { detectCaptionSyncIssues } from '../../../lib/clips/editor/caption-sync-warning'
+import {
+  captionSyncWarningsFromError,
+  detectCaptionSyncIssues,
+  isCaptionSyncRequiredError,
+  type CaptionSyncWarning,
+} from '../../../lib/clips/editor/caption-sync-warning'
 import { CaptionSyncWarningBanner } from './caption-sync-warning-banner'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
@@ -146,6 +151,7 @@ export function ExportDialog({
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
   const [captionSyncAck, setCaptionSyncAck] = useState(false)
+  const [serverCaptionSyncWarnings, setServerCaptionSyncWarnings] = useState<CaptionSyncWarning[]>([])
   const [removeDeadAir, setRemoveDeadAir] = useState(false)
   const [aspect, setAspect] = useState<ExportAspect>(
     edits.aspectRatio ?? '9:16',
@@ -445,10 +451,20 @@ export function ExportDialog({
     inFlightResolution,
     selectedResolution,
   })
-  const captionSyncWarnings = useMemo(
+  const localCaptionSyncWarnings = useMemo(
     () => detectCaptionSyncIssues({ words, edits }),
     [words, edits],
   )
+  const captionSyncWarnings = useMemo(() => {
+    const merged = [...localCaptionSyncWarnings]
+    const seen = new Set(merged.map((w) => w.code))
+    for (const warning of serverCaptionSyncWarnings) {
+      if (seen.has(warning.code)) continue
+      seen.add(warning.code)
+      merged.push(warning)
+    }
+    return merged
+  }, [localCaptionSyncWarnings, serverCaptionSyncWarnings])
   const captionSyncBlocksExport = captionSyncWarnings.length > 0 && !captionSyncAck
   const onDownloadNlePack = () => {
     if (nleExportBusy || captionSyncBlocksExport) return
@@ -464,6 +480,9 @@ export function ExportDialog({
       : exportButton.label
   const downloadCtaLabel = exportDownloadLabel(deliverFormat, encoders)
   useEffect(() => {
+    if (!open) setServerCaptionSyncWarnings([])
+  }, [open])
+  useEffect(() => {
     if (!captionSyncWarnings.length) setCaptionSyncAck(false)
   }, [captionSyncWarnings.length])
 
@@ -472,6 +491,7 @@ export function ExportDialog({
     exportClickedRef.current = true
     setBusy(true)
     setErrorDetail(null)
+    setServerCaptionSyncWarnings([])
     exportToast.start()
     try {
       await onBeforeExport?.()
@@ -536,6 +556,7 @@ export function ExportDialog({
           ? { rangeInMs: timelineInOut.inMs, rangeOutMs: timelineInOut.outMs }
           : {}),
         ...(exportPlatform === 'none' && deliverFormat === 'png' ? { stillAtMs: Math.round(playheadMs) } : {}),
+        ...(captionSyncAck ? { captionSyncAck: true } : {}),
       })
       if (data.inFlight) {
         // FV4c: the server handed back the render already in flight for these edits — attach to it.
@@ -566,6 +587,24 @@ export function ExportDialog({
       }
       if (alsoSrt) window.open(`/api/clips/clips/${clipId}/srt`, '_blank')
     } catch (e) {
+      if (isCaptionSyncRequiredError(e)) {
+        const fromServer = captionSyncWarningsFromError(e)
+        setServerCaptionSyncWarnings(
+          fromServer.length
+            ? fromServer
+            : [
+                {
+                  level: 'warning',
+                  code: 'line_transcript_drift',
+                  message:
+                    e instanceof Error
+                      ? e.message
+                      : 'Caption timing looks out of sync. Acknowledge the warning to export anyway.',
+                },
+              ],
+        )
+        setCaptionSyncAck(false)
+      }
       const msg = e instanceof Error ? e.message : 'Export failed'
       setErrorDetail(msg)
       exportToast.failed(msg)

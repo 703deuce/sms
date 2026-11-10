@@ -22,3 +22,23 @@ export function formatCaptionChunk(words: string[], caseMode: string): string {
   }
   return parts.join(' ')
 }
+
+/** Apply the same case transform as formatCaptionChunk, preserving newlines and spacing. */
+export function formatCaptionLineText(text: string, caseMode: string): string {
+  const safe = typeof text === 'string' ? text : ''
+  if (!safe) return ''
+  if (caseMode === 'upper') {
+    return safe.replace(/[^\s]+/g, (word) => word.toUpperCase())
+  }
+  const parts = safe.split(/(\s+)/)
+  let sentenceStart = true
+  return parts
+    .map((part) => {
+      if (!part || /^\s+$/.test(part)) return part
+      const formatted = formatCaptionWord(part, 'sentence', sentenceStart)
+      sentenceStart = isSentenceBoundary(part)
+      return formatted
+    })
+    .join('')
+}
+

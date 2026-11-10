@@ -6,6 +6,7 @@ import {
   primaryCaptionSyncWarning,
 } from '../lib/clips/editor/caption-sync-warning'
 import { buildNleCaptionsSrt } from '../lib/clips/export-nle-captions'
+import { PUBLISHED_EDITOR_WORDS_EXCERPT_40 } from './fixtures/published-editor-words-excerpt-40'
 
 const bounds = { clipStartMs: 0, clipEndMs: 10_000 }
 
@@ -64,26 +65,28 @@ describe('caption sync warning', () => {
   })
 
   it('warns on invalid or out-of-order cues', () => {
-    // Check the raw cues. normalizeEdits drops inverted times and sorts lines,
-    // which would hide the condition the export warning is meant to catch.
-    const base = edits()
-    const invalid = detectCaptionSyncIssues({
-      words,
-      edits: { ...base, captionLines: [{ id: 'a', text: 'b', startMs: 1200, endMs: 800 }] },
+    // Real UI path: normalizeEdits drops inverted times and sorts lines, but
+    // the detector still surfaces those dropped / reordered cues.
+    const invalid = edits({
+      captionLines: [
+        { id: 'a', text: 'First cue', startMs: 1200, endMs: 800 },
+        { id: 'b', text: 'Second cue', startMs: 1200, endMs: 2400 },
+      ],
     })
-    expect(invalid.map((w) => w.code)).toContain('invalid_times')
+    expect(invalid.captionLines?.some((l) => l.endMs < l.startMs)).toBe(false)
+    expect(detectCaptionSyncIssues({ words, edits: invalid }).map((w) => w.code)).toContain(
+      'invalid_times',
+    )
 
-    const unordered = detectCaptionSyncIssues({
-      words,
-      edits: {
-        ...base,
-        captionLines: [
-          { id: 'a', text: 'later', startMs: 1200, endMs: 1800 },
-          { id: 'c', text: 'earlier', startMs: 100, endMs: 400 },
-        ],
-      },
+    const unordered = edits({
+      captionLines: [
+        { id: 'a', text: 'later', startMs: 1200, endMs: 1800 },
+        { id: 'c', text: 'earlier', startMs: 100, endMs: 400 },
+      ],
     })
-    expect(unordered.map((w) => w.code)).toContain('non_monotonic')
+    expect(detectCaptionSyncIssues({ words, edits: unordered }).map((w) => w.code)).toContain(
+      'non_monotonic',
+    )
   })
 
   it('word and line edits still flow into SRT when timings are valid', () => {
@@ -121,5 +124,108 @@ describe('SRT timestamp formatting and empty file', () => {
     const srt = buildSrtFromCaptionWords([{ text: 'Hi', s_ms: 0, e_ms: 400 }])
     expect(srt).toContain('00:00:00,000 --> 00:00:00,400')
     expect(srt).toContain('Hi')
+  })
+})
+
+function linesFromWords(
+  source: readonly { w: string; s: number; e: number }[],
+  offsetMs: number,
+  wordsPerLine = 2,
+  gradual = false,
+) {
+  const cueCount = Math.ceil(source.length / wordsPerLine)
+  const lines = []
+  for (let i = 0; i < source.length; i += wordsPerLine) {
+    const group = source.slice(i, i + wordsPerLine)
+    const cueIndex = i / wordsPerLine
+    const shift = gradual ? Math.round((cueIndex / Math.max(1, cueCount - 1)) * offsetMs) : offsetMs
+    lines.push({
+      id: `l${i}`,
+      text: group.map((w) => w.w).join(' '),
+      startMs: Math.round(group[0]!.s * 1000) + shift,
+      endMs: Math.round(group[group.length - 1]!.e * 1000) + shift,
+    })
+  }
+  return lines
+}
+
+describe('caption sync drift matching', () => {
+  const excerpt = [...PUBLISHED_EDITOR_WORDS_EXCERPT_40]
+  const denseBounds = { clipStartMs: 0, clipEndMs: 12_000 }
+
+  function denseEdits(offsetMs: number, gradual = false) {
+    return normalizeEdits(
+      {
+        ...defaultEdits(denseBounds),
+        captionLines: linesFromWords(excerpt, offsetMs, 2, gradual),
+      },
+      denseBounds,
+    )
+  }
+
+  // Thresholds: inclusive 500ms. +150 and +300 stay quiet so slight ASR slack
+  // does not block export; +500 and +1000 fire so a visible constant shift cannot ship.
+  it('flags the VQ repro: 40 words, 2 per line, every cue shifted +1000ms', () => {
+    const found = detectCaptionSyncIssues({ words: excerpt, edits: denseEdits(1000) })
+    expect(found.map((w) => w.code)).toContain('line_transcript_drift')
+  })
+
+  it('stays quiet for a constant +150ms offset', () => {
+    expect(detectCaptionSyncIssues({ words: excerpt, edits: denseEdits(150) }).map((w) => w.code)).not.toContain(
+      'line_transcript_drift',
+    )
+  })
+
+  it('stays quiet for a constant +300ms offset', () => {
+    expect(detectCaptionSyncIssues({ words: excerpt, edits: denseEdits(300) }).map((w) => w.code)).not.toContain(
+      'line_transcript_drift',
+    )
+  })
+
+  it('warns for a constant +500ms offset (inclusive threshold)', () => {
+    expect(detectCaptionSyncIssues({ words: excerpt, edits: denseEdits(500) }).map((w) => w.code)).toContain(
+      'line_transcript_drift',
+    )
+  })
+
+  it('warns for a constant +1000ms offset', () => {
+    expect(detectCaptionSyncIssues({ words: excerpt, edits: denseEdits(1000) }).map((w) => w.code)).toContain(
+      'line_transcript_drift',
+    )
+  })
+
+  it('warns when cue offsets gradually ramp to 1000ms', () => {
+    expect(
+      detectCaptionSyncIssues({ words: excerpt, edits: denseEdits(1000, true) }).map((w) => w.code),
+    ).toContain('line_transcript_drift')
+  })
+
+  it('stays quiet when the same dense cues are in sync', () => {
+    expect(detectCaptionSyncIssues({ words: excerpt, edits: denseEdits(0) })).toEqual([])
+  })
+})
+
+describe('NLE / export SRT caption case', () => {
+  it('applies upper and sentence case the same way preview/ASS do', () => {
+    const base = edits({
+      captionLines: [{ id: 'cl', text: 'Hello there\npals', startMs: 200, endMs: 1600 }],
+    })
+    const upper = {
+      ...base,
+      captions: { ...base.captions, case: 'upper' },
+    }
+    const upperSrt = buildNleCaptionsSrt(words, upper, bounds)
+    expect(upperSrt).toContain('HELLO THERE')
+    expect(upperSrt).toContain('PALS')
+    expect(upperSrt).not.toContain('Hello there')
+
+    const sentence = {
+      ...base,
+      captions: { ...base.captions, case: 'sentence' },
+    }
+    const sentenceSrt = buildNleCaptionsSrt(words, sentence, bounds)
+    expect(sentenceSrt).toContain('Hello there')
+    expect(sentenceSrt).toContain('pals')
+    expect(sentenceSrt).not.toContain('HELLO THERE')
   })
 })

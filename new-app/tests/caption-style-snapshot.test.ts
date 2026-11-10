@@ -91,7 +91,7 @@ describe('caption style snapshot', () => {
     expect(applied.presetId).toBe('boxed')
     expect(applied.animation).toBe('pop')
     expect(applied.size).toBe(6)
-    expect(applied.font).toBeUndefined()
+    expect(applied.font).toBe('Poppins')
   })
 
   it('normalizes unknown keys out of the snapshot', () => {

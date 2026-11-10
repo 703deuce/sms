@@ -163,48 +163,101 @@ export function captionLinePlainText(text: string): string {
   return segs.map((x) => x.join(' ')).join('\n')
 }
 
-/** Valid lines sorted by start, overlaps trimmed (py normalize_caption_lines). */
-export function normalizeCaptionLines(raw: unknown): CaptionLine[] {
-  if (!Array.isArray(raw)) return []
+export type CaptionLineNormalizeReport = {
+  droppedInvalid: number
+  reordered: boolean
+}
+
+const captionLineNormalizeReports = new WeakMap<object, CaptionLineNormalizeReport>()
+
+function attachCaptionLineNormalizeReport<T extends object>(
+  value: T,
+  report: CaptionLineNormalizeReport,
+): T {
+  captionLineNormalizeReports.set(value, report)
+  return value
+}
+
+/** Survives normalizeEdits so the export warning can still see dropped / reordered cues. */
+export function getCaptionLineNormalizeReport(
+  lines: readonly CaptionLine[] | undefined,
+): CaptionLineNormalizeReport | undefined {
+  if (!lines) return undefined
+  return captionLineNormalizeReports.get(lines)
+}
+
+function looksLikeCaptionCue(o: Record<string, unknown>): boolean {
+  return 'startMs' in o || 'endMs' in o || 'text' in o || 'id' in o
+}
+
+export function normalizeCaptionLinesDetailed(raw: unknown): {
+  lines: CaptionLine[]
+  report: CaptionLineNormalizeReport
+} {
+  if (!Array.isArray(raw)) {
+    const report = { droppedInvalid: 0, reordered: false }
+    return { lines: attachCaptionLineNormalizeReport([], report), report }
+  }
   const rows: CaptionLine[] = []
+  let droppedInvalid = 0
   for (const r of raw) {
     if (!r || typeof r !== 'object' || Array.isArray(r)) continue
     const o = r as Record<string, unknown>
+    if (!looksLikeCaptionCue(o)) continue
     const text = serializeTokens(lineTokens(String(o.text ?? '')), CAPTION_LINE_MAX_CHARS)
     const a0 = num(o.startMs)
     const b0 = num(o.endMs)
-    if (!text || a0 === null || b0 === null) continue
+    if (!text || a0 === null || b0 === null) {
+      droppedInvalid += 1
+      continue
+    }
     const a = Math.max(0, pyRound(a0))
     const b = pyRound(b0)
-    if (b - a < CAPTION_LINE_MIN_MS) continue
+    if (b - a < CAPTION_LINE_MIN_MS) {
+      droppedInvalid += 1
+      continue
+    }
     rows.push({ id: String(o.id ?? ''), text, startMs: a, endMs: b })
     if (rows.length >= CAPTION_LINES_MAX) break
   }
+  const orderBefore = rows.map((x) => `${x.id}:${x.startMs}:${x.endMs}`).join('|')
   rows.sort((p, q) => p.startMs - q.startMs || p.endMs - q.endMs)
+  const reordered = rows.length > 1 && rows.map((x) => `${x.id}:${x.startMs}:${x.endMs}`).join('|') !== orderBefore
   const out: CaptionLine[] = []
   let prevEnd = 0
   for (const x of rows) {
     const s = Math.max(x.startMs, prevEnd)
-    if (x.endMs - s < CAPTION_LINE_MIN_MS) continue
+    if (x.endMs - s < CAPTION_LINE_MIN_MS) {
+      droppedInvalid += 1
+      continue
+    }
     out.push({ ...x, startMs: s })
     prevEnd = x.endMs
   }
-  return out
+  const report = { droppedInvalid, reordered }
+  return { lines: attachCaptionLineNormalizeReport(out, report), report }
+}
+
+/** Valid lines sorted by start, overlaps trimmed (py normalize_caption_lines). */
+export function normalizeCaptionLines(raw: unknown): CaptionLine[] {
+  const { lines, report } = normalizeCaptionLinesDetailed(raw)
+  return attachCaptionLineNormalizeReport(lines, report)
 }
 
 const ID_RE = /^[A-Za-z0-9_~-]{1,64}$/
 
 /** Edits normalizer: same lines + stable unique ids; undefined when empty (key dropped). */
 export function normalizeCaptionLinesEdits(raw: unknown): CaptionLine[] | undefined {
-  const lines = normalizeCaptionLines(raw)
+  const { lines, report } = normalizeCaptionLinesDetailed(raw)
   if (!lines.length) return undefined
   const seen = new Set<string>()
-  return lines.map((l, i) => {
+  const out = lines.map((l, i) => {
     let id = ID_RE.test(l.id) && !seen.has(l.id) ? l.id : `cl${i}_${l.startMs}`
     while (seen.has(id)) id = `${id}x`
     seen.add(id)
     return { ...l, id }
   })
+  return attachCaptionLineNormalizeReport(out, report)
 }
 
 export type CaptionLineWord = { i: number; text: string; s_ms: number; e_ms: number; ln: number; br?: true; it?: true; bo?: true }

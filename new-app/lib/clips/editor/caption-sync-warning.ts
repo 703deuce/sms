@@ -1,9 +1,17 @@
 import { buildCaptionWords, type CaptionSourceWord, type CaptionWord } from '../caption-words'
 import { displayDurationMs, type ClipEditsV2 } from '../edits'
-import type { CaptionLine } from './caption-lines'
+import { getCaptionLineNormalizeReport, type CaptionLine } from './caption-lines'
 
-/** Drift large enough that burned-in captions / SRT would visibly miss the words. */
+/**
+ * Caption timing is drifted when the median absolute start/end offset against
+ * a cue's own matched transcript words is >= 500ms, or when later cues in a
+ * gradual ramp reach that bound. +150ms and +300ms stay quiet; +500ms and
+ * +1000ms fire. The 500ms bound is inclusive so a constant +500ms shift is
+ * not silently exported.
+ */
 export const CAPTION_SYNC_DRIFT_MS = 500
+
+export const CAPTION_SYNC_REQUIRED = 'CAPTION_SYNC_REQUIRED'
 
 export type CaptionSyncWarning = {
   level: 'warning'
@@ -35,22 +43,60 @@ function toCaptionSourceWords(words: CaptionSyncSourceWord[]): CaptionSourceWord
   }))
 }
 
-function lineOverlapMs(line: CaptionLine, word: CaptionWord): number {
-  const start = Math.max(line.startMs, word.s_ms)
-  const end = Math.min(line.endMs, word.e_ms)
-  return Math.max(0, end - start)
+function normalizeToken(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}'’]+/gu, '')
 }
 
-function nearestWordDriftMs(line: CaptionLine, words: CaptionWord[]): number | null {
+function cueTokens(text: string): string[] {
+  return text
+    .split(/\s+/)
+    .map((part) => normalizeToken(part))
+    .filter(Boolean)
+}
+
+function wordToken(word: CaptionWord): string {
+  return normalizeToken(word.text || '')
+}
+
+/**
+ * Match a cue to its own transcript words by text, walking forward from a
+ * moving index so a constant or gradual shift cannot be scored as "in sync"
+ * just because the cue overlaps some other word. If text cannot be matched,
+ * fall back to the next words in index order.
+ */
+function cueDriftMs(
+  line: CaptionLine,
+  words: CaptionWord[],
+  cursor: { index: number },
+): number | null {
   if (!words.length) return null
-  const mid = (line.startMs + line.endMs) / 2
-  let best = Number.POSITIVE_INFINITY
-  for (const word of words) {
-    if (lineOverlapMs(line, word) > 0) return 0
-    const wmid = (word.s_ms + word.e_ms) / 2
-    best = Math.min(best, Math.abs(wmid - mid))
+  const tokens = cueTokens(line.text)
+  if (!tokens.length) return null
+
+  const matched: CaptionWord[] = []
+  let idx = cursor.index
+  for (const tok of tokens) {
+    let found = -1
+    for (let i = idx; i < words.length; i++) {
+      if (wordToken(words[i]!) === tok) {
+        found = i
+        break
+      }
+    }
+    if (found < 0) break
+    matched.push(words[found]!)
+    idx = found + 1
   }
-  return Number.isFinite(best) ? best : null
+
+  const used =
+    matched.length > 0
+      ? matched
+      : words.slice(cursor.index, cursor.index + Math.max(1, tokens.length))
+  if (!used.length) return null
+  cursor.index = matched.length > 0 ? idx : cursor.index + used.length
+  const startOff = line.startMs - used[0]!.s_ms
+  const endOff = line.endMs - used[used.length - 1]!.e_ms
+  return Math.max(Math.abs(startOff), Math.abs(endOff))
 }
 
 function median(values: number[]): number {
@@ -59,6 +105,14 @@ function median(values: number[]): number {
   const mid = Math.floor(sorted.length / 2)
   if (sorted.length % 2 === 0) return (sorted[mid - 1]! + sorted[mid]!) / 2
   return sorted[mid]!
+}
+
+function shouldWarnLineTranscriptDrift(cueDrifts: number[]): boolean {
+  if (!cueDrifts.length) return false
+  if (median(cueDrifts) >= CAPTION_SYNC_DRIFT_MS) return true
+  if (cueDrifts.length === 1) return cueDrifts[0]! >= CAPTION_SYNC_DRIFT_MS
+  const later = cueDrifts.slice(Math.floor(cueDrifts.length / 2))
+  return median(later) >= CAPTION_SYNC_DRIFT_MS
 }
 
 /**
@@ -80,14 +134,15 @@ export function detectCaptionSyncIssues(args: {
   )
   const warnings: CaptionSyncWarning[] = []
   const lines = args.edits.captionLines ?? []
+  const normalizeReport = getCaptionLineNormalizeReport(lines)
   const captionWords = buildCaptionWords(toCaptionSourceWords(args.words ?? []), args.edits)
 
   const timed = lines.length
     ? lines.map((l) => ({ startMs: l.startMs, endMs: l.endMs, id: l.id }))
     : captionWords.map((w) => ({ startMs: w.s_ms, endMs: w.e_ms, id: String(w.i) }))
 
-  let invalid = false
-  let nonMonotonic = false
+  let invalid = (normalizeReport?.droppedInvalid ?? 0) > 0
+  let nonMonotonic = Boolean(normalizeReport?.reordered)
   let pastDuration = false
   for (let i = 0; i < timed.length; i++) {
     const row = timed[i]!
@@ -139,11 +194,12 @@ export function detectCaptionSyncIssues(args: {
     }
   }
 
-  if (lines.length >= 3 && captionWords.length >= 3) {
+  if (lines.length >= 1 && captionWords.length >= 1) {
+    const cursor = { index: 0 }
     const drifts = lines
-      .map((line: CaptionLine) => nearestWordDriftMs(line, captionWords))
+      .map((line: CaptionLine) => cueDriftMs(line, captionWords, cursor))
       .filter((v: number | null): v is number => v !== null)
-    if (drifts.length >= 3 && median(drifts) > CAPTION_SYNC_DRIFT_MS) {
+    if (shouldWarnLineTranscriptDrift(drifts)) {
       warnings.push({
         level: 'warning',
         code: 'line_transcript_drift',
@@ -160,4 +216,40 @@ export function primaryCaptionSyncWarning(
   args: Parameters<typeof detectCaptionSyncIssues>[0],
 ): CaptionSyncWarning | null {
   return detectCaptionSyncIssues(args)[0] ?? null
+}
+
+export function isCaptionSyncRequiredError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const err = error as { status?: unknown; code?: unknown }
+  return err.status === 409 && err.code === CAPTION_SYNC_REQUIRED
+}
+
+const WARNING_CODES: ReadonlySet<CaptionSyncWarning['code']> = new Set([
+  'invalid_times',
+  'non_monotonic',
+  'past_duration',
+  'source_clock',
+  'line_transcript_drift',
+])
+
+export function captionSyncWarningsFromError(error: unknown): CaptionSyncWarning[] {
+  if (!error || typeof error !== 'object') return []
+  const data = (error as { data?: { warnings?: unknown } }).data
+  const raw = data?.warnings
+  if (!Array.isArray(raw)) return []
+  const out: CaptionSyncWarning[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as { level?: unknown; code?: unknown; message?: unknown }
+    if (row.level !== 'warning' || typeof row.code !== 'string' || !WARNING_CODES.has(row.code as CaptionSyncWarning['code'])) {
+      continue
+    }
+    if (typeof row.message !== 'string' || !row.message.trim()) continue
+    out.push({
+      level: 'warning',
+      code: row.code as CaptionSyncWarning['code'],
+      message: row.message,
+    })
+  }
+  return out
 }

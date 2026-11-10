@@ -135,9 +135,9 @@ export function applyCaptionStyleSnapshot(
 ): ClipEditsV2['captions'] {
   const snap = normalizeCaptionStyleSnapshot(raw)
   const next: Record<string, unknown> = { ...(current ?? {}) }
-  for (const key of CAPTION_STYLE_SNAPSHOT_KEYS) {
-    delete next[key]
-  }
+  // Merge defined snapshot fields over the current style. Omitted keys from
+  // a legacy incomplete saved config keep the clip's existing values (e.g. font)
+  // instead of wiping them to undefined.
   const assigned = snap as Record<string, unknown>
   for (const key of CAPTION_STYLE_SNAPSHOT_KEYS) {
     const value = assigned[key]
