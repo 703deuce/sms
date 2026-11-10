@@ -136,19 +136,20 @@ The zip is also gated. Acknowledge with `GET ?captionSyncAck=true` or `POST { ca
 
 The agent auto-export path that calls `enqueueRenderClip` from the orchestrator is not on this branch and is **not** gated inside `enqueueRenderClip` (there is no ack UI on those runs).
 
-`#1109` (Frontend ack + 409 handling, including sentence-case) and `#1110` (this backend contract, including worker ASS sentence-case) must merge together.
+`#1109` (Frontend ack + 409 handling, including SRT/VTT sentence-case) and `#1110` (this backend contract) must merge together. Worker burned-in ASS sentence case and cue splitting are in `#1132`, not this PR.
 
-## 5. Sentence case (preview, SRT/VTT, burned-in ASS)
+## 5. Sentence case (SRT/VTT)
 
 `edits.captions.case` is `upper` or `sentence` (anything other than `upper` is treated as sentence). This is not a new API field.
 
 - `upper`: every word is fully uppercased.
 - `sentence`: capitalize **only the first character** of each cue and of each word that follows a sentence-ending `[.!?]` plus optional closing quotes/brackets (`[.!?]["')\]]*$`). Every other word keeps its **source casing**. Mid-sentence `I`, `I'm`, proper nouns (`Wayne State`, `Michigan`, `Egypt`), and acronyms (`AI`, `PhD`) must not be lowercased.
 
-Frontend (`formatCaptionWord` / `formatCaptionLineText` in `new-app/lib/clips/caption-case.ts`, PR #1109) and worker burned-in ASS (`worker/clips_worker/captions_ass.py` `disp` / `disp_words`) use the same rule, so preview, downloaded SRT/VTT, and burned-in export captions agree.
+This PR applies that rule to downloaded SRT/VTT and NLE caption lines (`buildNleCaptionSrt` / `buildNleCaptionVtt` / `buildNleCaptionLines`), matching Frontend `#1109` (`formatCaptionWord` / `formatCaptionChunk` / `formatCaptionLineText`). Worker burned-in ASS sentence case and cue splitting are not in this PR — see `#1132`.
 
 ## 6. Out of scope
 
 - Caption translation (New #7) is not enabled or expanded.
-- The burned-in caption render API shape is unchanged. Worker burn-in already applies `wordFixes` / `wordFixMeta` and `captionLines`; SRT/VTT use the same text, display-clock timings, and sentence-case rule.
+- The burned-in caption render API shape is unchanged. Worker burn-in already applies `wordFixes` / `wordFixMeta` and `captionLines`; SRT/VTT use the same text and display-clock timings.
+- Worker ASS sentence case and cue splitting live in `#1132`.
 - No Mode 2, Clean Take, or clipper finder changes.

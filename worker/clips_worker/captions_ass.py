@@ -123,18 +123,13 @@ def _sentence_boundary(prev: str | None) -> bool:
 
 
 def disp(text: str, case: str, sentence_start: bool = False) -> str:
-    """Match new-app formatCaptionWord: upper the whole word, or sentence-case
-    by capitalizing only the first character of a cue/sentence start and
-    keeping source casing everywhere else (I/I'm, proper nouns, acronyms).
-    """
     t = text.replace("{", "(").replace("}", ")")
     if not t:
         return t
     if case == "upper":
         return t.upper()
-    if not sentence_start:
-        return t
-    return t[0:1].upper() + t[1:]
+    lower = t.lower()
+    return lower[0:1].upper() + lower[1:] if sentence_start else lower
 
 
 def _styled(w: dict, text: str) -> str:
