@@ -239,4 +239,49 @@ describe('ai-captions runs', () => {
       expect((err as AiCaptionsError).message).not.toContain('$')
     }
   })
+  it('waits for the actual burned-in render and downloads only after the render is ready', async () => {
+    const deps = testDeps({ sources: sourceMap([{ projectId: 'proj_export', durationMs: 5_000, words: shortWords }]) })
+    const created = await createAiCaptionsRun('ws_1', null,
+      { clientRequestId: 'req-delayed-export', source: { kind: 'project', projectId: 'proj_export' } },
+      null, deps)
+    deps.pipeline.exportMp4 = async () => ({ downloadUrl: null, renderId: 'rnd_delayed' })
+    let ready = false
+    deps.pipeline.pollExport = async () => ready
+      ? { status: 'ready', downloadUrl: 'https://example.test/finished.mp4' }
+      : { status: 'processing', downloadUrl: null }
+    const queued = await exportAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(queued.view.status).toBe('exporting')
+    expect(queued.view.result?.downloadUrl).toBeNull()
+    const pending = await getAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(pending.status).toBe('exporting')
+    ready = true
+    const completed = await getAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(completed.status).toBe('ready')
+    expect(completed.result?.downloadUrl).toBe('https://example.test/finished.mp4')
+  })
+
+  it('invalidates an earlier MP4 when the clip editor saves caption changes', async () => {
+    const deps = testDeps({ sources: sourceMap([{ projectId: 'proj_edits', durationMs: 5_000, words: shortWords }]) })
+    let version = 1
+    deps.pipeline.getEditsVersion = async () => version
+    const created = await createAiCaptionsRun('ws_1', null,
+      { clientRequestId: 'req-edits-version', source: { kind: 'project', projectId: 'proj_edits' } },
+      null, deps)
+    const first = await exportAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(first.view.result?.exportedEditsVersion).toBe(1)
+    expect(first.view.result?.downloadUrl).toContain('.mp4')
+    version = 2
+    const edited = await getAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(edited.result?.downloadUrl).toBeNull()
+    const second = await exportAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(second.view.result?.exportedEditsVersion).toBe(2)
+  })
+
+  it('shows a clear no-speech error rather than polling a completed empty transcript forever', async () => {
+    const deps = testDeps({ sources: sourceMap([{ projectId: 'proj_silent', uploadId: 'upl_silent', durationMs: 5000, ready: true, words: [] }]) })
+    await expect(createAiCaptionsRun('ws_1', null,
+      { clientRequestId: 'req-silent', source: { kind: 'upload', uploadId: 'upl_silent' } },
+      null, deps)).rejects.toMatchObject({ code: 'source_has_no_audio' })
+  })
+
 })
