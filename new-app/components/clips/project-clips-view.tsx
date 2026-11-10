@@ -19,6 +19,11 @@ import { ClipResultsToolbar } from '@/components/clips/clip-results-toolbar'
 import { ClipTemplateProjectActions } from '@/components/clips/clip-template-project-actions'
 import { ProjectClipsNewEditAction } from '@/components/ai-producer-agent/project-clips-new-edit-action'
 import { mergeMonotonicProjectPoll } from '@/lib/clips/eta-poll'
+import {
+  loadProjectClipsWithRetry,
+  retryIdempotentRequest,
+  ProjectClipListTimeoutError,
+} from '@/lib/clips/project-clips-list-retry'
 import { clipsFetch, getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
 import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
 import { buildOpenInEditorHref, openInEditorLinkLabel } from '@/lib/clips/project-editor-link'
@@ -97,6 +102,13 @@ function pageDescription(status: string, error: string | null, clipCount: number
   return 'Processing your source video.'
 }
 
+function clipsListErrorMessage(error: unknown) {
+  if (error instanceof ProjectClipListTimeoutError) {
+    return 'The clips list timed out. Your clips were not changed; retry the list request.'
+  }
+  return 'The clips list could not be loaded. Your clips were not changed; retry the list request.'
+}
+
 export function ProjectClipsView({
   projectId,
   projectTitle,
@@ -165,16 +177,16 @@ export function ProjectClipsView({
 
   useEffect(() => {
     if (!shouldClientEnrichReadyClips(initialStatus, initialClips)) return
-    let cancelled = false
-    void listProjectClips(projectId, 'score')
+    const controller = new AbortController()
+    void listProjectClips(projectId, 'score', { signal: controller.signal })
       .then((data) => {
-        if (!cancelled) setClips(data.clips as ClipCardData[])
+        if (!controller.signal.aborted) setClips(data.clips as ClipCardData[])
       })
       .catch(() => {
         /* keep SSR clip list */
       })
     return () => {
-      cancelled = true
+      controller.abort()
     }
   }, [initialStatus, initialClips, projectId])
 
@@ -191,6 +203,11 @@ export function ProjectClipsView({
   const [montagePollKey, setMontagePollKey] = useState(0)
   const [error, setError] = useState<string | null>(initialError ?? null)
   const [readyHydrated, setReadyHydrated] = useState(readyFromServer)
+  const [listLoading, setListLoading] = useState(
+    (initialStatus === 'READY' || initialStatus === 'FAILED') && !readyFromServer,
+  )
+  const [listError, setListError] = useState<string | null>(null)
+  const listHydrationAbortRef = useRef<AbortController | null>(null)
   const [progressEtaSec, setProgressEtaSec] = useState(initialEtaSec)
   const [progressStage, setProgressStage] = useState<string | null>(initialStage)
   const [clipsReady, setClipsReady] = useState(0)
