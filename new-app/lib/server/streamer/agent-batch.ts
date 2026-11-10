@@ -6,6 +6,7 @@ import {createAgentVideoWindow} from '@/lib/server/streamer/agent-window-source'
 import {createAiProducerAgentRun} from '@/lib/server/ai-producer-agent/runs'
 import {startUnifiedClipRun} from '@/lib/server/ai-producer-agent/unified-clip-run'
 import {storyTargetFromAgentSeconds} from '@/lib/ai-producer-agent/clip-mode/unified-run-input'
+import {planAutoStartUnifiedClip} from '@/lib/streamer/auto-start-unified'
 import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
 import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
   type StreamerAgentBatch as AgentBatch,type StreamerAgentMode as Mode}
@@ -69,30 +70,23 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
   })
   return batch
 }
-/** Safe to call after any READY PROCESS_PROJECT worker callback.
- * A single SQL CAS and the batch job insertion share one transaction. */
+/** Safe to call after ingest marks a project READY (PROCESS_PROJECT,
+ * STREAM_ANALYZE, or STREAM_RENDER). A single SQL CAS records the run id. */
 export async function maybeAutoStartUploadAgentBatch(projectId:string){
   const prisma=getPrisma()
   const p=await prisma.clipProject.findUnique({where:{id:projectId},
     select:{workspaceId:true,status:true,deletedAt:true,uploadId:true,settings:true,
-      rangeStartMs:true,rangeEndMs:true,title:true}})
-  if(!p||p.deletedAt||p.status!=='READY'||!p.uploadId)return null
-  const settings=asSettings(p.settings)
-  const mode=settings.autoAgentClipMode
-  // Regular upload clipper: any auto-agent mode starts one unified job.
-  // Stream clipping uses startStreamerAgentBatch / startUnifiedClipRun later.
-  if(mode!=='clip_moment_v1'&&mode!=='clip_story_v1'&&mode!=='clip_unified_v1')return null
-  if(settings.agentClipBatch||settings.unifiedClipRunId)return null
-  const value=Number(settings.autoAgentClipSeconds)
-  const rangeMs:[number,number]=[p.rangeStartMs,p.rangeEndMs]
-  if(!(rangeMs[1]-rangeMs[0]>=15_000))return null
+      rangeStartMs:true,rangeEndMs:true,title:true,transcriptWords:true,transcriptKey:true,
+      streamVod:{select:{platform:true,attestedAt:true,
+        channel:{select:{status:true,deletedAt:true}}}}}})
+  const plan=planAutoStartUnifiedClip(p?{id:projectId,...p}:null)
+  if(!plan||!p)return null
+  // Stream imports start by default; skip quietly while the agent is off.
+  if(plan.source.kind==='stream'&&!aiProducerAgentServerEnabled())return null
   try{
     const run=await startUnifiedClipRun(p.workspaceId,{
-      source:{
-        sourceId:'uploaded_recording',kind:'upload',projectId,
-        rangeMs,durationMs:rangeMs[1]-rangeMs[0],title:p.title,
-      },
-      targetLengthS:storyTargetFromAgentSeconds(value),
+      source:plan.source,
+      targetLengthS:plan.targetLengthS,
     })
     const saved=await prisma.$executeRaw`
       UPDATE clip_projects

@@ -138,7 +138,7 @@ export async function buildToolCtx(run: {
         laughs: ctx.cache.laughs ?? [],
         reactions: [],
         bursts: ctx.cache.bursts ?? [],
-        layoutAt: () => ({ contentType: 'irl', mode: isClipAgentMode(config.storyMode)?'speaker_follow':'fit_blur' }),
+        layoutAt: () => ({ contentType: 'irl', mode: isClipAgentMode(config.storyMode)?'auto':'fit_blur' }),
         outputType: out.outputType,
         editMode: config.editMode,
         directStoryWordCuts: config.editMode === 'just_chatting_rough_cut' &&

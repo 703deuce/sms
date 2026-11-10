@@ -269,7 +269,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
     if not vod_id:
         raise RuntimeError("missing vodId")
 
-    from clips_worker.stage_log import bind_stage_context, stage_span
+    from clips_worker.stage_log import bind_stage_context, stage_event, stage_span
 
     vod = _load_vod(conn, vod_id)
     workspace_id = vod["workspaceId"]
@@ -288,6 +288,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
     clips = _clips_for_project(conn, project_id)
     if not clips:
         mark_project_ready(conn, project_id)
+        stage_event("save", "streamer_ready", project_id=str(project_id), job_id=str(job["id"]), clipCount=0)
         post_progress(job["id"], {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE"})
         return
 
@@ -726,6 +727,15 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
         return
 
     mark_project_ready(conn, project_id)
+    stage_event(
+        "save",
+        "streamer_ready",
+        project_id=str(project_id),
+        job_id=str(job["id"]),
+        attempted=render_attempts,
+        inserted=render_successes,
+        clipCount=total,
+    )
     enqueue_stream_cleanup_job(
         conn,
         project_id,

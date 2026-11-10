@@ -1,9 +1,11 @@
 """Docker-visible stage timing for PROCESS_PROJECT and STREAM_* clipper pipelines."""
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import threading
+import traceback
 import time
 from contextlib import contextmanager
 from concurrent.futures import Future
@@ -226,3 +228,38 @@ def ffmpeg_run(
         stop.set()
         hb.join(timeout=1.0)
         stage_end(stage, t0, project=project, job=job, exit_code=code, **extra)
+
+
+def stage_event(
+    stage: str,
+    action: str = "info",
+    *,
+    project_id: str | None = None,
+    job_id: str | None = None,
+    run_id: str | None = None,
+    error: BaseException | None = None,
+    **fields: Any,
+) -> None:
+    """One JSON-ish structured log for a clipper stage (secrets redacted)."""
+    pid, jid = _resolve_ids(project_id, job_id)
+    rec: dict[str, Any] = {"event": "clipper_stage", "stage": str(stage), "action": str(action)}
+    if pid:
+        rec["projectId"] = pid
+    if jid:
+        rec["jobId"] = jid
+    if run_id:
+        rec["runId"] = run_id
+    for k, v in fields.items():
+        if v is None:
+            continue
+        rec[str(k)] = v
+    if error is not None:
+        rec["errorType"] = type(error).__name__
+        rec["error"] = sanitize_log_text(str(error)[:800])
+        rec["traceback"] = sanitize_log_text(traceback.format_exc())[:4000]
+    # never log secrets / signed urls
+    raw = json.dumps(rec, default=str, ensure_ascii=False)
+    raw = sanitize_log_text(raw)
+    if len(raw) > 8000:
+        raw = raw[:8000] + "…"
+    print(f"{_PREFIX} {raw}", flush=True)

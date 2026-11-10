@@ -61,4 +61,8 @@ export async function publishClipScore(input:{
 }
 export async function discardClip(workspaceId:string,clipId:string){
   await getPrisma().clip.updateMany({where:{id:clipId,workspaceId},data:{deletedAt:new Date()}})
+  console.log(JSON.stringify({
+    event:'clipper_stage',stage:'save',action:'discard_clip',
+    workspaceId,clipId,
+  }))
 }

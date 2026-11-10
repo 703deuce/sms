@@ -32,6 +32,7 @@ import {mergeUnifiedClips,UNIFIED_OVERLAP_THRESHOLD,type UnifiedMergeClip} from 
 import {clipAgentHardSteps,clipAgentHardStepsForCandidates,clipAgentWallClockMs,clipAgentWallClockMsForCandidates,clipCandidateHardSteps,clipCandidateWallClockMs,clipQaRetryHardSteps,clipQaRetryWallClockMs} from '@/lib/ai-producer-agent/rough-cut-window'
 import type {ClipWord} from '@/lib/clips/edits'
 import { buildJustChattingEvidence } from '@/lib/ai-producer-agent/just-chatting-evidence'
+import { clipperStageLog } from '@/lib/ai-producer-agent/clip-mode/clipper-stage-log'
 
 export type Phase = AiProducerPhase
 
@@ -211,9 +212,9 @@ async function runClipPass(input:{
   const kept:ClipPassItem[]=[]
   for(const item of ranked){
     const cuts=item.out.editorialHandoff!.cutPlan
-    if(kept.some(k=>overlapFraction(cuts,k.out.editorialHandoff!.cutPlan)>.35)){
+    if(kept.some(k=>overlapFraction(cuts,k.out.editorialHandoff!.cutPlan)>UNIFIED_OVERLAP_THRESHOLD)){
       await discardClip(ctx.workspaceId,item.out.clipId!)
-      item.out.notes.push('Dropped: ranked candidate overlap >35%')
+      item.out.notes.push('Dropped: ranked candidate overlap >60%')
       item.out.projectId=undefined;item.out.clipId=undefined
       continue
     }
@@ -226,7 +227,7 @@ async function runClipPass(input:{
     const fallback=chooseFallbackPublications(usable,0,3,(item:{critical:boolean})=>item.critical)
     for(const item of fallback){
       const cuts=item.out.editorialHandoff!.cutPlan
-      if(kept.some(k=>overlapFraction(cuts,k.out.editorialHandoff!.cutPlan)>.35))continue
+      if(kept.some(k=>overlapFraction(cuts,k.out.editorialHandoff!.cutPlan)>UNIFIED_OVERLAP_THRESHOLD))continue
       item.out.suppressed=false
       item.out.needsReview=true
       const reasons=item.issues
@@ -291,6 +292,8 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
     if(unified||mode==='story')passes.push({pass:'story',candidates:storyCandidates,targetS:storyTargetS})
     if(unified||mode==='moment')passes.push({pass:'moment',candidates:momentCandidates,targetS:continuousTargetS})
     const allCandidates=passes.reduce((n,p)=>n+p.candidates.length,0)
+    clipperStageLog({stage:'segment',action:'candidate_count',runId,projectId:source.projectId,
+      story:storyCandidates.length,continuous:momentCandidates.length,candidateCount:allCandidates})
     if(!allCandidates)throw Error('clip_no_grounded_candidate_moments')
     budget.expandLimits({
       wallClockMs:clipAgentWallClockMsForCandidates(ctx.totalSourceMs,allCandidates),
@@ -409,6 +412,22 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       tool:'clip_ranked_outputs',kind:'system',
       resultSummary:JSON.stringify({unified,found:allCandidates,published:kept.length,mix:unifiedMix,
         scores:kept.map(k=>({clipId:k.out.clipId,score:k.score,type:k.type}))}).slice(0,4000)})
+    const dropNotes=heldDrafts.flatMap(h=>h.out.notes).concat(kept.flatMap(k=>k.out.notes))
+    const reasonCounts:Record<string,number>={}
+    for(const note of dropNotes){
+      if(!String(note).startsWith('Dropped:')) continue
+      reasonCounts[String(note)]=(reasonCounts[String(note)]??0)+1
+    }
+    clipperStageLog({stage:'filter',action:'dedupe',runId,projectId:source.projectId,
+      candidateCount:allCandidates,published:kept.length,heldDrafts:heldDrafts.length,reasons:reasonCounts})
+    const publishedIds=new Set(kept.map(k=>k.out.clipId).filter(Boolean))
+    for(const item of heldDrafts){
+      if(item.out.clipId&&!publishedIds.has(item.out.clipId)){
+        await discardClip(ctx.workspaceId,item.out.clipId)
+        item.out.notes.push('Dropped: unused held draft after publish')
+        item.out.projectId=undefined;item.out.clipId=undefined
+      }
+    }
     // Each candidate uses a separate budget; do not cap all outputs together.
     if (budget.cappedBy) status = 'capped'
     const anyClip=outputs.some((o)=>Boolean(o.projectId&&o.clipId))
@@ -425,6 +444,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
   } catch (err) {
     status = 'failed'
     error = String((err as Error)?.message ?? err).slice(0, 2000)
+    clipperStageLog({stage:'save',action:'run_failed',runId,error:err})
   } finally {
     await finishRun(ctx, outputs, budget, status, error, unifiedMix)
   }
@@ -1044,4 +1064,18 @@ async function finishRun(
       finishedAt: new Date(),
     },
   })
+  const sourceProjectId = ctx.sources[0]?.projectId
+  if (sourceProjectId) {
+    const publishedCount = clipIds.length
+    const failedEmpty = (status === 'failed' || status === 'capped') && publishedCount === 0
+    await prisma.clipProject.updateMany({
+      where: { id: sourceProjectId, status: { in: ['FINDING_CLIPS', 'SCANNING', 'TRANSCRIBING', 'QUEUED', 'PREPARING'] } },
+      data: {
+        status: failedEmpty ? 'FAILED' : 'READY',
+        stage: failedEmpty ? 'failed' : 'ready',
+        progress: 100,
+        error: failedEmpty ? (error ?? 'no clips were saved') : null,
+      },
+    })
+  }
 }

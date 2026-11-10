@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs'
 import {dirname,join} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {describe,expect,it} from 'vitest'
-import {overlapFraction,rankCandidate} from '@/lib/ai-producer-agent/clip-mode/candidates'
+import {overlapFraction,isMostlySameContent,overlapStats,rankCandidate} from '@/lib/ai-producer-agent/clip-mode/candidates'
 import {
   mergeUnifiedClips,
   UNIFIED_OVERLAP_THRESHOLD,
@@ -34,11 +34,11 @@ describe('unified clipper merge, dedupe, mix, and tagging',()=>{
     expect(result.mix).toEqual({story:2,continuous:1,droppedDuplicates:0})
   })
 
-  it('treats overlap above 60% as a duplicate and keeps the higher score',()=>{
-    // 20s shared of a 30s shorter clip = 66.7%
-    const story=clip({id:'s1',type:'story',score:90,segments:[seg(0,40_000),seg(80_000,100_000)]})
-    const continuous=clip({id:'c1',type:'continuous',score:70,segments:[seg(10_000,40_000)]})
-    expect(overlapFraction(story.segments,continuous.segments)).toBeGreaterThan(UNIFIED_OVERLAP_THRESHOLD)
+  it('treats overlap as a duplicate only when shared time is most of both clips',()=>{
+    // 25s continuous almost entirely covers a 30s Story (83% of the longer).
+    const story=clip({id:'s1',type:'story',score:90,segments:[seg(0,30_000)]})
+    const continuous=clip({id:'c1',type:'continuous',score:70,segments:[seg(0,25_000)]})
+    expect(isMostlySameContent(story.segments,continuous.segments)).toBe(true)
     const result=mergeUnifiedClips([story,continuous])
     expect(result.kept.map(c=>c.id)).toEqual(['s1'])
     expect(result.droppedDuplicates).toEqual([
@@ -46,6 +46,20 @@ describe('unified clipper merge, dedupe, mix, and tagging',()=>{
     ])
     expect(result.droppedDuplicates[0]!.fraction).toBeGreaterThan(0.6)
     expect(result.mix.droppedDuplicates).toBe(1)
+  })
+
+  it('keeps a short continuous moment that sits inside a much longer Story',()=>{
+    // Live bug: intersection/min(duration)=1.0 deleted moments that were only
+    // 5–12% of the Story. Two Story clips so the mix rule allows one continuous.
+    const story=clip({id:'s1',type:'story',score:90,segments:[seg(0,107_735)]})
+    const story2=clip({id:'s2',type:'story',score:80,segments:[seg(200_000,316_940)]})
+    const moment=clip({id:'c1',type:'continuous',score:70,segments:[seg(21_7675,24_3915)]})
+    expect(overlapFraction(story2.segments,moment.segments)).toBeGreaterThan(0.6)
+    expect(overlapStats(story2.segments,moment.segments).longer).toBeLessThan(0.3)
+    expect(isMostlySameContent(story2.segments,moment.segments)).toBe(false)
+    const result=mergeUnifiedClips([story,story2,moment])
+    expect(result.kept.map(c=>c.id)).toEqual(['s1','s2','c1'])
+    expect(result.droppedDuplicates).toEqual([])
   })
 
   it('allows overlap at exactly 60% (threshold is greater-than, not greater-or-equal)',()=>{

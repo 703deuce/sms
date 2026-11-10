@@ -4,6 +4,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { applyWorkerJobProgress, isStaleWorkerPost } from '@/lib/server/clips/job-progress'
 import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
 import { getPrisma } from '@/lib/server/db'
+import { shouldHookAutoStartUnified } from '@/lib/streamer/auto-start-unified'
 import { getClipStorage } from '@/lib/storage'
 
 export const runtime = 'nodejs'
@@ -109,7 +110,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       stepPct: body.stepPct,
     })
 
-    if(body.projectStatus==='READY' && body.jobStatus==='DONE' && job.type==='PROCESS_PROJECT'){
+    if(shouldHookAutoStartUnified(job.type, body.projectStatus, body.jobStatus)){
       try{
         const {maybeAutoStartUploadAgentBatch}=await import('@/lib/server/streamer/agent-batch')
         await maybeAutoStartUploadAgentBatch(job.projectId)

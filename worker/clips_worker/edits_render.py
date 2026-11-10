@@ -422,6 +422,15 @@ def run_speakercrop_layout_timeline(
     """Export speakercrop honoring per-segment layout modes when they differ."""
     from clips_worker.clip_layout_render import speakercrop_settings_band_height
     from clips_worker.render_clip import aspect_size
+    from clips_worker.needs_tracking import apply_layout_decision
+
+    apply_layout_decision(
+        edits,
+        clip_src,
+        clip_id=clip_id,
+        project_id=project_id,
+        settings=settings,
+    )
 
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
