@@ -95,7 +95,7 @@ export function ProjectCard({
         )}
         <div className="absolute left-2 top-2 z-10 flex gap-1.5">
           <ProjectKindBadge kind={isT2v ? 'video' : 'clips'} onMedia />
-          {!isT2v || !t2vLabel ? (
+          {failed && noThumb ? null : !isT2v || !t2vLabel ? (
             <ProjectStatusBadge status={project.status} showSpinner={false} onMedia />
           ) : (
             <Badge variant="onMedia">{t2vLabel}</Badge>
