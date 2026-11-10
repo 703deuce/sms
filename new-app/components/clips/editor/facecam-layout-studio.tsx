@@ -174,17 +174,22 @@ export function FacecamLayoutStudio({
 
   const patchCrop = useCallback(
     (next: NormBox) => {
+      if (!edits.layout.template?.id && ['speaker_follow', 'auto', 'subject_follow', 'dynamic'].includes(mode)) {
+        console.info('[editor:crop-offset]', { action: 'user_crop_tracked', mode, x: next.x, w: next.w })
+      }
       onEdits({
         ...edits,
         layout: {
           ...edits.layout,
           // T6.2: keep the template's mode; the crop box feeds its action_box/trim_sides panel.
-          mode: edits.layout.template?.id ? edits.layout.mode : 'center_crop',
+          mode: edits.layout.template?.id || ['speaker_follow', 'auto', 'subject_follow', 'dynamic'].includes(mode)
+            ? edits.layout.mode
+            : 'center_crop',
           cropBox: next,
         },
       })
     },
-    [edits, onEdits],
+    [edits, mode, onEdits],
   )
 
   const onPointerDown = (

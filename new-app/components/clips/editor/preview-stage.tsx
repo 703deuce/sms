@@ -21,7 +21,7 @@ import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import { editorTemplateSegmentIndex, editorTemplateSpec } from '@/lib/clips/templates/editor-spec'
 import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
 import { TemplateStage, TemplateTitleOverlay } from '@/components/clips/editor/template-stage'
-import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
+import { cropPanX, normalizeCropTrack, trackedCropPanX, type CropTrack } from '@/lib/clips/crop-track'
 import { aspectRatioParts, exportPixelSize, isLandscapeAspect, type ExportAspect } from '@/lib/clips/export-aspect'
 import {
   clampPan,
@@ -1113,7 +1113,7 @@ export function PreviewStage({
           v.style.width = `${track.W * s}px`
           v.style.left = '0'
           v.style.top = '0'
-          const x0s = x0 * s
+          const x0s = trackedCropPanX(x0, track, e.layout?.cropBox) * s
           v.style.transform = `translate3d(${-x0s}px,0,0)`
         }
       }

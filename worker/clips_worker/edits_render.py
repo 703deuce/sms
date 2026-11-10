@@ -390,13 +390,53 @@ def _track_is_all_wide(p: Path) -> bool:
         return False
 
 
-def _preview_crop_track_for_export(edits: dict, preview_crop_track: Path | None) -> Path | None:
-    dom_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+def _preview_crop_track_for_export(
+    edits: dict, preview_crop_track: Path | None, work_dir: Path
+) -> Path | None:
+    layout = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+    dom_mode = str(layout.get("mode") or "speaker_follow")
     if editor_mode_uses_static_fit_blur(dom_mode):
         return None
-    if preview_crop_track is not None and preview_crop_track.is_file() and not _track_is_all_wide(preview_crop_track):
+    if preview_crop_track is None or not preview_crop_track.is_file() or _track_is_all_wide(preview_crop_track):
+        return None
+
+    # Tracked layouts retain their original moving crop. Shift its x0 tracks
+    # and v2 segment-slot centers by the crop-box pan, in a NEW file so the
+    # original tracker is never overwritten or double-offset on future exports.
+    crop_box = layout.get("cropBox") if isinstance(layout.get("cropBox"), dict) else None
+    if not crop_box or dom_mode not in ("speaker_follow", "subject_follow", "auto", "dynamic") or layout.get("template"):
         return preview_crop_track
-    return None
+    try:
+        source = json.loads(preview_crop_track.read_text())
+        W, cw = float(source["W"]), float(source["cw"])
+        center = float(crop_box["x"]) + float(crop_box["w"]) / 2.0
+        if not (W > 0 and cw > 0 and 0 <= center <= 1):
+            return preview_crop_track
+        shift = (center - 0.5) * W
+        if abs(shift) < 0.001:
+            return preview_crop_track
+        max_x = max(0.0, W - cw)
+        for key in ("x0", "x0_A", "x0_B"):
+            values = source.get(key)
+            if isinstance(values, list):
+                source[key] = [
+                    max(0.0, min(max_x, float(x) + shift)) if isinstance(x, (float, int)) and x >= 0 else x
+                    for x in values
+                ]
+        # v2 multi-person rendering uses segment slots rather than x0.
+        for segment in source.get("segments") or []:
+            if not isinstance(segment, dict):
+                continue
+            for slot in segment.get("slots") or []:
+                if isinstance(slot, dict) and isinstance(slot.get("cx"), (float, int)):
+                    slot["cx"] = max(0.0, min(W, float(slot["cx"]) + shift))
+        output = work_dir / "user_offset_crop_track.json"
+        output.write_text(json.dumps(source))
+        print(f"[editor:crop-offset] applied mode={dom_mode} shiftPx={round(shift, 2)} track={preview_crop_track.name}", flush=True)
+        return output
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        print(f"[editor:crop-offset] skipped reason={type(exc).__name__}", flush=True)
+        return preview_crop_track
 
 
 def run_speakercrop_layout_timeline(
@@ -1589,7 +1629,7 @@ def render_edited_clip(
             workspace_id=workspace_id,
             project_id=project_id,
             clip_id=clip_id,
-            preview_crop_track=_preview_crop_track_for_export(edits, preview_crop_track),
+            preview_crop_track=_preview_crop_track_for_export(edits, preview_crop_track, work_dir),
         )
         stage("speakercrop_fast_done")
         if render_meta is not None:
@@ -1676,7 +1716,7 @@ def render_edited_clip(
 
     bgr = bg_removal_active(edits) if (conn is not None and workspace_id and project_id and clip_id) else None
     main_track = work_dir / "main_crop_track.json"
-    pct = _preview_crop_track_for_export(edits, preview_crop_track)
+    pct = _preview_crop_track_for_export(edits, preview_crop_track, work_dir)
 
     full_render = work_dir / "full_render.mp4"
     settings_nc = json.loads(json.dumps(sc_settings))

@@ -95,3 +95,26 @@ export function shotsToCropShots(track: CropTrack) {
     h: 100,
   }))
 }
+
+// A crop-box in a tracked layout is a PAN relative to the auto-selected
+// subject, not a static crop replacing the speaker-follow timeline. The
+// default centered box gives zero offset.
+export function trackedCropOffsetPx(
+  cropBox: { x: number; w: number } | null | undefined,
+  sourceWidth: number,
+): number {
+  if (!cropBox || !Number.isFinite(sourceWidth) || sourceWidth <= 0 ||
+      !Number.isFinite(cropBox.x) || !Number.isFinite(cropBox.w)) return 0
+  const center = Math.max(0, Math.min(1, cropBox.x + cropBox.w / 2))
+  return (center - 0.5) * sourceWidth
+}
+
+export function trackedCropPanX(
+  x0: number,
+  track: Pick<CropTrack, 'W' | 'cw'>,
+  cropBox: { x: number; w: number } | null | undefined,
+): number {
+  if (x0 < 0) return x0 // wide / fit-track sentinel
+  const shifted = x0 + trackedCropOffsetPx(cropBox, track.W)
+  return Math.max(0, Math.min(Math.max(0, track.W - track.cw), shifted))
+}
