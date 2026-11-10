@@ -34,6 +34,7 @@ export class AdStudioHttpError extends Error {
 
 type RunEnvelope = { run: AdStudioRun }
 type CommercialEnvelope = { run: AdStudioRun; created: boolean }
+export type AdStudioFinalRender = { url: string; filename: string }
 
 async function jsonRequest<T>(path: string, init?: RequestInit): Promise<T> {
   console.log('[ad-studio:ui] request', { step: 'begin', method: init?.method ?? 'GET', path })
@@ -66,6 +67,7 @@ export type AdStudioClient = {
   cancel: (runId: string) => Promise<AdStudioRun>
   continueRun: (runId: string) => Promise<AdStudioRun>
   retryRender: (runId: string, idempotencyKey: string) => Promise<AdStudioRun>
+  getFinalRender: (runId: string, download?: boolean) => Promise<AdStudioFinalRender>
   createCommercial: (
     runId: string,
     body: { variantId: string; idempotencyKey: string; voiceId?: string; voiceoverEnabled?: boolean },
@@ -139,6 +141,11 @@ export function createAdStudioClient(): AdStudioClient {
         body: JSON.stringify({ idempotencyKey }),
       })
       return result.run
+    },
+
+    getFinalRender(runId, download = false) {
+      const suffix = download ? '?download=1' : ''
+      return jsonRequest<AdStudioFinalRender>(`/api/ad-studio/runs/${encodeURIComponent(runId)}/final-render${suffix}`)
     },
 
     createCommercial(runId, body) {
