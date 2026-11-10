@@ -47,7 +47,7 @@ export async function recoverUnifiedProject(projectId: string, now = new Date())
   const started = Date.now()
   const project = await prisma.clipProject.findUnique({
     where: { id: projectId },
-    select: { id: true, workspaceId: true, status: true, settings: true, deletedAt: true },
+    select: { id: true, workspaceId: true, status: true, stage: true, settings: true, deletedAt: true },
   })
   const runId = unifiedRunIdFromSettings(project?.settings)
   if (!project || project.deletedAt || !runId || !ACTIVE_PROJECT_STATUSES.includes(project.status as typeof ACTIVE_PROJECT_STATUSES[number])) return false
@@ -137,6 +137,13 @@ export async function recoverUnifiedProject(projectId: string, now = new Date())
       where: { id: projectId, status: { in: [...ACTIVE_PROJECT_STATUSES] } },
       data: { status: 'FAILED', stage: 'failed', progress: 0, error: FRIENDLY_INTERRUPTED },
     })
+    if (failed.count) {
+      console.info('[clips:timeout]', {
+        projectId, runId, lastStage: project.stage,
+        idleMs: run ? Math.max(0, now.getTime() - run.updatedAt.getTime()) : unifiedRunStaleMs(),
+        action: 'failed_stale_unified_run',
+      })
+    }
     runLog(projectId, runId, 'failed_no_usable_clips', {
       elapsedMs: Date.now() - started, updated: failed.count,
     })
