@@ -668,7 +668,7 @@ export function exportCutRangesFromProposals(
       const lo = Math.min(range[0], range[1])
       const hi = Math.max(range[0], range[1])
       if (hi - lo < MIN_SEGMENT_MS) return false
-      return !cuts.some(([start, end]) => Math.min(end, hi) - Math.max(start, lo) > 0)
+      return !cuts.some((cut: CutRange) => Math.min(cut[1], hi) - Math.max(cut[0], lo) > 0)
     })
   if (missing.length) {
     cuts = sanitizeCutRangesForTrim(mergeCutRanges([...cuts, ...missing]), edits.trim.in, edits.trim.out)

@@ -452,7 +452,7 @@ export function CleanupPanel({
       onAuditionChange(null)
       return
     }
-    const pending = proposed.filter((row) => !applied.some((a) => a.id === row.id))
+    const pending = proposed.filter((row) => !applied.some((a: CleanupProposal) => a.id === row.id))
     if (!applied.length && !pending.length) {
       onAuditionChange(null)
       return

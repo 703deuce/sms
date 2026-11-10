@@ -104,7 +104,7 @@ export function CleanTakeReviewPanel({
         for (const cut of meta.cuts) {
           if (seen.has(cut.sourceId)) continue
           seen.add(cut.sourceId)
-          const media = payload.edits.sources?.find((source, index) =>
+          const media = payload.edits.sources?.find((source: { id?: string; durationMs?: number }, index: number) =>
             source.id === cut.sourceId || index === meta.cuts.findIndex((row: CleanTakeKeptCut) => row.sourceId === cut.sourceId),
           )
           extents.push({
