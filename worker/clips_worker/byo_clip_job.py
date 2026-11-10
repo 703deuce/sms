@@ -165,7 +165,18 @@ def finalize_byo_clip(
         elif dur_ms > BYO_MAX_DURATION_MS:
             raise ClipUserError(BYO_DURATION_MESSAGE)
 
-        clip_id = f"clip_{uuid.uuid4().hex}"
+        preseeded = full and payload.get("preseededFullVideo") is True
+        seeded_id = f"clip_fv_{project.get('uploadId')}" if preseeded else None
+        seeded = False
+        if seeded_id:
+            with conn.cursor() as cur:
+                cur.execute(
+                    'SELECT id FROM clips WHERE id=%s AND "projectId"=%s AND "workspaceId"=%s AND "deletedAt" IS NULL',
+                    (seeded_id, project_id, workspace_id),
+                )
+                seeded = cur.fetchone() is not None
+            print(f"[clipper:fullvideo] step=seed_lookup project={project_id} found={int(seeded)}", flush=True)
+        clip_id = seeded_id if seeded and seeded_id else f"clip_{uuid.uuid4().hex}"
 
         try:
             edits = initial_clip_edits(settings)
@@ -191,8 +202,14 @@ def finalize_byo_clip(
             edits = full_video_initial_edits(edits, settings, w, h)
             post_progress(
                 job_id,
-                {"projectStatus": "TRANSCRIBING", "stage": "transcribing", "progress": 70, "jobStatus": "RUNNING"},
+                {
+                    "projectStatus": "PREPARING" if preseeded else "TRANSCRIBING",
+                    "stage": "assets" if preseeded else "transcribing",
+                    "progress": 70,
+                    "jobStatus": "RUNNING",
+                },
             )
+            print(f"[clipper:fullvideo] step=build_editor_assets project={project_id} preseeded={int(preseeded)}", flush=True)
             editor_assets = _build_full_video_assets(src, workspace_id, project_id, dur_ms, w, h)
 
         poster_key = None
@@ -200,10 +217,14 @@ def finalize_byo_clip(
         try:
             poster_path = src.parent / f"{clip_id}_poster.jpg"
             _poster_frame_jpg(src, poster_path, dur_ms / 1000.0)
-            upload_file(keys["poster"], poster_path, "image/jpeg")
-            poster_key = keys["poster"]
-        except Exception:
-            print("[clipper:byo] poster_skip", flush=True)
+            if poster_path.is_file() and poster_path.stat().st_size > 0:
+                upload_file(keys["poster"], poster_path, "image/jpeg")
+                poster_key = keys["poster"]
+                print(f"[clipper:byo] step=poster_ready clip={clip_id}", flush=True)
+            else:
+                print(f"[clipper:byo] step=poster_skip clip={clip_id} reason=no_output_frame", flush=True)
+        except Exception as exc:
+            print(f"[clipper:byo] step=poster_skip clip={clip_id} reason={type(exc).__name__}", flush=True)
 
         title = str(project.get("title") or "Clip")[:200]
         row = {
@@ -228,7 +249,22 @@ def finalize_byo_clip(
                 else {"byo": True}
             ),
         }
-        insert_clips_batch(conn, [row])
+        if seeded:
+            # Preserve edits made while the user is already in the editor.
+            # Attach only background assets/poster to the atomically seeded clip.
+            meta_patch = {"editorAssets": editor_assets} if editor_assets else {}
+            with conn.cursor() as cur:
+                cur.execute(
+                    """UPDATE clips SET "posterKey"=COALESCE("posterKey", %s),
+                       "aiMeta"=COALESCE("aiMeta", '{}'::jsonb) || %s::jsonb,
+                       "updatedAt"=NOW()
+                       WHERE id=%s AND "projectId"=%s""",
+                    (poster_key, json.dumps(meta_patch), clip_id, project_id),
+                )
+            conn.commit()
+            print(f"[clipper:fullvideo] step=seed_enriched clip={clip_id} assets={bool(editor_assets)}", flush=True)
+        else:
+            insert_clips_batch(conn, [row])
         mark_project_ready(conn, project_id)
         post_progress(
             job_id,

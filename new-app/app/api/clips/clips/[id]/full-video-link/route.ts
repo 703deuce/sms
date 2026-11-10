@@ -10,11 +10,15 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   try {
     const params = await ctx.params
     clipId = params.id
-    console.info('[clipper:fullvideo-link] route_begin', { requestId, clipId })
+    console.log('[clipper:fullvideo-link] route_begin', { requestId, clipId })
+    const authAt = Date.now()
     const workspaceId = await resolveWorkspaceId()
+    console.log('[clipper:fullvideo-link] step=workspace', { requestId, elapsedMs: Date.now() - authAt })
+    const linkAt = Date.now()
     const link = await resolveFullVideoLink(workspaceId, clipId)
+    console.log('[clipper:fullvideo-link] step=resolve', { requestId, elapsedMs: Date.now() - linkAt })
     const result = link && 'url' in link ? 'ready' : link && 'preparing' in link ? `preparing:${link.stage}` : 'unavailable'
-    console.info('[clipper:fullvideo-link] route_end', {
+    console.log('[clipper:fullvideo-link] route_end', {
       requestId,
       clipId,
       result,

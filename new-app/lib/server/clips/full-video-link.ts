@@ -29,6 +29,7 @@ export async function resolveFullVideoLink(
   clipId: string,
 ): Promise<FullVideoLinkResult | null> {
   const prisma = getPrisma()
+  const startedAt = Date.now()
   const clip = await prisma.clip.findFirst({
     where: { id: clipId, workspaceId, deletedAt: null },
     include: {
@@ -38,20 +39,19 @@ export async function resolveFullVideoLink(
           title: true,
           uploadId: true,
           settings: true,
-          transcriptWords: true,
           proxyKey: true,
           rangeEndMs: true,
+          upload: {
+            select: { id: true, durationMs: true, width: true, height: true, filename: true, status: true },
+          },
         },
       },
     },
   })
+  console.log('[clipper:fullvideo-link] step=source_lookup', { clipId, elapsedMs: Date.now() - startedAt })
   if (!clip?.project?.uploadId) return null
-
-  const upload = await prisma.clipUpload.findFirst({
-    where: { id: clip.project.uploadId, workspaceId, status: 'COMPLETE' },
-    select: { id: true, durationMs: true, width: true, height: true, filename: true },
-  })
-  if (!upload) return null
+  const upload = clip.project.upload
+  if (!upload || upload.status !== 'COMPLETE') return null
 
   let fvProjectId: string | null = null
   const parsed = clipProjectSettingsSchema.safeParse(clip.project.settings)
@@ -64,17 +64,29 @@ export async function resolveFullVideoLink(
     if (!linked) fvProjectId = null
   }
   if (!fvProjectId) {
+    const lookupAt = Date.now()
     const fv = await findFullVideoProjectForUpload(workspaceId, clip.project.uploadId)
+    console.log('[clipper:fullvideo-link] step=dedupe_lookup', { clipId, elapsedMs: Date.now() - lookupAt, reused: Boolean(fv) })
     if (fv) fvProjectId = fv.id
   }
   if (!fvProjectId && !isFullVideoSettings(clip.project.settings)) {
+    const createAt = Date.now()
+    const source = await prisma.clipProject.findUnique({
+      where: { id: clip.project.id },
+      select: { transcriptWords: true },
+    })
+    console.log('[clipper:fullvideo-link] step=transcript_lookup', {
+      clipId, elapsedMs: Date.now() - createAt,
+      hasWords: Array.isArray(source?.transcriptWords) && source.transcriptWords.length > 0,
+    })
     fvProjectId = await ensureFullVideoProjectForUpload(workspaceId, upload, {
       id: clip.project.id,
       title: clip.project.title,
-      transcriptWords: clip.project.transcriptWords,
+      transcriptWords: source?.transcriptWords,
       proxyKey: clip.project.proxyKey,
       rangeEndMs: clip.project.rangeEndMs,
     })
+    console.log('[clipper:fullvideo-link] step=project_ensure', { clipId, elapsedMs: Date.now() - createAt, projectId: fvProjectId })
   }
   if (!fvProjectId) return null
 
@@ -83,6 +95,7 @@ export async function resolveFullVideoLink(
     orderBy: { startMs: 'asc' },
     select: { id: true, title: true },
   })
+  console.log('[clipper:fullvideo-link] step=clip_lookup', { clipId, elapsedMs: Date.now() - startedAt, found: Boolean(fvClip) })
   if (!fvClip) {
     return {
       preparing: true,
@@ -100,5 +113,6 @@ export async function resolveFullVideoLink(
     `/app/video-editor/${fvProjectId}/edit/${fvClip.id}?t=${sourceMs}` +
     `&fromClip=${encodeURIComponent(clipId)}` +
     `&momentIn=${momentIn}&momentOut=${momentOut}&momentTitle=${title}`
+  console.log('[clipper:fullvideo-link] step=ready', { clipId, elapsedMs: Date.now() - startedAt, projectId: fvProjectId })
   return { projectId: fvProjectId, clipId: fvClip.id, url, sourceMs }
 }

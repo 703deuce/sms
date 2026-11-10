@@ -362,8 +362,10 @@ def process_job(conn, job: dict) -> None:
         else:
             _ = probe_duration(src)
         audio_wav = td_path / "audio.wav"
-        if not captions_only and payload.get('agentOnly') is not True:
+        if not captions_only and payload.get('agentOnly') is not True and not (payload.get("byo") is True and words):
             extract_wav_for_picker(src, audio_wav)
+        elif payload.get("byo") is True and words:
+            print(f"[clipper:fullvideo] step=skip_audio_extract project={project['id']} cachedWords={len(words)}", flush=True)
         byo_job = payload.get("byo") is True
         if words:
             log(f"resume: skipping transcribe ({len(words)} words on project)")
@@ -373,8 +375,8 @@ def process_job(conn, job: dict) -> None:
             )
             stage_event("transcribe", "skipped", project_id=project["id"], job_id=job["id"], transcriptWords=len(words))
             resume_progress = {
-                "projectStatus": "TRANSCRIBING" if (byo_job or captions_only) else "FINDING_CLIPS",
-                "stage": "transcribing" if (byo_job or captions_only) else "finding_clips",
+                "projectStatus": "PREPARING" if payload.get("preseededFullVideo") else ("TRANSCRIBING" if (byo_job or captions_only) else "FINDING_CLIPS"),
+                "stage": "assets" if payload.get("preseededFullVideo") else ("transcribing" if (byo_job or captions_only) else "finding_clips"),
                 "progress": 45,
                 "transcriptWords": words,
                 "jobStatus": "RUNNING",

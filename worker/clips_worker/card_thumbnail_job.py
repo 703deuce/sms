@@ -106,14 +106,34 @@ def run_card_thumbnail_job(conn, job: dict) -> None:
             f"[clips:cards] thumbnail generate step=extract_frame clipId={clip_id} aspect={aspect} seekMs={seek_ms}",
             flush=True,
         )
-        subprocess.check_call(
-            [
-                "ffmpeg", "-y", "-v", "error",
-                "-ss", f"{seek_ms / 1000.0:.3f}", "-i", str(src),
-                "-vf", f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}",
-                "-frames:v", "1", "-q:v", "3", str(poster),
-            ]
-        )
+        # Some files return zero frames at the requested seek. A successful ffmpeg
+        # invocation does not guarantee poster.jpg exists; try t=0 then skip safely.
+        frame_ready = False
+        for attempt_ms in ([seek_ms, 0] if seek_ms else [0]):
+            poster.unlink(missing_ok=True)
+            try:
+                result = subprocess.run(
+                    [
+                        "ffmpeg", "-y", "-v", "error",
+                        "-ss", f"{attempt_ms / 1000.0:.3f}", "-i", str(src),
+                        "-vf", f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}",
+                        "-frames:v", "1", "-q:v", "3", str(poster),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                frame_ready = result.returncode == 0 and poster.is_file() and poster.stat().st_size > 0
+                if frame_ready:
+                    print(f"[clips:cards] thumbnail generate step=frame_ready clipId={clip_id} seekMs={attempt_ms}", flush=True)
+                    break
+                reason = (result.stderr or "").strip()[-180:] or "no_output_frame"
+            except OSError as exc:
+                reason = type(exc).__name__
+            print(f"[clips:cards] thumbnail generate step=frame_failed clipId={clip_id} seekMs={attempt_ms} reason={reason}", flush=True)
+        if not frame_ready:
+            print(f"[clips:cards] thumbnail generate end clipId={clip_id} status=skipped reason=poster_not_created", flush=True)
+            return
 
         poster_key = f"ws/{ctx['workspaceId']}/projects/{ctx['projectId']}/clips/{clip_id}/poster.jpg"
         print(f"[clips:cards] thumbnail generate step=upload clipId={clip_id}", flush=True)
