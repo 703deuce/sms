@@ -1,6 +1,7 @@
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 import { DraftEditsBuilder } from '@/lib/ai-producer-agent/draft-edits'
 import type { ToolCtx } from '@/lib/ai-producer-agent/tools/registry'
+import { isClipAgentMode } from '@/lib/ai-producer-agent/clip-mode/modes'
 import { validateBrokenRules } from '@/lib/ai-producer-agent/validate'
 
 export function createProject(ctx: ToolCtx, out: OutputState, args: Record<string, unknown>) {
@@ -23,7 +24,7 @@ export function createProject(ctx: ToolCtx, out: OutputState, args: Record<strin
   // entire frame. Clip-mode 9:16 talking-head exports use speaker tracking;
   // the worker already runs face-aware reframe for speaker_follow.
   if (ctx.config.editMode === 'just_chatting_rough_cut') {
-    const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+    const clipMode=isClipAgentMode(ctx.config.storyMode)
     out.builder.setLayout(clipMode?'speaker_follow':'full_frame')
   }
   out.pendingTitle = String(args.title ?? 'AI Producer edit')

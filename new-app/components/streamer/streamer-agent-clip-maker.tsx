@@ -6,8 +6,10 @@ import {Sparkles,Loader2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {aiProducerAgentPublicEnabled} from '@/lib/ai-producer-agent/flags'
 import {streamerAgentWindows,MAX_AGENT_SOURCE_WINDOW_MS} from '@/lib/streamer/agent-windows'
+import { UNIFIED_AUTO_AGENT_CLIP_MODE } from '../../lib/clips/unified-clip-results'
+import { UnifiedClipRunNote } from '../clips/unified-clip-run-note'
 
-export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'
+export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'
 type FinishedClip={projectId:string;clipId:string;startMin:number}
 const WINDOW_MS=MAX_AGENT_SOURCE_WINDOW_MS
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms))
@@ -26,7 +28,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
   projectId:string;ready:boolean;sourceStartMs:number;sourceDurationMs:number
   videoAvailable:boolean;sourceKind?:'stream'|'upload'
 }){
-  const [mode,setMode]=useState<StreamerShortMode>('clip_moment_v1')
+  const mode:StreamerShortMode=UNIFIED_AUTO_AGENT_CLIP_MODE
   const [seconds,setSeconds]=useState<30|60|90>(60)
   const [windowStartMin,setWindowStartMin]=useState(0)
   const [allWindows,setAllWindows]=useState(false)
@@ -181,13 +183,8 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
       <h2 className="text-sm font-semibold">AI Agent Clipper</h2>
       <span className="ml-auto text-xs text-muted-foreground">Story · Footage · Flow · QA</span>
     </div>
+    <UnifiedClipRunNote testId="streamer-agent-clip-mode" className="mb-3">
     <div className="flex flex-wrap items-center gap-2">
-      <select aria-label="AI clipping mode" value={mode} disabled={running}
-        onChange={e=>setMode(e.target.value as StreamerShortMode)}
-        className="h-9 rounded-md border border-border bg-background px-2 text-sm">
-        <option value="clip_moment_v1">Single continuous moment</option>
-        <option value="clip_story_v1">AI story clip (multiple moments)</option>
-      </select>
       <select aria-label="Clip target duration" value={seconds} disabled={running}
         onChange={e=>setSeconds(Number(e.target.value) as 30|60|90)}
         className="h-9 rounded-md border border-border bg-background px-2 text-sm">
@@ -220,6 +217,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         {running?'Processing…':'Create AI clips'}
       </Button>
     </div>
+    </UnifiedClipRunNote>
     <p className="mt-2 text-xs text-muted-foreground">
       {sourceKind==='stream'?'Twitch/Kick sources are fetched as bounded video windows when needed.':'Your uploaded video is used directly without another download.'}
       Each batch runs the same specialist agents and produces an editable Clip Studio result.
@@ -232,7 +230,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
       {completed.map((clip,i)=>
         <Link key={clip.projectId+clip.clipId}
           className="rounded-md border border-border px-3 py-2 text-xs underline"
-          href={`/app/clips/${clip.projectId}/studio/${clip.clipId}`}>
+          href={`/app/video-editor/${clip.projectId}/studio/${clip.clipId}`}>
           Clip {i+1} · Source {clip.startMin}m · Edit
         </Link>)}
     </div>:null}

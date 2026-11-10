@@ -66,7 +66,7 @@ export function useFullVideoMomentFocus(
         toast.success('New clip created', {
           action: {
             label: 'Open',
-            onClick: () => router.push(`/app/clips/${res.projectId}/edit/${res.clipId}`),
+            onClick: () => router.push(`/app/video-editor/${res.projectId}/edit/${res.clipId}`),
           },
         })
       } catch (e) {

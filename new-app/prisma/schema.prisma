@@ -520,6 +520,8 @@ model Workspace {
   clipRenders                            ClipRender[]
   clipRenderShareLinks                   ClipRenderShareLink[]
   clipEvents                             ClipEvent[]
+  aiStudioJobs                           AiStudioJob[]
+  aiStudioAssets                         AiStudioAsset[]
   forwardingUsageMonthly                 ForwardingUsageMonthly[]
   softphonePresence                      SoftphonePresence[]
   softphoneDevices                       SoftphoneDevice[]
@@ -10561,6 +10563,67 @@ model MotionRequestLimit {
   @@id([workspaceId, kind, windowStart])
   @@index([windowStart])
   @@map("motion_request_limits")
+}
+
+/// AI Studio v1 generation jobs (additive; no billing or credit ledger columns).
+model AiStudioJob {
+  id                   String    @id
+  workspaceId          String
+  userId               String
+  projectId            String?
+  status               String
+  modelId              String
+  mode                 String
+  prompt               String
+  aspect               String?
+  durationSec          Int?
+  resolution           String?
+  creditEstimate       Int
+  provider             String    @default("kie")
+  providerTaskId       String?
+  providerApi          String?
+  referenceAssetId     String?
+  startFrameAssetId    String?
+  endFrameAssetId      String?
+  outputStorageKey     String?
+  outputStorageDriver  String?
+  outputContentType    String?
+  outputWidth          Int?
+  outputHeight         Int?
+  outputDurationSec    Int?
+  outputKind           String?
+  outputUploadId       String?
+  errorCode            String?
+  errorMessage         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  startedAt            DateTime?
+  completedAt          DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, userId, status])
+  @@index([providerTaskId])
+  @@map("ai_studio_jobs")
+}
+
+/// Reference / start / end frame uploads for AI Studio jobs.
+model AiStudioAsset {
+  id             String   @id
+  workspaceId    String
+  userId         String
+  storageKey     String
+  storageDriver  String?
+  contentType    String
+  bytes          Int?
+  kind           String   @default("image")
+  createdAt      DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("ai_studio_assets")
 }
 
 /// Mode 2 "Make a YouTube video" runs (separate product from the clipper). Additive.

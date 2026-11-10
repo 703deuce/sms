@@ -73,6 +73,13 @@ import {
   type DeliverQuality,
 } from '@/lib/clips/export-deliver'
 import type { InOut } from '@/lib/clips/editor/timeline-edit-ops'
+import {
+  captionSyncWarningsFromError,
+  detectCaptionSyncIssues,
+  isCaptionSyncRequiredError,
+  type CaptionSyncWarning,
+} from '../../../lib/clips/editor/caption-sync-warning'
+import { CaptionSyncWarningBanner } from './caption-sync-warning-banner'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
 
@@ -112,6 +119,7 @@ export function ExportDialog({
   timelineInOut = null,
   playheadMs = 0,
   posterUrl = null,
+  aiMeta,
 }: {
   clipId: string
   title: string
@@ -141,8 +149,12 @@ export function ExportDialog({
   posterUrl?: string | null
   open: boolean
   onClose: () => void
+  /** Optional clip.aiMeta so share can warn when needsReview is true. Absent is treated as clean. */
+  aiMeta?: unknown
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
+  const [captionSyncAck, setCaptionSyncAck] = useState(false)
+  const [serverCaptionSyncWarnings, setServerCaptionSyncWarnings] = useState<CaptionSyncWarning[]>([])
   const [removeDeadAir, setRemoveDeadAir] = useState(false)
   const [aspect, setAspect] = useState<ExportAspect>(
     edits.aspectRatio ?? '9:16',
@@ -200,15 +212,6 @@ export function ExportDialog({
     void clipsFetch<{ channels: ClipUserStreamerChannelRow[] }>('/api/clips/my-channels')
       .then((data) => setSavedChannels(data.channels))
       .catch(() => {})
-  }
-
-  const onDownloadNlePack = () => {
-    if (nleExportBusy) return
-    setNleExportBusy(true)
-    void downloadClipNleZip(clipId, title)
-      .then(() => toast.success('NLE pack downloaded'))
-      .catch((err) => toast.error(err instanceof Error ? err.message : 'NLE export failed'))
-      .finally(() => setNleExportBusy(false))
   }
 
   useEffect(() => {
@@ -451,16 +454,47 @@ export function ExportDialog({
     inFlightResolution,
     selectedResolution,
   })
+  const localCaptionSyncWarnings = useMemo(
+    () => detectCaptionSyncIssues({ words, edits }),
+    [words, edits],
+  )
+  const captionSyncWarnings = useMemo(() => {
+    const merged = [...localCaptionSyncWarnings]
+    const seen = new Set(merged.map((w) => w.code))
+    for (const warning of serverCaptionSyncWarnings) {
+      if (seen.has(warning.code)) continue
+      seen.add(warning.code)
+      merged.push(warning)
+    }
+    return merged
+  }, [localCaptionSyncWarnings, serverCaptionSyncWarnings])
+  const captionSyncBlocksExport = captionSyncWarnings.length > 0 && !captionSyncAck
+  const onDownloadNlePack = () => {
+    if (nleExportBusy || captionSyncBlocksExport) return
+    setNleExportBusy(true)
+    void downloadClipNleZip(clipId, title)
+      .then(() => toast.success('NLE pack downloaded'))
+      .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'NLE export failed'))
+      .finally(() => setNleExportBusy(false))
+  }
   const exportCtaLabel =
     exportButton.label === 'Export MP4'
       ? exportActionLabel(deliverFormat, encoders)
       : exportButton.label
   const downloadCtaLabel = exportDownloadLabel(deliverFormat, encoders)
+  useEffect(() => {
+    if (!open) setServerCaptionSyncWarnings([])
+  }, [open])
+  useEffect(() => {
+    if (!captionSyncWarnings.length) setCaptionSyncAck(false)
+  }, [captionSyncWarnings.length])
+
   const startExport = async () => {
-    if (exportButton.disabled) return
+    if (exportButton.disabled || captionSyncBlocksExport) return
     exportClickedRef.current = true
     setBusy(true)
     setErrorDetail(null)
+    setServerCaptionSyncWarnings([])
     exportToast.start()
     try {
       await onBeforeExport?.()
@@ -525,6 +559,7 @@ export function ExportDialog({
           ? { rangeInMs: timelineInOut.inMs, rangeOutMs: timelineInOut.outMs }
           : {}),
         ...(exportPlatform === 'none' && deliverFormat === 'png' ? { stillAtMs: Math.round(playheadMs) } : {}),
+        ...(captionSyncAck ? { captionSyncAck: true } : {}),
       })
       if (data.inFlight) {
         // FV4c: the server handed back the render already in flight for these edits — attach to it.
@@ -555,6 +590,24 @@ export function ExportDialog({
       }
       if (alsoSrt) window.open(`/api/clips/clips/${clipId}/srt`, '_blank')
     } catch (e) {
+      if (isCaptionSyncRequiredError(e)) {
+        const fromServer = captionSyncWarningsFromError(e)
+        setServerCaptionSyncWarnings(
+          fromServer.length
+            ? fromServer
+            : [
+                {
+                  level: 'warning',
+                  code: 'line_transcript_drift',
+                  message:
+                    e instanceof Error
+                      ? e.message
+                      : 'Caption timing looks out of sync. Acknowledge the warning to export anyway.',
+                },
+              ],
+        )
+        setCaptionSyncAck(false)
+      }
       const msg = e instanceof Error ? e.message : 'Export failed'
       setErrorDetail(msg)
       exportToast.failed(msg)
@@ -745,14 +798,30 @@ export function ExportDialog({
         ) : null}
         <div className="mt-3">
           <p className="text-xs font-medium">Other formats</p>
+          {captionSyncWarnings.length ? (
+            <CaptionSyncWarningBanner
+              className="mt-2"
+              warnings={captionSyncWarnings}
+              showAcknowledge
+              acknowledge={captionSyncAck}
+              onAcknowledgeChange={setCaptionSyncAck}
+              testId="caption-sync-warning-nle"
+              ackTestId="caption-sync-export-ack-nle"
+            />
+          ) : null}
           <div className="mt-1 flex flex-wrap gap-2">
             <Button
               type="button"
               size="sm"
               variant="outline"
               data-testid="export-xml-download"
-              disabled={nleExportBusy}
+              disabled={nleExportBusy || captionSyncBlocksExport}
               onClick={onDownloadNlePack}
+              title={
+                captionSyncBlocksExport
+                  ? 'Acknowledge the caption sync warning before exporting'
+                  : undefined
+              }
             >
               Premiere / Resolve / FCP (zip)
             </Button>
@@ -1067,7 +1136,12 @@ export function ExportDialog({
           />
         </div>
         <div className="mt-4 flex items-center justify-between gap-2">
-          <Label className="text-sm">Also download .srt</Label>
+          <div>
+            <Label className="text-sm">Also download .srt</Label>
+            <p className="text-xs text-muted-foreground">
+              Subtitle file uses the same edited caption text and timings as the burned-in export.
+            </p>
+          </div>
           <Switch
             checked={alsoSrt}
             disabled={edits.captions?.enabled === false}
@@ -1199,14 +1273,27 @@ export function ExportDialog({
             {errorDetail}
           </pre>
         )}
+        {captionSyncWarnings.length ? (
+          <CaptionSyncWarningBanner
+            className="mt-4"
+            warnings={captionSyncWarnings}
+            showAcknowledge
+            acknowledge={captionSyncAck}
+            onAcknowledgeChange={setCaptionSyncAck}
+          />
+        ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
           {!downloadUrl ? (
             <Button
               onClick={() => void startExport()}
-              disabled={exportButton.disabled}
+              disabled={exportButton.disabled || captionSyncBlocksExport}
               data-testid="export-mp4-button"
               title={
-                exportButton.blockedByInFlight ? 'This clip is already rendering — wait for it to finish' : undefined
+                captionSyncBlocksExport
+                  ? 'Acknowledge the caption sync warning before exporting'
+                  : exportButton.blockedByInFlight
+                    ? 'This clip is already rendering — wait for it to finish'
+                    : undefined
               }
             >
               {exportCtaLabel}
@@ -1241,7 +1328,7 @@ export function ExportDialog({
           <Button variant="ghost" onClick={onClose}>Close</Button>
         </div>
       </div>
-      <ExportRenderShareDialog renderId={renderId} open={shareOpen} onOpenChange={setShareOpen} />
+      <ExportRenderShareDialog renderId={renderId} open={shareOpen} onOpenChange={setShareOpen} aiMeta={aiMeta} />
     </div>
   )
 }

@@ -130,7 +130,7 @@ export function T2vCreateWorkspace() {
         settings: { aspect, targetDurationS, platform, sceneSplit },
       })
       if (templateId) await applyT2vTemplate(templateId, id)
-      router.push(`/app/clips/video/new?d=${id}&step=2&projectId=${projectId}`)
+      router.push(`/app/ai-video/new?d=${id}&step=2&projectId=${projectId}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create draft')
     } finally {
@@ -177,7 +177,7 @@ export function T2vCreateWorkspace() {
       await runT2vScript(draftId)
       console.info('[t2v:script-generate] write script completed', { draftId })
       const projectId = params.get('projectId') ?? draft.data.projectId
-      router.push(`/app/clips/${projectId}/video?mode=script`)
+      router.push(`/app/ai-video/${projectId}?mode=script`)
     } catch (e) {
       console.error('[t2v:script-generate] write script failed', {
         draftId,
@@ -259,7 +259,7 @@ export function T2vCreateWorkspace() {
     <div className="mx-auto grid w-full max-w-[880px] gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="space-y-6">
         <div className="flex flex-wrap items-end justify-end gap-2">
-          <Link href="/app/clips/video/templates" className="text-sm text-primary">
+          <Link href="/app/ai-video/templates" className="text-sm text-primary">
             Browse templates
           </Link>
         </div>

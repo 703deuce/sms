@@ -1,3 +1,5 @@
+import { routes } from './routes'
+
 export type SidebarNavFlags = {
   recording: boolean
   soloRecording: boolean
@@ -7,7 +9,7 @@ export type SidebarNavFlags = {
 export type SidebarNavGroup = 'home' | 'products' | 'library' | 'footer'
 export type SidebarNavIcon =
   | 'home' | 'clips' | 'streamer' | 'editor' | 'record' | 'aiVideo'
-  | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings'
+  | 'studio' | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings'
 export type SidebarNavItem = { id: string; label: string; href: string; icon: SidebarNavIcon; group: SidebarNavGroup }
 export type CreateMenuItem = { id: string; label: string; href: string; icon: SidebarNavIcon }
 
@@ -44,21 +46,23 @@ export function createMenuItems(f: SidebarNavFlags): CreateMenuItem[] {
   return [
     { id: 'create-clip', label: 'Clip', href: '/app/clips/new', icon: 'clips' },
     { id: 'create-stream', label: 'Stream clip', href: '/app/streamer', icon: 'streamer' },
-    { id: 'create-editor', label: 'Editor project', href: f.scriptEditor ? '/app/editor' : '/app/clips/new?intent=full', icon: 'editor' },
+    { id: 'create-editor', label: 'Editor project', href: f.scriptEditor ? routes.videoEditor() : routes.videoEditorNew(), icon: 'editor' },
     ...(rec ? [{ id: 'create-record', label: 'Recording', href: rec, icon: 'record' as const }] : []),
-    ...(f.t2v ? [{ id: 'create-ai-video', label: 'AI Video', href: '/app/clips/video/new', icon: 'aiVideo' as const }] : []),
+    ...(f.t2v ? [{ id: 'create-ai-video', label: 'AI Video', href: routes.aiVideoNew(), icon: 'aiVideo' as const }] : []),
+    { id: 'create-studio', label: 'AI Studio', href: '/app/studio', icon: 'studio' as const },
   ]
 }
 
 export function buildSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
   const rec = recordHref(f)
   const items: (SidebarNavItem | null)[] = [
-    { id: 'home', label: 'Home', href: '/app/clips', icon: 'home', group: 'home' },
+    { id: 'home', label: 'Home', href: routes.app(), icon: 'home', group: 'home' },
     { id: 'clips', label: 'Clips', href: '/app/clips/new', icon: 'clips', group: 'products' },
     { id: 'streamer', label: 'Streamer', href: '/app/streamer', icon: 'streamer', group: 'products' },
-    { id: 'editor', label: 'Editor', href: '/app/editor', icon: 'editor', group: 'products' },
+    { id: 'editor', label: 'Editor', href: routes.videoEditor(), icon: 'editor', group: 'products' },
     rec ? { id: 'record', label: 'Record', href: rec, icon: 'record', group: 'products' } : null,
-    f.t2v ? { id: 'ai-video', label: 'AI Video', href: '/app/clips/video/new', icon: 'aiVideo', group: 'products' } : null,
+    f.t2v ? { id: 'ai-video', label: 'AI Video', href: routes.aiVideoNew(), icon: 'aiVideo', group: 'products' } : null,
+    { id: 'studio', label: 'Studio', href: '/app/studio', icon: 'studio', group: 'products' },
     { id: 'media', label: 'Media', href: '/app/clips/media', icon: 'media', group: 'library' },
     { id: 'brand', label: 'Brand kit', href: '/app/clips/brand', icon: 'brand', group: 'library' },
     { id: 'templates', label: 'Templates', href: '/app/clips/templates', icon: 'templates', group: 'library' },
@@ -73,23 +77,35 @@ export function buildSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
 export function activeSidebarId(pathname: string, search: URLSearchParams | string = ''): string | null {
   const sp = typeof search === 'string' ? new URLSearchParams(search) : search
   const p = pathname.replace(/\/+$/, '') || '/'
+  if (p === '/app/studio' || p.startsWith('/app/studio/')) return 'studio'
   if (p === '/app/clips/new') return 'clips'
-  if (p.startsWith('/app/clips/video/templates')) return 'templates'
+  if (p.startsWith('/app/clips/video/templates') || p.startsWith('/app/ai-video/templates')) return 'templates'
   if (p.startsWith('/app/clips/templates')) return 'templates' // every ?tab= / &sub=
   if (p.startsWith('/app/clips/brand')) return 'brand' // kit and ?tab=templates and ?id=
   if (p.startsWith('/app/clips/media')) return 'media'
   if (p === '/app/exports' || p.startsWith('/app/exports/') || p.startsWith('/app/clips/exports')) return 'exports'
-  if (p.startsWith('/app/clips/video/') || /^\/app\/clips\/[^/]+\/video(\/|$)/.test(p)) return 'ai-video'
+  if (
+    p.startsWith('/app/ai-video') ||
+    p.startsWith('/app/clips/video/') ||
+    /^\/app\/clips\/[^/]+\/video(\/|$)/.test(p)
+  )
+    return 'ai-video'
   if (p === '/app/clips' && sp.get('kind') === 'video') return 'ai-video'
   if (p.startsWith('/app/streamer')) return 'streamer'
   if (p.startsWith('/app/record') || p.startsWith('/app/rooms')) return 'record'
-  if (p.startsWith('/app/editor') || /^\/app\/clips\/[^/]+\/(edit|script)(\/|$)/.test(p)) return 'editor'
-  if (p === '/app/clips' || p === '/app/clips/trash' || clipsProjectId(p)) return 'home'
+  if (
+    p.startsWith('/app/video-editor') ||
+    p.startsWith('/app/editor') ||
+    /^\/app\/clips\/[^/]+\/(edit|studio|script)(\/|$)/.test(p)
+  )
+    return 'editor'
+  if (p === '/app' || p === '/app/home' || p === '/app/dashboard') return 'home'
+  if (p === '/app/clips' || p === '/app/clips/trash' || clipsProjectId(p)) return 'clips'
   if (p.startsWith('/app/help') || p.startsWith('/app/learn')) return 'learn'
   if (p.startsWith('/app/settings')) return 'settings'
   return null
 }
 
 export function isClipEditRoute(pathname: string): boolean {
-  return /^\/app\/clips\/[^/]+\/edit\/[^/]+/.test(pathname)
+  return /^\/app\/(clips|video-editor)\/[^/]+\/edit\/[^/]+/.test(pathname)
 }

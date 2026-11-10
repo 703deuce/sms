@@ -17,6 +17,7 @@ import {
   Settings,
   Sparkles,
   Video,
+  WandSparkles,
   type LucideIcon,
 } from 'lucide-react'
 import { LogoMark } from '@/components/brand/logo-mark'
@@ -52,7 +53,7 @@ const HEAVY_NAV_HREF_NO_PREFETCH = new Set([
   '/app/streamer',
   '/app/exports',
   '/app/record',
-  '/app/editor',
+  '/app/video-editor',
   '/app/rooms',
   '/app/rooms/new',
 ])
@@ -64,6 +65,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   editor: Clapperboard,
   record: Video,
   aiVideo: Sparkles,
+  studio: WandSparkles,
   media: Images,
   brand: Palette,
   templates: LayoutTemplate,

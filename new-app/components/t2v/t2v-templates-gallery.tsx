@@ -92,7 +92,7 @@ export function T2vTemplatesGallery({ draftId, embedded }: { draftId?: string; e
       }
       return
     }
-    window.location.href = `/app/clips/video/new?template=${id}`
+    window.location.href = `/app/ai-video/new?template=${id}`
   }
 
   return (
@@ -196,7 +196,7 @@ export function T2vTemplatesGallery({ draftId, embedded }: { draftId?: string; e
               </PrimaryButton>
               <Button type="button" variant="outline" onClick={() => setPreview(null)}>Close</Button>
               {!draftId ? (
-                <Link href={`/app/clips/video/new?template=${preview.id}`} className="text-sm text-primary">
+                <Link href={`/app/ai-video/new?template=${preview.id}`} className="text-sm text-primary">
                   Start new video
                 </Link>
               ) : null}

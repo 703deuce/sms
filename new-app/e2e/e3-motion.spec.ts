@@ -1,10 +1,10 @@
 /**
- * E3 keyframes + transitions acceptance on the REAL editor route (/app/clips/<projectId>/edit/<clipId>).
+ * E3 keyframes + transitions acceptance on the REAL editor route (/app/video-editor/<projectId>/edit/<clipId>).
  *
  * Use a DISPOSABLE clip with >= 1 transcript cut (so the Video lane has a cut point) and >= 1 B-roll
  * item. Each test undoes what it changes; a failed run can leave keyframes/transitions behind
  * (Edit -> undo, or clear `keyframes` / `transitions` in clip_edits).
- *   E3_CLIP_PATH=/app/clips/proj_x/edit/clip_y CLIPPER_E2E_BASE_URL=... npx playwright test e2e/e3-motion.spec.ts
+ *   E3_CLIP_PATH=/app/video-editor/proj_x/edit/clip_y CLIPPER_E2E_BASE_URL=... npx playwright test e2e/e3-motion.spec.ts
  * Screenshots go to test-results/ (attach them to the report).
  */
 import { test, expect, chromium, type Page, type Locator } from '@playwright/test'

@@ -11,12 +11,13 @@ import { runAiProducerAgent } from '@/lib/ai-producer-agent/orchestrator'
 import { enqueueAiProducerRunJob } from '@/lib/server/ai-producer-agent/enqueue-run'
 import { resolveAiProducerSources } from '@/lib/server/ai-producer-agent/resolve-sources'
 import type { AiProducerRunConfig, AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
+import { isClipAgentMode } from '@/lib/ai-producer-agent/clip-mode/modes'
 
 export type CreateAiProducerRunInput = {
   sources: AiProducerSourceRef[]
   outputType: AiProducerOutputType
   editMode?: 'just_chatting_rough_cut'
-  storyMode?: 'single_source_v1' | 'multi_source_story_v1' | 'clean_take_v1' | 'clip_moment_v1' | 'clip_story_v1'
+  storyMode?: 'single_source_v1' | 'multi_source_story_v1' | 'clean_take_v1' | 'clip_moment_v1' | 'clip_story_v1' | 'clip_unified_v1'
   roughCutIntent?: 'story' | 'highlights'
   visualEvidenceMode?: 'transcript_baseline' | 'visual_audio'
   genre?: string
@@ -41,7 +42,7 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
   const genre = input.genre ?? 'irl_just_chatting'
   const multiStory = input.storyMode === 'multi_source_story_v1'
   const cleanTake = input.storyMode === 'clean_take_v1'
-  const aiClip = input.storyMode === 'clip_moment_v1' || input.storyMode === 'clip_story_v1'
+  const aiClip = isClipAgentMode(input.storyMode)
   if (aiClip && (input.sources.length !== 1 || input.outputType !== 'story' || input.editMode || input.roughCutIntent))
     throw Error('clipper_agent_requires_one_source_and_story_output')
   if (aiClip && input.targetLengthS && (input.targetLengthS[0] < 15 || input.targetLengthS[1] > 105 || input.targetLengthS[1] < input.targetLengthS[0]))

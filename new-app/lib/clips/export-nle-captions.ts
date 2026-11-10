@@ -8,6 +8,25 @@ import {
 } from '@/lib/clips/edits'
 import { buildCaptionWords, type CaptionSourceWord } from '@/lib/clips/caption-words'
 import { captionLinesFromWords, captionLinesToSrt } from '@/lib/clips/editor/caption-lines'
+import { formatCaptionLineText, formatCaptionWord, isSentenceBoundary } from './caption-case'
+
+
+function srtCaseMode(edits: ClipEditsV2): 'upper' | 'sentence' {
+  return edits.captions?.case === 'upper' ? 'upper' : 'sentence'
+}
+
+function applyCaptionCaseToLines<T extends { text: string }>(lines: T[], caseMode: string): T[] {
+  return lines.map((line) => ({ ...line, text: formatCaptionLineText(line.text, caseMode) }))
+}
+
+function applyCaptionCaseToWords<T extends { text: string }>(words: T[], caseMode: string): T[] {
+  let sentenceStart = true
+  return words.map((word) => {
+    const text = formatCaptionWord(word.text, caseMode, sentenceStart)
+    sentenceStart = isSentenceBoundary(word.text)
+    return { ...word, text }
+  })
+}
 
 /** Map edit-timeline ms → export/display ms for NLE subtitle cues (segment speeds + global speed). */
 export function nleCaptionDisplayMs(edits: ClipEditsV2, editMs: number): number {
@@ -30,7 +49,7 @@ export function buildNleCaptionsSrt(
       startMs: nleCaptionDisplayMs(normalized, l.startMs),
       endMs: nleCaptionDisplayMs(normalized, l.endMs),
     }))
-    return captionLinesToSrt(lines)
+    return captionLinesToSrt(applyCaptionCaseToLines(lines, srtCaseMode(normalized)))
   }
   const captionWords = buildCaptionWords(words, normalized)
   const wpl = normalized.captions?.wordsPerLine ?? 2
@@ -39,13 +58,13 @@ export function buildNleCaptionsSrt(
     startMs: nleCaptionDisplayMs(normalized, l.startMs),
     endMs: nleCaptionDisplayMs(normalized, l.endMs),
   }))
-  if (grouped.length) return captionLinesToSrt(grouped)
+  if (grouped.length) return captionLinesToSrt(applyCaptionCaseToLines(grouped, srtCaseMode(normalized)))
   const warped = captionWords.map((w) => ({
     text: w.text,
     s_ms: nleCaptionDisplayMs(normalized, w.s_ms),
     e_ms: nleCaptionDisplayMs(normalized, w.e_ms),
   }))
-  return buildSrtFromCaptionWords(warped)
+  return buildSrtFromCaptionWords(applyCaptionCaseToWords(warped, srtCaseMode(normalized)))
 }
 
 /** Parse SRT cue times (ms) and rewrite through `displayPositionMs` (for tests / parity checks). */

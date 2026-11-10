@@ -42,7 +42,7 @@ export function MediaLibraryView({ uploads }: { uploads: MediaLibraryUploadRow[]
       })
       console.info('[editor:media-library]', 'project_from_upload', { uploadId, projectId: project.id })
       router.push(
-        isScriptEditorEnabled() ? `/app/clips/${project.id}/script` : `/app/clips/${project.id}`,
+        isScriptEditorEnabled() ? `/app/video-editor/${project.id}/script` : `/app/clips/${project.id}`,
       )
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create project')
@@ -102,7 +102,7 @@ export function MediaLibraryView({ uploads }: { uploads: MediaLibraryUploadRow[]
                           <Link
                             href={
                               isScriptEditorEnabled()
-                                ? `/app/clips/${p.id}/script`
+                                ? `/app/video-editor/${p.id}/script`
                                 : `/app/clips/${p.id}`
                             }
                             className="text-xs text-primary underline-offset-2 hover:underline"
@@ -127,7 +127,7 @@ export function MediaLibraryView({ uploads }: { uploads: MediaLibraryUploadRow[]
                       <Link
                         href={
                           isScriptEditorEnabled()
-                            ? `/app/clips/${u.projectIds[0].id}/script`
+                            ? `/app/video-editor/${u.projectIds[0].id}/script`
                             : `/app/clips/${u.projectIds[0].id}`
                         }
                       />

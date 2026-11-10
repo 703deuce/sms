@@ -32,13 +32,15 @@ import { Clapperboard, Globe, Link2, Loader2, Radio, UploadCloud } from 'lucide-
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { UNIFIED_AUTO_AGENT_CLIP_MODE } from '../../lib/clips/unified-clip-results'
+import { UnifiedClipRunNote } from './unified-clip-run-note'
 
-export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Enabled?: boolean }) {
+export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: { reframeV2Enabled?: boolean; forcedIntent?: 'full' }) {
   const router = useRouter()
   const params = useSearchParams()
   const preset = params.get('preset')
-  // FV1: /app/clips/new?intent=full opens "Edit a full video" (Home links here).
-  const fullIntentParam = params.get('intent') === 'full'
+  // FV1: /app/video-editor/new opens "Edit a full video" (Home links here).
+  const fullIntentParam = forcedIntent === 'full' || params.get('intent') === 'full'
   const initial = useMemo(() => {
     // FIX2 R1: default layout = Auto variety (see lib/clips/new-project-initial.ts)
     return initialNewProjectSettings(preset, Boolean(fullIntentParam))
@@ -53,7 +55,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
     if (tabParam === 'streamer' || tabParam === 'link' || tabParam === 'upload') setTab(tabParam)
   }, [tabParam])
   const [projectIntent, setProjectIntent] = useState<'find' | 'byo' | 'full'>(fullIntentParam ? 'full' : 'find')
-  const [agentClipMode, setAgentClipMode] = useState<'clip_moment_v1'|'clip_story_v1'>('clip_moment_v1')
+  const agentClipMode = UNIFIED_AUTO_AGENT_CLIP_MODE
   const [agentClipSeconds, setAgentClipSeconds] = useState<30|60|90>(60)
   const [sourceAspect, setSourceAspect] = useState<ReturnType<typeof sourceAspectRatio> | null>(null)
   const [settings, setSettings] = useState<ClipProjectSettings>(initial)
@@ -185,6 +187,12 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   }, [projectIntent, upload?.state, uploadId, submitting, submitUpload])
 
   const submitLink = async () => {
+    const kind = classifyImportUrl(linkUrl)
+    if (kind === 'kick') {
+      setTab('streamer')
+      toast('Kick links import from the Streamer tab.')
+      return
+    }
     const check = validateImportUrlForSubmit(linkUrl)
     if (!check.ok) {
       toast.error(check.message)
@@ -192,7 +200,11 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
     }
     setSubmitting(true)
     try {
-      const project = await createProjectFromLink({ sourceUrl: linkUrl.trim(), settings })
+      const payloadSettings =
+        projectIntent === 'find' && aiProducerAgentPublicEnabled()
+          ? defaultClipSettings({...settings,autoAgentClipMode:agentClipMode,autoAgentClipSeconds:agentClipSeconds})
+          : settings
+      const project = await createProjectFromLink({ sourceUrl: linkUrl.trim(), settings: payloadSettings })
       router.push(`/app/clips/${project.id}`)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not start import'
@@ -265,21 +277,13 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
         </fieldset>
       ) : null}
       {tab==='upload'&&projectIntent==='find'&&aiProducerAgentPublicEnabled()?(
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-border p-3" data-testid="upload-agent-mode">
-          <label className="text-sm font-medium" htmlFor="upload-agent-mode">Agent clip mode</label>
-          <select id="upload-agent-mode" value={agentClipMode}
-            onChange={e=>setAgentClipMode(e.target.value as 'clip_moment_v1'|'clip_story_v1')}
-            className="h-9 rounded-md border border-border bg-background px-2 text-sm">
-            <option value="clip_moment_v1">Single continuous moment</option>
-            <option value="clip_story_v1">AI story from multiple moments</option>
-          </select>
+        <UnifiedClipRunNote testId="upload-agent-mode" className="mb-4">
           <select aria-label="Agent target length" value={agentClipSeconds}
             onChange={e=>setAgentClipSeconds(Number(e.target.value) as 30|60|90)}
             className="h-9 rounded-md border border-border bg-background px-2 text-sm">
             <option value={30}>30 seconds</option><option value={60}>60 seconds</option><option value={90}>90 seconds</option>
           </select>
-          <span className="text-xs text-muted-foreground">The same Story, Footage, Flow and QA agents run when the upload is ready.</span>
-        </div>
+        </UnifiedClipRunNote>
       ):null}
       <BlankProjectCard />
       {/* FVfix: ONE source row (was shown twice: link cards + "Import source" radios). */}
@@ -312,7 +316,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           </OptionCard>
         ))}
         {isT2vFeatureEnabled() ? (
-          <Link href="/app/clips/video/new" className="block min-h-[72px]" data-testid="new-project-t2v-card">
+          <Link href="/app/ai-video/new" className="block min-h-[72px]" data-testid="new-project-t2v-card">
             <OptionCard
               selected={false}
               icon={Clapperboard}
@@ -330,6 +334,30 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           ) : tab === 'upload' ? (
             <div className="flex flex-col gap-4">
               {!upload || upload.state === 'error' ? <Dropzone onFile={onFile} /> : null}
+              {projectIntent === 'find' ? (
+                <div className="flex flex-col gap-2" data-testid="upload-twitch-kick-link">
+                  <Label htmlFor="upload-twitch-kick-link" className="text-xs text-muted-foreground">
+                    Or paste a Twitch or Kick link
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      id="upload-twitch-kick-link"
+                      value={linkUrl}
+                      onChange={(e) => setLinkUrl(e.target.value)}
+                      placeholder="Twitch VOD or Kick URL"
+                      className="min-w-0 flex-1"
+                    />
+                    <button
+                      type="button"
+                      className="h-9 shrink-0 rounded-md border border-border bg-background px-3 text-sm font-medium"
+                      onClick={() => void submitLink()}
+                      disabled={submitting || !linkUrl.trim()}
+                    >
+                      Import
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               {upload ? (
                 <UploadProgressItem
                   progress={upload}

@@ -120,7 +120,7 @@ export function ProjectProducerPanel({ projectId }: { projectId: string }) {
           <ul className="space-y-1">
             {affected.map((c) => (
               <li key={c.clipId} className="flex justify-between gap-2">
-                <Link className="underline" href={`/app/clips/${projectId}/edit/${c.clipId}`}>
+                <Link className="underline" href={`/app/video-editor/${projectId}/edit/${c.clipId}`}>
                   {c.title}
                 </Link>
                 <span className="text-muted-foreground">{c.changeCount} change{c.changeCount === 1 ? '' : 's'}</span>

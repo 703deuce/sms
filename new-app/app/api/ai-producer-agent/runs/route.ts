@@ -22,7 +22,7 @@ const createSchema = z.object({
     .min(1),
   outputType: z.enum(['single_payoff', 'montage', 'story', 'auto']),
   editMode: z.enum(['just_chatting_rough_cut']).optional(),
-  storyMode: z.enum(['single_source_v1','multi_source_story_v1','clean_take_v1','clip_moment_v1','clip_story_v1']).optional(),
+  storyMode: z.enum(['single_source_v1','multi_source_story_v1','clean_take_v1','clip_moment_v1','clip_story_v1','clip_unified_v1']).optional(),
   roughCutIntent: z.enum(['story', 'highlights']).optional(),
   visualEvidenceMode: z.enum(['transcript_baseline','visual_audio']).optional(),
   genre: z.string().optional(),

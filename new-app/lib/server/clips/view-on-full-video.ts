@@ -44,5 +44,5 @@ export async function resolveViewOnFullVideoUrl(
     select: { id: true },
   })
   if (!clip) return null
-  return `/app/clips/${fvId}/edit/${clip.id}?highlights=1`
+  return `/app/video-editor/${fvId}/edit/${clip.id}?highlights=1`
 }

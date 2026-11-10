@@ -8,7 +8,7 @@ import {readStreamerAgentBatch,startStreamerAgentBatch,cancelStreamerAgentBatch}
 
 const start=z.object({
   projectId:z.string().min(1),
-  mode:z.enum(['clip_moment_v1','clip_story_v1']),
+  mode:z.enum(['clip_moment_v1','clip_story_v1','clip_unified_v1']),
   seconds:z.union([z.literal(30),z.literal(60),z.literal(90)]),
   action:z.literal('start').optional(),
 })

@@ -248,7 +248,7 @@ export async function notifyMentionedUsers(input: {
   if (!unique.length) return
 
   const prisma = getPrisma()
-  const href = `/app/clips/${(await getCompositionForWorkspace(input.workspaceId, input.compositionId))?.projectId}/script?comment=${input.threadId}`
+  const href = `/app/video-editor/${(await getCompositionForWorkspace(input.workspaceId, input.compositionId))?.projectId}/script?comment=${input.threadId}`
   await prisma.inAppNotification.createMany({
     data: unique.map((userId) => ({
       id: createId('noti'),
