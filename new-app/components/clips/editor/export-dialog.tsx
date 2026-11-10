@@ -73,6 +73,8 @@ import {
   type DeliverQuality,
 } from '@/lib/clips/export-deliver'
 import type { InOut } from '@/lib/clips/editor/timeline-edit-ops'
+import { detectCaptionSyncIssues } from '@/lib/clips/editor/caption-sync-warning'
+import { CaptionSyncWarningBanner } from '@/components/clips/editor/caption-sync-warning-banner'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
 
@@ -143,6 +145,7 @@ export function ExportDialog({
   onClose: () => void
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
+  const [captionSyncAck, setCaptionSyncAck] = useState(false)
   const [removeDeadAir, setRemoveDeadAir] = useState(false)
   const [aspect, setAspect] = useState<ExportAspect>(
     edits.aspectRatio ?? '9:16',
@@ -451,13 +454,22 @@ export function ExportDialog({
     inFlightResolution,
     selectedResolution,
   })
+  const captionSyncWarnings = useMemo(
+    () => detectCaptionSyncIssues({ words, edits }),
+    [words, edits],
+  )
+  const captionSyncBlocksExport = captionSyncWarnings.length > 0 && !captionSyncAck
   const exportCtaLabel =
     exportButton.label === 'Export MP4'
       ? exportActionLabel(deliverFormat, encoders)
       : exportButton.label
   const downloadCtaLabel = exportDownloadLabel(deliverFormat, encoders)
+  useEffect(() => {
+    if (!captionSyncWarnings.length) setCaptionSyncAck(false)
+  }, [captionSyncWarnings.length])
+
   const startExport = async () => {
-    if (exportButton.disabled) return
+    if (exportButton.disabled || captionSyncBlocksExport) return
     exportClickedRef.current = true
     setBusy(true)
     setErrorDetail(null)
@@ -1067,7 +1079,12 @@ export function ExportDialog({
           />
         </div>
         <div className="mt-4 flex items-center justify-between gap-2">
-          <Label className="text-sm">Also download .srt</Label>
+          <div>
+            <Label className="text-sm">Also download .srt</Label>
+            <p className="text-xs text-muted-foreground">
+              Subtitle file uses the same edited caption text and timings as the burned-in export.
+            </p>
+          </div>
           <Switch
             checked={alsoSrt}
             disabled={edits.captions?.enabled === false}
@@ -1199,14 +1216,27 @@ export function ExportDialog({
             {errorDetail}
           </pre>
         )}
+        {captionSyncWarnings.length ? (
+          <CaptionSyncWarningBanner
+            className="mt-4"
+            warnings={captionSyncWarnings}
+            showAcknowledge
+            acknowledge={captionSyncAck}
+            onAcknowledgeChange={setCaptionSyncAck}
+          />
+        ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
           {!downloadUrl ? (
             <Button
               onClick={() => void startExport()}
-              disabled={exportButton.disabled}
+              disabled={exportButton.disabled || captionSyncBlocksExport}
               data-testid="export-mp4-button"
               title={
-                exportButton.blockedByInFlight ? 'This clip is already rendering — wait for it to finish' : undefined
+                captionSyncBlocksExport
+                  ? 'Acknowledge the caption sync warning before exporting'
+                  : exportButton.blockedByInFlight
+                    ? 'This clip is already rendering — wait for it to finish'
+                    : undefined
               }
             >
               {exportCtaLabel}

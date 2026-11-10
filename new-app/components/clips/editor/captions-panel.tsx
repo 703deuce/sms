@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { CaptionMiniPreview } from '@/components/clips/editor/caption-overlay'
@@ -45,6 +45,13 @@ import { previewCaptionBottomPct } from '@/lib/clips/caption-safe-area'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
 import { keyframeGlobalEditMs } from '@/lib/clips/editor/keyframe-time'
 import { CAPTION_PROPS } from '@/lib/clips/editor/motion-schema'
+import {
+  applyCaptionStyleSnapshot,
+  captionStyleSnapshotForSave,
+} from '@/lib/clips/editor/caption-style-snapshot'
+import { captionStyleRole, CAPTION_OPT_IN_COPY } from '@/lib/clips/editor/caption-style-catalog'
+import { detectCaptionSyncIssues } from '@/lib/clips/editor/caption-sync-warning'
+import { CaptionSyncWarningBanner } from '@/components/clips/editor/caption-sync-warning-banner'
 
 const CAPTION_FONTS = ['Poppins', 'Anton', 'Montserrat Black'] as const
 const CAPTION_FONT_LABELS: Record<string, string> = {
@@ -148,6 +155,7 @@ export function CaptionsPanel({
     [UPLOAD_FONT]: 'Upload font…',
   }
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>([])
+  const [customPresetStatus, setCustomPresetStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [vocabulary, setVocabulary] = useState<VocabEntry[]>([])
   const [vocabAutoApply, setVocabAutoApply] = useState(true)
   const [vocabFrom, setVocabFrom] = useState('')
@@ -161,9 +169,11 @@ export function CaptionsPanel({
   const loadCustom = useCallback(async () => {
     try {
       const data = await clipsFetch<{ items: CustomPreset[] }>('/api/clips/caption-presets')
-      setCustomPresets(data.items)
+      setCustomPresets(data.items ?? [])
+      setCustomPresetStatus('ready')
     } catch {
       setCustomPresets([])
+      setCustomPresetStatus('error')
     }
   }, [])
 
@@ -200,6 +210,10 @@ export function CaptionsPanel({
   const activeWordsPerLine = Number(cap.wordsPerLine ?? preset.wordsPerLine)
   const activeCase = cap.case ?? preset.case
   const activePosition = cap.position ?? preset.position
+  const syncWarnings = useMemo(
+    () => detectCaptionSyncIssues({ words, edits }),
+    [words, edits],
+  )
 
   const suggestEmojis = async () => {
     if (!clipId) return
@@ -251,6 +265,8 @@ export function CaptionsPanel({
         <span className="text-sm font-medium">Captions</span>
         <Switch checked={cap.enabled !== false} onCheckedChange={(v) => patch({ enabled: v })} />
       </div>
+      <p className="text-xs text-muted-foreground">{CAPTION_OPT_IN_COPY}</p>
+      {syncWarnings.length ? <CaptionSyncWarningBanner warnings={syncWarnings} /> : null}
 
       {onWordFix && words.length > 0 ? (
         <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3" data-testid="caption-word-corrections">
@@ -296,7 +312,7 @@ export function CaptionsPanel({
                   <span key={w.i} className="mr-1 inline-flex">
                     <input
                       autoFocus
-                      className="w-24 rounded border border-border bg-background px-1 py-0.5 text-sm"
+                      className="w-24 rounded-lg border border-border bg-background px-1 py-0.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       defaultValue={display}
                       onFocus={(e) => e.currentTarget.select()}
                       onKeyDown={(e) => {
@@ -328,7 +344,7 @@ export function CaptionsPanel({
                   <button
                     type="button"
                     className={cn(
-                      'rounded px-0.5 hover:bg-accent',
+                      'rounded px-0.5 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       fixed && 'bg-primary/15 ring-1 ring-primary/30',
                     )}
                     onDoubleClick={(e) => {
@@ -427,20 +443,23 @@ export function CaptionsPanel({
         </label>
       </div>
 
-      {customPresets?.length ? (
-        <div className="space-y-2" data-testid="caption-custom-presets">
-          <p className="text-xs font-medium text-muted-foreground">My presets</p>
+      <div className="space-y-2" data-testid="caption-custom-presets">
+        <p className="text-xs font-medium text-muted-foreground">Saved styles</p>
+        {customPresetStatus === 'loading' ? (
+          <p className="text-xs text-muted-foreground">Loading saved styles…</p>
+        ) : customPresetStatus === 'error' ? (
+          <p className="text-xs text-destructive" role="alert">Could not load saved styles. Try again in a moment.</p>
+        ) : customPresets.length ? (
           <ul className="space-y-1">
             {customPresets.map((p) => (
-              <li key={p.id} className="flex items-center gap-2 rounded-md border border-border p-2">
+              <li key={p.id} className="flex items-center gap-2 rounded-lg border border-border p-2">
                 <button
                   type="button"
-                  className="flex-1 text-left text-xs font-medium hover:underline"
+                  className="flex-1 rounded-sm text-left text-xs font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() =>
                     onChange({
-                      ...cap,
+                      ...applyCaptionStyleSnapshot(cap, p.config),
                       customPresetId: p.id,
-                      ...(p.config as ClipEditsV2['captions']),
                     })
                   }
                 >
@@ -467,8 +486,12 @@ export function CaptionsPanel({
               </li>
             ))}
           </ul>
-        </div>
-      ) : null}
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Save a style to reuse it on another clip in this workspace.
+          </p>
+        )}
+      </div>
       {t6CaptionPresetsEnabled() ? (
         <div className="space-y-2 border-t pt-3">
           <p className="text-xs font-medium text-muted-foreground">CP presets (T6)</p>
@@ -504,6 +527,9 @@ export function CaptionsPanel({
       ) : null}
       <div className="grid grid-cols-2 gap-2">
         <p className="col-span-2 text-xs font-medium text-muted-foreground">Classic</p>
+        <p className="col-span-2 text-xs text-muted-foreground">
+          Clean White is the clean style. Bold Pop is the modern style. {CAPTION_OPT_IN_COPY}
+        </p>
         {CAPTION_PRESETS.map((p) => {
           const id = presetSlugToId(p.slug)
           const active = id === presetId
@@ -522,11 +548,18 @@ export function CaptionsPanel({
                 })
               }
               className={cn(
-                'rounded-lg border p-2 text-left transition-colors',
+                'rounded-lg border p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 active ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:bg-muted/40',
               )}
             >
-              <p className="mb-1 text-xs font-medium">{p.name}</p>
+              <p className="mb-1 text-xs font-medium">
+                {p.name}
+                {captionStyleRole(id) ? (
+                  <span className="ml-1 font-normal text-muted-foreground">
+                    · {captionStyleRole(id)!.roleLabel}
+                  </span>
+                ) : null}
+              </p>
               <CaptionMiniPreview preset={p} />
             </button>
           )
@@ -590,7 +623,7 @@ export function CaptionsPanel({
         <Switch id="cap-safe-zone" checked={safeZoneVisible} onCheckedChange={setSafeZoneVisible} />
       </div>
       {unsafeCaption ? (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-100">
+        <div className="rounded-lg border border-warning/40 bg-warning/10 p-2 text-xs text-foreground">
           <p>Captions sit under {exportPlatform.replace(/_/g, ' ')}&apos;s buttons.</p>
           <Button
             size="sm"
@@ -603,8 +636,11 @@ export function CaptionsPanel({
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between">
-        <label htmlFor="cap-auto-emojis" className="text-sm">Auto emojis</label>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <label htmlFor="cap-auto-emojis" className="text-sm">Auto emojis</label>
+          <p className="text-xs text-muted-foreground">Off until you turn it on.</p>
+        </div>
         <Switch id="cap-auto-emojis" checked={!!cap.autoEmojis} onCheckedChange={(v) => patch({ autoEmojis: v })} />
       </div>
       {cap.autoEmojis && clipId ? (
@@ -688,8 +724,11 @@ export function CaptionsPanel({
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between">
-        <span className="text-sm">Keyword highlight</span>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <span className="text-sm">Keyword highlight</span>
+          <p className="text-xs text-muted-foreground">Off until you turn it on.</p>
+        </div>
         <Switch
           checked={!!cap.keywordHighlight}
           onCheckedChange={(v) => patch({ keywordHighlight: v, emphasis: v ? cap.emphasis ?? [] : [] })}
@@ -873,12 +912,12 @@ export function CaptionsPanel({
         {onSaveClipTemplate ? (
           <Button size="sm" variant="outline" onClick={onSaveClipTemplate}>Save clip template</Button>
         ) : null}
-        <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)}>Save caption preset</Button>
+        <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)}>Save style</Button>
       </div>
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Save caption preset</DialogTitle>
+            <DialogTitle>Save caption style</DialogTitle>
           </DialogHeader>
           <Input
             placeholder="Preset name"
@@ -901,20 +940,10 @@ export function CaptionsPanel({
                     method: 'POST',
                     body: JSON.stringify({
                       name,
-                      config: {
-                        presetId: cap.presetId,
-                        animation: cap.animation,
-                        size: cap.size,
-                        position: cap.position,
-                        case: cap.case,
-                        wordsPerLine: cap.wordsPerLine,
-                        colors: cap.colors,
-                        progressBar: cap.progressBar,
-                        autoEmojis: cap.autoEmojis,
-                      },
+                      config: captionStyleSnapshotForSave(cap),
                     }),
                   })
-                  toast.success('Preset saved')
+                  toast.success('Style saved. You can apply it on another clip in this workspace.')
                   setSaveName('')
                   setSaveOpen(false)
                   await loadCustom()
