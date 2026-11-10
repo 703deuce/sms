@@ -8,6 +8,7 @@ export type EditorialRiskCode=
   |'referential_opening'|'missing_qualification'|'unfinished_ending'
   |'chronology'|'invalid_passage'|'false_start_opening'|'cut_context_reference'
   |'dangling_pronoun_opening'|'continuation_opening'|'incoherent_passage'|'mid_phrase_opening'
+  |'long_source_gap'|'uncovered_cut'
 export type EditorialRisk={
   code:EditorialRiskCode
   detail:string
@@ -76,8 +77,19 @@ function endsMidSentence(tail:string):boolean{
   return last.length>0 && !/[.!?]$/.test(trimmed)
 }
 
+/** Joined source cuts this far apart are a chronology / coherence risk. */
+export const LONG_SOURCE_GAP_MS=5*60_000
+/** A kept cut that extends this far past the last overlapping transcript word is uncovered. */
+export const UNCOVERED_CUT_TAIL_MS=1_500
+
+export type ClipEditorialAuditOptions={
+  /** Planned multi-beat story. Large source gaps are needsReview, not critical. */
+  storyPlan?:boolean
+}
+
 export function clipEditorialAudit(
   cuts:readonly ClipSpan[],words:readonly TimedWord[],
+  opts?:ClipEditorialAuditOptions,
 ):EditorialRisk[]{
   const issues:EditorialRisk[]=[]
   const ordered=cuts.filter(x=>x.kind!=='visual_action')
@@ -88,7 +100,26 @@ export function clipEditorialAudit(
     }
     if(i>0&&cut.startMs<ordered[i-1]!.startMs)
       issues.push({code:'chronology',detail:'A source passage plays before an earlier passage',passageIndex:i})
+    if(i>0){
+      const gapMs=cut.startMs-ordered[i-1]!.endMs
+      if(gapMs>=LONG_SOURCE_GAP_MS){
+        const minutes=Math.round(gapMs/60000)
+        if(opts?.storyPlan){
+          issues.push({code:'long_source_gap',detail:'Joined cuts sit '+minutes+' minutes apart in the source of a planned multi-beat story',passageIndex:i})
+        }else{
+          // No story plan: a jump this large is critical chronology / incoherence.
+          issues.push({code:'chronology',detail:'Joined cuts sit '+minutes+' minutes apart in the source with no planned multi-beat story',passageIndex:i})
+          issues.push({code:'incoherent_passage',detail:'A '+minutes+'-minute source jump glues together passages that were not planned as a multi-beat story',passageIndex:i})
+        }
+      }
+    }
     const inside=at(words,cut.startMs,cut.endMs)
+    if(!cutHasTranscriptCoverage(cut,inside)){
+      const last=inside.length?Math.round(inside[inside.length-1]!.e*1000):null
+      issues.push({code:'uncovered_cut',detail:inside.length
+        ?('Transcript words end at '+last+'ms but the kept cut runs to '+cut.endMs+'ms')
+        :('No transcript words cover the kept cut '+cut.startMs+'-'+cut.endMs+'ms'),passageIndex:i})
+    }
     if(!inside.length)continue // visual-only moments need visual QA, never fake ASR findings
     const first=stripLeadingFiller(phrase(inside.slice(0,8))).toLowerCase()
     const priorText=phrase(ordered.slice(0,i).flatMap(c=>at(words,c.startMs,c.endMs)))
@@ -134,6 +165,12 @@ export function clipEditorialAudit(
   }
   for(const risk of passageCoherenceRisks(ordered,words))issues.push(risk)
   return issues
+}
+
+function cutHasTranscriptCoverage(cut:ClipSpan,inside:readonly TimedWord[]):boolean{
+  if(!inside.length)return false
+  const lastEnd=Math.round(inside[inside.length-1]!.e*1000)
+  return cut.endMs-lastEnd<=UNCOVERED_CUT_TAIL_MS
 }
 
 function stripLeadingFiller(text:string):string{
@@ -302,6 +339,7 @@ export const NON_CRITICAL_PUBLISH_CODES=new Set<EditorialRiskCode>([
   'referential_opening','missing_qualification','unfinished_ending',
   'false_start_opening','cut_context_reference','dangling_pronoun_opening',
   'continuation_opening','mid_phrase_opening',
+  'long_source_gap','uncovered_cut',
 ])
 /** Explicit critical codes (also implied by absence from the allowlist). */
 export const CRITICAL_PUBLISH_CODES=new Set<EditorialRiskCode>([
@@ -364,7 +402,9 @@ export function publishDisposition(input:{
   qaIssues:readonly string[]
 }):PublishDisposition{
   if(isCriticalEditorialFailure(input.risks,input.qaIssues))return 'drop'
-  if(shouldVetoPublish(input)||input.qaPass!==true)return 'publish_needs_review'
+  // Any leftover post-repair audit risk is at least needsReview, even if
+  // qaPass was true (fail closed on uncovered cuts and similar).
+  if(shouldVetoPublish(input)||input.qaPass!==true||input.risks.length>0)return 'publish_needs_review'
   if(input.qaIssues.some(isNeedsReviewQaIssue))return 'publish_needs_review'
   return 'publish'
 }

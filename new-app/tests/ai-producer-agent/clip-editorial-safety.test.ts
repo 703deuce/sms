@@ -2,7 +2,7 @@ import {describe,expect,it} from 'vitest'
 import {readFileSync} from 'node:fs'
 import {dirname,join} from 'node:path'
 import {fileURLToPath} from 'node:url'
-import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isCriticalEditorialFailure,isCriticalQaIssue,isNeedsReviewQaIssue,isNonBlockingEditorialQaIssue,JOIN_ONSET_PAD_MS,MIN_CLIP_TAIL_MS,publishDisposition,regateAfterRepair,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions,type EditorialRisk} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isCriticalEditorialFailure,isCriticalQaIssue,isNeedsReviewQaIssue,isNonBlockingEditorialQaIssue,JOIN_ONSET_PAD_MS,LONG_SOURCE_GAP_MS,MIN_CLIP_TAIL_MS,publishDisposition,regateAfterRepair,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions,type EditorialRisk} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {selectMomentFlowTrim} from '@/lib/ai-producer-agent/clip-mode/moment-flow'
 import {
   clipAgentExportIdempotencyKey,
@@ -846,17 +846,96 @@ function replayRun(fixture:Fixture){
 
 // Re-gate after repair drops stale historical QA notes, so clips whose
 // post-repair audit is empty publish clean (QA projection: 10+4 and 13+3).
-const expectedA3c={published:14,clean:10,needsReview:4,dropped:1}
-const expected7574={published:16,clean:13,needsReview:3,dropped:0}
+// Post-repair chronology + coverage checks change these vs the previous 10+4 / 13+3:
+// a3c clip_88a083b1 (52-minute jump) is now a critical drop;
+// 7574 clip_5afb4015 and clip_1d23876e are needsReview (truncated fixture words).
+const expectedA3c={published:13,clean:9,needsReview:4,dropped:2}
+const expected7574={published:16,clean:11,needsReview:5,dropped:0}
+
+
+describe('post-repair chronology gap and transcript coverage',()=>{
+  it('flags a 52-minute splice as critical chronology when there is no story plan (88a083b1)',()=>{
+    const cuts=[
+      {startMs:685815,endMs:710575},
+      {startMs:710655,endMs:726140},
+      {startMs:3863830,endMs:3925190},
+    ]
+    const words=[
+      {w:'I',s:725.0,e:725.2},{w:'think',s:725.2,e:725.5},{w:'he',s:725.5,e:725.7},{w:'played',s:725.7,e:726.0},{w:'that',s:726.0,e:726.1},{w:'game.',s:726.1,e:726.14},
+      {w:'Talk',s:3863.830,e:3864.0},{w:'to',s:3864.0,e:3864.2},{w:'me.',s:3864.2,e:3864.5},
+    ]
+    const noPlan=clipEditorialAudit(cuts,words)
+    expect(cuts[2]!.startMs-cuts[1]!.endMs).toBeGreaterThan(LONG_SOURCE_GAP_MS)
+    expect(noPlan.some((x:EditorialRisk)=>x.code==='chronology'&&x.passageIndex===2)).toBe(true)
+    expect(noPlan.some((x:EditorialRisk)=>x.code==='incoherent_passage'&&x.passageIndex===2)).toBe(true)
+    expect(isCriticalEditorialFailure(noPlan,[])).toBe(true)
+    expect(publishDisposition({risks:noPlan,qaPass:true,qaIssues:[]})).toBe('drop')
+    const planned=clipEditorialAudit(cuts,words,{storyPlan:true})
+    expect(planned.some((x:EditorialRisk)=>x.code==='long_source_gap'&&x.passageIndex===2)).toBe(true)
+    expect(planned.some((x:EditorialRisk)=>x.code==='chronology')).toBe(false)
+    expect(isCriticalEditorialFailure(planned,[])).toBe(false)
+    expect(publishDisposition({risks:planned,qaPass:true,qaIssues:planned.map((r:EditorialRisk)=>r.code+': '+r.detail)})).toBe('publish_needs_review')
+  })
+
+  it('flags a kept cut that the transcript window does not cover (5afb4015)',()=>{
+    // Official fixture words only cover ~434–452s; the last kept cut is 549.9–559.3s
+    // and ends "I'll give you one example." with no example in the clip.
+    const cuts=[
+      {startMs:450020,endMs:470705},
+      {startMs:477400,endMs:506520},
+      {startMs:549915,endMs:559290},
+    ]
+    const words=[
+      {w:'Monopolies',s:450.02,e:450.40},{w:'and',s:450.40,e:450.58},
+      {w:'oligopolies.',s:450.74,e:451.62},{w:'We',s:452.02,e:452.34},
+    ]
+    const risks=clipEditorialAudit(cuts,words)
+    expect(risks.some((x:EditorialRisk)=>x.code==='uncovered_cut'&&x.passageIndex===0)).toBe(true)
+    expect(risks.some((x:EditorialRisk)=>x.code==='uncovered_cut'&&x.passageIndex===2)).toBe(true)
+    expect(isCriticalEditorialFailure(risks,[])).toBe(false)
+    expect(publishDisposition({risks,qaPass:true,qaIssues:[]})).toBe('publish_needs_review')
+  })
+
+  it('07fc0289 at 24.24s: source words are Came, not I came or He came',()=>{
+    // VQ stitch ASR heard "I came" at the 24.24s join. Pipeline words after
+    // "twenties." (794.895) go straight to "Came" (795.295). There is no I/He
+    // token. Energy starts ~795.10s, so the onset of "Came" is slightly late
+    // in the transcript (~195ms), not a missing pronoun. Repair pads 100ms
+    // to 795.195, which still leaves some of that unaligned onset out.
+    const words=[
+      {w:'twenties.',s:794.175,e:794.895},
+      {w:'Came',s:795.295,e:795.455},
+      {w:'to',s:795.455,e:795.615},
+      {w:'do',s:795.615,e:795.775},
+      {w:'a',s:795.775,e:795.855},
+      {w:'PhD',s:795.855,e:796.095},
+    ]
+    const between=words.filter((w:TranscriptWord)=>w.e>794.895&&w.s<795.295)
+    expect(between.map((w:TranscriptWord)=>w.w)).toEqual([])
+    expect(words.some((w:TranscriptWord)=>w.s>=794.9&&w.s<=795.4&&/^(?:I|He|he|i)$/.test(w.w))).toBe(false)
+    const repaired=repairClipBoundaries([
+      {startMs:769105,endMs:784320},
+      {startMs:795295,endMs:806030},
+    ],words)
+    const join=repaired.cuts[1]!
+    expect(join.startMs).toBeLessThan(795295)
+    expect(join.startMs).toBeGreaterThanOrEqual(794895) // does not pull in "twenties."
+    expect(join.startMs).toBe(795295-JOIN_ONSET_PAD_MS)
+    const risks=clipEditorialAudit(repaired.cuts,words)
+    // Not a missing I/He pronoun — do not invent a dangling-pronoun or
+    // continuation flag from this join. Follow-up: punch-in/mask + 300ms tail.
+    expect(risks.some((x:EditorialRisk)=>x.code==='dangling_pronoun_opening'||x.code==='continuation_opening')).toBe(false)
+  })
+})
 
 describe('held-draft replay of live 0-published runs',()=>{
-  it('aprun_a3c71b5a: 10 clean, 4 needsReview, 1 dropped after the post-repair re-gate',()=>{
+  it('aprun_a3c71b5a: 9 clean, 4 needsReview, 2 dropped after chronology/coverage checks',()=>{
     const counts=replayRun(loadReplayFixture('aprun_a3c71b5a.replay.json'))
     expect(counts.runId).toBe('aprun_a3c71b5acee74a5ea52192768053a1ea')
     expect(counts).toMatchObject(expectedA3c)
   })
 
-  it('aprun_7574d85f: 13 clean, 3 needsReview, 0 dropped after the post-repair re-gate',()=>{
+  it('aprun_7574d85f: 11 clean, 5 needsReview, 0 dropped after chronology/coverage checks',()=>{
     const counts=replayRun(loadReplayFixture('aprun_7574d85f.replay.json'))
     expect(counts.runId).toBe('aprun_7574d85f5ce64fcdb58a05c2e0b5b8e6')
     expect(counts).toMatchObject(expected7574)

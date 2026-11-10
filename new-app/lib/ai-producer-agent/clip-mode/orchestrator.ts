@@ -181,7 +181,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           continue
         }
         const finalCuts=cuts
-        const safetyRisks=clipEditorialAudit(finalCuts,ctx.cache.words??[])
+        const safetyRisks=clipEditorialAudit(finalCuts,ctx.cache.words??[],{storyPlan:mode==='story'})
         await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
           tool:'clip_editorial_safety_audit',kind:'validate',
           argsSummary:JSON.stringify({clipId:out.clipId,candidateIndex:candidate.index}),
@@ -223,7 +223,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
             }catch(error){
               out.notes.push('Editorial revision persist failed; kept prior draft: '+String((error as Error).message).slice(0,180))
             }
-            workingRisks=clipEditorialAudit(workingCuts,ctx.cache.words??[])
+            workingRisks=clipEditorialAudit(workingCuts,ctx.cache.words??[],{storyPlan:mode==='story'})
             repairLanded=true
           }
         }
@@ -456,7 +456,7 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget,
       fullTranscript:completeTranscriptWords(
         qaTranscriptWindow(fullSourceWords,out.editorialHandoff.cutPlan,ctx.sources[0]!.rangeMs!),
         true),
-      flaggedContextAndQualificationRisks:clipEditorialAudit(out.editorialHandoff.cutPlan,fullSourceWords),
+      flaggedContextAndQualificationRisks:clipEditorialAudit(out.editorialHandoff.cutPlan,fullSourceWords,{storyPlan:ctx.config.storyMode==='clip_story_v1'}),
       ...(ctx.config.visualEvidenceMode==='visual_audio' && ctx.cache.visualEvidence ? {
         visualAudioEvidence: ctx.cache.visualEvidence,
         selectedVisualBeats:out.editorialHandoff.outline.visualBeats??[],
