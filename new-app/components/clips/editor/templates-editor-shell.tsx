@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Clapperboard, Download, FileText, Loader2, Pause, Play, Redo2, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -19,8 +18,10 @@ import { CatalogTplThumb } from '@/lib/clips/templates/catalog-thumb'
 import { applyCatalogToken, parseApplyToken } from '@/lib/clips/templates/apply-from-hub'
 import { BRAND_STARTERS } from '@/lib/clips/brand-starters'
 import { applyBrandTemplateToEdits, type BrandTemplatePayload } from '@/lib/clips/apply-brand'
-import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
-import { applyProjectTemplate, clipsFetch, listProjectClips, patchClip } from '@/lib/clips-api'
+import { canonicalEditsJson, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { clipStyleSettingsFromEdits } from '@/lib/clips/brand'
+import { BRAND_FONTS } from '@/lib/clips/brand-kit'
+import { clipsFetch, listProjectClips, patchClip } from '@/lib/clips-api'
 import { t6CaptionPresetsEnabled, t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import { routes } from '@/lib/routes'
 import { cn } from '@/lib/utils'
@@ -38,6 +39,19 @@ type ProjectClipRow = {
   endMs: number
   edits: unknown
 }
+type CaptionDraft = {
+  font?: string
+  size?: number
+  userSizePct?: number
+  position?: string
+  case?: string
+  wordsPerLine?: number
+  colors?: { a?: string; b?: string }
+  activeStyle?: 'color' | 'highlight' | 'fill'
+  highlightColor?: string
+}
+type HandoffTarget = 'project' | 'text' | 'clip' | 'export'
+type BulkResult = { updated: number; skipped: number; errors: number }
 
 const TABS: { id: CatalogTab; label: string }[] = [
   { id: 'layouts', label: 'Layouts' },
@@ -63,6 +77,40 @@ function entryKind(entry: GalleryEntry | null) {
 
 function entryId(entry: GalleryEntry | null) {
   return entry?.source === 'saved_brand' ? entry.brand.id : entry?.item.id ?? 'aspect'
+}
+
+function entrySearchText(entry: GalleryEntry) {
+  return [entry.item.name, entry.item.id, entry.item.kind, entry.item.tab, JSON.stringify(entry.item.mock)]
+    .join(' ')
+    .toLowerCase()
+}
+
+function captionDraftFields(draft: CaptionDraft) {
+  const fields = Object.keys(draft).filter((key) => key !== 'colors')
+  if (draft.colors?.a !== undefined) fields.push('colors.a')
+  if (draft.colors?.b !== undefined) fields.push('colors.b')
+  return fields.sort()
+}
+
+function applyCaptionDraft(base: ClipEditsV2, draft: CaptionDraft): ClipEditsV2 {
+  if (!captionDraftFields(draft).length) return base
+  return {
+    ...base,
+    captions: {
+      ...base.captions,
+      ...draft,
+      ...(draft.colors
+        ? { colors: { ...base.captions.colors, ...draft.colors } }
+        : {}),
+    },
+  }
+}
+
+function reusablePalette(edits: ClipEditsV2) {
+  return [edits.captions.colors?.a, edits.captions.colors?.b]
+    .filter((value): value is string => Boolean(value && /^#[0-9a-fA-F]{6}$/.test(value)))
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .slice(0, 5)
 }
 
 function savedBrandCatalogItem(brand: BrandRow): CatalogItem {
@@ -152,6 +200,13 @@ export function TemplatesEditorShell(props: Props) {
   const [selectedEntry, setSelectedEntry] = useState<GalleryEntry | null>(null)
   const [hoveredEntry, setHoveredEntry] = useState<GalleryEntry | null>(null)
   const [aspectOverride, setAspectOverride] = useState<ClipEditsV2['aspectRatio'] | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [captionDraft, setCaptionDraft] = useState<CaptionDraft>({})
+  const [presetName, setPresetName] = useState('')
+  const [savingPreset, setSavingPreset] = useState(false)
+  const [handoffTarget, setHandoffTarget] = useState<HandoffTarget | null>(null)
+  const [handoffBusy, setHandoffBusy] = useState(false)
+  const [bulkResult, setBulkResult] = useState<BulkResult | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
   const [applyingAll, setApplyingAll] = useState(false)
   const [playing, setPlaying] = useState(false)
@@ -262,7 +317,33 @@ export function TemplatesEditorShell(props: Props) {
     return [...saved, ...base]
   }, [brands, catalog, tab])
 
+  const filteredEntries = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return entries
+    return entries.filter((entry) => entrySearchText(entry).includes(query))
+  }, [entries, searchQuery])
+
+  useEffect(() => {
+    console.info('[editor:templates-gaps] filter', {
+      projectId,
+      clipId,
+      category: tab,
+      queryActive: Boolean(searchQuery.trim()),
+      count: filteredEntries.length,
+    })
+  }, [projectId, clipId, tab, searchQuery, filteredEntries.length])
+
   const activeEntry = hoveredEntry ?? selectedEntry
+  const customFieldNames = useMemo(() => captionDraftFields(captionDraft), [captionDraft])
+  useEffect(() => {
+    if (!customFieldNames.length) return
+    console.info('[editor:templates-gaps] customization', {
+      projectId,
+      clipId,
+      fieldNames: customFieldNames,
+    })
+  }, [projectId, clipId, customFieldNames])
+
   const draftEdits = useMemo(() => {
     let next = applyEntryToEdits(edits, activeEntry, {
       facecamLayout: props.facecamLayout,
@@ -270,11 +351,31 @@ export function TemplatesEditorShell(props: Props) {
       idPrefix: clipId,
     })
     if (aspectOverride) next = { ...next, aspectRatio: aspectOverride }
+    next = applyCaptionDraft(next, captionDraft)
     return next
-  }, [edits, activeEntry, props.facecamLayout, playhead, clipId, aspectOverride])
+  }, [edits, activeEntry, props.facecamLayout, playhead, clipId, aspectOverride, captionDraft])
   const previewEdits = useMemo(() => editorPreviewEdits(draftEdits, words), [draftEdits, words])
   const effectiveAspect = draftEdits.aspectRatio ?? '9:16'
-  const hasDraftChange = Boolean(selectedEntry || aspectOverride)
+  const hasDraftChange = useMemo(
+    () => canonicalEditsJson(draftEdits) !== canonicalEditsJson(edits),
+    [draftEdits, edits],
+  )
+  const hasLocalPreviewState = Boolean(selectedEntry || hoveredEntry || aspectOverride || customFieldNames.length)
+  const cpCaptionSize = Boolean(draftEdits.captions.presetId?.startsWith('cp'))
+  const captionSize = cpCaptionSize
+    ? draftEdits.captions.userSizePct ?? draftEdits.captions.size ?? 6.5
+    : draftEdits.captions.size ?? 6.5
+  const fontOptions = useMemo(
+    () => Array.from(new Set([draftEdits.captions.font, ...BRAND_FONTS].filter((font): font is string => Boolean(font)))),
+    [draftEdits.captions.font],
+  )
+  const reusableUnsupported = Boolean(
+    captionDraft.highlightColor !== undefined ||
+      captionDraft.userSizePct !== undefined ||
+      draftEdits.captions.activeStyle === 'highlight' ||
+      draftEdits.captions.activeStyle === 'fill' ||
+      (cpCaptionSize && draftEdits.captions.userSizePct != null),
+  )
 
   const onMediaError = useCallback(() => {
     if (media?.url) tried.current.add(media.url)
@@ -330,150 +431,243 @@ export function TemplatesEditorShell(props: Props) {
     })
   }
 
-  const applyThisClip = () => {
-    if (!hasDraftChange) return
-    setEdits(draftEdits)
-    console.info('[editor:templates-mode] template-applied', {
+  const clearPreviewForHistory = () => {
+    setSelectedEntry(null)
+    setHoveredEntry(null)
+    setAspectOverride(null)
+    setCaptionDraft({})
+  }
+
+  const cancelPreview = (source: 'button' | 'history' | 'handoff' = 'button') => {
+    clearPreviewForHistory()
+    setBulkResult(null)
+    console.info('[editor:templates-gaps] cancel-preview', {
       projectId,
       clipId,
-      kind: entryKind(selectedEntry),
-      id: entryId(selectedEntry),
-      aspect: draftEdits.aspectRatio ?? null,
+      source,
+      scope: 'local-preview-only',
     })
-    toast.success(selectedEntry ? 'Template applied to this clip' : 'Aspect applied to this clip')
-    setAspectOverride(null)
-    window.setTimeout(() => {
-      void flushSave().catch(() => {
-        console.error('[editor:templates-mode] apply-save-failed', { projectId, clipId })
-        toast.error('Template applied locally, but saving needs a retry')
+  }
+
+  const applyThisClip = async () => {
+    if (!hasDraftChange) return
+    const chosen = activeEntry
+    console.info('[editor:templates-gaps] apply-start', {
+      projectId,
+      clipId,
+      scope: 'clip',
+      category: chosen?.item.tab ?? tab,
+      templateId: entryId(chosen),
+      fieldNames: customFieldNames,
+    })
+    setEdits(draftEdits)
+    try {
+      await flushSave()
+      console.info('[editor:templates-gaps] apply-finished', {
+        projectId,
+        clipId,
+        scope: 'clip',
+        updated: 1,
+        skipped: 0,
+        errors: 0,
       })
-    }, 0)
+      toast.success(chosen ? 'Template styling applied to this clip' : 'Style changes applied to this clip')
+      cancelPreview('button')
+    } catch {
+      console.error('[editor:templates-gaps] apply-failed', {
+        projectId,
+        clipId,
+        scope: 'clip',
+        updated: 0,
+        skipped: 0,
+        errors: 1,
+      })
+      toast.error('Style is still local; saving needs a retry')
+    }
   }
 
   const applyAll = async () => {
     if (!hasDraftChange || applyingAll) return
     setApplyingAll(true)
-    const chosen = selectedEntry
+    setBulkResult(null)
+    const chosen = activeEntry
     const chosenKind = entryKind(chosen)
     const chosenId = entryId(chosen)
-    console.info('[editor:templates-mode] apply-to-all-start', {
+    const chosenAspect = aspectOverride
+    const chosenCaptionDraft = captionDraft
+    const currentDraft = draftEdits
+    console.info('[editor:templates-gaps] apply-start', {
       projectId,
       clipId,
-      kind: chosenKind,
-      id: chosenId,
-      aspectOverride: aspectOverride ?? null,
+      scope: 'project',
+      category: chosen?.item.tab ?? tab,
+      templateId: chosenId,
+      fieldNames: customFieldNames,
     })
 
     try {
       await flushSave()
-
-      if (chosen?.source === 'saved_brand') {
-        const result = await applyProjectTemplate(projectId, chosen.brand.id)
-        if (aspectOverride) {
-          const data = await listProjectClips(projectId, 'timeline', { includeHidden: true })
-          const rows = data.clips as ProjectClipRow[]
-          for (const row of rows) {
-            const base = normalizeEdits(row.edits, {
-              clipStartMs: row.startMs,
-              clipEndMs: row.endMs,
-            })
-            console.info('[editor:templates-mode] apply-to-all-clip', {
-              projectId,
-              clipId,
-              targetClipId: row.id,
-              step: 'aspect',
-            })
-            await patchClip(row.id, {
-              edits: { ...base, aspectRatio: aspectOverride },
-            })
-          }
-        }
-        console.info('[editor:templates-mode] apply-to-all', {
-          projectId,
-          clipId,
-          kind: chosenKind,
-          id: chosenId,
-          updatedCount: result.updated,
-        })
-        toast.success('Applied to ' + result.updated + ' clips')
-        window.location.reload()
-        return
-      }
+      setEdits(currentDraft)
+      await flushSave()
 
       const data = await listProjectClips(projectId, 'timeline', { includeHidden: true })
       const rows = data.clips as ProjectClipRow[]
-      let updated = 0
+      let updated = 1
+      let skipped = 0
+      let errors = 0
+
       for (const row of rows) {
+        if (row.id === clipId) continue
         const base = normalizeEdits(row.edits, {
           clipStartMs: row.startMs,
           clipEndMs: row.endMs,
         })
+        const reason = chosen ? disabledReason(chosen.item, base) : undefined
+        if (reason) {
+          skipped += 1
+          console.info('[editor:templates-gaps] apply-clip-skipped', {
+            projectId,
+            clipId,
+            targetClipId: row.id,
+            reason,
+          })
+          continue
+        }
         let next = applyEntryToEdits(base, chosen, {
           facecamLayout: null,
           playheadSourceMs: row.startMs,
           idPrefix: row.id,
         })
-        if (aspectOverride) next = { ...next, aspectRatio: aspectOverride }
-        console.info('[editor:templates-mode] apply-to-all-clip', {
+        if (chosenAspect) next = { ...next, aspectRatio: chosenAspect }
+        next = applyCaptionDraft(next, chosenCaptionDraft)
+        if (canonicalEditsJson(next) === canonicalEditsJson(base)) {
+          skipped += 1
+          console.info('[editor:templates-gaps] apply-clip-skipped', {
+            projectId,
+            clipId,
+            targetClipId: row.id,
+            reason: 'already-matches',
+          })
+          continue
+        }
+        try {
+          await patchClip(row.id, { edits: next })
+          updated += 1
+        } catch {
+          errors += 1
+          console.error('[editor:templates-gaps] apply-clip-error', {
+            projectId,
+            clipId,
+            targetClipId: row.id,
+          })
+        }
+      }
+
+      const result = { updated, skipped, errors }
+      setBulkResult(result)
+      console.info('[editor:templates-gaps] apply-finished', {
+        projectId,
+        clipId,
+        scope: 'project',
+        kind: chosenKind,
+        templateId: chosenId,
+        ...result,
+      })
+      toast.success(
+        'Project style apply: ' +
+          updated +
+          ' updated' +
+          (skipped ? ', ' + skipped + ' skipped' : '') +
+          (errors ? ', ' + errors + ' errors' : ''),
+      )
+      if (!errors) {
+        clearPreviewForHistory()
+        console.info('[editor:templates-gaps] cancel-preview', {
           projectId,
           clipId,
-          targetClipId: row.id,
-          step: updated + 1,
-          total: rows.length,
+          source: 'button',
+          scope: 'applied-project-preview',
         })
-        await patchClip(row.id, { edits: next })
-        updated += 1
       }
-      console.info('[editor:templates-mode] apply-to-all', {
-        projectId,
-        clipId,
-        kind: chosenKind,
-        id: chosenId,
-        updatedCount: updated,
-      })
-      toast.success('Applied to ' + updated + ' clips')
-      window.location.reload()
     } catch (error) {
-      console.error('[editor:templates-mode] apply-to-all-failed', {
+      console.error('[editor:templates-gaps] apply-failed', {
         projectId,
         clipId,
+        scope: 'project',
         kind: chosenKind,
-        id: chosenId,
+        templateId: chosenId,
+        errors: 1,
         message: error instanceof Error ? error.message : String(error),
       })
-      toast.error(error instanceof Error ? error.message : 'Could not apply to all clips')
+      toast.error(error instanceof Error ? error.message : 'Could not apply style to project')
     } finally {
       setApplyingAll(false)
     }
   }
 
-  const clearPreviewForHistory = () => {
-    setSelectedEntry(null)
-    setHoveredEntry(null)
-    setAspectOverride(null)
-  }
-
-  const openTextEditor = async () => {
-    console.info('[editor:templates-mode] open-in-text-editor', { projectId, clipId })
-    try {
-      await flushSave()
-    } catch {
-      toast.error('Save edits before switching editors')
+  const saveReusableStyle = async () => {
+    const name = presetName.trim()
+    if (!name) {
+      toast.error('Enter a reusable style name')
       return
     }
-    window.location.assign(
-      routes.text(projectId, clipId, props.clipperStudio ? { from: 'studio' } : undefined),
-    )
+    if (reusableUnsupported) {
+      toast.error('This draft uses caption fields the current reusable brand-style model cannot store faithfully')
+      return
+    }
+    setSavingPreset(true)
+    try {
+      const palette = reusablePalette(draftEdits)
+      const data = await clipsFetch<{ template: BrandRow }>('/api/clips/brand/templates', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          settings: clipStyleSettingsFromEdits(draftEdits),
+          captionFont: draftEdits.captions.font ?? null,
+          palette: palette.length ? palette : null,
+        }),
+      })
+      await loadBrands()
+      setTab('brand')
+      setSearchQuery('')
+      setPresetName('')
+      console.info('[editor:templates-gaps] preset-saved', {
+        projectId,
+        clipId,
+        presetId: data.template.id,
+      })
+      toast.success('Reusable style saved. Applying it is a separate action.')
+    } catch (error) {
+      console.error('[editor:templates-gaps] preset-save-failed', {
+        projectId,
+        clipId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      toast.error(error instanceof Error ? error.message : 'Could not save reusable style')
+    } finally {
+      setSavingPreset(false)
+    }
   }
 
-  const openClipEditor = async () => {
+  const navigateAfterSave = (target: HandoffTarget) => {
+    if (target === 'export') {
+      setExportOpen(true)
+      console.info('[editor:templates-mode] export-opened', { projectId, clipId })
+      return
+    }
+    if (target === 'project') {
+      console.info('[editor:templates-mode] back-to-project', { projectId, clipId })
+      window.location.assign(routes.project(projectId))
+      return
+    }
+    if (target === 'text') {
+      console.info('[editor:templates-mode] open-in-text-editor', { projectId, clipId })
+      window.location.assign(
+        routes.text(projectId, clipId, props.clipperStudio ? { from: 'studio' } : undefined),
+      )
+      return
+    }
     console.info('[editor:templates-mode] open-in-clip-editor', { projectId, clipId })
-    try {
-      await flushSave()
-    } catch {
-      toast.error('Save edits before switching editors')
-      return
-    }
     console.info('[editor:compact-mode] open-from-templates', {
       projectId,
       clipId,
@@ -484,24 +678,102 @@ export function TemplatesEditorShell(props: Props) {
     )
   }
 
+  const finishHandoff = async (target: HandoffTarget) => {
+    try {
+      await flushSave()
+    } catch {
+      toast.error('Save edits before leaving Templates')
+      return
+    }
+    console.info('[editor:templates-gaps] handoff', {
+      projectId,
+      clipId,
+      target,
+      scope: 'saved-edit',
+    })
+    navigateAfterSave(target)
+  }
+
+  const requestHandoff = (target: HandoffTarget) => {
+    if (hasDraftChange) {
+      setHandoffTarget(target)
+      console.info('[editor:templates-gaps] handoff-pending', {
+        projectId,
+        clipId,
+        target,
+        scope: 'clip-preview',
+      })
+      return
+    }
+    void finishHandoff(target)
+  }
+
+  const applyPendingAndContinue = async () => {
+    if (!handoffTarget || handoffBusy) return
+    const target = handoffTarget
+    setHandoffBusy(true)
+    console.info('[editor:templates-gaps] handoff-choice', {
+      projectId,
+      clipId,
+      target,
+      scope: 'apply-this-clip',
+    })
+    setEdits(draftEdits)
+    try {
+      await flushSave()
+      cancelPreview('handoff')
+      setHandoffTarget(null)
+      navigateAfterSave(target)
+    } catch {
+      console.error('[editor:templates-gaps] handoff-apply-failed', {
+        projectId,
+        clipId,
+        target,
+      })
+      toast.error('Could not save the applied preview. Your local draft is still here.')
+    } finally {
+      setHandoffBusy(false)
+    }
+  }
+
+  const discardPendingAndContinue = async () => {
+    if (!handoffTarget || handoffBusy) return
+    const target = handoffTarget
+    console.info('[editor:templates-gaps] handoff-choice', {
+      projectId,
+      clipId,
+      target,
+      scope: 'discard-preview',
+    })
+    cancelPreview('handoff')
+    setHandoffTarget(null)
+    await finishHandoff(target)
+  }
+
   return (
     <ClipperSurfaceErrorBoundary surface="Templates editor">
       <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground" data-testid="templates-editor">
         <header className={editorToolbarRow}>
-          <Link
-            href={routes.project(projectId)}
+          <button
+            type="button"
             className={editorIconBtn}
             aria-label="Back to project clips"
-            onClick={() => console.info('[editor:templates-mode] back-to-project', { projectId, clipId })}
+            onClick={() => requestHandoff('project')}
           >
             <ArrowLeft />
-          </Link>
+          </button>
           <div className="min-w-0">
             <p className="max-w-[220px] truncate text-[10px] text-muted-foreground">{props.projectTitle}</p>
             <h1 className="max-w-[280px] truncate text-xs font-semibold">{props.initialTitle}</h1>
           </div>
           <span className="ml-auto text-[11px] text-muted-foreground" aria-live="polite">
-            {saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Save failed' : 'Saving…'}
+            {saveState === 'saved'
+              ? hasDraftChange
+                ? 'Saved edit · preview not applied'
+                : 'Saved'
+              : saveState === 'error'
+                ? 'Save failed'
+                : 'Saving…'}
           </span>
           {saveState === 'error' ? (
             <Button size="sm" variant="outline" onClick={() => void flushSave().catch(() => toast.error('Save retry failed'))}>
@@ -519,14 +791,13 @@ export function TemplatesEditorShell(props: Props) {
             redo()
             console.info('[editor:templates-mode] redo', { projectId, clipId })
           }}><Redo2 /></button>
-          <button type="button" className={editorToolbarTextBtn} onClick={() => {
-            setExportOpen(true)
-            console.info('[editor:templates-mode] export-opened', { projectId, clipId })
-          }}><Download />Export</button>
-          <button type="button" className={editorToolbarTextBtn} onClick={() => void openTextEditor()}>
+          <button type="button" className={editorToolbarTextBtn} onClick={() => requestHandoff('export')}>
+            <Download />Export
+          </button>
+          <button type="button" className={editorToolbarTextBtn} onClick={() => requestHandoff('text')}>
             <FileText />Open in text editor
           </button>
-          <Button size="sm" onClick={() => void openClipEditor()}>
+          <Button size="sm" onClick={() => requestHandoff('clip')}>
             <Clapperboard className="mr-1 size-4" />Open in clip editor
           </Button>
         </header>
@@ -561,6 +832,22 @@ export function TemplatesEditorShell(props: Props) {
                   </button>
                 ))}
               </div>
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={'Search ' + tab + ' by name or tag'}
+                  className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-xs outline-none focus:border-primary"
+                  aria-label={'Search ' + tab + ' templates'}
+                />
+                {searchQuery ? (
+                  <Button size="sm" variant="ghost" onClick={() => setSearchQuery('')}>Clear</Button>
+                ) : null}
+              </div>
+              <p className="mt-1 text-[10px] text-muted-foreground" aria-live="polite">
+                {filteredEntries.length} of {entries.length} in {tab}
+              </p>
             </div>
 
             {tab === 'brand' && brandsError ? (
@@ -580,9 +867,9 @@ export function TemplatesEditorShell(props: Props) {
                 </div>
               ) : null}
 
-              {entries.length ? (
+              {filteredEntries.length ? (
                 <div className="grid grid-cols-2 gap-3">
-                  {entries.map((entry) => {
+                  {filteredEntries.map((entry) => {
                     const reason = disabledReason(entry.item, edits)
                     const selected = selectedEntry?.key === entry.key
                     return (
@@ -609,7 +896,27 @@ export function TemplatesEditorShell(props: Props) {
                           })
                         }}
                         onMouseLeave={() => setHoveredEntry(null)}
-                        onClick={() => selectEntry(entry)}
+                        onFocus={() => {
+                          if (reason) return
+                          setHoveredEntry(entry)
+                          console.info('[editor:templates-gaps] template-preview', {
+                            projectId,
+                            clipId,
+                            category: entry.item.tab,
+                            templateId: entryId(entry),
+                            via: 'focus',
+                          })
+                        }}
+                        onBlur={() => setHoveredEntry(null)}
+                        onClick={() => {
+                          console.info('[editor:templates-gaps] template-selected', {
+                            projectId,
+                            clipId,
+                            category: entry.item.tab,
+                            templateId: entryId(entry),
+                          })
+                          selectEntry(entry)
+                        }}
                       >
                         <CatalogTplThumb item={entry.item} />
                         <div className="space-y-1.5 p-3">
@@ -636,11 +943,193 @@ export function TemplatesEditorShell(props: Props) {
               ) : (
                 <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-border bg-background/40 px-6 text-center">
                   <div>
-                    <p className="text-sm font-medium">No templates in this section</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Choose another tab or retry saved brand kits.</p>
+                    <p className="text-sm font-medium">{searchQuery ? 'No matching templates' : 'No templates in this section'}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {searchQuery ? 'Clear search or try a different real template name/tag.' : 'Choose another tab or retry saved brand kits.'}
+                    </p>
                   </div>
                 </div>
               )}
+
+              <section className="mt-4 space-y-3 rounded-xl border border-border bg-background/70 p-3" aria-label="Customize selected style">
+                <div>
+                  <h3 className="text-xs font-semibold">Customize</h3>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {activeEntry?.item.name ?? selectedEntry?.item.name ?? 'Saved clip style'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="space-y-1 text-[11px]">
+                    <span className="text-muted-foreground">Typeface</span>
+                    <select
+                      className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs"
+                      value={draftEdits.captions.font ?? fontOptions[0] ?? 'Inter'}
+                      onChange={(event) => setCaptionDraft((draft) => ({ ...draft, font: event.target.value }))}
+                    >
+                      {fontOptions.map((font) => <option key={font} value={font}>{font}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-[11px]">
+                    <span className="text-muted-foreground">Weight</span>
+                    <input className="h-8 w-full rounded-md border border-border bg-muted px-2 text-xs" value="Not available" disabled />
+                  </label>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Weight has no stable ClipEditsV2 caption field, so it stays disabled.</p>
+
+                <label className="block space-y-1 text-[11px]">
+                  <span className="text-muted-foreground">Size · {captionSize.toFixed(1)}%</span>
+                  <input
+                    type="range"
+                    min="3"
+                    max="10"
+                    step="0.5"
+                    value={captionSize}
+                    className="w-full"
+                    onChange={(event) => {
+                      const value = Number(event.target.value)
+                      setCaptionDraft((draft) =>
+                        cpCaptionSize
+                          ? { ...draft, userSizePct: value }
+                          : { ...draft, size: value },
+                      )
+                    }}
+                  />
+                </label>
+
+                <div className="grid grid-cols-3 gap-2 text-[11px]">
+                  <label className="space-y-1">
+                    <span className="text-muted-foreground">Text A</span>
+                    <input
+                      type="color"
+                      value={draftEdits.captions.colors?.a ?? '#FFFFFF'}
+                      className="h-8 w-full rounded border border-border bg-background"
+                      onChange={(event) =>
+                        setCaptionDraft((draft) => ({
+                          ...draft,
+                          colors: { ...draft.colors, a: event.target.value },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-muted-foreground">Text B</span>
+                    <input
+                      type="color"
+                      value={draftEdits.captions.colors?.b ?? '#FFFFFF'}
+                      className="h-8 w-full rounded border border-border bg-background"
+                      onChange={(event) =>
+                        setCaptionDraft((draft) => ({
+                          ...draft,
+                          colors: { ...draft.colors, b: event.target.value },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-muted-foreground">Highlight</span>
+                    <input
+                      type="color"
+                      value={draftEdits.captions.highlightColor ?? '#FDE047'}
+                      disabled={(draftEdits.captions.activeStyle ?? 'color') !== 'highlight'}
+                      className="h-8 w-full rounded border border-border bg-background disabled:opacity-50"
+                      onChange={(event) => setCaptionDraft((draft) => ({ ...draft, highlightColor: event.target.value }))}
+                    />
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <label className="space-y-1">
+                    <span className="text-muted-foreground">Active word</span>
+                    <select
+                      className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs"
+                      value={draftEdits.captions.activeStyle ?? 'color'}
+                      onChange={(event) =>
+                        setCaptionDraft((draft) => ({
+                          ...draft,
+                          activeStyle: event.target.value as NonNullable<ClipEditsV2['captions']['activeStyle']>,
+                        }))
+                      }
+                    >
+                      <option value="color">Color</option>
+                      <option value="highlight">Highlight</option>
+                      <option value="fill">Fill</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-muted-foreground">Position</span>
+                    <select
+                      className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs"
+                      value={draftEdits.captions.position ?? 'bottom'}
+                      onChange={(event) => setCaptionDraft((draft) => ({ ...draft, position: event.target.value }))}
+                    >
+                      <option value="top">Top</option>
+                      <option value="middle">Middle</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <label className="space-y-1">
+                    <span className="text-muted-foreground">Case</span>
+                    <select
+                      className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs"
+                      value={draftEdits.captions.case ?? 'sentence'}
+                      onChange={(event) => setCaptionDraft((draft) => ({ ...draft, case: event.target.value }))}
+                    >
+                      <option value="sentence">Sentence</option>
+                      <option value="upper">UPPER</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-muted-foreground">Words / line</span>
+                    <select
+                      className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs"
+                      value={String(draftEdits.captions.wordsPerLine ?? 2)}
+                      onChange={(event) =>
+                        setCaptionDraft((draft) => ({ ...draft, wordsPerLine: Number(event.target.value) }))
+                      }
+                    >
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="rounded-md border border-dashed border-border p-2 text-[10px] text-muted-foreground">
+                  Stroke/background controls are disabled here because the current caption edit contract has no dedicated persisted fields for them.
+                </div>
+
+                <div className="space-y-2 border-t border-border pt-3">
+                  <p className="text-[11px] font-medium">Save as reusable style</p>
+                  <div className="flex gap-2">
+                    <input
+                      value={presetName}
+                      onChange={(event) => setPresetName(event.target.value)}
+                      placeholder="Style name"
+                      className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-xs"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={savingPreset || reusableUnsupported}
+                      onClick={() => void saveReusableStyle()}
+                    >
+                      {savingPreset ? 'Saving…' : 'Save style'}
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Saving creates a reusable brand style only; it does not apply this preview to the clip.
+                  </p>
+                  {reusableUnsupported ? (
+                    <p className="text-[10px] text-amber-600">
+                      Active-word highlight/fill or CP size overrides are real clip fields, but the current reusable brand-style schema cannot store them faithfully.
+                    </p>
+                  ) : null}
+                </div>
+              </section>
             </div>
           </aside>
 
@@ -717,14 +1206,29 @@ export function TemplatesEditorShell(props: Props) {
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-card/60 px-5 py-4">
               <div className="min-w-0">
                 <p className="text-xs font-medium">
-                  {selectedEntry ? selectedEntry.item.name : aspectOverride ? 'Aspect change' : 'Choose a template'}
+                  {activeEntry ? activeEntry.item.name : aspectOverride || customFieldNames.length ? 'Customized saved style' : 'Choose a template'}
                 </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Preview changes are not saved until you apply them.
+                  Preview changes are local until applied. Templates change styling/layout only — never source footage.
                 </p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  Project scope applies compatible fields clip-by-clip and skips incompatible clips; no hidden scene scope is added.
+                </p>
+                {bulkResult ? (
+                  <p className="mt-1 text-[10px] font-medium" aria-live="polite">
+                    Last project apply: {bulkResult.updated} updated · {bulkResult.skipped} skipped · {bulkResult.errors} errors
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" disabled={!hasDraftChange || applyingAll} onClick={applyThisClip}>
+                <Button
+                  variant="ghost"
+                  disabled={!hasLocalPreviewState || applyingAll}
+                  onClick={() => cancelPreview('button')}
+                >
+                  Cancel preview / reset to saved
+                </Button>
+                <Button variant="outline" disabled={!hasDraftChange || applyingAll} onClick={() => void applyThisClip()}>
                   Apply to this clip
                 </Button>
                 <Button disabled={!hasDraftChange || applyingAll} onClick={() => void applyAll()}>
@@ -757,6 +1261,39 @@ export function TemplatesEditorShell(props: Props) {
           aiMeta={props.aiMeta}
           fullVideo={props.fullVideo}
         />
+
+        {handoffTarget ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Unapplied template preview">
+            <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 shadow-2xl">
+              <h2 className="text-sm font-semibold">Unapplied template preview</h2>
+              <p className="mt-2 text-xs text-muted-foreground">
+                The saved edit is unchanged. Apply this preview to this clip, discard only the local preview, or stay here.
+              </p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Apply uses current-clip scope only. Project-wide apply remains the explicit button on the Templates page.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <Button variant="ghost" disabled={handoffBusy} onClick={() => {
+                  console.info('[editor:templates-gaps] handoff-choice', {
+                    projectId,
+                    clipId,
+                    target: handoffTarget,
+                    scope: 'stay',
+                  })
+                  setHandoffTarget(null)
+                }}>
+                  Stay
+                </Button>
+                <Button variant="outline" disabled={handoffBusy} onClick={() => void discardPendingAndContinue()}>
+                  Discard preview
+                </Button>
+                <Button disabled={handoffBusy} onClick={() => void applyPendingAndContinue()}>
+                  {handoffBusy ? <><Loader2 className="mr-1 size-4 animate-spin" />Applying…</> : 'Apply to this clip'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </ClipperSurfaceErrorBoundary>
   )
