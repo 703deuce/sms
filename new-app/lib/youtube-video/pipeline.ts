@@ -1,4 +1,5 @@
 import { withAutoContentDetection } from '@/lib/clips/content-detection'
+import type { YtPlanArgs, YtProgress } from '@/lib/youtube-video/pipeline/yt-types'
 import { defaultClipSettings } from '@/lib/clips/settings'
 import { storyCutsInEditorialOrder } from '@/lib/youtube-video/assemble'
 import { resultStoryFields } from '@/lib/youtube-video/chapters'
@@ -30,6 +31,8 @@ export type YoutubeVideoPipelineDeps = {
   loadReadySource: LoadReadySource
   writeClip?: WriteYoutubeClip
   proposeOptions?: (sources: YoutubeVideoIngestedSource[]) => YoutubeVideoOption[]
+  /** Optional YouTube-owned long-form implementation; legacy callers unchanged. */
+  planLongForm?: (args: YtPlanArgs) => Promise<YtProgress>
 }
 
 export type PreparedYoutubeVideo = {
