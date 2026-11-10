@@ -83,6 +83,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       })
     }
 
+    // No interactive transaction may span storage IO or the unified auto-start hook.
+    // applyWorkerJobProgress uses a short, awaited batch transaction only.
+    console.info('[clipper:progress] db_apply_begin', { jobId, stage: body.stage })
     await applyWorkerJobProgress({
       jobId,
       jobType: job.type,
@@ -109,6 +112,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       renderSteps: body.renderSteps,
       stepPct: body.stepPct,
     })
+
+    console.info('[clipper:progress] db_apply_complete', { jobId, stage: body.stage })
 
     if(shouldHookAutoStartUnified(job.type, body.projectStatus, body.jobStatus)){
       try{
