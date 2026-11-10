@@ -1,10 +1,10 @@
-/** Sentence case: only sentence-initial words capitalized; others lowercased. */
+/** Sentence case: capitalize the first letter of each cue or sentence; keep source casing everywhere else. */
 export function formatCaptionWord(text: string, caseMode: string, sentenceStart: boolean): string {
   const safe = typeof text === 'string' ? text : ''
   if (!safe) return ''
   if (caseMode === 'upper') return safe.toUpperCase()
-  const lower = safe.toLowerCase()
-  return sentenceStart ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower
+  if (!sentenceStart) return safe
+  return safe.charAt(0).toUpperCase() + safe.slice(1)
 }
 
 export function isSentenceBoundary(prevWord: string | undefined): boolean {
@@ -41,4 +41,3 @@ export function formatCaptionLineText(text: string, caseMode: string): string {
     })
     .join('')
 }
-

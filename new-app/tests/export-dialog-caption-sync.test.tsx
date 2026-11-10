@@ -1,11 +1,20 @@
 // @vitest-environment happy-dom
+// @ts-ignore root tsc does not resolve the new-app vitest install
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+// @ts-ignore root tsc does not resolve @testing-library/react
 import { fireEvent, render, waitFor, cleanup } from '@testing-library/react'
-import { ExportDialog } from '@/components/clips/editor/export-dialog'
-import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
-import { exportClipWithOptions } from '@/lib/clips-api'
-import { FetchJsonError } from '@/lib/client/fetch-json'
-import { CAPTION_SYNC_REQUIRED } from '@/lib/clips/editor/caption-sync-warning'
+import { ExportDialog } from '../components/clips/editor/export-dialog'
+import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '../lib/clips/edits'
+import { exportClipWithOptions } from '../lib/clips-api'
+import { FetchJsonError } from '../lib/client/fetch-json'
+import { CAPTION_SYNC_REQUIRED } from '../lib/clips/editor/caption-sync-warning'
+
+vi.mock('../lib/clips-api', () => ({
+  clipsFetch: vi.fn(() => Promise.resolve({ channels: [] })),
+  exportClipWithOptions: vi.fn(),
+  getRenderStatus: vi.fn(),
+  downloadClipNleZip: vi.fn(() => Promise.resolve()),
+}))
 
 vi.mock('@/lib/clips-api', () => ({
   clipsFetch: vi.fn(() => Promise.resolve({ channels: [] })),

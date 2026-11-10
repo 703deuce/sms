@@ -134,7 +134,8 @@ export function detectCaptionSyncIssues(args: {
   )
   const warnings: CaptionSyncWarning[] = []
   const lines = args.edits.captionLines ?? []
-  const normalizeReport = getCaptionLineNormalizeReport(lines)
+  const normalizeReport =
+    args.edits.captionLineNormalizeReport ?? getCaptionLineNormalizeReport(lines)
   const captionWords = buildCaptionWords(toCaptionSourceWords(args.words ?? []), args.edits)
 
   const timed = lines.length

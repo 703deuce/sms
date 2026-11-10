@@ -87,6 +87,7 @@ jobs:
             tests/layers-actual-stack.test.tsx \
             tests/preview-stage-e3.test.tsx \
             tests/e8-caption-size-parity.test.ts \
+            tests/caption-case.test.ts \
             tests/caption-style-snapshot.test.ts \
             tests/caption-sync-warning.test.ts \
             tests/asr-language-catalog.test.ts \

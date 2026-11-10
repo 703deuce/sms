@@ -1,3 +1,4 @@
+// @ts-ignore root tsc does not resolve the new-app vitest install
 import { describe, expect, it } from 'vitest'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '../lib/clips/edits'
 import {

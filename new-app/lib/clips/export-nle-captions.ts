@@ -8,7 +8,7 @@ import {
 } from '@/lib/clips/edits'
 import { buildCaptionWords, type CaptionSourceWord } from '@/lib/clips/caption-words'
 import { captionLinesFromWords, captionLinesToSrt } from '@/lib/clips/editor/caption-lines'
-import { formatCaptionLineText, formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
+import { formatCaptionLineText, formatCaptionWord, isSentenceBoundary } from './caption-case'
 
 
 function srtCaseMode(edits: ClipEditsV2): 'upper' | 'sentence' {

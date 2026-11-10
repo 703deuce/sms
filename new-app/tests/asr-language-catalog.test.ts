@@ -1,3 +1,4 @@
+// @ts-ignore root tsc does not resolve the new-app vitest install
 import { describe, expect, it } from 'vitest'
 import { ASR_LANGUAGES } from '../lib/clips/asr-languages'
 import {

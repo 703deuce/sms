@@ -1,3 +1,4 @@
+// @ts-ignore root tsc does not resolve the new-app vitest install
 import { describe, expect, it } from 'vitest'
 import { buildSrtFromCaptionWords, defaultEdits, formatSrtTime, normalizeEdits, type ClipEditsV2 } from '../lib/clips/edits'
 import {
@@ -227,5 +228,46 @@ describe('NLE / export SRT caption case', () => {
     expect(sentenceSrt).toContain('Hello there')
     expect(sentenceSrt).toContain('pals')
     expect(sentenceSrt).not.toContain('HELLO THERE')
+  })
+})
+
+describe('invalid-cue report survives clone and re-normalize', () => {
+  it('keeps invalid_times after JSON clone, a shallow lines copy, and a second normalizeEdits', () => {
+    const invalid = edits({
+      captionLines: [
+        { id: 'a', text: 'First cue', startMs: 1200, endMs: 800 },
+        { id: 'b', text: 'Second cue', startMs: 1200, endMs: 2400 },
+      ],
+    })
+    expect(detectCaptionSyncIssues({ words, edits: invalid }).map((w) => w.code)).toContain('invalid_times')
+    expect(invalid.captionLineNormalizeReport?.droppedInvalid).toBeGreaterThan(0)
+
+    const cloned = JSON.parse(JSON.stringify(invalid)) as ClipEditsV2
+    expect(detectCaptionSyncIssues({ words, edits: cloned }).map((w) => w.code)).toContain('invalid_times')
+
+    const shallow: ClipEditsV2 = {
+      ...invalid,
+      captionLines: [...(invalid.captionLines ?? [])],
+    }
+    expect(detectCaptionSyncIssues({ words, edits: shallow }).map((w) => w.code)).toContain('invalid_times')
+
+    const again = normalizeEdits(invalid, bounds)
+    expect(detectCaptionSyncIssues({ words, edits: again }).map((w) => w.code)).toContain('invalid_times')
+  })
+
+  it('warns when every cue is dropped as invalid', () => {
+    const allBad = edits({
+      captionLines: [
+        { id: 'a', text: 'inverted', startMs: 1200, endMs: 800 },
+        { id: 'b', text: 'also inverted', startMs: 500, endMs: 400 },
+      ],
+    })
+    expect(allBad.captionLines).toBeUndefined()
+    expect(allBad.captionLineNormalizeReport?.droppedInvalid).toBeGreaterThan(0)
+    expect(detectCaptionSyncIssues({ words, edits: allBad }).map((w) => w.code)).toContain('invalid_times')
+
+    const cloned = JSON.parse(JSON.stringify(allBad)) as ClipEditsV2
+    expect(cloned.captionLines).toBeUndefined()
+    expect(detectCaptionSyncIssues({ words, edits: cloned }).map((w) => w.code)).toContain('invalid_times')
   })
 })

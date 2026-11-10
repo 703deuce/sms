@@ -247,9 +247,33 @@ export function normalizeCaptionLines(raw: unknown): CaptionLine[] {
 const ID_RE = /^[A-Za-z0-9_~-]{1,64}$/
 
 /** Edits normalizer: same lines + stable unique ids; undefined when empty (key dropped). */
-export function normalizeCaptionLinesEdits(raw: unknown): CaptionLine[] | undefined {
+export function mergeCaptionLineNormalizeReports(
+  previous: CaptionLineNormalizeReport | undefined,
+  next: CaptionLineNormalizeReport,
+): CaptionLineNormalizeReport {
+  return {
+    droppedInvalid: (previous?.droppedInvalid ?? 0) + next.droppedInvalid,
+    reordered: Boolean(previous?.reordered || next.reordered),
+  }
+}
+
+export function parseCaptionLineNormalizeReport(raw: unknown): CaptionLineNormalizeReport | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as { droppedInvalid?: unknown; reordered?: unknown }
+  const dropped = Number(o.droppedInvalid)
+  const droppedInvalid = Number.isFinite(dropped) && dropped > 0 ? Math.round(dropped) : 0
+  const reordered = o.reordered === true
+  if (droppedInvalid === 0 && !reordered) return undefined
+  return { droppedInvalid, reordered }
+}
+
+/** Same as normalizeCaptionLinesEdits, but always returns the report (including when every cue is dropped). */
+export function normalizeCaptionLinesEditsWithReport(raw: unknown): {
+  lines: CaptionLine[] | undefined
+  report: CaptionLineNormalizeReport
+} {
   const { lines, report } = normalizeCaptionLinesDetailed(raw)
-  if (!lines.length) return undefined
+  if (!lines.length) return { lines: undefined, report }
   const seen = new Set<string>()
   const out = lines.map((l, i) => {
     let id = ID_RE.test(l.id) && !seen.has(l.id) ? l.id : `cl${i}_${l.startMs}`
@@ -257,7 +281,11 @@ export function normalizeCaptionLinesEdits(raw: unknown): CaptionLine[] | undefi
     seen.add(id)
     return { ...l, id }
   })
-  return attachCaptionLineNormalizeReport(out, report)
+  return { lines: attachCaptionLineNormalizeReport(out, report), report }
+}
+
+export function normalizeCaptionLinesEdits(raw: unknown): CaptionLine[] | undefined {
+  return normalizeCaptionLinesEditsWithReport(raw).lines
 }
 
 export type CaptionLineWord = { i: number; text: string; s_ms: number; e_ms: number; ln: number; br?: true; it?: true; bo?: true }
