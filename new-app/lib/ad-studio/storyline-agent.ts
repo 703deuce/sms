@@ -21,16 +21,30 @@ export function writeAdStoryline(input: AdProductInput, mode: AdMode, choice: St
   const cta = `Explore ${name}.`
   const details = second ? ` ${second}.` : ''
   const core = [hook, problem, `${solution.replace(/[.!?]+$/, '')}.${details}`]
-  const voiceover = input.durationSec === 30
+  const voiceParts = input.durationSec === 30
     ? [
         ...core,
-        `Take a closer look at ${name}.`,
         first ? `One thing to remember: ${first.replace(/[.!?]+$/, '')}.` : '',
         second ? `Also worth knowing: ${second.replace(/[.!?]+$/, '')}.` : '',
-        `See ${name} for yourself.`,
         cta,
-      ].filter(Boolean).join(' ')
-    : [...core, cta].join(' ')
+      ].filter(Boolean)
+    : [...core, cta]
+  const targetWords = input.durationSec === 30 ? 42 : 20
+  const neutralFillers = [
+    `Take a closer look at ${name}.`,
+    `See ${name} for yourself.`,
+    `Explore ${name} today.`,
+    `Learn more about ${name}.`,
+    `See the product up close.`,
+    `Take another look at ${name}.`,
+    `Keep ${name} in view.`,
+  ]
+  const countWords = () => voiceParts.join(' ').trim().split(/\s+/).filter(Boolean).length
+  for (const filler of neutralFillers) {
+    if (countWords() >= targetWords) break
+    voiceParts.splice(Math.max(0, voiceParts.length - 1), 0, filler)
+  }
+  const voiceover = voiceParts.join(' ')
   const script = { hook, problem, solution, cta, voiceover, onScreenText: [hook, solution, ...(second ? [second] : []), cta] }
   console.info('[ad-studio:storyline] complete', {
     mode, textCards: script.onScreenText.length, voiceWords: voiceover.trim().split(/\s+/).filter(Boolean).length,
