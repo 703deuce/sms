@@ -90,6 +90,7 @@ jobs:
             tests/clean-take-review.test.ts \
             tests/cleanup-locked-ranges.test.ts \
             tests/cleanup-strength.test.ts \
+            tests/cleanup-strength-sync.test.tsx \
             tests/ef24-bg-removal-edits.test.ts \
             tests/stock-audio-picker-placement.test.tsx \
             tests/batch5-template-full-video.test.tsx \

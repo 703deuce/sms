@@ -104,6 +104,8 @@ export type ClipEditsV2 = {
   >
   /** Clean Take remaining-omission list. Kept by normalizeEdits / mergeEditsPatch (clip PATCH). */
   cleanTakeReview?: ClipEditsCleanTakeReview
+  /** Export-refined AI / Clean Take cut ranges, kept apart from the user's manual cuts. Additive. */
+  cleanTakeAiRanges?: CutRange[]
   wordFixes: Record<string, string>
   /** Stable source-time + original text for export parity when word indices differ. */
   wordFixMeta?: Record<string, WordFixMetaEntry>
@@ -452,6 +454,20 @@ export function normalizeCleanTakeReview(raw: unknown): ClipEditsCleanTakeReview
   return { v: 1, omissions }
 }
 
+export function normalizeCleanTakeAiRanges(raw: unknown): CutRange[] | undefined {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw)) return undefined
+  const out: CutRange[] = []
+  for (const row of raw) {
+    if (!Array.isArray(row) || row.length < 2) continue
+    const a = Number(row[0])
+    const b = Number(row[1])
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) continue
+    out.push([Math.round(a), Math.round(b)])
+  }
+  return out
+}
+
 function normalizeCaptions(
   raw: unknown,
   base: ClipEditsV2['captions'],
@@ -666,6 +682,9 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.bgRemoval) payload.bgRemoval = null
   if (!edits.speakerNames) payload.speakerNames = null
   if (!edits.cleanTakeReview) payload.cleanTakeReview = null
+  // Persist an empty list so a completed restore does not fall back to leftover manual cuts.
+  if (edits.cleanTakeAiRanges !== undefined) payload.cleanTakeAiRanges = edits.cleanTakeAiRanges
+  else payload.cleanTakeAiRanges = null
   return payload
 }
 
@@ -731,6 +750,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     cutCleanupKinds: normalizeCutCleanupKinds(o.cutCleanupKinds),
     cutQualityMeta: normalizeCutQualityMeta(o.cutQualityMeta),
     cleanTakeReview: normalizeCleanTakeReview(o.cleanTakeReview),
+    cleanTakeAiRanges: normalizeCleanTakeAiRanges(o.cleanTakeAiRanges),
     wordFixes: (o.wordFixes as Record<string, string>) || {},
     wordFixMeta: normalizeWordFixMeta(o.wordFixMeta, (o.wordFixes as Record<string, string>) || {}),
     captions: normalizeCaptions(o.captions, base.captions),

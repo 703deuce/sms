@@ -677,7 +677,11 @@ export function exportCutRangesFromProposals(
 }
 
 export function restoreCleanupProposal(edits: ClipEditsV2, range: CutRange): ClipEditsV2 {
-  return { ...edits, cutRanges: subtractRangeFromCuts(edits.cutRanges, range) }
+  const next: ClipEditsV2 = { ...edits, cutRanges: subtractRangeFromCuts(edits.cutRanges, range) }
+  if (Array.isArray(edits.cleanTakeAiRanges)) {
+    next.cleanTakeAiRanges = subtractRangeFromCuts(edits.cleanTakeAiRanges, range)
+  }
+  return next
 }
 
 /** Export-refined (padded) range for one proposal — the same cut audition and export keep. */

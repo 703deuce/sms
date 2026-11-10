@@ -17,6 +17,7 @@ import {
   invertRangesWithin,
   lightStrengthExcludesOptInFillers,
   listOmissionsFromSavedEdits,
+  recordCleanTakeAiRanges,
   omittedRangesFromCleanTakeCuts,
   omitRestoredOmissions,
   overlapsAnyLockedRange,
@@ -529,13 +530,6 @@ describe('Clean Take editor-shell CleanupPanel strength', () => {
     expect(src).toMatch(/defaultStrength=\{cleanTakeCleanupPanelStrength\(aiMeta\)\}/)
   })
 
-  it('re-syncs CleanupPanel defaultStrength if aiMeta arrives after mount', () => {
-    expect(cleanupPanelDefaultStrength(undefined)).toBe(DEFAULT_CLEANUP_STRENGTH)
-    expect(cleanupPanelDefaultStrength('light')).toBe('light')
-    const src = readFileSync(join(__dirname, '../components/clips/editor/cleanup-panel.tsx'), 'utf8')
-    expect(src).toMatch(/setStrength\(cleanupPanelDefaultStrength\(defaultStrength\)\)/)
-    expect(src).toMatch(/\[defaultStrength\]/)
-  })
 })
 
 describe('light Remove All vs reaction Ah.', () => {
@@ -799,3 +793,116 @@ describe('restore clears the exact export-refined cut', () => {
     expect(current.cutRanges).toEqual(preRemoval)
   })
 })
+
+describe('review list and Restore All match export cuts >= MIN_SEGMENT_MS', () => {
+  const vqBounds: ClipBounds = {
+    clipStartMs: 0,
+    clipEndMs: 1_200_000,
+    trimMinMs: 0,
+    trimMaxMs: 1_200_000,
+  }
+
+  function vqEdits(cutRanges: ClipEditsV2['cutRanges'], extra: Partial<ClipEditsV2> = {}): ClipEditsV2 {
+    return {
+      ...defaultEdits(vqBounds),
+      trim: { in: 0, out: 1_200_000 },
+      cutRanges,
+      sources: [
+        {
+          id: 'source_0',
+          ref: 'upload',
+          refId: 'upl_cine',
+          mediaType: 'video',
+          label: 'cinestudy',
+          durationMs: 1_200_000,
+        },
+      ],
+      ...extra,
+    }
+  }
+
+  const extents = [{ sourceId: 'source_0', startMs: 0, endMs: 1_200_000 }]
+
+  // VQ cinestudy light Remove All export cuts (80, 80, 80, 81, 203, 275 ms).
+  const cineLightFillerCuts: Array<[number, number]> = [
+    [200_000, 200_080],
+    [335_800, 335_880],
+    [400_000, 400_080],
+    [530_699, 530_780],
+    [987_688, 987_963],
+    [1_012_010, 1_012_213],
+  ]
+
+  it('a: Restore All leaves cutRanges with zero AI cuts, including the 80-250ms 115ms hole', () => {
+    // cinestudy cuts.json-style plan: listed mid-take holes plus the unlisted 115 ms pause at 957.590-957.705.
+    const planCuts: Array<[number, number]> = [
+      [20_000, 40_000],
+      [957_590, 957_705],
+      [987_688, 987_963],
+    ]
+    const starting = writeCleanTakeReview(vqEdits(planCuts), omittedRangesFromCleanTakeCuts(
+      keptRangesFromPlan(planCuts),
+      extents,
+    ))
+    const listed = listOmissionsFromSavedEdits(starting, extents)
+    expect(listed.some((row) => row.startMs === 957_590 && row.endMs === 957_705)).toBe(true)
+    expect(listed.filter((row) => row.endMs - row.startMs >= MIN_SEGMENT_MS && row.startMs >= starting.trim.in && row.endMs <= starting.trim.out).length).toBeGreaterThanOrEqual(3)
+
+    let current = starting
+    for (const row of listed) {
+      const result = restoreCleanTakeOmission(current, row, keptRangesFromPlan(planCuts))
+      expect(result.ok).toBe(true)
+      if (result.ok) current = result.edits
+    }
+    const remainingAi = (current.cleanTakeAiRanges ?? []).filter(([a, b]) => b - a >= MIN_SEGMENT_MS)
+    expect(remainingAi).toEqual([])
+    expect(current.cutRanges).toEqual([])
+  })
+
+  it('b: after a light Remove All, all 6 cinestudy filler cuts are listed', () => {
+    const applied = recordCleanTakeAiRanges(vqEdits(cineLightFillerCuts), cineLightFillerCuts)
+    const listed = listOmissionsFromSavedEdits(applied, extents)
+    const inTrim = listed
+      .filter((row) => row.startMs >= applied.trim.in && row.endMs <= applied.trim.out)
+      .map((row) => [row.startMs, row.endMs] as [number, number])
+      .sort((a, b) => a[0] - b[0])
+    expect(inTrim).toEqual([...cineLightFillerCuts].sort((a, b) => a[0] - b[0]))
+    expect(inTrim).toHaveLength(6)
+  })
+
+  it('c: a manual cut overlapping or merged with an omission survives restore exactly', () => {
+    const cases: Array<{ manual: [number, number]; filler: [number, number] }> = [
+      { manual: [173_163, 173_363], filler: [173_363, 173_630] },
+      { manual: [293_063, 293_263], filler: [293_263, 293_520] },
+      { manual: [987_488, 987_688], filler: [987_688, 987_963] },
+    ]
+    for (const row of cases) {
+      const merged: [number, number] = [row.manual[0], row.filler[1]]
+      const edits = vqEdits([merged], {
+        cleanTakeAiRanges: [row.filler],
+        cutCleanupKinds: { [`${merged[0]}:${merged[1]}`]: 'filler' },
+      })
+      const listed = listOmissionsFromSavedEdits(edits, extents)
+      const omission = listed.find((item) => item.startMs === row.filler[0] && item.endMs === row.filler[1])
+      expect(omission).toBeTruthy()
+      expect(listed.some((item) => item.startMs === row.manual[0] && item.endMs === row.filler[1])).toBe(false)
+      const result = restoreCleanTakeOmission(edits, omission!, [])
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.edits.cutRanges).toEqual([row.manual])
+      expect(result.edits.cleanTakeAiRanges ?? []).toEqual([])
+    }
+  })
+})
+
+function keptRangesFromPlan(cuts: Array<[number, number]>): CleanTakeKeptCut[] {
+  const holes = [...cuts].sort((a, b) => a[0] - b[0])
+  const kept: CleanTakeKeptCut[] = []
+  let cursor = 0
+  for (const [start, end] of holes) {
+    if (start > cursor) kept.push({ sourceId: 'source_0', startMs: cursor, endMs: start })
+    cursor = Math.max(cursor, end)
+  }
+  if (1_200_000 > cursor) kept.push({ sourceId: 'source_0', startMs: cursor, endMs: 1_200_000 })
+  return kept
+}

@@ -37,11 +37,11 @@ import {
 } from '@/lib/clips/editor/cleanup-strength'
 import {
   CLEAN_TAKE_SHOW_CUTS_DEFAULT,
-  cleanupPanelDefaultStrength,
   introOutroLockedRanges,
   playRemovedOnlyMatchingExport,
   type LockedRange,
 } from '../../../lib/clips/editor/clean-take-review'
+import { useSyncedCleanupPanelStrength } from '../../../lib/clips/editor/cleanup-strength-sync'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
@@ -128,11 +128,7 @@ export function CleanupPanel({
   const [clarityRows, setClarityRows] = useState<CleanupProposal[]>([])
   const [clarityLoading, setClarityLoading] = useState(false)
   const [clarityEmpty, setClarityEmpty] = useState<string | null>(null)
-  const [strength, setStrength] = useState<CleanupStrength>(defaultStrength ?? DEFAULT_CLEANUP_STRENGTH)
-  // Re-sync if aiMeta / defaultStrength arrives after first mount.
-  useEffect(() => {
-    setStrength(cleanupPanelDefaultStrength(defaultStrength))
-  }, [defaultStrength])
+  const { strength, setStrength } = useSyncedCleanupPanelStrength(defaultStrength)
   const [showCuts, setShowCuts] = useState(showCutsDefault)
   const [playRemovedOnly, setPlayRemovedOnly] = useState(false)
   const [lockIntroSec, setLockIntroSec] = useState(0)

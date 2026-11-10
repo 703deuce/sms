@@ -2,9 +2,10 @@
  * Frontend only. Does not change Mode 2 assembly or backend export defaults. */
 
 import type { ClipEditsV2, CutRange } from '../edits'
-import { displayDurationMs, mergeCutRanges, subtractRangeFromCuts } from '../edits'
+import { displayDurationMs, mergeCutRanges, MIN_SEGMENT_MS, subtractRangeFromCuts } from '../edits'
 import {
   exportCutRangesFromProposals,
+  exportRefinedRangeForProposal,
   proposalId,
   restoreCleanupProposal,
   type CleanupProposal,
@@ -35,7 +36,8 @@ export const CLEAN_TAKE_EXPORT_ON_FINISH_DEFAULT = false
 /** Filler and retake lexicons are English-only today. */
 export const CLEAN_TAKE_FILLER_LANGUAGE = 'en' as const
 
-export const CLEAN_TAKE_MIN_OMISSION_MS = 250
+/** Review list matches export: every cut at or above MIN_SEGMENT_MS (80) is listed and restorable. */
+export const CLEAN_TAKE_MIN_OMISSION_MS = MIN_SEGMENT_MS
 
 export const CLEAN_TAKE_COPY = {
   eyebrow: 'AI Producer · Clean Take',
@@ -512,9 +514,13 @@ export function restoreCleanTakeOmission(
   edits: ClipEditsV2,
   omission: CleanTakeOmission,
   keptCuts: CleanTakeKeptCut[] = [],
+  opts?: {
+    wordSpans?: { s: number; e: number; w?: string }[]
+    rmsSamples?: Parameters<typeof exportCutRangesFromProposals>[3]
+  },
 ): { ok: true; edits: ClipEditsV2 } | { ok: false; error: string; edits: ClipEditsV2 } {
   const duration = omission.endMs - omission.startMs
-  if (duration < 200) {
+  if (duration < CLEAN_TAKE_MIN_OMISSION_MS) {
     return { ok: false, error: 'omission_too_short', edits }
   }
   const first = firstKeptFromEdits(edits, keptCuts)
@@ -557,8 +563,8 @@ export function restoreCleanTakeOmission(
   }
 
   if (sameAsMain && omission.startMs >= edits.trim.in && omission.endMs <= edits.trim.out) {
-    // Omission was represented as a cut on the main clip — use the existing restore helper.
-    return { ok: true, edits: restoreCleanupProposal(edits, [omission.startMs, omission.endMs]) }
+    // Subtract the export-refined, AI-owned range only — never a merged manual cut.
+    return { ok: true, edits: restoreCleanTakeInTrimCut(edits, omission, opts) }
   }
 
   const sourceId = findEditSourceIdForOmission(edits, omission, keptCuts)
@@ -714,6 +720,9 @@ type ClipEditsWithCleanTakeReview = ClipEditsV2 & { cleanTakeReview?: CleanTakeR
 /** Persist remaining review omissions on the saved edits (`cleanTakeReview` is kept by normalizeEdits / mergeEditsPatch). */
 export function writeCleanTakeReview(edits: ClipEditsV2, omissions: CleanTakeOmission[]): ClipEditsV2 {
   const next: ClipEditsWithCleanTakeReview = { ...edits, cleanTakeReview: { v: 1, omissions } }
+  if (next.cleanTakeAiRanges === undefined) {
+    next.cleanTakeAiRanges = resolveCleanTakeAiRanges(edits)
+  }
   return next
 }
 
@@ -792,17 +801,158 @@ export function listOmissionsFromSavedEdits(
   edits: ClipEditsV2,
   extents?: CleanTakeSourceExtent[],
 ): CleanTakeOmission[] {
-  const stored = readCleanTakeReview(edits)
-  if (stored) {
-    return stored.omissions.filter((row) => !omissionCoveredByEdits(edits, row))
-  }
   const sourceExtents = (extents && extents.length ? extents : sourceExtentsFromEdits(edits)).filter((row) => row.endMs > row.startMs)
   const kept: CleanTakeKeptCut[] = keptRangesFromEdits(edits).map((row) => ({
     sourceId: row.sourceId,
     startMs: row.startMs,
     endMs: row.endMs,
   }))
-  return omittedRangesFromCleanTakeCuts(kept, sourceExtents)
+  const derived = omittedRangesFromCleanTakeCuts(kept, sourceExtents)
+  const stored = readCleanTakeReview(edits)
+  const remainingStored = stored
+    ? stored.omissions.filter((row) => !omissionCoveredByEdits(edits, row))
+    : []
+  const base = remainingStored.length ? remainingStored : derived
+  return mergeReviewListWithExportCuts(edits, base, derived)
+}
+
+/** AI / Clean Take cut ranges kept apart from the user's manual cuts. */
+export function resolveCleanTakeAiRanges(edits: ClipEditsV2): CutRange[] {
+  if (Array.isArray(edits.cleanTakeAiRanges)) {
+    return mergeCutRanges(edits.cleanTakeAiRanges.map((range) => loHi(range)).filter(([a, b]) => b > a))
+  }
+  const kinds = edits.cutCleanupKinds
+  const cuts = (edits.cutRanges ?? []).map((range) => loHi(range)).filter(([a, b]) => b > a)
+  if (kinds && Object.keys(kinds).length) {
+    return mergeCutRanges(cuts.filter(([a, b]) => kinds[`${a}:${b}`] !== 'manual'))
+  }
+  return mergeCutRanges(cuts)
+}
+
+export function mergeCleanTakeAiRanges(current: CutRange[] | undefined, added: CutRange[]): CutRange[] {
+  return mergeCutRanges([...(current ?? []), ...added.map((range) => loHi(range)).filter(([a, b]) => b > a)])
+}
+
+export function recordCleanTakeAiRanges(edits: ClipEditsV2, added: CutRange[]): ClipEditsV2 {
+  const base = Array.isArray(edits.cleanTakeAiRanges) ? edits.cleanTakeAiRanges : resolveCleanTakeAiRanges(edits)
+  return { ...edits, cleanTakeAiRanges: mergeCleanTakeAiRanges(base, added) }
+}
+
+function rangesOverlapInclusive(a: CutRange, b: CutRange): boolean {
+  const [a0, a1] = loHi(a)
+  const [b0, b1] = loHi(b)
+  return Math.min(a1, b1) - Math.max(a0, b0) > 0
+}
+
+/** Intersect a restore range with AI-owned cuts so a merged manual cut is never removed. */
+export function aiOwnedRestoreRanges(edits: ClipEditsV2, range: CutRange): CutRange[] {
+  const [lo, hi] = loHi(range)
+  if (hi <= lo) return []
+  if (!Array.isArray(edits.cleanTakeAiRanges)) {
+    return [[lo, hi]]
+  }
+  const out: CutRange[] = []
+  for (const [a, b] of resolveCleanTakeAiRanges(edits)) {
+    const start = Math.max(lo, a)
+    const end = Math.min(hi, b)
+    if (end - start >= 1) out.push([start, end])
+  }
+  return mergeCutRanges(out)
+}
+
+function restoreCleanTakeInTrimCut(
+  edits: ClipEditsV2,
+  omission: CleanTakeOmission,
+  opts?: {
+    wordSpans?: { s: number; e: number; w?: string }[]
+    rmsSamples?: Parameters<typeof exportCutRangesFromProposals>[3]
+  },
+): ClipEditsV2 {
+  const proposal = omissionToCleanupProposal(omission)
+  const refined = exportRefinedRangeForProposal(
+    edits,
+    proposal,
+    opts?.wordSpans ?? [],
+    opts?.rmsSamples,
+  )
+  const targets = aiOwnedRestoreRanges(edits, refined)
+  let next = edits
+  for (const range of targets) {
+    next = restoreCleanupProposal(next, range)
+  }
+  return next
+}
+
+function omissionFromExportCut(
+  range: CutRange,
+  edits: ClipEditsV2,
+  stored: CleanTakeOmission[],
+): CleanTakeOmission {
+  const [startMs, endMs] = loHi(range)
+  const sourceId = edits.sources?.[0]?.id ?? stored[0]?.sourceId ?? 'source_0'
+  const hit = stored.find((row) => rangesOverlapInclusive([row.startMs, row.endMs], range))
+  const type = hit?.type ?? classifyOmissionType({ startMs, endMs, betweenKept: true, position: 'mid' })
+  return {
+    id: hit?.id && hit.startMs === startMs && hit.endMs === endMs ? hit.id : `${sourceId}:${startMs}:${endMs}`,
+    sourceId: hit?.sourceId ?? sourceId,
+    sourceProjectId: hit?.sourceProjectId,
+    startMs,
+    endMs,
+    type,
+    reason: hit?.reason ?? reasonForOmissionType(type, 'mid'),
+    accepted: false,
+  }
+}
+
+/**
+ * The review list must match export: every AI / Clean Take cut at or above MIN_SEGMENT_MS
+ * is listed, and a merged manual cut is not treated as one restorable omission.
+ */
+export function mergeReviewListWithExportCuts(
+  edits: ClipEditsV2,
+  listed: CleanTakeOmission[],
+  derived: CleanTakeOmission[] = [],
+): CleanTakeOmission[] {
+  const aiRanges = resolveCleanTakeAiRanges(edits).filter(([a, b]) => b - a >= CLEAN_TAKE_MIN_OMISSION_MS)
+  const out: CleanTakeOmission[] = []
+  const seen = new Set<string>()
+  const push = (row: CleanTakeOmission) => {
+    if (row.endMs - row.startMs < CLEAN_TAKE_MIN_OMISSION_MS) return
+    if (omissionCoveredByEdits(edits, row)) return
+    const key = `${row.sourceId}:${row.startMs}:${row.endMs}`
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push(row)
+  }
+
+  for (const row of listed) {
+    const covering = aiRanges.filter((range) => rangesOverlapInclusive(range, [row.startMs, row.endMs]))
+    if (covering.length) {
+      for (const range of covering) {
+        const [startMs, endMs] = loHi(range)
+        push({
+          ...row,
+          id: row.startMs === startMs && row.endMs === endMs ? row.id : `${row.sourceId}:${startMs}:${endMs}`,
+          startMs,
+          endMs,
+        })
+      }
+      continue
+    }
+    push(row)
+  }
+
+  for (const range of aiRanges) {
+    push(omissionFromExportCut(range, edits, [...listed, ...derived]))
+  }
+
+  for (const row of derived) {
+    const overlapsListed = out.some((existing) =>
+      existing.sourceId === row.sourceId && rangesOverlapInclusive([existing.startMs, existing.endMs], [row.startMs, row.endMs]),
+    )
+    if (!overlapsListed) push(row)
+  }
+  return out
 }
 
 export function cleanupPanelDefaultStrength(defaultStrength?: CleanupStrength): CleanupStrength {

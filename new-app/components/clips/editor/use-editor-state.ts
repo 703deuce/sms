@@ -52,6 +52,7 @@ import {
   exportRefinedRangeForProposal,
   type CleanupProposal,
 } from '@/lib/clips/editor/cleanup-proposals'
+import { mergeCleanTakeAiRanges, resolveCleanTakeAiRanges } from '../../../lib/clips/editor/clean-take-review'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { mergeEditsThreeWay } from '@/lib/clips/edits-merge'
@@ -504,7 +505,13 @@ export function useEditorState(
         ranges,
         proposals.map((p) => p.quality),
       )
-      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds, cutQualityMeta }
+      const aiAdds = proposals
+        .filter((p) => p.kind !== 'manual' && p.kind !== 'unknown')
+        .map((p) => exportRefinedRangeForProposal(editsRef.current, p, spans, audioSamples))
+      const cleanTakeAiRanges = aiAdds.length
+        ? mergeCleanTakeAiRanges(resolveCleanTakeAiRanges(editsRef.current), aiAdds)
+        : editsRef.current.cleanTakeAiRanges
+      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds, cutQualityMeta, cleanTakeAiRanges }
       if (editsEqual(editsRef.current, nextEdits)) return
       const rippled = rippleFrom(editsRef.current, nextEdits)
       editsRef.current = rippled
@@ -613,7 +620,10 @@ export function useEditorState(
       const cuts = subtractRangeFromCuts(editsRef.current.cutRanges, range)
       const cutCleanupKinds = pruneCutCleanupKinds(editsRef.current.cutCleanupKinds, cuts)
       const cutQualityMeta = pruneCutQualityMeta(editsRef.current.cutQualityMeta, cuts)
-      const next = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds, cutQualityMeta }
+      const cleanTakeAiRanges = Array.isArray(editsRef.current.cleanTakeAiRanges)
+        ? subtractRangeFromCuts(editsRef.current.cleanTakeAiRanges, range)
+        : editsRef.current.cleanTakeAiRanges
+      const next = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds, cutQualityMeta, cleanTakeAiRanges }
       if (editsEqual(editsRef.current, next)) return
       setEdits(next)
     },
@@ -629,7 +639,11 @@ export function useEditorState(
       }
       const cutCleanupKinds = pruneCutCleanupKinds(editsRef.current.cutCleanupKinds, cuts)
       const cutQualityMeta = pruneCutQualityMeta(editsRef.current.cutQualityMeta, cuts)
-      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds, cutQualityMeta }
+      let cleanTakeAiRanges = editsRef.current.cleanTakeAiRanges
+      if (Array.isArray(cleanTakeAiRanges)) {
+        for (const range of ranges) cleanTakeAiRanges = subtractRangeFromCuts(cleanTakeAiRanges, range)
+      }
+      const nextEdits = { ...editsRef.current, cutRanges: cuts, cutCleanupKinds, cutQualityMeta, cleanTakeAiRanges }
       if (editsEqual(editsRef.current, nextEdits)) return
       const rippled = rippleFrom(editsRef.current, nextEdits)
       editsRef.current = rippled
