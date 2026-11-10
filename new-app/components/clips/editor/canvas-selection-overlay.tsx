@@ -64,10 +64,11 @@ type Props = {
   onCommit: (next: ClipEditsV2, pushHistory: boolean) => void
   cropMode: boolean
   onCropModeChange: (on: boolean) => void
+  captionQuickStyle?: { onMore: () => void }
   readOnly?: boolean
 }
 
-const laneOf = (t: KeyframeTarget) => (t === 'video' ? 'video' : t.startsWith('broll:') ? 'broll' : 'text')
+const laneOf = (t: KeyframeTarget) => (t === 'captions' ? 'captions' : t === 'video' ? 'video' : t.startsWith('broll:') ? 'broll' : 'text')
 
 function relRect(el: Element, box: DOMRect): Rect {
   const r = el.getBoundingClientRect()
@@ -150,6 +151,7 @@ export function CanvasSelectionOverlay({
   onCommit,
   cropMode,
   onCropModeChange,
+  captionQuickStyle,
   readOnly = false,
 }: Props) {
   const [quad, setQuad] = useState<Pt[] | null>(null)
@@ -249,7 +251,7 @@ export function CanvasSelectionOverlay({
       if (!p) return
       const hit = hitTest(p)
       onSelect(hit)
-      if (!hit || readOnly || locked(hit)) return
+      if (!hit || hit === 'captions' || readOnly || locked(hit)) return
       const g = geomOf(hit)
       if (!g) return
       const e = editsRef.current
@@ -320,7 +322,8 @@ export function CanvasSelectionOverlay({
       const p = pointIn(ev)
       if (!p) return
       const hit = hitTest(p)
-      if (!hit || isMediaLayerTarget(hit) || locked(hit)) {
+      if (!hit || hit === 'captions' || isMediaLayerTarget(hit) || locked(hit)) {
+        if (hit === 'captions') onSelect(hit)
         if (hit && isMediaLayerTarget(hit) && !locked(hit)) onCropModeChange(true)
         return
       }
@@ -427,7 +430,7 @@ export function CanvasSelectionOverlay({
         ) : null}
         {quad && rot && canEdit && !showCrop ? <line x1={rot.stem.x} y1={rot.stem.y} x2={rot.at.x} y2={rot.at.y} stroke="#fff" strokeWidth={1} /> : null}
       </svg>
-      {quad && canEdit && !showCrop
+      {quad && canEdit && !showCrop && selected !== 'captions'
         ? quad.map((p, i) => {
             const at =
               selected === 'video' && box
@@ -445,7 +448,7 @@ export function CanvasSelectionOverlay({
             )
           })
         : null}
-      {quad && rot && canEdit && !showCrop ? (
+      {quad && rot && canEdit && !showCrop && selected !== 'captions' ? (
         <div
           role="presentation"
           className="pointer-events-auto absolute size-3.5 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border border-black/60 bg-white"
@@ -476,9 +479,9 @@ export function CanvasSelectionOverlay({
       {quad && canEdit && selected ? (
         // TC4a (CV-15): floating selection toolbar above the selected layer (crop, rotate, flip, reset).
         <div
-          className="pointer-events-auto absolute flex items-center gap-0.5 rounded-md bg-black/80 p-0.5 text-[11px] font-medium text-white shadow-lg ring-1 ring-white/15"
+          className="pointer-events-auto absolute flex max-w-[calc(100%-8px)] items-center gap-0.5 overflow-x-auto rounded-md bg-black/80 p-0.5 text-[11px] font-medium text-white shadow-lg ring-1 ring-white/15"
           style={{
-            left: Math.max(4, Math.min(W - 230, quadBounds(quad).x)),
+            left: Math.max(4, Math.min(W - (selected === 'captions' ? Math.min(320, W - 8) : 230), quadBounds(quad).x)),
             top: floatToolbarTop(quadBounds(quad), H),
           }}
           onPointerDown={(e) => e.stopPropagation()}
@@ -486,6 +489,29 @@ export function CanvasSelectionOverlay({
           aria-label="Selected layer"
           data-testid="canvas-float-toolbar"
         >
+          {selected === 'captions' && captionQuickStyle ? (
+            <>
+              <select aria-label="Caption font family" data-testid="canvas-caption-font" className="h-6 max-w-24 rounded bg-black/60 px-1 text-white" value={baseEdits.captions?.font ?? 'Poppins'}
+                onChange={(e) => onCommit({ ...baseRef.current, captions: { ...baseRef.current.captions, font: e.target.value } }, true)}>
+                {[...new Set(['Poppins', 'Anton', 'Montserrat Black', ...(baseEdits.captions?.font ? [baseEdits.captions.font] : [])])].map((font) => <option key={font} value={font}>{font}</option>)}
+              </select>
+              <input type="number" aria-label="Caption size percent" data-testid="canvas-caption-size" min={3} max={10} step={0.5} className="h-6 w-12 rounded bg-black/60 px-1 text-white"
+                value={baseEdits.captions?.presetId?.startsWith('cp') ? (baseEdits.captions?.userSizePct ?? 5) : (baseEdits.captions?.size ?? 5)}
+                onChange={(ev) => {
+                  const size = ev.currentTarget.valueAsNumber
+                  if (!Number.isFinite(size) || size < 3 || size > 10) return
+                  const cap = baseRef.current.captions ?? {}
+                  onCommit({ ...baseRef.current, captions: { ...cap, ...(cap.presetId?.startsWith('cp') ? { userSizePct: size } : { size }) } }, true)
+                }}
+              />
+              <button type="button" title="Toggle caption case" aria-label="Toggle caption case" data-testid="canvas-caption-case" className="rounded px-1.5 py-0.5 hover:bg-white/15" onClick={() => { const cap = baseRef.current.captions ?? {}; onCommit({ ...baseRef.current, captions: { ...cap, case: cap.case === 'upper' ? 'sentence' : 'upper' } }, true) }}>Aa</button>
+              <input type="color" title="Caption active color" aria-label="Caption active color" data-testid="canvas-caption-color" className="h-6 w-7 cursor-pointer rounded" value={baseEdits.captions?.colors?.a ?? '#FFFFFF'}
+                onChange={(ev) => { const cap = baseRef.current.captions ?? {}; onCommit({ ...baseRef.current, captions: { ...cap, colors: { ...cap.colors, a: ev.target.value } } }, true) }}
+              />
+              <button type="button" className="rounded px-1.5 py-0.5 hover:bg-white/15" data-testid="canvas-caption-more" onClick={captionQuickStyle.onMore}>More</button>
+            </>
+          ) : (
+            <>
           {media ? (
             <button type="button" className="rounded px-1.5 py-0.5 hover:bg-white/15" onClick={() => onCropModeChange(!cropMode)} data-testid="canvas-crop-toggle">
               {showCrop ? 'Done' : 'Crop'}
@@ -520,6 +546,8 @@ export function CanvasSelectionOverlay({
           >
             Reset
           </button>
+            </>
+          )}
         </div>
       ) : null}
       {editing ? (

@@ -214,6 +214,7 @@ export function PreviewStage({
     onCommit: (next: ClipEditsV2, pushHistory: boolean) => void
     cropMode: boolean
     onCropModeChange: (on: boolean) => void
+    captionQuickStyle?: { onMore: () => void }
   } | null
   canvasBgImageUrl?: string | null
   mainVideoSize?: { width: number; height: number } | null
@@ -1355,17 +1356,23 @@ export function PreviewStage({
       const el = textRefs.current[t.id] ?? null
       out.push({ target: `text:${t.id}`, el, frame: stageBoxEl, content: el?.querySelector<HTMLElement>('[data-testid="preview-text-block"]') ?? null })
     }
+    // Caption hit-testing uses the rendered caption bounds, never the whole preview.
+    if (canvas?.captionQuickStyle && e.captions?.enabled !== false) {
+      const captionEl = stageBoxEl?.querySelector<HTMLElement>('[data-testid="caption-line"]') ?? null
+      if (captionEl) out.push({ target: 'captions', el: captionEl, frame: captionEl })
+    }
     // G1b: text under an overlay track hit-tests under that overlay (same z as the drawing).
     const uz = underZRef.current
     if (!Object.keys(uz).length) return out
     const zOf = (l: CanvasLayerDom) => {
       if (l.target === 'video') return 0
+      if (l.target === 'captions') return 25
       if (l.target.startsWith('broll:')) return uz[`overlay:${l.target.slice(6)}`] ?? 15
       if (l.target.startsWith('text:')) return uz[`text:${l.target.slice(5)}`] ?? 23
       return 22
     }
     return out.map((l, i) => ({ l, i, z: zOf(l) })).sort((a, b) => a.z - b.z || a.i - b.i).map((x) => x.l)
-  }, [stageBoxEl])
+  }, [stageBoxEl, canvas?.captionQuickStyle])
 
   // G4afix: every cross-origin <video> / <img> of the preview loads in CORS mode from its first
   // fetch (pixel access for the WebGL grade, scopes, filmstrip); failures fall back to a plain load.
@@ -2084,6 +2091,7 @@ export function PreviewStage({
             onCommit={canvas.onCommit}
             cropMode={canvas.cropMode}
             onCropModeChange={canvas.onCropModeChange}
+            captionQuickStyle={canvas.captionQuickStyle}
             readOnly={Boolean(audition)}
           />
         ) : null}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { CaptionMiniPreview } from '@/components/clips/editor/caption-overlay'
@@ -125,6 +125,8 @@ export function CaptionsPanel({
   onEdits,
   onSeekOutput,
   readOnly,
+  compactProperties = false,
+  aspectSlot,
 }: {
   clipId?: string
   edits: ClipEditsV2
@@ -138,6 +140,8 @@ export function CaptionsPanel({
   onEdits?: (next: ClipEditsV2) => void
   onSeekOutput?: (ms: number) => void
   readOnly?: boolean
+  compactProperties?: boolean
+  aspectSlot?: ReactNode
 }) {
   const cap = edits.captions ?? {}
   const userFonts = useWorkspaceFonts()
@@ -162,6 +166,7 @@ export function CaptionsPanel({
   const [vocabTo, setVocabTo] = useState('')
   const [vocabSpeakAs, setVocabSpeakAs] = useState('')
   const [saveOpen, setSaveOpen] = useState(false)
+  const [stylesExpanded, setStylesExpanded] = useState(false)
   const [saveName, setSaveName] = useState('')
   const [translateLang, setTranslateLang] = useState('')
   const [translateBusy, setTranslateBusy] = useState(false)
@@ -259,12 +264,53 @@ export function CaptionsPanel({
     }
   }
 
+  const coreColorSwatches = (
+    <div className="grid grid-cols-2 gap-3" data-testid="caption-core-colors">
+      <CaptionHexInput label="Speaker 1 active" value={cap.colors?.a || preset.active} onCommit={(a) => patch({ colors: { ...cap.colors, a } })} />
+      <CaptionHexInput label="Speaker 2 active" value={cap.colors?.b || preset.activeB} onCommit={(b) => patch({ colors: { ...cap.colors, b } })} />
+    </div>
+  )
+
   return (
     <div className="flex flex-col gap-4 p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Captions</span>
-        <Switch checked={cap.enabled !== false} onCheckedChange={(v) => patch({ enabled: v })} />
-      </div>
+      {compactProperties ? (
+        <section className="space-y-3" data-testid="compact-caption-properties">
+          <label className="flex items-center justify-between gap-2 text-sm font-medium">
+            Show captions on this video
+            <Switch aria-label="Show captions on this video" checked={cap.enabled !== false} onCheckedChange={(v) => patch({ enabled: v })} />
+          </label>
+          <label className="block space-y-1 text-xs font-medium">
+            <span>Template</span>
+            <select data-testid="compact-caption-template" className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+              value={cap.customPresetId ? `custom:${cap.customPresetId}` : presetId}
+              onChange={(event) => {
+                const id = event.target.value
+                if (id.startsWith('custom:')) {
+                  const saved = customPresets.find((p) => p.id === id.slice(7))
+                  if (saved) onChange({ ...applyCaptionStyleSnapshot(cap, saved.config), customPresetId: saved.id })
+                  return
+                }
+                const classic = CAPTION_PRESETS.find((p) => presetSlugToId(p.slug) === id)
+                if (classic) {
+                  onChange({ ...cap, enabled: cap.enabled !== false, presetId: id, customPresetId: undefined, animation: classic.animation, size: cap.size ?? classic.sizePct, userSizePct: undefined })
+                } else if (id in CAPTION_PRESETS_V2 && t6CaptionPresetsEnabled()) {
+                  onChange({ enabled: cap.enabled !== false, presetId: id, emphasis: cap.emphasis, size: cap.size, position: cap.position })
+                }
+              }}>
+              {CAPTION_PRESETS.map((p) => <option key={p.slug} value={presetSlugToId(p.slug)}>{p.name}</option>)}
+              {t6CaptionPresetsEnabled() ? Object.entries(CAPTION_PRESETS_V2).filter(([id, p]) => id.startsWith('cp') && !(p as { deferred?: boolean }).deferred).map(([id, p]) => <option key={id} value={id}>{(p as { name?: string }).name ?? id}</option>) : null}
+              {customPresets.map((p) => <option key={p.id} value={`custom:${p.id}`}>{p.name}</option>)}
+            </select>
+          </label>
+          <Button type="button" size="sm" variant="outline" onClick={() => setStylesExpanded((v) => !v)} aria-expanded={stylesExpanded} data-testid="compact-caption-see-styles">{stylesExpanded ? 'Hide styles' : 'See all styles'}</Button>
+          {coreColorSwatches}
+        </section>
+      ) : (
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">Captions</span>
+          <Switch checked={cap.enabled !== false} onCheckedChange={(v) => patch({ enabled: v })} />
+        </div>
+      )}
       <p className="text-xs text-muted-foreground">{CAPTION_OPT_IN_COPY}</p>
       {syncWarnings.length ? <CaptionSyncWarningBanner warnings={syncWarnings} /> : null}
 
@@ -443,6 +489,8 @@ export function CaptionsPanel({
         </label>
       </div>
 
+      {(!compactProperties || stylesExpanded) ? (
+      <>
       <div className="space-y-2" data-testid="caption-custom-presets">
         <p className="text-xs font-medium text-muted-foreground">Saved styles</p>
         {customPresetStatus === 'loading' ? (
@@ -565,6 +613,9 @@ export function CaptionsPanel({
           )
         })}
       </div>
+
+      </>
+      ) : null}
 
       <label className="text-xs font-medium text-muted-foreground">Animation</label>
       <Select
@@ -892,18 +943,7 @@ export function CaptionsPanel({
         </p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3">
-        <CaptionHexInput
-          label="Speaker 1 active"
-          value={cap.colors?.a || preset.active}
-          onCommit={(a) => patch({ colors: { ...cap.colors, a } })}
-        />
-        <CaptionHexInput
-          label="Speaker 2 active"
-          value={cap.colors?.b || preset.activeB}
-          onCommit={(b) => patch({ colors: { ...cap.colors, b } })}
-        />
-      </div>
+      {!compactProperties ? coreColorSwatches : null}
 
       <div className="flex flex-wrap gap-2">
         {onApplyBrand ? (
@@ -914,6 +954,7 @@ export function CaptionsPanel({
         ) : null}
         <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)}>Save style</Button>
       </div>
+      {compactProperties && aspectSlot ? <section className="border-t border-border pt-3" data-testid="caption-aspect-layout">{aspectSlot}</section> : null}
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>

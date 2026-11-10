@@ -172,6 +172,7 @@ import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
 import { buildFromTranscriptItem, matchFrameAt } from '@/lib/clips/editor/source-monitor'
 import { mediaUrlFor, useMediaTranscripts, useProjectMedia } from '@/components/clips/editor/use-project-media'
 import { CanvasBackgroundChip, CanvasBackgroundSection } from '@/components/clips/editor/canvas-background'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { PreviewChipRow, previewChipButtonClass } from '@/components/clips/editor/preview-chip-row'
 import { PreviewTransportStrip } from '@/components/clips/editor/preview-transport-strip'
 import { EditorProjectMenu } from '@/components/clips/editor/editor-project-menu'
@@ -183,7 +184,7 @@ import {
 } from '@/components/clips/editor/script-view-tool-rail'
 import { TimelineShortcutsSheet } from '@/components/clips/editor/timeline/shortcuts-sheet'
 import { canvasBgRelevant } from '@/lib/clips/canvas-bg'
-import { aspectCss } from '@/lib/clips/export-aspect'
+import { aspectCss, EXPORT_ASPECT_PRESETS } from '@/lib/clips/export-aspect'
 import {
   nextZoom,
   readPreviewQuality,
@@ -367,6 +368,7 @@ export function EditorShell({
   })
   const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
   const pendingApplyDone = useRef(false)
+  const compactClipMode = compact && !fullVideo && !clipperStudio
   const startPanel: EditorPanelId = initialPanel ?? 'transcript'
   const [panel, setPanel] = useState<EditorPanelId>(startPanel)
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
@@ -1437,6 +1439,8 @@ export function EditorShell({
             ? 'Video'
             : target === 'text'
               ? 'Hook'
+              : target === 'captions'
+                ? 'Captions'
               : target.startsWith('broll:')
                 ? 'B-roll'
                 : (edits.textItems?.find((x) => `text:${x.id}` === target)?.text ?? 'Text').slice(0, 40)
@@ -1447,10 +1451,16 @@ export function EditorShell({
         if (!target) return { lane: 'video', id: '__none__', seq }
         if (target === 'video') return { lane: 'video', atMs: outputMs, seq }
         if (target === 'text') return { lane: 'text', id: 'hook', seq }
+        if (target === 'captions') return { lane: 'captions', atMs: outputMs, seq }
         if (target.startsWith('broll:')) return { lane: 'broll', id: target.slice(6), seq }
         return { lane: 'text', id: target.slice(5), seq }
       })
       if (target?.startsWith('text:')) setSelectedTextId(target.slice(5))
+      if (target === 'captions') {
+        selectPanel('captions')
+        console.info('[editor:compact-gaps] caption-canvas-select', { projectId, clipId })
+        return
+      }
       // Text panel open + a text item clicked: stay there (it follows the selection); else Properties.
       if (target && !(panel === 'text' && target.startsWith('text:'))) {
         setPanel('inspector')
@@ -1458,7 +1468,7 @@ export function EditorShell({
         if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
       }
     },
-    [edits.textItems, outputMs, panel, layoutView, band, setDockPanelOpenPersist],
+    [edits.textItems, outputMs, panel, layoutView, band, setDockPanelOpenPersist, selectPanel, projectId, clipId],
   )
   const onCanvasCommit = useCallback(
     (next: ClipEditsV2, pushHistory: boolean) => setEdits(next, pushHistory),
@@ -2487,6 +2497,8 @@ export function EditorShell({
           onChange={setCaptions}
           onApplyBrand={() => void applyBrand()}
           onSaveClipTemplate={() => void saveClipTemplate()}
+          compactProperties={compactClipMode}
+          aspectSlot={compactClipMode ? <LayoutQuickPicker value={edits.layout.mode} edits={edits} facecamLayout={facecamLayout} reframeV2Enabled={reframeV2Enabled} onPick={onLayoutPick} onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })} /> : undefined}
           outputMs={outputMs}
           onEdits={setEdits}
           onSeekOutput={seekOutput}
@@ -2854,6 +2866,7 @@ export function EditorShell({
           onCommit: onCanvasCommit,
           cropMode,
           onCropModeChange: setCropMode,
+          captionQuickStyle: compactClipMode ? { onMore: () => selectPanel('captions') } : undefined,
         }}
       />
       {studioPreviewLoading ? (
@@ -2943,6 +2956,32 @@ export function EditorShell({
       ) : null}
           </div>
         </div>
+        {compactClipMode ? (
+          <div className="flex min-w-0 shrink-0 items-center gap-2 overflow-x-auto border-t border-border/70 px-2 py-1.5" data-testid="compact-preview-footer" aria-label="Preview layout controls">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className={previewChipButtonClass()} data-testid="compact-footer-ratio">Ratio · {edits.aspectRatio ?? '9:16'}</button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-auto max-w-[90vw] p-3">
+                <p className="mb-2 text-xs font-semibold">Aspect ratio</p>
+                <div className="flex flex-wrap gap-1">
+                  {EXPORT_ASPECT_PRESETS.map((aspect) => (
+                    <Button key={aspect} size="sm" variant={(edits.aspectRatio ?? '9:16') === aspect ? 'default' : 'outline'} onClick={() => { setEdits({ ...edits, aspectRatio: aspect }); console.info('[editor:compact-gaps] ratio-set', { projectId, clipId, aspect }) }}>{aspect}</Button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+            <CanvasBackgroundChip edits={edits} media={media} projectId={projectId} clipId={clipId} visible compositeLocked={compositePreviewClip} readOnly={Boolean(edits.timelineLanes?.video?.locked)} onCommit={setEdits} />
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className={previewChipButtonClass()} data-testid="compact-footer-layouts">Layouts</button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[min(420px,90vw)] max-h-[65vh] overflow-y-auto p-3">
+                <LayoutQuickPicker value={edits.layout.mode} edits={edits} facecamLayout={facecamLayout} reframeV2Enabled={reframeV2Enabled} onPick={(mode, facecam) => { onLayoutPick(mode, facecam); console.info('[editor:compact-gaps] layout-set', { projectId, clipId, mode }) }} />
+              </PopoverContent>
+            </Popover>
+          </div>
+        ) : null}
         {!dockTools && (pickerWhy || detectedLayout || clipTypeLabel) ? (
           <div className="hidden max-w-xl space-y-1 px-1 2xl:block">
         {clipTypeLabel ? (
@@ -3119,7 +3158,7 @@ export function EditorShell({
                     ) : null}
                   </div>
                 ) : null}
-                <CanvasBackgroundChip
+                {!compactClipMode ? <CanvasBackgroundChip
                   edits={edits}
                   media={media}
                   projectId={projectId}
@@ -3129,7 +3168,7 @@ export function EditorShell({
                   readOnly={Boolean(edits.timelineLanes?.video?.locked)}
                   onCommit={(next) => setEdits(next)}
                   narrow={previewFrameW < 320}
-                />
+                /> : null}
                 <button
                   type="button"
                   className={previewChipButtonClass(meterOn ? 'ring-2 ring-primary' : undefined)}
@@ -3833,6 +3872,12 @@ export function EditorShell({
                 minPreviewPx={320}
                 transcript={
                   <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card" data-testid="unified-transcript-pane">
+                    {compactClipMode ? (
+                      <div className="flex shrink-0 gap-1 border-b border-border/70 p-1.5" role="tablist" aria-label="Transcript editing mode" data-testid="compact-transcript-switch">
+                        <button type="button" role="tab" aria-selected={panel !== 'captions'} className={panel !== 'captions' ? 'rounded bg-accent px-3 py-1.5 text-xs font-medium' : 'rounded px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted'} onClick={() => selectPanel('transcript')}>Transcript</button>
+                        <button type="button" role="tab" aria-selected={panel === 'captions'} className={panel === 'captions' ? 'rounded bg-accent px-3 py-1.5 text-xs font-medium' : 'rounded px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted'} onClick={() => selectPanel('captions')}>Edit subtitles</button>
+                      </div>
+                    ) : null}
                     {renderTranscriptPanel({ largeScript: true, compactToolbar: true, documentView: true })}
                   </div>
                 }
