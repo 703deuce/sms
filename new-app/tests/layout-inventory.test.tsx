@@ -30,7 +30,7 @@ vi.mock('@/components/shell/breadcrumb-context', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
-  usePathname: () => '/app/clips/p/edit/c',
+  usePathname: () => '/app/video-editor/p/edit/c',
 }))
 
 vi.mock('@/components/clips/editor/use-full-video-highlights', () => ({

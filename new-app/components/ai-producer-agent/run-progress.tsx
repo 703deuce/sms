@@ -45,7 +45,7 @@ export function RunProgress({ runId, onDone }: { runId: string; onDone?: () => v
 
   const editorHref =
     run?.resultProjectId && run.resultClipId
-      ? `/app/clips/${run.resultProjectId}/edit/${run.resultClipId}`
+      ? `/app/video-editor/${run.resultProjectId}/edit/${run.resultClipId}`
       : null
 
   return (

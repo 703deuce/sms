@@ -3673,7 +3673,7 @@ export function EditorShell({
             Drag layers on the live preview
           </span>
           <Button size="sm" variant="outline" nativeButton={false}
-            render={<a href={`/app/clips/${projectId}/edit/${clipId}`} />}>
+            render={<a href={`/app/video-editor/${projectId}/edit/${clipId}`} />}>
             Full editor
           </Button>
         </nav>

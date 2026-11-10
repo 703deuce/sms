@@ -37,9 +37,9 @@ export function ScriptCompositionSwitcher({
 
   const hrefFor = (c: CompositionListItem) => {
     if (c.kind === 'CLIP' && c.clipId) {
-      return `/app/clips/${projectId}/script?clipId=${encodeURIComponent(c.clipId)}`
+      return `/app/video-editor/${projectId}/script?clipId=${encodeURIComponent(c.clipId)}`
     }
-    return `/app/clips/${projectId}/script`
+    return `/app/video-editor/${projectId}/script`
   }
 
   return (

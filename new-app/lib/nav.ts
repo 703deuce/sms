@@ -68,7 +68,7 @@ const CLIPS_ITEMS: NavItem[] = [
     },
     {
       title: 'Editor',
-      href: '/app/editor',
+      href: '/app/video-editor',
       icon: Scissors,
       group: 'Library',
       isActive: (pathname) => pathname.includes('/script'),
@@ -114,7 +114,7 @@ const CLIPS_ITEMS: NavItem[] = [
 
 const SCRIPT_EDITOR_ONLY_HREFS = new Set([
   '/app/sw',
-  '/app/editor',
+  '/app/video-editor',
   '/app/voice',
   // '/app/rooms' index is still a stub (redirects to /new); Rooms itself is not script-editor-only.
   '/app/rooms',
@@ -147,10 +147,10 @@ export const WORKSPACE: NavContext = {
   key: 'workspace',
   title: 'Workspace',
   shortTitle: 'Workspace',
-  href: '/app/clips',
+  href: '/app',
   icon: Home,
   items: [
-    { title: 'Home', href: '/app/clips', icon: Home, group: 'Workspace' },
+    { title: 'Home', href: '/app', icon: Home, group: 'Workspace' },
     { title: 'Integrations', href: '/app/integrations', icon: Plug, group: 'Manage' },
     { title: 'Settings', href: '/app/settings', icon: Settings, group: 'Manage' },
     { title: 'Help', href: '/app/help', icon: HelpCircle, group: 'Manage' },
@@ -166,11 +166,16 @@ export function resolveContext(pathname: string): NavContext {
     pathname === '/app/exports' ||
     pathname.startsWith('/app/streamer') ||
     pathname.startsWith('/app/sw') ||
-    pathname.startsWith('/app/rooms')
+    pathname.startsWith('/app/rooms') ||
+    pathname === '/app/video-editor' ||
+    pathname.startsWith('/app/video-editor/') ||
+    pathname === '/app/ai-video' ||
+    pathname.startsWith('/app/ai-video/')
   ) {
     return CLIPS
   }
   if (
+    pathname === '/app' ||
     pathname === '/app/home' ||
     pathname.startsWith('/app/settings') ||
     pathname.startsWith('/app/integrations') ||
@@ -191,7 +196,7 @@ export function isItemActive(item: NavItem, pathname: string, searchParams?: URL
   if (item.href === '/app/clips' && item.exact) {
     return pathname === '/app/clips'
   }
-  if (item.href.startsWith('/app/clips/') && item.href.includes('/edit/')) {
+  if ((item.href.startsWith('/app/clips/') || item.href.startsWith('/app/video-editor/')) && item.href.includes('/edit/')) {
     return pathname === item.href || pathname.startsWith(`${item.href}/`)
   }
   if (item.href.includes('?')) {

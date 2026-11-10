@@ -1,14 +1,10 @@
-import { T2vTemplatesGallery } from '@/components/t2v/t2v-templates-gallery'
-import { requireAiVideoPageEnabled } from '@/lib/server/t2v/require-ai-video-page'
+import { permanentRedirect } from 'next/navigation'
+import { routes } from '../../../../../../lib/routes'
 
-export const metadata = { title: 'AI Video templates' }
-
-export default async function T2vTemplatesPage({
+export default async function LegacyAiVideoTemplatesRedirect({
   searchParams,
 }: {
-  searchParams: Promise<{ d?: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  requireAiVideoPageEnabled()
-  const { d } = await searchParams
-  return <T2vTemplatesGallery draftId={d} />
+  permanentRedirect(routes.aiVideoTemplates(await searchParams))
 }

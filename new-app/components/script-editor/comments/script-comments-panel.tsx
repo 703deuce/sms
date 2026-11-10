@@ -194,7 +194,7 @@ export function ScriptCommentsPanel({
                     <DropdownMenuItem
                       onClick={() => {
                         const base = typeof window !== 'undefined' ? window.location.origin : ''
-                        const href = `${base}/app/clips/${projectId}/script?comment=${thread.id}`
+                        const href = `${base}/app/video-editor/${projectId}/script?comment=${thread.id}`
                         void navigator.clipboard.writeText(href)
                         toast.success('Comment link copied')
                       }}

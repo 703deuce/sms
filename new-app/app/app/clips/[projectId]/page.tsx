@@ -17,7 +17,7 @@ function reservedProjectSlugRedirects(): Record<string, string> {
     exports: '/app/exports',
     brand: '/app/clips/brand',
     new: '/app/clips/new',
-    video: isT2vFeatureEnabled() ? '/app/clips/video/new' : '/app/clips',
+    video: isT2vFeatureEnabled() ? '/app/ai-video/new' : '/app/clips',
   }
 }
 
@@ -104,7 +104,7 @@ export default async function ClipProjectPage({
   if (!project) notFound()
   if (project.sourceKind === 't2v') {
     if (!isT2vFeatureEnabled()) redirect('/app/clips')
-    redirect(`/app/clips/${project.id}/video`)
+    redirect(`/app/ai-video/${project.id}`)
   }
 
   const projectSettings = parseSettings(project.settings)

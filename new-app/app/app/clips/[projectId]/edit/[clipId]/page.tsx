@@ -1,21 +1,13 @@
-import { EditorPageSkeleton } from '@/components/clips/editor/editor-page-skeleton'
-import { resolveWorkspaceId } from '@/lib/server/workspace'
-import { Suspense } from 'react'
-import { EditorPayloadSection } from './editor-payload-section'
+import { permanentRedirect } from 'next/navigation'
+import { routes } from '../../../../../../lib/routes'
 
-export const metadata = { title: 'Edit clip · Clips' }
-
-export default async function ClipEditorPage({
+export default async function LegacyClipEditorRedirect({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string; clipId: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { projectId, clipId } = await params
-  const workspaceId = await resolveWorkspaceId()
-
-  return (
-    <Suspense fallback={<EditorPageSkeleton />}>
-      <EditorPayloadSection workspaceId={workspaceId} projectId={projectId} clipId={clipId} />
-    </Suspense>
-  )
+  permanentRedirect(routes.edit(projectId, clipId, await searchParams))
 }

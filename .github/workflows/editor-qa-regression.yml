@@ -135,7 +135,14 @@ jobs:
             tests/streamer-agent-batch-contract.test.ts \
             tests/motion-graphics-contract.test.ts \
             tests/motion-graphics-text-adapter.test.ts \
-            tests/motion-request-limit.test.ts
+            tests/motion-request-limit.test.ts \
+            tests/app-route-redirects.test.ts \
+            tests/routes-helper.test.ts \
+            tests/app-route-nav-links.test.ts \
+            tests/app-route-href-grep.test.ts \
+            tests/ui/sidebar-nav-model.test.ts \
+            tests/project-editor-link.test.ts \
+            tests/t2v-project-link.test.ts
 
   captions-worker-regression:
     runs-on: ubuntu-latest

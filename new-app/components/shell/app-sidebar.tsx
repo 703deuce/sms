@@ -52,7 +52,7 @@ const HEAVY_NAV_HREF_NO_PREFETCH = new Set([
   '/app/streamer',
   '/app/exports',
   '/app/record',
-  '/app/editor',
+  '/app/video-editor',
   '/app/rooms',
   '/app/rooms/new',
 ])

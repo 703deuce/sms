@@ -88,8 +88,8 @@ export function ClipCard({
       : undefined
 
   const editorHref = isStreamer
-    ? `/app/clips/${projectId}/studio/${clip.id}`
-    : `/app/clips/${projectId}/edit/${clip.id}`
+    ? `/app/video-editor/${projectId}/studio/${clip.id}`
+    : `/app/video-editor/${projectId}/edit/${clip.id}`
 
   const openEditor = () => {
     router.push(editorHref)
@@ -434,7 +434,7 @@ export function ClipCard({
               {isScriptEditorEnabled() ? (
                 <DropdownMenuItem
                   data-testid="edit-in-script-editor"
-                  onClick={() => router.push(`/app/clips/${projectId}/script?clipId=${clip.id}`)}
+                  onClick={() => router.push(`/app/video-editor/${projectId}/script?clipId=${clip.id}`)}
                 >
                   Script editor
                 </DropdownMenuItem>
