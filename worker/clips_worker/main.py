@@ -778,6 +778,7 @@ def handle_ad_studio_run(conn, job: dict) -> None:
 
     log(f"[ad-studio:worker] dispatch_begin job={job['id']}")
     run_ad_studio_job(conn, job)
+    _mark_job_done(conn, job["id"])
     log(f"[ad-studio:worker] dispatch_complete job={job['id']}")
 
 
