@@ -1,7 +1,10 @@
 'use client'
 
-import { ClipCard } from '@/components/clips/clip-card'
-import type { ExportAspect } from '@/lib/clips/export-aspect'
+import { ClipCard } from './clip-card'
+import { UnifiedClipTypeBadge } from './unified-clip-type-badge'
+import { NeedsReviewBadge } from './needs-review-badge'
+import type { ExportAspect } from '../../lib/clips/export-aspect'
+import type { UnifiedClipKind } from '../../lib/clips/unified-clip-results'
 
 export type ClipCardData = {
   id: string
@@ -17,6 +20,9 @@ export type ClipCardData = {
   aiMeta?: unknown
   edits?: unknown
   spokenFirstLine?: string
+  resultKind?: UnifiedClipKind
+  needsReview?: boolean
+  needsReviewReasons?: string[]
 }
 
 export function ClipGrid({
@@ -45,19 +51,28 @@ export function ClipGrid({
   return (
     <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {clips.map((c) => (
-        <ClipCard
-          key={c.id}
-          clip={c}
-          projectId={projectId}
-          onDownload={onDownload}
-          onHidden={onHidden}
-          onChanged={onChanged}
-          isStreamer={isStreamer}
-          cardAspect={cardAspect}
-          selected={selectedIds?.has(c.id) ?? false}
-          onToggleSelect={onToggleSelect ? () => onToggleSelect(c.id) : undefined}
-          projectHasUpload={projectHasUpload}
-        />
+        <div key={c.id} className="relative min-w-0">
+          <div className="pointer-events-none absolute left-12 top-2 z-20 flex flex-col items-start gap-1">
+            {c.resultKind ? <UnifiedClipTypeBadge kind={c.resultKind} /> : null}
+            {c.needsReview || c.aiMeta ? (
+              <span className="pointer-events-auto">
+                <NeedsReviewBadge aiMeta={c.aiMeta ?? (c.needsReview ? { needsReview: true, needsReviewReasons: c.needsReviewReasons } : undefined)} />
+              </span>
+            ) : null}
+          </div>
+          <ClipCard
+            clip={c}
+            projectId={projectId}
+            onDownload={onDownload}
+            onHidden={onHidden}
+            onChanged={onChanged}
+            isStreamer={isStreamer}
+            cardAspect={cardAspect}
+            selected={selectedIds?.has(c.id) ?? false}
+            onToggleSelect={onToggleSelect ? () => onToggleSelect(c.id) : undefined}
+            projectHasUpload={projectHasUpload}
+          />
+        </div>
       ))}
     </div>
   )
