@@ -8,7 +8,7 @@ export type SidebarNavFlags = {
 }
 export type SidebarNavGroup = 'home' | 'products' | 'library' | 'footer'
 export type SidebarNavIcon =
-  | 'home' | 'clips' | 'streamer' | 'editor' | 'youtubeVideo' | 'record' | 'aiVideo'
+  | 'home' | 'clips' | 'streamer' | 'editor' | 'youtubeVideo' | 'captions' | 'record' | 'aiVideo'
   | 'studio' | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings'
 export type SidebarNavItem = { id: string; label: string; href: string; icon: SidebarNavIcon; group: SidebarNavGroup }
 export type CreateMenuItem = { id: string; label: string; href: string; icon: SidebarNavIcon }
@@ -62,6 +62,7 @@ export function buildSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
     { id: 'streamer', label: 'Streamer', href: '/app/streamer', icon: 'streamer', group: 'products' },
     { id: 'editor', label: 'Editor', href: routes.videoEditor(), icon: 'editor', group: 'products' },
     { id: 'youtube-video', label: 'YouTube Video', href: routes.youtubeVideo(), icon: 'youtubeVideo', group: 'products' },
+    { id: 'captions', label: 'AI Captions', href: '/app/captions', icon: 'captions', group: 'products' },
     rec ? { id: 'record', label: 'Record', href: rec, icon: 'record', group: 'products' } : null,
     f.t2v ? { id: 'ai-video', label: 'AI Video', href: routes.aiVideoNew(), icon: 'aiVideo', group: 'products' } : null,
     { id: 'studio', label: 'Studio', href: '/app/studio', icon: 'studio', group: 'products' },
@@ -81,6 +82,7 @@ export function activeSidebarId(pathname: string, search: URLSearchParams | stri
   const p = pathname.replace(/\/+$/, '') || '/'
   if (p === '/app/studio' || p.startsWith('/app/studio/')) return 'studio'
   if (p === '/app/youtube-video' || p.startsWith('/app/youtube-video/')) return 'youtube-video'
+  if (p === '/app/captions' || p.startsWith('/app/captions/')) return 'captions'
   if (p === '/app/clips/new') return 'clips'
   if (p.startsWith('/app/clips/video/templates') || p.startsWith('/app/ai-video/templates')) return 'templates'
   if (p.startsWith('/app/clips/templates')) return 'templates' // every ?tab= / &sub=

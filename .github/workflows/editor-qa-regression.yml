@@ -171,7 +171,9 @@ jobs:
             tests/unified-clip-results.test.ts \
             tests/unified-clip-results-ui.test.tsx \
             tests/youtube-video/page-adapter.test.ts \
-            tests/streamer-unified-results.test.tsx
+            tests/streamer-unified-results.test.tsx \
+            tests/editor-initial-panel.test.ts \
+            tests/ai-captions-workspace.test.tsx
 
   captions-worker-regression:
     runs-on: ubuntu-latest

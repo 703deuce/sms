@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import {
+  Captions,
   Clapperboard,
   Download,
   GraduationCap,
@@ -38,6 +39,8 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   editor: Clapperboard,
   record: Video,
   aiVideo: Sparkles,
+  studio: Sparkles,
+  captions: Captions,
   media: Images,
   brand: Palette,
   templates: LayoutTemplate,
