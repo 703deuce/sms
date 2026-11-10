@@ -298,12 +298,16 @@ def load_source_words(ctx: dict, work_dir: Path) -> tuple[list[dict], bool]:
         project_id = ctx["projectId"]
         words_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/words.json"
         p = work_dir / "clip_words.json"
-        download_object(words_key, p)
-        clip_words = json.loads(p.read_text())
-        start = int(ctx["startMs"])
-        words = [{**w, "s": w["s"] + start / 1000.0, "e": w["e"] + start / 1000.0} for w in clip_words]
-        words_fallback = True
-        print("[clipper:words] words_fallback source=clip_words", flush=True)
+        try:
+            download_object(words_key, p)
+            clip_words = json.loads(p.read_text())
+            start = int(ctx["startMs"])
+            words = [{**w, "s": w["s"] + start / 1000.0, "e": w["e"] + start / 1000.0} for w in clip_words]
+            words_fallback = True
+            print("[clipper:words] words_fallback source=clip_words", flush=True)
+        except Exception:
+            print("[clipper:words] clip_words_missing -> empty", flush=True)
+            return [], False
     out = []
     for pos, w in enumerate(words):
         wi = w.get("i", w.get("idx", pos))
