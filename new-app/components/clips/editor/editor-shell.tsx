@@ -1,6 +1,8 @@
 'use client'
 
 import { Anton, Montserrat, Poppins } from 'next/font/google'
+import Link from 'next/link'
+import { routes } from '@/lib/routes'
 import { addFontVarsToBody, clipDisplayFontVars } from '@/components/clips/editor/clip-editor-fonts'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
@@ -3609,13 +3611,16 @@ export function EditorShell({
           }
           layoutSlot={null}
           versionsSlot={
-            fullVideo ? (
+            <>
+              <Button type="button" size="sm" variant="outline" render={<Link href={routes.text(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} />} onClick={() => console.info('[editor:text] compact-entry', { projectId, clipId })}>Text editor</Button>
+              {fullVideo ? (
               <FindClipsInVideoButton
                 projectId={projectId}
                 durationMs={bounds.clipEndMs - bounds.clipStartMs}
                 onStarted={fvHighlights.startedFind}
               />
-            ) : <OpenInFullVideoButton clipId={clipId} />
+            ) : <OpenInFullVideoButton clipId={clipId} />}
+            </>
           }
         />
       {clipperStudio ? (

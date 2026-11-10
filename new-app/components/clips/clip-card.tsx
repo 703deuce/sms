@@ -457,6 +457,7 @@ export function ClipCard({
               <MoreHorizontal className="size-4" aria-hidden />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem data-testid="clip-card-text-editor" onClick={() => { console.info('[editor:text] card-entry', { projectId, clipId: clip.id }); router.push('/app/video-editor/' + projectId + '/text/' + clip.id + (isStreamer ? '?from=studio' : '')) }}>Text editor</DropdownMenuItem>
               <DropdownMenuItem disabled={cardActionBusy} data-testid="clip-card-rename" onClick={() => void renameCard()}>Rename</DropdownMenuItem>
               <DropdownMenuItem disabled={cardActionBusy} data-testid="clip-card-duplicate" onClick={() => void duplicateCard()}>Duplicate</DropdownMenuItem>
               {projectHasUpload ? <DropdownMenuItem data-testid="clip-card-copy-moment" onClick={() => void copyMomentLink()}>Copy moment link</DropdownMenuItem> : null}
