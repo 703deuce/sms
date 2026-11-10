@@ -4,7 +4,7 @@ import { t2vProjectHref, t2vStatusLabel } from '../lib/t2v/project-link'
 
 describe('t2vProjectHref', () => {
   it('routes clip projects to clips view', () => {
-    expect(t2vProjectHref({ id: 'p1', sourceKind: 'upload' as const, status: 'READY' as const })).toBe('/app/clips/p1')
+    expect(t2vProjectHref({ id: 'p1', sourceKind: 'upload' as const, status: 'READY' as const, t2vDraftStatus: null })).toBe('/app/clips/p1')
   })
 
   it('routes draft t2v to studio', () => {
@@ -22,7 +22,7 @@ describe('t2vProjectHref', () => {
 
 describe('t2vStatusLabel', () => {
   it('returns null for non-t2v', () => {
-    expect(t2vStatusLabel({ sourceKind: 'upload' as const, status: 'READY' as const })).toBeNull()
+    expect(t2vStatusLabel({ sourceKind: 'upload' as const, status: 'READY' as const, t2vDraftStatus: null, t2vDraftProgress: null })).toBeNull()
   })
 
   it('shows building progress', () => {

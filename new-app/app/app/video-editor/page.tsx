@@ -15,9 +15,9 @@ export default async function ScriptEditorHubPage() {
   const scriptOn = isScriptEditorFeatureEnabled()
   const workspaceId = await getClipsWorkspaceId()
   const projects = await getClipsDriveProjects(workspaceId, { limit: 60 })
-  const anyProcessing = projects.some((p) => isClipProjectProcessing(p.status))
+  const anyProcessing = projects.some((p: { status: string }) => isClipProjectProcessing(p.status))
 
-  const sorted = [...projects].sort((a, b) => {
+  const sorted = [...projects].sort((a: { status: string; updatedAt: string | Date }, b: { status: string; updatedAt: string | Date }) => {
     const aProc = isClipProjectProcessing(a.status) ? 0 : 1
     const bProc = isClipProjectProcessing(b.status) ? 0 : 1
     if (aProc !== bProc) return aProc - bProc
@@ -25,7 +25,7 @@ export default async function ScriptEditorHubPage() {
   })
 
   const openable = sorted.filter(
-    (p) => p.status === 'READY' || isClipProjectProcessing(p.status) || p.status === 'DRAFT',
+    (p: { status: string }) => p.status === 'READY' || isClipProjectProcessing(p.status) || p.status === 'DRAFT',
   )
 
   return (
@@ -52,7 +52,7 @@ export default async function ScriptEditorHubPage() {
         </p>
       ) : (
         <ul className="divide-y divide-border rounded-lg border border-border">
-          {openable.map((p) => (
+          {openable.map((p: { id: string; title: string; status: string }) => (
             <li key={p.id}>
               <Link
                 href={scriptOn ? routes.script(p.id) : routes.project(p.id)}
