@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Clapperboard, Download, FileText, Loader2, Palette, Pause, Play, Redo2, RefreshCw, Search, Undo2 } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Download, FileText, Loader2, MessageSquare, Palette, Pause, Play, Redo2, RefreshCw, Search, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
@@ -11,6 +11,7 @@ import { PreviewStage } from '@/components/clips/editor/preview-stage'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { LayoutQuickPicker } from '@/components/clips/editor/layout-quick-picker'
 import { PreviewChipRow } from '@/components/clips/editor/preview-chip-row'
+import { EditorChatRail, type EditorChatScope } from '@/components/clips/editor/editor-chat-rail'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-filmstrip-frames'
@@ -20,7 +21,7 @@ import { editorIconBtn, editorIconBtnActive } from '@/lib/clips/editor/editor-ch
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { outputToSource, timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
-import { wordDisplayText } from '@/lib/clips/edits'
+import { canonicalEditsJson, wordDisplayText } from '@/lib/clips/edits'
 import { loadSourceWords, type SourceWord } from '@/lib/clips/source-words'
 import { paragraphStarts } from '@/lib/clips/editor/transcript-edit'
 import { sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
@@ -31,7 +32,7 @@ import type { BrandTemplateSettings } from '@/lib/clips/brand'
 import { deriveClipFromEditor, clipsFetch } from '@/lib/clips-api'
 import { routes } from '@/lib/routes'
 
-type Props = Parameters<typeof EditorClipShell>[0]
+type Props = Parameters<typeof EditorClipShell>[0] & { initialChatOpen?: boolean }
 type Scene = { start: number; end: number; label: string; id: string }
 type BrandRow = { id: string; name: string; settings: unknown; logoKey?: string | null; introVideoKey?: string | null; outroVideoKey?: string | null }
 
@@ -76,6 +77,10 @@ export function TextSceneEditorShell(props: Props) {
   const [media, setMedia] = useState(props.primaryMedia)
   const [exportOpen, setExportOpen] = useState(false)
   const [layoutOpen, setLayoutOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(Boolean(props.initialChatOpen))
+  const [chatMounted, setChatMounted] = useState(Boolean(props.initialChatOpen))
+  const [chatScope, setChatScope] = useState<EditorChatScope>({ kind: 'whole' })
+  const [chatAudition, setChatAudition] = useState<Props['initialEdits'] | null>(null)
   const [title] = useState(props.initialTitle)
   const [playing, setPlaying] = useState(false)
   const [playhead, setPlayhead] = useState(props.initialEdits.trim.in)
@@ -91,7 +96,7 @@ export function TextSceneEditorShell(props: Props) {
   const videoUrl = media?.url ?? props.mediaUrls.proxy ?? props.mediaUrls.segment ?? props.mediaUrls.source ?? props.mediaUrls.preview
   const posterUrl = props.posterUrl
   const mediaOffsetMs = media?.offsetMs ?? 0
-  const { edits, setEdits, undo, redo, canUndo, canRedo, saveState, flushSave, applyCleanupCut,
+  const { edits, setEdits, undo, redo, canUndo, canRedo, saveState, flushSave, applyProducerPatch, applyCleanupCut,
     setWordFix, applyWordFixesBatch, restoreWord, restoreCutRange, setTrim, setLayoutMode,
     syncWordsForCuts } = useEditorState(clipId, bounds, props.initialEdits, {
       serverUpdatedAt: props.serverUpdatedAt, editsSaveVersion: props.editsSaveVersion, words: normalizedWords,
@@ -111,7 +116,47 @@ export function TextSceneEditorShell(props: Props) {
       .catch(() => { console.warn('[editor:text] brand-presets-unavailable', { projectId, clipId }) })
   }, [projectId, clipId])
 
-  const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
+  const previewEdits = useMemo(() => editorPreviewEdits(chatAudition ?? edits, words), [chatAudition, edits, words])
+  const latestEditsRef = useRef(edits)
+  latestEditsRef.current = edits
+  const openChat = useCallback(async () => {
+    if (chatOpen) {
+      setChatOpen(false)
+      setChatAudition(null)
+      console.info('[editor:chat-mode] close', { projectId, clipId })
+      return
+    }
+    try {
+      await flushSave()
+      setChatMounted(true)
+      setChatOpen(true)
+      console.info('[editor:chat-mode] open', { projectId, clipId })
+    } catch {
+      toast.error('Save edits before opening AI chat')
+      console.error('[editor:chat-mode] open-blocked-save', { projectId, clipId })
+    }
+  }, [chatOpen, clipId, projectId, flushSave])
+  const useChatSelection = useCallback(() => {
+    const selection = selectionRef.current
+    if (!selection || selection.endMs <= selection.startMs) {
+      toast.message('Select words in the transcript first')
+      return
+    }
+    setChatScope({ kind: 'range', startMs: selection.startMs, endMs: selection.endMs, label: 'Selected transcript' })
+    console.info('[editor:chat-mode] selection-context', { projectId, clipId, startMs: selection.startMs, endMs: selection.endMs })
+  }, [projectId, clipId])
+  const acceptChatProposal = useCallback(async (next: Props['initialEdits'], before: Props['initialEdits'], count: number) => {
+    const beforeHash = canonicalEditsJson(before)
+    if (canonicalEditsJson(latestEditsRef.current) !== beforeHash) throw new Error('Local edits changed. Discard and replan.')
+    await flushSave()
+    const latest = await clipsFetch<{ edits: Props['initialEdits'] }>(`/api/clips/clips/${encodeURIComponent(clipId)}`)
+    if (canonicalEditsJson(latest.edits) !== beforeHash || canonicalEditsJson(latestEditsRef.current) !== beforeHash) {
+      throw new Error('The clip changed on the server. Discard this proposal and replan.')
+    }
+    if (count <= 0 || canonicalEditsJson(next) === beforeHash) throw new Error('No editable changes to accept.')
+    applyProducerPatch(next, before, count, 'Chat Producer')
+    console.info('[editor:chat-mode] accept-to-shared-edit', { projectId, clipId, count })
+  }, [clipId, projectId, flushSave, applyProducerPatch])
   const scenes = useMemo(() => buildScenes(words, edits), [words, edits])
   const sceneKey = scenes.map((s) => s.start).join(',')
   useEffect(() => console.info('[editor:text] scene-list-built', { projectId, clipId, count: scenes.length }), [projectId, clipId, sceneKey, scenes.length])
@@ -207,6 +252,7 @@ export function TextSceneEditorShell(props: Props) {
           {saveState === 'error' && <Button size="sm" variant="outline" onClick={() => void flushSave().catch(() => toast.error('Save retry failed'))}>Retry save</Button>}
           <Button variant="ghost" size="icon" disabled={!canUndo} aria-label="Undo" onClick={() => { undo(); console.info('[editor:text] undo', { projectId, clipId }) }}><Undo2 className="size-4" /></Button>
           <Button variant="ghost" size="icon" disabled={!canRedo} aria-label="Redo" onClick={() => { redo(); console.info('[editor:text] redo', { projectId, clipId }) }}><Redo2 className="size-4" /></Button>
+          <Button size="sm" variant={chatOpen ? 'secondary' : 'outline'} aria-expanded={chatOpen} aria-controls="editor-chat-mode" onClick={() => void openChat()}><MessageSquare className="mr-1 size-4" />Chat / Producer</Button>
           <Button size="sm" variant="outline" onClick={() => { setExportOpen(true); console.info('[editor:text] export-opened', { projectId, clipId }) }}><Download className="mr-1 size-4" />Export</Button>
           <Button size="sm" variant="outline" onClick={() => void openTemplates()}><Palette className="mr-1 size-4" />Templates</Button>
           <Button size="sm" onClick={() => void openClipEditor()}><Clapperboard className="mr-1 size-4" />Open in clip editor</Button>
@@ -305,6 +351,26 @@ export function TextSceneEditorShell(props: Props) {
               {derived && <Link href={routes.edit(projectId, derived.id)} className="block text-xs font-medium text-primary underline">Open newly created clip <span className="ml-1 rounded-md border border-border px-1.5 py-0.5 font-mono text-[10px]">{clock(derived.durationMs)}</span></Link>}
             </div>
           </section>
+          {chatMounted && <>
+            {chatOpen && <button type="button" className="fixed inset-0 z-40 bg-black/40 2xl:hidden" aria-label="Close AI chat drawer" onClick={() => { setChatOpen(false); setChatAudition(null); console.info('[editor:chat-mode] drawer-closed', { projectId, clipId }) }} />}
+            <div id="editor-chat-mode" role="dialog" aria-modal={chatOpen ? true : undefined} aria-label="Edit with AI" className={chatOpen ? 'fixed inset-y-0 right-0 z-50 w-[min(420px,100vw)] shadow-xl 2xl:static 2xl:z-auto 2xl:w-[360px] 2xl:shrink-0 2xl:shadow-none' : 'hidden'}>
+              <EditorChatRail
+                open={chatOpen} clipId={clipId} projectId={projectId} bounds={bounds} edits={edits} saveState={saveState} scope={chatScope} canUndo={canUndo}
+                onClose={() => { setChatOpen(false); setChatAudition(null) }}
+                onUseSelection={useChatSelection}
+                onUseScene={() => {
+                  const scene = scenes[activeScene]
+                  if (!scene) { toast.message('No scene is available'); return }
+                  setChatScope({ kind: 'scene', startMs: scene.start, endMs: scene.end, label: 'Scene ' + (activeScene + 1) })
+                  console.info('[editor:chat-mode] scene-context', { projectId, clipId, sceneIndex: activeScene, startMs: scene.start, endMs: scene.end })
+                }}
+                onClearScope={() => { setChatScope({ kind: 'whole' }); console.info('[editor:chat-mode] whole-context', { projectId, clipId }) }}
+                onSeek={seekSource} onAudition={setChatAudition}
+                onBeforeSend={async () => { await flushSave() }}
+                onAccept={acceptChatProposal} onUndo={undo} onRetrySave={flushSave}
+              />
+            </div>
+          </>}
         </div>
         <ExportDialog clipId={clipId} title={title} edits={edits} words={words} open={exportOpen}
           onClose={() => setExportOpen(false)} onBeforeExport={flushSave} onEdits={setEdits}

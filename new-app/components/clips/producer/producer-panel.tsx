@@ -24,6 +24,8 @@ export function ProducerPanel({
   onPlan,
   costLabel,
   onPendingPaidChange,
+  onBeforeSend,
+  sendDisabledReason,
 }: {
   clipId: string
   bounds: ClipBounds
@@ -40,6 +42,9 @@ export function ProducerPanel({
   costLabel?: (tool: { name: string; args: Record<string, unknown> }) => string
   /** E4: paid tools awaiting Generate / Skip (top-bar ✨ dot). */
   onPendingPaidChange?: (count: number) => void
+  /** Optional safety gate for chat mode, before a billable Producer request. */
+  onBeforeSend?: (promptLength: number) => Promise<void>
+  sendDisabledReason?: string
 }) {
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
@@ -69,12 +74,13 @@ export function ProducerPanel({
 
   const send = async () => {
     const text = input.trim()
-    if (!text || busy) return
+    if (!text || busy || sendDisabledReason) return
     setBusy(true)
     editsBeforeSend.current = edits
     setInput('')
     setMessages((m) => [...m, { role: 'user', content: text }])
     try {
+      if (onBeforeSend) await onBeforeSend(text.length)
       const res = await fetch(`/api/clips/clips/${clipId}/producer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -128,6 +134,7 @@ export function ProducerPanel({
         }
       }
     } catch (e) {
+      setInput(text)
       setMessages((m) => [
         ...m,
         { role: 'assistant', content: e instanceof Error ? e.message : 'Producer failed' },
@@ -194,12 +201,18 @@ export function ProducerPanel({
           {summaries
             .filter((s) => !isPendingProducerSummary(s))
             .map((s, i) => (
-              <ToolCallCard
-                key={i}
-                summary={s}
-                toolName={s.split(' ')[0]?.toLowerCase()}
-                status={isNoopProducerSummary(s) ? 'noop' : 'done'}
-              />
+              dryRun && !isNoopProducerSummary(s) ? (
+                <div key={i} className="rounded-xl border border-border bg-card px-3 py-2 text-xs" data-testid="producer-proposed-tool">
+                  <span className="font-semibold">Proposed only · </span>{s}
+                </div>
+              ) : (
+                <ToolCallCard
+                  key={i}
+                  summary={s}
+                  toolName={s.split(' ')[0]?.toLowerCase()}
+                  status={isNoopProducerSummary(s) ? 'noop' : 'done'}
+                />
+              )
             ))}
           {pendingPaid.map((t) => (
             <div key={t.name} className="rounded-xl border border-warning/40 bg-warning/8 p-3">
@@ -231,6 +244,7 @@ export function ProducerPanel({
               size="sm"
               variant="outline"
               className="h-8 rounded-full text-xs"
+              disabled={Boolean(sendDisabledReason)}
               onClick={() => setInput(c.label)}
             >
               {c.label}
@@ -241,6 +255,7 @@ export function ProducerPanel({
           <Textarea
             className="min-h-[44px] max-h-40 resize-none border-0 bg-transparent pr-12 shadow-none focus-visible:ring-0"
             value={input}
+            disabled={Boolean(sendDisabledReason)}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Tell the producer what to change…"
             onKeyDown={(e) => {
@@ -254,14 +269,14 @@ export function ProducerPanel({
             type="button"
             size="icon"
             className="absolute bottom-2 right-2 size-8 rounded-lg"
-            disabled={busy || !input.trim()}
+            disabled={busy || !input.trim() || Boolean(sendDisabledReason)}
             onClick={() => void send()}
             aria-label="Send message"
           >
             <ArrowUp className="size-4" />
           </PrimaryButton>
         </div>
-        <p className="mt-1 text-[11px] text-muted-foreground">Enter to send · Shift+Enter for new line</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">{sendDisabledReason || 'Enter to send · Shift+Enter for new line'}</p>
       </div>
     </div>
   )

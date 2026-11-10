@@ -8,11 +8,13 @@ export async function EditorPayloadSection({
   projectId,
   clipId,
   clipperStudio = false,
+  chatMode = false,
 }: {
   workspaceId: string
   projectId: string
   clipId: string
   clipperStudio?: boolean
+  chatMode?: boolean
 }) {
   console.info('[editor:text] payload-load', { projectId, clipId })
   let data
@@ -67,6 +69,7 @@ export async function EditorPayloadSection({
       fullVideo={isFullVideoSettings(data.project.settings)}
       editorAssets={data.editorAssets ?? null}
       clipperStudio={clipperStudio}
+      initialChatOpen={chatMode}
     />
   )
 }
