@@ -88,6 +88,12 @@ export type AiCaptionsResult = {
   srtUrl: string
 }
 
+export type AiCaptionsExportProgress = {
+  workerStage?: string | null
+  elapsedMs?: number | null
+  etaSeconds?: number | null
+}
+
 export type AiCaptionsRun = {
   runId: string
   status: AiCaptionsStatus
@@ -101,6 +107,7 @@ export type AiCaptionsRun = {
   /** Human-readable source label. Never use project/run IDs as the primary visible title. */
   displayTitle?: string
   sourceTitle?: string
+  exportProgress?: AiCaptionsExportProgress
   result: AiCaptionsResult | null
   createdAt?: string
   updatedAt?: string

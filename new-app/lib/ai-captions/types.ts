@@ -88,6 +88,15 @@ export type AiCaptionsCreateView = {
   creditEstimate: number
 }
 
+export type AiCaptionsExportProgress = {
+  /** Sanitized worker phase when the worker exposes one; may be generic or absent. */
+  workerStage?: string | null
+  /** Time since the render job (or render row fallback) was created. */
+  elapsedMs?: number | null
+  /** Worker-measured ETA only. Null/absent means the UI must show estimating, never invent a countdown. */
+  etaSeconds?: number | null
+}
+
 export type AiCaptionsRunView = {
   runId: string
   status: AiCaptionsStatus
@@ -102,6 +111,7 @@ export type AiCaptionsRunView = {
   displayTitle?: string
   /** Backward-compatible alias for consumers that describe this as the source title. */
   sourceTitle?: string
+  exportProgress?: AiCaptionsExportProgress
   result: AiCaptionsResult | null
   createdAt?: string
   updatedAt?: string

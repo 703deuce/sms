@@ -148,6 +148,36 @@ describe('AI Captions workspace', () => {
     expect(screen.getByText('Customer interview')).toBeTruthy()
   })
 
+  it('shows worker elapsed time and ETA during burned-in export', async () => {
+    const exportingRun = {
+      runId: 'run_exporting',
+      status: 'exporting' as const,
+      stage: 'export' as const,
+      progressPercent: 90,
+      failureCode: null,
+      failureMessage: null,
+      creditEstimate: CAPTIONS_RUN_CREDITS,
+      styleId: 'clean_white',
+      projectId: 'proj_exporting',
+      displayTitle: 'Export test',
+      result: { ...readyResult, downloadUrl: null, renderId: 'rnd_exporting' },
+    }
+    listAiCaptionsRuns.mockResolvedValue([exportingRun])
+    getAiCaptionsRun.mockResolvedValue({
+      ...exportingRun,
+      stage: 'export_encode',
+      progressPercent: 95,
+      exportProgress: { workerStage: 'render_clip', elapsedMs: 75_000, etaSeconds: 35 },
+    })
+
+    render(<AiCaptionsWorkspace />)
+    await waitFor(() => expect(screen.getByText('Export test')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Open caption run Export test' }))
+    await waitFor(() => expect(screen.getByTestId('ai-captions-export-timing')).toBeTruthy())
+    expect(screen.getByTestId('ai-captions-export-timing').textContent).toMatch(/1m 15s elapsed/)
+    expect(screen.getByTestId('ai-captions-export-timing').textContent).toMatch(/ETA about 35s/)
+  })
+
   it('uploads, starts a captions run, shows preparing, then Edit opens the Captions tab', async () => {
     createAiCaptionsRun.mockResolvedValue({
       runId: 'run_1',

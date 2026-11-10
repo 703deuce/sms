@@ -39,6 +39,27 @@ type Phase = 'idle' | 'uploading' | 'running' | 'ready' | 'failed'
 
 const steps = ['Upload', 'Prepare video', 'Transcribe', 'Generate captions', 'Edit & export'] as const
 
+function compactDuration(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.round(totalSeconds))
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return rest ? `${minutes}m ${rest}s` : `${minutes}m`
+}
+
+function exportTimingText(run: AiCaptionsRun): string | null {
+  if (run.status !== 'exporting') return null
+  const elapsedMs = run.exportProgress?.elapsedMs
+  const etaSeconds = run.exportProgress?.etaSeconds
+  const elapsed = typeof elapsedMs === 'number' && Number.isFinite(elapsedMs)
+    ? `${compactDuration(elapsedMs / 1000)} elapsed`
+    : 'Elapsed time unknown'
+  const eta = typeof etaSeconds === 'number' && Number.isFinite(etaSeconds)
+    ? `ETA about ${compactDuration(etaSeconds)}`
+    : 'ETA estimating…'
+  return `${elapsed} · ${eta}`
+}
+
 function friendlyError(message: string | null | undefined): string {
   const value = message?.trim() || 'Captions could not be completed.'
   if (/no audio|no speech/i.test(value)) return 'No speech was detected. Try a video that has spoken audio.'
@@ -245,7 +266,7 @@ export function AiCaptionsWorkspace() {
 
       {phase === 'running' ? (
         <div
-          className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground"
+          className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground"
           data-testid="ai-captions-progress"
           data-status={status}
           role="status"
@@ -253,6 +274,11 @@ export function AiCaptionsWorkspace() {
           <Loader2 className="size-4 animate-spin" aria-hidden />
           {captionsProgressLabel(status, run?.stage)}
           {typeof run?.progressPercent === 'number' ? <span className="ml-auto">{run.progressPercent}%</span> : null}
+          {run && status === 'exporting' ? (
+            <span className="basis-full pl-7 text-xs" data-testid="ai-captions-export-timing">
+              {exportTimingText(run)}
+            </span>
+          ) : null}
         </div>
       ) : null}
 

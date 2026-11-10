@@ -93,6 +93,7 @@ function toView(row: AiCaptionsRunRecord, resolvedDisplayTitle?: string): AiCapt
     status: row.status,
     stage: row.stage,
     progressPercent: row.progressPercent,
+    exportProgress: row.exportProgress,
     failureCode: row.failureCode,
     failureMessage: row.failureMessage,
     creditEstimate: row.creditEstimate,
@@ -229,10 +230,18 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
       const exportStatus = await deps.pipeline.pollExport(row.workspaceId, row.result.renderId)
       if (exportStatus.status === 'failed') {
         console.warn('[ai-captions:export] render_failed', { runId: row.id, renderId: row.result.renderId })
-        return deps.store.update(row.workspaceId, row.id, {
+        const failed = await deps.store.update(row.workspaceId, row.id, {
           status: 'failed', failureCode: 'export_failed',
           failureMessage: exportStatus.error || 'The export failed. You can retry without uploading again.',
         })
+        return {
+          ...failed,
+          exportProgress: {
+            workerStage: exportStatus.workerStage ?? null,
+            elapsedMs: exportStatus.elapsedMs ?? null,
+            etaSeconds: exportStatus.etaSeconds ?? null,
+          },
+        }
       }
       if (exportStatus.status === 'ready' && exportStatus.downloadUrl) {
         console.info('[ai-captions:export] render_ready', { runId: row.id })
@@ -250,15 +259,23 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
               ? 'export_encode'
               : 'export'
         const nextProgress = Math.max(row.progressPercent ?? 90, exportStatus.progressPercent ?? 90)
+        const exportProgress = {
+          workerStage: exportStatus.workerStage ?? null,
+          elapsedMs: exportStatus.elapsedMs ?? null,
+          etaSeconds: exportStatus.etaSeconds ?? null,
+        }
         console.info('[captions:export] progress_sync', {
           runId: row.id, renderId: row.result.renderId, stage: nextStage,
-          progressPercent: nextProgress, etaSeconds: exportStatus.etaSeconds ?? null,
+          progressPercent: nextProgress, etaSeconds: exportProgress.etaSeconds,
+          elapsedMs: exportProgress.elapsedMs, workerStage: exportProgress.workerStage,
         })
         if (nextStage !== row.stage || nextProgress !== row.progressPercent) {
-          return deps.store.update(row.workspaceId, row.id, {
+          const updated = await deps.store.update(row.workspaceId, row.id, {
             stage: nextStage, progressPercent: nextProgress,
           })
+          return { ...updated, exportProgress }
         }
+        return { ...row, exportProgress }
       }
     } catch (err) {
       console.warn('[ai-captions:export] render_poll_error', { runId: row.id, error: String(err) })

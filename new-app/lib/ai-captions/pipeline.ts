@@ -64,6 +64,8 @@ export type AiCaptionsPipelineDeps = {
     stage?: 'prepare' | 'encode' | 'upload'
     progressPercent?: number
     etaSeconds?: number | null
+    elapsedMs?: number | null
+    workerStage?: string | null
   }>
   getCaptionLines?(workspaceId: string, clipId: string): Promise<AiCaptionsResult['lines']>
   getEditsVersion?(workspaceId: string, clipId: string): Promise<number>

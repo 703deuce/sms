@@ -78,6 +78,31 @@ async function resolveCaptionRunDisplayTitles(
   return titles
 }
 
+type CaptionExportWorkerStage = 'prepare' | 'encode' | 'upload'
+
+function verifiedExportStage(workerPhase: unknown, progress: number): CaptionExportWorkerStage {
+  const phase = typeof workerPhase === 'string' ? workerPhase.trim().toLowerCase() : ''
+  if (phase && /(upload|output_upload|upload_output)/.test(phase)) return 'upload'
+  if (phase && /(encode|ffmpeg)/.test(phase)) return 'encode'
+  if (phase && /(prepare|prep|download|queue)/.test(phase)) return 'prepare'
+  // Current worker commonly reports the generic phase "render_clip"; preserve the proven
+  // prep 0–10 / encode 10–90 / upload 90–100 mapping as the compatibility fallback.
+  return progress >= 90 ? 'upload' : progress >= 10 ? 'encode' : 'prepare'
+}
+
+function exportTimingPhase(jobStatus: string | null, workerPhase: unknown, progress: number): string {
+  if (jobStatus === 'QUEUED') return 'queue_wait'
+  const phase = typeof workerPhase === 'string' ? workerPhase.trim().toLowerCase() : ''
+  if (phase.includes('download')) return 'download'
+  if (phase.includes('upload')) return 'output_upload'
+  if (phase.includes('encode') || phase.includes('ffmpeg')) return 'encode'
+  if (progress >= 90) return 'output_upload'
+  if (progress >= 10) return 'encode'
+  // Verified worker checkpoints: ~2% before source download, ~6% after it completes.
+  if (progress >= 5) return 'download'
+  return 'prepare'
+}
+
 function asWords(raw: unknown): TranscriptWord[] | null {
   if (!Array.isArray(raw) || !raw.length) return null
   const words: TranscriptWord[] = []
@@ -371,27 +396,70 @@ const productionPipeline = (): AiCaptionsPipelineDeps => ({
         : null
       const workerProgress = Number(watchdog?.progress)
       const progress = Number.isFinite(workerProgress) ? Math.max(0, Math.min(99, workerProgress)) : 0
-      const stage = progress >= 90 ? 'upload' as const : progress >= 10 ? 'encode' as const : 'prepare' as const
+      const workerStage = typeof watchdog?.phase === 'string' && watchdog.phase.trim()
+        ? watchdog.phase.trim().slice(0, 120)
+        : null
+      const stage = verifiedExportStage(workerStage, progress)
       const progressPercent = Math.min(99, 90 + Math.floor(progress / 10))
       const etaRaw = Number(payload.renderEtaSeconds)
       const etaSeconds = Number.isFinite(etaRaw) && etaRaw >= 0 ? Math.round(etaRaw) : null
-      const elapsedMs = Date.now() - (job?.createdAt ?? render.createdAt).getTime()
+      const elapsedMs = Math.max(0, Date.now() - (job?.createdAt ?? render.createdAt).getTime())
+      const jobStatus = job ? String(job.status) : null
+      const timingPhase = exportTimingPhase(jobStatus, workerStage, progress)
+
+      if (jobStatus === 'FAILED' || jobStatus === 'CANCELED') {
+        console.warn('[captions:export] worker_terminal_failure', {
+          renderId, clipId: render.clipId, jobStatus, elapsedMs, workerStage,
+        })
+        return {
+          status: 'failed' as const,
+          downloadUrl: null,
+          error: 'The video export worker stopped before completion. Please retry.',
+          elapsedMs,
+          etaSeconds: null,
+          workerStage,
+        }
+      }
+
       console.info('[captions:export] stage_timing', {
-        renderId, clipId: render.clipId, stage, workerProgress: progress,
-        progressPercent, etaSeconds, elapsedMs, jobStatus: job?.status ?? null,
+        renderId, clipId: render.clipId, stage, timingPhase, workerStage,
+        workerProgress: progress, progressPercent, etaSeconds, elapsedMs, jobStatus,
       })
-      return { status: 'processing' as const, downloadUrl: null, stage, progressPercent, etaSeconds }
+      return {
+        status: 'processing' as const,
+        downloadUrl: null,
+        stage,
+        progressPercent,
+        etaSeconds,
+        elapsedMs,
+        workerStage,
+      }
     }
-    const downloadUrl = await createCachedSignedDownloadUrl(getClipStorage(), render.outputKey, {
-      downloadFilename: render.filename || 'captions.mp4',
-      versionHint: `render:${renderId}`,
-    })
+
+    const elapsedBeforeSigningMs = Math.max(0, Date.now() - render.createdAt.getTime())
     console.info('[captions:export] stage_timing', {
-      renderId, clipId: render.clipId, stage: 'ready', progressPercent: 100,
-      elapsedMs: Date.now() - render.createdAt.getTime(),
+      renderId, clipId: render.clipId, stage: 'ready', timingPhase: 'signing_begin',
+      progressPercent: 100, elapsedMs: elapsedBeforeSigningMs,
     })
-    console.info('[ai-captions:export] poll_ready', { renderId })
-    return { status: 'ready' as const, downloadUrl }
+    try {
+      const downloadUrl = await createCachedSignedDownloadUrl(getClipStorage(), render.outputKey, {
+        downloadFilename: render.filename || 'captions.mp4',
+        versionHint: `render:${renderId}`,
+      })
+      const elapsedMs = Math.max(0, Date.now() - render.createdAt.getTime())
+      console.info('[captions:export] stage_timing', {
+        renderId, clipId: render.clipId, stage: 'ready', timingPhase: 'signing_complete',
+        progressPercent: 100, elapsedMs,
+      })
+      console.info('[ai-captions:export] poll_ready', { renderId })
+      return { status: 'ready' as const, downloadUrl, elapsedMs, etaSeconds: 0 }
+    } catch (err) {
+      console.warn('[captions:export] signing_failed', {
+        renderId, clipId: render.clipId, elapsedMs: Math.max(0, Date.now() - render.createdAt.getTime()),
+        errorType: err instanceof Error ? err.name : 'unknown',
+      })
+      throw err
+    }
   },
   async getEditsVersion(workspaceId, clipId) {
     console.info('[ai-captions:export] edits_version_request', { workspaceId, clipId })

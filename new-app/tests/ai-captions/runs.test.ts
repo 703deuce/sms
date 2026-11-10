@@ -343,6 +343,95 @@ describe('ai-captions runs', () => {
     expect(completed.result?.downloadUrl).toBe('https://example.test/finished.mp4')
   })
 
+  it('surfaces measured export timing, keeps polling through transient errors, and retries worker failure without re-upload', async () => {
+    const deps = testDeps({ sources: sourceMap([{ projectId: 'proj_progress', durationMs: 5_000, words: shortWords }]) })
+    const created = await createAiCaptionsRun('ws_1', null,
+      { clientRequestId: 'req-export-progress', source: { kind: 'project', projectId: 'proj_progress' } },
+      null, deps)
+
+    let renderAttempt = 0
+    deps.pipeline.exportMp4 = async () => {
+      renderAttempt += 1
+      return { downloadUrl: null, renderId: `rnd_progress_${renderAttempt}` }
+    }
+    let mode: 'queued' | 'encode' | 'upload' | 'transient' | 'failed' | 'ready' = 'queued'
+    deps.pipeline.pollExport = async () => {
+      if (mode === 'transient') throw new Error('temporary poll outage')
+      if (mode === 'failed') {
+        return {
+          status: 'failed', downloadUrl: null, error: 'Worker stopped. Please retry.',
+          elapsedMs: 44_000, etaSeconds: null, workerStage: 'render_clip',
+        }
+      }
+      if (mode === 'ready') {
+        return {
+          status: 'ready', downloadUrl: 'https://example.test/progress-finished.mp4',
+          elapsedMs: 60_000, etaSeconds: 0, workerStage: 'ready',
+        }
+      }
+      if (mode === 'encode') {
+        return {
+          status: 'processing', downloadUrl: null, stage: 'encode', progressPercent: 95,
+          elapsedMs: 20_000, etaSeconds: 35, workerStage: 'render_clip',
+        }
+      }
+      if (mode === 'upload') {
+        return {
+          status: 'processing', downloadUrl: null, stage: 'upload', progressPercent: 99,
+          elapsedMs: 40_000, etaSeconds: 5, workerStage: 'render_clip',
+        }
+      }
+      return {
+        status: 'processing', downloadUrl: null, stage: 'prepare', progressPercent: 90,
+        elapsedMs: 5_000, etaSeconds: null, workerStage: 'render_clip',
+      }
+    }
+
+    const queued = await exportAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(queued.view.status).toBe('exporting')
+    expect(renderAttempt).toBe(1)
+
+    const preparing = await getAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(preparing.stage).toBe('export_prepare')
+    expect(preparing.progressPercent).toBe(90)
+    expect(preparing.exportProgress).toEqual({
+      workerStage: 'render_clip', elapsedMs: 5_000, etaSeconds: null,
+    })
+
+    mode = 'encode'
+    const encoding = await getAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(encoding.stage).toBe('export_encode')
+    expect(encoding.progressPercent).toBe(95)
+    expect(encoding.exportProgress?.etaSeconds).toBe(35)
+
+    mode = 'upload'
+    const uploading = await getAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(uploading.stage).toBe('export_upload')
+    expect(uploading.progressPercent).toBe(99)
+    expect(uploading.exportProgress?.elapsedMs).toBe(40_000)
+
+    mode = 'transient'
+    const transient = await getAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(transient.status).toBe('exporting')
+    expect(transient.progressPercent).toBe(99)
+
+    mode = 'failed'
+    const failed = await getAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(failed.status).toBe('failed')
+    expect(failed.failureCode).toBe('export_failed')
+    expect(failed.result?.clipId).toBeTruthy()
+    expect(failed.exportProgress?.elapsedMs).toBe(44_000)
+
+    const retried = await exportAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(retried.view.status).toBe('exporting')
+    expect(renderAttempt).toBe(2)
+
+    mode = 'ready'
+    const completed = await getAiCaptionsRun('ws_1', created.view.runId, deps)
+    expect(completed.status).toBe('ready')
+    expect(completed.result?.downloadUrl).toBe('https://example.test/progress-finished.mp4')
+  })
+
   it('invalidates an earlier MP4 when the clip editor saves caption changes', async () => {
     const deps = testDeps({ sources: sourceMap([{ projectId: 'proj_edits', durationMs: 5_000, words: shortWords }]) })
     let version = 1

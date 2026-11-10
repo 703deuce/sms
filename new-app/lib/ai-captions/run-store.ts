@@ -1,4 +1,5 @@
 import type {
+  AiCaptionsExportProgress,
   AiCaptionsResult,
   AiCaptionsSource,
   AiCaptionsStage,
@@ -11,6 +12,8 @@ export type AiCaptionsRunRecord = {
   status: AiCaptionsStatus
   stage: AiCaptionsStage | null
   progressPercent: number | null
+  /** Request-scoped export telemetry; production persistence intentionally ignores this optional field. */
+  exportProgress?: AiCaptionsExportProgress
   failureCode: string | null
   failureMessage: string | null
   clientRequestId: string
