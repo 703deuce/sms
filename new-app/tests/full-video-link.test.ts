@@ -1,115 +1,125 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mockFindFirst = vi.fn()
-const mockProjectFindFirst = vi.fn()
-const mockProjectFindMany = vi.fn()
-const mockUploadFindFirst = vi.fn()
-const mockEnsureFv = vi.fn()
-const mockWaitFvClip = vi.fn()
-
-vi.mock('@/lib/server/clips/ensure-full-video-project', () => ({
-  findFullVideoProjectForUpload: vi.fn(async () => null),
-  ensureFullVideoProjectForUpload: (...args: unknown[]) => mockEnsureFv(...args),
-  waitForFullVideoClip: (...args: unknown[]) => mockWaitFvClip(...args),
+const { sourceQuery, createProject } = vi.hoisted(() => ({
+  sourceQuery: vi.fn(),
+  createProject: vi.fn(),
 }))
 
 vi.mock('@/lib/server/db', () => ({
-  getPrisma: () => ({
-    clip: { findFirst: mockFindFirst },
-    clipProject: { findFirst: mockProjectFindFirst, findMany: mockProjectFindMany },
-    clipUpload: { findFirst: mockUploadFindFirst },
-  }),
+  getPrisma: () => ({ $queryRaw: sourceQuery }),
+  withPrismaPoolRetry: async (_operation: string, execute: () => Promise<unknown>) => execute(),
 }))
 
-const baseProject = {
-  id: 'proj_clips',
-  title: 'Found clips',
+vi.mock('@/lib/server/clips/ensure-full-video-project', () => ({
+  createFullVideoProjectForUpload: (...args: unknown[]) => createProject(...args),
+}))
+
+const existingSource = {
+  sourceProjectId: 'proj_clips',
+  sourceProjectTitle: 'Found clips',
+  sourceSettings: { fromFullVideoProjectId: 'proj_fv_existing' },
+  sourceProxyKey: null,
+  sourceRangeEndMs: 60_000,
+  transcriptWords: null,
+  sourceMs: 5000,
+  endMs: 9000,
+  clipTitle: 'Test clip',
   uploadId: 'up_1',
-  transcriptWords: [{ w: 'hi', s: 0, e: 1, i: 0 }],
-  proxyKey: null,
-  rangeEndMs: 60_000,
+  durationMs: 60_000,
+  width: 1920,
+  height: 1080,
+  filename: 'talk.mp4',
+  existingProjectId: 'proj_fv_existing',
+  existingClipId: 'clip_fv_existing',
+  dbStatementMs: 8,
 }
 
-describe('resolveFullVideoLink', () => {
+describe('resolveFullVideoLink fast-path', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockUploadFindFirst.mockResolvedValue({
-      id: 'up_1',
-      durationMs: 60_000,
-      width: 1920,
-      height: 1080,
-      filename: 'talk.mp4',
+    sourceQuery.mockResolvedValue([existingSource])
+    createProject.mockResolvedValue({ projectId: 'proj_fv_up_1', clipId: 'clip_fv_up_1' })
+  })
+
+  it('returns a linked full-video editor URL in one workspace-scoped query', async () => {
+    const { resolveFullVideoLink } = await import('@/lib/server/clips/full-video-link')
+    const link = await resolveFullVideoLink('ws', 'clip_a')
+
+    expect(link).toMatchObject({
+      projectId: 'proj_fv_existing',
+      clipId: 'clip_fv_existing',
+      sourceMs: 5000,
     })
-    mockProjectFindMany.mockResolvedValue([])
-    mockWaitFvClip.mockResolvedValue(null)
-    mockEnsureFv.mockResolvedValue('proj_fv_new')
+    expect(link && 'url' in link ? link.url : '').toContain('t=5000')
+    expect(link && 'url' in link ? link.url : '').toContain('fromClip=clip_a')
+    expect(sourceQuery).toHaveBeenCalledTimes(1)
+    const sql = (sourceQuery.mock.calls[0]?.[0] as TemplateStringsArray).join('?')
+    expect(sql).toContain('JOIN clip_uploads')
+    expect(sql).toContain('LEFT JOIN LATERAL')
+    expect(sql).toContain('c."workspaceId"')
+    expect(sql).toContain('fp."workspaceId"')
+    expect(createProject).not.toHaveBeenCalled()
   })
 
-  it('uses settings.fromFullVideoProjectId when present', async () => {
-    mockFindFirst
-      .mockResolvedValueOnce({
-        startMs: 5000,
-        endMs: 9000,
-        title: 'Test clip',
-        project: {
-          ...baseProject,
-          settings: {
-            v: 2,
-            mode: 'auto',
-            genre: 'auto',
-            clipLength: 'auto',
-            clipLenMode: 'auto',
-            targetClipLenS: null,
-            rangeStartMs: 0,
-            rangeEndMs: 60_000,
-            layout: 'speaker_follow',
-            aspectRatio: '9:16',
-            fromFullVideoProjectId: 'proj_fv',
-          },
-        },
-      })
-      .mockResolvedValueOnce({ id: 'clip_fv', title: 'Full' })
-    mockProjectFindFirst.mockResolvedValueOnce({ id: 'proj_fv' })
+  it('opens the seeded clip immediately on first click and copies transcript words', async () => {
+    const words = [{ w: 'hi', s: 0, e: 1, i: 0 }]
+    sourceQuery.mockResolvedValue([{
+      ...existingSource,
+      sourceSettings: {},
+      transcriptWords: words,
+      existingProjectId: null,
+      existingClipId: null,
+    }])
     const { resolveFullVideoLink } = await import('@/lib/server/clips/full-video-link')
     const link = await resolveFullVideoLink('ws', 'clip_a')
-    expect(link?.projectId).toBe('proj_fv')
-    expect(link?.url).toContain('t=5000')
-    expect(link?.url).toContain('fromClip=')
-    expect(mockEnsureFv).not.toHaveBeenCalled()
+
+    expect(link).toMatchObject({
+      projectId: 'proj_fv_up_1',
+      clipId: 'clip_fv_up_1',
+    })
+    expect(link && 'url' in link ? link.url : '').toContain('/edit/clip_fv_up_1')
+    expect(createProject).toHaveBeenCalledTimes(1)
+    expect(createProject).toHaveBeenCalledWith(
+      'ws',
+      expect.objectContaining({ id: 'up_1', durationMs: 60_000 }),
+      expect.objectContaining({ id: 'proj_clips', transcriptWords: words }),
+    )
+    expect(sourceQuery).toHaveBeenCalledTimes(1)
   })
 
-  it('creates the full-video project on demand and returns preparing without blocking for a clip', async () => {
-    mockFindFirst
-      .mockResolvedValueOnce({
-        startMs: 5000,
-        endMs: 9000,
-        title: 'Test clip',
-        project: {
-          ...baseProject,
-          settings: {
-            v: 2,
-            mode: 'auto',
-            genre: 'auto',
-            clipLength: 'auto',
-            clipLenMode: 'auto',
-            targetClipLenS: null,
-            rangeStartMs: 0,
-            rangeEndMs: 60_000,
-            layout: 'speaker_follow',
-            aspectRatio: '9:16',
-          },
-        },
-      })
-      .mockResolvedValueOnce(null)
+  it('preserves the preparing response when source duration is unknown and no clip exists', async () => {
+    sourceQuery.mockResolvedValue([{
+      ...existingSource,
+      sourceSettings: {},
+      existingProjectId: null,
+      existingClipId: null,
+      durationMs: null,
+    }])
+    createProject.mockResolvedValue({ projectId: 'proj_fv_up_1', clipId: null })
     const { resolveFullVideoLink } = await import('@/lib/server/clips/full-video-link')
     const link = await resolveFullVideoLink('ws', 'clip_a')
-    expect(mockEnsureFv).toHaveBeenCalledOnce()
+
     expect(link).toEqual({
       preparing: true,
       stage: 'clip',
       message: 'Preparing full video editor (rendering clip)…',
-      projectId: 'proj_fv_new',
+      projectId: 'proj_fv_up_1',
     })
-    expect(mockWaitFvClip).not.toHaveBeenCalled()
+  })
+
+  it('reuses an existing project and clip without creating either one', async () => {
+    const { resolveFullVideoLink } = await import('@/lib/server/clips/full-video-link')
+    const first = await resolveFullVideoLink('ws', 'clip_a')
+    const second = await resolveFullVideoLink('ws', 'clip_a')
+    expect(second).toEqual(first)
+    expect(sourceQuery).toHaveBeenCalledTimes(2)
+    expect(createProject).not.toHaveBeenCalled()
+  })
+
+  it('does not create a project when the clip or upload is unavailable', async () => {
+    sourceQuery.mockResolvedValue([])
+    const { resolveFullVideoLink } = await import('@/lib/server/clips/full-video-link')
+    expect(await resolveFullVideoLink('ws', 'missing')).toBeNull()
+    expect(createProject).not.toHaveBeenCalled()
   })
 })

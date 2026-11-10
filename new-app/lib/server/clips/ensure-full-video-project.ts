@@ -9,7 +9,6 @@ import {
 } from '@/lib/clips/full-video'
 import { clipProjectSettingsSchema, defaultClipSettings } from '@/lib/clips/settings'
 import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
-import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { getPrisma } from '@/lib/server/db'
 import { projectWordsKey } from '@/lib/storage'
 import { defaultEdits } from '@/lib/clips/edits'
@@ -42,16 +41,19 @@ type SourceProject = {
  * CL-05: create a full-video BYO project for an upload (no clip finding, no ASR when transcript is copied).
  * Reuses transcript + proxy from the clip-finding project when present.
  */
-export async function ensureFullVideoProjectForUpload(
+/**
+ * Single PostgreSQL statement: project, immediately usable clip and background
+ * PROCESS_PROJECT job are committed atomically. The caller has already looked up
+ * existing projects, so another dedupe round trip would double first-open latency.
+ * A conflict is the only time we fall back to a read.
+ */
+export async function createFullVideoProjectForUpload(
   workspaceId: string,
   upload: { id: string; durationMs: number | null; width: number | null; height: number | null; filename: string },
   sourceProject: SourceProject,
-): Promise<string> {
-  const existing = await findFullVideoProjectForUpload(workspaceId, upload.id)
-  if (existing) return existing.id
-
+): Promise<{ projectId: string; clipId: string | null }> {
+  const startedAt = Date.now()
   assertFullVideoUploadDuration(upload.durationMs)
-  const prisma = getPrisma()
   const aspect = sourceAspectRatio(upload.width, upload.height)
   const settings = withAutoContentDetection(
     clipProjectSettingsSchema.parse({
@@ -66,95 +68,142 @@ export async function ensureFullVideoProjectForUpload(
   const transcriptWords =
     Array.isArray(sourceProject.transcriptWords) && sourceProject.transcriptWords.length
       ? sourceProject.transcriptWords
-      : undefined
+      : null
   const title = `${sourceProject.title || upload.filename.replace(/\.[^.]+$/, '')} · full`.slice(0, 200)
   const durationMs = upload.durationMs && upload.durationMs > 0 ? upload.durationMs : null
-  // Seed a real full-length clip atomically with the project: the source is editable
-  // immediately, while peaks/filmstrip/proxy are prepared by the existing worker.
+  const projectId = `proj_fv_${upload.id}`
   const fastClipId = durationMs ? `clip_fv_${upload.id}` : null
-  const fastEdits = durationMs ? {
-    ...defaultEdits({ clipStartMs: 0, clipEndMs: durationMs }),
-    aspectRatio: aspect,
-    layout: { mode: 'full_frame' as const, shotOverrides: [] },
-    exportTemplate: { headlineBar: { enabled: false }, platformBadge: { enabled: false } },
-  } : null
+  const edits = durationMs
+    ? {
+        ...defaultEdits({ clipStartMs: 0, clipEndMs: durationMs }),
+        aspectRatio: aspect,
+        layout: { mode: 'full_frame' as const, shotOverrides: [] },
+        exportTemplate: { headlineBar: { enabled: false }, platformBadge: { enabled: false } },
+      }
+    : null
+  const jobPayload = buildProcessProjectJobPayload(
+    settings,
+    fastClipId ? { preseededFullVideo: true } : undefined,
+  )
+  const prisma = getPrisma()
 
-  console.log('[clipper:fullvideo-link] ensure_begin', {
+  console.log('[clipper:fullvideo-link] step=ensure_begin', {
     uploadId: upload.id,
     sourceProjectId: sourceProject.id,
     hasTranscriptWords: Boolean(transcriptWords),
     hasProxy: Boolean(sourceProject.proxyKey),
-    fastClip: Boolean(fastClipId),
+    hasSeedClip: Boolean(fastClipId),
   })
-
-  // Deterministic per-upload id makes concurrent creates collide safely on the
-  // primary key. The nested job write is atomic with the project create.
-  const newId = `proj_fv_${upload.id}`
-  try {
-    await prisma.clipProject.create({
-      data: {
-        id: newId,
-        workspaceId,
-        title,
-        uploadId: upload.id,
-        settings: JSON.parse(JSON.stringify(settings)),
-        rangeStartMs: 0,
-        rangeEndMs: settings.rangeEndMs,
-        status: 'QUEUED',
-        stage: 'queued',
-        progress: 0,
-        // Copied DB words are authoritative: avoid a missing S3-key fetch on first load.
-        transcriptKey: transcriptWords ? null : projectWordsKey(workspaceId, newId),
-        ...(transcriptWords ? { transcriptWords: JSON.parse(JSON.stringify(transcriptWords)) } : {}),
-        ...(sourceProject.proxyKey ? { proxyKey: sourceProject.proxyKey } : {}),
-        ...(fastClipId && fastEdits && durationMs ? {
-          clips: {
-            create: {
-              id: fastClipId,
-              workspaceId,
-              title,
-              reason: 'user_upload',
-              startMs: 0,
-              endMs: durationMs,
-              score: 0,
-              scores: {},
-              edits: JSON.parse(JSON.stringify(fastEdits)),
-              aiMeta: { byo: true, fullVideo: true },
-            },
-          },
-        } : {}),
-        jobs: {
-          create: {
-            id: createId('job'),
-            type: 'PROCESS_PROJECT',
-            status: 'QUEUED',
-            payload: toPrismaJson(buildProcessProjectJobPayload(settings, fastClipId ? { preseededFullVideo: true } : undefined)),
-          },
-        },
-      },
-    })
-    console.log('[clipper:fullvideo-link] ensure_created', {
+  const queryAt = Date.now()
+  const created = await prisma.$queryRaw<{
+    projectId: string
+    clipId: string | null
+    dbStatementMs: number
+  }[]>`
+    WITH created_project AS (
+      INSERT INTO clip_projects (
+        id, "workspaceId", title, "uploadId", settings,
+        "rangeStartMs", "rangeEndMs", status, stage, progress,
+        "transcriptKey", "transcriptWords", "proxyKey", "updatedAt"
+      )
+      VALUES (
+        ${projectId}, ${workspaceId}, ${title}, ${upload.id},
+        ${JSON.stringify(settings)}::jsonb,
+        0, ${settings.rangeEndMs}, 'QUEUED', 'queued', 0,
+        ${transcriptWords ? null : projectWordsKey(workspaceId, projectId)},
+        ${transcriptWords ? JSON.stringify(transcriptWords) : null}::jsonb,
+        ${sourceProject.proxyKey}, NOW()
+      )
+      ON CONFLICT (id) DO NOTHING
+      RETURNING id
+    ),
+    seeded_clip AS (
+      INSERT INTO clips (
+        id, "projectId", "workspaceId", title, reason,
+        "startMs", "endMs", edits, "aiMeta", "updatedAt"
+      )
+      SELECT
+        ${fastClipId}, p.id, ${workspaceId}, ${title}, 'user_upload',
+        0, ${durationMs}, ${JSON.stringify(edits || {})}::jsonb,
+        '{"byo":true,"fullVideo":true}'::jsonb, NOW()
+      FROM created_project p
+      WHERE ${fastClipId}::text IS NOT NULL
+      RETURNING id
+    ),
+    queued_job AS (
+      INSERT INTO clip_jobs (id, "projectId", type, status, payload)
+      SELECT ${createId('job')}, p.id, 'PROCESS_PROJECT', 'QUEUED',
+        ${JSON.stringify(jobPayload)}::jsonb
+      FROM created_project p
+      LEFT JOIN seeded_clip sc ON TRUE
+      RETURNING id
+    )
+    SELECT
+      p.id AS "projectId", sc.id AS "clipId",
+      ROUND(EXTRACT(EPOCH FROM (clock_timestamp() - statement_timestamp())) * 1000)::int AS "dbStatementMs"
+    FROM created_project p
+    LEFT JOIN seeded_clip sc ON TRUE
+    JOIN queued_job job ON TRUE
+  `
+  const queryMs = Date.now() - queryAt
+  const result = created[0]
+  console.log('[clipper:fullvideo-link] step=ensure_insert', {
+    uploadId: upload.id,
+    projectId,
+    inserted: Boolean(result),
+    queryMs,
+    dbStatementMs: result ? Number(result.dbStatementMs) : null,
+    poolOrNetworkMsApprox: result ? Math.max(0, Math.round(queryMs - Number(result.dbStatementMs))) : null,
+  })
+  if (result) {
+    console.log('[clipper:fullvideo-link] step=ensure_created', {
       uploadId: upload.id,
-      projectId: newId,
-      clipId: fastClipId,
-      transcriptReused: Boolean(transcriptWords),
+      projectId: result.projectId,
+      clipId: result.clipId,
+      elapsedMs: Date.now() - startedAt,
     })
-    return newId
-  } catch (error) {
-    const code = (error as { code?: unknown } | null)?.code
-    if (code === 'P2002') {
-      const concurrent = await findFullVideoProjectForUpload(workspaceId, upload.id)
-      if (concurrent) {
-        console.info('[clipper:fullvideo-link] ensure_reuse', {
-          uploadId: upload.id,
-          projectId: concurrent.id,
-          reason: 'concurrent_create',
-        })
-        return concurrent.id
-      }
-    }
-    throw error
+    return { projectId: result.projectId, clipId: result.clipId }
   }
+
+  // Two clients may click concurrently. ON CONFLICT prevents duplicate projects,
+  // clips or jobs. Resolve the winner's actual clip rather than guessing its ID.
+  const concurrent = await prisma.clipProject.findFirst({
+    where: { id: projectId, workspaceId, uploadId: upload.id, deletedAt: null },
+    select: {
+      id: true, settings: true,
+      clips: {
+        where: { workspaceId, deletedAt: null },
+        orderBy: { startMs: 'asc' },
+        take: 1,
+        select: { id: true },
+      },
+    },
+  })
+  if (concurrent && isFullVideoSettings(concurrent.settings)) {
+    console.log('[clipper:fullvideo-link] step=ensure_reuse', {
+      uploadId: upload.id,
+      projectId: concurrent.id,
+      reason: 'concurrent_create',
+      elapsedMs: Date.now() - startedAt,
+    })
+    return { projectId: concurrent.id, clipId: concurrent.clips[0]?.id ?? null }
+  }
+  // Existing deleted projects deliberately cannot be revived by a stale clip link.
+  throw new Error('Full-video project creation conflicted with a different project')
+}
+
+/** Retained contract for other full-video creation callers. */
+export async function ensureFullVideoProjectForUpload(
+  workspaceId: string,
+  upload: { id: string; durationMs: number | null; width: number | null; height: number | null; filename: string },
+  sourceProject: SourceProject,
+): Promise<string> {
+  const existing = await findFullVideoProjectForUpload(workspaceId, upload.id)
+  if (existing) {
+    console.log('[clipper:fullvideo-link] step=ensure_existing', { uploadId: upload.id, projectId: existing.id })
+    return existing.id
+  }
+  return (await createFullVideoProjectForUpload(workspaceId, upload, sourceProject)).projectId
 }
 
 export async function waitForFullVideoClip(

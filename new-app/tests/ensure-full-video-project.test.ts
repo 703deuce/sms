@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { projectFindMany, projectCreate } = vi.hoisted(() => ({
-  projectFindMany: vi.fn(),
-  projectCreate: vi.fn(),
+const { projectFindFirst, projectRaw } = vi.hoisted(() => ({
+  projectFindFirst: vi.fn(),
+  projectRaw: vi.fn(),
 }))
 
 vi.mock('@/lib/server/db', () => ({
   getPrisma: () => ({
-    clipProject: { findMany: projectFindMany, create: projectCreate },
+    clipProject: { findFirst: projectFindFirst },
+    $queryRaw: projectRaw,
   }),
 }))
 
@@ -19,7 +20,10 @@ vi.mock('@/lib/storage', () => ({
   projectWordsKey: (workspaceId: string, projectId: string) => `ws/${workspaceId}/projects/${projectId}/words.json`,
 }))
 
-import { ensureFullVideoProjectForUpload } from '@/lib/server/clips/ensure-full-video-project'
+import {
+  createFullVideoProjectForUpload,
+  ensureFullVideoProjectForUpload,
+} from '@/lib/server/clips/ensure-full-video-project'
 
 const upload = {
   id: 'up_1',
@@ -37,49 +41,74 @@ const sourceProject = {
   rangeEndMs: 60_000,
 }
 
-describe('ensureFullVideoProjectForUpload concurrency', () => {
+describe('full-video project creation and concurrency', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    projectFindMany.mockResolvedValue([])
-    projectCreate.mockResolvedValue({ id: 'proj_fv_up_1' })
+    vi.resetAllMocks()
+    projectFindFirst.mockResolvedValue(null)
+    projectRaw.mockResolvedValue([{
+      projectId: 'proj_fv_up_1',
+      clipId: 'clip_fv_up_1',
+      dbStatementMs: 5,
+    }])
   })
 
-  it('atomically creates one queued project with one nested processing job', async () => {
-    const projectId = await ensureFullVideoProjectForUpload('ws_1', upload, sourceProject)
-    expect(projectId).toBe('proj_fv_up_1')
-    expect(projectCreate).toHaveBeenCalledTimes(1)
-    expect(projectCreate.mock.calls[0]?.[0]?.data).toMatchObject({
-      id: 'proj_fv_up_1',
-      uploadId: 'up_1',
-      status: 'QUEUED',
-      stage: 'queued',
-      proxyKey: 'proxy.mp4',
-      jobs: {
-        create: {
-          id: 'job_new',
-          type: 'PROCESS_PROJECT',
-          status: 'QUEUED',
-        },
-      },
-    })
+  it('creates a project, seeded clip and processing job atomically in one statement', async () => {
+    const result = await createFullVideoProjectForUpload('ws_1', upload, sourceProject)
+    expect(result).toEqual({ projectId: 'proj_fv_up_1', clipId: 'clip_fv_up_1' })
+    expect(projectRaw).toHaveBeenCalledTimes(1)
+    expect(projectFindFirst).not.toHaveBeenCalled()
+
+    const sql = (projectRaw.mock.calls[0]?.[0] as TemplateStringsArray).join('?')
+    expect(sql).toContain('WITH created_project AS')
+    expect(sql).toContain('INSERT INTO clip_projects')
+    expect(sql).toContain('INSERT INTO clips')
+    expect(sql).toContain('INSERT INTO clip_jobs')
+    expect(sql).toContain('ON CONFLICT (id) DO NOTHING')
+    expect(sql).toContain('LEFT JOIN seeded_clip')
+    expect(sql).toContain('"proxyKey", "updatedAt"')
+    expect(sql).toContain('"aiMeta", "updatedAt"')
+    const args = projectRaw.mock.calls[0]?.slice(1) ?? []
+    expect(args).toContain('proj_fv_up_1')
+    expect(args).toContain('clip_fv_up_1')
+    expect(args).toContain(JSON.stringify(sourceProject.transcriptWords))
+    expect(args).toContain('proxy.mp4')
+    expect(args).toContain('job_new')
+    expect(args.some((a) => typeof a === 'string' && a.includes('"preseededFullVideo":true'))).toBe(true)
   })
 
-  it('reuses an existing full-video project before attempting a create', async () => {
-    projectFindMany.mockResolvedValue([{ id: 'proj_existing', settings: { fullVideo: true } }])
+  it('keeps the original ensure API and reuses an existing full-video project', async () => {
+    projectFindFirst.mockResolvedValueOnce({ id: 'proj_existing', settings: { fullVideo: true } })
     const projectId = await ensureFullVideoProjectForUpload('ws_1', upload, sourceProject)
     expect(projectId).toBe('proj_existing')
-    expect(projectCreate).not.toHaveBeenCalled()
+    expect(projectRaw).not.toHaveBeenCalled()
+    expect(projectFindFirst).toHaveBeenCalledTimes(1)
   })
 
-  it('reuses the concurrent winner after a deterministic-id collision', async () => {
-    projectFindMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ id: 'proj_winner', settings: { fullVideo: true } }])
-    projectCreate.mockRejectedValueOnce(Object.assign(new Error('duplicate id'), { code: 'P2002' }))
-
+  it('the original ensure API creates once when no project exists', async () => {
     const projectId = await ensureFullVideoProjectForUpload('ws_1', upload, sourceProject)
-    expect(projectId).toBe('proj_winner')
-    expect(projectCreate).toHaveBeenCalledTimes(1)
-    expect(projectFindMany).toHaveBeenCalledTimes(2)
+    expect(projectId).toBe('proj_fv_up_1')
+    expect(projectFindFirst).toHaveBeenCalledTimes(2)
+    expect(projectRaw).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns the actual concurrent winner without a second project or job', async () => {
+    projectRaw.mockResolvedValueOnce([])
+    projectFindFirst.mockResolvedValueOnce({
+      id: 'proj_fv_up_1',
+      settings: { fullVideo: true },
+      clips: [{ id: 'clip_fv_up_1' }],
+    })
+    const result = await createFullVideoProjectForUpload('ws_1', upload, sourceProject)
+    expect(result).toEqual({ projectId: 'proj_fv_up_1', clipId: 'clip_fv_up_1' })
+    expect(projectRaw).toHaveBeenCalledTimes(1)
+    expect(projectFindFirst).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not seed a made-up clip when the source duration is unknown', async () => {
+    projectRaw.mockResolvedValueOnce([{ projectId: 'proj_fv_up_1', clipId: null, dbStatementMs: 4 }])
+    const result = await createFullVideoProjectForUpload('ws_1', { ...upload, durationMs: null }, sourceProject)
+    expect(result).toEqual({ projectId: 'proj_fv_up_1', clipId: null })
+    const params = projectRaw.mock.calls[0]?.slice(1) ?? []
+    expect(params).toContain(null)
   })
 })
