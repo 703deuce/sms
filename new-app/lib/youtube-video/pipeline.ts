@@ -7,6 +7,7 @@ import { YoutubeVideoError } from '@/lib/youtube-video/errors'
 import { importUrlAsUpload, type YoutubeVideoImporter } from '@/lib/youtube-video/import-source'
 import { cutsFromOption, proposeOptionsFromPacked } from '@/lib/youtube-video/story-options'
 import { packTranscripts } from '@/lib/youtube-video/transcript-packer'
+import type { SharedArgs } from '@/lib/youtube-video/shared-pipeline'
 import type {
   YoutubeVideoCreateInput,
   YoutubeVideoIngestedSource,
@@ -30,6 +31,8 @@ export type YoutubeVideoPipelineDeps = {
   loadReadySource: LoadReadySource
   writeClip?: WriteYoutubeClip
   proposeOptions?: (sources: YoutubeVideoIngestedSource[]) => YoutubeVideoOption[]
+  /** Production-only shared Gemini + Producer long-form window planner. */
+  planShared?: (input: SharedArgs) => ReturnType<typeof import('@/lib/youtube-video/shared-pipeline').advanceYoutubeSharedStory>
 }
 
 export type PreparedYoutubeVideo = {
