@@ -1,6 +1,6 @@
-import { fetchJson, type FetchJsonOptions } from '@/lib/client/fetch-json'
+import { fetchJson } from '@/lib/client/fetch-json'
 
-export async function clipsFetch<T>(path: string, init?: FetchJsonOptions): Promise<T> {
+export async function clipsFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase()
   const json = await fetchJson<{ data?: T; error?: string }>(path, {
     ...init,
@@ -132,15 +132,12 @@ export function estimateCredits(body: { durationMs: number; rangeStartMs: number
 export function listProjectClips(
   projectId: string,
   sort: 'score' | 'timeline' = 'score',
-  opts?: { includeHidden?: boolean; signal?: AbortSignal; maxGatewayRetries?: number },
+  opts?: { includeHidden?: boolean; signal?: AbortSignal },
 ) {
   const qs = new URLSearchParams({ sort })
   if (opts?.includeHidden) qs.set('includeHidden', '1')
   return clipsFetch<{ clips: unknown[] }>('/api/clips/projects/' + projectId + '/clips?' + qs.toString(), {
     signal: opts?.signal,
-    tag: 'clip-list',
-    retryGateway: true,
-    ...(opts?.maxGatewayRetries != null ? { maxGatewayRetries: opts.maxGatewayRetries } : {}),
   })
 }
 
