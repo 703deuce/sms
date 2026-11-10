@@ -22,7 +22,7 @@ export async function createAiProducerOutputProject(a: {
   const clipId = createId('clip')
   const sourceSettings = p.settings && typeof p.settings === 'object' && !Array.isArray(p.settings)
     ? p.settings as Record<string, unknown> : {}
-  const settings = { ...sourceSettings, ...parseSettings(sourceSettings, a.sourceProjectId), aiProducerRunId: a.runId }
+  const settings: Record<string, unknown> = { ...sourceSettings, ...parseSettings(sourceSettings, a.sourceProjectId), aiProducerRunId: a.runId }
   // Output projects are editable video timelines, not transcribe-only source jobs.
   delete settings.captionsOnly
   console.info('[youtube-video:settings]', {

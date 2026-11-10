@@ -55,7 +55,7 @@ export async function createCaptionsOnlyProject(
       createdById: createdById || undefined,
       title,
       uploadId: upload.id,
-      settings,
+      settings: JSON.parse(JSON.stringify(settings)),
       rangeStartMs: 0,
       rangeEndMs: durationMs,
       status: 'QUEUED',
