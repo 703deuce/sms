@@ -9,7 +9,9 @@ import { normalizeTranscriptJson } from '@/lib/server/clips/editor-words'
 export type ListProjectClipsProjectContext = {
   settings: unknown
   transcriptKey: string | null
-  upload: { storageDriver: string | null } | null
+  proxyKey?: string | null
+  rangeStartMs?: number
+  upload: { storageDriver: string | null; key?: string | null } | null
 }
 
 export type ListProjectClipsOpts = {
@@ -34,6 +36,8 @@ const listClipSelect = {
   edits: true,
   previewKey: true,
   posterKey: true,
+  sourceSegKey: true,
+  sourceSegStartMs: true,
   updatedAt: true,
 } as const
 
@@ -51,7 +55,9 @@ export async function listProjectClips(
       select: {
         settings: true,
         transcriptKey: true,
-        upload: { select: { storageDriver: true } },
+        proxyKey: true,
+        rangeStartMs: true,
+        upload: { select: { storageDriver: true, key: true } },
       },
     })
   }
@@ -66,6 +72,23 @@ export async function listProjectClips(
     ? clips
     : clips.filter((c) => !isClipUserHidden(c.aiMeta))
 
+  const needsProjectFallback = visible.some((c) => !c.previewKey && !c.posterKey && !c.sourceSegKey)
+  const projectFallbackKey = project.proxyKey || project.upload?.key || null
+  let projectFallback: { url: string; offsetMs: number } | null = null
+  if (needsProjectFallback && projectFallbackKey) {
+    try {
+      const sourceStorage = await getClipStorageForObjectKey(projectFallbackKey, project.upload?.storageDriver ?? null)
+      projectFallback = {
+        url: await createCachedSignedDownloadUrl(sourceStorage, projectFallbackKey, {
+          versionHint: `clip-card-source:${projectId}`,
+        }),
+        offsetMs: project.proxyKey ? Number(project.rangeStartMs ?? 0) : 0,
+      }
+    } catch (error) {
+      console.warn('[clips:cards] thumbnail source_fallback_sign_failed', { projectId, error: String(error) })
+    }
+  }
+
   let rows = await Promise.all(
     visible.map(async (c) => {
       const versionHint = c.updatedAt.toISOString()
@@ -74,6 +97,26 @@ export async function listProjectClips(
         c.previewKey ? createCachedSignedDownloadUrl(storage, c.previewKey, signOpts) : Promise.resolve(null),
         c.posterKey ? createCachedSignedDownloadUrl(storage, c.posterKey, signOpts) : Promise.resolve(null),
       ])
+      let fallbackSourceUrl: string | null = null
+      let fallbackStartMs = c.startMs
+      if (!previewUrl && !posterUrl) {
+        if (c.sourceSegKey) {
+          try {
+            const segmentStorage = await getClipStorageForObjectKey(
+              c.sourceSegKey,
+              project!.upload?.storageDriver ?? null,
+            )
+            fallbackSourceUrl = await createCachedSignedDownloadUrl(segmentStorage, c.sourceSegKey, { versionHint })
+            fallbackStartMs = Math.max(0, c.startMs - Number(c.sourceSegStartMs ?? c.startMs))
+          } catch (error) {
+            console.warn('[clips:cards] thumbnail segment_fallback_sign_failed', { clipId: c.id, error: String(error) })
+          }
+        }
+        if (!fallbackSourceUrl && projectFallback) {
+          fallbackSourceUrl = projectFallback.url
+          fallbackStartMs = Math.max(0, c.startMs - projectFallback.offsetMs)
+        }
+      }
       return {
         id: c.id,
         projectId: c.projectId,
@@ -87,6 +130,8 @@ export async function listProjectClips(
         durationMs: c.endMs - c.startMs,
         previewUrl,
         posterUrl,
+        fallbackSourceUrl,
+        fallbackStartMs,
         aiMeta: c.aiMeta,
         edits: c.edits,
       }

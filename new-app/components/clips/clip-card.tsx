@@ -27,7 +27,7 @@ import { clipReasonTag } from '@/lib/clips/reason-tag'
 import { clipCardAspectClass } from '@/lib/clips/card-aspect'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { ClipPostCopy } from '@/components/clips/clip-post-copy'
-import { NeedsReviewBadge, NeedsReviewReasonList } from './needs-review-badge'
+import { NeedsReviewBadge } from './needs-review-badge'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { CLIP_PREVIEW_EXPORT_ASPECT } from '@/lib/clips/export-preview-reuse'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
@@ -71,8 +71,19 @@ export function ClipCard({
   const [hideBusy, setHideBusy] = useState(false)
   const [downloadBusy, setDownloadBusy] = useState(false)
   const [cardActionBusy, setCardActionBusy] = useState(false)
-  const aiMeta = (clip.aiMeta || {}) as ClipAiMeta
+  const aiMeta = (clip.aiMeta || {}) as ClipAiMeta & {
+    whyThisClip?: string
+    editorialIssues?: string[]
+    needsReviewReasons?: string[]
+  }
   const why = clipWhySummary(aiMeta)
+  const agentWhy = typeof aiMeta.whyThisClip === 'string' ? aiMeta.whyThisClip.trim() : ''
+  const shortWhy = agentWhy || why || (clip.reason && clip.reason !== 'ai_producer' ? clip.reason.trim() : '')
+  const detailNotes = Array.from(new Set([
+    ...(Array.isArray(aiMeta.editorialIssues) ? aiMeta.editorialIssues : []),
+    ...(Array.isArray(aiMeta.needsReviewReasons) ? aiMeta.needsReviewReasons : []),
+    ...(clip.reason && clip.reason !== 'ai_producer' && clip.reason !== shortWhy ? [clip.reason] : []),
+  ].map((note) => String(note).trim()).filter(Boolean)))
   const layoutChip = clipLayoutChip(aiMeta)
   const clipTypeLabel = clipTypeBadge(aiMeta)
   const people = clipPersonCount(aiMeta)
@@ -196,7 +207,7 @@ export function ClipCard({
     <article
       id={`clip-card-${clip.id}`}
       data-testid="clip-card"
-      className={`group flex flex-col gap-2 overflow-hidden rounded-xl border bg-card shadow-xs transition hover:-translate-y-0.5 hover:shadow-md ${
+      className={`group flex h-full flex-col gap-2 overflow-hidden rounded-xl border bg-card shadow-xs transition hover:-translate-y-0.5 hover:shadow-md ${
         selected ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary/40'
       }`}
     >
@@ -232,11 +243,13 @@ export function ClipCard({
             Select
           </label>
         ) : null}
-        {clip.previewUrl || clip.posterUrl ? (
+        {clip.previewUrl || clip.posterUrl || clip.fallbackSourceUrl ? (
           <ClipCardVideo
             clipId={clip.id}
             previewUrl={clip.previewUrl}
             posterUrl={clip.posterUrl}
+            fallbackSourceUrl={clip.fallbackSourceUrl}
+            fallbackStartMs={clip.fallbackStartMs}
             previewEdits={previewEdits}
             overlayBurnedIn={isStreamer}
           />
@@ -277,7 +290,7 @@ export function ClipCard({
           {reasonTagLabel(reasonTag)}
         </span>
       </div>
-      <div className="flex flex-col gap-2 p-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
         <h3 className="line-clamp-2 text-sm font-medium leading-snug break-words">
           <Link
             href={editorHref}
@@ -366,19 +379,27 @@ export function ClipCard({
               ))
             : null}
         </div>
-        {why || clip.reason ? (
-          <p className="line-clamp-2 text-xs text-muted-foreground">{why || clip.reason}</p>
+        {shortWhy ? (
+          <p className="line-clamp-1 text-xs text-muted-foreground" data-testid="clip-why-line">{shortWhy}</p>
         ) : null}
-        <NeedsReviewReasonList aiMeta={clip.aiMeta} />
-        {!isStreamer ? <ClipPostCopy clipId={clip.id} aiMeta={clip.aiMeta} /> : null}
-        <ReasonChips
-          score={isStreamer ? clip.score : undefined}
-          reasons={streamerReasons}
-        />
-        {isStreamer && !streamerReasons.length ? (
-          <p className="text-[10px] text-muted-foreground">No signal chips (chat or replay may be unavailable).</p>
+        {(detailNotes.length > 0 || !isStreamer || streamerReasons.length > 0) ? (
+          <details className="text-xs text-muted-foreground" data-testid="clip-card-details">
+            <summary className="cursor-pointer select-none font-medium text-foreground/80 hover:text-foreground">Details</summary>
+            <div className="mt-2 space-y-2">
+              {detailNotes.length ? (
+                <ul className="space-y-1 pl-4">
+                  {detailNotes.map((note) => <li key={note} className="list-disc">{note}</li>)}
+                </ul>
+              ) : null}
+              {!isStreamer ? <ClipPostCopy clipId={clip.id} aiMeta={clip.aiMeta} /> : null}
+              <ReasonChips score={isStreamer ? clip.score : undefined} reasons={streamerReasons} />
+              {isStreamer && !streamerReasons.length ? (
+                <p className="text-[10px] text-muted-foreground">No signal chips (chat or replay may be unavailable).</p>
+              ) : null}
+            </div>
+          </details>
         ) : null}
-        <div className="flex flex-nowrap items-center gap-1.5" data-testid="clip-card-actions">
+        <div className="mt-auto flex flex-nowrap items-center gap-1.5 pt-1" data-testid="clip-card-actions">
           <Button
             size="sm"
             variant="default"

@@ -16,6 +16,8 @@ export type ClipCardData = {
   endMs: number
   previewUrl: string | null
   posterUrl: string | null
+  fallbackSourceUrl?: string | null
+  fallbackStartMs?: number
   reason?: string | null
   aiMeta?: unknown
   edits?: unknown
@@ -52,7 +54,7 @@ export function ClipGrid({
   return (
     <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {clips.map((c) => (
-        <div key={c.id} className="relative min-w-0">
+        <div key={c.id} className="relative min-w-0 h-full">
           <div className="pointer-events-none absolute left-12 top-2 z-20 flex flex-col items-start gap-1">
             {c.resultKind ? <UnifiedClipTypeBadge kind={c.resultKind} /> : null}
             {c.needsReview || c.aiMeta ? (

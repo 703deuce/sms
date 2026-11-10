@@ -14,12 +14,16 @@ export function ClipCardVideo({
   posterUrl,
   previewEdits,
   overlayBurnedIn = false,
+  fallbackSourceUrl,
+  fallbackStartMs = 0,
 }: {
   clipId: string
   previewUrl: string | null
   posterUrl: string | null
   previewEdits?: ClipEditsV2
   overlayBurnedIn?: boolean
+  fallbackSourceUrl?: string | null
+  fallbackStartMs?: number
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -130,6 +134,27 @@ export function ClipCardVideo({
     return (
       <div ref={wrapRef} className="relative size-full">
         <img src={posterUrl} alt="" className="size-full object-cover" data-testid="clip-card-poster" />
+      </div>
+    )
+  }
+  if (!previewUrl && fallbackSourceUrl) {
+    return (
+      <div ref={wrapRef} className="relative size-full bg-black">
+        <video
+          className="pointer-events-none size-full object-cover"
+          src={fallbackSourceUrl}
+          preload="metadata"
+          muted
+          playsInline
+          data-testid="clip-card-source-frame"
+          onLoadedMetadata={(event) => {
+            const video = event.currentTarget
+            const target = Math.max(0, fallbackStartMs / 1000)
+            if (Number.isFinite(video.duration) && video.duration > 0) {
+              video.currentTime = Math.min(target, Math.max(0, video.duration - 0.05))
+            }
+          }}
+        />
       </div>
     )
   }

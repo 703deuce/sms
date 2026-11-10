@@ -204,6 +204,43 @@ export function ProjectClipsView({
     setClips(rows)
   }, [projectId])
 
+  const thumbnailBackfillRequestedRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (status !== 'READY' || clips.length === 0) return
+    const missing = clips.filter((clip) => !clip.posterUrl && !thumbnailBackfillRequestedRef.current.has(clip.id))
+    if (!missing.length) return
+    for (const clip of missing) thumbnailBackfillRequestedRef.current.add(clip.id)
+    const startedAt = Date.now()
+    for (const clip of missing) {
+      console.info('[clips:cards] thumbnail backfill begin', { clipId: clip.id })
+    }
+    void clipsFetch(`/api/clips/projects/${encodeURIComponent(projectId)}/card-thumbnails`, {
+      method: 'POST', body: '{}',
+    }).then(async () => {
+      const data = await listProjectClips(projectId, 'score')
+      const rows = data.clips as ClipCardData[]
+      setClips(rows)
+      const byId = new Map(rows.map((clip) => [clip.id, clip]))
+      for (const clip of missing) {
+        const current = byId.get(clip.id)
+        console.info('[clips:cards] thumbnail backfill end', {
+          clipId: clip.id,
+          elapsedMs: Date.now() - startedAt,
+          status: current?.posterUrl ? 'ready' : current?.fallbackSourceUrl ? 'source_fallback' : 'queued',
+        })
+      }
+    }).catch((error) => {
+      for (const clip of missing) {
+        console.warn('[clips:cards] thumbnail backfill end', {
+          clipId: clip.id,
+          elapsedMs: Date.now() - startedAt,
+          status: 'failed',
+          error: String(error),
+        })
+      }
+    })
+  }, [clips, projectId, status])
+
   const retryProcessing = useCallback(() => {
     setStatus('QUEUED')
     setError(null)

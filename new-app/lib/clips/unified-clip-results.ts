@@ -26,6 +26,8 @@ export type UnifiedClipResult = {
   endMs: number
   previewUrl: string | null
   posterUrl: string | null
+  fallbackSourceUrl?: string | null
+  fallbackStartMs?: number
   reason?: string | null
   aiMeta?: unknown
   edits?: unknown
@@ -163,6 +165,8 @@ export function adaptListProjectClip(raw: unknown): UnifiedClipResult | null {
     // project clip list or any payload that does include them.
     previewUrl: firstString(row.previewUrl, row.playbackUrl, row.videoUrl, row.mediaUrl, row.src),
     posterUrl: firstString(row.posterUrl, row.thumbnailUrl, row.thumbUrl, row.previewImageUrl, row.imageUrl),
+    fallbackSourceUrl: firstString(row.fallbackSourceUrl),
+    fallbackStartMs: firstNumber(row.fallbackStartMs) ?? undefined,
     reason: typeof row.reason === 'string' ? row.reason : row.reason == null ? null : undefined,
     aiMeta,
     edits: row.edits,
