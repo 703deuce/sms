@@ -42,7 +42,7 @@ describe('ai-captions runs', () => {
     expect(view.result!.bounds).toEqual({ startMs: 0, endMs: 5_000 })
     expect(view.result!.captionsEnabled).toBe(true)
     expect(view.result!.styleId).toBe('clean_white')
-    expect(view.result!.editorUrl).toBe(`/app/clips/proj_ready/edit/${view.result!.clipId}?tab=captions`)
+    expect(view.result!.editorUrl).toBe(`/app/video-editor/proj_ready/edit/${view.result!.clipId}?tab=captions`)
     expect(view.result!.srtUrl).toBe(`/api/ai-captions/runs/${view.runId}/srt`)
     const clip = uploadDeps.clips.get(view.result!.clipId)!
     expect(clip.edits.captions?.enabled).toBe(true)
@@ -214,7 +214,7 @@ describe('ai-captions runs', () => {
     expect(ready.result!.projectId).toBe('proj_from_upl_1')
     expect(ready.result!.bounds.startMs).toBe(0)
     expect(ready.result!.captionsEnabled).toBe(true)
-    expect(ready.result!.editorUrl).toContain('/app/clips/proj_from_upl_1/edit/')
+    expect(ready.result!.editorUrl).toContain('/app/video-editor/proj_from_upl_1/edit/')
     expect(ready.result!.editorUrl).toContain('?tab=captions')
   })
 

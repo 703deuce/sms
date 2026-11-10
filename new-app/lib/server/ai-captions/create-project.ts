@@ -4,6 +4,7 @@ import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { projectWordsKey } from '@/lib/storage'
 import { AiCaptionsError } from '@/lib/ai-captions/errors'
+import { captionsOnlyProjectSettings } from '@/lib/ai-captions/auto-agent-guard'
 
 /**
  * Create a captions-only project from a completed upload.
@@ -31,11 +32,7 @@ export async function createCaptionsOnlyProject(
   const projectId = createId('proj')
   const durationMs = upload.durationMs ?? 0
   const title = upload.filename.replace(/\.[^.]+$/, '') || 'Captions'
-  const settings = {
-    captionsOnly: true,
-    rangeStartMs: 0,
-    rangeEndMs: durationMs,
-  }
+  const settings = captionsOnlyProjectSettings(durationMs)
 
   await prisma.clipProject.create({
     data: {

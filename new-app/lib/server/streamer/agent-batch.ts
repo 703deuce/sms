@@ -5,6 +5,7 @@ import {streamerAgentWindows} from '@/lib/streamer/agent-windows'
 import {createAgentVideoWindow} from '@/lib/server/streamer/agent-window-source'
 import {createAiProducerAgentRun} from '@/lib/server/ai-producer-agent/runs'
 import {startUnifiedClipRun} from '@/lib/server/ai-producer-agent/unified-clip-run'
+import {shouldAutoStartUploadAgentBatch} from '@/lib/ai-captions/auto-agent-guard'
 import {storyTargetFromAgentSeconds} from '@/lib/ai-producer-agent/clip-mode/unified-run-input'
 import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
 import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
@@ -78,11 +79,11 @@ export async function maybeAutoStartUploadAgentBatch(projectId:string){
       rangeStartMs:true,rangeEndMs:true,title:true}})
   if(!p||p.deletedAt||p.status!=='READY'||!p.uploadId)return null
   const settings=asSettings(p.settings)
-  const mode=settings.autoAgentClipMode
   // Regular upload clipper: any auto-agent mode starts one unified job.
   // Stream clipping uses startStreamerAgentBatch / startUnifiedClipRun later.
-  if(mode!=='clip_moment_v1'&&mode!=='clip_story_v1'&&mode!=='clip_unified_v1')return null
-  if(settings.agentClipBatch||settings.unifiedClipRunId)return null
+  // Captions-only projects must never start a unified clip run, even if a
+  // workspace autoAgentClipMode leaked onto settings.
+  if(!shouldAutoStartUploadAgentBatch(settings))return null
   const value=Number(settings.autoAgentClipSeconds)
   const rangeMs:[number,number]=[p.rangeStartMs,p.rangeEndMs]
   if(!(rangeMs[1]-rangeMs[0]>=15_000))return null

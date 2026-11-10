@@ -12,6 +12,7 @@ import {
 import { isLowConfidence } from '@/lib/ai-captions/words'
 import { groupCaptionLines } from '@/lib/ai-captions/lines'
 import { srtFromLines } from '@/lib/ai-captions/srt'
+import { captionsOnlyProjectSettings, shouldAutoStartUploadAgentBatch } from '@/lib/ai-captions/auto-agent-guard'
 
 describe('ai-captions contract helpers', () => {
   it('defaults to clean_white and lists all 14 built-in presets', () => {
@@ -39,7 +40,7 @@ describe('ai-captions contract helpers', () => {
   })
 
   it('builds the clip-editor Captions tab URL and SRT path', () => {
-    expect(editorUrlFor('proj_1', 'clip_1')).toBe('/app/clips/proj_1/edit/clip_1?tab=captions')
+    expect(editorUrlFor('proj_1', 'clip_1')).toBe('/app/video-editor/proj_1/edit/clip_1?tab=captions')
     expect(srtUrlFor('acr_1')).toBe('/api/ai-captions/runs/acr_1/srt')
   })
 
@@ -72,5 +73,31 @@ describe('ai-captions contract helpers', () => {
     const srt = srtFromLines(split)
     expect(srt).toContain('word0')
     expect(srt).toContain('-->')
+  })
+
+  it('never auto-starts the clipper for a captions-only project, even if autoAgentClipMode is on', () => {
+    const leaked = {
+      ...captionsOnlyProjectSettings(30 * 60 * 1000),
+      autoAgentClipMode: 'clip_unified_v1' as const,
+      autoAgentClipSeconds: 60,
+    }
+    expect(shouldAutoStartUploadAgentBatch(leaked)).toBe(false)
+    expect(shouldAutoStartUploadAgentBatch({
+      captionsOnly: true,
+      autoAgentClipMode: 'clip_story_v1',
+    })).toBe(false)
+    expect(shouldAutoStartUploadAgentBatch({
+      captionsOnly: true,
+      autoAgentClipMode: 'clip_moment_v1',
+    })).toBe(false)
+    // Workspace mode on a normal clipper upload still starts the agent.
+    expect(shouldAutoStartUploadAgentBatch({
+      autoAgentClipMode: 'clip_unified_v1',
+    })).toBe(true)
+    // The settings we actually persist never include a clipper mode.
+    const saved = captionsOnlyProjectSettings(1_800_000)
+    expect(saved.captionsOnly).toBe(true)
+    expect('autoAgentClipMode' in saved).toBe(false)
+    expect(shouldAutoStartUploadAgentBatch(saved)).toBe(false)
   })
 })

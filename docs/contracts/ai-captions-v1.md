@@ -59,7 +59,7 @@ type AiCaptionsStyle = {
 type AiCaptionsResult = {
   clipId: string
   projectId: string
-  editorUrl: string            // /app/clips/{projectId}/edit/{clipId}?tab=captions
+  editorUrl: string            // /app/video-editor/{projectId}/edit/{clipId}?tab=captions
   durationMs: number
   styleId: string
   captionsEnabled: true
@@ -149,7 +149,7 @@ When `ready`:
 - Word highlight (`keywordHighlight`) and auto-emoji (`autoEmojis`) are **off** unless the applied saved style explicitly turns them on.
 - `words` are word-level, with punctuation preserved, and include `lowConfidence` from ASR confidence.
 - `lines` are sentence-aware groups of those words. Oversized cues split on **word boundaries** only (the #1132 caption-lines rule), never mid-word, and no transcript word is dropped.
-- `editorUrl` is `/app/clips/{projectId}/edit/{clipId}?tab=captions`. That path permanently redirects to the clip editor (`/app/video-editor/{projectId}/edit/{clipId}?tab=captions`). The Captions tab is the intended landing tab. Words and timing stay editable through the existing clip edits and caption-words path (`writeClipEdits` / clip PATCH). This product does not add a second edit API.
+- `editorUrl` is `/app/video-editor/{projectId}/edit/{clipId}?tab=captions`. Frontend opens the clip editor on the Captions tab from `?tab=captions`. Words and timing stay editable through the existing clip edits and caption-words path (`writeClipEdits` / clip PATCH). This product does not add a second edit API.
 - `srtUrl` is `GET /api/ai-captions/runs/:runId/srt` (same lines used for the burned-in MP4).
 - `downloadUrl` is the burned-in MP4 when an export has completed; it is `null` until then. MP4 and SRT have **no watermark** and **no tier gate**.
 

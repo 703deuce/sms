@@ -109,7 +109,7 @@ export type AiCaptionsStylesView = {
 export type TranscriptWord = { w: string; s: number; e: number; p?: number }
 
 export function editorUrlFor(projectId: string, clipId: string): string {
-  return `/app/clips/${projectId}/edit/${clipId}?tab=captions`
+  return `/app/video-editor/${projectId}/edit/${clipId}?tab=captions`
 }
 
 export function srtUrlFor(runId: string): string {
