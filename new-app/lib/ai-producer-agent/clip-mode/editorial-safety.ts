@@ -7,6 +7,7 @@ export type ClipSpan={startMs:number;endMs:number;kind?:string}
 export type EditorialRiskCode=
   |'referential_opening'|'missing_qualification'|'unfinished_ending'
   |'chronology'|'invalid_passage'|'false_start_opening'|'cut_context_reference'
+  |'dangling_pronoun_opening'|'continuation_opening'|'incoherent_passage'|'mid_phrase_opening'
 export type EditorialRisk={
   code:EditorialRiskCode
   detail:string
@@ -17,13 +18,19 @@ const QUAL_OPEN=/^(?:but|however|unless|except|only if|as long as|provided that|
 const DANGLING=/\b(?:but|because|if|unless|although|however|which|so|and|the thing is|what i mean is)\s*[,—-]?$/i
 const FILLER_OPEN=/^(?:i mean[,.]?\s*)+(?:um|uh|like|you know|so)?[,.]?\s*/i
 const FALSE_START=/^(?:i mean[,.]?\s+)+/i
+const LEADING_FILLER=/^(?:(?:uh|um|ah|er|like|you know)[,.]?\s*)+/i
+const CONTINUATION_OPEN=/^(?:(?:uh|um|ah|er)[,.]?\s*)*(?:also|and|but|so|which|because|anyway|again)\b/i
+const DANGLING_PRONOUN_OPEN=/^(?:(?:uh|um|ah|er)[,.]?\s*)*(?:her|his|their|they|she|he)\b/i
 const CUT_CONTEXT_OPEN=/^(?:you keep(?: talking)?|that(?:'s| is) not (?:what|why)|i(?:'m| am) (?:not )?talking about|as i (?:said|mentioned)|going back to|to (?:your|that) (?:question|point)|like i(?: said| mentioned))\b/i
 const SENTENCE_END=/[.!?]["']?$/
 const PUBLISH_VETO_CODES=new Set<EditorialRiskCode>([
   'referential_opening','unfinished_ending','missing_qualification',
   'chronology','invalid_passage','false_start_opening','cut_context_reference',
+  'dangling_pronoun_opening','continuation_opening','incoherent_passage','mid_phrase_opening',
 ])
-const QA_VETO=/qualif|mislead|misrepresent|changed meaning|false impression|missing setup|payoff before|unresolved referen|context missing|mid-sentence|mid sentence|unfinished ending|false start|stammer|broken opening|cut (?:question|exchange|context)|backward refer|not self-contained|dangling/i
+const QA_VETO=/qualif|mislead|misrepresent|changed meaning|false impression|missing setup|payoff before|unresolved referen|context missing|mid-sentence|mid sentence|unfinished ending|false start|stammer|broken opening|cut (?:question|exchange|context)|backward refer|not self-contained|dangling|antecedent|continuation opener|unrelated passage|incoherent|mid-phrase|mid phrase/i
+const STOPWORDS=new Set('the a an and or but for nor so if as at by to of in on with from this that these those he she it they them his her their its my our your we us i you was were are is be been being have has had do did does not no yes just like know think really very then than when what who whom which where how why also too still even only into about over after before because while there here one two three come came said say going gone want well yeah right kind sort thing things people'.split(' '))
+const WEAK_OVERLAP=new Set('first time make made come came remember remembers tell telling told year years day days way ways good great want wants need needs really much back going gone take takes took give gave given'.split(' '))
 
 function phrase(words:readonly TimedWord[]):string{
   return words.map(x=>x.w).join(' ').replace(/[\u2018\u2019]/g,"'").replace(/\s+([,.;:!?])/g,'$1').trim()
@@ -56,13 +63,21 @@ export function clipEditorialAudit(
       issues.push({code:'chronology',detail:'A source passage plays before an earlier passage',passageIndex:i})
     const inside=at(words,cut.startMs,cut.endMs)
     if(!inside.length)continue // visual-only moments need visual QA, never fake ASR findings
-    const first=phrase(inside.slice(0,8)).toLowerCase()
-    // A stitched story may legitimately open a later passage with "so" when
-    // its preceding output passage already supplied the antecedent. Flow does
-    // the semantic join audit for those. Flag only the first audible opening.
-    if(i===0&&(REF_OPEN.test(first)||FALSE_START.test(first))){
-      const code:EditorialRiskCode=FALSE_START.test(first)&&!REF_OPEN.test(first)?'false_start_opening':'referential_opening'
-      issues.push({code,detail:'Opening may refer to missing setup or start mid-thought: '+first.slice(0,75),passageIndex:i})
+    const first=stripLeadingFiller(phrase(inside.slice(0,8))).toLowerCase()
+    const priorText=phrase(ordered.slice(0,i).flatMap(c=>at(words,c.startMs,c.endMs)))
+    if(startsMidPhrase(words,cut.startMs)){
+      issues.push({code:'mid_phrase_opening',detail:'Passage starts mid-phrase: '+first.slice(0,75),passageIndex:i})
+    }
+    if(FALSE_START.test(first)||FILLER_OPEN.test(first)){
+      issues.push({code:'false_start_opening',detail:'Opening starts mid-thought or with a false start: '+first.slice(0,75),passageIndex:i})
+    }
+    if(isStrongContinuation(first)||(isSoftContinuation(first)&&i===0)){
+      issues.push({code:'continuation_opening',detail:'Passage opens with a continuation word that needs earlier context: '+first.slice(0,75),passageIndex:i})
+    }
+    if(DANGLING_PRONOUN_OPEN.test(first)&&!pronounHasAntecedent(first,priorText)){
+      issues.push({code:'dangling_pronoun_opening',detail:'Opening pronoun has no antecedent in earlier output: '+first.slice(0,75),passageIndex:i})
+    }else if(i===0&&(REF_OPEN.test(first))){
+      issues.push({code:'referential_opening',detail:'Opening may refer to missing setup or start mid-thought: '+first.slice(0,75),passageIndex:i})
     }
     if(i>0){
       const prev=ordered[i-1]!
@@ -90,7 +105,132 @@ export function clipEditorialAudit(
     if(QUAL_OPEN.test(tailContext))
       issues.push({code:'missing_qualification',detail:'Source may continue with a meaning-changing qualification: '+tailContext.slice(0,90),passageIndex:i})
   }
+  for(const risk of passageCoherenceRisks(ordered,words))issues.push(risk)
   return issues
+}
+
+function stripLeadingFiller(text:string):string{
+  return text.replace(LEADING_FILLER,'').trim()
+}
+function startsMidPhrase(words:readonly TimedWord[],startMs:number):boolean{
+  const prev=words.filter(w=>w.e*1000<=startMs+20).at(-1)
+  if(!prev)return false
+  const token=prev.w.trim()
+  if(!token)return false
+  if(SENTENCE_END.test(token))return false
+  // A pause after a complete word is still mid-sentence without punctuation.
+  const next=words.find(w=>w.s*1000>=startMs-20)
+  if(!next)return false
+  return true
+}
+function pronounHasAntecedent(opening:string,priorText:string):boolean{
+  const lead=(stripLeadingFiller(opening).split(/\s+/)[0]??'').toLowerCase().replace(/[^a-z]/g,'')
+  const prior=priorText.toLowerCase()
+  if(!prior.trim())return false
+  if(/^(?:she|her)$/.test(lead))return /\b(?:she|her|hers|woman|women|mother|mom|grandmother|grandma|tete|sister|daughter|wife|girl|lady)\b/i.test(prior)
+  if(/^(?:he|his)$/.test(lead))return /\b(?:he|his|him|man|men|father|dad|grandfather|grandpa|brother|son|husband|boy)\b/i.test(prior)
+  if(/^(?:they|their|these|those)$/.test(lead))return /\b(?:they|them|their|people|folks|both|two|women|men|family|parents)\b/i.test(prior)
+  if(/^(?:it|this|that)$/.test(lead))return /\b(?:it|this|that|idea|thing|issue|story|point)\b/i.test(prior)
+  return prior.split(/\s+/).length>=8
+}
+const TOKEN_ALIASES:Record<string,string>={
+  grandma:'grandmother',grandpa:'grandfather',mom:'mother',dad:'father',
+  tete:'grandmother',kids:'children',kid:'children',
+}
+function normalizeToken(raw:string):string{
+  const alias=TOKEN_ALIASES[raw]
+  if(alias)return alias
+  if(raw.length>=7&&raw.endsWith('s'))return raw.slice(0,-1)
+  return raw
+}
+function contentTokens(text:string):Set<string>{
+  const out=new Set<string>()
+  for(const raw of text.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/)){
+    if(raw.length<4||STOPWORDS.has(raw))continue
+    out.add(normalizeToken(raw))
+  }
+  return out
+}
+function passageCoherenceRisks(cuts:readonly ClipSpan[],words:readonly TimedWord[]):EditorialRisk[]{
+  const issues:EditorialRisk[]=[]
+  const texts=cuts.map(c=>phrase(at(words,c.startMs,c.endMs)))
+  const tokens=texts.map(contentTokens)
+  for(let i=0;i<cuts.length;i++){
+    const dur=cuts[i]!.endMs-cuts[i]!.startMs
+    if(dur<8000||tokens[i]!.size<6)continue
+    const others=new Set<string>()
+    for(let j=0;j<cuts.length;j++)if(j!==i)for(const tok of tokens[j]!)others.add(tok)
+    if(others.size<6)continue
+    const later=new Set<string>()
+    for(let j=i+1;j<cuts.length;j++)for(const tok of tokens[j]!)later.add(tok)
+    const shared=sharedCount(tokens[i]!,others)
+    const sharedLater=later.size?sharedCount(tokens[i]!,later):shared
+    // Early passages must earn their place in the later payoff, not just
+    // sit next to a weakly related family mention.
+    if(i<cuts.length-1&&sharedLater<1&&shared<2){
+      issues.push({code:'incoherent_passage',detail:'Passage does not clearly belong to the later story payoff: '+texts[i]!.slice(0,90),passageIndex:i})
+    }
+  }
+  return issues
+}
+function lastSentenceStart(words:readonly TimedWord[],beforeMs:number,floorMs:number):number|null{
+  // Exclusive of beforeMs so a start already on a sentence boundary
+  // walks to the previous sentence, not back to itself.
+  const region=at(words,floorMs,beforeMs)
+  if(!region.length)return null
+  for(let i=region.length-1;i>=0;i--){
+    if(SENTENCE_END.test(region[i]!.w)){
+      const next=region[i+1]
+      if(next&&next.s*1000<beforeMs)return Math.round(next.s*1000)
+      if(!next){
+        // Sentence ended at the close of this region; the next word is at/after beforeMs.
+        continue
+      }
+    }
+  }
+  return Math.round(region[0]!.s*1000)
+}
+function isStrongContinuation(opening:string):boolean{
+  const t=stripLeadingFiller(opening)
+  if(/^(?:also|which|because|anyway|again)\b/i.test(t))return true
+  if(/^(?:but|and|so)\s+also\b/i.test(t))return true
+  return false
+}
+function isSoftContinuation(opening:string):boolean{
+  const t=stripLeadingFiller(opening)
+  return /^(?:and|so|but)\b/i.test(t)&&!isStrongContinuation(t)
+}
+function sentenceEndsIn(words:readonly TimedWord[],startMs:number,endMs:number):number[]{
+  return at(words,startMs,endMs)
+    .filter(w=>SENTENCE_END.test(w.w)&&!/\.{2,}$|…$/.test(w.w))
+    .map(w=>Math.round(w.e*1000))
+}
+function sharedCount(a:Set<string>,b:Set<string>):number{
+  let n=0
+  for(const tok of a)if(b.has(tok)&&!WEAK_OVERLAP.has(tok))n++
+  return n
+}
+function snapToSelfContainedStart(words:readonly TimedWord[],startMs:number,floorMs:number,endMs:number):number|null{
+  let start=startMs
+  if(startsMidPhrase(words,start)){
+    const snapped=lastSentenceStart(words,start,floorMs)
+    if(snapped!=null&&snapped<start&&snapped<endMs-3000)start=snapped
+  }
+  // If the sentence we landed on still needs a short identifier
+  // ("My grandmother." before "She was the ninth..."), include it.
+  for(let n=0;n<2;n++){
+    const opening=stripLeadingFiller(phrase(at(words,start,start+8000)))
+    const prior=phrase(at(words,floorMs,start))
+    const needsMore=DANGLING_PRONOUN_OPEN.test(opening)||CONTINUATION_OPEN.test(opening)||REF_OPEN.test(opening.toLowerCase())
+    if(!needsMore)break
+    if(needsMore&&DANGLING_PRONOUN_OPEN.test(opening)&&pronounHasAntecedent(opening,prior)){
+      // antecedent is in the not-yet-included prior region; pull in the previous sentence
+    }else if(!DANGLING_PRONOUN_OPEN.test(opening)&&!CONTINUATION_OPEN.test(opening))break
+    const earlier=lastSentenceStart(words,start,floorMs)
+    if(earlier==null||earlier>=start||earlier>=endMs-3000)break
+    start=earlier
+  }
+  return start!==startMs&&start<endMs-3000?start:null
 }
 
 export function shouldVetoPublish(input:{
@@ -162,16 +302,23 @@ export function repairClipBoundaries(
     const prevEnd=i>0?next[i-1]!.endMs:cut.startMs-earlier
     const floor=i===0?cut.startMs-earlier:Math.max(prevEnd,cut.startMs-earlier)
     const ceiling=i+1<next.length?Math.min(next[i+1]!.startMs,cut.endMs+later):cut.endMs+later
-    if(i===0){
-      const opening=phrase(at(words,cut.startMs,cut.startMs+8000))
-      if(FALSE_START.test(opening)||REF_OPEN.test(opening)||FILLER_OPEN.test(opening)){
+    const opening=stripLeadingFiller(phrase(at(words,cut.startMs,cut.startMs+8000)))
+    const priorText=phrase(next.slice(0,i).flatMap(c=>at(words,c.startMs,c.endMs)))
+    const needsOpenFix=startsMidPhrase(words,cut.startMs)||FALSE_START.test(opening)||FILLER_OPEN.test(opening)||isStrongContinuation(opening)||(isSoftContinuation(opening)&&i===0)||(DANGLING_PRONOUN_OPEN.test(opening)&&!pronounHasAntecedent(opening,priorText))||(i===0&&REF_OPEN.test(opening.toLowerCase()))
+    if(needsOpenFix){
+      const snapped=snapToSelfContainedStart(words,cut.startMs,floor,cut.endMs)
+      if(snapped!=null&&snapped<cut.startMs){
+        cut.startMs=snapped
+        notes.push('Snapped opening back to a self-contained sentence start')
+      }else{
         const start=nextSentenceStart(words,cut.startMs,Math.min(cut.startMs+earlier,cut.endMs-3000))
         if(start!=null&&start>cut.startMs&&start<cut.endMs-3000){
-          notes.push('Trimmed false-start or referential opening to a self-contained sentence')
+          notes.push('Trimmed a mid-phrase, continuation, or referential opening to a self-contained sentence')
           cut.startMs=start
         }
       }
-    }else{
+    }
+    if(i>0){
       const first=phrase(at(words,cut.startMs,cut.startMs+8000))
       if(CUT_CONTEXT_OPEN.test(first)&&gapHasQuestion(words,prevEnd,cut.startMs)){
         const question=at(words,prevEnd,cut.startMs)
@@ -210,8 +357,48 @@ export function repairClipBoundaries(
       if(end!=null){cut.endMs=end;notes.push('Included a meaning-changing qualifier after the ending')}
     }
   }
-  const valid=next.filter(c=>c.endMs-c.startMs>=3000)
+  for(let i=0;i<next.length-1;i++){
+    const cut=next[i]!
+    const dur=cut.endMs-cut.startMs
+    if(dur<12_000)continue
+    const laterTokens=contentTokens(phrase(next.slice(i+1).flatMap(c=>at(words,c.startMs,c.endMs))))
+    if(laterTokens.size<6)continue
+    const ends=sentenceEndsIn(words,cut.startMs,cut.endMs)
+    let trimTo:number|null=null
+    for(const end of ends){
+      if(end-cut.startMs<5000||cut.endMs-end<6000)continue
+      const tail=contentTokens(phrase(at(words,end,cut.endMs)))
+      const head=contentTokens(phrase(at(words,cut.startMs,end)))
+      if(tail.size>=5&&sharedCount(tail,laterTokens)<1&&sharedCount(tail,head)<2)trimTo=end
+    }
+    if(trimTo!=null){
+      cut.endMs=trimTo
+      notes.push('Trimmed a trailing detour that did not connect to the later payoff')
+    }
+  }
+  let valid=next.filter(c=>c.endMs-c.startMs>=3000)
+  const coherence=passageCoherenceRisks(valid,words)
+  if(coherence.length&&valid.length>=3){
+    const drop=new Set(coherence.map(r=>r.passageIndex))
+    // Keep the ending payoff; drop earlier unrelated setup when the
+    // remaining story still has at least two passages.
+    const kept=valid.filter((c,idx)=>!drop.has(idx)||idx>=valid.length-2)
+    if(kept.length>=2&&kept.reduce((n,c)=>n+c.endMs-c.startMs,0)>=8000){
+      notes.push('Dropped an unrelated passage that did not connect to the later payoff')
+      valid=kept
+    }
+  }
   return {cuts:valid,repaired:notes.length>0,notes,contextBridges}
+}
+
+/** Brief crossfades on stitched joins, keyed by the following segment's source in-point. */
+export function stitchJoinTransitions(cuts:readonly ClipSpan[],durMs=350):Array<{type:'crossfade';durMs:number;srcMs:number}>{
+  const out:Array<{type:'crossfade';durMs:number;srcMs:number}>=[]
+  for(let i=1;i<cuts.length;i++){
+    const dur=Math.min(400,Math.max(200,durMs),Math.floor((cuts[i]!.endMs-cuts[i]!.startMs)/4))
+    if(dur>=200)out.push({type:'crossfade',durMs:dur,srcMs:cuts[i]!.startMs})
+  }
+  return out
 }
 
 export function contextBridgeCaption(text:string):string{
@@ -284,9 +471,11 @@ export function clipEditorialInstructions():string{
   return [
     'CLIP EDITORIAL CONTRACT — applies to this clip only:',
     'Before selecting or shortening any footage, state the intended POINT in ONE clear sentence (claim, story or joke), and preserve that same point through every cut.',
-    'A first line starting with “that’s why”, “so”, “and”, “this”, “like I said”, “I mean,” or another backward reference or false start is NOT self-contained; return to the relevant one or two setup sentences. Never add a long preamble or dead air.',
+    'A first line starting with “that’s why”, “so”, “and”, “also”, “but”, “which”, “this”, “her/his/they” without an antecedent, “like I said”, “I mean,” or another backward reference, continuation, dangling pronoun, or mid-phrase start is NOT self-contained. Snap to the sentence start (including a short identifier like “My grandmother.” if it supplies the antecedent). Never add a long preamble or dead air.',
+    'Check EVERY stitched segment opening, not only the first. “also coming to understand” or “but also…” is a continuation of an omitted thought and must be repaired or rejected.',
     'Hook with the strongest authentic line that raises a question or tension, but do not move the payoff before its explanation or fabricate/reorder spoken meaning.',
-    'For stitched stories, every section must be understandable from the earlier sections in the OUTPUT, not from unplayed original source. If an answer refers to a removed interviewer exchange, include that question or do not use the answer.',
+    'For stitched stories, every section must be understandable from the earlier sections in the OUTPUT, not from unplayed original source, and must belong to the same story as the later payoff. If an early passage (for example a childhood anecdote) does not serve the ending, drop it. If an answer refers to a removed interviewer exchange, include that question or do not use the answer.',
+    'Smooth jump cuts at stitch joins with a brief crossfade (and optional punch-in), but never use a transition to hide a broken sentence or missing antecedent.',
     'Never remove a but, only if, unless, exception, caveat, negation or qualifier when it changes the speaker’s actual meaning.',
     'Inspect at least the NEXT 6.5 SECONDS of original source after every proposed END for a late qualifier or concluding thought, and INCLUDE it when materially needed.',
     'End exactly after the authentic full conclusion or joke landing. Mid-sentence endings are a failure. Short is fine; never pad to the target duration. Cut filler and search detours, not meaning.',

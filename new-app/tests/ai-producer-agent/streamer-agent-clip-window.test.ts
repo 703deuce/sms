@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest'
-import {clipAgentSourceWindow,roughCutSourceWindow,minimumAgentTranscriptWords,MAX_CLIP_AGENT_SOURCE_MS,clipAnalysisChunks,clipAgentWallClockMs,analyzeWaitTimeoutMs} from '@/lib/ai-producer-agent/rough-cut-window'
+import {clipAgentSourceWindow,roughCutSourceWindow,minimumAgentTranscriptWords,MAX_CLIP_AGENT_SOURCE_MS,clipAnalysisChunks,clipAgentWallClockMs,analyzeWaitTimeoutMs,clipAgentHardSteps,clipAgentHardStepsForCandidates,clipCandidateHardSteps,clipCandidateWallClockMs,clipQaRetryHardSteps} from '@/lib/ai-producer-agent/rough-cut-window'
 import {buildAgentSystemPrompt} from '@/lib/ai-producer-agent/prompts'
 
 describe('streamer agent clip mode source isolation',()=>{
@@ -66,5 +66,21 @@ describe('streamer word minimum contract',()=>{
     expect(minimumAgentTranscriptWords('clip_story_v1')).toBe(8)
     expect(minimumAgentTranscriptWords('single_source_v1')).toBe(30)
     expect(minimumAgentTranscriptWords()).toBe(30)
+  })
+})
+
+describe('clip candidate QA budget scales with source length and yield',()=>{
+  const interviewMs=3_931_162
+  it('gives each candidate more than the default 80-step budget that exhausted QA',()=>{
+    expect(clipCandidateHardSteps(interviewMs)).toBeGreaterThan(80)
+    expect(clipCandidateHardSteps(interviewMs)).toBeGreaterThanOrEqual(200)
+    expect(clipCandidateWallClockMs(interviewMs)).toBeGreaterThan(12*60_000)
+    expect(clipQaRetryHardSteps()).toBe(80)
+  })
+  it('expands the run-level step cap as candidate count grows',()=>{
+    const base=clipAgentHardSteps(interviewMs)
+    expect(clipAgentHardStepsForCandidates(interviewMs,17)).toBeGreaterThan(base)
+    expect(clipAgentHardStepsForCandidates(interviewMs,17)).toBe(base+17*8)
+    expect(clipAgentHardStepsForCandidates(interviewMs,0)).toBe(base)
   })
 })

@@ -67,3 +67,25 @@ export function clipAgentHardSteps(sourceMs:number):number{
 export function minimumAgentTranscriptWords(storyMode?:string):number{
   return storyMode==='clip_moment_v1'||storyMode==='clip_story_v1'?8:30
 }
+
+/** Per-candidate budget. Specialists plus assembly plus QA previously shared
+ * the default 80-step Budget and exhausted it before QA could finish. */
+export function clipCandidateHardSteps(sourceMs:number):number{
+  const extraChunks=Math.max(0,Math.ceil(Math.max(0,sourceMs)/CLIP_ANALYSIS_CHUNK_MS)-1)
+  return Math.min(400,200+extraChunks*20)
+}
+export function clipCandidateWallClockMs(sourceMs:number):number{
+  const extraChunks=Math.max(0,Math.ceil(Math.max(0,sourceMs)/CLIP_ANALYSIS_CHUNK_MS)-1)
+  return Math.min(45*60_000,12*60_000+extraChunks*3*60_000)
+}
+export function clipQaRetryHardSteps():number{return 80}
+export function clipQaRetryWallClockMs():number{return 8*60_000}
+
+/** Run-level limits grow with the number of candidates so logging/export
+ * steps cannot cap a long yield after per-clip work already succeeded. */
+export function clipAgentHardStepsForCandidates(sourceMs:number,candidateCount:number):number{
+  return Math.min(2000,clipAgentHardSteps(sourceMs)+Math.max(0,candidateCount)*8)
+}
+export function clipAgentWallClockMsForCandidates(sourceMs:number,candidateCount:number):number{
+  return Math.min(8*60*60_000,clipAgentWallClockMs(sourceMs)+Math.max(0,candidateCount)*2*60_000)
+}

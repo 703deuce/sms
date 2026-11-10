@@ -19,14 +19,21 @@ export class Budget {
   geminiUsd = 0
   cappedBy: string | null = null
   readonly t0 = Date.now()
-  readonly wallClockMs: number
-  readonly hardSteps: number
-  readonly softSteps: number
+  wallClockMs: number
+  hardSteps: number
+  softSteps: number
 
   constructor(opts?: {wallClockMs?: number; hardSteps?: number; softSteps?: number}) {
     this.wallClockMs = opts?.wallClockMs ?? CAPS.wallClockMs
     this.hardSteps = opts?.hardSteps ?? CAPS.hardSteps
     this.softSteps = opts?.softSteps ?? CAPS.softSteps
+  }
+
+  /** Raise caps when more work is known (e.g. many clip candidates). Never lowers. */
+  expandLimits(opts: {wallClockMs?: number; hardSteps?: number; softSteps?: number}) {
+    if (opts.wallClockMs != null) this.wallClockMs = Math.max(this.wallClockMs, opts.wallClockMs)
+    if (opts.hardSteps != null) this.hardSteps = Math.max(this.hardSteps, opts.hardSteps)
+    if (opts.softSteps != null) this.softSteps = Math.max(this.softSteps, opts.softSteps)
   }
 
   addLuna(u?: { prompt_tokens?: number; completion_tokens?: number }) {
