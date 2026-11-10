@@ -77,6 +77,7 @@ describe('sidebar model', () => {
   it.each([
     ['/app', '', 'home'],
     ['/app/home', '', 'home'],
+    ['/app/dashboard', '', 'home'],
     ['/app/clips', '', 'clips'],
     ['/app/clips', 'kind=video', 'ai-video'],
     ['/app/clips', 'view=recents', 'clips'],

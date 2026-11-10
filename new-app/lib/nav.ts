@@ -177,6 +177,7 @@ export function resolveContext(pathname: string): NavContext {
   if (
     pathname === '/app' ||
     pathname === '/app/home' ||
+    pathname === '/app/dashboard' ||
     pathname.startsWith('/app/settings') ||
     pathname.startsWith('/app/integrations') ||
     pathname.startsWith('/app/help')

@@ -59,6 +59,16 @@ export const appRouteRedirects = [
     destination: '/app',
     permanent: true,
   },
+  {
+    source: '/app/dashboard',
+    destination: '/app',
+    permanent: true,
+  },
+  {
+    source: '/app/dashboard/',
+    destination: '/app',
+    permanent: true,
+  },
 ]
 
 function sourceToRegex(source) {

@@ -6,6 +6,8 @@ describe('applyAppRouteRedirect', () => {
   it('maps the §9 table to 308 destinations', () => {
     const cases: Array<[string, string, string]> = [
       ['/app/home', '', '/app'],
+      ['/app/dashboard', '', '/app'],
+      ['/app/dashboard/', '', '/app'],
       ['/app/editor', '', '/app/video-editor'],
       ['/app/editor/proj_1/edit/clip_1', '', '/app/video-editor/proj_1/edit/clip_1'],
       ['/app/clips/proj_1/edit/clip_1', '', '/app/video-editor/proj_1/edit/clip_1'],
@@ -26,6 +28,14 @@ describe('applyAppRouteRedirect', () => {
     expect(applyAppRouteRedirect('/app/home', 'tab=recents')).toEqual({
       status: 308,
       location: '/app?tab=recents',
+    })
+    expect(applyAppRouteRedirect('/app/dashboard', 'tab=recents')).toEqual({
+      status: 308,
+      location: '/app?tab=recents',
+    })
+    expect(applyAppRouteRedirect('/app/dashboard/', 'from=login')).toEqual({
+      status: 308,
+      location: '/app?from=login',
     })
     expect(applyAppRouteRedirect('/app/clips/proj_1/edit/clip_1', 't=1200&panel=captions')).toEqual({
       status: 308,

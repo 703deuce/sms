@@ -96,7 +96,7 @@ export function activeSidebarId(pathname: string, search: URLSearchParams | stri
     /^\/app\/clips\/[^/]+\/(edit|studio|script)(\/|$)/.test(p)
   )
     return 'editor'
-  if (p === '/app' || p === '/app/home') return 'home'
+  if (p === '/app' || p === '/app/home' || p === '/app/dashboard') return 'home'
   if (p === '/app/clips' || p === '/app/clips/trash' || clipsProjectId(p)) return 'clips'
   if (p.startsWith('/app/help') || p.startsWith('/app/learn')) return 'learn'
   if (p.startsWith('/app/settings')) return 'settings'
