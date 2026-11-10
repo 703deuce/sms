@@ -55,6 +55,9 @@ export type ClipBrandEdits = {
   logoPosition?: 'TL' | 'TR' | 'BL' | 'BR'
   logoSizePct?: number
   logoOpacity?: number
+  /** Optional output-time window for a timed logo overlay; absent preserves the legacy full-clip logo. */
+  logoStartMs?: number
+  logoEndMs?: number
   primaryColor?: string
   introVideoKey?: string
   outroVideoKey?: string
