@@ -65,6 +65,8 @@ export async function planAdScenes(args: {
       const remaining = durationSec - first
       scene.durationSec = first
       scene.endMs = cursor + first * 1000
+      // Each split unit has a unique stable scene index, including later beats.
+      scene.index = planned.length
       planned.push(scene)
       console.info('[ad-studio:planner] scene_selected', { runId, sceneIndex: planned.length - 1, source: scene.source, reason: scene.reason, modelId: scene.modelId })
       cursor = scene.endMs

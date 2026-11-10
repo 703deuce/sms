@@ -93,5 +93,6 @@ describe('Ad Studio B2 contract', () => {
     expect(plan.scenes.every(s => s.source === 'generated' && s.durationSec >= 2 && s.durationSec <= 5)).toBe(true)
     expect(plan.scenes.every(s => s.modelId === 'seedance-2.0-mini')).toBe(true)
     expect(plan.scenes.every(s => s.referenceAssetId === 'stast_owned')).toBe(true)
+    expect(plan.scenes.every((s, i) => s.index === i)).toBe(true)
   })
 })
