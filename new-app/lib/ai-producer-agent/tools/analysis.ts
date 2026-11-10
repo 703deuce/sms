@@ -23,8 +23,11 @@ export async function findMoments(
   const mode = String(args.mode ?? 'best_moments') as 'best_moments' | 'story_search' | 'inventory'
   const anchor = ctx.sources[0]?.projectId
   if (!anchor) return { ok: false, summary: 'no anchor project' }
-  const visualStory = ctx.config.editMode === 'just_chatting_rough_cut' &&
-    ctx.config.visualEvidenceMode === 'visual_audio' && mode === 'best_moments'
+  // Opt-in only: YouTube uses the same Gemini watcher without inheriting Just Chatting rules.
+  const visualStory = mode === 'best_moments' && (
+    args.youtubeLongForm === true ||
+    (ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.visualEvidenceMode === 'visual_audio')
+  )
   const sourceRange = ctx.sources[0]?.rangeMs
   const transcriptText = visualStory && sourceRange
     ? timestampedAsrForVisual(ctx.cache.words ?? [], sourceRange) : undefined
@@ -193,9 +196,10 @@ export function ingestFramesFromWorker(samples: { tMs: number; rms: number }[]) 
 export async function refineVisualStoryEvidence(
   ctx: import('@/lib/ai-producer-agent/tools/registry').ToolCtx,
   budget: Budget,
+  options: { youtubeLongForm?: boolean } = {},
 ) {
-  if (ctx.config.editMode!=='just_chatting_rough_cut' ||
-      ctx.config.visualEvidenceMode!=='visual_audio' ||
+  if ((!options.youtubeLongForm && ctx.config.editMode!=='just_chatting_rough_cut') ||
+      (!options.youtubeLongForm && ctx.config.visualEvidenceMode!=='visual_audio') ||
       !ctx.cache.visualEvidence || !ctx.cache.moments?.length) return
   const source=ctx.sources[0]
   if (!source?.rangeMs || !source.projectId) return
