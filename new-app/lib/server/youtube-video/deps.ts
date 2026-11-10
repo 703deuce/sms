@@ -111,6 +111,13 @@ export function prismaYoutubeVideoStore(): YoutubeVideoRunStore {
       })
       return updated.count === 1
     },
+    async claimAssemblyChoice(workspaceId,id,chosenOptionId) {
+      const claimed=await db().updateMany({
+        where:{id,workspaceId,status:'awaiting_choice',chosenOptionId:null},
+        data:{status:'running',stage:'assembling',progressPercent:80,chosenOptionId},
+      })
+      return claimed.count===1
+    },
     async claimAssembling(workspaceId,id,chosenOptionId,staleBeforeIso) {
       const claimed=await db().updateMany({
         where:{id,workspaceId,status:'running',stage:'assembling',
