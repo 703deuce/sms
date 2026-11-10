@@ -20,6 +20,7 @@ export type YtOutline = {
 }
 
 export type YtSelectedCut = YoutubeVideoCut & {
+  beat: string
   kind: 'speech' | 'visual'
   reason: string
 }
