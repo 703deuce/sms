@@ -38,7 +38,9 @@ export async function assertNoConcurrentRun(workspaceId: string) {
 }
 
 export async function createAiProducerAgentRun(workspaceId: string, userId: string | null, input: CreateAiProducerRunInput) {
-  await assertNoConcurrentRun(workspaceId)
+  // Project-backed starts are serialized in a short DB transaction below.
+  // Other callers retain the workspace-wide guard.
+  if (!input.sources[0]?.projectId) await assertNoConcurrentRun(workspaceId)
   const genre = input.genre ?? 'irl_just_chatting'
   const multiStory = input.storyMode === 'multi_source_story_v1'
   const cleanTake = input.storyMode === 'clean_take_v1'
@@ -94,22 +96,49 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
     maxEditsPerRun: multiStory || cleanTake || aiClip || input.editMode === 'just_chatting_rough_cut' ? 1 : AI_PRODUCER_MAX_EDITS_PER_RUN,
   }
   const id = createId('aprun')
-  const row = await getPrisma().aiProducerAgentRun.create({
-    data: {
-      id,
-      workspaceId,
-      status: 'queued',
-      genre,
-      outputType: input.outputType,
-      platform: input.platform ?? 'tiktok',
-      instruction: input.instruction?.trim() || null,
-      config: config as unknown as Prisma.InputJsonValue,
-      sourceSnapshot: input.sources as unknown as Prisma.InputJsonValue,
-      createdById: userId,
-    },
-  })
   const anchorProjectId = input.sources[0]?.projectId
   const durableUnified = input.storyMode === 'clip_unified_v1'
+  const runData = {
+    id,
+    workspaceId,
+    status: 'queued',
+    genre,
+    outputType: input.outputType,
+    platform: input.platform ?? 'tiktok',
+    instruction: input.instruction?.trim() || null,
+    config: config as unknown as Prisma.InputJsonValue,
+    sourceSnapshot: input.sources as unknown as Prisma.InputJsonValue,
+    createdById: userId,
+  } as const
+  let attached = false
+  const row = anchorProjectId
+    ? await getPrisma().$transaction(async (tx) => {
+        // Serialize simultaneous starts for the same project, including across deploy containers.
+        await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext(${workspaceId}), hashtext(${anchorProjectId}))) AS locked`
+        const active = await tx.aiProducerAgentRun.findMany({
+          where: { workspaceId, status: { in: ['queued', 'running', 'planning', 'applying', 'recovering', 'capped'] } },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        })
+        const sameProject = active.find((run) => {
+          const snapshots = Array.isArray(run.sourceSnapshot) ? run.sourceSnapshot : []
+          return snapshots.some((entry) =>
+            entry != null && typeof entry === 'object' &&
+            !Array.isArray(entry) && entry.projectId === anchorProjectId)
+        })
+        if (sameProject) {
+          attached = true
+          console.info('[clips:double-run]', { projectId: anchorProjectId, existingRunId: sameProject.id, action: 'attached' })
+          return sameProject
+        }
+        if (active.length) {
+          console.info('[clips:double-run]', { projectId: anchorProjectId, existingRunId: active[0].id, action: 'rejected_workspace_active' })
+          throw new Error('ai_producer_agent_run_in_progress')
+        }
+        return tx.aiProducerAgentRun.create({ data: runData })
+      })
+    : await getPrisma().aiProducerAgentRun.create({ data: runData })
+  if (attached) return row
   let queued = false
   try {
     const resolved = await resolveAiProducerSources(workspaceId, input.sources)
