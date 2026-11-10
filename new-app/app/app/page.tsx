@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Clapperboard, Scissors, Youtube, Captions, WandSparkles } from 'lucide-react'
+import { Clapperboard, Scissors, SquarePlay, Captions, WandSparkles } from 'lucide-react'
 import { Page, PageHeader } from '../../components/app/page-primitives'
 import { ProjectStatusBadge } from '../../components/app/status'
 import { getClipsDriveProjects, getClipsWorkspaceId } from '../../lib/server/clips/drive-data'
@@ -43,7 +43,7 @@ export default async function AppDashboardPage() {
         />
         <LauncherCard
           href={routes.youtubeVideo()}
-          icon={Youtube}
+          icon={SquarePlay}
           title="YouTube Video"
           description="Turn your footage into a complete YouTube video."
           testId="app-launcher-youtube-video"
