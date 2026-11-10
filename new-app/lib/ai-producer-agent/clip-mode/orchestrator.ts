@@ -23,7 +23,7 @@ import { createEditorialHandoff, runEditorialRole, recoverEditorialSelections, c
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
 import {candidateWindows,clipCandidateLimit,overlapFraction,rankCandidate,type ClipCandidate} from '@/lib/ai-producer-agent/clip-mode/candidates'
 import {storyCoverage} from '@/lib/ai-producer-agent/clip-mode/story-coverage'
-import {clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,qaTranscriptWindow,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isNonBlockingEditorialQaIssue,qaTranscriptWindow,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {instructionAsksToCompile,mergeTopicCandidates,topicPassagesFromTranscript,topicQueryFromInstruction,whyThisClip} from '@/lib/ai-producer-agent/clip-mode/topic-search'
 import {createSourceClip,publishClipScore,discardClip} from '@/lib/server/ai-producer-agent/clip-mode-store'
 import {clipAgentHardSteps,clipAgentHardStepsForCandidates,clipAgentWallClockMs,clipAgentWallClockMsForCandidates,clipCandidateHardSteps,clipCandidateWallClockMs,clipQaRetryHardSteps,clipQaRetryWallClockMs} from '@/lib/ai-producer-agent/rough-cut-window'
@@ -186,24 +186,22 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         const qa=out.editorialHandoff.review
         // An LLM may still mention preset length in QA prose. Strip only
         // duration-only criticisms; leave actual continuity/content flaws.
-        const substantiveIssues=(qa?.issues??[]).filter(issue=>
-          !/^(?:the )?(?:selected |final |clip |edit |story )?(?:intervals? total |duration |runtime |length |clip is too short|clip is too long|below the requested|above the requested)/i.test(issue.trim()) &&
-          !/duration (?:is |of |below |above )|seconds? (?:below |above )|length target|runtime target/i.test(issue))
+        const substantiveIssues=(qa?.issues??[]).filter(issue=>!isNonBlockingEditorialQaIssue(issue))
         // Regex can detect a suspicious "but", not whether it changes
         // meaning. Ground the final decision in the explicit model QA, which
         // saw the complete original transcript and the flagged risk spans.
         const criticalStructural=safetyRisks.filter(r=>
           r.code==='invalid_passage'||r.code==='chronology')
-        const durationOnlyModelFailure=Boolean(qa&&qa.pass===false&&
+        const warningOnlyModelFailure=Boolean(qa&&qa.pass===false&&
           (qa.issues?.length??0)>0&&substantiveIssues.length===0)
         const veto=shouldVetoPublish({
           risks:safetyRisks,qaPass:qa?.pass??null,qaIssues:substantiveIssues,
         })||criticalStructural.length>0||(!qa&&safetyRisks.some(r=>r.code==='missing_qualification'))
         // Incomplete QA (budget exhausted, timeout, crash) must not publish.
-        // Only a completed passing review, or a duration-only model miss, can ship.
+        // Listening-only or duration-only model remarks are warnings, not vetoes.
         const qaComplete=Boolean(qa)&&!substantiveIssues.some(issue=>/could not complete|specialist_budget_exhausted/i.test(issue))
         const qaPass:boolean|null=veto?false:
-          qaComplete&&qa?(Boolean(qa.pass)||durationOnlyModelFailure)&&substantiveIssues.length===0:null
+          qaComplete&&qa?(Boolean(qa.pass)||warningOnlyModelFailure)&&substantiveIssues.length===0:null
         const safetyIssues=safetyRisks.map(r=>r.code+': '+r.detail)
         const combinedIssues=[...new Set([...substantiveIssues,
           ...(qaPass===true?[]:safetyIssues)])]
@@ -299,9 +297,14 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         published:kept.length,scores:kept.map(k=>({clipId:k.out.clipId,score:k.score}))}).slice(0,4000)})
     // Each candidate uses a separate budget; do not cap all outputs together.
     if (budget.cappedBy) status = 'capped'
-    if (!outputs.some((o) => o.projectId && !o.suppressed)) {
+    const anyClip=outputs.some((o)=>Boolean(o.projectId&&o.clipId))
+    const anyPublished=outputs.some((o)=>Boolean(o.projectId&&o.clipId)&&!o.suppressed)
+    if (!anyClip) {
       status = 'failed'
       error = 'no valid plan for any output'
+    } else if (!anyPublished) {
+      // Held drafts are still a completed run the editor can review.
+      error = undefined
     }
   } catch (err) {
     status = 'failed'

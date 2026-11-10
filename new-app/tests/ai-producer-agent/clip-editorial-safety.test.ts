@@ -2,7 +2,7 @@ import {describe,expect,it} from 'vitest'
 import {readFileSync} from 'node:fs'
 import {dirname,join} from 'node:path'
 import {fileURLToPath} from 'node:url'
-import {clipEditorialAudit,clipEditorialInstructions,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isNonBlockingEditorialQaIssue,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {selectMomentFlowTrim} from '@/lib/ai-producer-agent/clip-mode/moment-flow'
 const words=(text:string,startMs=0,spacingMs=380)=>
   text.split(' ').map((w,i)=>({w,s:(startMs+i*spacingMs)/1000,e:(startMs+i*spacingMs+320)/1000}))
@@ -174,6 +174,14 @@ describe('aprun_851c73b3 published-clip fixture repairs',()=>{
     const lastText=publishedWords.filter(w=>w.e*1000>last.startMs&&w.s*1000<last.endMs).map(w=>w.w).join(' ').toLowerCase()
     expect(lastText).toContain('make us human')
   })
+  it('includes a concluding sentence after it feels the same',()=>{
+    const repaired=repairClipBoundaries([
+      {startMs:913640,endMs:920520},
+    ],publishedWords,{maxLaterConclusionMs:6500})
+    expect(repaired.cuts[0]!.endMs).toBeGreaterThanOrEqual(924840)
+    const text=publishedWords.filter(w=>w.e*1000>repaired.cuts[0]!.startMs&&w.s*1000<repaired.cuts[0]!.endMs).map(w=>w.w).join(' ').toLowerCase()
+    expect(text).toContain('make us human')
+  })
   it('plans brief crossfades on every stitch join',()=>{
     const joins=stitchJoinTransitions(publishedCuts)
     expect(joins).toHaveLength(4)
@@ -192,5 +200,33 @@ describe('aprun_851c73b3 published-clip fixture repairs',()=>{
     expect(shouldVetoPublish({
       risks:[],qaPass:true,qaIssues:[],
     })).toBe(false)
+  })
+})
+
+
+describe('duration tightening must not cut the ending payoff',()=>{
+  it('keeps the last passage when a story is longer than the request',()=>{
+    const cuts=[
+      {startMs:0,endMs:40000},
+      {startMs:50000,endMs:80000},
+      {startMs:90000,endMs:120000},
+    ]
+    const result=honorTargetDuration(cuts,[],60)
+    expect(result.cuts.at(-1)!.endMs).toBe(120000)
+    expect(result.cuts.at(-1)!.startMs).toBe(90000)
+    expect(result.note??'').toMatch(/ending|complete story/i)
+  })
+})
+
+describe('non-blocking editorial QA warnings',()=>{
+  it('treats listening-only and duration-only remarks as warnings',()=>{
+    expect(isNonBlockingEditorialQaIssue('Audio joins are marked as requiring listening review. No waveform was supplied.')).toBe(true)
+    expect(isNonBlockingEditorialQaIssue('No audio was supplied, so seam clicks cannot be verified.')).toBe(true)
+    expect(isNonBlockingEditorialQaIssue('The clip is too short relative to the length target.')).toBe(true)
+  })
+  it('still treats a missing payoff or mid-sentence ending as blocking',()=>{
+    expect(isNonBlockingEditorialQaIssue('The edit omits the recorded cooperation payoff after 381095 ms.')).toBe(false)
+    expect(isNonBlockingEditorialQaIssue('The 350 ms crossfade cannot repair this missing story beat or the dangling clause.')).toBe(false)
+    expect(isNonBlockingEditorialQaIssue('Ending is mid-sentence and must be extended to the next complete sentence.')).toBe(false)
   })
 })
