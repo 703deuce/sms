@@ -87,7 +87,7 @@ describe('Ad Studio live-contract UI', () => {
     render(<AdStudioPage client={client} sleep={noWait} pollMs={0} />)
 
     expect(await screen.findByTestId('ad-studio-recent-run')).toBeTruthy()
-    expect(screen.getByTestId('ad-studio-read-recovery').textContent).toContain('safe creation defaults')
+    expect((await screen.findByTestId('ad-studio-read-recovery')).textContent).toContain('safe creation defaults')
     fireEvent.click(screen.getByTestId('ad-studio-retry-config'))
     await waitFor(() => expect(screen.queryByTestId('ad-studio-read-recovery')).toBeNull())
     expect(configCalls).toBe(2)

@@ -201,8 +201,10 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
           failureCount = 0
           setPollRecovery(null)
           setRun((current) => current?.id === runId ? next : current)
-          if (next.status === 'done' || next.status === 'failed' || next.status === 'cancelled') {
-            void refreshHistory().catch(showError)
+          if (!ACTIVE_STATUSES.has(next.status)) {
+            if (next.status === 'done' || next.status === 'failed' || next.status === 'cancelled') {
+              void refreshHistory().catch(showError)
+            }
             return
           }
         } catch (err) {
