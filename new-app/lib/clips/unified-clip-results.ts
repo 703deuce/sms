@@ -1,20 +1,16 @@
 /**
- * Unified clipper results adapter.
+ * Unified clipper results adapter against docs/contracts/unified-clipper-v1.md
+ * (New draft PR #1138, head 880194ec). Maps GET /api/ai-producer-agent/runs/:id/clips
+ * and the existing project clip list. Does not re-dedupe (>60% overlap is backend).
  *
- * New has not posted a results contract yet (as of this frontend branch).
- * This adapter maps the existing list-project-clips payload, plus any
- * forthcoming `type: 'story' | 'continuous'` field, into a single tagged list.
- * Do not change the clips API from the frontend alone.
- *
- * Until a unified job param exists, create/process still sends
- * UNIFIED_AUTO_AGENT_CLIP_MODE (`clip_story_v1`) because the current contract
- * only accepts `clip_moment_v1` | `clip_story_v1`.
+ * Frontend sends storyMode / autoAgentClipMode: 'clip_unified_v1'.
+ * #1138 is not merged; auto-start of that job is a merge-order dependency.
  */
 
 export type UnifiedClipKind = 'story' | 'continuous'
 
-/** Required backend enum value sent while a unified job param is not in the contract. */
-export const UNIFIED_AUTO_AGENT_CLIP_MODE = 'clip_story_v1' as const
+/** Posted contract value. New Frontend should send only clip_unified_v1. */
+export const UNIFIED_AUTO_AGENT_CLIP_MODE = 'clip_unified_v1' as const
 
 export type UnifiedClipTypeFilter = 'all' | UnifiedClipKind
 export type UnifiedClipSort = 'score' | 'type' | 'duration' | 'timeline' | 'title'
@@ -37,6 +33,8 @@ export type UnifiedClipResult = {
   favorite?: boolean
   /** Story (stitched beats) or Continuous (uninterrupted 15–30s, up to ~60s). */
   resultKind: UnifiedClipKind
+  needsReview?: boolean
+  needsReviewReasons?: string[]
 }
 
 const STORY_VALUES = new Set([
@@ -133,13 +131,27 @@ export function inferUnifiedClipKind(raw: unknown): UnifiedClipKind {
 
 export function adaptListProjectClip(raw: unknown): UnifiedClipResult | null {
   const row = asRecord(raw)
-  if (!row || typeof row.id !== 'string' || !row.id) return null
+  const id = firstString(row?.id, row?.clipId)
+  if (!row || !id) return null
   const startMs = firstNumber(row.startMs) ?? 0
   const endMs = firstNumber(row.endMs) ?? startMs
-  const durationMs = firstNumber(row.durationMs) ?? Math.max(0, endMs - startMs)
+  const durationSeconds = firstNumber(row.durationSeconds)
+  const durationMs = firstNumber(row.durationMs) ?? (durationSeconds != null ? Math.round(durationSeconds * 1000) : Math.max(0, endMs - startMs))
   const title = typeof row.title === 'string' && row.title.trim() ? row.title : 'Untitled clip'
+  const resultKind = inferUnifiedClipKind(row)
+  const meta = asRecord(row.aiMeta)
+  const needsReview = row.needsReview === true || meta?.needsReview === true
+  const reasonRaw = row.needsReviewReasons ?? meta?.needsReviewReasons
+  const needsReviewReasons = Array.isArray(reasonRaw)
+    ? reasonRaw.filter((r): r is string => typeof r === 'string' && r.trim().length > 0).slice(0, 10)
+    : []
+  const aiMeta = {
+    ...(meta ?? {}),
+    type: resultKind,
+    ...(needsReview ? { needsReview: true, needsReviewReasons } : {}),
+  }
   return {
-    id: row.id,
+    id,
     projectId: typeof row.projectId === 'string' ? row.projectId : undefined,
     title,
     score: firstNumber(row.score) ?? 0,
@@ -150,11 +162,13 @@ export function adaptListProjectClip(raw: unknown): UnifiedClipResult | null {
     previewUrl: typeof row.previewUrl === 'string' ? row.previewUrl : null,
     posterUrl: typeof row.posterUrl === 'string' ? row.posterUrl : null,
     reason: typeof row.reason === 'string' ? row.reason : row.reason == null ? null : undefined,
-    aiMeta: row.aiMeta,
+    aiMeta,
     edits: row.edits,
     spokenFirstLine: typeof row.spokenFirstLine === 'string' ? row.spokenFirstLine : undefined,
     favorite: row.favorite === true,
-    resultKind: inferUnifiedClipKind(row),
+    resultKind,
+    needsReview,
+    needsReviewReasons,
   }
 }
 

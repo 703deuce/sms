@@ -2,6 +2,7 @@
 
 import { ClipCard } from './clip-card'
 import { UnifiedClipTypeBadge } from './unified-clip-type-badge'
+import { NeedsReviewBadge } from './needs-review-badge'
 import type { ExportAspect } from '../../lib/clips/export-aspect'
 import type { UnifiedClipKind } from '../../lib/clips/unified-clip-results'
 
@@ -20,6 +21,8 @@ export type ClipCardData = {
   edits?: unknown
   spokenFirstLine?: string
   resultKind?: UnifiedClipKind
+  needsReview?: boolean
+  needsReviewReasons?: string[]
 }
 
 export function ClipGrid({
@@ -49,11 +52,14 @@ export function ClipGrid({
     <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {clips.map((c) => (
         <div key={c.id} className="relative min-w-0">
-          {c.resultKind ? (
-            <div className="pointer-events-none absolute left-12 top-2 z-20">
-              <UnifiedClipTypeBadge kind={c.resultKind} />
-            </div>
-          ) : null}
+          <div className="pointer-events-none absolute left-12 top-2 z-20 flex flex-col items-start gap-1">
+            {c.resultKind ? <UnifiedClipTypeBadge kind={c.resultKind} /> : null}
+            {c.needsReview || c.aiMeta ? (
+              <span className="pointer-events-auto">
+                <NeedsReviewBadge aiMeta={c.aiMeta ?? (c.needsReview ? { needsReview: true, needsReviewReasons: c.needsReviewReasons } : undefined)} />
+              </span>
+            ) : null}
+          </div>
           <ClipCard
             clip={c}
             projectId={projectId}

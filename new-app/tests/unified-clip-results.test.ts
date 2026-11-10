@@ -11,8 +11,8 @@ import {
 } from '../lib/clips/unified-clip-results'
 
 describe('unified clip results adapter', () => {
-  it('keeps the required backend mode as clip_story_v1 until a unified job param exists', () => {
-    expect(UNIFIED_AUTO_AGENT_CLIP_MODE).toBe('clip_story_v1')
+  it('sends clip_unified_v1 per the posted contract', () => {
+    expect(UNIFIED_AUTO_AGENT_CLIP_MODE).toBe('clip_unified_v1')
   })
 
   it('reads the forthcoming type field from the list payload', () => {
@@ -74,5 +74,34 @@ describe('unified clip results adapter', () => {
 
   it('counts story and continuous clips', () => {
     expect(unifiedClipCounts(MOCK_UNIFIED_CLIPS)).toEqual({ total: 4, story: 2, continuous: 2 })
+  })
+
+  it('maps the posted contract shape (clipId, durationSeconds, needsReview) from an uploaded-file run', () => {
+    const clip = adaptListProjectClip({
+      clipId: 'clip_from_upload',
+      projectId: 'proj_upload',
+      type: 'story',
+      title: 'Uploaded hook',
+      score: 91,
+      durationSeconds: 42.5,
+      startMs: 1000,
+      endMs: 43_500,
+      needsReview: true,
+      needsReviewReasons: ['unfinished_ending'],
+    })
+    expect(clip?.id).toBe('clip_from_upload')
+    expect(clip?.durationMs).toBe(42_500)
+    expect(clip?.resultKind).toBe('story')
+    expect(clip?.needsReview).toBe(true)
+    expect(clip?.needsReviewReasons).toEqual(['unfinished_ending'])
+  })
+
+  it('does not re-dedupe overlapping clips; the backend list is already final', () => {
+    const rows = adaptListProjectClips([
+      { id: 'a', title: 'Story', type: 'story', score: 90, startMs: 0, endMs: 20_000 },
+      { id: 'b', title: 'Overlap', type: 'continuous', score: 80, startMs: 1000, endMs: 18_000 },
+    ])
+    expect(rows).toHaveLength(2)
+    expect(filterSortUnifiedClips(rows).map((c) => c.id)).toEqual(['a', 'b'])
   })
 })
