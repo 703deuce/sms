@@ -6,7 +6,7 @@ This document is the single canonical name set. Use these fields and paths exact
 
 AI Captions is a **separate product**, not a clipper mode. `/app/clips` stays the clipper. There is no clipping and no cuts. One run transcribes the source (if needed) and generates captions only. Output is **one** `Clip` row covering the full video (`startMs` 0 through `durationMs`) in clip-editor shape, with captions enabled. Edit opens that clip in the **clip editor**.
 
-Captions start automatically when a run is created from an upload or from an existing project or asset. There is no confirm or choose step.
+Captions start automatically when a run is created from a new upload, an existing project, or an asset. There is no confirm or choose step. A new upload (`kind: 'upload'`, `uploadId`) is turned into a captions-only project by this API: transcription only, no clip job, no auto clipper, and no credit spend beyond the informational `creditEstimate`.
 
 Reuse the existing transcription and caption pipeline read-only (caption presets, word-boundary line splitting from #1132, SRT builders, `writeClipEdits`). Do not fork behaviour and do not change the clipper’s captions, the editor, the SMS worker, or app3. No live billing; never show `$`. Credits on this contract are informational only and are not charged.
 
@@ -14,11 +14,13 @@ Reuse the existing transcription and caption pipeline read-only (caption presets
 
 ```ts
 type AiCaptionsSource =
-  | { kind: 'upload'; projectId: string }
+  | { kind: 'upload'; uploadId: string }
+  | { kind: 'project'; projectId: string }
   | { kind: 'asset'; projectId: string; assetId: string }
 
 type AiCaptionsStatus =
   | 'queued'
+  | 'preparing'
   | 'transcribing'
   | 'captioning'
   | 'exporting'
@@ -27,6 +29,7 @@ type AiCaptionsStatus =
 
 type AiCaptionsStage =
   | 'queued'
+  | 'prepare'
   | 'transcribe'
   | 'captions'
   | 'export'
@@ -70,7 +73,7 @@ type AiCaptionsResult = {
 }
 ```
 
-`styleId` identifies a built-in preset or a saved style. `assetId` is a media asset on the given project (library upload id). `lowConfidence` is always present on each word. The coverage rule is: every transcript word in `[0, durationMs]` appears in `words` and in some `lines` entry, including its text and timing.
+`styleId` identifies a built-in preset or a saved style. `uploadId` is a completed clip upload in this workspace (the existing upload API). `assetId` is a media asset on the given project (library upload id). `lowConfidence` is always present on each word. The coverage rule is: every transcript word in `[0, durationMs]` appears in `words` and in some `lines` entry, including its text and timing.
 
 ## 1. Create a run
 
@@ -88,12 +91,13 @@ Captions start automatically on this request. Do not wait for a second call to b
 }
 ```
 
-- `kind: 'upload'` is a READY uploaded project in this workspace (`projectId`). This is the primary path: Frontend uploads with the existing upload API, then passes the new `projectId`, or the user picks an existing project.
-- `kind: 'asset'` is an existing media asset (`assetId`) on a project in this workspace. No re-upload.
-- After ingest, upload and asset sources are indistinguishable. The same pipeline runs for both.
-- The project or asset must be READY. Otherwise `400` `source_not_ready`. Missing or cross-workspace ids are `404` `source_not_found`. A source with no audio is `400` `source_has_no_audio`.
+- `kind: 'upload'` is a completed file from the existing upload API (`uploadId`). This is the primary new-file path. The server creates a **captions-only** project from that upload: it runs transcription/process with **no clip job**, **no auto clipper** (it does not call `maybeAutoStartUploadAgentBatch` and does not use `PROCESS_PROJECT` clip picking), and **no credit spend** beyond this run’s informational `creditEstimate`. Once the transcript is ready, the same captions pipeline runs as for an existing project. While the project is being created and before the transcript is ready, the run status is `preparing` (then `transcribing`). An incomplete upload is `400` `source_not_ready`. A missing or cross-workspace `uploadId` is `404` `source_not_found`.
+- `kind: 'project'` is an existing project in this workspace (`projectId`). No re-upload. The project must be READY; otherwise `400` `source_not_ready`.
+- `kind: 'asset'` is an existing media asset (`assetId`) on a project in this workspace. No re-upload. The project or asset must be READY; otherwise `400` `source_not_ready`.
+- After ingest, upload, project, and asset sources are indistinguishable. The same caption pipeline runs for all three.
+- Missing or cross-workspace project or asset ids are `404` `source_not_found`. A source with no audio is `400` `source_has_no_audio`.
 - An unknown `styleId` is `400` `unknown_style_id`.
-- There is **no captions-specific duration cap**. This path must accept 20–30+ minute sources. It uses the regular uploaded-project transcript path, not the 3-minute BYO path. The existing clip upload limit (10 hours) is unchanged; sources above that existing upload limit fail with the existing upload error, not a new captions cap.
+- There is **no captions-specific duration cap**. This path must accept 20–30+ minute sources. It does not use the 3-minute BYO path and does not pick clips. The existing clip upload limit (10 hours) is unchanged; sources above that existing upload limit fail with the existing upload error, not a new captions cap.
 
 `201` on a new run, `200` on an idempotent replay:
 
@@ -120,6 +124,7 @@ Captions start automatically on this request. Do not wait for a second call to b
     failureMessage: string | null     // human, no $
     creditEstimate: number | null     // integer credits; informational; not charged
     styleId: string | null
+    projectId: string | null          // set once a project exists (created from upload, or the given project)
     result: AiCaptionsResult | null   // set only when status is 'ready'
   }
 }
@@ -128,13 +133,14 @@ Captions start automatically on this request. Do not wait for a second call to b
 | status | meaning |
 |---|---|
 | `queued` | Accepted, not started |
+| `preparing` | Creating the captions-only project from `uploadId` (or otherwise waiting until the source exists and can be transcribed) |
 | `transcribing` | Running or waiting on the existing transcription path |
 | `captioning` | Building caption words and sentence-aware lines |
 | `exporting` | Optional burned-in MP4 is in progress; SRT may already be available on a later ready result |
 | `ready` | Clip, captions, and SRT are written; `result` is present |
 | `failed` | Terminal failure; `failureCode` and `failureMessage` are set |
 
-A project that already has a transcript skips `transcribing` and goes straight to `captioning`.
+A `kind: 'project'` or `kind: 'asset'` source that already has a transcript skips `preparing` / `transcribing` and goes straight to `captioning`. A `kind: 'upload'` source stays in `preparing` until its captions-only project exists, then `transcribing` until words are ready.
 
 When `ready`:
 
@@ -209,8 +215,8 @@ JSON errors use `{ error: { code, message } }`. `message` is human-readable and 
 |---|---|---|
 | `idempotency_key_required` | 400 | missing Idempotency-Key and clientRequestId |
 | `idempotency_key_reuse` | 409 | same key, different source or styleId |
-| `source_not_ready` | 400 | project or asset is not READY |
-| `source_not_found` | 404 | unknown or cross-workspace project or asset |
+| `source_not_ready` | 400 | existing project or asset is not READY, or the upload is not complete |
+| `source_not_found` | 404 | unknown or cross-workspace upload, project, or asset |
 | `source_has_no_audio` | 400 | no audio to transcribe |
 | `unknown_style_id` | 400 | styleId is not a builtin or saved style in this workspace |
 | `style_not_applicable` | 409 | style change is not allowed in the current status |
@@ -225,7 +231,9 @@ Authenticated app route: `/app/captions`. Marketing landing `/ai-captions` is la
 ## 8. Engine notes (backend)
 
 - Copy or wire into `new-app/lib/ai-captions/`. Do not modify clipper, editor, streamer, clip-mode, or `unified-clip-run` originals.
-- Transcription: existing project or media transcript path, mocked in tests, no live paid provider calls in CI.
+- `kind: 'upload'` creates a captions-only project in this service (do not call `createClipProject`, `maybeAutoStartUploadAgentBatch`, or a `PROCESS_PROJECT` job that picks clips; do not set `autoAgentClipMode`). Transcription is enqueue-only in production and mocked in tests; no live paid provider calls in CI. No credit spend beyond informational `creditEstimate`.
+- `kind: 'project'` and `kind: 'asset'` use an existing ready project or media transcript path.
+
 - Line grouping: sentence-aware (do not split immediately after a mid-sentence word); oversized cues use the #1132 word-boundary split (`splitTokensByMaxChars` / worker `caption_lines`). Import those helpers read-only; if a copy is required, do not change the original files.
 - Low-confidence threshold: `0.5` on ASR `p`. Flag only when `p` is present.
 - Coverage test: caption `words` cover all transcript words for the full duration.
