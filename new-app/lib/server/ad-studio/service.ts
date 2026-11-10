@@ -11,6 +11,7 @@ import { writeGroundedAdStoryline } from '@/lib/server/ad-studio/storyline'
 import { planAdScenes } from '@/lib/ad-studio/planner-agent'
 import { adCommercialReferenceId } from '@/lib/ad-studio/commercial'
 import { advanceAdStudioRun, getAdStudioImages } from '@/lib/server/ad-studio/pipeline'
+import { advanceAdRender, ensureAdEditorClip } from '@/lib/server/ad-studio/destination'
 import type { AdImageVariant } from '@/lib/ad-studio/types'
 
 const prisma = () => getPrisma()
@@ -29,15 +30,16 @@ function canonicalJson(value: unknown): string {
 }
 
 /** Confirmation metadata is private in plan JSON until a dedicated field is added in B3. */
-type SavedPlan = AdPlan & { _confirmKey?: string }
+type SavedPlan = AdPlan & { _confirmKey?: string; _renderRetryKey?: string }
 
 function publicPlan(raw: unknown): AdPlan | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const { _confirmKey: _hidden, ...plan } = raw as unknown as SavedPlan
-  void _hidden
+  const { _confirmKey: _confirmHidden, _renderRetryKey: _retryHidden, ...plan } = raw as unknown as SavedPlan
+  void _confirmHidden
+  void _retryHidden
   return plan as AdPlan
 }
-function toView(row: Existing, imageAds?: AdImageVariant[]): AdStudioRun {
+function toView(row: Existing, imageAds?: AdImageVariant[], canRetryRender = false): AdStudioRun {
   const plan = publicPlan(row.plan)
   const done = row.status === 'done' && row.projectId && row.clipId
   const compactEditorUrl = done ? `/app/video-editor/${encodeURIComponent(row.projectId!)}/edit/${encodeURIComponent(row.clipId!)}?mode=compact` : null
@@ -48,6 +50,7 @@ function toView(row: Existing, imageAds?: AdImageVariant[]): AdStudioRun {
     creditEstimate: row.creditEstimate, creditCharged: row.creditCharged,
     projectId: row.projectId, clipId: row.clipId, compactEditorUrl, fullEditorUrl,
     ...(imageAds ? { imageAds } : {}),
+    canRetryRender,
     error: row.errorCode ? { code: row.errorCode, message: row.errorMessage || 'Ad Studio could not complete this run.' } : null,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
@@ -59,6 +62,31 @@ const required = async (workspaceId: string, id: string): Promise<Existing> => {
   if (!row) throw new AdStudioError('RUN_NOT_FOUND','Ad run not found.',404)
   console.info('[ad-studio:store] get_complete', { runId: id, status: row.status })
   return row
+}
+
+async function canRetryFinalRender(row: Existing): Promise<boolean> {
+  if (row.status !== 'failed' || row.errorCode !== 'RENDER_ERROR' || !row.projectId) return false
+  const db = prisma()
+  const input = row.input as unknown as AdProductInput
+  console.info('[ad-studio:b3] retry_render_eligibility_begin', { runId: row.id })
+  const [sceneCount, unreadyScenes, variantCount, readyVariants] = await Promise.all([
+    db.adStudioScene.count({ where: { runId: row.id } }),
+    db.adStudioScene.count({ where: { runId: row.id, status: { not: 'ready' } } }),
+    db.adStudioImageVariant.count({ where: { runId: row.id } }),
+    db.adStudioImageVariant.count({ where: { runId: row.id, status: 'ready' } }),
+  ])
+  const voiceReady = row.voiceoverStatus === 'ready'
+    || (row.mode === 'image_ad_to_commercial' && input.voiceoverEnabled !== true && row.voiceoverStatus === 'skipped')
+  const ready = sceneCount > 0
+    && unreadyScenes === 0
+    && variantCount === 3
+    && readyVariants === variantCount
+    && voiceReady
+  console.info('[ad-studio:b3] retry_render_eligibility_complete', {
+    runId: row.id, ready, sceneCount, unreadyScenes, variantCount, readyVariants,
+    voiceoverStatus: row.voiceoverStatus,
+  })
+  return ready
 }
 
 async function validateAssets(workspaceId: string, input: AdProductInput): Promise<void> {
@@ -177,8 +205,11 @@ export async function getAdRun(workspaceId: string, id: string): Promise<AdStudi
   const fresh = await required(workspaceId, id)
   const imageAds = ['generating','stitching','done','failed'].includes(fresh.status)
     ? await getAdStudioImages(id) : undefined
-  console.info('[ad-studio:b3] run_refresh_complete', { runId: id, status: fresh.status, images: imageAds?.length })
-  return toView(fresh, imageAds)
+  const canRetryRender = await canRetryFinalRender(fresh)
+  console.info('[ad-studio:b3] run_refresh_complete', {
+    runId: id, status: fresh.status, images: imageAds?.length, canRetryRender,
+  })
+  return toView(fresh, imageAds, canRetryRender)
 }
 
 export async function listAdRuns(workspaceId: string, query: { limit?: string | null; cursor?: string | null; status?: string | null }):
@@ -303,6 +334,64 @@ export async function continueAdRun(workspaceId: string, id: string): Promise<Ad
   const updated = await required(workspaceId, id)
   console.info('[ad-studio:b3] continue_without_failed_scenes_complete', { runId: id, status: updated.status })
   return toView(updated, await getAdStudioImages(id))
+}
+
+/** User-click-only retry of the already-generated final render. Never resubmits paid generation or voiceover. */
+export async function retryAdRender(workspaceId: string, id: string, keyValue: unknown): Promise<AdStudioRun> {
+  console.info('[ad-studio:b3] retry_render_begin', { runId: id })
+  const key = adKeySchema.safeParse(keyValue)
+  if (!key.success) throw adInvalid('An idempotency key is required for render retry.')
+
+  let row = await required(workspaceId, id)
+  const saved = row.plan as unknown as SavedPlan | null
+  if (saved?._renderRetryKey === key.data && (row.status === 'stitching' || row.status === 'done')) {
+    console.info('[ad-studio:b3] retry_render_idempotent_replay', { runId: id, status: row.status })
+    if (row.status === 'stitching') {
+      const clipId = await ensureAdEditorClip(workspaceId, id)
+      if (clipId) await advanceAdRender(workspaceId, id)
+      row = await required(workspaceId, id)
+    }
+    return toView(row, await getAdStudioImages(id), await canRetryFinalRender(row))
+  }
+
+  if (row.status !== 'failed' || row.errorCode !== 'RENDER_ERROR') {
+    throw new AdStudioError('INVALID_PARAMS', 'Only a failed final render can be retried.', 409)
+  }
+  if (!saved || !(await canRetryFinalRender(row))) {
+    throw new AdStudioError('INVALID_PARAMS', 'The generated outputs are not complete enough to retry only the final render.', 409)
+  }
+
+  const nextPlan: SavedPlan = { ...saved, _renderRetryKey: key.data }
+  const claimed = await prisma().adStudioRun.updateMany({
+    where: { id, workspaceId, status: 'failed', errorCode: 'RENDER_ERROR' },
+    data: {
+      status: 'stitching', renderId: null, renderJobId: null, renderStatus: null,
+      errorCode: null, errorMessage: null, completedAt: null, plan: jsonValue(nextPlan),
+    },
+  })
+  if (!claimed.count) return retryAdRender(workspaceId, id, key.data)
+  console.info('[ad-studio:b3] retry_render_claimed', { runId: id })
+
+  try {
+    const clipId = await ensureAdEditorClip(workspaceId, id)
+    if (!clipId) throw new Error('Destination clip unavailable')
+    await advanceAdRender(workspaceId, id)
+    console.info('[ad-studio:b3] retry_render_queued', { runId: id, clipId })
+  } catch (err) {
+    console.warn('[ad-studio:b3] retry_render_failed', {
+      runId: id, type: err instanceof Error ? err.name : typeof err,
+    })
+    await prisma().adStudioRun.updateMany({
+      where: { id, workspaceId, status: 'stitching' },
+      data: {
+        status: 'failed', renderStatus: 'failed', errorCode: 'RENDER_ERROR',
+        errorMessage: 'Ad Studio could not retry the final render.',
+      },
+    })
+  }
+
+  row = await required(workspaceId, id)
+  return toView(row, await getAdStudioImages(id), await canRetryFinalRender(row))
 }
 
 export async function cancelAdRun(workspaceId: string, id: string): Promise<AdStudioRun> {
