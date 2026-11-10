@@ -1201,7 +1201,7 @@ export function TemplatesEditorShell(props: Props) {
   return (
     <ClipperSurfaceErrorBoundary surface="Templates editor">
       <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground" data-testid="templates-editor">
-        <header className={editorToolbarRow}>
+        <header className={editorToolbarRow + ' relative z-50'}>
           <button
             type="button"
             className={editorIconBtn}
@@ -1250,8 +1250,8 @@ export function TemplatesEditorShell(props: Props) {
           </Button>
         </header>
 
-        <div className="flex min-h-0 flex-1">
-          <aside className="flex w-[390px] shrink-0 flex-col border-r border-border bg-card/40 xl:w-[430px]" aria-label="Template gallery">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] overflow-hidden gap-1 p-1 xl:grid-cols-[minmax(360px,430px)_minmax(0,1fr)]" data-testid="templates-editor-layout-grid">
+          <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card/60" aria-label="Template gallery">
             <div className="border-b border-border px-4 pb-3 pt-4">
               <h2 className="text-sm font-semibold">Templates</h2>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -1547,7 +1547,7 @@ export function TemplatesEditorShell(props: Props) {
             </div>
           </aside>
 
-          <main className="flex min-w-0 flex-1 flex-col bg-background" aria-label="Template preview">
+          <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel" aria-label="Template preview">
             <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-2">
               <div>
                 <h2 className="text-sm font-semibold">Live preview</h2>
@@ -1584,7 +1584,7 @@ export function TemplatesEditorShell(props: Props) {
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/15 p-5">
+            <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-muted/15 p-5 [container-type:size]" data-testid="templates-preview-frame">
               {videoUrl ? (
                 <PreviewStage
                   key={previewRetryKey}

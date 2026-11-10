@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { ArrowLeft, Clapperboard, Download, FileText, GripVertical, Loader2, Maximize2, MessageSquare, MoreHorizontal, Palette, Pause, Play, Redo2, RefreshCw, Search, Undo2 } from 'lucide-react'
+import { ArrowLeft, ArrowRightLeft, Captions, Clapperboard, Download, FileText, GripVertical, LayoutTemplate, Loader2, Maximize2, MessageSquare, MoreHorizontal, Palette, Pause, Play, Redo2, RefreshCw, Search, Type, Undo2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
@@ -113,6 +113,7 @@ export function TextSceneEditorShell(props: Props) {
   const [layoutScope, setLayoutScope] = useState<'scene' | 'clip'>('scene')
   const [documentTab, setDocumentTab] = useState<'transcript' | 'subtitles'>('transcript')
   const [styleTab, setStyleTab] = useState<'templates' | 'logos' | 'subtitles' | 'text' | 'images'>('subtitles')
+  const [railPanel, setRailPanel] = useState<'style' | 'broll' | 'transitions' | null>(null)
   const [styleAudition, setStyleAudition] = useState<Props['initialEdits'] | null>(null)
   const [previewZoom, setPreviewZoom] = useState<PreviewZoom>('fit')
   const [dragSceneId, setDragSceneId] = useState<string | null>(null)
@@ -486,7 +487,7 @@ export function TextSceneEditorShell(props: Props) {
   return (
     <ClipperSurfaceErrorBoundary surface="Text editor">
       <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground" data-testid="text-scene-editor">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-4">
+        <header className="relative z-50 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-4">
           <Button variant="ghost" size="icon" aria-label="Back to project" render={<Link href={routes.project(projectId)} />}><ArrowLeft className="size-4" /></Button>
           <div className="min-w-0">
             <p className="truncate text-[11px] text-muted-foreground">{props.projectTitle}</p>
@@ -508,12 +509,8 @@ export function TextSceneEditorShell(props: Props) {
           <Button size="sm" variant="outline" onClick={() => void openGenerateMode()}>Change this shot</Button>
           <Button size="sm" onClick={() => void openClipEditor()}><Clapperboard className="mr-1 size-4" />Open in clip editor</Button>
         </header>
-        <div className="flex min-h-0 flex-1">
-          <nav className="flex w-14 shrink-0 flex-col items-center gap-2 border-r border-border bg-card/60 py-4" aria-label="Text editing tools">
-            <button type="button" className={editorIconBtn + ' ' + editorIconBtnActive} aria-label="Scenes" aria-current="page" title="Scenes"><FileText className="size-5" /></button>
-            <button type="button" className={editorIconBtn} title="Search words" aria-label="Find in transcript" onClick={() => window.dispatchEvent(new Event('transovo:find-transcript'))}><Search className="size-5" /></button>
-          </nav>
-          <aside className="flex w-48 shrink-0 flex-col border-r border-border bg-card/40 xl:w-56" aria-label="Scenes">
+        <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden gap-1 p-1" data-testid="text-editor-layout-grid">
+          <aside className="flex w-44 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card/60 xl:w-48" aria-label="Scenes">
             <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4"><h2 className="text-sm font-semibold">Scenes</h2><span className="text-xs text-muted-foreground">{scenes.length}</span></div>
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
               {scenes.map((scene, index) => {
@@ -599,7 +596,7 @@ export function TextSceneEditorShell(props: Props) {
               {!scenes.length && <p className="px-2 py-5 text-center text-xs text-muted-foreground">Scenes appear with the transcript.</p>}
             </div>
           </aside>
-          <main className="flex min-h-0 min-w-[300px] flex-[1.15] flex-col bg-card" aria-label="Transcript document">
+          <main className="flex min-h-0 min-w-[300px] flex-[3_1_0%] flex-col overflow-hidden rounded-lg border border-border bg-card" aria-label="Transcript document">
             <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
               <div className="flex rounded-lg border border-border bg-muted/40 p-0.5" role="group" aria-label="Transcript editing mode" data-testid="text-document-tabs">
                 <Button type="button" size="sm" variant={documentTab === 'transcript' ? 'secondary' : 'ghost'} aria-pressed={documentTab === 'transcript'} onClick={() => { setDocumentTab('transcript'); console.info('[editor:text-gaps] document-tab', { projectId, clipId, tab: 'transcript' }) }}>Transcript</Button>
@@ -632,7 +629,7 @@ export function TextSceneEditorShell(props: Props) {
                   playheadSourceMs={playhead} onSetEdits={setEdits} compactToolbar largeScript
                 />}
           </main>
-          <section className="flex min-w-[280px] flex-[1] flex-col border-l border-border bg-background" aria-label="Video preview">
+          <section className="relative flex min-h-0 min-w-[320px] flex-[2_1_0%] flex-col overflow-hidden rounded-lg border border-border bg-panel" aria-label="Video preview">
             <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
               <span className="text-xs font-semibold">Preview</span>
               <div className="flex items-center gap-2">
@@ -644,7 +641,7 @@ export function TextSceneEditorShell(props: Props) {
                 </Button>
               </div>
             </div>
-            <div ref={previewFrameRef} className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/15 p-3">
+            <div ref={previewFrameRef} className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-muted/15 p-3 [container-type:size]">
               {videoUrl ? <PreviewStage clipId={clipId} videoUrl={videoUrl} posterUrl={posterUrl}
                 edits={previewEdits} words={words} cropTrack={props.cropTrack} brollMedia={props.brollMedia}
                 media={media} videoRef={videoRef} onEditorMediaError={onMediaError}
@@ -708,7 +705,8 @@ export function TextSceneEditorShell(props: Props) {
                 {props.brollMedia.length ? <span className="rounded-full border border-border px-2.5 py-1 text-xs">Attached media</span> : null}
               </PreviewChipRow>
             </div>
-            <div className="max-h-[42vh] overflow-y-auto border-t border-border bg-card/60 p-3" data-testid="text-style-brand-panel">
+            <div className={railPanel === 'style' ? 'absolute inset-y-0 right-0 z-30 w-[min(320px,90%)] overflow-y-auto border-l border-border bg-card p-3 shadow-2xl' : 'hidden'} data-testid="text-style-brand-panel">
+              <div className="mb-2 flex items-center justify-between gap-2"><span className="text-xs font-semibold">Tools</span><Button size="sm" variant="ghost" onClick={() => { setRailPanel(null); setStyleAudition(null) }}>Close</Button></div>
               <div className="mb-3 flex flex-wrap gap-1" role="tablist" aria-label="Brand and style">
                 {([['templates','Templates'],['logos','Logos'],['subtitles','Subtitles'],['text','Text styles'],['images','Images']] as const).map(([id,label]) => (
                   <Button key={id} type="button" size="sm" variant={styleTab === id ? 'secondary' : 'ghost'} aria-pressed={styleTab === id} onClick={() => { setStyleTab(id); setStyleAudition(null); console.info('[editor:text-gaps] style-tab', { projectId, clipId, tab: id }) }}>{label}</Button>
@@ -761,9 +759,39 @@ export function TextSceneEditorShell(props: Props) {
               {derived && <Link href={routes.edit(projectId, derived.id)} className="mt-3 block text-xs font-medium text-primary underline">Open newly created clip <span className="ml-1 rounded-md border border-border px-1.5 py-0.5 font-mono text-[10px]">{clock(derived.durationMs)}</span></Link>}
             </div>
           </section>
+          <nav className="hidden w-14 shrink-0 flex-col items-center gap-1 overflow-y-auto rounded-lg border border-border bg-card py-2 lg:flex" aria-label="Text editor tools" data-testid="text-editor-right-rail">
+            {([
+              ['ai', 'AI tools', MessageSquare],
+              ['brand', 'Brand kit', Palette],
+              ['templates', 'Templates', LayoutTemplate],
+              ['subtitles', 'Subtitles', Captions],
+              ['upload', 'Upload', Upload],
+              ['broll', 'B-roll', Clapperboard],
+              ['transitions', 'Transitions', ArrowRightLeft],
+              ['text', 'Text', Type],
+            ] as const).map(([id, label, Icon]) => (
+              <button key={id} type="button" className="relative flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={label} title={label} onClick={() => {
+                  console.info('[editor:text-gaps] rail-open', { projectId, clipId, tool: id })
+                  if (id === 'ai') { void openChat(); return }
+                  if (id === 'broll' || id === 'transitions') { setRailPanel(id); return }
+                  setRailPanel('style')
+                  setStyleTab(id === 'brand' ? 'logos' : id === 'upload' ? 'images' : id)
+                }}>
+                <Icon className="size-4" aria-hidden /><span className="max-w-full truncate text-[9px] leading-none">{label}</span>
+              </button>
+            ))}
+          </nav>
+          {railPanel === 'broll' || railPanel === 'transitions' ? (
+            <aside className="absolute inset-y-0 right-14 z-30 w-[320px] overflow-y-auto border-l border-border bg-card p-4 shadow-2xl" data-testid="text-editor-full-tools-handoff">
+              <div className="flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{railPanel === 'broll' ? 'B-roll' : 'Transitions'}</h2><Button size="sm" variant="ghost" onClick={() => setRailPanel(null)}>Close</Button></div>
+              <p className="mt-3 text-xs text-muted-foreground">These controls stay on the existing full clip editor so this Text view does not create a second editing contract.</p>
+              <Button className="mt-4 w-full" onClick={() => void openClipEditor()}>Open full tools</Button>
+            </aside>
+          ) : null}
           {chatMounted && <>
-            {chatOpen && <button type="button" className="fixed inset-0 z-40 bg-black/40 2xl:hidden" aria-label="Close AI chat drawer" onClick={() => { setChatOpen(false); setChatAudition(null); console.info('[editor:chat-mode] drawer-closed', { projectId, clipId }) }} />}
-            <div id="editor-chat-mode" role="dialog" aria-modal={chatOpen ? true : undefined} aria-label="Edit with AI" className={chatOpen ? 'fixed inset-y-0 right-0 z-50 w-[min(420px,100vw)] shadow-xl 2xl:static 2xl:z-auto 2xl:w-[360px] 2xl:shrink-0 2xl:shadow-none' : 'hidden'}>
+            {chatOpen && <button type="button" className="absolute inset-0 z-20 bg-black/20 lg:hidden" aria-label="Close AI chat drawer" onClick={() => { setChatOpen(false); setChatAudition(null); console.info('[editor:chat-mode] drawer-closed', { projectId, clipId }) }} />}
+            <div id="editor-chat-mode" role="dialog" aria-modal={chatOpen ? true : undefined} aria-label="Edit with AI" className={chatOpen ? 'absolute inset-y-0 right-14 z-40 w-[min(360px,calc(100%-3.5rem))] overflow-hidden border-l border-border bg-card shadow-2xl' : 'hidden'}>
               <EditorChatRail
                 open={chatOpen} clipId={clipId} projectId={projectId} bounds={bounds} edits={edits} saveState={saveState} scope={chatScope} canUndo={canUndo}
                 fullVideo={props.fullVideo} playheadSourceMs={playhead} projectMedia={projectMedia}
@@ -786,6 +814,22 @@ export function TextSceneEditorShell(props: Props) {
               />
             </div>
           </>}
+        </div>
+        <div className="h-[112px] max-h-[120px] shrink-0 overflow-x-auto border-t border-border bg-card/70 px-2 py-2" data-testid="text-scene-strip">
+          <div className="flex h-full min-w-max items-stretch gap-2">
+            {scenes.map((scene, index) => {
+              const frameMs = Math.max(0, scene.start - mediaOffsetMs + 100)
+              const frame = frameExtractor?.get(frameMs, 1000)
+              return <button key={scene.id} type="button" onClick={() => seekSource(scene.start)}
+                className={'flex w-36 shrink-0 flex-col overflow-hidden rounded-lg border text-left ' + (activeScene === index ? 'border-primary ring-1 ring-primary/30' : 'border-border')}>
+                <div className="relative min-h-0 flex-1 overflow-hidden bg-muted">
+                  {frame ? <img src={frame} alt="" className="size-full object-cover" /> : posterUrl ? <img src={posterUrl} alt="" className="size-full object-cover opacity-60" /> : null}
+                  <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[9px] text-white">{clock(scene.end - scene.start)}</span>
+                </div>
+                <span className="truncate px-2 py-1 text-[10px]">Scene {index + 1} · {scene.label}</span>
+              </button>
+            })}
+          </div>
         </div>
         <ExportDialog clipId={clipId} title={title} edits={edits} words={words} open={exportOpen}
           onClose={() => setExportOpen(false)} onBeforeExport={flushSave} onEdits={setEdits}
