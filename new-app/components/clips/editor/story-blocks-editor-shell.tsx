@@ -73,7 +73,8 @@ function storyScenes(tb: Timebase, words: SourceWord[], edits: ClipEditsV2): Sce
     const sourceEndMs = outputToSourceEnd(tb, end)
     const phrase = active.filter((w) => w.s * 1000 >= sourceStartMs && w.s * 1000 < sourceEndMs)
       .slice(0, 9).map((w) => wordDisplayText(w, edits.wordFixes)).join(' ').trim()
-    const label = edits.markers?.find((m) => Math.abs(m.ms - from) < 35 && m.label)?.label
+    const label = (edits.markers?.find((m) => m.id.startsWith('story_') && Math.abs(m.ms - from) < 35 && m.label) ??
+      edits.markers?.find((m) => Math.abs(m.ms - from) < 35 && m.label))?.label
     result.push({
       id: 'out:' + from,
       startMs: from, endMs: end, sourceStartMs, sourceEndMs,
@@ -227,7 +228,9 @@ export function StoryBlocksEditorShell(props: Props) {
   const saveLabel = () => {
     if (!selected || !labelDraft.trim() || labelDraft.trim() === selected.label) return
     const at = selected.startMs
-    const current = edits.markers?.find((m) => Math.abs(m.ms - at) < 35)
+    const current = edits.markers?.find((m) => m.id.startsWith('story_') && Math.abs(m.ms - at) < 35)
+    if (!current && (edits.markers?.length ?? 0) >= MAX_MARKERS)
+      return reportError('scene-label', new Error('The clip has reached its marker limit.'))
     const id = current?.id ?? 'story_' + crypto.randomUUID().replaceAll('-', '').slice(0, 28)
     const markers = normalizeMarkers([...(edits.markers ?? []).filter((m) => m.id !== id),
       { id, color: current?.color ?? 'blue', ms: at, label: labelDraft.trim().slice(0, 80), chapter: current?.chapter }])
