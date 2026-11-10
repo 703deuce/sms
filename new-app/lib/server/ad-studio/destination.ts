@@ -237,10 +237,12 @@ export async function ensureAdEditorClip(workspaceId: string, runId: string): Pr
 
   const ctaScene = [...timelineScenes].reverse().find(scene => scene.status !== 'skipped' && scene.role === 'cta')
   const logoAsset = input.logoAssetId ? assets.find(asset => asset.id === input.logoAssetId) : undefined
+  const plannedSceneEndMs = Math.max(plannedDurationMs, ...timelineScenes.map(scene => scene.endMs))
+  const timelineScale = plannedSceneEndMs > durationMs ? durationMs / plannedSceneEndMs : 1
   const logo = logoAsset && ctaScene
     ? {
         storageKey: logoAsset.storageKey,
-        startMs: Math.min(ctaScene.startMs, Math.max(0, durationMs - 300)),
+        startMs: Math.max(0, Math.min(durationMs - 300, Math.round(ctaScene.startMs * timelineScale))),
         endMs: durationMs,
       }
     : undefined
