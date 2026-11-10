@@ -23,7 +23,8 @@ import { createEditorialHandoff, runEditorialRole, recoverEditorialSelections, c
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
 import {candidateWindows,clipCandidateLimit,overlapFraction,rankCandidate,type ClipCandidate} from '@/lib/ai-producer-agent/clip-mode/candidates'
 import {storyCoverage} from '@/lib/ai-producer-agent/clip-mode/story-coverage'
-import {clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isNonBlockingEditorialQaIssue,qaTranscriptWindow,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,evaluateCandidateAfterPlan,honorTargetDuration,qaTranscriptWindow,repairClipBoundaries,stitchJoinTransitions,storyPlanFromHandoff} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {CLIP_AGENT_EXPORT_PRESET,editVersionFromSnapshot,isUniqueConflict,queueClipExportOnce,shouldAutoExportPublishedClip,shouldAutoPlanClipMotion} from './clip-agent-export'
 import {instructionAsksToCompile,mergeTopicCandidates,topicPassagesFromTranscript,topicQueryFromInstruction,whyThisClip} from '@/lib/ai-producer-agent/clip-mode/topic-search'
 import {createSourceClip,publishClipScore,discardClip} from '@/lib/server/ai-producer-agent/clip-mode-store'
 import {clipAgentHardSteps,clipAgentHardStepsForCandidates,clipAgentWallClockMs,clipAgentWallClockMsForCandidates,clipCandidateHardSteps,clipCandidateWallClockMs,clipQaRetryHardSteps,clipQaRetryWallClockMs} from '@/lib/ai-producer-agent/rough-cut-window'
@@ -50,6 +51,7 @@ export type OutputState = {
   editorialHandoff?: EditorialHandoff
   contextBridges?: Array<{atMs:number;text:string;passageIndex:number}>
   suppressed?: boolean
+  needsReview?: boolean
 }
 
 const activeRuns = new Set<string>()
@@ -113,6 +115,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
     await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
       tool:'clip_candidates_found',kind:'system',
       resultSummary:JSON.stringify({count:candidates.length,candidates}).slice(0,4000)})
+    const heldDrafts:Array<{out:OutputState;candidate:ClipCandidate;score:number;durationSeconds:number;issues:string[];critical:boolean}>=[]
     const successful:Array<{out:OutputState;candidate:ClipCandidate;score:number;durationSeconds:number}> = []
     // Each candidate owns its transcript window, editorial agents, edit and
     // budget. One failure must never abort unrelated candidate clips.
@@ -178,44 +181,46 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           continue
         }
         const finalCuts=cuts
-        const safetyRisks=clipEditorialAudit(finalCuts,ctx.cache.words??[])
+        // Bind the parent transcript here. fullSourceWords is only a
+        // parameter of runOneOutput; the candidate loop must not rely on it.
+        const fullSourceWords=ctx.cache.words??[]
+        const storyPlan=storyPlanFromHandoff(out.editorialHandoff)
+        const evaluated=evaluateCandidateAfterPlan({
+          cuts:finalCuts,words:fullSourceWords,storyPlan,
+          qa:out.editorialHandoff.review,
+        })
+        const safetyRisks=evaluated.safetyRisks
         await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
           tool:'clip_editorial_safety_audit',kind:'validate',
           argsSummary:JSON.stringify({clipId:out.clipId,candidateIndex:candidate.index}),
           resultSummary:JSON.stringify({point:out.editorialHandoff.outline.logline,risks:safetyRisks,bridges:out.contextBridges}).slice(0,3600)})
-        const qa=out.editorialHandoff.review
-        // An LLM may still mention preset length in QA prose. Strip only
-        // duration-only criticisms; leave actual continuity/content flaws.
-        const substantiveIssues=(qa?.issues??[]).filter(issue=>!isNonBlockingEditorialQaIssue(issue))
-        // Regex can detect a suspicious "but", not whether it changes
-        // meaning. Ground the final decision in the explicit model QA, which
-        // saw the complete original transcript and the flagged risk spans.
-        const criticalStructural=safetyRisks.filter(r=>
-          r.code==='invalid_passage'||r.code==='chronology')
-        const warningOnlyModelFailure=Boolean(qa&&qa.pass===false&&
-          (qa.issues?.length??0)>0&&substantiveIssues.length===0)
-        const veto=shouldVetoPublish({
-          risks:safetyRisks,qaPass:qa?.pass??null,qaIssues:substantiveIssues,
-        })||criticalStructural.length>0||(!qa&&safetyRisks.some(r=>r.code==='missing_qualification'))
-        // Incomplete QA (budget exhausted, timeout, crash) must not publish.
-        // Listening-only or duration-only model remarks are warnings, not vetoes.
-        const qaComplete=Boolean(qa)&&!substantiveIssues.some(issue=>/could not complete|specialist_budget_exhausted/i.test(issue))
-        const qaPass:boolean|null=veto?false:
-          qaComplete&&qa?(Boolean(qa.pass)||warningOnlyModelFailure)&&substantiveIssues.length===0:null
-        const safetyIssues=safetyRisks.map(r=>r.code+': '+r.detail)
-        const combinedIssues=[...new Set([...substantiveIssues,
-          ...(qaPass===true?[]:safetyIssues)])]
-        out.editorialHandoff.review={pass:qaPass===true,issues:combinedIssues}
-        const durationSeconds=finalCuts.reduce((n,c)=>n+(c.endMs-c.startMs),0)/1000
-        if(veto||qaPass!==true){
-          // Keep the editable rough cut for manual repair; do not publish or export.
+        // Held drafts get their QA revisions applied executably (deterministic
+        // boundary / join / opening repair) and are re-gated once. No paid retry.
+        const {qaComplete,workingCuts,combinedIssues,disposition}=evaluated
+        if(evaluated.repairLanded){
+          out.editorialHandoff.cutPlan=workingCuts
+          out.notes.push(...evaluated.repairNotes.map((n:string)=>'Editorial revision applied: '+n))
+          try{
+            await persistRevisedCuts(ctx,out,workingCuts)
+          }catch(error){
+            out.notes.push('Editorial revision persist failed; kept prior draft: '+String((error as Error).message).slice(0,180))
+          }
+        }
+        const durationSeconds=workingCuts.reduce((n,c)=>n+(c.endMs-c.startMs),0)/1000
+        const score=rankCandidate({finderScore:candidate.finderScore,
+          qaPass:disposition==='publish',issues:combinedIssues.length,
+          durationSeconds,targetS:ctx.config.targetLengthS[1]})
+        if(disposition==='drop'){
           out.suppressed=true
-          out.notes.push((qaComplete?'Held as editable draft; not published: ':'Held as editable draft; editorial QA did not complete: ')+combinedIssues.join('; ').slice(0,420))
+          out.notes.push((qaComplete?'Held as editable draft; critical editorial failure: ':'Held as editable draft; editorial QA did not complete: ')+combinedIssues.join('; ').slice(0,420))
+          heldDrafts.push({out,candidate,score,durationSeconds,issues:combinedIssues,critical:true})
           continue
         }
-        const score=rankCandidate({finderScore:candidate.finderScore,
-          qaPass,issues:combinedIssues.length,
-          durationSeconds,targetS:ctx.config.targetLengthS[1]})
+        if(disposition==='publish_needs_review'){
+          out.needsReview=true
+          out.notes.push('Published with needsReview: '+combinedIssues.join('; ').slice(0,420))
+        }
+        out.editorialHandoff.review={pass:disposition==='publish',issues:combinedIssues}
         successful.push({out,candidate,score,durationSeconds})
       }catch(error){
         out.notes.push('Candidate failed: '+String((error as Error).message).slice(0,350))
@@ -241,6 +246,27 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         continue
       }
       kept.push(item)
+    }
+    // A run never publishes a critical draft. If nothing kept is publishable,
+    // fall back to the best 1–3 non-critical held drafts (needsReview). If
+    // only critical drafts remain, the run ends as an honest failure below.
+    if(!kept.length){
+      const usable=heldDrafts
+        .filter(item=>Boolean(item.out.projectId&&item.out.clipId&&item.out.editorialHandoff?.cutPlan.length)&&!item.critical)
+        .sort((a,b)=>b.score-a.score)
+      const fallback=chooseFallbackPublications(usable,0,3,(item:{critical:boolean})=>item.critical)
+      for(const item of fallback){
+        const cuts=item.out.editorialHandoff!.cutPlan
+        if(kept.some(k=>overlapFraction(cuts,k.out.editorialHandoff!.cutPlan)>.35))continue
+        item.out.suppressed=false
+        item.out.needsReview=true
+        const reasons=item.issues
+        item.out.editorialHandoff!.review={pass:false,issues:reasons}
+        item.out.notes.push('Published as fallback needsReview so the run does not ship 0 clips: '+reasons.join('; ').slice(0,420))
+        kept.push({out:item.out,candidate:item.candidate,score:item.score,durationSeconds:item.durationSeconds})
+      }
+    }
+    for(const item of kept){
       const publishedCuts=item.out.editorialHandoff!.cutPlan
       const why=whyThisClip({
         logline:item.out.editorialHandoff?.outline.logline,
@@ -250,20 +276,26 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         targetS:ctx.config.targetLengthS[1],
         distinctMoments:storyCoverage(publishedCuts,ctx.config.targetLengthS[1]).distinctMoments,
       })
+      const reviewIssues=item.out.editorialHandoff?.review?.issues??[]
       await publishClipScore({workspaceId:ctx.workspaceId,clipId:item.out.clipId!,
         runId,score:item.score,finderScore:item.candidate.finderScore,
         qaPass:item.out.editorialHandoff?.review?.pass??null,
-        issues:item.out.editorialHandoff?.review?.issues??[],
+        issues:reviewIssues,
         candidateIndex:item.candidate.index,durationSeconds:item.durationSeconds,
         mode:ctx.config.storyMode!,
         whyThisClip:why,
         stitchSegments:publishedCuts.map(c=>({startMs:c.startMs,endMs:c.endMs})),
         contextBridges:item.out.contextBridges??[],
         topics:topicQueryFromInstruction(run.instruction)?[topicQueryFromInstruction(run.instruction)]:undefined,
+        needsReview:item.out.needsReview===true,
       })
       // Post-edit Motion is a decision stage, not the caption preset. It can
       // generate zero graphics; failures leave the usable clip intact.
-      try{
+      // needsReview clips get no auto Motion until the user reviews them.
+      if(!shouldAutoPlanClipMotion({clipId:item.out.clipId,suppressed:item.out.suppressed,
+        needsReview:item.out.needsReview===true})){
+        item.out.notes.push('Motion graphics skipped: clip needs review')
+      }else try{
         const {autoPlanClipMotion}=await import('@/lib/server/ai-producer-agent/clip-mode-motion')
         const bridges=item.out.contextBridges??[]
         const motion=await autoPlanClipMotion({
@@ -286,10 +318,10 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           error:reason})
         item.out.notes.push('Motion graphics unavailable: '+reason)
       }
-      if(ctx.config.exportOnFinish&&item.out.editorialHandoff?.review?.pass===true)
+      // Auto-export clean clips only; needsReview and critical clips wait
+      // for the user to review and export manually.
+      if(ctx.config.exportOnFinish)
         await queueClipExport(ctx,item.out,budget)
-      else if(ctx.config.exportOnFinish)
-        item.out.notes.push('Auto-export skipped: editorial QA did not pass')
     }
     await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'finish',
       tool:'clip_ranked_outputs',kind:'system',
@@ -303,8 +335,10 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       status = 'failed'
       error = 'no valid plan for any output'
     } else if (!anyPublished) {
-      // Held drafts are still a completed run the editor can review.
-      error = undefined
+      const reasons=heldDrafts.flatMap(h=>h.issues)
+      status = 'failed'
+      error = ('No publishable clips; remaining drafts are critical editorial failures'
+        +(reasons.length?': '+[...new Set(reasons)].join('; ').slice(0,1500):'.'))
     }
   } catch (err) {
     status = 'failed'
@@ -389,7 +423,7 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget,
       fullTranscript:completeTranscriptWords(
         qaTranscriptWindow(fullSourceWords,out.editorialHandoff.cutPlan,ctx.sources[0]!.rangeMs!),
         true),
-      flaggedContextAndQualificationRisks:clipEditorialAudit(out.editorialHandoff.cutPlan,fullSourceWords),
+      flaggedContextAndQualificationRisks:clipEditorialAudit(out.editorialHandoff.cutPlan,fullSourceWords,{storyPlan:storyPlanFromHandoff(out.editorialHandoff)}),
       ...(ctx.config.visualEvidenceMode==='visual_audio' && ctx.cache.visualEvidence ? {
         visualAudioEvidence: ctx.cache.visualEvidence,
         selectedVisualBeats:out.editorialHandoff.outline.visualBeats??[],
@@ -465,33 +499,105 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget,
 
 }
 
-async function queueClipExport(ctx:ToolCtx,out:OutputState,budget:Budget){
-  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
-  if(clipMode&&out.projectId&&out.clipId&&out.lastValid){
-    const renderId=createId('render')
-    await getPrisma().$transaction(async tx=>{
-      await tx.clipRender.create({data:{
-        id:renderId,clipId:out.clipId!,workspaceId:ctx.workspaceId,
-        status:'QUEUED',format:'mp4',resolution:'720p',aspectRatio:'9:16',
-        filename:(out.editorialHandoff?.outline.logline??'AI clip').replace(/[\\/\\:*?\"<>|]/g,'').slice(0,80)+'.mp4',
-        watermark:false,
-      }})
-      await tx.clipJob.create({data:{
-        id:createId('job'),projectId:out.projectId!,clipId:out.clipId!,
-        type:'RENDER_CLIP',status:'QUEUED',payload:{renderId},
-      }})
-    })
-    out.notes.push('Finished MP4 export queued: '+renderId)
-    await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
-      phase:'apply',tool:'clip_agent_export_queued',kind:'system',
-      resultSummary:JSON.stringify({renderId,projectId:out.projectId,clipId:out.clipId})})
+async function persistRevisedCuts(ctx:ToolCtx,out:OutputState,cuts:Array<{startMs:number;endMs:number;kind?:string}>){
+  const builder=out.builder
+  if(!builder||!cuts.length)return
+  const sourceId=builder.mainSourceId
+  builder.preserveApprovedEdges=true
+  builder.segs.splice(0,builder.segs.length)
+  for(const cut of cuts){
+    builder.addSegment({sourceId,srcInMs:cut.startMs,srcOutMs:cut.endMs})
   }
+  if(cuts.length>1){
+    const joins=stitchJoinTransitions(cuts)
+    for(let i=1;i<builder.segs.length;i++){
+      const seg=builder.segs[i]
+      const join=joins[i-1]
+      if(seg&&join){
+        try{builder.setTransition(seg.id,'dissolve',join.durMs)}
+        catch{/* transition is optional smoothing */}
+      }
+    }
+  }
+  out.lastValid=builder.snapshot()
+  if(out.lastValid.transitions?.length){
+    const starts=new Set(cuts.slice(1).map(c=>c.startMs))
+    out.lastValid={...out.lastValid,transitions:out.lastValid.transitions.filter((tr:{srcMs:number})=>starts.has(tr.srcMs))}
+  }
+  if(out.clipId)await ctx.writeDraft(out,out.lastValid)
 }
 
-/**
- * Deterministically turn approved selections into an actual editor timeline.
- * A model's missing create_project calls must never prevent project creation.
- */
+async function queueClipExport(ctx:ToolCtx,out:OutputState,budget:Budget){
+  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+  if(!clipMode||!out.lastValid)return
+  if(!shouldAutoExportPublishedClip({
+    clipId:out.clipId,projectId:out.projectId,suppressed:out.suppressed,
+    needsReview:out.needsReview===true,
+  })){
+    if(out.needsReview===true)out.notes.push('Finished MP4 export skipped: clip needs review')
+    return
+  }
+  const prisma=getPrisma()
+  const result=await queueClipExportOnce({
+    workspaceId:ctx.workspaceId,
+    projectId:out.projectId,
+    clipId:out.clipId,
+    filename:(out.editorialHandoff?.outline.logline??'AI clip').replace(/[\\/:*?"<>|]/g,'').slice(0,80)+'.mp4',
+    editVersion:editVersionFromSnapshot(out.lastValid),
+    preset:CLIP_AGENT_EXPORT_PRESET,
+    suppressed:out.suppressed,
+    needsReview:out.needsReview===true,
+    createId,
+    store:{
+      findByIdempotencyKey:async(key:string)=>{
+        const row=await prisma.clipRender.findFirst({
+          where:{clipId:out.clipId!,editsVersionHash:key,preset:CLIP_AGENT_EXPORT_PRESET},
+          select:{id:true,status:true},
+        })
+        return row
+      },
+      // Atomic: the unique index clip_renders(clipId, editsVersionHash, preset)
+      // rejects a concurrent duplicate; the render + job insert roll back
+      // together and we return the existing export instead.
+      createQueuedExport:async(input)=>{
+        try{
+          await prisma.$transaction(async tx=>{
+            await tx.clipRender.create({data:{
+              id:input.renderId,clipId:input.clipId,workspaceId:input.workspaceId,
+              status:'QUEUED',format:'mp4',resolution:'720p',aspectRatio:'9:16',
+              filename:input.filename,watermark:false,
+              editsVersionHash:input.idempotencyKey,preset:input.preset,
+            }})
+            await tx.clipJob.create({data:{
+              id:createId('job'),projectId:input.projectId,clipId:input.clipId,
+              type:'RENDER_CLIP',status:'QUEUED',
+              payload:{renderId:input.renderId,idempotencyKey:input.idempotencyKey},
+            }})
+          })
+          return {created:true as const}
+        }catch(error){
+          if(!isUniqueConflict(error))throw error
+          const existing=await prisma.clipRender.findFirst({
+            where:{clipId:input.clipId,editsVersionHash:input.idempotencyKey,preset:input.preset},
+            select:{id:true,status:true},
+          })
+          if(!existing)throw error
+          return {created:false as const,existing}
+        }
+      },
+    },
+  })
+  if(!result.queued&&result.reason==='already_queued'){
+    out.notes.push('Finished MP4 export already queued: '+result.renderId)
+    return
+  }
+  if(!result.queued)return
+  out.notes.push('Finished MP4 export queued: '+result.renderId)
+  await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+    phase:'apply',tool:'clip_agent_export_queued',kind:'system',
+    resultSummary:JSON.stringify({renderId:result.renderId,projectId:out.projectId,clipId:out.clipId,idempotencyKey:result.idempotencyKey})})
+}
+
 async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: Budget) {
   const source = ctx.sources[0]
   const proposed = out.editorialHandoff?.cutPlan
