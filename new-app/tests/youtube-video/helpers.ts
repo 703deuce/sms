@@ -3,6 +3,7 @@ import type { YoutubeVideoImporter } from '@/lib/youtube-video/import-source'
 import type { YoutubeVideoPipelineDeps, WriteYoutubeClip } from '@/lib/youtube-video/pipeline'
 import { memoryYoutubeVideoStore } from '@/lib/youtube-video/run-store'
 import type { YoutubeVideoRunDeps } from '@/lib/youtube-video/runs'
+import { YoutubeVideoError } from '@/lib/youtube-video/errors'
 
 export function wordsFromScript(
   lines: Array<{ w: string; at: number; dur?: number; spk?: string }>,
@@ -50,7 +51,7 @@ export function testDeps(ready: Map<string, YoutubeVideoIngestedSource>, opts?: 
     importer,
     loadReadySource: async (_workspaceId, projectId) => {
       const source = ready.get(projectId)
-      if (!source) throw new Error('source_not_ready')
+      if (!source) throw new YoutubeVideoError('source_not_ready', 'Source transcription is still processing.', 425)
       return source
     },
     writeClip,

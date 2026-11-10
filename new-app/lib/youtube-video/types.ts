@@ -1,6 +1,7 @@
 export const YOUTUBE_VIDEO_STATUSES = [
   'queued',
   'importing',
+  'waiting_for_source',
   'running',
   'awaiting_choice',
   'ready',
@@ -13,6 +14,7 @@ export type YoutubeVideoStatus = (typeof YOUTUBE_VIDEO_STATUSES)[number]
 export const YOUTUBE_VIDEO_STAGES = [
   'importing',
   'ingest',
+  'waiting_for_source',
   'planning',
   'assembling',
   'applying',

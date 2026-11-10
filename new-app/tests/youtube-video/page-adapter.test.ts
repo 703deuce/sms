@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { YOUTUBE_VIDEO_PATHS } from '../../lib/youtube-video-ui/paths'
 import { createYoutubeVideoClient } from '../../lib/youtube-video-ui/client'
 import { createYoutubeVideoController } from '../../lib/youtube-video-ui/controller'
-import { parseYoutubeVideoRun, YoutubeVideoHttpError } from '../../lib/youtube-video-ui/parse'
+import { parseHttpErrorPayload, parseYoutubeVideoRun, YoutubeVideoHttpError } from '../../lib/youtube-video-ui/parse'
 import { formatCredits } from '../../lib/youtube-video-ui/format'
 
 function json(status: number, body: unknown): Response {
@@ -297,5 +297,22 @@ describe('youtube video page adapter', () => {
       message: 'A different option was already chosen.',
     })
     await expect(client.chooseOption('run_1', 'opt_b')).rejects.toBeInstanceOf(YoutubeVideoHttpError)
+  })
+
+  it('shows a string error from the server instead of Request failed (400)', () => {
+    const error = parseHttpErrorPayload(400, {
+      error: 'The source upload has not finished yet.',
+      failureCode: 'source_not_ready',
+    })
+    expect(error.message).toBe('The source upload has not finished yet.')
+    expect(error.code).toBe('source_not_ready')
+  })
+
+  it('normalizes the waiting_for_source status for UI polling', () => {
+    const waiting = parseYoutubeVideoRun({
+      data: { runId: 'yvrun_wait', status: 'waiting_for_source', stage: 'waiting_for_source', progressPercent: 20 },
+    })
+    expect(waiting.status).toBe('waiting_for_source')
+    expect(waiting.stage).toBe('waiting_for_source')
   })
 })

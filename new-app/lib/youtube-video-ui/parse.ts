@@ -182,6 +182,8 @@ export function parseHttpErrorPayload(status: number, body: unknown): YoutubeVid
     (status === 409 ? 'option_already_chosen' : 'ERROR')
   const message =
     str(err.message) ??
+    str(rec.error) ??
+    str(data.error) ??
     str(data.failureMessage) ??
     str(rec.message) ??
     (status === 409

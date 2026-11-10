@@ -57,8 +57,9 @@ export async function ingestSources(
       const ready = await deps.loadReadySource(workspaceId, projectId)
       ingested.push({ ...ready, sourceId: ready.sourceId || `source_${index}` })
     } catch (err) {
+      // Only a typed source_not_ready is a temporary wait; do not hide errors.
       if (err instanceof YoutubeVideoError) throw err
-      throw new YoutubeVideoError('source_not_ready', 'An upload project is missing, not in this workspace, or not READY', 400)
+      throw new YoutubeVideoError('source_load_failed', 'Unable to load the source video.', 500)
     }
   }
   return ingested
@@ -77,13 +78,19 @@ export async function prepareYoutubeVideoRun(
   deps: Pick<YoutubeVideoPipelineDeps, 'importer' | 'loadReadySource' | 'proposeOptions'>,
 ): Promise<PreparedYoutubeVideo> {
   const ingested = await ingestSources(workspaceId, input.sources, deps)
+  return prepareFromReadyYoutubeSources(ingested, deps.proposeOptions)
+}
+
+/** Planning after all source projects have finished transcribing. */
+export function prepareFromReadyYoutubeSources(
+  ingested: YoutubeVideoIngestedSource[],
+  proposeOptions?: YoutubeVideoPipelineDeps['proposeOptions'],
+): PreparedYoutubeVideo {
   const creditsEstimated = estimateYoutubeVideoCredits(
     ingested.reduce((sum, source) => sum + source.durationMs, 0),
     ingested.length,
   )
-  const options = deps.proposeOptions
-    ? deps.proposeOptions(ingested)
-    : planOptions(ingested)
+  const options = proposeOptions ? proposeOptions(ingested) : planOptions(ingested)
   if (!options.length) throw new YoutubeVideoError('no_story', 'Footage did not support a truthful long-form story', 400)
   return { ingested, options, creditsEstimated }
 }

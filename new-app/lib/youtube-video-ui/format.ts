@@ -21,6 +21,7 @@ export function fallbackEditorUrl(projectId: string, clipId: string): string {
 export function statusLabel(status: YoutubeVideoStatus | string): string {
   if (status === 'queued') return 'Queued'
   if (status === 'importing') return 'Importing'
+  if (status === 'waiting_for_source') return 'Transcribing source'
   if (status === 'running') return 'Generating'
   if (status === 'awaiting_choice') return 'Choose a story'
   if (status === 'ready') return 'Ready'

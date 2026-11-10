@@ -9,11 +9,12 @@ import { sortAndMergeCuts } from '@/lib/youtube-video/assemble'
 import { cutsFromOption } from '@/lib/youtube-video/story-options'
 import { memoryYoutubeVideoStore, type YoutubeVideoRunRecord, type YoutubeVideoRunStore } from '@/lib/youtube-video/run-store'
 import { defaultStreamerImporter } from '@/lib/youtube-video/import-source'
+import { YoutubeVideoError } from '@/lib/youtube-video/errors'
 import type { YoutubeVideoPipelineDeps, WriteYoutubeClip } from '@/lib/youtube-video/pipeline'
 import type { RevertClip, YoutubeVideoRunDeps } from '@/lib/youtube-video/runs'
 import type { YoutubeVideoIngestedSource } from '@/lib/youtube-video/types'
 
-const ACTIVE_STATUSES = ['queued', 'importing', 'running', 'awaiting_choice']
+const ACTIVE_STATUSES = ['queued', 'importing', 'waiting_for_source', 'running', 'awaiting_choice']
 
 function fromRow(row: Record<string, unknown>): YoutubeVideoRunRecord {
   return {
@@ -71,6 +72,20 @@ export function prismaYoutubeVideoStore(): YoutubeVideoRunStore {
       const row = await db().findFirst({ where: { workspaceId, status: { in: ACTIVE_STATUSES } } })
       return row ? fromRow(row as unknown as Record<string, unknown>) : null
     },
+    async claimPlanning(workspaceId, id, staleBeforeIso) {
+      const claimed = await db().updateMany({
+        where: {
+          id, workspaceId,
+          OR: [
+            { status: 'waiting_for_source' },
+            { status: 'queued' },
+            { status: 'running', stage: 'planning', updatedAt: { lt: new Date(staleBeforeIso) } },
+          ],
+        },
+        data: { status: 'running', stage: 'planning', progressPercent: 50 },
+      })
+      return claimed.count === 1
+    },
     async update(workspaceId, id, patch) {
       const existing = await db().findFirst({ where: { id, workspaceId }, select: { id: true } })
       if (!existing) throw new Error('youtube_video_run_missing')
@@ -93,8 +108,9 @@ export function getYoutubeVideoStore(): YoutubeVideoRunStore {
 export async function loadReadySource(workspaceId: string, projectId: string): Promise<YoutubeVideoIngestedSource> {
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({
-    where: { id: projectId, workspaceId, deletedAt: null, status: 'READY' },
+    where: { id: projectId, workspaceId, deletedAt: null },
     select: {
+      status: true,
       id: true,
       title: true,
       rangeStartMs: true,
@@ -103,7 +119,13 @@ export async function loadReadySource(workspaceId: string, projectId: string): P
       upload: { select: { durationMs: true } },
     },
   })
-  if (!project) throw new Error('source_not_ready')
+  if (!project) throw new YoutubeVideoError('source_not_found', 'Source project was not found in this workspace.', 404)
+  if (project.status === 'FAILED' || project.status === 'CANCELED') {
+    throw new YoutubeVideoError('source_failed', 'The source video did not finish processing. Please upload it again.', 409)
+  }
+  if (project.status !== 'READY') {
+    throw new YoutubeVideoError('source_not_ready', 'Source transcription is still processing.', 425)
+  }
   const words = Array.isArray(project.transcriptWords)
     ? (project.transcriptWords as Array<{ w?: string; s?: number; e?: number; spk?: string | null }>).
         flatMap((word, index) => {
@@ -111,7 +133,7 @@ export async function loadReadySource(workspaceId: string, projectId: string): P
           return [{ w: word.w, s: word.s, e: word.e, spk: word.spk ?? null }]
         })
     : []
-  if (!words.length) throw new Error('source_not_ready')
+  if (!words.length) throw new YoutubeVideoError('source_no_transcript', 'The source finished without usable transcript words.', 422)
   const durationMs = project.upload?.durationMs
     ?? Math.max(0, (project.rangeEndMs ?? 0) - (project.rangeStartMs ?? 0))
     ?? Math.round((words[words.length - 1]?.e ?? 0) * 1000)

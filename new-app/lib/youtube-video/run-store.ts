@@ -35,9 +35,11 @@ export type YoutubeVideoRunStore = {
   getByClientRequestId(workspaceId: string, clientRequestId: string): Promise<YoutubeVideoRunRecord | null>
   findActive(workspaceId: string): Promise<YoutubeVideoRunRecord | null>
   update(workspaceId: string, id: string, patch: Partial<YoutubeVideoRunRecord>): Promise<YoutubeVideoRunRecord>
+  /** Atomic claim; a stale planning run can be resumed after a web restart. */
+  claimPlanning(workspaceId: string, id: string, staleBeforeIso: string): Promise<boolean>
 }
 
-const ACTIVE: YoutubeVideoStatus[] = ['queued', 'importing', 'running', 'awaiting_choice']
+const ACTIVE: YoutubeVideoStatus[] = ['queued', 'importing', 'waiting_for_source', 'running', 'awaiting_choice']
 
 export function isActiveYoutubeVideoStatus(status: YoutubeVideoStatus): boolean {
   return ACTIVE.includes(status)
@@ -66,6 +68,19 @@ export function memoryYoutubeVideoStore(): YoutubeVideoRunStore {
         if (row.workspaceId === workspaceId && isActiveYoutubeVideoStatus(row.status)) return { ...row }
       }
       return null
+    },
+    async claimPlanning(workspaceId, id, staleBeforeIso) {
+      const current = rows.get(key(workspaceId, id))
+      if (!current) return false
+      const eligible = current.status === 'waiting_for_source' ||
+        current.status === 'queued' ||
+        (current.status === 'running' && current.stage === 'planning' && current.updatedAt < staleBeforeIso)
+      if (!eligible) return false
+      rows.set(key(workspaceId, id), {
+        ...current, status: 'running', stage: 'planning', progressPercent: 50,
+        updatedAt: new Date().toISOString(),
+      })
+      return true
     },
     async update(workspaceId, id, patch) {
       const current = rows.get(key(workspaceId, id))

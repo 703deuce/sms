@@ -1,6 +1,8 @@
 import { createId } from '@/lib/supabase/id'
-import { assembleChosenOption, prepareYoutubeVideoRun, type YoutubeVideoPipelineDeps } from '@/lib/youtube-video/pipeline'
+import { assembleChosenOption, ingestSources, prepareFromReadyYoutubeSources, type YoutubeVideoPipelineDeps } from '@/lib/youtube-video/pipeline'
 import { YoutubeVideoError } from '@/lib/youtube-video/errors'
+import { traceYoutubeRunStep, youtubeRunEvent } from '@/lib/youtube-video/step-log'
+import type { YoutubeVideoRunRecord, YoutubeVideoRunStore } from '@/lib/youtube-video/run-store'
 import { requestHash, resolveIdempotencyKey, validateCreateInput } from '@/lib/youtube-video/request'
 import type {
   YoutubeVideoCreateInput,
@@ -34,6 +36,106 @@ function view(record: YoutubeVideoRunRecord): YoutubeVideoRunView {
   }
 }
 
+
+const STALE_PLANNING_MS = 2 * 60_000
+
+async function failRun(row: YoutubeVideoRunRecord, deps: YoutubeVideoRunDeps, err: unknown): Promise<YoutubeVideoRunRecord> {
+  const code = err instanceof YoutubeVideoError ? err.code : 'pipeline_failed'
+  youtubeRunEvent(row.id, 'run', 'failed', { errorCode: code })
+  return deps.store.update(row.workspaceId, row.id, {
+    status: 'failed', stage: null, progressPercent: null,
+    failureCode: code,
+    failureMessage: err instanceof Error ? err.message : 'Video preparation failed.',
+  })
+}
+
+/** GET polling advances durable waiting runs. Never reimport an already mapped URL. */
+async function advanceRun(
+  record: YoutubeVideoRunRecord, deps: YoutubeVideoRunDeps, creating = false,
+): Promise<YoutubeVideoRunRecord> {
+  if (['ready', 'failed', 'canceled', 'awaiting_choice'].includes(record.status) || record.chosenOptionId) return record
+  const staleBefore = new Date(Date.now() - STALE_PLANNING_MS).toISOString()
+  if (record.status === 'running' && record.stage === 'planning' && record.updatedAt >= staleBefore) {
+    youtubeRunEvent(record.id, 'planning', 'claimed_by_another_request')
+    return record
+  }
+  if (record.status === 'importing' && !creating && record.updatedAt >= staleBefore) {
+    youtubeRunEvent(record.id, 'importing', 'waiting_for_import')
+    return record
+  }
+
+  let current = record
+  try {
+    // Persist the URL -> projectId mapping after every import to avoid duplicate
+    // Twitch/Kick imports across source-readiness polls or web restarts.
+    for (const [index, source] of current.sources.entries()) {
+      if (source.kind !== 'url') continue
+      current = await deps.store.update(current.workspaceId, current.id, {
+        status: 'importing', stage: 'importing', progressPercent: 5,
+      })
+      const imported = await traceYoutubeRunStep(
+        current.id, 'source_import',
+        () => deps.pipeline.importer({ workspaceId: current.workspaceId, url: source.url }),
+      )
+      if (!imported.projectId) throw new YoutubeVideoError('import_failed', 'The source import did not create a project.', 500)
+      current = await deps.store.update(current.workspaceId, current.id, {
+        sources: current.sources.map((s, i) => i === index ? { kind: 'upload' as const, projectId: imported.projectId } : s),
+      })
+      youtubeRunEvent(current.id, 'source_import', 'project_created', { projectId: imported.projectId })
+    }
+
+    if (current.status !== 'waiting_for_source' && !(current.status === 'running' && current.stage === 'planning')) {
+      current = await deps.store.update(current.workspaceId, current.id, {
+        status: 'waiting_for_source', stage: 'waiting_for_source', progressPercent: 20,
+      })
+    }
+    let ingested: Awaited<ReturnType<typeof ingestSources>>
+    try {
+      ingested = await traceYoutubeRunStep(
+        current.id, 'source_readiness',
+        () => ingestSources(current.workspaceId, current.sources, deps.pipeline),
+        { sourceCount: current.sources.length },
+      )
+    } catch (err) {
+      if (err instanceof YoutubeVideoError && err.code === 'source_not_ready') {
+        youtubeRunEvent(current.id, 'source_wait', 'pending', {
+          sourceCount: current.sources.length, status: 'waiting_for_source',
+        })
+        if (current.status !== 'waiting_for_source') {
+          current = await deps.store.update(current.workspaceId, current.id, {
+            status: 'waiting_for_source', stage: 'waiting_for_source', progressPercent: 20,
+          })
+        }
+        return current
+      }
+      throw err
+    }
+    const claimed = await traceYoutubeRunStep(
+      current.id, 'planning_claim',
+      () => deps.store.claimPlanning(current.workspaceId, current.id, staleBefore),
+    )
+    if (!claimed) {
+      youtubeRunEvent(current.id, 'planning', 'already_claimed')
+      return (await deps.store.get(current.workspaceId, current.id)) ?? current
+    }
+    const prepared = await traceYoutubeRunStep(
+      current.id, 'planning',
+      () => prepareFromReadyYoutubeSources(ingested, deps.pipeline.proposeOptions),
+      { sourceCount: ingested.length, wordCount: ingested.reduce((sum, source) => sum + source.words.length, 0) },
+    )
+    return traceYoutubeRunStep(
+      current.id, 'awaiting_choice',
+      () => deps.store.update(current.workspaceId, current.id, {
+        status: 'awaiting_choice', stage: null, progressPercent: 70,
+        ingested: prepared.ingested, options: prepared.options, creditsEstimated: prepared.creditsEstimated,
+      }),
+      { optionCount: prepared.options.length },
+    )
+  } catch (err) {
+    return failRun(current, deps, err)
+  }
+}
+
 export async function createYoutubeVideoRun(
   workspaceId: string,
   createdById: string | null,
@@ -41,84 +143,43 @@ export async function createYoutubeVideoRun(
   idempotencyHeader: string | null,
   deps: YoutubeVideoRunDeps,
 ): Promise<{ view: YoutubeVideoRunView; created: boolean }> {
-  const input = validateCreateInput(raw)
+  const input = await traceYoutubeRunStep('new', 'validation', () => validateCreateInput(raw))
   const clientRequestId = resolveIdempotencyKey(idempotencyHeader, input.clientRequestId)
   const hash = requestHash(input)
-  const existing = await deps.store.getByClientRequestId(workspaceId, clientRequestId)
+  const existing = await traceYoutubeRunStep('new', 'idempotency_lookup',
+    () => deps.store.getByClientRequestId(workspaceId, clientRequestId))
   if (existing) {
-    if (existing.requestHash !== hash) {
-      throw new YoutubeVideoError('idempotency_key_reuse', 'Idempotency key was already used with a different request', 409)
-    }
+    if (existing.requestHash !== hash) throw new YoutubeVideoError('idempotency_key_reuse', 'Idempotency key was already used with a different request', 409)
+    youtubeRunEvent(existing.id, 'create', 'idempotent_replay', { status: existing.status })
     return { view: view(existing), created: false }
   }
-  const active = await deps.store.findActive(workspaceId)
+  const active = await traceYoutubeRunStep('new', 'active_run_check', () => deps.store.findActive(workspaceId))
   if (active) throw new YoutubeVideoError('run_in_progress', 'A YouTube video run is already in progress', 409)
-
-  const now = (deps.now ?? (() => new Date))().toISOString()
+  const now = (deps.now ?? (() => new Date()))().toISOString()
+  const hasUrl = input.sources.some((source) => source.kind === 'url')
   const record: YoutubeVideoRunRecord = {
-    id: createId('yvrun'),
-    workspaceId,
-    status: input.sources.some((source) => source.kind === 'url') ? 'importing' : 'running',
-    stage: input.sources.some((source) => source.kind === 'url') ? 'importing' : 'ingest',
-    progressPercent: input.sources.some((source) => source.kind === 'url') ? 5 : 20,
-    failureCode: null,
-    failureMessage: null,
-    instruction: input.instruction ?? null,
-    clientRequestId,
-    requestHash: hash,
-    sources: input.sources,
-    ingested: [],
-    options: null,
-    chosenOptionId: null,
-    creditsEstimated: null,
-    result: null,
-    createdById,
-    createdAt: now,
-    updatedAt: now,
+    id: createId('yvrun'), workspaceId,
+    status: hasUrl ? 'importing' : 'waiting_for_source',
+    stage: hasUrl ? 'importing' : 'waiting_for_source',
+    progressPercent: hasUrl ? 5 : 20,
+    failureCode: null, failureMessage: null, instruction: input.instruction ?? null,
+    clientRequestId, requestHash: hash, sources: input.sources, ingested: [],
+    options: null, chosenOptionId: null, creditsEstimated: null, result: null,
+    createdById, createdAt: now, updatedAt: now,
   }
-  const created = await deps.store.create(record)
-  try {
-    await deps.store.update(workspaceId, created.id, {
-      status: 'running',
-      stage: 'planning',
-      progressPercent: 50,
-    })
-    const prepared = await prepareYoutubeVideoRun(workspaceId, input, deps.pipeline)
-    const readyForChoice = await deps.store.update(workspaceId, created.id, {
-      status: 'awaiting_choice',
-      stage: null,
-      progressPercent: 70,
-      ingested: prepared.ingested,
-      options: prepared.options,
-      creditsEstimated: prepared.creditsEstimated,
-    })
-    return { view: view(readyForChoice), created: true }
-  } catch (err) {
-    const failureCode = err instanceof YoutubeVideoError ? err.code : 'pipeline_failed'
-    const failureMessage = err instanceof Error ? err.message : 'pipeline failed'
-    const failed = await deps.store.update(workspaceId, created.id, {
-      status: 'failed',
-      stage: null,
-      progressPercent: null,
-      failureCode,
-      failureMessage,
-    })
-    if (err instanceof YoutubeVideoError && (err.status === 400 || err.status === 409)) {
-      // The run is stored as failed; still surface the request error to the caller.
-      throw err
-    }
-    return { view: view(failed), created: true }
-  }
+  const created = await traceYoutubeRunStep(record.id, 'run_create', () => deps.store.create(record), { sourceCount: input.sources.length })
+  return { view: view(await advanceRun(created, deps, true)), created: true }
 }
 
 export async function getYoutubeVideoRun(
-  workspaceId: string,
-  runId: string,
-  deps: Pick<YoutubeVideoRunDeps, 'store'>,
+  workspaceId: string, runId: string, deps: YoutubeVideoRunDeps,
 ): Promise<YoutubeVideoRunView> {
-  const record = await deps.store.get(workspaceId, runId)
+  const record = await traceYoutubeRunStep(runId, 'poll_read', () => deps.store.get(workspaceId, runId))
   if (!record) throw new YoutubeVideoError('not_found', 'Run not found', 404)
-  return view(record)
+  youtubeRunEvent(runId, 'poll_decision', 'read', { status: record.status })
+  const advanced = await advanceRun(record, deps)
+  youtubeRunEvent(runId, 'poll_decision', 'return', { status: advanced.status })
+  return view(advanced)
 }
 
 export async function chooseYoutubeVideoOption(
@@ -140,40 +201,27 @@ export async function chooseYoutubeVideoOption(
   const option = record.options.find((item: YoutubeVideoOption) => item.id === optionId)
   if (!option) throw new YoutubeVideoError('invalid_request', 'optionId does not match an options[].id', 400)
 
-  await deps.store.update(workspaceId, runId, {
-    status: 'running',
-    stage: 'assembling',
-    progressPercent: 80,
-    chosenOptionId: optionId,
-  })
+  await traceYoutubeRunStep(runId, 'choice_validation', () => deps.store.update(workspaceId, runId, {
+    status: 'running', stage: 'assembling', progressPercent: 80, chosenOptionId: optionId,
+  }))
   try {
-    const written = deps.pipeline.writeClip
-      ? await deps.pipeline.writeClip({
-          workspaceId,
-          createdById: record.createdById,
-          runId,
-          option,
-          sources: record.ingested,
-        })
-      : await deps.writeClip({
-          workspaceId,
-          createdById: record.createdById,
-          runId,
-          option,
-          sources: record.ingested,
-        })
-    const result: YoutubeVideoResult = assembleChosenOption(option, written)
-    const ready = await deps.store.update(workspaceId, runId, {
+    const written = await traceYoutubeRunStep(runId, 'assembling', () =>
+      (deps.pipeline.writeClip ?? deps.writeClip)({
+        workspaceId, createdById: record.createdById, runId, option, sources: record.ingested,
+      }), { sourceCount: record.ingested.length })
+    const result: YoutubeVideoResult = await traceYoutubeRunStep(runId, 'applying', () => assembleChosenOption(option, written))
+    const ready = await traceYoutubeRunStep(runId, 'result_ready', () => deps.store.update(workspaceId, runId, {
       status: 'ready',
       stage: null,
       progressPercent: 100,
       chosenOptionId: optionId,
       result,
-    })
+    }))
     return view(ready)
   } catch (err) {
     const failureCode = err instanceof YoutubeVideoError ? err.code : 'apply_failed'
     const failureMessage = err instanceof Error ? err.message : 'apply failed'
+    youtubeRunEvent(runId, 'assembling', 'failed', { errorCode: failureCode })
     await deps.store.update(workspaceId, runId, {
       status: 'failed',
       stage: null,
@@ -198,6 +246,9 @@ export async function revertYoutubeVideoRun(
   if (!deps.revertClip) {
     throw new YoutubeVideoError('revert_not_available', 'Revert is not available', 409)
   }
-  await deps.revertClip({ clipId: record.result.clipId, projectId: record.result.projectId })
+  await traceYoutubeRunStep(runId, 'revert', () =>
+    deps.revertClip!({ clipId: record.result!.clipId, projectId: record.result!.projectId }),
+    { projectId: record.result.projectId },
+  )
   return view(record)
 }

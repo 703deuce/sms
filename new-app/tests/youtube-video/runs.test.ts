@@ -102,4 +102,46 @@ describe('youtube-video runs', () => {
     expect(fromUrl.view.options?.map((option) => option.id)).toEqual(fromUpload.view.options?.map((option) => option.id))
     expect(fromUrl.view.options?.[0]?.premise).toEqual(fromUpload.view.options?.[0]?.premise)
   })
+
+  it('waits instead of returning HTTP 400, then advances when an upload becomes READY', async () => {
+    const ready = new Map<string, ReturnType<typeof sourceFromWords>>()
+    const deps = testDeps(ready)
+    const created = await createYoutubeVideoRun(
+      'ws_wait', null,
+      { sources: [{ kind: 'upload', projectId: 'proj_pending' }], clientRequestId: 'req_wait_upload' },
+      null, deps,
+    )
+    expect(created.created).toBe(true)
+    expect(created.view.status).toBe('waiting_for_source')
+    expect(created.view.stage).toBe('waiting_for_source')
+    expect((await getYoutubeVideoRun('ws_wait', created.view.runId, deps)).status).toBe('waiting_for_source')
+    ready.set('proj_pending', sourceFromWords('proj_pending', podcastScript))
+    const advanced = await getYoutubeVideoRun('ws_wait', created.view.runId, deps)
+    expect(advanced.status).toBe('awaiting_choice')
+    expect(advanced.options?.length).toBeGreaterThan(0)
+    expect((await getYoutubeVideoRun('ws_wait', created.view.runId, deps)).options).toEqual(advanced.options)
+  })
+
+  it('imports a URL only once while its project is transcribing', async () => {
+    const ready = new Map<string, ReturnType<typeof sourceFromWords>>()
+    let imports = 0
+    const deps = testDeps(ready, {
+      importer: async () => {
+        imports += 1
+        return { projectId: 'proj_imported_pending' }
+      },
+    })
+    const created = await createYoutubeVideoRun(
+      'ws_pending_url', null,
+      { sources: [{ kind: 'url', url: 'https://www.twitch.tv/videos/123' }], clientRequestId: 'req_url_pending' },
+      null, deps,
+    )
+    expect(created.view.status).toBe('waiting_for_source')
+    await getYoutubeVideoRun('ws_pending_url', created.view.runId, deps)
+    await getYoutubeVideoRun('ws_pending_url', created.view.runId, deps)
+    expect(imports).toBe(1)
+    ready.set('proj_imported_pending', sourceFromWords('proj_imported_pending', podcastScript))
+    expect((await getYoutubeVideoRun('ws_pending_url', created.view.runId, deps)).status).toBe('awaiting_choice')
+    expect(imports).toBe(1)
+  })
 })
