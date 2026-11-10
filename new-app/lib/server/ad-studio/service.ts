@@ -7,7 +7,7 @@ import { AD_STUDIO_COSTS } from '@/lib/ad-studio/costs'
 import type { AdMode, AdPlan, AdProductInput, AdStudioRun, AdRunStatus } from '@/lib/ad-studio/types'
 import { AdStudioError, adInvalid, adSafeFailure } from '@/lib/ad-studio/errors'
 import { parseCreate, parseReplan, adKeySchema } from '@/lib/ad-studio/validate'
-import { writeAdStoryline } from '@/lib/ad-studio/storyline-agent'
+import { writeGroundedAdStoryline } from '@/lib/server/ad-studio/storyline'
 import { planAdScenes } from '@/lib/ad-studio/planner-agent'
 
 const prisma = () => getPrisma()
@@ -63,7 +63,7 @@ async function performPlanning(row: Existing): Promise<AdStudioRun> {
   try {
     const input = row.input as unknown as AdProductInput
     const mode = row.mode as AdMode
-    const script = writeAdStoryline(input, mode)
+    const script = await writeGroundedAdStoryline(input, mode)
     const plan = await planAdScenes({
       runId: row.id, mode, input, script,
       search: async (query) => {
@@ -223,18 +223,19 @@ export async function confirmAdRun(workspaceId: string, id: string, keyValue: un
   try {
     // B2 prepares only stock. B3 creates paid AiStudioJobs, stitch and render workers.
     await prepareStock(workspaceId, id, saved)
-    const updated = await prisma().adStudioRun.update({
-      where: { id }, data: { status: 'generating', errorCode: null, errorMessage: null },
+    const committed = await prisma().adStudioRun.updateMany({
+      where: { id, workspaceId, status: 'confirming' },
+      data: { status: 'generating', errorCode: null, errorMessage: null },
     })
-    console.info('[ad-studio:confirm] complete', { runId: id, status: updated.status, paidJobs: 0 })
-    return toView(updated)
+    console.info('[ad-studio:confirm] transition_complete', { runId: id, count: committed.count, paidJobs: 0 })
+    return toView(await required(workspaceId, id))
   } catch (err) {
     console.error('[ad-studio:confirm] stock_failed', { runId: id, type: err instanceof Error ? err.name : typeof err })
     const failure = err instanceof AdStudioError ? err : adSafeFailure(err,'STOCK_ERROR')
-    const updated = await prisma().adStudioRun.update({ where: { id }, data: {
-      status: 'failed', errorCode: failure.code, errorMessage: failure.message,
-    } })
-    return toView(updated)
+    await prisma().adStudioRun.updateMany({ where: { id, workspaceId, status: 'confirming' },
+      data: { status: 'failed', errorCode: failure.code, errorMessage: failure.message },
+    })
+    return toView(await required(workspaceId, id))
   }
 }
 
