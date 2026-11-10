@@ -6,6 +6,7 @@ import logging
 import tempfile
 import threading
 import time
+import urllib.error
 from pathlib import Path
 
 _log = logging.getLogger(__name__)
@@ -305,7 +306,16 @@ def load_source_words(ctx: dict, work_dir: Path) -> tuple[list[dict], bool]:
             words = [{**w, "s": w["s"] + start / 1000.0, "e": w["e"] + start / 1000.0} for w in clip_words]
             words_fallback = True
             print("[clipper:words] words_fallback source=clip_words", flush=True)
-        except Exception:
+        except Exception as exc:
+            missing = (
+                isinstance(exc, RuntimeError)
+                and str(exc).startswith("storage_object_missing:")
+            ) or (
+                isinstance(exc, urllib.error.HTTPError)
+                and exc.code == 404
+            )
+            if not missing:
+                raise
             print("[clipper:words] clip_words_missing -> empty", flush=True)
             return [], False
     out = []
