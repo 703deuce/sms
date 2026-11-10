@@ -86,13 +86,18 @@ function NavItemRow({ item, active }: { item: SidebarNavItem; active: boolean })
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        tooltip={item.label}
+        tooltip={item.id === 'ad-studio' ? undefined : item.label}
         isActive={active}
         aria-current={active ? 'page' : undefined}
         data-nav-id={item.id}
         className={navButtonClass}
         render={
-          <Link href={item.href} prefetch={HEAVY_NAV_HREF_NO_PREFETCH.has(item.href) ? false : undefined} />
+          <Link
+            href={item.href}
+            title={item.label}
+            prefetch={HEAVY_NAV_HREF_NO_PREFETCH.has(item.href) ? false : undefined}
+            onClick={item.id === 'ad-studio' ? () => console.info('[nav:ad-studio] navigate', { href: item.href }) : undefined}
+          />
         }
       >
         <Icon className="size-5" />
