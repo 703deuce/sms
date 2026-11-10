@@ -120,6 +120,120 @@ def _split_lines(tokens: list[dict]) -> list[list[dict]]:
     return segs
 
 
+
+def _plain_len(tokens: list[dict]) -> int:
+    return sum((1 if k else 0) + len(t["w"]) for k, t in enumerate(tokens))
+
+
+def _split_tokens_max_chars(tokens: list[dict], max_chars: int = MAX_CHARS) -> list[tuple[list[dict], bool]]:
+    """Split tokens so each chunk's plain text (words + separators, no tags) is at most max_chars.
+    A single word longer than max_chars is split mid-word rather than dropped.
+    The bool is True when the chunk starts mid-word and must be glued to the previous chunk on merge."""
+    chunks: list[tuple[list[dict], bool]] = []
+    cur: list[dict] = []
+    used = 0
+    glue = False
+
+    def flush() -> None:
+        nonlocal cur, used, glue
+        if cur:
+            chunks.append((cur, glue))
+            cur, used, glue = [], 0, False
+
+    for t in tokens:
+        remaining = t["w"]
+        first = True
+        while remaining:
+            room = max_chars - used - (1 if cur else 0)
+            if room <= 0:
+                flush()
+                continue
+            take, remaining = remaining[:room], remaining[room:]
+            cur.append({
+                "w": take,
+                "br": bool(t.get("br")) and first and not cur,
+                "it": bool(t.get("it")),
+                "bo": bool(t.get("bo")),
+            })
+            used += (1 if len(cur) > 1 else 0) + len(take)
+            first = False
+            if remaining:
+                flush()
+                glue = True
+    flush()
+    return chunks
+
+
+def _join_token_chunks(left: list[dict], right: list[dict], glue_left: bool) -> list[dict]:
+    if glue_left and left and right:
+        glued = {**left[-1], "w": left[-1]["w"] + right[0]["w"]}
+        return left[:-1] + [glued] + right[1:]
+    return left + right
+
+
+def _merge_text(prev: dict, nxt: dict) -> str:
+    return serialize_tokens(_join_token_chunks(
+        line_tokens(prev["text"]), line_tokens(nxt["text"]), bool(nxt.get("glue_left")),
+    ))
+
+
+def _merge_short_pieces(pieces: list[dict]) -> list[dict]:
+    """Merge any piece under MIN_MS into its neighbor, the way rechunkCaptionLines does.
+    Also merge a leading short piece into the next neighbor so words are never dropped."""
+    merged: list[dict] = []
+    for x in pieces:
+        prev = merged[-1] if merged else None
+        if prev is not None and x["endMs"] - x["startMs"] < MIN_MS and prev["endMs"] == x["startMs"]:
+            merged[-1] = {**prev, "text": _merge_text(prev, x), "endMs": x["endMs"]}
+        else:
+            merged.append(x)
+    out: list[dict] = []
+    i = 0
+    while i < len(merged):
+        x = merged[i]
+        nxt = merged[i + 1] if i + 1 < len(merged) else None
+        if nxt is not None and x["endMs"] - x["startMs"] < MIN_MS and x["endMs"] == nxt["startMs"]:
+            out.append({**x, "text": _merge_text(x, nxt), "endMs": nxt["endMs"], "glue_left": x.get("glue_left")})
+            i += 2
+            continue
+        out.append(x)
+        i += 1
+    return out
+
+
+def _split_oversized_line(line: dict) -> list[dict]:
+    """If a cue's plain text exceeds MAX_CHARS, split it by length and time-slice like rechunkCaptionLines.
+    Pieces under MIN_MS are merged into a neighbor; words are never dropped."""
+    toks = line_tokens(line["text"])
+    if _plain_len(toks) <= MAX_CHARS:
+        return [line]
+    chunks = _split_tokens_max_chars(toks)
+    if len(chunks) <= 1:
+        return [line]
+    total = sum(len(t["w"]) + 1 for t in toks) or 1
+    s, e = line["startMs"], line["endMs"]
+    dur = e - s
+    acc = 0
+    pieces: list[dict] = []
+    for i, (part, glue_left) in enumerate(chunks):
+        a = s + (dur * acc) // total
+        acc += sum(len(t["w"]) + 1 for t in part)
+        b = e if i == len(chunks) - 1 else s + (dur * acc) // total
+        if b <= a:
+            b = a + 1
+        pieces.append({
+            "id": line["id"] if i == 0 else f"{line['id']}_{i}_{a}",
+            "text": serialize_tokens(part),
+            "startMs": a,
+            "endMs": b,
+            "glue_left": glue_left,
+        })
+    merged = _merge_short_pieces(pieces)
+    for row in merged:
+        row.pop("glue_left", None)
+    return merged
+
+
 def normalize_caption_lines(raw) -> list[dict]:
     """Valid lines, sorted by start, overlaps trimmed (a line starts no earlier than the previous end)."""
     if not isinstance(raw, list):
@@ -128,7 +242,8 @@ def normalize_caption_lines(raw) -> list[dict]:
     for r in raw:
         if not isinstance(r, dict):
             continue
-        text = serialize_tokens(line_tokens(str(r.get("text") or "")), MAX_CHARS)
+        # Keep the full text here; oversized cues are split below instead of truncated.
+        text = serialize_tokens(line_tokens(str(r.get("text") or "")))
         a, b = _num(r.get("startMs")), _num(r.get("endMs"))
         if not text or a is None or b is None:
             continue
@@ -139,9 +254,17 @@ def normalize_caption_lines(raw) -> list[dict]:
         if len(rows) >= MAX_LINES:
             break
     rows.sort(key=lambda x: (x["startMs"], x["endMs"]))
+    split: list[dict] = []
+    for line in rows:
+        for piece in _split_oversized_line(line):
+            split.append(piece)
+            if len(split) >= MAX_LINES:
+                break
+        if len(split) >= MAX_LINES:
+            break
     out: list[dict] = []
     prev_end = 0
-    for x in rows:
+    for x in split:
         s = max(x["startMs"], prev_end)
         if x["endMs"] - s < MIN_MS:
             continue
