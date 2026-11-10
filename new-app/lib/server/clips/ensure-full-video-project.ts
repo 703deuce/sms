@@ -1,6 +1,5 @@
 import 'server-only'
 
-import { Prisma } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { withAutoContentDetection } from '@/lib/clips/content-detection'
 import {
@@ -71,76 +70,55 @@ export async function ensureFullVideoProjectForUpload(
     hasProxy: Boolean(sourceProject.proxyKey),
   })
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const newId = createId('proj')
-    try {
-      return await prisma.$transaction(
-        async (tx) => {
-          const candidates = await tx.clipProject.findMany({
-            where: { workspaceId, uploadId: upload.id, deletedAt: null },
-            orderBy: { createdAt: 'desc' },
-            select: { id: true, settings: true },
-          })
-          const concurrent = candidates.find((project) => isFullVideoSettings(project.settings))
-          if (concurrent) {
-            console.info('[clipper:fullvideo-link] ensure_reuse', {
-              uploadId: upload.id,
-              projectId: concurrent.id,
-              attempt,
-            })
-            return concurrent.id
-          }
-
-          await tx.clipProject.create({
-            data: {
-              id: newId,
-              workspaceId,
-              title,
-              uploadId: upload.id,
-              settings: JSON.parse(JSON.stringify(settings)),
-              rangeStartMs: 0,
-              rangeEndMs: settings.rangeEndMs,
-              status: 'QUEUED',
-              stage: 'queued',
-              progress: 0,
-              transcriptKey: projectWordsKey(workspaceId, newId),
-              ...(transcriptWords ? { transcriptWords: JSON.parse(JSON.stringify(transcriptWords)) } : {}),
-              ...(sourceProject.proxyKey ? { proxyKey: sourceProject.proxyKey } : {}),
-            },
-          })
-          await tx.clipJob.create({
-            data: {
-              id: createId('job'),
-              projectId: newId,
-              type: 'PROCESS_PROJECT',
-              status: 'QUEUED',
-              payload: toPrismaJson(buildProcessProjectJobPayload(settings)),
-            },
-          })
-          console.info('[clipper:fullvideo-link] ensure_created', {
-            uploadId: upload.id,
-            projectId: newId,
-            attempt,
-          })
-          return newId
+  // Deterministic per-upload id makes concurrent creates collide safely on the
+  // primary key. The nested job write is atomic with the project create.
+  const newId = `proj_fv_${upload.id}`
+  try {
+    await prisma.clipProject.create({
+      data: {
+        id: newId,
+        workspaceId,
+        title,
+        uploadId: upload.id,
+        settings: JSON.parse(JSON.stringify(settings)),
+        rangeStartMs: 0,
+        rangeEndMs: settings.rangeEndMs,
+        status: 'QUEUED',
+        stage: 'queued',
+        progress: 0,
+        transcriptKey: projectWordsKey(workspaceId, newId),
+        ...(transcriptWords ? { transcriptWords: JSON.parse(JSON.stringify(transcriptWords)) } : {}),
+        ...(sourceProject.proxyKey ? { proxyKey: sourceProject.proxyKey } : {}),
+        jobs: {
+          create: {
+            id: createId('job'),
+            type: 'PROCESS_PROJECT',
+            status: 'QUEUED',
+            payload: toPrismaJson(buildProcessProjectJobPayload(settings)),
+          },
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      )
-    } catch (error) {
-      const code = (error as { code?: unknown } | null)?.code
-      if (code === 'P2034' && attempt < 2) {
-        console.warn('[clipper:fullvideo-link] ensure_retry', {
+      },
+    })
+    console.info('[clipper:fullvideo-link] ensure_created', {
+      uploadId: upload.id,
+      projectId: newId,
+    })
+    return newId
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code
+    if (code === 'P2002') {
+      const concurrent = await findFullVideoProjectForUpload(workspaceId, upload.id)
+      if (concurrent) {
+        console.info('[clipper:fullvideo-link] ensure_reuse', {
           uploadId: upload.id,
-          attempt,
-          errorCode: code,
+          projectId: concurrent.id,
+          reason: 'concurrent_create',
         })
-        continue
+        return concurrent.id
       }
-      throw error
     }
+    throw error
   }
-
-  throw new Error('Could not create full-video project')
 }
 
 export async function waitForFullVideoClip(
