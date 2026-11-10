@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
-// @ts-ignore — vitest is resolved in new-app; root tsc has no vitest types
+// @ts-expect-error root tsc does not resolve the new-app vitest install
 import { afterEach, describe, expect, it, vi } from 'vitest'
-// @ts-ignore — testing-library is resolved in new-app; root tsc cannot see it
+// @ts-expect-error root tsc does not resolve @testing-library/react
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ExportRenderShareDialog } from '../components/clips/export-render-share-dialog'
 import { requestNeedsReviewAck } from '../components/clips/needs-review-share-warning'
+import { shareAiMetaAfterClipFetch, SHARE_STATUS_UNKNOWN_REASON } from '../lib/clips/clip-needs-review'
 
 const createRenderShareLink = vi.fn(async () => ({ shareUrl: 'https://example.test/share/abc' }))
 const revokeRenderShareLink = vi.fn(async () => undefined)
@@ -71,5 +72,17 @@ describe('needsReview share warning', () => {
     requestNeedsReviewAck({ needsReview: true }, openWarning, action)
     expect(openWarning).toHaveBeenCalledTimes(1)
     expect(action).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the needsReview confirm when the exports-list clip GET failed (fail closed)', async () => {
+    const meta = shareAiMetaAfterClipFetch({ ok: false })
+    render(<ExportRenderShareDialog renderId="rnd_fail" open onOpenChange={() => undefined} aiMeta={meta} />)
+    fireEvent.click(screen.getByTestId('export-share-create'))
+    const warning = await screen.findByTestId('needs-review-share-warning')
+    expect(warning.textContent).toContain(SHARE_STATUS_UNKNOWN_REASON)
+    expect(createRenderShareLink).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByTestId('needs-review-share-cancel'))
+    await waitFor(() => expect(screen.queryByTestId('needs-review-share-warning')).toBeNull())
+    expect(createRenderShareLink).not.toHaveBeenCalled()
   })
 })

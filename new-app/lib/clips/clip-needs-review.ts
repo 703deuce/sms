@@ -32,3 +32,16 @@ export function clipNeedsReviewReasons(aiMeta: unknown): string[] {
   }
   return out
 }
+
+/** Used when GET /api/clips/clips/:id fails on the exports-list Share path. Fail closed. */
+export const SHARE_STATUS_UNKNOWN_REASON = 'Could not confirm whether this clip needs review'
+
+/** After a successful clip GET, use the payload aiMeta. After a failed GET, return a flagged meta so Share shows the needsReview confirm instead of opening a plain link. */
+export function shareAiMetaAfterClipFetch(
+  result: { ok: true; aiMeta?: unknown } | { ok: false },
+): unknown {
+  if (!result.ok) {
+    return { needsReview: true, needsReviewReasons: [SHARE_STATUS_UNKNOWN_REASON] }
+  }
+  return result.aiMeta
+}

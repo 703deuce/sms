@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-// @ts-ignore — vitest is resolved in new-app; root tsc has no vitest types
+// @ts-expect-error root tsc does not resolve the new-app vitest install
 import { afterEach, describe, expect, it, vi } from 'vitest'
-// @ts-ignore — testing-library is resolved in new-app; root tsc cannot see it
+// @ts-expect-error root tsc does not resolve @testing-library/react
 import { cleanup, render, screen } from '@testing-library/react'
 import { ClipCard } from '../components/clips/clip-card'
 import { ClipGrid } from '../components/clips/clip-grid'

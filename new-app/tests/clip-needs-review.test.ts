@@ -1,7 +1,7 @@
 // @vitest-environment node
-// @ts-ignore — vitest is resolved in new-app; root tsc has no vitest types
+// @ts-expect-error root tsc does not resolve the new-app vitest install
 import { describe, expect, it } from 'vitest'
-import { clipNeedsReview, clipNeedsReviewReasons } from '../lib/clips/clip-needs-review'
+import { clipNeedsReview, clipNeedsReviewReasons, shareAiMetaAfterClipFetch, SHARE_STATUS_UNKNOWN_REASON } from '../lib/clips/clip-needs-review'
 
 describe('clipNeedsReview helpers', () => {
   it('returns false and no reasons when aiMeta is absent', () => {
@@ -28,5 +28,22 @@ describe('clipNeedsReview helpers', () => {
     ).toEqual(['hook is weak', 'overlap on beat 2'])
     const many = Array.from({ length: 12 }, (_, i) => `reason ${i + 1}`)
     expect(clipNeedsReviewReasons({ needsReview: true, needsReviewReasons: many })).toEqual(many.slice(0, 10))
+  })
+})
+
+describe('shareAiMetaAfterClipFetch (exports-list Share)', () => {
+  it('passes through aiMeta when the clip GET succeeds', () => {
+    const flagged = { needsReview: true, needsReviewReasons: ['Leftover filler'] }
+    expect(shareAiMetaAfterClipFetch({ ok: true, aiMeta: flagged })).toEqual(flagged)
+    expect(clipNeedsReview(shareAiMetaAfterClipFetch({ ok: true, aiMeta: flagged }))).toBe(true)
+    expect(shareAiMetaAfterClipFetch({ ok: true, aiMeta: undefined })).toBeUndefined()
+    expect(clipNeedsReview(shareAiMetaAfterClipFetch({ ok: true, aiMeta: undefined }))).toBe(false)
+    expect(clipNeedsReview(shareAiMetaAfterClipFetch({ ok: true, aiMeta: { needsReview: false } }))).toBe(false)
+  })
+
+  it('fails closed when the clip GET fails, so Share shows the needsReview confirm', () => {
+    const meta = shareAiMetaAfterClipFetch({ ok: false })
+    expect(clipNeedsReview(meta)).toBe(true)
+    expect(clipNeedsReviewReasons(meta)).toEqual([SHARE_STATUS_UNKNOWN_REASON])
   })
 })

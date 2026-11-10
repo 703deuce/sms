@@ -14,6 +14,7 @@ import { ExportErrorMessage } from '@/components/clips/export-error-message'
 import { retryFailedExportRender } from '@/lib/clips-api'
 import { Download, RotateCcw, Share2 } from 'lucide-react'
 import { ExportRenderShareDialog } from '@/components/clips/export-render-share-dialog'
+import { shareAiMetaAfterClipFetch } from '../../../../../lib/clips/clip-needs-review'
 
 type Filter = 'all' | 'ready' | 'failed'
 
@@ -181,10 +182,11 @@ export function ExportsList({
       // Existing GET clip payload already includes aiMeta. Do not invent export-row fields.
       if (row.clipId) {
         const data = await clipsFetch<{ aiMeta?: unknown }>(`/api/clips/clips/${row.clipId}`)
-        setShareAiMeta(data?.aiMeta)
+        setShareAiMeta(shareAiMetaAfterClipFetch({ ok: true, aiMeta: data?.aiMeta }))
       }
     } catch {
-      setShareAiMeta(undefined)
+      // Fail closed: show the needsReview confirm instead of opening a plain link.
+      setShareAiMeta(shareAiMetaAfterClipFetch({ ok: false }))
     } finally {
       setShareLoadingId(null)
       setShareOpen(true)
