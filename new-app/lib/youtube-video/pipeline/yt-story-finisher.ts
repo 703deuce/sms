@@ -54,9 +54,9 @@ export type YtGlobalSelection = {
   chapterTitles: string[]
 }
 
-function descriptiveTitle(raw:string,cut:YtSelectedCut):string {
+function descriptiveTitle(raw:string,cut:YtSelectedCut,windowTitle:string):string {
   const generic=/^(?:premise|payoff|opening|ending|beat[ ]*[0-9]+|story[ ]*[0-9]+|part[ ]*[0-9]+)$/i
-  for(const choice of [raw,cut.beat,cut.label??'',cut.reason]){
+  for(const choice of [raw,cut.beat,cut.label??'',cut.reason,windowTitle]){
     const cleaned=choice.trim().replace(/[ ]+/g,' ')
     if(cleaned.length>=6&&!generic.test(cleaned))return cleaned.slice(0,110)
   }
@@ -111,9 +111,11 @@ export async function ytFinishWholeSourceStory(
     if(!chosen.some(index=>index>=from&&index<at))covered.add(from)
   }
   const selectedIndices=[...covered].sort((a,b)=>a-b)
+  const windowTitles=windows.flatMap(w=>w.cuts.map(()=>w.outline.title))
   return {title:raw.title.slice(0,110),premise:raw.premise.slice(0,450),
     selectedIndices,
-    chapterTitles:selectedIndices.map(i=>descriptiveTitle(suppliedByIndex.get(i)??'',all[i]!))}
+    chapterTitles:selectedIndices.map(i=>
+      descriptiveTitle(suppliedByIndex.get(i)??'',all[i]!,windowTitles[i]??''))}
 }
 
 export async function ytQaWholeSourceStory(
