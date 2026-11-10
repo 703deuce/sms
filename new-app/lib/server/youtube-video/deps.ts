@@ -1,12 +1,10 @@
 import 'server-only'
 
-import { defaultEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { defaultEdits, editsVersionHash, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
-import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
+import { writeClipEdits, writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
-import { createAiProducerOutputProject } from '@/lib/server/ai-producer-agent/create-output-project'
-import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import { getClipStorage } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { buildYoutubeStoryEditAssembly } from '@/lib/youtube-video/story-edit-assembly'
@@ -20,6 +18,10 @@ import { YoutubeVideoError } from '@/lib/youtube-video/errors'
 import type { YoutubeVideoPipelineDeps, WriteYoutubeClip } from '@/lib/youtube-video/pipeline'
 import type { RevertClip, YoutubeVideoRunDeps } from '@/lib/youtube-video/runs'
 import type { YoutubeVideoIngestedSource } from '@/lib/youtube-video/types'
+import {
+  createOrReuseYoutubeOutputProject,
+  enqueueYoutubeVideoRenderOnce,
+} from '@/lib/server/youtube-video/output'
 
 const ACTIVE_STATUSES = ['queued', 'importing', 'waiting_for_source', 'running', 'awaiting_choice']
 
@@ -233,37 +235,24 @@ export const writeYoutubeVideoClip: WriteYoutubeClip = async ({ workspaceId, cre
   const firstSource = bySource.get(first.sourceId)
   if (!firstSource) throw new YoutubeVideoError('source_not_found', 'Story opening source is unavailable.', 404)
 
-  // A killed web container can leave an output project before the run advances.
-  // Reattach to that exact clip by durable run marker; never create another.
-  const prior=await prisma.clip.findFirst({
-    where:{workspaceId,deletedAt:null,
-      aiMeta:{path:['aiProducerRunId'],equals:runId}},
-    orderBy:{createdAt:'asc'},
-    select:{id:true,projectId:true,editsSaveVersion:true,aiMeta:true},
-  })
-  const created=prior
-    ?{projectId:prior.projectId,clipId:prior.id}
-    :await traceYoutubeRunStep(runId,'output_project_create',()=>createAiProducerOutputProject({
+  // Deterministic run+option IDs make stale-lease replays converge on one
+  // output project/clip. Both records are claimed atomically in the YouTube adapter.
+  const created=await traceYoutubeRunStep(runId,'output_project_create',()=>
+    createOrReuseYoutubeOutputProject({
       workspaceId,createdById:createdById??'system',
-      runId,title:option.title,sourceProjectId:firstSource.projectId,
+      runId,optionId:option.id,title:option.title,sourceProjectId:firstSource.projectId,
       clipStartMs:first.startMs,clipEndMs:first.endMs,
     }),{projectId:firstSource.projectId})
-  if(prior){
-    youtubeRunEvent(runId,'story_assembly','existing_clip_reused',{projectId:created.projectId})
-    const meta=prior.aiMeta&&typeof prior.aiMeta==='object'&&!Array.isArray(prior.aiMeta)
-      ?prior.aiMeta as Record<string,unknown>:{}
-    if(meta.youtubeVideoRunId===runId){
-      const priorRender=await prisma.clipRender.findFirst({
-        where:{workspaceId,clipId:created.clipId,
-          status:{in:['READY','RENDERING','QUEUED']}},
-        orderBy:{createdAt:'desc'},select:{id:true},
-      })
-      if(priorRender){
-        return {projectId:created.projectId,clipId:created.clipId,
-          durationMs:cuts.reduce((sum,cut)=>sum+cut.endMs-cut.startMs,0),
-          renderId:priorRender.id}
-      }
-    }
+  const priorRender=await prisma.clipRender.findUnique({
+    where:{id:created.renderId},select:{id:true,status:true},
+  })
+  if(priorRender){
+    youtubeRunEvent(runId,'story_assembly','existing_render_reused',{
+      projectId:created.projectId,status:priorRender.status,
+    })
+    return {projectId:created.projectId,clipId:created.clipId,
+      durationMs:cuts.reduce((sum,cut)=>sum+cut.endMs-cut.startMs,0),
+      renderId:priorRender.id}
   }
 
   const distinctUploads = new Map(uploads.map((upload) => [upload.id, upload]))
@@ -301,9 +290,21 @@ export const writeYoutubeVideoClip: WriteYoutubeClip = async ({ workspaceId, cre
       uploads.map((upload) => ({ id: upload.id, label: upload.filename, durationMs: upload.durationMs })),
     ),
   { projectId: created.projectId })
-  await traceYoutubeRunStep(runId, 'segments_write', () =>
-    writeClipEditsOrThrow(created.clipId, bounds, prior?.editsSaveVersion??0, () => edits),
-  { projectId: created.projectId })
+  await traceYoutubeRunStep(runId, 'segments_write', async () => {
+    const current=await prisma.clip.findUniqueOrThrow({
+      where:{id:created.clipId},select:{edits:true,editsSaveVersion:true},
+    })
+    const existing=normalizeEdits(current.edits,bounds)
+    if(editsVersionHash(existing)===editsVersionHash(edits)){
+      youtubeRunEvent(runId,'segments_write','existing_edits_reused',{projectId:created.projectId})
+      return
+    }
+    const written=await writeClipEdits(created.clipId,bounds,current.editsSaveVersion,()=>edits)
+    if(!written.ok&&editsVersionHash(written.edits)!==editsVersionHash(edits))
+      throw Error('youtube_output_edits_conflict')
+    if(!written.ok)
+      youtubeRunEvent(runId,'segments_write','concurrent_edits_reused',{projectId:created.projectId})
+  }, { projectId: created.projectId })
   youtubeRunEvent(runId, 'segments_write', 'done', {
     projectId: created.projectId, sourceCount: distinctUploads.size, wordCount: cuts.length,
   })
@@ -321,13 +322,12 @@ export const writeYoutubeVideoClip: WriteYoutubeClip = async ({ workspaceId, cre
     })
   }, { projectId: created.projectId })
 
-  const queued = await traceYoutubeRunStep(runId, 'render_queue', () => enqueueRenderClip(
-    workspaceId, created.clipId, {
-      resolution: '720p', aspect: '16:9', watermark: false,
-      edits, clipStartMs: first.startMs, clipEndMs: first.endMs,
-      previewKey: null, title: option.title,
-    },
-  ), { projectId: created.projectId })
+  const queued = await traceYoutubeRunStep(runId, 'render_queue', () =>
+    enqueueYoutubeVideoRenderOnce({
+      workspaceId,projectId:created.projectId,clipId:created.clipId,
+      runId,optionId:option.id,title:option.title,edits,
+    }),
+  { projectId: created.projectId })
   youtubeRunEvent(runId, 'render_queue', 'queued', {
     projectId: created.projectId, status: queued.render.status,
   })
