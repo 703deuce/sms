@@ -36,6 +36,7 @@ export type YtStep = {
   accepted?: number
   rejected?: number
   code?: string
+  issues?: string[]
 }
 
 export type YtActiveWindow = {
@@ -64,6 +65,7 @@ export type YtFinishedWindow = {
   rejected: Array<{ startMs: number; endMs: number; code: string }>
   coarseCount: number
   focusedCount: number
+  qaIssues?: string[]
 }
 
 export type YtCheckpoint = {
