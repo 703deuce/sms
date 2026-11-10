@@ -90,6 +90,7 @@ export type StudioJobRecord = {
   referenceAssetId: string | null
   startFrameAssetId: string | null
   endFrameAssetId: string | null
+  sourceVideoAssetId: string | null
   outputStorageKey: string | null
   outputStorageDriver: string | null
   outputContentType: string | null

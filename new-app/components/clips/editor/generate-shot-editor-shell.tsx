@@ -857,11 +857,17 @@ export function GenerateShotEditorShell(props: Props) {
       )
       const body = await responseJson(response)
       const item = body.item as ProjectMediaItem | undefined
+      const sourceRange = body.sourceRange as { startMs?: unknown; endMs?: unknown } | undefined
+      const serverStartMs = Number(sourceRange?.startMs)
+      const serverEndMs = Number(sourceRange?.endMs)
       if (
         !response.ok ||
         !item ||
         item.ref !== 'upload' ||
-        item.mediaType !== 'video'
+        item.mediaType !== 'video' ||
+        !Number.isInteger(serverStartMs) ||
+        !Number.isInteger(serverEndMs) ||
+        serverEndMs <= serverStartMs
       ) {
         throw new Error(
           typeof body.error === 'string'
@@ -870,19 +876,22 @@ export function GenerateShotEditorShell(props: Props) {
         )
       }
 
-      const expectedMs = range.endMs - range.startMs
+      if (serverStartMs !== range.startMs || serverEndMs !== range.endMs) {
+        throw new Error('Candidate source range no longer matches this selected version')
+      }
+      const expectedMs = serverEndMs - serverStartMs
       if (item.durationMs != null && item.durationMs < expectedMs) {
         throw new Error('Generated candidate is shorter than the selected range')
       }
       const latest = latestEditsRef.current
-      if (!safeOutputRange(latest, range.startMs, range.endMs)) {
+      if (!safeOutputRange(latest, serverStartMs, serverEndMs)) {
         throw new Error('The clip changed while preparing the candidate. Try Accept again.')
       }
       const replacement = replaceVideoRange(
         latest,
         item,
-        range.startMs,
-        range.endMs,
+        serverStartMs,
+        serverEndMs,
         () => crypto.randomUUID(),
       )
       if (!replacement.edits) throw new Error(replacement.message)

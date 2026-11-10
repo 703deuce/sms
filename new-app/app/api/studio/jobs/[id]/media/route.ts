@@ -9,13 +9,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const { id } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const body = (await request.json().catch(() => ({}))) as { projectId?: string; clipId?: string }
-    const item = await registerStudioOutputForClip(createDefaultStudioService(), {
+    const result = await registerStudioOutputForClip(createDefaultStudioService(), {
       workspaceId,
       jobId: id,
       projectId: body.projectId || '',
       clipId: body.clipId || '',
     })
-    return NextResponse.json({ item })
+    return NextResponse.json(result)
   } catch (err) {
     return studioJsonError(err)
   }

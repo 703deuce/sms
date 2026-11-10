@@ -39,9 +39,9 @@ function extForContentType(contentType: string, kind: 'video' | 'image'): string
   return kind === 'video' ? 'mp4' : 'png'
 }
 
-const SOURCE_VIDEO_KIND = 'source_video:'
+export const SOURCE_VIDEO_KIND = 'source_video:'
 
-function parseSourceVideoKind(kind: string): { clipId: string; startMs: number; endMs: number } | null {
+export function parseSourceVideoKind(kind: string): { clipId: string; startMs: number; endMs: number } | null {
   if (!kind.startsWith(SOURCE_VIDEO_KIND)) return null
   const parts = kind.slice(SOURCE_VIDEO_KIND.length).split(':')
   if (parts.length !== 3) return null
@@ -113,7 +113,8 @@ export async function createStudioJob(
           existing.mode !== resolved.mode || existing.prompt !== resolved.prompt ||
           existing.durationSec !== resolved.durationSec ||
           existing.referenceAssetId !== resolved.referenceAssetId ||
-          existing.startFrameAssetId !== resolved.startFrameAssetId) {
+          existing.startFrameAssetId !== resolved.startFrameAssetId ||
+          existing.sourceVideoAssetId !== resolved.sourceVideoAssetId) {
         throw new StudioError('INVALID_PARAMS', 'A Studio generation id was already used for different input')
       }
       console.info('[ad-studio:b3] child_job_replay', { jobId: existing.id, status: existing.status })
@@ -151,6 +152,7 @@ export async function createStudioJob(
     referenceAssetId: resolved.referenceAssetId,
     startFrameAssetId: resolved.startFrameAssetId,
     endFrameAssetId: resolved.endFrameAssetId,
+    sourceVideoAssetId: resolved.sourceVideoAssetId,
     outputStorageKey: null,
     outputStorageDriver: null,
     outputContentType: null,
@@ -177,7 +179,8 @@ export async function createStudioJob(
             existing.mode !== resolved.mode || existing.prompt !== resolved.prompt ||
             existing.durationSec !== resolved.durationSec ||
             existing.referenceAssetId !== resolved.referenceAssetId ||
-            existing.startFrameAssetId !== resolved.startFrameAssetId) {
+            existing.startFrameAssetId !== resolved.startFrameAssetId ||
+            existing.sourceVideoAssetId !== resolved.sourceVideoAssetId) {
           throw new StudioError('INVALID_PARAMS', 'A Studio generation id was already used for different input')
         }
         console.info('[ad-studio:b3] child_job_concurrent_replay', { jobId: id, status: existing.status })

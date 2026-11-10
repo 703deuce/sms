@@ -10586,6 +10586,7 @@ model AiStudioJob {
   referenceAssetId     String?
   startFrameAssetId    String?
   endFrameAssetId      String?
+  sourceVideoAssetId   String?
   outputStorageKey     String?
   outputStorageDriver  String?
   outputContentType    String?

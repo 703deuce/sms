@@ -5,12 +5,12 @@ import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import { getPrisma } from '@/lib/server/db'
 import { storageDriverName } from '@/lib/storage/driver-name'
 import { StudioError } from './errors'
-import { getStudioJobForOutput, type StudioService } from './jobs'
+import { getStudioJobForOutput, parseSourceVideoKind, type StudioService } from './jobs'
 
 export async function registerStudioOutputForClip(
   svc: StudioService,
   input: { workspaceId: string; jobId: string; projectId: string; clipId: string },
-): Promise<ProjectMediaItem> {
+): Promise<{ item: ProjectMediaItem; sourceRange: { startMs: number; endMs: number } }> {
   if (!input.projectId || !input.clipId) throw new StudioError('INVALID_PARAMS', 'projectId and clipId are required')
   if (!(await svc.store.clipInProject(input.workspaceId, input.projectId, input.clipId))) {
     throw new StudioError('INVALID_PARAMS', 'Clip was not found in this project')
@@ -22,6 +22,14 @@ export async function registerStudioOutputForClip(
   }
   if (job.mode !== 'source_video_edit' || job.outputKind !== 'video' || !job.outputStorageKey || !job.outputContentType) {
     throw new StudioError('INVALID_PARAMS', 'Only completed source-video edits can replace a shot')
+  }
+  if (!job.sourceVideoAssetId) {
+    throw new StudioError('INVALID_PARAMS', 'Generation is missing source-video provenance')
+  }
+  const sourceAsset = await svc.store.getAsset(input.workspaceId, job.sourceVideoAssetId)
+  const sourceInfo = sourceAsset ? parseSourceVideoKind(sourceAsset.kind) : null
+  if (!sourceInfo || sourceInfo.clipId !== input.clipId) {
+    throw new StudioError('INVALID_PARAMS', 'Generation belongs to a different source clip')
   }
 
   const prisma = getPrisma()
@@ -70,5 +78,8 @@ export async function registerStudioOutputForClip(
     uploadId,
     durationMs,
   })
-  return item
+  return {
+    item,
+    sourceRange: { startMs: sourceInfo.startMs, endMs: sourceInfo.endMs },
+  }
 }

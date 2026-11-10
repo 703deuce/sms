@@ -21,6 +21,7 @@ function mapJob(row: {
   referenceAssetId: string | null
   startFrameAssetId: string | null
   endFrameAssetId: string | null
+  sourceVideoAssetId: string | null
   outputStorageKey: string | null
   outputStorageDriver: string | null
   outputContentType: string | null
@@ -69,6 +70,7 @@ export function createPrismaStudioStore(): StudioStore {
           referenceAssetId: row.referenceAssetId,
           startFrameAssetId: row.startFrameAssetId,
           endFrameAssetId: row.endFrameAssetId,
+          sourceVideoAssetId: row.sourceVideoAssetId,
           outputStorageKey: row.outputStorageKey,
           outputStorageDriver: row.outputStorageDriver,
           outputContentType: row.outputContentType,
@@ -120,6 +122,7 @@ export function createPrismaStudioStore(): StudioStore {
       if (patch.status !== undefined) data.status = patch.status
       if (patch.providerTaskId !== undefined) data.providerTaskId = patch.providerTaskId
       if (patch.providerApi !== undefined) data.providerApi = patch.providerApi
+      if (patch.sourceVideoAssetId !== undefined) data.sourceVideoAssetId = patch.sourceVideoAssetId
       if (patch.outputStorageKey !== undefined) data.outputStorageKey = patch.outputStorageKey
       if (patch.outputStorageDriver !== undefined) data.outputStorageDriver = patch.outputStorageDriver
       if (patch.outputContentType !== undefined) data.outputContentType = patch.outputContentType
