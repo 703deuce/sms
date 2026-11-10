@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Clapperboard, Download, FileText, Loader2, Pause, Play, RefreshCw, Search, Undo2 } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Download, FileText, Loader2, Pause, Play, Redo2, RefreshCw, Search, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
