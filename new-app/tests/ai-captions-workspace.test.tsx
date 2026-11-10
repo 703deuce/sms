@@ -17,6 +17,7 @@ import { AiCaptionsWorkspace } from '../components/captions/ai-captions-workspac
 const push = vi.fn()
 const createAiCaptionsRun = vi.fn()
 const getAiCaptionsRun = vi.fn()
+const listAiCaptionsRuns = vi.fn()
 const listAiCaptionsStyles = vi.fn()
 const applyAiCaptionsStyle = vi.fn()
 const startAiCaptionsExport = vi.fn()
@@ -29,6 +30,8 @@ vi.mock('next/navigation', () => ({
 vi.mock('../lib/clips/ai-captions-api', () => ({
   createAiCaptionsRun: (...args: unknown[]) => createAiCaptionsRun(...args),
   getAiCaptionsRun: (...args: unknown[]) => getAiCaptionsRun(...args),
+  listAiCaptionsRuns: (...args: unknown[]) => listAiCaptionsRuns(...args),
+  aiCaptionsVttUrl: (id: string) => `/api/ai-captions/runs/${id}/vtt`,
   listAiCaptionsStyles: (...args: unknown[]) => listAiCaptionsStyles(...args),
   applyAiCaptionsStyle: (...args: unknown[]) => applyAiCaptionsStyle(...args),
   startAiCaptionsExport: (...args: unknown[]) => startAiCaptionsExport(...args),
@@ -97,6 +100,8 @@ describe('AI Captions workspace', () => {
     push.mockReset()
     createAiCaptionsRun.mockReset()
     getAiCaptionsRun.mockReset()
+    listAiCaptionsRuns.mockReset()
+    listAiCaptionsRuns.mockResolvedValue([])
     listAiCaptionsStyles.mockReset()
     applyAiCaptionsStyle.mockReset()
     startAiCaptionsExport.mockReset()
@@ -154,6 +159,8 @@ describe('AI Captions workspace', () => {
     await waitFor(() => expect(screen.getByTestId('ai-captions-result')).toBeTruthy())
     expect(screen.getByTestId('ai-captions-credits').textContent).toMatch(/10 credits/)
     expect(screen.getByTestId('ai-captions-credits').textContent).not.toMatch(/\$/)
+    expect(screen.getByTestId('ai-captions-vtt')).toBeTruthy()
+    expect(screen.getByTestId('ai-captions-run-list')).toBeTruthy()
     fireEvent.click(screen.getByTestId('ai-captions-edit'))
     expect(push).toHaveBeenCalledWith('/app/clips/proj_1/edit/clip_1?tab=captions')
   })

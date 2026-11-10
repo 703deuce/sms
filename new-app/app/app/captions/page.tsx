@@ -11,7 +11,7 @@ export default function AiCaptionsPage() {
         icon={Captions}
         iconTone="brand"
         title="AI Captions"
-        description="Upload a finished video to transcribe and caption it. When it is ready, preview the result, download it, or open the clip editor on the Captions tab."
+        description="Upload a video, transcribe speech, style captions in the existing compact editor, and export a burned-in MP4, SRT, or VTT."
       />
       <AiCaptionsWorkspace />
     </PageContainer>
