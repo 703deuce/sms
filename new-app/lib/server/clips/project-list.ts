@@ -3,6 +3,8 @@ import { createReadableSignedUrl } from '@/lib/storage/resolve'
 import { listClipProjects } from '@/lib/server/clips/projects'
 import { getPrisma } from '@/lib/server/db'
 import { Prisma } from '@prisma/client'
+import { isClipUserHidden } from '@/lib/clips/clip-results-chips'
+import { enqueueClipCardThumbnail } from '@/lib/server/clips/card-thumbnails'
 
 export type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 
@@ -62,10 +64,20 @@ export async function listClipProjectsForPage(
   const ownerIds = [...new Set(projects.map((p) => p.createdById).filter(Boolean))]
   const t2vProjectIds = projects.filter((p) => p.sourceKind === 't2v').map((p) => p.id)
 
-  const [counts, t2vRows, owners, publishes] = await Promise.all([
+  console.info('[clips:projects] list_meta begin', { projectCount: ids.length })
+  const [counts, hiddenCounts, t2vRows, owners, publishes] = await Promise.all([
     prisma.clip.groupBy({
       by: ['projectId'],
       where: { projectId: { in: ids }, deletedAt: null },
+      _count: { _all: true },
+    }),
+    prisma.clip.groupBy({
+      by: ['projectId'],
+      where: {
+        projectId: { in: ids },
+        deletedAt: null,
+        aiMeta: { path: ['userHidden'], equals: true },
+      },
       _count: { _all: true },
     }),
     loadT2vListMeta(t2vProjectIds),
@@ -78,7 +90,17 @@ export async function listClipProjectsForPage(
     }),
   ])
 
-  const countByProject = new Map(counts.map((c) => [c.projectId, c._count._all]))
+  const hiddenCountByProject = new Map(hiddenCounts.map((row) => [row.projectId, row._count._all]))
+  const countByProject = new Map(
+    counts.map((row) => [
+      row.projectId,
+      Math.max(0, row._count._all - (hiddenCountByProject.get(row.projectId) ?? 0)),
+    ]),
+  )
+  console.info('[clips:projects] list_meta end', {
+    projectCount: ids.length,
+    hiddenClipCount: hiddenCounts.reduce((sum, row) => sum + row._count._all, 0),
+  })
 
   const t2vByProject = new Map<
     string,
@@ -106,29 +128,92 @@ export async function listClipProjectsForPage(
   return Promise.all(
     projects.map(async (p): Promise<ClipProjectListItem> => {
       let thumbKey = p.thumbKey
-      if (!thumbKey) {
-        const negUntil = thumbFallbackMissUntil.get(p.id)
-        if (negUntil == null || negUntil <= Date.now()) {
-          const topClip = await prisma.clip.findFirst({
-            where: { projectId: p.id, deletedAt: null, posterKey: { not: null } },
-            orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
-            select: { posterKey: true },
+      let sourceFrameUrl: string | null = null
+      let sourceFrameStartMs = 0
+      if (!thumbKey && p.sourceKind !== 't2v') {
+        const started = Date.now()
+        console.info('[clips:projects] preview_backfill begin', { projectId: p.id })
+        const candidates = await prisma.clip.findMany({
+          where: { projectId: p.id, deletedAt: null },
+          orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
+          take: 12,
+          select: {
+            id: true,
+            aiMeta: true,
+            posterKey: true,
+            startMs: true,
+            sourceSegKey: true,
+            sourceSegStartMs: true,
+          },
+        })
+        const topClip = candidates.find((clip) => !isClipUserHidden(clip.aiMeta)) ?? null
+        if (topClip?.posterKey) {
+          thumbKey = topClip.posterKey
+          thumbFallbackMissUntil.delete(p.id)
+          await prisma.clipProject.update({ where: { id: p.id }, data: { thumbKey } }).catch(() => {})
+          console.info('[clips:projects] preview_backfill poster_found', {
+            projectId: p.id, clipId: topClip.id, elapsedMs: Date.now() - started,
           })
-          if (topClip?.posterKey) {
-            thumbKey = topClip.posterKey
-            thumbFallbackMissUntil.delete(p.id)
-            await prisma.clipProject.update({ where: { id: p.id }, data: { thumbKey } }).catch(() => {})
-          } else {
+        } else if (topClip) {
+          const negUntil = thumbFallbackMissUntil.get(p.id)
+          if (negUntil == null || negUntil <= Date.now()) {
+            try {
+              const queued = await enqueueClipCardThumbnail(p.workspaceId, topClip.id, 'page_load_backfill')
+              console.info('[clips:projects] preview_backfill thumbnail_queued', {
+                projectId: p.id, clipId: topClip.id, queued,
+              })
+            } catch (error) {
+              console.warn('[clips:projects] preview_backfill thumbnail_failed', {
+                projectId: p.id, clipId: topClip.id, error: String(error),
+              })
+            }
             if (thumbFallbackMissUntil.size >= 5000) thumbFallbackMissUntil.clear()
             thumbFallbackMissUntil.set(p.id, Date.now() + THUMB_FALLBACK_NEG_TTL_MS)
           }
+
+          let sourceKey = topClip.sourceSegKey
+          let sourceOffsetMs = Number(topClip.sourceSegStartMs ?? topClip.startMs)
+          if (!sourceKey) {
+            const source = await prisma.clipProject.findUnique({
+              where: { id: p.id },
+              select: {
+                proxyKey: true,
+                upload: { select: { key: true } },
+              },
+            })
+            sourceKey = source?.proxyKey || source?.upload?.key || null
+            sourceOffsetMs = source?.proxyKey ? p.rangeStartMs : 0
+          }
+          if (sourceKey) {
+            try {
+              sourceFrameUrl = await createReadableSignedUrl(sourceKey, THUMB_TTL)
+              sourceFrameStartMs = Math.max(0, topClip.startMs - sourceOffsetMs)
+              console.info('[clips:projects] preview_backfill source_frame_ready', {
+                projectId: p.id,
+                clipId: topClip.id,
+                sourceFrameStartMs,
+              })
+            } catch (error) {
+              console.warn('[clips:projects] preview_backfill source_frame_failed', {
+                projectId: p.id, clipId: topClip.id, error: String(error),
+              })
+            }
+          }
         }
+        console.info('[clips:projects] preview_backfill end', {
+          projectId: p.id,
+          clipId: topClip?.id ?? null,
+          hasPoster: Boolean(thumbKey),
+          hasSourceFrame: Boolean(sourceFrameUrl),
+          elapsedMs: Date.now() - started,
+        })
       }
       let thumbUrl: string | null = null
       if (thumbKey) {
         try {
           thumbUrl = await createReadableSignedUrl(thumbKey, THUMB_TTL)
-        } catch {
+        } catch (error) {
+          console.warn('[clips:projects] preview_sign_failed', { projectId: p.id, error: String(error) })
           thumbUrl = null
         }
       }
@@ -146,7 +231,7 @@ export async function listClipProjectsForPage(
         progress: p.progress,
         error: p.error,
         transcriptKey: p.transcriptKey,
-        thumbKey: p.thumbKey,
+        thumbKey,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
         createdById: p.createdById,
@@ -157,6 +242,8 @@ export async function listClipProjectsForPage(
         clipCount: countByProject.get(p.id) ?? 0,
         durationMs: Math.max(0, p.rangeEndMs - p.rangeStartMs),
         thumbUrl: thumbUrl ?? t2v?.sceneThumb ?? null,
+        sourceFrameUrl,
+        sourceFrameStartMs,
         ownerName: ownerNameById.get(p.createdById) ?? null,
         isPublished: publishedProjectIds.has(p.id),
         publishedAt: publishedAtByProject.get(p.id)?.toISOString() ?? null,

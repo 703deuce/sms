@@ -36,10 +36,12 @@ export function ProjectCard({
   const { clipCount, thumbUrl, durationMs, t2vSceneCount } = project
   const href = t2vProjectHref(project)
   const displayThumb = thumbUrl ?? project.sourceThumbUrl ?? null
+  const sourceFrameUrl = project.sourceFrameUrl ?? null
+  const sourceFrameStartMs = project.sourceFrameStartMs ?? 0
   const isDraft = project.status === 'DRAFT'
   const failed = project.status === 'FAILED'
-  const noThumb = !displayThumb
-  const showThumbOverlay = processing && displayThumb
+  const noThumb = !displayThumb && !sourceFrameUrl
+  const showThumbOverlay = processing && Boolean(displayThumb || sourceFrameUrl)
   const showPlaceholderStatus = (processing || failed) && noThumb
   const KindIcon = isT2v ? Clapperboard : project.sourceUrl ? Radio : Film
 
@@ -69,6 +71,27 @@ export function ProjectCard({
       <div className="relative aspect-video bg-muted">
         {displayThumb ? (
           <img src={displayThumb} alt="" className="size-full object-cover" />
+        ) : sourceFrameUrl ? (
+          <video
+            src={sourceFrameUrl}
+            className="pointer-events-none size-full object-cover"
+            muted
+            playsInline
+            preload="metadata"
+            aria-hidden
+            data-testid="project-source-frame"
+            onLoadedMetadata={(event) => {
+              const video = event.currentTarget
+              const target = Math.max(0, sourceFrameStartMs / 1000)
+              if (Number.isFinite(video.duration) && video.duration > 0) {
+                video.currentTime = Math.min(target, Math.max(0, video.duration - 0.05))
+              }
+              console.info('[clips:projects] source_frame_seek', {
+                projectId: project.id,
+                sourceFrameStartMs,
+              })
+            }}
+          />
         ) : (
           <div
             className="absolute inset-0 grid place-items-center bg-gradient-to-br from-secondary to-card"

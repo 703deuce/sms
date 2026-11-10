@@ -4,6 +4,8 @@ export type ClipProjectListItem = ClipProjectListRow & {
   clipCount: number
   thumbUrl: string | null
   sourceThumbUrl?: string | null
+  sourceFrameUrl?: string | null
+  sourceFrameStartMs?: number
   durationMs: number
   ownerName?: string | null
   isPublished?: boolean
