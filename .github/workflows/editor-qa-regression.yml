@@ -136,8 +136,8 @@ jobs:
             tests/motion-graphics-contract.test.ts \
             tests/motion-graphics-text-adapter.test.ts \
             tests/motion-request-limit.test.ts \
-            tests/caption-export-v1.test.ts \
-            tests/export-xml-srt-route-auth.test.ts
+            tests/export-xml-srt-route-auth.test.ts \
+            tests/export-batch.test.ts
 
   captions-worker-regression:
     runs-on: ubuntu-latest

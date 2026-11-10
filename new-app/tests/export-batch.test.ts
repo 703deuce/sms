@@ -97,8 +97,8 @@ describe('enqueueProjectExportAll', () => {
       words: driftedWords,
       bounds: { clipStartMs: 0, clipEndMs: 2_000 },
     })
-    const { enqueueProjectExportAll } = await import('@/lib/server/clips/export-batch')
-    const { CaptionSyncRequiredError } = await import('@/lib/clips/caption-sync-guard')
+    const { enqueueProjectExportAll } = await import('../lib/server/clips/export-batch')
+    const { CaptionSyncRequiredError } = await import('../lib/clips/caption-sync-guard')
     await expect(
       enqueueProjectExportAll('ws_1', 'proj_1', { aspect: '9:16', resolution: '720p' }),
     ).rejects.toBeInstanceOf(CaptionSyncRequiredError)
@@ -124,7 +124,7 @@ describe('enqueueProjectExportAll', () => {
       words: driftedWords,
       bounds: { clipStartMs: 0, clipEndMs: 2_000 },
     })
-    const { enqueueProjectExportAll } = await import('@/lib/server/clips/export-batch')
+    const { enqueueProjectExportAll } = await import('../lib/server/clips/export-batch')
     const result = await enqueueProjectExportAll('ws_1', 'proj_1', {
       aspect: '9:16',
       resolution: '720p',
