@@ -23,7 +23,7 @@ export type WriteYoutubeClip = (input: {
   runId: string
   option: YoutubeVideoOption
   sources: YoutubeVideoIngestedSource[]
-}) => Promise<{ projectId: string; clipId: string; durationMs: number }>
+}) => Promise<{ projectId: string; clipId: string; durationMs: number; renderId?: string }>
 
 export type YoutubeVideoPipelineDeps = {
   importer: YoutubeVideoImporter

@@ -18,6 +18,7 @@ export const YOUTUBE_VIDEO_STAGES = [
   'planning',
   'assembling',
   'applying',
+  'rendering',
 ] as const
 
 export type YoutubeVideoStage = (typeof YOUTUBE_VIDEO_STAGES)[number]
@@ -51,6 +52,7 @@ export type YoutubeVideoChapter = {
 export type YoutubeVideoResult = {
   clipId: string
   projectId: string
+  renderId?: string | null
   editorUrl: string
   durationMs: number
   durationSeconds: number

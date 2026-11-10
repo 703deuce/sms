@@ -83,6 +83,7 @@ export type YoutubeVideoController = {
   retry: () => Promise<void>
   choose: (optionId: string) => Promise<void>
   refresh: () => Promise<void>
+  restoreRun: (runId: string) => Promise<void>
   requestRevert: () => void
   cancelRevert: () => void
   confirmRevert: () => Promise<void>
@@ -102,6 +103,8 @@ export function createYoutubeVideoController(
   let generation = 0
 
   function emit(patch: Partial<YoutubeVideoSessionState>) {
+    const previousPhase = state.phase
+    const previousStatus = state.run?.status ?? null
     state = { ...state, ...patch }
     if (patch.run !== undefined) {
       const nextPhase = phaseFromRun(patch.run, state.phase)
@@ -121,6 +124,15 @@ export function createYoutubeVideoController(
               ? null
               : state.error,
       }
+    }
+    const nextStatus = state.run?.status ?? null
+    if (previousPhase !== state.phase || previousStatus !== nextStatus) {
+      // Never log sources, signed media URLs, instructions, or transcript text.
+      console.info('[youtube-video:client]', {
+        event: 'phase_change', runId: state.run?.runId ?? null,
+        from: previousPhase, to: state.phase,
+        fromStatus: previousStatus, toStatus: nextStatus,
+      })
     }
     for (const l of listeners) l()
   }
@@ -181,8 +193,10 @@ export function createYoutubeVideoController(
       clientRequestId,
     })
     try {
+      console.info('[youtube-video:client]', { event: 'run_create_request', sourceCount: sources.length })
       const run = await client.createRun(body, clientRequestId)
       if (disposed || gen !== generation) return
+      console.info('[youtube-video:client]', { event: 'run_created', runId: run.runId, status: run.status })
       emit({ run, submitLocked: false, phase: settled(run) ? phaseFromRun(run, 'polling') : 'polling' })
       if (!settled(run)) await pollUntilSettled(run.runId, gen)
       else emit({ phase: phaseFromRun(run, 'polling'), run })
@@ -226,11 +240,13 @@ export function createYoutubeVideoController(
     },
     async choose(optionId) {
       if (!state.run || state.submitLocked) return
+      console.info('[youtube-video:client]', { event: 'choice_start', runId: state.run.runId, optionId })
       const gen = generation
       emit({ phase: 'choosing', chooseError: null, submitLocked: true })
       try {
         const run = await client.chooseOption(state.run.runId, optionId)
         if (disposed || gen !== generation) return
+        console.info('[youtube-video:client]', { event: 'choice_response', runId: run.runId, status: run.status })
         emit({ run, submitLocked: false, chooseError: null, phase: 'polling' })
         if (run.status === 'ready' || run.status === 'failed' || run.status === 'canceled') {
           emit({ phase: phaseFromRun(run, 'polling'), run })
@@ -261,6 +277,24 @@ export function createYoutubeVideoController(
           return
         }
         emit({ submitLocked: false, phase: 'awaiting_choice', chooseError: toError(e).message })
+      }
+    },
+    async restoreRun(runId) {
+      if (state.run?.runId === runId) return
+      const gen = ++generation
+      console.info('[youtube-video:client]', { event: 'restore_start', runId })
+      emit({ phase: 'polling', submitLocked: false, error: null, chooseError: null })
+      try {
+        const run = await client.getRun(runId)
+        if (disposed || gen !== generation) return
+        console.info('[youtube-video:client]', { event: 'restore_loaded', runId, status: run.status })
+        emit({ run, phase: phaseFromRun(run, 'polling'), submitLocked: false })
+        if (!settled(run)) await pollUntilSettled(runId, gen)
+      } catch (e) {
+        if (disposed || gen !== generation) return
+        console.error('[youtube-video:client]', { event: 'restore_failed', runId,
+          errorCode: e instanceof YoutubeVideoHttpError ? e.code : 'ERROR' })
+        emit({ phase: 'failed', submitLocked: false, error: toError(e) })
       }
     },
     async refresh() {

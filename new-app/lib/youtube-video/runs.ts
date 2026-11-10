@@ -16,6 +16,14 @@ export type WriteChosenClip = NonNullable<YoutubeVideoPipelineDeps['writeClip']>
 
 export type YoutubeVideoRunDeps = {
   store: YoutubeVideoRunStore
+  /** Check the durable RENDER_CLIP job and sign URLs only after outputKey exists. */
+  resolveRender?: (workspaceId: string, renderId: string, runId: string) => Promise<{
+    status: 'queued' | 'rendering' | 'ready' | 'failed'
+    playbackUrl: string | null
+    downloadUrl: string | null
+    thumbnailUrl: string | null
+    error?: string | null
+  }>
   now?: () => Date
   pipeline: YoutubeVideoPipelineDeps
   writeClip: WriteChosenClip
@@ -39,6 +47,63 @@ function view(record: YoutubeVideoRunRecord): YoutubeVideoRunView {
 
 const STALE_PLANNING_MS = 2 * 60_000
 
+async function advanceRender(
+  record: YoutubeVideoRunRecord, deps: YoutubeVideoRunDeps,
+): Promise<YoutubeVideoRunRecord> {
+  const renderId = record.result?.renderId
+  if (!renderId || !deps.resolveRender) return record
+  try {
+    const progress = await traceYoutubeRunStep(record.id, 'render_status', () =>
+      deps.resolveRender!(record.workspaceId, renderId, record.id),
+      { projectId: record.result!.projectId },
+    )
+    if (progress.status === 'failed') {
+      youtubeRunEvent(record.id, 'render_status', 'failed', { projectId: record.result!.projectId })
+      return deps.store.update(record.workspaceId, record.id, {
+        status: 'failed', stage: null,
+        failureCode: 'render_failed',
+        failureMessage: progress.error || 'Video rendering failed. Please try again.',
+      })
+    }
+    if (progress.status !== 'ready') {
+      youtubeRunEvent(record.id, 'render_status', 'waiting', {
+        projectId: record.result!.projectId, status: progress.status,
+      })
+      return record
+    }
+    if (!progress.playbackUrl || !progress.downloadUrl) {
+      youtubeRunEvent(record.id, 'render_status', 'url_pending', { projectId: record.result!.projectId })
+      return record
+    }
+    youtubeRunEvent(record.id, 'render_status', 'ready', { projectId: record.result!.projectId })
+    return deps.store.update(record.workspaceId, record.id, {
+      status: 'ready', stage: null, progressPercent: 100,
+      result: {
+        ...record.result!,
+        playbackUrl: progress.playbackUrl,
+        downloadUrl: progress.downloadUrl,
+        thumbnailUrl: progress.thumbnailUrl,
+      },
+    })
+  } catch (err) {
+    youtubeRunEvent(record.id, 'render_status', 'check_failed', {
+      projectId: record.result!.projectId,
+      errorCode: err instanceof YoutubeVideoError ? err.code : 'render_poll_failed',
+    })
+    // Storage/pooler transient errors must not make a completed clip disappear.
+    return record
+  }
+}
+
+async function maybeAutoPickOnlyStory(
+  record: YoutubeVideoRunRecord, deps: YoutubeVideoRunDeps,
+): Promise<YoutubeVideoRunRecord> {
+  if (record.options?.length !== 1) return record
+  youtubeRunEvent(record.id, 'story_choice', 'auto_pick_single_option', { optionCount: 1 })
+  await chooseYoutubeVideoOption(record.workspaceId, record.id, record.options[0]!.id, deps)
+  return (await deps.store.get(record.workspaceId, record.id)) ?? record
+}
+
 async function failRun(row: YoutubeVideoRunRecord, deps: YoutubeVideoRunDeps, err: unknown): Promise<YoutubeVideoRunRecord> {
   const code = err instanceof YoutubeVideoError ? err.code : 'pipeline_failed'
   youtubeRunEvent(row.id, 'run', 'failed', { errorCode: code })
@@ -53,6 +118,7 @@ async function failRun(row: YoutubeVideoRunRecord, deps: YoutubeVideoRunDeps, er
 async function advanceRun(
   record: YoutubeVideoRunRecord, deps: YoutubeVideoRunDeps, creating = false,
 ): Promise<YoutubeVideoRunRecord> {
+  if (record.status === 'running' && record.stage === 'rendering') return advanceRender(record, deps)
   if (['ready', 'failed', 'canceled', 'awaiting_choice'].includes(record.status) || record.chosenOptionId) return record
   const staleBefore = new Date(Date.now() - STALE_PLANNING_MS).toISOString()
   if (record.status === 'running' && record.stage === 'planning' && record.updatedAt >= staleBefore) {
@@ -123,14 +189,15 @@ async function advanceRun(
       () => prepareFromReadyYoutubeSources(ingested, deps.pipeline.proposeOptions),
       { sourceCount: ingested.length, wordCount: ingested.reduce((sum, source) => sum + source.words.length, 0) },
     )
-    return traceYoutubeRunStep(
-      current.id, 'awaiting_choice',
+    const planned = await traceYoutubeRunStep(
+      current.id, 'story_options_saved',
       () => deps.store.update(current.workspaceId, current.id, {
         status: 'awaiting_choice', stage: null, progressPercent: 70,
         ingested: prepared.ingested, options: prepared.options, creditsEstimated: prepared.creditsEstimated,
       }),
       { optionCount: prepared.options.length },
     )
+    return maybeAutoPickOnlyStory(planned, deps)
   } catch (err) {
     return failRun(current, deps, err)
   }
@@ -179,6 +246,19 @@ export async function getYoutubeVideoRun(
   youtubeRunEvent(runId, 'poll_decision', 'read', { status: record.status })
   const advanced = await advanceRun(record, deps)
   youtubeRunEvent(runId, 'poll_decision', 'return', { status: advanced.status })
+  // Refresh expired browser signed URLs even for already-finished runs.
+  if (advanced.status === 'ready' && advanced.result?.renderId && deps.resolveRender) {
+    const media = await traceYoutubeRunStep(runId, 'ready_media_refresh', () =>
+      deps.resolveRender!(workspaceId, advanced.result!.renderId!, runId))
+    if (media.status === 'ready' && media.playbackUrl && media.downloadUrl) {
+      return view({ ...advanced, result: {
+        ...advanced.result!,
+        playbackUrl: media.playbackUrl,
+        downloadUrl: media.downloadUrl,
+        thumbnailUrl: media.thumbnailUrl,
+      } })
+    }
+  }
   return view(advanced)
 }
 
@@ -210,12 +290,18 @@ export async function chooseYoutubeVideoOption(
         workspaceId, createdById: record.createdById, runId, option, sources: record.ingested,
       }), { sourceCount: record.ingested.length })
     const result: YoutubeVideoResult = await traceYoutubeRunStep(runId, 'applying', () => assembleChosenOption(option, written))
+    if (written.renderId && deps.resolveRender) {
+      // The renderer owns the real output. Do not claim video READY while it is
+      // QUEUED / RENDERING and no signed MP4 URL exists yet.
+      const waiting = await traceYoutubeRunStep(runId, 'render_wait_persist', () => deps.store.update(workspaceId, runId, {
+        status: 'running', stage: 'rendering', progressPercent: 90,
+        chosenOptionId: optionId, result,
+      }), { projectId: result.projectId })
+      return view(await advanceRender(waiting, deps))
+    }
     const ready = await traceYoutubeRunStep(runId, 'result_ready', () => deps.store.update(workspaceId, runId, {
-      status: 'ready',
-      stage: null,
-      progressPercent: 100,
-      chosenOptionId: optionId,
-      result,
+      status: 'ready', stage: null, progressPercent: 100,
+      chosenOptionId: optionId, result,
     }))
     return view(ready)
   } catch (err) {

@@ -319,8 +319,26 @@ export async function createClipProjectFromImportUrl(
   return project
 }
 
-export function parseSettings(raw: unknown): ClipProjectSettings {
-  return withAutoContentDetection(clipProjectSettingsSchema.parse(raw))
+export function parseSettings(raw: unknown, projectId?: string): ClipProjectSettings {
+  const received = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown> : {}
+  if (received.v == null) {
+    console.info('[clipper:settings]', {
+      action: 'legacy_missing_v', projectId: projectId ?? 'unknown',
+      settingsVersion: defaultClipSettings().v,
+    })
+  }
+  const parsed = clipProjectSettingsSchema.parse({
+    ...defaultClipSettings(),
+    ...received,
+    // Only missing versions are repaired: a known incompatible version is
+    // still rejected rather than silently interpreted as the current schema.
+    v: received.v ?? defaultClipSettings().v,
+  })
+  console.info('[clipper:settings]', {
+    action: 'validated', projectId: projectId ?? 'unknown', settingsVersion: parsed.v,
+  })
+  return withAutoContentDetection(parsed)
 }
 
 export async function createClipProjectFromPrompt(

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Page, PageHeader } from '../app/page-primitives'
 import { parseStreamUrl } from '../../lib/streamer/url'
 import { YOUTUBE_VIDEO_MAX_SOURCES, YOUTUBE_VIDEO_URL_CAP_HOURS } from '../../lib/youtube-video-ui/paths'
@@ -23,6 +23,26 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
   const inputRef = useRef<HTMLInputElement>(null)
   const busy = state.submitLocked || uploading
   const sourceCount = files.length + urlSources.length
+
+  // Bookmark the run, not source uploads or local-only form state. A reload can
+  // resume polling, choice, render and final playback from the durable run id.
+  useEffect(() => {
+    const runId = new URLSearchParams(window.location.search).get('run')
+    if (runId) {
+      console.info('[youtube-video:client]', { event: 'url_restore', runId })
+      void controller.restoreRun(runId)
+    }
+  }, [controller])
+
+  useEffect(() => {
+    const runId = state.run?.runId
+    if (!runId) return
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('run') === runId) return
+    url.searchParams.set('run', runId)
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash)
+    console.info('[youtube-video:client]', { event: 'url_run_saved', runId })
+  }, [state.run?.runId])
 
   function addFiles(list: FileList | File[]) {
     const incoming = Array.from(list).filter((f) => f.size > 0)
@@ -61,15 +81,23 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
     }
     setUploadError(null)
     setUploading(true)
+    console.info('[youtube-video:client]', { event: 'upload_begin', sourceCount })
     try {
       const uploaded: YoutubeVideoSource[] = []
       for (const item of files) {
+        console.info('[youtube-video:client]', { event: 'source_upload_start', sourceIndex: uploaded.length })
         uploaded.push(await uploadFileToProject(item.file))
+        console.info('[youtube-video:client]', { event: 'source_upload_done',
+          projectId: uploaded[uploaded.length - 1]?.kind === 'upload'
+            ? (uploaded[uploaded.length - 1] as { projectId: string }).projectId : null })
       }
       const sources = [...uploaded, ...urlSources]
       controller.setSources(sources)
       await controller.submit({ sources, title: state.title })
+      console.info('[youtube-video:client]', { event: 'upload_and_submit_complete', sourceCount: sources.length })
     } catch (e) {
+      console.error('[youtube-video:client]', { event: 'upload_or_submit_failed',
+        errorType: e instanceof Error ? e.name : 'unknown' })
       setUploadError(e instanceof Error ? e.message : 'Upload failed.')
     } finally {
       setUploading(false)
@@ -213,7 +241,7 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
           </section>
         )}
 
-        {run && options.length > 0 && run.status === 'awaiting_choice' && (
+        {run && options.length > 1 && run.status === 'awaiting_choice' && (
           <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4" data-testid="youtube-video-options">
             <h2 className="text-sm font-medium">Choose a story</h2>
             {state.chooseError && (

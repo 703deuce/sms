@@ -5,6 +5,7 @@ import { getPrisma } from '@/lib/server/db'
 import { projectWordsKey } from '@/lib/storage'
 import { AiCaptionsError } from '@/lib/ai-captions/errors'
 import { captionsOnlyProjectSettings } from '@/lib/ai-captions/auto-agent-guard'
+import { clipProjectSettingsSchema, defaultClipSettings } from '@/lib/clips/settings'
 
 /**
  * Create a captions-only project from a completed upload.
@@ -32,8 +33,21 @@ export async function createCaptionsOnlyProject(
   const projectId = createId('proj')
   const durationMs = upload.durationMs ?? 0
   const title = upload.filename.replace(/\.[^.]+$/, '') || 'Captions'
-  const settings = captionsOnlyProjectSettings(durationMs)
+  const settings = {
+    ...clipProjectSettingsSchema.parse({
+      ...defaultClipSettings(),
+      rangeStartMs: 0,
+      rangeEndMs: Math.max(0, durationMs),
+    }),
+    ...captionsOnlyProjectSettings(durationMs),
+  }
+  console.info('[youtube-video:settings]', {
+    action: 'captions_only_defaults_v2', projectId, settingsVersion: settings.v,
+    transcribeOnly: settings.captionsOnly,
+  })
 
+  const started = Date.now()
+  console.info('[youtube-video:source]', { action: 'project_create_begin', projectId, workspaceId })
   await prisma.clipProject.create({
     data: {
       id: projectId,
@@ -51,6 +65,7 @@ export async function createCaptionsOnlyProject(
       sourceKind: 'upload',
     },
   })
+  console.info('[youtube-video:source]', { action: 'project_created', projectId, elapsedMs: Date.now() - started })
   await prisma.clipJob.create({
     data: {
       id: createId('job'),
@@ -60,5 +75,6 @@ export async function createCaptionsOnlyProject(
       payload: { agentOnly: true },
     },
   })
+  console.info('[youtube-video:source]', { action: 'transcribe_job_queued', projectId, elapsedMs: Date.now() - started })
   return { projectId }
 }

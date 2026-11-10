@@ -144,4 +144,55 @@ describe('youtube-video runs', () => {
     expect((await getYoutubeVideoRun('ws_pending_url', created.view.runId, deps)).status).toBe('awaiting_choice')
     expect(imports).toBe(1)
   })
+  it('auto-selects the only supported story without asking the viewer to choose', async () => {
+    const source = sourceFromWords('proj_one', podcastScript)
+    const deps = testDeps(new Map([['proj_one', source]]))
+    deps.pipeline.proposeOptions = () => [{
+      id: 'opt_solo',
+      title: 'One truthful story',
+      premise: 'A source-grounded story',
+      beats: [{ label: 'Beginning', sourceId: 'proj_one', startMs: 0, endMs: 6000 }],
+    }]
+    const run = await createYoutubeVideoRun(
+      'ws_solo', null,
+      { sources: [{ kind: 'upload', projectId: 'proj_one' }], clientRequestId: 'req_one_option' },
+      null, deps,
+    )
+    expect(run.view.status).toBe('ready')
+    expect(run.view.options).toBeNull()
+    expect(run.view.result?.clipId).toBe('clip_out')
+  })
+
+  it('waits for the actual render and returns signed media URLs only once READY', async () => {
+    const source = sourceFromWords('proj_render_source', podcastScript)
+    const deps = testDeps(new Map([['proj_render_source', source]]))
+    deps.pipeline.proposeOptions = () => [{
+      id: 'opt_render',
+      title: 'Render pending',
+      premise: 'Real video output',
+      beats: [{ label: 'Story', sourceId: 'proj_render_source', startMs: 0, endMs: 6000 }],
+    }]
+    deps.writeClip = async () => ({
+      clipId: 'clip_rendered', projectId: 'proj_output', durationMs: 6000, renderId: 'rnd_one',
+    })
+    let ready = false
+    deps.resolveRender = async () => ready ? {
+      status: 'ready', playbackUrl: 'https://cdn.example/play.mp4',
+      downloadUrl: 'https://cdn.example/download.mp4', thumbnailUrl: 'https://cdn.example/poster.jpg',
+    } : { status: 'rendering', playbackUrl: null, downloadUrl: null, thumbnailUrl: null }
+    const created = await createYoutubeVideoRun(
+      'ws_render', null,
+      { sources: [{ kind: 'upload', projectId: 'proj_render_source' }], clientRequestId: 'req_wait_render' },
+      null, deps,
+    )
+    expect(created.view.status).toBe('running')
+    expect(created.view.stage).toBe('rendering')
+    expect((await getYoutubeVideoRun('ws_render', created.view.runId, deps)).status).toBe('running')
+    ready = true
+    const published = await getYoutubeVideoRun('ws_render', created.view.runId, deps)
+    expect(published.status).toBe('ready')
+    expect(published.result?.playbackUrl).toBe('https://cdn.example/play.mp4')
+    expect(published.result?.downloadUrl).toBe('https://cdn.example/download.mp4')
+    expect(published.result?.thumbnailUrl).toBe('https://cdn.example/poster.jpg')
+  })
 })

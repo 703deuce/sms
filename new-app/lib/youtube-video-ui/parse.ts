@@ -119,6 +119,7 @@ function parseResult(raw: Record<string, unknown>, fallback: Record<string, unkn
   return {
     clipId,
     projectId,
+    renderId: str(resultRaw.renderId) ?? null,
     editorUrl: str(resultRaw.editorUrl) ?? fallbackEditorUrl(projectId, clipId),
     durationMs,
     durationSeconds,

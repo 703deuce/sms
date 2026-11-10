@@ -3,6 +3,7 @@ import 'server-only'
 import type { Prisma } from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
+import { parseSettings } from '@/lib/server/clips/projects'
 
 export async function createAiProducerOutputProject(a: {
   workspaceId: string
@@ -19,6 +20,15 @@ export async function createAiProducerOutputProject(a: {
   })
   const projectId = createId('proj')
   const clipId = createId('clip')
+  const sourceSettings = p.settings && typeof p.settings === 'object' && !Array.isArray(p.settings)
+    ? p.settings as Record<string, unknown> : {}
+  const settings = { ...sourceSettings, ...parseSettings(sourceSettings, a.sourceProjectId), aiProducerRunId: a.runId }
+  // Output projects are editable video timelines, not transcribe-only source jobs.
+  delete settings.captionsOnly
+  console.info('[youtube-video:settings]', {
+    action: 'output_settings_validated', runId: a.runId,
+    projectId, sourceProjectId: a.sourceProjectId, settingsVersion: settings.v,
+  })
   await prisma.$transaction(async (tx) => {
     await tx.clipProject.create({
       data: {
@@ -28,7 +38,7 @@ export async function createAiProducerOutputProject(a: {
         title: a.title,
         uploadId: p.uploadId,
         sourceUrl: p.sourceUrl,
-        settings: { ...((p.settings ?? {}) as object), aiProducerRunId: a.runId } as Prisma.InputJsonValue,
+        settings: settings as Prisma.InputJsonValue,
         rangeStartMs: p.rangeStartMs,
         rangeEndMs: p.rangeEndMs,
         status: p.status,
@@ -57,6 +67,9 @@ export async function createAiProducerOutputProject(a: {
         scores: {},
       },
     })
+  })
+  console.info('[youtube-video:output]', {
+    action: 'project_clip_created', runId: a.runId, projectId, clipId,
   })
   return { projectId, clipId }
 }

@@ -315,4 +315,18 @@ describe('youtube video page adapter', () => {
     expect(waiting.status).toBe('waiting_for_source')
     expect(waiting.stage).toBe('waiting_for_source')
   })
+  it('restores the persisted run on refresh and shows its terminal result', async () => {
+    const fetchImpl = async (input: RequestInfo | URL) => {
+      if (String(input) === YOUTUBE_VIDEO_PATHS.run('yvrun_restore')) {
+        return json(200, { data: { ...READY_RUN, runId: 'yvrun_restore' } })
+      }
+      throw new Error('unexpected URL')
+    }
+    const client = createYoutubeVideoClient({ fetch: fetchImpl as unknown as typeof fetch })
+    const controller = createYoutubeVideoController({ client, sleep: async () => {} })
+    await controller.restoreRun('yvrun_restore')
+    expect(controller.getState().phase).toBe('ready')
+    expect(controller.getState().run?.runId).toBe('yvrun_restore')
+    expect(controller.getState().run?.result?.editorUrl).toBe('/app/clips/proj_1/edit/clip_1')
+  })
 })
