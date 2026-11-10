@@ -23,14 +23,18 @@ async function readAdVoiceWords(workspaceId: string, runId: string): Promise<AdV
   try {
     const raw = await getClipStorage(storageDriverName()).getJson<unknown>(adVoiceWordsKey(workspaceId, runId))
     if (!Array.isArray(raw)) return []
-    const words = raw.filter((row): row is AdVoiceWord => {
-      if (!row || typeof row !== 'object') return false
+    const words: AdVoiceWord[] = []
+    for (const row of raw) {
+      if (!row || typeof row !== 'object') continue
       const word = row as Partial<AdVoiceWord>
-      return typeof word.w === 'string'
-        && Number.isFinite(word.s) && Number.isFinite(word.e)
-        && Number.isInteger(word.i) && Number.isInteger(word.spk)
-        && Number(word.e) > Number(word.s)
-    })
+      const s = Number(word.s)
+      const e = Number(word.e)
+      const i = Number(word.i)
+      const spk = Number(word.spk)
+      if (typeof word.w !== 'string' || !Number.isFinite(s) || !Number.isFinite(e)
+        || !Number.isInteger(i) || !Number.isInteger(spk) || e <= s) continue
+      words.push({ w: word.w, s, e, i, spk })
+    }
     console.info('[ad-studio:b3] voice_words_read_complete', { runId, wordCount: words.length })
     return words
   } catch (err) {
