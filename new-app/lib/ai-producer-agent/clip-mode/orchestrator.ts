@@ -359,6 +359,8 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       })
       const reviewIssues=item.out.editorialHandoff?.review?.issues??[]
       const pipeline=clipPipelineMode(item.type==='continuous'?'moment':'story')
+      clipperStageLog({stage:'publish',action:'clip_begin',runId,
+        projectId:source.projectId,clipId:item.out.clipId,type:item.type})
       await publishClipScore({workspaceId:ctx.workspaceId,clipId:item.out.clipId!,
         runId,score:item.score,finderScore:item.candidate.finderScore,
         qaPass:item.out.editorialHandoff?.review?.pass??null,
@@ -373,6 +375,12 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         topics:topicQueryFromInstruction(run.instruction)?[topicQueryFromInstruction(run.instruction)]:undefined,
         needsReview:item.out.needsReview===true,
       })
+      await prisma.aiProducerAgentRun.updateMany({
+        where: { id: runId, status: 'running' },
+        data: { phase: 'publishing' },
+      })
+      clipperStageLog({stage:'publish',action:'clip_saved',runId,
+        projectId:source.projectId,clipId:item.out.clipId,score:item.score,type:item.type})
       // Post-edit Motion is a decision stage, not the caption preset. It can
       // generate zero graphics; failures leave the usable clip intact.
       // needsReview clips get no auto Motion until the user reviews them.
@@ -1024,8 +1032,8 @@ async function finishRun(
   const lunaUsd = estimateLunaUsd(budget.lunaIn, budget.lunaOut)
   const costUsd = lunaUsd + budget.geminiUsd
   const terminalStatus = status === 'done' ? 'ready' : status
-  await prisma.aiProducerAgentRun.update({
-    where: { id: ctx.runId },
+  const finished = await prisma.aiProducerAgentRun.updateMany({
+    where: { id: ctx.runId, status: { notIn: ['recovering', 'ready', 'failed', 'canceled'] } },
     data: {
       status: terminalStatus,
       phase: 'finish',
@@ -1064,6 +1072,10 @@ async function finishRun(
       finishedAt: new Date(),
     },
   })
+  if (finished.count === 0) {
+    clipperStageLog({stage:'finish',action:'watchdog_or_terminal_won',runId:ctx.runId})
+    return
+  }
   const sourceProjectId = ctx.sources[0]?.projectId
   if (sourceProjectId) {
     const publishedCount = clipIds.length

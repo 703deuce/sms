@@ -33,6 +33,13 @@ export async function enqueueClipperRecoveryJob(projectId: string, reason: strin
 
   const project = await prisma.clipProject.findUnique({ where: { id: projectId } })
   if (!project || !clipperProjectNeedsRecovery(project.status)) return null
+  const unifiedRunId = ((project.settings ?? {}) as { unifiedClipRunId?: unknown }).unifiedClipRunId
+  if (typeof unifiedRunId === 'string' && unifiedRunId.trim()) {
+    console.info('[clipper:watchdog]', {
+      action: 'skip_unified_process_project_recovery', projectId, runId: unifiedRunId, reason,
+    })
+    return null
+  }
   if (isCaptionsOnlyProjectSettings(project.settings)) {
     console.info('[clipper:watchdog]', {
       action: 'skip_captions_only_recovery',

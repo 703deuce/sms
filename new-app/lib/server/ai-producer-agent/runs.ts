@@ -109,12 +109,44 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
     },
   })
   const anchorProjectId = input.sources[0]?.projectId
+  const durableUnified = input.storyMode === 'clip_unified_v1'
+  let queued = false
   try {
     const resolved = await resolveAiProducerSources(workspaceId, input.sources)
     const pid = resolved[0]?.projectId
-    if (pid) await enqueueAiProducerRunJob(row.id, pid)
-  } catch {
-    if (anchorProjectId) await enqueueAiProducerRunJob(row.id, anchorProjectId).catch(() => null)
+    if (pid) {
+      await enqueueAiProducerRunJob(row.id, pid)
+      queued = true
+    }
+  } catch (err) {
+    console.error('[clipper:unified:dispatch]', {
+      action: 'source_resolve_failed', runId: row.id, projectId: anchorProjectId,
+      errorType: err instanceof Error ? err.name : 'unknown',
+    })
+  }
+  if (!queued && anchorProjectId) {
+    try {
+      await enqueueAiProducerRunJob(row.id, anchorProjectId)
+      queued = true
+    } catch (err) {
+      console.error('[clipper:unified:dispatch]', {
+        action: 'job_enqueue_failed', runId: row.id, projectId: anchorProjectId,
+        errorType: err instanceof Error ? err.name : 'unknown',
+      })
+    }
+  }
+  if (durableUnified && !queued) {
+    await getPrisma().aiProducerAgentRun.update({
+      where: { id: row.id },
+      data: { status: 'failed', error: 'The clip worker could not start. Please retry.', finishedAt: new Date() },
+    })
+    throw new Error('unified_clip_worker_enqueue_failed')
+  }
+  if (durableUnified) {
+    console.info('[clipper:unified:dispatch]', {
+      action: 'worker_job_queued', runId: row.id, projectId: anchorProjectId,
+    })
+    return row
   }
   queueMicrotask(() => {
     runAiProducerAgent(row.id).catch(async (err) => {

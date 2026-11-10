@@ -17,6 +17,7 @@ import { fairQueueAheadForJob } from '@/lib/server/clips/job-queue-fairness'
 import { enqueueStreamerRecoveryJob } from '@/lib/server/streamer/recover-project'
 import { reapClipperProgressStalls } from '@/lib/server/clips/clipper-watchdog-reaper'
 import { resolveClipsReadyForStatus } from '@/lib/server/clips/project-clip-progress'
+import { reapStaleUnifiedRuns, unifiedRunIdFromSettings } from '@/lib/server/ai-producer-agent/unified-clip-recovery'
 
 const TERMINAL: ClipProjectStatus[] = ['READY', 'FAILED', 'CANCELED']
 
@@ -267,13 +268,42 @@ export async function reapStaleJobs() {
       OR: [{ lockedAt: { lt: heartbeatCutoff } }, { lockedAt: null }],
     },
     take: 30,
-    include: { project: { select: { id: true, status: true } } },
+    include: { project: { select: { id: true, status: true, settings: true } } },
   })
 
   let requeued = 0
   let failed = 0
 
+  // Salvage or gracefully fail interrupted unified runs before generic orphan
+  // handling can mistake them for PROCESS_PROJECT picker jobs.
+  const unifiedRecovered = await reapStaleUnifiedRuns()
+
   for (const job of stale) {
+    if (unifiedRunIdFromSettings(job.project.settings)) {
+      if (job.type === 'AI_PRODUCER_AGENT_RUN') {
+        console.info('[clipper:unified:reaper]', {
+          action: 'stale_worker_job', jobId: job.id, projectId: job.projectId,
+          runId: unifiedRunIdFromSettings(job.project.settings),
+        })
+        // A stale agent worker cannot be requeued to rerun candidates; that
+        // duplicates outputs. Saved clips are handled by the unified finalizer.
+        await prisma.clipJob.updateMany({
+          where: { id: job.id, status: 'RUNNING' },
+          data: {
+            status: 'FAILED', error: 'Unified agent worker interrupted; recovering saved clips.',
+            finishedAt: new Date(), lockedBy: null, lockedAt: null,
+          },
+        })
+        continue
+      }
+      if (job.type === 'PROCESS_PROJECT') {
+        console.info('[clipper:unified:reaper]', {
+          action: 'skip_stale_process_project', jobId: job.id, projectId: job.projectId,
+        })
+        continue
+      }
+    }
+
     if (shouldFailJobAfterStale(job.attempts)) {
       const msg =
         job.error?.slice(0, 200) ||
@@ -345,6 +375,13 @@ export async function reapStaleJobs() {
     take: 20,
   })
   for (const project of legacyOrphans) {
+    if (unifiedRunIdFromSettings(project.settings)) {
+      console.info('[clipper:unified:reaper]', {
+        action: 'skip_legacy_orphan', projectId: project.id,
+        runId: unifiedRunIdFromSettings(project.settings),
+      })
+      continue
+    }
     if (isCaptionsOnlyProjectSettings(project.settings)) {
       console.info('[clipper:watchdog]', { action: 'skip_captions_only_orphan', projectId: project.id, stage: project.stage })
       continue
@@ -365,6 +402,13 @@ export async function reapStaleJobs() {
     take: 15,
   })
   for (const project of clipperOrphans) {
+    if (unifiedRunIdFromSettings(project.settings)) {
+      console.info('[clipper:unified:reaper]', {
+        action: 'skip_process_project_orphan', projectId: project.id,
+        runId: unifiedRunIdFromSettings(project.settings),
+      })
+      continue
+    }
     if (isCaptionsOnlyProjectSettings(project.settings)) {
       console.info('[clipper:watchdog]', { action: 'skip_captions_only_orphan', projectId: project.id, stage: project.stage })
       continue
@@ -380,10 +424,17 @@ export async function reapStaleJobs() {
       status: { in: STUCK_PROJECT_STATUSES },
       updatedAt: { lt: stuckCutoff },
     },
-    select: { id: true, status: true },
+    select: { id: true, status: true, settings: true },
     take: 10,
   })
   for (const project of stuckProjects) {
+    if (unifiedRunIdFromSettings(project.settings)) {
+      console.info('[clipper:unified:reaper]', {
+        action: 'skip_generic_project_timeout', projectId: project.id,
+        runId: unifiedRunIdFromSettings(project.settings),
+      })
+      continue
+    }
     await prisma.$transaction([
       prisma.clipProject.update({
         where: { id: project.id },
@@ -409,5 +460,5 @@ export async function reapStaleJobs() {
   }
 
   const watchdogActs = await reapClipperProgressStalls()
-  return requeued + failed + watchdogActs
+  return unifiedRecovered + requeued + failed + watchdogActs
 }
