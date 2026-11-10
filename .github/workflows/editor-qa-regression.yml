@@ -135,7 +135,10 @@ jobs:
             tests/streamer-agent-batch-contract.test.ts \
             tests/motion-graphics-contract.test.ts \
             tests/motion-graphics-text-adapter.test.ts \
-            tests/motion-request-limit.test.ts
+            tests/motion-request-limit.test.ts \
+            tests/clip-needs-review.test.ts \
+            tests/needs-review-badge.test.tsx \
+            tests/needs-review-share-warning.test.tsx
 
   captions-worker-regression:
     runs-on: ubuntu-latest

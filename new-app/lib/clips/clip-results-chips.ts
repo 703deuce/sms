@@ -20,6 +20,10 @@ export type ClipAiMeta = {
   videoWhy?: string
   wordsPerSec?: number
   videoMomentMatchIou?: number
+  /** #1111: true when a leftover non-critical draft was published for review. Absent on older clips. */
+  needsReview?: boolean
+  /** Up to 10 editorial/QA issue strings; empty when needsReview is not true. */
+  needsReviewReasons?: string[]
 }
 
 const FALLBACK_REASON_RE =

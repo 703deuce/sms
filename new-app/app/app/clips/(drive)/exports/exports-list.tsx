@@ -9,7 +9,7 @@ import { StatusBadge } from '@/components/app/status'
 import { AspectGlyph } from '@/components/clips/ui/aspect-glyph'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import type { ExportRenderRow } from '@/lib/clips-api'
+import { clipsFetch, type ExportRenderRow } from '@/lib/clips-api'
 import { ExportErrorMessage } from '@/components/clips/export-error-message'
 import { retryFailedExportRender } from '@/lib/clips-api'
 import { Download, RotateCcw, Share2 } from 'lucide-react'
@@ -102,6 +102,8 @@ export function ExportsList({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [shareRenderId, setShareRenderId] = useState<string | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
+  const [shareAiMeta, setShareAiMeta] = useState<unknown>(undefined)
+  const [shareLoadingId, setShareLoadingId] = useState<string | null>(null)
 
   useEffect(() => {
     setRows(initialRows)
@@ -170,9 +172,23 @@ export function ExportsList({
     }
   }
 
-  const openShare = (renderId: string) => {
-    setShareRenderId(renderId)
-    setShareOpen(true)
+  const openShare = async (row: ExportRenderRow) => {
+    if (shareLoadingId) return
+    setShareRenderId(row.id)
+    setShareAiMeta(undefined)
+    setShareLoadingId(row.id)
+    try {
+      // Existing GET clip payload already includes aiMeta. Do not invent export-row fields.
+      if (row.clipId) {
+        const data = await clipsFetch<{ aiMeta?: unknown }>(`/api/clips/clips/${row.clipId}`)
+        setShareAiMeta(data?.aiMeta)
+      }
+    } catch {
+      setShareAiMeta(undefined)
+    } finally {
+      setShareLoadingId(null)
+      setShareOpen(true)
+    }
   }
 
   if (!rows.length) {
@@ -192,8 +208,12 @@ export function ExportsList({
         open={shareOpen}
         onOpenChange={(next) => {
           setShareOpen(next)
-          if (!next) setShareRenderId(null)
+          if (!next) {
+            setShareRenderId(null)
+            setShareAiMeta(undefined)
+          }
         }}
+        aiMeta={shareAiMeta}
       />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {(['all', 'ready', 'failed'] as const).map((f) => (
@@ -281,7 +301,7 @@ export function ExportsList({
                           Stems
                         </Button>
                       ) : null}
-                      <Button size="sm" variant="outline" onClick={() => openShare(r.id)}>
+                      <Button size="sm" variant="outline" disabled={shareLoadingId === r.id} onClick={() => void openShare(r)}>
                         <Share2 className="size-3.5" aria-hidden />
                         Share
                       </Button>
@@ -406,7 +426,7 @@ export function ExportsList({
                             Stems (.zip)
                           </Button>
                         ) : null}
-                        <Button size="sm" variant="outline" onClick={() => openShare(r.id)}>
+                        <Button size="sm" variant="outline" disabled={shareLoadingId === r.id} onClick={() => void openShare(r)}>
                           <Share2 className="size-3.5" aria-hidden />
                           Share
                         </Button>

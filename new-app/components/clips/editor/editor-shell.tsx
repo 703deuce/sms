@@ -4165,6 +4165,7 @@ export function EditorShell({
         timelineInOut={exportTimelineInOut}
         playheadMs={outputMs}
         posterUrl={posterUrl}
+        aiMeta={aiMeta}
       />
       </ClipperSurfaceErrorBoundary>
       <Dialog open={projectSettingsOpen} onOpenChange={setProjectSettingsOpen}>

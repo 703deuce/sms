@@ -112,6 +112,7 @@ export function ExportDialog({
   timelineInOut = null,
   playheadMs = 0,
   posterUrl = null,
+  aiMeta,
 }: {
   clipId: string
   title: string
@@ -141,6 +142,8 @@ export function ExportDialog({
   posterUrl?: string | null
   open: boolean
   onClose: () => void
+  /** Optional clip.aiMeta so share can warn when needsReview is true. Absent is treated as clean. */
+  aiMeta?: unknown
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
   const [removeDeadAir, setRemoveDeadAir] = useState(false)
@@ -1241,7 +1244,7 @@ export function ExportDialog({
           <Button variant="ghost" onClick={onClose}>Close</Button>
         </div>
       </div>
-      <ExportRenderShareDialog renderId={renderId} open={shareOpen} onOpenChange={setShareOpen} />
+      <ExportRenderShareDialog renderId={renderId} open={shareOpen} onOpenChange={setShareOpen} aiMeta={aiMeta} />
     </div>
   )
 }
