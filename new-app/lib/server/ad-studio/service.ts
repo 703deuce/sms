@@ -344,7 +344,7 @@ export async function retryAdRender(workspaceId: string, id: string, keyValue: u
 
   let row = await required(workspaceId, id)
   const saved = row.plan as unknown as SavedPlan | null
-  if (saved?._renderRetryKey === key.data && (row.status === 'stitching' || row.status === 'done')) {
+  if (saved?._renderRetryKey === key.data && ['stitching','done','failed'].includes(row.status)) {
     console.info('[ad-studio:b3] retry_render_idempotent_replay', { runId: id, status: row.status })
     if (row.status === 'stitching') {
       const clipId = await ensureAdEditorClip(workspaceId, id)
