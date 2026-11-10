@@ -10707,9 +10707,25 @@ model AdStudioRun {
   updatedAt       DateTime @updatedAt
   completedAt     DateTime?
   scenes          AdStudioScene[]
+  imageVariants   AdStudioImageVariant[]
 
   @@unique([workspaceId, idempotencyKey])
   @@index([workspaceId, createdAt])
+}
+
+model AdStudioImageVariant {
+  id          String @id
+  runId       String
+  index       Int
+  headline    String
+  cta         String
+  modelId     String
+  studioJobId String?
+  status      String @default("planned")
+  createdAt   DateTime @default(now())
+  run         AdStudioRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, index])
 }
 
 model AdStudioScene {
