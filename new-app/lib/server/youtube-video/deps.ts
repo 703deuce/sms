@@ -10,6 +10,7 @@ import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import { getClipStorage } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { buildYoutubeStoryEditAssembly } from '@/lib/youtube-video/story-edit-assembly'
+import { ytAdvanceLongForm } from '@/lib/youtube-video/pipeline/yt-orchestrator'
 import { traceYoutubeRunStep, youtubeRunEvent } from '@/lib/youtube-video/step-log'
 import { storyCutsInEditorialOrder } from '@/lib/youtube-video/assemble'
 import { cutsFromOption } from '@/lib/youtube-video/story-options'
@@ -23,6 +24,10 @@ import type { YoutubeVideoIngestedSource } from '@/lib/youtube-video/types'
 const ACTIVE_STATUSES = ['queued', 'importing', 'waiting_for_source', 'running', 'awaiting_choice']
 
 function fromRow(row: Record<string, unknown>): YoutubeVideoRunRecord {
+  const rawResult = row.result as Record<string, unknown> | null
+  const savedState = rawResult && typeof rawResult === 'object' &&
+    rawResult.__ytLongFormState && typeof rawResult.__ytLongFormState === 'object'
+    ? rawResult.__ytLongFormState as YoutubeVideoRunRecord['analysisState'] : null
   return {
     id: String(row.id),
     workspaceId: String(row.workspaceId),
@@ -36,10 +41,11 @@ function fromRow(row: Record<string, unknown>): YoutubeVideoRunRecord {
     requestHash: String(row.requestHash),
     sources: (row.sources ?? []) as YoutubeVideoRunRecord['sources'],
     ingested: (row.ingested ?? []) as YoutubeVideoRunRecord['ingested'],
+    analysisState: savedState,
     options: (row.options ?? null) as YoutubeVideoRunRecord['options'],
     chosenOptionId: (row.chosenOptionId ?? null) as string | null,
     creditsEstimated: (row.creditsEstimated ?? null) as number | null,
-    result: (row.result ?? null) as YoutubeVideoRunRecord['result'],
+    result: (savedState ? null : row.result ?? null) as YoutubeVideoRunRecord['result'],
     createdById: (row.createdById ?? null) as string | null,
     createdAt: new Date(row.createdAt as string | Date).toISOString(),
     updatedAt: new Date(row.updatedAt as string | Date).toISOString(),
@@ -50,6 +56,12 @@ function toData(patch: Partial<YoutubeVideoRunRecord>) {
   const data: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'createdAt' || key === 'updatedAt') continue
+    if (key === 'analysisState') {
+      // Reuse the existing JSONB result column only while planning. Once the
+      // rendered result is written, its typed payload takes over the column.
+      data.result = value == null ? null : toPrismaJson({ __ytLongFormState: value })
+      continue
+    }
     if (['sources', 'ingested', 'options', 'result'].includes(key)) {
       data[key] = value == null ? (key === 'sources' || key === 'ingested' ? [] : null) : toPrismaJson(value)
     } else {
@@ -91,6 +103,13 @@ export function prismaYoutubeVideoStore(): YoutubeVideoRunStore {
         data: { status: 'running', stage: 'planning', progressPercent: 50 },
       })
       return claimed.count === 1
+    },
+    async heartbeatPlanning(workspaceId, id) {
+      const updated = await db().updateMany({
+        where: { id, workspaceId, status: 'running', stage: 'planning' },
+        data: { updatedAt: new Date() },
+      })
+      return updated.count === 1
     },
     async update(workspaceId, id, patch) {
       const existing = await db().findFirst({ where: { id, workspaceId }, select: { id: true } })
@@ -139,7 +158,9 @@ export async function loadReadySource(workspaceId: string, projectId: string): P
           return [{ w: word.w, s: word.s, e: word.e, spk: word.spk ?? null }]
         })
     : []
-  if (!words.length) throw new YoutubeVideoError('source_no_transcript', 'The source finished without usable transcript words.', 422)
+  if (!words.length && process.env.YOUTUBE_ISOLATED_PIPELINE === '0') {
+    throw new YoutubeVideoError('source_no_transcript', 'The source finished without usable transcript words.', 422)
+  }
   const durationMs = project.upload?.durationMs
     ?? Math.max(0, (project.rangeEndMs ?? 0) - (project.rangeStartMs ?? 0))
     ?? Math.round((words[words.length - 1]?.e ?? 0) * 1000)
@@ -347,6 +368,7 @@ export function productionPipelineDeps(): YoutubeVideoPipelineDeps {
   return {
     importer: defaultStreamerImporter,
     loadReadySource,
+    ...(process.env.YOUTUBE_ISOLATED_PIPELINE === '0' ? {} : { planLongForm: ytAdvanceLongForm }),
   }
 }
 
