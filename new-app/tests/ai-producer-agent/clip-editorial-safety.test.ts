@@ -1,5 +1,8 @@
 import {describe,expect,it} from 'vitest'
-import {clipEditorialAudit,clipEditorialInstructions,repairClipBoundaries,shouldVetoPublish} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {readFileSync} from 'node:fs'
+import {dirname,join} from 'node:path'
+import {fileURLToPath} from 'node:url'
+import {clipEditorialAudit,clipEditorialInstructions,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {selectMomentFlowTrim} from '@/lib/ai-producer-agent/clip-mode/moment-flow'
 const words=(text:string,startMs=0,spacingMs=380)=>
   text.split(' ').map((w,i)=>({w,s:(startMs+i*spacingMs)/1000,e:(startMs+i*spacingMs+320)/1000}))
@@ -113,4 +116,81 @@ describe('clip-only editorial policy from video review',()=>{
     qaIssues:[],
   })).toBe(false)
  })
+})
+
+
+const publishedWords=JSON.parse(readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)),'fixtures/aprun_851c73b3_published_words.json'),
+  'utf8',
+)) as Array<{w:string;s:number;e:number}>
+
+const publishedCuts=[
+  {startMs:765000,endMs:784160},
+  {startMs:868065,endMs:873345},
+  {startMs:877505,endMs:892220},
+  {startMs:897795,endMs:910595},
+  {startMs:910595,endMs:924840},
+]
+
+describe('aprun_851c73b3 published-clip fixture repairs',()=>{
+  it('flags the mid-phrase dangling her opening and the later also-continuation',()=>{
+    const risk=clipEditorialAudit(publishedCuts,publishedWords)
+    expect(risk.some(x=>x.code==='mid_phrase_opening'&&x.passageIndex===0)).toBe(true)
+    expect(risk.some(x=>x.code==='dangling_pronoun_opening'&&x.passageIndex===0)).toBe(true)
+    expect(risk.some(x=>x.code==='continuation_opening'&&x.passageIndex===2)).toBe(true)
+    expect(risk.some(x=>x.code==='incoherent_passage'&&x.passageIndex===0)).toBe(true)
+  })
+  it('does not treat a later complete And-sentence as a continuation opener',()=>{
+    const risk=clipEditorialAudit(publishedCuts,publishedWords)
+    expect(risk.some(x=>x.code==='continuation_opening'&&x.passageIndex===3)).toBe(false)
+    expect(risk.some(x=>x.code==='continuation_opening'&&x.passageIndex===4)).toBe(false)
+  })
+  it('snaps the opening back to My grandmother and includes her antecedent',()=>{
+    const repaired=repairClipBoundaries(publishedCuts,publishedWords)
+    expect(repaired.repaired).toBe(true)
+    const first=repaired.cuts[0]!
+    expect(first.startMs).toBeLessThanOrEqual(761105)
+    expect(first.startMs).toBeGreaterThanOrEqual(755000)
+    const opening=publishedWords.filter(w=>w.e*1000>first.startMs&&w.s*1000<first.startMs+4000).map(w=>w.w).join(' ')
+    expect(opening.toLowerCase()).toContain('grandmother')
+    expect(opening.toLowerCase()).not.toMatch(/^(?:uh,?\s*)?her six/)
+  })
+  it('repairs but also coming to understand by including the omitted thought',()=>{
+    const repaired=repairClipBoundaries(publishedCuts,publishedWords)
+    const also=repaired.cuts.find(c=>c.endMs===892220||(c.startMs<878000&&c.endMs>=892000))
+    expect(also).toBeTruthy()
+    expect(also!.startMs).toBeLessThanOrEqual(873585)
+    const opening=publishedWords.filter(w=>w.e*1000>also!.startMs&&w.s*1000<also!.startMs+5000).map(w=>w.w).join(' ').toLowerCase()
+    expect(opening).toContain('understanding these differences')
+    expect(opening.startsWith('but also')).toBe(false)
+  })
+  it('trims the disconnected Corvette detour but keeps the grandmother ending',()=>{
+    const repaired=repairClipBoundaries(publishedCuts,publishedWords)
+    const first=repaired.cuts[0]!
+    expect(first.endMs).toBeLessThanOrEqual(773280+50)
+    expect(first.endMs).toBeGreaterThan(768000)
+    const last=repaired.cuts.at(-1)!
+    expect(last.endMs).toBe(924840)
+    const lastText=publishedWords.filter(w=>w.e*1000>last.startMs&&w.s*1000<last.endMs).map(w=>w.w).join(' ').toLowerCase()
+    expect(lastText).toContain('make us human')
+  })
+  it('plans brief crossfades on every stitch join',()=>{
+    const joins=stitchJoinTransitions(publishedCuts)
+    expect(joins).toHaveLength(4)
+    expect(joins.every(j=>j.type==='crossfade'&&j.durMs>=200&&j.durMs<=400)).toBe(true)
+    expect(joins.map(j=>j.srcMs)).toEqual([868065,877505,897795,910595])
+  })
+  it('still vetoes a dangling pronoun or continuation that could not be repaired',()=>{
+    expect(shouldVetoPublish({
+      risks:[{code:'dangling_pronoun_opening',detail:'her six of eight kids',passageIndex:0}],
+      qaPass:true,qaIssues:[],
+    })).toBe(true)
+    expect(shouldVetoPublish({
+      risks:[{code:'continuation_opening',detail:'also coming to understand',passageIndex:2}],
+      qaPass:true,qaIssues:[],
+    })).toBe(true)
+    expect(shouldVetoPublish({
+      risks:[],qaPass:true,qaIssues:[],
+    })).toBe(false)
+  })
 })

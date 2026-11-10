@@ -23,10 +23,10 @@ import { createEditorialHandoff, runEditorialRole, recoverEditorialSelections, c
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
 import {candidateWindows,clipCandidateLimit,overlapFraction,rankCandidate,type ClipCandidate} from '@/lib/ai-producer-agent/clip-mode/candidates'
 import {storyCoverage} from '@/lib/ai-producer-agent/clip-mode/story-coverage'
-import {clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,qaTranscriptWindow,repairClipBoundaries,shouldVetoPublish} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,qaTranscriptWindow,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {instructionAsksToCompile,mergeTopicCandidates,topicPassagesFromTranscript,topicQueryFromInstruction,whyThisClip} from '@/lib/ai-producer-agent/clip-mode/topic-search'
 import {createSourceClip,publishClipScore,discardClip} from '@/lib/server/ai-producer-agent/clip-mode-store'
-import {clipAgentHardSteps,clipAgentWallClockMs} from '@/lib/ai-producer-agent/rough-cut-window'
+import {clipAgentHardSteps,clipAgentHardStepsForCandidates,clipAgentWallClockMs,clipAgentWallClockMsForCandidates,clipCandidateHardSteps,clipCandidateWallClockMs,clipQaRetryHardSteps,clipQaRetryWallClockMs} from '@/lib/ai-producer-agent/rough-cut-window'
 import type {ClipWord} from '@/lib/clips/edits'
 import { buildJustChattingEvidence } from '@/lib/ai-producer-agent/just-chatting-evidence'
 
@@ -103,6 +103,10 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       ? mergeTopicCandidates(seeded,topicHits,source.rangeMs,ctx.config.targetLengthS[1])
       : seeded
     if(!candidates.length)throw Error('clip_no_grounded_candidate_moments')
+    budget.expandLimits({
+      wallClockMs:clipAgentWallClockMsForCandidates(ctx.totalSourceMs,candidates.length),
+      hardSteps:clipAgentHardStepsForCandidates(ctx.totalSourceMs,candidates.length),
+    })
     if(topicQuery)await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
       tool:'clip_topic_search',kind:'system',
       resultSummary:JSON.stringify({query:topicQuery,hits:topicHits.length,compile:instructionAsksToCompile(run.instruction)}).slice(0,2000)})
@@ -141,7 +145,11 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           title:target.pendingTitle??('AI '+mode+' clip'),startMs,endMs,
           mode:ctx.config.storyMode!})
       }
-      const clipBudget=new Budget()
+      const clipBudget=new Budget({
+        wallClockMs:clipCandidateWallClockMs(ctx.totalSourceMs),
+        hardSteps:clipCandidateHardSteps(ctx.totalSourceMs),
+        softSteps:Math.max(40,Math.floor(clipCandidateHardSteps(ctx.totalSourceMs)*0.45)),
+      })
       try{
         await runOneOutput(candidateCtx,out,clipBudget,mode==='story'
           ? [run.instruction??'',
@@ -191,17 +199,20 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         const veto=shouldVetoPublish({
           risks:safetyRisks,qaPass:qa?.pass??null,qaIssues:substantiveIssues,
         })||criticalStructural.length>0||(!qa&&safetyRisks.some(r=>r.code==='missing_qualification'))
+        // Incomplete QA (budget exhausted, timeout, crash) must not publish.
+        // Only a completed passing review, or a duration-only model miss, can ship.
+        const qaComplete=Boolean(qa)&&!substantiveIssues.some(issue=>/could not complete|specialist_budget_exhausted/i.test(issue))
         const qaPass:boolean|null=veto?false:
-          qa?(Boolean(qa.pass)||durationOnlyModelFailure)&&substantiveIssues.length===0:null
+          qaComplete&&qa?(Boolean(qa.pass)||durationOnlyModelFailure)&&substantiveIssues.length===0:null
         const safetyIssues=safetyRisks.map(r=>r.code+': '+r.detail)
         const combinedIssues=[...new Set([...substantiveIssues,
           ...(qaPass===true?[]:safetyIssues)])]
         out.editorialHandoff.review={pass:qaPass===true,issues:combinedIssues}
         const durationSeconds=finalCuts.reduce((n,c)=>n+(c.endMs-c.startMs),0)/1000
-        if(veto||qaPass===false){
+        if(veto||qaPass!==true){
           // Keep the editable rough cut for manual repair; do not publish or export.
           out.suppressed=true
-          out.notes.push('Held as editable draft; not published: '+combinedIssues.join('; ').slice(0,420))
+          out.notes.push((qaComplete?'Held as editable draft; not published: ':'Held as editable draft; editorial QA did not complete: ')+combinedIssues.join('; ').slice(0,420))
           continue
         }
         const score=rankCandidate({finderScore:candidate.finderScore,
@@ -365,8 +376,7 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget,
   // Persist the valid editable project before model QA; review cannot erase the draft.
   await apply(ctx, out, budget)
   if (out.editorialHandoff && out.lastValid) {
-    try {
-    const review = await runEditorialRole(ctx, out, budget, 'qa', {
+    const qaArgs={
       outline: out.editorialHandoff.outline,
       storyFinisher: out.editorialHandoff.finisher ?? null,
       highlightsFinisher: out.editorialHandoff.highlightsFinisher ?? null,
@@ -395,16 +405,36 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget,
       instruction: [clipEditorialInstructions(),ctx.config.roughCutIntent === 'highlights'
         ? 'HIGHLIGHTS QA: Inspect actual opening and closing transcript words for EVERY selected moment and all joins. Use the Highlights Finisher verified landings: confirm every promised quote remains in the final footage and each highlight actually ends naturally. Check that no unrelated talk after a landing, incomplete opening, missing independent payoff, or overlong segment remains. Require distinct source moments, not breath cuts. If source words do not support the finishing choices, pass=false with precise timestamps. No rendered audio was supplied; acoustic joins require listening review.'
         : 'EDITORIAL BASELINE (NO LENGTH TARGET): Judge whether one specific story is coherently told from a clear opening through its recorded ending. Inspect the first words for missing setup and the NEXT 6.5 seconds of ORIGINAL source after each end for a meaning-changing qualifier, negation, exception or conclusion. Check that every stitched passage makes sense with only earlier OUTPUT passages. If a meaning-changing qualifier is omitted, pass=false with source-word evidence and an exact repair hint. A short complete 15-second edit is valid; never penalize length or number of passages. Verify titles/caption proper-name spelling against evidence; do not pretend ASR guarantees spelling. Do not infer audio quality without listening.'].join(' '),
-    })
-    out.editorialHandoff.review = { pass: review.pass === true, issues: review.issues as string[] }
-    out.notes.push(...out.editorialHandoff.review.issues.slice(0, 10).map((issue) => 'Editorial QA: ' + issue))
-    if (!out.editorialHandoff.review.pass) {
+    }
+    const runQa=async(qaBudget:Budget)=>{
+      try{
+        const review=await runEditorialRole(ctx,out,qaBudget,'qa',qaArgs)
+        return {complete:true as const,pass:review.pass===true,issues:review.issues as string[]}
+      }catch(error){
+        const message=String((error as Error)?.message??error)
+        return {complete:false as const,pass:false,issues:['Editorial QA could not complete: '+message.slice(0,250)],error:message}
+      }
+    }
+    let review=await runQa(budget)
+    if(!review.complete&&(/specialist_budget_exhausted/i.test(review.error??'')||budget.state()==='hard')){
+      const qaBudget=new Budget({
+        wallClockMs:clipQaRetryWallClockMs(),
+        hardSteps:clipQaRetryHardSteps(),
+        softSteps:20,
+      })
+      out.notes.push('Retrying editorial QA with a reserved budget after the candidate budget was exhausted')
+      review=await runQa(qaBudget)
+      budget.addGemini(qaBudget.geminiUsd)
+      budget.addLuna({prompt_tokens:qaBudget.lunaIn,completion_tokens:qaBudget.lunaOut})
+    }
+    out.editorialHandoff.review={pass:review.complete&&review.pass,issues:review.issues}
+    out.notes.push(...out.editorialHandoff.review.issues.slice(0,10).map((issue)=>'Editorial QA: '+issue))
+    if(!review.complete){
+      out.notes.push('Editorial QA did not complete; holding this clip as a draft')
+    }else if(!out.editorialHandoff.review.pass){
       // QA findings belong on the editable draft. Do not discard an otherwise
       // valid rough cut solely because the editorial review asks for revisions.
       out.notes.push('Editorial QA requested revisions; editable rough cut retained')
-    }
-    } catch (error) {
-      out.notes.push('Editorial QA could not complete: ' + String((error as Error)?.message ?? error).slice(0, 250))
     }
   }
   for (; out.fixLoops < CAPS.maxFixLoops && budget.state() !== 'hard'; out.fixLoops++) {
@@ -527,6 +557,32 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
       error:added.ok?undefined:added.summary,
     })
     if (!added.ok) throw new Error('rough_cut_assembly_segment_failed: ' + added.summary)
+  }
+  if (clipMode && cuts.length>1 && out.builder) {
+    const joins=stitchJoinTransitions(cuts)
+    let outAt=0
+    for (let i=0;i<cuts.length;i++) {
+      const seg=out.builder.segs[i]
+      const dur=cuts[i]!.endMs-cuts[i]!.startMs
+      if(i>0&&seg){
+        const join=joins[i-1]
+        if(join) out.builder.setTransition(seg.id,'dissolve',join.durMs)
+        // Alternate a modest punch-in so framing changes at a jump cut feel intended.
+        if(i%2===1&&dur>1800){
+          try{out.builder.addZoom(outAt,outAt+Math.min(900,dur-500),1.08,'smooth')}
+          catch(_zoomErr){/* zoom is optional smoothing; never fail assembly */}
+        }
+      }
+      outAt+=dur
+    }
+    if(joins.length){
+      out.notes.push('Smoothed '+joins.length+' stitch joins with brief crossfades')
+      await logAiProducerStep({
+        runId:ctx.runId,stepIndex:++budget.steps,phase:'plan',
+        tool:'clip_stitch_join_smoothing',kind:'system',
+        resultSummary:JSON.stringify({joins:joins.length,transitions:joins}),
+      })
+    }
   }
   // Only the short Story direct-cut baseline: gentle anti-click audio fades.
   // Keep every approved timestamp and picture cut exactly where Footage chose.
