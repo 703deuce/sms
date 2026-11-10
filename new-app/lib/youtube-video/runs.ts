@@ -120,6 +120,21 @@ async function advanceRun(
   record: YoutubeVideoRunRecord, deps: YoutubeVideoRunDeps, creating = false,
 ): Promise<YoutubeVideoRunRecord> {
   if (record.status === 'running' && record.stage === 'rendering') return advanceRender(record, deps)
+  if (record.status === 'running' && record.stage === 'assembling' && record.chosenOptionId) {
+    const staleBefore=new Date((deps.now??(()=>new Date()))().getTime()-10*60_000).toISOString()
+    if(record.updatedAt>=staleBefore||!deps.store.claimAssembling)return record
+    const claimed=await deps.store.claimAssembling(record.workspaceId,record.id,
+      record.chosenOptionId,staleBefore)
+    if(!claimed)return (await deps.store.get(record.workspaceId,record.id))??record
+    youtubeRunEvent(record.id,'assembling','assembling_resumed',{
+      windowIndex:Math.max(0,(record.analysisState?.finished.length??1)-1),
+      windowCount:record.analysisState?.finished.length??1,
+    })
+    try{
+      await chooseYoutubeVideoOption(record.workspaceId,record.id,record.chosenOptionId,deps,true)
+    }catch{ /* Assembly writes failure status durably. */ }
+    return (await deps.store.get(record.workspaceId,record.id))??record
+  }
   if (['ready', 'failed', 'canceled', 'awaiting_choice'].includes(record.status) || record.chosenOptionId) return record
   const staleBefore = new Date(Date.now() - (deps.pipeline.planLongForm ? 10 * 60_000 : STALE_PLANNING_MS)).toISOString()
   const importStaleBefore = new Date(Date.now() - STALE_PLANNING_MS).toISOString()
@@ -227,19 +242,45 @@ async function advanceRun(
           optionCount: sharedOptions.length,
         })
       } catch (error) {
-        const fallbackCode = ytErrorCode(error)
-        const checkpoint = current.analysisState
-        if (checkpoint) {
-          ytLog(current.id, checkpoint, 'isolated_long_form', 'transcript_only_fallback',
-            { code: fallbackCode })
-          current = await deps.store.update(current.workspaceId, current.id, {
-            analysisState: checkpoint, status: 'running',
-            stage: 'planning', progressPercent: 55,
+        const code=ytErrorCode(error)
+        const checkpoint=current.analysisState
+        const longSource=ingested.some(source=>source.durationMs>20*60_000)
+        if(longSource){
+          const stage=checkpoint?.active?.stage??
+            (checkpoint?.final?.qaPassed?'assembly_validation':
+              checkpoint?.final?'global_qa':'global_story')
+          const windowIndex=checkpoint?.finished.length??0
+          const windowCount=ingested.reduce((sum,source)=>
+            sum+Math.ceil(source.durationMs/(20*60_000)),0)
+          const attempts=checkpoint?.steps.filter(step=>
+            step.stage==='retry:'+stage&&step.windowIndex===windowIndex).length??0
+          youtubeRunEvent(current.id,'isolated_long_form','stage_error',{
+            reason:code,windowIndex,windowCount,
+          })
+          if(checkpoint&&attempts<2){
+            ytLog(current.id,checkpoint,'retry:'+stage,'scheduled',{
+              code,windowIndex,windowCount,count:attempts+1,
+            })
+            current=await deps.store.update(current.workspaceId,current.id,{
+              analysisState:checkpoint,status:'queued',stage:'planning',
+              progressPercent:55,
+            })
+            return current
+          }
+          return failRun(current,deps,new YoutubeVideoError(
+            'yt_long_form_stage_failed',
+            'Full-source YouTube analysis failed at '+stage+
+              ' after '+attempts+' retries (code: '+code+'). No transcript-only fallback was used.',
+            500,
+          ))
+        }
+        if(checkpoint){
+          ytLog(current.id,checkpoint,'isolated_long_form','transcript_only_fallback',{code})
+          current=await deps.store.update(current.workspaceId,current.id,{
+            analysisState:checkpoint,status:'running',stage:'planning',progressPercent:55,
           })
         }
-        youtubeRunEvent(current.id, 'isolated_long_form', 'transcript_only_fallback', {
-          reason: fallbackCode,
-        })
+        youtubeRunEvent(current.id,'isolated_long_form','transcript_only_fallback',{reason:code})
       } finally {
         if (timer) clearInterval(timer)
       }
@@ -334,23 +375,34 @@ export async function chooseYoutubeVideoOption(
   runId: string,
   optionId: string,
   deps: YoutubeVideoRunDeps,
+  resumeExisting=false,
 ): Promise<YoutubeVideoRunView> {
   if (!optionId?.trim()) throw new YoutubeVideoError('invalid_request', 'optionId is required', 400)
   const record = await deps.store.get(workspaceId, runId)
   if (!record) throw new YoutubeVideoError('not_found', 'Run not found', 404)
-  if (record.chosenOptionId) {
-    if (record.chosenOptionId === optionId) return view(record)
-    throw new YoutubeVideoError('option_already_chosen', 'A different option was already chosen', 409)
+  if(record.chosenOptionId){
+    if(record.chosenOptionId!==optionId)
+      throw new YoutubeVideoError('option_already_chosen','A different option was already chosen',409)
+    if(!resumeExisting)return view(record)
+    if(record.status!=='running'||record.stage!=='assembling')
+      throw new YoutubeVideoError('choice_not_available','Assembly is not pending',409)
   }
-  if (record.status !== 'awaiting_choice' || !record.options?.length) {
-    throw new YoutubeVideoError('choice_not_available', 'Story options are not available to choose yet', 409)
+  if((!resumeExisting&&record.status!=='awaiting_choice')||!record.options?.length){
+    throw new YoutubeVideoError('choice_not_available','Story options are not available to choose yet',409)
   }
   const option = record.options.find((item: YoutubeVideoOption) => item.id === optionId)
   if (!option) throw new YoutubeVideoError('invalid_request', 'optionId does not match an options[].id', 400)
 
-  await traceYoutubeRunStep(runId, 'choice_validation', () => deps.store.update(workspaceId, runId, {
-    status: 'running', stage: 'assembling', progressPercent: 80, chosenOptionId: optionId,
-  }))
+  if(!resumeExisting){
+    await traceYoutubeRunStep(runId,'choice_validation',()=>deps.store.update(workspaceId,runId,{
+      status:'running',stage:'assembling',progressPercent:80,chosenOptionId:optionId,
+    }))
+  }
+  const heartbeat=deps.store.heartbeatAssembling
+    ?setInterval(()=>{
+      void deps.store.heartbeatAssembling!(workspaceId,runId).catch(()=>
+        youtubeRunEvent(runId,'assembling','heartbeat_error'))
+    },20_000):undefined
   try {
     const written = await traceYoutubeRunStep(runId, 'assembling', () =>
       (deps.pipeline.writeClip ?? deps.writeClip)({
@@ -394,6 +446,8 @@ export async function chooseYoutubeVideoOption(
       chosenOptionId: optionId,
     })
     throw err instanceof YoutubeVideoError ? err : new YoutubeVideoError('apply_failed', failureMessage, 500)
+  } finally {
+    if(heartbeat)clearInterval(heartbeat)
   }
 }
 
