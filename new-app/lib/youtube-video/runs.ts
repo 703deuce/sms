@@ -394,9 +394,16 @@ export async function chooseYoutubeVideoOption(
   if (!option) throw new YoutubeVideoError('invalid_request', 'optionId does not match an options[].id', 400)
 
   if(!resumeExisting){
-    await traceYoutubeRunStep(runId,'choice_validation',()=>deps.store.update(workspaceId,runId,{
-      status:'running',stage:'assembling',progressPercent:80,chosenOptionId:optionId,
-    }))
+    const claimed=await traceYoutubeRunStep(runId,'choice_validation',()=>deps.store.claimAssemblyChoice
+      ?deps.store.claimAssemblyChoice(workspaceId,runId,optionId)
+      :deps.store.update(workspaceId,runId,{
+        status:'running',stage:'assembling',progressPercent:80,chosenOptionId:optionId,
+      }).then(()=>true))
+    if(!claimed){
+      const refreshed=await deps.store.get(workspaceId,runId)
+      if(refreshed?.chosenOptionId===optionId)return view(refreshed)
+      throw new YoutubeVideoError('option_already_chosen','A different option was already chosen',409)
+    }
   }
   const heartbeat=deps.store.heartbeatAssembling
     ?setInterval(()=>{
