@@ -140,3 +140,13 @@ JSON `{ error: string, code: string }`.
 | 500 | `STORAGE_ERROR` | Output or reference upload failed |
 
 Auth failures use the existing workspace 401/403 behavior. No `$` in error messages.
+
+## Additive notes (backend, 2026-11-10)
+
+These do not change existing field names or launch `id`s.
+
+- `GET /api/studio/jobs/:id` (and the history list, at most 5 running rows per request) performs a **single** KIE status poll when the job is `queued` or `running`. On success the result is copied into our storage and the job becomes `done`. On provider failure the job becomes `failed` with `KIE_ERROR`. **No automatic retries** of `createTask`.
+- `GET /api/studio/jobs/:id/output` returns `409 JOB_NOT_READY` when the job exists but is not `done`. Missing / other-workspace jobs are `404 JOB_NOT_FOUND`.
+- `hailuo-2.3` is **image-to-video only** (KIE exposes Hailuo 2.3 as image-to-video). `text_to_video` is rejected with `INVALID_PARAMS`. A `startFrameAssetId` or `referenceAssetId` is required.
+- Veo 3.1 aspects are `9:16` and `16:9` (KIE does not accept `1:1` for Veo). Default duration is the shortest allowed (`4`). Seedance 2.0 Mini default resolution is `480p`; Hailuo 2.3 default is `768P` (the contract also accepts `720p` as an alias for that default). Flux 2 Pro / Nano Banana Pro default resolution is `1K`.
+- `POST /api/studio/jobs` persists a `failed` row when KIE rejects `createTask`, and the HTTP response is still `502 KIE_ERROR`.
