@@ -16,10 +16,17 @@ export async function EditorPayloadSection({
   clipperStudio?: boolean
   chatMode?: boolean
 }) {
-  console.info('[editor:text] payload-load', { projectId, clipId })
+  console.info('[editor:text-gaps] load-step', { projectId, clipId, step: 'payload-start' })
   let data
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    data = await getClipEditorPayload(workspaceId, clipId)
+    data = await Promise.race([
+      getClipEditorPayload(workspaceId, clipId),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Text editor payload timed out')), 20_000)
+      }),
+    ])
+    console.info('[editor:text-gaps] load-step', { projectId, clipId, step: 'payload-ready' })
   } catch (err) {
     console.error('[editor:text] payload_failed', {
       clipId,
@@ -27,9 +34,12 @@ export async function EditorPayloadSection({
       message: err instanceof Error ? err.message : String(err),
     })
     throw err
+  } finally {
+    if (timer) clearTimeout(timer)
   }
   if (!data || data.clip.projectId !== projectId) notFound()
 
+  console.info('[editor:text-gaps] load-step', { projectId, clipId, step: 'shell-render', wordCount: data.words.length })
   const posterUrl = data.mediaUrls.poster || data.mediaUrls.preview
 
   return (
