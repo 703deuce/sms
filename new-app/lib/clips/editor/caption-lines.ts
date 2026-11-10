@@ -148,6 +148,51 @@ export function serializeTokens(tokens: readonly LineToken[], maxChars?: number)
   return out
 }
 
+/** Visible characters plus separators, matching how serializeTokens counts `maxChars`. */
+export function tokenSpanChars(tokens: readonly LineToken[]): number {
+  if (!tokens.length) return 0
+  return tokens.reduce((n, tok, i) => n + (i ? 1 : 0) + cpLen(tok.w), 0)
+}
+
+/**
+ * Pack tokens into groups of at most `maxChars` visible characters.
+ * Never drops a token. A single token longer than `maxChars` stays intact in its own group.
+ */
+export function splitTokensByMaxChars(tokens: readonly LineToken[], maxChars: number): LineToken[][] {
+  const groups: LineToken[][] = []
+  let current: LineToken[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i]!
+    if (!current.length) {
+      current = [{ ...tok, br: false }]
+      continue
+    }
+    const next = [...current, tok]
+    if (tokenSpanChars(next) > maxChars) {
+      groups.push(current)
+      current = [{ ...tok, br: false }]
+    } else {
+      current = next
+    }
+  }
+  if (current.length) groups.push(current)
+  return groups
+}
+
+function proportionalSpans(weights: readonly number[], startMs: number, endMs: number): { startMs: number; endMs: number }[] {
+  const total = weights.reduce((sum, w) => sum + w, 0) || 1
+  const dur = endMs - startMs
+  const out: { startMs: number; endMs: number }[] = []
+  let acc = 0
+  for (let i = 0; i < weights.length; i++) {
+    const s = startMs + Math.round((dur * acc) / total)
+    acc += weights[i]!
+    const e = i === weights.length - 1 ? endMs : startMs + Math.round((dur * acc) / total)
+    out.push({ startMs: s, endMs: Math.max(e, s) })
+  }
+  return out
+}
+
 /** Plain words of a caption line (tags dropped). */
 export function captionLineWordsOf(text: string): string[] {
   return lineTokens(text).map((t) => t.w)
@@ -204,10 +249,11 @@ export function normalizeCaptionLinesDetailed(raw: unknown): {
     if (!r || typeof r !== 'object' || Array.isArray(r)) continue
     const o = r as Record<string, unknown>
     if (!looksLikeCaptionCue(o)) continue
-    const text = serializeTokens(lineTokens(String(o.text ?? '')), CAPTION_LINE_MAX_CHARS)
+    const tokens = lineTokens(String(o.text ?? ''))
+    const groups = splitTokensByMaxChars(tokens, CAPTION_LINE_MAX_CHARS)
     const a0 = num(o.startMs)
     const b0 = num(o.endMs)
-    if (!text || a0 === null || b0 === null) {
+    if (!groups.length || a0 === null || b0 === null) {
       droppedInvalid += 1
       continue
     }
@@ -217,7 +263,17 @@ export function normalizeCaptionLinesDetailed(raw: unknown): {
       droppedInvalid += 1
       continue
     }
-    rows.push({ id: String(o.id ?? ''), text, startMs: a, endMs: b })
+    const weights = groups.map((g) => Math.max(1, tokenSpanChars(g)))
+    const spans = proportionalSpans(weights, a, b)
+    const baseId = String(o.id ?? '')
+    for (let i = 0; i < groups.length; i++) {
+      const text = serializeTokens(groups[i]!)
+      if (!text) continue
+      const span = spans[i]!
+      const id = i === 0 || !baseId ? baseId : `${baseId}~${i}`
+      rows.push({ id, text, startMs: span.startMs, endMs: span.endMs })
+      if (rows.length >= CAPTION_LINES_MAX) break
+    }
     if (rows.length >= CAPTION_LINES_MAX) break
   }
   const orderBefore = rows.map((x) => `${x.id}:${x.startMs}:${x.endMs}`).join('|')
@@ -408,7 +464,7 @@ export function mergeCaptionLineWithNext(lines: CaptionLine[], id: string): Capt
   const a = sorted[i]!
   const b = sorted[i + 1]!
   const tb = lineTokens(b.text)
-  const text = serializeTokens([...lineTokens(a.text), ...tb.map((t, j) => (j === 0 ? { ...t, br: false } : t))], CAPTION_LINE_MAX_CHARS)
+  const text = serializeTokens([...lineTokens(a.text), ...tb.map((t, j) => (j === 0 ? { ...t, br: false } : t))])
   return [...sorted.slice(0, i), { ...a, text, endMs: Math.max(a.endMs, b.endMs) }, ...sorted.slice(i + 2)]
 }
 

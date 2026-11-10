@@ -142,7 +142,8 @@ jobs:
             tests/streamer-agent-batch-contract.test.ts \
             tests/motion-graphics-contract.test.ts \
             tests/motion-graphics-text-adapter.test.ts \
-            tests/motion-request-limit.test.ts
+            tests/motion-request-limit.test.ts \
+            tests/caption-line-max-chars.test.ts
 
   captions-worker-regression:
     runs-on: ubuntu-latest
