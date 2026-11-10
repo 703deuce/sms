@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Clapperboard, Download, FileText, Loader2, Pause, Play, Redo2, RefreshCw, Search, Undo2 } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Download, FileText, Loader2, Palette, Pause, Play, Redo2, RefreshCw, Search, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
@@ -151,6 +151,14 @@ export function TextSceneEditorShell(props: Props) {
     setPlayhead(sourceMs)
     if (videoRef.current) videoRef.current.currentTime = videoTimeFromSourceMs(sourceMs, mediaOffsetMs)
   }, [edits.trim.in, edits.trim.out, mediaOffsetMs])
+  const openTemplates = async () => {
+    console.info('[editor:templates-mode] text-entry', { projectId, clipId })
+    try { await flushSave() } catch {
+      toast.error('Save edits before switching editors')
+      return
+    }
+    window.location.assign(routes.templateMode(projectId, clipId, props.clipperStudio ? { from: 'studio' } : undefined))
+  }
   const openClipEditor = async () => {
     console.info('[editor:text] open-in-clip-editor', { projectId, clipId })
     try { await flushSave() } catch {
@@ -200,6 +208,7 @@ export function TextSceneEditorShell(props: Props) {
           <Button variant="ghost" size="icon" disabled={!canUndo} aria-label="Undo" onClick={() => { undo(); console.info('[editor:text] undo', { projectId, clipId }) }}><Undo2 className="size-4" /></Button>
           <Button variant="ghost" size="icon" disabled={!canRedo} aria-label="Redo" onClick={() => { redo(); console.info('[editor:text] redo', { projectId, clipId }) }}><Redo2 className="size-4" /></Button>
           <Button size="sm" variant="outline" onClick={() => { setExportOpen(true); console.info('[editor:text] export-opened', { projectId, clipId }) }}><Download className="mr-1 size-4" />Export</Button>
+          <Button size="sm" variant="outline" onClick={() => void openTemplates()}><Palette className="mr-1 size-4" />Templates</Button>
           <Button size="sm" onClick={() => void openClipEditor()}><Clapperboard className="mr-1 size-4" />Open in clip editor</Button>
         </header>
         <div className="flex min-h-0 flex-1">

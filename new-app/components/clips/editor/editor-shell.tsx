@@ -3618,6 +3618,7 @@ export function EditorShell({
             <>
               {compact && !fullVideo && !clipperStudio ? <Badge variant="outline" className="h-6 text-[11px] font-normal" data-testid="compact-editor-mode-label">Clip editor</Badge> : null}
               <Button type="button" size="sm" variant="outline" render={<Link href={routes.text(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} />} onClick={() => console.info('[editor:text] compact-entry', { projectId, clipId })}>Text editor</Button>
+              <Button type="button" size="sm" variant="outline" render={<Link href={routes.templateMode(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} />} onClick={() => console.info('[editor:templates-mode] compact-entry', { projectId, clipId })}>Templates</Button>
               {fullVideo ? (
               <FindClipsInVideoButton
                 projectId={projectId}

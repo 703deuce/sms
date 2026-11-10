@@ -41,6 +41,7 @@ import {
 import { clipsFetch, patchClip } from '@/lib/clips-api'
 import { useOpenInFullVideo } from '@/components/clips/editor/open-in-full-video-button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { routes } from '@/lib/routes'
 
 function oneLineClipWhy(text: string): string {
   const normalized = text.replace(/\s+/g, ' ').trim()
@@ -458,6 +459,10 @@ export function ClipCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem data-testid="clip-card-text-editor" onClick={() => { console.info('[editor:text] card-entry', { projectId, clipId: clip.id }); router.push('/app/video-editor/' + projectId + '/text/' + clip.id + (isStreamer ? '?from=studio' : '')) }}>Text editor</DropdownMenuItem>
+              <DropdownMenuItem data-testid="clip-card-templates-editor" onClick={() => {
+                console.info('[editor:templates-mode] card-entry', { projectId, clipId: clip.id })
+                router.push(routes.templateMode(projectId, clip.id, isStreamer ? { from: 'studio' } : undefined))
+              }}>Templates</DropdownMenuItem>
               <DropdownMenuItem disabled={cardActionBusy} data-testid="clip-card-rename" onClick={() => void renameCard()}>Rename</DropdownMenuItem>
               <DropdownMenuItem disabled={cardActionBusy} data-testid="clip-card-duplicate" onClick={() => void duplicateCard()}>Duplicate</DropdownMenuItem>
               {projectHasUpload ? <DropdownMenuItem data-testid="clip-card-copy-moment" onClick={() => void copyMomentLink()}>Copy moment link</DropdownMenuItem> : null}

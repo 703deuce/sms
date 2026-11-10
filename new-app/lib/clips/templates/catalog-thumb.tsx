@@ -11,6 +11,9 @@ import { resolveTemplateGeometry } from '@/lib/clips/templates/geometry'
 import { signalsOrDefaults } from '@/lib/clips/templates/signals'
 import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
 import { cn } from '@/lib/utils'
+import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
+import { captionFontStack } from '@/lib/clips/caption-fonts'
+import { captionPresetPatch, STARTER_LOOKS } from '@/lib/clips/editor/starter-templates'
 
 const PREVIEW_BOUNDS = { clipStartMs: 0, clipEndMs: 60_000, trimMinMs: 0, trimMaxMs: 60_000 }
 
@@ -231,6 +234,47 @@ export function CatalogTplThumb({ item }: { item: CatalogItem }) {
   if (item.kind === 'layout' || item.kind === 'layout_template' || item.kind === 'multicam') {
     const regions = catalogSchematicRegions(item)
     return <LayoutSchematic regions={regions.length ? regions : [{ x: 0.08, y: 0.12, w: 0.84, h: 0.76, label: 'Layout' }]} />
+  }
+  if (item.kind === 'caption') {
+    const edits = captionPresetPatch(defaultEdits(PREVIEW_BOUNDS), item.id)
+    return (
+      <div className="relative aspect-[9/16] max-h-44 w-full overflow-hidden rounded-t-xl bg-gradient-to-br from-zinc-800 via-black to-zinc-950">
+        <div className="absolute inset-x-5 top-8 h-20 rounded-lg border border-white/10 bg-white/5" />
+        <CaptionOverlay words={[{ w: 'Sample line', s: 0, e: 2, spk: 0 }]} edits={edits} currentTimeSec={0.5} boxHeightPx={320} outputDurationSec={3} staticPreview />
+      </div>
+    )
+  }
+  if (item.kind === 'brand_starter') {
+    const palette = (item.mock.palette as string[] | undefined) ?? ['#111827', '#38bdf8']
+    const font = String(item.mock.captionFont ?? 'Inter')
+    return (
+      <div className="flex aspect-[9/16] max-h-44 w-full flex-col justify-end gap-2 overflow-hidden rounded-t-xl bg-gradient-to-br from-zinc-900 via-zinc-800 to-black p-3">
+        <div className="mb-auto mt-4 rounded-lg border border-white/10 bg-white/5 p-2"><div className="h-1.5 w-16 rounded-full bg-white/25" /><div className="mt-2 h-10 rounded-md border border-white/10 bg-black/25" /></div>
+        <div className="flex gap-1">{palette.slice(0, 5).map((color) => <span key={color} className="size-5 rounded-full border border-white/20" style={{ background: color }} />)}</div>
+        <p className="text-xs font-bold text-white" style={{ fontFamily: captionFontStack(font) }}>Brand kit</p>
+      </div>
+    )
+  }
+  if (item.kind === 'look') {
+    const look = STARTER_LOOKS.find((candidate) => candidate.id === item.id)
+    const edits = captionPresetPatch(defaultEdits(PREVIEW_BOUNDS), look?.caption ?? 'clean_white')
+    const regions = regionsForClipLayoutMode(look?.layoutMode ?? 'speaker_follow')
+    return (
+      <div className="relative aspect-[9/16] max-h-44 w-full overflow-hidden rounded-t-xl bg-black">
+        <LayoutSchematic regions={regions} className="rounded-none" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/35" />
+        <CaptionOverlay words={[{ w: 'Creator look', s: 0, e: 2, spk: 0 }]} edits={edits} currentTimeSec={0.5} boxHeightPx={320} outputDurationSec={3} staticPreview />
+      </div>
+    )
+  }
+  if (item.kind === 'look_feature') {
+    return (
+      <div className="relative aspect-[9/16] max-h-44 w-full overflow-hidden rounded-t-xl bg-zinc-800">
+        <div className="absolute inset-2 rounded-lg border border-dashed border-white/30 bg-zinc-700/60" />
+        <div className="absolute inset-x-[28%] bottom-0 top-[18%] rounded-t-full border border-white/20 bg-black/65" />
+        <div className="absolute inset-x-3 bottom-3 rounded-md bg-black/65 px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-white">Background</div>
+      </div>
+    )
   }
   return null
 }

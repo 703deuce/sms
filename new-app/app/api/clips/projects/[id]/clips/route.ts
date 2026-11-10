@@ -9,7 +9,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const workspaceId = await resolveWorkspaceId()
     const url = new URL(request.url)
     const sort = url.searchParams.get('sort') === 'timeline' ? 'timeline' : 'score'
-    const clips = await listProjectClips(workspaceId, id, sort)
+    const includeHidden = url.searchParams.get('includeHidden') === '1'
+    if (includeHidden) console.info('[editor:templates-mode] project-clips-load', { projectId: id, includeHidden: true })
+    const clips = await listProjectClips(workspaceId, id, sort, includeHidden ? { includeHidden: true } : undefined)
     if (!clips) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({ data: { clips } })
   } catch (err) {
