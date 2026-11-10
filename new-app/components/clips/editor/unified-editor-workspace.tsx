@@ -9,6 +9,7 @@ type TimelineDisplay = 'compact' | 'expanded' | 'focus'
 
 const TIMELINE_HEIGHT_KEY = 'transovo.editor.unified.timelinePct.v3'
 const INSPECTOR_OPEN_KEY = 'transovo.editor.unified.inspectorOpen'
+const COMPACT_INSPECTOR_OPEN_KEY = 'transovo.editor.unified.compactInspectorOpen'
 
 function clampTimelinePct(value: number): number {
   return Math.max(35, Math.min(78, Math.round(value)))
@@ -22,6 +23,8 @@ function clampTimelinePct(value: number): number {
 export function UnifiedEditorWorkspace({
   main,
   inspector,
+  compactPreviewFirst = false,
+  inspectorOpenRequest = 0,
   timeline,
   timelineView,
   timelineHidden = false,
@@ -34,6 +37,8 @@ export function UnifiedEditorWorkspace({
 }: {
   main: ReactNode
   inspector: ReactNode
+  compactPreviewFirst?: boolean
+  inspectorOpenRequest?: number
   timeline: ReactNode
   timelineView: 'script' | 'timeline'
   timelineHidden?: boolean
@@ -44,7 +49,8 @@ export function UnifiedEditorWorkspace({
   onInspectorWidthChange: (width: number) => void
   className?: string
 }) {
-  const [inspectorOpen, setInspectorOpen] = useState(true)
+  const [inspectorOpen, setInspectorOpen] = useState(!compactPreviewFirst)
+  const lastInspectorOpenRequest = useRef(inspectorOpenRequest)
   const [focus, setFocus] = useState(false)
   const [timelinePct, setTimelinePct] = useState(65)
   const [topBarHost, setTopBarHost] = useState<HTMLElement | null>(null)
@@ -55,13 +61,36 @@ export function UnifiedEditorWorkspace({
   useEffect(() => {
     try {
       const savedInspector = localStorage.getItem(INSPECTOR_OPEN_KEY)
-      setInspectorOpen(savedInspector == null ? window.innerWidth > 1280 : savedInspector !== 'false')
+      const compactSaved = compactPreviewFirst ? localStorage.getItem(COMPACT_INSPECTOR_OPEN_KEY) : null
+      const compactChoice = compactSaved === 'true' || compactSaved === 'false'
+      const legacyChoice = savedInspector === 'true' || savedInspector === 'false'
+      const open = compactPreviewFirst
+        ? compactChoice ? compactSaved === 'true' : legacyChoice ? savedInspector === 'true' : false
+        : savedInspector == null ? window.innerWidth > 1280 : savedInspector !== 'false'
+      setInspectorOpen(open)
+      if (compactPreviewFirst) {
+        console.info('[editor:compact-gaps] inspector-preference', {
+          source: compactChoice ? 'compact-saved' : legacyChoice ? 'existing-saved' : 'fresh-default',
+          open,
+        })
+      }
       const stored = Number(localStorage.getItem(TIMELINE_HEIGHT_KEY))
       if (Number.isFinite(stored) && stored >= 35 && stored <= 78) setTimelinePct(stored)
     } catch {
-      // Storage may be inaccessible; default layout still works.
+      // Storage may be inaccessible; compact remains preview-first.
+      if (compactPreviewFirst) {
+        setInspectorOpen(false)
+        console.info('[editor:compact-gaps] inspector-preference', { source: 'storage-unavailable', open: false })
+      }
     }
-  }, [])
+  }, [compactPreviewFirst])
+
+  useEffect(() => {
+    if (!compactPreviewFirst || inspectorOpenRequest === lastInspectorOpenRequest.current) return
+    lastInspectorOpenRequest.current = inspectorOpenRequest
+    setInspectorOpen(true)
+    console.info('[editor:compact-gaps] panel-open', { source: 'tool' })
+  }, [compactPreviewFirst, inspectorOpenRequest])
 
   useEffect(() => {
     setTopBarHost(document.getElementById('editor-workspace-controls'))
@@ -69,8 +98,9 @@ export function UnifiedEditorWorkspace({
 
   const persistInspectorOpen = useCallback((next: boolean) => {
     setInspectorOpen(next)
-    try { localStorage.setItem(INSPECTOR_OPEN_KEY, String(next)) } catch { /* private mode */ }
-  }, [])
+    try { localStorage.setItem(compactPreviewFirst ? COMPACT_INSPECTOR_OPEN_KEY : INSPECTOR_OPEN_KEY, String(next)) } catch { /* private mode */ }
+    if (compactPreviewFirst) console.info('[editor:compact-gaps]', next ? 'panel-open' : 'panel-close', { source: 'toggle' })
+  }, [compactPreviewFirst])
 
   const persistTimelinePct = useCallback((next: number) => {
     const pct = clampTimelinePct(next)

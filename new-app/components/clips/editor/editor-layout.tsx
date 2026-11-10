@@ -95,6 +95,10 @@ export function EditorLayout(props: {
   dockTools?: boolean
   /** Unified desktop editor uses a single transcript/preview surface and a full-height right panel. */
   unified?: boolean
+  /** Compact mode alone starts preview-first unless an existing preference says otherwise. */
+  unifiedCompactPreviewFirst?: boolean
+  /** Incremented only for explicit compact tool selection; reopens the existing inspector. */
+  unifiedInspectorOpenRequest?: number
   unifiedMain?: ReactNode
   unifiedTimelineView?: 'script' | 'timeline'
   unifiedTimelineHidden?: boolean
@@ -157,6 +161,8 @@ export function EditorLayout(props: {
       <UnifiedEditorWorkspace
         main={props.unifiedMain}
         inspector={props.properties}
+        compactPreviewFirst={props.unifiedCompactPreviewFirst}
+        inspectorOpenRequest={props.unifiedInspectorOpenRequest}
         timeline={props.timeline}
         timelineView={props.unifiedTimelineView}
         timelineHidden={props.unifiedTimelineHidden}

@@ -4,7 +4,7 @@ import { Anton, Montserrat, Poppins } from 'next/font/google'
 import Link from 'next/link'
 import { routes } from '@/lib/routes'
 import { addFontVarsToBody, clipDisplayFontVars } from '@/components/clips/editor/clip-editor-fonts'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from 'react'
 import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
 import { EditorRail, clipEditorRailIds, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import {
@@ -372,6 +372,8 @@ export function EditorShell({
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const band = useEditorBand()
   const unifiedWorkspaceActive = band !== 'mobile'
+  const [compactInspectorOpenRequest, setCompactInspectorOpenRequest] = useState(0)
+  const compactHandoffInFlight = useRef(false)
   // FIX2 R7: read localStorage after mount (no SSR/hydration mismatch)
   const [timelineOpen, setTimelineOpen] = useState(false)
   useEffect(() => {
@@ -381,16 +383,19 @@ export function EditorShell({
   useEffect(() => {
     if (compact) {
       const store = typeof window === 'undefined' ? null : window.localStorage
-      setTimelineOpen(readTimelineOpen(store))
+      const open = readTimelineOpen(store)
+      setTimelineOpen(open)
+      if (!fullVideo && !clipperStudio) console.info('[editor:compact-gaps] timeline-state', { projectId, clipId, open })
     }
-  }, [compact, unifiedWorkspaceActive])
+  }, [compact, unifiedWorkspaceActive, fullVideo, clipperStudio, projectId, clipId])
   const toggleTimeline = useCallback(() => {
     setTimelineOpen((o) => {
       const next = !o
       writeTimelineOpen(typeof window === 'undefined' ? null : window.localStorage, next)
+      if (compact && !fullVideo && !clipperStudio) console.info('[editor:compact-gaps] timeline-state', { projectId, clipId, open: next })
       return next
     })
-  }, [])
+  }, [compact, fullVideo, clipperStudio, projectId, clipId])
   const timelineVisible = !compact || timelineOpen
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
@@ -446,12 +451,18 @@ export function EditorShell({
     }
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
-    if (unifiedWorkspaceActive) return
+    if (unifiedWorkspaceActive) {
+      if (compact && !fullVideo && !clipperStudio) {
+        console.info('[editor:compact-gaps] panel-select', { projectId, clipId, panel: id })
+        setCompactInspectorOpenRequest((request) => request + 1)
+      }
+      return
+    }
     if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
     else if (band === 'mobile' || band === 'compact') {
       setMobilePanelOpen(true)
     }
-  }, [band, layoutView, setDockPanelOpenPersist, unifiedWorkspaceActive])
+  }, [band, layoutView, setDockPanelOpenPersist, unifiedWorkspaceActive, compact, fullVideo, clipperStudio, projectId, clipId])
   const selectRailGroup = useCallback(
     (groupId: EditorRailGroupId) => {
       const group = editorRailGroups(clipEditorAiExtrasEnabled()).find((g) => g.id === groupId)
@@ -3297,6 +3308,30 @@ export function EditorShell({
     }
     selectRailGroup(groupId)
   }
+  const handleCompactHandoff = (event: ReactMouseEvent<HTMLAnchorElement>, target: 'text' | 'templates') => {
+    if (!compact || fullVideo || clipperStudio) return
+    // Keep browser-native modified clicks and new-tab behavior. Guard same-tab handoffs.
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    if (compactHandoffInFlight.current) {
+      console.info('[editor:compact-gaps] handoff-already-running', { projectId, clipId, target })
+      return
+    }
+    compactHandoffInFlight.current = true
+    console.info('[editor:compact-gaps] handoff-start', { projectId, clipId, target })
+    void (async () => {
+      try {
+        await flushSave()
+        console.info('[editor:compact-gaps] handoff-saved', { projectId, clipId, target })
+        window.location.assign(target === 'text' ? routes.text(projectId, clipId) : routes.templateMode(projectId, clipId))
+      } catch {
+        console.error('[editor:compact-gaps] handoff-failure', { projectId, clipId, target })
+        toast.error('Save edits before switching editors. Retry the save and try again.')
+      } finally {
+        compactHandoffInFlight.current = false
+      }
+    })()
+  }
   const needSel = canvasSel ? null : 'Select a clip first'
   const needBroll = canvasSel?.target.startsWith('broll:') ? null : 'Select a B-roll clip first'
   const needFull = fullVideo ? null : 'Available on full-length videos'
@@ -3617,8 +3652,8 @@ export function EditorShell({
           versionsSlot={
             <>
               {compact && !fullVideo && !clipperStudio ? <Badge variant="outline" className="h-6 text-[11px] font-normal" data-testid="compact-editor-mode-label">Clip editor</Badge> : null}
-              <Button type="button" size="sm" variant="outline" render={<Link href={routes.text(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} />} onClick={() => console.info('[editor:text] compact-entry', { projectId, clipId })}>Text editor</Button>
-              <Button type="button" size="sm" variant="outline" render={<Link href={routes.templateMode(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} />} onClick={() => console.info('[editor:templates-mode] compact-entry', { projectId, clipId })}>Templates</Button>
+              <Button type="button" size="sm" variant="outline" render={<Link href={routes.text(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.info('[editor:text] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'text') }} />}>Text editor</Button>
+              <Button type="button" size="sm" variant="outline" render={<Link href={routes.templateMode(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.info('[editor:templates-mode] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'templates') }} />}>Templates</Button>
               {fullVideo ? (
               <FindClipsInVideoButton
                 projectId={projectId}
@@ -3761,6 +3796,8 @@ export function EditorShell({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <EditorLayout
           unified={unifiedWorkspaceActive}
+          unifiedCompactPreviewFirst={compact && !fullVideo && !clipperStudio}
+          unifiedInspectorOpenRequest={compactInspectorOpenRequest}
           unifiedTimelineView={layoutView}
           unifiedTimelineHidden={compact && !timelineOpen && !timelineFocused}
           unifiedTimelineCollapsed={timelineCollapsed && !timelineFocused}
