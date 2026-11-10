@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { getPrisma } from '@/lib/server/db'
-import { ytLog } from '@/lib/youtube-video/pipeline/yt-audit'
+import { ytLog, ytErrorCode } from '@/lib/youtube-video/pipeline/yt-audit'
 import { ytFindMoments, ytReadMomentsJob } from '@/lib/youtube-video/pipeline/yt-find-moments'
 import { ytRefineVisualStoryEvidence } from '@/lib/youtube-video/pipeline/yt-visual-refine'
 import {
@@ -57,9 +57,10 @@ async function ytGetMediaKey(args:YtPlanArgs,sourceIndex:number,endMs:number):Pr
   return project.upload.key
 }
 
-function makeWindowContext(args:YtPlanArgs,active:YtActiveWindow):YtWindowContext{
+function makeWindowContext(args:YtPlanArgs,active:YtActiveWindow,windowIndex:number,windowCount:number):YtWindowContext{
   const source=args.sources[active.sourceIndex]!
   return {
+    windowIndex,windowCount,
     sourceId:source.sourceId,startMs:active.startMs,endMs:active.endMs,
     words:source.words.filter(w=>w.e*1000>active.startMs &&
       w.s*1000<active.endMs).map(w=>({w:w.w,s:w.s,e:w.e})),
@@ -108,11 +109,27 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
   const persist=async()=>args.save(checkpoint)
   const all=ytAllWindows(args)
 
+  /** Retain only speech at exact source-word boundaries and observed visual shots. */
+  const grounded=(ctx:YtWindowContext,cuts:YtSelectedCut[]):YtSelectedCut[]=>{
+    let lastEnd=ctx.startMs
+    return cuts.filter(cut=>{
+      if(cut.sourceId!==ctx.sourceId||cut.startMs<lastEnd||
+        cut.startMs<ctx.startMs||cut.endMs>ctx.endMs||cut.endMs-cut.startMs<200)return false
+      const valid=cut.kind==='speech'
+        ?ctx.words.some(w=>Math.round(w.s*1000)===cut.startMs)&&
+          ctx.words.some(w=>Math.round(w.e*1000)===cut.endMs)
+        :cut.kind==='visual'&&ctx.observations.some(m=>
+          cut.startMs>=m.startMs&&cut.endMs<=m.endMs)
+      if(valid)lastEnd=cut.endMs
+      return valid
+    })
+  }
+
   if(!checkpoint.active&&checkpoint.finished.length<all.length){
     const next=all[checkpoint.finished.length]!
     checkpoint.active={...next,stage:'coarse_queue'}
     log('window','start',{sourceIndex:next.sourceIndex,
-      windowIndex:checkpoint.finished.length})
+      windowIndex:checkpoint.finished.length,windowCount:all.length})
     await persist()
     return {done:false,checkpoint}
   }
@@ -120,9 +137,9 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
   const window=checkpoint.active
   if(window){
     const source=args.sources[window.sourceIndex]!
-    const ctx=makeWindowContext(args,window)
+    const ctx=makeWindowContext(args,window,checkpoint.finished.length,all.length)
     const fields={sourceIndex:window.sourceIndex,
-      windowIndex:checkpoint.finished.length}
+      windowIndex:checkpoint.finished.length,windowCount:all.length}
     switch(window.stage){
       case 'coarse_queue':{
         log('gemini_coarse','start',fields)
@@ -206,17 +223,39 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
       case 'finisher':{
         if(!window.outline||!window.cuts)throw Error('yt_footage_missing')
         log('specialist_finisher','start',fields)
-        window.cuts=await ytRunStoryFinisher(ctx,window.outline,window.cuts)
-        window.stage='qa'
-        log('specialist_finisher','done',{...fields,count:window.cuts.length})
+        try{
+          window.cuts=await ytRunStoryFinisher(ctx,window.outline,window.cuts,window.qaIssues??[])
+          window.stage='qa'
+          log('specialist_finisher','done',{...fields,count:window.cuts.length})
+        }catch(error){
+          if(!window.qaRevisionAttempted)throw error
+          window.cuts=grounded(ctx,window.cuts)
+          if(!window.cuts.length)throw Error('yt_no_grounded_window_cuts')
+          window.stage='commit'
+          log('specialist_qa','window_qa_soft_fail',{...fields,code:ytErrorCode(error),
+            accepted:window.cuts.length})
+        }
         break
       }
       case 'qa':{
         if(!window.outline||!window.cuts)throw Error('yt_footage_missing')
         log('specialist_qa','start',fields)
-        await ytQualityReview(ctx,window.outline,window.cuts)
-        window.stage='commit'
-        log('specialist_qa','passed',fields)
+        const review=await ytQualityReview(ctx,window.outline,window.cuts)
+        if(review.pass){
+          window.stage='commit'
+          log('specialist_qa','passed',fields)
+        }else if(!window.qaRevisionAttempted){
+          window.qaRevisionAttempted=true
+          window.qaIssues=review.issues
+          window.stage='finisher'
+          log('specialist_qa','revision_requested',{...fields,code:'yt_qa_revision'})
+        }else{
+          window.cuts=grounded(ctx,window.cuts)
+          if(!window.cuts.length)throw Error('yt_no_grounded_window_cuts')
+          window.stage='commit'
+          log('specialist_qa','window_qa_soft_fail',{...fields,accepted:window.cuts.length,
+            code:'yt_qa_rejected_story'})
+        }
         break
       }
       case 'commit':{
@@ -229,7 +268,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
         }
         checkpoint.finished.push(current)
         checkpoint.active=null
-        log('window','checkpoint_saved',{...fields,accepted:current.cuts.length,
+        log('window','done',{...fields,accepted:current.cuts.length,
           rejected:current.rejected.length})
         break
       }
@@ -249,10 +288,36 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
     return {done:false,checkpoint}
   }
   if(!checkpoint.final.qaPassed){
-    log('global_qa','start',{count:checkpoint.final.selectedIndices.length})
-    await ytQaWholeSourceStory(checkpoint.finished,checkpoint.final)
-    checkpoint.final.qaPassed=true
-    log('global_qa','passed',{count:checkpoint.final.selectedIndices.length})
+    log('global_qa','start',{count:checkpoint.final.selectedIndices.length,
+      windowCount:all.length})
+    const review=await ytQaWholeSourceStory(checkpoint.finished,{
+      ...checkpoint.final,chapterTitles:checkpoint.final.chapterTitles??[],
+    })
+    if(!review.pass){
+      log('global_qa','revision_requested',{count:review.issues.length,
+        windowCount:all.length})
+      try{
+        const revised=await ytFinishWholeSourceStory(checkpoint.finished,{
+          issues:review.issues,previousSelection:{
+            ...checkpoint.final,chapterTitles:checkpoint.final.chapterTitles??[],
+          },
+        })
+        const second=await ytQaWholeSourceStory(checkpoint.finished,revised)
+        checkpoint.final={...revised,qaPassed:true}
+        log('global_qa',second.pass?'passed':'global_qa_soft_fail',{
+          count:second.issues.length,windowCount:all.length,
+          ...(second.pass?{}:{code:'yt_global_qa_rejected'}),
+        })
+      }catch(error){
+        checkpoint.final.qaPassed=true
+        log('global_qa','global_qa_soft_fail',{code:ytErrorCode(error),
+          windowCount:all.length})
+      }
+    }else{
+      checkpoint.final.qaPassed=true
+      log('global_qa','passed',{count:checkpoint.final.selectedIndices.length,
+        windowCount:all.length})
+    }
     await persist()
     return {done:false,checkpoint}
   }
@@ -267,7 +332,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
     premise:checkpoint.final.premise,
     beats:approved.map((cut,i)=>({
       sourceId:cut.sourceId,startMs:cut.startMs,endMs:cut.endMs,
-      label:cut.label || (i===0?'Opening':i===approved.length-1?'Ending':'Story '+i),
+      label:checkpoint.final!.chapterTitles?.[i] || cut.beat || cut.reason,
     })),
     estDurationMs:approved.reduce((sum,cut)=>sum+cut.endMs-cut.startMs,0),
   }
