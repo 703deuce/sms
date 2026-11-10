@@ -31,6 +31,7 @@ export type YtStep = {
   event: string
   sourceIndex?: number
   windowIndex?: number
+  windowCount?: number
   count?: number
   accepted?: number
   rejected?: number
@@ -50,6 +51,8 @@ export type YtActiveWindow = {
   outline?: YtOutline
   cuts?: YtSelectedCut[]
   rejected?: Array<{ startMs: number; endMs: number; code: string }>
+  qaRevisionAttempted?: boolean
+  qaIssues?: string[]
 }
 
 export type YtFinishedWindow = {
@@ -73,6 +76,7 @@ export type YtCheckpoint = {
     title: string
     premise: string
     selectedIndices: number[]
+    chapterTitles?: string[]
     qaPassed: boolean
   }
 }
@@ -94,6 +98,8 @@ export type YtPlanArgs = {
 export type YtTranscriptWord = { w: string; s: number; e: number }
 
 export type YtWindowContext = {
+  windowIndex?: number
+  windowCount?: number
   sourceId: string
   startMs: number
   endMs: number
