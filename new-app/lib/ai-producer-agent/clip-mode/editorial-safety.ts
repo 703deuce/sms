@@ -39,15 +39,41 @@ function phrase(words:readonly TimedWord[]):string{
 function at(words:readonly TimedWord[],from:number,to:number):TimedWord[]{
   return words.filter(w=>w.e*1000>from&&w.s*1000<to)
 }
+function isEllipsisToken(token:string):boolean{
+  return /\.{2,}$|…$/.test(token.trim())
+}
+function isSentenceFinalToken(token:string):boolean{
+  if(isEllipsisToken(token))return false
+  return SENTENCE_END.test(token.trim())
+}
+function lastSpokenToken(tail:string):string{
+  return (tail.trim().split(/\s+/).pop()??'').trim()
+}
+/** Comma, conjunction, or ellipsis landings are unfinished clauses, not sentence ends. */
+function endsOnIncompleteClause(tail:string):boolean{
+  const trimmed=tail.trim()
+  if(!trimmed)return false
+  const last=lastSpokenToken(trimmed)
+  if(isEllipsisToken(last)||isEllipsisToken(trimmed))return true
+  if(/,$/.test(last)||/,$/.test(trimmed))return true
+  if(/\b(?:and|but|or|so|because|which|if|when|that|than|the)\s*[,—-]?$/i.test(trimmed))return true
+  return false
+}
+function endsWithCompleteSentence(tail:string):boolean{
+  const trimmed=tail.trim()
+  if(!trimmed||endsOnIncompleteClause(trimmed))return false
+  return isSentenceFinalToken(trimmed)||isSentenceFinalToken(lastSpokenToken(trimmed))
+}
 function endsMidSentence(tail:string):boolean{
   if(DANGLING.test(tail))return true
   const trimmed=tail.trim()
   if(!trimmed)return false
+  if(endsOnIncompleteClause(trimmed))return true
   // A complete landing usually has sentence punctuation, or is a short
   // exclamation. A clause that just stops mid-thought does not.
-  if(SENTENCE_END.test(trimmed))return false
-  const last=trimmed.split(/\s+/).pop()??''
-  return last.length>0 && !/[.!?…]$/.test(trimmed)
+  if(endsWithCompleteSentence(trimmed))return false
+  const last=lastSpokenToken(trimmed)
+  return last.length>0 && !/[.!?]$/.test(trimmed)
 }
 
 export function clipEditorialAudit(
@@ -72,7 +98,7 @@ export function clipEditorialAudit(
     if(FALSE_START.test(first)||FILLER_OPEN.test(first)){
       issues.push({code:'false_start_opening',detail:'Opening starts mid-thought or with a false start: '+first.slice(0,75),passageIndex:i})
     }
-    if(isStrongContinuation(first)||(isSoftContinuation(first)&&i===0)){
+    if(isStrongContinuation(first,priorText)||(isSoftContinuation(first,priorText)&&i===0)){
       issues.push({code:'continuation_opening',detail:'Passage opens with a continuation word that needs earlier context: '+first.slice(0,75),passageIndex:i})
     }
     if(DANGLING_PRONOUN_OPEN.test(first)&&!pronounHasAntecedent(first,priorText)){
@@ -94,7 +120,7 @@ export function clipEditorialAudit(
           issues.push({code:'cut_context_reference',detail:'Passage refers to a removed exchange: '+first.slice(0,90),passageIndex:i})
       }
     }
-    const tail=phrase(inside.slice(-8))
+    const tail=phrase(wordsClosedBy(words,Math.max(cut.startMs,cut.endMs-8000),cut.endMs).slice(-8))
     if(endsMidSentence(tail))
       issues.push({code:'unfinished_ending',detail:'Ending appears to leave a clause unfinished: '+tail.slice(-90),passageIndex:i})
     // Qualifier immediately following the selected end may change the claim.
@@ -118,7 +144,7 @@ function startsMidPhrase(words:readonly TimedWord[],startMs:number):boolean{
   if(!prev)return false
   const token=prev.w.trim()
   if(!token)return false
-  if(SENTENCE_END.test(token))return false
+  if(isSentenceFinalToken(token))return false
   // A pause after a complete word is still mid-sentence without punctuation.
   const next=words.find(w=>w.s*1000>=startMs-20)
   if(!next)return false
@@ -180,7 +206,7 @@ function lastSentenceStart(words:readonly TimedWord[],beforeMs:number,floorMs:nu
   const region=at(words,floorMs,beforeMs)
   if(!region.length)return null
   for(let i=region.length-1;i>=0;i--){
-    if(SENTENCE_END.test(region[i]!.w)){
+    if(isSentenceFinalToken(region[i]!.w)){
       const next=region[i+1]
       if(next&&next.s*1000<beforeMs)return Math.round(next.s*1000)
       if(!next){
@@ -196,26 +222,37 @@ function lastSentenceStart(words:readonly TimedWord[],beforeMs:number,floorMs:nu
 // speech. Demonstratives and "it" ("And that", "So this", "But it") are
 // not: they often start self-contained hooks or dummy-subject sentences
 // ("And that was the point.", "So this is how we start.", "But it didn't
-// matter."). A first-passage And/So/But is still a soft continuation.
+// matter."). "And if that happens" / "So when this starts" is different:
+// the demonstrative is a condition with no meaning unless the antecedent
+// is already in the clip. A first-passage And/So/But is still a soft
+// continuation when it is not one of those strong cases.
 const CONTINUATION_PRONOUN_OPEN=/^(?:(?:uh|um|ah|er)[,.]?\s*)*(?:and|but|so)\s+(?:he|she|they|him|her|his|their)\b/i
+const CONTINUATION_CONDITIONAL_DEMONSTRATIVE=/^(?:(?:uh|um|ah|er)[,.]?\s*)*(?:and|but|so)\s+(?:if|when)\s+(?:that|this)\b/i
 /** "And he was a great student" is a failure even when the previous word ends a sentence. */
 function isContinuationPronounOpen(opening:string):boolean{
   return CONTINUATION_PRONOUN_OPEN.test(stripLeadingFiller(opening))
 }
-function isStrongContinuation(opening:string):boolean{
+function isConditionalDemonstrativeOpen(opening:string):boolean{
+  return CONTINUATION_CONDITIONAL_DEMONSTRATIVE.test(stripLeadingFiller(opening))
+}
+function demonstrativeHasAntecedent(priorText:string):boolean{
+  return pronounHasAntecedent('that',priorText)
+}
+function isStrongContinuation(opening:string,priorText=''):boolean{
   const t=stripLeadingFiller(opening)
   if(isContinuationPronounOpen(t))return true
+  if(isConditionalDemonstrativeOpen(t)&&!demonstrativeHasAntecedent(priorText))return true
   if(/^(?:also|which|because|anyway|again)\b/i.test(t))return true
   if(/^(?:but|and|so)\s+also\b/i.test(t))return true
   return false
 }
-function isSoftContinuation(opening:string):boolean{
+function isSoftContinuation(opening:string,priorText=''):boolean{
   const t=stripLeadingFiller(opening)
-  return /^(?:and|so|but)\b/i.test(t)&&!isStrongContinuation(t)
+  return /^(?:and|so|but)\b/i.test(t)&&!isStrongContinuation(t,priorText)
 }
 function sentenceEndsIn(words:readonly TimedWord[],startMs:number,endMs:number):number[]{
-  return at(words,startMs,endMs)
-    .filter(w=>SENTENCE_END.test(w.w)&&!/\.{2,}$|…$/.test(w.w))
+  return wordsClosedBy(words,startMs,endMs)
+    .filter(w=>isSentenceFinalToken(w.w))
     .map(w=>Math.round(w.e*1000))
 }
 function sharedCount(a:Set<string>,b:Set<string>):number{
@@ -256,6 +293,41 @@ export function shouldVetoPublish(input:{
   return false
 }
 
+/** Broken media, reordered source, or unintelligible/wrong content. */
+export const CRITICAL_PUBLISH_CODES=new Set<EditorialRiskCode>(['invalid_passage','chronology'])
+const CRITICAL_QA=/broken media|unplayable|no usable (?:audio|video|media)|corrupt(?:ed)? (?:file|media)|wrong (?:source|video) content|unintelligible audio/i
+
+export function isCriticalEditorialFailure(
+  risks:readonly EditorialRisk[],
+  qaIssues:readonly string[]=[],
+):boolean{
+  if(risks.some(r=>CRITICAL_PUBLISH_CODES.has(r.code)))return true
+  if(qaIssues.some(issue=>CRITICAL_QA.test(issue)))return true
+  return false
+}
+
+export type PublishDisposition='publish'|'publish_needs_review'|'drop'
+
+/**
+ * After one executable repair pass: only critical failures are dropped.
+ * Remaining non-critical editorial issues publish flagged needsReview.
+ */
+export function publishDisposition(input:{
+  risks:readonly EditorialRisk[]
+  qaPass:boolean|null
+  qaIssues:readonly string[]
+}):PublishDisposition{
+  if(isCriticalEditorialFailure(input.risks,input.qaIssues))return 'drop'
+  if(shouldVetoPublish(input)||input.qaPass===false)return 'publish_needs_review'
+  return 'publish'
+}
+
+/** If nothing published, still ship the best 1–3 held drafts (flagged), unless there are none. */
+export function chooseFallbackPublications<T>(held:readonly T[],publishedCount:number,max=3):T[]{
+  if(publishedCount>0||!held.length)return []
+  return held.slice(0,Math.max(1,Math.min(max,held.length)))
+}
+
 function nextSentenceStart(words:readonly TimedWord[],fromMs:number,limitMs:number):number|null{
   const region=at(words,fromMs,limitMs)
   if(!region.length)return null
@@ -267,23 +339,27 @@ function nextSentenceStart(words:readonly TimedWord[],fromMs:number,limitMs:numb
     if(i>0&&i<region.length)return Math.round(region[i]!.s*1000)
   }
   for(let j=0;j<region.length-1;j++){
-    if(SENTENCE_END.test(region[j]!.w))return Math.round(region[j+1]!.s*1000)
+    if(isSentenceFinalToken(region[j]!.w))return Math.round(region[j+1]!.s*1000)
   }
   return null
 }
 
+/** Words that finish inside the cut, excluding a later word whose onset overlaps the out-point. */
+function wordsClosedBy(words:readonly TimedWord[],startMs:number,endMs:number):TimedWord[]{
+  return words.filter(w=>Math.round(w.e*1000)<=endMs+20&&w.e*1000>startMs&&Math.round(w.s*1000)<endMs)
+}
 function lastCompletedEnd(words:readonly TimedWord[],startMs:number,endMs:number):number|null{
-  const region=at(words,startMs,endMs)
+  const region=wordsClosedBy(words,startMs,endMs)
   for(let i=region.length-1;i>=0;i--){
-    if(SENTENCE_END.test(region[i]!.w))return Math.round(region[i]!.e*1000)
+    if(isSentenceFinalToken(region[i]!.w))return Math.round(region[i]!.e*1000)
   }
   return null
 }
 
 function nextCompletedEnd(words:readonly TimedWord[],endMs:number,limitMs:number):number|null{
-  const region=at(words,endMs,limitMs)
+  const region=words.filter(w=>Math.round(w.s*1000)>=endMs-20&&w.s*1000<limitMs)
   for(const w of region){
-    if(SENTENCE_END.test(w.w))return Math.round(w.e*1000)
+    if(isSentenceFinalToken(w.w))return Math.round(w.e*1000)
   }
   return null
 }
@@ -318,7 +394,7 @@ export function repairClipBoundaries(
     const ceiling=i+1<next.length?Math.min(next[i+1]!.startMs,cut.endMs+later):cut.endMs+later
     const opening=stripLeadingFiller(phrase(at(words,cut.startMs,cut.startMs+8000)))
     const priorText=phrase(next.slice(0,i).flatMap(c=>at(words,c.startMs,c.endMs)))
-    const needsOpenFix=startsMidPhrase(words,cut.startMs)||FALSE_START.test(opening)||FILLER_OPEN.test(opening)||isStrongContinuation(opening)||(isSoftContinuation(opening)&&i===0)||(DANGLING_PRONOUN_OPEN.test(opening)&&!pronounHasAntecedent(opening,priorText))||(i===0&&REF_OPEN.test(opening.toLowerCase()))
+    const needsOpenFix=startsMidPhrase(words,cut.startMs)||FALSE_START.test(opening)||FILLER_OPEN.test(opening)||isStrongContinuation(opening,priorText)||(isSoftContinuation(opening,priorText)&&i===0)||(DANGLING_PRONOUN_OPEN.test(opening)&&!pronounHasAntecedent(opening,priorText))||(i===0&&REF_OPEN.test(opening.toLowerCase()))
     if(needsOpenFix){
       const snapped=snapToSelfContainedStart(words,cut.startMs,floor,cut.endMs)
       if(snapped!=null&&snapped<cut.startMs){
@@ -350,22 +426,42 @@ export function repairClipBoundaries(
         }
       }
     }
-    const tail=phrase(at(words,Math.max(cut.startMs,cut.endMs-8000),cut.endMs))
-    if(endsMidSentence(tail)){
-      const extended=nextCompletedEnd(words,cut.endMs,ceiling)
+    const splitAtEnd=words.find(w=>{
+      const s=Math.round(w.s*1000),e=Math.round(w.e*1000)
+      return s<cut.endMs&&e>cut.endMs
+    })
+    if(splitAtEnd){
+      const splitStart=Math.round(splitAtEnd.s*1000)
+      if(splitStart>cut.startMs+MIN_KEPT_CUT_MS){
+        cut.endMs=splitStart
+        tailLock.set(cut,splitStart)
+        notes.push('Pulled a join back so it does not cut a word onset')
+      }
+    }
+    const tail=phrase(wordsClosedBy(words,Math.max(cut.startMs,cut.endMs-8000),cut.endMs))
+    // A locked end already pulled back from a later word onset; do not
+    // walk into that next sentence just because the overlap slightly clipped the last word.
+    if(endsMidSentence(tail)&&!tailLock.has(cut)){
+      const extendTo=endsOnIncompleteClause(tail)
+        ? (i+1<next.length?Math.min(next[i+1]!.startMs,cut.endMs+CLAUSE_EXTEND_MS):cut.endMs+CLAUSE_EXTEND_MS)
+        : ceiling
+      const extended=nextCompletedEnd(words,cut.endMs,extendTo)
       if(extended!=null&&extended>cut.endMs){
         cut.endMs=extended
         notes.push('Extended a mid-sentence ending to the next complete sentence')
       }else{
         const trimmed=lastCompletedEnd(words,cut.startMs,cut.endMs)
-        if(trimmed!=null&&trimmed<cut.endMs&&trimmed-cut.startMs>=3000){
+        const keptMs=(trimmed??cut.endMs)-cut.startMs
+        // Keep a short but complete landing (a question, for example) rather
+        // than leaving a comma, conjunction, or ellipsis as the out-point.
+        if(trimmed!=null&&trimmed<cut.endMs&&(keptMs>=3000||(keptMs>=800&&endsWithCompleteSentence(phrase(at(words,cut.startMs,trimmed)))))){
           cut.endMs=trimmed
           tailLock.set(cut,trimmed)
           notes.push('Trimmed a mid-sentence ending back to the last complete sentence')
         }
       }
     }
-    const qualifier=at(words,cut.endMs,Math.min(ceiling,cut.endMs+later))
+    const qualifier=tailLock.has(cut)?[]:at(words,cut.endMs,Math.min(ceiling,cut.endMs+later))
       .filter(w=>!next.some((other,j)=>j!==i&&w.s*1000>=other.startMs&&w.e*1000<=other.endMs))
     if(QUAL_OPEN.test(phrase(qualifier.slice(0,9)).toLowerCase())){
       const end=nextCompletedEnd(words,cut.endMs,Math.min(ceiling,cut.endMs+later))
@@ -398,7 +494,8 @@ export function repairClipBoundaries(
       notes.push('Trimmed a trailing detour that did not connect to the later payoff')
     }
   }
-  let valid=next.filter(c=>c.endMs-c.startMs>=3000)
+  repairJoinEdges(next,words,notes)
+  let valid=next.filter(c=>keepRepairedCut(c,words))
   const coherence=passageCoherenceRisks(valid,words)
   if(coherence.length&&valid.length>=3){
     const drop=new Set(coherence.map(r=>r.passageIndex))
@@ -413,6 +510,8 @@ export function repairClipBoundaries(
       applyOpeningRepairs(valid,words,earlier,notes)
     }
   }
+  repairJoinEdges(valid,words,notes)
+  valid=valid.filter(c=>keepRepairedCut(c,words))
   const sourceEnd=sourceDurationMs(words)
   for(let i=0;i<valid.length;i++){
     const cut=valid[i]!
@@ -421,7 +520,58 @@ export function repairClipBoundaries(
   return {cuts:valid,repaired:notes.length>0,notes,contextBridges}
 }
 
-const MIN_CLIP_TAIL_MS=300
+const CLAUSE_EXTEND_MS=12_000
+/** Pad 80–120ms before the first word onset at a stitch join so the cut does not clip the attack. */
+export const JOIN_ONSET_PAD_MS=100
+const MIN_KEPT_CUT_MS=800
+export const MIN_CLIP_TAIL_MS=300
+
+function keepRepairedCut(cut:ClipSpan,words:readonly TimedWord[]):boolean{
+  const dur=cut.endMs-cut.startMs
+  if(dur>=3000)return true
+  if(dur<MIN_KEPT_CUT_MS)return false
+  const tail=phrase(at(words,Math.max(cut.startMs,cut.endMs-8000),cut.endMs))
+  return endsWithCompleteSentence(tail)
+}
+
+/** Never start mid-word or end mid-word, on a comma/conjunction, or at a word onset. */
+function repairJoinEdges(cuts:ClipSpan[],words:readonly TimedWord[],notes:string[]):void{
+  for(let i=0;i<cuts.length;i++){
+    const cut=cuts[i]!
+    const prevEnd=i>0?cuts[i-1]!.endMs:0
+    // If the out-point slices a later word's onset, pull back to that onset
+    // so the next (omitted or kept) word is not clipped.
+    const split=words.find(w=>{
+      const s=Math.round(w.s*1000),e=Math.round(w.e*1000)
+      return s<cut.endMs&&e>cut.endMs
+    })
+    if(split){
+      const splitStart=Math.round(split.s*1000)
+      if(splitStart>cut.startMs+MIN_KEPT_CUT_MS){
+        cut.endMs=splitStart
+        notes.push('Pulled a join back so it does not cut a word onset')
+      }
+    }
+    const inside=at(words,cut.startMs,cut.endMs)
+    if(!inside.length)continue
+    const firstStart=Math.round(inside[0]!.s*1000)
+    const prevWord=words.filter(w=>Math.round(w.e*1000)<=firstStart+20).at(-1)
+    const afterPrev=prevWord?Math.round(prevWord.e*1000):0
+    const padded=firstStart-JOIN_ONSET_PAD_MS
+    const floor=Math.max(prevEnd,afterPrev,0)
+    const start=Math.max(floor,Math.min(firstStart,padded))
+    if(start<cut.startMs||(cut.startMs>firstStart&&start<=firstStart)){
+      if(start!==cut.startMs){
+        cut.startMs=start
+        notes.push('Added onset padding before a joined clause')
+      }
+    }else if(cut.startMs>firstStart){
+      cut.startMs=firstStart
+      notes.push('Moved a join back to the first word onset')
+    }
+  }
+}
+
 /** Last known source time from the transcript; empty input is 0. */
 function sourceDurationMs(words:readonly TimedWord[]):number{
   let max=0
@@ -491,7 +641,7 @@ function applyOpeningRepairs(
     const floor=i===0?cut.startMs-earlier:Math.max(prevEnd,cut.startMs-earlier)
     const opening=stripLeadingFiller(phrase(at(words,cut.startMs,cut.startMs+8000)))
     const priorText=phrase(cuts.slice(0,i).flatMap(c=>at(words,c.startMs,c.endMs)))
-    const needsOpenFix=startsMidPhrase(words,cut.startMs)||FALSE_START.test(opening)||FILLER_OPEN.test(opening)||isStrongContinuation(opening)||(isSoftContinuation(opening)&&i===0)||(DANGLING_PRONOUN_OPEN.test(opening)&&!pronounHasAntecedent(opening,priorText))||(i===0&&REF_OPEN.test(opening.toLowerCase()))
+    const needsOpenFix=startsMidPhrase(words,cut.startMs)||FALSE_START.test(opening)||FILLER_OPEN.test(opening)||isStrongContinuation(opening,priorText)||(isSoftContinuation(opening,priorText)&&i===0)||(DANGLING_PRONOUN_OPEN.test(opening)&&!pronounHasAntecedent(opening,priorText))||(i===0&&REF_OPEN.test(opening.toLowerCase()))
     if(!needsOpenFix)continue
     const snapped=snapToSelfContainedStart(words,cut.startMs,floor,cut.endMs)
     if(snapped!=null&&snapped<cut.startMs){
@@ -591,10 +741,10 @@ export function clipEditorialInstructions():string{
     'CLIP EDITORIAL CONTRACT — applies to this clip only:',
     'Before selecting or shortening any footage, state the intended POINT in ONE clear sentence (claim, story or joke), and preserve that same point through every cut.',
     'A first line starting with “that’s why”, “so”, “and”, “also”, “but”, “which”, “this”, “her/his/they” without an antecedent, “like I said”, “I mean,” or another backward reference, continuation, dangling pronoun, or mid-phrase start is NOT self-contained. Snap to the sentence start (including a short identifier like “My grandmother.” if it supplies the antecedent). Never add a long preamble or dead air.',
-    'Check EVERY stitched segment opening, not only the first. “also coming to understand” or “but also…” is a continuation of an omitted thought and must be repaired or rejected. A first line such as “And he was a great student,” “But she…,” or “So they…” is not self-contained even if the previous source word ends a sentence: snap back to the antecedent or reject the opening. “And that,” “So this,” and “But it” are not treated as that same strong continuation — demonstratives and “it” often open a self-contained hook or dummy-subject sentence — though a first-passage And/So/But may still be a soft continuation.',
+    'Check EVERY stitched segment opening, not only the first. “also coming to understand” or “but also…” is a continuation of an omitted thought and must be repaired or rejected. A first line such as “And he was a great student,” “But she…,” or “So they…” is not self-contained even if the previous source word ends a sentence: snap back to the antecedent or reject the opening. “And if that happens” or “So when this starts” with no antecedent already in the clip is the same class of continuation and must be snapped back. “And that,” “So this,” and “But it” are not treated as that same strong continuation — demonstratives and “it” often open a self-contained hook or dummy-subject sentence — though a first-passage And/So/But may still be a soft continuation.',
     'Hook with the strongest authentic line that raises a question or tension, but do not move the payoff before its explanation or fabricate/reorder spoken meaning.',
     'For stitched stories, every section must be understandable from the earlier sections in the OUTPUT, not from unplayed original source, and must belong to the same story as the later payoff. If an early passage (for example a childhood anecdote) does not serve the ending, drop it. If an answer refers to a removed interviewer exchange, include that question or do not use the answer.',
-    'Smooth jump cuts at stitch joins with a brief crossfade (and optional punch-in), but never use a transition to hide a broken sentence or missing antecedent. A brief intentional crossfade is not itself a failure. If no rendered audio was supplied, list acoustic joins as a listening warning and do not fail the review for that reason alone.',
+    'Internal joins must land on clause boundaries. Leave about 80–120 milliseconds of onset padding before the first word of a joined clause, and never cut a word onset or end a passage on a comma, conjunction, or ellipsis. Smooth jump cuts at stitch joins with a brief crossfade (and optional punch-in), but never use a transition to hide a broken sentence or missing antecedent. A brief intentional crossfade is not itself a failure. If no rendered audio was supplied, list acoustic joins as a listening warning and do not fail the review for that reason alone.',
     'Never remove a but, only if, unless, exception, caveat, negation or qualifier when it changes the speaker’s actual meaning.',
     'Inspect at least the NEXT 6.5 SECONDS of original source after every proposed END for a late qualifier or concluding thought, and INCLUDE it when materially needed.',
     'End exactly after the authentic full conclusion or joke landing. Mid-sentence endings are a failure. Keep at least 300 milliseconds of tail after the last spoken word when there is room, but never extend that pad across a trimmed boundary, the next kept or dropped segment, or past the end of the source; use a shorter tail when there is not enough room. Short is fine; never pad to the target duration. Cut filler and search detours, not meaning.',

@@ -2,7 +2,7 @@ import {describe,expect,it} from 'vitest'
 import {readFileSync} from 'node:fs'
 import {dirname,join} from 'node:path'
 import {fileURLToPath} from 'node:url'
-import {clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isNonBlockingEditorialQaIssue,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isNonBlockingEditorialQaIssue,JOIN_ONSET_PAD_MS,MIN_CLIP_TAIL_MS,publishDisposition,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {selectMomentFlowTrim} from '@/lib/ai-producer-agent/clip-mode/moment-flow'
 const words=(text:string,startMs=0,spacingMs=380)=>
   text.split(' ').map((w,i)=>({w,s:(startMs+i*spacingMs)/1000,e:(startMs+i*spacingMs+320)/1000}))
@@ -105,7 +105,7 @@ describe('clip-only editorial policy from video review',()=>{
     {startMs:20000,endMs:Math.round(a[a.length-1]!.e*1000)},
   ],[...setup,...q,...a])
   expect(restored.cuts[1]!.startMs).toBeLessThan(20000)
-  expect(restored.cuts[1]!.startMs).toBeGreaterThanOrEqual(8000)
+  expect(restored.cuts[1]!.startMs).toBeGreaterThanOrEqual(8000-JOIN_ONSET_PAD_MS)
  })
  it('vetoes publish when QA or the audit finds a broken opening, ending, or cut context',()=>{
   expect(shouldVetoPublish({
@@ -394,5 +394,197 @@ describe('tail padding respects trim, source, and neighbor bounds',()=>{
     )
     expect(gapped.cuts[0]!.endMs).toBeLessThanOrEqual(4100)
     expect(gapped.cuts[0]!.endMs-Math.round(first.at(-1)!.e*1000)).toBeLessThanOrEqual(300)
+  })
+})
+
+
+describe('And if/when that/this is a continuation; And that remains exempt',()=>{
+  it('flags And if that happens with no antecedent in the clip and snaps back to the setup',()=>{
+    const setup=words('It is foundationally going to change our economy at a time scale that we cannot adapt to.',84630,400)
+    setup[setup.length-1]!.w='to.'
+    const opening=words('And if that happens or if AI slips human control we need a treaty.',Math.round(setup[setup.length-1]!.e*1000)+200,400)
+    opening[opening.length-1]!.w='treaty.'
+    const w=[...setup,...opening]
+    const startMs=Math.round(opening[0]!.s*1000)
+    const endMs=Math.round(opening[opening.length-1]!.e*1000)
+    const risk=clipEditorialAudit([{startMs,endMs}],w)
+    expect(risk.some((x: EditorialFinding)=>x.code==='continuation_opening')).toBe(true)
+    const repaired=repairClipBoundaries([{startMs,endMs}],w)
+    expect(repaired.cuts[0]!.startMs).toBeLessThanOrEqual(Math.round(setup[0]!.s*1000)+20)
+    const text=w.filter((word: TranscriptWord)=>word.e*1000>repaired.cuts[0]!.startMs&&word.s*1000<repaired.cuts[0]!.startMs+8000).map((word: TranscriptWord)=>word.w).join(' ')
+    expect(text.toLowerCase()).toMatch(/change our economy/)
+    expect(text.toLowerCase().startsWith('and if that')).toBe(false)
+  })
+  it('keeps the And that / So this / But it exemption for self-contained later hooks',()=>{
+    const prior=words('Here is the setup and the first reason we changed course today.',0,400)
+    prior[prior.length-1]!.w='today.'
+    const andThat=words('And that was the whole point of the story today.',20000,400)
+    andThat[andThat.length-1]!.w='today.'
+    const soThis=words('So this is how we start the next chapter now.',40000,400)
+    soThis[soThis.length-1]!.w='now.'
+    const butIt=words("But it didn't matter after the work was done.",60000,400)
+    butIt[butIt.length-1]!.w='done.'
+    const cuts=[
+      {startMs:0,endMs:Math.round(prior[prior.length-1]!.e*1000)},
+      {startMs:20000,endMs:Math.round(andThat[andThat.length-1]!.e*1000)},
+      {startMs:40000,endMs:Math.round(soThis[soThis.length-1]!.e*1000)},
+      {startMs:60000,endMs:Math.round(butIt[butIt.length-1]!.e*1000)},
+    ]
+    const risk=clipEditorialAudit(cuts,[...prior,...andThat,...soThis,...butIt])
+    expect(risk.some((x: EditorialFinding)=>x.code==='continuation_opening'&&x.passageIndex===1)).toBe(false)
+    expect(risk.some((x: EditorialFinding)=>x.code==='continuation_opening'&&x.passageIndex===2)).toBe(false)
+    expect(risk.some((x: EditorialFinding)=>x.code==='continuation_opening'&&x.passageIndex===3)).toBe(false)
+  })
+})
+
+describe('internal joins land on clause boundaries with onset padding',()=>{
+  // clip_2c9d41ab: 343.050s ends on "that's..." then 400ms to "I don't..."
+  const join2c9d: TranscriptWord[]=[
+    {w:'If',s:339.130,e:339.290},{w:'we',s:339.290,e:339.450},{w:'pause',s:339.450,e:339.770},
+    {w:'and',s:339.770,e:339.930},{w:'China',s:339.930,e:340.250},{w:"doesn't?",s:340.250,e:340.730},
+    {w:'See,',s:340.730,e:341.130},{w:'I',s:341.130,e:341.210},{w:'just',s:341.530,e:341.690},
+    {w:"don't",s:341.690,e:341.930},{w:'think',s:341.930,e:342.170},{w:'that',s:342.170,e:342.330},
+    {w:"that's...",s:342.330,e:343.050},
+    {w:'I',s:343.450,e:343.850},{w:"don't",s:344.170,e:344.330},{w:'take',s:344.650,e:344.890},
+    {w:'that',s:344.890,e:345.050},{w:'as',s:345.050,e:345.290},{w:'seriously',s:345.290,e:345.610},
+    {w:'as',s:345.610,e:345.770},{w:'a',s:345.770,e:345.850},{w:'lot',s:345.850,e:345.930},
+    {w:'of',s:345.930,e:346.010},{w:'people',s:346.010,e:346.170},{w:'do.',s:346.170,e:346.410},
+  ]
+  it('does not end the 2c9d41ab join at 343.050s on that\'s...',()=>{
+    const cuts=[{startMs:339130,endMs:343050},{startMs:343450,endMs:346410}]
+    const risk=clipEditorialAudit(cuts,join2c9d)
+    expect(risk.some((x: EditorialFinding)=>x.code==='unfinished_ending'&&x.passageIndex===0)).toBe(true)
+    const repaired=repairClipBoundaries(cuts,join2c9d)
+    const first=repaired.cuts[0]!
+    expect(first.endMs).toBeLessThanOrEqual(340730)
+    const last=join2c9d.filter((w: TranscriptWord)=>w.e*1000<=first.endMs+20).at(-1)
+    expect(last?.w).toMatch(/doesn't\?/)
+    expect(first.endMs).not.toBe(343050)
+  })
+
+  // clip_020320f5: "up." ends 386.695, "I" starts 386.670 (onset is cut)
+  const join0203: TranscriptWord[]=[
+    {w:'I',s:382.000,e:382.200},{w:'think',s:382.200,e:382.500},{w:'the',s:383.015,e:383.095},
+    {w:'skier',s:384.855,e:385.335},{w:'can',s:385.335,e:385.575},{w:'still',s:385.575,e:385.815},
+    {w:'swim',s:385.815,e:386.135},{w:'and',s:386.135,e:386.295},{w:'catch',s:386.295,e:386.535},
+    {w:'up.',s:386.535,e:386.695},
+    {w:'I',s:386.670,e:386.910},{w:'mean,',s:386.910,e:387.070},{w:"that's",s:387.070,e:387.230},
+    {w:'apart.',s:388.030,e:388.190},
+    {w:'But,',s:390.270,e:390.430},{w:'eventually,',s:390.430,e:390.910},{w:'yes,',s:390.990,e:391.230},
+    {w:'they',s:391.230,e:391.310},{w:'are',s:391.550,e:391.630},{w:'going',s:391.630,e:391.790},
+    {w:'to',s:391.790,e:391.870},{w:'catch.',s:391.870,e:392.200},
+  ]
+  it('does not cut the onset of I at 386.695s on 020320f5',()=>{
+    const cuts=[{startMs:382000,endMs:386695},{startMs:390270,endMs:392200}]
+    const repaired=repairClipBoundaries(cuts,join0203)
+    const first=repaired.cuts[0]!
+    expect(first.endMs).toBeLessThanOrEqual(386670)
+    const spilled=join0203.filter((w: TranscriptWord)=>w.w==='I'&&Math.round(w.s*1000)===386670)
+    expect(spilled.length).toBe(1)
+    expect(first.endMs).toBeLessThanOrEqual(Math.round(spilled[0]!.s*1000))
+  })
+
+  // clip_26347297: ends on "kids," at 2249.440 then "which means..."
+  const join2634: TranscriptWord[]=[
+    {w:'Maybe',s:2246.000,e:2246.480},{w:'we',s:2246.480,e:2246.720},{w:'should',s:2246.720,e:2247.120},
+    {w:'stop',s:2247.120,e:2247.520},{w:'making',s:2247.520,e:2247.760},{w:'it',s:2247.760,e:2247.920},
+    {w:'so',s:2247.920,e:2248.160},{w:'expensive',s:2248.160,e:2248.560},{w:'to',s:2248.560,e:2248.720},
+    {w:'have',s:2248.720,e:2248.880},{w:'kids,',s:2248.880,e:2249.440},
+    {w:'which',s:2249.600,e:2249.760},{w:'means',s:2249.760,e:2250.080},{w:'that',s:2250.080,e:2250.400},
+    {w:'if',s:2250.400,e:2250.560},{w:'the',s:2250.560,e:2250.720},{w:'only',s:2250.720,e:2250.960},
+    {w:'argument',s:2250.960,e:2251.440},{w:'that',s:2251.440,e:2251.600},{w:'we',s:2251.600,e:2251.760},
+    {w:'have',s:2251.760,e:2252.080},{w:'about',s:2252.080,e:2252.400},{w:'America',s:2252.400,e:2252.720},
+    {w:'is',s:2252.720,e:2252.960},{w:'we',s:2252.960,e:2253.120},{w:"can't",s:2253.120,e:2253.360},
+    {w:'possibly',s:2253.360,e:2253.680},{w:'do',s:2253.680,e:2253.920},{w:'anything',s:2253.920,e:2254.160},
+    {w:'to',s:2254.160,e:2254.320},{w:'make',s:2254.320,e:2254.480},{w:'it',s:2254.480,e:2254.560},
+    {w:'easier',s:2254.560,e:2254.800},{w:'to',s:2254.800,e:2254.880},{w:'have',s:2254.880,e:2255.040},
+    {w:'kids,',s:2255.040,e:2255.280},{w:'we',s:2255.280,e:2255.440},{w:'are',s:2255.440,e:2255.600},
+    {w:'going',s:2255.600,e:2256.400},{w:'to',s:2256.085,e:2256.165},{w:'have',s:2256.165,e:2256.325},
+    {w:'a',s:2256.325,e:2256.485},{w:'race',s:2256.485,e:2256.565},{w:'to',s:2256.565,e:2256.725},
+    {w:'the',s:2256.725,e:2256.885},{w:'bottom.',s:2256.725,e:2257.205},
+    {w:'You',s:2270.120,e:2270.440},{w:'need',s:2270.440,e:2270.600},{w:'to',s:2270.600,e:2270.680},
+    {w:'be',s:2270.680,e:2270.840},{w:'invested.',s:2270.840,e:2271.320},
+  ]
+  it('does not end the 26347297 join on kids, at 2249.440s',()=>{
+    const cuts=[{startMs:2246000,endMs:2249440},{startMs:2270120,endMs:2271320}]
+    const risk=clipEditorialAudit(cuts,join2634)
+    expect(risk.some((x: EditorialFinding)=>x.code==='unfinished_ending'&&x.passageIndex===0)).toBe(true)
+    const repaired=repairClipBoundaries(cuts,join2634)
+    const first=repaired.cuts[0]!
+    expect(first.endMs).toBeGreaterThanOrEqual(2257205)
+    const last=join2634.filter((w: TranscriptWord)=>w.e*1000<=first.endMs+20&&w.s*1000<first.endMs).at(-1)
+    expect(last?.w).toMatch(/bottom\./)
+    expect(first.endMs).toBeGreaterThan(2249440)
+  })
+
+  it('pads about 80–120ms before a joined clause onset when there is room',()=>{
+    const w: TranscriptWord[]=[
+      {w:'We',s:0.200,e:0.400},{w:'were',s:0.400,e:0.600},{w:'done.',s:1.000,e:1.300},
+      {w:'Then',s:2.000,e:2.200},{w:'we',s:2.200,e:2.400},{w:'started.',s:2.400,e:2.800},
+    ]
+    const repaired=repairClipBoundaries([
+      {startMs:200,endMs:1300},
+      {startMs:2000,endMs:2800},
+    ],w)
+    expect(repaired.cuts.length).toBeGreaterThanOrEqual(2)
+    const second=repaired.cuts[1]!
+    expect(second.startMs).toBeGreaterThanOrEqual(2000-JOIN_ONSET_PAD_MS-5)
+    expect(second.startMs).toBeLessThan(2000)
+    expect(second.startMs).toBeGreaterThanOrEqual(1300)
+  })
+})
+
+describe('ae48f53a 300ms tail after treaty.',()=>{
+  const treaty: TranscriptWord[]=[
+    {w:'we',s:379.655,e:379.815},{w:'need',s:379.815,e:379.975},{w:'an',s:379.975,e:380.135},
+    {w:'international',s:380.135,e:380.615},{w:'treaty.',s:380.615,e:381.095},
+  ]
+  it('does not extend into the next word when I starts at the same instant',()=>{
+    const w=[...treaty,{w:'I',s:381.095,e:381.335},{w:'think',s:381.335,e:381.575}]
+    const repaired=repairClipBoundaries([{startMs:379655,endMs:381095}],w)
+    expect(repaired.cuts[0]!.endMs).toBeLessThanOrEqual(381095)
+    const spilled=w.filter((word: TranscriptWord)=>word.s*1000>=381095&&word.s*1000<repaired.cuts[0]!.endMs)
+    expect(spilled.map((word: TranscriptWord)=>word.w).join(' ')).toBe('')
+  })
+  it('keeps a >=300ms tail when a breath remains before the next word',()=>{
+    const w=[...treaty,{w:'I',s:381.495,e:381.735},{w:'think',s:381.735,e:381.975}]
+    const repaired=repairClipBoundaries([{startMs:379655,endMs:381095}],w)
+    const lastEnd=381095
+    expect(repaired.cuts[0]!.endMs-lastEnd).toBeGreaterThanOrEqual(MIN_CLIP_TAIL_MS)
+    expect(repaired.cuts[0]!.endMs).toBeLessThanOrEqual(381495)
+  })
+})
+
+describe('held-draft publish policy',()=>{
+  it('publishes non-critical leftovers flagged needsReview and drops only critical failures',()=>{
+    expect(publishDisposition({
+      risks:[{code:'continuation_opening',detail:'And if that happens',passageIndex:0}],
+      qaPass:false,
+      qaIssues:['The opening depends on omitted setup. Snap back to the antecedent.'],
+    })).toBe('publish_needs_review')
+    expect(publishDisposition({
+      risks:[{code:'unfinished_ending',detail:'kids,',passageIndex:0}],
+      qaPass:false,
+      qaIssues:['Do not end on kids, — restore the clause.'],
+    })).toBe('publish_needs_review')
+    expect(publishDisposition({
+      risks:[{code:'invalid_passage',detail:'Invalid source interval',passageIndex:0}],
+      qaPass:false,
+      qaIssues:['broken media: the source interval is empty'],
+    })).toBe('drop')
+    expect(publishDisposition({
+      risks:[],
+      qaPass:true,
+      qaIssues:[],
+    })).toBe('publish')
+  })
+  it('never returns an empty fallback when held drafts exist and nothing published',()=>{
+    const held=[{id:'a'},{id:'b'},{id:'c'},{id:'d'}]
+    expect(chooseFallbackPublications(held,0,3).map((x:{id:string})=>x.id)).toEqual(['a','b','c'])
+    expect(chooseFallbackPublications(held,2,3)).toEqual([])
+    expect(chooseFallbackPublications([],0,3)).toEqual([])
+  })
+  it('documents that a listening-only remark is still non-blocking',()=>{
+    expect(isNonBlockingEditorialQaIssue('Audio joins are marked as requiring listening review. No waveform was supplied.')).toBe(true)
   })
 })
