@@ -1,4 +1,5 @@
 import { AD_STUDIO_COSTS } from './costs'
+import { adGenerationWindow } from './durations'
 import { getStudioModel } from '@/lib/studio/models'
 import type { AdMode, AdProductInput, AdScript, AdPlan, AdScene } from './types'
 import { chooseStockHit, stockTrim, type AdStockHit } from './stock'
@@ -80,10 +81,20 @@ export async function planAdScenes(args: {
     console.info('[ad-studio:planner] scene_selected', { runId, sceneIndex: scene.index, source: scene.source, reason: scene.reason, modelId: scene.modelId, providerId: scene.providerId })
   }
   if (cursor !== input.durationSec * 1000) throw new Error('Ad plan duration mismatch.')
+  const outputScenes = planned.map(scene => {
+    if (scene.source !== 'generated') return scene
+    if (!scene.modelId) throw new Error('Generated scene is missing a registry model.')
+    const window = adGenerationWindow(scene.modelId, scene.durationSec)
+    console.info('[ad-studio:b3] scene_generation_window', {
+      runId, index: scene.index, modelId: scene.modelId, plannedSec: scene.durationSec,
+      generatedSec: window.generationDurationSec, trimInMs: window.trimInMs, trimOutMs: window.trimOutMs,
+    })
+    return { ...scene, ...window }
+  })
   const costKey = `${mode}_${input.durationSec}` as keyof typeof AD_STUDIO_COSTS
   const plan: AdPlan = {
     script, imagery: { imageJobIds: [], preservedSourceAssetIds: [...input.imageAssetIds, ...(input.logoAssetId ? [input.logoAssetId] : [])] },
-    scenes: planned, creditEstimate: AD_STUDIO_COSTS[costKey],
+    scenes: outputScenes, creditEstimate: AD_STUDIO_COSTS[costKey],
     modelStrategy: 'Prefer approved stock and original product imagery. Use supported registry video models only for necessary short shots after confirmation.',
   }
   console.info('[ad-studio:planner] complete', { runId, count: plan.scenes.length, stock: plan.scenes.filter(s=>s.source==='stock').length, generated: plan.scenes.filter(s=>s.source==='generated').length })

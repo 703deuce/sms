@@ -4,6 +4,7 @@ import { writeAdStoryline } from '@/lib/ad-studio/storyline-agent'
 import { planAdScenes } from '@/lib/ad-studio/planner-agent'
 import { chooseStockHit, stockTrim } from '@/lib/ad-studio/stock'
 import { AD_STUDIO_COSTS } from '@/lib/ad-studio/costs'
+import { adGenerationWindow } from '@/lib/ad-studio/durations'
 import type { AdProductInput } from '@/lib/ad-studio/types'
 
 const input: AdProductInput = {
@@ -65,9 +66,19 @@ describe('Ad Studio B2 contract', () => {
     expect(plan.scenes.every(s => s.endMs - s.startMs === s.durationSec * 1000)).toBe(true)
     expect(plan.scenes.at(-1)?.endMs).toBe(15000)
     expect(plan.scenes.every((s,i) => s.index === i)).toBe(true)
+    expect(plan.scenes.filter(s => s.source === 'generated').every(s => s.generationDurationSec! >= s.durationSec && s.trimOutMs === s.durationSec * 1000 && s.trimInMs === 0)).toBe(true)
     expect(plan.imagery.imageJobIds).toEqual([])
     expect(plan.imagery.preservedSourceAssetIds).toContain('stast_owned')
     expect(plan.creditEstimate).toBeNull()
+  })
+
+  it('resolves the nearest supported provider duration without changing output length', () => {
+    expect(adGenerationWindow('veo-3.1-lite', 3)).toEqual({
+      generationDurationSec: 4, trimInMs: 0, trimOutMs: 3000,
+    })
+    expect(adGenerationWindow('veo-3.1-lite', 5).generationDurationSec).toBe(6)
+    expect(adGenerationWindow('seedance-2.0-mini', 5).generationDurationSec).toBe(5)
+    expect(() => adGenerationWindow('veo-3.1-lite', 9)).toThrow(/supported duration/)
   })
 
   it('plans a 30s image-to-ad with short generated shots using only existing model IDs', async () => {

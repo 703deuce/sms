@@ -92,6 +92,7 @@ async function performPlanning(row: Existing): Promise<AdStudioRun> {
           source: scene.source, reason: scene.reason, providerId: scene.providerId, stockQuery: scene.stockQuery,
           sourceInMs: scene.sourceInMs, sourceOutMs: scene.sourceOutMs, modelId: scene.modelId,
           prompt: scene.prompt, startMs: scene.startMs, endMs: scene.endMs, status: 'planned',
+          generationDurationSec: scene.generationDurationSec, trimInMs: scene.trimInMs, trimOutMs: scene.trimOutMs,
         } })
       }
       return tx.adStudioRun.update({ where: { id: row.id }, data: {

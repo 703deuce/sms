@@ -10726,6 +10726,9 @@ model AdStudioScene {
   sourceOutMs   Int?
   stockQuery    String?
   studioJobId   String?
+  generationDurationSec Int?
+  trimInMs      Int?
+  trimOutMs     Int?
   modelId       String?
   prompt        String?
   startMs       Int
