@@ -16,6 +16,13 @@ function isAbortError(error: unknown) {
   return error instanceof ProjectClipListAbortedError
 }
 
+function isRetryableError(error: unknown) {
+  if (error instanceof ProjectClipListTimeoutError) return true
+  const status = Number((error as { status?: unknown } | null)?.status)
+  if (Number.isFinite(status)) return status === 408 || status === 429 || status >= 500
+  return true
+}
+
 function throwIfAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw new ProjectClipListAbortedError()
 }
@@ -98,7 +105,7 @@ export async function loadProjectClipsWithRetry<T>(opts: {
     } catch (error) {
       if (isAbortError(error)) throw error
       lastError = error
-      if (attempt === maxAttempts) throw error
+      if (!isRetryableError(error) || attempt === maxAttempts) throw error
     }
     await delayWithSignal(baseDelayMs * 2 ** (attempt - 1), opts.signal)
   }
