@@ -80,7 +80,8 @@ describe('caption style snapshot', () => {
       next,
       bounds,
     )
-    expect(srt).toContain('hello though')
+    // Export/NLE SRT applies the style case transform (default sentence).
+    expect(srt).toContain('Hello though')
   })
 
   it('still applies a legacy incomplete saved config', () => {
