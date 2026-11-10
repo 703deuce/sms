@@ -101,6 +101,8 @@ export function TranscriptPanel({
   momentRows,
   onSelectRange,
   compactToolbar = false,
+  textSceneMode = false,
+  onEmphasisSelection,
   largeScript = false,
   documentView = false,
   findRequestSeq = 0,
@@ -153,6 +155,9 @@ export function TranscriptPanel({
   onSelectRange?: (startMs: number, endMs: number) => void
   /** Phase 2b: single-row find + overflow menu; transcript fills panel height. */
   compactToolbar?: boolean
+  /** Optional Vizard-style floating toolbar; regular editor chrome stays unchanged. */
+  textSceneMode?: boolean
+  onEmphasisSelection?: (wordIndices: number[]) => void
   /** Phase 3 script view: larger transcript typography in the main split. */
   largeScript?: boolean
   /** Unified editor keeps instructions available via menu while giving words priority. */
@@ -1205,7 +1210,14 @@ export function TranscriptPanel({
         </div>
       </div>
       )}
-      {selStart !== null && selEnd !== null && (
+      {selStart !== null && selEnd !== null && (textSceneMode ? (
+        <div className="sticky top-0 z-20 flex w-fit max-w-full flex-wrap items-center gap-1 rounded-lg border border-primary/25 bg-popover p-1.5 shadow-lg" data-testid="text-scene-selection-toolbar">
+          <span className="px-2 text-[11px] font-semibold tabular-nums text-muted-foreground">{(() => { const r = selRange(); if (!r) return 'Select words'; const c = (ms: number) => { const s = Math.floor(ms / 1000); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0') }; return c(r[0]) + '–' + c(r[1]) })()}</span>
+          <Button size="sm" variant="ghost" onClick={deleteSelection}><Scissors className="mr-1 size-3.5" />Delete</Button>
+          <Button size="sm" variant="ghost" disabled={!onEmphasisSelection} onClick={() => onEmphasisSelection?.(selectionWords().map((w) => w.i))}>Highlight</Button>
+          <Button size="sm" variant="secondary" disabled={!onSaveAsNewClip} onClick={makeClipFromSelection}>+ Create clip</Button>
+        </div>
+      ) : (
         <div className="flex w-fit gap-1 rounded-lg border border-border bg-popover p-1 shadow-md">
           <Button size="sm" variant="ghost" className="h-8 gap-1" onClick={deleteSelection}>
             <Scissors className="size-3.5" />
@@ -1304,7 +1316,7 @@ export function TranscriptPanel({
               ))
             : null}
         </div>
-      )}
+      ))}
       {!compactToolbar ? (
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={deleteSelection}>Delete selection</Button>

@@ -32,6 +32,8 @@ export const routes = {
   videoEditorNew: (query?: Record<string, string | undefined>) => withQuery('/app/video-editor/new', query),
   edit: (projectId: string, clipId: string, query?: URLSearchParams | string | Record<string, string | string[] | undefined | null>) =>
     withQuery(`/app/video-editor/${projectId}/edit/${clipId}`, query),
+  text: (projectId: string, clipId: string, query?: URLSearchParams | string | Record<string, string | string[] | undefined | null>) =>
+    withQuery('/app/video-editor/' + projectId + '/text/' + clipId, query),
   studio: (projectId: string, clipId: string, query?: URLSearchParams | string | Record<string, string | string[] | undefined | null>) =>
     withQuery(`/app/video-editor/${projectId}/studio/${clipId}`, query),
   script: (projectId: string, query?: URLSearchParams | string | Record<string, string | string[] | undefined | null>) =>
