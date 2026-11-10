@@ -111,6 +111,21 @@ export function prismaYoutubeVideoStore(): YoutubeVideoRunStore {
       })
       return updated.count === 1
     },
+    async claimAssembling(workspaceId,id,chosenOptionId,staleBeforeIso) {
+      const claimed=await db().updateMany({
+        where:{id,workspaceId,status:'running',stage:'assembling',
+          chosenOptionId,updatedAt:{lt:new Date(staleBeforeIso)}},
+        data:{updatedAt:new Date()},
+      })
+      return claimed.count===1
+    },
+    async heartbeatAssembling(workspaceId,id) {
+      const touched=await db().updateMany({
+        where:{id,workspaceId,status:'running',stage:'assembling'},
+        data:{updatedAt:new Date()},
+      })
+      return touched.count===1
+    },
     async update(workspaceId, id, patch) {
       const existing = await db().findFirst({ where: { id, workspaceId }, select: { id: true } })
       if (!existing) throw new Error('youtube_video_run_missing')
@@ -211,11 +226,38 @@ export const writeYoutubeVideoClip: WriteYoutubeClip = async ({ workspaceId, cre
   const firstSource = bySource.get(first.sourceId)
   if (!firstSource) throw new YoutubeVideoError('source_not_found', 'Story opening source is unavailable.', 404)
 
-  const created = await traceYoutubeRunStep(runId, 'output_project_create', () => createAiProducerOutputProject({
-    workspaceId, createdById: createdById ?? 'system',
-    runId, title: option.title, sourceProjectId: firstSource.projectId,
-    clipStartMs: first.startMs, clipEndMs: first.endMs,
-  }), { projectId: firstSource.projectId })
+  // A killed web container can leave an output project before the run advances.
+  // Reattach to that exact clip by durable run marker; never create another.
+  const prior=await prisma.clip.findFirst({
+    where:{workspaceId,deletedAt:null,
+      aiMeta:{path:['aiProducerRunId'],equals:runId}},
+    orderBy:{createdAt:'asc'},
+    select:{id:true,projectId:true,editsSaveVersion:true,aiMeta:true},
+  })
+  const created=prior
+    ?{projectId:prior.projectId,clipId:prior.id}
+    :await traceYoutubeRunStep(runId,'output_project_create',()=>createAiProducerOutputProject({
+      workspaceId,createdById:createdById??'system',
+      runId,title:option.title,sourceProjectId:firstSource.projectId,
+      clipStartMs:first.startMs,clipEndMs:first.endMs,
+    }),{projectId:firstSource.projectId})
+  if(prior){
+    youtubeRunEvent(runId,'story_assembly','existing_clip_reused',{projectId:created.projectId})
+    const meta=prior.aiMeta&&typeof prior.aiMeta==='object'&&!Array.isArray(prior.aiMeta)
+      ?prior.aiMeta as Record<string,unknown>:{}
+    if(meta.youtubeVideoRunId===runId){
+      const priorRender=await prisma.clipRender.findFirst({
+        where:{workspaceId,clipId:created.clipId,
+          status:{in:['READY','RENDERING','QUEUED']}},
+        orderBy:{createdAt:'desc'},select:{id:true},
+      })
+      if(priorRender){
+        return {projectId:created.projectId,clipId:created.clipId,
+          durationMs:cuts.reduce((sum,cut)=>sum+cut.endMs-cut.startMs,0),
+          renderId:priorRender.id}
+      }
+    }
+  }
 
   const distinctUploads = new Map(uploads.map((upload) => [upload.id, upload]))
   await traceYoutubeRunStep(runId, 'source_media_register', async () => {
@@ -253,7 +295,7 @@ export const writeYoutubeVideoClip: WriteYoutubeClip = async ({ workspaceId, cre
     ),
   { projectId: created.projectId })
   await traceYoutubeRunStep(runId, 'segments_write', () =>
-    writeClipEditsOrThrow(created.clipId, bounds, 0, () => edits),
+    writeClipEditsOrThrow(created.clipId, bounds, prior?.editsSaveVersion??0, () => edits),
   { projectId: created.projectId })
   youtubeRunEvent(runId, 'segments_write', 'done', {
     projectId: created.projectId, sourceCount: distinctUploads.size, wordCount: cuts.length,
