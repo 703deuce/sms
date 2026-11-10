@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-// @ts-ignore root tsc does not resolve the new-app vitest install
+// @ts-expect-error root tsc does not resolve the new-app vitest install
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-// @ts-ignore root tsc does not resolve @testing-library/react
+// @ts-expect-error root tsc does not resolve @testing-library/react
 import { fireEvent, render, waitFor, cleanup } from '@testing-library/react'
 import { ExportDialog } from '../components/clips/editor/export-dialog'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '../lib/clips/edits'

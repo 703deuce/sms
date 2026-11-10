@@ -243,7 +243,7 @@ export function normalizeCaptionLinesDetailed(raw: unknown): {
     const report = { droppedInvalid: 0, reordered: false }
     return { lines: attachCaptionLineNormalizeReport([], report), report }
   }
-  const rows: CaptionLine[] = []
+  let rows: CaptionLine[] = []
   let droppedInvalid = 0
   for (const r of raw) {
     if (!r || typeof r !== 'object' || Array.isArray(r)) continue
@@ -276,6 +276,9 @@ export function normalizeCaptionLinesDetailed(raw: unknown): {
     }
     if (rows.length >= CAPTION_LINES_MAX) break
   }
+  // Merge undersized split siblings before the overlap trim so a short leftover
+  // (e.g. a 1-char overflow over 4s, or a 40-word cue over 150ms) is kept, not dropped.
+  rows = mergeUndersizedCaptionPieces(rows)
   const orderBefore = rows.map((x) => `${x.id}:${x.startMs}:${x.endMs}`).join('|')
   rows.sort((p, q) => p.startMs - q.startMs || p.endMs - q.endMs)
   const reordered = rows.length > 1 && rows.map((x) => `${x.id}:${x.startMs}:${x.endMs}`).join('|') !== orderBefore
@@ -284,7 +287,19 @@ export function normalizeCaptionLinesDetailed(raw: unknown): {
   for (const x of rows) {
     const s = Math.max(x.startMs, prevEnd)
     if (x.endMs - s < CAPTION_LINE_MIN_MS) {
-      droppedInvalid += 1
+      const prev = out[out.length - 1]
+      if (prev) {
+        out[out.length - 1] = {
+          ...prev,
+          text: serializeTokens([...lineTokens(prev.text), ...lineTokens(x.text)]),
+          endMs: Math.max(prev.endMs, x.endMs),
+        }
+        prevEnd = Math.max(prevEnd, x.endMs)
+      } else {
+        // No neighbor to merge into; keep the words on the original span.
+        out.push({ ...x })
+        prevEnd = x.endMs
+      }
       continue
     }
     out.push({ ...x, startMs: s })
@@ -560,6 +575,40 @@ export function captionLinesToTxt(lines: CaptionLine[]): string {
  * G3afix: optional import re-chunk — every cue split into captions of `wordsPerLine` words, timed
  * by length like the burned captions (cue line breaks dropped, <i>/<b> kept per word).
  */
+
+/**
+ * Merge a split piece shorter than CAPTION_LINE_MIN_MS into its neighbor.
+ * Same rule as rechunkCaptionLines: prefer the previous abutting cue, otherwise the next.
+ * A merged cue may exceed CAPTION_LINE_MAX_CHARS only when a standalone piece would be under
+ * the 100ms floor (unavoidable). Never drops words from a duration-valid source cue.
+ */
+export function mergeUndersizedCaptionPieces(lines: CaptionLine[]): CaptionLine[] {
+  const joinText = (left: CaptionLine, right: CaptionLine, endMs: number): CaptionLine => ({
+    ...left,
+    text: serializeTokens([...lineTokens(left.text), ...lineTokens(right.text)]),
+    endMs,
+  })
+  const merged: CaptionLine[] = []
+  for (const x of lines) {
+    const prev = merged[merged.length - 1]
+    if (x.endMs - x.startMs < CAPTION_LINE_MIN_MS && prev && prev.endMs === x.startMs) {
+      merged[merged.length - 1] = joinText(prev, x, x.endMs)
+    } else {
+      merged.push(x)
+    }
+  }
+  const out: CaptionLine[] = []
+  for (const x of merged) {
+    const prev = out[out.length - 1]
+    if (prev && prev.endMs - prev.startMs < CAPTION_LINE_MIN_MS && prev.endMs === x.startMs) {
+      out[out.length - 1] = joinText(prev, x, x.endMs)
+    } else {
+      out.push(x)
+    }
+  }
+  return out
+}
+
 export function rechunkCaptionLines(lines: CaptionLine[], wordsPerLine: number): CaptionLine[] {
   const wpl = Math.max(1, Math.round(wordsPerLine) || 1)
   const out: CaptionLine[] = []
@@ -576,15 +625,8 @@ export function rechunkCaptionLines(lines: CaptionLine[], wordsPerLine: number):
       out.push({ id: `cl${out.length}_${a}`, text: serializeTokens(part), startMs: a, endMs: b })
     }
   }
-  // pieces shorter than the minimum are merged into the previous caption by the normalizer's trim
-  const merged: CaptionLine[] = []
-  for (const x of out) {
-    const prev = merged[merged.length - 1]
-    if (x.endMs - x.startMs < CAPTION_LINE_MIN_MS && prev && prev.endMs === x.startMs) {
-      merged[merged.length - 1] = { ...prev, text: serializeTokens([...lineTokens(prev.text), ...lineTokens(x.text)]), endMs: x.endMs }
-    } else merged.push(x)
-  }
-  return normalizeCaptionLinesEdits(merged) ?? []
+  // pieces shorter than the minimum are merged into a neighbor (same helper as normalize)
+  return normalizeCaptionLinesEdits(mergeUndersizedCaptionPieces(out)) ?? []
 }
 
 /**
