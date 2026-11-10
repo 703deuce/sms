@@ -64,9 +64,25 @@ export async function createStudioJob(
     workspaceId: string
     userId: string
     body: StudioCreateJobInput
+    /** Internal durable id for Ad Studio. Replays only read the original job; never createTask again. */
+    jobId?: string
   },
 ): Promise<StudioJob> {
   const resolved = resolveStudioCreateInput(input.body)
+  if (input.jobId) {
+    const existing = await svc.store.getJob(input.workspaceId, input.jobId)
+    if (existing) {
+      if (existing.userId !== input.userId || existing.modelId !== resolved.model.id ||
+          existing.mode !== resolved.mode || existing.prompt !== resolved.prompt ||
+          existing.durationSec !== resolved.durationSec ||
+          existing.referenceAssetId !== resolved.referenceAssetId ||
+          existing.startFrameAssetId !== resolved.startFrameAssetId) {
+        throw new StudioError('INVALID_PARAMS', 'A Studio generation id was already used for different input')
+      }
+      console.info('[ad-studio:b3] child_job_replay', { jobId: existing.id, status: existing.status })
+      return serializeStudioJob(existing)
+    }
+  }
   if (resolved.projectId) {
     const ok = await svc.store.projectExists(input.workspaceId, resolved.projectId)
     if (!ok) throw new StudioError('PROJECT_NOT_FOUND', 'Project not found')
@@ -78,7 +94,7 @@ export async function createStudioJob(
   }
 
   const now = svc.now()
-  const id = createId('stjob')
+  const id = input.jobId ?? createId('stjob')
   const queued: StudioJobRecord = {
     id,
     workspaceId: input.workspaceId,
@@ -113,7 +129,26 @@ export async function createStudioJob(
     startedAt: null,
     completedAt: null,
   }
-  await svc.store.createJob(queued)
+  try {
+    await svc.store.createJob(queued)
+  } catch (err) {
+    // If a concurrent caller won the unique-id insert, it owns the only paid createTask.
+    if (input.jobId) {
+      const existing = await svc.store.getJob(input.workspaceId, id)
+      if (existing) {
+        if (existing.userId !== input.userId || existing.modelId !== resolved.model.id ||
+            existing.mode !== resolved.mode || existing.prompt !== resolved.prompt ||
+            existing.durationSec !== resolved.durationSec ||
+            existing.referenceAssetId !== resolved.referenceAssetId ||
+            existing.startFrameAssetId !== resolved.startFrameAssetId) {
+          throw new StudioError('INVALID_PARAMS', 'A Studio generation id was already used for different input')
+        }
+        console.info('[ad-studio:b3] child_job_concurrent_replay', { jobId: id, status: existing.status })
+        return serializeStudioJob(existing)
+      }
+    }
+    throw err
+  }
 
   let taskId: string
   try {
