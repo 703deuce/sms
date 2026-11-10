@@ -3,6 +3,7 @@ import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { shouldResumeClipperFromTranscript } from '@/lib/server/clips/project-retry'
+import { isCaptionsOnlyProjectSettings } from '@/lib/ai-captions/auto-agent-guard'
 
 const NON_TERMINAL: ClipProjectStatus[] = [
   'UPLOADING',
@@ -32,6 +33,15 @@ export async function enqueueClipperRecoveryJob(projectId: string, reason: strin
 
   const project = await prisma.clipProject.findUnique({ where: { id: projectId } })
   if (!project || !clipperProjectNeedsRecovery(project.status)) return null
+  if (isCaptionsOnlyProjectSettings(project.settings)) {
+    console.info('[clipper:watchdog]', {
+      action: 'skip_captions_only_recovery',
+      projectId,
+      stage: project.stage,
+      reason,
+    })
+    return null
+  }
 
   const active = await prisma.clipJob.findFirst({
     where: { projectId, status: { in: ['QUEUED', 'RUNNING'] } },

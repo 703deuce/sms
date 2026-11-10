@@ -12,11 +12,18 @@ export function captionsOnlyProjectSettings(durationMs: number): {
   return { captionsOnly: true, rangeStartMs: 0, rangeEndMs: Math.max(0, durationMs) }
 }
 
+export function isCaptionsOnlyProjectSettings(settings: unknown): boolean {
+  return Boolean(
+    settings && typeof settings === 'object' && !Array.isArray(settings) &&
+    (settings as Record<string, unknown>).captionsOnly === true,
+  )
+}
+
 export function shouldAutoStartUploadAgentBatch(
   settings: Record<string, unknown> | null | undefined,
 ): boolean {
   const s = settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {}
-  if (s.captionsOnly === true) return false
+  if (isCaptionsOnlyProjectSettings(s)) return false
   const mode = s.autoAgentClipMode
   if (typeof mode !== 'string' || !AUTO_AGENT_MODES.has(mode)) return false
   if (s.agentClipBatch || s.unifiedClipRunId) return false

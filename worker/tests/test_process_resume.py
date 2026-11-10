@@ -1,7 +1,7 @@
 """Resume / transcript helpers for PROCESS_PROJECT recovery."""
 import json
 
-from clips_worker.process_helpers import job_payload, resolve_transcript_for_job, stored_transcript_words
+from clips_worker.process_helpers import is_captions_only_project, job_payload, resolve_transcript_for_job, stored_transcript_words
 
 
 def test_job_payload_parses_json_string():
@@ -32,3 +32,11 @@ def test_resolve_transcript_force_retranscribe():
 
 def test_resolve_transcript_fresh_project():
     assert resolve_transcript_for_job({}, {}) is None
+
+
+def test_captions_only_detected_from_persisted_project_settings():
+    assert is_captions_only_project({"settings": {"captionsOnly": True}})
+    assert is_captions_only_project({"settings": '{"captionsOnly": true}'})
+    assert not is_captions_only_project({"settings": {"captionsOnly": False}})
+    assert not is_captions_only_project({"settings": {"autoAgentClipMode": "clip_unified_v1"}})
+    assert not is_captions_only_project({"settings": "{bad json"})

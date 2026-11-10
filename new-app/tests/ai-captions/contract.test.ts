@@ -12,7 +12,7 @@ import {
 import { isLowConfidence } from '@/lib/ai-captions/words'
 import { groupCaptionLines } from '@/lib/ai-captions/lines'
 import { srtFromLines } from '@/lib/ai-captions/srt'
-import { captionsOnlyProjectSettings, shouldAutoStartUploadAgentBatch } from '@/lib/ai-captions/auto-agent-guard'
+import { captionsOnlyProjectSettings, isCaptionsOnlyProjectSettings, shouldAutoStartUploadAgentBatch } from '@/lib/ai-captions/auto-agent-guard'
 
 describe('ai-captions contract helpers', () => {
   it('defaults to clean_white and lists all 14 built-in presets', () => {
@@ -97,6 +97,11 @@ describe('ai-captions contract helpers', () => {
     // The settings we actually persist never include a clipper mode.
     const saved = captionsOnlyProjectSettings(1_800_000)
     expect(saved.captionsOnly).toBe(true)
+    expect(isCaptionsOnlyProjectSettings(saved)).toBe(true)
+    expect(isCaptionsOnlyProjectSettings({ captionsOnly: true, autoAgentClipMode: 'clip_unified_v1' })).toBe(true)
+    expect(isCaptionsOnlyProjectSettings({ captionsOnly: false })).toBe(false)
+    expect(isCaptionsOnlyProjectSettings({ autoAgentClipMode: 'clip_unified_v1' })).toBe(false)
+    expect(isCaptionsOnlyProjectSettings(null)).toBe(false)
     expect('autoAgentClipMode' in saved).toBe(false)
     expect(shouldAutoStartUploadAgentBatch(saved)).toBe(false)
   })

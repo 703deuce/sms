@@ -10,6 +10,7 @@ import {
 } from '@/lib/server/clips/job-reliability'
 import { getPrisma } from '@/lib/server/db'
 import { enqueueClipperRecoveryJob, isTranscriptReadyOrphan } from '@/lib/server/clips/recover-project'
+import { isCaptionsOnlyProjectSettings } from '@/lib/ai-captions/auto-agent-guard'
 import { clampEtaBetweenPolls, etaStageKey } from '@/lib/clips/eta-poll'
 import { computeNonStreamerClipEtaSec } from '@/lib/server/clips/project-eta'
 import { fairQueueAheadForJob } from '@/lib/server/clips/job-queue-fairness'
@@ -340,10 +341,14 @@ export async function reapStaleJobs() {
       streamVod: { is: null },
       jobs: { none: { status: { in: ['QUEUED', 'RUNNING'] } } },
     },
-    select: { id: true, stage: true, status: true },
+    select: { id: true, stage: true, status: true, settings: true },
     take: 20,
   })
   for (const project of legacyOrphans) {
+    if (isCaptionsOnlyProjectSettings(project.settings)) {
+      console.info('[clipper:watchdog]', { action: 'skip_captions_only_orphan', projectId: project.id, stage: project.stage })
+      continue
+    }
     if (!isTranscriptReadyOrphan(project.stage, project.status)) continue
     const recovered = await enqueueClipperRecoveryJob(project.id, 'watchdog_transcript_ready')
     if (recovered) requeued += 1
@@ -356,10 +361,14 @@ export async function reapStaleJobs() {
       streamVod: { is: null },
       jobs: { none: { status: { in: ['QUEUED', 'RUNNING'] } } },
     },
-    select: { id: true, stage: true, status: true },
+    select: { id: true, stage: true, status: true, settings: true },
     take: 15,
   })
   for (const project of clipperOrphans) {
+    if (isCaptionsOnlyProjectSettings(project.settings)) {
+      console.info('[clipper:watchdog]', { action: 'skip_captions_only_orphan', projectId: project.id, stage: project.stage })
+      continue
+    }
     if (isTranscriptReadyOrphan(project.stage, project.status)) continue
     const recovered = await enqueueClipperRecoveryJob(project.id, 'watchdog_orphan')
     if (recovered) requeued += 1

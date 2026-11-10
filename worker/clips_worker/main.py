@@ -307,11 +307,16 @@ def load_project(conn, project_id: str) -> dict:
     return dict(row)
 
 
-from clips_worker.process_helpers import job_payload, resolve_transcript_for_job
+from clips_worker.process_helpers import is_captions_only_project, job_payload, resolve_transcript_for_job
 
 
 def process_job(conn, job: dict) -> None:
-    project = load_project(conn, job["projectId"])
+    from clips_worker.stage_log import bind_stage_context, stage_event, stage_span
+
+    bind_stage_context(project_id=str(job["projectId"]), job_id=str(job["id"]))
+    with stage_span("project_load"):
+        project = load_project(conn, job["projectId"])
+    captions_only = is_captions_only_project(project)
     if project.get("status") == "CANCELED":
         post_progress(job["id"], {"jobStatus": "FAILED", "error": "canceled"})
         return
@@ -323,10 +328,9 @@ def process_job(conn, job: dict) -> None:
     payload = job_payload(job)
     words = resolve_transcript_for_job(project, payload)
 
-    from clips_worker.stage_log import bind_stage_context, stage_event, stage_span
-
-    bind_stage_context(project_id=str(project["id"]), job_id=str(job["id"]))
-    if str(job.get("type") or "") == "PROCESS_PROJECT":
+    if captions_only:
+        stage_event("captions_ingest", "begin", project_id=project["id"], job_id=job["id"], mode="transcribe_only")
+    if str(job.get("type") or "") == "PROCESS_PROJECT" and not captions_only:
         from clips_worker.gpu.render_warmup import schedule_modal_warmup_background
 
         schedule_modal_warmup_background()
@@ -339,7 +343,7 @@ def process_job(conn, job: dict) -> None:
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
         src = td_path / "source.mp4"
-        if payload.get("blank") is True:
+        if payload.get("blank") is True and not captions_only:
             # G1b3: blank project — black, silent canvas; no download, no transcription, no credits.
             from clips_worker.blank_project import prepare_blank_source
             from clips_worker.byo_clip_job import finalize_byo_clip
@@ -352,9 +356,13 @@ def process_job(conn, job: dict) -> None:
             download_object(key, src)
         post_progress(job["id"], {"projectStatus": "PREPARING", "stage": "preparing", "progress": 8})
 
-        _ = probe_duration(src)
+        if captions_only:
+            with stage_span("captions_source_probe"):
+                _ = probe_duration(src)
+        else:
+            _ = probe_duration(src)
         audio_wav = td_path / "audio.wav"
-        if payload.get('agentOnly') is not True:
+        if not captions_only and payload.get('agentOnly') is not True:
             extract_wav_for_picker(src, audio_wav)
         byo_job = payload.get("byo") is True
         if words:
@@ -365,8 +373,8 @@ def process_job(conn, job: dict) -> None:
             )
             stage_event("transcribe", "skipped", project_id=project["id"], job_id=job["id"], transcriptWords=len(words))
             resume_progress = {
-                "projectStatus": "TRANSCRIBING" if byo_job else "FINDING_CLIPS",
-                "stage": "transcribing" if byo_job else "finding_clips",
+                "projectStatus": "TRANSCRIBING" if (byo_job or captions_only) else "FINDING_CLIPS",
+                "stage": "transcribing" if (byo_job or captions_only) else "finding_clips",
                 "progress": 45,
                 "transcriptWords": words,
                 "jobStatus": "RUNNING",
@@ -406,6 +414,35 @@ def process_job(conn, job: dict) -> None:
                     **tx_meta.as_progress_fields(),
                 },
             )
+
+        if captions_only:
+            # Persist the transcript, project terminal state and completed job in
+            # one SQL transaction BEFORE the HTTP callback. This remains READY even
+            # if web deploys interrupt a callback; never fall through to a picker.
+            with stage_span("captions_ready_commit"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """UPDATE clip_projects
+                           SET status='READY', stage='ready', progress=100,
+                               error=NULL, "transcriptWords"=%s::jsonb,
+                               "updatedAt"=NOW()
+                           WHERE id=%s AND status <> 'CANCELED'
+                           RETURNING id""",
+                        (json.dumps(words), project["id"]),
+                    )
+                    marked_ready = cur.fetchone() is not None
+                _mark_job_done(conn, job["id"])
+            if not marked_ready:
+                stage_event("captions_ingest", "canceled", transcriptWords=len(words))
+                return
+            stage_event("captions_ingest", "ready", transcriptWords=len(words))
+            with stage_span("captions_ready_callback"):
+                post_progress_terminal(job["id"], {
+                    "projectStatus": "READY", "stage": "ready", "progress": 100,
+                    "transcriptWords": words, "jobStatus": "DONE", "error": None,
+                })
+            log(f"finished captions-only job={job['id']} project={project['id']} words={len(words)}")
+            return
 
         if payload.get('agentOnly') is True:
             # Do not mark READY here. READY-with-0-clips is what made the UI say

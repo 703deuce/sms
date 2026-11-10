@@ -11,6 +11,21 @@ def job_payload(job: dict) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
+def is_captions_only_project(project: dict) -> bool:
+    """Only the explicit persisted captionsOnly flag opts out of clip picking.
+
+    Read settings, not job payload, so legacy/requeued jobs cannot run the
+    normal picker even if their payload loses agentOnly.
+    """
+    settings = project.get("settings") or {}
+    if isinstance(settings, str):
+        try:
+            settings = json.loads(settings)
+        except (ValueError, TypeError):
+            return False
+    return isinstance(settings, dict) and settings.get("captionsOnly") is True
+
+
 def stored_transcript_words(project: dict) -> list[dict] | None:
     tw = project.get("transcriptWords")
     if not tw:
