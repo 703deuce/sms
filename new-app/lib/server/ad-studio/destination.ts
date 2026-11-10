@@ -2,7 +2,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
-import { uploadSourceKey, storageDriverName } from '@/lib/storage'
+import { clipWordsKey, getClipStorage, uploadSourceKey, storageDriverName } from '@/lib/storage'
 import { defaultClipSettings } from '@/lib/clips/settings'
 import { buildAdTimelineEdits, type AdTimelineScene } from '@/lib/ad-studio/timeline'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
@@ -13,6 +13,13 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 const stableId = (prefix: string, key: string) =>
   prefix + createHash('sha256').update(key).digest('hex').slice(0, 32)
+
+async function writeAdClipWords(workspaceId: string, projectId: string, clipId: string): Promise<void> {
+  const key = clipWordsKey(workspaceId, projectId, clipId)
+  console.info('[ad-studio:b3] clip_words_write_begin', { projectId, clipId })
+  await getClipStorage(storageDriverName()).putJson(key, [])
+  console.info('[ad-studio:b3] clip_words_write_complete', { projectId, clipId })
+}
 
 /** No PROCESS_PROJECT: create the real DB project first, then the B3 canvas job. */
 export async function ensureAdDestinationProject(workspaceId: string, runId: string): Promise<'queued' | 'ready' | 'failed'> {
@@ -104,7 +111,11 @@ export async function ensureAdEditorClip(workspaceId: string, runId: string): Pr
   const db = getPrisma()
   const run = await db.adStudioRun.findFirst({ where: { id: runId, workspaceId } })
   if (!run || run.status !== 'stitching' || !run.projectId) return null
-  if (run.clipId) return run.clipId
+  if (run.clipId) {
+    await writeAdClipWords(workspaceId, run.projectId, run.clipId)
+    console.info('[ad-studio:b3] editor_clip_reused', { runId, projectId: run.projectId, clipId: run.clipId })
+    return run.clipId
+  }
   const input = run.input as unknown as AdProductInput
   const scenes = await db.adStudioScene.findMany({ where: { runId }, orderBy: { index: 'asc' } })
   if (scenes.some(s => s.status !== 'ready' && s.status !== 'skipped')) return null
@@ -169,6 +180,7 @@ export async function ensureAdEditorClip(workspaceId: string, runId: string): Pr
       aiMeta: toPrismaJson({ adStudioRunId: runId, originalProductImageCount: productPhotos.length }) },
     update: {},
   })
+  await writeAdClipWords(workspaceId, projectId, clipId)
   await db.adStudioRun.updateMany({ where: { id: runId, workspaceId, status: 'stitching', clipId: null },
     data: { clipId } })
   console.info('[ad-studio:b3] editor_clip_created', { runId, projectId, clipId })
