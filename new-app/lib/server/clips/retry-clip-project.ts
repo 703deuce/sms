@@ -44,7 +44,7 @@ export async function retryClipProject(workspaceId: string, projectId: string) {
     const runningAgent = activeRuns.find((run) =>
       Array.isArray(run.sourceSnapshot) && run.sourceSnapshot.some((source) =>
         source != null && typeof source === 'object' && !Array.isArray(source) &&
-        source.projectId === projectId))
+        (source as Record<string, unknown>).projectId === projectId))
     if (runningAgent) {
       console.info('[clips:double-run]', { projectId, existingRunId: runningAgent.id, action: 'rejected_retry_agent' })
       throw new Error('AI clips are already processing for this project.')
