@@ -10686,3 +10686,52 @@ model AiCaptionsWorkspacePref {
 
   @@map("ai_captions_workspace_prefs")
 }
+
+/// Ad Studio v1 runs. Additive; existing studio jobs/assets remain unchanged.
+model AdStudioRun {
+  id              String   @id
+  workspaceId     String
+  userId          String
+  mode            String
+  status          String
+  idempotencyKey  String
+  input           Json
+  plan            Json?
+  creditEstimate  Int?
+  creditCharged   Int?
+  projectId       String?
+  clipId          String?
+  errorCode       String?
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  completedAt     DateTime?
+  scenes          AdStudioScene[]
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, createdAt])
+}
+
+model AdStudioScene {
+  id            String @id
+  runId         String
+  index         Int
+  role          String
+  durationSec   Int
+  source        String
+  reason        String
+  providerId    String?
+  stockAssetId  String?
+  sourceInMs    Int?
+  sourceOutMs   Int?
+  stockQuery    String?
+  studioJobId   String?
+  modelId       String?
+  prompt        String?
+  startMs       Int
+  endMs         Int
+  status        String
+  run           AdStudioRun @relation(fields: [runId], references: [id])
+
+  @@unique([runId, index])
+}
