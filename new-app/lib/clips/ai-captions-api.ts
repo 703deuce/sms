@@ -40,6 +40,11 @@ export function createAiCaptionsRun(body: {
   })
 }
 
+export function listAiCaptionsRuns(): Promise<AiCaptionsRun[]> {
+  console.info('[ai-captions:client] list_runs_begin')
+  return captionsFetch<AiCaptionsRun[]>('/api/ai-captions/runs')
+}
+
 export function getAiCaptionsRun(runId: string): Promise<AiCaptionsRun> {
   return captionsFetch<AiCaptionsRun>(`/api/ai-captions/runs/${runId}`)
 }
@@ -60,6 +65,11 @@ export function startAiCaptionsExport(runId: string): Promise<AiCaptionsExportDa
     method: 'POST',
     body: '{}',
   })
+}
+
+export function aiCaptionsVttUrl(runId: string): string {
+  console.info('[ai-captions:client] vtt_download_link', { runId })
+  return `/api/ai-captions/runs/${encodeURIComponent(runId)}/vtt`
 }
 
 export function aiCaptionsSrtUrl(runId: string): string {

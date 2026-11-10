@@ -3,6 +3,8 @@ import 'server-only'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
+import { getClipStorage } from '@/lib/storage'
+import { CLIPS_EDITOR_MEDIA_TTL_SEC, createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 import { loadProjectSourceWords } from '@/lib/server/clips/transcript'
@@ -107,6 +109,14 @@ export function prismaAiCaptionsStore(prisma: PrismaClient = getPrisma()): AiCap
       const row = await prisma.aiCaptionsRun.findFirst({ where: { workspaceId, clientRequestId } })
       return row ? recordFromRow(row) : null
     },
+    async list(workspaceId, limit = 40) {
+      console.info('[ai-captions:store] list_begin', { workspaceId, limit })
+      const rows = await prisma.aiCaptionsRun.findMany({
+        where: { workspaceId }, orderBy: { createdAt: 'desc' }, take: Math.min(100, Math.max(1, limit)),
+      })
+      console.info('[ai-captions:store] list_complete', { workspaceId, count: rows.length })
+      return rows.map(recordFromRow)
+    },
     async update(workspaceId, id, patch) {
       const data: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(patch)) {
@@ -147,9 +157,13 @@ async function resolveSource(
   if (!projectId) return null
   const project = await prisma.clipProject.findFirst({
     where: { id: projectId, workspaceId, deletedAt: null },
-    include: { upload: { select: { durationMs: true } } },
+    include: { upload: { select: { durationMs: true, key: true } } },
   })
   if (!project) return null
+  console.info('[ai-captions:source] resolved_project', { projectId, status: project.status, stage: project.stage, progress: project.progress })
+  if (String(project.status) === 'FAILED' || String(project.status) === 'CANCELED') {
+    throw new AiCaptionsError('source_processing_failed', 'Video transcription could not finish. Please retry or upload another video.', 409)
+  }
   const ready = String(project.status) === 'READY'
   let durationMs = Math.max(0, (project.rangeEndMs ?? 0) - (project.rangeStartMs ?? 0))
   let hasAudio = true
@@ -191,16 +205,18 @@ async function resolveSource(
   if (!durationMs && words?.length) durationMs = Math.round(words[words.length - 1]!.e * 1000)
   if (!durationMs && project.upload?.durationMs) durationMs = project.upload.durationMs
 
-  return {
-    projectId: project.id,
-    assetId,
-    durationMs,
-    ready,
-    hasAudio,
-    words,
-    playbackUrl: null,
-    thumbnailUrl: null,
-  }
+  const storage = getClipStorage()
+  const mediaKey = project.proxyKey || project.upload?.key
+  const [playbackUrl, thumbnailUrl] = await Promise.all([
+    mediaKey ? createCachedSignedDownloadUrl(storage, mediaKey, { versionHint: `captions:media:${project.id}` }, CLIPS_EDITOR_MEDIA_TTL_SEC).catch((err) => {
+      console.warn('[ai-captions:source] media_sign_failed', { projectId, error: String(err) }); return null
+    }) : Promise.resolve(null),
+    project.thumbKey ? createCachedSignedDownloadUrl(storage, project.thumbKey, { versionHint: `captions:thumb:${project.id}` }, CLIPS_EDITOR_MEDIA_TTL_SEC).catch((err) => {
+      console.warn('[ai-captions:source] thumb_sign_failed', { projectId, error: String(err) }); return null
+    }) : Promise.resolve(null),
+  ])
+  console.info('[ai-captions:source] resolved_media', { projectId, playback: Boolean(playbackUrl), thumbnail: Boolean(thumbnailUrl), words: words?.length ?? 0 })
+  return { projectId: project.id, assetId, durationMs, ready, hasAudio, words, playbackUrl, thumbnailUrl }
 }
 
 const productionPipeline = (): AiCaptionsPipelineDeps => ({

@@ -45,6 +45,8 @@ function toView(row: AiCaptionsRunRecord): AiCaptionsRunView {
       row.source.kind === 'project' || row.source.kind === 'asset' ? row.source.projectId : null
     ),
     result: row.result,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   }
 }
 
@@ -76,6 +78,7 @@ export async function createAiCaptionsRun(
   headerKey: string | null,
   deps: AiCaptionsRunDeps,
 ): Promise<{ view: AiCaptionsCreateView; created: boolean }> {
+  console.info('[ai-captions:runs] create_begin', { workspaceId })
   const parsed = parseCreateBody(body, headerKey)
   const existing = await deps.store.getByClientRequestId(workspaceId, parsed.clientRequestId)
   if (existing) {
@@ -118,10 +121,18 @@ export async function createAiCaptionsRun(
   })
 
   const advanced = await advanceRun(row, deps)
+  console.info('[ai-captions:runs] create_complete', { runId: advanced.id, status: advanced.status })
   return {
     view: { runId: advanced.id, status: advanced.status, creditEstimate },
     created: true,
   }
+}
+
+export async function listAiCaptionsRuns(workspaceId: string, deps: AiCaptionsRunDeps): Promise<AiCaptionsRunView[]> {
+  console.info('[ai-captions:runs] list_begin', { workspaceId })
+  const rows = await deps.store.list(workspaceId, 40)
+  console.info('[ai-captions:runs] list_complete', { workspaceId, count: rows.length })
+  return rows.map(toView)
 }
 
 export async function getAiCaptionsRun(
@@ -129,9 +140,11 @@ export async function getAiCaptionsRun(
   runId: string,
   deps: AiCaptionsRunDeps,
 ): Promise<AiCaptionsRunView> {
+  console.info('[ai-captions:runs] get_begin', { workspaceId, runId })
   const row = await deps.store.get(workspaceId, runId)
   if (!row) throw new AiCaptionsError('run_not_found', 'That captions run was not found.', 404)
   const advanced = await advanceRun(row, deps)
+  console.info('[ai-captions:runs] get_complete', { runId, status: advanced.status, stage: advanced.stage })
   return toView(advanced)
 }
 
@@ -252,7 +265,8 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
     const pendingTranscript =
       err instanceof AiCaptionsError &&
       err.code === 'source_not_ready' &&
-      err.message.includes('did not return any words')
+      (row.source.kind === 'upload' || err.message.includes('did not return any words'))
+    console.info('[ai-captions:runs] advance_result', { runId: row.id, pendingTranscript, error: err instanceof Error ? err.message : String(err) })
     if (pendingTranscript) {
       const upload = row.source.kind === 'upload'
       return deps.store.update(row.workspaceId, row.id, {

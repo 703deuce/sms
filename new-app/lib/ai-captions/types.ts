@@ -97,6 +97,8 @@ export type AiCaptionsRunView = {
   styleId: string | null
   projectId: string | null
   result: AiCaptionsResult | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type AiCaptionsStylesView = {
