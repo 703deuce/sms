@@ -184,9 +184,62 @@ async function advanceRun(
       youtubeRunEvent(current.id, 'planning', 'already_claimed')
       return (await deps.store.get(current.workspaceId, current.id)) ?? current
     }
+    let sharedOptions: YoutubeVideoOption[] | undefined
+    if (process.env.YOUTUBE_SHARED_PIPELINE !== '0' && deps.pipeline.planShared) {
+      // A single source window is processed per poll, so every completed
+      // window is durable before the next one starts. Heartbeat renews the
+      // atomic planning lease while Gemini and the specialists are running.
+      let heartbeat: ReturnType<typeof setInterval> | undefined
+      try {
+        if (deps.store.heartbeatPlanning) {
+          heartbeat = setInterval(() => {
+            void deps.store.heartbeatPlanning!(current.workspaceId,current.id)
+              .catch(() => youtubeRunEvent(current.id,'planning','heartbeat_failed'))
+          }, 20_000)
+        }
+        const progress = await traceYoutubeRunStep(current.id,'shared_planning',() =>
+          deps.pipeline.planShared!({
+            runId:current.id,workspaceId:current.workspaceId,
+            createdById:current.createdById,instruction:current.instruction,
+            sources:ingested,checkpoint:current.analysisState,
+            saveCheckpoint:async (checkpoint) => {
+              current = await deps.store.update(current.workspaceId,current.id,{
+                analysisState:checkpoint,status:'running',stage:'planning',progressPercent:55,
+              })
+              youtubeRunEvent(current.id,'shared_planning','checkpoint_saved',{
+                sourceCount:checkpoint.completed.length,
+              })
+            },
+          }),{sourceCount:ingested.length})
+        if (!progress.done) {
+          youtubeRunEvent(current.id,'shared_planning','next_window_pending',{
+            sourceCount:progress.checkpoint.completed.length,
+          })
+          return deps.store.update(current.workspaceId,current.id,{
+            status:'queued',stage:'planning',progressPercent:55,
+          })
+        }
+        sharedOptions = progress.options
+        youtubeRunEvent(current.id,'shared_planning','validated',{
+          optionCount:sharedOptions.length,
+        })
+      } catch (error) {
+        // Last-resort transcript heuristic is the ORIGINAL production path.
+        // Never render a partially accepted specialist plan after a failure.
+        youtubeRunEvent(current.id,'shared_planning','heuristic_fallback',{
+          status:'legacy_transcript_only',
+          errorCode:error instanceof Error ? error.name : 'unknown',
+        })
+      } finally {
+        if (heartbeat) clearInterval(heartbeat)
+      }
+    } else {
+      youtubeRunEvent(current.id,'shared_planning','disabled_legacy_planner')
+    }
     const prepared = await traceYoutubeRunStep(
       current.id, 'planning',
-      () => prepareFromReadyYoutubeSources(ingested, deps.pipeline.proposeOptions),
+      () => prepareFromReadyYoutubeSources(ingested,
+        sharedOptions ? () => sharedOptions : deps.pipeline.proposeOptions),
       { sourceCount: ingested.length, wordCount: ingested.reduce((sum, source) => sum + source.words.length, 0) },
     )
     const planned = await traceYoutubeRunStep(
