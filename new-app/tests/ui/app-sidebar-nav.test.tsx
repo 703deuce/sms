@@ -82,6 +82,7 @@ describe('AppSidebar nav', () => {
       'clips',
       'streamer',
       'editor',
+      'youtube-video',
       'record',
       'ai-video',
       'studio',

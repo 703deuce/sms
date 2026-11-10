@@ -10625,3 +10625,30 @@ model AiStudioAsset {
   @@index([workspaceId, createdAt])
   @@map("ai_studio_assets")
 }
+
+/// Mode 2 "Make a YouTube video" runs (separate product from the clipper). Additive.
+model YoutubeVideoRun {
+  id               String   @id
+  workspaceId      String
+  status           String   @default("queued")
+  stage            String?
+  progressPercent  Int?
+  failureCode      String?
+  failureMessage   String?
+  instruction      String?
+  clientRequestId  String
+  requestHash      String
+  sources          Json     @default("[]")
+  ingested         Json     @default("[]")
+  options          Json?
+  chosenOptionId   String?
+  creditsEstimated Int?
+  result           Json?
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([workspaceId, clientRequestId])
+  @@index([workspaceId, status])
+  @@map("youtube_video_runs")
+}
