@@ -474,6 +474,11 @@ export function TemplatesEditorShell(props: Props) {
       toast.error('Save edits before switching editors')
       return
     }
+    console.info('[editor:compact-mode] open-from-templates', {
+      projectId,
+      clipId,
+      target: props.clipperStudio ? 'studio' : 'edit',
+    })
     window.location.assign(
       props.clipperStudio ? routes.studio(projectId, clipId) : routes.edit(projectId, clipId),
     )
