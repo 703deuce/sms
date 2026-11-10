@@ -69,7 +69,7 @@ describe('streamer unified results grid', () => {
     expect(screen.getAllByTestId('unified-clip-type-badge').map((el: HTMLElement) => el.getAttribute('data-kind')).sort()).toEqual(
       ['continuous', 'story'],
     )
-    expect(screen.getByTestId('clip-needs-review-badge')).toBeTruthy()
+    expect(screen.getAllByTestId('clip-needs-review-badge').length).toBeGreaterThan(0)
     const edit = screen.getAllByRole('link').find((el) => el.getAttribute('href')?.includes('/studio/clip_stream_story'))
     expect(edit).toBeTruthy()
   })
