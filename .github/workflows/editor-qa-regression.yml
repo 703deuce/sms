@@ -72,6 +72,7 @@ jobs:
             tests/editor-audio-only-filler.test.ts \
             tests/editor-audio-only-filler-ui.test.tsx \
             tests/clip-timeline.test.ts \
+            tests/editor-command-registry.test.ts \
             tests/timeline-e2-render.test.tsx \
             tests/c1-laptop-lanes.test.ts \
             tests/clip-timeline.test.ts \
@@ -168,6 +169,7 @@ jobs:
             tests/studio-job-polling.test.ts \
             tests/studio-history-and-timeline.test.ts \
             tests/studio-ui-layout.test.tsx \
+            tests/ad-studio-f1.test.tsx \
             tests/unified-clip-results.test.ts \
             tests/unified-clip-results-ui.test.tsx \
             tests/youtube-video/page-adapter.test.ts \

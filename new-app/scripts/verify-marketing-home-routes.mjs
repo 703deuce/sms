@@ -55,6 +55,8 @@ const ALLOWED_NEW = {
   '/ai-clipper': { file: 'new-app/app/(marketing)/ai-clipper/page.tsx', redirectTo: null },
   '/video-editor': { file: 'new-app/app/(marketing)/video-editor/page.tsx', redirectTo: null },
   '/app/studio': { file: 'new-app/app/app/studio/page.tsx', redirectTo: null },
+  '/app/ad-studio': { file: 'new-app/app/app/ad-studio/page.tsx', redirectTo: null },
+  '/app/clips/motion': { file: 'new-app/app/app/clips/motion/page.tsx', redirectTo: null },
   '/app/youtube-video': { file: 'new-app/app/app/youtube-video/page.tsx', redirectTo: null },
   '/app/captions': { file: 'new-app/app/app/captions/page.tsx', redirectTo: null },
   // Additional legitimate workspaces and compatibility aliases added after the frozen inventory.

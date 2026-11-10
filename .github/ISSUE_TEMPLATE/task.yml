@@ -1,0 +1,95 @@
+name: Task
+description: Standard work item with one accountable owner, requirements, and acceptance criteria.
+title: "[Task]: "
+labels: ["type:task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for planned work. Prefix comments with `[Agent: <role>]`.
+        Every task needs one accountable owner, even if multiple specialists contribute.
+  - type: dropdown
+    id: owner
+    attributes:
+      label: Owner (one accountable)
+      description: The single accountable owner for this task.
+      options:
+        - chief-of-staff
+        - researcher
+        - product-manager
+        - backend
+        - frontend
+        - landing-pages
+        - qa
+        - video-quality
+        - security
+        - devops
+        - support
+        - growth
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+    validations:
+      required: true
+  - type: textarea
+    id: components
+    attributes:
+      label: Affected components
+      description: Files, directories, services, or product areas this work may change.
+      placeholder: e.g. new-app/components/clips, worker/clips_worker, public pricing page
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: What must be true when this work is done. Include constraints and protected existing behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Testable criteria. Do not mark the task done until these are evidenced.
+    validations:
+      required: true
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status
+      options:
+        - Backlog
+        - Specifying
+        - Ready
+        - Building
+        - Review
+        - Testing
+        - Blocked
+        - Approved
+        - Deployed
+        - Done
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Blocking issues, PRs, reviews, or other work. Write "None" if there are none.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Distinguish code written, tests passed, deployed, and verified in production. Only claim what has been verified.
+    validations:
+      required: true

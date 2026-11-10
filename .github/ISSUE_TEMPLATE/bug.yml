@@ -1,0 +1,114 @@
+name: Bug
+description: Defect report with reproduction steps, expected vs actual behavior, and evidence.
+title: "[Bug]: "
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for defects. Prefix comments with `[Agent: <role>]`.
+        Reproduce before accepting a fix when feasible.
+  - type: dropdown
+    id: owner
+    attributes:
+      label: Owner (one accountable)
+      description: The single accountable owner for fixing or coordinating this bug.
+      options:
+        - chief-of-staff
+        - researcher
+        - product-manager
+        - backend
+        - frontend
+        - landing-pages
+        - qa
+        - video-quality
+        - security
+        - devops
+        - support
+        - growth
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+    validations:
+      required: true
+  - type: textarea
+    id: components
+    attributes:
+      label: Affected components
+      description: Feature, files, services, or product areas affected.
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: What correct behavior should be, including any protected existing modes that must not regress.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What must be demonstrated before this bug can be closed.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Exact steps, environment, and commit SHA if known.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include error logs or screenshots when available. Do not paste secrets, tokens, cookies, or signed URLs.
+    validations:
+      required: true
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status
+      options:
+        - Backlog
+        - Specifying
+        - Ready
+        - Building
+        - Review
+        - Testing
+        - Blocked
+        - Approved
+        - Deployed
+        - Done
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Blocking issues, PRs, or related reports. Write "None" if there are none.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Distinguish fix written, tests passed, deployed, and verified in production. Only claim what has been verified.
+    validations:
+      required: true

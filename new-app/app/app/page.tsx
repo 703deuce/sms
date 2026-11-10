@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Clapperboard, Scissors, SquarePlay, Captions, WandSparkles } from 'lucide-react'
+import { Clapperboard, Scissors, SquarePlay, Captions, WandSparkles, Megaphone } from 'lucide-react'
 import { Page, PageHeader } from '../../components/app/page-primitives'
 import { ProjectStatusBadge } from '../../components/app/status'
 import { getClipsDriveProjects, getClipsWorkspaceId } from '../../lib/server/clips/drive-data'
@@ -22,7 +22,7 @@ export default async function AppDashboardPage() {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 8)
 
-  console.info('[app:home]', { cards: ['clipper', 'video-editor', 'youtube-video', 'captions', 'ad-studio'] })
+  console.info('[app:home]', { cards: ['clipper', 'video-editor', 'youtube-video', 'captions', 'ai-studio', 'ad-studio'] })
   return (
     <Page>
       <PageHeader title="Home" description="Choose what you want to create. Recent projects are listed below." />
@@ -61,6 +61,13 @@ export default async function AppDashboardPage() {
           title="AI Studio"
           description="Create and plan AI-powered video ads."
           testId="app-launcher-ad-studio"
+        />
+        <LauncherCard
+          href="/app/ad-studio"
+          icon={Megaphone}
+          title="Ad Studio"
+          description="Create product ads from a brief or product image."
+          testId="app-launcher-product-ad-studio"
         />
       </div>
       <section className="mt-8" aria-labelledby="recent-projects-heading">

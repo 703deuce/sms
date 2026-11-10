@@ -67,6 +67,24 @@ export function buildNleCaptionsSrt(
   return buildSrtFromCaptionWords(applyCaptionCaseToWords(warped, srtCaseMode(normalized)))
 }
 
+/** Same caption cues as SRT, serialized as WebVTT on the rendered/display clock. */
+export function buildNleCaptionsVtt(
+  words: CaptionSourceWord[],
+  edits: unknown,
+  bounds: ClipBounds,
+): string {
+  console.info('[captions:vtt] build_begin', { words: words.length })
+  const srt = buildNleCaptionsSrt(words, edits, bounds).trim()
+  if (!srt) {
+    console.info('[captions:vtt] build_complete', { cues: 0 })
+    return 'WEBVTT\n'
+  }
+  const vttBody = srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
+  const cues = (vttBody.match(/-->/g) ?? []).length
+  console.info('[captions:vtt] build_complete', { cues })
+  return `WEBVTT\n\n${vttBody}\n`
+}
+
 /** Parse SRT cue times (ms) and rewrite through `displayPositionMs` (for tests / parity checks). */
 export function warpSrtCuesToDisplayMs(srt: string, edits: ClipEditsV2): string {
   const lines = srt.split('\n')

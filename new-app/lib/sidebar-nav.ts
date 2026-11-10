@@ -66,6 +66,7 @@ export function buildSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
     rec ? { id: 'record', label: 'Record', href: rec, icon: 'record', group: 'products' } : null,
     f.t2v ? { id: 'ai-video', label: 'AI Video', href: routes.aiVideoNew(), icon: 'aiVideo', group: 'products' } : null,
     { id: 'studio', label: 'Studio', href: '/app/studio', icon: 'studio', group: 'products' },
+    { id: 'ad-studio', label: 'Ad Studio', href: '/app/ad-studio', icon: 'studio', group: 'products' },
     { id: 'media', label: 'Media', href: '/app/clips/media', icon: 'media', group: 'library' },
     { id: 'brand', label: 'Brand kit', href: '/app/clips/brand', icon: 'brand', group: 'library' },
     { id: 'templates', label: 'Templates', href: '/app/clips/templates', icon: 'templates', group: 'library' },
@@ -80,6 +81,7 @@ export function buildSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
 export function activeSidebarId(pathname: string, search: URLSearchParams | string = ''): string | null {
   const sp = typeof search === 'string' ? new URLSearchParams(search) : search
   const p = pathname.replace(/\/+$/, '') || '/'
+  if (p === '/app/ad-studio' || p.startsWith('/app/ad-studio/')) return 'ad-studio'
   if (p === '/app/studio' || p.startsWith('/app/studio/')) return 'studio'
   if (p === '/app/youtube-video' || p.startsWith('/app/youtube-video/')) return 'youtube-video'
   if (p === '/app/captions' || p.startsWith('/app/captions/')) return 'captions'
