@@ -286,6 +286,84 @@ describe('youtube video page adapter', () => {
     expect(controller.getState().run?.status).toBe('ready')
   })
 
+  it('recovers polling after a transient Bad Gateway without creating a second run', async () => {
+    let gets = 0
+    let creates = 0
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === YOUTUBE_VIDEO_PATHS.create && init?.method === 'POST') {
+        creates += 1
+        return json(201, { data: { runId: 'run_recover', status: 'queued', stage: 'planning' } })
+      }
+      if (url === YOUTUBE_VIDEO_PATHS.run('run_recover')) {
+        gets += 1
+        if (gets === 1) return json(502, { error: 'Bad Gateway' })
+        return json(200, { data: { ...READY_RUN, runId: 'run_recover' } })
+      }
+      throw new Error(`unexpected ${url}`)
+    })
+    const controller = createYoutubeVideoController({
+      client: createYoutubeVideoClient({ fetch: fetchImpl as unknown as typeof fetch }),
+      sleep: async () => {},
+      randomId: () => 'req_recover',
+    })
+    await controller.submit({ sources: [UPLOAD_SOURCE] })
+    expect(creates).toBe(1)
+    expect(gets).toBe(2)
+    expect(controller.getState().phase).toBe('ready')
+  })
+
+  it('recovers a transient Choose failure with GET and never reposts the choice automatically', async () => {
+    let choosePosts = 0
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? 'GET'
+      if (url === YOUTUBE_VIDEO_PATHS.create && method === 'POST') {
+        return json(201, { data: {
+          runId: 'run_choose_recover', status: 'awaiting_choice', stage: 'planning',
+          options: [
+            { id: 'opt_a', title: 'A', premise: '', beats: [] },
+            { id: 'opt_b', title: 'B', premise: '', beats: [] },
+          ],
+        } })
+      }
+      if (url === YOUTUBE_VIDEO_PATHS.choose('run_choose_recover') && method === 'POST') {
+        choosePosts += 1
+        return json(502, { error: 'Bad Gateway' })
+      }
+      if (url === YOUTUBE_VIDEO_PATHS.run('run_choose_recover') && method === 'GET') {
+        return json(200, { data: { ...READY_RUN, runId: 'run_choose_recover' } })
+      }
+      throw new Error(`unexpected ${method} ${url}`)
+    })
+    const controller = createYoutubeVideoController({
+      client: createYoutubeVideoClient({ fetch: fetchImpl as unknown as typeof fetch }),
+      sleep: async () => {},
+      randomId: () => 'req_choose_recover',
+    })
+    await controller.submit({ sources: [UPLOAD_SOURCE] })
+    await controller.choose('opt_b')
+    expect(choosePosts).toBe(1)
+    expect(controller.getState().run?.status).toBe('ready')
+  })
+
+  it('reconnects restoreRun after a transient gateway error', async () => {
+    let gets = 0
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) !== YOUTUBE_VIDEO_PATHS.run('yvrun_reconnect')) throw new Error('unexpected URL')
+      gets += 1
+      if (gets === 1) return json(503, { error: 'Service unavailable' })
+      return json(200, { data: { ...READY_RUN, runId: 'yvrun_reconnect' } })
+    })
+    const controller = createYoutubeVideoController({
+      client: createYoutubeVideoClient({ fetch: fetchImpl as unknown as typeof fetch }),
+      sleep: async () => {},
+    })
+    await controller.restoreRun('yvrun_reconnect')
+    expect(gets).toBe(2)
+    expect(controller.getState().phase).toBe('ready')
+  })
+
   it('maps a 409 payload to YoutubeVideoHttpError', async () => {
     const fetchImpl = async () =>
       json(409, { error: { code: 'option_already_chosen', message: 'A different option was already chosen.' } })

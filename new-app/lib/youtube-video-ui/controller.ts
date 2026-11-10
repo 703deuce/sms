@@ -62,6 +62,13 @@ function settled(run: YoutubeVideoRunView | null): boolean {
   return !!run && (run.status === 'ready' || run.status === 'failed' || run.status === 'canceled' || run.status === 'awaiting_choice')
 }
 
+const MAX_RECONNECT_GET_ATTEMPTS = 3
+
+function recoverableRunReadError(e: unknown): boolean {
+  if (!(e instanceof YoutubeVideoHttpError)) return true
+  return [408, 425, 429, 500, 502, 503, 504].includes(e.status)
+}
+
 function toError(e: unknown): { code: string; message: string } {
   if (e instanceof YoutubeVideoHttpError) return { code: e.code, message: e.message }
   if (e instanceof Error) return { code: 'ERROR', message: sanitizeYoutubeVideoMessage(e.message) }
@@ -101,6 +108,32 @@ export function createYoutubeVideoController(
   const listeners = new Set<() => void>()
   let disposed = false
   let generation = 0
+
+  async function getRunWithRecovery(
+    runId: string,
+    gen: number,
+    context: 'poll' | 'restore' | 'choice' | 'refresh',
+  ): Promise<YoutubeVideoRunView | null> {
+    let lastError: unknown
+    for (let attempt = 1; attempt <= MAX_RECONNECT_GET_ATTEMPTS; attempt += 1) {
+      try {
+        return await client.getRun(runId)
+      } catch (e) {
+        lastError = e
+        if (!recoverableRunReadError(e) || attempt === MAX_RECONNECT_GET_ATTEMPTS) throw e
+        console.info('[youtube-video:client]', {
+          event: 'run_get_reconnect',
+          runId,
+          context,
+          attempt,
+          errorCode: e instanceof YoutubeVideoHttpError ? e.code : 'NETWORK_ERROR',
+        })
+        await sleep(pollMs)
+        if (disposed || gen !== generation) return null
+      }
+    }
+    throw lastError
+  }
 
   function emit(patch: Partial<YoutubeVideoSessionState>) {
     const previousPhase = state.phase
@@ -155,8 +188,8 @@ export function createYoutubeVideoController(
       await sleep(pollMs)
       if (disposed || gen !== generation) return
       try {
-        const next = await client.getRun(runId)
-        if (disposed || gen !== generation) return
+        const next = await getRunWithRecovery(runId, gen, 'poll')
+        if (!next || disposed || gen !== generation) return
         emit({ run: next })
       } catch (e) {
         if (disposed || gen !== generation) return
@@ -218,7 +251,8 @@ export function createYoutubeVideoController(
       emit({ title })
     },
     setSources(sources) {
-      emit({ sources, clientRequestId: null })
+      const unchanged = JSON.stringify(state.sources) === JSON.stringify(sources)
+      emit({ sources, ...(unchanged ? {} : { clientRequestId: null }) })
     },
     async submit(input) {
       if (state.submitLocked) return
@@ -261,8 +295,8 @@ export function createYoutubeVideoController(
             chooseError: e.message || 'A different option was already chosen. Refreshing the run.',
           })
           try {
-            const run = await client.getRun(state.run.runId)
-            if (disposed || gen !== generation) return
+            const run = await getRunWithRecovery(state.run.runId, gen, 'choice')
+            if (!run || disposed || gen !== generation) return
             emit({ run, phase: phaseFromRun(run, 'polling') })
             if (!settled(run) || run.status === 'awaiting_choice' && run.result) {
               /* already updated */
@@ -276,6 +310,32 @@ export function createYoutubeVideoController(
           }
           return
         }
+        if (recoverableRunReadError(e) && state.run) {
+          const failedChoice = toError(e)
+          try {
+            const recovered = await getRunWithRecovery(state.run.runId, gen, 'choice')
+            if (!recovered || disposed || gen !== generation) return
+            const stillAwaitingChoice = recovered.status === 'awaiting_choice'
+            console.info('[youtube-video:client]', {
+              event: 'choice_reconnect_result',
+              runId: recovered.runId,
+              status: recovered.status,
+              reposted: false,
+            })
+            emit({
+              run: recovered,
+              submitLocked: false,
+              phase: phaseFromRun(recovered, stillAwaitingChoice ? 'awaiting_choice' : 'polling'),
+              chooseError: stillAwaitingChoice ? failedChoice.message : null,
+            })
+            if (!stillAwaitingChoice && !settled(recovered)) {
+              await pollUntilSettled(recovered.runId, gen, false)
+            }
+            return
+          } catch {
+            /* fall through; never repost a failed choice automatically */
+          }
+        }
         emit({ submitLocked: false, phase: 'awaiting_choice', chooseError: toError(e).message })
       }
     },
@@ -285,8 +345,8 @@ export function createYoutubeVideoController(
       console.info('[youtube-video:client]', { event: 'restore_start', runId })
       emit({ phase: 'polling', submitLocked: false, error: null, chooseError: null })
       try {
-        const run = await client.getRun(runId)
-        if (disposed || gen !== generation) return
+        const run = await getRunWithRecovery(runId, gen, 'restore')
+        if (!run || disposed || gen !== generation) return
         console.info('[youtube-video:client]', { event: 'restore_loaded', runId, status: run.status })
         emit({ run, phase: phaseFromRun(run, 'polling'), submitLocked: false })
         if (!settled(run)) await pollUntilSettled(runId, gen)
@@ -299,8 +359,9 @@ export function createYoutubeVideoController(
     },
     async refresh() {
       if (!state.run) return
-      const run = await client.getRun(state.run.runId)
-      if (disposed) return
+      const gen = generation
+      const run = await getRunWithRecovery(state.run.runId, gen, 'refresh')
+      if (!run || disposed || gen !== generation) return
       emit({ run, phase: phaseFromRun(run, state.phase) })
     },
     requestRevert() {
