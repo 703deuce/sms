@@ -18,6 +18,7 @@ import {
   Sparkles,
   Video,
   Film,
+  WandSparkles,
   type LucideIcon,
 } from 'lucide-react'
 import { LogoMark } from '@/components/brand/logo-mark'
@@ -66,6 +67,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   youtubeVideo: Film,
   record: Video,
   aiVideo: Sparkles,
+  studio: WandSparkles,
   media: Images,
   brand: Palette,
   templates: LayoutTemplate,

@@ -9,7 +9,7 @@ export type SidebarNavFlags = {
 export type SidebarNavGroup = 'home' | 'products' | 'library' | 'footer'
 export type SidebarNavIcon =
   | 'home' | 'clips' | 'streamer' | 'editor' | 'youtubeVideo' | 'record' | 'aiVideo'
-  | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings'
+  | 'studio' | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings'
 export type SidebarNavItem = { id: string; label: string; href: string; icon: SidebarNavIcon; group: SidebarNavGroup }
 export type CreateMenuItem = { id: string; label: string; href: string; icon: SidebarNavIcon }
 
@@ -50,6 +50,7 @@ export function createMenuItems(f: SidebarNavFlags): CreateMenuItem[] {
     { id: 'create-youtube-video', label: 'YouTube Video', href: routes.youtubeVideo(), icon: 'youtubeVideo' },
     ...(rec ? [{ id: 'create-record', label: 'Recording', href: rec, icon: 'record' as const }] : []),
     ...(f.t2v ? [{ id: 'create-ai-video', label: 'AI Video', href: routes.aiVideoNew(), icon: 'aiVideo' as const }] : []),
+    { id: 'create-studio', label: 'AI Studio', href: '/app/studio', icon: 'studio' as const },
   ]
 }
 
@@ -63,6 +64,7 @@ export function buildSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
     { id: 'youtube-video', label: 'YouTube Video', href: routes.youtubeVideo(), icon: 'youtubeVideo', group: 'products' },
     rec ? { id: 'record', label: 'Record', href: rec, icon: 'record', group: 'products' } : null,
     f.t2v ? { id: 'ai-video', label: 'AI Video', href: routes.aiVideoNew(), icon: 'aiVideo', group: 'products' } : null,
+    { id: 'studio', label: 'Studio', href: '/app/studio', icon: 'studio', group: 'products' },
     { id: 'media', label: 'Media', href: '/app/clips/media', icon: 'media', group: 'library' },
     { id: 'brand', label: 'Brand kit', href: '/app/clips/brand', icon: 'brand', group: 'library' },
     { id: 'templates', label: 'Templates', href: '/app/clips/templates', icon: 'templates', group: 'library' },
@@ -77,6 +79,8 @@ export function buildSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
 export function activeSidebarId(pathname: string, search: URLSearchParams | string = ''): string | null {
   const sp = typeof search === 'string' ? new URLSearchParams(search) : search
   const p = pathname.replace(/\/+$/, '') || '/'
+  if (p === '/app/studio' || p.startsWith('/app/studio/')) return 'studio'
+  if (p.startsWith('/app/youtube-video')) return 'youtube-video'
   if (p === '/app/clips/new') return 'clips'
   if (p.startsWith('/app/clips/video/templates') || p.startsWith('/app/ai-video/templates')) return 'templates'
   if (p.startsWith('/app/clips/templates')) return 'templates' // every ?tab= / &sub=
@@ -90,7 +94,6 @@ export function activeSidebarId(pathname: string, search: URLSearchParams | stri
   )
     return 'ai-video'
   if (p === '/app/clips' && sp.get('kind') === 'video') return 'ai-video'
-  if (p.startsWith('/app/youtube-video')) return 'youtube-video'
   if (p.startsWith('/app/streamer')) return 'streamer'
   if (p.startsWith('/app/record') || p.startsWith('/app/rooms')) return 'record'
   if (
