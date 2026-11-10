@@ -1,28 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  projectFindMany,
-  txProjectFindMany,
-  txProjectCreate,
-  txJobCreate,
-  transaction,
-} = vi.hoisted(() => ({
+const { projectFindMany, projectCreate } = vi.hoisted(() => ({
   projectFindMany: vi.fn(),
-  txProjectFindMany: vi.fn(),
-  txProjectCreate: vi.fn(),
-  txJobCreate: vi.fn(),
-  transaction: vi.fn(),
+  projectCreate: vi.fn(),
 }))
 
 vi.mock('@/lib/server/db', () => ({
   getPrisma: () => ({
-    clipProject: { findMany: projectFindMany },
-    $transaction: transaction,
+    clipProject: { findMany: projectFindMany, create: projectCreate },
   }),
 }))
 
 vi.mock('@/lib/supabase/id', () => ({
-  createId: (prefix: string) => prefix === 'proj' ? 'proj_new' : 'job_new',
+  createId: (prefix: string) => `${prefix}_new`,
 }))
 
 vi.mock('@/lib/storage', () => ({
@@ -47,53 +37,49 @@ const sourceProject = {
   rangeEndMs: 60_000,
 }
 
-const tx = {
-  clipProject: { findMany: txProjectFindMany, create: txProjectCreate },
-  clipJob: { create: txJobCreate },
-}
-
 describe('ensureFullVideoProjectForUpload concurrency', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     projectFindMany.mockResolvedValue([])
-    txProjectFindMany.mockResolvedValue([])
-    txProjectCreate.mockResolvedValue({ id: 'proj_new' })
-    txJobCreate.mockResolvedValue({ id: 'job_new' })
-    transaction.mockImplementation(async (run: (client: typeof tx) => Promise<string>) => run(tx))
+    projectCreate.mockResolvedValue({ id: 'proj_fv_up_1' })
   })
 
-  it('creates one queued project and one processing job inside the transaction', async () => {
+  it('atomically creates one queued project with one nested processing job', async () => {
     const projectId = await ensureFullVideoProjectForUpload('ws_1', upload, sourceProject)
-    expect(projectId).toBe('proj_new')
-    expect(txProjectCreate).toHaveBeenCalledTimes(1)
-    expect(txJobCreate).toHaveBeenCalledTimes(1)
-    expect(txProjectCreate.mock.calls[0]?.[0]?.data).toMatchObject({
-      id: 'proj_new',
+    expect(projectId).toBe('proj_fv_up_1')
+    expect(projectCreate).toHaveBeenCalledTimes(1)
+    expect(projectCreate.mock.calls[0]?.[0]?.data).toMatchObject({
+      id: 'proj_fv_up_1',
       uploadId: 'up_1',
       status: 'QUEUED',
       stage: 'queued',
       proxyKey: 'proxy.mp4',
+      jobs: {
+        create: {
+          id: 'job_new',
+          type: 'PROCESS_PROJECT',
+          status: 'QUEUED',
+        },
+      },
     })
   })
 
-  it('reuses a concurrent full-video project before creating a duplicate job', async () => {
-    txProjectFindMany.mockResolvedValue([{ id: 'proj_existing', settings: { fullVideo: true } }])
+  it('reuses an existing full-video project before attempting a create', async () => {
+    projectFindMany.mockResolvedValue([{ id: 'proj_existing', settings: { fullVideo: true } }])
     const projectId = await ensureFullVideoProjectForUpload('ws_1', upload, sourceProject)
     expect(projectId).toBe('proj_existing')
-    expect(txProjectCreate).not.toHaveBeenCalled()
-    expect(txJobCreate).not.toHaveBeenCalled()
+    expect(projectCreate).not.toHaveBeenCalled()
   })
 
-  it('retries one Serializable conflict and reuses the winner', async () => {
-    transaction
-      .mockRejectedValueOnce(Object.assign(new Error('write conflict'), { code: 'P2034' }))
-      .mockImplementationOnce(async (run: (client: typeof tx) => Promise<string>) => run(tx))
-    txProjectFindMany.mockResolvedValue([{ id: 'proj_winner', settings: { fullVideo: true } }])
+  it('reuses the concurrent winner after a deterministic-id collision', async () => {
+    projectFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'proj_winner', settings: { fullVideo: true } }])
+    projectCreate.mockRejectedValueOnce(Object.assign(new Error('duplicate id'), { code: 'P2002' }))
 
     const projectId = await ensureFullVideoProjectForUpload('ws_1', upload, sourceProject)
     expect(projectId).toBe('proj_winner')
-    expect(transaction).toHaveBeenCalledTimes(2)
-    expect(txProjectCreate).not.toHaveBeenCalled()
-    expect(txJobCreate).not.toHaveBeenCalled()
+    expect(projectCreate).toHaveBeenCalledTimes(1)
+    expect(projectFindMany).toHaveBeenCalledTimes(2)
   })
 })
