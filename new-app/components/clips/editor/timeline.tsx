@@ -4016,7 +4016,7 @@ export function Timeline({
                               key={id}
                               type="button"
                               data-testid="timeline-word"
-                              className={`pointer-events-auto absolute top-0 h-[16px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-0.5 text-left text-[11px] leading-4 text-white shadow-[inset_-1px_0_0_rgba(0,0,0,0.45)] ${bg}`}
+                              className={`${wi.kind === 'word' ? 'pointer-events-auto' : 'pointer-events-none'} absolute top-0 h-[16px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-0.5 text-left text-[11px] leading-4 text-white shadow-[inset_-1px_0_0_rgba(0,0,0,0.45)] ${bg}`}
                               style={{ left, width: w }}
                               onPointerDown={(ev) => ev.stopPropagation()}
                               onClick={(ev) => {

@@ -229,6 +229,7 @@ export function ScriptViewCompactTimeline({
                   type="button"
                   data-testid={cut ? 'script-compact-word-cut' : 'script-compact-word'}
                   className={cn(
+                    wi.kind === 'word' ? 'pointer-events-auto' : 'pointer-events-none',
                     'absolute top-0 overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-0.5 text-left text-[10px] leading-4 shadow-[inset_-1px_0_0_rgba(0,0,0,0.35)]',
                     cut
                       ? 'bg-destructive/35 text-destructive-foreground/90 line-through'
