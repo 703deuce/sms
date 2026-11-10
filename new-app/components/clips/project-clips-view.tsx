@@ -135,7 +135,7 @@ export function ProjectClipsView({
   editorProjectId?: string | null
   /** CL-05: clip cards can open moment in full video when the project has an upload. */
   projectHasUpload?: boolean
-  autoAgentClipMode?: 'clip_moment_v1'|'clip_story_v1'
+  autoAgentClipMode?: 'clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'
   autoAgentClipSeconds?: 30|60|90
   autoAgentClipError?: string
 }) {

@@ -33,6 +33,8 @@ export async function publishClipScore(input:{
   contextBridges?:Array<{atMs:number;text:string;passageIndex:number}>
   topics?:string[]
   needsReview?:boolean
+  type?:'story'|'continuous'
+  overlaps?:Array<{clipId:string;fraction:number}>
 }){
   await getPrisma().clip.updateMany({
     where:{id:input.clipId,workspaceId:input.workspaceId},
@@ -51,6 +53,8 @@ export async function publishClipScore(input:{
         editableStitchSegments:true,
         needsReview:input.needsReview===true,
         needsReviewReasons:input.needsReview===true?input.issues.slice(0,10):[],
+        type:input.type??(input.mode==='clip_moment_v1'?'continuous':'story'),
+        overlaps:input.overlaps??[],
       },
     },
   })

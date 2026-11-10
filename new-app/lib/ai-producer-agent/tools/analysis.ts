@@ -5,6 +5,7 @@ import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 import { enqueueAiProducerAnalyzeJob, waitForClipJobDone } from '@/lib/server/ai-producer-agent/enqueue-analyze'
 import { analyzeWaitTimeoutMs } from '@/lib/ai-producer-agent/rough-cut-window'
 import { topicQueryFromInstruction } from '@/lib/ai-producer-agent/clip-mode/topic-search'
+import { isClipAgentMode } from '@/lib/ai-producer-agent/clip-mode/modes'
 import { framesFromSamples } from '@/lib/clips/cuts-quality/cut-boundary-refine'
 import type { RmsFrames } from '@/lib/ai-producer-agent/draft-edits'
 import { timestampedAsrForVisual, visualMomentsWithAsr, chooseVisualFocusWindows } from '@/lib/ai-producer-agent/visual-evidence'
@@ -164,7 +165,7 @@ export function buildRmsLookup(frames: { tMs: number; rms: number }[]): RmsFrame
 }
 
 export async function layoutInfo(ctx: import('@/lib/ai-producer-agent/tools/registry').ToolCtx) {
-  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+  const clipMode=isClipAgentMode(ctx.config.storyMode)
   return { ok: true, summary: 'layout', data: { contentType: 'irl', mode: clipMode?'speaker_follow':'fit_blur' }, costUsd: 0 }
 }
 

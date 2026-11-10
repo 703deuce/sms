@@ -53,7 +53,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: 
     if (tabParam === 'streamer' || tabParam === 'link' || tabParam === 'upload') setTab(tabParam)
   }, [tabParam])
   const [projectIntent, setProjectIntent] = useState<'find' | 'byo' | 'full'>(fullIntentParam ? 'full' : 'find')
-  const [agentClipMode, setAgentClipMode] = useState<'clip_moment_v1'|'clip_story_v1'>('clip_moment_v1')
+  const [agentClipMode, setAgentClipMode] = useState<'clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'>('clip_moment_v1')
   const [agentClipSeconds, setAgentClipSeconds] = useState<30|60|90>(60)
   const [sourceAspect, setSourceAspect] = useState<ReturnType<typeof sourceAspectRatio> | null>(null)
   const [settings, setSettings] = useState<ClipProjectSettings>(initial)
@@ -268,7 +268,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: 
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-border p-3" data-testid="upload-agent-mode">
           <label className="text-sm font-medium" htmlFor="upload-agent-mode">Agent clip mode</label>
           <select id="upload-agent-mode" value={agentClipMode}
-            onChange={e=>setAgentClipMode(e.target.value as 'clip_moment_v1'|'clip_story_v1')}
+            onChange={e=>setAgentClipMode(e.target.value as 'clip_moment_v1'|'clip_story_v1'|'clip_unified_v1')}
             className="h-9 rounded-md border border-border bg-background px-2 text-sm">
             <option value="clip_moment_v1">Single continuous moment</option>
             <option value="clip_story_v1">AI story from multiple moments</option>

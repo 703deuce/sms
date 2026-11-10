@@ -23,6 +23,7 @@ import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/f
 import { createEditorialHandoff, runEditorialRole, recoverEditorialSelections, type EditorialHandoff } from '@/lib/ai-producer-agent/specialists'
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
 import { buildJustChattingEvidence } from '@/lib/ai-producer-agent/just-chatting-evidence'
+import { isClipAgentMode } from '@/lib/ai-producer-agent/clip-mode/modes'
 
 export type Phase = AiProducerPhase
 
@@ -53,7 +54,7 @@ export async function runAiProducerAgent(runId: string): Promise<void> {
     where:{id:runId},select:{config:true},
   })
   const storyMode=(modeRun?.config as {storyMode?:string}|null)?.storyMode
-  if(storyMode==='clip_moment_v1'||storyMode==='clip_story_v1'){
+  if(isClipAgentMode(storyMode)){
     const {runClipAgent}=await import('@/lib/ai-producer-agent/clip-mode/orchestrator')
     await runClipAgent(runId)
     return
@@ -255,7 +256,7 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget, inst
     await loop(ctx, out, budget, messages, 'self_review')
     if (out.lastValid !== before && out.lastValid) await ctx.writeDraft(out, out.lastValid)
   }
-  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+  const clipMode=isClipAgentMode(ctx.config.storyMode)
   if(clipMode&&ctx.config.exportOnFinish&&out.projectId&&out.clipId&&out.lastValid){
     const renderId=createId('render')
     await getPrisma().$transaction(async tx=>{
@@ -320,7 +321,7 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
       preservedFinisherEdges:verifiedFinisher,
     }),
   })
-  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+  const clipMode=isClipAgentMode(ctx.config.storyMode)
   const title=clipMode
     ? `AI ${ctx.config.storyMode==='clip_moment_v1'?'moment':'story'} clip · ${source.title??'video'}`
     : `AI Producer ${ctx.config.roughCutIntent === 'highlights' ? 'highlights' : 'rough cut'} · ${source.title ?? 'stream'}`
