@@ -69,21 +69,20 @@ async function canRetryFinalRender(row: Existing): Promise<boolean> {
   const db = prisma()
   const input = row.input as unknown as AdProductInput
   console.info('[ad-studio:b3] retry_render_eligibility_begin', { runId: row.id })
-  const [sceneCount, unreadyScenes, variantCount, readyVariants] = await Promise.all([
+  const [sceneCount, unreadyScenes, variantCount, unreadyVariants] = await Promise.all([
     db.adStudioScene.count({ where: { runId: row.id } }),
-    db.adStudioScene.count({ where: { runId: row.id, status: { not: 'ready' } } }),
+    db.adStudioScene.count({ where: { runId: row.id, status: { notIn: ['ready','skipped'] } } }),
     db.adStudioImageVariant.count({ where: { runId: row.id } }),
-    db.adStudioImageVariant.count({ where: { runId: row.id, status: 'ready' } }),
+    db.adStudioImageVariant.count({ where: { runId: row.id, status: { not: 'ready' } } }),
   ])
   const voiceReady = row.voiceoverStatus === 'ready'
     || (row.mode === 'image_ad_to_commercial' && input.voiceoverEnabled !== true && row.voiceoverStatus === 'skipped')
   const ready = sceneCount > 0
     && unreadyScenes === 0
-    && variantCount === 3
-    && readyVariants === variantCount
+    && unreadyVariants === 0
     && voiceReady
   console.info('[ad-studio:b3] retry_render_eligibility_complete', {
-    runId: row.id, ready, sceneCount, unreadyScenes, variantCount, readyVariants,
+    runId: row.id, ready, sceneCount, unreadyScenes, variantCount, unreadyVariants,
     voiceoverStatus: row.voiceoverStatus,
   })
   return ready
