@@ -9,8 +9,8 @@ export async function POST(request: Request) {
   try {
     const workspaceId = await resolveWorkspaceId()
     const userId = await resolveClipsActorUserId(request)
-    const contentType = request.headers.get('content-type') || ''
-    if (contentType.includes('application/json')) {
+    const requestContentType = request.headers.get('content-type') || ''
+    if (requestContentType.includes('application/json')) {
       const body = (await request.json()) as { clipId?: string; startMs?: number; endMs?: number }
       const asset = await createStudioClipSourceAsset(createDefaultStudioService(), {
         workspaceId,
