@@ -86,8 +86,8 @@ export async function enqueueYoutubeVideoRenderOnce(a:{
 }){
   const prisma=getPrisma()
   const ids=youtubeOutputIdentity(a.workspaceId,a.runId,a.optionId)
-  if(ids.projectId!==a.projectId||ids.clipId!==a.clipId)
-    throw Error('youtube_output_render_identity_conflict')
+  // render/job IDs are deterministic per run+choice even when resuming a
+  // pre-deterministic output clip whose project/clip IDs were random.
   const {width,height}=exportPixelSize('16:9','720p')
   const composeSpec=composeSpecV1Enabled(a.workspaceId,a.projectId)
     ?resolveComposeSpec(a.edits,width,height):null

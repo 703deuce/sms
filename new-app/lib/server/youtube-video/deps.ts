@@ -235,16 +235,28 @@ export const writeYoutubeVideoClip: WriteYoutubeClip = async ({ workspaceId, cre
   const firstSource = bySource.get(first.sourceId)
   if (!firstSource) throw new YoutubeVideoError('source_not_found', 'Story opening source is unavailable.', 404)
 
-  // Deterministic run+option IDs make stale-lease replays converge on one
-  // output project/clip. Both records are claimed atomically in the YouTube adapter.
-  const created=await traceYoutubeRunStep(runId,'output_project_create',()=>
+  // Preserve an output clip created by the pre-deterministic adapter. New runs
+  // converge on deterministic IDs; old run-marked clips are never duplicated.
+  const legacyCreated=await prisma.clip.findFirst({
+    where:{workspaceId,deletedAt:null,aiMeta:{path:['aiProducerRunId'],equals:runId}},
+    orderBy:{createdAt:'asc'},select:{id:true,projectId:true},
+  })
+  const deterministic=legacyCreated?null:await traceYoutubeRunStep(runId,'output_project_create',()=>
     createOrReuseYoutubeOutputProject({
       workspaceId,createdById:createdById??'system',
       runId,optionId:option.id,title:option.title,sourceProjectId:firstSource.projectId,
       clipStartMs:first.startMs,clipEndMs:first.endMs,
     }),{projectId:firstSource.projectId})
-  const priorRender=await prisma.clipRender.findUnique({
-    where:{id:created.renderId},select:{id:true,status:true},
+  const created=legacyCreated
+    ?{projectId:legacyCreated.projectId,clipId:legacyCreated.id}
+    :{projectId:deterministic!.projectId,clipId:deterministic!.clipId}
+  if(legacyCreated){
+    youtubeRunEvent(runId,'story_assembly','legacy_clip_reused',{projectId:created.projectId})
+  }
+  const priorRender=await prisma.clipRender.findFirst({
+    where:{workspaceId,clipId:created.clipId,
+      status:{in:['READY','RENDERING','QUEUED','FAILED']}},
+    orderBy:{createdAt:'desc'},select:{id:true,status:true},
   })
   if(priorRender){
     youtubeRunEvent(runId,'story_assembly','existing_render_reused',{
