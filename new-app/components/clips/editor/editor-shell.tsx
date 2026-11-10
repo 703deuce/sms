@@ -3348,7 +3348,7 @@ export function EditorShell({
     }
     selectRailGroup(groupId)
   }
-  const handleCompactHandoff = (event: ReactMouseEvent<HTMLAnchorElement>, target: 'text' | 'templates') => {
+  const handleCompactHandoff = (event: ReactMouseEvent<HTMLAnchorElement>, target: 'text' | 'story' | 'templates') => {
     if (!compact || fullVideo || clipperStudio) return
     // Keep browser-native modified clicks and new-tab behavior. Guard same-tab handoffs.
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -3363,7 +3363,7 @@ export function EditorShell({
       try {
         await flushSave()
         console.info('[editor:compact-gaps] handoff-saved', { projectId, clipId, target })
-        window.location.assign(target === 'text' ? routes.text(projectId, clipId) : routes.templateMode(projectId, clipId))
+        window.location.assign(target === 'text' ? routes.text(projectId, clipId) : target === 'story' ? routes.story(projectId, clipId) : routes.templateMode(projectId, clipId))
       } catch {
         console.error('[editor:compact-gaps] handoff-failure', { projectId, clipId, target })
         toast.error('Save edits before switching editors. Retry the save and try again.')
@@ -3712,6 +3712,7 @@ export function EditorShell({
             <>
               {compact && !fullVideo && !clipperStudio ? <Badge variant="outline" className="h-6 text-[11px] font-normal" data-testid="compact-editor-mode-label">Clip editor</Badge> : null}
               <Button type="button" size="sm" variant="outline" render={<Link href={routes.text(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.info('[editor:text] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'text') }} />}>Text editor</Button>
+              <Button type="button" size="sm" variant="outline" render={<Link href={routes.story(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.log('[editor:story-mode] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'story') }} />}>Story blocks</Button>
               <Button type="button" size="sm" variant="outline" render={<Link href={routes.templateMode(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.info('[editor:templates-mode] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'templates') }} />}>Templates</Button>
               <Button type="button" size="sm" variant="outline" data-testid="editor-change-this-shot" onClick={() => void openGenerateMode()}>Change this shot</Button>
               {fullVideo ? (
