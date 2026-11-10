@@ -25,6 +25,7 @@ on:
       - "worker/tests/test_e8_caption_size.py"
       - "worker/tests/test_motion_graphics_export.py"
       - ".github/workflows/editor-qa-regression.yml"
+      - ".github/scripts/pytest-junit-guard.sh"
 
 jobs:
   editor-regression:
@@ -146,8 +147,20 @@ jobs:
           python-version: "3.12"
       - name: Compile all clips-worker modules and worker tests
         run: python -m py_compile worker/clips_worker/*.py worker/tests/*.py worker/modal_app/matte.py
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Confirm ffmpeg is installed
+        run: ffmpeg -version && ffprobe -version
       - run: python -m pip install pytest
-      - run: PYTHONPATH=worker python -m pytest -q worker/tests/test_e8_caption_size.py worker/tests/test_export_duration_guard.py worker/tests/test_audio_only_mute.py
+      - name: Caption and export-duration worker tests
+        run: |
+          PYTHONPATH=worker python -m pytest -q -rs --tb=short \
+            --junitxml=/tmp/captions-worker-regression.xml \
+            worker/tests/test_e8_caption_size.py \
+            worker/tests/test_export_duration_guard.py \
+            worker/tests/test_audio_only_mute.py
+          bash .github/scripts/pytest-junit-guard.sh \
+            /tmp/captions-worker-regression.xml captions-worker-regression
 
   visual-audio-worker-regression:
     runs-on: ubuntu-latest
@@ -161,7 +174,13 @@ jobs:
       - name: Install isolated test dependencies
         run: python -m pip install pytest requests boto3
       - name: Exercise Gemini visual contracts and streamer video source-window alignment
-        run: PYTHONPATH=worker python -m pytest -q worker/tests/test_ai_producer_visual_audio.py worker/tests/test_stream_agent_prepare.py
+        run: |
+          PYTHONPATH=worker python -m pytest -q -rs --tb=short \
+            --junitxml=/tmp/visual-audio-worker-regression.xml \
+            worker/tests/test_ai_producer_visual_audio.py \
+            worker/tests/test_stream_agent_prepare.py
+          bash .github/scripts/pytest-junit-guard.sh \
+            /tmp/visual-audio-worker-regression.xml visual-audio-worker-regression
 
   motion-graphics-mp4-smoke:
     runs-on: ubuntu-latest
