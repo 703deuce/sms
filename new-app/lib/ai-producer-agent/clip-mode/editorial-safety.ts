@@ -15,6 +15,7 @@ export type EditorialRisk={
 }
 const REF_OPEN=/^(?:that(?:'s| is) why|like i said|as i said|as we said|as mentioned|so|and|this|that|those|these|it|they|he|she|which|because|but|anyway|again)\b/i
 const QUAL_OPEN=/^(?:but|however|unless|except|only if|as long as|provided that|on the other hand|the catch is|with one exception|not if)\b/i
+const CONCLUDING_FOLLOW=/^(?:and those|and that(?:'s| is)|and this is|so (?:that|those) are|that(?:'s| is) (?:the|why|what|one)|the point is)\b/i
 const DANGLING=/\b(?:but|because|if|unless|although|however|which|so|and|the thing is|what i mean is)\s*[,—-]?$/i
 const FILLER_OPEN=/^(?:i mean[,.]?\s*)+(?:um|uh|like|you know|so)?[,.]?\s*/i
 const FALSE_START=/^(?:i mean[,.]?\s+)+/i
@@ -355,6 +356,12 @@ export function repairClipBoundaries(
     if(QUAL_OPEN.test(phrase(qualifier.slice(0,9)).toLowerCase())){
       const end=nextCompletedEnd(words,cut.endMs,Math.min(ceiling,cut.endMs+later))
       if(end!=null){cut.endMs=end;notes.push('Included a meaning-changing qualifier after the ending')}
+    }else if(CONCLUDING_FOLLOW.test(phrase(qualifier.slice(0,10)))){
+      const end=nextCompletedEnd(words,cut.endMs,Math.min(ceiling,cut.endMs+later))
+      if(end!=null&&end>cut.endMs){
+        cut.endMs=end
+        notes.push('Included a concluding sentence after a complete landing')
+      }
     }
   }
   for(let i=0;i<next.length-1;i++){
@@ -443,28 +450,31 @@ export function honorTargetDuration(
       : undefined
     return {cuts:next,tightened:false,note}
   }
-  // Prefer ending on the last complete sentence inside the target window
-  // before dropping a whole passage.
-  const last=next[next.length-1]!
-  const budgetMs=Math.round(targetSeconds*1000)
-  const keptBefore=next.slice(0,-1).reduce((n,c)=>n+c.endMs-c.startMs,0)
-  const lastBudget=budgetMs-keptBefore
-  if(lastBudget>=3000){
-    const trimmed=lastCompletedEnd(words,last.startMs+3000,last.startMs+lastBudget)
-    if(trimmed!=null&&trimmed<last.endMs){
-      last.endMs=trimmed
-      return {cuts:next,tightened:true,note:`Tightened a long take to ${Math.round((keptBefore+trimmed-last.startMs)/1000)}s at a complete sentence.`}
-    }
-  }
-  while(next.length>2){
-    next=next.slice(0,-1)
-    duration=next.reduce((n,c)=>n+c.endMs-c.startMs,0)/1000
-    if(duration<=targetSeconds*1.25){
-      return {cuts:next,tightened:true,note:`Dropped a trailing passage so the story could honor the ${targetSeconds}s request.`}
+  // Never trim or drop the ending payoff just to hit a duration request.
+  // If the story is long, drop one earlier passage; otherwise keep the natural length.
+  if(next.length>2){
+    const trial=next.slice(1)
+    const trialDur=trial.reduce((n,c)=>n+Math.max(0,c.endMs-c.startMs),0)/1000
+    if(trial.length>=2&&trialDur<=targetSeconds*1.25){
+      return {cuts:trial,tightened:true,
+        note:`Dropped an earlier passage so the story could honor the ${targetSeconds}s request without cutting the ending.`}
     }
   }
   return {cuts:cuts.map(c=>({...c})),tightened:false,
-    note:`Natural length ${Math.round(dur())}s exceeds the ${targetSeconds}s request; kept a complete story rather than cutting meaning.`}
+    note:`Natural length ${Math.round(dur())}s exceeds the ${targetSeconds}s request; kept a complete story rather than cutting the ending.`}
+}
+
+/** Listening-only or duration-only QA remarks are warnings, not publish blockers. */
+export function isNonBlockingEditorialQaIssue(issue:string):boolean{
+  const t=issue.trim()
+  if(/^(?:the )?(?:selected |final |clip |edit |story )?(?:intervals? total |duration |runtime |length |clip is too short|clip is too long|below the requested|above the requested)/i.test(t))return true
+  if(/duration (?:is |of |below |above )|seconds? (?:below |above )|length target|runtime target/i.test(t)
+    &&!/omit|missing|mid-sentence|dangling|unfinished|qualifier|antecedent|payoff|not self-contained/i.test(t))return true
+  const listen=/listen(?:ing)? required|no (?:rendered )?(?:audio|waveform)|cannot (?:be )?(?:verified|verif(?:y|ied)) without listen|audition (?:the )?(?:source |audio )?join|acoustic (?:timing|joins?)|no audio was (?:supplied|provided|auditioned|available)/i.test(t)
+  const crossfadeOnly=/^(?:the )?(?:\d+ ?ms )?crossfade\b/i.test(t)||/\bcrossfade(?:s)? (?:cannot|does not|do not|can't) (?:verify|prove|establish)/i.test(t)
+  const meaning=/omit(?:s|ted|ting)?|missing (?:setup|payoff|antecedent|question)|mid-sentence|dangling|unfinished|qualifier|not self-contained|changed meaning|false start/i.test(t)
+  if((listen||crossfadeOnly)&&!meaning)return true
+  return false
 }
 
 export function clipEditorialInstructions():string{
@@ -475,12 +485,12 @@ export function clipEditorialInstructions():string{
     'Check EVERY stitched segment opening, not only the first. “also coming to understand” or “but also…” is a continuation of an omitted thought and must be repaired or rejected.',
     'Hook with the strongest authentic line that raises a question or tension, but do not move the payoff before its explanation or fabricate/reorder spoken meaning.',
     'For stitched stories, every section must be understandable from the earlier sections in the OUTPUT, not from unplayed original source, and must belong to the same story as the later payoff. If an early passage (for example a childhood anecdote) does not serve the ending, drop it. If an answer refers to a removed interviewer exchange, include that question or do not use the answer.',
-    'Smooth jump cuts at stitch joins with a brief crossfade (and optional punch-in), but never use a transition to hide a broken sentence or missing antecedent.',
+    'Smooth jump cuts at stitch joins with a brief crossfade (and optional punch-in), but never use a transition to hide a broken sentence or missing antecedent. A brief intentional crossfade is not itself a failure. If no rendered audio was supplied, list acoustic joins as a listening warning and do not fail the review for that reason alone.',
     'Never remove a but, only if, unless, exception, caveat, negation or qualifier when it changes the speaker’s actual meaning.',
     'Inspect at least the NEXT 6.5 SECONDS of original source after every proposed END for a late qualifier or concluding thought, and INCLUDE it when materially needed.',
     'End exactly after the authentic full conclusion or joke landing. Mid-sentence endings are a failure. Short is fine; never pad to the target duration. Cut filler and search detours, not meaning.',
     'Every distinct clip must stand alone, have its own reason to exist, and not be a near-duplicate.',
-    'QA must explicitly FAIL a meaning-changing omission, a stammered or referential opening, a mid-sentence ending, or payoff-before-setup and identify the original words/source times to repair. Fix at the source word IDs, not via generated dialogue.',
+    'QA must explicitly FAIL a meaning-changing omission, a stammered or referential opening, a mid-sentence ending, or payoff-before-setup and identify the original words/source times to repair. Fix at the source word IDs, not via generated dialogue. Never cut a recorded ending or concluding sentence to honor a duration request.',
     'Check proper-name spelling in visible text against evidence; ASR alone is NOT proof of a name spelling. Flag uncertain names instead of inventing corrections.',
     'Caption/title/graphic placement must stay in the 9:16 safe area and avoid the visible face and mouth; if face location is unknown, use conservative non-center-face areas and flag for visual review.',
   ].join(' ')
