@@ -9,6 +9,7 @@ import { AdStudioError, adInvalid, adSafeFailure } from '@/lib/ad-studio/errors'
 import { parseCreate, parseReplan, adKeySchema } from '@/lib/ad-studio/validate'
 import { writeGroundedAdStoryline } from '@/lib/server/ad-studio/storyline'
 import { planAdScenes } from '@/lib/ad-studio/planner-agent'
+import { adCommercialReferenceId } from '@/lib/ad-studio/commercial'
 import { advanceAdStudioRun, getAdStudioImages } from '@/lib/server/ad-studio/pipeline'
 import type { AdImageVariant } from '@/lib/ad-studio/types'
 
@@ -67,6 +68,18 @@ async function validateAssets(workspaceId: string, input: AdProductInput): Promi
   const found = await prisma().aiStudioAsset.count({ where: { workspaceId, id: { in: ids }, kind: 'image' } })
   if (found !== ids.length) throw adInvalid('One or more product images do not belong to this workspace.')
   console.info('[ad-studio:assets] validate_complete', { count: found })
+}
+
+/** The selected commercial reference must come from a completed image-ad in this workspace. */
+async function validateCommercialReference(workspaceId: string, input: AdProductInput): Promise<void> {
+  if (!input.imageVariantId) throw adInvalid('Choose a completed image ad.')
+  const variant = await prisma().adStudioImageVariant.findFirst({
+    where: { id: input.imageVariantId, status: 'ready', run: { workspaceId } },
+    select: { id: true, runId: true },
+  })
+  if (!variant || input.imageAssetIds[0] !== adCommercialReferenceId(variant.runId, variant.id))
+    throw adInvalid('The chosen image ad is not ready or is not a valid reference.')
+  console.info('[ad-studio:b3] commercial_reference_valid', { variantId: variant.id, workspaceId })
 }
 
 async function performPlanning(row: Existing): Promise<AdStudioRun> {
@@ -130,6 +143,7 @@ export async function createAdRun(workspaceId: string, userId: string, body: unk
     return { run: toView(previous), created: false }
   }
   await validateAssets(workspaceId, input)
+  if (mode === 'image_ad_to_commercial') await validateCommercialReference(workspaceId, input)
   const active = await prisma().adStudioRun.count({ where: { workspaceId, status: { in: activeStatuses } } })
   if (active >= maxActive) throw new AdStudioError('CONCURRENCY_LIMIT','Too many ad runs are active. Finish an existing run before starting another.',409)
   try {
@@ -191,6 +205,7 @@ export async function replanAdRun(workspaceId: string, id: string, body: unknown
   if (!['draft','plan_ready'].includes(row.status)) throw new AdStudioError('PLAN_NOT_READY','This ad cannot be replanned in its current state.',409)
   const input = parseReplan(body, row.input as unknown as AdProductInput, row.mode as AdMode)
   await validateAssets(workspaceId, input)
+  if (row.mode === 'image_ad_to_commercial') await validateCommercialReference(workspaceId, input)
   const claimed = await prisma().adStudioRun.updateMany({
     where: { id, workspaceId, status: row.status },
     data: { input: jsonValue(input), status: 'planning', plan: Prisma.JsonNull, creditEstimate: null, errorCode: null, errorMessage: null },
@@ -304,5 +319,6 @@ export async function cancelAdRun(workspaceId: string, id: string): Promise<AdSt
 
 export const adStudioConfig = () => ({
   version: 1 as const, aspects: ['9:16','16:9','1:1'] as const,
-  durationsSec: [15,30] as const, costs: AD_STUDIO_COSTS,
+  durationsSec: [15,30] as const, modes: ['storyline','image_to_ad','image_ad_to_commercial'] as const,
+  costs: AD_STUDIO_COSTS,
 })

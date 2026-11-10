@@ -24,7 +24,7 @@ export async function planAdScenes(args: {
     const role = roles[i]!
     console.info('[ad-studio:planner] scene_begin', { runId, sceneIndex: i, role })
     // Product-specific visuals require a real product image. General background visuals favor stock.
-    const productShot = mode === 'image_to_ad' || (Boolean(productRef) && (role === 'solution' || role === 'cta'))
+    const productShot = mode === 'image_to_ad' || mode === 'image_ad_to_commercial' || (Boolean(productRef) && (role === 'solution' || role === 'cta'))
     const query = role === 'problem'
       ? (input.audience || input.name)
       : (claims[0] || input.name)
@@ -53,7 +53,9 @@ export async function planAdScenes(args: {
           : 'No suitable real stock footage available; generation is proposed only, pending confirmation.',
       startMs: cursor, endMs: cursor + durationSec * 1000, onScreenText: cards[i],
       ...(stock ? { providerId: stock.providerId, stockQuery: query, ...stockTrim({ durationSec }, stock) }
-        : { modelId: model.id, prompt: `Product: ${input.name}. ${cards[i]}. Maintain real appearance; do not invent features, packaging, logos or claims.`,
+        : { modelId: model.id, prompt: mode === 'image_ad_to_commercial'
+          ? `Transovo commercial director. Animate the supplied finished image advertisement for ${input.name}. Decide motion, camera moves, cuts, shot structure and short commercial storytelling autonomously. This scene's narrative beat is ${role}: ${cards[i]}. Preserve the exact product, original logo, text, packaging and colors. Do not invent features, prices, promotions, claims or endorsements.`
+          : `Product: ${input.name}. ${cards[i]}. Maintain real appearance; do not invent features, packaging, logos or claims.`,
           ...(productRef ? { referenceAssetId: productRef } : {}) }),
     }
     // Generated scene length limited by splitting the run into short shots instead of requesting an invalid duration.
@@ -94,8 +96,11 @@ export async function planAdScenes(args: {
   const costKey = `${mode}_${input.durationSec}` as keyof typeof AD_STUDIO_COSTS
   const plan: AdPlan = {
     script, imagery: { imageJobIds: [], preservedSourceAssetIds: [...input.imageAssetIds, ...(input.logoAssetId ? [input.logoAssetId] : [])] },
-    scenes: outputScenes, creditEstimate: AD_STUDIO_COSTS[costKey],
-    modelStrategy: 'Prefer approved stock and original product imagery. Use supported registry video models only for necessary short shots after confirmation.',
+    scenes: outputScenes, creditEstimate: AD_STUDIO_COSTS[costKey] ?? null,
+    modelStrategy: mode === 'image_ad_to_commercial'
+      ? 'Animate the chosen image ad via supported KIE image-to-video models; the provider chooses motion and story per beat.'
+      : 'Prefer approved stock and original product imagery. Use supported registry video models only for necessary short shots after confirmation.',
+    voiceoverEnabled: input.voiceoverEnabled, voiceId: input.voiceId,
   }
   console.info('[ad-studio:planner] complete', { runId, count: plan.scenes.length, stock: plan.scenes.filter(s=>s.source==='stock').length, generated: plan.scenes.filter(s=>s.source==='generated').length })
   return plan

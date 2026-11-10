@@ -15,8 +15,9 @@ export const adBriefSchema = z.object({
   logoAssetId: asset.optional(),
   voiceId: asset.optional(),
   voiceoverEnabled: z.boolean().optional(),
+  imageVariantId: asset.optional(),
 }).strict()
-export const adModeSchema = z.enum(['storyline','image_to_ad'])
+export const adModeSchema = z.enum(['storyline','image_to_ad','image_ad_to_commercial'])
 export const adKeySchema = z.string().trim().min(8).max(160)
 export const adCreateSchema = z.object({
   mode: adModeSchema, input: adBriefSchema, idempotencyKey: adKeySchema.optional(),
@@ -32,6 +33,8 @@ export function parseCreate(body: unknown, headerKey?: string | null): { mode: A
   if (headerKey && parsed.data.idempotencyKey && headerKey !== parsed.data.idempotencyKey) throw adInvalid('The idempotency keys must match.')
   if (parsed.data.mode === 'image_to_ad' && parsed.data.input.imageAssetIds.length === 0)
     throw adInvalid('Image-to-ad requires at least one product image.')
+  if (parsed.data.mode === 'image_ad_to_commercial' && (!parsed.data.input.imageVariantId || !parsed.data.input.imageAssetIds.length))
+    throw adInvalid('Choose a completed image ad before planning its commercial.')
   if (parsed.data.mode === 'storyline' && !parsed.data.input.sellingPoints.length)
     throw adInvalid('Add at least one factual selling point for a storyline ad.')
   console.info('[ad-studio:validate] create_valid', { mode: parsed.data.mode, durationSec: parsed.data.input.durationSec })
@@ -46,6 +49,7 @@ export function parseReplan(body: unknown, previous: AdProductInput, mode: AdMod
   if (!merged.success) throw adInvalid('Revised brief must include a valid product, duration and aspect.')
   const input = merged.data
   if (mode === 'image_to_ad' && !input.imageAssetIds.length) throw adInvalid('Image-to-ad requires an image.')
+  if (mode === 'image_ad_to_commercial' && (!input.imageVariantId || !input.imageAssetIds.length)) throw adInvalid('Choose a completed image ad.')
   if (mode === 'storyline' && !input.sellingPoints.length) throw adInvalid('Add at least one selling point.')
   console.info('[ad-studio:validate] replan_valid', { durationSec: input.durationSec })
   return input

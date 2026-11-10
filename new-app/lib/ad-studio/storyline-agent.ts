@@ -13,7 +13,7 @@ export function writeAdStoryline(input: AdProductInput, mode: AdMode, choice: St
   const first = input.sellingPoints[leadIndex]
   const second = supportingIndex >= 0 ? input.sellingPoints[supportingIndex] : undefined
   const name = input.name.trim()
-  const hookVerb = choice.hookStyle === 'discover' ? 'Discover' : choice.hookStyle === 'meet' || mode === 'image_to_ad' ? 'Meet' : 'Introducing'
+  const hookVerb = choice.hookStyle === 'discover' ? 'Discover' : choice.hookStyle === 'meet' || (mode === 'image_to_ad' || mode === 'image_ad_to_commercial') ? 'Meet' : 'Introducing'
   const hook = `${hookVerb} ${name}.`
   // Never invent a user problem, capability, results, or comparative claim.
   const problem = input.audience ? `Made for ${input.audience}.` : `See what makes ${name} worth a look.`
