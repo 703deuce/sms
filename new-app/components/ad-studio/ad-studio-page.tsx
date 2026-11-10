@@ -854,7 +854,7 @@ function BriefForm({
   )
 }
 
-function formatAdSceneModel(scene: AdStudioRun['plan'] extends infer _Plan ? NonNullable<AdStudioRun['plan']>['scenes'][number] : never): string {
+function formatAdSceneModel(scene: NonNullable<AdStudioRun['plan']>['scenes'][number]): string {
   const model = scene.modelId ? getStudioModel(scene.modelId) : null
   const label = model?.label ?? scene.modelId ?? 'Generated video'
   const resolution = model?.defaultResolution
