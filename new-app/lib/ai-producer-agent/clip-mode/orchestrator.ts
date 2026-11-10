@@ -181,7 +181,8 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           continue
         }
         const finalCuts=cuts
-        const safetyRisks=clipEditorialAudit(finalCuts,ctx.cache.words??[],{storyPlan:mode==='story'})
+        // fullSourceWords is the parent transcript, not the candidate-scoped window.
+        const safetyRisks=clipEditorialAudit(finalCuts,fullSourceWords,{storyPlan:mode==='story'})
         await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
           tool:'clip_editorial_safety_audit',kind:'validate',
           argsSummary:JSON.stringify({clipId:out.clipId,candidateIndex:candidate.index}),
@@ -212,7 +213,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         // Held drafts get their QA revisions applied executably (deterministic
         // boundary / join / opening repair) and are re-gated once. No paid retry.
         if(veto||qaPass!==true){
-          const revised=repairClipBoundaries(workingCuts,ctx.cache.words??[],{
+          const revised=repairClipBoundaries(workingCuts,fullSourceWords,{
             maxEarlierSetupMs:12_000,maxLaterConclusionMs:6_500})
           if(revised.repaired){
             workingCuts=revised.cuts
@@ -223,7 +224,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
             }catch(error){
               out.notes.push('Editorial revision persist failed; kept prior draft: '+String((error as Error).message).slice(0,180))
             }
-            workingRisks=clipEditorialAudit(workingCuts,ctx.cache.words??[],{storyPlan:mode==='story'})
+            workingRisks=clipEditorialAudit(workingCuts,fullSourceWords,{storyPlan:mode==='story'})
             repairLanded=true
           }
         }

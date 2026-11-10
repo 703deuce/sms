@@ -894,11 +894,13 @@ function replayRun(fixture:Fixture){
 
 // Re-gate after repair drops stale historical QA notes, so clips whose
 // post-repair audit is empty publish clean (QA projection: 10+4 and 13+3).
-// Post-repair chronology + coverage checks change these vs the previous 10+4 / 13+3:
-// a3c clip_88a083b1 (52-minute jump) is now a critical drop;
-// 7574 clip_5afb4015 and clip_1d23876e are needsReview (truncated fixture words).
-const expectedA3c={published:13,clean:9,needsReview:4,dropped:2}
-const expected7574={published:16,clean:11,needsReview:5,dropped:0}
+// Later post-repair checks change these vs 10+4 / 13+3:
+// a3c clip_88a083b1 (52-minute jump) is a critical drop;
+// 7574 clip_5afb4015 and clip_1d23876e are needsReview (truncated fixture words);
+// a3c clip_a961dac4 and clip_af264bcf, and 7574 clip_31f33843 and clip_099c2071,
+// are needsReview for unfulfilled "Here's why." setups.
+const expectedA3c={published:13,clean:7,needsReview:6,dropped:2}
+const expected7574={published:16,clean:9,needsReview:7,dropped:0}
 
 
 describe('post-repair chronology gap and transcript coverage',()=>{
@@ -918,10 +920,29 @@ describe('post-repair chronology gap and transcript coverage',()=>{
     expect(noPlan.some((x:EditorialRisk)=>x.code==='incoherent_passage'&&x.passageIndex===2)).toBe(true)
     expect(isCriticalEditorialFailure(noPlan,[])).toBe(true)
     expect(publishDisposition({risks:noPlan,qaPass:true,qaIssues:[]})).toBe('drop')
+    // A planned jump still has to land on a self-contained sentence start.
+    // "Talk to me." is a context-dependent uptake, so this is a chronology
+    // misrepresentation even when a multi-beat story was planned.
     const planned=clipEditorialAudit(cuts,words,{storyPlan:true})
-    expect(planned.some((x:EditorialRisk)=>x.code==='long_source_gap'&&x.passageIndex===2)).toBe(true)
-    expect(planned.some((x:EditorialRisk)=>x.code==='chronology')).toBe(false)
-    expect(isCriticalEditorialFailure(planned,[])).toBe(false)
+    expect(planned.some((x:EditorialRisk)=>x.code==='chronology'&&x.passageIndex===2)).toBe(true)
+    expect(planned.some((x:EditorialRisk)=>x.code==='incoherent_passage'&&x.passageIndex===2)).toBe(true)
+    expect(planned.some((x:EditorialRisk)=>x.code==='long_source_gap')).toBe(false)
+    expect(isCriticalEditorialFailure(planned,[])).toBe(true)
+    expect(publishDisposition({risks:planned,qaPass:true,qaIssues:planned.map((r:EditorialRisk)=>r.code+': '+r.detail)})).toBe('drop')
+  })
+
+  it('allows a planned long jump only when it lands on a self-contained sentence start',()=>{
+    const cuts=[
+      {startMs:0,endMs:1300},
+      {startMs:5*60_000+4000,endMs:5*60_000+5000},
+    ]
+    const words=[
+      {w:'We',s:0.0,e:0.2},{w:'created',s:0.2,e:0.5},{w:'the',s:0.5,e:0.7},{w:'commission.',s:0.7,e:1.2},
+      {w:'Prices',s:304.0,e:304.3},{w:'went',s:304.3,e:304.5},{w:'up.',s:304.5,e:304.9},
+    ]
+    const planned=clipEditorialAudit(cuts,words,{storyPlan:true})
+    expect(planned.some((x:EditorialRisk)=>x.code==='long_source_gap'&&x.passageIndex===1)).toBe(true)
+    expect(planned.some((x:EditorialRisk)=>x.code==='chronology'||x.code==='incoherent_passage')).toBe(false)
     expect(publishDisposition({risks:planned,qaPass:true,qaIssues:planned.map((r:EditorialRisk)=>r.code+': '+r.detail)})).toBe('publish_needs_review')
   })
 
@@ -942,6 +963,22 @@ describe('post-repair chronology gap and transcript coverage',()=>{
     expect(risks.some((x:EditorialRisk)=>x.code==='uncovered_cut'&&x.passageIndex===2)).toBe(true)
     expect(isCriticalEditorialFailure(risks,[])).toBe(false)
     expect(publishDisposition({risks,qaPass:true,qaIssues:[]})).toBe('publish_needs_review')
+  })
+
+  it('flags 5afb4015 as unfinished_ending when full words cover the promised example that never comes',()=>{
+    const spoken=words("Monopolies and oligopolies. What's an example of a monopoly that holds power over an extended period of time in our era? I'll give you one example.")
+    const endMs=Math.round(spoken[spoken.length-1]!.e*1000)+200
+    const risks=clipEditorialAudit([{startMs:0,endMs}],spoken)
+    expect(risks.some((x:EditorialRisk)=>x.code==='unfinished_ending')).toBe(true)
+    expect(isCriticalEditorialFailure(risks,[])).toBe(false)
+    expect(publishDisposition({risks,qaPass:true,qaIssues:[]})).toBe('publish_needs_review')
+  })
+
+  it('fail-closes needsReview when a kept cut has no transcript words, including an empty word list',()=>{
+    const cuts=[{startMs:0,endMs:5000},{startMs:8000,endMs:12000}]
+    const empty=clipEditorialAudit(cuts,[])
+    expect(empty.filter((x:EditorialRisk)=>x.code==='uncovered_cut').map((x:EditorialRisk)=>x.passageIndex)).toEqual([0,1])
+    expect(publishDisposition({risks:empty,qaPass:true,qaIssues:[]})).toBe('publish_needs_review')
   })
 
   it('07fc0289 at 24.24s: source words are Came, not I came or He came',()=>{
@@ -976,14 +1013,50 @@ describe('post-repair chronology gap and transcript coverage',()=>{
   })
 })
 
+
+describe('generalized unfinished_ending setups',()=>{
+  function endingRisks(text:string){
+    const w=words(text)
+    const endMs=Math.round(w[w.length-1]!.e*1000)+200
+    return clipEditorialAudit([{startMs:0,endMs}],w)
+  }
+  function hasUnfinished(text:string){
+    return endingRisks(text).some((x:EditorialRisk)=>x.code==='unfinished_ending')
+  }
+
+  it('flags cataphoric setups, a trailing colon, an unanswered question, and a dangling preposition',()=>{
+    expect(hasUnfinished("I'll give you one example.")).toBe(true)
+    expect(hasUnfinished("Here's the thing.")).toBe(true)
+    expect(hasUnfinished("Here's why.")).toBe(true)
+    expect(hasUnfinished("Here's what.")).toBe(true)
+    expect(hasUnfinished('Let me tell you.')).toBe(true)
+    expect(hasUnfinished('The reason is.')).toBe(true)
+    expect(hasUnfinished('For instance.')).toBe(true)
+    expect(hasUnfinished('Here is the list:')).toBe(true)
+    expect(hasUnfinished('What happens next?')).toBe(true)
+    expect(hasUnfinished('I was thinking about')).toBe(true)
+  })
+
+  it('does not flag normal complete endings or a question that already has an answer',()=>{
+    expect(hasUnfinished("That's the reason.")).toBe(false)
+    expect(hasUnfinished('Here it is.')).toBe(false)
+    expect(hasUnfinished('Let me tell you, it worked.')).toBe(false)
+    expect(hasUnfinished("That's one example.")).toBe(false)
+    expect(hasUnfinished('What do we do? We fight.')).toBe(false)
+    expect(hasUnfinished("That's what I voted for.")).toBe(false)
+    expect(hasUnfinished("That's the point, right?")).toBe(false)
+  })
+})
+
 describe('held-draft replay of live 0-published runs',()=>{
-  it('aprun_a3c71b5a: 9 clean, 4 needsReview, 2 dropped after chronology/coverage checks',()=>{
+
+  it('aprun_a3c71b5a: 7 clean, 6 needsReview, 2 dropped after chronology/coverage/setup checks',()=>{
     const counts=replayRun(loadReplayFixture('aprun_a3c71b5a.replay.json'))
     expect(counts.runId).toBe('aprun_a3c71b5acee74a5ea52192768053a1ea')
     expect(counts).toMatchObject(expectedA3c)
   })
 
-  it('aprun_7574d85f: 11 clean, 5 needsReview, 0 dropped after chronology/coverage checks',()=>{
+  it('aprun_7574d85f: 9 clean, 7 needsReview, 0 dropped after chronology/coverage/setup checks',()=>{
     const counts=replayRun(loadReplayFixture('aprun_7574d85f.replay.json'))
     expect(counts.runId).toBe('aprun_7574d85f5ce64fcdb58a05c2e0b5b8e6')
     expect(counts).toMatchObject(expected7574)

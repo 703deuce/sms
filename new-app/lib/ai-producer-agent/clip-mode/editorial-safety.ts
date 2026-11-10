@@ -58,6 +58,7 @@ function endsOnIncompleteClause(tail:string):boolean{
   if(isEllipsisToken(last)||isEllipsisToken(trimmed))return true
   if(/,$/.test(last)||/,$/.test(trimmed))return true
   if(/\b(?:and|but|or|so|because|which|if|when|that|than|the)\s*[,—-]?$/i.test(trimmed))return true
+  if(/\b(?:about|at|by|for|from|in|into|of|on|to|with|without|after|before|over|under|through|during|against|between|among|across)\s*[,—-]?$/i.test(trimmed))return true
   return false
 }
 function endsWithCompleteSentence(tail:string):boolean{
@@ -75,6 +76,57 @@ function endsMidSentence(tail:string):boolean{
   if(endsWithCompleteSentence(trimmed))return false
   const last=lastSpokenToken(trimmed)
   return last.length>0 && !/[.!?]$/.test(trimmed)
+}
+
+function lastSentenceOf(text:string):string{
+  const trimmed=text.trim()
+  if(!trimmed)return ''
+  const parts=trimmed.split(/(?<=[.!?])(?:["')\]]+)?\s+/).filter(Boolean)
+  return (parts.at(-1)??trimmed).trim()
+}
+function payoffAfterCue(sentence:string,cue:RegExp):boolean{
+  const m=sentence.match(cue)
+  if(!m||m.index==null)return false
+  const after=sentence.slice(m.index+m[0].length).replace(/^[\s,:.—-]+/,'').replace(/[.!?]+$/,'').trim()
+  return after.length>0&&!/^(?:one example|an example|for instance|for example)$/i.test(after)
+}
+/** Promise/setup endings that still need a payoff, including punctuated ones. */
+function endsOnUnfulfilledSetup(tail:string):boolean{
+  const trimmed=tail.trim()
+  if(!trimmed)return false
+  if(/:\s*$/.test(trimmed))return true
+  const last=lastSentenceOf(trimmed)
+  if(/\bhere(?:'s| is) the (?:thing|why|what)\b/i.test(last)&&!payoffAfterCue(last,/\bhere(?:'s| is) the (?:thing|why|what)\b/i))return true
+  if(/\bhere(?:'s| is) (?:why|what)\b/i.test(last)&&!payoffAfterCue(last,/\bhere(?:'s| is) (?:why|what)\b/i))return true
+  if(/\blet me tell you\b/i.test(last)&&!payoffAfterCue(last,/\blet me tell you\b/i))return true
+  if(/\bthe reason is\b/i.test(last)&&!payoffAfterCue(last,/\bthe reason is\b/i))return true
+  // Forward-looking example/instance; not a recap like "That's one example."
+  if(/\b(?:i(?:'ll| will) give you (?:one |an )?example)\s*[:.—-]*$/i.test(last))return true
+  if(/(?<!\bthat's )(?<!\bthat is )(?<!\bthat was )\b(?:one example|for instance|for example)\s*[:.—-]*$/i.test(last))return true
+  return false
+}
+const TAG_QUESTION=/^(?:right|yeah|yes|yep|no|nope|okay|ok|see|huh|hm|hmm|you know|correct|really|true)\s*\?\s*(?:["')\]]+)?\s*$/i
+const TRAILING_TAG_QUESTION=/,\s*(?:right|yeah|yes|yep|no|nope|okay|ok|see|huh|hm|hmm|you know|correct|really|true)\s*\?\s*(?:["')\]]+)?\s*$/i
+function endsOnUnansweredQuestion(text:string):boolean{
+  const last=lastSentenceOf(text)
+  if(!/\?\s*(?:["')\]]+)?\s*$/.test(last))return false
+  // Tag / backchannel questions ("Right?", "That's the point, right?") are not unfulfilled setups.
+  if(TAG_QUESTION.test(last)||TRAILING_TAG_QUESTION.test(last))return false
+  return true
+}
+/** Conversational uptake that is not a self-contained beat start (88a083b1 "Talk to me."). */
+const CONVERSATIONAL_UPTAKE=/^(?:talk to me|i(?:'m| am) talking(?: to you)?)\b/i
+/** Reuse opening/continuation heuristics; far-away prior speech does not count as context. */
+function openingIsContextDependent(words:readonly TimedWord[],cut:ClipSpan,opening:string):boolean{
+  const first=stripLeadingFiller(opening)
+  if(startsMidPhrase(words,cut.startMs))return true
+  if(FALSE_START.test(first)||FILLER_OPEN.test(first))return true
+  if(isStrongContinuation(first,'')||isSoftContinuation(first,''))return true
+  if(DANGLING_PRONOUN_OPEN.test(first)&&!pronounHasAntecedent(first,''))return true
+  if(REF_OPEN.test(first.toLowerCase()))return true
+  if(CUT_CONTEXT_OPEN.test(first))return true
+  if(CONVERSATIONAL_UPTAKE.test(first))return true
+  return false
 }
 
 /** Joined source cuts this far apart are a chronology / coherence risk. */
@@ -104,7 +156,15 @@ export function clipEditorialAudit(
       const gapMs=cut.startMs-ordered[i-1]!.endMs
       if(gapMs>=LONG_SOURCE_GAP_MS){
         const minutes=Math.round(gapMs/60000)
-        if(opts?.storyPlan){
+        const landing=at(words,cut.startMs,cut.endMs)
+        const landingOpen=stripLeadingFiller(phrase(landing.slice(0,8)))
+        // A planned jump still has to land on a self-contained sentence start.
+        // Landing on a context-dependent line ("Talk to me.") misrepresents
+        // chronology — critical even when a multi-beat story was planned.
+        if(landing.length&&openingIsContextDependent(words,cut,landingOpen)){
+          issues.push({code:'chronology',detail:'A '+minutes+'-minute source jump lands on a context-dependent line, which misrepresents chronology'+(opts?.storyPlan?' even in a planned multi-beat story':'')+': '+landingOpen.slice(0,75),passageIndex:i})
+          issues.push({code:'incoherent_passage',detail:'A '+minutes+'-minute source jump glues a later context-dependent opening onto earlier speech',passageIndex:i})
+        }else if(opts?.storyPlan){
           issues.push({code:'long_source_gap',detail:'Joined cuts sit '+minutes+' minutes apart in the source of a planned multi-beat story',passageIndex:i})
         }else{
           // No story plan: a jump this large is critical chronology / incoherence.
@@ -152,8 +212,11 @@ export function clipEditorialAudit(
       }
     }
     const tail=phrase(wordsClosedBy(words,Math.max(cut.startMs,cut.endMs-8000),cut.endMs).slice(-8))
-    if(endsMidSentence(tail))
+    const cutText=phrase(inside)
+    if(endsMidSentence(tail)||endsOnUnfulfilledSetup(tail)||endsOnUnfulfilledSetup(cutText))
       issues.push({code:'unfinished_ending',detail:'Ending appears to leave a clause unfinished: '+tail.slice(-90),passageIndex:i})
+    else if(i===ordered.length-1&&endsOnUnansweredQuestion(cutText))
+      issues.push({code:'unfinished_ending',detail:'Clip ends on an unanswered question: '+lastSentenceOf(cutText).slice(-90),passageIndex:i})
     // Qualifier immediately following the selected end may change the claim.
     // Look at the ORIGINAL source, not the assembled timeline. Do not count
     // words already retained in the next selected passage.
