@@ -10704,6 +10704,9 @@ model AdStudioRun {
   voiceoverStatus String?
   voiceoverStorageKey String?
   voiceoverDurationMs Int?
+  renderId        String?
+  renderJobId     String?
+  renderStatus    String?
   errorCode       String?
   errorMessage    String?
   createdAt       DateTime @default(now())
