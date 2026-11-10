@@ -677,6 +677,54 @@ describe('held-draft publish policy',()=>{
     expect(unrepaired.qaPass).toBe(false)
     expect(unrepaired.qaIssues).toEqual(historical)
   })
+
+  it('keeps critical historical QA notes through regateAfterRepair so the draft still drops (QA nit 3)',()=>{
+    // Moving cut boundaries cannot fix broken media, wrong source content, or
+    // a critical machine code. Those notes must survive a landed repair even
+    // when the post-repair audit is empty, and the draft must still drop.
+    const stale='The opening depends on omitted setup. Snap back to the antecedent.'
+    const brokenMedia='broken media: the source interval is empty'
+    const wrongSource='Wrong source content: this is a different interview.'
+    const criticalCode='incoherent_passage: childhood anecdote does not belong to the later payoff'
+    const unknownCode='qa_code_not_yet_classified: a brand new checker failed this draft'
+    const historical=[stale,brokenMedia,wrongSource,criticalCode,unknownCode]
+    for(const note of [brokenMedia,wrongSource,criticalCode,unknownCode])expect(isCriticalQaIssue(note)).toBe(true)
+    expect(isCriticalQaIssue(stale)).toBe(false)
+
+    const repaired=regateAfterRepair({
+      repaired:true,workingRisks:[],historicalQaIssues:historical,qaPassBefore:false,
+    })
+    expect(repaired.qaPass).toBe(false)
+    expect(repaired.qaIssues).toEqual([brokenMedia,wrongSource,criticalCode,unknownCode])
+    expect(repaired.qaIssues).not.toContain(stale)
+    expect(publishDisposition({risks:[],qaPass:repaired.qaPass,qaIssues:repaired.qaIssues})).toBe('drop')
+
+    // Even a stale qaPass===true before repair cannot wash a critical note clean.
+    const passedBefore=regateAfterRepair({
+      repaired:true,workingRisks:[],historicalQaIssues:[brokenMedia],qaPassBefore:true,
+    })
+    expect(passedBefore).toEqual({qaPass:false,qaIssues:[brokenMedia]})
+    expect(publishDisposition({risks:[],qaPass:passedBefore.qaPass,qaIssues:passedBefore.qaIssues})).toBe('drop')
+
+    // Critical notes plus leftover non-critical working risks: still a drop, both kept.
+    const withRisk=regateAfterRepair({
+      repaired:true,
+      workingRisks:[{code:'continuation_opening',detail:'And if that happens',passageIndex:0}],
+      historicalQaIssues:[stale,brokenMedia],qaPassBefore:false,
+    })
+    expect(withRisk.qaIssues).toEqual([brokenMedia,'continuation_opening: And if that happens'])
+    expect(publishDisposition({
+      risks:[{code:'continuation_opening',detail:'And if that happens',passageIndex:0}],
+      qaPass:withRisk.qaPass,qaIssues:withRisk.qaIssues,
+    })).toBe('drop')
+
+    // Unrepaired path keeps them too.
+    const unrepaired=regateAfterRepair({
+      repaired:false,workingRisks:[],historicalQaIssues:[brokenMedia],qaPassBefore:false,
+    })
+    expect(unrepaired.qaIssues).toContain(brokenMedia)
+    expect(publishDisposition({risks:[],qaPass:unrepaired.qaPass,qaIssues:unrepaired.qaIssues})).toBe('drop')
+  })
 })
 
 describe('clip agent auto-export and auto-motion policy',()=>{
