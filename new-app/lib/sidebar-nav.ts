@@ -49,7 +49,7 @@ export function createMenuItems(f: SidebarNavFlags): CreateMenuItem[] {
     { id: 'create-editor', label: 'Editor project', href: f.scriptEditor ? routes.videoEditor() : routes.videoEditorNew(), icon: 'editor' },
     ...(rec ? [{ id: 'create-record', label: 'Recording', href: rec, icon: 'record' as const }] : []),
     ...(f.t2v ? [{ id: 'create-ai-video', label: 'AI Video', href: routes.aiVideoNew(), icon: 'aiVideo' as const }] : []),
-    { id: 'create-studio', label: 'AI Studio', href: '/app/studio', icon: 'studio' as const },
+    { id: 'create-studio', label: 'Product ad', href: '/app/studio', icon: 'studio' as const },
   ]
 }
 
@@ -62,7 +62,7 @@ export function buildSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
     { id: 'editor', label: 'Editor', href: routes.videoEditor(), icon: 'editor', group: 'products' },
     rec ? { id: 'record', label: 'Record', href: rec, icon: 'record', group: 'products' } : null,
     f.t2v ? { id: 'ai-video', label: 'AI Video', href: routes.aiVideoNew(), icon: 'aiVideo', group: 'products' } : null,
-    { id: 'studio', label: 'Studio', href: '/app/studio', icon: 'studio', group: 'products' },
+    { id: 'studio', label: 'Product ad', href: '/app/studio', icon: 'studio', group: 'products' },
     { id: 'media', label: 'Media', href: '/app/clips/media', icon: 'media', group: 'library' },
     { id: 'brand', label: 'Brand kit', href: '/app/clips/brand', icon: 'brand', group: 'library' },
     { id: 'templates', label: 'Templates', href: '/app/clips/templates', icon: 'templates', group: 'library' },

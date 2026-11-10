@@ -168,6 +168,7 @@ jobs:
             tests/studio-job-polling.test.ts \
             tests/studio-history-and-timeline.test.ts \
             tests/studio-ui-layout.test.tsx \
+            tests/ad-studio-f1.test.tsx \
             tests/unified-clip-results.test.ts \
             tests/unified-clip-results-ui.test.tsx
 

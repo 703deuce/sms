@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Clapperboard, Scissors } from 'lucide-react'
+import { Clapperboard, Scissors, Sparkles } from 'lucide-react'
 import { Page, PageHeader } from '../../components/app/page-primitives'
 import { ProjectStatusBadge } from '../../components/app/status'
 import { getClipsDriveProjects, getClipsWorkspaceId } from '../../lib/server/clips/drive-data'
@@ -24,8 +24,8 @@ export default async function AppDashboardPage() {
 
   return (
     <Page>
-      <PageHeader title="Home" description="Open Clipper or the video editor. Recent projects are listed below." />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <PageHeader title="Home" description="Open Clipper, the video editor, or Product ad. Recent projects are listed below." />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <LauncherCard
           href={routes.clips()}
           icon={Scissors}
@@ -39,6 +39,13 @@ export default async function AppDashboardPage() {
           title="Video Editor"
           description="Edit a full video or open an existing project."
           testId="app-launcher-video-editor"
+        />
+        <LauncherCard
+          href="/app/studio"
+          icon={Sparkles}
+          title="Product ad"
+          description="Turn a product into a short ad, then open it in the editor."
+          testId="app-launcher-product-ad"
         />
       </div>
       <section className="mt-8" aria-labelledby="recent-projects-heading">

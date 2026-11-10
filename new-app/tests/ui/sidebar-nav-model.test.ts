@@ -20,6 +20,7 @@ describe('sidebar model', () => {
       'editor',
       'record',
       'ai-video',
+      'studio',
       'media',
       'brand',
       'templates',
@@ -36,6 +37,7 @@ describe('sidebar model', () => {
       editor: '/app/video-editor',
       record: '/app/rooms/new',
       'ai-video': '/app/ai-video/new',
+      studio: '/app/studio',
       templates: '/app/clips/templates',
       brand: '/app/clips/brand',
       exports: '/app/exports',
@@ -64,6 +66,7 @@ describe('sidebar model', () => {
       'Editor project',
       'Recording',
       'AI Video',
+      'Product ad',
     ])
     expect(Object.fromEntries(items.map((i: { id: string; href: string }) => [i.id, i.href]))).toMatchObject({
       'create-clip': '/app/clips/new',
@@ -91,6 +94,7 @@ describe('sidebar model', () => {
     ['/app/video-editor/abc/edit/c1', '', 'editor'],
     ['/app/video-editor/abc/studio/c1', '', 'editor'],
     ['/app/video-editor/abc/script', '', 'editor'],
+    ['/app/studio', '', 'studio'],
     ['/app/ai-video/new', '', 'ai-video'],
     ['/app/ai-video/proj_t2v', 'mode=storyboard', 'ai-video'],
     ['/app/clips/templates', 'tab=layouts&sub=mine', 'templates'],

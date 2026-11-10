@@ -1,5 +1,5 @@
-import { AiStudioPage } from '../../../components/studio/ai-studio-page'
+import { AdStudioPage } from '../../../components/ad-studio/ad-studio-page'
 
 export default function StudioRoute() {
-  return <AiStudioPage />
+  return <AdStudioPage />
 }
