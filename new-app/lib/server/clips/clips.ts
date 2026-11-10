@@ -222,8 +222,6 @@ export async function listProjectClips(
   })
 
   if (opts?.skipTranscriptEnrichment) {
-
-  if (opts?.skipTranscriptEnrichment) {
     return rows
   }
 
