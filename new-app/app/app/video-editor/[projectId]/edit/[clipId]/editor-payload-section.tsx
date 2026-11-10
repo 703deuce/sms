@@ -10,12 +10,14 @@ export async function EditorPayloadSection({
   clipId,
   clipperStudio = false,
   initialTab,
+  initialProducerOpen = false,
 }: {
   workspaceId: string
   projectId: string
   clipId: string
   clipperStudio?: boolean
   initialTab?: string
+  initialProducerOpen?: boolean
 }) {
   const initialPanel = editorPanelFromSearchParam(initialTab)
   let data
@@ -71,6 +73,7 @@ export async function EditorPayloadSection({
       editorAssets={data.editorAssets ?? null}
       clipperStudio={clipperStudio}
       initialPanel={initialPanel}
+      initialProducerOpen={initialProducerOpen}
     />
   )
 }

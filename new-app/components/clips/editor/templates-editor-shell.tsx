@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Clapperboard, Download, FileText, Loader2, Pause, Play, Redo2, Undo2 } from 'lucide-react'
+import { ArrowLeft, Download, Loader2, Pause, Play, Redo2, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { LayoutQuickPicker } from '@/components/clips/editor/layout-quick-picker'
@@ -17,6 +17,7 @@ import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import type { EditorClipShell } from '@/components/clips/editor/editor-clip-shell'
 import { editorMediaLoadFallbacks } from '@/lib/server/clips/editor-clip-media'
 import { editorIconBtn, editorToolbarDivider, editorToolbarRow, editorToolbarTextBtn } from '@/lib/clips/editor/editor-chrome-tokens'
+import { EditorModeSwitcher } from '@/components/clips/editor/editor-mode-switcher'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { loadSourceWords } from '@/lib/clips/source-words'
 import { buildTemplateCatalog, type CatalogItem, type CatalogTab } from '@/lib/clips/templates/catalog'
@@ -57,7 +58,7 @@ type CaptionDraft = {
   activeStyle?: 'color' | 'highlight' | 'fill'
   highlightColor?: string
 }
-type HandoffTarget = 'project' | 'text' | 'clip' | 'export'
+type HandoffTarget = 'project' | 'clip' | 'producer' | 'story' | 'generate' | 'export'
 type BulkResult = { updated: number; skipped: number; errors: number }
 type CaptionView = 'choose' | 'edit'
 type CustomizerSection = 'layout' | 'subtitle' | 'headline' | 'background' | 'logo' | 'outro'
@@ -1107,11 +1108,20 @@ export function TemplatesEditorShell(props: Props) {
       window.location.assign(routes.project(projectId))
       return
     }
-    if (target === 'text') {
-      console.info('[editor:templates-mode] open-in-text-editor', { projectId, clipId })
-      window.location.assign(
-        routes.text(projectId, clipId, props.clipperStudio ? { from: 'studio' } : undefined),
-      )
+    const query = props.clipperStudio ? { from: 'studio' } : undefined
+    if (target === 'producer') {
+      console.info('[editor:templates-mode] open-ai-producer', { projectId, clipId })
+      window.location.assign(routes.chat(projectId, clipId, query))
+      return
+    }
+    if (target === 'story') {
+      console.info('[editor:templates-mode] open-story-blocks', { projectId, clipId })
+      window.location.assign(routes.story(projectId, clipId, query))
+      return
+    }
+    if (target === 'generate') {
+      console.info('[editor:templates-mode] open-change-shot', { projectId, clipId, atMs: Math.round(playhead) })
+      window.location.assign(routes.generate(projectId, clipId, { atMs: String(Math.round(playhead)), ...(props.clipperStudio ? { from: 'studio' } : {}) }))
       return
     }
     console.info('[editor:templates-mode] open-in-clip-editor', { projectId, clipId })
@@ -1242,12 +1252,15 @@ export function TemplatesEditorShell(props: Props) {
           <button type="button" className={editorToolbarTextBtn} onClick={() => requestHandoff('export')}>
             <Download />Export
           </button>
-          <button type="button" className={editorToolbarTextBtn} onClick={() => requestHandoff('text')}>
-            <FileText />Open in text editor
-          </button>
-          <Button size="sm" onClick={() => requestHandoff('clip')}>
-            <Clapperboard className="mr-1 size-4" />Open in clip editor
-          </Button>
+          <EditorModeSwitcher
+            current="templates"
+            disabled={handoffBusy}
+            onSelect={(mode) => {
+              console.info('[editor:templates-mode] mode-selected', { projectId, clipId, mode })
+              if (mode === 'templates') return
+              requestHandoff(mode)
+            }}
+          />
         </header>
 
         <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] overflow-hidden gap-1 p-1 xl:grid-cols-[minmax(360px,430px)_minmax(0,1fr)]" data-testid="templates-editor-layout-grid">

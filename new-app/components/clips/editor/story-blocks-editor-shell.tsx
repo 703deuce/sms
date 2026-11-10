@@ -35,6 +35,8 @@ import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
 import { splitLayoutSegmentAt, setLayoutModeForSegmentAt } from '@/lib/clips/layout-segments'
 import { clipsFetch, requestClipReframe } from '@/lib/clips-api'
 import { routes } from '@/lib/routes'
+import { editorToolbarRow } from '@/lib/clips/editor/editor-chrome-tokens'
+import { EditorModeSwitcher, type EditorModeSwitcherMode } from '@/components/clips/editor/editor-mode-switcher'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 
 type Props = Parameters<typeof EditorClipShell>[0]
@@ -298,16 +300,19 @@ export function StoryBlocksEditorShell(props: Props) {
     commit('scene-label-only', { ...edits, markers })
     console.log('[editor:story-mode] scope', { projectId, clipId, kind: 'metadata-only', sceneStartMs: at })
   }
-  const openOther = async (target: 'edit' | 'text' | 'templates') => {
+  const openOther = async (target: EditorModeSwitcherMode | 'transcript' | 'captions') => {
     console.log('[editor:story-mode] handoff-start', { projectId, clipId, target })
     try { await flushSave() } catch {
       reportError('handoff', new Error('Save edits before changing editors'))
       return
     }
-    const query = props.clipperStudio ? { from: 'studio' } : undefined
-    const url = target === 'text' ? routes.text(projectId, clipId, query)
-      : target === 'templates' ? routes.templateMode(projectId, clipId, query)
-        : props.clipperStudio ? routes.studio(projectId, clipId) : routes.edit(projectId, clipId)
+    const fromQuery = props.clipperStudio ? { from: 'studio' } : undefined
+    const editorQuery = target === 'transcript' || target === 'captions' ? { tab: target } : undefined
+    const editorUrl = props.clipperStudio ? routes.studio(projectId, clipId, editorQuery) : routes.edit(projectId, clipId, editorQuery)
+    const url = target === 'producer' ? routes.chat(projectId, clipId, fromQuery)
+      : target === 'templates' ? routes.templateMode(projectId, clipId, fromQuery)
+        : target === 'generate' ? routes.generate(projectId, clipId, { atMs: String(Math.round(selected?.sourceStartMs ?? edits.trim.in)), ...(props.clipperStudio ? { from: 'studio' } : {}) })
+          : editorUrl
     console.log('[editor:story-mode] handoff-complete', { projectId, clipId, target })
     window.location.assign(url)
   }
@@ -359,7 +364,7 @@ export function StoryBlocksEditorShell(props: Props) {
 
   return <ClipperSurfaceErrorBoundary surface="Story blocks editor">
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground" data-testid="story-blocks-editor">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+      <header className={editorToolbarRow + ' relative z-50'}>
         <Button variant="ghost" size="icon" render={<Link href={routes.project(projectId)} />} aria-label="Back to project"><ArrowLeft className="size-4" /></Button>
         <div className="min-w-0"><p className="truncate text-[10px] text-muted-foreground">{props.projectTitle}</p><h1 className="max-w-56 truncate text-sm font-semibold">{props.initialTitle}</h1></div>
         <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-medium">Story blocks</span>
@@ -369,23 +374,28 @@ export function StoryBlocksEditorShell(props: Props) {
         <Button variant="ghost" size="icon" aria-label="Undo" disabled={!canUndo} onClick={() => { undo(); setSelectedStart(null); console.log('[editor:story-mode] undo', { projectId, clipId }) }}><Undo2 className="size-4" /></Button>
         <Button variant="ghost" size="icon" aria-label="Redo" disabled={!canRedo} onClick={() => { redo(); setSelectedStart(null); console.log('[editor:story-mode] redo', { projectId, clipId }) }}><Redo2 className="size-4" /></Button>
         <Button size="sm" variant="outline" onClick={() => { setExportOpen(true); console.log('[editor:story-mode] export-open', { projectId, clipId }) }}><Download className="mr-1 size-4" />Export</Button>
-        <Button variant="outline" size="sm" onClick={() => void openOther('text')}>Text editor</Button>
-        <Button variant="outline" size="sm" onClick={() => void openOther('templates')}>Templates</Button>
-        <Button size="sm" onClick={() => void openOther('edit')}>Clip editor</Button>
+        <EditorModeSwitcher
+          current="story"
+          onSelect={(mode) => {
+            console.log('[editor:story-mode] mode-selected', { projectId, clipId, mode })
+            if (mode === 'story') return
+            void openOther(mode)
+          }}
+        />
       </header>
-      <div className="flex min-h-0 flex-1">
-        <nav className="flex w-[76px] shrink-0 flex-col border-r border-border bg-card/50 py-3" aria-label="Story tools">
+      <div className="flex min-h-0 flex-1 gap-1 p-1">
+        <nav className="order-last flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-y-auto rounded-lg border border-border/70 bg-muted/20 px-1 py-2" aria-label="Story tools" data-testid="story-tool-rail">
           {rail.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => {
             setTab(id); console.log('[editor:story-mode] tool-selected', { projectId, clipId, tool: id })
-          }} aria-current={tab === id ? 'page' : undefined} className={'flex flex-col items-center gap-1 px-1 py-3 text-[10px] ' + (tab === id ? 'bg-primary/10 font-semibold text-primary' : 'text-muted-foreground hover:bg-muted')}>
+          }} aria-current={tab === id ? 'page' : undefined} className={'flex min-h-11 w-full flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-[9px] leading-none transition-colors ' + (tab === id ? 'bg-accent font-semibold text-foreground ring-1 ring-border' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
             <Icon className="size-5" />{label}
           </button>)}
         </nav>
-        <aside className="relative flex w-[390px] shrink-0 flex-col border-r border-border bg-card/30 xl:w-[430px]" aria-label="Scene cards and tools">
+        <aside className="relative flex w-[390px] shrink-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card xl:w-[430px]" aria-label="Scene cards and tools">
           {tab === 'story' ? <>
             <div className="border-b border-border p-3">
               <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Story</h2><span className="text-xs text-muted-foreground">{scenes.length} scenes</span></div>
-              <Button className="mt-3 w-full" variant="outline" size="sm" onClick={() => void openOther('text')}><FileText className="mr-1 size-3" />Edit full script</Button>
+              <Button className="mt-3 w-full" variant="outline" size="sm" onClick={() => void openOther('transcript')}><FileText className="mr-1 size-3" />Edit full script</Button>
               <div className="mt-3 flex gap-2">
                 <label className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-input px-2"><Search className="size-4 text-muted-foreground" /><input className="h-9 min-w-0 flex-1 bg-transparent text-xs outline-none" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a scene" aria-label="Find scenes" /></label>
                 <Button variant="outline" size="sm" disabled={!selected || selected.endMs - selected.startMs < 1200 || (edits.markers?.length ?? 0) >= MAX_MARKERS || Boolean(edits.inserts?.length) || hasRepeatedSource(tb)} title={!selected ? 'Select a scene first.' : edits.inserts?.length ? 'Add scene is disabled while inserted clips are present.' : hasRepeatedSource(tb) ? 'Repeated source sections cannot receive an unambiguous layout boundary.' : undefined} onClick={() => { setAddSceneOpen(true); console.log('[editor:story-mode] add-scene-open', { projectId, clipId, selected: selectedIndex }) }}><Plus className="mr-1 size-3" />Add scene</Button>
@@ -439,7 +449,7 @@ export function StoryBlocksEditorShell(props: Props) {
               {stockAttachReason && <p className="text-xs text-muted-foreground">{stockAttachReason}</p>}
             </> : tab === 'audio' ? <>
               <p className="text-xs text-muted-foreground">This recording keeps its current audio. Voice generation is not scene-scoped in the existing edit contract, so Story mode does not silently regenerate narration.</p>
-              <Button size="sm" variant="outline" onClick={() => void openOther('edit')}>Open existing audio / voice tools</Button>
+              <Button size="sm" variant="outline" onClick={() => void openOther('clip')}>Open existing audio / voice tools</Button>
             </> : tab === 'layouts' ? <>
               <p className="text-xs text-muted-foreground">Quick layouts and the existing layout inspector write to the same clip edit document.</p>
               <LayoutQuickPicker value={edits.layout.mode} edits={edits} facecamLayout={props.facecamLayout} reframeV2Enabled={props.reframeV2Enabled} onPick={(mode, facecam) => { setLayoutMode(mode, facecam); console.log('[editor:story-mode] layout', { projectId, clipId, mode }) }} onAspectChange={(aspect) => commit('aspect-global', { ...edits, aspectRatio: aspect })} />
@@ -448,7 +458,7 @@ export function StoryBlocksEditorShell(props: Props) {
               </div>
             </> : tab === 'text' ? <>
               <p className="text-xs text-muted-foreground">Scene labels are metadata. Transcript correction changes caption text only, not the recorded voice.</p>
-              <Button size="sm" variant="outline" onClick={() => void openOther('text')}>Edit full transcript / script</Button>
+              <Button size="sm" variant="outline" onClick={() => void openOther('captions')}>Edit full transcript / script</Button>
               <CaptionsPanel clipId={clipId} edits={edits} words={words} onChange={(captions) => { setCaptions(captions); console.log('[editor:story-mode] captions-change', { projectId, clipId }) }} onEdits={setEdits} outputMs={playheadOut} onSeekOutput={seekOutput} compactProperties />
             </> : tab === 'styles' ? <>
               <p className="text-xs text-muted-foreground">Typography uses the same caption catalog and saved custom presets as the full editor.</p>
@@ -468,7 +478,7 @@ export function StoryBlocksEditorShell(props: Props) {
             </>}
           </div>}
         </aside>
-        <main className="flex min-w-0 flex-1 flex-col" aria-label="Selected scene and preview">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/70 bg-background" aria-label="Selected scene and preview">
           <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2">
             <div><h2 className="text-sm font-semibold">{selected ? 'Scene ' + (selectedIndex + 1) : 'No scene selected'}</h2>
               <p className="text-[11px] text-muted-foreground">{selected ? clock(displayPositionMs(previewEdits, selected.endMs) - displayPositionMs(previewEdits, selected.startMs)) + ' · ' + (edits.aspectRatio ?? '9:16') : 'Select a scene card'}</p>
@@ -526,7 +536,7 @@ export function StoryBlocksEditorShell(props: Props) {
               <Button variant="outline" size="sm" onClick={splitScene} disabled={selected.endMs - selected.startMs < 1200 || (edits.markers?.length ?? 0) >= MAX_MARKERS}><Scissors className="mr-1 size-3" />Split boundary</Button>
               <Button variant="outline" size="sm" onClick={mergeScene} disabled={selectedIndex < 1 || !edits.markers?.some((m) => m.id.startsWith('story_') && Math.abs(m.ms - selected.startMs) < 35)}>Merge boundary</Button>
               <Button variant="outline" size="sm" onClick={deleteScene} disabled={Boolean(simpleEdlReason) || scenes.length < 2} title={simpleEdlReason ?? undefined}><Trash2 className="mr-1 size-3" />Delete footage</Button>
-              <Button variant="outline" size="sm" onClick={() => void openOther('text')}>Edit words in Text</Button>
+              <Button variant="outline" size="sm" onClick={() => void openOther('transcript')}>Edit words in Compact</Button>
             </div>
             {simpleEdlReason && <p className="text-[11px] text-muted-foreground">{simpleEdlReason}</p>}
             {mutationError && <div role="alert" className="flex items-center gap-2 text-xs text-destructive"><span className="flex-1">{mutationError}</span><Button size="sm" variant="outline" disabled={!retryMutationRef.current} title={retryMutationRef.current ? 'Retry the failed operation' : 'This operation is blocked by the current edit shape'} onClick={() => retryMutationRef.current?.()}>Retry</Button><Button size="sm" variant="ghost" onClick={() => { retryMutationRef.current = null; setMutationError(null) }}>Dismiss</Button></div>}

@@ -458,7 +458,7 @@ export function ClipCard({
               <MoreHorizontal className="size-4" aria-hidden />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem data-testid="clip-card-text-editor" onClick={() => { console.info('[editor:text] card-entry', { projectId, clipId: clip.id }); router.push('/app/video-editor/' + projectId + '/text/' + clip.id + (isStreamer ? '?from=studio' : '')) }}>Text editor</DropdownMenuItem>
+              {false ? <DropdownMenuItem data-testid="clip-card-text-editor" onClick={() => { console.info('[editor:text] card-entry', { projectId, clipId: clip.id }); router.push('/app/video-editor/' + projectId + '/text/' + clip.id + (isStreamer ? '?from=studio' : '')) }}>Text editor</DropdownMenuItem> : null}
               <DropdownMenuItem data-testid="clip-card-story-editor" onClick={() => {
                 console.log('[editor:story-mode] card-entry', { projectId, clipId: clip.id })
                 router.push(routes.story(projectId, clip.id, isStreamer ? { from: 'studio' } : undefined))

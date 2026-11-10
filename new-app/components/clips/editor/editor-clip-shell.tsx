@@ -49,6 +49,7 @@ export function EditorClipShell(props: {
   editorAssets: EditorAssets | null
   clipperStudio?: boolean
   initialPanel?: EditorPanelId
+  initialProducerOpen?: boolean
 }) {
   const fallbacks = useMemo(
     () =>
@@ -120,6 +121,7 @@ export function EditorClipShell(props: {
         compact={!props.fullVideo || props.initialPanel === 'captions'}
         clipperStudio={props.clipperStudio === true}
         initialPanel={props.initialPanel}
+        initialProducerOpen={props.initialProducerOpen}
       />
     </ClipperSurfaceErrorBoundary>
   )

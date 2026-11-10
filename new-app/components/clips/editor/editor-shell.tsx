@@ -4,7 +4,7 @@ import { Anton, Montserrat, Poppins } from 'next/font/google'
 import Link from 'next/link'
 import { routes } from '@/lib/routes'
 import { addFontVarsToBody, clipDisplayFontVars } from '@/components/clips/editor/clip-editor-fonts'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { getPreviewRate, subscribePreviewRate } from '@/lib/clips/editor/preview-rate'
 import { EditorRail, clipEditorRailIds, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import {
@@ -74,10 +74,8 @@ import { MotionGraphicsPanel } from '@/components/clips/editor/motion-graphics-p
 import { TemplatesPanel } from '@/components/clips/editor/templates-panel'
 import { ColorPanel, type ColorTarget } from '@/components/clips/editor/color-panel'
 import { EffectsBrowser } from '@/components/clips/editor/effects-browser'
-import { ProducerPopover } from '@/components/clips/editor/producer-popover'
-import { applyProducerPlanStep } from '@/lib/clips/editor/producer-plan'
-import type { ClipWord } from '@/lib/clips/edits'
-import type { ProducerToolCall } from '@/lib/clips/edits-reducer'
+import { EditorChatRail, type EditorChatScope } from '@/components/clips/editor/editor-chat-rail'
+import { EditorModeSwitcher } from '@/components/clips/editor/editor-mode-switcher'
 import { TemplateLayoutPanel } from '@/components/clips/editor/template-layout-panel'
 import { t6CaptionPresetsEnabled, t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import {
@@ -137,6 +135,7 @@ import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
 import { EditorVersionsMenu, type EditVersionRow } from '@/components/clips/editor/editor-versions-menu'
 import {
+  canonicalEditsJson,
   normalizeEdits,
   normalizeEditSpeed,
   outputDurationMs,
@@ -272,6 +271,7 @@ export function EditorShell({
   compact = false,
   clipperStudio = false,
   initialPanel,
+  initialProducerOpen = false,
 }: {
   projectId: string
   projectTitle?: string
@@ -313,6 +313,8 @@ export function EditorShell({
   clipperStudio?: boolean
   /** When set (e.g. ?tab=captions), that panel is selected on init. Default remains transcript. */
   initialPanel?: EditorPanelId
+  /** Deep-link compatibility for /chat; default-off everywhere else. */
+  initialProducerOpen?: boolean
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
@@ -357,8 +359,9 @@ export function EditorShell({
       ),
     [],
   )
-  const [producerOpen, setProducerOpen] = useState(false)
+  const [producerOpen, setProducerOpen] = useState(initialProducerOpen)
   const [producerPendingPaid, setProducerPendingPaid] = useState(0)
+  const [chatScope, setChatScope] = useState<EditorChatScope>({ kind: 'whole' })
   const [pendingDerivedClipId, setPendingDerivedClipId] = useState<string | null>(null)
   const [gapToolSettings, setGapToolSettings] = useState<ClipGapToolSettings>({
     mode: 'more_than',
@@ -3341,29 +3344,72 @@ export function EditorShell({
     }
     selectRailGroup(groupId)
   }
-  const handleCompactHandoff = (event: ReactMouseEvent<HTMLAnchorElement>, target: 'text' | 'story' | 'templates') => {
-    if (!compact || fullVideo || clipperStudio) return
-    // Keep browser-native modified clicks and new-tab behavior. Guard same-tab handoffs.
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-    event.preventDefault()
+  const openEditorMode = async (target: 'story' | 'templates') => {
     if (compactHandoffInFlight.current) {
       console.info('[editor:compact-gaps] handoff-already-running', { projectId, clipId, target })
       return
     }
     compactHandoffInFlight.current = true
     console.info('[editor:compact-gaps] handoff-start', { projectId, clipId, target })
-    void (async () => {
-      try {
-        await flushSave()
-        console.info('[editor:compact-gaps] handoff-saved', { projectId, clipId, target })
-        window.location.assign(target === 'text' ? routes.text(projectId, clipId) : target === 'story' ? routes.story(projectId, clipId) : routes.templateMode(projectId, clipId))
-      } catch {
-        console.error('[editor:compact-gaps] handoff-failure', { projectId, clipId, target })
-        toast.error('Save edits before switching editors. Retry the save and try again.')
-      } finally {
-        compactHandoffInFlight.current = false
-      }
-    })()
+    try {
+      await flushSave()
+      console.info('[editor:compact-gaps] handoff-saved', { projectId, clipId, target })
+      const query = clipperStudio ? { from: 'studio' } : undefined
+      window.location.assign(target === 'story' ? routes.story(projectId, clipId, query) : routes.templateMode(projectId, clipId, query))
+    } catch {
+      console.error('[editor:compact-gaps] handoff-failure', { projectId, clipId, target })
+      toast.error('Save edits before switching editors. Retry the save and try again.')
+    } finally {
+      compactHandoffInFlight.current = false
+    }
+  }
+  const toggleProducerRail = async () => {
+    if (producerOpen) {
+      setProducerOpen(false)
+      setAuditionEdits(null)
+      console.info('[editor:chat-mode] close', { projectId, clipId })
+      return
+    }
+    try {
+      console.info('[editor:chat-mode] open-start', { projectId, clipId })
+      await flushSave()
+      setProducerOpen(true)
+      console.info('[editor:chat-mode] open', { projectId, clipId })
+    } catch {
+      console.error('[editor:chat-mode] open-blocked-save', { projectId, clipId })
+      toast.error('Save edits before opening AI Producer.')
+    }
+  }
+  const useChatSelection = () => {
+    const selection = selectionRef.current
+    if (!selection || selection.startMs === selection.endMs) {
+      toast.message('Select words in the transcript first')
+      return
+    }
+    const startMs = Math.min(selection.startMs, selection.endMs)
+    const endMs = Math.max(selection.startMs, selection.endMs)
+    setChatScope({ kind: 'range', startMs, endMs, label: 'Selected transcript' })
+    console.info('[editor:chat-mode] selection-context', { projectId, clipId, startMs, endMs })
+  }
+  const useChatScene = () => {
+    if (!selectedVideo || selectedVideo.srcOutMs <= selectedVideo.srcInMs) {
+      toast.message('Select a timeline segment first')
+      return
+    }
+    setChatScope({ kind: 'scene', startMs: selectedVideo.srcInMs, endMs: selectedVideo.srcOutMs, label: 'Selected timeline segment' })
+    console.info('[editor:chat-mode] scene-context', { projectId, clipId, startMs: selectedVideo.srcInMs, endMs: selectedVideo.srcOutMs })
+  }
+  const acceptChatProposal = async (next: ClipEditsV2, before: ClipEditsV2, count: number) => {
+    const beforeHash = canonicalEditsJson(before)
+    if (canonicalEditsJson(editsRef.current) !== beforeHash) throw new Error('Local edits changed. Discard and replan.')
+    await flushSave()
+    const latest = await clipsFetch<{ edits: ClipEditsV2 }>(`/api/clips/clips/${encodeURIComponent(clipId)}`)
+    if (canonicalEditsJson(latest.edits) !== beforeHash || canonicalEditsJson(editsRef.current) !== beforeHash) {
+      throw new Error('The clip changed on the server. Discard this proposal and replan.')
+    }
+    if (count <= 0 || canonicalEditsJson(next) === beforeHash) throw new Error('No editable changes to accept.')
+    applyProducerPatch(next, before, count, 'Chat Producer')
+    console.info('[editor:chat-mode] accept-to-shared-edit', { projectId, clipId, count })
   }
   const openGenerateMode = async () => {
     if (compactHandoffInFlight.current) return
@@ -3692,7 +3738,7 @@ export function EditorShell({
           onRetrySave={() => {
             void flushSave()
           }}
-          onOpenProducer={() => setProducerOpen((o) => !o)}
+          onOpenProducer={() => void toggleProducerRail()}
           producerOpen={producerOpen}
           producerStrip={producerStrip ? { changeCount: producerStrip.changeCount, onUndo: undo } : null}
           pendingPaidCount={producerPendingPaid}
@@ -3704,10 +3750,17 @@ export function EditorShell({
           versionsSlot={
             <>
               {compact && !fullVideo && !clipperStudio ? <Badge variant="outline" className="h-6 text-[11px] font-normal" data-testid="compact-editor-mode-label">Clip editor</Badge> : null}
-              <Button type="button" size="sm" variant="outline" render={<Link href={routes.text(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.info('[editor:text] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'text') }} />}>Text editor</Button>
-              <Button type="button" size="sm" variant="outline" render={<Link href={routes.story(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.log('[editor:story-mode] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'story') }} />}>Story blocks</Button>
-              <Button type="button" size="sm" variant="outline" render={<Link href={routes.templateMode(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.info('[editor:templates-mode] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'templates') }} />}>Templates</Button>
-              <Button type="button" size="sm" variant="outline" data-testid="editor-change-this-shot" data-mode="source-video-edit" aria-label="Change this shot with AI" title="Edit selected footage with the source-video Change this shot workspace" onClick={() => void openGenerateMode()}>Change this shot</Button>
+              <EditorModeSwitcher
+                current="clip"
+                producerOpen={producerOpen}
+                onSelect={(mode) => {
+                  console.info('[editor:compact-gaps] mode-selected', { projectId, clipId, mode })
+                  if (mode === 'clip') return
+                  if (mode === 'producer') { void toggleProducerRail(); return }
+                  if (mode === 'story' || mode === 'templates') { void openEditorMode(mode); return }
+                  if (mode === 'generate') void openGenerateMode()
+                }}
+              />
               {fullVideo ? (
               <FindClipsInVideoButton
                 projectId={projectId}
@@ -3795,32 +3848,6 @@ export function EditorShell({
           onRestoreOriginal={() => void restoreOriginalEdits()}
         />
       </div>
-      <EditorPanelErrorBoundary label="AI Producer">
-        <ProducerPopover
-          open={producerOpen}
-          onClose={() => setProducerOpen(false)}
-          clipId={clipId}
-          bounds={bounds}
-          edits={edits}
-          durationMs={outDur}
-          onAudition={setAuditionEdits}
-          onAccept={(next, before, n) => applyProducerPatch(next, before, n)}
-          onUndo={undo}
-          onPendingPaidChange={setProducerPendingPaid}
-          words={clipEditorWords as ClipWord[]}
-          onRunPlanStep={(index, tools: ProducerToolCall[]) => {
-            const cur = editsRef.current
-            const res = applyProducerPlanStep(cur, bounds, clipEditorWords as ClipWord[], tools, index)
-            if (res?.applied) {
-              editsRef.current = res.edits
-              setEditsPass(res.edits, res.label)
-              return true
-            }
-            if (res && !res.applied) toast.message(`Producer: ${tools[index]?.name ?? 'step'} made no change`)
-            return false
-          }}
-        />
-      </EditorPanelErrorBoundary>
       <ClipFillerReview
         clipId={clipId}
         words={editorWords}
@@ -4204,6 +4231,51 @@ export function EditorShell({
           </div>
           </>
           )}
+        />
+      </div>
+      {producerOpen ? (
+        <button
+          type="button"
+          className="fixed inset-x-0 bottom-0 top-11 z-[65] bg-black/35 lg:hidden"
+          aria-label="Close AI Producer drawer"
+          onClick={() => { setProducerOpen(false); setAuditionEdits(null); console.info('[editor:chat-mode] drawer-closed', { projectId, clipId }) }}
+        />
+      ) : null}
+      <div
+        id="editor-chat-mode"
+        role="dialog"
+        aria-modal={producerOpen ? true : undefined}
+        aria-label="AI Producer"
+        className={producerOpen ? 'fixed bottom-0 right-0 top-11 z-[70] w-[min(380px,100vw)] overflow-hidden border-l border-border bg-card shadow-2xl lg:right-14' : 'hidden'}
+      >
+        <EditorChatRail
+          open={producerOpen}
+          clipTitle={title}
+          clipId={clipId}
+          projectId={projectId}
+          bounds={bounds}
+          edits={edits}
+          saveState={saveState}
+          scope={chatScope}
+          canUndo={canUndo}
+          fullVideo={fullVideo}
+          playheadSourceMs={playheadSourceMs}
+          projectMedia={media}
+          onClose={() => { setProducerOpen(false); setAuditionEdits(null); console.info('[editor:chat-mode] close', { projectId, clipId }) }}
+          onUseSelection={useChatSelection}
+          onUseScene={useChatScene}
+          onClearScope={() => { setChatScope({ kind: 'whole' }); console.info('[editor:chat-mode] whole-context', { projectId, clipId }) }}
+          onSeek={seekSource}
+          onAudition={setAuditionEdits}
+          onBeforeSend={async () => {
+            console.info('[editor:chat-mode] save-before-prompt', { projectId, clipId })
+            await flushSave()
+            console.info('[editor:chat-mode] save-before-prompt-complete', { projectId, clipId })
+          }}
+          onAccept={acceptChatProposal}
+          onUndo={undo}
+          onRetrySave={flushSave}
+          onPendingPaidChange={setProducerPendingPaid}
         />
       </div>
       <Button

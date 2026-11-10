@@ -29,11 +29,12 @@ function time(ms: number) {
 
 /** Session-local shell for the existing Producer API. No new agent or edit storage. */
 export function EditorChatRail({
-  open, clipId, projectId, bounds, edits, saveState, scope, canUndo, fullVideo, playheadSourceMs, projectMedia,
+  open, clipTitle, clipId, projectId, bounds, edits, saveState, scope, canUndo, fullVideo, playheadSourceMs, projectMedia,
   onClose, onUseSelection, onUseScene, onClearScope, onSeek, onAudition,
-  onBeforeSend, onAccept, onUndo, onRetrySave,
+  onBeforeSend, onAccept, onUndo, onRetrySave, onPendingPaidChange,
 }: {
   open: boolean
+  clipTitle: string
   clipId: string
   projectId: string
   bounds: ClipBounds
@@ -54,6 +55,7 @@ export function EditorChatRail({
   onAccept: (next: ClipEditsV2, before: ClipEditsV2, count: number) => Promise<void>
   onUndo: () => void
   onRetrySave: () => Promise<void>
+  onPendingPaidChange?: (count: number) => void
 }) {
   const [proposal, setProposal] = useState<Proposal | null>(null)
   const [planTools, setPlanTools] = useState<ProducerToolCall[]>([])
@@ -153,7 +155,7 @@ export function EditorChatRail({
         }}><X className="size-4" /></Button>
       </div>
       <div className="shrink-0 space-y-2 border-b border-border p-3 text-xs">
-        <p className="truncate text-muted-foreground">Active clip: <span className="font-mono text-foreground">{clipId}</span></p>
+        <p className="truncate text-muted-foreground">Active clip · <span className="font-medium text-foreground">{clipTitle}</span></p>
         <div className="flex flex-wrap gap-1.5">
           <button type="button" onClick={onClearScope} className={'rounded-full border px-2.5 py-1 ' + (scope.kind === 'whole' ? 'border-primary bg-primary/10' : 'border-border')}>Whole clip</button>
           <Button size="xs" variant="outline" onClick={onUseSelection}>Use transcript selection</Button>
@@ -296,6 +298,7 @@ export function EditorChatRail({
           dryRun
           onApplyEdits={() => { /* Dry-run uses onProposal; never mutate from a message. */ }}
           onUndo={onUndo}
+          onPendingPaidChange={onPendingPaidChange}
           includeDryRunPlan
           onPlan={(tools) => {
             setPlanTools(tools)

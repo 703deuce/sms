@@ -35,6 +35,8 @@ import { loadSourceWords } from '@/lib/clips/source-words'
 import { normalizeEditSpeed, orderedKeepSegments, type ClipEditsV2 } from '@/lib/clips/edits'
 import { replaceVideoRange, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { routes } from '@/lib/routes'
+import { editorToolbarRow } from '@/lib/clips/editor/editor-chrome-tokens'
+import { EditorModeSwitcher } from '@/components/clips/editor/editor-mode-switcher'
 
 type EditorProps = Parameters<typeof EditorClipShell>[0]
 type Props = Pick<
@@ -965,7 +967,7 @@ export function GenerateShotEditorShell(props: Props) {
         className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground"
         data-testid="generate-shot-editor"
       >
-        <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+        <header className={editorToolbarRow + ' relative z-50'}>
           <Button
             size="sm"
             variant="ghost"
@@ -1043,31 +1045,19 @@ export function GenerateShotEditorShell(props: Props) {
               <Download className="mr-1 size-4" />
               Export
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
+            <EditorModeSwitcher
+              current="generate"
               disabled={navigating}
-              onClick={() =>
-                void navigate(
-                  routes.text(
-                    projectId,
-                    clipId,
-                    props.fromStudio ? { from: 'studio' } : undefined,
-                  ),
-                  'text',
-                )
-              }
-            >
-              Text
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={navigating}
-              onClick={() => void navigate(editorHref, 'clip')}
-            >
-              Clip
-            </Button>
+              onSelect={(mode) => {
+                console.info('[editor:generate-mode] mode-selected', { projectId, clipId, mode })
+                if (mode === 'generate') return
+                const query = props.fromStudio ? { from: 'studio' } : undefined
+                if (mode === 'clip') { void navigate(editorHref, 'clip'); return }
+                if (mode === 'producer') { void navigate(routes.chat(projectId, clipId, query), 'producer'); return }
+                if (mode === 'story') { void navigate(routes.story(projectId, clipId, query), 'story'); return }
+                if (mode === 'templates') void navigate(routes.templateMode(projectId, clipId, query), 'templates')
+              }}
+            />
             <Button
               size="sm"
               variant="ghost"
@@ -1081,9 +1071,9 @@ export function GenerateShotEditorShell(props: Props) {
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[240px_minmax(0,1fr)_280px] lg:overflow-hidden">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-1 overflow-y-auto bg-background p-1 lg:grid-cols-[240px_minmax(0,1fr)_280px] lg:overflow-hidden">
           <aside
-            className="space-y-4 border-b border-border bg-card/50 p-4 lg:overflow-y-auto lg:border-b-0 lg:border-r"
+            className="space-y-4 rounded-lg border border-border/70 bg-card p-4 lg:overflow-y-auto"
             aria-label="Original source and range"
           >
             <div>
@@ -1219,7 +1209,7 @@ export function GenerateShotEditorShell(props: Props) {
             </div>
           </aside>
 
-          <main className="flex min-h-[600px] min-w-0 flex-col lg:min-h-0">
+          <main className="flex min-h-[600px] min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-background lg:min-h-0">
             <div className="flex items-center justify-between border-b border-border px-4 py-2">
               <h2 className="text-sm font-semibold">Shot board</h2>
               <div
@@ -1616,7 +1606,7 @@ export function GenerateShotEditorShell(props: Props) {
           </main>
 
           <aside
-            className="space-y-3 border-t border-border bg-card/50 p-3 lg:overflow-y-auto lg:border-l lg:border-t-0"
+            className="space-y-3 overflow-y-auto rounded-lg border border-border/70 bg-card p-3"
             aria-label="Generation versions"
           >
             <div className="flex items-center justify-between">

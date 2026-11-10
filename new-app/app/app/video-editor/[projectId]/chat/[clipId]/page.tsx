@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { EditorPageSkeleton } from '@/components/clips/editor/editor-page-skeleton'
-import { EditorPayloadSection } from '../../text/[clipId]/editor-payload-section'
+import { EditorPayloadSection } from '../../edit/[clipId]/editor-payload-section'
 
 export const metadata = { title: 'Edit with AI' }
 
@@ -23,7 +23,7 @@ export default async function ChatEditorPage({
         projectId={projectId}
         clipId={clipId}
         clipperStudio={from === 'studio'}
-        chatMode
+        initialProducerOpen
       />
     </Suspense>
   )

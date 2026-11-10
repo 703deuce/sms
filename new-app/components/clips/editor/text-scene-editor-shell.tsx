@@ -795,7 +795,7 @@ export function TextSceneEditorShell(props: Props) {
             {chatOpen && <button type="button" className="absolute inset-0 z-20 bg-black/20 lg:hidden" aria-label="Close AI chat drawer" onClick={() => { setChatOpen(false); setChatAudition(null); console.info('[editor:chat-mode] drawer-closed', { projectId, clipId }) }} />}
             <div id="editor-chat-mode" role="dialog" aria-modal={chatOpen ? true : undefined} aria-label="Edit with AI" className={chatOpen ? 'absolute inset-y-0 right-14 z-40 w-[min(360px,calc(100%-3.5rem))] overflow-hidden border-l border-border bg-card shadow-2xl' : 'hidden'}>
               <EditorChatRail
-                open={chatOpen} clipId={clipId} projectId={projectId} bounds={bounds} edits={edits} saveState={saveState} scope={chatScope} canUndo={canUndo}
+                open={chatOpen} clipTitle={title} clipId={clipId} projectId={projectId} bounds={bounds} edits={edits} saveState={saveState} scope={chatScope} canUndo={canUndo}
                 fullVideo={props.fullVideo} playheadSourceMs={playhead} projectMedia={projectMedia}
                 onClose={() => { setChatOpen(false); setChatAudition(null) }}
                 onUseSelection={useChatSelection}
