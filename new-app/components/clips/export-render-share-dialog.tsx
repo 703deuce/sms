@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Copy, Link2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { NeedsReviewShareWarning, requestNeedsReviewAck } from './needs-review-share-warning'
 import {
   Dialog,
   DialogContent,
@@ -20,21 +21,24 @@ export function ExportRenderShareDialog({
   renderId,
   open,
   onOpenChange,
+  aiMeta,
 }: {
   renderId: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  aiMeta?: unknown
 }) {
   const [busy, setBusy] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [allowDownload, setAllowDownload] = useState(true)
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   const reset = () => {
     setShareUrl(null)
     setAllowDownload(true)
   }
 
-  const onCreate = async () => {
+  const createLink = async () => {
     if (!renderId || busy) return
     setBusy(true)
     try {
@@ -76,7 +80,10 @@ export function ExportRenderShareDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) reset()
+        if (!next) {
+          reset()
+          setReviewOpen(false)
+        }
         onOpenChange(next)
       }}
     >
@@ -124,13 +131,20 @@ export function ExportRenderShareDialog({
               </Button>
             </>
           ) : (
-            <Button type="button" className="w-full sm:ml-auto" disabled={busy || !renderId} data-testid="export-share-create" onClick={() => void onCreate()}>
+            <Button type="button" className="w-full sm:ml-auto" disabled={busy || !renderId} data-testid="export-share-create" onClick={() => requestNeedsReviewAck(aiMeta, () => setReviewOpen(true), () => void createLink())}>
               {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Link2 className="size-4" aria-hidden />}
               Create link
             </Button>
           )}
         </DialogFooter>
       </DialogContent>
+      <NeedsReviewShareWarning
+        open={reviewOpen}
+        aiMeta={aiMeta}
+        confirmLabel="Create link anyway"
+        onOpenChange={setReviewOpen}
+        onConfirm={() => void createLink()}
+      />
     </Dialog>
   )
 }

@@ -1,3 +1,4 @@
+import { routes } from '../routes'
 import { ASR_LANGUAGES, type AsrLanguageCode } from '@/lib/clips/asr-languages'
 
 function isUsableId(id: string | null | undefined): id is string {
@@ -25,7 +26,7 @@ export function buildOpenInEditorHref(input: {
   const projectId = resolveEditorProjectId(input.routeProjectId, input.editorProjectId)
   if (!projectId) return null
   if (!isUsableId(input.clipId)) return null
-  return `/app/clips/${projectId}/edit/${input.clipId}`
+  return routes.edit(projectId, input.clipId)
 }
 
 export function asrLanguageEditorLabel(code?: AsrLanguageCode | string | null): string {

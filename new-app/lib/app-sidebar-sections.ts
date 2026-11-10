@@ -10,11 +10,17 @@ export function resolveActiveSidebarSection(
   if (pathname === '/app/help' || pathname.startsWith('/app/help/')) return 'shared'
   if (pathname === '/app/clips' && searchParams?.get('view') === 'workspaces') return 'shared'
 
-  if (pathname.startsWith('/app/clips/video/')) return 't2v'
+  if (pathname.startsWith('/app/ai-video') || pathname.startsWith('/app/clips/video/')) return 't2v'
   if (/^\/app\/clips\/[^/]+\/video(?:\/|$)/.test(pathname)) return 't2v'
   if (pathname === '/app/clips' && searchParams?.get('kind') === 'video') return 't2v'
 
-  if (pathname === '/app/editor' || pathname.startsWith('/app/editor/')) return 'editor'
+  if (
+    pathname === '/app/editor' ||
+    pathname.startsWith('/app/editor/') ||
+    pathname === '/app/video-editor' ||
+    pathname.startsWith('/app/video-editor/')
+  )
+    return 'editor'
   if (pathname.includes('/script')) return 'editor'
   if (pathname.startsWith('/app/rooms')) return 'editor'
   if (pathname === '/app/voice' || pathname.startsWith('/app/voice/')) return 'editor'

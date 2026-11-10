@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { appRouteRedirects } from "./lib/app-route-redirects.mjs";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,6 +31,7 @@ const nextConfig = {
   },
   async redirects() {
     return [
+      ...appRouteRedirects,
       {
         source: "/streamer",
         destination: "/app/streamer",

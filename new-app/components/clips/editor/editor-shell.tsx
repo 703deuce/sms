@@ -117,6 +117,7 @@ import { StudioSoundPreview } from '@/components/script-editor/studio-sound-prev
 import { DEFAULT_STUDIO_SOUND_MIX, normalizeAudioEdits } from '@/lib/clips/audio'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { CleanupPanel } from '@/components/clips/editor/cleanup-panel'
+import { cleanTakeCleanupPanelStrength } from '../../../lib/clips/editor/clean-take-review'
 import type { CleanupProposal } from '@/lib/clips/editor/cleanup-proposals'
 import { singleCleanupApplyLabel } from '@/lib/clips/editor/history-labels'
 import { toggleMarkerAt } from '@/lib/clips/editor/markers'
@@ -531,6 +532,8 @@ export function EditorShell({
     restoreWord,
     restoreCutRange,
     restoreCutRanges,
+    restoreCleanupProposalCut,
+    restoreCleanupProposalCuts,
     setLayoutMode,
     setShotOverride,
     setTrim: setTrimRaw,
@@ -640,12 +643,9 @@ export function EditorShell({
         label,
         count: proposals.length,
       })
-      restoreCutRanges(
-        proposals.map((p) => p.range),
-        label,
-      )
+      restoreCleanupProposalCuts(proposals, label)
     },
-    [clipId, restoreCutRanges],
+    [clipId, restoreCleanupProposalCuts],
   )
 
   const onRestoreCleanupProposal = useCallback(
@@ -655,9 +655,9 @@ export function EditorShell({
         kind: proposal.kind,
         range: proposal.range,
       })
-      restoreCutRange(proposal.range)
+      restoreCleanupProposalCut(proposal)
     },
-    [clipId, restoreCutRange],
+    [clipId, restoreCleanupProposalCut],
   )
 
   const onStickerMove = useCallback(
@@ -2335,6 +2335,7 @@ export function EditorShell({
             onReloadWords={reloadWords}
             onGapSettingsChange={(patch) => setGapToolSettings((s) => ({ ...s, ...patch }))}
             mediaOffsetMs={mediaOffsetMs}
+            defaultStrength={cleanTakeCleanupPanelStrength(aiMeta)}
           />
         </EditorPanelErrorBoundary>
       </div>
@@ -3673,7 +3674,7 @@ export function EditorShell({
             Drag layers on the live preview
           </span>
           <Button size="sm" variant="outline" nativeButton={false}
-            render={<a href={`/app/clips/${projectId}/edit/${clipId}`} />}>
+            render={<a href={`/app/video-editor/${projectId}/edit/${clipId}`} />}>
             Full editor
           </Button>
         </nav>
@@ -4165,6 +4166,7 @@ export function EditorShell({
         timelineInOut={exportTimelineInOut}
         playheadMs={outputMs}
         posterUrl={posterUrl}
+        aiMeta={aiMeta}
       />
       </ClipperSurfaceErrorBoundary>
       <Dialog open={projectSettingsOpen} onOpenChange={setProjectSettingsOpen}>

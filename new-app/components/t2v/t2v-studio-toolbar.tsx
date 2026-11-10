@@ -38,18 +38,18 @@ export function T2vStudioToolbar({
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Link
-            href={`/app/clips/${projectId}/video?mode=script`}
+            href={`/app/ai-video/${projectId}?mode=script`}
             className={mode === 'script' ? 'font-medium text-foreground' : 'text-muted-foreground'}
           >
             Script
           </Link>
           <Link
-            href={`/app/clips/${projectId}/video?mode=storyboard`}
+            href={`/app/ai-video/${projectId}?mode=storyboard`}
             className={mode === 'storyboard' ? 'font-medium text-foreground' : 'text-muted-foreground'}
           >
             Storyboard
           </Link>
-          <Link href={`/app/clips/${projectId}/script`} className="text-primary">
+          <Link href={`/app/video-editor/${projectId}/script`} className="text-primary">
             Open in editor
           </Link>
           {compositionId ? (

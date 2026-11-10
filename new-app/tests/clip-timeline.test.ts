@@ -1,4 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { buildKieCreateRequest, getStudioRegistryDocument, resolveStudioCreateInput, STUDIO_MODELS } from '../lib/studio/models'
+import { createStudioAsset, createStudioJob, getStudioJob, listStudioJobs, type StudioService } from '../lib/studio/jobs'
+import { sendStudioJobToTimeline } from '../lib/studio/send-to-timeline'
+import { createMemoryStudioStore } from '../lib/studio/store'
+import type { StudioKieClient } from '../lib/studio/kie-client'
+import { StudioError } from '../lib/studio/errors'
+import type { KieCreateRequest, KieTaskSnapshot } from '../lib/studio/types'
 import {
   applyTimelineLaneState,
   brollMediaForItems,
@@ -345,5 +352,466 @@ describe('B1 retest: Magnet-off sub-slot main-video movement', () => {
     const e = base({ videoSplits: [5000] })
     expect(shiftVideoSegmentWithinSlot(ctxOf(e), 'seg:5000', -500)).toBeNull()
     expect(shiftVideoSegmentWithinSlot(ctxOf(e), 'seg:5000', 0)).toBeNull()
+  })
+})
+
+
+function mockKie(overrides?: Partial<StudioKieClient> & {
+  created?: KieCreateRequest[]
+  fetches?: number
+}): StudioKieClient {
+  const created = overrides?.created ?? []
+  return {
+    async createTask(req) {
+      created.push(req)
+      if (overrides?.createTask) return overrides.createTask(req)
+      return { taskId: 'task_mock_1' }
+    },
+    async fetchTask(taskId, api) {
+      if (overrides?.fetches != null) overrides.fetches += 1
+      if (overrides?.fetchTask) return overrides.fetchTask(taskId, api)
+      return {
+        state: 'success',
+        resultUrl: 'https://cdn.example.test/out.mp4',
+        contentTypeHint: 'video/mp4',
+      } satisfies KieTaskSnapshot
+    },
+    async uploadImage() {
+      if (overrides?.uploadImage) return overrides.uploadImage(Buffer.from('x'), 'image/png', 'ws', 'lab')
+      return 'https://kie.example.test/ref.png'
+    },
+    async downloadUrl(url) {
+      if (overrides?.downloadUrl) return overrides.downloadUrl(url)
+      const isImage = /\.(png|jpe?g|webp)(?:\?|$)/i.test(url)
+      return {
+        bytes: Buffer.from(isImage ? 'img' : 'vid'),
+        contentType: isImage ? 'image/png' : 'video/mp4',
+      }
+    },
+  }
+}
+
+function testStorage(puts: Array<{ key: string; type: string; bytes: Buffer }> = []) {
+  return {
+    async putBytes(objectKey: string, body: Buffer, contentType: string) {
+      puts.push({ key: objectKey, type: contentType, bytes: body })
+    },
+    async createSignedDownloadUrl(objectKey: string) {
+      return `https://storage.example.test/${objectKey}`
+    },
+    driverName: () => 's3' as const,
+  }
+}
+
+function makeSvc(opts?: {
+  kie?: StudioKieClient
+  projects?: string[]
+  clips?: Array<{ projectId: string; clipId: string }>
+  puts?: Array<{ key: string; type: string; bytes: Buffer }>
+  concurrencyLimit?: number
+}): StudioService {
+  return {
+    store: createMemoryStudioStore({
+      projects: opts?.projects ?? ['proj_1'],
+      clips: opts?.clips,
+    }),
+    kie: opts?.kie ?? mockKie(),
+    storage: testStorage(opts?.puts),
+    concurrencyLimit: opts?.concurrencyLimit ?? 3,
+    now: () => new Date('2026-11-10T12:00:00.000Z'),
+  }
+}
+
+describe('AI Studio v1 backend', () => {
+  it('returns a config-driven registry with launch ids and no Seedance 2.5', () => {
+    const doc = getStudioRegistryDocument()
+    expect(doc.version).toBe(1)
+    const ids = doc.models.map((m) => m.id)
+    expect(ids).toEqual([
+      'veo-3.1-lite',
+      'veo-3.1-fast',
+      'veo-3.1-quality',
+      'hailuo-2.3',
+      'seedance-2.0-mini',
+      'flux-2-pro',
+      'nano-banana',
+      'nano-banana-pro',
+    ])
+    expect(ids).not.toContain('seedance-2.5')
+    expect(doc.models.every((m) => !('providerModel' in m))).toBe(true)
+    expect(JSON.stringify(doc).includes('$')).toBe(false)
+  })
+
+  it('rejects unknown models including Seedance 2.5', () => {
+    expect(() =>
+      resolveStudioCreateInput({ modelId: 'seedance-2.5', mode: 'text_to_video', prompt: 'a cat walks' }),
+    ).toThrow(StudioError)
+    try {
+      resolveStudioCreateInput({ modelId: 'seedance-2.5', mode: 'text_to_video', prompt: 'a cat walks' })
+    } catch (err) {
+      expect((err as StudioError).code).toBe('UNKNOWN_MODEL')
+    }
+  })
+
+  it('validates prompt, mode, aspect, duration, and resolution', () => {
+    const cases: Array<{ body: Parameters<typeof resolveStudioCreateInput>[0]; code: string }> = [
+      { body: { modelId: 'flux-2-pro', mode: 'text_to_image', prompt: 'ab' }, code: 'INVALID_PARAMS' },
+      { body: { modelId: 'seedance-2.0-mini', mode: 'text_to_image', prompt: 'a cat walks' }, code: 'INVALID_PARAMS' },
+      { body: { modelId: 'veo-3.1-lite', mode: 'text_to_video', prompt: 'a cat walks', aspect: '1:1' }, code: 'INVALID_PARAMS' },
+      { body: { modelId: 'seedance-2.0-mini', mode: 'text_to_video', prompt: 'a cat walks', durationSec: 1 }, code: 'INVALID_PARAMS' },
+      { body: { modelId: 'flux-2-pro', mode: 'text_to_image', prompt: 'a cat walks', resolution: '8K' }, code: 'INVALID_PARAMS' },
+      { body: { modelId: 'hailuo-2.3', mode: 'text_to_video', prompt: 'a cat walks' }, code: 'INVALID_PARAMS' },
+      { body: { modelId: 'hailuo-2.3', mode: 'image_to_video', prompt: 'a cat walks' }, code: 'INVALID_PARAMS' },
+      { body: { modelId: 'seedance-2.0-mini', mode: 'image_to_video', prompt: 'a cat walks' }, code: 'INVALID_PARAMS' },
+    ]
+    for (const c of cases) {
+      try {
+        resolveStudioCreateInput(c.body)
+        throw new Error(`expected throw for ${JSON.stringify(c.body)}`)
+      } catch (err) {
+        expect((err as StudioError).code).toBe(c.code)
+      }
+    }
+  })
+
+  it('builds the cheapest Seedance and Flux request shapes', () => {
+    const seedance = resolveStudioCreateInput({
+      modelId: 'seedance-2.0-mini',
+      mode: 'text_to_video',
+      prompt: 'a red ball rolls',
+    })
+    expect(seedance.durationSec).toBe(4)
+    expect(seedance.resolution).toBe('480p')
+    const seedanceReq = buildKieCreateRequest(seedance, {})
+    expect(seedanceReq).toEqual({
+      api: 'jobs',
+      model: 'bytedance/seedance-2-mini',
+      input: {
+        prompt: 'a red ball rolls',
+        aspect_ratio: '16:9',
+        duration: 4,
+        resolution: '480p',
+        generate_audio: false,
+      },
+    })
+
+    const flux = resolveStudioCreateInput({
+      modelId: 'flux-2-pro',
+      mode: 'text_to_image',
+      prompt: 'a simple red square on white',
+    })
+    expect(flux.resolution).toBe('1K')
+    expect(buildKieCreateRequest(flux, {})).toEqual({
+      api: 'jobs',
+      model: 'flux-2/pro-text-to-image',
+      input: { prompt: 'a simple red square on white', aspect_ratio: '1:1', resolution: '1K' },
+    })
+  })
+
+  it('builds provider request shapes for every launch model', () => {
+    const start = { startFrameUrl: 'https://img.example.test/start.png' }
+    const shapes: Array<{
+      modelId: string
+      mode: 'text_to_video' | 'image_to_video' | 'text_to_image'
+      urls?: typeof start & { endFrameUrl?: string; referenceUrl?: string }
+      assert: (req: KieCreateRequest) => void
+    }> = [
+      {
+        modelId: 'veo-3.1-lite',
+        mode: 'text_to_video',
+        assert: (req) => {
+          expect(req.api).toBe('veo')
+          expect(req.model).toBe('veo3_lite')
+          expect(req.input).toMatchObject({ prompt: 'a cat walks', model: 'veo3_lite', duration: 4, resolution: '720p' })
+          expect(req.input.imageUrls).toBeUndefined()
+        },
+      },
+      {
+        modelId: 'veo-3.1-fast',
+        mode: 'image_to_video',
+        urls: { ...start, endFrameUrl: 'https://img.example.test/end.png' },
+        assert: (req) => {
+          expect(req.model).toBe('veo3_fast')
+          expect(req.input.imageUrls).toEqual([
+            'https://img.example.test/start.png',
+            'https://img.example.test/end.png',
+          ])
+        },
+      },
+      {
+        modelId: 'veo-3.1-quality',
+        mode: 'text_to_video',
+        assert: (req) => expect(req.model).toBe('veo3'),
+      },
+      {
+        modelId: 'hailuo-2.3',
+        mode: 'image_to_video',
+        urls: start,
+        assert: (req) => {
+          expect(req).toEqual({
+            api: 'jobs',
+            model: 'hailuo/2-3-image-to-video-standard',
+            input: {
+              prompt: 'a cat walks',
+              image_url: 'https://img.example.test/start.png',
+              duration: '6',
+              resolution: '768P',
+            },
+          })
+        },
+      },
+      {
+        modelId: 'seedance-2.0-mini',
+        mode: 'image_to_video',
+        urls: { ...start, endFrameUrl: 'https://img.example.test/end.png' },
+        assert: (req) => {
+          expect(req.input.first_frame_url).toBe('https://img.example.test/start.png')
+          expect(req.input.last_frame_url).toBe('https://img.example.test/end.png')
+          expect(req.input.reference_image_urls).toBeUndefined()
+        },
+      },
+      {
+        modelId: 'nano-banana',
+        mode: 'text_to_image',
+        urls: { startFrameUrl: '', referenceUrl: 'https://img.example.test/ref.png' } as never,
+        assert: (req) => {
+          expect(req.model).toBe('google/nano-banana')
+          expect(req.input.image_urls).toEqual(['https://img.example.test/ref.png'])
+        },
+      },
+      {
+        modelId: 'nano-banana-pro',
+        mode: 'text_to_image',
+        assert: (req) => {
+          expect(req.model).toBe('nano-banana-pro')
+          expect(req.input).toMatchObject({ resolution: '1K', output_format: 'png' })
+        },
+      },
+    ]
+    for (const row of shapes) {
+      const resolved = resolveStudioCreateInput({
+        modelId: row.modelId,
+        mode: row.mode,
+        prompt: 'a cat walks',
+        startFrameAssetId: row.mode === 'image_to_video' ? 'asset_start' : undefined,
+        endFrameAssetId: row.urls?.endFrameUrl ? 'asset_end' : undefined,
+        referenceAssetId: row.modelId.startsWith('nano-banana') && row.urls && 'referenceUrl' in (row.urls ?? {}) ? 'asset_ref' : undefined,
+      })
+      row.assert(buildKieCreateRequest(resolved, row.urls ?? {}))
+    }
+    expect(STUDIO_MODELS).toHaveLength(8)
+  })
+
+  it('maps hailuo 720p to 768P', () => {
+    const resolved = resolveStudioCreateInput({
+      modelId: 'hailuo-2.3',
+      mode: 'image_to_video',
+      prompt: 'a cat walks',
+      startFrameAssetId: 'asset_1',
+      resolution: '720p',
+    })
+    expect(resolved.resolution).toBe('768P')
+  })
+
+  it('creates a running job after one mocked KIE createTask and never retries on failure', async () => {
+    const created: KieCreateRequest[] = []
+    let calls = 0
+    const kie = mockKie({
+      created,
+      async createTask(req) {
+        calls += 1
+        created.push(req)
+        throw new StudioError('KIE_ERROR', 'insufficient credits')
+      },
+    })
+    const svc = makeSvc({ kie })
+    await expect(
+      createStudioJob(svc, {
+        workspaceId: 'ws_1',
+        userId: 'user_1',
+        body: { modelId: 'seedance-2.0-mini', mode: 'text_to_video', prompt: 'a red ball rolls' },
+      }),
+    ).rejects.toMatchObject({ code: 'KIE_ERROR', message: 'insufficient credits' })
+    expect(calls).toBe(1)
+    const listed = await listStudioJobs(svc, 'ws_1', {})
+    expect(listed.jobs).toHaveLength(1)
+    expect(listed.jobs[0].status).toBe('failed')
+    expect(listed.jobs[0].error).toEqual({ code: 'KIE_ERROR', message: 'insufficient credits' })
+  })
+
+  it('polls a mocked KIE success, copies bytes into our storage, and hides provider URLs', async () => {
+    const puts: Array<{ key: string; type: string; bytes: Buffer }> = []
+    const kie = mockKie({
+      async downloadUrl(url) {
+        expect(url).toBe('https://cdn.example.test/out.png')
+        return { bytes: Buffer.from('png-bytes'), contentType: 'image/png' }
+      },
+      async fetchTask() {
+        return { state: 'success', resultUrl: 'https://cdn.example.test/out.png', contentTypeHint: 'image/png' }
+      },
+    })
+    const svc = makeSvc({ kie, puts })
+    const created = await createStudioJob(svc, {
+      workspaceId: 'ws_1',
+      userId: 'user_1',
+      body: { modelId: 'flux-2-pro', mode: 'text_to_image', prompt: 'a simple red square on white' },
+    })
+    expect(created.status).toBe('running')
+    const got = await getStudioJob(svc, 'ws_1', created.id)
+    expect(got.status).toBe('done')
+    expect(got.output?.kind).toBe('image')
+    expect(got.output?.contentType).toBe('image/png')
+    expect(got.output?.previewUrl).toBe(`/api/studio/jobs/${created.id}/output`)
+    expect(got.output?.downloadUrl).toBe(`/api/studio/jobs/${created.id}/output?download=1`)
+    expect(JSON.stringify(got).includes('cdn.example.test')).toBe(false)
+    expect(puts).toHaveLength(1)
+    expect(puts[0].key).toBe(`ws/ws_1/studio/${created.id}/output.png`)
+    expect(puts[0].bytes.toString()).toBe('png-bytes')
+  })
+
+  it('lists history and isolates jobs by workspace', async () => {
+    const svc = makeSvc()
+    const a = await createStudioJob(svc, {
+      workspaceId: 'ws_1',
+      userId: 'user_1',
+      body: { modelId: 'flux-2-pro', mode: 'text_to_image', prompt: 'one red square' },
+    })
+    await createStudioJob(svc, {
+      workspaceId: 'ws_2',
+      userId: 'user_1',
+      body: { modelId: 'flux-2-pro', mode: 'text_to_image', prompt: 'two red squares' },
+    })
+    const listed = await listStudioJobs(svc, 'ws_1', {})
+    expect(listed.jobs.map((j) => j.id)).toEqual([a.id])
+    await expect(getStudioJob(svc, 'ws_1', 'missing')).rejects.toMatchObject({ code: 'JOB_NOT_FOUND' })
+  })
+
+  it('enforces the per-user concurrency limit', async () => {
+    const kie = mockKie({
+      async fetchTask() {
+        return { state: 'running' }
+      },
+    })
+    const svc = makeSvc({ kie, concurrencyLimit: 1 })
+    await createStudioJob(svc, {
+      workspaceId: 'ws_1',
+      userId: 'user_1',
+      body: { modelId: 'flux-2-pro', mode: 'text_to_image', prompt: 'first square' },
+    })
+    await expect(
+      createStudioJob(svc, {
+        workspaceId: 'ws_1',
+        userId: 'user_1',
+        body: { modelId: 'flux-2-pro', mode: 'text_to_image', prompt: 'second square' },
+      }),
+    ).rejects.toMatchObject({ code: 'CONCURRENCY_LIMIT' })
+    const otherUser = await createStudioJob(svc, {
+      workspaceId: 'ws_1',
+      userId: 'user_2',
+      body: { modelId: 'flux-2-pro', mode: 'text_to_image', prompt: 'other user square' },
+    })
+    expect(otherUser.status).toBe('running')
+  })
+
+  it('rejects send-to-timeline until the job is done, then writes into the project', async () => {
+    const kie = mockKie({
+      async fetchTask() {
+        return { state: 'running' }
+      },
+    })
+    const svc = makeSvc({ kie, projects: ['proj_1'], clips: [{ projectId: 'proj_1', clipId: 'clip_existing' }] })
+    const created = await createStudioJob(svc, {
+      workspaceId: 'ws_1',
+      userId: 'user_1',
+      body: { modelId: 'seedance-2.0-mini', mode: 'text_to_video', prompt: 'a red ball rolls' },
+    })
+    await expect(
+      sendStudioJobToTimeline(svc, { workspaceId: 'ws_1', jobId: created.id, projectId: 'proj_1' }),
+    ).rejects.toMatchObject({ code: 'JOB_NOT_READY' })
+    await expect(
+      sendStudioJobToTimeline(svc, { workspaceId: 'ws_1', jobId: created.id, projectId: 'missing' }),
+    ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND' })
+
+    const doneSvc = makeSvc({ projects: ['proj_1'] })
+    const done = await createStudioJob(doneSvc, {
+      workspaceId: 'ws_1',
+      userId: 'user_1',
+      body: { modelId: 'seedance-2.0-mini', mode: 'text_to_video', prompt: 'a red ball rolls' },
+    })
+    await getStudioJob(doneSvc, 'ws_1', done.id)
+    const sent = await sendStudioJobToTimeline(doneSvc, {
+      workspaceId: 'ws_1',
+      jobId: done.id,
+      projectId: 'proj_1',
+      write: async (input) => {
+        expect(input.projectId).toBe('proj_1')
+        expect(input.storageKey).toContain(`/studio/${done.id}/`)
+        expect(input.kind).toBe('video')
+        expect(input.contentType).toBe('video/mp4')
+        expect(input.durationMs).toBe(4000)
+        return { ok: true, projectId: input.projectId, clipId: 'clip_from_studio' }
+      },
+    })
+    expect(sent).toEqual({ ok: true, projectId: 'proj_1', clipId: 'clip_from_studio' })
+  })
+
+  it('stores an uploaded reference asset and uses it for image-to-video', async () => {
+    const puts: Array<{ key: string; type: string; bytes: Buffer }> = []
+    const created: KieCreateRequest[] = []
+    const kie = mockKie({
+      created,
+      async uploadImage() {
+        return 'https://kie.example.test/hosted.png'
+      },
+      async downloadUrl(url) {
+        if (url.includes('storage.example.test')) return { bytes: Buffer.from('ref'), contentType: 'image/png' }
+        return { bytes: Buffer.from('vid'), contentType: 'video/mp4' }
+      },
+    })
+    const svc = makeSvc({ kie, puts })
+    const asset = await createStudioAsset(svc, {
+      workspaceId: 'ws_1',
+      userId: 'user_1',
+      bytes: Buffer.from('ref-bytes'),
+      contentType: 'image/png',
+    })
+    expect(asset.id).toBeTruthy()
+    const job = await createStudioJob(svc, {
+      workspaceId: 'ws_1',
+      userId: 'user_1',
+      body: {
+        modelId: 'hailuo-2.3',
+        mode: 'image_to_video',
+        prompt: 'the still photo begins to move',
+        startFrameAssetId: asset.id,
+      },
+    })
+    expect(job.status).toBe('running')
+    expect(created[0].model).toBe('hailuo/2-3-image-to-video-standard')
+    expect(created[0].input.image_url).toBe('https://kie.example.test/hosted.png')
+  })
+
+  it('rejects a bad asset mime and a missing asset id', async () => {
+    const svc = makeSvc()
+    await expect(
+      createStudioAsset(svc, {
+        workspaceId: 'ws_1',
+        userId: 'user_1',
+        bytes: Buffer.from('x'),
+        contentType: 'application/pdf',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(
+      createStudioJob(svc, {
+        workspaceId: 'ws_1',
+        userId: 'user_1',
+        body: {
+          modelId: 'hailuo-2.3',
+          mode: 'image_to_video',
+          prompt: 'the still photo begins to move',
+          startFrameAssetId: 'missing',
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
   })
 })

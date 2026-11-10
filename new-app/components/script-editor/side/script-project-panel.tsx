@@ -20,9 +20,9 @@ export function ScriptProjectPanel({
 }) {
   const hrefFor = (c: CompositionListItem) => {
     if (c.kind === 'CLIP' && c.clipId) {
-      return `/app/clips/${projectId}/script?clipId=${encodeURIComponent(c.clipId)}`
+      return `/app/video-editor/${projectId}/script?clipId=${encodeURIComponent(c.clipId)}`
     }
-    return `/app/clips/${projectId}/script`
+    return `/app/video-editor/${projectId}/script`
   }
 
   return (
@@ -63,7 +63,7 @@ export function ScriptProjectPanel({
             {clips.map((clip) => (
               <li key={clip.id}>
                 <Link
-                  href={`/app/clips/${projectId}/script?clipId=${encodeURIComponent(clip.id)}`}
+                  href={`/app/video-editor/${projectId}/script?clipId=${encodeURIComponent(clip.id)}`}
                   className="block truncate rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 >
                   {clip.title}

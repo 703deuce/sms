@@ -101,7 +101,7 @@ export async function resolveFullVideoLink(
   const momentOut = clip.endMs
   const title = encodeURIComponent(clip.title.slice(0, 80))
   const url =
-    `/app/clips/${fvProjectId}/edit/${fvClip.id}?t=${sourceMs}` +
+    `/app/video-editor/${fvProjectId}/edit/${fvClip.id}?t=${sourceMs}` +
     `&fromClip=${encodeURIComponent(clipId)}` +
     `&momentIn=${momentIn}&momentOut=${momentOut}&momentTitle=${title}`
   return { projectId: fvProjectId, clipId: fvClip.id, url, sourceMs }

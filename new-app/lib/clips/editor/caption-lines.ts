@@ -148,6 +148,51 @@ export function serializeTokens(tokens: readonly LineToken[], maxChars?: number)
   return out
 }
 
+/** Visible characters plus separators, matching how serializeTokens counts `maxChars`. */
+export function tokenSpanChars(tokens: readonly LineToken[]): number {
+  if (!tokens.length) return 0
+  return tokens.reduce((n, tok, i) => n + (i ? 1 : 0) + cpLen(tok.w), 0)
+}
+
+/**
+ * Pack tokens into groups of at most `maxChars` visible characters.
+ * Never drops a token. A single token longer than `maxChars` stays intact in its own group.
+ */
+export function splitTokensByMaxChars(tokens: readonly LineToken[], maxChars: number): LineToken[][] {
+  const groups: LineToken[][] = []
+  let current: LineToken[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i]!
+    if (!current.length) {
+      current = [{ ...tok, br: false }]
+      continue
+    }
+    const next = [...current, tok]
+    if (tokenSpanChars(next) > maxChars) {
+      groups.push(current)
+      current = [{ ...tok, br: false }]
+    } else {
+      current = next
+    }
+  }
+  if (current.length) groups.push(current)
+  return groups
+}
+
+function proportionalSpans(weights: readonly number[], startMs: number, endMs: number): { startMs: number; endMs: number }[] {
+  const total = weights.reduce((sum, w) => sum + w, 0) || 1
+  const dur = endMs - startMs
+  const out: { startMs: number; endMs: number }[] = []
+  let acc = 0
+  for (let i = 0; i < weights.length; i++) {
+    const s = startMs + Math.round((dur * acc) / total)
+    acc += weights[i]!
+    const e = i === weights.length - 1 ? endMs : startMs + Math.round((dur * acc) / total)
+    out.push({ startMs: s, endMs: Math.max(e, s) })
+  }
+  return out
+}
+
 /** Plain words of a caption line (tags dropped). */
 export function captionLineWordsOf(text: string): string[] {
   return lineTokens(text).map((t) => t.w)
@@ -163,48 +208,155 @@ export function captionLinePlainText(text: string): string {
   return segs.map((x) => x.join(' ')).join('\n')
 }
 
-/** Valid lines sorted by start, overlaps trimmed (py normalize_caption_lines). */
-export function normalizeCaptionLines(raw: unknown): CaptionLine[] {
-  if (!Array.isArray(raw)) return []
-  const rows: CaptionLine[] = []
+export type CaptionLineNormalizeReport = {
+  droppedInvalid: number
+  reordered: boolean
+}
+
+const captionLineNormalizeReports = new WeakMap<object, CaptionLineNormalizeReport>()
+
+function attachCaptionLineNormalizeReport<T extends object>(
+  value: T,
+  report: CaptionLineNormalizeReport,
+): T {
+  captionLineNormalizeReports.set(value, report)
+  return value
+}
+
+/** Survives normalizeEdits so the export warning can still see dropped / reordered cues. */
+export function getCaptionLineNormalizeReport(
+  lines: readonly CaptionLine[] | undefined,
+): CaptionLineNormalizeReport | undefined {
+  if (!lines) return undefined
+  return captionLineNormalizeReports.get(lines)
+}
+
+function looksLikeCaptionCue(o: Record<string, unknown>): boolean {
+  return 'startMs' in o || 'endMs' in o || 'text' in o || 'id' in o
+}
+
+export function normalizeCaptionLinesDetailed(raw: unknown): {
+  lines: CaptionLine[]
+  report: CaptionLineNormalizeReport
+} {
+  if (!Array.isArray(raw)) {
+    const report = { droppedInvalid: 0, reordered: false }
+    return { lines: attachCaptionLineNormalizeReport([], report), report }
+  }
+  let rows: CaptionLine[] = []
+  let droppedInvalid = 0
   for (const r of raw) {
     if (!r || typeof r !== 'object' || Array.isArray(r)) continue
     const o = r as Record<string, unknown>
-    const text = serializeTokens(lineTokens(String(o.text ?? '')), CAPTION_LINE_MAX_CHARS)
+    if (!looksLikeCaptionCue(o)) continue
+    const tokens = lineTokens(String(o.text ?? ''))
+    const groups = splitTokensByMaxChars(tokens, CAPTION_LINE_MAX_CHARS)
     const a0 = num(o.startMs)
     const b0 = num(o.endMs)
-    if (!text || a0 === null || b0 === null) continue
+    if (!groups.length || a0 === null || b0 === null) {
+      droppedInvalid += 1
+      continue
+    }
     const a = Math.max(0, pyRound(a0))
     const b = pyRound(b0)
-    if (b - a < CAPTION_LINE_MIN_MS) continue
-    rows.push({ id: String(o.id ?? ''), text, startMs: a, endMs: b })
+    if (b - a < CAPTION_LINE_MIN_MS) {
+      droppedInvalid += 1
+      continue
+    }
+    const weights = groups.map((g) => Math.max(1, tokenSpanChars(g)))
+    const spans = proportionalSpans(weights, a, b)
+    const baseId = String(o.id ?? '')
+    for (let i = 0; i < groups.length; i++) {
+      const text = serializeTokens(groups[i]!)
+      if (!text) continue
+      const span = spans[i]!
+      const id = i === 0 || !baseId ? baseId : `${baseId}~${i}`
+      rows.push({ id, text, startMs: span.startMs, endMs: span.endMs })
+      if (rows.length >= CAPTION_LINES_MAX) break
+    }
     if (rows.length >= CAPTION_LINES_MAX) break
   }
+  // Merge undersized split siblings before the overlap trim so a short leftover
+  // (e.g. a 1-char overflow over 4s, or a 40-word cue over 150ms) is kept, not dropped.
+  rows = mergeUndersizedCaptionPieces(rows)
+  const orderBefore = rows.map((x) => `${x.id}:${x.startMs}:${x.endMs}`).join('|')
   rows.sort((p, q) => p.startMs - q.startMs || p.endMs - q.endMs)
+  const reordered = rows.length > 1 && rows.map((x) => `${x.id}:${x.startMs}:${x.endMs}`).join('|') !== orderBefore
   const out: CaptionLine[] = []
   let prevEnd = 0
   for (const x of rows) {
     const s = Math.max(x.startMs, prevEnd)
-    if (x.endMs - s < CAPTION_LINE_MIN_MS) continue
+    if (x.endMs - s < CAPTION_LINE_MIN_MS) {
+      const prev = out[out.length - 1]
+      if (prev) {
+        out[out.length - 1] = {
+          ...prev,
+          text: serializeTokens([...lineTokens(prev.text), ...lineTokens(x.text)]),
+          endMs: Math.max(prev.endMs, x.endMs),
+        }
+        prevEnd = Math.max(prevEnd, x.endMs)
+      } else {
+        // No neighbor to merge into; keep the words on the original span.
+        out.push({ ...x })
+        prevEnd = x.endMs
+      }
+      continue
+    }
     out.push({ ...x, startMs: s })
     prevEnd = x.endMs
   }
-  return out
+  const report = { droppedInvalid, reordered }
+  return { lines: attachCaptionLineNormalizeReport(out, report), report }
+}
+
+/** Valid lines sorted by start, overlaps trimmed (py normalize_caption_lines). */
+export function normalizeCaptionLines(raw: unknown): CaptionLine[] {
+  const { lines, report } = normalizeCaptionLinesDetailed(raw)
+  return attachCaptionLineNormalizeReport(lines, report)
 }
 
 const ID_RE = /^[A-Za-z0-9_~-]{1,64}$/
 
 /** Edits normalizer: same lines + stable unique ids; undefined when empty (key dropped). */
-export function normalizeCaptionLinesEdits(raw: unknown): CaptionLine[] | undefined {
-  const lines = normalizeCaptionLines(raw)
-  if (!lines.length) return undefined
+export function mergeCaptionLineNormalizeReports(
+  previous: CaptionLineNormalizeReport | undefined,
+  next: CaptionLineNormalizeReport,
+): CaptionLineNormalizeReport {
+  return {
+    droppedInvalid: (previous?.droppedInvalid ?? 0) + next.droppedInvalid,
+    reordered: Boolean(previous?.reordered || next.reordered),
+  }
+}
+
+export function parseCaptionLineNormalizeReport(raw: unknown): CaptionLineNormalizeReport | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as { droppedInvalid?: unknown; reordered?: unknown }
+  const dropped = Number(o.droppedInvalid)
+  const droppedInvalid = Number.isFinite(dropped) && dropped > 0 ? Math.round(dropped) : 0
+  const reordered = o.reordered === true
+  if (droppedInvalid === 0 && !reordered) return undefined
+  return { droppedInvalid, reordered }
+}
+
+/** Same as normalizeCaptionLinesEdits, but always returns the report (including when every cue is dropped). */
+export function normalizeCaptionLinesEditsWithReport(raw: unknown): {
+  lines: CaptionLine[] | undefined
+  report: CaptionLineNormalizeReport
+} {
+  const { lines, report } = normalizeCaptionLinesDetailed(raw)
+  if (!lines.length) return { lines: undefined, report }
   const seen = new Set<string>()
-  return lines.map((l, i) => {
+  const out = lines.map((l, i) => {
     let id = ID_RE.test(l.id) && !seen.has(l.id) ? l.id : `cl${i}_${l.startMs}`
     while (seen.has(id)) id = `${id}x`
     seen.add(id)
     return { ...l, id }
   })
+  return { lines: attachCaptionLineNormalizeReport(out, report), report }
+}
+
+export function normalizeCaptionLinesEdits(raw: unknown): CaptionLine[] | undefined {
+  return normalizeCaptionLinesEditsWithReport(raw).lines
 }
 
 export type CaptionLineWord = { i: number; text: string; s_ms: number; e_ms: number; ln: number; br?: true; it?: true; bo?: true }
@@ -327,7 +479,7 @@ export function mergeCaptionLineWithNext(lines: CaptionLine[], id: string): Capt
   const a = sorted[i]!
   const b = sorted[i + 1]!
   const tb = lineTokens(b.text)
-  const text = serializeTokens([...lineTokens(a.text), ...tb.map((t, j) => (j === 0 ? { ...t, br: false } : t))], CAPTION_LINE_MAX_CHARS)
+  const text = serializeTokens([...lineTokens(a.text), ...tb.map((t, j) => (j === 0 ? { ...t, br: false } : t))])
   return [...sorted.slice(0, i), { ...a, text, endMs: Math.max(a.endMs, b.endMs) }, ...sorted.slice(i + 2)]
 }
 
@@ -423,6 +575,40 @@ export function captionLinesToTxt(lines: CaptionLine[]): string {
  * G3afix: optional import re-chunk — every cue split into captions of `wordsPerLine` words, timed
  * by length like the burned captions (cue line breaks dropped, <i>/<b> kept per word).
  */
+
+/**
+ * Merge a split piece shorter than CAPTION_LINE_MIN_MS into its neighbor.
+ * Same rule as rechunkCaptionLines: prefer the previous abutting cue, otherwise the next.
+ * A merged cue may exceed CAPTION_LINE_MAX_CHARS only when a standalone piece would be under
+ * the 100ms floor (unavoidable). Never drops words from a duration-valid source cue.
+ */
+export function mergeUndersizedCaptionPieces(lines: CaptionLine[]): CaptionLine[] {
+  const joinText = (left: CaptionLine, right: CaptionLine, endMs: number): CaptionLine => ({
+    ...left,
+    text: serializeTokens([...lineTokens(left.text), ...lineTokens(right.text)]),
+    endMs,
+  })
+  const merged: CaptionLine[] = []
+  for (const x of lines) {
+    const prev = merged[merged.length - 1]
+    if (x.endMs - x.startMs < CAPTION_LINE_MIN_MS && prev && prev.endMs === x.startMs) {
+      merged[merged.length - 1] = joinText(prev, x, x.endMs)
+    } else {
+      merged.push(x)
+    }
+  }
+  const out: CaptionLine[] = []
+  for (const x of merged) {
+    const prev = out[out.length - 1]
+    if (prev && prev.endMs - prev.startMs < CAPTION_LINE_MIN_MS && prev.endMs === x.startMs) {
+      out[out.length - 1] = joinText(prev, x, x.endMs)
+    } else {
+      out.push(x)
+    }
+  }
+  return out
+}
+
 export function rechunkCaptionLines(lines: CaptionLine[], wordsPerLine: number): CaptionLine[] {
   const wpl = Math.max(1, Math.round(wordsPerLine) || 1)
   const out: CaptionLine[] = []
@@ -439,15 +625,8 @@ export function rechunkCaptionLines(lines: CaptionLine[], wordsPerLine: number):
       out.push({ id: `cl${out.length}_${a}`, text: serializeTokens(part), startMs: a, endMs: b })
     }
   }
-  // pieces shorter than the minimum are merged into the previous caption by the normalizer's trim
-  const merged: CaptionLine[] = []
-  for (const x of out) {
-    const prev = merged[merged.length - 1]
-    if (x.endMs - x.startMs < CAPTION_LINE_MIN_MS && prev && prev.endMs === x.startMs) {
-      merged[merged.length - 1] = { ...prev, text: serializeTokens([...lineTokens(prev.text), ...lineTokens(x.text)]), endMs: x.endMs }
-    } else merged.push(x)
-  }
-  return normalizeCaptionLinesEdits(merged) ?? []
+  // pieces shorter than the minimum are merged into a neighbor (same helper as normalize)
+  return normalizeCaptionLinesEdits(mergeUndersizedCaptionPieces(out)) ?? []
 }
 
 /**

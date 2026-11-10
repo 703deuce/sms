@@ -45,7 +45,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
 
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     await expect(page.locator('[data-script-shell]')).toBeVisible({ timeout: 120_000 })
 
     const wordBtn = page.locator('button[data-word-idx]').first()
@@ -83,7 +83,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     await expect(page.locator('[data-script-shell]')).toBeVisible({ timeout: 120_000 })
     const wordBtn = page.locator('button[data-word-idx]').nth(3)
     await wordBtn.click()
@@ -105,8 +105,8 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     const ctx2 = await browser.newContext({ storageState: storage })
     const p1 = await ctx1.newPage()
     const p2 = await ctx2.newPage()
-    await p1.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'domcontentloaded', timeout: 180_000 })
-    await p2.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'domcontentloaded', timeout: 180_000 })
+    await p1.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'domcontentloaded', timeout: 180_000 })
+    await p2.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'domcontentloaded', timeout: 180_000 })
     await expect(p2.getByTestId('script-tab-lock-banner')).toBeVisible({ timeout: 60_000 })
     await ctx1.close()
     await ctx2.close()
@@ -117,7 +117,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     const badge = page.getByTestId('script-filler-count-badge')
     if (!(await badge.isVisible().catch(() => false))) {
       test.skip(true, 'No filler hits on fixture')
@@ -135,7 +135,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     const durBefore = await page.locator('span[title="Output timeline (after cuts)"]').textContent()
     const fillerWord = page.locator('button[data-word-idx].underline').first()
     if (!(await fillerWord.isVisible().catch(() => false))) test.skip(true, 'No filler word')
@@ -151,7 +151,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     const chip = page.getByTestId('script-gap-chip').first()
     if (!(await chip.isVisible().catch(() => false))) test.skip(true, 'No gap chip')
     await chip.click()
@@ -163,7 +163,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     await page.getByRole('button', { name: 'Media' }).click()
     await expect(page.getByTestId('script-media-panel')).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: 'Stock search' }).click()
@@ -175,7 +175,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     await page.locator('[data-script-shell]').click()
     await page.keyboard.press('#')
     await expect(page.getByText('Marker at playhead')).toBeVisible({ timeout: 15_000 })
@@ -186,7 +186,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     await page.locator('button[data-word-idx]').first().click()
     await page.keyboard.press('/')
     await expect(page.getByTestId('script-scene-break').first()).toBeVisible({ timeout: 30_000 })
@@ -199,7 +199,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     await page.locator('button[data-word-idx]').first().click()
     await page.keyboard.press('Delete')
     await expect(page.getByText(/^Saved$/)).toBeVisible({ timeout: 60_000 })
@@ -215,7 +215,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
 
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     await expect(page.locator('[data-script-shell]')).toBeVisible({ timeout: 120_000 })
 
     const fillersChip = page.getByRole('button', { name: /Fillers \d+/ })
@@ -264,7 +264,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     const scrollY = await page.evaluate(() => window.scrollY)
     expect(scrollY).toBeGreaterThan(200)
 
-    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.goto(`/app/video-editor/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
     await page.getByTestId('script-shortcuts-help').click()
     await expect(page.getByTestId('script-shortcuts-sheet')).toBeVisible()
     await expect(page.getByText('Split at playhead')).toBeVisible()

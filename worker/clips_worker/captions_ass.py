@@ -123,13 +123,18 @@ def _sentence_boundary(prev: str | None) -> bool:
 
 
 def disp(text: str, case: str, sentence_start: bool = False) -> str:
+    """Match new-app formatCaptionWord (#1109): upper the whole word, or
+    sentence-case by capitalizing only the first character of a cue/sentence
+    start and keeping source casing everywhere else (I/I'm, proper nouns,
+    acronyms)."""
     t = text.replace("{", "(").replace("}", ")")
     if not t:
         return t
     if case == "upper":
         return t.upper()
-    lower = t.lower()
-    return lower[0:1].upper() + lower[1:] if sentence_start else lower
+    if not sentence_start:
+        return t
+    return t[0:1].upper() + t[1:]
 
 
 def _styled(w: dict, text: str) -> str:
@@ -560,7 +565,7 @@ def build_ass(
     anim = (edits_captions.get("animation") or preset["animation"] or "none").lower()
     highlight_mode = str(preset.get("highlightMode") or edits_captions.get("highlightMode") or "color").lower()
     wpl = int(edits_captions.get("wordsPerLine") or preset["wordsPerLine"] or 2)
-    case = (edits_captions.get("case") or preset["case"] or "upper").lower()
+    case = (edits_captions.get("case") or preset["case"] or "sentence").lower()
     case = "upper" if case == "upper" else "sentence"
     size_pct = float(edits_captions.get("userSizePct") if preset_id.startswith("cp") and edits_captions.get("userSizePct") is not None else edits_captions.get("size") or edits_captions.get("sizePct") or preset["sizePct"])
     if size_pct < 3:

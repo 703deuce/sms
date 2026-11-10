@@ -31,10 +31,11 @@ describe('sidebar model', () => {
   it('hrefs', () => {
     const h = Object.fromEntries(buildSidebarNav(ALL).map((i) => [i.id, i.href]))
     expect(h).toMatchObject({
-      home: '/app/clips',
+      home: '/app',
       clips: '/app/clips/new',
-      editor: '/app/editor',
+      editor: '/app/video-editor',
       record: '/app/rooms/new',
+      'ai-video': '/app/ai-video/new',
       templates: '/app/clips/templates',
       brand: '/app/clips/brand',
       exports: '/app/exports',
@@ -56,24 +57,42 @@ describe('sidebar model', () => {
     for (const h of SIDEBAR_HIDDEN_HREFS) expect(items.some((i) => i.href === h)).toBe(false)
   })
   it('create menu', () => {
-    expect(createMenuItems(ALL).map((i) => i.label)).toEqual([
+    const items = createMenuItems(ALL)
+    expect(items.map((i: { label: string }) => i.label)).toEqual([
       'Clip',
       'Stream clip',
       'Editor project',
       'Recording',
       'AI Video',
     ])
+    expect(Object.fromEntries(items.map((i: { id: string; href: string }) => [i.id, i.href]))).toMatchObject({
+      'create-clip': '/app/clips/new',
+      'create-editor': '/app/video-editor/new',
+      'create-ai-video': '/app/ai-video/new',
+    })
+    expect(createMenuItems({ ...ALL, scriptEditor: true }).find((i: { id: string; href: string }) => i.id === 'create-editor')?.href).toBe(
+      '/app/video-editor',
+    )
   })
   it.each([
-    ['/app/clips', '', 'home'],
+    ['/app', '', 'home'],
+    ['/app/home', '', 'home'],
+    ['/app/dashboard', '', 'home'],
+    ['/app/clips', '', 'clips'],
     ['/app/clips', 'kind=video', 'ai-video'],
-    ['/app/clips', 'view=recents', 'home'],
-    ['/app/clips/trash', '', 'home'],
-    ['/app/clips/abc123', '', 'home'],
+    ['/app/clips', 'view=recents', 'clips'],
+    ['/app/clips/trash', '', 'clips'],
+    ['/app/clips/abc123', '', 'clips'],
     ['/app/clips/new', '', 'clips'],
     ['/app/clips/abc/edit/c1', '', 'editor'],
     ['/app/clips/abc/script', '', 'editor'],
     ['/app/editor', '', 'editor'],
+    ['/app/video-editor', '', 'editor'],
+    ['/app/video-editor/abc/edit/c1', '', 'editor'],
+    ['/app/video-editor/abc/studio/c1', '', 'editor'],
+    ['/app/video-editor/abc/script', '', 'editor'],
+    ['/app/ai-video/new', '', 'ai-video'],
+    ['/app/ai-video/proj_t2v', 'mode=storyboard', 'ai-video'],
     ['/app/clips/templates', 'tab=layouts&sub=mine', 'templates'],
     ['/app/clips/templates', 'tab=ai-video', 'templates'],
     ['/app/clips/video/templates', '', 'templates'],
@@ -83,6 +102,7 @@ describe('sidebar model', () => {
     ['/app/clips/exports', '', 'exports'],
     ['/app/exports', '', 'exports'],
     ['/app/clips/video/new', '', 'ai-video'],
+    ['/app/ai-video/templates', '', 'templates'],
     ['/app/rooms', '', 'record'],
     ['/app/record', '', 'record'],
     ['/app/streamer', '', 'streamer'],
@@ -100,7 +120,9 @@ describe('sidebar model', () => {
   })
   it('isClipEditRoute', () => {
     expect(isClipEditRoute('/app/clips/p/edit/c')).toBe(true)
+    expect(isClipEditRoute('/app/video-editor/p/edit/c')).toBe(true)
     expect(isClipEditRoute('/app/clips/p')).toBe(false)
+    expect(isClipEditRoute('/app/video-editor/p/studio/c')).toBe(false)
   })
   it('open state: forced rail never persists, toggle still works', () => {
     expect(resolveSidebarOpen({ pref: true, override: null, forcedRail: true })).toBe(false)
