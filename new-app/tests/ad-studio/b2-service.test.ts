@@ -88,6 +88,10 @@ vi.mock('@/lib/server/db', () => ({ getPrisma: () => fakeDb }))
 vi.mock('@/lib/server/ai/pixabay', () => ({
   searchVideos: state.search, findCachedHit: state.cached, ensureStockAsset: state.ensure,
 }))
+vi.mock('@/lib/server/ad-studio/pipeline', () => ({
+  advanceAdStudioRun: vi.fn(async () => {}),
+  getAdStudioImages: vi.fn(async () => []),
+}))
 vi.mock('@/lib/server/ad-studio/storyline', async () => {
   const { writeAdStoryline } = await import('@/lib/ad-studio/storyline-agent')
   return { writeGroundedAdStoryline: async (input: AdProductInput, mode: 'storyline' | 'image_to_ad') =>

@@ -9,6 +9,8 @@ import { AdStudioError, adInvalid, adSafeFailure } from '@/lib/ad-studio/errors'
 import { parseCreate, parseReplan, adKeySchema } from '@/lib/ad-studio/validate'
 import { writeGroundedAdStoryline } from '@/lib/server/ad-studio/storyline'
 import { planAdScenes } from '@/lib/ad-studio/planner-agent'
+import { advanceAdStudioRun, getAdStudioImages } from '@/lib/server/ad-studio/pipeline'
+import type { AdImageVariant } from '@/lib/ad-studio/types'
 
 const prisma = () => getPrisma()
 const activeStatuses = ['planning','plan_ready','confirming','generating','stitching']
@@ -34,7 +36,7 @@ function publicPlan(raw: unknown): AdPlan | null {
   void _hidden
   return plan as AdPlan
 }
-function toView(row: Existing): AdStudioRun {
+function toView(row: Existing, imageAds?: AdImageVariant[]): AdStudioRun {
   const plan = publicPlan(row.plan)
   const done = row.status === 'done' && row.projectId && row.clipId
   const compactEditorUrl = done ? `/app/video-editor/${encodeURIComponent(row.projectId!)}/edit/${encodeURIComponent(row.clipId!)}?mode=compact` : null
@@ -44,6 +46,7 @@ function toView(row: Existing): AdStudioRun {
     input: row.input as unknown as AdProductInput, plan,
     creditEstimate: row.creditEstimate, creditCharged: row.creditCharged,
     projectId: row.projectId, clipId: row.clipId, compactEditorUrl, fullEditorUrl,
+    ...(imageAds ? { imageAds } : {}),
     error: row.errorCode ? { code: row.errorCode, message: row.errorMessage || 'Ad Studio could not complete this run.' } : null,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
@@ -154,7 +157,14 @@ export async function getAdRun(workspaceId: string, id: string): Promise<AdStudi
   console.info('[ad-studio:get] begin', { runId: id })
   const row = await required(workspaceId, id)
   if (row.status === 'planning') return performPlanning(row)
-  return toView(row)
+  if (row.status === 'generating' || row.status === 'stitching') {
+    await advanceAdStudioRun(workspaceId, id)
+  }
+  const fresh = await required(workspaceId, id)
+  const imageAds = ['generating','stitching','done','failed'].includes(fresh.status)
+    ? await getAdStudioImages(id) : undefined
+  console.info('[ad-studio:b3] run_refresh_complete', { runId: id, status: fresh.status, images: imageAds?.length })
+  return toView(fresh, imageAds)
 }
 
 export async function listAdRuns(workspaceId: string, query: { limit?: string | null; cursor?: string | null; status?: string | null }):
@@ -236,8 +246,12 @@ export async function confirmAdRun(workspaceId: string, id: string, keyValue: un
       where: { id, workspaceId, status: 'confirming' },
       data: { status: 'generating', errorCode: null, errorMessage: null },
     })
-    console.info('[ad-studio:confirm] transition_complete', { runId: id, count: committed.count, paidJobs: 0 })
-    return toView(await required(workspaceId, id))
+    console.info('[ad-studio:b3] confirm_generation_ready', { runId: id, count: committed.count })
+    if (committed.count) {
+      await advanceAdStudioRun(workspaceId, id)
+    }
+    const latest = await required(workspaceId, id)
+    return toView(latest, await getAdStudioImages(id))
   } catch (err) {
     console.error('[ad-studio:confirm] stock_failed', { runId: id, type: err instanceof Error ? err.name : typeof err })
     const failure = err instanceof AdStudioError ? err : adSafeFailure(err,'STOCK_ERROR')
@@ -246,6 +260,34 @@ export async function confirmAdRun(workspaceId: string, id: string, keyValue: un
     })
     return toView(await required(workspaceId, id))
   }
+}
+
+/**
+ * Continue a failed video without the failed shots; no paid KIE job is retried.
+ * Image-variant failures remain blocked because every finished run needs 3 variants.
+ */
+export async function continueAdRun(workspaceId: string, id: string): Promise<AdStudioRun> {
+  const db = prisma()
+  const run = await required(workspaceId, id)
+  if (run.status !== 'failed' || run.errorCode !== 'KIE_ERROR')
+    throw new AdStudioError('INVALID_PARAMS', 'Only a failed generation can continue without scenes.', 409)
+  const imageFailures = await db.adStudioImageVariant.count({ where: { runId: id, status: 'failed' } })
+  if (imageFailures) throw new AdStudioError('INVALID_PARAMS', 'A failed image-ad variant needs a new confirmed run.', 409)
+  const failedScenes = await db.adStudioScene.count({ where: { runId: id, status: 'failed' } })
+  if (!failedScenes) throw new AdStudioError('INVALID_PARAMS', 'No failed ad scenes can be skipped.', 409)
+  console.info('[ad-studio:b3] continue_without_failed_scenes_begin', { runId: id, failedScenes })
+  await db.$transaction(async tx => {
+    const claimed = await tx.adStudioRun.updateMany({
+      where: { id, workspaceId, status: 'failed', errorCode: 'KIE_ERROR' },
+      data: { status: 'generating', errorCode: null, errorMessage: null },
+    })
+    if (!claimed.count) return
+    await tx.adStudioScene.updateMany({ where: { runId: id, status: 'failed' }, data: { status: 'skipped' } })
+  })
+  await advanceAdStudioRun(workspaceId, id)
+  const updated = await required(workspaceId, id)
+  console.info('[ad-studio:b3] continue_without_failed_scenes_complete', { runId: id, status: updated.status })
+  return toView(updated, await getAdStudioImages(id))
 }
 
 export async function cancelAdRun(workspaceId: string, id: string): Promise<AdStudioRun> {
