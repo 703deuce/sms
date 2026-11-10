@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { ASR_LANGUAGES } from '@/lib/clips/asr-languages'
-import { CAPTION_PRESETS as CAPTION_PRESET_DEFS, presetSlugToId } from '@/lib/clips/caption-presets'
+import { ASR_LANGUAGES } from './asr-languages'
+import { CAPTION_PRESETS as CAPTION_PRESET_DEFS, presetSlugToId, type CaptionPreset } from './caption-presets'
 
 /** Published transcription languages from asr-languages.ts. Keep in sync with that list. */
-export const ASR_LANGUAGE_SETTING_CODES = ASR_LANGUAGES.map((l) => l.code) as [
+export const ASR_LANGUAGE_SETTING_CODES = ASR_LANGUAGES.map((l: (typeof ASR_LANGUAGES)[number]) => l.code) as [
   (typeof ASR_LANGUAGES)[number]['code'],
   ...(typeof ASR_LANGUAGES)[number]['code'][],
 ]
@@ -132,7 +132,7 @@ export function defaultClipSettings(overrides?: Partial<ClipProjectSettings>): C
   })
 }
 
-export const CAPTION_PRESETS = CAPTION_PRESET_DEFS.map((p) => ({
+export const CAPTION_PRESETS = CAPTION_PRESET_DEFS.map((p: CaptionPreset) => ({
   id: presetSlugToId(p.slug),
   label: p.name,
   description: `${p.case} · ${p.animation}`,

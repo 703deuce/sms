@@ -1,8 +1,14 @@
 import { can } from '@/lib/billing/entitlements'
 import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
 import { normalizeExportTemplate } from '@/lib/clips/export-template'
-import { editsVersionHash, normalizeEdits } from '@/lib/clips/edits'
-import { mergeEditsPatch } from '@/lib/server/clips/clip-detail'
+import { displayDurationMs, editsVersionHash, normalizeEdits } from '@/lib/clips/edits'
+import {
+  captionSyncExportDecision,
+  CaptionSyncRequiredError,
+  type CaptionSyncClipConflict,
+  type CaptionSyncSourceWord,
+} from '../../clips/caption-sync-guard'
+import { getClipEditorWords, mergeEditsPatch } from '@/lib/server/clips/clip-detail'
 import type { ExportAspect, ExportResolution } from '@/lib/clips/export-aspect'
 import { renderVersionHash } from '@/lib/clips/export-aspect'
 import { createReadyRenderFromPreview } from '@/lib/server/clips/export-preview-ready'
@@ -19,6 +25,8 @@ export async function enqueueProjectExportAll(
     aspect: ExportAspect
     resolution: ExportResolution
     clipExportTemplates?: Record<string, Record<string, unknown>>
+    /** Required when any clip's caption timing is drifted; acknowledges the editor sync warning. */
+    captionSyncAck?: boolean
   },
 ) {
   const prisma = getPrisma()
@@ -31,6 +39,36 @@ export async function enqueueProjectExportAll(
   const selected = opts.clipIds?.length ? clips.filter((c) => opts.clipIds!.includes(c.id)) : clips
   const batch = selected.filter((c) => c.previewKey).slice(0, 10)
   if (!batch.length) throw new Error('No clips to export')
+
+  // Scan the exact edits that would be exported (including in-memory template merge)
+  // and refuse the whole batch before any enqueue or preview reuse when the sync gate blocks.
+  const conflicts: CaptionSyncClipConflict[] = []
+  for (const clip of batch) {
+    const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
+    let edits = normalizeEdits(clip.edits, bounds)
+    const tplPatch = opts.clipExportTemplates?.[clip.id]
+    if (tplPatch) {
+      const tpl = normalizeExportTemplate(tplPatch)
+      if (tpl) {
+        edits = normalizeEdits(mergeEditsPatch(edits, { exportTemplate: tpl }, bounds), bounds)
+      }
+    }
+    const loaded = await getClipEditorWords(workspaceId, clip.id)
+    const words = (loaded?.words ?? []) as CaptionSyncSourceWord[]
+    const decision = captionSyncExportDecision({
+      words,
+      edits,
+      durationMs: displayDurationMs(edits),
+      captionSyncAck: opts.captionSyncAck,
+      format: 'mp4',
+    })
+    if (decision.blocked) {
+      conflicts.push({ clipId: clip.id, warnings: decision.warnings })
+    }
+  }
+  if (conflicts.length) {
+    throw new CaptionSyncRequiredError(conflicts)
+  }
 
   const batchId = createId('xbatch')
   const watermark = !can(workspaceId, 'no_watermark')

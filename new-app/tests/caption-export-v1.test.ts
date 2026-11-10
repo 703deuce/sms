@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { ASR_LANGUAGES } from '@/lib/clips/asr-languages'
-import { normalizeCaptionPresetConfig } from '@/lib/clips/caption-style-config'
+import { ASR_LANGUAGES } from '../lib/clips/asr-languages'
+import { normalizeCaptionPresetConfig } from '../lib/clips/caption-style-config'
 import {
   captionSyncExportDecision,
   detectCaptionSyncIssues,
-} from '@/lib/clips/caption-sync-guard'
-import { defaultEdits } from '@/lib/clips/edits'
+  type CaptionSyncWarning,
+} from '../lib/clips/caption-sync-guard'
+import { defaultEdits } from '../lib/clips/edits'
 import {
   buildNleCaptionLines,
   buildNleCaptionsSrt,
   buildNleCaptionsVtt,
-} from '@/lib/clips/export-nle-captions'
-import { clipProjectSettingsSchema } from '@/lib/clips/settings'
+} from '../lib/clips/export-nle-captions'
+import { clipProjectSettingsSchema } from '../lib/clips/settings'
+import type { CaptionLine } from '../lib/clips/editor/caption-lines'
 
 const bounds = { clipStartMs: 0, clipEndMs: 10_000 }
 const words = [
@@ -62,13 +64,13 @@ describe('SRT and VTT honor wordFixes, captionLines, and cuts', () => {
     const srt = buildNleCaptionsSrt(words, edits, bounds)
     const vtt = buildNleCaptionsVtt(words, edits, bounds)
     const lines = buildNleCaptionLines(words, edits, bounds)
-    const later = lines.find((l: {text: string; startMs: number}) => /\blater\b/i.test(l.text))
+    const later = lines.find((l: CaptionLine) => /\blater\b/i.test(l.text))
     expect(later).toBeTruthy()
     // "world" (mid 1100ms) is inside the cut. "later" at source 5000ms
     // maps to 1000ms on the output clock after the 4000ms deletion.
     expect(later!.startMs).toBeGreaterThanOrEqual(900)
     expect(later!.startMs).toBeLessThan(1600)
-    expect(srt).toContain('later')
+    expect(srt).toContain('Later')
     expect(srt).not.toContain('world')
     expect(srt).toContain('00:00:01')
     expect(srt).not.toContain('00:00:05')
@@ -144,7 +146,7 @@ describe('export-time caption sync guard', () => {
       ],
     }
     const warnings = detectCaptionSyncIssues({ words, edits, durationMs: 2000 })
-    expect(warnings.some((w: { code: string }) => w.code === 'past_duration' || w.code === 'line_transcript_drift')).toBe(true)
+    expect(warnings.some((w: CaptionSyncWarning) => w.code === 'past_duration' || w.code === 'line_transcript_drift')).toBe(true)
     const blocked = captionSyncExportDecision({ words, edits, durationMs: 2000, format: 'mp4' })
     expect(blocked.blocked).toBe(true)
     const acked = captionSyncExportDecision({
@@ -173,5 +175,49 @@ describe('export-time caption sync guard', () => {
         captionsEnabled: false,
       }).blocked,
     ).toBe(false)
+  })
+})
+
+describe('SRT and VTT honor edits.captions.case like ASS', () => {
+  it('applies case:upper to SRT, VTT, and NLE caption lines', () => {
+    const base = defaultEdits(bounds)
+    const edits = { ...base, captions: { ...base.captions, case: 'upper', wordsPerLine: 2 } }
+    const srt = buildNleCaptionsSrt(words, edits, bounds)
+    const vtt = buildNleCaptionsVtt(words, edits, bounds)
+    const lines = buildNleCaptionLines(words, edits, bounds)
+    expect(srt).toContain('HELLO WORLD')
+    expect(srt).toContain('LATER')
+    expect(srt).not.toContain('Hello')
+    expect(vtt).toContain('HELLO WORLD')
+    expect(vtt).toContain('LATER')
+    expect(vtt).toContain('WEBVTT')
+    expect(lines.every((l: CaptionLine) => l.text === l.text.toUpperCase())).toBe(true)
+  })
+
+  it('applies sentence case with chunk-initial capitals on SRT and VTT', () => {
+    const base = defaultEdits(bounds)
+    const edits = { ...base, captions: { ...base.captions, case: 'sentence', wordsPerLine: 2 } }
+    const srt = buildNleCaptionsSrt(words, edits, bounds)
+    const vtt = buildNleCaptionsVtt(words, edits, bounds)
+    // defaultEdits already uses sentence; each cue starts with a capital (ASS chunk-initial).
+    expect(srt).toContain('Hello world')
+    expect(srt).toContain('Later')
+    expect(vtt).toContain('Hello world')
+    expect(vtt).toContain('Later')
+    const manual = {
+      ...base,
+      captions: { ...base.captions, case: 'sentence' },
+      captionLines: [{ id: 'cl_s', text: 'hello there. friend now', startMs: 400, endMs: 1300 }],
+    }
+    const srtManual = buildNleCaptionsSrt(words, manual, bounds)
+    const vttManual = buildNleCaptionsVtt(words, manual, bounds)
+    expect(srtManual).toContain('Hello there. Friend now')
+    expect(vttManual).toContain('Hello there. Friend now')
+    const upperManual = {
+      ...manual,
+      captions: { ...base.captions, case: 'upper' },
+    }
+    expect(buildNleCaptionsSrt(words, upperManual, bounds)).toContain('HELLO THERE. FRIEND NOW')
+    expect(buildNleCaptionsVtt(words, upperManual, bounds)).toContain('HELLO THERE. FRIEND NOW')
   })
 })

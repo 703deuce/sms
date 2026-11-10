@@ -5,24 +5,44 @@ import {
   normalizeEdits,
   type ClipBounds,
   type ClipEditsV2,
-} from '@/lib/clips/edits'
-import { buildCaptionWords, type CaptionSourceWord } from '@/lib/clips/caption-words'
+} from './edits'
+import { formatCaptionChunk } from './caption-case'
+import { buildCaptionWords, type CaptionSourceWord } from './caption-words'
 import {
   captionLinesFromWords,
   captionLinesToSrt,
   captionLinesToVtt,
   type CaptionLine,
-} from '@/lib/clips/editor/caption-lines'
+} from './editor/caption-lines'
 
 /** Map edit-timeline ms → export/display ms for NLE subtitle cues (segment speeds + global speed). */
 export function nleCaptionDisplayMs(edits: ClipEditsV2, editMs: number): number {
   return displayPositionMs(edits, editMs)
 }
 
+/** Match ASS: upper stays upper; anything else is sentence case with chunk-initial capitals. */
+export function nleCaptionCaseMode(edits: ClipEditsV2): 'upper' | 'sentence' {
+  return String(edits.captions?.case ?? '').toLowerCase() === 'upper' ? 'upper' : 'sentence'
+}
+
+export function applyNleCaptionCase(text: string, caseMode: 'upper' | 'sentence'): string {
+  const parts = text.split(/\s+/).filter((w: string) => w.length > 0)
+  if (!parts.length) return text
+  return formatCaptionChunk(parts, caseMode)
+}
+
+function applyCaseToLines(lines: CaptionLine[], caseMode: 'upper' | 'sentence'): CaptionLine[] {
+  return lines.map((l: CaptionLine) => ({
+    ...l,
+    text: applyNleCaptionCase(l.text, caseMode),
+  }))
+}
+
 /**
  * Grouped caption cues on the export/display clock.
  * Manual captionLines keep user text; times are edit ms warped through displayPositionMs.
  * Word fixes are applied through buildCaptionWords when cues are derived from the transcript.
+ * edits.captions.case is applied the same way as ASS (upper, or sentence with chunk-initial capitals).
  */
 export function buildNleCaptionLines(
   words: CaptionSourceWord[],
@@ -30,27 +50,37 @@ export function buildNleCaptionLines(
   bounds: ClipBounds,
 ): CaptionLine[] {
   const normalized = normalizeEdits(edits, bounds)
+  const caseMode = nleCaptionCaseMode(normalized)
   if (normalized.captionLines?.length) {
-    return normalized.captionLines.map((l) => ({
-      ...l,
-      startMs: nleCaptionDisplayMs(normalized, l.startMs),
-      endMs: nleCaptionDisplayMs(normalized, l.endMs),
-    }))
+    return applyCaseToLines(
+      normalized.captionLines.map((l: CaptionLine) => ({
+        ...l,
+        startMs: nleCaptionDisplayMs(normalized, l.startMs),
+        endMs: nleCaptionDisplayMs(normalized, l.endMs),
+      })),
+      caseMode,
+    )
   }
   const captionWords = buildCaptionWords(words, normalized)
   const wpl = normalized.captions?.wordsPerLine ?? 2
-  const grouped = captionLinesFromWords(captionWords, wpl).map((l) => ({
-    ...l,
-    startMs: nleCaptionDisplayMs(normalized, l.startMs),
-    endMs: nleCaptionDisplayMs(normalized, l.endMs),
-  }))
+  const grouped = applyCaseToLines(
+    captionLinesFromWords(captionWords, wpl).map((l: CaptionLine) => ({
+      ...l,
+      startMs: nleCaptionDisplayMs(normalized, l.startMs),
+      endMs: nleCaptionDisplayMs(normalized, l.endMs),
+    })),
+    caseMode,
+  )
   if (grouped.length) return grouped
-  return captionWords.map((w, i) => ({
-    id: `cw_${w.i}_${i}`,
-    text: w.text,
-    startMs: nleCaptionDisplayMs(normalized, w.s_ms),
-    endMs: nleCaptionDisplayMs(normalized, w.e_ms),
-  }))
+  return applyCaseToLines(
+    captionWords.map((w: { i: number; text: string; s_ms: number; e_ms: number }, i: number) => ({
+      id: `cw_${w.i}_${i}`,
+      text: w.text,
+      startMs: nleCaptionDisplayMs(normalized, w.s_ms),
+      endMs: nleCaptionDisplayMs(normalized, w.e_ms),
+    })),
+    caseMode,
+  )
 }
 
 /**
@@ -65,8 +95,9 @@ export function buildNleCaptionsSrt(
   const lines = buildNleCaptionLines(words, edits, bounds)
   if (lines.length) return captionLinesToSrt(lines)
   const normalized = normalizeEdits(edits, bounds)
-  const warped = buildCaptionWords(words, normalized).map((w) => ({
-    text: w.text,
+  const caseMode = nleCaptionCaseMode(normalized)
+  const warped = buildCaptionWords(words, normalized).map((w: { text: string; s_ms: number; e_ms: number }) => ({
+    text: applyNleCaptionCase(w.text, caseMode),
     s_ms: nleCaptionDisplayMs(normalized, w.s_ms),
     e_ms: nleCaptionDisplayMs(normalized, w.e_ms),
   }))

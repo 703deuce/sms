@@ -2,13 +2,18 @@ import { fetchJson } from '@/lib/client/fetch-json'
 
 export async function clipsFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase()
-  const json = await fetchJson<{ data?: T; error?: string }>(path, {
+  const json = await fetchJson<{ data?: T; error?: string; code?: string }>(path, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     tag: `clips-api:${method}:${path}`,
     retryGateway: method === 'GET' || method === 'HEAD',
   })
-  if (json.error) throw new Error(json.error)
+  if (json.error) {
+    const err = new Error(json.error) as Error & { code?: string; data?: unknown }
+    if (typeof json.code === 'string') err.code = json.code
+    if ('data' in json) err.data = (json as { data?: unknown }).data
+    throw err
+  }
   return json.data as T
 }
 
@@ -373,6 +378,8 @@ export function exportProjectAllBatch(
     aspect: '9:16' | '4:5' | '1:1' | '16:9'
     resolution: '720p' | '1080p'
     clipExportTemplates?: Record<string, unknown>
+    /** Required when any clip's caption timing is drifted; acknowledges the editor sync warning. */
+    captionSyncAck?: boolean
   },
 ) {
   return clipsFetch<{
@@ -432,23 +439,37 @@ function nleZipDownloadFilename(title: string): string {
   return `${base || 'clip'}-nle.zip`
 }
 
-export async function downloadClipNleZip(clipId: string, title: string): Promise<void> {
-  const res = await fetch(`/api/clips/clips/${encodeURIComponent(clipId)}/export-xml`, {
+export async function downloadClipNleZip(
+  clipId: string,
+  title: string,
+  opts?: { captionSyncAck?: boolean },
+): Promise<void> {
+  const nlePath = `/api/clips/clips/${encodeURIComponent(clipId)}/export-xml${
+    opts?.captionSyncAck ? '?captionSyncAck=true' : ''
+  }`
+  const res = await fetch(nlePath, {
     method: 'GET',
     credentials: 'same-origin',
   })
   if (!res.ok) {
     let message = `NLE export failed (${res.status})`
+    let code: string | undefined
+    let data: unknown
     const ct = (res.headers.get('content-type') ?? '').toLowerCase()
     if (ct.includes('json')) {
       try {
-        const body = (await res.json()) as { error?: string }
+        const body = (await res.json()) as { error?: string; code?: string; data?: unknown }
         if (body?.error) message = body.error
+        if (typeof body?.code === 'string') code = body.code
+        if (body?.data !== undefined) data = body.data
       } catch {
         /* ignore */
       }
     }
-    throw new Error(message)
+    const err = new Error(message) as Error & { code?: string; data?: unknown }
+    if (code) err.code = code
+    if (data !== undefined) err.data = data
+    throw err
   }
   const blob = await res.blob()
   if (blob.size < 64) {

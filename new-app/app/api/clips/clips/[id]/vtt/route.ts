@@ -1,10 +1,10 @@
-import { normalizeEdits } from '@/lib/clips/edits'
-import { buildNleCaptionsVtt } from '@/lib/clips/export-nle-captions'
+import { normalizeEdits } from '../../../../../../lib/clips/edits'
+import { buildNleCaptionsVtt } from '../../../../../../lib/clips/export-nle-captions'
 import { NextResponse } from 'next/server'
-import { jsonError } from '@/lib/server/api-error'
-import { getClipForWorkspace } from '@/lib/server/clips/clips'
-import { loadClipSourceWords } from '@/lib/server/clips/transcript'
-import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { jsonError } from '../../../../../../lib/server/api-error'
+import { getClipForWorkspace } from '../../../../../../lib/server/clips/clips'
+import { loadClipSourceWords } from '../../../../../../lib/server/clips/transcript'
+import { resolveWorkspaceId } from '../../../../../../lib/server/workspace'
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {

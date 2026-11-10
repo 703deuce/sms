@@ -35,7 +35,7 @@ import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { clipExportMediaReady } from '@/lib/clips/clip-export-media'
 import { isFullVideoSettings } from '@/lib/clips/full-video'
-import { captionSyncExportDecision } from '@/lib/clips/caption-sync-guard'
+import { captionSyncExportDecision, captionSyncRequiredBody, type CaptionSyncWarning } from '../../../../../../lib/clips/caption-sync-guard'
 
 const resolutionSchema = z.preprocess((v) => {
   if (v === 720 || v === '720') return '720p'
@@ -225,16 +225,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       console.info('[clipper:export] caption_sync_blocked', {
         clipId,
         workspaceId,
-        codes: captionSync.warnings.map((w) => w.code),
+        codes: captionSync.warnings.map((w: CaptionSyncWarning) => w.code),
       })
-      return NextResponse.json(
-        {
-          error: 'Caption timing looks out of sync. Acknowledge the warning to export anyway.',
-          code: 'CAPTION_SYNC_REQUIRED',
-          data: { warnings: captionSync.warnings },
-        },
-        { status: 409 },
-      )
+      return NextResponse.json(captionSyncRequiredBody({ warnings: captionSync.warnings }), { status: 409 })
     }
 
     if (!skipPolishForPreviewReuse) {

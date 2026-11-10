@@ -111,6 +111,33 @@ When captions are enabled, the export is a pictured format (`mp4` / `mov` / `gif
 
 Please add `captionSyncAck: true` to the `exportClipWithOptions` call in the export dialog when the editor acknowledgment is checked. The TypeScript options type already includes this optional field.
 
+The same gate now applies to every pictured export path that can ship captions (not only single-clip `POST /export`):
+
+### `POST /api/clips/projects/:id/export-all`
+
+Existing body is unchanged, plus `captionSyncAck?: boolean`. Before any render is enqueued or a preview is reused, every clip in the batch is scanned with the same detector. If any clip is blocked and `captionSyncAck` is not `true`, the server returns **409** and enqueues nothing:
+
+```ts
+{
+  error: string
+  code: 'CAPTION_SYNC_REQUIRED'
+  data: {
+    warnings: Array<{ level: 'warning'; code: string; message: string }>
+    clips: Array<{ clipId: string; warnings: Array<{ level: 'warning'; code: string; message: string }> }>
+  }
+}
+```
+
+`exportProjectAllBatch` accepts `captionSyncAck?: boolean`. Send `true` when the user has acknowledged the warning.
+
+### `GET` / `POST /api/clips/clips/:id/export-xml` (NLE zip, includes `captions.srt`)
+
+The zip is also gated. Acknowledge with `GET ?captionSyncAck=true` or `POST { captionSyncAck: true }`. The 409 body is the same single-clip shape (`data.warnings`, no `clips` array). `downloadClipNleZip(clipId, title, { captionSyncAck?: boolean })` passes the query flag.
+
+The agent auto-export path that calls `enqueueRenderClip` from the orchestrator is not on this branch and is **not** gated inside `enqueueRenderClip` (there is no ack UI on those runs).
+
+`#1109` (Frontend ack + 409 handling) and `#1110` (this backend contract) must merge together.
+
 ## 5. Out of scope
 
 - Caption translation (New #7) is not enabled or expanded.

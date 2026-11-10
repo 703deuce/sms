@@ -1,6 +1,6 @@
-import { buildCaptionWords, type CaptionSourceWord, type CaptionWord } from '@/lib/clips/caption-words'
-import { displayDurationMs, type ClipEditsV2 } from '@/lib/clips/edits'
-import type { CaptionLine } from '@/lib/clips/editor/caption-lines'
+import { buildCaptionWords, type CaptionSourceWord, type CaptionWord } from './caption-words'
+import { displayDurationMs, type ClipEditsV2 } from './edits'
+import type { CaptionLine } from './editor/caption-lines'
 
 /** Drift large enough that burned-in captions / SRT would visibly miss the words. */
 export const CAPTION_SYNC_DRIFT_MS = 500
@@ -26,7 +26,7 @@ export type CaptionSyncSourceWord = {
 }
 
 function toCaptionSourceWords(words: CaptionSyncSourceWord[]): CaptionSourceWord[] {
-  return words.map((w, index) => ({
+  return words.map((w: CaptionSyncSourceWord, index: number) => ({
     i: typeof w.i === 'number' ? w.i : typeof w.idx === 'number' ? w.idx : index,
     w: w.w,
     s: w.s,
@@ -55,7 +55,7 @@ function nearestWordDriftMs(line: CaptionLine, words: CaptionWord[]): number | n
 
 function median(values: number[]): number {
   if (!values.length) return 0
-  const sorted = [...values].sort((a, b) => a - b)
+  const sorted = [...values].sort((a: number, b: number) => a - b)
   const mid = Math.floor(sorted.length / 2)
   if (sorted.length % 2 === 0) return (sorted[mid - 1]! + sorted[mid]!) / 2
   return sorted[mid]!
@@ -86,8 +86,8 @@ export function detectCaptionSyncIssues(args: {
   const captionWords = buildCaptionWords(toCaptionSourceWords(args.words ?? []), args.edits)
 
   const timed = lines.length
-    ? lines.map((l) => ({ startMs: l.startMs, endMs: l.endMs, id: l.id }))
-    : captionWords.map((w) => ({ startMs: w.s_ms, endMs: w.e_ms, id: String(w.i) }))
+    ? lines.map((l: CaptionLine) => ({ startMs: l.startMs, endMs: l.endMs, id: l.id }))
+    : captionWords.map((w: CaptionWord) => ({ startMs: w.s_ms, endMs: w.e_ms, id: String(w.i) }))
 
   let invalid = false
   let nonMonotonic = false
@@ -131,7 +131,7 @@ export function detectCaptionSyncIssues(args: {
 
   const trimIn = args.edits.trim?.in ?? 0
   if (lines.length >= 1 && trimIn > 2000) {
-    const minStart = Math.min(...lines.map((l) => l.startMs))
+    const minStart = Math.min(...lines.map((l: CaptionLine) => l.startMs))
     if (minStart > 2000 && Math.abs(minStart - trimIn) < CAPTION_SYNC_DRIFT_MS) {
       warnings.push({
         level: 'warning',
@@ -144,8 +144,8 @@ export function detectCaptionSyncIssues(args: {
 
   if (lines.length >= 3 && captionWords.length >= 3) {
     const drifts = lines
-      .map((line) => nearestWordDriftMs(line, captionWords))
-      .filter((v): v is number => v !== null)
+      .map((line: CaptionLine) => nearestWordDriftMs(line, captionWords))
+      .filter((v: number | null): v is number => v !== null)
     if (drifts.length >= 3 && median(drifts) > CAPTION_SYNC_DRIFT_MS) {
       warnings.push({
         level: 'warning',
@@ -198,4 +198,45 @@ export function captionSyncExportDecision(input: {
     durationMs: input.durationMs,
   })
   return { blocked: warnings.length > 0 && input.captionSyncAck !== true, warnings }
+}
+
+export type CaptionSyncClipConflict = {
+  clipId: string
+  warnings: CaptionSyncWarning[]
+}
+
+/** Shared 409 body for POST /export, POST /export-all, and /export-xml. */
+export function captionSyncRequiredBody(input: {
+  warnings: CaptionSyncWarning[]
+  clips?: CaptionSyncClipConflict[]
+}): {
+  error: string
+  code: 'CAPTION_SYNC_REQUIRED'
+  data: { warnings: CaptionSyncWarning[]; clips?: CaptionSyncClipConflict[] }
+} {
+  return {
+    error: 'Caption timing looks out of sync. Acknowledge the warning to export anyway.',
+    code: 'CAPTION_SYNC_REQUIRED',
+    data: {
+      warnings: input.warnings,
+      ...(input.clips && input.clips.length ? { clips: input.clips } : {}),
+    },
+  }
+}
+
+/** Thrown by batch export when one or more clips are blocked and captionSyncAck is not true. */
+export class CaptionSyncRequiredError extends Error {
+  readonly code = 'CAPTION_SYNC_REQUIRED' as const
+  readonly warnings: CaptionSyncWarning[]
+  readonly clips: CaptionSyncClipConflict[]
+  constructor(clips: CaptionSyncClipConflict[]) {
+    const warnings = clips.flatMap((c: CaptionSyncClipConflict) => c.warnings)
+    super('Caption timing looks out of sync. Acknowledge the warning to export anyway.')
+    this.name = 'CaptionSyncRequiredError'
+    this.warnings = warnings
+    this.clips = clips
+  }
+  toBody() {
+    return captionSyncRequiredBody({ warnings: this.warnings, clips: this.clips })
+  }
 }

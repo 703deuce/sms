@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { jsonError } from '@/lib/server/api-error'
+import { CaptionSyncRequiredError } from '../../../../../../lib/clips/caption-sync-guard'
 import { enqueueProjectExportAll } from '@/lib/server/clips/export-batch'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
@@ -13,6 +14,7 @@ const postSchema = z.object({
   aspect: z.enum(['9:16', '4:5', '1:1', '16:9']),
   resolution: z.enum(['720p', '1080p']).default('720p'),
   clipExportTemplates: z.record(z.string(), z.record(z.unknown())).optional(),
+  captionSyncAck: z.boolean().optional(),
 })
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -25,6 +27,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const data = await enqueueProjectExportAll(workspaceId, projectId, body)
     return NextResponse.json({ data })
   } catch (err) {
+    if (err instanceof CaptionSyncRequiredError) {
+      return NextResponse.json(err.toBody(), { status: 409 })
+    }
     return jsonError(err, 400)
   }
 }

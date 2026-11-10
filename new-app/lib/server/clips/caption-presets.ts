@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client'
-import { normalizeCaptionPresetConfig } from '@/lib/clips/caption-style-config'
+import { normalizeCaptionPresetConfig } from '../../clips/caption-style-config'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 

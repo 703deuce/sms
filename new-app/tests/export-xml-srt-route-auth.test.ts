@@ -50,7 +50,7 @@ describe('clip export routes without Supabase session', () => {
   })
 
   it('GET srt returns 200 text/plain (workspace scope only)', async () => {
-    const { GET } = await import('@/app/api/clips/clips/[id]/srt/route')
+    const { GET } = await import('../app/api/clips/clips/[id]/srt/route')
     const res = await GET(new Request('http://local/api'), {
       params: Promise.resolve({ id: mockClip.id }),
     })
@@ -61,7 +61,7 @@ describe('clip export routes without Supabase session', () => {
   })
 
   it('GET vtt returns 200 text/vtt (workspace scope only)', async () => {
-    const { GET } = await import('@/app/api/clips/clips/[id]/vtt/route')
+    const { GET } = await import('../app/api/clips/clips/[id]/vtt/route')
     const res = await GET(new Request('http://local/api'), {
       params: Promise.resolve({ id: mockClip.id }),
     })
@@ -74,7 +74,7 @@ describe('clip export routes without Supabase session', () => {
   })
 
   it('GET export-xml returns 200 application/zip (workspace scope only)', async () => {
-    const { GET } = await import('@/app/api/clips/clips/[id]/export-xml/route')
+    const { GET } = await import('../app/api/clips/clips/[id]/export-xml/route')
     const res = await GET(new Request('http://local/api'), {
       params: Promise.resolve({ id: mockClip.id }),
     })
@@ -84,5 +84,58 @@ describe('clip export routes without Supabase session', () => {
     expect(buf.length).toBeGreaterThan(4)
     const { requireAuthenticatedUser } = await import('@/lib/server/auth/session')
     expect(requireAuthenticatedUser).not.toHaveBeenCalled()
+  })
+})
+
+describe('export-xml caption sync gate', () => {
+  it('returns 409 CAPTION_SYNC_REQUIRED when NLE cues are drifted and unacked', async () => {
+    const { getPrisma } = await import('@/lib/server/db')
+    vi.mocked(getPrisma).mockReturnValue({
+      clip: {
+        findFirst: vi.fn(async () => ({
+          ...mockClip,
+          startMs: 0,
+          endMs: 2_000,
+          edits: {
+            captions: { enabled: true, case: 'sentence', wordsPerLine: 2 },
+            captionLines: [
+              { id: 'a', text: 'Hello', startMs: 400, endMs: 800 },
+              { id: 'b', text: 'world', startMs: 900, endMs: 1300 },
+              { id: 'c', text: 'later', startMs: 8000, endMs: 8400 },
+            ],
+          },
+        })),
+      },
+    } as never)
+    const { loadClipSourceWords } = await import('@/lib/server/clips/transcript')
+    vi.mocked(loadClipSourceWords).mockResolvedValue([
+      { i: 0, w: 'Hello', s: 0.4, e: 0.8 },
+      { i: 1, w: 'world', s: 0.9, e: 1.3 },
+      { i: 2, w: 'later', s: 5.0, e: 5.4 },
+    ] as never)
+
+    const { GET, POST } = await import('../app/api/clips/clips/[id]/export-xml/route')
+    const blocked = await GET(new Request('http://local/api'), {
+      params: Promise.resolve({ id: mockClip.id }),
+    })
+    expect(blocked.status).toBe(409)
+    const body = (await blocked.json()) as { code?: string; data?: { warnings?: unknown[] } }
+    expect(body.code).toBe('CAPTION_SYNC_REQUIRED')
+    expect((body.data?.warnings ?? []).length).toBeGreaterThan(0)
+
+    const ackedGet = await GET(new Request('http://local/api?captionSyncAck=true'), {
+      params: Promise.resolve({ id: mockClip.id }),
+    })
+    expect(ackedGet.status).toBe(200)
+
+    const ackedPost = await POST(
+      new Request('http://local/api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ captionSyncAck: true }),
+      }),
+      { params: Promise.resolve({ id: mockClip.id }) },
+    )
+    expect(ackedPost.status).toBe(200)
   })
 })
