@@ -64,6 +64,7 @@ describe('streamer word minimum contract',()=>{
   it('accepts speech-light gameplay while preserving long-form minimum',()=>{
     expect(minimumAgentTranscriptWords('clip_moment_v1')).toBe(8)
     expect(minimumAgentTranscriptWords('clip_story_v1')).toBe(8)
+    expect(minimumAgentTranscriptWords('clip_unified_v1')).toBe(8)
     expect(minimumAgentTranscriptWords('single_source_v1')).toBe(30)
     expect(minimumAgentTranscriptWords()).toBe(30)
   })

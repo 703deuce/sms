@@ -1,4 +1,4 @@
-export type StreamerAgentMode='clip_moment_v1'|'clip_story_v1'
+export type StreamerAgentMode='clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'
 export type StreamerAgentBatchResult={
   projectId:string;clipId:string;startMin:number
 }
@@ -20,7 +20,7 @@ export function readStreamerAgentBatch(raw:unknown):StreamerAgentBatch|null{
   if(typeof b.id!=='string'||!['running','done','canceled'].includes(b.status)||
     !Number.isSafeInteger(b.index)||!Number.isSafeInteger(b.total)||
     b.index<0||b.total<1||b.index>b.total||
-    !['clip_moment_v1','clip_story_v1'].includes(b.mode)||
+    !['clip_moment_v1','clip_story_v1','clip_unified_v1'].includes(b.mode)||
     ![30,60,90].includes(b.seconds)||!Array.isArray(b.completed)||
     !Array.isArray(b.errors))return null
   return b

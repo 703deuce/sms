@@ -89,7 +89,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [rangeStart, setRangeStart] = useState('0:00')
   const [rangeEnd, setRangeEnd] = useState('15:00')
   const [clipLength, setClipLength] = useState<ClipLengthChoiceValue>('auto')
-  const [agentClipMode,setAgentClipMode]=useState<'clip_moment_v1'|'clip_story_v1'>('clip_moment_v1')
+  const [agentClipMode,setAgentClipMode]=useState<'clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'>('clip_moment_v1')
   const [agentClipSeconds,setAgentClipSeconds]=useState<30|60|90>(60)
 
   useEffect(() => {
@@ -614,7 +614,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
           <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="streamer-upload-agent-mode">
             <label htmlFor="streamer-upload-agent-mode" className="text-sm">AI clip mode</label>
             <select id="streamer-upload-agent-mode" value={agentClipMode}
-              onChange={e=>setAgentClipMode(e.target.value as 'clip_moment_v1'|'clip_story_v1')}
+              onChange={e=>setAgentClipMode(e.target.value as 'clip_moment_v1'|'clip_story_v1'|'clip_unified_v1')}
               className="h-9 rounded-md border border-border bg-background px-2 text-sm">
               <option value="clip_moment_v1">Single continuous moment</option>
               <option value="clip_story_v1">AI story from multiple moments</option>

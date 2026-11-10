@@ -76,7 +76,7 @@ export async function maybeAutoStartUploadAgentBatch(projectId:string){
   if(!p||p.deletedAt||p.status!=='READY'||!p.uploadId)return null
   const settings=asSettings(p.settings)
   const mode=settings.autoAgentClipMode
-  if(mode!=='clip_moment_v1'&&mode!=='clip_story_v1')return null
+  if(mode!=='clip_moment_v1'&&mode!=='clip_story_v1'&&mode!=='clip_unified_v1')return null
   if(settings.agentClipBatch)return null
   const value=Number(settings.autoAgentClipSeconds)
   const seconds=(value===30||value===90?value:60) as 30|60|90
@@ -171,7 +171,9 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
           visualEvidenceMode:'visual_audio',exportOnFinish:true,
           instruction:next.mode==='clip_moment_v1'
             ? 'Choose a continuous streamer action with genuine setup and reaction.'
-            : 'Create one short narrative from distinct source-grounded beats.',
+            : next.mode==='clip_unified_v1'
+              ? 'Find both stitched story clips and continuous 15-30 second moments from the same source. Prefer complete multi-beat stories; use continuous clips to fill in distinct moments.'
+              : 'Create one short narrative from distinct source-grounded beats.',
         })
         next.runId=run.id
       }catch(err){
@@ -201,7 +203,9 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
         visualEvidenceMode:'visual_audio',exportOnFinish:true,
         instruction:next.mode==='clip_moment_v1'
           ? 'Choose one genuine continuous moment with setup, action and reaction.'
-          : 'Create one coherent narrative from distinct original source beats.',
+          : next.mode==='clip_unified_v1'
+            ? 'Find both stitched story clips and continuous 15-30 second moments from the same source. Prefer complete multi-beat stories; use continuous clips to fill in distinct moments.'
+            : 'Create one coherent narrative from distinct original source beats.',
       })
       next.runId=run.id
     }catch(err){

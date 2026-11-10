@@ -7,7 +7,7 @@ import {Button} from '@/components/ui/button'
 import {aiProducerAgentPublicEnabled} from '@/lib/ai-producer-agent/flags'
 import {streamerAgentWindows,MAX_AGENT_SOURCE_WINDOW_MS} from '@/lib/streamer/agent-windows'
 
-export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'
+export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'
 type FinishedClip={projectId:string;clipId:string;startMin:number}
 const WINDOW_MS=MAX_AGENT_SOURCE_WINDOW_MS
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms))

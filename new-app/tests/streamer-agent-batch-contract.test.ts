@@ -17,6 +17,10 @@ describe('durable streamer agent batch state',()=>{
     expect(readStreamerAgentBatch({agentClipBatch:{...state,mode:'clean_take_v1'}})).toBeNull()
     expect(readStreamerAgentBatch({agentClipBatch:null})).toBeNull()
   })
+  it('accepts a unified clipper batch mode',()=>{
+    const unified={...state,mode:'clip_unified_v1' as const}
+    expect(readStreamerAgentBatch({agentClipBatch:unified})).toEqual(unified)
+  })
   it('does not interpret unrelated project settings as an active batch',()=>{
     expect(readStreamerAgentBatch({streamer:{}})).toBeNull()
     expect(streamerAgentSettings(null)).toEqual({})
