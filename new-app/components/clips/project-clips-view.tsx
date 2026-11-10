@@ -19,6 +19,11 @@ import { ClipResultsToolbar } from '@/components/clips/clip-results-toolbar'
 import { ClipTemplateProjectActions } from '@/components/clips/clip-template-project-actions'
 import { ProjectClipsNewEditAction } from '@/components/ai-producer-agent/project-clips-new-edit-action'
 import { mergeMonotonicProjectPoll } from '@/lib/clips/eta-poll'
+import {
+  loadProjectClipsWithRetry,
+  retryIdempotentRequest,
+  ProjectClipListTimeoutError,
+} from '@/lib/clips/project-clips-list-retry'
 import { clipsFetch, getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
 import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
 import { buildOpenInEditorHref, openInEditorLinkLabel } from '@/lib/clips/project-editor-link'
@@ -97,6 +102,13 @@ function pageDescription(status: string, error: string | null, clipCount: number
   return 'Processing your source video.'
 }
 
+function clipsListErrorMessage(error: unknown) {
+  if (error instanceof ProjectClipListTimeoutError) {
+    return 'The clips list timed out. Your clips were not changed; retry the list request.'
+  }
+  return 'The clips list could not be loaded. Your clips were not changed; retry the list request.'
+}
+
 export function ProjectClipsView({
   projectId,
   projectTitle,
@@ -165,16 +177,16 @@ export function ProjectClipsView({
 
   useEffect(() => {
     if (!shouldClientEnrichReadyClips(initialStatus, initialClips)) return
-    let cancelled = false
-    void listProjectClips(projectId, 'score')
+    const controller = new AbortController()
+    void listProjectClips(projectId, 'score', { signal: controller.signal })
       .then((data) => {
-        if (!cancelled) setClips(data.clips as ClipCardData[])
+        if (!controller.signal.aborted) setClips(data.clips as ClipCardData[])
       })
       .catch(() => {
         /* keep SSR clip list */
       })
     return () => {
-      cancelled = true
+      controller.abort()
     }
   }, [initialStatus, initialClips, projectId])
 
@@ -183,6 +195,10 @@ export function ProjectClipsView({
     (initialStatus === 'FAILED' && initialClips != null && initialClips.length > 0)
   const [status, setStatus] = useState(initialStatus)
   const [clips, setClips] = useState<ClipCardData[]>(initialClips ?? [])
+  const clipsRef = useRef<ClipCardData[]>(initialClips ?? [])
+  useEffect(() => {
+    clipsRef.current = clips
+  }, [clips])
   const [clipSort, setClipSort] = useState<UnifiedClipSort>('score')
   const [clipTypeFilter, setClipTypeFilter] = useState<UnifiedClipTypeFilter>('all')
   const unifiedClips = adaptListProjectClips(clips)
@@ -191,6 +207,11 @@ export function ProjectClipsView({
   const [montagePollKey, setMontagePollKey] = useState(0)
   const [error, setError] = useState<string | null>(initialError ?? null)
   const [readyHydrated, setReadyHydrated] = useState(readyFromServer)
+  const [listLoading, setListLoading] = useState(
+    (initialStatus === 'READY' || initialStatus === 'FAILED') && !readyFromServer,
+  )
+  const [listError, setListError] = useState<string | null>(null)
+  const listHydrationAbortRef = useRef<AbortController | null>(null)
   const [progressEtaSec, setProgressEtaSec] = useState(initialEtaSec)
   const [progressStage, setProgressStage] = useState<string | null>(initialStage)
   const [clipsReady, setClipsReady] = useState(0)
@@ -205,19 +226,41 @@ export function ProjectClipsView({
   }, [projectId])
 
   const thumbnailBackfillRequestedRef = useRef<Set<string>>(new Set())
+  const thumbnailBackfillControllersRef = useRef<Set<AbortController>>(new Set())
+  useEffect(() => {
+    thumbnailBackfillRequestedRef.current.clear()
+    return () => {
+      for (const controller of thumbnailBackfillControllersRef.current) controller.abort()
+      thumbnailBackfillControllersRef.current.clear()
+    }
+  }, [projectId])
+
   useEffect(() => {
     if (status !== 'READY' || clips.length === 0) return
     const missing = clips.filter((clip) => !clip.posterUrl && !thumbnailBackfillRequestedRef.current.has(clip.id))
     if (!missing.length) return
     for (const clip of missing) thumbnailBackfillRequestedRef.current.add(clip.id)
+    const controller = new AbortController()
+    thumbnailBackfillControllersRef.current.add(controller)
     const startedAt = Date.now()
     for (const clip of missing) {
       console.info('[clips:cards] thumbnail backfill begin', { clipId: clip.id })
     }
-    void clipsFetch(`/api/clips/projects/${encodeURIComponent(projectId)}/card-thumbnails`, {
-      method: 'POST', body: '{}',
+    void retryIdempotentRequest({
+      signal: controller.signal,
+      maxAttempts: 3,
+      baseDelayMs: 750,
+      timeoutMs: 8_000,
+      request: (signal) =>
+        clipsFetch(`/api/clips/projects/${encodeURIComponent(projectId)}/card-thumbnails`, {
+          method: 'POST',
+          body: '{}',
+          signal,
+        }),
     }).then(async () => {
-      const data = await listProjectClips(projectId, 'score')
+      if (controller.signal.aborted) return
+      const data = await listProjectClips(projectId, 'score', { signal: controller.signal })
+      if (controller.signal.aborted) return
       const rows = data.clips as ClipCardData[]
       setClips(rows)
       const byId = new Map(rows.map((clip) => [clip.id, clip]))
@@ -229,21 +272,27 @@ export function ProjectClipsView({
           status: current?.posterUrl ? 'ready' : current?.fallbackSourceUrl ? 'source_fallback' : 'queued',
         })
       }
-    }).catch((error) => {
+    }).catch((backfillError) => {
+      if (controller.signal.aborted) return
       for (const clip of missing) {
+        thumbnailBackfillRequestedRef.current.delete(clip.id)
         console.warn('[clips:cards] thumbnail backfill end', {
           clipId: clip.id,
           elapsedMs: Date.now() - startedAt,
           status: 'failed',
-          error: String(error),
+          errorName: backfillError instanceof Error ? backfillError.name : 'UnknownError',
         })
       }
+    }).finally(() => {
+      thumbnailBackfillControllersRef.current.delete(controller)
     })
   }, [clips, projectId, status])
-
   const retryProcessing = useCallback(() => {
+    listHydrationAbortRef.current?.abort()
     setStatus('QUEUED')
     setError(null)
+    setListError(null)
+    setListLoading(false)
     setClips([])
     setReadyHydrated(false)
     void retryProject(projectId)
@@ -287,38 +336,96 @@ export function ProjectClipsView({
     [refreshClipsList],
   )
 
-  const hydrateReady = useCallback(async (payload: ProjectStatusPayload) => {
-    const expected = payload.clipCount ?? 0
-    let list: ClipCardData[] = []
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const data = await listProjectClips(projectId, 'score')
-      list = data.clips as ClipCardData[]
-      if (list.length > 0 || expected === 0 || attempt >= 7) break
-      await new Promise((r) => setTimeout(r, 500 + attempt * 400))
+  const hydrateTerminalClips = useCallback(async (payload: ProjectStatusPayload) => {
+    const controller = new AbortController()
+    listHydrationAbortRef.current?.abort()
+    listHydrationAbortRef.current = controller
+    const startedAt = Date.now()
+    const loadedCount = clipsRef.current.length
+    const expectedCount = payload.clipCount ?? (loadedCount > 0 ? loadedCount : undefined)
+    setListLoading(true)
+    setListError(null)
+    console.info('[clips:list] hydrate_begin', {
+      projectId,
+      status: payload.status,
+      expectedCount: expectedCount ?? null,
+      loadedCount,
+    })
+    try {
+      const result = await loadProjectClipsWithRetry<ClipCardData>({
+        signal: controller.signal,
+        expectedCount,
+        maxAttempts: 4,
+        baseDelayMs: 500,
+        timeoutMs: 8_000,
+        load: async (signal) => {
+          const data = await listProjectClips(projectId, 'score', { signal })
+          return data.clips as ClipCardData[]
+        },
+      })
+      if (controller.signal.aborted) return
+      setStatus(payload.status)
+      setError(payload.error ?? null)
+      if (result.expectedMissing) {
+        setListError('The project reports saved clips, but the list is still catching up. Retry the clips list.')
+        console.warn('[clips:list] hydrate_expected_missing', {
+          projectId,
+          status: payload.status,
+          expectedCount: expectedCount ?? null,
+          loadedCount,
+          attempts: result.attempts,
+          elapsedMs: Date.now() - startedAt,
+        })
+        return
+      }
+      setClips(result.rows)
+      setReadyHydrated(true)
+      console.info('[clips:list] hydrate_end', {
+        projectId,
+        status: payload.status,
+        rows: result.rows.length,
+        attempts: result.attempts,
+        elapsedMs: Date.now() - startedAt,
+      })
+    } catch (hydrateError) {
+      if (controller.signal.aborted) return
+      setStatus(payload.status)
+      setError(payload.error ?? null)
+      setListError(clipsListErrorMessage(hydrateError))
+      console.warn('[clips:list] hydrate_failed', {
+        projectId,
+        status: payload.status,
+        errorName: hydrateError instanceof Error ? hydrateError.name : 'UnknownError',
+        elapsedMs: Date.now() - startedAt,
+      })
+    } finally {
+      if (listHydrationAbortRef.current === controller) {
+        listHydrationAbortRef.current = null
+        setListLoading(false)
+      }
     }
-    setClips(list)
-    setError(payload.error ?? null)
-    setStatus('READY')
-    setReadyHydrated(true)
   }, [projectId])
 
   useEffect(() => {
-    if (initialStatus === 'READY' && !readyHydrated) {
-      void hydrateReady({ status: 'READY' }).catch(() => setReadyHydrated(true))
+    return () => {
+      listHydrationAbortRef.current?.abort()
+      listHydrationAbortRef.current = null
     }
-  }, [initialStatus, readyHydrated, hydrateReady])
+  }, [projectId])
+
+  useEffect(() => {
+    if ((initialStatus === 'READY' || initialStatus === 'FAILED') && !readyHydrated) {
+      void hydrateTerminalClips({ status: initialStatus, error: initialError })
+    }
+  }, [initialStatus, initialError, readyHydrated, hydrateTerminalClips])
 
   const onByoReadyFromPoll = useCallback(
     (payload: { primaryClipId?: string | null }) => {
       if (payload.primaryClipId) setPollPrimaryClipId(payload.primaryClipId)
-      void hydrateReady({ status: 'READY', clipCount: 1 }).catch(() => {
-        setStatus('READY')
-        setReadyHydrated(true)
-      })
+      void hydrateTerminalClips({ status: 'READY', clipCount: 1 })
     },
-    [hydrateReady],
+    [hydrateTerminalClips],
   )
-
   const terminalRef = useRef(readyFromServer || ['READY', 'FAILED', 'CANCELED'].includes(initialStatus))
   const pollSnapshotRef = useRef({
     status: initialStatus,
@@ -375,15 +482,20 @@ export function ProjectClipsView({
         const next = merged.status
         if (next === 'READY') {
           terminalRef.current = true
-          try {
-            await hydrateReady(data)
-          } catch {
-            setStatus('READY')
-            setReadyHydrated(true)
+          await hydrateTerminalClips(data)
+          return
+        }
+        if (next === 'FAILED') {
+          terminalRef.current = true
+          if (liveClipCount > 0 || clipsRef.current.length > 0) {
+            await hydrateTerminalClips(data)
+          } else {
+            setStatus(next)
+            setError(data.error ?? null)
           }
           return
         }
-        if (next === 'FAILED' || next === 'CANCELED') {
+        if (next === 'CANCELED') {
           terminalRef.current = true
         }
         setStatus(next)
@@ -397,7 +509,7 @@ export function ProjectClipsView({
     return () => {
       stop = true
     }
-  }, [projectId, hydrateReady, readyFromServer, initialStatus, isStreamer, refreshClipsList])
+  }, [projectId, hydrateTerminalClips, readyFromServer, initialStatus, isStreamer, refreshClipsList])
 
   const failureCopy = describeClipProjectFailure({
     status,
@@ -405,10 +517,15 @@ export function ProjectClipsView({
     clipCount: clips.length,
     stage: progressStage,
   })
-  const desc = pageDescription(status, error, clips.length)
+  const desc =
+    listLoading && clips.length === 0
+      ? 'Loading your saved clips…'
+      : listError && clips.length === 0
+        ? listError
+        : pageDescription(status, error, clips.length)
   const showResults =
-    (status === 'READY' && readyHydrated) ||
-    (status === 'FAILED' && readyHydrated && clips.length > 0)
+    (status === 'READY' && (readyHydrated || clips.length > 0)) ||
+    (status === 'FAILED' && clips.length > 0)
   const processing = !showResults && status !== 'FAILED' && status !== 'CANCELED'
   const showProgressiveClips =
     processing && (clips.length > 0 || clipsTotal > 0 || clipsReady > 0)
@@ -508,6 +625,29 @@ export function ProjectClipsView({
         }
       />
       {autoAgentClipError ? <p role="alert" className="mb-3 text-sm text-destructive">AI Agent Clipper could not start: {autoAgentClipError}</p> : null}
+      {listError ? (
+        <Panel title="Clips list" description={listError}>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={listLoading}
+              onClick={() => void hydrateTerminalClips({
+                status,
+                error,
+                clipCount: clipsTotal > 0 ? clipsTotal : clips.length > 0 ? clips.length : undefined,
+              })}
+            >
+              {listLoading ? 'Retrying…' : 'Retry clips list'}
+            </Button>
+            {clips.length > 0 ? (
+              <span className="text-xs text-muted-foreground">
+                Loaded clips remain available while the list retries.
+              </span>
+            ) : null}
+          </div>
+        </Panel>
+      ) : null}
       {(isStreamer || (projectHasUpload && !byoProject)) ? <StreamerAgentClipMaker projectId={projectId} ready={status === 'READY'} videoAvailable={projectHasUpload} sourceKind={isStreamer?'stream':'upload'} sourceStartMs={sourceStartMs} sourceDurationMs={sourceDurationMs} /> : null}
       {status === 'FAILED' && !showResults ? (
         <Panel title="Project" description="This upload could not be processed.">

@@ -46,6 +46,31 @@ const listClipSelect = {
   updatedAt: true,
 } as const
 
+const CLIP_CARD_ROW_SIGN_CONCURRENCY = 4
+const STREAMER_PROJECT_SIGN_CONCURRENCY = 3
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (!items.length) return []
+  const out = new Array<R>(items.length)
+  let nextIndex = 0
+  const workerCount = Math.min(Math.max(1, concurrency), items.length)
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const index = nextIndex
+        nextIndex += 1
+        if (index >= items.length) return
+        out[index] = await fn(items[index]!, index)
+      }
+    }),
+  )
+  return out
+}
+
 export async function listProjectClips(
   workspaceId: string,
   projectId: string,
@@ -85,30 +110,60 @@ export async function listProjectClips(
     ? clips
     : clips.filter((c) => !isClipUserHidden(c.aiMeta))
 
-  const needsProjectFallback = visible.some((c) => !c.previewKey && !c.posterKey && !c.sourceSegKey)
   const projectFallbackKey = project.proxyKey || project.upload?.key || null
-  let projectFallback: { url: string; offsetMs: number } | null = null
-  if (needsProjectFallback && projectFallbackKey) {
-    try {
-      const sourceStorage = await getClipStorageForObjectKey(projectFallbackKey, project.upload?.storageDriver ?? null)
-      projectFallback = {
-        url: await createCachedSignedDownloadUrl(sourceStorage, projectFallbackKey, {
-          versionHint: `clip-card-source:${projectId}`,
-        }),
-        offsetMs: project.proxyKey ? Number(project.rangeStartMs ?? 0) : 0,
-      }
-    } catch (error) {
-      console.warn('[clips:cards] thumbnail source_fallback_sign_failed', { projectId, error: String(error) })
+  let projectFallbackPromise: Promise<{ url: string; offsetMs: number } | null> | null = null
+  const loadProjectFallback = async () => {
+    if (!projectFallbackKey) return null
+    if (!projectFallbackPromise) {
+      projectFallbackPromise = (async () => {
+        try {
+          const sourceStorage = await getClipStorageForObjectKey(
+            projectFallbackKey,
+            project!.upload?.storageDriver ?? null,
+          )
+          return {
+            url: await createCachedSignedDownloadUrl(sourceStorage, projectFallbackKey, {
+              versionHint: `clip-card-source:${projectId}`,
+            }),
+            offsetMs: project!.proxyKey ? Number(project!.rangeStartMs ?? 0) : 0,
+          }
+        } catch (fallbackError) {
+          console.warn('[clips:cards] thumbnail source_fallback_sign_failed', {
+            projectId,
+            errorName: fallbackError instanceof Error ? fallbackError.name : 'UnknownError',
+          })
+          return null
+        }
+      })()
     }
+    return projectFallbackPromise
   }
 
-  let rows = await Promise.all(
-    visible.map(async (c) => {
+  const signStarted = Date.now()
+  let mediaSignFailures = 0
+  let rows = await mapWithConcurrency(
+    visible,
+    CLIP_CARD_ROW_SIGN_CONCURRENCY,
+    async (c) => {
       const versionHint = c.updatedAt.toISOString()
       const signOpts = { versionHint }
+      const signMedia = async (key: string, media: 'preview' | 'poster') => {
+        try {
+          return await createCachedSignedDownloadUrl(storage, key, signOpts)
+        } catch (signError) {
+          mediaSignFailures += 1
+          console.warn('[clips:cards] media_sign_failed', {
+            projectId,
+            clipId: c.id,
+            media,
+            errorName: signError instanceof Error ? signError.name : 'UnknownError',
+          })
+          return null
+        }
+      }
       const [previewUrl, posterUrl] = await Promise.all([
-        c.previewKey ? createCachedSignedDownloadUrl(storage, c.previewKey, signOpts) : Promise.resolve(null),
-        c.posterKey ? createCachedSignedDownloadUrl(storage, c.posterKey, signOpts) : Promise.resolve(null),
+        c.previewKey ? signMedia(c.previewKey, 'preview') : Promise.resolve(null),
+        c.posterKey ? signMedia(c.posterKey, 'poster') : Promise.resolve(null),
       ])
       let fallbackSourceUrl: string | null = null
       let fallbackStartMs = c.startMs
@@ -121,13 +176,19 @@ export async function listProjectClips(
             )
             fallbackSourceUrl = await createCachedSignedDownloadUrl(segmentStorage, c.sourceSegKey, { versionHint })
             fallbackStartMs = Math.max(0, c.startMs - Number(c.sourceSegStartMs ?? c.startMs))
-          } catch (error) {
-            console.warn('[clips:cards] thumbnail segment_fallback_sign_failed', { clipId: c.id, error: String(error) })
+          } catch (segmentError) {
+            console.warn('[clips:cards] thumbnail segment_fallback_sign_failed', {
+              clipId: c.id,
+              errorName: segmentError instanceof Error ? segmentError.name : 'UnknownError',
+            })
           }
         }
-        if (!fallbackSourceUrl && projectFallback) {
-          fallbackSourceUrl = projectFallback.url
-          fallbackStartMs = Math.max(0, c.startMs - projectFallback.offsetMs)
+        if (!fallbackSourceUrl) {
+          const projectFallback = await loadProjectFallback()
+          if (projectFallback) {
+            fallbackSourceUrl = projectFallback.url
+            fallbackStartMs = Math.max(0, c.startMs - projectFallback.offsetMs)
+          }
         }
       }
       return {
@@ -148,8 +209,17 @@ export async function listProjectClips(
         aiMeta: c.aiMeta,
         edits: c.edits,
       }
-    }),
+    },
   )
+  console.info('[page:timing]', {
+    path: '/app/clips/[projectId]',
+    query: 'clip_url_signing',
+    projectId,
+    elapsedMs: Date.now() - signStarted,
+    rows: rows.length,
+    signFailures: mediaSignFailures,
+    concurrency: CLIP_CARD_ROW_SIGN_CONCURRENCY,
+  })
 
   if (opts?.skipTranscriptEnrichment) {
     return rows
@@ -225,15 +295,20 @@ export async function listStreamerHubProjectClips(workspaceId: string, projectId
     clipsById.set(clip.projectId, group)
   }
   const signStarted = Date.now()
-  const lists = await Promise.all(projectIds.map((projectId) => {
-    const project = projectById.get(projectId)
-    return project
-      ? listProjectClips(workspaceId, projectId, 'score', {
-          skipTranscriptEnrichment: true, project,
-          prefetchedClips: clipsById.get(projectId) ?? [],
-        })
-      : Promise.resolve(null)
-  }))
+  const lists = await mapWithConcurrency(
+    projectIds,
+    STREAMER_PROJECT_SIGN_CONCURRENCY,
+    async (projectId) => {
+      const project = projectById.get(projectId)
+      return project
+        ? listProjectClips(workspaceId, projectId, 'score', {
+            skipTranscriptEnrichment: true,
+            project,
+            prefetchedClips: clipsById.get(projectId) ?? [],
+          })
+        : null
+    },
+  )
   const visible = lists.flatMap((rows) => rows ?? [])
   console.info('[page:timing]', {
     path: '/app/streamer', query: 'clip_url_signing',

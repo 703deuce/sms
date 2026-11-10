@@ -132,11 +132,13 @@ export function estimateCredits(body: { durationMs: number; rangeStartMs: number
 export function listProjectClips(
   projectId: string,
   sort: 'score' | 'timeline' = 'score',
-  opts?: { includeHidden?: boolean },
+  opts?: { includeHidden?: boolean; signal?: AbortSignal },
 ) {
   const qs = new URLSearchParams({ sort })
   if (opts?.includeHidden) qs.set('includeHidden', '1')
-  return clipsFetch<{ clips: unknown[] }>('/api/clips/projects/' + projectId + '/clips?' + qs.toString())
+  return clipsFetch<{ clips: unknown[] }>('/api/clips/projects/' + projectId + '/clips?' + qs.toString(), {
+    signal: opts?.signal,
+  })
 }
 
 export function exportClip(
