@@ -23,7 +23,7 @@ import { createEditorialHandoff, runEditorialRole, recoverEditorialSelections, c
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
 import {candidateWindows,clipCandidateLimit,overlapFraction,rankCandidate,type ClipCandidate} from '@/lib/ai-producer-agent/clip-mode/candidates'
 import {storyCoverage} from '@/lib/ai-producer-agent/clip-mode/story-coverage'
-import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isNonBlockingEditorialQaIssue,publishDisposition,qaTranscriptWindow,regateAfterRepair,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,evaluateCandidateAfterPlan,honorTargetDuration,qaTranscriptWindow,repairClipBoundaries,stitchJoinTransitions,storyPlanFromHandoff} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {CLIP_AGENT_EXPORT_PRESET,editVersionFromSnapshot,isUniqueConflict,queueClipExportOnce,shouldAutoExportPublishedClip,shouldAutoPlanClipMotion} from './clip-agent-export'
 import {instructionAsksToCompile,mergeTopicCandidates,topicPassagesFromTranscript,topicQueryFromInstruction,whyThisClip} from '@/lib/ai-producer-agent/clip-mode/topic-search'
 import {createSourceClip,publishClipScore,discardClip} from '@/lib/server/ai-producer-agent/clip-mode-store'
@@ -181,64 +181,31 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           continue
         }
         const finalCuts=cuts
-        // fullSourceWords is the parent transcript, not the candidate-scoped window.
-        const safetyRisks=clipEditorialAudit(finalCuts,fullSourceWords,{storyPlan:mode==='story'})
+        // Bind the parent transcript here. fullSourceWords is only a
+        // parameter of runOneOutput; the candidate loop must not rely on it.
+        const fullSourceWords=ctx.cache.words??[]
+        const storyPlan=storyPlanFromHandoff(out.editorialHandoff)
+        const evaluated=evaluateCandidateAfterPlan({
+          cuts:finalCuts,words:fullSourceWords,storyPlan,
+          qa:out.editorialHandoff.review,
+        })
+        const safetyRisks=evaluated.safetyRisks
         await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
           tool:'clip_editorial_safety_audit',kind:'validate',
           argsSummary:JSON.stringify({clipId:out.clipId,candidateIndex:candidate.index}),
           resultSummary:JSON.stringify({point:out.editorialHandoff.outline.logline,risks:safetyRisks,bridges:out.contextBridges}).slice(0,3600)})
-        const qa=out.editorialHandoff.review
-        // An LLM may still mention preset length in QA prose. Strip only
-        // duration-only criticisms; leave actual continuity/content flaws.
-        const substantiveIssues=(qa?.issues??[]).filter(issue=>!isNonBlockingEditorialQaIssue(issue))
-        // Regex can detect a suspicious "but", not whether it changes
-        // meaning. Ground the final decision in the explicit model QA, which
-        // saw the complete original transcript and the flagged risk spans.
-        const criticalStructural=safetyRisks.filter(r=>
-          r.code==='invalid_passage'||r.code==='chronology')
-        const warningOnlyModelFailure=Boolean(qa&&qa.pass===false&&
-          (qa.issues?.length??0)>0&&substantiveIssues.length===0)
-        const veto=shouldVetoPublish({
-          risks:safetyRisks,qaPass:qa?.pass??null,qaIssues:substantiveIssues,
-        })||criticalStructural.length>0||(!qa&&safetyRisks.some(r=>r.code==='missing_qualification'))
-        // Incomplete QA (budget exhausted, timeout, crash) must not publish
-        // as a clean pass. Listening-only or duration-only model remarks
-        // are warnings, not vetoes.
-        const qaComplete=Boolean(qa)&&!substantiveIssues.some(issue=>/could not complete|specialist_budget_exhausted/i.test(issue))
-        let qaPass:boolean|null=veto?false:
-          qaComplete&&qa?(Boolean(qa.pass)||warningOnlyModelFailure)&&substantiveIssues.length===0:null
-        let workingCuts=finalCuts
-        let workingRisks=safetyRisks
-        let repairLanded=false
         // Held drafts get their QA revisions applied executably (deterministic
         // boundary / join / opening repair) and are re-gated once. No paid retry.
-        if(veto||qaPass!==true){
-          const revised=repairClipBoundaries(workingCuts,fullSourceWords,{
-            maxEarlierSetupMs:12_000,maxLaterConclusionMs:6_500})
-          if(revised.repaired){
-            workingCuts=revised.cuts
-            out.editorialHandoff.cutPlan=workingCuts
-            out.notes.push(...revised.notes.slice(0,8).map((n:string)=>'Editorial revision applied: '+n))
-            try{
-              await persistRevisedCuts(ctx,out,workingCuts)
-            }catch(error){
-              out.notes.push('Editorial revision persist failed; kept prior draft: '+String((error as Error).message).slice(0,180))
-            }
-            workingRisks=clipEditorialAudit(workingCuts,fullSourceWords,{storyPlan:mode==='story'})
-            repairLanded=true
+        const {qaComplete,workingCuts,combinedIssues,disposition}=evaluated
+        if(evaluated.repairLanded){
+          out.editorialHandoff.cutPlan=workingCuts
+          out.notes.push(...evaluated.repairNotes.map((n:string)=>'Editorial revision applied: '+n))
+          try{
+            await persistRevisedCuts(ctx,out,workingCuts)
+          }catch(error){
+            out.notes.push('Editorial revision persist failed; kept prior draft: '+String((error as Error).message).slice(0,180))
           }
         }
-        // Re-gate: after a landed repair the historical QA notes and qaPass
-        // describe the OLD cuts, so refresh them from the post-repair audit.
-        const regate=(veto||qaPass!==true)
-          ?regateAfterRepair({repaired:repairLanded,workingRisks,
-            historicalQaIssues:substantiveIssues,qaPassBefore:qaPass})
-          :{qaPass,qaIssues:[...substantiveIssues]}
-        qaPass=regate.qaPass
-        const combinedIssues=regate.qaIssues
-        const disposition=publishDisposition({
-          risks:workingRisks,qaPass:qaPass,qaIssues:combinedIssues,
-        })
         const durationSeconds=workingCuts.reduce((n,c)=>n+(c.endMs-c.startMs),0)/1000
         const score=rankCandidate({finderScore:candidate.finderScore,
           qaPass:disposition==='publish',issues:combinedIssues.length,
@@ -250,7 +217,6 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           continue
         }
         if(disposition==='publish_needs_review'){
-          qaPass=false
           out.needsReview=true
           out.notes.push('Published with needsReview: '+combinedIssues.join('; ').slice(0,420))
         }
@@ -457,7 +423,7 @@ async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget,
       fullTranscript:completeTranscriptWords(
         qaTranscriptWindow(fullSourceWords,out.editorialHandoff.cutPlan,ctx.sources[0]!.rangeMs!),
         true),
-      flaggedContextAndQualificationRisks:clipEditorialAudit(out.editorialHandoff.cutPlan,fullSourceWords,{storyPlan:ctx.config.storyMode==='clip_story_v1'}),
+      flaggedContextAndQualificationRisks:clipEditorialAudit(out.editorialHandoff.cutPlan,fullSourceWords,{storyPlan:storyPlanFromHandoff(out.editorialHandoff)}),
       ...(ctx.config.visualEvidenceMode==='visual_audio' && ctx.cache.visualEvidence ? {
         visualAudioEvidence: ctx.cache.visualEvidence,
         selectedVisualBeats:out.editorialHandoff.outline.visualBeats??[],

@@ -134,9 +134,52 @@ export const LONG_SOURCE_GAP_MS=5*60_000
 /** A kept cut that extends this far past the last overlapping transcript word is uncovered. */
 export const UNCOVERED_CUT_TAIL_MS=1_500
 
+export type StoryBeat={startMs:number;endMs:number}
+
 export type ClipEditorialAuditOptions={
-  /** Planned multi-beat story. Large source gaps are needsReview, not critical. */
-  storyPlan?:boolean
+  /** Timed beat plan from the paper-edit footage. A long jump is planned
+   *  only when both joined cuts map to adjacent beats in this list. */
+  storyPlan?:readonly StoryBeat[]
+}
+
+/** Index of the unique beat a cut maps to, or -1 if none / ambiguous. */
+export function beatIndexForCut(cut:ClipSpan,plan:readonly StoryBeat[]):number{
+  if(!plan.length)return -1
+  const mid=(cut.startMs+cut.endMs)/2
+  const containing:number[]=[]
+  for(let i=0;i<plan.length;i++){
+    const beat=plan[i]!
+    if(mid>=beat.startMs&&mid<=beat.endMs)containing.push(i)
+  }
+  if(containing.length===1)return containing[0]!
+  let best=-1,bestOv=0,ties=0
+  for(let i=0;i<plan.length;i++){
+    const beat=plan[i]!
+    const ov=Math.max(0,Math.min(cut.endMs,beat.endMs)-Math.max(cut.startMs,beat.startMs))
+    if(ov>bestOv){bestOv=ov;best=i;ties=1}
+    else if(ov===bestOv&&ov>0)ties++
+  }
+  if(containing.length!==1&&bestOv>0&&ties===1)return best
+  return -1
+}
+
+/** A jump is planned only when both cuts map to different adjacent beats. */
+export function isPlannedAdjacentJump(
+  left:ClipSpan,right:ClipSpan,storyPlan?:readonly StoryBeat[],
+):boolean{
+  if(!storyPlan?.length)return false
+  const i=beatIndexForCut(left,storyPlan)
+  const j=beatIndexForCut(right,storyPlan)
+  return i>=0&&j>=0&&i!==j&&Math.abs(j-i)===1
+}
+
+/** Paper-edit footage windows are the actual beat plan; never infer from cutPlan. */
+export function storyPlanFromHandoff(handoff?:{
+  footage?:readonly {startMs:number;endMs:number}[]
+}|null):StoryBeat[]|undefined{
+  const footage=handoff?.footage
+  if(!footage?.length)return undefined
+  return footage.map(b=>({startMs:b.startMs,endMs:b.endMs}))
 }
 
 export function clipEditorialAudit(
@@ -158,18 +201,19 @@ export function clipEditorialAudit(
         const minutes=Math.round(gapMs/60000)
         const landing=at(words,cut.startMs,cut.endMs)
         const landingOpen=stripLeadingFiller(phrase(landing.slice(0,8)))
+        const planned=isPlannedAdjacentJump(ordered[i-1]!,cut,opts?.storyPlan)
         // A planned jump still has to land on a self-contained sentence start.
         // Landing on a context-dependent line ("Talk to me.") misrepresents
-        // chronology — critical even when a multi-beat story was planned.
+        // chronology — critical even when the two cuts map to adjacent beats.
         if(landing.length&&openingIsContextDependent(words,cut,landingOpen)){
-          issues.push({code:'chronology',detail:'A '+minutes+'-minute source jump lands on a context-dependent line, which misrepresents chronology'+(opts?.storyPlan?' even in a planned multi-beat story':'')+': '+landingOpen.slice(0,75),passageIndex:i})
+          issues.push({code:'chronology',detail:'A '+minutes+'-minute source jump lands on a context-dependent line, which misrepresents chronology'+(planned?' even in a planned multi-beat story':'')+': '+landingOpen.slice(0,75),passageIndex:i})
           issues.push({code:'incoherent_passage',detail:'A '+minutes+'-minute source jump glues a later context-dependent opening onto earlier speech',passageIndex:i})
-        }else if(opts?.storyPlan){
+        }else if(planned){
           issues.push({code:'long_source_gap',detail:'Joined cuts sit '+minutes+' minutes apart in the source of a planned multi-beat story',passageIndex:i})
         }else{
-          // No story plan: a jump this large is critical chronology / incoherence.
-          issues.push({code:'chronology',detail:'Joined cuts sit '+minutes+' minutes apart in the source with no planned multi-beat story',passageIndex:i})
-          issues.push({code:'incoherent_passage',detail:'A '+minutes+'-minute source jump glues together passages that were not planned as a multi-beat story',passageIndex:i})
+          // Unplanned: no beat plan, a skipped beat, or a cut that does not map.
+          issues.push({code:'chronology',detail:'Joined cuts sit '+minutes+' minutes apart in the source'+(opts?.storyPlan?.length?' and do not map to adjacent beats in the story plan':' with no planned multi-beat story'),passageIndex:i})
+          issues.push({code:'incoherent_passage',detail:'A '+minutes+'-minute source jump glues together passages that were not planned as adjacent story beats',passageIndex:i})
         }
       }
     }
@@ -510,6 +554,76 @@ export function regateAfterRepair(input:{
  * needsReview. Critical drafts are never returned. If only critical drafts
  * remain, the result is empty and the run should fail honestly.
  */
+/**
+ * Post-plan editorial gate used by the candidate loop after a cut plan
+ * exists: audit, one executable repair, re-audit, re-gate, disposition.
+ * Callers must pass the parent transcript (`ctx.cache.words`), not a
+ * candidate-scoped window.
+ */
+export function evaluateCandidateAfterPlan(input:{
+  cuts:readonly ClipSpan[]
+  words:readonly TimedWord[]
+  storyPlan?:readonly StoryBeat[]
+  qa?:{pass?:boolean|null;issues?:readonly string[]}|null
+}):{
+  safetyRisks:EditorialRisk[]
+  workingCuts:ClipSpan[]
+  workingRisks:EditorialRisk[]
+  substantiveIssues:string[]
+  criticalStructural:EditorialRisk[]
+  warningOnlyModelFailure:boolean
+  veto:boolean
+  qaComplete:boolean
+  qaPass:boolean|null
+  combinedIssues:string[]
+  disposition:PublishDisposition
+  repairLanded:boolean
+  repairNotes:string[]
+}{
+  const opts=input.storyPlan!==undefined?{storyPlan:input.storyPlan}:undefined
+  const safetyRisks=clipEditorialAudit(input.cuts,input.words,opts)
+  const qa=input.qa
+  const substantiveIssues=(qa?.issues??[]).filter(issue=>!isNonBlockingEditorialQaIssue(issue))
+  const criticalStructural=safetyRisks.filter(r=>
+    r.code==='invalid_passage'||r.code==='chronology')
+  const warningOnlyModelFailure=Boolean(qa&&qa.pass===false&&
+    (qa.issues?.length??0)>0&&substantiveIssues.length===0)
+  const veto=shouldVetoPublish({
+    risks:safetyRisks,qaPass:qa?.pass??null,qaIssues:substantiveIssues,
+  })||criticalStructural.length>0||(!qa&&safetyRisks.some(r=>r.code==='missing_qualification'))
+  const qaComplete=Boolean(qa)&&!substantiveIssues.some(issue=>/could not complete|specialist_budget_exhausted/i.test(issue))
+  let qaPass:boolean|null=veto?false:
+    qaComplete&&qa?(Boolean(qa.pass)||warningOnlyModelFailure)&&substantiveIssues.length===0:null
+  let workingCuts=[...input.cuts]
+  let workingRisks=safetyRisks
+  let repairLanded=false
+  const repairNotes:string[]=[]
+  if(veto||qaPass!==true){
+    const revised=repairClipBoundaries(workingCuts,input.words,{
+      maxEarlierSetupMs:12_000,maxLaterConclusionMs:6_500})
+    if(revised.repaired){
+      workingCuts=revised.cuts
+      repairNotes.push(...revised.notes.slice(0,8))
+      workingRisks=clipEditorialAudit(workingCuts,input.words,opts)
+      repairLanded=true
+    }
+  }
+  const regate=(veto||qaPass!==true)
+    ?regateAfterRepair({repaired:repairLanded,workingRisks,
+      historicalQaIssues:substantiveIssues,qaPassBefore:qaPass})
+    :{qaPass,qaIssues:[...substantiveIssues]}
+  qaPass=regate.qaPass
+  const combinedIssues=regate.qaIssues
+  const disposition=publishDisposition({
+    risks:workingRisks,qaPass,qaIssues:combinedIssues,
+  })
+  return {
+    safetyRisks,workingCuts,workingRisks,substantiveIssues,criticalStructural,
+    warningOnlyModelFailure,veto,qaComplete,qaPass,combinedIssues,disposition,
+    repairLanded,repairNotes,
+  }
+}
+
 export function chooseFallbackPublications<T>(
   held:readonly T[],
   publishedCount:number,

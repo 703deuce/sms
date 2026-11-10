@@ -2,7 +2,7 @@ import {describe,expect,it} from 'vitest'
 import {readFileSync} from 'node:fs'
 import {dirname,join} from 'node:path'
 import {fileURLToPath} from 'node:url'
-import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isCriticalEditorialFailure,isCriticalQaIssue,isNeedsReviewQaIssue,isNonBlockingEditorialQaIssue,JOIN_ONSET_PAD_MS,LONG_SOURCE_GAP_MS,MIN_CLIP_TAIL_MS,publishDisposition,regateAfterRepair,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions,type EditorialRisk} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {beatIndexForCut,chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,evaluateCandidateAfterPlan,honorTargetDuration,isCriticalEditorialFailure,isCriticalQaIssue,isNeedsReviewQaIssue,isNonBlockingEditorialQaIssue,isPlannedAdjacentJump,JOIN_ONSET_PAD_MS,LONG_SOURCE_GAP_MS,MIN_CLIP_TAIL_MS,publishDisposition,regateAfterRepair,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions,storyPlanFromHandoff,type EditorialRisk,type StoryBeat} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {selectMomentFlowTrim} from '@/lib/ai-producer-agent/clip-mode/moment-flow'
 import {
   clipAgentExportIdempotencyKey,
@@ -824,8 +824,8 @@ describe('clip agent export idempotency',()=>{
 
 type Word={w:string;s:number;e:number}
 type Cut={startMs:number;endMs:number}
-type Draft={clipId:string|null;rejected:boolean;cuts:Cut[];qaIssues:string[];words:Word[]}
-type Fixture={runId:string;drafts:Draft[]}
+type Draft={clipId:string|null;rejected:boolean;cuts:Cut[];qaIssues:string[];words:Word[];mode?:'story'|'moment';storyPlan?:StoryBeat[]}
+type Fixture={runId:string;drafts:Draft[];mode?:'story'|'moment';storyPlan?:StoryBeat[]}
 
 const fixtureDir=dirname(fileURLToPath(import.meta.url))
 
@@ -833,31 +833,18 @@ function loadReplayFixture(name:string):Fixture{
   return JSON.parse(readFileSync(join(fixtureDir,'fixtures',name),'utf8')) as Fixture
 }
 
-function replayDraft(draft:Draft){
+function replayDraft(draft:Draft,fixture?:Fixture){
   if(draft.rejected||!draft.clipId||!draft.cuts.length){
     return {clipId:draft.clipId,disposition:'skip_rejected' as const,published:false,needsReview:false,dropped:false,critical:false}
   }
-  const substantive=draft.qaIssues.filter((issue:string)=>!isNonBlockingEditorialQaIssue(issue))
-  const words=draft.words
-  const initialRisks=words.length?clipEditorialAudit(draft.cuts,words):[]
-  const qaPassBefore:boolean|null=false
-  const veto=shouldVetoPublish({risks:initialRisks,qaPass:qaPassBefore,qaIssues:substantive})
-  let workingCuts=draft.cuts
-  let workingRisks=initialRisks
+  const storyPlan=draft.storyPlan??fixture?.storyPlan
   // Historical QA on these runs did not pass clean, so always apply the one
-  // deterministic repair pass (same as orchestrator when qaPass !== true).
-  void veto
-  const revised=repairClipBoundaries(workingCuts,words,{maxEarlierSetupMs:12_000,maxLaterConclusionMs:6_500})
-  let repairLanded=false
-  if(revised.repaired){
-    workingCuts=revised.cuts
-    workingRisks=words.length?clipEditorialAudit(workingCuts,words):workingRisks
-    repairLanded=true
-  }
-  const {qaPass,qaIssues:combinedIssues}=regateAfterRepair({
-    repaired:repairLanded,workingRisks,historicalQaIssues:substantive,qaPassBefore,
+  // deterministic repair pass (same as the orchestrator candidate loop).
+  const evaluated=evaluateCandidateAfterPlan({
+    cuts:draft.cuts,words:draft.words,storyPlan,
+    qa:{pass:false,issues:draft.qaIssues},
   })
-  const disposition=publishDisposition({risks:workingRisks,qaPass,qaIssues:combinedIssues})
+  const {workingRisks,combinedIssues,disposition}=evaluated
   const critical=isCriticalEditorialFailure(workingRisks,combinedIssues)
   return {
     clipId:draft.clipId,
@@ -866,12 +853,13 @@ function replayDraft(draft:Draft){
     needsReview:disposition==='publish_needs_review',
     dropped:disposition==='drop',
     critical,
+    workingRisks,
   }
 }
 
 function replayRun(fixture:Fixture){
   type ReplayRow=ReturnType<typeof replayDraft>
-  const results=fixture.drafts.map((d:Draft)=>replayDraft(d))
+  const results=fixture.drafts.map((d:Draft)=>replayDraft(d,fixture))
   let published=results.filter((r:ReplayRow)=>r.published)
   const dropped=results.filter((r:ReplayRow)=>r.dropped)
   let fallbackUsed=false
@@ -895,10 +883,13 @@ function replayRun(fixture:Fixture){
 // Re-gate after repair drops stale historical QA notes, so clips whose
 // post-repair audit is empty publish clean (QA projection: 10+4 and 13+3).
 // Later post-repair checks change these vs 10+4 / 13+3:
-// a3c clip_88a083b1 (52-minute jump) is a critical drop;
-// 7574 clip_5afb4015 and clip_1d23876e are needsReview (truncated fixture words);
-// a3c clip_a961dac4 and clip_af264bcf, and 7574 clip_31f33843 and clip_099c2071,
-// are needsReview for unfulfilled "Here's why." setups.
+// a3c: clip_88a083b1 (52-minute Talk-to-me jump) and clip_ff62eedc
+// (incoherent_passage) drop; clip_a961dac4, clip_af264bcf, clip_07f113cc
+// are needsReview for unfulfilled setups; others as replayed.
+// 7574: clip_5afb4015 and clip_1d23876e were needsReview for uncovered_cut
+// while words stopped at ~452s; extended official transcript words now
+// cover every kept cut, so both flag unfinished_ending (payoff) instead.
+// Counts stay 9 clean + 7 needsReview + 0 dropped.
 const expectedA3c={published:13,clean:7,needsReview:6,dropped:2}
 const expected7574={published:16,clean:9,needsReview:7,dropped:0}
 
@@ -923,7 +914,12 @@ describe('post-repair chronology gap and transcript coverage',()=>{
     // A planned jump still has to land on a self-contained sentence start.
     // "Talk to me." is a context-dependent uptake, so this is a chronology
     // misrepresentation even when a multi-beat story was planned.
-    const planned=clipEditorialAudit(cuts,words,{storyPlan:true})
+    const adjacentPlan:StoryBeat[]=[
+      {startMs:685815,endMs:726140},
+      {startMs:3863830,endMs:3925190},
+    ]
+    expect(isPlannedAdjacentJump(cuts[1]!,cuts[2]!,adjacentPlan)).toBe(true)
+    const planned=clipEditorialAudit(cuts,words,{storyPlan:adjacentPlan})
     expect(planned.some((x:EditorialRisk)=>x.code==='chronology'&&x.passageIndex===2)).toBe(true)
     expect(planned.some((x:EditorialRisk)=>x.code==='incoherent_passage'&&x.passageIndex===2)).toBe(true)
     expect(planned.some((x:EditorialRisk)=>x.code==='long_source_gap')).toBe(false)
@@ -940,10 +936,94 @@ describe('post-repair chronology gap and transcript coverage',()=>{
       {w:'We',s:0.0,e:0.2},{w:'created',s:0.2,e:0.5},{w:'the',s:0.5,e:0.7},{w:'commission.',s:0.7,e:1.2},
       {w:'Prices',s:304.0,e:304.3},{w:'went',s:304.3,e:304.5},{w:'up.',s:304.5,e:304.9},
     ]
-    const planned=clipEditorialAudit(cuts,words,{storyPlan:true})
+    const adjacentPlan:StoryBeat[]=[
+      {startMs:0,endMs:1300},
+      {startMs:5*60_000+4000,endMs:5*60_000+5000},
+    ]
+    expect(isPlannedAdjacentJump(cuts[0]!,cuts[1]!,adjacentPlan)).toBe(true)
+    const planned=clipEditorialAudit(cuts,words,{storyPlan:adjacentPlan})
     expect(planned.some((x:EditorialRisk)=>x.code==='long_source_gap'&&x.passageIndex===1)).toBe(true)
     expect(planned.some((x:EditorialRisk)=>x.code==='chronology'||x.code==='incoherent_passage')).toBe(false)
     expect(publishDisposition({risks:planned,qaPass:true,qaIssues:planned.map((r:EditorialRisk)=>r.code+': '+r.detail)})).toBe('publish_needs_review')
+  })
+
+  it('treats a long jump as unplanned unless both cuts map to adjacent beats',()=>{
+    const cuts=[
+      {startMs:0,endMs:1300},
+      {startMs:5*60_000+4000,endMs:5*60_000+5000},
+    ]
+    const words=[
+      {w:'We',s:0.0,e:0.2},{w:'created',s:0.2,e:0.5},{w:'the',s:0.5,e:0.7},{w:'commission.',s:0.7,e:1.2},
+      {w:'Prices',s:304.0,e:304.3},{w:'went',s:304.3,e:304.5},{w:'up.',s:304.5,e:304.9},
+    ]
+    const skippedBeatPlan:StoryBeat[]=[
+      {startMs:0,endMs:1300},
+      {startMs:60_000,endMs:90_000},
+      {startMs:5*60_000+4000,endMs:5*60_000+5000},
+    ]
+    expect(beatIndexForCut(cuts[0]!,skippedBeatPlan)).toBe(0)
+    expect(beatIndexForCut(cuts[1]!,skippedBeatPlan)).toBe(2)
+    expect(isPlannedAdjacentJump(cuts[0]!,cuts[1]!,skippedBeatPlan)).toBe(false)
+    const skipped=clipEditorialAudit(cuts,words,{storyPlan:skippedBeatPlan})
+    expect(skipped.some((x:EditorialRisk)=>x.code==='chronology'&&x.passageIndex===1)).toBe(true)
+    expect(skipped.some((x:EditorialRisk)=>x.code==='incoherent_passage'&&x.passageIndex===1)).toBe(true)
+    expect(skipped.some((x:EditorialRisk)=>x.code==='long_source_gap')).toBe(false)
+    expect(publishDisposition({risks:skipped,qaPass:true,qaIssues:skipped.map((r:EditorialRisk)=>r.code+': '+r.detail)})).toBe('drop')
+
+    const unmappedPlan:StoryBeat[]=[{startMs:0,endMs:1300}]
+    expect(isPlannedAdjacentJump(cuts[0]!,cuts[1]!,unmappedPlan)).toBe(false)
+    const unmapped=clipEditorialAudit(cuts,words,{storyPlan:unmappedPlan})
+    expect(unmapped.some((x:EditorialRisk)=>x.code==='chronology')).toBe(true)
+    expect(publishDisposition({risks:unmapped,qaPass:true,qaIssues:unmapped.map((r:EditorialRisk)=>r.code+': '+r.detail)})).toBe('drop')
+
+    // mode==='story' / a boolean is no longer a plan; no timed beats => unplanned.
+    const noPlan=clipEditorialAudit(cuts,words)
+    expect(isPlannedAdjacentJump(cuts[0]!,cuts[1]!,undefined)).toBe(false)
+    expect(noPlan.some((x:EditorialRisk)=>x.code==='chronology')).toBe(true)
+    expect(storyPlanFromHandoff({footage:[]})).toBeUndefined()
+    expect(storyPlanFromHandoff({footage:skippedBeatPlan})).toEqual(skippedBeatPlan)
+  })
+
+  it('does not flag a 4:59 source gap and flags a 5:00 source gap',()=>{
+    const words=[
+      {w:'We',s:0.0,e:0.2},{w:'created',s:0.2,e:0.5},{w:'the',s:0.5,e:0.7},{w:'commission.',s:0.7,e:1.2},
+      {w:'Prices',s:300.0,e:300.3},{w:'went',s:300.3,e:300.5},{w:'up.',s:300.5,e:300.9},
+    ]
+    const justUnder=clipEditorialAudit([
+      {startMs:0,endMs:1300},
+      {startMs:1300+4*60_000+59_000,endMs:1300+4*60_000+59_000+1000},
+    ],words)
+    expect(1300+4*60_000+59_000-1300).toBe(299_000)
+    expect(justUnder.some((x:EditorialRisk)=>x.code==='long_source_gap'||x.code==='chronology'||x.code==='incoherent_passage')).toBe(false)
+
+    const atBoundary=clipEditorialAudit([
+      {startMs:0,endMs:1300},
+      {startMs:1300+5*60_000,endMs:1300+5*60_000+1000},
+    ],[
+      {w:'We',s:0.0,e:0.2},{w:'created',s:0.2,e:0.5},{w:'the',s:0.5,e:0.7},{w:'commission.',s:0.7,e:1.2},
+      {w:'Prices',s:301.3,e:301.6},{w:'went',s:301.6,e:301.8},{w:'up.',s:301.8,e:302.1},
+    ])
+    expect(1300+5*60_000-1300).toBe(LONG_SOURCE_GAP_MS)
+    expect(atBoundary.some((x:EditorialRisk)=>x.code==='chronology'&&x.passageIndex===1)).toBe(true)
+    expect(atBoundary.some((x:EditorialRisk)=>x.code==='incoherent_passage'&&x.passageIndex===1)).toBe(true)
+  })
+
+  it('drives the orchestrator post-plan path with a cut plan and keeps the candidate',()=>{
+    const cuts=[
+      {startMs:0,endMs:2000},
+      {startMs:4000,endMs:6000},
+    ]
+    const words=[
+      {w:'We',s:0.0,e:0.2},{w:'created',s:0.2,e:0.5},{w:'the',s:0.5,e:0.7},{w:'commission.',s:0.7,e:1.8},
+      {w:'Prices',s:4.0,e:4.3},{w:'went',s:4.3,e:4.5},{w:'up.',s:4.5,e:5.5},
+    ]
+    const storyPlan:StoryBeat[]=[{startMs:0,endMs:2000},{startMs:4000,endMs:6000}]
+    const result=evaluateCandidateAfterPlan({
+      cuts,words,storyPlan,qa:{pass:true,issues:[]},
+    })
+    expect(result.disposition).not.toBe('drop')
+    expect(result.workingCuts).toHaveLength(2)
+    expect(result.workingRisks.some((r:EditorialRisk)=>r.code==='chronology')).toBe(false)
   })
 
   it('flags a kept cut that the transcript window does not cover (5afb4015)',()=>{
