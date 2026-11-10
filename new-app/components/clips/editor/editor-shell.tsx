@@ -381,6 +381,7 @@ export function EditorShell({
   useEffect(() => {
     if (!compact || fullVideo || clipperStudio) return
     console.info('[editor:compact-mode] route-entry', { projectId, clipId })
+    console.info('[editor:compact-gaps] entry', { projectId, clipId })
   }, [compact, fullVideo, clipperStudio, projectId, clipId])
   useEffect(() => {
     if (compact) {

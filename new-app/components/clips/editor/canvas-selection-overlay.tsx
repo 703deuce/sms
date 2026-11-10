@@ -11,7 +11,10 @@
  * a prop has keyframes), so the export renders exactly what the preview shows.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { CLIP_EDITOR_CAPTION_FONT_FAMILIES } from '@/components/clips/editor/clip-editor-fonts'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { resolveT6CaptionPreset } from '@/lib/clips/caption-v2-bridge'
+import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
 import {
   isMediaLayerTarget,
   layerTransformAt,
@@ -390,6 +393,15 @@ export function CanvasSelectionOverlay({
     rot = { at: { x: top.x + ux * 22, y: top.y + uy * 22 }, stem: top }
   }
   const canEdit = !readOnly && selected != null && !locked(selected)
+  const captionCap = baseEdits.captions ?? {}
+  const captionPreset = resolveT6CaptionPreset(captionCap, t6CaptionPresetsEnabled())
+  const captionFont = captionCap.font?.trim() || captionPreset.font || 'Poppins'
+  const captionSize = captionCap.presetId?.startsWith('cp')
+    ? captionCap.userSizePct ?? captionPreset.sizePct
+    : captionCap.size ?? captionPreset.sizePct
+  const captionCase = captionCap.case ?? captionPreset.case
+  const captionColor = captionCap.colors?.a || captionPreset.active || '#FFFFFF'
+  const captionFonts = [...new Set<string>([...CLIP_EDITOR_CAPTION_FONT_FAMILIES, captionFont])]
   const W = box?.clientWidth ?? 0
   const H = box?.clientHeight ?? 0
   const pathLine =
@@ -486,17 +498,17 @@ export function CanvasSelectionOverlay({
           }}
           onPointerDown={(e) => e.stopPropagation()}
           role="toolbar"
-          aria-label="Selected layer"
+          aria-label={selected === 'captions' ? 'Caption style' : 'Selected layer'}
           data-testid="canvas-float-toolbar"
         >
           {selected === 'captions' && captionQuickStyle ? (
             <>
-              <select aria-label="Caption font family" data-testid="canvas-caption-font" className="h-6 max-w-24 rounded bg-black/60 px-1 text-white" value={baseEdits.captions?.font ?? 'Poppins'}
+              <select aria-label="Caption font family" data-testid="canvas-caption-font" className="h-6 max-w-28 rounded bg-black/60 px-1 text-white" value={captionFont}
                 onChange={(e) => onCommit({ ...baseRef.current, captions: { ...baseRef.current.captions, font: e.target.value } }, true)}>
-                {[...new Set(['Poppins', 'Anton', 'Montserrat Black', ...(baseEdits.captions?.font ? [baseEdits.captions.font] : [])])].map((font) => <option key={font} value={font}>{font}</option>)}
+                {captionFonts.map((font) => <option key={font} value={font}>{font.startsWith('user:') ? 'Custom font' : font}</option>)}
               </select>
               <input type="number" aria-label="Caption size percent" data-testid="canvas-caption-size" min={3} max={10} step={0.5} className="h-6 w-12 rounded bg-black/60 px-1 text-white"
-                value={baseEdits.captions?.presetId?.startsWith('cp') ? (baseEdits.captions?.userSizePct ?? 5) : (baseEdits.captions?.size ?? 5)}
+                value={captionSize}
                 onChange={(ev) => {
                   const size = ev.currentTarget.valueAsNumber
                   if (!Number.isFinite(size) || size < 3 || size > 10) return
@@ -504,8 +516,8 @@ export function CanvasSelectionOverlay({
                   onCommit({ ...baseRef.current, captions: { ...cap, ...(cap.presetId?.startsWith('cp') ? { userSizePct: size } : { size }) } }, true)
                 }}
               />
-              <button type="button" title="Toggle caption case" aria-label="Toggle caption case" data-testid="canvas-caption-case" className="rounded px-1.5 py-0.5 hover:bg-white/15" onClick={() => { const cap = baseRef.current.captions ?? {}; onCommit({ ...baseRef.current, captions: { ...cap, case: cap.case === 'upper' ? 'sentence' : 'upper' } }, true) }}>Aa</button>
-              <input type="color" title="Caption active color" aria-label="Caption active color" data-testid="canvas-caption-color" className="h-6 w-7 cursor-pointer rounded" value={baseEdits.captions?.colors?.a ?? '#FFFFFF'}
+              <button type="button" title="Toggle caption case" aria-label="Toggle caption case" data-testid="canvas-caption-case" className="rounded px-1.5 py-0.5 hover:bg-white/15" onClick={() => { const cap = baseRef.current.captions ?? {}; onCommit({ ...baseRef.current, captions: { ...cap, case: captionCase === 'upper' ? 'sentence' : 'upper' } }, true) }}>Aa</button>
+              <input type="color" title="Caption active color" aria-label="Caption active color" data-testid="canvas-caption-color" className="h-6 w-7 cursor-pointer rounded" value={captionColor}
                 onChange={(ev) => { const cap = baseRef.current.captions ?? {}; onCommit({ ...baseRef.current, captions: { ...cap, colors: { ...cap.colors, a: ev.target.value } } }, true) }}
               />
               <button type="button" className="rounded px-1.5 py-0.5 hover:bg-white/15" data-testid="canvas-caption-more" onClick={captionQuickStyle.onMore}>More</button>

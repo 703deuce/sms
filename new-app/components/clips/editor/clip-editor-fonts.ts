@@ -15,6 +15,20 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-clip-inter', display
 const lato = Lato({ subsets: ['latin'], weight: ['900'], variable: '--font-clip-lato', display: 'swap' })
 const oswald = Oswald({ subsets: ['latin'], variable: '--font-clip-oswald', display: 'swap' })
 
+/** Built-in caption families whose preview faces are loaded by the clip editor. */
+export const CLIP_EDITOR_CAPTION_FONT_FAMILIES = [
+  'Poppins',
+  'Anton',
+  'Montserrat Black',
+  'Bangers',
+  'Bebas Neue',
+  'Archivo Black',
+  'Luckiest Guy',
+  'Inter',
+  'Lato',
+  'Oswald',
+] as const
+
 /** Class names that define every `--font-clip-*` display-font variable (put on the editor root). */
 export const clipDisplayFontVars = [bangers, bebas, archivo, luckiest, inter, lato, oswald]
   .map((f) => f.variable)

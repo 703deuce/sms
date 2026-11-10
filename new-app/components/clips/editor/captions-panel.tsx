@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { CaptionMiniPreview } from '@/components/clips/editor/caption-overlay'
+import { CLIP_EDITOR_CAPTION_FONT_FAMILIES } from '@/components/clips/editor/clip-editor-fonts'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -53,12 +54,10 @@ import { captionStyleRole, CAPTION_OPT_IN_COPY } from '../../../lib/clips/editor
 import { detectCaptionSyncIssues } from '../../../lib/clips/editor/caption-sync-warning'
 import { CaptionSyncWarningBanner } from './caption-sync-warning-banner'
 
-const CAPTION_FONTS = ['Poppins', 'Anton', 'Montserrat Black'] as const
-const CAPTION_FONT_LABELS: Record<string, string> = {
-  Poppins: 'Poppins',
-  Anton: 'Anton',
-  'Montserrat Black': 'Montserrat Black',
-}
+const CAPTION_FONTS = CLIP_EDITOR_CAPTION_FONT_FAMILIES
+const CAPTION_FONT_LABELS: Record<string, string> = Object.fromEntries(
+  CAPTION_FONTS.map((font) => [font, font]),
+)
 const UPLOAD_FONT = '__upload__'
 
 function CaptionHexInput({
