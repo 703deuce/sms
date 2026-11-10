@@ -3378,7 +3378,7 @@ export function EditorShell({
     const range = selectedVideo && selectedVideo.srcOutMs > selectedVideo.srcInMs
       ? { startMs: String(Math.round(selectedVideo.srcInMs)), endMs: String(Math.round(selectedVideo.srcOutMs)) }
       : { atMs: String(Math.round(playheadSourceMs)) }
-    console.info('[editor:generate-mode] handoff-start', { projectId, clipId, hasSelectedRange: Boolean(selectedVideo) })
+    console.info('[editor:generate-mode] handoff-start', { projectId, clipId, hasSelectedRange: Boolean(selectedVideo), rangeMs: selectedVideo ? Math.max(0, selectedVideo.srcOutMs - selectedVideo.srcInMs) : null })
     try {
       await flushSave()
       console.info('[editor:generate-mode] handoff-saved', { projectId, clipId })
