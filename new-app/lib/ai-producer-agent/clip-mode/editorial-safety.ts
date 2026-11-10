@@ -191,7 +191,13 @@ function lastSentenceStart(words:readonly TimedWord[],beforeMs:number,floorMs:nu
   }
   return Math.round(region[0]!.s*1000)
 }
-const CONTINUATION_PRONOUN_OPEN=/^(?:(?:uh|um|ah|er)[,.]?\s*)*(?:and|but|so)\s+(?:he|she|they|him|her|his|their|it|this|that)\b/i
+// And/But/So + a personal pronoun ("And he was a great student") is a
+// strong continuation: the referent almost always lives in omitted prior
+// speech. Demonstratives and "it" ("And that", "So this", "But it") are
+// not: they often start self-contained hooks or dummy-subject sentences
+// ("And that was the point.", "So this is how we start.", "But it didn't
+// matter."). A first-passage And/So/But is still a soft continuation.
+const CONTINUATION_PRONOUN_OPEN=/^(?:(?:uh|um|ah|er)[,.]?\s*)*(?:and|but|so)\s+(?:he|she|they|him|her|his|their)\b/i
 /** "And he was a great student" is a failure even when the previous word ends a sentence. */
 function isContinuationPronounOpen(opening:string):boolean{
   return CONTINUATION_PRONOUN_OPEN.test(stripLeadingFiller(opening))
@@ -303,6 +309,7 @@ export function repairClipBoundaries(
   const later=Math.max(0,opts.maxLaterConclusionMs??6_500)
   const notes:string[]=[]
   const contextBridges:BoundaryRepair['contextBridges']=[]
+  const tailLock=new WeakMap<ClipSpan,number>()
   const next:ClipSpan[]=cuts.map(c=>({...c}))
   for(let i=0;i<next.length;i++){
     const cut=next[i]!
@@ -353,6 +360,7 @@ export function repairClipBoundaries(
         const trimmed=lastCompletedEnd(words,cut.startMs,cut.endMs)
         if(trimmed!=null&&trimmed<cut.endMs&&trimmed-cut.startMs>=3000){
           cut.endMs=trimmed
+          tailLock.set(cut,trimmed)
           notes.push('Trimmed a mid-sentence ending back to the last complete sentence')
         }
       }
@@ -386,6 +394,7 @@ export function repairClipBoundaries(
     }
     if(trimTo!=null){
       cut.endMs=trimTo
+      tailLock.set(cut,trimTo)
       notes.push('Trimmed a trailing detour that did not connect to the later payoff')
     }
   }
@@ -404,22 +413,70 @@ export function repairClipBoundaries(
       applyOpeningRepairs(valid,words,earlier,notes)
     }
   }
+  const sourceEnd=sourceDurationMs(words)
   for(let i=0;i<valid.length;i++){
-    const ceiling=i+1<valid.length?valid[i+1]!.startMs:valid[i]!.endMs+later
-    ensureMinTail(valid[i]!,words,ceiling)
+    const cut=valid[i]!
+    ensureMinTail(cut,words,tailCeiling(cut,i,valid,next,words,sourceEnd,tailLock))
   }
   return {cuts:valid,repaired:notes.length>0,notes,contextBridges}
 }
 
 const MIN_CLIP_TAIL_MS=300
-/** Keep at least 300ms of source after the last spoken word. */
+/** Last known source time from the transcript; empty input is 0. */
+function sourceDurationMs(words:readonly TimedWord[]):number{
+  let max=0
+  for(const w of words){
+    const end=Math.round(w.e*1000)
+    if(end>max)max=end
+  }
+  return max
+}
+/** Start of the next source token at or after the last kept word (kept or dropped). */
+function nextSourceBoundaryMs(words:readonly TimedWord[],afterMs:number):number|null{
+  let best:number|null=null
+  for(const w of words){
+    const start=Math.round(w.s*1000)
+    if(start>=afterMs&&(best==null||start<best))best=start
+  }
+  return best
+}
+/**
+ * Hard cap for tail padding: never cross a locked trim, the next kept or
+ * dropped segment, the next source token, or the end of the source. If
+ * there is not 300ms of room, use a shorter tail.
+ */
+function tailCeiling(
+  cut:ClipSpan,
+  index:number,
+  kept:readonly ClipSpan[],
+  original:readonly ClipSpan[],
+  words:readonly TimedWord[],
+  sourceEnd:number,
+  tailLock:WeakMap<ClipSpan,number>,
+):number{
+  let cap=sourceEnd
+  if(index+1<kept.length)cap=Math.min(cap,kept[index+1]!.startMs)
+  const inside=at(words,cut.startMs,cut.endMs)
+  const lastEnd=inside.length?Math.round(inside.at(-1)!.e*1000):cut.endMs
+  const nextTok=nextSourceBoundaryMs(words,lastEnd)
+  if(nextTok!=null)cap=Math.min(cap,nextTok)
+  const locked=tailLock.get(cut)
+  if(locked!=null)cap=Math.min(cap,locked)
+  for(const other of original){
+    if(other===cut)continue
+    if(other.startMs>lastEnd)cap=Math.min(cap,other.startMs)
+  }
+  return cap
+}
+/** Keep up to 300ms of source after the last spoken word, without crossing a bound. */
 function ensureMinTail(cut:ClipSpan,words:readonly TimedWord[],ceiling:number):void{
   const inside=at(words,cut.startMs,cut.endMs)
   if(!inside.length)return
   const lastEnd=Math.round(inside.at(-1)!.e*1000)
   const want=lastEnd+MIN_CLIP_TAIL_MS
   if(cut.endMs>=want)return
-  if(ceiling>cut.endMs)cut.endMs=Math.min(ceiling,want)
+  const room=Math.min(ceiling,want)
+  if(room>cut.endMs)cut.endMs=room
 }
 
 function applyOpeningRepairs(
@@ -534,13 +591,13 @@ export function clipEditorialInstructions():string{
     'CLIP EDITORIAL CONTRACT — applies to this clip only:',
     'Before selecting or shortening any footage, state the intended POINT in ONE clear sentence (claim, story or joke), and preserve that same point through every cut.',
     'A first line starting with “that’s why”, “so”, “and”, “also”, “but”, “which”, “this”, “her/his/they” without an antecedent, “like I said”, “I mean,” or another backward reference, continuation, dangling pronoun, or mid-phrase start is NOT self-contained. Snap to the sentence start (including a short identifier like “My grandmother.” if it supplies the antecedent). Never add a long preamble or dead air.',
-    'Check EVERY stitched segment opening, not only the first. “also coming to understand” or “but also…” is a continuation of an omitted thought and must be repaired or rejected. A first line such as “And he was a great student,” “But she…,” or “So they…” is not self-contained even if the previous source word ends a sentence: snap back to the antecedent or reject the opening.',
+    'Check EVERY stitched segment opening, not only the first. “also coming to understand” or “but also…” is a continuation of an omitted thought and must be repaired or rejected. A first line such as “And he was a great student,” “But she…,” or “So they…” is not self-contained even if the previous source word ends a sentence: snap back to the antecedent or reject the opening. “And that,” “So this,” and “But it” are not treated as that same strong continuation — demonstratives and “it” often open a self-contained hook or dummy-subject sentence — though a first-passage And/So/But may still be a soft continuation.',
     'Hook with the strongest authentic line that raises a question or tension, but do not move the payoff before its explanation or fabricate/reorder spoken meaning.',
     'For stitched stories, every section must be understandable from the earlier sections in the OUTPUT, not from unplayed original source, and must belong to the same story as the later payoff. If an early passage (for example a childhood anecdote) does not serve the ending, drop it. If an answer refers to a removed interviewer exchange, include that question or do not use the answer.',
     'Smooth jump cuts at stitch joins with a brief crossfade (and optional punch-in), but never use a transition to hide a broken sentence or missing antecedent. A brief intentional crossfade is not itself a failure. If no rendered audio was supplied, list acoustic joins as a listening warning and do not fail the review for that reason alone.',
     'Never remove a but, only if, unless, exception, caveat, negation or qualifier when it changes the speaker’s actual meaning.',
     'Inspect at least the NEXT 6.5 SECONDS of original source after every proposed END for a late qualifier or concluding thought, and INCLUDE it when materially needed.',
-    'End exactly after the authentic full conclusion or joke landing. Mid-sentence endings are a failure. Keep at least 300 milliseconds of tail after the last spoken word. Short is fine; never pad to the target duration. Cut filler and search detours, not meaning.',
+    'End exactly after the authentic full conclusion or joke landing. Mid-sentence endings are a failure. Keep at least 300 milliseconds of tail after the last spoken word when there is room, but never extend that pad across a trimmed boundary, the next kept or dropped segment, or past the end of the source; use a shorter tail when there is not enough room. Short is fine; never pad to the target duration. Cut filler and search detours, not meaning.',
     'Every distinct clip must stand alone, have its own reason to exist, and not be a near-duplicate.',
     'QA must explicitly FAIL a meaning-changing omission, a stammered or referential opening, a mid-sentence ending, or payoff-before-setup and identify the original words/source times to repair. Fix at the source word IDs, not via generated dialogue. Never cut a recorded ending or concluding sentence to honor a duration request.',
     'Check proper-name spelling in visible text against evidence; ASR alone is NOT proof of a name spelling. Flag uncertain names instead of inventing corrections.',

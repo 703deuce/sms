@@ -253,14 +253,138 @@ describe('VQ PR #1081 draft openings and tails (clip_30f9ea02)',()=>{
     const opening=publishedWords.filter(w=>w.e*1000>first.startMs&&w.s*1000<first.startMs+4000).map(w=>w.w).join(' ').toLowerCase()
     expect(opening.startsWith('and he')).toBe(false)
   })
-  it('keeps at least 300ms of tail after the last word of the Corvette landing',()=>{
+  it('does not extend the Corvette landing tail into the next sentence when there is no room',()=>{
     const repaired=repairClipBoundaries([{startMs:777120,endMs:806030}],publishedWords)
     const landing=publishedWords.filter(w=>w.e*1000<=806030+20 && /[.!?]"?$/.test(w.w)).at(-1)
     expect(landing?.w).toMatch(/Corvette\.?/)
-    expect(repaired.cuts[0]!.endMs).toBeGreaterThanOrEqual(Math.round(landing!.e*1000)+300)
+    // "Corvette." ends at the same instant "And for the car lovers" begins.
+    expect(repaired.cuts[0]!.endMs).toBeLessThanOrEqual(Math.round(landing!.e*1000))
+    const spilled=publishedWords.filter(w=>w.s*1000>=806030&&w.s*1000<806330).map(w=>w.w).join(' ').toLowerCase()
+    expect(spilled).toMatch(/^and for/)
+    expect(repaired.cuts[0]!.endMs).toBeLessThanOrEqual(806030)
   })
   it('does not treat a later And-without-pronoun sentence as a pronoun continuation',()=>{
     const risk=clipEditorialAudit(publishedCuts,publishedWords)
     expect(risk.some(x=>x.code==='continuation_opening'&&x.passageIndex===3)).toBe(false)
+  })
+})
+
+describe('And/But/So + demonstrative or it is not a strong continuation',()=>{
+  // Personal pronouns after And/But/So almost always point at a person
+  // named in omitted prior speech (the clip_30f9ea02 "And he" failure).
+  // "it" / "this" / "that" often start a self-contained hook or a dummy
+  // subject ("And that was the point.", "So this is how we start.",
+  // "But it didn't matter."), so they are not strong continuations.
+  // A first-passage And/So/But remains a soft continuation.
+  it('still flags And he, But she, and So they as continuation openings',()=>{
+    const andHe=words('And he was a great student after all that work.')
+    andHe[andHe.length-1]!.w='work.'
+    expect(clipEditorialAudit([{startMs:0,endMs:8000}],andHe)
+      .some(x=>x.code==='continuation_opening')).toBe(true)
+    const butShe=words('But she never gave up on the family after that.')
+    butShe[butShe.length-1]!.w='that.'
+    expect(clipEditorialAudit([{startMs:0,endMs:8000}],butShe)
+      .some(x=>x.code==='continuation_opening')).toBe(true)
+    const soThey=words('So they decided to start over with a new plan.')
+    soThey[soThey.length-1]!.w='plan.'
+    expect(clipEditorialAudit([{startMs:0,endMs:8000}],soThey)
+      .some(x=>x.code==='continuation_opening')).toBe(true)
+  })
+  it('does not flag And that, So this, or But it as a continuation in a later passage',()=>{
+    const setup=words('My grandmother taught the family a real lesson here.',0,400)
+    setup[setup.length-1]!.w='here.'
+    const andThat=words('And that was the whole point of the story today.',20000,400)
+    andThat[andThat.length-1]!.w='today.'
+    const soThis=words('So this is how we start the next chapter together.',40000,400)
+    soThis[soThis.length-1]!.w='together.'
+    const butIt=words('But it did not matter once the work was finished.',60000,400)
+    butIt[butIt.length-1]!.w='finished.'
+    const firstEnd=Math.round(setup[setup.length-1]!.e*1000)
+    for(const [later,label] of [[andThat,'that'],[soThis,'this'],[butIt,'it']] as const){
+      const start=Math.round(later[0]!.s*1000)
+      const end=Math.round(later[later.length-1]!.e*1000)
+      const risk=clipEditorialAudit(
+        [{startMs:0,endMs:firstEnd},{startMs:start,endMs:end}],
+        [...setup,...later],
+      )
+      expect(risk.some(x=>x.code==='continuation_opening'&&x.passageIndex===1),label).toBe(false)
+    }
+  })
+  it('may still treat a first-passage And that as a soft continuation',()=>{
+    const w=words('And that was the whole point of the story today.')
+    w[w.length-1]!.w='today.'
+    expect(clipEditorialAudit([{startMs:0,endMs:8000}],w)
+      .some(x=>x.code==='continuation_opening')).toBe(true)
+  })
+})
+
+describe('tail padding respects trim, source, and neighbor bounds',()=>{
+  it('adds a 300ms tail when a pause after the last word leaves room',()=>{
+    const w=[
+      {w:'This',s:0,e:0.25},
+      {w:'is',s:0.25,e:0.4},
+      {w:'a',s:0.4,e:0.5},
+      {w:'complete',s:0.5,e:0.9},
+      {w:'thought',s:0.9,e:1.2},
+      {w:'done.',s:3.5,e:3.9},
+      {w:'Later',s:5.5,e:5.8},
+      {w:'on.',s:5.8,e:6.1},
+    ]
+    const repaired=repairClipBoundaries([{startMs:0,endMs:3900}],w)
+    expect(repaired.cuts[0]!.endMs).toBeGreaterThanOrEqual(4200)
+    expect(repaired.cuts[0]!.endMs).toBeLessThan(5500)
+    expect(repaired.cuts[0]!.endMs).toBe(4200)
+  })
+  it('clamps the tail to the source duration at EOF',()=>{
+    const w=[
+      {w:'This',s:0,e:0.25},
+      {w:'is',s:0.25,e:0.4},
+      {w:'a',s:0.4,e:0.5},
+      {w:'complete',s:0.5,e:0.9},
+      {w:'thought',s:0.9,e:1.2},
+      {w:'done.',s:3.6,e:4.0},
+    ]
+    const repaired=repairClipBoundaries([{startMs:0,endMs:4000}],w)
+    expect(repaired.cuts[0]!.endMs).toBeLessThanOrEqual(4000)
+    expect(repaired.cuts[0]!.endMs).toBe(4000)
+  })
+  it('leaves an empty transcript unchanged and does not throw',()=>{
+    expect(()=>repairClipBoundaries([{startMs:0,endMs:8000}],[])).not.toThrow()
+    const repaired=repairClipBoundaries([{startMs:0,endMs:8000}],[])
+    expect(repaired.cuts).toEqual([{startMs:0,endMs:8000}])
+    expect(repairClipBoundaries([],[]).cuts).toEqual([])
+  })
+  it('does not extend a tail into a back-to-back following clip',()=>{
+    const first=[
+      {w:'Here',s:0,e:0.25},
+      {w:'is',s:0.25,e:0.4},
+      {w:'a',s:0.4,e:0.5},
+      {w:'complete',s:0.5,e:0.9},
+      {w:'opening',s:0.9,e:1.3},
+      {w:'thought.',s:3.6,e:4.0},
+    ]
+    const second=[
+      {w:'Here',s:4.0,e:4.25},
+      {w:'is',s:4.25,e:4.4},
+      {w:'another',s:4.4,e:4.8},
+      {w:'complete',s:4.8,e:5.2},
+      {w:'closing',s:5.2,e:5.6},
+      {w:'thought.',s:7.6,e:8.0},
+    ]
+    const repaired=repairClipBoundaries(
+      [{startMs:0,endMs:4000},{startMs:4000,endMs:8000}],
+      [...first,...second],
+    )
+    expect(repaired.cuts.length).toBe(2)
+    expect(repaired.cuts[0]!.endMs).toBeLessThanOrEqual(4000)
+    expect(repaired.cuts[1]!.startMs).toBeGreaterThanOrEqual(repaired.cuts[0]!.endMs)
+    // A short gap between clips also cannot be inflated past the next start.
+    const gappedSecond=[{w:'Here',s:4.1,e:4.35},...second.slice(1)]
+    const gapped=repairClipBoundaries(
+      [{startMs:0,endMs:4000},{startMs:4100,endMs:8000}],
+      [...first,...gappedSecond],
+    )
+    expect(gapped.cuts[0]!.endMs).toBeLessThanOrEqual(4100)
+    expect(gapped.cuts[0]!.endMs-Math.round(first.at(-1)!.e*1000)).toBeLessThanOrEqual(300)
   })
 })
