@@ -29,6 +29,19 @@ describe('Ad Studio B3b paid child idempotency', () => {
     await expect(createStudioJob(svc, { ...input, body: { ...input.body, prompt: 'Different scene' } }))
       .rejects.toMatchObject({ code: 'INVALID_PARAMS' })
   })
+  it('marks failed createTask once and never auto-reissues on idempotent replay', async () => {
+    const store = createMemoryStudioStore()
+    const createTask = vi.fn(async () => { throw new Error('provider unavailable') })
+    const svc = { store, kie: { createTask }, storage: { driverName: () => 'test' },
+      concurrencyLimit: 3, now: () => new Date() } as unknown as StudioService
+    const jobId = adSceneJobId('failed-run', 'failed-scene')
+    const input = { workspaceId: 'ws1', userId: 'user1', jobId,
+      body: { modelId: 'veo-3.1-lite', mode: 'text_to_video' as const, prompt: 'Scene', durationSec: 4 } }
+    await expect(createStudioJob(svc, input)).rejects.toMatchObject({ code: 'KIE_ERROR' })
+    expect((await store.getJob('ws1', jobId))?.status).toBe('failed')
+    expect((await createStudioJob(svc, input)).status).toBe('failed')
+    expect(createTask).toHaveBeenCalledTimes(1)
+  })
   it('does not submit a paid call when capacity is full', async () => {
     const store = createMemoryStudioStore()
     const createTask = vi.fn()

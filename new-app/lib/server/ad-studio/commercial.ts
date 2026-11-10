@@ -44,7 +44,10 @@ export async function createCommercialFromImageAd(workspaceId: string, sourceRun
     sourceRunId, variantId: variant.id, studioJobId: job.id, assetId: referenceAssetId,
   })
   const source = parent.input as unknown as AdProductInput
-  const input: AdProductInput = { ...source, imageAssetIds: [referenceAssetId],
+  // Keep the chosen image ad first for image-to-video while preserving original photos
+  // as editor media sources. The brief validator allows at most 15 image assets.
+  const originalPhotos = source.imageAssetIds.filter(id => id !== referenceAssetId).slice(0, 14)
+  const input: AdProductInput = { ...source, imageAssetIds: [referenceAssetId, ...originalPhotos],
     imageVariantId: variant.id, voiceoverEnabled: parsed.data.voiceoverEnabled ?? false,
     ...(parsed.data.voiceId ? { voiceId: parsed.data.voiceId } : {}) }
   const result = await createAdRun(workspaceId, parent.userId, {

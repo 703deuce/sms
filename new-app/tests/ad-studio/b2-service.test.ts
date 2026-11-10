@@ -152,11 +152,29 @@ describe('Ad Studio B2 service', () => {
     expect(confirmed.creditCharged).toBeNull()
     expect(confirmed.plan).not.toHaveProperty('_confirmKey')
     expect(state.ensure).toHaveBeenCalled()
+    const existingView = await getAdRun('ws_owner', row.id)
+    expect(existingView.compactEditorUrl).toBeNull()
+    expect(existingView.fullEditorUrl).toBeNull()
     expect((await confirmAdRun('ws_owner',row.id,'confirm-111')).status).toBe('generating')
     expect(state.ensure).toHaveBeenCalledTimes(2)
     await expect(confirmAdRun('ws_owner',row.id,'confirm-222')).rejects.toMatchObject({
       code: 'ALREADY_CONFIRMED', status: 409,
     })
+  })
+
+  it('exposes the existing compact and full editor URLs only after rendered completion', async () => {
+    const { run } = await createAdRun('ws_owner', 'user_1', {
+      mode: 'storyline', input, idempotencyKey: 'create-urls-1234',
+    })
+    const row = state.runs.get(run.id)!
+    row.projectId = 'proj_completed'
+    row.clipId = 'clip_completed'
+    row.status = 'stitching'
+    expect((await getAdRun('ws_owner', run.id)).compactEditorUrl).toBeNull()
+    row.status = 'done'
+    const done = await getAdRun('ws_owner', run.id)
+    expect(done.compactEditorUrl).toBe('/app/video-editor/proj_completed/edit/clip_completed?mode=compact')
+    expect(done.fullEditorUrl).toBe('/app/video-editor/proj_completed/edit/clip_completed')
   })
 
   it('replans without invoking stock materialization or paid generations', async () => {
