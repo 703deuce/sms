@@ -50,7 +50,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 const readyResult = {
   clipId: 'clip_1',
   projectId: 'proj_1',
-  editorUrl: '/app/clips/proj_1/edit/clip_1?tab=captions',
+  editorUrl: '/app/video-editor/proj_1/edit/clip_1?tab=captions',
   durationMs: 1000,
   styleId: 'clean_white',
   captionsEnabled: true as const,
@@ -75,14 +75,14 @@ describe('AI Captions contract helpers', () => {
   })
 
   it('always builds the compact clip-editor captions URL from projectId and clipId', () => {
-    expect(captionsEditorHref('proj_1', 'clip_1')).toBe('/app/clips/proj_1/edit/clip_1?tab=captions')
+    expect(captionsEditorHref('proj_1', 'clip_1')).toBe('/app/video-editor/proj_1/edit/clip_1?tab=captions')
     expect(
       captionsRedirectFromRun({
         status: 'ready',
         projectId: 'proj_1',
         result: readyResult,
       }),
-    ).toBe('/app/clips/proj_1/edit/clip_1?tab=captions')
+    ).toBe('/app/video-editor/proj_1/edit/clip_1?tab=captions')
     expect(captionsRedirectFromRun({ status: 'preparing', projectId: null, result: null })).toBeNull()
   })
 
@@ -162,6 +162,6 @@ describe('AI Captions workspace', () => {
     expect(screen.getByTestId('ai-captions-vtt')).toBeTruthy()
     expect(screen.getByTestId('ai-captions-run-list')).toBeTruthy()
     fireEvent.click(screen.getByTestId('ai-captions-edit'))
-    expect(push).toHaveBeenCalledWith('/app/clips/proj_1/edit/clip_1?tab=captions')
+    expect(push).toHaveBeenCalledWith('/app/video-editor/proj_1/edit/clip_1?tab=captions')
   })
 })
