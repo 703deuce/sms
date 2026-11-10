@@ -6,36 +6,34 @@ export function ClipsHeroMock() {
     <ProductFrame label="Transovo Clips · Story review">
       <div className="bg-[oklch(0.16_0.008_285)]">
         <SourceScrubber />
-        <div className="grid gap-4 border-t border-border/80 p-4 sm:p-5 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="flex items-end justify-center gap-3 sm:gap-4">
-            <ClipCard
-              title="The setup"
-              time="00:42"
-              caption="So here’s what actually happened on set that week."
-              why="Opens on a clear hook, then lands the answer."
-              layout="Speaker follow"
-              offset="hidden sm:block"
-              dim
-            />
-            <ClipCard
-              title="Story · 0:58"
-              time="00:58"
-              caption="We cut three days apart — and the argument still holds."
-              why="Stitches the setup, the pushback, and a complete-sentence payoff."
-              layout="9:16 · Story"
-              featured
-            />
-            <ClipCard
-              title="The payoff"
-              time="00:31"
-              caption="That’s the line I wish I had said in the moment."
-              why="Ends on a finished thought, not a mid-sentence cut."
-              layout="Split"
-              offset="hidden sm:block"
-              dim
-            />
-          </div>
-          <StoryStitchPanel />
+        <StoryStitchRail />
+        <div className="flex items-end justify-center gap-2.5 border-t border-border/80 px-3 pb-4 pt-3 sm:gap-3.5 sm:px-4">
+          <ClipCard
+            title="The setup"
+            time="00:42"
+            caption="So here’s what actually happened on set that week."
+            why="Opens on a clear hook, then lands the answer."
+            layout="Speaker follow"
+            offset="hidden sm:block"
+            dim
+          />
+          <ClipCard
+            title="Story · 0:58"
+            time="00:58"
+            caption="We cut three days apart — and the argument still holds."
+            why="Stitches the setup, the pushback, and a complete-sentence payoff."
+            layout="9:16 · Story"
+            featured
+          />
+          <ClipCard
+            title="The payoff"
+            time="00:31"
+            caption="That’s the line I wish I had said in the moment."
+            why="Ends on a finished thought, not a mid-sentence cut."
+            layout="Split"
+            offset="hidden sm:block"
+            dim
+          />
         </div>
       </div>
     </ProductFrame>
@@ -131,7 +129,7 @@ function ClipCard({
 }) {
   return (
     <div
-      className={`w-[8.6rem] shrink-0 sm:w-[9.6rem] ${offset ?? ''} ${dim ? 'opacity-70' : ''} ${featured ? 'z-10 scale-[1.04]' : ''}`}
+      className={`w-[6.8rem] shrink-0 sm:w-[8rem] ${offset ?? ''} ${dim ? 'opacity-70' : ''} ${featured ? 'z-10 scale-[1.03]' : ''}`}
       aria-hidden
     >
       <div className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-gradient-to-b from-[oklch(0.28_0.05_295)] via-[oklch(0.2_0.02_285)] to-[oklch(0.14_0.01_285)] shadow-md">
@@ -158,50 +156,48 @@ function ClipCard({
   )
 }
 
-function StoryStitchPanel() {
+function StoryStitchRail() {
+  const steps = [
+    { t: '02:14', label: 'Setup', body: 'The hook that starts the thread.' },
+    { t: '18:41', label: 'Turn', body: 'A later rebuttal, kept in context.' },
+    { t: '41:07', label: 'Payoff', body: 'Ends when the thought is finished.' },
+  ]
   return (
-    <div className="flex flex-col justify-center rounded-xl border border-border bg-card/70 p-4 sm:p-5" aria-hidden>
-      <p className="font-mono text-[0.65rem] uppercase tracking-[0.16em] text-brand">Story stitch</p>
-      <p className="mt-1 text-sm font-medium text-foreground">Non-contiguous moments, one clip</p>
-      <ol className="mt-4 space-y-3">
-        {[
-          { t: '02:14', label: 'Setup', body: 'The hook that starts the thread.' },
-          { t: '18:41', label: 'Turn', body: 'A later rebuttal, kept in context.' },
-          { t: '41:07', label: 'Payoff', body: 'Ends when the thought is finished.' },
-        ].map((step, i) => (
-          <li key={step.t} className="relative flex gap-3">
-            <div className="flex flex-col items-center">
-              <span className="grid size-6 place-items-center rounded-full bg-brand-gradient text-[0.65rem] font-semibold text-brand-foreground">
-                {i + 1}
-              </span>
-              {i < 2 ? <span className="mt-1 w-px flex-1 bg-border" /> : null}
-            </div>
-            <div className="pb-1">
-              <p className="text-sm font-medium text-foreground">
-                {step.label}{' '}
-                <span className="font-mono text-[0.65rem] text-muted-foreground">{step.t}</span>
+    <div className="px-3 pb-1 sm:px-4" aria-hidden>
+      <div className="flex flex-nowrap items-center gap-2 overflow-hidden rounded-xl border border-border bg-card/70 px-3 py-2.5">
+        <div className="flex shrink-0 flex-col justify-center pr-1">
+          <p className="font-mono text-[0.58rem] uppercase tracking-[0.14em] text-brand">Story stitch</p>
+          <p className="text-[0.7rem] font-medium text-foreground">3 moments, one clip</p>
+        </div>
+        {steps.map((step, i) => (
+          <div key={step.t} className="flex min-w-0 flex-1 items-center gap-1.5">
+            {i > 0 ? <span className="hidden h-px w-2 shrink-0 bg-border md:block" /> : null}
+            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-brand-gradient text-[0.6rem] font-semibold text-brand-foreground">
+              {i + 1}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-medium text-foreground">
+                {step.label} <span className="font-mono text-[0.6rem] text-muted-foreground">{step.t}</span>
               </p>
-              <p className="text-xs text-muted-foreground">{step.body}</p>
+              <p className="hidden truncate text-[0.65rem] text-muted-foreground xl:block">{step.body}</p>
             </div>
-          </li>
+          </div>
         ))}
-      </ol>
-      <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
-        <span className="text-xs text-muted-foreground">Target length</span>
-        <span className="flex gap-1">
+        <div className="flex items-center gap-1 self-center rounded-md border border-border bg-background px-2 py-1">
           {['30s', '60s', '90s'].map((d) => (
             <span
               key={d}
-              className={`rounded-md px-2 py-0.5 font-mono text-[0.65rem] ${d === '60s' ? 'bg-brand-gradient text-brand-foreground' : 'bg-muted text-muted-foreground'}`}
+              className={`rounded px-1.5 py-0.5 font-mono text-[0.58rem] ${d === '60s' ? 'bg-brand-gradient text-brand-foreground' : 'text-muted-foreground'}`}
             >
               {d}
             </span>
           ))}
-        </span>
+        </div>
       </div>
     </div>
   )
 }
+
 
 export function LayoutsMock() {
   const layouts = [
@@ -247,7 +243,7 @@ export function LayoutsMock() {
 export function EditorHeroMock() {
   return (
     <ProductFrame label="Transovo studio · Script + Timeline">
-      <div className="grid bg-[oklch(0.16_0.008_285)] lg:grid-cols-[0.9fr_1.2fr]">
+      <div className="bg-[oklch(0.16_0.008_285)]">
         <ScriptMock />
         <TimelineMock />
       </div>
@@ -265,7 +261,7 @@ function ScriptMock() {
     { mark: false, text: 'That’s the take we kept.' },
   ]
   return (
-    <div className="border-b border-border p-4 sm:p-5 lg:border-b-0 lg:border-r" aria-hidden>
+    <div className="border-b border-border p-3 sm:p-4" aria-hidden>
       <div className="mb-3 flex items-center justify-between">
         <span className="font-mono text-[0.65rem] uppercase tracking-[0.14em] text-brand">Script</span>
         <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[0.6rem] text-muted-foreground">
@@ -276,7 +272,7 @@ function ScriptMock() {
         {lines.map((line) => (
           <li
             key={line.text}
-            className={`rounded-lg px-3 py-2 text-sm leading-relaxed ${
+            className={`rounded-md px-3 py-1.5 text-[0.8rem] leading-relaxed ${
               line.mark
                 ? 'bg-destructive/10 text-muted-foreground line-through decoration-destructive/60'
                 : 'bg-card text-foreground'
@@ -371,7 +367,7 @@ function Lane({
   return (
     <div className="flex items-center gap-2">
       <span className="w-12 shrink-0 font-mono text-[0.6rem] text-muted-foreground">{name}</span>
-      <div className={`relative flex-1 overflow-hidden rounded-sm bg-muted/70 ${short ? 'h-5' : 'h-7'}`} style={{ ['--lane' as string]: color }}>
+      <div className={`relative flex-1 overflow-hidden rounded-sm bg-muted/70 ${short ? 'h-5' : 'h-8'}`} style={{ ['--lane' as string]: color }}>
         {children}
       </div>
     </div>
