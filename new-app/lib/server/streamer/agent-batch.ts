@@ -5,6 +5,7 @@ import {streamerAgentWindows} from '@/lib/streamer/agent-windows'
 import {createAgentVideoWindow} from '@/lib/server/streamer/agent-window-source'
 import {createAiProducerAgentRun} from '@/lib/server/ai-producer-agent/runs'
 import {startUnifiedClipRun} from '@/lib/server/ai-producer-agent/unified-clip-run'
+import {shouldAutoStartUploadAgentBatch} from '@/lib/ai-captions/auto-agent-guard'
 import {storyTargetFromAgentSeconds} from '@/lib/ai-producer-agent/clip-mode/unified-run-input'
 import {planAutoStartUnifiedClip} from '@/lib/streamer/auto-start-unified'
 import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
@@ -83,6 +84,10 @@ export async function maybeAutoStartUploadAgentBatch(projectId:string){
   if(!plan||!p)return null
   // Stream imports start by default; skip quietly while the agent is off.
   if(plan.source.kind==='stream'&&!aiProducerAgentServerEnabled())return null
+  // Captions-only projects must never start a unified clip run, even if a
+  // workspace autoAgentClipMode leaked onto settings. Apply #1147's upload
+  // guard only to upload plans; stream auto-start is decided above.
+  if(plan.source.kind==='upload'&&!shouldAutoStartUploadAgentBatch(asSettings(p.settings)))return null
   try{
     const run=await startUnifiedClipRun(p.workspaceId,{
       source:plan.source,

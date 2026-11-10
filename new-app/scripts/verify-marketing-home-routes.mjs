@@ -42,6 +42,7 @@ const ALLOWED_NEW = {
   '/video-editor': { file: 'new-app/app/(marketing)/video-editor/page.tsx', redirectTo: null },
   '/app/studio': { file: 'new-app/app/app/studio/page.tsx', redirectTo: null },
   '/app/youtube-video': { file: 'new-app/app/app/youtube-video/page.tsx', redirectTo: null },
+  '/app/captions': { file: 'new-app/app/app/captions/page.tsx', redirectTo: null },
 }
 
 const LEGACY_SLUG_REDIRECTS = {

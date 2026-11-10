@@ -10652,3 +10652,37 @@ model YoutubeVideoRun {
   @@index([workspaceId, status])
   @@map("youtube_video_runs")
 }
+
+/// Standalone AI Captions runs (additive, v1).
+model AiCaptionsRun {
+  id              String   @id
+  workspaceId     String
+  status          String   @default("queued")
+  stage           String?
+  progressPercent Int?
+  failureCode     String?
+  failureMessage  String?
+  clientRequestId String
+  requestHash     String
+  source          Json
+  ingestedProjectId String?
+  styleId         String?
+  creditEstimate  Int?
+  result          Json?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([workspaceId, clientRequestId])
+  @@index([workspaceId, status])
+  @@map("ai_captions_runs")
+}
+
+/// Last applied or saved caption style for /app/captions, per workspace.
+model AiCaptionsWorkspacePref {
+  workspaceId String   @id
+  lastStyleId String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("ai_captions_workspace_prefs")
+}
