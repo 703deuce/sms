@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
+import type { EditorPanelId } from './editor-rail'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import { editorMediaLoadFallbacks, type EditorMediaUrls } from '@/lib/server/clips/editor-clip-media'
 import type { ClipBounds, ClipEditsV2, ClipWord } from '@/lib/clips/edits'
@@ -47,6 +48,7 @@ export function EditorClipShell(props: {
   fullVideo: boolean
   editorAssets: EditorAssets | null
   clipperStudio?: boolean
+  initialPanel?: EditorPanelId
 }) {
   const fallbacks = useMemo(
     () =>
@@ -115,8 +117,9 @@ export function EditorClipShell(props: {
         fullVideo={props.fullVideo}
         editorAssets={props.editorAssets}
         onEditorMediaError={onPrimaryMediaError}
-        compact={!props.fullVideo}
+        compact={!props.fullVideo || props.initialPanel === 'captions'}
         clipperStudio={props.clipperStudio === true}
+        initialPanel={props.initialPanel}
       />
     </ClipperSurfaceErrorBoundary>
   )

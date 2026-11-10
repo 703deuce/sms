@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
+  Captions,
   Clapperboard,
   Download,
   FlaskConical,
@@ -66,6 +67,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   record: Video,
   aiVideo: Sparkles,
   studio: WandSparkles,
+  captions: Captions,
   media: Images,
   brand: Palette,
   templates: LayoutTemplate,

@@ -268,6 +268,7 @@ export function EditorShell({
   onEditorMediaError,
   compact = false,
   clipperStudio = false,
+  initialPanel,
 }: {
   projectId: string
   projectTitle?: string
@@ -307,6 +308,8 @@ export function EditorShell({
   compact?: boolean
   /** Dedicated short-form editor UI, powered by existing editing and export components. */
   clipperStudio?: boolean
+  /** When set (e.g. ?tab=captions), that panel is selected on init. Default remains transcript. */
+  initialPanel?: EditorPanelId
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
@@ -362,7 +365,8 @@ export function EditorShell({
   })
   const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
   const pendingApplyDone = useRef(false)
-  const [panel, setPanel] = useState<EditorPanelId>('transcript')
+  const startPanel: EditorPanelId = initialPanel ?? 'transcript'
+  const [panel, setPanel] = useState<EditorPanelId>(startPanel)
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const band = useEditorBand()
   const unifiedWorkspaceActive = band !== 'mobile'
@@ -461,7 +465,7 @@ export function EditorShell({
     }
   }, [panel])
   /** Re-hooked panels (B-roll, Brand, Cover, Dub) mount on first open so they don't fetch on editor load. */
-  const [visitedPanels, setVisitedPanels] = useState<ReadonlySet<EditorPanelId>>(() => new Set(['transcript']))
+  const [visitedPanels, setVisitedPanels] = useState<ReadonlySet<EditorPanelId>>(() => new Set([startPanel]))
   useEffect(() => {
     setVisitedPanels((prev) => (prev.has(panel) ? prev : new Set([...prev, panel])))
   }, [panel])
