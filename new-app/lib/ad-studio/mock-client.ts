@@ -247,6 +247,13 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
       return save(run, { status: 'stitching', error: null, canRetryRender: false, completedAt: null })
     },
 
+    async getFinalRender(runId) {
+      const run = runs.get(runId)
+      if (!run) throw new AdStudioHttpError(404, 'RUN_NOT_FOUND', 'Run not found.')
+      if (run.status !== 'done') throw new AdStudioHttpError(409, 'RENDER_ERROR', 'Final render is not ready.')
+      return { url: `/mock-ad-studio/${runId}.mp4`, filename: `${run.input.name || 'ad-studio'}.mp4` }
+    },
+
     async createCommercial(runId, body) {
       const parent = runs.get(runId)
       if (!parent) throw new AdStudioHttpError(404, 'RUN_NOT_FOUND', 'Run not found.')
