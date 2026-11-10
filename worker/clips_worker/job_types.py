@@ -32,6 +32,7 @@ JOB_TYPES: tuple[str, ...] = (
     "MEDIA_TRANSCRIBE",
     "AI_PRODUCER_AGENT_ANALYZE",
     "AI_PRODUCER_AGENT_RUN",
+    "AD_STUDIO_RUN",
 )
 
 
@@ -44,3 +45,10 @@ def bind_ai_producer_agent_dispatch(dispatch: dict) -> None:
 
 def job_types_sql_in() -> str:
     return ", ".join(f"'{t}'" for t in JOB_TYPES)
+
+
+def bind_ad_studio_dispatch(dispatch: dict) -> None:
+    """Register the durable Ad Studio job using the standard clip-job claim/lock lifecycle."""
+    from clips_worker.ad_studio_run import handle_ad_studio_run
+    print("[ad-studio:worker] registering AD_STUDIO_RUN", flush=True)
+    dispatch["AD_STUDIO_RUN"] = handle_ad_studio_run

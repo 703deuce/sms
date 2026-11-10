@@ -16,7 +16,7 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from clips_worker.job_types import bind_ai_producer_agent_dispatch, job_types_sql_in
+from clips_worker.job_types import bind_ad_studio_dispatch, bind_ai_producer_agent_dispatch, job_types_sql_in
 from clips_worker.streamer.job_failure import terminal_failure_progress_payload
 from clips_worker.streamer.lanes import lane_types_sql_in, worker_lane
 from clips_worker.pipeline import extract_wav_for_picker, run_m4_pipeline
@@ -763,6 +763,7 @@ DISPATCH["T2V_SCENE_AI_IMAGE"] = handle_t2v_scene_ai_image
 DISPATCH["T2V_SCENE_AI_VIDEO"] = handle_t2v_scene_ai_video
 
 bind_ai_producer_agent_dispatch(DISPATCH)
+bind_ad_studio_dispatch(DISPATCH)
 
 
 def main() -> None:

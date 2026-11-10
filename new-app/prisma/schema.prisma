@@ -10695,6 +10695,7 @@ model AdStudioRun {
   mode            String
   status          String
   idempotencyKey  String
+  confirmIdempotencyKey String?
   input           Json
   plan            Json?
   creditEstimate  Int?
