@@ -20,6 +20,8 @@ export type YoutubeVideoRunRecord = {
   requestHash: string
   sources: YoutubeVideoSource[]
   ingested: YoutubeVideoIngestedSource[]
+  /** Persisted in existing run.result JSON during planning; no DB migration. */
+  analysisState?: import('@/lib/youtube-video/pipeline/yt-types').YtCheckpoint | null
   options: YoutubeVideoOption[] | null
   chosenOptionId: string | null
   creditsEstimated: number | null
@@ -37,6 +39,7 @@ export type YoutubeVideoRunStore = {
   update(workspaceId: string, id: string, patch: Partial<YoutubeVideoRunRecord>): Promise<YoutubeVideoRunRecord>
   /** Atomic claim; a stale planning run can be resumed after a web restart. */
   claimPlanning(workspaceId: string, id: string, staleBeforeIso: string): Promise<boolean>
+  heartbeatPlanning?: (workspaceId: string, id: string) => Promise<boolean>
 }
 
 const ACTIVE: YoutubeVideoStatus[] = ['queued', 'importing', 'waiting_for_source', 'running', 'awaiting_choice']
@@ -80,6 +83,12 @@ export function memoryYoutubeVideoStore(): YoutubeVideoRunStore {
         ...current, status: 'running', stage: 'planning', progressPercent: 50,
         updatedAt: new Date().toISOString(),
       })
+      return true
+    },
+    async heartbeatPlanning(workspaceId, id) {
+      const current=rows.get(key(workspaceId,id))
+      if(!current||current.status!=='running'||current.stage!=='planning')return false
+      rows.set(key(workspaceId,id),{...current,updatedAt:new Date().toISOString()})
       return true
     },
     async update(workspaceId, id, patch) {
