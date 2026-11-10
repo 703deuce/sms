@@ -1,9 +1,9 @@
-import { ScriptEditorEntry } from '@/components/script-editor/script-editor-entry'
-import { T2vEditorStaleBanner } from '@/components/t2v/t2v-editor-stale-banner'
-import { getPrisma } from '@/lib/server/db'
-import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { ScriptEditorEntry } from '../../../../../components/script-editor/script-editor-entry'
+import { T2vEditorStaleBanner } from '../../../../../components/t2v/t2v-editor-stale-banner'
+import { getPrisma } from '../../../../../lib/server/db'
+import { resolveWorkspaceId } from '../../../../../lib/server/workspace'
 import { notFound, redirect } from 'next/navigation'
-import { isScriptEditorFeatureEnabled } from '@/lib/server/clips/feature-gates'
+import { isScriptEditorFeatureEnabled } from '../../../../../lib/server/clips/feature-gates'
 
 export const metadata = { title: 'Script · Clips' }
 

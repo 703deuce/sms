@@ -58,19 +58,19 @@ describe('sidebar model', () => {
   })
   it('create menu', () => {
     const items = createMenuItems(ALL)
-    expect(items.map((i) => i.label)).toEqual([
+    expect(items.map((i: { label: string }) => i.label)).toEqual([
       'Clip',
       'Stream clip',
       'Editor project',
       'Recording',
       'AI Video',
     ])
-    expect(Object.fromEntries(items.map((i) => [i.id, i.href]))).toMatchObject({
+    expect(Object.fromEntries(items.map((i: { id: string; href: string }) => [i.id, i.href]))).toMatchObject({
       'create-clip': '/app/clips/new',
       'create-editor': '/app/video-editor/new',
       'create-ai-video': '/app/ai-video/new',
     })
-    expect(createMenuItems({ ...ALL, scriptEditor: true }).find((i) => i.id === 'create-editor')?.href).toBe(
+    expect(createMenuItems({ ...ALL, scriptEditor: true }).find((i: { id: string; href: string }) => i.id === 'create-editor')?.href).toBe(
       '/app/video-editor',
     )
   })

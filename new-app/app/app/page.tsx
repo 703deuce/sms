@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { Clapperboard, Scissors } from 'lucide-react'
-import { Page, PageHeader } from '@/components/app/page-primitives'
-import { ProjectStatusBadge } from '@/components/app/status'
-import { getClipsDriveProjects, getClipsWorkspaceId } from '@/lib/server/clips/drive-data'
-import { t2vProjectHref } from '@/lib/t2v/project-link'
+import { Page, PageHeader } from '../../components/app/page-primitives'
+import { ProjectStatusBadge } from '../../components/app/status'
+import { getClipsDriveProjects, getClipsWorkspaceId } from '../../lib/server/clips/drive-data'
+import { t2vProjectHref } from '../../lib/t2v/project-link'
 import { routes } from '../../lib/routes'
 
 export const dynamic = 'force-dynamic'

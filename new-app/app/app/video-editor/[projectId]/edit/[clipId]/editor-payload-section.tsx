@@ -1,6 +1,6 @@
-import { EditorClipShell } from '@/components/clips/editor/editor-clip-shell'
-import { isFullVideoSettings } from '@/lib/clips/full-video'
-import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
+import { EditorClipShell } from '../../../../../../components/clips/editor/editor-clip-shell'
+import { isFullVideoSettings } from '../../../../../../lib/clips/full-video'
+import { getClipEditorPayload } from '../../../../../../lib/server/clips/clip-detail'
 import { notFound } from 'next/navigation'
 
 export async function EditorPayloadSection({

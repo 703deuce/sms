@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
-import { Page, PageHeader } from '@/components/app/page-primitives'
-import { T2vCreateWorkspace } from '@/components/t2v/t2v-create-workspace'
-import { requireAiVideoPageEnabled } from '@/lib/server/t2v/require-ai-video-page'
+import { Page, PageHeader } from '../../../../components/app/page-primitives'
+import { T2vCreateWorkspace } from '../../../../components/t2v/t2v-create-workspace'
+import { requireAiVideoPageEnabled } from '../../../../lib/server/t2v/require-ai-video-page'
 
 export const metadata = { title: 'AI Video' }
 

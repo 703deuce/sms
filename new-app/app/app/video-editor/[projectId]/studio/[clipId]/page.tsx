@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
-import { resolveWorkspaceId } from '@/lib/server/workspace'
-import { EditorPageSkeleton } from '@/components/clips/editor/editor-page-skeleton'
+import { resolveWorkspaceId } from '../../../../../../lib/server/workspace'
+import { EditorPageSkeleton } from '../../../../../../components/clips/editor/editor-page-skeleton'
 import { EditorPayloadSection } from '../../edit/[clipId]/editor-payload-section'
 
 export const metadata = { title: 'Clip Studio · Transovo' }

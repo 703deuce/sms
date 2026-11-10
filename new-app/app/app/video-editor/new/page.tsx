@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
-import { NewProjectWorkspace } from '@/components/clips/new-project-workspace'
-import { clipperCapabilities } from '@/lib/server/clips/clipper-capabilities'
+import { NewProjectWorkspace } from '../../../../components/clips/new-project-workspace'
+import { clipperCapabilities } from '../../../../lib/server/clips/clipper-capabilities'
 
 export const metadata = { title: 'New editor project' }
 

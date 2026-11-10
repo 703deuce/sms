@@ -1,5 +1,5 @@
-import { EditorPageSkeleton } from '@/components/clips/editor/editor-page-skeleton'
-import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { EditorPageSkeleton } from '../../../../../../components/clips/editor/editor-page-skeleton'
+import { resolveWorkspaceId } from '../../../../../../lib/server/workspace'
 import { Suspense } from 'react'
 import { EditorPayloadSection } from './editor-payload-section'
 
