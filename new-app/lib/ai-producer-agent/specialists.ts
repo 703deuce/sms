@@ -1538,7 +1538,7 @@ export async function createEditorialHandoff(
   } catch (error) {
     // Never invent a generic Story for this baseline. Surface the model failure
     // instead of asking Footage to cut a story that Story never selected.
-    if (!highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105) {
+    if (ctx.config.youtubeLongForm || (!highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105)) {
       await specialistEvent(ctx,budget,'story','story_decision_failed_no_fallback',{
         errorCode:String((error as Error)?.message??error).slice(0,500),
         sourceRangeMs:source.rangeMs,
@@ -1597,7 +1597,7 @@ export async function createEditorialHandoff(
   } catch (error) {
     // Never replace a Story agent's editorial plan with an unrelated source tail.
     // Surface the execution failure and log it rather than publishing a fake edit.
-    if (!highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105) {
+    if (ctx.config.youtubeLongForm || (!highlightsMode && ctx.config.editMode === 'just_chatting_rough_cut' && ctx.config.targetLengthS[1] <= 105)) {
       await specialistEvent(ctx, budget, 'footage', 'direct_cut_failed_no_fallback', {
         errorCode: String((error as Error)?.message ?? error).slice(0,500),
         selectedStory: outline,
@@ -2143,5 +2143,7 @@ export async function createEditorialHandoff(
       note: 'Deliver the best coherent editable cut even when shorter or longer than requested.',
     })
   }
-  return { outline, footage, cutPlan, ...(finisher ? { finisher } : {}), ...(highlightsFinisher ? { highlightsFinisher } : {}) }
+  return { outline, footage, cutPlan,
+    ...(ctx.config.youtubeLongForm ? { visualActions, visualActionOmissions: submittedVisualOmissions } : {}),
+    ...(finisher ? { finisher } : {}), ...(highlightsFinisher ? { highlightsFinisher } : {}) }
 }
