@@ -54,3 +54,31 @@ def test_remap_labeled_frame_times_scales_down():
         frame_times=None,
     )
     assert float(out[0]["start_s"]) <= 226.0
+
+
+def test_remap_does_not_subtract_offset_outside_window():
+    """Live bug: absolute times from earlier in the source (e.g. ~501s)
+    on a 180s end-edge window starting at 871s became end_s=-369.8."""
+    raw = [{"start_s": 0.0, "end_s": 501.2, "peak_s": 480.0, "hook_s": 470.0, "score": 0.4}]
+    out = _remap_labeled_frame_moment_times(
+        raw,
+        duration_s=180.0,
+        fps=0.25,
+        trim_start_s=871.0,
+        frame_times=None,
+    )
+    assert float(out[0]["end_s"]) == 501.2
+    assert float(out[0]["end_s"]) > 0
+
+
+def test_remap_subtracts_offset_only_when_inside_window():
+    raw = [{"start_s": 880.0, "end_s": 1020.0, "peak_s": 950.0, "hook_s": 890.0, "score": 0.5}]
+    out = _remap_labeled_frame_moment_times(
+        raw,
+        duration_s=180.0,
+        fps=0.25,
+        trim_start_s=871.0,
+        frame_times=None,
+    )
+    assert abs(float(out[0]["start_s"]) - 9.0) < 0.01
+    assert abs(float(out[0]["end_s"]) - 149.0) < 0.01

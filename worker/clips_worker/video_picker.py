@@ -111,13 +111,17 @@ def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dic
     """Clamp/drop out-of-range model times instead of rejecting the whole response."""
     from clips_worker.decision_log import decision_log
 
+    from clips_worker.stage_log import stage_event
+
     dur = max(1.0, float(duration_s))
     kept = clamped = dropped = 0
+    reasons: dict[str, int] = {}
     valid: list[dict] = []
     for row in raw_moments:
         coerced = _coerce_moment_row(row, dur)
         if coerced is None:
             dropped += 1
+            reasons["coerce_failed"] = reasons.get("coerce_failed", 0) + 1
             decision_log(
                 "sanitize",
                 "reject",
@@ -133,10 +137,12 @@ def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dic
             hook = float(row.get("hook_s", start))
         except (TypeError, ValueError):
             dropped += 1
+            reasons["time_parse"] = reasons.get("time_parse", 0) + 1
             decision_log("sanitize", "reject", reason="time_parse", input=_sanitize_moment_preview(row))
             continue
         if start >= dur - 3:
             dropped += 1
+            reasons["start_near_eof"] = reasons.get("start_near_eof", 0) + 1
             decision_log(
                 "sanitize",
                 "reject",
@@ -148,13 +154,36 @@ def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dic
         orig = (start, end, peak, hook)
         start = max(0.0, start)
         end = min(end, dur)
+        if end < 0:
+            dropped += 1
+            reasons["span_too_short"] = reasons.get("span_too_short", 0) + 1
+            decision_log(
+                "sanitize",
+                "reject",
+                reason="span_too_short",
+                start_s=start,
+                end_s=end,
+                raw_start_s=orig[0],
+                raw_end_s=orig[1],
+            )
+            continue
+        end = max(end, 0.0)
         peak = _clamp(peak, start, max(start, end - 0.001))
         hook = _clamp(hook, start, max(start, peak))
         if end - start < _MIN_MOMENT_S:
             start = max(0.0, end - _MIN_MOMENT_S)
         if end - start < _MIN_MOMENT_S:
             dropped += 1
-            decision_log("sanitize", "reject", reason="span_too_short", start_s=start, end_s=end)
+            reasons["span_too_short"] = reasons.get("span_too_short", 0) + 1
+            decision_log(
+                "sanitize",
+                "reject",
+                reason="span_too_short",
+                start_s=start,
+                end_s=end,
+                raw_start_s=orig[0],
+                raw_end_s=orig[1],
+            )
             continue
         if (round(start, 3), round(end, 3), round(peak, 3), round(hook, 3)) != (
             round(orig[0], 3),
@@ -191,7 +220,17 @@ def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dic
             score=row.get("score"),
         )
     stats = {"kept": kept, "clamped": clamped, "dropped": dropped}
-    decision_log("sanitize", "summary", **stats, duration_s=dur)
+    decision_log("sanitize", "summary", **stats, duration_s=dur, reasons=reasons)
+    stage_event(
+        "filter",
+        "sanitize",
+        candidateCount=len(raw_moments),
+        kept=kept,
+        clamped=clamped,
+        dropped=dropped,
+        reasons=reasons,
+        duration_s=dur,
+    )
     return valid, stats
 
 
@@ -1388,13 +1427,20 @@ def _remap_labeled_frame_moment_times(
                 continue
             new_val = val
             if val > dur + 1.0:
-                if trim_start_s >= 1.0 and val - trim_start_s <= dur + 1.0:
-                    new_val = val - trim_start_s
-                elif frame_times:
+                # Only treat val as an absolute source time in THIS window.
+                # A looser upper-bound check (val - trim_start_s <= dur) let
+                # earlier-in-source times (e.g. 501s on an 871–1051s edge
+                # window) remap to negative end_s and then get dropped as
+                # span_too_short (proj_f32e136d, end_s=-369.8).
+                local = val - trim_start_s
+                if trim_start_s >= 1.0 and -1.0 <= local <= dur + 1.0:
+                    new_val = local
+                elif trim_start_s < 1.0 and frame_times:
                     idx = max(0, min(len(frame_times) - 1, round(val * fps)))
                     new_val = frame_times[idx]
-                elif scale < 1.0:
+                elif trim_start_s < 1.0 and scale < 1.0:
                     new_val = val * scale
+                # else: leave val alone (out of this window). Sanitize drops it.
             if abs(new_val - val) > 0.05:
                 decision_log(
                     "video_picker",
@@ -2232,6 +2278,18 @@ def watch_video_file(
                     "after_reassess": before_final_dedupe,
                 }
                 meta["ok"] = True
+                from clips_worker.stage_log import stage_event as _stage_event
+                _stage_event(
+                    "segment",
+                    "candidates",
+                    candidateCount=len(moments),
+                    rawMoments=len(raw_moments),
+                    momentsBeforeDedupe=moments_before_dedupe,
+                    afterReassess=before_final_dedupe,
+                    minNeed=min_need,
+                    normalizeRejects=len(normalize_rejects or []),
+                    chunk=chunk_label,
+                )
                 meta["model"] = active_model
                 meta["model_used"] = active_model
                 meta["model_fallback"] = active_model != primary_model

@@ -36,11 +36,27 @@ export function candidateWindows(moments:readonly Record<string,unknown>[],range
   // events. Return only grounded observed candidates.
   return selected.map((c,index)=>({...c,index}))
 }
-export function overlapFraction(a:readonly SourcePassage[],b:readonly SourcePassage[]){
+export function overlapStats(a:readonly SourcePassage[],b:readonly SourcePassage[]){
   const duration=(xs:readonly SourcePassage[])=>xs.reduce((n,x)=>n+Math.max(0,x.endMs-x.startMs),0)
   let intersection=0
   for(const x of a)for(const y of b)intersection+=Math.max(0,Math.min(x.endMs,y.endMs)-Math.max(x.startMs,y.startMs))
-  return intersection/Math.max(1,Math.min(duration(a),duration(b)))
+  const da=duration(a), db=duration(b)
+  const shorter=Math.min(da,db), longer=Math.max(da,db)
+  return {
+    intersection,
+    shorter:intersection/Math.max(1,shorter),
+    longer:intersection/Math.max(1,longer),
+  }
+}
+export function overlapFraction(a:readonly SourcePassage[],b:readonly SourcePassage[]){
+  return overlapStats(a,b).shorter
+}
+/** True only when the two clips mostly cover the same moments
+ * (shared time is most of *both* durations). A short continuous moment
+ * sitting inside a long Story is not a duplicate. */
+export function isMostlySameContent(a:readonly SourcePassage[],b:readonly SourcePassage[],threshold=0.6){
+  const stats=overlapStats(a,b)
+  return stats.shorter>threshold && stats.longer>threshold
 }
 export function rankCandidate(score:{finderScore:number;qaPass:boolean|null;issues:number;durationSeconds:number;targetS:number}){
   // Narrative clarity, independent comprehensibility and truthful completion

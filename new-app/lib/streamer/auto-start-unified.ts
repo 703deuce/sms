@@ -4,20 +4,25 @@ import {
 } from '@/lib/ai-producer-agent/clip-mode/unified-run-input'
 import {streamerAgentSettings} from '@/lib/streamer/agent-batch-contract'
 
-/** Ingest jobs that can mark a project READY with transcript + video already on it. */
+/** Ingest jobs that finish with transcript + video already on the project. */
 export const AUTO_START_INGEST_JOB_TYPES = [
   'PROCESS_PROJECT',
   'STREAM_ANALYZE',
   'STREAM_RENDER',
 ] as const
 
+/** Statuses that mean ingest is done and a unified run may start.
+ * FINDING_CLIPS is the in-progress state while the agent runs.
+ * READY is kept so older ingest jobs that still flip READY can hook. */
+export const AUTO_START_INGEST_STATUSES = ['FINDING_CLIPS', 'READY'] as const
+
 export function shouldHookAutoStartUnified(
   jobType: string,
   projectStatus?: string,
   jobStatus?: string,
 ): boolean {
-  return projectStatus === 'READY'
-    && jobStatus === 'DONE'
+  if (!projectStatus || jobStatus !== 'DONE') return false
+  return (AUTO_START_INGEST_STATUSES as readonly string[]).includes(projectStatus)
     && (AUTO_START_INGEST_JOB_TYPES as readonly string[]).includes(jobType)
 }
 
@@ -63,7 +68,7 @@ function streamPermissionOk(project: AutoStartProjectSnap): boolean {
 }
 
 /**
- * Decide whether a READY ingest should start one clip_unified_v1 job.
+ * Decide whether a finished ingest should start one clip_unified_v1 job.
  * Twitch/Kick stream imports start unified on this project's range (the full
  * imported range, or an already-windowed project). Uploads still require
  * autoAgentClipMode. Never plans a per-window Story/continuous batch.
@@ -71,7 +76,8 @@ function streamPermissionOk(project: AutoStartProjectSnap): boolean {
 export function planAutoStartUnifiedClip(
   project: AutoStartProjectSnap | null | undefined,
 ): AutoStartUnifiedPlan | null {
-  if (!project || project.deletedAt || project.status !== 'READY') return null
+  if (!project || project.deletedAt) return null
+  if (!(AUTO_START_INGEST_STATUSES as readonly string[]).includes(project.status)) return null
   const settings = streamerAgentSettings(project.settings)
   if (settings.agentClipBatch || settings.unifiedClipRunId) return null
   const rangeMs: [number, number] = [project.rangeStartMs, project.rangeEndMs]

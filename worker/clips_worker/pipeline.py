@@ -103,6 +103,16 @@ def insert_clips_batch(conn, rows: list[dict]) -> int:
                 if cur.rowcount:
                     inserted += 1
         conn.commit()
+    from clips_worker.stage_log import stage_event
+    project_id = rows[0].get("projectId") if rows else None
+    stage_event(
+        "save",
+        "insert_clips",
+        project_id=project_id,
+        attempted=len(rows),
+        inserted=inserted,
+        skipped=len(rows) - inserted,
+    )
     return inserted
 
 
@@ -311,9 +321,21 @@ def reframe_clip_preview(
 
     render_meta: dict = {}
 
-    layout_cfg = settings.get("layout") if isinstance(settings.get("layout"), dict) else {}
+    # Per-clip layout for unified / auto clips, before any speakercrop work.
+    if edits:
+        from clips_worker.needs_tracking import apply_layout_decision
+        apply_layout_decision(
+            edits,
+            clip_file,
+            clip_id=clip_id,
+            project_id=project_id,
+            settings=reframe_settings,
+            archetype=(ai_meta or {}).get("archetype") if isinstance(ai_meta, dict) else None,
+        )
+
+    layout_cfg = reframe_settings.get("layout") if isinstance(reframe_settings.get("layout"), dict) else {}
     layout_mode = str(
-        settings.get("layoutMode") or layout_cfg.get("mode") or settings.get("layout") or "speaker_follow"
+        reframe_settings.get("layoutMode") or layout_cfg.get("mode") or reframe_settings.get("layout") or "speaker_follow"
     ).lower()
     if isinstance(settings.get("layout"), str):
         layout_mode = str(settings.get("layoutMode") or settings.get("layout") or "speaker_follow").lower()

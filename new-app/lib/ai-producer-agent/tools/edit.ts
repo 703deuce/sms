@@ -19,13 +19,12 @@ export function createProject(ctx: ToolCtx, out: OutputState, args: Record<strin
   out.builder = new DraftEditsBuilder(bounds, main, ctx.cache.words ?? [], ctx.rmsLookup ?? (() => []))
   out.builder.aspectRatio = ctx.config.editMode === 'just_chatting_rough_cut'
     ? '16:9' : (args.aspect as typeof out.builder.aspectRatio) ?? '9:16'
-  // Long-form rough cuts default to the untouched full source frame. On a
-  // three-person two-shot, speaker_follow without face boxes can zoom the
-  // entire frame. Clip-mode 9:16 talking-head exports use speaker tracking;
-  // the worker already runs face-aware reframe for speaker_follow.
+  // Long-form / YouTube video stay full_frame. Clip modes leave layout as
+  // 'auto' so the worker (needs_tracking.py) picks center_crop / fit_blur /
+  // speaker_follow from faces, screen-share, and source aspect.
   if (ctx.config.editMode === 'just_chatting_rough_cut') {
     const clipMode=isClipAgentMode(ctx.config.storyMode)
-    out.builder.setLayout(clipMode?'speaker_follow':'full_frame')
+    out.builder.setLayout(clipMode?'auto':'full_frame')
   }
   out.pendingTitle = String(args.title ?? 'AI Producer edit')
   out.pendingSources = sources

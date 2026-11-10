@@ -166,7 +166,7 @@ export function buildRmsLookup(frames: { tMs: number; rms: number }[]): RmsFrame
 
 export async function layoutInfo(ctx: import('@/lib/ai-producer-agent/tools/registry').ToolCtx) {
   const clipMode=isClipAgentMode(ctx.config.storyMode)
-  return { ok: true, summary: 'layout', data: { contentType: 'irl', mode: clipMode?'speaker_follow':'fit_blur' }, costUsd: 0 }
+  return { ok: true, summary: 'layout', data: { contentType: 'irl', mode: clipMode?'auto':'fit_blur' }, costUsd: 0 }
 }
 
 export async function beats() {

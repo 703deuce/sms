@@ -1,12 +1,11 @@
-import { overlapFraction } from '@/lib/ai-producer-agent/clip-mode/candidates'
+import { overlapFraction, isMostlySameContent, overlapStats } from '@/lib/ai-producer-agent/clip-mode/candidates'
 import type { SourcePassage } from '@/lib/ai-producer-agent/clip-mode/story-coverage'
 
 /**
  * Unified merge overlap threshold.
- * Overlap fraction = intersection of source time across all segments
- * divided by the duration of the shorter clip (sum of its segment lengths).
- * More than 60% is a duplicate; 60% and under is allowed when the clips
- * are clearly different.
+ * A pair is a duplicate only when shared time is more than 60% of *both*
+ * clip durations. A short continuous moment inside a longer Story is kept
+ * (they do not mostly cover the same moments).
  */
 export const UNIFIED_OVERLAP_THRESHOLD = 0.6
 
@@ -53,10 +52,10 @@ export function mergeUnifiedClips<T>(
   for (const clip of ranked) {
     let duplicateOf: { id: string; fraction: number } | null = null
     for (const kept of afterDedupe) {
-      const fraction = overlapFraction(clip.segments, kept.segments)
-      if (fraction > threshold) {
+      const stats = overlapStats(clip.segments, kept.segments)
+      if (isMostlySameContent(clip.segments, kept.segments, threshold)) {
         // Ranked score-desc, Story first on a tie, so the already-kept clip wins.
-        duplicateOf = { id: kept.id, fraction }
+        duplicateOf = { id: kept.id, fraction: stats.shorter }
         break
       }
     }

@@ -314,7 +314,7 @@ def process_job(conn, job: dict) -> None:
     payload = job_payload(job)
     words = resolve_transcript_for_job(project, payload)
 
-    from clips_worker.stage_log import bind_stage_context, stage_span
+    from clips_worker.stage_log import bind_stage_context, stage_event, stage_span
 
     bind_stage_context(project_id=str(project["id"]), job_id=str(job["id"]))
     if str(job.get("type") or "") == "PROCESS_PROJECT":
@@ -354,6 +354,7 @@ def process_job(conn, job: dict) -> None:
                 f"[clipper:transcribe] project={project['id']} skipped=true words={len(words)}",
                 flush=True,
             )
+            stage_event("transcribe", "skipped", project_id=project["id"], job_id=job["id"], transcriptWords=len(words))
             resume_progress = {
                 "projectStatus": "TRANSCRIBING" if byo_job else "FINDING_CLIPS",
                 "stage": "transcribing" if byo_job else "finding_clips",
@@ -376,6 +377,14 @@ def process_job(conn, job: dict) -> None:
                 f"engine={getattr(tx_meta, 'transcription_engine', 'unknown')}",
                 flush=True,
             )
+            stage_event(
+                "transcribe",
+                "done",
+                project_id=project["id"],
+                job_id=job["id"],
+                transcriptWords=len(words),
+                engine=getattr(tx_meta, "transcription_engine", "unknown"),
+            )
 
             post_progress(
                 job["id"],
@@ -390,15 +399,25 @@ def process_job(conn, job: dict) -> None:
             )
 
         if payload.get('agentOnly') is True:
-            from clips_worker.pipeline import mark_project_ready
-
-            mark_project_ready(conn, project['id'])
+            # Do not mark READY here. READY-with-0-clips is what made the UI say
+            # "finished, no clips" while the unified agent run was still going
+            # (proj_f32e136d, 2026-11-10). Leave FINDING_CLIPS so the progress
+            # hook can start clip_unified_v1 and the UI stays in progress until
+            # that run is terminal.
+            with conn.cursor() as cur:
+                cur.execute(
+                    """UPDATE clip_projects
+                       SET status='FINDING_CLIPS', stage='finding_clips', progress=50,
+                           "updatedAt"=NOW()
+                       WHERE id=%s""",
+                    (project["id"],),
+                )
             post_progress(job['id'], {
-                'projectStatus': 'READY', 'stage': 'ready', 'progress': 100,
+                'projectStatus': 'FINDING_CLIPS', 'stage': 'finding_clips', 'progress': 50,
                 'transcriptWords': words, 'jobStatus': 'DONE', 'error': None,
             })
             _mark_job_done(conn, job['id'])
-            log(f"finished agent-only job={job['id']} (classic picker skipped)")
+            log(f"finished agent-only job={job['id']} (classic picker skipped; awaiting unified run)")
             return
 
         if byo_job:

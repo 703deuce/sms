@@ -37,9 +37,10 @@ function streamProject(extra:Partial<AutoStartProjectSnap>={}):AutoStartProjectS
 }
 
 describe('post-ingest hook gate',()=>{
-  it('fires for upload and stream ingest jobs that reach READY',()=>{
+  it('fires for upload and stream ingest jobs that reach FINDING_CLIPS or READY',()=>{
+    expect(shouldHookAutoStartUnified('PROCESS_PROJECT','FINDING_CLIPS','DONE')).toBe(true)
     expect(shouldHookAutoStartUnified('PROCESS_PROJECT','READY','DONE')).toBe(true)
-    expect(shouldHookAutoStartUnified('STREAM_ANALYZE','READY','DONE')).toBe(true)
+    expect(shouldHookAutoStartUnified('STREAM_ANALYZE','FINDING_CLIPS','DONE')).toBe(true)
     expect(shouldHookAutoStartUnified('STREAM_RENDER','READY','DONE')).toBe(true)
   })
   it('ignores non-ingest jobs and non-final progress',()=>{
@@ -91,6 +92,12 @@ describe('planAutoStartUnifiedClip (stream)',()=>{
     expect(planAutoStartUnifiedClip(upload)).toBeNull()
     expect(planAutoStartUnifiedClip({...upload,settings:{autoAgentClipMode:'clip_story_v1'}})?.source)
       .toMatchObject({kind:'upload',sourceId:'uploaded_recording'})
+  })
+  it('plans a unified upload run while the project is FINDING_CLIPS, not only READY',()=>{
+    const upload=streamProject({streamVod:null,status:'FINDING_CLIPS',
+      settings:{autoAgentClipMode:'clip_unified_v1',autoAgentClipSeconds:60}})
+    expect(planAutoStartUnifiedClip(upload)?.source)
+      .toMatchObject({kind:'upload',projectId:'proj_stream'})
   })
 })
 

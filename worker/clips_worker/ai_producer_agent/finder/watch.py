@@ -1383,13 +1383,15 @@ def _remap_labeled_frame_moment_times(
                 continue
             new_val = val
             if val > dur + 1.0:
-                if trim_start_s >= 1.0 and val - trim_start_s <= dur + 1.0:
-                    new_val = val - trim_start_s
-                elif frame_times:
+                local = val - trim_start_s
+                if trim_start_s >= 1.0 and -1.0 <= local <= dur + 1.0:
+                    new_val = local
+                elif trim_start_s < 1.0 and frame_times:
                     idx = max(0, min(len(frame_times) - 1, round(val * fps)))
                     new_val = frame_times[idx]
-                elif scale < 1.0:
+                elif trim_start_s < 1.0 and scale < 1.0:
                     new_val = val * scale
+                # else: leave val alone (out of this window). Sanitize drops it.
             if abs(new_val - val) > 0.05:
                 decision_log(
                     "video_picker",
