@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { AiStudioPage } from '../components/studio/ai-studio-page'
 import { createDevStudioFallback } from '../lib/ai-studio/fallback'
+import { StrictMode } from 'react'
 
 describe('studio layout', () => {
   it('renders the rail, category nav, credit generate button, presets, and capability-gated frames', async () => {
@@ -26,4 +27,18 @@ describe('studio layout', () => {
     expect(await screen.findByTestId('studio-model-gallery')).toBeTruthy()
     expect(screen.getAllByText(/from \d+ credits/).length).toBeGreaterThan(0)
   })
+
+  it('loads models after a React Strict Mode remount', async () => {
+    const client = createDevStudioFallback()
+    render(
+      <StrictMode>
+        <AiStudioPage client={client} sleep={async () => {}} />
+      </StrictMode>,
+    )
+    await waitFor(() => {
+      expect(screen.getAllByText(/from \d+ credits/).length).toBeGreaterThan(0)
+    })
+    expect(screen.getAllByTestId('studio-settings-chip').some((el) => !el.hasAttribute('disabled'))).toBe(true)
+  })
+
 })

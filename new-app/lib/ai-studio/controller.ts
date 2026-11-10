@@ -280,13 +280,17 @@ export function createStudioController(opts: CreateStudioControllerOptions = {})
     },
     getState: () => state,
     async load() {
+      // React Strict Mode remounts in dev and may call load() after destroy().
+      // Reset the flag and stamp a generation so a stale in-flight load cannot commit.
+      disposed = false
+      const loadGen = ++generation
       emit({ modelsStatus: state.models.length ? 'ready' : 'loading', modelsError: null })
       try {
         const [registry] = await Promise.all([
           client.listModels(),
           api.refreshHistory(),
         ])
-        if (disposed) return
+        if (disposed || loadGen !== generation) return
         const models = registry.models
         const current = selectedModel(models, state.form.modelId) ?? pickDefaultModel(models, 'video')
         emit({
@@ -297,7 +301,7 @@ export function createStudioController(opts: CreateStudioControllerOptions = {})
           form: current ? applyModelToForm(state.form, current) : state.form,
         })
       } catch (e) {
-        if (disposed) return
+        if (disposed || loadGen !== generation) return
         emit({
           transport: readTransport(),
           modelsStatus: 'error',
