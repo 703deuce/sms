@@ -408,7 +408,13 @@ def _preview_crop_track_for_export(
         return preview_crop_track
     try:
         source = json.loads(preview_crop_track.read_text())
-        W, cw = float(source["W"]), float(source["cw"])
+        W = float(source["W"])
+        # v2 segment-slot tracks need not contain the legacy cw field.
+        # Infer it from source and output dimensions so their centers still pan.
+        H = float(source.get("H") or 0)
+        out_w = float(source.get("out_w") or 720)
+        out_h = float(source.get("out_h") or 1280)
+        cw = float(source.get("cw") or (H * out_w / out_h if out_h > 0 else 0))
         center = float(crop_box["x"]) + float(crop_box["w"]) / 2.0
         if not (W > 0 and cw > 0 and 0 <= center <= 1):
             return preview_crop_track
