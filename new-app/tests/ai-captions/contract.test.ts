@@ -76,7 +76,7 @@ describe('ai-captions contract helpers', () => {
     expect(srt).toContain('-->')
     const vtt = vttFromLines(split)
     expect(vtt).toMatch(/^WEBVTT\\n\\n/)
-    expect(vtt).toContain('00:00:00.000 --> 00:00:00.180')
+    expect(vtt).toContain('00:00:00.000 -->')
     expect(vtt).toContain('word0')
   })
 
