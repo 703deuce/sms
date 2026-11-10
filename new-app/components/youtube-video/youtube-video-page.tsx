@@ -12,6 +12,16 @@ import type { CreateYoutubeVideoControllerOptions } from '../../lib/youtube-vide
 
 type PendingFile = { key: string; file: File }
 
+const VIDEO_FILE_EXT = /\.(?:mp4|mov|m4v|webm|mkv|avi|mpeg|mpg|3gp|ts)$/i
+
+function pendingFileKey(file: File): string {
+  return `${file.name}-${file.size}-${file.lastModified}`
+}
+
+function acceptsVideoFile(file: File): boolean {
+  return file.type.startsWith('video/') || (!file.type && VIDEO_FILE_EXT.test(file.name))
+}
+
 export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {}) {
   const { state, controller } = useYoutubeVideo(opts)
   const [files, setFiles] = useState<PendingFile[]>([])
@@ -21,6 +31,7 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const uploadedByFileKeyRef = useRef(new Map<string, Extract<YoutubeVideoSource, { kind: 'upload' }>>())
   const busy = state.submitLocked || uploading
   const sourceCount = files.length + urlSources.length
 
@@ -45,12 +56,35 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
   }, [state.run?.runId])
 
   function addFiles(list: FileList | File[]) {
-    const incoming = Array.from(list).filter((f) => f.size > 0)
-    setFiles((prev) => {
-      const room = YOUTUBE_VIDEO_MAX_SOURCES - urlSources.length - prev.length
-      return [...prev, ...incoming.slice(0, Math.max(0, room)).map((file) => ({ key: `${file.name}-${file.size}-${file.lastModified}`, file }))]
+    const incoming = Array.from(list)
+    const nonEmpty = incoming.filter((file) => file.size > 0)
+    const accepted = nonEmpty.filter(acceptsVideoFile)
+    const known = new Set(files.map((item) => item.key))
+    const unique = accepted.filter((file) => {
+      const key = pendingFileKey(file)
+      if (known.has(key)) return false
+      known.add(key)
+      return true
     })
-    setUploadError(null)
+    const room = Math.max(0, YOUTUBE_VIDEO_MAX_SOURCES - urlSources.length - files.length)
+    setFiles((prev) => [
+      ...prev,
+      ...unique.slice(0, room).map((file) => ({ key: pendingFileKey(file), file })),
+    ])
+    if (incoming.some((file) => file.size <= 0)) {
+      setUploadError('Empty video files cannot be uploaded.')
+    } else if (nonEmpty.some((file) => !acceptsVideoFile(file))) {
+      setUploadError('Choose video files only.')
+    } else if (unique.length > room) {
+      setUploadError(`You can add up to ${YOUTUBE_VIDEO_MAX_SOURCES} sources.`)
+    } else {
+      setUploadError(null)
+    }
+  }
+
+  function openFilePicker() {
+    if (busy || sourceCount >= YOUTUBE_VIDEO_MAX_SOURCES) return
+    inputRef.current?.click()
   }
 
   function addUrl() {
@@ -85,14 +119,22 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
     try {
       const uploaded: YoutubeVideoSource[] = []
       for (const item of files) {
+        const cached = uploadedByFileKeyRef.current.get(item.key)
+        if (cached) {
+          uploaded.push(cached)
+          console.info('[youtube-video:client]', {
+            event: 'source_upload_reused', sourceIndex: uploaded.length - 1, projectId: cached.projectId,
+          })
+          continue
+        }
         console.info('[youtube-video:client]', { event: 'source_upload_start', sourceIndex: uploaded.length })
-        uploaded.push(await uploadFileToProject(item.file))
-        console.info('[youtube-video:client]', { event: 'source_upload_done',
-          projectId: uploaded[uploaded.length - 1]?.kind === 'upload'
-            ? (uploaded[uploaded.length - 1] as { projectId: string }).projectId : null })
+        const source = await uploadFileToProject(item.file)
+        uploadedByFileKeyRef.current.set(item.key, source)
+        uploaded.push(source)
+        console.info('[youtube-video:client]', { event: 'source_upload_done', projectId: source.projectId })
       }
       const sources = [...uploaded, ...urlSources]
-      controller.setSources(sources)
+      if (JSON.stringify(state.sources) !== JSON.stringify(sources)) controller.setSources(sources)
       await controller.submit({ sources, title: state.title })
       console.info('[youtube-video:client]', { event: 'upload_and_submit_complete', sourceCount: sources.length })
     } catch (e) {
@@ -124,22 +166,42 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
               {sourceCount}/{YOUTUBE_VIDEO_MAX_SOURCES}
             </p>
           </div>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-background/50 px-4 py-8 text-center text-sm text-muted-foreground hover:bg-muted/40">
-            <span>Drop videos here, or click to upload</span>
-            <input
-              ref={inputRef}
-              type="file"
-              accept="video/*"
-              multiple
-              className="sr-only"
-              data-testid="youtube-video-upload"
-              disabled={busy}
-              onChange={(e) => {
-                if (e.target.files) addFiles(e.target.files)
-                e.target.value = ''
-              }}
-            />
-          </label>
+          <button
+            type="button"
+            data-testid="youtube-video-dropzone"
+            disabled={busy || sourceCount >= YOUTUBE_VIDEO_MAX_SOURCES}
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-background/50 px-4 py-8 text-center text-sm text-muted-foreground hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={openFilePicker}
+            onDragOver={(e) => {
+              if (busy) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'copy'
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              if (busy || !e.dataTransfer.files.length) return
+              console.info('[youtube-video:client]', {
+                event: 'source_drop', sourceCount: e.dataTransfer.files.length,
+              })
+              addFiles(e.dataTransfer.files)
+            }}
+          >
+            <span>Drop videos here</span>
+            <span className="font-medium text-foreground">Choose videos</span>
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="video/*"
+            multiple
+            className="sr-only"
+            data-testid="youtube-video-upload"
+            disabled={busy || sourceCount >= YOUTUBE_VIDEO_MAX_SOURCES}
+            onChange={(e) => {
+              if (e.currentTarget.files?.length) addFiles(e.currentTarget.files)
+              e.currentTarget.value = ''
+            }}
+          />
           {files.length > 0 && (
             <ul className="flex flex-col gap-1 text-sm" data-testid="youtube-video-file-list">
               {files.map((item, i) => (
