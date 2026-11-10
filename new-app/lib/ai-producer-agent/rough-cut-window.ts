@@ -1,4 +1,5 @@
 import type { AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
+import { isClipAgentMode } from '@/lib/ai-producer-agent/clip-mode/modes'
 
 /** Official competitor caps checked 9 Nov 2026 (America/New_York):
  * Opus Clip documents 10 hours (help.opus.pro/docs/article/video-length)
@@ -65,7 +66,7 @@ export function clipAgentHardSteps(sourceMs:number):number{
 
 /** Less commentary is common in games; never loosen existing long-form ingest. */
 export function minimumAgentTranscriptWords(storyMode?:string):number{
-  return storyMode==='clip_moment_v1'||storyMode==='clip_story_v1'?8:30
+  return isClipAgentMode(storyMode)?8:30
 }
 
 /** Per-candidate budget. Specialists plus assembly plus QA previously shared

@@ -11,7 +11,6 @@ import { EmptyState, Panel } from '@/components/app/page-primitives'
 import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { ProjectPeopleStrip } from '@/components/clips/project-people-strip'
-import { ClipGridSkeleton } from '@/components/clips/clip-grid-skeleton'
 import { ProgressiveClipResults } from '@/components/clips/progressive-clip-results'
 import { JobStatus } from '@/components/clips/job-status'
 import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
@@ -35,6 +34,15 @@ import { useRouter } from 'next/navigation'
 import { ProjectSpeechSelectsPanel } from '@/components/clips/project-speech-selects-panel'
 import { defaultEdits } from '@/lib/clips/edits'
 import { shouldClientEnrichReadyClips } from '@/lib/clips/project-clips-enrich'
+import {
+  adaptListProjectClips,
+  filterSortUnifiedClips,
+  unifiedClipCounts,
+  type UnifiedClipSort,
+  type UnifiedClipTypeFilter,
+} from '../../lib/clips/unified-clip-results'
+import { UnifiedResultsToolbar } from './unified-results-toolbar'
+import { UnifiedClipProgress } from './unified-clip-progress'
 
 type ProjectStatusPayload = {
   status: string
@@ -135,7 +143,7 @@ export function ProjectClipsView({
   editorProjectId?: string | null
   /** CL-05: clip cards can open moment in full video when the project has an upload. */
   projectHasUpload?: boolean
-  autoAgentClipMode?: 'clip_moment_v1'|'clip_story_v1'
+  autoAgentClipMode?: 'clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'
   autoAgentClipSeconds?: 30|60|90
   autoAgentClipError?: string
 }) {
@@ -175,8 +183,11 @@ export function ProjectClipsView({
     (initialStatus === 'FAILED' && initialClips != null && initialClips.length > 0)
   const [status, setStatus] = useState(initialStatus)
   const [clips, setClips] = useState<ClipCardData[]>(initialClips ?? [])
-  const [clipSort, setClipSort] = useState<'score' | 'timeline' | 'title'>('score')
-  const displayedClips = [...clips].sort((a,b) => clipSort === 'timeline' ? a.startMs - b.startMs : clipSort === 'title' ? a.title.localeCompare(b.title) : b.score - a.score)
+  const [clipSort, setClipSort] = useState<UnifiedClipSort>('score')
+  const [clipTypeFilter, setClipTypeFilter] = useState<UnifiedClipTypeFilter>('all')
+  const unifiedClips = adaptListProjectClips(clips)
+  const displayedClips = filterSortUnifiedClips(unifiedClips, { type: clipTypeFilter, sort: clipSort })
+  const clipKindCounts = unifiedClipCounts(unifiedClips)
   const [montagePollKey, setMontagePollKey] = useState(0)
   const [error, setError] = useState<string | null>(initialError ?? null)
   const [readyHydrated, setReadyHydrated] = useState(readyFromServer)
@@ -515,7 +526,7 @@ export function ProjectClipsView({
             {!isStreamer && clips.length > 0 ? <ProjectPeopleStrip clips={clips} /> : null}
             <ProgressiveClipResults
               projectId={projectId}
-              clips={clips}
+              clips={unifiedClips}
               clipsTotal={clipsTotal}
               clipsReady={clipsReady}
               etaSec={progressEtaSec}
@@ -526,7 +537,12 @@ export function ProjectClipsView({
             />
             </>
           ) : processing ? (
-            <ClipGridSkeleton />
+            <UnifiedClipProgress
+              clipsReady={clipsReady}
+              clipsTotal={clipsTotal}
+              etaSec={progressEtaSec}
+              stage={progressStage}
+            />
           ) : null}
         </div>
       ) : (
@@ -534,16 +550,23 @@ export function ProjectClipsView({
           {isStreamer ? <MontageProgress projectId={projectId} pollKey={montagePollKey} /> : null}
           {!isStreamer && clips.length > 0 ? <ProjectPeopleStrip clips={clips} /> : null}
           <Panel
-            title={clipCountLabel(clips.length)}
-            description={`Sorted by ${clipSort}. Hover a card to preview.`}
+            title={
+              clipKindCounts.total === 0
+                ? clipCountLabel(clips.length)
+                : `${clipKindCounts.total} clip${clipKindCounts.total === 1 ? '' : 's'} · ${clipKindCounts.story} Story · ${clipKindCounts.continuous} Continuous`
+            }
+            description="Hover a card to preview. Edit opens the clip editor."
             actions={
               clips.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  <select aria-label="Sort clips" data-testid="project-clip-sort" className="h-8 rounded border border-border bg-background px-2 text-xs" value={clipSort} onChange={e => setClipSort(e.target.value as typeof clipSort)}>
-                    <option value="score">Score</option>
-                    <option value="timeline">Timeline</option>
-                    <option value="title">Title</option>
-                  </select>
+                  <UnifiedResultsToolbar
+                    typeFilter={clipTypeFilter}
+                    sort={clipSort}
+                    onTypeFilterChange={setClipTypeFilter}
+                    onSortChange={setClipSort}
+                    storyCount={clipKindCounts.story}
+                    continuousCount={clipKindCounts.continuous}
+                  />
                   <Sheet>
                     <SheetTrigger render={<Button size="sm" variant="outline" />}>
                       <Sparkles className="mr-1 size-4 text-primary" />
@@ -585,7 +608,7 @@ export function ProjectClipsView({
                 description={
                   failureCopy?.message ??
                   error ??
-                  'No complete, self-contained moments were found in this segment.'
+                  'No complete Story or Continuous moments were found in this segment.'
                 }
                 action={
                   <Button
@@ -635,6 +658,13 @@ export function ProjectClipsView({
                     onApplied={() => void refreshClipsList()}
                   />
                 ) : null}
+                {displayedClips.length === 0 ? (
+                  <EmptyState
+                    icon={Clapperboard}
+                    title={clipTypeFilter === 'story' ? 'No Story clips' : 'No Continuous clips'}
+                    description="Try the other type, or clear the filter to see every clip from this run."
+                  />
+                ) : (
                 <ClipGrid
                   clips={displayedClips}
                   projectId={projectId}
@@ -657,6 +687,7 @@ export function ProjectClipsView({
                         }
                   }
                 />
+                )}
               </>
             )}
           </Panel>

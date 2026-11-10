@@ -26,6 +26,9 @@ describe('buildProcessProjectJobPayload', () => {
     expect(buildProcessProjectJobPayload(defaultClipSettings({
       autoAgentClipMode:'clip_story_v1',
     }))).toMatchObject({agentOnly:true,agentClipMode:'clip_story_v1',agentClipSeconds:60})
+    expect(buildProcessProjectJobPayload(defaultClipSettings({
+      autoAgentClipMode:'clip_unified_v1',
+    }))).toMatchObject({agentOnly:true,agentClipMode:'clip_unified_v1',agentClipSeconds:60})
   })
   it('existing full-video and BYO settings take priority over agent-only',()=>{
     for(const extra of [{byo:true},{fullVideo:true}]){

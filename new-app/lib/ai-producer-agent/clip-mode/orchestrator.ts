@@ -27,6 +27,8 @@ import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,
 import {CLIP_AGENT_EXPORT_PRESET,editVersionFromSnapshot,isUniqueConflict,queueClipExportOnce,shouldAutoExportPublishedClip,shouldAutoPlanClipMotion} from './clip-agent-export'
 import {instructionAsksToCompile,mergeTopicCandidates,topicPassagesFromTranscript,topicQueryFromInstruction,whyThisClip} from '@/lib/ai-producer-agent/clip-mode/topic-search'
 import {createSourceClip,publishClipScore,discardClip} from '@/lib/server/ai-producer-agent/clip-mode-store'
+import {CONTINUOUS_TARGET_S,clipPipelineMode,isClipAgentMode,unifiedClipType} from '@/lib/ai-producer-agent/clip-mode/modes'
+import {mergeUnifiedClips,UNIFIED_OVERLAP_THRESHOLD,type UnifiedMergeClip} from '@/lib/ai-producer-agent/clip-mode/unified-merge'
 import {clipAgentHardSteps,clipAgentHardStepsForCandidates,clipAgentWallClockMs,clipAgentWallClockMsForCandidates,clipCandidateHardSteps,clipCandidateWallClockMs,clipQaRetryHardSteps,clipQaRetryWallClockMs} from '@/lib/ai-producer-agent/rough-cut-window'
 import type {ClipWord} from '@/lib/clips/edits'
 import { buildJustChattingEvidence } from '@/lib/ai-producer-agent/just-chatting-evidence'
@@ -52,6 +54,7 @@ export type OutputState = {
   contextBridges?: Array<{atMs:number;text:string;passageIndex:number}>
   suppressed?: boolean
   needsReview?: boolean
+  clipType?: 'story' | 'continuous'
 }
 
 const activeRuns = new Set<string>()
@@ -64,6 +67,175 @@ export async function runClipAgent(runId: string): Promise<void> {
   } finally {
     activeRuns.delete(runId)
   }
+}
+
+
+type ClipPassItem={
+  out:OutputState
+  candidate:ClipCandidate
+  score:number
+  durationSeconds:number
+  type:'story'|'continuous'
+  issues:string[]
+  critical?:boolean
+  overlaps?:Array<{clipId:string;fraction:number}>
+}
+
+async function runClipPass(input:{
+  ctx:ToolCtx
+  run:{id:string;instruction:string|null}
+  parentBudget:Budget
+  source:ToolCtx['sources'][number] & {projectId:string;rangeMs:[number,number]}
+  pass:'moment'|'story'
+  candidates:ClipCandidate[]
+  targetS:number
+  fullSourceWords:ClipWord[]
+}):Promise<{outputs:OutputState[];kept:ClipPassItem[];heldDrafts:ClipPassItem[]}>{
+  const {ctx,run,parentBudget,source,pass,candidates,targetS,fullSourceWords}=input
+  const pipeline=clipPipelineMode(pass)
+  const type=unifiedClipType(pass)
+  const outputs:OutputState[]=[]
+  const successful:ClipPassItem[]=[]
+  const heldDrafts:ClipPassItem[]=[]
+  const passTarget:[number,number]=pass==='moment'?CONTINUOUS_TARGET_S:ctx.config.targetLengthS
+  for(const candidate of candidates){
+    const out:OutputState={index:pass==='story'?candidate.index:candidate.index+1000,
+      outputType:pass==='moment'?'single_payoff':'story',
+      builder:null,replans:0,fixLoops:0,notes:[],clipType:type}
+    outputs.push(out)
+    const contextStart=Math.max(source.rangeMs?.[0]??0,candidate.startMs-12000)
+    const contextEnd=Math.min(source.rangeMs?.[1]??candidate.endMs,candidate.endMs+6500)
+    const scopedWords=pass==='story'?(ctx.cache.words??[]):
+      (ctx.cache.words??[]).filter((word:ClipWord)=>
+        word.e*1000>=contextStart&&word.s*1000<=contextEnd)
+    if(scopedWords.length<8){out.notes.push('skipped: no transcript context for candidate');continue}
+    const scopedSource=pass==='story'?source:
+      {...source,rangeMs:[contextStart,contextEnd] as [number,number]}
+    const candidateCtx:ToolCtx={...ctx,sources:[scopedSource],
+      config:{...ctx.config,storyMode:pipeline,targetLengthS:passTarget},
+      cache:{...ctx.cache,words:scopedWords,momentsSummary:pass==='story'
+        ? ctx.cache.momentsSummary
+        : [{peakMs:candidate.peakMs,score:candidate.finderScore,
+            description:candidate.label}]}}
+    candidateCtx.createOutputProject=async (target)=>{
+      const segs=target.builder?.segs??[]
+      const startMs=Math.max(0,Math.min(...segs.map(seg=>seg.srcInMs))-2000)
+      const endMs=Math.max(...segs.map(seg=>seg.srcOutMs))+2000
+      return createSourceClip({workspaceId:ctx.workspaceId,
+        sourceProjectId:source.projectId!,runId:ctx.runId,
+        title:target.pendingTitle??('AI '+(pass==='story'?'story':'continuous')+' clip'),
+        startMs,endMs,mode:pipeline})
+    }
+    const clipBudget=new Budget({
+      wallClockMs:clipCandidateWallClockMs(ctx.totalSourceMs),
+      hardSteps:clipCandidateHardSteps(ctx.totalSourceMs),
+      softSteps:Math.max(40,Math.floor(clipCandidateHardSteps(ctx.totalSourceMs)*0.45)),
+    })
+    try{
+      await runOneOutput(candidateCtx,out,clipBudget,pass==='story'
+        ? [run.instruction??'',
+           'INDEPENDENT STORY CANDIDATE '+String(candidate.index+1)+':',
+           'Anchor this distinct story at observed event '+candidate.label,
+           'near original source time '+Math.round(candidate.peakMs/1000)+' seconds.',
+           'Find additional relevant moments from distinct original source regions. Build one coherent complete story of whatever natural length; do not pad toward a preset.',
+           'Other candidate stories must not all be a copy of the same source event.'].join(' ')
+        : [run.instruction??'',
+            'INDEPENDENT SINGLE-MOMENT CANDIDATE '+String(candidate.index+1)+':',
+            'Anchor this clip at the finder event '+candidate.label,
+            'around original source time '+Math.round(candidate.peakMs/1000)+' seconds.',
+            'If the first spoken line refers backward, include ONLY the necessary preceding setup sentence or two.',
+            'Inspect the next 6.5 seconds after the proposed ending for a meaning-changing qualification.',
+            'Let Flow choose the natural ending. Never pad to the requested target length.'].join(' '),
+        fullSourceWords)
+      if(!out.projectId||!out.clipId||!out.editorialHandoff?.cutPlan.length){
+        out.notes.push('No valid editorial output')
+        continue
+      }
+      const cuts=out.editorialHandoff.cutPlan
+      if(pass==='story'&&!storyCoverage(cuts,targetS).separated){
+        await discardClip(ctx.workspaceId,out.clipId)
+        out.notes.push('Rejected: story is one continuous source passage')
+        out.projectId=undefined;out.clipId=undefined
+        continue
+      }
+      const storyPlan=storyPlanFromHandoff(out.editorialHandoff)
+      const evaluated=evaluateCandidateAfterPlan({
+        cuts,words:fullSourceWords,storyPlan,
+        qa:out.editorialHandoff.review,
+      })
+      const safetyRisks=evaluated.safetyRisks
+      await logAiProducerStep({runId:ctx.runId,stepIndex:++parentBudget.steps,phase:'plan',
+        tool:'clip_editorial_safety_audit',kind:'validate',
+        argsSummary:JSON.stringify({clipId:out.clipId,candidateIndex:candidate.index,type}),
+        resultSummary:JSON.stringify({point:out.editorialHandoff.outline.logline,risks:safetyRisks,bridges:out.contextBridges}).slice(0,3600)})
+      const {qaComplete,workingCuts,combinedIssues,disposition}=evaluated
+      if(evaluated.repairLanded){
+        out.editorialHandoff.cutPlan=workingCuts
+        out.notes.push(...evaluated.repairNotes.map((n:string)=>'Editorial revision applied: '+n))
+        try{
+          await persistRevisedCuts(ctx,out,workingCuts)
+        }catch(error){
+          out.notes.push('Editorial revision persist failed; kept prior draft: '+String((error as Error).message).slice(0,180))
+        }
+      }
+      const durationSeconds=workingCuts.reduce((n,c)=>n+(c.endMs-c.startMs),0)/1000
+      const score=rankCandidate({finderScore:candidate.finderScore,
+        qaPass:disposition==='publish',issues:combinedIssues.length,
+        durationSeconds,targetS})
+      if(disposition==='drop'){
+        out.suppressed=true
+        out.notes.push((qaComplete?'Held as editable draft; critical editorial failure: ':'Held as editable draft; editorial QA did not complete: ')+combinedIssues.join('; ').slice(0,420))
+        heldDrafts.push({out,candidate,score,durationSeconds,type,issues:combinedIssues,critical:true})
+        continue
+      }
+      if(disposition==='publish_needs_review'){
+        out.needsReview=true
+        out.notes.push('Published with needsReview: '+combinedIssues.join('; ').slice(0,420))
+      }
+      out.editorialHandoff.review={pass:disposition==='publish',issues:combinedIssues}
+      successful.push({out,candidate,score,durationSeconds,type,issues:combinedIssues})
+    }catch(error){
+      out.notes.push('Candidate failed: '+String((error as Error).message).slice(0,350))
+      if(out.clipId)await discardClip(ctx.workspaceId,out.clipId)
+      out.projectId=undefined;out.clipId=undefined
+      await logAiProducerStep({runId:ctx.runId,stepIndex:++parentBudget.steps,phase:'plan',
+        tool:'clip_candidate_failed',kind:'validate',
+        argsSummary:JSON.stringify({candidate:candidate.index,type,sourceRange:[candidate.startMs,candidate.endMs]}),
+        error:String((error as Error).message).slice(0,700)})
+    }finally{
+      parentBudget.addGemini(clipBudget.geminiUsd)
+      parentBudget.addLuna({prompt_tokens:clipBudget.lunaIn,completion_tokens:clipBudget.lunaOut})
+    }
+  }
+  const ranked=[...successful].sort((a,b)=>b.score-a.score)
+  const kept:ClipPassItem[]=[]
+  for(const item of ranked){
+    const cuts=item.out.editorialHandoff!.cutPlan
+    if(kept.some(k=>overlapFraction(cuts,k.out.editorialHandoff!.cutPlan)>.35)){
+      await discardClip(ctx.workspaceId,item.out.clipId!)
+      item.out.notes.push('Dropped: ranked candidate overlap >35%')
+      item.out.projectId=undefined;item.out.clipId=undefined
+      continue
+    }
+    kept.push(item)
+  }
+  if(!kept.length){
+    const usable=heldDrafts
+      .filter(item=>Boolean(item.out.projectId&&item.out.clipId&&item.out.editorialHandoff?.cutPlan.length)&&!item.critical)
+      .sort((a,b)=>b.score-a.score)
+    const fallback=chooseFallbackPublications(usable,0,3,(item:{critical:boolean})=>item.critical)
+    for(const item of fallback){
+      const cuts=item.out.editorialHandoff!.cutPlan
+      if(kept.some(k=>overlapFraction(cuts,k.out.editorialHandoff!.cutPlan)>.35))continue
+      item.out.suppressed=false
+      item.out.needsReview=true
+      const reasons=item.issues
+      item.out.editorialHandoff!.review={pass:false,issues:reasons}
+      item.out.notes.push('Published as fallback needsReview so the run does not ship 0 clips: '+reasons.join('; ').slice(0,420))
+      kept.push(item)
+    }
+  }
+  return {outputs,kept,heldDrafts}
 }
 
 async function runAiProducerAgentInner(runId: string): Promise<void> {
@@ -79,13 +251,15 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
   const outputs: OutputState[] = []
   let status: 'done' | 'capped' | 'failed' = 'done'
   let error: string | undefined
+  let unifiedMix:{story:number;continuous:number;droppedDuplicates:number}|undefined
 
   await setRunStatus(runId, 'running', 'ingest')
   try {
     // Clip-only fanout. The first full-video analysis is shared by every output.
     // No classic picker jobs are created, and Producer's planner is not called.
-    if(ctx.config.storyMode!=='clip_moment_v1'&&ctx.config.storyMode!=='clip_story_v1')
+    if(!isClipAgentMode(ctx.config.storyMode))
       throw Error('clip_runner_requires_clip_mode')
+    const unified=ctx.config.storyMode==='clip_unified_v1'
     const mode=ctx.config.storyMode==='clip_moment_v1'?'moment':'story'
     const analyzed=await sysTool(ctx,budget,'ingest','find_moments',{
       mode:'best_moments',limit:30,targetClipLenS:ctx.config.targetLengthS[1],
@@ -99,172 +273,76 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
     if(!source?.projectId||!source.rangeMs)throw Error('clip_source_project_missing')
     const topicQuery=topicQueryFromInstruction(run.instruction)
     const topicHits=topicQuery?topicPassagesFromTranscript(ctx.cache.words??[],topicQuery,source.rangeMs):[]
-    const seeded=candidateWindows(ctx.cache.moments??[],source.rangeMs,mode,
-      ctx.config.targetLengthS[1],clipCandidateLimit(source.rangeMs[1]-source.rangeMs[0],12))
-    const candidates=topicHits.length
-      ? mergeTopicCandidates(seeded,topicHits,source.rangeMs,ctx.config.targetLengthS[1])
-      : seeded
-    if(!candidates.length)throw Error('clip_no_grounded_candidate_moments')
+    const rangeMs=source.rangeMs[1]-source.rangeMs[0]
+    const limit=clipCandidateLimit(rangeMs,12)
+    const storyTargetS=ctx.config.targetLengthS[1]
+    const continuousTargetS=CONTINUOUS_TARGET_S[1]
+    const storySeeded=candidateWindows(ctx.cache.moments??[],source.rangeMs,'story',
+      storyTargetS,limit)
+    const momentSeeded=candidateWindows(ctx.cache.moments??[],source.rangeMs,'moment',
+      continuousTargetS,limit)
+    const storyCandidates=topicHits.length
+      ? mergeTopicCandidates(storySeeded,topicHits,source.rangeMs,storyTargetS)
+      : storySeeded
+    const momentCandidates=topicHits.length
+      ? mergeTopicCandidates(momentSeeded,topicHits,source.rangeMs,continuousTargetS)
+      : momentSeeded
+    const passes:Array<{pass:'moment'|'story';candidates:ClipCandidate[];targetS:number}>=[]
+    if(unified||mode==='story')passes.push({pass:'story',candidates:storyCandidates,targetS:storyTargetS})
+    if(unified||mode==='moment')passes.push({pass:'moment',candidates:momentCandidates,targetS:continuousTargetS})
+    const allCandidates=passes.reduce((n,p)=>n+p.candidates.length,0)
+    if(!allCandidates)throw Error('clip_no_grounded_candidate_moments')
     budget.expandLimits({
-      wallClockMs:clipAgentWallClockMsForCandidates(ctx.totalSourceMs,candidates.length),
-      hardSteps:clipAgentHardStepsForCandidates(ctx.totalSourceMs,candidates.length),
+      wallClockMs:clipAgentWallClockMsForCandidates(ctx.totalSourceMs,allCandidates),
+      hardSteps:clipAgentHardStepsForCandidates(ctx.totalSourceMs,allCandidates),
     })
     if(topicQuery)await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
       tool:'clip_topic_search',kind:'system',
       resultSummary:JSON.stringify({query:topicQuery,hits:topicHits.length,compile:instructionAsksToCompile(run.instruction)}).slice(0,2000)})
     await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
       tool:'clip_candidates_found',kind:'system',
-      resultSummary:JSON.stringify({count:candidates.length,candidates}).slice(0,4000)})
-    const heldDrafts:Array<{out:OutputState;candidate:ClipCandidate;score:number;durationSeconds:number;issues:string[];critical:boolean}>=[]
-    const successful:Array<{out:OutputState;candidate:ClipCandidate;score:number;durationSeconds:number}> = []
-    // Each candidate owns its transcript window, editorial agents, edit and
-    // budget. One failure must never abort unrelated candidate clips.
-    // Sequential execution keeps source edit and render workload bounded.
-    for(const candidate of candidates){
-      const out:OutputState={index:candidate.index,outputType:mode==='moment'?'single_payoff':'story',
-        builder:null,replans:0,fixLoops:0,notes:[]}
-      outputs.push(out)
-      // Single Moment stays restricted to one local region. Story agents must
-      // inspect the WHOLE authorized recording to seek genuinely separate beats.
-      const contextStart=Math.max(source.rangeMs?.[0]??0,candidate.startMs-12000)
-      const contextEnd=Math.min(source.rangeMs?.[1]??candidate.endMs,candidate.endMs+6500)
-      const scopedWords=mode==='story'?(ctx.cache.words??[]):
-        (ctx.cache.words??[]).filter((word:ClipWord)=>
-          word.e*1000>=contextStart&&word.s*1000<=contextEnd)
-      if(scopedWords.length<8){out.notes.push('skipped: no transcript context for candidate');continue}
-      const scopedSource=mode==='story'?source:
-        {...source,rangeMs:[contextStart,contextEnd] as [number,number]}
-      const candidateCtx:ToolCtx={...ctx,sources:[scopedSource],
-        cache:{...ctx.cache,words:scopedWords,momentsSummary:mode==='story'
-          ? ctx.cache.momentsSummary
-          : [{peakMs:candidate.peakMs,score:candidate.finderScore,
-              description:candidate.label}]}}
-      candidateCtx.createOutputProject=async (target)=>{
-        const segs=target.builder?.segs??[]
-        const startMs=Math.max(0,Math.min(...segs.map(seg=>seg.srcInMs))-2000)
-        const endMs=Math.max(...segs.map(seg=>seg.srcOutMs))+2000
-        return createSourceClip({workspaceId:ctx.workspaceId,
-          sourceProjectId:source.projectId!,runId:ctx.runId,
-          title:target.pendingTitle??('AI '+mode+' clip'),startMs,endMs,
-          mode:ctx.config.storyMode!})
-      }
-      const clipBudget=new Budget({
-        wallClockMs:clipCandidateWallClockMs(ctx.totalSourceMs),
-        hardSteps:clipCandidateHardSteps(ctx.totalSourceMs),
-        softSteps:Math.max(40,Math.floor(clipCandidateHardSteps(ctx.totalSourceMs)*0.45)),
+      resultSummary:JSON.stringify({
+        unified,story:storyCandidates.length,continuous:momentCandidates.length,
+        passes:passes.map(p=>({pass:p.pass,count:p.candidates.length,candidates:p.candidates})),
+      }).slice(0,4000)})
+    const fullSourceWords=ctx.cache.words??[]
+    const sourceRef=source as ToolCtx['sources'][number] & {projectId:string;rangeMs:[number,number]}
+    let kept:ClipPassItem[]=[]
+    let heldDrafts:ClipPassItem[]=[]
+    for(const pass of passes){
+      const result=await runClipPass({
+        ctx,run,parentBudget:budget,source:sourceRef,pass:pass.pass,
+        candidates:pass.candidates,targetS:pass.targetS,fullSourceWords,
       })
-      try{
-        await runOneOutput(candidateCtx,out,clipBudget,mode==='story'
-          ? [run.instruction??'',
-             'INDEPENDENT STORY CANDIDATE '+String(candidate.index+1)+':',
-             'Anchor this distinct story at observed event '+candidate.label,
-             'near original source time '+Math.round(candidate.peakMs/1000)+' seconds.',
-             'Find additional relevant moments from distinct original source regions. Build one coherent complete story of whatever natural length; do not pad toward a preset.',
-             'Other candidate stories must not all be a copy of the same source event.'].join(' ')
-          : [run.instruction??'',
-              'INDEPENDENT SINGLE-MOMENT CANDIDATE '+String(candidate.index+1)+':',
-              'Anchor this clip at the finder event '+candidate.label,
-              'around original source time '+Math.round(candidate.peakMs/1000)+' seconds.',
-              'If the first spoken line refers backward, include ONLY the necessary preceding setup sentence or two.',
-              'Inspect the next 6.5 seconds after the proposed ending for a meaning-changing qualification.',
-              'Let Flow choose the natural ending. Never pad to the requested target length.'].join(' '),
-          ctx.cache.words??[])
-        if(!out.projectId||!out.clipId||!out.editorialHandoff?.cutPlan.length){
-          out.notes.push('No valid editorial output')
-          continue
-        }
-        const cuts=out.editorialHandoff.cutPlan
-        if(mode==='story'&&!storyCoverage(cuts,ctx.config.targetLengthS[1]).separated){
-          await discardClip(ctx.workspaceId,out.clipId)
-          out.notes.push('Rejected: story is one continuous source passage')
-          out.projectId=undefined;out.clipId=undefined
-          continue
-        }
-        const finalCuts=cuts
-        // Bind the parent transcript here. fullSourceWords is only a
-        // parameter of runOneOutput; the candidate loop must not rely on it.
-        const fullSourceWords=ctx.cache.words??[]
-        const storyPlan=storyPlanFromHandoff(out.editorialHandoff)
-        const evaluated=evaluateCandidateAfterPlan({
-          cuts:finalCuts,words:fullSourceWords,storyPlan,
-          qa:out.editorialHandoff.review,
-        })
-        const safetyRisks=evaluated.safetyRisks
-        await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
-          tool:'clip_editorial_safety_audit',kind:'validate',
-          argsSummary:JSON.stringify({clipId:out.clipId,candidateIndex:candidate.index}),
-          resultSummary:JSON.stringify({point:out.editorialHandoff.outline.logline,risks:safetyRisks,bridges:out.contextBridges}).slice(0,3600)})
-        // Held drafts get their QA revisions applied executably (deterministic
-        // boundary / join / opening repair) and are re-gated once. No paid retry.
-        const {qaComplete,workingCuts,combinedIssues,disposition}=evaluated
-        if(evaluated.repairLanded){
-          out.editorialHandoff.cutPlan=workingCuts
-          out.notes.push(...evaluated.repairNotes.map((n:string)=>'Editorial revision applied: '+n))
-          try{
-            await persistRevisedCuts(ctx,out,workingCuts)
-          }catch(error){
-            out.notes.push('Editorial revision persist failed; kept prior draft: '+String((error as Error).message).slice(0,180))
-          }
-        }
-        const durationSeconds=workingCuts.reduce((n,c)=>n+(c.endMs-c.startMs),0)/1000
-        const score=rankCandidate({finderScore:candidate.finderScore,
-          qaPass:disposition==='publish',issues:combinedIssues.length,
-          durationSeconds,targetS:ctx.config.targetLengthS[1]})
-        if(disposition==='drop'){
-          out.suppressed=true
-          out.notes.push((qaComplete?'Held as editable draft; critical editorial failure: ':'Held as editable draft; editorial QA did not complete: ')+combinedIssues.join('; ').slice(0,420))
-          heldDrafts.push({out,candidate,score,durationSeconds,issues:combinedIssues,critical:true})
-          continue
-        }
-        if(disposition==='publish_needs_review'){
-          out.needsReview=true
-          out.notes.push('Published with needsReview: '+combinedIssues.join('; ').slice(0,420))
-        }
-        out.editorialHandoff.review={pass:disposition==='publish',issues:combinedIssues}
-        successful.push({out,candidate,score,durationSeconds})
-      }catch(error){
-        out.notes.push('Candidate failed: '+String((error as Error).message).slice(0,350))
-        if(out.clipId)await discardClip(ctx.workspaceId,out.clipId)
-        out.projectId=undefined;out.clipId=undefined
-        await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'plan',
-          tool:'clip_candidate_failed',kind:'validate',
-          argsSummary:JSON.stringify({candidate:candidate.index,sourceRange:[candidate.startMs,candidate.endMs]}),
-          error:String((error as Error).message).slice(0,700)})
-      }finally{
-        budget.addGemini(clipBudget.geminiUsd)
-        budget.addLuna({prompt_tokens:clipBudget.lunaIn,completion_tokens:clipBudget.lunaOut})
-      }
+      outputs.push(...result.outputs)
+      kept.push(...result.kept)
+      heldDrafts.push(...result.heldDrafts)
     }
-    const ranked=[...successful].sort((a,b)=>b.score-a.score)
-    const kept:typeof ranked=[]
-    for(const item of ranked){
-      const cuts=item.out.editorialHandoff!.cutPlan
-      if(kept.some(k=>overlapFraction(cuts,k.out.editorialHandoff!.cutPlan)>.35)){
-        await discardClip(ctx.workspaceId,item.out.clipId!)
-        item.out.notes.push('Dropped: ranked candidate overlap >35%')
-        item.out.projectId=undefined;item.out.clipId=undefined
-        continue
+    if(unified&&kept.length){
+      const inputs:UnifiedMergeClip<ClipPassItem>[]=kept.filter(item=>item.out.clipId).map(item=>({
+        id:item.out.clipId!,
+        type:item.type,
+        score:item.score,
+        segments:item.out.editorialHandoff!.cutPlan,
+        startMs:item.out.editorialHandoff!.cutPlan[0]!.startMs,
+        data:item,
+      }))
+      const merged=mergeUnifiedClips(inputs,UNIFIED_OVERLAP_THRESHOLD)
+      const keptIds=new Set(merged.kept.map(item=>item.id))
+      for(const item of kept){
+        if(item.out.clipId&&!keptIds.has(item.out.clipId)){
+          await discardClip(ctx.workspaceId,item.out.clipId)
+          item.out.notes.push('Dropped: unified overlap >60% or story-majority mix')
+          item.out.projectId=undefined;item.out.clipId=undefined
+        }
       }
-      kept.push(item)
-    }
-    // A run never publishes a critical draft. If nothing kept is publishable,
-    // fall back to the best 1–3 non-critical held drafts (needsReview). If
-    // only critical drafts remain, the run ends as an honest failure below.
-    if(!kept.length){
-      const usable=heldDrafts
-        .filter(item=>Boolean(item.out.projectId&&item.out.clipId&&item.out.editorialHandoff?.cutPlan.length)&&!item.critical)
-        .sort((a,b)=>b.score-a.score)
-      const fallback=chooseFallbackPublications(usable,0,3,(item:{critical:boolean})=>item.critical)
-      for(const item of fallback){
-        const cuts=item.out.editorialHandoff!.cutPlan
-        if(kept.some(k=>overlapFraction(cuts,k.out.editorialHandoff!.cutPlan)>.35))continue
-        item.out.suppressed=false
-        item.out.needsReview=true
-        const reasons=item.issues
-        item.out.editorialHandoff!.review={pass:false,issues:reasons}
-        item.out.notes.push('Published as fallback needsReview so the run does not ship 0 clips: '+reasons.join('; ').slice(0,420))
-        kept.push({out:item.out,candidate:item.candidate,score:item.score,durationSeconds:item.durationSeconds})
-      }
+      const overlapById=new Map(merged.kept.map(item=>[item.id,item.overlaps]))
+      kept=merged.kept.map(item=>{
+        const row=item.data!
+        row.overlaps=overlapById.get(row.out.clipId!)??[]
+        return row
+      })
+      unifiedMix=merged.mix
     }
     for(const item of kept){
       const publishedCuts=item.out.editorialHandoff!.cutPlan
@@ -273,16 +351,19 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         label:item.candidate.label,
         instruction:run.instruction,
         durationSeconds:item.durationSeconds,
-        targetS:ctx.config.targetLengthS[1],
+        targetS:item.type==='continuous'?CONTINUOUS_TARGET_S[1]:ctx.config.targetLengthS[1],
         distinctMoments:storyCoverage(publishedCuts,ctx.config.targetLengthS[1]).distinctMoments,
       })
       const reviewIssues=item.out.editorialHandoff?.review?.issues??[]
+      const pipeline=clipPipelineMode(item.type==='continuous'?'moment':'story')
       await publishClipScore({workspaceId:ctx.workspaceId,clipId:item.out.clipId!,
         runId,score:item.score,finderScore:item.candidate.finderScore,
         qaPass:item.out.editorialHandoff?.review?.pass??null,
         issues:reviewIssues,
         candidateIndex:item.candidate.index,durationSeconds:item.durationSeconds,
-        mode:ctx.config.storyMode!,
+        mode:pipeline,
+        type:item.type,
+        overlaps:item.overlaps??[],
         whyThisClip:why,
         stitchSegments:publishedCuts.map(c=>({startMs:c.startMs,endMs:c.endMs})),
         contextBridges:item.out.contextBridges??[],
@@ -292,6 +373,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       // Post-edit Motion is a decision stage, not the caption preset. It can
       // generate zero graphics; failures leave the usable clip intact.
       // needsReview clips get no auto Motion until the user reviews them.
+      const motionMode=item.type==='continuous'?'moment':'story'
       if(!shouldAutoPlanClipMotion({clipId:item.out.clipId,suppressed:item.out.suppressed,
         needsReview:item.out.needsReview===true})){
         item.out.notes.push('Motion graphics skipped: clip needs review')
@@ -299,7 +381,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         const {autoPlanClipMotion}=await import('@/lib/server/ai-producer-agent/clip-mode-motion')
         const bridges=item.out.contextBridges??[]
         const motion=await autoPlanClipMotion({
-          workspaceId:ctx.workspaceId,clipId:item.out.clipId!,mode,
+          workspaceId:ctx.workspaceId,clipId:item.out.clipId!,mode:motionMode,
           instruction:[run.instruction??'',
             'If the opening is a complete claim, prefer one short source-grounded hook title in the first 3 seconds, inside the 9:16 safe area, clear of the speaker face and captions.',
             bridges.length?('Add a brief source-grounded context-bridge title card at these joins, using only these exact phrases: '+bridges.map(b=>b.text).join(' | ')): '',
@@ -307,14 +389,14 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
         })
         await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'apply',
           tool:'clip_motion_graphics_'+motion.status,kind:'system',
-          argsSummary:JSON.stringify({clipId:item.out.clipId,candidate:item.candidate.index}),
+          argsSummary:JSON.stringify({clipId:item.out.clipId,candidate:item.candidate.index,type:item.type}),
           resultSummary:JSON.stringify(motion)})
         item.out.notes.push('Motion graphics: '+motion.status+' ('+motion.count+')')
       }catch(error){
         const reason=String((error as Error)?.message??error).slice(0,220)
         await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'apply',
           tool:'clip_motion_graphics_failed',kind:'validate',
-          argsSummary:JSON.stringify({clipId:item.out.clipId,candidate:item.candidate.index}),
+          argsSummary:JSON.stringify({clipId:item.out.clipId,candidate:item.candidate.index,type:item.type}),
           error:reason})
         item.out.notes.push('Motion graphics unavailable: '+reason)
       }
@@ -325,8 +407,8 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
     }
     await logAiProducerStep({runId,stepIndex:++budget.steps,phase:'finish',
       tool:'clip_ranked_outputs',kind:'system',
-      resultSummary:JSON.stringify({found:candidates.length,completed:successful.length,
-        published:kept.length,scores:kept.map(k=>({clipId:k.out.clipId,score:k.score}))}).slice(0,4000)})
+      resultSummary:JSON.stringify({unified,found:allCandidates,published:kept.length,mix:unifiedMix,
+        scores:kept.map(k=>({clipId:k.out.clipId,score:k.score,type:k.type}))}).slice(0,4000)})
     // Each candidate uses a separate budget; do not cap all outputs together.
     if (budget.cappedBy) status = 'capped'
     const anyClip=outputs.some((o)=>Boolean(o.projectId&&o.clipId))
@@ -344,9 +426,10 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
     status = 'failed'
     error = String((err as Error)?.message ?? err).slice(0, 2000)
   } finally {
-    await finishRun(ctx, outputs, budget, status, error)
+    await finishRun(ctx, outputs, budget, status, error, unifiedMix)
   }
 }
+
 
 async function runOneOutput(ctx: ToolCtx, out: OutputState, budget: Budget,
   instruction: string | null, fullSourceWords: ClipWord[] = ctx.cache.words??[]) {
@@ -528,7 +611,7 @@ async function persistRevisedCuts(ctx:ToolCtx,out:OutputState,cuts:Array<{startM
 }
 
 async function queueClipExport(ctx:ToolCtx,out:OutputState,budget:Budget){
-  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+  const clipMode=isClipAgentMode(ctx.config.storyMode)
   if(!clipMode||!out.lastValid)return
   if(!shouldAutoExportPublishedClip({
     clipId:out.clipId,projectId:out.projectId,suppressed:out.suppressed,
@@ -637,9 +720,9 @@ async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: 
       preservedFinisherEdges:verifiedFinisher,
     }),
   })
-  const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
+  const clipMode=isClipAgentMode(ctx.config.storyMode)
   const title=clipMode
-    ? `AI ${ctx.config.storyMode==='clip_moment_v1'?'moment':'story'} clip · ${source.title??'video'}`
+    ? `AI ${ctx.config.storyMode==='clip_moment_v1'?'moment':ctx.config.storyMode==='clip_unified_v1'?'clip':'story'} clip · ${source.title??'video'}`
     : `AI Producer ${ctx.config.roughCutIntent === 'highlights' ? 'highlights' : 'rough cut'} · ${source.title ?? 'stream'}`
   const created = await sysTool(ctx, budget, 'plan', 'create_project', {
     title, sources: [source.sourceId], aspect: clipMode?'9:16':'16:9', outputType: out.outputType,
@@ -911,6 +994,7 @@ async function finishRun(
   budget: Budget,
   status: 'done' | 'capped' | 'failed',
   error?: string,
+  unifiedMix?:{story:number;continuous:number;droppedDuplicates:number},
 ) {
   const prisma = getPrisma()
   const published = outputs.filter((o) => Boolean(o.projectId&&o.clipId)&&!o.suppressed)
@@ -951,6 +1035,7 @@ async function finishRun(
           } : undefined,
         })),
         cappedBy: budget.cappedBy,
+        ...(unifiedMix?{unifiedMix,overlapThreshold:UNIFIED_OVERLAP_THRESHOLD}:{}),
       }),
       costUsdEstimated: costUsd,
       geminiUsd: budget.geminiUsd,
