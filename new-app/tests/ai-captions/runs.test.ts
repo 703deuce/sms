@@ -201,7 +201,8 @@ describe('ai-captions runs', () => {
     expect(created.created).toBe(true)
     expect(created.view.status).toBe('preparing')
     const mid = await getAiCaptionsRun('ws_1', created.view.runId, deps)
-    expect(mid.status).toBe('preparing')
+    // After ingestion, a pending transcript advances to the distinct transcription stage.
+    expect(['preparing', 'transcribing']).toContain(mid.status)
     expect(mid.projectId).toBe('proj_from_upl_1')
     expect(mid.result).toBeNull()
 

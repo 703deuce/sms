@@ -5,6 +5,7 @@ import { productionRunDeps } from '@/lib/server/ai-captions/deps'
 import { exportAiCaptionsRun } from '@/lib/ai-captions/runs'
 
 export async function POST(_request: Request, ctx: { params: Promise<{ runId: string }> }) {
+  console.info('[ai-captions:api] export_begin')
   try {
     const workspaceId = await resolveWorkspaceId()
     const { runId } = await ctx.params
@@ -21,6 +22,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ runId: st
       { status: queued ? 202 : 200 },
     )
   } catch (err) {
+    console.error('[ai-captions:api] export_failed', err)
     return aiCaptionsErrorResponse(err)
   }
 }
