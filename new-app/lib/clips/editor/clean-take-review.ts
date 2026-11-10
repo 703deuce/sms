@@ -409,7 +409,7 @@ export function restoreCleanTakeOmission(
     first &&
     (omission.sourceId === first.sourceId ||
       (!!omission.sourceProjectId && keptCuts[0]?.sourceProjectId === omission.sourceProjectId) ||
-      ((edits.sources?.length ?? 0) <= 1 && !edits.inserts?.length))
+      ((edits.sources?.length ?? 0) === 1 && !edits.inserts?.length))
 
   if (sameAsMain && omission.endMs <= edits.trim.in) {
     const hole: CutRange = [omission.endMs, edits.trim.in]

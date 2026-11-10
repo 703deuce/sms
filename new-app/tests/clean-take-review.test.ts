@@ -161,16 +161,41 @@ describe('restore of each omission', () => {
     expect(displayDurationMs(result.edits)).toBe(before + 8000)
   })
 
-  it('re-inserts a later omission as an append insert and increases duration', () => {
+  it('re-inserts a later same-source omission by expanding trim and increases duration', () => {
+    const edits = baseEdits()
+    const before = displayDurationMs(edits)
+    const omission: CleanTakeOmission = {
+      id: 'source_0:30000:38000',
+      sourceId: 'source_0',
+      sourceProjectId: 'proj_1',
+      startMs: 30_000,
+      endMs: 38_000,
+      type: 'retake',
+      reason: 'Earlier take omitted',
+    }
+    const result = restoreCleanTakeOmission(edits, omission, [
+      { sourceId: 'source_0', sourceProjectId: 'proj_1', startMs: 10_000, endMs: 20_000 },
+    ])
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // No later inserts: expand the main trim and cut the hole so picture/sound return.
+    expect(result.edits.trim).toEqual({ in: 10_000, out: 38_000 })
+    expect(result.edits.cutRanges).toEqual([[20_000, 30_000]])
+    expect(displayDurationMs(result.edits)).toBe(before + 8000)
+  })
+
+  it('appends a later omission as an insert when later inserts already exist', () => {
     const edits = baseEdits({
-      sources: [
+      inserts: [
         {
-          id: 'multi_0',
-          ref: 'upload',
-          refId: 'upl_main',
-          mediaType: 'video',
-          label: 'take-a',
-          durationMs: 60_000,
+          id: 'existing_tail',
+          sourceId: 'multi_0',
+          atSrcMs: 20_000,
+          append: true,
+          inMs: 50_000,
+          durMs: 2000,
+          audio: 'source',
+          fit: 'contain',
         },
       ],
     })
@@ -189,12 +214,8 @@ describe('restore of each omission', () => {
     ])
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.edits.inserts).toHaveLength(1)
-    expect(result.edits.inserts?.[0]?.inMs).toBe(30_000)
-    expect(result.edits.inserts?.[0]?.durMs).toBe(8000)
-    expect(result.edits.inserts?.[0]?.audio).toBe('source')
+    expect(result.edits.inserts?.some((row) => row.inMs === 30_000 && row.durMs === 8000 && row.audio === 'source')).toBe(true)
     expect(displayDurationMs(result.edits)).toBe(before + 8000)
-    // Original kept take is still present
     expect(result.edits.trim).toEqual({ in: 10_000, out: 20_000 })
   })
 
@@ -209,10 +230,42 @@ describe('restore of each omission', () => {
   })
 
   it('leaves the kept edit unchanged when source media is missing', () => {
-    const edits = baseEdits({ sources: [] })
+    const edits = baseEdits({
+      sources: [
+        {
+          id: 'multi_0',
+          ref: 'upload',
+          refId: 'upl_main',
+          mediaType: 'video',
+          label: 'take-a',
+          durationMs: 60_000,
+        },
+        {
+          id: 'multi_1',
+          ref: 'upload',
+          refId: 'upl_other',
+          mediaType: 'video',
+          label: 'take-b',
+          durationMs: 40_000,
+        },
+      ],
+      inserts: [
+        {
+          id: 'kept_other',
+          sourceId: 'multi_1',
+          atSrcMs: 20_000,
+          append: true,
+          inMs: 0,
+          durMs: 2000,
+          audio: 'source',
+          fit: 'contain',
+        },
+      ],
+    })
     const omission: CleanTakeOmission = {
-      id: 'source_x:30000:38000',
-      sourceId: 'source_x',
+      id: 'source_absent:30000:38000',
+      sourceId: 'source_absent',
+      sourceProjectId: 'proj_missing',
       startMs: 30_000,
       endMs: 38_000,
       type: 'omission',
