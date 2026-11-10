@@ -295,15 +295,45 @@ const productionPipeline = (): AiCaptionsPipelineDeps => ({
   async pollExport(workspaceId, renderId) {
     console.info('[ai-captions:export] poll_begin', { workspaceId, renderId })
     const render = await getRenderForWorkspace(workspaceId, renderId)
-    if (!render) return { status: 'failed', downloadUrl: null, error: 'The export could not be found. Please retry.' }
-    if (render.status === 'FAILED') return { status: 'failed', downloadUrl: null, error: 'The video could not be exported. Please retry.' }
-    if (render.status !== 'READY' || !render.outputKey) return { status: 'processing', downloadUrl: null }
+    if (!render) return { status: 'failed' as const, downloadUrl: null, error: 'The export could not be found. Please retry.' }
+    if (render.status === 'FAILED') return { status: 'failed' as const, downloadUrl: null, error: 'The video could not be exported. Please retry.' }
+    if (render.status !== 'READY' || !render.outputKey) {
+      const job = await getPrisma().clipJob.findFirst({
+        where: {
+          clipId: render.clipId,
+          type: 'RENDER_CLIP',
+          payload: { path: ['renderId'], equals: renderId },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { payload: true, createdAt: true, status: true },
+      })
+      const payload = (job?.payload ?? {}) as Record<string, unknown>
+      const watchdog = payload.clipperWatchdog && typeof payload.clipperWatchdog === 'object'
+        ? payload.clipperWatchdog as { progress?: unknown; phase?: unknown }
+        : null
+      const workerProgress = Number(watchdog?.progress)
+      const progress = Number.isFinite(workerProgress) ? Math.max(0, Math.min(99, workerProgress)) : 0
+      const stage = progress >= 90 ? 'upload' as const : progress >= 10 ? 'encode' as const : 'prepare' as const
+      const progressPercent = Math.min(99, 90 + Math.floor(progress / 10))
+      const etaRaw = Number(payload.renderEtaSeconds)
+      const etaSeconds = Number.isFinite(etaRaw) && etaRaw >= 0 ? Math.round(etaRaw) : null
+      const elapsedMs = Date.now() - (job?.createdAt ?? render.createdAt).getTime()
+      console.info('[captions:export] stage_timing', {
+        renderId, clipId: render.clipId, stage, workerProgress: progress,
+        progressPercent, etaSeconds, elapsedMs, jobStatus: job?.status ?? null,
+      })
+      return { status: 'processing' as const, downloadUrl: null, stage, progressPercent, etaSeconds }
+    }
     const downloadUrl = await createCachedSignedDownloadUrl(getClipStorage(), render.outputKey, {
       downloadFilename: render.filename || 'captions.mp4',
       versionHint: `render:${renderId}`,
     })
+    console.info('[captions:export] stage_timing', {
+      renderId, clipId: render.clipId, stage: 'ready', progressPercent: 100,
+      elapsedMs: Date.now() - render.createdAt.getTime(),
+    })
     console.info('[ai-captions:export] poll_ready', { renderId })
-    return { status: 'ready', downloadUrl }
+    return { status: 'ready' as const, downloadUrl }
   },
   async getEditsVersion(workspaceId, clipId) {
     console.info('[ai-captions:export] edits_version_request', { workspaceId, clipId })

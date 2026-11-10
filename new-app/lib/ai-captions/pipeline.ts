@@ -57,7 +57,14 @@ export type AiCaptionsPipelineDeps = {
     edits: ClipEditsV2
   }): Promise<WrittenClip>
   exportMp4(args: { workspaceId: string; clipId: string; watermark: false }): Promise<{ downloadUrl: string | null; renderId?: string | null }>
-  pollExport?(workspaceId: string, renderId: string): Promise<{ status: 'processing' | 'ready' | 'failed'; downloadUrl: string | null; error?: string }>
+  pollExport?(workspaceId: string, renderId: string): Promise<{
+    status: 'processing' | 'ready' | 'failed'
+    downloadUrl: string | null
+    error?: string
+    stage?: 'prepare' | 'encode' | 'upload'
+    progressPercent?: number
+    etaSeconds?: number | null
+  }>
   getCaptionLines?(workspaceId: string, clipId: string): Promise<AiCaptionsResult['lines']>
   getEditsVersion?(workspaceId: string, clipId: string): Promise<number>
   listSavedStyles(workspaceId: string): Promise<SavedCaptionStyle[]>

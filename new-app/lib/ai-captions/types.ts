@@ -35,7 +35,7 @@ export type AiCaptionsStatus =
   | 'ready'
   | 'failed'
 
-export type AiCaptionsStage = 'queued' | 'prepare' | 'transcribe' | 'captions' | 'export' | 'ready'
+export type AiCaptionsStage = 'queued' | 'prepare' | 'transcribe' | 'captions' | 'export' | 'export_prepare' | 'export_encode' | 'export_upload' | 'ready'
 
 export type AiCaptionsWord = {
   text: string

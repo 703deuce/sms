@@ -44,6 +44,9 @@ export type AiCaptionsStage =
   | 'transcribe'
   | 'captions'
   | 'export'
+  | 'export_prepare'
+  | 'export_encode'
+  | 'export_upload'
   | 'ready'
 
 export type AiCaptionsWord = {
@@ -171,7 +174,10 @@ export function captionsProgressLabel(status: AiCaptionsStatus, stage?: AiCaptio
   if (status === 'preparing' || stage === 'prepare') return 'Preparing your video…'
   if (status === 'transcribing' || stage === 'transcribe') return 'Transcribing…'
   if (status === 'captioning' || stage === 'captions') return 'Generating captions…'
-  if (status === 'exporting' || stage === 'export') return 'Finishing captions…'
+  if (stage === 'export_prepare') return 'Preparing video export…'
+  if (stage === 'export_encode') return 'Burning captions into video…'
+  if (stage === 'export_upload') return 'Uploading finished video…'
+  if (status === 'exporting' || stage === 'export') return 'Starting video export…'
   if (status === 'ready' || stage === 'ready') return 'Captions are ready.'
   return 'Starting captions…'
 }

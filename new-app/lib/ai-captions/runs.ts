@@ -183,6 +183,25 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
           result: { ...row.result, downloadUrl: exportStatus.downloadUrl },
         })
       }
+      if (exportStatus.status === 'processing') {
+        const nextStage = exportStatus.stage === 'prepare'
+          ? 'export_prepare'
+          : exportStatus.stage === 'upload'
+            ? 'export_upload'
+            : exportStatus.stage === 'encode'
+              ? 'export_encode'
+              : 'export'
+        const nextProgress = Math.max(row.progressPercent ?? 90, exportStatus.progressPercent ?? 90)
+        console.info('[captions:export] progress_sync', {
+          runId: row.id, renderId: row.result.renderId, stage: nextStage,
+          progressPercent: nextProgress, etaSeconds: exportStatus.etaSeconds ?? null,
+        })
+        if (nextStage !== row.stage || nextProgress !== row.progressPercent) {
+          return deps.store.update(row.workspaceId, row.id, {
+            stage: nextStage, progressPercent: nextProgress,
+          })
+        }
+      }
     } catch (err) {
       console.warn('[ai-captions:export] render_poll_error', { runId: row.id, error: String(err) })
     }
