@@ -1,0 +1,194 @@
+{
+  "generatedFrom": "ee8cb81ec476b4240f61bbb360f5a5d0d5568084",
+  "note": "Inventory of new-app/app page routes on PR #1082 before the public marketing home replaced the / redirect.",
+  "routes": {
+    "/": {
+      "file": "new-app/app/page.tsx",
+      "redirectTo": "/app/home"
+    },
+    "/ai-clips": {
+      "file": "new-app/app/(marketing)/ai-clips/page.tsx",
+      "redirectTo": null
+    },
+    "/ai-producer-agent/clean-take": {
+      "file": "new-app/app/ai-producer-agent/clean-take/page.tsx",
+      "redirectTo": null
+    },
+    "/ai-producer-agent/multi-source": {
+      "file": "new-app/app/ai-producer-agent/multi-source/page.tsx",
+      "redirectTo": null
+    },
+    "/app": {
+      "file": "new-app/app/app/page.tsx",
+      "redirectTo": "/app/clips"
+    },
+    "/app/clips": {
+      "file": "new-app/app/app/clips/(drive)/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/[projectId]": {
+      "file": "new-app/app/app/clips/[projectId]/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/[projectId]/edit/[clipId]": {
+      "file": "new-app/app/app/clips/[projectId]/edit/[clipId]/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/[projectId]/script": {
+      "file": "new-app/app/app/clips/[projectId]/script/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/[projectId]/studio/[clipId]": {
+      "file": "new-app/app/app/clips/[projectId]/studio/[clipId]/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/[projectId]/video": {
+      "file": "new-app/app/app/clips/[projectId]/video/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/brand": {
+      "file": "new-app/app/app/clips/(drive)/brand/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/exports": {
+      "file": "new-app/app/app/clips/(drive)/exports/page.tsx",
+      "redirectTo": "/app/exports"
+    },
+    "/app/clips/media": {
+      "file": "new-app/app/app/clips/(drive)/media/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/new": {
+      "file": "new-app/app/app/clips/(drive)/new/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/templates": {
+      "file": "new-app/app/app/clips/(drive)/templates/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/trash": {
+      "file": "new-app/app/app/clips/(drive)/trash/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/video/new": {
+      "file": "new-app/app/app/clips/(drive)/video/new/page.tsx",
+      "redirectTo": null
+    },
+    "/app/clips/video/templates": {
+      "file": "new-app/app/app/clips/(drive)/video/templates/page.tsx",
+      "redirectTo": null
+    },
+    "/app/editor": {
+      "file": "new-app/app/app/editor/page.tsx",
+      "redirectTo": null
+    },
+    "/app/exports": {
+      "file": "new-app/app/app/exports/page.tsx",
+      "redirectTo": null
+    },
+    "/app/help": {
+      "file": "new-app/app/app/help/page.tsx",
+      "redirectTo": null
+    },
+    "/app/home": {
+      "file": "new-app/app/app/home/page.tsx",
+      "redirectTo": "/app/clips"
+    },
+    "/app/integrations": {
+      "file": "new-app/app/app/integrations/page.tsx",
+      "redirectTo": null
+    },
+    "/app/record": {
+      "file": "new-app/app/app/record/page.tsx",
+      "redirectTo": null
+    },
+    "/app/record/recover/[sessionId]": {
+      "file": "new-app/app/app/record/recover/[sessionId]/page.tsx",
+      "redirectTo": null
+    },
+    "/app/rooms": {
+      "file": "new-app/app/app/rooms/page.tsx",
+      "redirectTo": null
+    },
+    "/app/rooms/[sessionId]": {
+      "file": "new-app/app/app/rooms/[sessionId]/page.tsx",
+      "redirectTo": null
+    },
+    "/app/rooms/[sessionId]/studio": {
+      "file": "new-app/app/app/rooms/[sessionId]/studio/page.tsx",
+      "redirectTo": null
+    },
+    "/app/rooms/[sessionId]/upload": {
+      "file": "new-app/app/app/rooms/[sessionId]/upload/page.tsx",
+      "redirectTo": null
+    },
+    "/app/rooms/join": {
+      "file": "new-app/app/app/rooms/join/page.tsx",
+      "redirectTo": null
+    },
+    "/app/rooms/new": {
+      "file": "new-app/app/app/rooms/new/page.tsx",
+      "redirectTo": null
+    },
+    "/app/settings": {
+      "file": "new-app/app/app/settings/page.tsx",
+      "redirectTo": null
+    },
+    "/app/streamer": {
+      "file": "new-app/app/app/streamer/page.tsx",
+      "redirectTo": null
+    },
+    "/app/streamer/autopull": {
+      "file": "new-app/app/app/streamer/autopull/page.tsx",
+      "redirectTo": null
+    },
+    "/app/streamer/channels/[channelId]": {
+      "file": "new-app/app/app/streamer/channels/[channelId]/page.tsx",
+      "redirectTo": null
+    },
+    "/app/sw": {
+      "file": "new-app/app/app/sw/page.tsx",
+      "redirectTo": null
+    },
+    "/app/sw/scripts/[scriptId]": {
+      "file": "new-app/app/app/sw/scripts/[scriptId]/page.tsx",
+      "redirectTo": null
+    },
+    "/app/templates": {
+      "file": "new-app/app/app/templates/page.tsx",
+      "redirectTo": "/app/clips/templates"
+    },
+    "/app/test/slide": {
+      "file": "new-app/app/app/test/slide/page.tsx",
+      "redirectTo": null
+    },
+    "/dev/t6-2": {
+      "file": "new-app/app/dev/t6-2/page.tsx",
+      "redirectTo": null
+    },
+    "/dev/template-preview": {
+      "file": "new-app/app/dev/template-preview/page.tsx",
+      "redirectTo": null
+    },
+    "/s/[token]": {
+      "file": "new-app/app/s/[token]/page.tsx",
+      "redirectTo": null
+    },
+    "/share/clips/[linkId]": {
+      "file": "new-app/app/share/clips/[linkId]/page.tsx",
+      "redirectTo": null
+    },
+    "/share/p/[slug]": {
+      "file": "new-app/app/share/p/[slug]/page.tsx",
+      "redirectTo": null
+    },
+    "/share/renders/[slug]": {
+      "file": "new-app/app/share/renders/[slug]/page.tsx",
+      "redirectTo": null
+    },
+    "/video-editing": {
+      "file": "new-app/app/(marketing)/video-editing/page.tsx",
+      "redirectTo": null
+    }
+  }
+}

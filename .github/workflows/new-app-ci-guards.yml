@@ -37,4 +37,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node scripts/verify-app-route-dynamic-segments.mjs
       - run: node scripts/verify-migration-table-refs.mjs
-      - run: pnpm exec vitest run tests/new-app-ci-guards.test.ts
+      - run: pnpm exec vitest run tests/new-app-ci-guards.test.ts tests/marketing-home-routes.test.ts
