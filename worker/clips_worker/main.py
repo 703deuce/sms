@@ -764,6 +764,20 @@ DISPATCH["T2V_SCENE_AI_VIDEO"] = handle_t2v_scene_ai_video
 
 bind_ai_producer_agent_dispatch(DISPATCH)
 
+# B2: reserve the new ad-studio job type in the normal clips-worker dispatch.
+# B3 will enqueue AD_STUDIO_RUN only after a real clip project exists.
+def handle_ad_studio_run(conn, job: dict) -> None:
+    from clips_worker.ad_studio.job import run_ad_studio_job
+
+    log(f"[ad-studio:worker] dispatch_begin job={job['id']}")
+    run_ad_studio_job(conn, job)
+    log(f"[ad-studio:worker] dispatch_complete job={job['id']}")
+
+
+DISPATCH["AD_STUDIO_RUN"] = handle_ad_studio_run
+log("[ad-studio:worker] dispatch_registered type=AD_STUDIO_RUN")
+
+
 
 def main() -> None:
     from clips_worker.startup_check import validate_worker_env
