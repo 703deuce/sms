@@ -250,6 +250,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           window.stage='finisher'
           log('specialist_qa','revision_requested',{...fields,code:'yt_qa_revision'})
         }else{
+          window.qaIssues=review.issues
           window.cuts=grounded(ctx,window.cuts)
           if(!window.cuts.length)throw Error('yt_no_grounded_window_cuts')
           window.stage='commit'
