@@ -18,6 +18,7 @@ describe('sidebar model', () => {
       'clips',
       'streamer',
       'editor',
+      'youtube-video',
       'record',
       'ai-video',
       'media',
@@ -34,6 +35,7 @@ describe('sidebar model', () => {
       home: '/app',
       clips: '/app/clips/new',
       editor: '/app/video-editor',
+      'youtube-video': '/app/youtube-video',
       record: '/app/rooms/new',
       'ai-video': '/app/ai-video/new',
       templates: '/app/clips/templates',
@@ -62,12 +64,14 @@ describe('sidebar model', () => {
       'Clip',
       'Stream clip',
       'Editor project',
+      'YouTube Video',
       'Recording',
       'AI Video',
     ])
     expect(Object.fromEntries(items.map((i: { id: string; href: string }) => [i.id, i.href]))).toMatchObject({
       'create-clip': '/app/clips/new',
       'create-editor': '/app/video-editor/new',
+      'create-youtube-video': '/app/youtube-video',
       'create-ai-video': '/app/ai-video/new',
     })
     expect(createMenuItems({ ...ALL, scriptEditor: true }).find((i: { id: string; href: string }) => i.id === 'create-editor')?.href).toBe(
@@ -88,6 +92,7 @@ describe('sidebar model', () => {
     ['/app/clips/abc/script', '', 'editor'],
     ['/app/editor', '', 'editor'],
     ['/app/video-editor', '', 'editor'],
+    ['/app/youtube-video', '', 'youtube-video'],
     ['/app/video-editor/abc/edit/c1', '', 'editor'],
     ['/app/video-editor/abc/studio/c1', '', 'editor'],
     ['/app/video-editor/abc/script', '', 'editor'],

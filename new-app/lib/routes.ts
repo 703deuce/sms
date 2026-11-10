@@ -42,6 +42,7 @@ export const routes = {
   aiVideoTemplates: (query?: URLSearchParams | string | Record<string, string | string[] | undefined | null>) =>
     withQuery('/app/ai-video/templates', query),
   exports: () => '/app/exports',
+  youtubeVideo: () => '/app/youtube-video',
   streamer: () => '/app/streamer',
   settings: () => '/app/settings',
   help: () => '/app/help',

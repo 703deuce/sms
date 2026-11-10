@@ -9,6 +9,10 @@ on:
       - "new-app/scripts/verify-editor-jsx-imports.mjs"
       - "new-app/scripts/verify-clip-editor-feature-parity.mjs"
       - "new-app/tests/layout-panel-mount.test.tsx"
+      - "new-app/tests/youtube-video-adapter.test.ts"
+      - "new-app/lib/youtube-video/**"
+      - "new-app/components/youtube-video/**"
+      - "new-app/app/app/youtube-video/**"
       - ".github/workflows/clips-editor-import-guard.yml"
   pull_request:
     branches: [master]
@@ -19,11 +23,10 @@ on:
       - "new-app/lib/ai-producer-agent/**"
       - "new-app/lib/server/ai-producer-agent/**"
       - "new-app/app/api/ai-producer-agent/**"
-      - "new-app/lib/ai-studio/**"
-      - "new-app/components/studio/**"
-      - "new-app/app/app/studio/**"
-      - "new-app/tests/studio-*.ts"
-      - "new-app/tests/studio-*.tsx"
+      - "new-app/lib/youtube-video/**"
+      - "new-app/components/youtube-video/**"
+      - "new-app/app/app/youtube-video/**"
+      - "new-app/tests/youtube-video-adapter.test.ts"
 
 jobs:
   editor-shell-import-guard:
@@ -48,5 +51,5 @@ jobs:
       - run: pnpm run verify:clip-editor-feature-parity
       - run: pnpm run verify:editor-shell-hook-order
       - run: pnpm run verify:clips-editor-eslint
-      - run: pnpm exec vitest run tests/editor-shell-use-editor-words.test.ts tests/editor-shell-render.test.tsx tests/editor-shell-ssr.test.tsx tests/clip-editor-features-mount.test.tsx tests/editor-layout-repair.test.tsx tests/unified-editor-workspace.test.tsx tests/editor-density-defaults.test.ts tests/text-template-panel-add.test.tsx tests/editor-words-merge.test.ts tests/caption-overlay-preview.test.tsx tests/clip-timeline.test.ts tests/audio-panel-fades.test.tsx tests/layers-actual-stack.test.tsx tests/timeline-e2-render.test.tsx tests/transcript-cut-source-time.test.tsx tests/editor-words-route-contract.test.ts tests/use-editor-words-source-time.test.tsx tests/caption-case.test.ts tests/caption-style-snapshot.test.ts tests/caption-sync-warning.test.ts tests/asr-language-catalog.test.ts tests/export-nle-captions-srt.test.ts tests/export-dialog-nle-download.test.tsx tests/export-dialog-caption-sync.test.tsx tests/caption-line-max-chars.test.ts tests/clean-take-review.test.ts tests/cleanup-locked-ranges.test.ts tests/cleanup-strength.test.ts tests/cleanup-strength-sync.test.tsx tests/clip-needs-review.test.ts tests/needs-review-badge.test.tsx tests/needs-review-share-warning.test.tsx tests/studio-error-mapping.test.ts tests/studio-contract-adapter.test.ts tests/studio-generate-guard.test.ts tests/studio-job-polling.test.ts tests/studio-history-and-timeline.test.ts tests/studio-ui-layout.test.tsx tests/unified-clip-results.test.ts tests/unified-clip-results-ui.test.tsx
+      - run: pnpm exec vitest run tests/editor-shell-use-editor-words.test.ts tests/editor-shell-render.test.tsx tests/editor-shell-ssr.test.tsx tests/clip-editor-features-mount.test.tsx tests/editor-layout-repair.test.tsx tests/unified-editor-workspace.test.tsx tests/editor-density-defaults.test.ts tests/text-template-panel-add.test.tsx tests/editor-words-merge.test.ts tests/caption-overlay-preview.test.tsx tests/clip-timeline.test.ts tests/audio-panel-fades.test.tsx tests/layers-actual-stack.test.tsx tests/timeline-e2-render.test.tsx tests/transcript-cut-source-time.test.tsx tests/editor-words-route-contract.test.ts tests/use-editor-words-source-time.test.tsx tests/caption-case.test.ts tests/caption-style-snapshot.test.ts tests/caption-sync-warning.test.ts tests/asr-language-catalog.test.ts tests/export-nle-captions-srt.test.ts tests/export-dialog-nle-download.test.tsx tests/export-dialog-caption-sync.test.tsx tests/caption-line-max-chars.test.ts tests/clean-take-review.test.ts tests/cleanup-locked-ranges.test.ts tests/cleanup-strength.test.ts tests/cleanup-strength-sync.test.tsx tests/clip-needs-review.test.ts tests/needs-review-badge.test.tsx tests/needs-review-share-warning.test.tsx tests/youtube-video-adapter.test.ts
       - run: pnpm run typecheck:clips

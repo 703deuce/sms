@@ -122,8 +122,6 @@ jobs:
             tests/ai-producer-agent/just-chatting-editorial-direction.test.ts \
             tests/ai-producer-agent/specialists.test.ts \
             tests/ai-producer-agent/clip-editorial-safety.test.ts \
-            tests/ai-producer-agent/unified-clipper-merge.test.ts \
-            tests/ai-producer-agent/unified-clip-run.test.ts \
             tests/ai-producer-agent/clip-multi-output.test.ts \
             tests/ai-producer-agent/specialist-workflow.test.ts \
             tests/ai-producer-agent/orchestrator.mock-luna.test.ts \
@@ -161,14 +159,7 @@ jobs:
             tests/clip-needs-review.test.ts \
             tests/needs-review-badge.test.tsx \
             tests/needs-review-share-warning.test.tsx \
-            tests/studio-error-mapping.test.ts \
-            tests/studio-contract-adapter.test.ts \
-            tests/studio-generate-guard.test.ts \
-            tests/studio-job-polling.test.ts \
-            tests/studio-history-and-timeline.test.ts \
-            tests/studio-ui-layout.test.tsx \
-            tests/unified-clip-results.test.ts \
-            tests/unified-clip-results-ui.test.tsx
+            tests/youtube-video-adapter.test.ts
 
   captions-worker-regression:
     runs-on: ubuntu-latest
