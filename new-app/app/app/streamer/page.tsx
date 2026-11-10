@@ -13,7 +13,10 @@ import { StreamerLiveComingSoon } from '@/components/streamer/streamer-live-comi
 import { streamerLiveRealtimeEnabled, streamerPublicFlags } from '@/lib/server/streamer/env'
 import { Radio } from 'lucide-react'
 import { listProjectClips } from '../../../lib/server/clips/clips'
+import type { StreamerVodRow } from '../../../lib/server/streamer/vod-list'
 import { StreamerUnifiedResults } from '../../../components/streamer/streamer-unified-results'
+
+type ProjectClipList = NonNullable<Awaited<ReturnType<typeof listProjectClips>>>
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Streamer · Clips' }
@@ -26,17 +29,18 @@ export default async function StreamerHubPage() {
     getStreamUsage(workspaceId),
     listStreamerChannels(workspaceId),
   ])
-  const clipIds = vods
-    .filter((v) => v.status === 'READY' || v.status === 'FAILED')
-    .map((v) => v.projectId)
-  const clipLists = await Promise.all(
-    clipIds.map((id) => listProjectClips(workspaceId, id, 'score', { skipTranscriptEnrichment: true })),
+  const vodRows: StreamerVodRow[] = vods
+  const clipIds: string[] = vodRows
+    .filter((v: StreamerVodRow) => v.status === 'READY' || v.status === 'FAILED')
+    .map((v: StreamerVodRow) => v.projectId)
+  const clipLists: Array<ProjectClipList | null> = await Promise.all(
+    clipIds.map((id: string) => listProjectClips(workspaceId, id, 'score', { skipTranscriptEnrichment: true })),
   )
-  const streamClips = clipLists.flatMap((rows) => rows ?? [])
-  const processingVods = vods.filter(
-    (v) => v.status !== 'READY' && v.status !== 'FAILED' && v.status !== 'CANCELED',
+  const streamClips: ProjectClipList = clipLists.flatMap((rows: ProjectClipList | null) => rows ?? [])
+  const processingVods: StreamerVodRow[] = vodRows.filter(
+    (v: StreamerVodRow) => v.status !== 'READY' && v.status !== 'FAILED' && v.status !== 'CANCELED',
   )
-  const failedVod = vods.find((v) => v.status === 'FAILED')
+  const failedVod: StreamerVodRow | undefined = vodRows.find((v: StreamerVodRow) => v.status === 'FAILED')
   return (
     <PageContainer className="max-w-none">
       <PageHeader
@@ -98,7 +102,7 @@ export default async function StreamerHubPage() {
             etaSec={processingVods[0]?.etaSec ?? 0}
             stage={processingVods[0]?.stage ?? null}
             clipsReady={streamClips.length}
-            clipsTotal={Math.max(streamClips.length, processingVods.reduce((n, v) => n + (v.chunkTotal ?? 0), 0))}
+            clipsTotal={Math.max(streamClips.length, processingVods.reduce((n: number, v: StreamerVodRow) => n + (v.chunkTotal ?? 0), 0))}
           />
         </div>
       </div>
