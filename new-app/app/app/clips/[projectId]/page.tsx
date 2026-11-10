@@ -33,6 +33,7 @@ export default async function ClipProjectPage({
   if (reserved) redirect(reserved)
   const workspaceId = await resolveWorkspaceId()
   const prisma = getPrisma()
+  const projectQueryStarted = Date.now()
   const projectP = prisma.clipProject.findFirst({
     where: { id: projectId, workspaceId },
     select: {
@@ -58,14 +59,8 @@ export default async function ClipProjectPage({
 
   const [project, upload, streamVod, initialClips, viewOnFullVideoUrl, liveStatus] = await Promise.all([
     projectP,
-    projectP.then((p) =>
-      p?.uploadId
-        ? prisma.clipUpload.findUnique({
-            where: { id: p.uploadId },
-            select: { durationMs: true },
-          })
-        : Promise.resolve(p?.upload ?? null),
-    ),
+    // Upload duration is already selected by projectP; avoid a redundant DB read.
+    projectP.then((p) => p?.upload ?? null),
     projectP.then((p) => (p ? prisma.streamVod.findUnique({ where: { projectId: p.id } }) : null)),
     projectP.then(async (p) => {
       if (!p) return null
@@ -98,9 +93,14 @@ export default async function ClipProjectPage({
       p ? resolveViewOnFullVideoUrl(workspaceId, p.id, p.settings, p.uploadId) : Promise.resolve(null),
     ),
     projectP.then((p) =>
-      p && p.status !== 'READY' ? getProjectStatus(workspaceId, p.id) : Promise.resolve(null),
+      p && !['READY', 'FAILED', 'CANCELED'].includes(p.status) ? getProjectStatus(workspaceId, p.id) : Promise.resolve(null),
     ),
   ])
+  console.info('[page:timing]', {
+    path: '/app/clips/[projectId]', query: 'project_and_dependencies',
+    elapsedMs: Date.now() - projectQueryStarted,
+    rows: project ? 1 : 0, clipRows: initialClips?.length ?? 0,
+  })
   if (!project) notFound()
   if (project.sourceKind === 't2v') {
     if (!isT2vFeatureEnabled()) redirect('/app/clips')
