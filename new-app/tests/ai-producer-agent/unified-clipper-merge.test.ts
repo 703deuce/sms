@@ -23,13 +23,15 @@ const clip=(partial:Partial<UnifiedMergeClip> & Pick<UnifiedMergeClip,'id'|'type
 
 describe('unified clipper merge, dedupe, mix, and tagging',()=>{
   it('keeps type tags on the merged list',()=>{
+    // Two Story clips so a fill-in continuous can stay under the majority rule.
     const result=mergeUnifiedClips([
       clip({id:'s1',type:'story',score:80,segments:[seg(0,10_000),seg(40_000,60_000)]}),
+      clip({id:'s2',type:'story',score:75,segments:[seg(200_000,220_000),seg(240_000,260_000)]}),
       clip({id:'c1',type:'continuous',score:70,segments:[seg(100_000,120_000)]}),
     ])
-    expect(result.kept.map(c=>c.type)).toEqual(['story','continuous'])
-    expect(result.kept.map(c=>c.id)).toEqual(['s1','c1'])
-    expect(result.mix).toEqual({story:1,continuous:1,droppedDuplicates:0})
+    expect(result.kept.map(c=>c.type)).toEqual(['story','story','continuous'])
+    expect(result.kept.map(c=>c.id)).toEqual(['s1','s2','c1'])
+    expect(result.mix).toEqual({story:2,continuous:1,droppedDuplicates:0})
   })
 
   it('treats overlap above 60% as a duplicate and keeps the higher score',()=>{
@@ -47,12 +49,14 @@ describe('unified clipper merge, dedupe, mix, and tagging',()=>{
   })
 
   it('allows overlap at exactly 60% (threshold is greater-than, not greater-or-equal)',()=>{
-    // shorter = 10s, intersection = 6s exactly
+    // shorter = 10s, intersection = 6s exactly. A second Story clip lets the
+    // continuous fill-in survive the story-majority mix.
     const story=clip({id:'s1',type:'story',score:80,segments:[seg(0,20_000),seg(50_000,70_000)]})
+    const story2=clip({id:'s2',type:'story',score:75,segments:[seg(200_000,220_000),seg(240_000,260_000)]})
     const continuous=clip({id:'c1',type:'continuous',score:70,segments:[seg(14_000,24_000)]})
     expect(overlapFraction(story.segments,continuous.segments)).toBeCloseTo(0.6,5)
-    const result=mergeUnifiedClips([story,continuous])
-    expect(result.kept.map(c=>c.id)).toEqual(['s1','c1'])
+    const result=mergeUnifiedClips([story,story2,continuous])
+    expect(result.kept.map(c=>c.id)).toEqual(['s1','s2','c1'])
     expect(result.droppedDuplicates).toEqual([])
     expect(result.kept.find(c=>c.id==='s1')!.overlaps).toEqual([{clipId:'c1',fraction:0.6}])
     expect(result.kept.find(c=>c.id==='c1')!.overlaps).toEqual([{clipId:'s1',fraction:0.6}])
