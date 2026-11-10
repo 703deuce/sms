@@ -468,6 +468,36 @@ export function TranscriptPanel({
       .slice(0, 120)
     void onSaveAsNewClip(trimIn, trimOut, title || undefined)
   }
+  // Text/scene mode reuses the same handlers as the context menu; no separate edit path.
+  useEffect(() => {
+    if (!textSceneMode || selStart === null || selEnd === null) return
+    const onSelectionKey = (event: KeyboardEvent) => {
+      const element = event.target instanceof HTMLElement ? event.target : null
+      if (element?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const inTranscript = element?.closest('[data-word-i], [data-testid="text-scene-selection-toolbar"]')
+      if (!inTranscript) return
+      const key = event.key.toLowerCase()
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && key === 'c') {
+        event.preventDefault()
+        copySelectionText()
+      } else if (!event.metaKey && !event.ctrlKey && !event.altKey && event.shiftKey && key === 'm') {
+        event.preventDefault()
+        makeClipFromSelection()
+      } else if (!event.metaKey && !event.ctrlKey && !event.altKey && event.shiftKey && key === 'h') {
+        event.preventDefault()
+        onEmphasisSelection?.(selectionWords().map((w) => w.i))
+      } else if (!event.metaKey && !event.ctrlKey && !event.altKey && event.shiftKey && event.key === 'Enter') {
+        event.preventDefault()
+        if (canRestoreSel) restoreSelection()
+      } else if (!event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && (event.key === 'Delete' || event.key === 'Backspace')) {
+        event.preventDefault()
+        deleteSelection()
+      }
+    }
+    window.addEventListener('keydown', onSelectionKey)
+    return () => window.removeEventListener('keydown', onSelectionKey)
+  }, [textSceneMode, selStart, selEnd, visible, edits, onSaveAsNewClip, onEmphasisSelection, onCopySelection, onRestoreCutRange])
+
   const ctxMenuItems: TranscriptContextMenuItem[] = ctxMenu
     ? [
         {
@@ -1213,9 +1243,12 @@ export function TranscriptPanel({
       {selStart !== null && selEnd !== null && (textSceneMode ? (
         <div className="sticky top-0 z-20 flex w-fit max-w-full flex-wrap items-center gap-1 rounded-lg border border-primary/25 bg-popover p-1.5 shadow-lg" data-testid="text-scene-selection-toolbar">
           <span className="px-2 text-[11px] font-semibold tabular-nums text-muted-foreground">{(() => { const r = selRange(); if (!r) return 'Select words'; const c = (ms: number) => { const s = Math.floor(ms / 1000); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0') }; return c(r[0]) + '–' + c(r[1]) })()}</span>
-          <Button size="sm" variant="ghost" onClick={deleteSelection}><Scissors className="mr-1 size-3.5" />Delete</Button>
-          <Button size="sm" variant="ghost" disabled={!onEmphasisSelection} onClick={() => onEmphasisSelection?.(selectionWords().map((w) => w.i))}>Highlight</Button>
-          <Button size="sm" variant="secondary" disabled={!onSaveAsNewClip} onClick={makeClipFromSelection}>+ Create clip</Button>
+          <Button size="sm" variant="secondary" disabled={!onSaveAsNewClip} onClick={makeClipFromSelection} title="Create clip · Shift+M" data-testid="text-scene-create-clip">Create clip <kbd className="ml-1 text-[10px] opacity-60">⇧M</kbd></Button>
+          <Button size="sm" variant="ghost" onClick={copySelectionText} title="Copy text · Ctrl/Cmd+C" data-testid="text-scene-copy-text">Copy text <kbd className="ml-1 text-[10px] opacity-60">⌘C</kbd></Button>
+          <Button size="sm" variant="ghost" disabled={selectionWords().length !== 1} onClick={() => { const word = selectionWords()[0]; if (word) beginWordEdit(word) }} title="Correct one selected word · Enter" data-testid="text-scene-correct-transcript">Correct transcript <kbd className="ml-1 text-[10px] opacity-60">↵</kbd></Button>
+          <Button size="sm" variant="ghost" disabled={!onEmphasisSelection} onClick={() => onEmphasisSelection?.(selectionWords().map((w) => w.i))} title="Highlight · Shift+H">Highlight <kbd className="ml-1 text-[10px] opacity-60">⇧H</kbd></Button>
+          <Button size="sm" variant="ghost" onClick={deleteSelection} title="Delete selection · Delete"><Scissors className="mr-1 size-3.5" />Delete <kbd className="ml-1 text-[10px] opacity-60">Del</kbd></Button>
+          <Button size="sm" variant="ghost" disabled={!canRestoreSel} onClick={restoreSelection} title="Restore selected cuts · Shift+Enter" data-testid="transcript-restore-selection"><RotateCcw className="mr-1 size-3.5" />Restore <kbd className="ml-1 text-[10px] opacity-60">⇧↵</kbd></Button>
         </div>
       ) : (
         <div className="flex w-fit gap-1 rounded-lg border border-border bg-popover p-1 shadow-md">
