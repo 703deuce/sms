@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { ArrowRight, Clapperboard, ImageIcon, Megaphone, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createAdStudioClient, AdStudioHttpError, type AdStudioClient, type AdStudioConfig } from '../../lib/ad-studio/client'
+import { createAdStudioClient, AdStudioHttpError, type AdStudioClient, type AdStudioConfig, type AdStudioFinalRender } from '../../lib/ad-studio/client'
 import { formatCredits, sanitizeAdStudioMessage, statusLabel } from '../../lib/ad-studio/format'
 import type { AdAspect, AdDuration, AdImageVariant, AdMode, AdProductInput, AdStudioRun } from '../../lib/ad-studio/types'
 import { DEFAULT_T2V_VOICE } from '../../lib/t2v/voice-defaults'
@@ -83,6 +83,9 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
   const [createKey, setCreateKey] = useState(newIdempotencyKey)
   const [confirmKey, setConfirmKey] = useState(newIdempotencyKey)
   const [retryRenderKey, setRetryRenderKey] = useState(newIdempotencyKey)
+  const [finalMedia, setFinalMedia] = useState<AdStudioFinalRender | null>(null)
+  const [finalMediaLoading, setFinalMediaLoading] = useState(false)
+  const [downloadBusy, setDownloadBusy] = useState(false)
 
   const showError = useCallback((err: unknown) => {
     const safe = errorOf(err)
@@ -230,6 +233,34 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
       cancelled = true
     }
   }, [liveClient, pollMs, pollRetryToken, refreshHistory, run?.id, run?.status, showError, sleepFn])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!run || run.status !== 'done') {
+      setFinalMedia(null)
+      setFinalMediaLoading(false)
+      return () => { cancelled = true }
+    }
+    const runId = run.id
+    setFinalMediaLoading(true)
+    console.log('[ad-studio:ui] final_media', { step: 'playback_begin', runId })
+    void liveClient.getFinalRender(runId)
+      .then((media) => {
+        if (cancelled) return
+        setFinalMedia(media)
+        console.log('[ad-studio:ui] final_media', { step: 'playback_complete', runId, ready: true })
+      })
+      .catch((err) => {
+        if (cancelled) return
+        const safe = errorOf(err)
+        console.log('[ad-studio:ui] final_media', { step: 'playback_error', runId, code: safe.code })
+        setFinalMedia(null)
+      })
+      .finally(() => {
+        if (!cancelled) setFinalMediaLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [liveClient, run?.id, run?.status])
 
   function openMode(next: SelectableMode) {
     console.log('[ad-studio:ui] load', { step: 'mode', mode: next })
@@ -403,6 +434,28 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
     }
   }
 
+  async function downloadFinalRender() {
+    if (!run || run.status !== 'done' || downloadBusy) return
+    setDownloadBusy(true)
+    setError(null)
+    console.log('[ad-studio:ui] final_media', { step: 'download_begin', runId: run.id })
+    try {
+      const media = await liveClient.getFinalRender(run.id, true)
+      const anchor = document.createElement('a')
+      anchor.href = media.url
+      anchor.download = media.filename || 'ad-studio.mp4'
+      anchor.rel = 'noopener'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      console.log('[ad-studio:ui] final_media', { step: 'download_complete', runId: run.id, filename: media.filename })
+    } catch (err) {
+      showError(err)
+    } finally {
+      setDownloadBusy(false)
+    }
+  }
+
   async function makeCommercial(variant: AdImageVariant) {
     if (!run || variant.status !== 'ready' || busy) return
     setBusy(true)
@@ -567,6 +620,10 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
                 onCancel={() => void cancelRun()}
                 onContinue={() => void continueRun()}
                 onRetryRender={() => void retryFinalRender()}
+                finalMedia={finalMedia}
+                finalMediaLoading={finalMediaLoading}
+                downloadBusy={downloadBusy}
+                onDownload={() => void downloadFinalRender()}
                 onCommercial={(variant) => void makeCommercial(variant)}
               />
             ) : null}
@@ -867,6 +924,10 @@ function RunPanel({
   onCancel,
   onContinue,
   onRetryRender,
+  finalMedia,
+  finalMediaLoading,
+  downloadBusy,
+  onDownload,
   onCommercial,
 }: {
   run: AdStudioRun
@@ -876,6 +937,10 @@ function RunPanel({
   onCancel: () => void
   onContinue: () => void
   onRetryRender: () => void
+  finalMedia: AdStudioFinalRender | null
+  finalMediaLoading: boolean
+  downloadBusy: boolean
+  onDownload: () => void
   onCommercial: (variant: AdImageVariant) => void
 }) {
   const plan = run.plan
@@ -928,7 +993,29 @@ function RunPanel({
         <div className="mt-4 rounded-xl border border-border bg-card p-4" data-testid="ad-studio-video-result">
           <Megaphone className="mb-2 size-5" aria-hidden />
           <p className="text-sm font-medium">Video result is ready in your project.</p>
-          <p className="mt-1 text-xs text-muted-foreground">Use the compact editor for a quick pass or open the full editor for the complete timeline.</p>
+          {finalMedia?.url ? (
+            <video
+              src={finalMedia.url}
+              controls
+              preload="metadata"
+              className="mt-3 aspect-video w-full rounded-lg bg-black object-contain"
+              data-testid="ad-studio-final-video"
+            />
+          ) : (
+            <div className="mt-3 flex aspect-video items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground" data-testid="ad-studio-final-video-loading">
+              {finalMediaLoading ? 'Loading final video…' : 'Final video preview is unavailable. Open the editor to review it.'}
+            </div>
+          )}
+          <button
+            type="button"
+            data-testid="ad-studio-download-mp4"
+            className="mt-3 rounded-md border border-border px-4 py-2 text-sm font-medium disabled:opacity-50"
+            disabled={downloadBusy}
+            onClick={onDownload}
+          >
+            {downloadBusy ? 'Preparing download…' : 'Download MP4'}
+          </button>
+          <p className="mt-2 text-xs text-muted-foreground">Use the compact editor for a quick pass or open the full editor for the complete timeline.</p>
         </div>
         <ImageAdVariants variants={imageAds} busy={busy} onCommercial={onCommercial} />
         <div className="mt-5 flex flex-wrap gap-3">
