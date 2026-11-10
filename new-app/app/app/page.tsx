@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Clapperboard, Scissors } from 'lucide-react'
+import { Clapperboard, Scissors, Youtube, Captions, WandSparkles } from 'lucide-react'
 import { Page, PageHeader } from '../../components/app/page-primitives'
 import { ProjectStatusBadge } from '../../components/app/status'
 import { getClipsDriveProjects, getClipsWorkspaceId } from '../../lib/server/clips/drive-data'
@@ -22,9 +22,10 @@ export default async function AppDashboardPage() {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 8)
 
+  console.info('[app:home]', { cards: ['clipper', 'video-editor', 'youtube-video', 'captions', 'ad-studio'] })
   return (
     <Page>
-      <PageHeader title="Home" description="Open Clipper or the video editor. Recent projects are listed below." />
+      <PageHeader title="Home" description="Choose what you want to create. Recent projects are listed below." />
       <div className="grid gap-4 sm:grid-cols-2">
         <LauncherCard
           href={routes.clips()}
@@ -39,6 +40,27 @@ export default async function AppDashboardPage() {
           title="Video Editor"
           description="Edit a full video or open an existing project."
           testId="app-launcher-video-editor"
+        />
+        <LauncherCard
+          href={routes.youtubeVideo()}
+          icon={Youtube}
+          title="YouTube Video"
+          description="Turn your footage into a complete YouTube video."
+          testId="app-launcher-youtube-video"
+        />
+        <LauncherCard
+          href="/app/captions"
+          icon={Captions}
+          title="AI Captions"
+          description="Generate and style captions for your videos."
+          testId="app-launcher-captions"
+        />
+        <LauncherCard
+          href="/app/studio"
+          icon={WandSparkles}
+          title="AI Studio"
+          description="Create and plan AI-powered video ads."
+          testId="app-launcher-ad-studio"
         />
       </div>
       <section className="mt-8" aria-labelledby="recent-projects-heading">
