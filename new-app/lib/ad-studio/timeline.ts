@@ -78,8 +78,17 @@ export function buildAdTimelineEdits(input: {
   const sourceSegments: SourceSegment[] = []
   const broll: BrollItem[] = []
   const textItems: TextItem[] = []
+  const plannedEndMs = Math.max(input.durationMs, ...input.scenes.map(scene => scene.endMs))
+  const timeScale = plannedEndMs > input.durationMs ? input.durationMs / plannedEndMs : 1
 
-  for (const scene of [...input.scenes].sort((a,b) => a.index - b.index)) {
+  for (const originalScene of [...input.scenes].sort((a,b) => a.index - b.index)) {
+    const scene: AdTimelineScene = timeScale < 1
+      ? {
+          ...originalScene,
+          startMs: Math.round(originalScene.startMs * timeScale),
+          endMs: Math.round(originalScene.endMs * timeScale),
+        }
+      : originalScene
     if (scene.status === 'skipped' || scene.startMs >= input.durationMs) {
       console.info('[ad-studio:b3] timeline_scene_skipped', { index: scene.index, status: scene.status })
       continue
@@ -184,6 +193,7 @@ export function buildAdTimelineEdits(input: {
     textItems: textItems.length,
     music: Boolean(input.music),
     logo: Boolean(input.logo),
+    timeScale: Math.round(timeScale * 1000) / 1000,
   })
   return result
 }
