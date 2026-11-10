@@ -76,6 +76,21 @@ export function parseStudioModel(raw: unknown): StudioModel {
   const resolutions = Array.isArray(raw.resolutions)
     ? raw.resolutions.filter((n): n is string => typeof n === 'string' && n.length > 0)
     : []
+  let sourceVideoEdit: StudioModel['sourceVideoEdit'] | undefined
+  if (isRecord(raw.sourceVideoEdit)) {
+    const minDurationSec = asNumber(raw.sourceVideoEdit.minDurationSec)
+    const maxDurationSec = asNumber(raw.sourceVideoEdit.maxDurationSec)
+    const rawRates = raw.sourceVideoEdit.creditPerSecondByResolution
+    const rates: Record<string, number> = {}
+    if (isRecord(rawRates)) {
+      for (const [key, value] of Object.entries(rawRates)) {
+        if (typeof value === 'number' && Number.isFinite(value) && value > 0) rates[key] = value
+      }
+    }
+    if (minDurationSec != null && maxDurationSec != null && minDurationSec > 0 && maxDurationSec >= minDurationSec && Object.keys(rates).length) {
+      sourceVideoEdit = { minDurationSec, maxDurationSec, creditPerSecondByResolution: rates }
+    }
+  }
   return {
     id,
     label,
@@ -87,6 +102,7 @@ export function parseStudioModel(raw: unknown): StudioModel {
     durationsSec,
     resolutions,
     creditEstimate,
+    ...(sourceVideoEdit ? { sourceVideoEdit } : {}),
   }
 }
 

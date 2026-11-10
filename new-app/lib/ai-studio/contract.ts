@@ -4,12 +4,12 @@ export const STUDIO_API_VERSION = 1 as const
 
 export type StudioJobStatus = 'queued' | 'running' | 'done' | 'failed'
 export type StudioMediaKind = 'video' | 'image'
-export type StudioMode = 'text_to_video' | 'image_to_video' | 'text_to_image'
+export type StudioMode = 'text_to_video' | 'image_to_video' | 'text_to_image' | 'source_video_edit'
 export type StudioAspect = '9:16' | '16:9' | '1:1'
 
 export const STUDIO_JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const
 export const STUDIO_MEDIA_KINDS = ['video', 'image'] as const
-export const STUDIO_MODES = ['text_to_video', 'image_to_video', 'text_to_image'] as const
+export const STUDIO_MODES = ['text_to_video', 'image_to_video', 'text_to_image', 'source_video_edit'] as const
 export const STUDIO_ASPECTS = ['9:16', '16:9', '1:1'] as const
 
 /** Launch ids from the contract. Seedance 2.5 is explicitly not included. */
@@ -51,6 +51,11 @@ export type StudioModel = {
   durationsSec: number[]
   resolutions: string[]
   creditEstimate: number
+  sourceVideoEdit?: {
+    minDurationSec: number
+    maxDurationSec: number
+    creditPerSecondByResolution: Record<string, number>
+  }
 }
 
 export type StudioModelRegistry = {
@@ -102,6 +107,7 @@ export type CreateStudioJobBody = {
   referenceAssetId?: string
   startFrameAssetId?: string
   endFrameAssetId?: string
+  sourceVideoAssetId?: string
   projectId?: string
 }
 

@@ -1,4 +1,7 @@
 import { createId } from '../supabase/id'
+import { getClipForWorkspace } from '../server/clips/clips'
+import { getClipStorageForObjectKey } from '../storage'
+import { createCachedSignedDownloadUrl } from '../storage/signed-download-cache'
 import { StudioError } from './errors'
 import { buildKieCreateRequest, contentTypeForKind, getStudioModel, outputKindForModel, resolveStudioCreateInput } from './models'
 import { serializeStudioJob } from './serialize'
@@ -39,6 +42,19 @@ function extForContentType(contentType: string, kind: 'video' | 'image'): string
   return kind === 'video' ? 'mp4' : 'png'
 }
 
+const SOURCE_VIDEO_KIND = 'source_video:'
+
+function parseSourceVideoKind(kind: string): { clipId: string; startMs: number; endMs: number } | null {
+  if (!kind.startsWith(SOURCE_VIDEO_KIND)) return null
+  const parts = kind.slice(SOURCE_VIDEO_KIND.length).split(':')
+  if (parts.length !== 3) return null
+  const [clipId, startRaw, endRaw] = parts
+  const startMs = Number(startRaw)
+  const endMs = Number(endRaw)
+  if (!clipId || !Number.isInteger(startMs) || !Number.isInteger(endMs) || endMs <= startMs) return null
+  return { clipId, startMs, endMs }
+}
+
 async function resolveAssetUrl(
   svc: StudioService,
   workspaceId: string,
@@ -48,6 +64,11 @@ async function resolveAssetUrl(
   const asset = await svc.store.getAsset(workspaceId, assetId)
   if (!asset) throw new StudioError('INVALID_PARAMS', 'Asset not found')
   try {
+    const sourceInfo = parseSourceVideoKind(asset.kind)
+    if (sourceInfo) {
+      const storage = await getClipStorageForObjectKey(asset.storageKey, asset.storageDriver)
+      return await createCachedSignedDownloadUrl(storage, asset.storageKey, { versionHint: asset.id }, 3600)
+    }
     const signed = await svc.storage.createSignedDownloadUrl(asset.storageKey, 3600)
     // Prefer a KIE-hosted copy so the provider can fetch the file reliably.
     const downloaded = await svc.kie.downloadUrl(signed)
@@ -69,6 +90,21 @@ export async function createStudioJob(
   },
 ): Promise<StudioJob> {
   const resolved = resolveStudioCreateInput(input.body)
+  let sourceVideoInfo: { clipId: string; startMs: number; endMs: number } | null = null
+  if (resolved.sourceVideoAssetId) {
+    const sourceAsset = await svc.store.getAsset(input.workspaceId, resolved.sourceVideoAssetId)
+    sourceVideoInfo = sourceAsset ? parseSourceVideoKind(sourceAsset.kind) : null
+    if (!sourceAsset || !sourceVideoInfo) {
+      throw new StudioError('INVALID_PARAMS', 'Source video asset is missing or invalid')
+    }
+    const sourceDurationSec = (sourceVideoInfo.endMs - sourceVideoInfo.startMs) / 1000
+    if (!Number.isInteger(sourceDurationSec) || sourceDurationSec !== resolved.durationSec) {
+      throw new StudioError('INVALID_PARAMS', 'Source video asset duration does not match the requested range')
+    }
+    if (!resolved.projectId || !(await svc.store.clipInProject(input.workspaceId, resolved.projectId, sourceVideoInfo.clipId))) {
+      throw new StudioError('INVALID_PARAMS', 'Source video clip was not found in this project')
+    }
+  }
   if (input.jobId) {
     const existing = await svc.store.getJob(input.workspaceId, input.jobId)
     if (existing) {
@@ -107,7 +143,7 @@ export async function createStudioJob(
     aspect: resolved.aspect,
     durationSec: resolved.durationSec,
     resolution: resolved.resolution,
-    creditEstimate: resolved.model.creditEstimate,
+    creditEstimate: resolved.creditEstimate,
     provider: 'kie',
     providerTaskId: null,
     providerApi: resolved.model.providerApi,
@@ -153,6 +189,7 @@ export async function createStudioJob(
   let taskId: string
   try {
     const urls = {
+      sourceVideoUrl: await resolveAssetUrl(svc, input.workspaceId, resolved.sourceVideoAssetId),
       referenceUrl: await resolveAssetUrl(svc, input.workspaceId, resolved.referenceAssetId),
       startFrameUrl: await resolveAssetUrl(svc, input.workspaceId, resolved.startFrameAssetId),
       endFrameUrl: await resolveAssetUrl(svc, input.workspaceId, resolved.endFrameAssetId),
@@ -161,6 +198,9 @@ export async function createStudioJob(
     // One attempt only — no automatic paid retries.
     const created = await svc.kie.createTask(req)
     taskId = created.taskId
+    if (resolved.mode === 'source_video_edit') {
+      console.info('[editor:generate-mode] job-created', { jobId: id, modelId: resolved.model.id, durationSec: resolved.durationSec, credits: resolved.creditEstimate })
+    }
   } catch (err) {
     const failed = await svc.store.updateJob(id, {
       status: 'failed',
@@ -319,6 +359,63 @@ export async function getStudioJobForOutput(
 
 export function studioAssetKey(workspaceId: string, assetId: string, ext: string): string {
   return `ws/${workspaceId}/studio/assets/${assetId}.${ext}`
+}
+
+export async function createStudioClipSourceAsset(
+  svc: StudioService,
+  input: { workspaceId: string; userId: string; clipId: string; startMs: number; endMs: number },
+): Promise<StudioAssetRecord> {
+  const startMs = Math.round(Number(input.startMs))
+  const endMs = Math.round(Number(input.endMs))
+  if (!input.clipId || !Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    throw new StudioError('INVALID_PARAMS', 'A valid clip range is required')
+  }
+  const clip = await getClipForWorkspace(input.workspaceId, input.clipId)
+  if (!clip) throw new StudioError('INVALID_PARAMS', 'Clip not found')
+  const segStart = clip.sourceSegStartMs == null ? null : Math.round(Number(clip.sourceSegStartMs))
+  const segEnd = clip.sourceSegEndMs == null ? null : Math.round(Number(clip.sourceSegEndMs))
+  if (!clip.sourceSegKey || segStart == null || segEnd == null) {
+    throw new StudioError('INVALID_PARAMS', 'This clip does not have an exact source segment for video editing')
+  }
+  const sourceSegmentDurationMs = segEnd - segStart
+  if (sourceSegmentDurationMs < 2000 || sourceSegmentDurationMs > 10000) {
+    throw new StudioError('INVALID_PARAMS', 'Wan 2.7 Video Edit requires the stored source video itself to be 2 to 10 seconds')
+  }
+  if (startMs !== segStart) {
+    throw new StudioError('INVALID_PARAMS', 'The selected range must begin at the available source segment start')
+  }
+  if (endMs > segEnd) {
+    throw new StudioError('INVALID_PARAMS', 'The selected range extends past the available source segment')
+  }
+  const durationMs = endMs - startMs
+  if (durationMs < 2000 || durationMs > 10000 || durationMs % 1000 !== 0) {
+    throw new StudioError('INVALID_PARAMS', 'Wan 2.7 Video Edit requires a whole-second source range from 2 to 10 seconds')
+  }
+  const lowerKey = clip.sourceSegKey.toLowerCase()
+  const contentType = lowerKey.endsWith('.mov') ? 'video/quicktime' : lowerKey.endsWith('.mp4') ? 'video/mp4' : null
+  if (!contentType) {
+    throw new StudioError('INVALID_PARAMS', 'The exact source segment must be MP4 or MOV for Wan 2.7 Video Edit')
+  }
+  const sourceStorage = await getClipStorageForObjectKey(clip.sourceSegKey, clip.storageDriver ?? null)
+  const sourceBytes = await sourceStorage.getObjectSizeBytes(clip.sourceSegKey).catch(() => null)
+  if (sourceBytes == null) throw new StudioError('STORAGE_ERROR', 'Could not verify the source video size')
+  if (sourceBytes > 100 * 1024 * 1024) {
+    throw new StudioError('INVALID_PARAMS', 'Wan 2.7 Video Edit source video must be 100 MB or smaller')
+  }
+  const id = createId('stast')
+  const asset = await svc.store.createAsset({
+    id,
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    storageKey: clip.sourceSegKey,
+    storageDriver: clip.storageDriver ?? null,
+    contentType,
+    bytes: sourceBytes,
+    kind: `${SOURCE_VIDEO_KIND}${clip.id}:${startMs}:${endMs}`,
+    createdAt: svc.now(),
+  })
+  console.info('[editor:generate-mode] source-asset-ready', { clipId: clip.id, assetId: id, durationMs })
+  return asset
 }
 
 export async function createStudioAsset(

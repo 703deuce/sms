@@ -2,7 +2,7 @@ export const STUDIO_REGISTRY_VERSION = 1 as const
 
 export type StudioJobStatus = 'queued' | 'running' | 'done' | 'failed'
 export type StudioMediaKind = 'video' | 'image'
-export type StudioMode = 'text_to_video' | 'image_to_video' | 'text_to_image'
+export type StudioMode = 'text_to_video' | 'image_to_video' | 'text_to_image' | 'source_video_edit'
 export type StudioAspect = '9:16' | '16:9' | '1:1'
 
 export type StudioModelPublic = {
@@ -16,6 +16,11 @@ export type StudioModelPublic = {
   durationsSec: number[]
   resolutions: string[]
   creditEstimate: number
+  sourceVideoEdit?: {
+    minDurationSec: number
+    maxDurationSec: number
+    creditPerSecondByResolution: Record<string, number>
+  }
 }
 
 export type StudioRegistryDocument = {
@@ -33,6 +38,7 @@ export type StudioCreateJobInput = {
   referenceAssetId?: string
   startFrameAssetId?: string
   endFrameAssetId?: string
+  sourceVideoAssetId?: string
   projectId?: string
 }
 

@@ -2,13 +2,25 @@ import { NextResponse } from 'next/server'
 import { resolveClipsActorUserId } from '../../../../lib/server/clips/clips-auth'
 import { resolveWorkspaceId } from '../../../../lib/server/workspace'
 import { studioJsonError } from '../../../../lib/studio/http'
-import { createStudioAsset } from '../../../../lib/studio/jobs'
+import { createStudioAsset, createStudioClipSourceAsset } from '../../../../lib/studio/jobs'
 import { createDefaultStudioService } from '../../../../lib/studio/runtime'
 
 export async function POST(request: Request) {
   try {
     const workspaceId = await resolveWorkspaceId()
     const userId = await resolveClipsActorUserId(request)
+    const contentType = request.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      const body = (await request.json()) as { clipId?: string; startMs?: number; endMs?: number }
+      const asset = await createStudioClipSourceAsset(createDefaultStudioService(), {
+        workspaceId,
+        userId,
+        clipId: body.clipId || '',
+        startMs: Number(body.startMs),
+        endMs: Number(body.endMs),
+      })
+      return NextResponse.json({ id: asset.id })
+    }
     const form = await request.formData()
     const file = form.get('file') ?? form.get('asset') ?? form.get('image')
     if (!file || typeof file === 'string' || typeof (file as Blob).arrayBuffer !== 'function') {

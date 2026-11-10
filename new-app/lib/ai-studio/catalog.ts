@@ -79,6 +79,7 @@ export const PROMPT_PRESETS: Record<StudioMode, PromptPreset[]> = {
     { id: 't2i-key', label: 'Key art', prompt: 'Cinematic key art of a lone figure on a rooftop at dusk, dramatic sky, anamorphic still, rich color.' },
     { id: 't2i-logo', label: 'Texture', prompt: 'Abstract brushed-metal texture with a faint geometric mark, premium, no typography.' },
   ],
+  source_video_edit: [],
 }
 
 export type StudioCategoryId = StudioMode

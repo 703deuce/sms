@@ -139,6 +139,29 @@ export const STUDIO_MODELS: StudioModelConfig[] = [
     resolveResolution: aliasResolution({ '480p': '480p', '720p': '720p' }),
   },
   {
+    id: 'wan-2.7-video-edit',
+    label: 'Wan 2.7 Video Edit',
+    kind: 'video',
+    modes: ['source_video_edit'],
+    supportsStartEndFrame: false,
+    supportsReferenceImage: true,
+    aspects: ASPECTS_ALL,
+    durationsSec: [2, 3, 4, 5, 6, 7, 8, 9, 10],
+    resolutions: ['720p', '1080p'],
+    creditEstimate: 32,
+    sourceVideoEdit: {
+      minDurationSec: 2,
+      maxDurationSec: 10,
+      creditPerSecondByResolution: { '720p': 16, '1080p': 24 },
+    },
+    providerModel: 'wan/2-7-videoedit',
+    providerApi: 'jobs',
+    defaultAspect: '16:9',
+    defaultDurationSec: 2,
+    defaultResolution: '720p',
+    resolveResolution: aliasResolution({ '720p': '720p', '1080p': '1080p' }),
+  },
+  {
     id: 'flux-2-pro',
     label: 'Flux 2 Pro',
     kind: 'image',
@@ -220,10 +243,13 @@ export function publicStudioModel(model: StudioModelConfig): StudioModelPublic {
   return pub
 }
 
-export function getStudioRegistryDocument(): StudioRegistryDocument {
+export function getStudioRegistryDocument(opts?: { mode?: StudioMode }): StudioRegistryDocument {
+  const models = opts?.mode
+    ? STUDIO_MODELS.filter((model) => model.modes.includes(opts.mode!))
+    : STUDIO_MODELS.filter((model) => !model.modes.includes('source_video_edit'))
   return {
     version: STUDIO_REGISTRY_VERSION,
-    models: STUDIO_MODELS.map(publicStudioModel),
+    models: models.map(publicStudioModel),
   }
 }
 
@@ -237,6 +263,8 @@ export type ResolvedStudioCreate = {
   referenceAssetId: string | null
   startFrameAssetId: string | null
   endFrameAssetId: string | null
+  sourceVideoAssetId: string | null
+  creditEstimate: number
   projectId: string | null
 }
 
@@ -259,6 +287,9 @@ export function resolveStudioCreateInput(input: StudioCreateJobInput): ResolvedS
   }
 
   const prompt = requirePrompt(input.prompt)
+  if (mode === 'source_video_edit' && prompt.length > 5000) {
+    throw new StudioError('INVALID_PARAMS', 'Video edit prompt must be 5000 characters or fewer')
+  }
 
   let aspect: StudioAspect = input.aspect ?? model.defaultAspect
   if (input.aspect && !model.aspects.includes(input.aspect)) {
@@ -289,6 +320,14 @@ export function resolveStudioCreateInput(input: StudioCreateJobInput): ResolvedS
   const referenceAssetId = input.referenceAssetId?.trim() || null
   const startFrameAssetId = input.startFrameAssetId?.trim() || null
   const endFrameAssetId = input.endFrameAssetId?.trim() || null
+  const sourceVideoAssetId = input.sourceVideoAssetId?.trim() || null
+
+  if (mode === 'source_video_edit' && !sourceVideoAssetId) {
+    throw new StudioError('INVALID_PARAMS', 'source_video_edit requires sourceVideoAssetId')
+  }
+  if (mode !== 'source_video_edit' && sourceVideoAssetId) {
+    throw new StudioError('INVALID_PARAMS', 'sourceVideoAssetId is only valid for source_video_edit')
+  }
 
   if (endFrameAssetId && !model.supportsStartEndFrame) {
     throw new StudioError('INVALID_PARAMS', `${model.id} does not support start/end frames`)
@@ -309,6 +348,11 @@ export function resolveStudioCreateInput(input: StudioCreateJobInput): ResolvedS
     throw new StudioError('INVALID_PARAMS', 'endFrameAssetId requires a start frame')
   }
 
+  const rate = mode === 'source_video_edit' && durationSec != null && resolution
+    ? model.sourceVideoEdit?.creditPerSecondByResolution[resolution]
+    : undefined
+  const creditEstimate = rate ? Math.round(rate * durationSec) : model.creditEstimate
+
   return {
     model,
     mode,
@@ -319,11 +363,14 @@ export function resolveStudioCreateInput(input: StudioCreateJobInput): ResolvedS
     referenceAssetId,
     startFrameAssetId,
     endFrameAssetId,
+    sourceVideoAssetId,
+    creditEstimate,
     projectId: input.projectId?.trim() || null,
   }
 }
 
 export type StudioAssetUrls = {
+  sourceVideoUrl?: string
   referenceUrl?: string
   startFrameUrl?: string
   endFrameUrl?: string
@@ -352,6 +399,22 @@ export function buildKieCreateRequest(resolved: ResolvedStudioCreate, urls: Stud
     }
     if (imageUrls.length) body.imageUrls = imageUrls
     return { api: 'veo', model: model.providerModel, input: body }
+  }
+
+  if (model.id === 'wan-2.7-video-edit') {
+    if (!urls.sourceVideoUrl) throw new StudioError('INVALID_PARAMS', 'Wan 2.7 Video Edit requires source video')
+    const input: Record<string, unknown> = {
+      prompt,
+      video_url: urls.sourceVideoUrl,
+      resolution: resolution || '720p',
+      duration: durationSec ?? 0,
+      audio_setting: 'origin',
+      prompt_extend: true,
+      watermark: false,
+      nsfw_checker: false,
+    }
+    if (referenceUrl) input.reference_image = referenceUrl
+    return { api: 'jobs', model: model.providerModel, input }
   }
 
   if (model.id === 'seedance-2.0-mini') {

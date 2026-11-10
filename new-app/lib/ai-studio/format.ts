@@ -18,6 +18,8 @@ export function modeLabel(mode: StudioMode): string {
       return 'Image to video'
     case 'text_to_image':
       return 'Text to image'
+    case 'source_video_edit':
+      return 'Video edit'
   }
 }
 
