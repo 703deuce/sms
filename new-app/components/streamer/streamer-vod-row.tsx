@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { ClipProjectStatus } from '@prisma/client'
 import { Panel } from '@/components/app/page-primitives'
@@ -42,6 +42,12 @@ export function StreamerVodRowCard({
       ? ` · chunk ${row.chunkDone}/${row.chunkTotal}`
       : ''
   const badge = vodStatusBadge(row.status)
+  const terminal = row.status === 'READY' || row.status === 'FAILED' || row.status === 'CANCELED'
+  useEffect(() => {
+    if (terminal && (row.progress > 0 || row.chunkTotal || row.etaSec || row.waitingForWorker)) {
+      console.info('[streamer:progress]', { projectId: row.projectId, action: 'hide_terminal_progress', status: row.status })
+    }
+  }, [terminal, row.projectId, row.progress, row.chunkTotal, row.etaSec, row.waitingForWorker, row.status])
 
   return (
     <Panel className="p-4">
@@ -77,20 +83,20 @@ export function StreamerVodRowCard({
               ) : null}
             </div>
           ) : null}
-          <StreamerStageStepper stage={row.stage} progress={row.waitingForWorker ? 0 : row.progress} />
-          {row.waitingForWorker ? (
+          {!terminal ? <StreamerStageStepper stage={row.stage} progress={row.waitingForWorker ? 0 : row.progress} /> : null}
+          {!terminal && row.waitingForWorker ? (
             <p className="text-xs text-muted-foreground">
               Waiting for a worker
               {row.queuedElapsedSec != null && row.queuedElapsedSec > 0
                 ? ` · ${formatEtaSeconds(row.queuedElapsedSec)}`
                 : ''}
             </p>
-          ) : eta ? (
+          ) : !terminal && eta ? (
             <p className="text-xs text-muted-foreground">
               ETA {eta}
               {chunk}
             </p>
-          ) : row.progress > 0 || (row.chunkTotal != null && row.chunkTotal > 0) ? (
+          ) : !terminal && (row.progress > 0 || (row.chunkTotal != null && row.chunkTotal > 0)) ? (
             <p className="text-xs text-muted-foreground">
               Processing{row.progress > 0 ? ` · ${row.progress}%` : ''}
               {chunk}
