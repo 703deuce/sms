@@ -20,6 +20,7 @@ JOB_TYPES: tuple[str, ...] = (
     "REFRAME_CROP",
     "MUSIC",
     "THUMBNAIL",
+    "CARD_THUMBNAIL",
     "DUB",
     "STUDIO_SOUND",
     "RENDER_SCRIPT_COMPOSITION",

@@ -513,6 +513,12 @@ def handle_thumbnail(conn, job: dict) -> None:
     run_thumbnail_job(conn, job, post_progress)
     _mark_job_done(conn, job["id"])
 
+def handle_card_thumbnail(conn, job: dict) -> None:
+    from clips_worker.card_thumbnail_job import run_card_thumbnail_job
+
+    run_card_thumbnail_job(conn, job)
+    _mark_job_done(conn, job["id"])
+
 
 def handle_dub(conn, job: dict) -> None:
     from clips_worker.dub_job import run_dub_job
@@ -661,6 +667,7 @@ DISPATCH: dict[str, object] = {
     "MUSIC": handle_music,
     "STUDIO_SOUND": handle_studio_sound,
     "THUMBNAIL": handle_thumbnail,
+    "CARD_THUMBNAIL": handle_card_thumbnail,
     "DUB": handle_dub,
 }
 

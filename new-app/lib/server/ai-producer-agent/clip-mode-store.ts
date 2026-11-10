@@ -1,6 +1,7 @@
 import 'server-only'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
+import { enqueueClipCardThumbnail } from '@/lib/server/clips/card-thumbnails'
 
 /** Unlike Producer edits, clip-mode outputs belong to the uploaded project. */
 export async function createSourceClip(input:{
@@ -58,6 +59,13 @@ export async function publishClipScore(input:{
       },
     },
   })
+  try {
+    console.info('[clips:cards] thumbnail publish_enqueue begin', { clipId: input.clipId })
+    await enqueueClipCardThumbnail(input.workspaceId,input.clipId,'agent_publish')
+    console.info('[clips:cards] thumbnail publish_enqueue end', { clipId: input.clipId })
+  } catch (error) {
+    console.warn('[clips:cards] thumbnail publish_enqueue failed', { clipId: input.clipId, error: String(error) })
+  }
 }
 export async function discardClip(workspaceId:string,clipId:string){
   await getPrisma().clip.updateMany({where:{id:clipId,workspaceId},data:{deletedAt:new Date()}})
