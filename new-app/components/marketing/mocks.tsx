@@ -1,40 +1,112 @@
+import type { ReactNode } from 'react'
 import { ProductFrame } from '@/components/marketing/product-frame'
 
 export function ClipsHeroMock() {
   return (
     <ProductFrame label="Transovo Clips · Story review">
-      <div className="grid gap-4 bg-[oklch(0.16_0.008_285)] p-4 sm:p-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="flex items-end justify-center gap-3 sm:gap-4">
-          <ClipCard
-            title="The setup"
-            time="00:42"
-            caption="So here’s what actually happened on set that week."
-            why="Opens on a clear question, then lands the answer."
-            layout="Speaker follow"
-            offset="translate-y-4 hidden sm:block"
-            dim
-          />
-          <ClipCard
-            title="Story · 0:58"
-            time="00:58"
-            caption="We cut three days apart — and the argument still holds."
-            why="Stitches the setup, the pushback, and the payoff."
-            layout="9:16 · Story"
-            featured
-          />
-          <ClipCard
-            title="The payoff"
-            time="00:31"
-            caption="That’s the line I wish I had said in the moment."
-            why="Clean ending on a complete sentence."
-            layout="Split"
-            offset="translate-y-4 hidden sm:block"
-            dim
-          />
+      <div className="bg-[oklch(0.16_0.008_285)]">
+        <SourceScrubber />
+        <div className="grid gap-4 border-t border-border/80 p-4 sm:p-5 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="flex items-end justify-center gap-3 sm:gap-4">
+            <ClipCard
+              title="The setup"
+              time="00:42"
+              caption="So here’s what actually happened on set that week."
+              why="Opens on a clear hook, then lands the answer."
+              layout="Speaker follow"
+              offset="hidden sm:block"
+              dim
+            />
+            <ClipCard
+              title="Story · 0:58"
+              time="00:58"
+              caption="We cut three days apart — and the argument still holds."
+              why="Stitches the setup, the pushback, and a complete-sentence payoff."
+              layout="9:16 · Story"
+              featured
+            />
+            <ClipCard
+              title="The payoff"
+              time="00:31"
+              caption="That’s the line I wish I had said in the moment."
+              why="Ends on a finished thought, not a mid-sentence cut."
+              layout="Split"
+              offset="hidden sm:block"
+              dim
+            />
+          </div>
+          <StoryStitchPanel />
         </div>
-        <StoryStitchPanel />
       </div>
     </ProductFrame>
+  )
+}
+
+function SourceScrubber() {
+  const bars = Array.from({ length: 96 }, (_, i) => {
+    const wave = 8 + Math.abs(Math.sin(i / 3.4) * 14) + ((i * 5) % 7)
+    return Math.min(26, wave)
+  })
+  const segments = [
+    { left: '6%', width: '9%', label: 'Setup', time: '02:14', tone: 'from-[oklch(0.62_0.22_295)] to-[oklch(0.7_0.18_330)]' },
+    { left: '36%', width: '8%', label: 'Turn', time: '18:41', tone: 'from-[oklch(0.66_0.2_340)] to-[oklch(0.72_0.16_60)]' },
+    { left: '82%', width: '10%', label: 'Payoff', time: '41:07', tone: 'from-[oklch(0.72_0.16_60)] to-[oklch(0.78_0.14_80)]' },
+  ]
+  return (
+    <div className="px-4 pt-4 sm:px-5 sm:pt-5" aria-hidden>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[0.65rem] uppercase tracking-[0.14em] text-brand">Source</span>
+          <span className="text-xs font-medium text-foreground">episode-04.mp4</span>
+          <span className="font-mono text-[0.65rem] text-muted-foreground">48:12</span>
+        </div>
+        <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[0.6rem] text-muted-foreground">
+          3 moments → one Story
+        </span>
+      </div>
+      <div className="relative rounded-xl border border-border bg-panel px-3 pb-8 pt-2">
+        <div className="mb-1 flex justify-between font-mono text-[0.55rem] text-muted-foreground">
+          {['0:00', '12:00', '24:00', '36:00', '48:12'].map((t) => (
+            <span key={t}>{t}</span>
+          ))}
+        </div>
+        <div className="relative h-14 overflow-hidden rounded-md bg-muted/80">
+          <svg className="absolute inset-0 h-full w-full text-foreground/35" viewBox="0 0 288 40" preserveAspectRatio="none">
+            {bars.map((h, i) => (
+              <rect
+                key={i}
+                x={i * 3 + 1}
+                y={(40 - h) / 2}
+                width="2"
+                height={h}
+                fill="currentColor"
+                rx="0.5"
+              />
+            ))}
+          </svg>
+          {segments.map((seg) => (
+            <div
+              key={seg.label}
+              className={`absolute inset-y-0 rounded-sm bg-gradient-to-r ${seg.tone} opacity-80 ring-1 ring-white/30`}
+              style={{ left: seg.left, width: seg.width }}
+            />
+          ))}
+          <div className="absolute inset-y-0 left-[42%] w-px bg-brand-foreground/90" />
+        </div>
+        {segments.map((seg) => (
+          <div
+            key={seg.label}
+            className="absolute bottom-1.5 flex -translate-x-1/2 flex-col items-center"
+            style={{ left: `calc(${seg.left} + ${seg.width} / 2)` }}
+          >
+            <span className="h-2 w-px bg-brand/70" />
+            <span className="whitespace-nowrap font-mono text-[0.55rem] text-foreground">
+              {seg.label} {seg.time}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -59,7 +131,7 @@ function ClipCard({
 }) {
   return (
     <div
-      className={`w-[9.5rem] shrink-0 sm:w-[10.5rem] ${offset ?? ''} ${dim ? 'opacity-70' : ''} ${featured ? 'z-10 scale-[1.04]' : ''}`}
+      className={`w-[8.6rem] shrink-0 sm:w-[9.6rem] ${offset ?? ''} ${dim ? 'opacity-70' : ''} ${featured ? 'z-10 scale-[1.04]' : ''}`}
       aria-hidden
     >
       <div className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-gradient-to-b from-[oklch(0.28_0.05_295)] via-[oklch(0.2_0.02_285)] to-[oklch(0.14_0.01_285)] shadow-md">
@@ -69,16 +141,16 @@ function ClipCard({
           </span>
           <span className="font-mono text-[0.55rem] text-white/60">{time}</span>
         </div>
-        <div className="mx-auto mt-6 size-16 rounded-full bg-gradient-to-br from-[oklch(0.72_0.12_80)] to-[oklch(0.45_0.08_40)] ring-2 ring-white/20" />
-        <div className="mx-auto mt-3 h-1.5 w-16 rounded-full bg-white/20" />
-        <div className="absolute inset-x-0 bottom-0 mt-auto px-2 pb-2 pt-10">
+        <div className="mx-auto mt-5 size-14 rounded-full bg-gradient-to-br from-[oklch(0.72_0.12_80)] to-[oklch(0.45_0.08_40)] ring-2 ring-white/20" />
+        <div className="mx-auto mt-2.5 h-1.5 w-14 rounded-full bg-white/20" />
+        <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-10">
           <p className="rounded-md bg-black/55 px-1.5 py-1 text-center text-[0.62rem] font-semibold leading-snug text-white">
             {caption}
           </p>
         </div>
       </div>
       <div className="mt-2 rounded-lg border border-border bg-card px-2 py-1.5">
-        <p className="font-mono text-[0.58rem] uppercase tracking-[0.12em] text-brand">Why this clip</p>
+        <p className="font-mono text-[0.58rem] uppercase tracking-[0.12em] text-brand">Why this moment</p>
         <p className="mt-0.5 text-[0.7rem] leading-snug text-muted-foreground">{why}</p>
         <p className="mt-1 truncate text-[0.7rem] font-medium text-foreground">{title}</p>
       </div>
@@ -93,9 +165,9 @@ function StoryStitchPanel() {
       <p className="mt-1 text-sm font-medium text-foreground">Non-contiguous moments, one clip</p>
       <ol className="mt-4 space-y-3">
         {[
-          { t: '02:14', label: 'Setup', body: 'The question that starts the thread.' },
+          { t: '02:14', label: 'Setup', body: 'The hook that starts the thread.' },
           { t: '18:41', label: 'Turn', body: 'A later rebuttal, kept in context.' },
-          { t: '41:07', label: 'Payoff', body: 'The line that closes the story.' },
+          { t: '41:07', label: 'Payoff', body: 'Ends when the thought is finished.' },
         ].map((step, i) => (
           <li key={step.t} className="relative flex gap-3">
             <div className="flex flex-col items-center">
@@ -175,7 +247,7 @@ export function LayoutsMock() {
 export function EditorHeroMock() {
   return (
     <ProductFrame label="Transovo studio · Script + Timeline">
-      <div className="grid bg-[oklch(0.16_0.008_285)] lg:grid-cols-2">
+      <div className="grid bg-[oklch(0.16_0.008_285)] lg:grid-cols-[0.9fr_1.2fr]">
         <ScriptMock />
         <TimelineMock />
       </div>
@@ -197,7 +269,7 @@ function ScriptMock() {
       <div className="mb-3 flex items-center justify-between">
         <span className="font-mono text-[0.65rem] uppercase tracking-[0.14em] text-brand">Script</span>
         <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[0.6rem] text-muted-foreground">
-          Filler + silence
+          Filler + silence · Undo
         </span>
       </div>
       <ul className="space-y-2">
@@ -218,46 +290,118 @@ function ScriptMock() {
   )
 }
 
+function Waveform({ bars = 36, className = '' }: { bars?: number; className?: string }) {
+  return (
+    <svg className={`pointer-events-none absolute inset-x-1 inset-y-0.5 ${className}`} viewBox={`0 0 ${bars * 4} 20`} preserveAspectRatio="none">
+      {Array.from({ length: bars }, (_, i) => {
+        const h = 4 + ((i * 11 + 3) % 14)
+        return <rect key={i} x={i * 4 + 1} y={(20 - h) / 2} width="2" height={h} fill="white" opacity="0.75" />
+      })}
+    </svg>
+  )
+}
+
 function TimelineMock() {
-  const lanes = [
-    { name: 'Video', color: 'var(--lane-voice)', width: '92%' },
-    { name: 'Captions', color: 'var(--lane-caption)', width: '70%' },
-    { name: 'B-roll', color: 'var(--lane-broll)', width: '48%' },
-    { name: 'Titles', color: 'var(--lane-brand)', width: '36%' },
-    { name: 'Voice', color: 'var(--lane-record)', width: '80%' },
-  ]
+  const ticks = ['0:00', '0:15', '0:30', '0:45', '1:00']
+  const playhead = '38%'
   return (
     <div className="p-4 sm:p-5" aria-hidden>
       <div className="mb-3 flex items-center justify-between">
         <span className="font-mono text-[0.65rem] uppercase tracking-[0.14em] text-brand">Timeline</span>
-        <span className="font-mono text-[0.6rem] text-muted-foreground">Snap · Trim · Keyframes</span>
+        <span className="flex items-center gap-2 font-mono text-[0.6rem] text-muted-foreground">
+          <span className="grid size-4 place-items-center rounded-full bg-brand-gradient text-[0.5rem] text-brand-foreground">
+            ▶
+          </span>
+          00:22:18
+        </span>
       </div>
-      <div className="space-y-2 rounded-xl border border-border bg-panel p-3">
-        {lanes.map((lane) => (
-          <div key={lane.name} className="flex items-center gap-2">
-            <span className="w-16 shrink-0 text-[0.65rem] text-muted-foreground">{lane.name}</span>
-            <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-muted">
-              <div
-                className="absolute inset-y-1 left-1 rounded-sm opacity-90"
-                style={{ width: lane.width, background: lane.color }}
-              />
-              {lane.name === 'Voice' ? (
-                <svg className="absolute inset-0 h-full w-full opacity-70" viewBox="0 0 200 24" preserveAspectRatio="none">
-                  {Array.from({ length: 40 }, (_, i) => {
-                    const h = 4 + ((i * 7) % 16)
-                    return <rect key={i} x={i * 5 + 2} y={(24 - h) / 2} width="2" height={h} fill="white" opacity="0.7" />
-                  })}
-                </svg>
-              ) : null}
-            </div>
-          </div>
-        ))}
-        <div className="relative h-4">
-          <div className="absolute inset-x-0 top-1/2 h-px bg-border" />
-          <div className="absolute left-[38%] top-0 h-4 w-px bg-brand" />
-          <div className="absolute left-[38%] -top-0.5 size-2 -translate-x-1/2 rounded-full bg-brand" />
+      <div className="relative overflow-hidden rounded-xl border border-border bg-panel p-2.5">
+        <div className="mb-1 flex justify-between pl-[3.5rem] font-mono text-[0.55rem] text-muted-foreground">
+          {ticks.map((t) => (
+            <span key={t}>{t}</span>
+          ))}
         </div>
+        <div className="relative space-y-1.5">
+          <Lane name="V1" color="var(--lane-voice)">
+            <Clip left="2%" width="28%" />
+            <Clip left="34%" width="22%" />
+            <Clip left="60%" width="36%" />
+          </Lane>
+          <Lane name="C1" color="var(--lane-caption)" short>
+            <Clip left="2%" width="26%" />
+            <Clip left="34%" width="20%" />
+            <Clip left="62%" width="30%" />
+          </Lane>
+          <Lane name="B1" color="var(--lane-broll)" short>
+            <Clip left="40%" width="16%" />
+            <Clip left="72%" width="18%" />
+          </Lane>
+          <Lane name="T1" color="var(--lane-brand)" short>
+            <Clip left="8%" width="14%" keys={[18, 55, 82]} />
+            <Clip left="64%" width="12%" keys={[30, 70]} />
+          </Lane>
+          <Lane name="A1" color="var(--lane-record)" wave>
+            <Clip left="2%" width="28%" wave />
+            <Clip left="34%" width="58%" wave />
+          </Lane>
+          <div className="pointer-events-none absolute bottom-0 top-0 z-10" style={{ left: `calc(3.5rem + (100% - 3.5rem) * 0.38)` }}>
+            <div className="absolute -top-1 left-1/2 size-2 -translate-x-1/2 rounded-full bg-brand" />
+            <div className="h-full w-px bg-brand" />
+          </div>
+        </div>
+        <span className="sr-only">Playhead at {playhead}</span>
       </div>
+    </div>
+  )
+}
+
+function Lane({
+  name,
+  color,
+  children,
+  short,
+  wave,
+}: {
+  name: string
+  color: string
+  children: ReactNode
+  short?: boolean
+  wave?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-12 shrink-0 font-mono text-[0.6rem] text-muted-foreground">{name}</span>
+      <div className={`relative flex-1 overflow-hidden rounded-sm bg-muted/70 ${short ? 'h-5' : 'h-7'}`} style={{ ['--lane' as string]: color }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function Clip({
+  left,
+  width,
+  keys,
+  wave,
+}: {
+  left: string
+  width: string
+  keys?: number[]
+  wave?: boolean
+}) {
+  return (
+    <div
+      className="absolute inset-y-0.5 overflow-hidden rounded-[3px] opacity-95"
+      style={{ left, width, background: 'var(--lane)' }}
+    >
+      {wave ? <Waveform bars={28} /> : null}
+      {keys?.map((k) => (
+        <span
+          key={k}
+          className="absolute top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-white shadow-xs"
+          style={{ left: `${k}%` }}
+        />
+      ))}
     </div>
   )
 }

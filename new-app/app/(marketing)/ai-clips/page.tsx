@@ -71,7 +71,7 @@ const faqs: FaqItem[] = [
   {
     question: 'How does pricing work?',
     answer:
-      'Usage is measured in credits. This page does not list dollar prices or plan tiers. Start in Clips to see the current credit balance in your workspace.',
+      'Usage is measured in credits. Open Clips to see the current credit balance in your workspace. This page does not invent plan tiers.',
   },
 ]
 
@@ -122,7 +122,7 @@ const steps = [
   {
     n: '03',
     title: 'Review, caption, export',
-    body: 'Read the why-this-clip note, check openings and endings, add captions, and export when it is ready.',
+    body: 'Read the why-this-moment reason, check that the clip starts on the hook, then caption and finish it on a real timeline.',
   },
 ]
 
@@ -145,8 +145,7 @@ export default function AiClipsPage() {
                 Turn long episodes into short clips that still make sense.
               </h1>
               <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-                Import a long-form source, pick 30, 60, or 90 seconds, and get speaker-aware 9:16 layouts, captions, and
-                a note on why each clip was chosen. Story mode stitches non-contiguous moments into one clip.
+                Import a long-form source and get 30, 60, or 90 second clips built to start on the hook and avoid mid-sentence cuts. Each one includes a why-this-moment reason — not a virality score — and opens on a real timeline you can edit.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <PrimaryCta href={hrefs.clipsNew}>
@@ -178,14 +177,14 @@ export default function AiClipsPage() {
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-3 px-5 py-5 sm:px-8">
             <CreditChip>Credits-based</CreditChip>
             <p className="text-sm text-muted-foreground">Built for long uploads — up to 10 hours or 30 GB</p>
-            <p className="text-sm text-muted-foreground">No dollar prices on this page</p>
+            <p className="text-sm text-muted-foreground">Every AI cut opens on a real timeline</p>
           </div>
         </div>
 
         <Section
           eyebrow="Why Transovo"
           title="Story, not just isolated moments."
-          description="A good short often needs a setup from minute two and a payoff from minute forty. Story mode is built to stitch those passages into one clip, with a note on why it was chosen and a pass for openings and endings."
+          description="A good short often needs a hook from minute two and a payoff from minute forty. Story mode stitches those passages into one clip, with a why-this-moment reason and a pass for openings and endings."
         >
           <div className="grid gap-4 md:grid-cols-3">
             {[
@@ -196,13 +195,13 @@ export default function AiClipsPage() {
               },
               {
                 icon: Scissors,
-                title: 'Why this clip',
-                body: 'Each clip can include a short note on why it was chosen, so review starts with context instead of a guess.',
+                title: 'Why this moment',
+                body: 'Each clip can include a short, plain-language reason for why this moment made the cut — not a stamped virality score.',
               },
               {
                 icon: ShieldCheck,
-                title: 'Openings and endings',
-                body: 'The clipper is built to reject broken openings and endings before you export, so cuts are less likely to start or stop mid-thought.',
+                title: 'Start on the hook',
+                body: 'The clipper is built so candidates start on the hook and are less likely to cut mid-sentence, with a pass for broken openings and endings before you export.',
               },
             ].map((item) => (
               <article key={item.title} className="rounded-2xl border border-border bg-card p-6 shadow-xs">
@@ -265,10 +264,9 @@ export default function AiClipsPage() {
           </div>
         </Section>
 
-        <Section tone="raised" eyebrow="Then finish in the studio" title="Fine-tune in the video editor.">
+        <Section tone="raised" eyebrow="Then finish in the studio" title="Every AI cut lands on a real timeline.">
           <p className="mx-auto mb-8 max-w-2xl text-center text-muted-foreground">
-            Jump into Script and Timeline when a clip needs a tighter cut, branded captions, or a motion title. Same
-            project, same credits.
+            Story, moments, and other AI-assisted cuts open in Script and Timeline, so a too-short hook is a trim — not a rebuild in another editor. Same project, same credits.
           </p>
           <div className="flex justify-center">
             <TextCta href={hrefs.videoEditing}>

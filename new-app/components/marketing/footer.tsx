@@ -55,7 +55,7 @@ export function MarketingFooter() {
       <div className="border-t border-border">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-5 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <p>© 2026 Transovo Clips</p>
-          <p className="font-mono uppercase tracking-[0.12em]">Credits only — never priced in dollars on this page</p>
+          <p className="font-mono uppercase tracking-[0.12em]">Usage is measured in credits</p>
         </div>
       </div>
     </footer>

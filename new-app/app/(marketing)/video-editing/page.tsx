@@ -70,7 +70,7 @@ const faqs: FaqItem[] = [
   {
     question: 'How does pricing work?',
     answer:
-      'Usage is measured in credits. This page does not list dollar prices or plan tiers. Start in the studio to see the current credit balance in your workspace.',
+      'Usage is measured in credits. Open the studio to see the current credit balance in your workspace. This page does not invent plan tiers.',
   },
 ]
 
@@ -93,8 +93,7 @@ export default function VideoEditingPage() {
                 Script view for speed. Timeline for control.
               </h1>
               <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-                Cut on the transcript, refine on a multi-lane timeline, brand it, and export ready-to-post MP4s at 720
-                or 1080.
+                Every AI cut lands on a real Script and Timeline you can trim, caption, and export. Cut fillers and silence in Script view, put back anything it got wrong, and export ready-to-post MP4s at 720 or 1080.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <PrimaryCta href={hrefs.editorNew}>
@@ -121,7 +120,7 @@ export default function VideoEditingPage() {
           id="script"
           eyebrow="Script workflow"
           title="Edit the words. The picture follows."
-          description="Cut a line, drop filler, shorten a pause, or find and replace a phrase. Undo and redo stay with you. This is transcript editing you can trust for a talking-head cut — then hand the same project to the timeline."
+          description="Cut a line, drop filler, shorten a pause, or find and replace a phrase. Undo and redo let you put back anything the cleanup got wrong. Then hand the same project to the timeline."
         >
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[
@@ -264,8 +263,7 @@ export default function VideoEditingPage() {
 
         <Section eyebrow="Start from AI Clips" title="Find the short. Finish it here.">
           <p className="mx-auto mb-8 max-w-2xl text-center text-muted-foreground">
-            Use AI Clips to pull a Story from a long episode, then open the same project in the studio for transcript
-            cuts, captions, and export.
+            Use AI Clips to pull a Story from a long episode. Every AI cut lands on this same timeline, so you extend a hook, fix a caption, and export without starting over.
           </p>
           <div className="flex justify-center">
             <TextCta href={hrefs.aiClips}>
