@@ -86,14 +86,26 @@ export default async function ClipProjectPage({
         const n = await prisma.clip.count({ where: { projectId: p.id, deletedAt: null } })
         console.info('[page:timing]', { path: '/app/clips/[projectId]', query: 'failed_clip_count', elapsedMs: Date.now() - started, rows: n })
         if (n > 0) {
-          return listProjectClips(workspaceId, p.id, 'score', {
-            ...listOpts,
-            project: {
-              settings: p.settings,
-              transcriptKey: p.transcriptKey,
-              upload: p.upload ? { storageDriver: p.upload.storageDriver } : null,
-            },
-          })
+          const listStarted = Date.now()
+          try {
+            return await listProjectClips(workspaceId, p.id, 'score', {
+              ...listOpts,
+              project: {
+                settings: p.settings,
+                transcriptKey: p.transcriptKey,
+                upload: p.upload ? { storageDriver: p.upload.storageDriver } : null,
+              },
+            })
+          } catch (listError) {
+            console.warn('[page:timing]', {
+              path: '/app/clips/[projectId]',
+              query: 'failed_clip_list_deferred',
+              projectId: p.id,
+              elapsedMs: Date.now() - listStarted,
+              errorName: listError instanceof Error ? listError.name : 'UnknownError',
+            })
+            return null
+          }
         }
       }
       return null
