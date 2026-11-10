@@ -141,6 +141,11 @@ export async function loadOrTranscribe(
     return { ...resolved, words: resolved.words }
   }
   if (source.kind === 'upload' && (!resolved.ready || !resolved.words?.length)) {
+    if (resolved.ready && !resolved.words?.length) {
+      console.warn('[ai-captions:pipeline] transcription_empty', { projectId: resolved.projectId })
+      throw new AiCaptionsError('source_has_no_audio', 'No speech was detected in this video. Try another upload with spoken audio.', 400)
+    }
+    console.info('[ai-captions:pipeline] transcription_pending', { projectId: resolved.projectId })
     throw new AiCaptionsError('source_not_ready', 'Transcription did not return any words yet.', 400)
   }
   if (!resolved.ready) {
