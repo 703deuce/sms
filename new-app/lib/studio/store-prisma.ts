@@ -1,5 +1,6 @@
 import { getPrisma } from '../server/db'
-import type { StudioJobRecord, StudioStore } from './store'
+import type { StudioJobRecord } from './types'
+import type { StudioStore } from './store'
 
 function mapJob(row: {
   id: string
@@ -116,27 +117,22 @@ export function createPrismaStudioStore(): StudioStore {
     },
     async updateJob(id, patch) {
       const data: Record<string, unknown> = {}
-      const keys: Array<keyof StudioJobRecord> = [
-        'status',
-        'providerTaskId',
-        'providerApi',
-        'outputStorageKey',
-        'outputStorageDriver',
-        'outputContentType',
-        'outputWidth',
-        'outputHeight',
-        'outputDurationSec',
-        'outputKind',
-        'outputUploadId',
-        'errorCode',
-        'errorMessage',
-        'startedAt',
-        'completedAt',
-        'projectId',
-      ]
-      for (const key of keys) {
-        if (key in patch) data[key] = patch[key]
-      }
+      if (patch.status !== undefined) data.status = patch.status
+      if (patch.providerTaskId !== undefined) data.providerTaskId = patch.providerTaskId
+      if (patch.providerApi !== undefined) data.providerApi = patch.providerApi
+      if (patch.outputStorageKey !== undefined) data.outputStorageKey = patch.outputStorageKey
+      if (patch.outputStorageDriver !== undefined) data.outputStorageDriver = patch.outputStorageDriver
+      if (patch.outputContentType !== undefined) data.outputContentType = patch.outputContentType
+      if (patch.outputWidth !== undefined) data.outputWidth = patch.outputWidth
+      if (patch.outputHeight !== undefined) data.outputHeight = patch.outputHeight
+      if (patch.outputDurationSec !== undefined) data.outputDurationSec = patch.outputDurationSec
+      if (patch.outputKind !== undefined) data.outputKind = patch.outputKind
+      if (patch.outputUploadId !== undefined) data.outputUploadId = patch.outputUploadId
+      if (patch.errorCode !== undefined) data.errorCode = patch.errorCode
+      if (patch.errorMessage !== undefined) data.errorMessage = patch.errorMessage
+      if (patch.startedAt !== undefined) data.startedAt = patch.startedAt
+      if (patch.completedAt !== undefined) data.completedAt = patch.completedAt
+      if (patch.projectId !== undefined) data.projectId = patch.projectId
       const row = await prisma.aiStudioJob.update({ where: { id }, data })
       return mapJob(row)
     },

@@ -25,7 +25,7 @@ export async function sendStudioJobToTimeline(
     jobId: string
     projectId: string
     clipId?: string
-    write: TimelineWriter
+    write?: TimelineWriter
   },
 ): Promise<SendToTimelineResult> {
   const projectId = (input.projectId || '').trim()
@@ -48,6 +48,7 @@ export async function sendStudioJobToTimeline(
 
   const title = fresh.prompt.slice(0, 80) || 'Studio output'
   const durationMs = Math.round((fresh.outputDurationSec ?? fresh.durationSec ?? (fresh.outputKind === 'image' ? 3 : 4)) * 1000)
+  if (!input.write) throw new StudioError('JOB_NOT_READY', 'Job output is not ready')
   return input.write({
     workspaceId: input.workspaceId,
     projectId,
