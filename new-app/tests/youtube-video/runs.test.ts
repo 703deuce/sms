@@ -175,6 +175,7 @@ describe('youtube-video runs', () => {
     deps.writeClip = async () => ({
       clipId: 'clip_rendered', projectId: 'proj_output', durationMs: 6000, renderId: 'rnd_one',
     })
+    deps.pipeline.writeClip = deps.writeClip
     let ready = false
     deps.resolveRender = async () => ready ? {
       status: 'ready', playbackUrl: 'https://cdn.example/play.mp4',

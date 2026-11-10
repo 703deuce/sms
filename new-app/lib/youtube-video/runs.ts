@@ -248,15 +248,21 @@ export async function getYoutubeVideoRun(
   youtubeRunEvent(runId, 'poll_decision', 'return', { status: advanced.status })
   // Refresh expired browser signed URLs even for already-finished runs.
   if (advanced.status === 'ready' && advanced.result?.renderId && deps.resolveRender) {
-    const media = await traceYoutubeRunStep(runId, 'ready_media_refresh', () =>
-      deps.resolveRender!(workspaceId, advanced.result!.renderId!, runId))
-    if (media.status === 'ready' && media.playbackUrl && media.downloadUrl) {
-      return view({ ...advanced, result: {
-        ...advanced.result!,
-        playbackUrl: media.playbackUrl,
-        downloadUrl: media.downloadUrl,
-        thumbnailUrl: media.thumbnailUrl,
-      } })
+    try {
+      const media = await traceYoutubeRunStep(runId, 'ready_media_refresh', () =>
+        deps.resolveRender!(workspaceId, advanced.result!.renderId!, runId))
+      if (media.status === 'ready' && media.playbackUrl && media.downloadUrl) {
+        return view({ ...advanced, result: {
+          ...advanced.result!,
+          playbackUrl: media.playbackUrl,
+          downloadUrl: media.downloadUrl,
+          thumbnailUrl: media.thumbnailUrl,
+        } })
+      }
+    } catch (err) {
+      youtubeRunEvent(runId, 'ready_media_refresh', 'retry_later', {
+        errorCode: err instanceof YoutubeVideoError ? err.code : 'media_sign_failed',
+      })
     }
   }
   return view(advanced)

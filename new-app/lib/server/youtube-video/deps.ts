@@ -286,7 +286,12 @@ export async function resolveYoutubeVideoRender(
   const status = render.status === 'READY' ? 'ready'
     : render.status === 'FAILED' ? 'failed'
     : render.status === 'RENDERING' ? 'rendering' : 'queued'
-  if (status !== 'ready' || !render.outputKey) {
+  if (status === 'ready' && !render.outputKey) {
+    youtubeRunEvent(runId, 'render_poll', 'missing_output', { status: 'failed' })
+    return { status: 'failed', playbackUrl: null, downloadUrl: null, thumbnailUrl: null,
+      error: 'The video render completed without a playable file. Please retry.' }
+  }
+  if (status !== 'ready') {
     youtubeRunEvent(runId, 'render_poll', 'pending', { status })
     return { status, playbackUrl: null, downloadUrl: null, thumbnailUrl: null,
       error: status === 'failed' ? render.error ?? 'Rendering failed. Please retry.' : null }
