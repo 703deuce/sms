@@ -65,7 +65,11 @@ export function validateYoutubeSharedCuts(
   sources: readonly YoutubeVideoIngestedSource[],
 ): void {
   if (!cuts.length) throw Error('youtube_no_approved_cuts')
-  if (cuts.length > MAX_STORY_INSERTS + 1) throw Error('youtube_too_many_approved_cuts')
+  // The existing E5b renderer splits appended inserts into at most 10-minute
+  // pieces. Validate that actual expansion will fit before creating a clip.
+  const insertPieces = cuts.slice(1).reduce((count, cut) =>
+    count + Math.ceil((cut.endMs-cut.startMs) / 600_000), 0)
+  if (insertPieces > MAX_STORY_INSERTS) throw Error('youtube_too_many_approved_inserts')
   const ids = new Map(sources.map((s, index) => [s.sourceId, { source: s, index }]))
   let lastSourceIndex = -1
   const lastEnd = new Map<string, number>()
