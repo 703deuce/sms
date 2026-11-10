@@ -319,8 +319,12 @@ export function isCriticalQaIssue(issue:string):boolean{
   if(isNonBlockingEditorialQaIssue(issue))return false
   // Machine QA codes look like snake_case prefixes ("incoherent_passage: ...").
   // Unknown or future codes are critical until they are added to the allowlist.
-  // Free-form editorial prose is not a "code" and stays non-critical unless it
-  // matches the explicit critical media/content patterns.
+  // Un-prefixed editorial prose is never silently clean (see
+  // isNeedsReviewQaIssue) but is also not critical: earlier default-closed
+  // treatment of free-form notes as critical dropped almost every live draft
+  // ("Do not end on kids, — restore the clause."). Those are review flags,
+  // not media/content-destroying failures. Only explicit CRITICAL_QA wording
+  // or an unknown/critical code prefix is a drop.
   const prefixed=issue.match(/^([a-z][a-z0-9_]*)\s*:/)
   if(prefixed){
     const code=prefixed[1]!
@@ -329,6 +333,12 @@ export function isCriticalQaIssue(issue:string):boolean{
   }
   if(CRITICAL_QA.test(issue))return true
   return false
+}
+
+/** Substantive un-prefixed QA prose, and any other non-critical leftover note. */
+export function isNeedsReviewQaIssue(issue:string):boolean{
+  if(!issue.trim()||isNonBlockingEditorialQaIssue(issue)||isCriticalQaIssue(issue))return false
+  return true
 }
 
 export function isCriticalEditorialFailure(
@@ -346,6 +356,7 @@ export type PublishDisposition='publish'|'publish_needs_review'|'drop'
  * After one executable repair pass: only critical failures are dropped.
  * Remaining non-critical editorial issues publish flagged needsReview.
  * Incomplete QA (qaPass === null) never publishes as a clean pass.
+ * Un-prefixed substantive QA prose is at least needsReview, never silently clean.
  */
 export function publishDisposition(input:{
   risks:readonly EditorialRisk[]
@@ -354,7 +365,41 @@ export function publishDisposition(input:{
 }):PublishDisposition{
   if(isCriticalEditorialFailure(input.risks,input.qaIssues))return 'drop'
   if(shouldVetoPublish(input)||input.qaPass!==true)return 'publish_needs_review'
+  if(input.qaIssues.some(isNeedsReviewQaIssue))return 'publish_needs_review'
   return 'publish'
+}
+
+/**
+ * Re-gate after the single executable repair pass.
+ * If repair landed, drop stale historical (non-critical) QA notes and the
+ * pre-repair qaPass so a clip whose post-repair audit is empty publishes clean.
+ * Critical historical notes (broken media etc.) survive and still drop.
+ * If repair did not land, keep the historical notes (they still describe
+ * these cuts) and the pre-repair qaPass.
+ */
+export function regateAfterRepair(input:{
+  repaired:boolean
+  workingRisks:readonly EditorialRisk[]
+  historicalQaIssues:readonly string[]
+  qaPassBefore:boolean|null
+}):{qaPass:boolean|null;qaIssues:string[]}{
+  const safetyIssues=input.workingRisks.map(r=>r.code+': '+r.detail)
+  if(input.repaired){
+    // Critical media/content failures are not fixed by moving cut boundaries,
+    // so they survive the refresh and still drop the draft.
+    const stillCritical=input.historicalQaIssues.filter(isCriticalQaIssue)
+    return {
+      qaPass:input.workingRisks.length===0&&stillCritical.length===0?true:false,
+      qaIssues:[...new Set([...stillCritical,...safetyIssues])],
+    }
+  }
+  return {
+    qaPass:input.qaPassBefore,
+    qaIssues:[...new Set([
+      ...input.historicalQaIssues.filter(issue=>!isNonBlockingEditorialQaIssue(issue)),
+      ...safetyIssues,
+    ])],
+  }
 }
 
 /**

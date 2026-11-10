@@ -2,13 +2,15 @@ import {describe,expect,it} from 'vitest'
 import {readFileSync} from 'node:fs'
 import {dirname,join} from 'node:path'
 import {fileURLToPath} from 'node:url'
-import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isCriticalEditorialFailure,isNonBlockingEditorialQaIssue,JOIN_ONSET_PAD_MS,MIN_CLIP_TAIL_MS,publishDisposition,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions,type EditorialRisk} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isCriticalEditorialFailure,isCriticalQaIssue,isNeedsReviewQaIssue,isNonBlockingEditorialQaIssue,JOIN_ONSET_PAD_MS,MIN_CLIP_TAIL_MS,publishDisposition,regateAfterRepair,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions,type EditorialRisk} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {selectMomentFlowTrim} from '@/lib/ai-producer-agent/clip-mode/moment-flow'
 import {
   clipAgentExportIdempotencyKey,
   editVersionFromSnapshot,
+  isUniqueConflict,
   queueClipExportOnce,
   shouldAutoExportPublishedClip,
+  shouldAutoPlanClipMotion,
 } from '../../lib/ai-producer-agent/clip-mode/clip-agent-export'
 
 const words=(text:string,startMs=0,spacingMs=380)=>
@@ -636,13 +638,58 @@ describe('held-draft publish policy',()=>{
   it('documents that a listening-only remark is still non-blocking',()=>{
     expect(isNonBlockingEditorialQaIssue('Audio joins are marked as requiring listening review. No waveform was supplied.')).toBe(true)
   })
+
+  it('treats un-prefixed QA prose as needsReview, never silently clean, and not critical',()=>{
+    // Justification: free-form LLM notes ("Do not end on kids, — restore the
+    // clause.") are editorial review flags, not media/content-destroying
+    // failures. Treating them as critical previously dropped almost every
+    // live draft. They must still surface to the user (needsReview), never
+    // publish as a silent clean pass. Unknown snake_case codes stay critical.
+    const prose='Do not end on kids, — restore the clause.'
+    expect(isCriticalQaIssue(prose)).toBe(false)
+    expect(isNeedsReviewQaIssue(prose)).toBe(true)
+    expect(publishDisposition({risks:[],qaPass:true,qaIssues:[prose]})).toBe('publish_needs_review')
+    expect(publishDisposition({risks:[],qaPass:true,qaIssues:['Audio joins require listening review. No waveform was supplied.']})).toBe('publish')
+    expect(publishDisposition({
+      risks:[],qaPass:true,
+      qaIssues:['qa_code_not_yet_classified: a brand new checker failed this draft'],
+    })).toBe('drop')
+  })
+
+  it('drops stale historical QA notes after a landed repair so an empty post-repair audit is clean',()=>{
+    const historical=['The opening depends on omitted setup. Snap back to the antecedent.']
+    const stale=regateAfterRepair({
+      repaired:true,workingRisks:[],historicalQaIssues:historical,qaPassBefore:false,
+    })
+    expect(stale).toEqual({qaPass:true,qaIssues:[]})
+    expect(publishDisposition({risks:[],qaPass:stale.qaPass,qaIssues:stale.qaIssues})).toBe('publish')
+    const leftover=regateAfterRepair({
+      repaired:true,
+      workingRisks:[{code:'continuation_opening',detail:'And if that happens',passageIndex:0}],
+      historicalQaIssues:historical,qaPassBefore:false,
+    })
+    expect(leftover.qaPass).toBe(false)
+    expect(leftover.qaIssues.some((x:string)=>x.startsWith('continuation_opening:'))).toBe(true)
+    expect(leftover.qaIssues).not.toContain(historical[0])
+    const unrepaired=regateAfterRepair({
+      repaired:false,workingRisks:[],historicalQaIssues:historical,qaPassBefore:false,
+    })
+    expect(unrepaired.qaPass).toBe(false)
+    expect(unrepaired.qaIssues).toEqual(historical)
+  })
 })
 
-describe('clip agent auto-export policy',()=>{
-  it('exports clean and needsReview clips but never critical or suppressed ones',()=>{
-    expect(shouldAutoExportPublishedClip({clipId:'c1',projectId:'p1'})).toBe(true)
-    expect(shouldAutoExportPublishedClip({clipId:'c1',projectId:'p1',suppressed:false})).toBe(true)
+describe('clip agent auto-export and auto-motion policy',()=>{
+  it('gates auto-export and autoPlanClipMotion on !needsReview; flagged clips still publish',()=>{
+    const clean={clipId:'c1',projectId:'p1'}
+    const flagged={clipId:'c1',projectId:'p1',needsReview:true}
+    expect(shouldAutoExportPublishedClip(clean)).toBe(true)
+    expect(shouldAutoPlanClipMotion(clean)).toBe(true)
+    expect(shouldAutoExportPublishedClip({...clean,needsReview:false})).toBe(true)
+    expect(shouldAutoExportPublishedClip(flagged)).toBe(false)
+    expect(shouldAutoPlanClipMotion(flagged)).toBe(false)
     expect(shouldAutoExportPublishedClip({clipId:'c1',projectId:'p1',critical:true})).toBe(false)
+    expect(shouldAutoPlanClipMotion({clipId:'c1',critical:true})).toBe(false)
     expect(shouldAutoExportPublishedClip({clipId:'c1',projectId:'p1',suppressed:true})).toBe(false)
     expect(shouldAutoExportPublishedClip({clipId:null,projectId:'p1'})).toBe(false)
   })
@@ -670,6 +717,7 @@ describe('clip agent export idempotency',()=>{
       async createQueuedExport(input:{renderId:string;idempotencyKey:string}){
         created.push(input.renderId)
         this.byKey.set(input.idempotencyKey,{id:input.renderId,status:'QUEUED'})
+        return {created:true as const}
       },
     }
     let n=0
@@ -688,11 +736,36 @@ describe('clip agent export idempotency',()=>{
     expect(created).toEqual([first.queued?first.renderId:''])
   })
 
-  it('refuses to queue a critical or suppressed clip',async()=>{
+  it('returns the existing export when a unique-constraint race beats the find',async()=>{
+    const existing={id:'render_winner',status:'QUEUED'}
+    const store={
+      async findByIdempotencyKey(){return null},
+      async createQueuedExport(){
+        return {created:false as const,existing}
+      },
+    }
+    const result=await queueClipExportOnce({
+      workspaceId:'ws_1',projectId:'proj_1',clipId:'clip_1',
+      filename:'clip.mp4',editVersion:'v1',createId:()=>'render_loser',store,
+    })
+    expect(result).toEqual({
+      queued:false,reason:'already_queued',renderId:'render_winner',
+      idempotencyKey:clipAgentExportIdempotencyKey({clipId:'clip_1',editVersion:'v1'}),
+    })
+    expect(isUniqueConflict({code:'P2002'})).toBe(true)
+    expect(isUniqueConflict({code:'P2003'})).toBe(false)
+  })
+
+  it('refuses to queue a needsReview, critical, or suppressed clip',async()=>{
     const store={
       async findByIdempotencyKey(){return null},
       async createQueuedExport(){throw new Error('must not create')},
     }
+    const flagged=await queueClipExportOnce({
+      workspaceId:'ws_1',projectId:'proj_1',clipId:'clip_1',
+      filename:'clip.mp4',editVersion:'v1',needsReview:true,createId:()=>'render_x',store,
+    })
+    expect(flagged).toEqual({queued:false,reason:'not_exportable'})
     const result=await queueClipExportOnce({
       workspaceId:'ws_1',projectId:'proj_1',clipId:'clip_1',
       filename:'clip.mp4',editVersion:'v1',critical:true,createId:()=>'render_x',store,
@@ -719,20 +792,23 @@ function replayDraft(draft:Draft){
   const substantive=draft.qaIssues.filter((issue:string)=>!isNonBlockingEditorialQaIssue(issue))
   const words=draft.words
   const initialRisks=words.length?clipEditorialAudit(draft.cuts,words):[]
-  let qaPass:boolean|null=false
-  const veto=shouldVetoPublish({risks:initialRisks,qaPass,qaIssues:substantive})
+  const qaPassBefore:boolean|null=false
+  const veto=shouldVetoPublish({risks:initialRisks,qaPass:qaPassBefore,qaIssues:substantive})
   let workingCuts=draft.cuts
   let workingRisks=initialRisks
   // Historical QA on these runs did not pass clean, so always apply the one
   // deterministic repair pass (same as orchestrator when qaPass !== true).
   void veto
   const revised=repairClipBoundaries(workingCuts,words,{maxEarlierSetupMs:12_000,maxLaterConclusionMs:6_500})
+  let repairLanded=false
   if(revised.repaired){
     workingCuts=revised.cuts
     workingRisks=words.length?clipEditorialAudit(workingCuts,words):workingRisks
+    repairLanded=true
   }
-  const safetyIssues=workingRisks.map((r:EditorialRisk)=>r.code+': '+r.detail)
-  const combinedIssues=[...new Set([...substantive,...safetyIssues])]
+  const {qaPass,qaIssues:combinedIssues}=regateAfterRepair({
+    repaired:repairLanded,workingRisks,historicalQaIssues:substantive,qaPassBefore,
+  })
   const disposition=publishDisposition({risks:workingRisks,qaPass,qaIssues:combinedIssues})
   const critical=isCriticalEditorialFailure(workingRisks,combinedIssues)
   return {
@@ -760,6 +836,7 @@ function replayRun(fixture:Fixture){
   return {
     runId:fixture.runId,
     published:published.length,
+    clean:published.filter((r:ReplayRow)=>!r.needsReview).length,
     needsReview:published.filter((r:ReplayRow)=>r.needsReview).length,
     dropped:fallbackUsed?dropped.length-published.length:dropped.length,
     skipped:results.filter((r:ReplayRow)=>r.disposition==='skip_rejected').length,
@@ -767,17 +844,19 @@ function replayRun(fixture:Fixture){
   }
 }
 
-const expectedA3c={published:14,needsReview:14,dropped:1}
-const expected7574={published:16,needsReview:16,dropped:0}
+// Re-gate after repair drops stale historical QA notes, so clips whose
+// post-repair audit is empty publish clean (QA projection: 10+4 and 13+3).
+const expectedA3c={published:14,clean:10,needsReview:4,dropped:1}
+const expected7574={published:16,clean:13,needsReview:3,dropped:0}
 
 describe('held-draft replay of live 0-published runs',()=>{
-  it('aprun_a3c71b5a: published, needsReview, and dropped counts under the default-closed policy',()=>{
+  it('aprun_a3c71b5a: 10 clean, 4 needsReview, 1 dropped after the post-repair re-gate',()=>{
     const counts=replayRun(loadReplayFixture('aprun_a3c71b5a.replay.json'))
     expect(counts.runId).toBe('aprun_a3c71b5acee74a5ea52192768053a1ea')
     expect(counts).toMatchObject(expectedA3c)
   })
 
-  it('aprun_7574d85f: published, needsReview, and dropped counts under the default-closed policy',()=>{
+  it('aprun_7574d85f: 13 clean, 3 needsReview, 0 dropped after the post-repair re-gate',()=>{
     const counts=replayRun(loadReplayFixture('aprun_7574d85f.replay.json'))
     expect(counts.runId).toBe('aprun_7574d85f5ce64fcdb58a05c2e0b5b8e6')
     expect(counts).toMatchObject(expected7574)

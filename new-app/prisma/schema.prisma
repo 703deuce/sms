@@ -9871,6 +9871,7 @@ model ClipRender {
   watermark         Boolean          @default(false)
   filename          String?
   editsVersionHash  String?
+  preset            String?
   srtKey            String?
   stemsKey          String?
   sizeBytes         BigInt?
@@ -9885,6 +9886,7 @@ model ClipRender {
 
   @@index([workspaceId, createdAt])
   @@index([batchId])
+  @@unique([clipId, editsVersionHash, preset], map: "clip_renders_clipId_editsVersionHash_preset_key")
   @@map("clip_renders")
 }
 

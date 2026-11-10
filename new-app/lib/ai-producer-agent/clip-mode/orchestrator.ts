@@ -23,8 +23,8 @@ import { createEditorialHandoff, runEditorialRole, recoverEditorialSelections, c
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_DIRECTION_VERSION } from '@/lib/ai-producer-agent/just-chatting-direction'
 import {candidateWindows,clipCandidateLimit,overlapFraction,rankCandidate,type ClipCandidate} from '@/lib/ai-producer-agent/clip-mode/candidates'
 import {storyCoverage} from '@/lib/ai-producer-agent/clip-mode/story-coverage'
-import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isNonBlockingEditorialQaIssue,publishDisposition,qaTranscriptWindow,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
-import {editVersionFromSnapshot,queueClipExportOnce,shouldAutoExportPublishedClip} from './clip-agent-export'
+import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isNonBlockingEditorialQaIssue,publishDisposition,qaTranscriptWindow,regateAfterRepair,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {CLIP_AGENT_EXPORT_PRESET,editVersionFromSnapshot,isUniqueConflict,queueClipExportOnce,shouldAutoExportPublishedClip,shouldAutoPlanClipMotion} from './clip-agent-export'
 import {instructionAsksToCompile,mergeTopicCandidates,topicPassagesFromTranscript,topicQueryFromInstruction,whyThisClip} from '@/lib/ai-producer-agent/clip-mode/topic-search'
 import {createSourceClip,publishClipScore,discardClip} from '@/lib/server/ai-producer-agent/clip-mode-store'
 import {clipAgentHardSteps,clipAgentHardStepsForCandidates,clipAgentWallClockMs,clipAgentWallClockMsForCandidates,clipCandidateHardSteps,clipCandidateWallClockMs,clipQaRetryHardSteps,clipQaRetryWallClockMs} from '@/lib/ai-producer-agent/rough-cut-window'
@@ -208,6 +208,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           qaComplete&&qa?(Boolean(qa.pass)||warningOnlyModelFailure)&&substantiveIssues.length===0:null
         let workingCuts=finalCuts
         let workingRisks=safetyRisks
+        let repairLanded=false
         // Held drafts get their QA revisions applied executably (deterministic
         // boundary / join / opening repair) and are re-gated once. No paid retry.
         if(veto||qaPass!==true){
@@ -223,11 +224,17 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
               out.notes.push('Editorial revision persist failed; kept prior draft: '+String((error as Error).message).slice(0,180))
             }
             workingRisks=clipEditorialAudit(workingCuts,ctx.cache.words??[])
+            repairLanded=true
           }
         }
-        const safetyIssues=workingRisks.map(r=>r.code+': '+r.detail)
-        const combinedIssues=[...new Set([...substantiveIssues,
-          ...(qaPass===true?[]:safetyIssues)])]
+        // Re-gate: after a landed repair the historical QA notes and qaPass
+        // describe the OLD cuts, so refresh them from the post-repair audit.
+        const regate=(veto||qaPass!==true)
+          ?regateAfterRepair({repaired:repairLanded,workingRisks,
+            historicalQaIssues:substantiveIssues,qaPassBefore:qaPass})
+          :{qaPass,qaIssues:[...substantiveIssues]}
+        qaPass=regate.qaPass
+        const combinedIssues=regate.qaIssues
         const disposition=publishDisposition({
           risks:workingRisks,qaPass:qaPass,qaIssues:combinedIssues,
         })
@@ -317,7 +324,11 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       })
       // Post-edit Motion is a decision stage, not the caption preset. It can
       // generate zero graphics; failures leave the usable clip intact.
-      try{
+      // needsReview clips get no auto Motion until the user reviews them.
+      if(!shouldAutoPlanClipMotion({clipId:item.out.clipId,suppressed:item.out.suppressed,
+        needsReview:item.out.needsReview===true})){
+        item.out.notes.push('Motion graphics skipped: clip needs review')
+      }else try{
         const {autoPlanClipMotion}=await import('@/lib/server/ai-producer-agent/clip-mode-motion')
         const bridges=item.out.contextBridges??[]
         const motion=await autoPlanClipMotion({
@@ -340,7 +351,8 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           error:reason})
         item.out.notes.push('Motion graphics unavailable: '+reason)
       }
-      // Auto-export clean and needsReview clips only; never critical ones.
+      // Auto-export clean clips only; needsReview and critical clips wait
+      // for the user to review and export manually.
       if(ctx.config.exportOnFinish)
         await queueClipExport(ctx,item.out,budget)
     }
@@ -553,7 +565,11 @@ async function queueClipExport(ctx:ToolCtx,out:OutputState,budget:Budget){
   if(!clipMode||!out.lastValid)return
   if(!shouldAutoExportPublishedClip({
     clipId:out.clipId,projectId:out.projectId,suppressed:out.suppressed,
-  }))return
+    needsReview:out.needsReview===true,
+  })){
+    if(out.needsReview===true)out.notes.push('Finished MP4 export skipped: clip needs review')
+    return
+  }
   const prisma=getPrisma()
   const result=await queueClipExportOnce({
     workspaceId:ctx.workspaceId,
@@ -561,31 +577,46 @@ async function queueClipExport(ctx:ToolCtx,out:OutputState,budget:Budget){
     clipId:out.clipId,
     filename:(out.editorialHandoff?.outline.logline??'AI clip').replace(/[\\/:*?"<>|]/g,'').slice(0,80)+'.mp4',
     editVersion:editVersionFromSnapshot(out.lastValid),
+    preset:CLIP_AGENT_EXPORT_PRESET,
     suppressed:out.suppressed,
+    needsReview:out.needsReview===true,
     createId,
     store:{
       findByIdempotencyKey:async(key:string)=>{
         const row=await prisma.clipRender.findFirst({
-          where:{clipId:out.clipId!,workspaceId:ctx.workspaceId,editsVersionHash:key,
-            status:{in:['QUEUED','RENDERING','READY']}},
+          where:{clipId:out.clipId!,editsVersionHash:key,preset:CLIP_AGENT_EXPORT_PRESET},
           select:{id:true,status:true},
         })
         return row
       },
+      // Atomic: the unique index clip_renders(clipId, editsVersionHash, preset)
+      // rejects a concurrent duplicate; the render + job insert roll back
+      // together and we return the existing export instead.
       createQueuedExport:async(input)=>{
-        await prisma.$transaction(async tx=>{
-          await tx.clipRender.create({data:{
-            id:input.renderId,clipId:input.clipId,workspaceId:input.workspaceId,
-            status:'QUEUED',format:'mp4',resolution:'720p',aspectRatio:'9:16',
-            filename:input.filename,watermark:false,
-            editsVersionHash:input.idempotencyKey,
-          }})
-          await tx.clipJob.create({data:{
-            id:createId('job'),projectId:input.projectId,clipId:input.clipId,
-            type:'RENDER_CLIP',status:'QUEUED',
-            payload:{renderId:input.renderId,idempotencyKey:input.idempotencyKey},
-          }})
-        })
+        try{
+          await prisma.$transaction(async tx=>{
+            await tx.clipRender.create({data:{
+              id:input.renderId,clipId:input.clipId,workspaceId:input.workspaceId,
+              status:'QUEUED',format:'mp4',resolution:'720p',aspectRatio:'9:16',
+              filename:input.filename,watermark:false,
+              editsVersionHash:input.idempotencyKey,preset:input.preset,
+            }})
+            await tx.clipJob.create({data:{
+              id:createId('job'),projectId:input.projectId,clipId:input.clipId,
+              type:'RENDER_CLIP',status:'QUEUED',
+              payload:{renderId:input.renderId,idempotencyKey:input.idempotencyKey},
+            }})
+          })
+          return {created:true as const}
+        }catch(error){
+          if(!isUniqueConflict(error))throw error
+          const existing=await prisma.clipRender.findFirst({
+            where:{clipId:input.clipId,editsVersionHash:input.idempotencyKey,preset:input.preset},
+            select:{id:true,status:true},
+          })
+          if(!existing)throw error
+          return {created:false as const,existing}
+        }
       },
     },
   })
