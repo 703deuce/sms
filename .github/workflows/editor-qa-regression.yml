@@ -151,6 +151,12 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: Confirm ffmpeg is installed
         run: ffmpeg -version && ffprobe -version
+      - name: "NEGATIVE TEST: remove ffmpeg/ffprobe from PATH"
+        run: |
+          sudo mv /usr/bin/ffmpeg /usr/bin/ffmpeg.disabled
+          sudo mv /usr/bin/ffprobe /usr/bin/ffprobe.disabled
+          if command -v ffmpeg || command -v ffprobe; then echo "ffmpeg still on PATH" >&2; exit 1; fi
+          echo "ffmpeg and ffprobe are no longer on PATH"
       - run: python -m pip install pytest
       - name: Caption and export-duration worker tests
         run: |
