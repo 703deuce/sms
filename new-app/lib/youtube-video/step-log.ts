@@ -7,6 +7,9 @@ type YoutubeRunStepFields = {
   optionCount?: number
   status?: string
   reason?: string
+  windowIndex?: number
+  windowCount?: number
+  issues?: string[]
 }
 
 /** Structured logs omit URLs, request bodies, transcript text and secrets. */

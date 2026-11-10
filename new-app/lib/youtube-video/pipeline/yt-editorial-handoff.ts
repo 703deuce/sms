@@ -21,7 +21,7 @@ export async function ytStructuredDecision(
   const messages:LunaMessage[]=[
     {role:'system',content:[
       YOUTUBE_VIDEO_STORY_SYSTEM,
-      'YOUTUBE STORY SPECIALIST: The original source is authoritative. No genre assumptions, fabricated events, mandatory runtime, or short-form compression. A coherent opening, development and actual source-recorded ending are required. Do not invent timestamp or quote evidence. Visual-only events count if observed by Gemini. The Deepgram transcript controls spoken word boundaries.',
+      'YOUTUBE STORY SPECIALIST: The original source is authoritative. No genre assumptions, fabricated events, mandatory runtime, or short-form compression. Require a coherent opening only for the first window and a source-recorded ending only for the final window; intermediate windows are episode segments, not complete stories. Do not invent timestamp or quote evidence. Visual-only events count if observed by Gemini. The Deepgram transcript controls spoken word boundaries.',
       instruction,
     ].join('\n\n')},
     {role:'user',content:JSON.stringify(evidence)},
@@ -46,6 +46,7 @@ export async function ytStructuredDecision(
 function evidenceRows(ctx:YtWindowContext){
   return {
     sourceId:ctx.sourceId,rangeMs:[ctx.startMs,ctx.endMs],
+    windowIndex:ctx.windowIndex??0,windowCount:ctx.windowCount??1,
     originalTranscriptWordIds:ctx.words.map((w,i)=>[i,Math.round(w.s*1000),Math.round(w.e*1000),w.w]),
     observedVideoAndOriginalAudio:ctx.observations.map((m,i)=>({
       observationId:i,startMs:m.startMs,endMs:m.endMs,
@@ -58,7 +59,7 @@ function evidenceRows(ctx:YtWindowContext){
 
 export async function ytCreateEditorialHandoff(ctx:YtWindowContext):Promise<YtOutline>{
   const raw=await ytStructuredDecision('yt_submit_story_outline',
-    'STORY: Examine the entire source transcript AND Gemini video/original-audio observations. Identify one coherent story within this window, with an opening, development and genuine ending. An ending may be visual with no speech.',
+    'STORY: Examine the entire window transcript AND Gemini video/original-audio observations. Outline real events from this segment of a longer recording. Only the first window needs an episode opening; only the last needs a genuine episode ending. Intermediate windows must NOT invent a complete episode ending. An ending may be visual with no speech.',
     evidenceRows(ctx),
     {
       title:stringField,premise:stringField,opening:stringField,
@@ -133,7 +134,7 @@ export async function ytSelectFootage(
   ctx:YtWindowContext,outline:YtOutline,
 ):Promise<YtCutsResult>{
   const raw=await ytStructuredDecision('yt_submit_footage',
-    'FOOTAGE: Choose final complete spoken passages by original ZERO-BASED word IDs. Use observed visual-only events by observationId even if nobody speaks. Preserve actual opening, development and ending. Choose only relevant footage, not a highlight reel or source inventory. Every interval must be inside this window. No duration target.',
+    'FOOTAGE: Choose final complete spoken passages by original ZERO-BASED word IDs. Use observed visual-only events by observationId even if nobody speaks. Preserve actual scene order; do not force an episode ending in a non-final window. Choose only relevant footage, not a highlight reel or source inventory. Every interval must be inside this window. No duration target.',
     {...evidenceRows(ctx),outline},
     {
       speech:{type:'array',maxItems:24,items:{type:'object',additionalProperties:false,
@@ -209,17 +210,29 @@ export async function ytDialoguePictureReview(
   return {cuts:next,rejected}
 }
 
+export type YtQaResult = { pass: boolean; issues: string[] }
+
+/** QA is scoped to verifiable window evidence and appropriate episode boundaries. */
 export async function ytQualityReview(
   ctx:YtWindowContext,outline:YtOutline,cuts:YtSelectedCut[],
-):Promise<void>{
+):Promise<YtQaResult>{
+  const first=ctx.windowIndex===0
+  const last=ctx.windowCount==null||ctx.windowIndex==null||
+    ctx.windowIndex===ctx.windowCount-1
   const raw=await ytStructuredDecision('yt_submit_quality_review',
-    'QA: Independently verify the opening makes sense, each passage is source-grounded, joins make sense, visual-only evidence is genuine, and the ending completes the intended story. Do NOT apply time limits. Fail if a misleading or incomplete story would render.',
-    {outline,cuts:cuts.map((cut,index)=>({
-      index,kind:cut.kind,startMs:cut.startMs,endMs:cut.endMs,
-      beat:cut.beat,
-      dialogue:cut.kind==='speech'?ctx.words.filter(w=>w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '):null,
-    })),observedVideoAndOriginalAudio:evidenceRows(ctx).observedVideoAndOriginalAudio},
+    'QA: This is window '+String((ctx.windowIndex??0)+1)+' of '+String(ctx.windowCount??1)+
+    ' of one longer episode. Judge only whether each passage is source-grounded, joins make sense, and visual-only evidence is genuinely observed. Do not invent words or on-screen actions. '+
+    (first?'Check that the episode opening is understandable. ':'Do NOT require a new opening. ')+
+    (last?'Check that the final episode ending is genuinely supported. ':'Do NOT require a complete episode ending in this window. ')+
+    'Provide specific issues for any failure. Do not enforce a duration target.',
+    {windowIndex:ctx.windowIndex??0,windowCount:ctx.windowCount??1,outline,
+      cuts:cuts.map((cut,index)=>({
+        index,kind:cut.kind,startMs:cut.startMs,endMs:cut.endMs,
+        beat:cut.beat,
+        dialogue:cut.kind==='speech'?ctx.words.filter(w=>w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '):null,
+      })),observedVideoAndOriginalAudio:evidenceRows(ctx).observedVideoAndOriginalAudio},
     {pass:{type:'boolean'},issues:{type:'array',items:stringField,maxItems:12}},
     ['pass','issues'])
-  if(raw.pass!==true)throw Error('yt_qa_rejected_story')
+  return {pass:raw.pass===true,issues:Array.isArray(raw.issues)
+    ?raw.issues.filter((v):v is string=>typeof v==='string').slice(0,12).map(v=>v.slice(0,240)):[]}
 }
