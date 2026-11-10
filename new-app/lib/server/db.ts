@@ -45,6 +45,43 @@ export function resolvePrismaDatabaseUrl(raw: string): string {
   }
 }
 
+/**
+ * Retry read-only Prisma model queries when the shared transaction pooler briefly
+ * runs out of sessions during overlapping deployments. Never retry writes:
+ * a failed response could follow an already-committed mutation.
+ */
+const RETRYABLE_POOL_READS = new Set([
+  "findFirst", "findFirstOrThrow", "findMany", "findUnique", "findUniqueOrThrow",
+  "count", "aggregate", "groupBy",
+]);
+
+function isTransientPoolError(error: unknown): boolean {
+  const typed = error as { code?: unknown; message?: unknown } | null;
+  const code = typeof typed?.code === "string" ? typed.code : "";
+  const message = typeof typed?.message === "string" ? typed.message : "";
+  return code === "P2024" ||
+    /EMAXCONNSESSION|too many connections|max clients|remaining connection slots|connection pool timeout|timed out fetching a new connection/i.test(message);
+}
+
+export async function withPrismaPoolRetry<T>(operation: string, execute: () => Promise<T>): Promise<T> {
+  const backoffs = [150, 400];
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await execute();
+    } catch (error) {
+      if (!isTransientPoolError(error)) throw error;
+      const code = typeof (error as { code?: unknown })?.code === "string"
+        ? (error as { code: string }).code : "pool_exhausted";
+      if (attempt >= backoffs.length) {
+        console.error("[db:pool]", { action: "retry_exhausted", operation, code, attempts: attempt + 1 });
+        throw error;
+      }
+      console.warn("[db:pool]", { action: "retry", operation, code, attempt: attempt + 1, backoffMs: backoffs[attempt] });
+      await new Promise<void>((resolve) => setTimeout(resolve, backoffs[attempt]));
+    }
+  }
+}
+
 export function getPrisma(): PrismaClient {
   const raw = process.env.DATABASE_URL?.trim();
   if (!raw) {
@@ -54,7 +91,16 @@ export function getPrisma(): PrismaClient {
     const datasourceUrl = resolvePrismaDatabaseUrl(raw);
     globalForPrisma.prisma = new PrismaClient({
       datasources: { db: { url: datasourceUrl } },
-    });
+    }).$extends({
+      query: {
+        $allModels: {
+          async $allOperations({ model, operation, args, query }) {
+            if (!RETRYABLE_POOL_READS.has(operation)) return query(args);
+            return withPrismaPoolRetry(`${model}.${operation}`, () => query(args));
+          },
+        },
+      },
+    }) as unknown as PrismaClient;
   }
   return globalForPrisma.prisma;
 }
