@@ -7,18 +7,50 @@ import { defaultClipSettings } from '@/lib/clips/settings'
 import { buildAdTimelineEdits, type AdTimelineScene } from '@/lib/ad-studio/timeline'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
-import type { AdProductInput } from '@/lib/ad-studio/types'
+import type { AdPlan, AdProductInput } from '@/lib/ad-studio/types'
+import { adVoiceWordsKey } from '@/lib/ad-studio/voice'
+import { attachStockAudioToProject } from '@/lib/server/ai/stock-audio'
 import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 const stableId = (prefix: string, key: string) =>
   prefix + createHash('sha256').update(key).digest('hex').slice(0, 32)
 
-async function writeAdClipWords(workspaceId: string, projectId: string, clipId: string): Promise<void> {
+type AdVoiceWord = { w: string; s: number; e: number; i: number; spk: number }
+
+async function readAdVoiceWords(workspaceId: string, runId: string): Promise<AdVoiceWord[]> {
+  console.info('[ad-studio:b3] voice_words_read_begin', { runId })
+  try {
+    const raw = await getClipStorage(storageDriverName()).getJson<unknown>(adVoiceWordsKey(workspaceId, runId))
+    if (!Array.isArray(raw)) return []
+    const words = raw.filter((row): row is AdVoiceWord => {
+      if (!row || typeof row !== 'object') return false
+      const word = row as Partial<AdVoiceWord>
+      return typeof word.w === 'string'
+        && Number.isFinite(word.s) && Number.isFinite(word.e)
+        && Number.isInteger(word.i) && Number.isInteger(word.spk)
+        && Number(word.e) > Number(word.s)
+    })
+    console.info('[ad-studio:b3] voice_words_read_complete', { runId, wordCount: words.length })
+    return words
+  } catch (err) {
+    console.info('[ad-studio:b3] voice_words_unavailable', {
+      runId, type: err instanceof Error ? err.name : typeof err,
+    })
+    return []
+  }
+}
+
+async function writeAdClipWords(
+  workspaceId: string,
+  projectId: string,
+  clipId: string,
+  words: AdVoiceWord[],
+): Promise<void> {
   const key = clipWordsKey(workspaceId, projectId, clipId)
-  console.info('[ad-studio:b3] clip_words_write_begin', { projectId, clipId })
-  await getClipStorage(storageDriverName()).putJson(key, [])
-  console.info('[ad-studio:b3] clip_words_write_complete', { projectId, clipId })
+  console.info('[ad-studio:b3] clip_words_write_begin', { projectId, clipId, wordCount: words.length })
+  await getClipStorage(storageDriverName()).putJson(key, words)
+  console.info('[ad-studio:b3] clip_words_write_complete', { projectId, clipId, wordCount: words.length })
 }
 
 /** No PROCESS_PROJECT: create the real DB project first, then the B3 canvas job. */
@@ -35,7 +67,7 @@ export async function ensureAdDestinationProject(workspaceId: string, runId: str
     const settings = defaultClipSettings({
       aspectRatio: input.aspect, rangeStartMs: 0, rangeEndMs: durationMs,
       byo: true, fullVideo: true, blank: true,
-      captions: { enabled: false, presetId: 'bold_pop', language: 'en' },
+      captions: { enabled: input.voiceoverEnabled !== false, presetId: 'bold_pop', language: 'en' },
     })
     await db.$transaction(async tx => {
       const claimed = await tx.adStudioRun.updateMany({
@@ -112,11 +144,16 @@ export async function ensureAdEditorClip(workspaceId: string, runId: string): Pr
   const run = await db.adStudioRun.findFirst({ where: { id: runId, workspaceId } })
   if (!run || run.status !== 'stitching' || !run.projectId) return null
   if (run.clipId) {
-    await writeAdClipWords(workspaceId, run.projectId, run.clipId)
-    console.info('[ad-studio:b3] editor_clip_reused', { runId, projectId: run.projectId, clipId: run.clipId })
+    const words = await readAdVoiceWords(workspaceId, runId)
+    if (words.length) await writeAdClipWords(workspaceId, run.projectId, run.clipId, words)
+    console.info('[ad-studio:b3] editor_clip_reused', {
+      runId, projectId: run.projectId, clipId: run.clipId, voiceWords: words.length,
+    })
     return run.clipId
   }
   const input = run.input as unknown as AdProductInput
+  const plan = run.plan as unknown as AdPlan | null
+  const plannedByIndex = new Map((plan?.scenes ?? []).map(scene => [scene.index, scene]))
   const scenes = await db.adStudioScene.findMany({ where: { runId }, orderBy: { index: 'asc' } })
   if (scenes.some(s => s.status !== 'ready' && s.status !== 'skipped')) return null
   const videoJobs = await db.aiStudioJob.findMany({
@@ -126,9 +163,12 @@ export async function ensureAdEditorClip(workspaceId: string, runId: string): Pr
   const projectId = run.projectId
   const timelineScenes: AdTimelineScene[] = []
   for (const scene of scenes) {
+    const planned = plannedByIndex.get(scene.index)
     const entry: AdTimelineScene = { id: scene.id, index: scene.index,
+      role: (planned?.role ?? scene.role) as AdTimelineScene['role'],
       source: scene.source === 'stock' ? 'stock' : 'generated', status: scene.status,
-      startMs: scene.startMs, endMs: scene.endMs, stockAssetId: scene.stockAssetId,
+      startMs: scene.startMs, endMs: scene.endMs, onScreenText: planned?.onScreenText,
+      stockAssetId: scene.stockAssetId,
       sourceInMs: scene.sourceInMs, trimInMs: scene.trimInMs,
     }
     if (scene.status === 'ready' && scene.source === 'generated') {
@@ -161,26 +201,61 @@ export async function ensureAdEditorClip(workspaceId: string, runId: string): Pr
       driver: asset.storageDriver })
     productPhotos.push({ uploadId, label: 'Original product reference' })
   }
-  let voice: { uploadId: string; durationMs: number } | undefined
+  let voice: { uploadId: string; durationMs: number; wordsAvailable: boolean } | undefined
+  let voiceWords: AdVoiceWord[] = []
   if (run.voiceoverStatus === 'ready' && run.voiceoverStorageKey && run.voiceoverDurationMs) {
     const uploadId = stableId('upl_advoice_', runId)
     await ensureMediaUpload({ workspaceId, projectId, uploadId, key: run.voiceoverStorageKey,
       filename: 'Ad voiceover.mp3', mime: 'audio/mpeg', durationMs: run.voiceoverDurationMs })
-    voice = { uploadId, durationMs: run.voiceoverDurationMs }
+    voiceWords = await readAdVoiceWords(workspaceId, runId)
+    voice = { uploadId, durationMs: run.voiceoverDurationMs, wordsAvailable: voiceWords.length > 0 }
   }
-  const edits = buildAdTimelineEdits({ durationMs: input.durationSec * 1000, aspect: input.aspect,
-    scenes: timelineScenes, productPhotos, voice })
+
+  const plannedDurationMs = input.durationSec * 1000
+  const durationMs = voice
+    ? Math.min(plannedDurationMs, Math.max(1000, voice.durationMs + 500))
+    : plannedDurationMs
+  console.info('[ad-studio:b3] timeline_duration_resolved', {
+    runId, plannedDurationMs, voiceDurationMs: voice?.durationMs ?? null, durationMs,
+    deadAirMs: voice ? Math.max(0, durationMs - voice.durationMs) : null,
+  })
+
+  let music: { uploadId: string } | undefined
+  try {
+    console.info('[ad-studio:b3] music_attach_begin', { runId, stockId: 'cc0-menu-loop' })
+    music = await attachStockAudioToProject(workspaceId, projectId, 'cc0-menu-loop')
+    console.info('[ad-studio:b3] music_attach_complete', { runId, attached: true })
+  } catch (err) {
+    console.info('[ad-studio:b3] music_attach_skipped', {
+      runId, type: err instanceof Error ? err.name : typeof err,
+    })
+  }
+
+  const ctaScene = [...timelineScenes].reverse().find(scene => scene.status !== 'skipped' && scene.role === 'cta')
+  const logoAsset = input.logoAssetId ? assets.find(asset => asset.id === input.logoAssetId) : undefined
+  const logo = logoAsset && ctaScene
+    ? {
+        storageKey: logoAsset.storageKey,
+        startMs: Math.min(ctaScene.startMs, Math.max(0, durationMs - 300)),
+        endMs: durationMs,
+      }
+    : undefined
+
+  const edits = buildAdTimelineEdits({
+    durationMs, aspect: input.aspect, productName: input.name,
+    scenes: timelineScenes, productPhotos, voice, music, logo,
+  })
   const clipId = stableId('clip_ad_', runId)
   console.info('[ad-studio:b3] editor_clip_create_begin', { runId, projectId, clipId, scenes: scenes.length })
   await db.clip.upsert({
     where: { id: clipId },
     create: { id: clipId, workspaceId, projectId, title: `${input.name} commercial`.slice(0, 120),
-      reason: 'ad_studio', startMs: 0, endMs: input.durationSec * 1000,
+      reason: 'ad_studio', startMs: 0, endMs: durationMs,
       storageDriver: storageDriverName(), edits: toPrismaJson(edits),
       aiMeta: toPrismaJson({ adStudioRunId: runId, originalProductImageCount: productPhotos.length }) },
     update: {},
   })
-  await writeAdClipWords(workspaceId, projectId, clipId)
+  await writeAdClipWords(workspaceId, projectId, clipId, voiceWords)
   await db.adStudioRun.updateMany({ where: { id: runId, workspaceId, status: 'stitching', clipId: null },
     data: { clipId } })
   console.info('[ad-studio:b3] editor_clip_created', { runId, projectId, clipId })
@@ -197,7 +272,7 @@ export async function advanceAdRender(workspaceId: string, runId: string): Promi
     console.info('[ad-studio:b3] render_polled', { runId, renderId: run.renderId, status: render?.status })
     if (render?.status === 'READY' && render.outputKey) {
       await db.adStudioRun.updateMany({ where: { id: runId, workspaceId, status: 'stitching' },
-        data: { status: 'done', completedAt: new Date(), errorCode: null, errorMessage: null } })
+        data: { status: 'done', renderStatus: 'ready', completedAt: new Date(), errorCode: null, errorMessage: null } })
       console.info('[ad-studio:b3] run_done', { runId, projectId: run.projectId, clipId: run.clipId, renderId: run.renderId })
     } else if (render?.status === 'FAILED') {
       await db.adStudioRun.updateMany({ where: { id: runId, workspaceId, status: 'stitching' },
