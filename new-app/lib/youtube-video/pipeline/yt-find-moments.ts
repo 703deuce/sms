@@ -1,6 +1,7 @@
 import 'server-only'
 
-import { enqueueAiProducerAnalyzeJob } from '@/lib/server/ai-producer-agent/enqueue-analyze'
+import { toPrismaJson } from '@/lib/server/clips/prisma-json'
+import type { AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
 import { getPrisma } from '@/lib/server/db'
 import { timestampedAsrForVisual } from '@/lib/ai-producer-agent/visual-evidence'
 import type { YtObservation, YtTranscriptWord } from '@/lib/youtube-video/pipeline/yt-types'
@@ -52,15 +53,14 @@ export async function ytFindMoments(input: MediaRange): Promise<string> {
     rangeMs: [input.startMs,input.endMs] as [number,number],
     durationMs:input.endMs-input.startMs,
   }
-  const job = await enqueueAiProducerAnalyzeJob({
-    runId:input.runId, projectId:input.projectId, mode:'best_moments',
-    sources:[source], targetClipLenS:60,
+  return ytEnqueueAnalyze({
+    runId:input.runId,projectId:input.projectId,source,
+    mode:'best_moments',pass:'coarse',targetClipLenS:60,
     visualEvidence:{
       enabled:true,model:'gemini-3.1-flash-lite',
       transcriptText:timestampedAsrForVisual(input.words,source.rangeMs,60_000),
     },
   })
-  return job.id
 }
 
 /** A queued worker job is durable. Subsequent polls read the SAME job ID. */
@@ -82,4 +82,34 @@ export async function ytReadMomentsJob(
       result.meta?.original_audio_attached !== true ||
       Number(result.meta?.fps) !== 1) throw Error('youtube_multimodal_evidence_missing')
   return {status:'ready',observations:ytObservations(result.moments,range,tier)}
+}
+
+/** Stable job ID protects against duplicate video analysis after HTTP crashes,
+ * concurrent GET polls, or a checkpoint write interrupted after enqueue. */
+export async function ytEnqueueAnalyze(input:{
+  runId:string;projectId:string;source:AiProducerSourceRef;
+  mode:'best_moments'|'visual_detail';pass:'coarse'|'focused';
+  targetClipLenS:number;
+  visualEvidence:{
+    enabled:true;model:string;transcriptText?:string;
+    focusWindows?:Array<{startMs:number;endMs:number;transcriptText:string}>;
+  };
+}):Promise<string>{
+  const range=input.source.rangeMs
+  if(!range)throw Error('yt_analysis_missing_range')
+  const jobId=['ytan',input.runId,input.projectId,range[0],range[1],input.pass].join('_')
+  await getPrisma().clipJob.upsert({
+    where:{id:jobId},
+    update:{},
+    create:{
+      id:jobId,projectId:input.projectId,type:'AI_PRODUCER_AGENT_ANALYZE',
+      status:'QUEUED',
+      payload:toPrismaJson({
+        runId:input.runId,mode:input.mode,sources:[input.source],
+        targetClipLenS:input.targetClipLenS,
+        visualEvidence:input.visualEvidence,
+      }),
+    },
+  })
+  return jobId
 }
