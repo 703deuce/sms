@@ -6,6 +6,7 @@ const cols = [
   {
     title: 'Product',
     links: [
+      { href: hrefs.home, label: 'Home' },
       { href: hrefs.aiClips, label: 'AI Clips' },
       { href: hrefs.videoEditing, label: 'Video Editing' },
       { href: hrefs.streamer, label: 'Streamer' },
@@ -17,6 +18,7 @@ const cols = [
       { href: hrefs.clipsNew, label: 'Start clipping' },
       { href: hrefs.editorNew, label: 'Open the studio' },
       { href: hrefs.clips, label: 'Open Clips' },
+      { href: hrefs.app, label: 'Log in' },
       { href: hrefs.help, label: 'Help' },
     ],
   },

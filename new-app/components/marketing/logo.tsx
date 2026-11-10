@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils'
 
 /** Theme-aware Transovo lettermark (from public/icon.svg paths) plus wordmark. */
 export function MarketingLogo({
-  href = hrefs.aiClips,
+  href = hrefs.home,
   className,
 }: {
   href?: string

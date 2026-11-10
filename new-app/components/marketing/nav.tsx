@@ -11,7 +11,7 @@ const links = [
   { href: hrefs.help, label: 'Help' },
 ] as const
 
-export function MarketingNav({ current }: { current?: 'ai-clips' | 'video-editing' }) {
+export function MarketingNav({ current }: { current?: 'home' | 'ai-clips' | 'video-editing' }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
@@ -37,6 +37,12 @@ export function MarketingNav({ current }: { current?: 'ai-clips' | 'video-editin
           })}
         </nav>
         <div className="flex items-center gap-2">
+          <Link
+            href={hrefs.app}
+            className="hidden h-9 items-center rounded-lg px-3 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 sm:inline-flex"
+          >
+            Log in
+          </Link>
           <PrimaryCta href={hrefs.clips} className="hidden h-9 px-4 shadow-xs sm:inline-flex">
             Open Clips
           </PrimaryCta>
@@ -57,6 +63,12 @@ export function MarketingNav({ current }: { current?: 'ai-clips' | 'video-editin
                   {link.label}
                 </Link>
               ))}
+              <Link
+                href={hrefs.app}
+                className="block rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted"
+              >
+                Log in
+              </Link>
               <Link
                 href={hrefs.clips}
                 className="mt-1 block rounded-lg bg-brand-gradient px-3 py-2 text-center text-sm font-medium text-brand-foreground"
