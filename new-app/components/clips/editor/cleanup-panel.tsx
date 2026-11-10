@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -38,7 +38,7 @@ import {
   introOutroLockedRanges,
   playRemovedOnlyEdits,
   type LockedRange,
-} from '@/lib/clips/editor/clean-take-review'
+} from '../../../lib/clips/editor/clean-take-review'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
@@ -520,7 +520,7 @@ export function CleanupPanel({
               min={0}
               step={0.5}
               value={lockIntroSec}
-              onChange={(e) => setLockIntroSec(Math.max(0, Number(e.target.value) || 0))}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setLockIntroSec(Math.max(0, Number(e.target.value) || 0))}
               className="h-8 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-label="Lock intro seconds"
               data-testid="cleanup-lock-intro"
@@ -534,7 +534,7 @@ export function CleanupPanel({
               min={0}
               step={0.5}
               value={lockOutroSec}
-              onChange={(e) => setLockOutroSec(Math.max(0, Number(e.target.value) || 0))}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setLockOutroSec(Math.max(0, Number(e.target.value) || 0))}
               className="h-8 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-label="Lock outro seconds"
               data-testid="cleanup-lock-outro"
@@ -549,7 +549,7 @@ export function CleanupPanel({
               step={0.1}
               placeholder="Start"
               value={customLock.startSec}
-              onChange={(e) => setCustomLock((prev) => ({ ...prev, startSec: e.target.value }))}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setCustomLock((prev) => ({ ...prev, startSec: e.target.value }))}
               className="h-8 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-label="Locked range start seconds"
               data-testid="cleanup-lock-custom-start"
@@ -561,7 +561,7 @@ export function CleanupPanel({
               step={0.1}
               placeholder="End"
               value={customLock.endSec}
-              onChange={(e) => setCustomLock((prev) => ({ ...prev, endSec: e.target.value }))}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setCustomLock((prev) => ({ ...prev, endSec: e.target.value }))}
               className="h-8 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-label="Locked range end seconds"
               data-testid="cleanup-lock-custom-end"

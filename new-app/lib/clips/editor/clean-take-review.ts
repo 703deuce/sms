@@ -1,12 +1,12 @@
 /** Pure helpers for suggestion-first Clean Take review and restore.
  * Frontend only. Does not change Mode 2 assembly or backend export defaults. */
 
-import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
-import { displayDurationMs, mergeCutRanges, subtractRangeFromCuts } from '@/lib/clips/edits'
-import type { CleanupProposal, CleanupCutKind } from '@/lib/clips/editor/cleanup-proposals'
-import { proposalId, restoreCleanupProposal } from '@/lib/clips/editor/cleanup-proposals'
-import { CLEAN_TAKE_DEFAULT_STRENGTH, OPT_IN_FILLER_WORDS } from '@/lib/clips/editor/cleanup-strength'
-import type { ClipInsert } from '@/lib/clips/editor/inserts'
+import type { ClipEditsV2, CutRange } from '../edits'
+import { displayDurationMs, mergeCutRanges, subtractRangeFromCuts } from '../edits'
+import type { CleanupProposal, CleanupCutKind } from './cleanup-proposals'
+import { proposalId, restoreCleanupProposal } from './cleanup-proposals'
+import { CLEAN_TAKE_DEFAULT_STRENGTH, OPT_IN_FILLER_WORDS } from './cleanup-strength'
+import type { ClipInsert } from './inserts'
 
 export { CLEAN_TAKE_DEFAULT_STRENGTH }
 
@@ -79,11 +79,7 @@ export type CleanTakeRunSource = {
   title?: string
 }
 
-export function buildCleanTakeRunBody(input: {
-  sources: CleanTakeRunSource[]
-  instruction?: string
-  exportOnFinish?: boolean
-}): {
+export type CleanTakeRunBody = {
   storyMode: 'clean_take_v1'
   outputType: 'story'
   genre: 'irl_just_chatting'
@@ -98,8 +94,18 @@ export function buildCleanTakeRunBody(input: {
     projectId: string
     title?: string
   }>
-} {
+  /** Additive; today's runs POST schema strips unknown keys until Backend adds the field. */
+  lockedRanges?: LockedRange[]
+}
+
+export function buildCleanTakeRunBody(input: {
+  sources: CleanTakeRunSource[]
+  instruction?: string
+  exportOnFinish?: boolean
+  lockedRanges?: LockedRange[]
+}): CleanTakeRunBody {
   const instruction = input.instruction?.trim()
+  const lockedRanges = (input.lockedRanges ?? []).filter((row) => row.endMs > row.startMs)
   return {
     storyMode: 'clean_take_v1',
     outputType: 'story',
@@ -115,7 +121,33 @@ export function buildCleanTakeRunBody(input: {
       projectId: source.projectId,
       title: source.title,
     })),
+    ...(lockedRanges.length ? { lockedRanges } : {}),
   }
+}
+
+export function omitRestoredOmissions(
+  omissions: CleanTakeOmission[],
+  restoredIds: Iterable<string>,
+): CleanTakeOmission[] {
+  const skip = new Set(restoredIds)
+  return omissions.filter((row) => !skip.has(row.id))
+}
+
+export type PlayRemovedOnlyCue = {
+  id: string
+  startSec: number
+  endSec: number
+}
+
+/** Source-clock cues for a play-removed-only preview of every remaining omission. */
+export function playRemovedOnlyCues(omissions: CleanTakeOmission[]): PlayRemovedOnlyCue[] {
+  return omissions
+    .filter((row) => row.endMs - row.startMs >= 200)
+    .map((row) => ({
+      id: row.id,
+      startSec: row.startMs / 1000,
+      endSec: row.endMs / 1000,
+    }))
 }
 
 export function lightStrengthExcludesOptInFillers(): boolean {

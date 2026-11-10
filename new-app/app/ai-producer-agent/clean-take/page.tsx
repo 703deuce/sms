@@ -1,16 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { CleanTakeReviewPanel } from '@/components/ai-producer-agent/clean-take-review-panel'
+import { CleanTakeReviewPanel } from '../../../../components/ai-producer-agent/clean-take-review-panel'
 import {
   CLEAN_TAKE_COPY,
   buildCleanTakeRunBody,
-} from '@/lib/clips/editor/clean-take-review'
+  introOutroLockedRanges,
+  type LockedRange,
+} from '../../../../lib/clips/editor/clean-take-review'
 
 type Source = { projectId: string; title: string; durationMs: number; hasTranscript: boolean }
 type Run = {
@@ -34,6 +36,7 @@ export default function CleanTakeExperiment() {
   const [sourcesLoading, setSourcesLoading] = useState(true)
   const [lockIntroSec, setLockIntroSec] = useState(0)
   const [lockOutroSec, setLockOutroSec] = useState(0)
+  const [customLock, setCustomLock] = useState<{ startSec: string; endSec: string }>({ startSec: '', endSec: '' })
 
   useEffect(() => {
     let active = true
@@ -81,6 +84,34 @@ export default function CleanTakeExperiment() {
     )
   }
 
+  const lockedRanges: LockedRange[] = useMemo(() => {
+    const rows: LockedRange[] = []
+    for (const projectId of selected) {
+      const source = sources.find((item) => item.projectId === projectId)
+      if (!source) continue
+      rows.push(
+        ...introOutroLockedRanges(
+          0,
+          source.durationMs,
+          Math.max(0, Math.round(lockIntroSec * 1000)),
+          Math.max(0, Math.round(lockOutroSec * 1000)),
+          projectId,
+        ),
+      )
+    }
+    const startSec = Number(customLock.startSec)
+    const endSec = Number(customLock.endSec)
+    if (Number.isFinite(startSec) && Number.isFinite(endSec) && endSec > startSec) {
+      rows.push({
+        id: 'lock-custom',
+        label: 'Locked range',
+        startMs: Math.round(startSec * 1000),
+        endMs: Math.round(endSec * 1000),
+      })
+    }
+    return rows
+  }, [selected, sources, lockIntroSec, lockOutroSec, customLock.startSec, customLock.endSec])
+
   const start = async () => {
     if (selected.length < 1 || selected.length > 5) return
     setLoading(true)
@@ -93,6 +124,7 @@ export default function CleanTakeExperiment() {
           return { projectId, title: source.title }
         }),
         instruction,
+        lockedRanges,
       })
       const response = await fetch('/api/ai-producer-agent/runs', {
         method: 'POST',
@@ -185,7 +217,7 @@ export default function CleanTakeExperiment() {
         <Textarea
           id="clean-take-direction"
           value={instruction}
-          onChange={(event) => setInstruction(event.target.value)}
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setInstruction(event.target.value)}
           maxLength={4000}
           rows={3}
           placeholder={CLEAN_TAKE_COPY.directionPlaceholder}
@@ -205,7 +237,7 @@ export default function CleanTakeExperiment() {
               min={0}
               step={0.5}
               value={lockIntroSec}
-              onChange={(event) => setLockIntroSec(Math.max(0, Number(event.target.value) || 0))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setLockIntroSec(Math.max(0, Number(event.target.value) || 0))}
               className="h-9 w-full rounded-lg border border-border bg-background px-3 font-mono text-sm tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-label="Lock intro seconds"
             />
@@ -218,9 +250,36 @@ export default function CleanTakeExperiment() {
               min={0}
               step={0.5}
               value={lockOutroSec}
-              onChange={(event) => setLockOutroSec(Math.max(0, Number(event.target.value) || 0))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setLockOutroSec(Math.max(0, Number(event.target.value) || 0))}
               className="h-9 w-full rounded-lg border border-border bg-background px-3 font-mono text-sm tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-label="Lock outro seconds"
+            />
+            <span className="text-xs text-muted-foreground">sec</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <span className="w-24 shrink-0 font-medium">Lock range</span>
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              value={customLock.startSec}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setCustomLock((current) => ({ ...current, startSec: event.target.value }))
+              }
+              className="h-9 w-full rounded-lg border border-border bg-background px-3 font-mono text-sm tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              aria-label="Lock range start seconds"
+            />
+            <span className="text-xs text-muted-foreground">to</span>
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              value={customLock.endSec}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setCustomLock((current) => ({ ...current, endSec: event.target.value }))
+              }
+              className="h-9 w-full rounded-lg border border-border bg-background px-3 font-mono text-sm tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              aria-label="Lock range end seconds"
             />
             <span className="text-xs text-muted-foreground">sec</span>
           </label>
@@ -270,6 +329,7 @@ export default function CleanTakeExperiment() {
           clipId={run.resultClipId}
           lockIntroSec={lockIntroSec}
           lockOutroSec={lockOutroSec}
+          lockedRanges={lockedRanges}
         />
       ) : null}
     </main>

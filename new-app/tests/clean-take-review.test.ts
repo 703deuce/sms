@@ -9,8 +9,10 @@ import {
   invertRangesWithin,
   lightStrengthExcludesOptInFillers,
   omittedRangesFromCleanTakeCuts,
+  omitRestoredOmissions,
   overlapsAnyLockedRange,
   parseCleanTakeMeta,
+  playRemovedOnlyCues,
   playRemovedOnlyEdits,
   playRemovedOnlyFromOmissions,
   restoreCleanTakeOmission,
@@ -60,6 +62,21 @@ describe('Clean Take suggestion-first defaults', () => {
     expect(body.instruction).toBe('keep the joke')
     expect(body.sources).toEqual([
       { sourceId: 'source_0', kind: 'upload', projectId: 'proj_1', title: 'Talk' },
+    ])
+    expect(body.lockedRanges).toBeUndefined()
+  })
+
+  it('includes lockedRanges on the run body when the user set locks', () => {
+    const body = buildCleanTakeRunBody({
+      sources: [{ projectId: 'proj_1', title: 'Talk' }],
+      lockedRanges: [
+        { id: 'lock-intro', label: 'Intro', startMs: 0, endMs: 3000, sourceId: 'proj_1' },
+        { id: 'lock-empty', label: 'Empty', startMs: 10, endMs: 10 },
+      ],
+    })
+    expect(body.exportOnFinish).toBe(false)
+    expect(body.lockedRanges).toEqual([
+      { id: 'lock-intro', label: 'Intro', startMs: 0, endMs: 3000, sourceId: 'proj_1' },
     ])
   })
 
@@ -208,6 +225,30 @@ describe('restore of each omission', () => {
     expect(result.edits).toBe(edits)
     expect(result.edits.trim).toEqual({ in: 10_000, out: 20_000 })
   })
+
+  it('drops a restored omission from the remaining review list', () => {
+    const omissions: CleanTakeOmission[] = [
+      {
+        id: 'source_0:0:10000',
+        sourceId: 'source_0',
+        startMs: 0,
+        endMs: 10_000,
+        type: 'omission',
+        reason: 'Opening material omitted from the first pass',
+      },
+      {
+        id: 'source_0:20000:30000',
+        sourceId: 'source_0',
+        startMs: 20_000,
+        endMs: 30_000,
+        type: 'retake',
+        reason: 'Earlier take or mid-passage omitted from the first pass',
+      },
+    ]
+    const remaining = omitRestoredOmissions(omissions, ['source_0:0:10000'])
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0]?.id).toBe('source_0:20000:30000')
+  })
 })
 
 describe('play removed only', () => {
@@ -253,6 +294,18 @@ describe('play removed only', () => {
     // Main kept take is fully cut so only removals play
     expect(preview.cutRanges).toEqual([[10_000, 20_000]])
     expect(displayDurationMs(preview)).toBe(4000)
+  })
+
+  it('builds a cue list for every remaining omitted range', () => {
+    const cues = playRemovedOnlyCues([
+      { id: 'a', sourceId: 'source_0', startMs: 0, endMs: 1500, type: 'omission', reason: 'lead' },
+      { id: 'b', sourceId: 'source_0', startMs: 30_000, endMs: 34_000, type: 'retake', reason: 'take' },
+      { id: 'tiny', sourceId: 'source_0', startMs: 40_000, endMs: 40_100, type: 'silence', reason: 'short' },
+    ])
+    expect(cues).toEqual([
+      { id: 'a', startSec: 0, endSec: 1.5 },
+      { id: 'b', startSec: 30, endSec: 34 },
+    ])
   })
 })
 

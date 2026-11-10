@@ -1,25 +1,27 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type SyntheticEvent } from 'react'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { exportClip, getClipEditor, getRenderStatus, patchClip } from '@/lib/clips-api'
-import { displayDurationMs, type ClipEditsV2 } from '@/lib/clips/edits'
-import { formatTimecode } from '@/lib/clips/format'
+import { Button } from '../../ui/button'
+import { exportClip, getClipEditor, getRenderStatus, patchClip } from '../../../lib/clips-api'
+import { displayDurationMs, type ClipEditsV2 } from '../../../lib/clips/edits'
+import { formatTimecode } from '../../../lib/clips/format'
 import {
   CLEAN_TAKE_COPY,
   introOutroLockedRanges,
   omissionsOverlappingLocked,
   omittedRangesFromCleanTakeCuts,
+  omitRestoredOmissions,
   parseCleanTakeMeta,
+  playRemovedOnlyCues,
   playRemovedOnlyFromOmissions,
   restoreCleanTakeOmission,
   type CleanTakeKeptCut,
   type CleanTakeOmission,
   type CleanTakeSourceExtent,
   type LockedRange,
-} from '@/lib/clips/editor/clean-take-review'
+} from '../../../lib/clips/editor/clean-take-review'
 
 type ReviewState = {
   edits: ClipEditsV2
@@ -34,17 +36,21 @@ export function CleanTakeReviewPanel({
   clipId,
   lockIntroSec = 0,
   lockOutroSec = 0,
+  lockedRanges: lockedRangesProp,
 }: {
   projectId: string
   clipId: string
   lockIntroSec?: number
   lockOutroSec?: number
+  lockedRanges?: LockedRange[]
 }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [review, setReview] = useState<ReviewState | null>(null)
   const [showCuts, setShowCuts] = useState(true)
   const [playRemovedOnly, setPlayRemovedOnly] = useState(false)
+  const [restoredIds, setRestoredIds] = useState<Set<string>>(new Set())
+  const [removedCueIndex, setRemovedCueIndex] = useState(0)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [exportStatus, setExportStatus] = useState<{ status: string; url?: string | null; error?: string | null; renderId?: string } | null>(null)
@@ -122,6 +128,7 @@ export function CleanTakeReviewPanel({
   }, [exportStatus?.renderId, exportStatus?.status])
 
   const lockedRanges: LockedRange[] = useMemo(() => {
+    if (lockedRangesProp?.length) return lockedRangesProp
     if (!review?.sources.length) return introOutroLockedRanges(0, 0, 0, 0)
     const rows: LockedRange[] = []
     for (const source of review.sources) {
@@ -136,17 +143,26 @@ export function CleanTakeReviewPanel({
       )
     }
     return rows
-  }, [review?.sources, lockIntroSec, lockOutroSec])
+  }, [lockedRangesProp, review?.sources, lockIntroSec, lockOutroSec])
 
   const omissions = useMemo(() => {
     if (!review) return []
-    return omittedRangesFromCleanTakeCuts(review.cuts, review.sources)
-  }, [review])
+    return omitRestoredOmissions(
+      omittedRangesFromCleanTakeCuts(review.cuts, review.sources),
+      restoredIds,
+    )
+  }, [review, restoredIds])
 
   const lockedOmissions = useMemo(
     () => omissionsOverlappingLocked(omissions, lockedRanges),
     [omissions, lockedRanges],
   )
+
+  const removedCues = useMemo(() => playRemovedOnlyCues(omissions), [omissions])
+
+  useEffect(() => {
+    setRemovedCueIndex(0)
+  }, [playRemovedOnly, removedCues])
 
   const previewEdits = useMemo(() => {
     if (!review) return null
@@ -174,6 +190,7 @@ export function CleanTakeReviewPanel({
     try {
       await patchClip(clipId, { edits: result.edits })
       setReview((current) => current ? { ...current, edits: result.edits } : current)
+      setRestoredIds((current) => new Set(current).add(omission.id))
       setNotice(`Restored ${formatTimecode(omission.endMs - omission.startMs)}. Duration is now ${formatTimecode(displayDurationMs(result.edits))}.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Restore could not be saved. The kept edit was not deleted.')
@@ -192,6 +209,11 @@ export function CleanTakeReviewPanel({
     try {
       await patchClip(clipId, { edits })
       setReview((current) => current ? { ...current, edits } : current)
+      setRestoredIds((current) => {
+        const next = new Set(current)
+        for (const omission of lockedOmissions) next.add(omission.id)
+        return next
+      })
       setNotice('Locked intro/outro ranges were restored into the review edit.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not restore locked ranges')
@@ -235,15 +257,33 @@ export function CleanTakeReviewPanel({
           Current duration {formatTimecode(durationMs)}
           {playRemovedOnly ? ' · previewing removed ranges only (not saved)' : ''}
         </p>
-        {playRemovedOnly && review?.mediaUrl && omissions[0] ? (
-          <video
-            key={omissions.map((row) => row.id).join('|')}
-            className="mt-3 aspect-video w-full rounded-lg bg-panel"
-            controls
-            src={`${review.mediaUrl}#t=${(omissions[0].startMs / 1000).toFixed(3)},${(omissions[0].endMs / 1000).toFixed(3)}`}
-          >
-            Play removed only starts at the first omitted range. Open the editor for the full flip-timeline preview.
-          </video>
+        {playRemovedOnly && review?.mediaUrl && removedCues.length ? (
+          <div className="mt-3 space-y-2">
+            <video
+              key={removedCues[removedCueIndex]?.id ?? 'removed'}
+              className="aspect-video w-full rounded-lg bg-panel"
+              controls
+              autoPlay
+              data-testid="clean-take-play-removed-video"
+              src={`${review.mediaUrl}#t=${removedCues[removedCueIndex]!.startSec.toFixed(3)},${removedCues[removedCueIndex]!.endSec.toFixed(3)}`}
+              onTimeUpdate={(event: SyntheticEvent<HTMLVideoElement>) => {
+                const cue = removedCues[removedCueIndex]
+                if (!cue) return
+                if (event.currentTarget.currentTime >= cue.endSec - 0.05) {
+                  if (removedCueIndex + 1 < removedCues.length) {
+                    setRemovedCueIndex((index) => index + 1)
+                  } else {
+                    event.currentTarget.pause()
+                  }
+                }
+              }}
+            >
+              Play removed only previews each omitted range in source time when a source URL is available.
+            </video>
+            <p className="text-xs text-muted-foreground">
+              Removed range {removedCueIndex + 1} of {removedCues.length}. Open the editor for the flip-timeline audition of the assembled cut.
+            </p>
+          </div>
         ) : null}
       </div>
 
