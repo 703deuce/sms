@@ -19,12 +19,15 @@ import {
   trimItem,
   type OpCtx,
 } from '@/lib/clips/editor/clip-timeline'
-import { canonicalEditsJson, defaultEdits, editsPayloadForSave, normalizeEdits, subtractRangeFromCuts, type ClipEditsV2 } from '@/lib/clips/edits'
-import { deleteRange, moveVideoSegment, moveVideoSegmentWithGap, shiftVideoSegmentWithinSlot } from '@/lib/clips/editor/timeline-edit-ops'
+import { canonicalEditsJson, defaultEdits, editsPayloadForSave, normalizeEdits, outputDurationMs, subtractRangeFromCuts, type ClipEditsV2 } from '@/lib/clips/edits'
+import { deleteRange, deleteRangeMain, moveVideoSegment, moveVideoSegmentWithGap, shiftVideoSegmentWithinSlot } from '@/lib/clips/editor/timeline-edit-ops'
 import { exportTimeMap, toExportMs } from '@/lib/clips/editor/export-time'
 
 import { applyBrandTemplateToEdits } from '../lib/clips/apply-brand'
 import { applyProposalsToEdits, pruneCutCleanupKinds, pruneCutQualityMeta } from '../lib/clips/editor/cleanup-proposals'
+import { normalizeTextItems, textPreset, type TextItem } from '../lib/clips/editor/text-items'
+import { headlineBarAllowedForLayout } from '../lib/clips/headline-band-layout'
+import { defaultLayoutSegments } from '../lib/clips/layout-segments'
 import { clampTrimToExtendedBounds } from '../lib/clips/trim-bounds'
 import {
   PHASE_1_COMMAND_NAMES,
@@ -461,7 +464,7 @@ describe('Phase 1 editor command registry (PR-B1 / #1115)', () => {
     expect(serializeEditorState(viaRestore.edits)).toBe(serializeEditorState(manualRestore))
   })
 
-  it('parity: set_captions, set_layout, apply_brand, reorder_segment, add_or_edit_text', () => {
+  it('parity: set_captions — registry equals the manual captions merge', () => {
     const start = base()
     const capPatch = { enabled: false, presetId: 'clean_white', wordsPerLine: 3 }
     const manualCap = { ...start, captions: { ...start.captions, ...capPatch } }
@@ -469,13 +472,39 @@ describe('Phase 1 editor command registry (PR-B1 / #1115)', () => {
     expect(viaCap.ok).toBe(true)
     if (!viaCap.ok) return
     expect(serializeEditorState(viaCap.edits)).toBe(serializeEditorState(manualCap))
+  })
 
-    const viaLayout = applyEditorCommand(start, { name: 'set_layout', params: { mode: 'fit_blur' } }, ctx)
-    expect(viaLayout.ok).toBe(true)
-    if (!viaLayout.ok) return
-    expect(viaLayout.edits.layout.mode).toBe('fit_blur')
-    expect(viaLayout.edits.layout.userPicked).toBe(true)
+  it('parity: set_layout — registry equals the manual setLayoutMode path', () => {
+    const start = base({
+      exportTemplate: { headlineBar: { enabled: true, text: 'Hello' } } as ClipEditsV2['exportTemplate'],
+    })
+    const mode = 'fit_blur' as const
+    const { template: _dropped, ...layoutRest } = start.layout as typeof start.layout & { template?: unknown }
+    void _dropped
+    let manual: ClipEditsV2 = {
+      ...start,
+      layout: {
+        ...layoutRest,
+        mode,
+        userPicked: true,
+        layoutSegments: defaultLayoutSegments(start.trim.in, start.trim.out, mode),
+      },
+    }
+    const tpl = manual.exportTemplate
+    if (tpl?.headlineBar?.enabled && !headlineBarAllowedForLayout(mode)) {
+      manual = {
+        ...manual,
+        exportTemplate: { ...tpl, headlineBar: { enabled: false, text: tpl.headlineBar?.text ?? '' } },
+      }
+    }
+    const via = applyEditorCommand(start, { name: 'set_layout', params: { mode } }, ctx)
+    expect(via.ok).toBe(true)
+    if (!via.ok) return
+    expect(serializeEditorState(via.edits)).toBe(serializeEditorState(manual))
+  })
 
+  it('parity: apply_brand and reorder_segment — registry equals applyBrandTemplateToEdits / moveVideoSegment', () => {
+    const start = base()
     const brand = { id: 'brand_t2', settings: { defaultLayoutMode: 'facecam_stack' as const } }
     const manualBrand = applyBrandTemplateToEdits(start, brand)
     const viaBrand = applyEditorCommand(start, { name: 'apply_brand', params: brand }, ctx)
@@ -495,7 +524,28 @@ describe('Phase 1 editor command registry (PR-B1 / #1115)', () => {
     expect(viaMove.ok).toBe(true)
     if (!viaMove.ok || !manualMove) return
     expect(serializeEditorState(viaMove.edits)).toBe(serializeEditorState(manualMove))
+  })
 
+  it('parity: add_or_edit_text — registry equals textPreset + normalizeTextItems', () => {
+    const start = base()
+    const preset = textPreset('title_white_on_dark_blur')!
+    const item: TextItem = {
+      id: 'txt_fixed',
+      text: 'Hello there',
+      startMs: 0,
+      endMs: 2500,
+      x: 50,
+      y: 30,
+      style: { ...preset.style },
+      presetId: preset.id,
+      anim: {
+        in: { type: 'pop', unit: 'block', durMs: 250 },
+        out: { type: 'fade', unit: 'block', durMs: 200 },
+      },
+    }
+    const addedItems = normalizeTextItems([item], outputDurationMs(start))
+    expect(addedItems).toBeTruthy()
+    const manualAdd = { ...start, textItems: addedItems }
     const viaText = applyEditorCommand(
       start,
       {
@@ -506,8 +556,12 @@ describe('Phase 1 editor command registry (PR-B1 / #1115)', () => {
     )
     expect(viaText.ok).toBe(true)
     if (!viaText.ok) return
-    expect(viaText.edits.textItems?.[0]?.id).toBe('txt_fixed')
-    expect(viaText.edits.textItems?.[0]?.text).toBe('Hello there')
+    expect(serializeEditorState(viaText.edits)).toBe(serializeEditorState(manualAdd!))
+
+    const cur = viaText.edits.textItems![0]!
+    const editedItem: TextItem = { ...cur, text: 'Updated' }
+    const editedItems = normalizeTextItems([editedItem], outputDurationMs(viaText.edits))
+    const manualEdit = { ...viaText.edits, textItems: editedItems }
     const edited = applyEditorCommand(
       viaText.edits,
       { name: 'add_or_edit_text', params: { id: 'txt_fixed', text: 'Updated' } },
@@ -515,7 +569,46 @@ describe('Phase 1 editor command registry (PR-B1 / #1115)', () => {
     )
     expect(edited.ok).toBe(true)
     if (!edited.ok) return
-    expect(edited.edits.textItems?.[0]?.text).toBe('Updated')
+    expect(serializeEditorState(edited.edits)).toBe(serializeEditorState(manualEdit!))
     expect(serializeEditorState(invertEditorCommand(edited))).toBe(serializeEditorState(viaText.edits))
+  })
+
+  it('parity: delete_range mode=main equals deleteRangeMain', () => {
+    const start = base()
+    const manual = deleteRangeMain(ctxOf(start), [2000, 3500])
+    const via = applyEditorCommand(
+      start,
+      { name: 'delete_range', params: { startMs: 2000, endMs: 3500, mode: 'main' } },
+      ctx,
+    )
+    expect(manual).toBeTruthy()
+    expect(via.ok).toBe(true)
+    if (!via.ok || !manual) return
+    expect(serializeEditorState(via.edits)).toBe(serializeEditorState(manual))
+  })
+
+  it('exercises every apply error code', () => {
+    const start = base()
+
+    const unknown = applyEditorCommand(start, { name: 'generate_music', params: {} }, ctx)
+    expect(unknown.ok).toBe(false)
+    if (!unknown.ok) expect(unknown.code).toBe('unknown_command')
+
+    const invalid = applyEditorCommand(start, { name: 'trim', params: { inMs: 8000, outMs: 1000 } }, ctx)
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) expect(invalid.code).toBe('invalid_params')
+
+    const missing = validateEditorCommand({ name: 'split', params: {} })
+    expect(missing.ok).toBe(false)
+    if (!missing.ok) expect(missing.code).toBe('invalid_params')
+
+    const precondition = applyEditorCommand(start, { name: 'split', params: { atMs: 0 } }, ctx)
+    expect(precondition.ok).toBe(false)
+    if (!precondition.ok) expect(precondition.code).toBe('precondition')
+
+    const sameTrim = { inMs: start.trim.in, outMs: start.trim.out }
+    const noChange = applyEditorCommand(start, { name: 'trim', params: sameTrim }, ctx)
+    expect(noChange.ok).toBe(false)
+    if (!noChange.ok) expect(noChange.code).toBe('no_change')
   })
 })
