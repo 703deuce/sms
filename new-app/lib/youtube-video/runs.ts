@@ -288,6 +288,12 @@ export async function createYoutubeVideoRun(
     createdById, createdAt: now, updatedAt: now,
   }
   const created = await traceYoutubeRunStep(record.id, 'run_create', () => deps.store.create(record), { sourceCount: input.sources.length })
+  // A Gemini window can outlive an API request. Return the durable run now,
+  // and let GET polling advance one checkpointed window at a time.
+  if (process.env.YOUTUBE_SHARED_PIPELINE !== '0' && deps.pipeline.planShared) {
+    youtubeRunEvent(record.id,'create','queued_for_shared_planning')
+    return { view:view(created), created:true }
+  }
   return { view: view(await advanceRun(created, deps, true)), created: true }
 }
 
