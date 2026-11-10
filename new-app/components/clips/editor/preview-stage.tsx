@@ -1233,6 +1233,10 @@ export function PreviewStage({
 
   const brand = (edits.brand || {}) as ClipBrandEdits
   const pos = brand.logoPosition ?? 'TR'
+  const brandLogoOutputMs = Math.round(captionTimeSec * 1000)
+  const brandLogoInWindow =
+    (brand.logoStartMs == null || brandLogoOutputMs >= brand.logoStartMs)
+    && (brand.logoEndMs == null || brandLogoOutputMs <= brand.logoEndMs)
 
   // E1fix: B-roll covers the same region the export overlays it on. Template mode and plain
   // layouts: the whole 9:16 frame (the T6 title band is burned on top after B-roll; its preview
@@ -1998,7 +2002,7 @@ export function PreviewStage({
             }}
           />
         ) : null}
-        {!compositePreview && brandLogoUrl && brand.logoKey && (
+        {!compositePreview && brandLogoUrl && brand.logoKey && brandLogoInWindow && (
           <img
             {...corsMediaProps(brandLogoUrl)}
             src={brandLogoUrl}
