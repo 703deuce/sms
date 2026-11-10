@@ -325,6 +325,7 @@ export function StoryBlocksEditorShell(props: Props) {
                 <label className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-input px-2"><Search className="size-4 text-muted-foreground" /><input className="h-9 min-w-0 flex-1 bg-transparent text-xs outline-none" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a scene" aria-label="Find scenes" /></label>
                 <Button variant="outline" size="sm" disabled title="Adding new source footage belongs in the Clip editor."><Plus className="mr-1 size-3" />Add scene</Button>
               </div>
+              <p className="mt-2 text-[10px] text-muted-foreground">Add new footage in Clip editor. Scene boundaries here split existing footage only.</p>
             </div>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
               {wordsLoading && !scenes.length ? <div className="space-y-3 py-12 text-center text-xs text-muted-foreground"><Loader2 className="mx-auto size-6 animate-spin" />Preparing scene transcript <Button size="sm" variant="outline" onClick={() => void reloadWords().catch((e) => reportError('reload-words', e))}>Retry transcript</Button></div> :
