@@ -23,6 +23,8 @@ export type YtSelectedCut = YoutubeVideoCut & {
   beat: string
   kind: 'speech' | 'visual'
   reason: string
+  /** Short source-grounded transcript or observed-video evidence used only for chapter naming. */
+  groundedEvidence?: string
 }
 
 export type YtStep = {

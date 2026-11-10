@@ -95,8 +95,12 @@ function cutFromWords(
   const startMs=Math.round(first.s*1000),endMs=Math.round(last.e*1000)
   if(!Number.isSafeInteger(startMs)||!Number.isSafeInteger(endMs)||
     startMs<ctx.startMs||endMs>ctx.endMs||endMs-startMs<200) return null
+  const groundedEvidence=ctx.words
+    .slice(firstWordId as number,(lastWordId as number)+1)
+    .map(word=>word.w).join(' ').trim().slice(0,600)
   return {sourceId:ctx.sourceId,startMs,endMs,beat:beat.slice(0,100),
-    label:beat.slice(0,100),reason:reason.slice(0,240),kind:'speech'}
+    label:beat.slice(0,100),reason:reason.slice(0,240),kind:'speech',
+    ...(groundedEvidence?{groundedEvidence}:{})}
 }
 
 function cutFromVisual(
@@ -109,9 +113,10 @@ function cutFromVisual(
   if(!observation|| (startMs as number)<observation.startMs ||
     (endMs as number)>observation.endMs ||
     (endMs as number)-(startMs as number)<200) return null
+  const groundedEvidence=observation.description.trim().slice(0,600)
   return {sourceId:ctx.sourceId,startMs:startMs as number,endMs:endMs as number,
     beat:beat.slice(0,100),label:beat.slice(0,100),reason:reason.slice(0,240),
-    kind:'visual'}
+    kind:'visual',...(groundedEvidence?{groundedEvidence}:{})}
 }
 
 function acceptNonOverlapping(

@@ -54,13 +54,96 @@ export type YtGlobalSelection = {
   chapterTitles: string[]
 }
 
-function descriptiveTitle(raw:string,cut:YtSelectedCut,windowTitle:string):string {
-  const generic=/^(?:premise|payoff|opening|ending|beat[ ]*[0-9]+|story[ ]*[0-9]+|part[ ]*[0-9]+)$/i
-  for(const choice of [raw,cut.beat,cut.label??'',cut.reason,windowTitle]){
-    const cleaned=choice.trim().replace(/[ ]+/g,' ')
-    if(cleaned.length>=6&&!generic.test(cleaned))return cleaned.slice(0,110)
+const GENERIC_CHAPTER_PREFIX=/^(?:premise|payoff|opening|ending|beat(?:[ ]*#?[ ]*[0-9]+)?|story(?:[ ]*#?[ ]*[0-9]+)?|part(?:[ ]*#?[ ]*[0-9]+)?|chapter(?:[ ]*#?[ ]*[0-9]+)?|segment(?:[ ]*#?[ ]*[0-9]+)?|section(?:[ ]*#?[ ]*[0-9]+)?)(?:\b|[ :–—-])/i
+const GENERIC_CHAPTER_EXACT=/^(?:observed on-screen action|recorded discussion|discussion|conversation|scene|moment)$/i
+const TITLE_STOP_WORDS=new Set(['the','and','for','that','this','with','from','into','about','your','their','there','what','when','where','which','while','have','has','had','was','were','are','but','not','you','our','out'])
+
+function cleanChapterTitle(raw:string):string{
+  return raw.trim().replace(/[ ]+/g,' ').replace(/^[\s:–—-]+|[\s:–—-]+$/g,'').slice(0,110)
+}
+
+export function ytChapterTitleLooksGeneric(raw:string):boolean{
+  const cleaned=cleanChapterTitle(raw)
+  return cleaned.length<3||GENERIC_CHAPTER_PREFIX.test(cleaned)||GENERIC_CHAPTER_EXACT.test(cleaned)
+}
+
+function titleTokens(raw:string):string[]{
+  return (raw.toLowerCase().match(/[a-z0-9']{3,}/g)??[])
+    .filter(token=>!TITLE_STOP_WORDS.has(token))
+}
+
+function chapterEvidence(cut:YtSelectedCut,windowTitle:string):string{
+  const grounded=cleanChapterTitle(cut.groundedEvidence??'')
+  if(grounded)return grounded
+  for(const choice of [cut.beat,cut.label??'',windowTitle,cut.reason]){
+    const cleaned=cleanChapterTitle(choice)
+    if(cleaned&&!ytChapterTitleLooksGeneric(cleaned))return cleaned
   }
-  return cut.kind==='visual'?'Observed on-screen action':'Recorded discussion'
+  return ''
+}
+
+function titleMatchesEvidence(title:string,evidence:string):boolean{
+  if(ytChapterTitleLooksGeneric(title)||!evidence)return false
+  const evidenceTokens=new Set(titleTokens(evidence))
+  const titleWords=titleTokens(title)
+  return titleWords.length>0&&titleWords.some(token=>evidenceTokens.has(token))
+}
+
+function groundedTitleFallback(cut:YtSelectedCut,windowTitle:string):string{
+  const evidence=chapterEvidence(cut,windowTitle)
+  if(!evidence)throw Error('yt_chapter_title_unrepairable')
+  const stripped=evidence.replace(GENERIC_CHAPTER_PREFIX,'').replace(/^[\s:–—-]+/,'').trim()
+  const words=(stripped||evidence).split(/\s+/).filter(Boolean).slice(0,10)
+  const title=cleanChapterTitle(words.join(' '))
+  if(!title||ytChapterTitleLooksGeneric(title))throw Error('yt_chapter_title_unrepairable')
+  return title
+}
+
+async function repairChapterTitles(
+  selectedIndices:number[],all:YtSelectedCut[],windowTitles:string[],
+  suppliedByIndex:Map<number,string>,
+):Promise<string[]>{
+  const titles=selectedIndices.map(index=>cleanChapterTitle(suppliedByIndex.get(index)??''))
+  const invalid:number[]=[]
+  for(let position=0;position<selectedIndices.length;position++){
+    const index=selectedIndices[position]!
+    const cut=all[index]!
+    const evidence=chapterEvidence(cut,windowTitles[index]??'')
+    if(!titleMatchesEvidence(titles[position]??'',evidence))invalid.push(position)
+  }
+  for(let start=0;start<invalid.length;start+=24){
+    const positions=invalid.slice(start,start+24)
+    const scenes=positions.map(position=>{
+      const index=selectedIndices[position]!
+      const cut=all[index]!
+      return {
+        position,index,sourceId:cut.sourceId,kind:cut.kind,
+        startMs:cut.startMs,endMs:cut.endMs,
+        groundedEvidence:chapterEvidence(cut,windowTitles[index]??''),
+      }
+    })
+    let repaired:string[]=[]
+    try{
+      const raw=await ytStructuredDecision('yt_submit_chapter_title_repair',
+        'CHAPTER TITLE REPAIR: Return one concise content-based title per scene, in the same order. Use only each scene groundedEvidence. Never use Premise, Beat N, Part N, Chapter N, Opening, Ending, Payoff, generic discussion/action labels, or invented events.',
+        {scenes},
+        {titles:{type:'array',minItems:positions.length,maxItems:positions.length,items:{type:'string'}}},
+        ['titles'])
+      repaired=Array.isArray(raw.titles)
+        ?raw.titles.map(value=>typeof value==='string'?cleanChapterTitle(value):''):[]
+    }catch{
+      repaired=[]
+    }
+    positions.forEach((position,offset)=>{
+      const index=selectedIndices[position]!
+      const cut=all[index]!
+      const evidence=chapterEvidence(cut,windowTitles[index]??'')
+      const candidate=repaired[offset]??''
+      titles[position]=titleMatchesEvidence(candidate,evidence)
+        ?candidate:groundedTitleFallback(cut,windowTitles[index]??'')
+    })
+  }
+  return titles
 }
 
 /** One chronological episode; coverage of all analyzed windows is enforced. */
@@ -112,10 +195,9 @@ export async function ytFinishWholeSourceStory(
   }
   const selectedIndices=[...covered].sort((a,b)=>a-b)
   const windowTitles=windows.flatMap(w=>w.cuts.map(()=>w.outline.title))
+  const chapterTitles=await repairChapterTitles(selectedIndices,all,windowTitles,suppliedByIndex)
   return {title:raw.title.slice(0,110),premise:raw.premise.slice(0,450),
-    selectedIndices,
-    chapterTitles:selectedIndices.map(i=>
-      descriptiveTitle(suppliedByIndex.get(i)??'',all[i]!,windowTitles[i]??''))}
+    selectedIndices,chapterTitles}
 }
 
 export async function ytQaWholeSourceStory(
