@@ -71,6 +71,8 @@ export type AiCaptionsResult = {
   playbackUrl: string | null
   thumbnailUrl: string | null
   downloadUrl: string | null
+  renderId?: string | null
+  exportedEditsVersion?: number | null
   srtUrl: string
 }
 
@@ -97,6 +99,9 @@ export type AiCaptionsRunView = {
   styleId: string | null
   projectId: string | null
   result: AiCaptionsResult | null
+  createdAt?: string
+  updatedAt?: string
+  source?: AiCaptionsSource
 }
 
 export type AiCaptionsStylesView = {

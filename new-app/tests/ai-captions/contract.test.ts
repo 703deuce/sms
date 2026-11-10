@@ -12,6 +12,7 @@ import {
 import { isLowConfidence } from '@/lib/ai-captions/words'
 import { groupCaptionLines } from '@/lib/ai-captions/lines'
 import { srtFromLines } from '@/lib/ai-captions/srt'
+import { vttFromLines } from '@/lib/ai-captions/vtt'
 import { captionsOnlyProjectSettings, isCaptionsOnlyProjectSettings, shouldAutoStartUploadAgentBatch } from '@/lib/ai-captions/auto-agent-guard'
 
 describe('ai-captions contract helpers', () => {
@@ -73,6 +74,10 @@ describe('ai-captions contract helpers', () => {
     const srt = srtFromLines(split)
     expect(srt).toContain('word0')
     expect(srt).toContain('-->')
+    const vtt = vttFromLines(split)
+    expect(vtt).toMatch(/^WEBVTT\\n\\n/)
+    expect(vtt).toContain('00:00:00.000 -->')
+    expect(vtt).toContain('word0')
   })
 
   it('never auto-starts the clipper for a captions-only project, even if autoAgentClipMode is on', () => {

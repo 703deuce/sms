@@ -29,6 +29,7 @@ export type AiCaptionsRunStore = {
   create(record: AiCaptionsRunRecord): Promise<AiCaptionsRunRecord>
   get(workspaceId: string, id: string): Promise<AiCaptionsRunRecord | null>
   getByClientRequestId(workspaceId: string, clientRequestId: string): Promise<AiCaptionsRunRecord | null>
+  list(workspaceId: string, limit?: number): Promise<AiCaptionsRunRecord[]>
   update(workspaceId: string, id: string, patch: Partial<AiCaptionsRunRecord>): Promise<AiCaptionsRunRecord>
 }
 
@@ -54,6 +55,11 @@ export function memoryAiCaptionsStore(): AiCaptionsRunStore {
         if (row.workspaceId === workspaceId && row.clientRequestId === clientRequestId) return { ...row }
       }
       return null
+    },
+    async list(workspaceId, limit = 40) {
+      console.info('[ai-captions:store] list', { workspaceId, limit })
+      return [...rows.values()].filter((row) => row.workspaceId === workspaceId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit).map((row) => ({ ...row }))
     },
     async update(workspaceId, id, patch) {
       const current = rows.get(key(workspaceId, id))

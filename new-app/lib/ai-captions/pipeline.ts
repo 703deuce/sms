@@ -56,7 +56,10 @@ export type AiCaptionsPipelineDeps = {
     baseVersion: number
     edits: ClipEditsV2
   }): Promise<WrittenClip>
-  exportMp4(args: { workspaceId: string; clipId: string; watermark: false }): Promise<{ downloadUrl: string | null }>
+  exportMp4(args: { workspaceId: string; clipId: string; watermark: false }): Promise<{ downloadUrl: string | null; renderId?: string | null }>
+  pollExport?(workspaceId: string, renderId: string): Promise<{ status: 'processing' | 'ready' | 'failed'; downloadUrl: string | null; error?: string }>
+  getCaptionLines?(workspaceId: string, clipId: string): Promise<AiCaptionsResult['lines']>
+  getEditsVersion?(workspaceId: string, clipId: string): Promise<number>
   listSavedStyles(workspaceId: string): Promise<SavedCaptionStyle[]>
 }
 
@@ -139,6 +142,11 @@ export async function loadOrTranscribe(
     return { ...resolved, words: resolved.words }
   }
   if (source.kind === 'upload' && (!resolved.ready || !resolved.words?.length)) {
+    if (resolved.ready && !resolved.words?.length) {
+      console.warn('[ai-captions:pipeline] transcription_empty', { projectId: resolved.projectId })
+      throw new AiCaptionsError('source_has_no_audio', 'No speech was detected in this video. Try another upload with spoken audio.', 400)
+    }
+    console.info('[ai-captions:pipeline] transcription_pending', { projectId: resolved.projectId })
     throw new AiCaptionsError('source_not_ready', 'Transcription did not return any words yet.', 400)
   }
   if (!resolved.ready) {

@@ -45,6 +45,9 @@ function toView(row: AiCaptionsRunRecord): AiCaptionsRunView {
       row.source.kind === 'project' || row.source.kind === 'asset' ? row.source.projectId : null
     ),
     result: row.result,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    source: row.source,
   }
 }
 
@@ -76,6 +79,7 @@ export async function createAiCaptionsRun(
   headerKey: string | null,
   deps: AiCaptionsRunDeps,
 ): Promise<{ view: AiCaptionsCreateView; created: boolean }> {
+  console.info('[ai-captions:runs] create_begin', { workspaceId })
   const parsed = parseCreateBody(body, headerKey)
   const existing = await deps.store.getByClientRequestId(workspaceId, parsed.clientRequestId)
   if (existing) {
@@ -118,10 +122,22 @@ export async function createAiCaptionsRun(
   })
 
   const advanced = await advanceRun(row, deps)
+  console.info('[ai-captions:runs] create_complete', { runId: advanced.id, status: advanced.status })
   return {
     view: { runId: advanced.id, status: advanced.status, creditEstimate },
     created: true,
   }
+}
+
+export async function listAiCaptionsRuns(workspaceId: string, deps: AiCaptionsRunDeps): Promise<AiCaptionsRunView[]> {
+  console.info('[ai-captions:runs] list_begin', { workspaceId })
+  const rows = await deps.store.list(workspaceId, 40)
+  console.info('[ai-captions:runs] list_complete', { workspaceId, count: rows.length })
+  // Only send lightweight result metadata for history cards; full transcript loads on selection.
+  return rows.map((row) => {
+    const view = toView(row)
+    return view.result ? { ...view, result: { ...view.result, words: [], lines: [] } } : view
+  })
 }
 
 export async function getAiCaptionsRun(
@@ -129,31 +145,46 @@ export async function getAiCaptionsRun(
   runId: string,
   deps: AiCaptionsRunDeps,
 ): Promise<AiCaptionsRunView> {
+  console.info('[ai-captions:runs] get_begin', { workspaceId, runId })
   const row = await deps.store.get(workspaceId, runId)
   if (!row) throw new AiCaptionsError('run_not_found', 'That captions run was not found.', 404)
-  const advanced = await advanceRun(row, deps)
+  let advanced = await advanceRun(row, deps)
+  if (advanced.status === 'ready' && advanced.result?.downloadUrl && deps.pipeline.getEditsVersion) {
+    const currentVersion = await deps.pipeline.getEditsVersion(workspaceId, advanced.result.clipId)
+    if (currentVersion !== advanced.result.exportedEditsVersion) {
+      console.info('[ai-captions:export] stale_download_invalidated', { runId, currentVersion, exportedVersion: advanced.result.exportedEditsVersion })
+      advanced = await deps.store.update(workspaceId, runId, {
+        result: { ...advanced.result, downloadUrl: null, renderId: null, exportedEditsVersion: null },
+      })
+    }
+  }
+  console.info('[ai-captions:runs] get_complete', { runId, status: advanced.status, stage: advanced.stage })
   return toView(advanced)
 }
 
 async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Promise<AiCaptionsRunRecord> {
   if (row.status === 'ready' || row.status === 'failed') return row
   if (row.status === 'exporting' && row.result) {
+    console.info('[ai-captions:export] advance_poll', { runId: row.id, renderId: row.result.renderId })
+    if (!row.result.renderId || !deps.pipeline.pollExport) return row
     try {
-      const exported = await deps.pipeline.exportMp4({
-        workspaceId: row.workspaceId,
-        clipId: row.result.clipId,
-        watermark: false,
-      })
-      if (exported.downloadUrl) {
+      const exportStatus = await deps.pipeline.pollExport(row.workspaceId, row.result.renderId)
+      if (exportStatus.status === 'failed') {
+        console.warn('[ai-captions:export] render_failed', { runId: row.id, renderId: row.result.renderId })
         return deps.store.update(row.workspaceId, row.id, {
-          status: 'ready',
-          stage: 'ready',
-          progressPercent: 100,
-          result: { ...row.result, downloadUrl: exported.downloadUrl },
+          status: 'failed', failureCode: 'export_failed',
+          failureMessage: exportStatus.error || 'The export failed. You can retry without uploading again.',
+        })
+      }
+      if (exportStatus.status === 'ready' && exportStatus.downloadUrl) {
+        console.info('[ai-captions:export] render_ready', { runId: row.id })
+        return deps.store.update(row.workspaceId, row.id, {
+          status: 'ready', stage: 'ready', progressPercent: 100,
+          result: { ...row.result, downloadUrl: exportStatus.downloadUrl },
         })
       }
     } catch (err) {
-      return deps.store.update(row.workspaceId, row.id, fail(row, err))
+      console.warn('[ai-captions:export] render_poll_error', { runId: row.id, error: String(err) })
     }
     return row
   }
@@ -202,6 +233,7 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
       })
     }
 
+    console.info('[ai-captions:runs] transcription_check', { runId: current.id, projectId: current.ingestedProjectId })
     const resolved = await loadOrTranscribe(
       current.workspaceId,
       current.source,
@@ -219,6 +251,7 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
 
     const durationMs = Math.max(resolved.durationMs, Math.round((resolved.words.at(-1)?.e ?? 0) * 1000))
     const built = captionsFromTranscript(durationMs, resolved.words, styleId, saved)
+    console.info('[ai-captions:runs] caption_lines_built', { runId: current.id, words: built.words.length, lines: built.lines.length, durationMs })
     const written = await deps.pipeline.writeClip({
       workspaceId: current.workspaceId,
       projectId: resolved.projectId,
@@ -227,6 +260,7 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
       title: 'Captions',
       edits: built.edits,
     })
+    console.info('[ai-captions:runs] clip_written', { runId: current.id, clipId: written.clipId })
     const result = buildResult({
       runId: current.id,
       clipId: written.clipId,
@@ -240,6 +274,7 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
       downloadUrl: null,
     })
     await deps.prefs.setLastStyleId(current.workspaceId, styleId)
+    console.info('[ai-captions:runs] ready', { runId: current.id, clipId: written.clipId })
     return deps.store.update(current.workspaceId, current.id, {
       status: 'ready',
       stage: 'ready',
@@ -252,13 +287,14 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
     const pendingTranscript =
       err instanceof AiCaptionsError &&
       err.code === 'source_not_ready' &&
-      err.message.includes('did not return any words')
+      (row.source.kind === 'upload' || err.message.includes('did not return any words'))
+    console.info('[ai-captions:runs] advance_result', { runId: row.id, pendingTranscript, error: err instanceof Error ? err.message : String(err) })
     if (pendingTranscript) {
-      const upload = row.source.kind === 'upload'
+      const preparing = row.source.kind === 'upload' && !row.ingestedProjectId
       return deps.store.update(row.workspaceId, row.id, {
-        status: upload ? 'preparing' : 'transcribing',
-        stage: upload ? 'prepare' : 'transcribe',
-        progressPercent: upload ? 25 : 30,
+        status: preparing ? 'preparing' : 'transcribing',
+        stage: preparing ? 'prepare' : 'transcribe',
+        progressPercent: preparing ? 25 : 30,
         failureCode: null,
         failureMessage: null,
       })
@@ -317,7 +353,7 @@ export async function applyAiCaptionsStyle(
   await deps.prefs.setLastStyleId(workspaceId, styleId)
   const next = await deps.store.update(workspaceId, runId, {
     styleId,
-    result: { ...row.result, styleId },
+    result: { ...row.result, styleId, downloadUrl: null, renderId: null, exportedEditsVersion: null },
   })
   void updated
   void bounds
@@ -332,10 +368,27 @@ export async function getAiCaptionsSrt(
   const { srtFromLines } = await import('@/lib/ai-captions/srt')
   const row = await deps.store.get(workspaceId, runId)
   if (!row) throw new AiCaptionsError('run_not_found', 'That captions run was not found.', 404)
-  if (row.status !== 'ready' || !row.result) {
+  if ((row.status !== 'ready' && row.status !== 'exporting') || !row.result) {
     throw new AiCaptionsError('srt_not_ready', 'The SRT file is not ready yet.', 409)
   }
-  return srtFromLines(row.result.lines)
+  const lines = deps.pipeline.getCaptionLines
+    ? await deps.pipeline.getCaptionLines(workspaceId, row.result.clipId)
+    : row.result.lines
+  console.info('[ai-captions:subtitles] srt_ready', { runId, lines: lines.length })
+  return srtFromLines(lines)
+}
+
+export async function getAiCaptionsVtt(workspaceId: string, runId: string, deps: AiCaptionsRunDeps): Promise<string> {
+  console.info('[ai-captions:subtitles] vtt_begin', { runId })
+  const row = await deps.store.get(workspaceId, runId)
+  if (!row || !row.result || (row.status !== 'ready' && row.status !== 'exporting')) {
+    throw new AiCaptionsError('vtt_not_ready', 'The captions are not ready to download yet.', 409)
+  }
+  const lines = deps.pipeline.getCaptionLines
+    ? await deps.pipeline.getCaptionLines(workspaceId, row.result.clipId)
+    : row.result.lines
+  const { vttFromLines } = await import('@/lib/ai-captions/vtt')
+  return vttFromLines(lines)
 }
 
 export async function exportAiCaptionsRun(
@@ -345,20 +398,32 @@ export async function exportAiCaptionsRun(
 ): Promise<{ view: AiCaptionsRunView; queued: boolean }> {
   const row = await deps.store.get(workspaceId, runId)
   if (!row) throw new AiCaptionsError('run_not_found', 'That captions run was not found.', 404)
-  if (row.status !== 'ready' && row.status !== 'exporting') {
+  if (row.status === 'exporting') {
+    console.info('[ai-captions:export] already_processing', { runId })
+    return { view: toView(row), queued: false }
+  }
+  if (row.status !== 'ready' && !(row.status === 'failed' && row.result)) {
     throw new AiCaptionsError('export_not_ready', 'Export is only available after captions are ready.', 409)
   }
   if (!row.result) {
     throw new AiCaptionsError('export_not_ready', 'Export is only available after captions are ready.', 409)
   }
-  if (row.result.downloadUrl) {
-    return { view: toView(row), queued: false }
+  if (row.result.downloadUrl && row.status === 'ready') {
+    const currentVersion = deps.pipeline.getEditsVersion
+      ? await deps.pipeline.getEditsVersion(workspaceId, row.result.clipId)
+      : row.result.exportedEditsVersion
+    if (!deps.pipeline.getEditsVersion || currentVersion === row.result.exportedEditsVersion) {
+      console.info('[ai-captions:export] cached_download', { runId })
+      return { view: toView(row), queued: false }
+    }
+    console.info('[ai-captions:export] cached_download_stale', { runId, currentVersion, exportedVersion: row.result.exportedEditsVersion })
   }
 
+  console.info('[ai-captions:export] queue_begin', { runId })
   const exporting = await deps.store.update(workspaceId, runId, {
-    status: 'exporting' as AiCaptionsStatus,
-    stage: 'export',
-    progressPercent: 90,
+    status: 'exporting' as AiCaptionsStatus, stage: 'export', progressPercent: 90,
+    failureCode: null, failureMessage: null,
+    result: { ...row.result, downloadUrl: null, renderId: null, exportedEditsVersion: null },
   })
   try {
     const exported = await deps.pipeline.exportMp4({
@@ -366,14 +431,20 @@ export async function exportAiCaptionsRun(
       clipId: exporting.result!.clipId,
       watermark: false,
     })
+    const ready = Boolean(exported.downloadUrl)
+    const exportedEditsVersion = deps.pipeline.getEditsVersion
+      ? await deps.pipeline.getEditsVersion(workspaceId, exporting.result!.clipId)
+      : null
+    console.info('[ai-captions:export] enqueue_complete', { runId, ready, renderId: exported.renderId ?? null })
     const next = await deps.store.update(workspaceId, runId, {
-      status: 'ready',
-      stage: 'ready',
-      progressPercent: 100,
-      result: { ...exporting.result!, downloadUrl: exported.downloadUrl },
+      status: ready ? 'ready' : 'exporting',
+      stage: ready ? 'ready' : 'export',
+      progressPercent: ready ? 100 : 90,
+      result: { ...exporting.result!, downloadUrl: exported.downloadUrl, renderId: exported.renderId ?? null, exportedEditsVersion },
     })
     return { view: toView(next), queued: true }
   } catch (err) {
+    console.error('[ai-captions:export] enqueue_failed', { runId, error: String(err) })
     await deps.store.update(workspaceId, runId, fail(exporting, err))
     throw err instanceof AiCaptionsError
       ? err
