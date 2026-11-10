@@ -7,7 +7,6 @@ import { createAdStudioClient, AdStudioHttpError, type AdStudioClient, type AdSt
 import { formatCredits, sanitizeAdStudioMessage, statusLabel } from '../../lib/ad-studio/format'
 import type { AdAspect, AdDuration, AdImageVariant, AdMode, AdProductInput, AdStudioRun } from '../../lib/ad-studio/types'
 import { DEFAULT_T2V_VOICE } from '../../lib/t2v/voice-defaults'
-import { getStudioModel } from '../../lib/studio/models'
 import { cn } from '../../lib/utils'
 import { Page, PageHeader } from '../app/page-primitives'
 
@@ -855,10 +854,9 @@ function BriefForm({
 }
 
 function formatAdSceneModel(scene: NonNullable<AdStudioRun['plan']>['scenes'][number]): string {
-  const model = scene.modelId ? getStudioModel(scene.modelId) : null
-  const label = model?.label ?? scene.modelId ?? 'Generated video'
-  const resolution = model?.defaultResolution
-  return resolution ? `${label} · ${resolution}` : label
+  if (scene.modelId === 'seedance-2.0-mini') return 'Seedance 2.0 Mini · 480p'
+  if (scene.modelId === 'veo-3.1-lite') return 'Veo 3.1 Lite · 720p'
+  return scene.modelId ?? 'Generated video'
 }
 
 function RunPanel({
