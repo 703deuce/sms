@@ -126,6 +126,13 @@ export function ClipCardVideo({
     v.currentTime = 0
   }
 
+  if (!previewUrl && posterUrl) {
+    return (
+      <div ref={wrapRef} className="relative size-full">
+        <img src={posterUrl} alt="" className="size-full object-cover" data-testid="clip-card-poster" />
+      </div>
+    )
+  }
   if (!previewUrl) return null
 
   return (

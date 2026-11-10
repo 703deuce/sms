@@ -68,8 +68,7 @@ export function snapDuration(value: number, allowed: number[]): number {
 }
 
 export function editorProjectHref(projectId: string, clipId: string): string {
-  // Master path. After #1133 this should move to /app/video-editor/...
-  return `/app/clips/${encodeURIComponent(projectId)}/edit/${encodeURIComponent(clipId)}`
+  return `/app/video-editor/${encodeURIComponent(projectId)}/edit/${encodeURIComponent(clipId)}`
 }
 
 

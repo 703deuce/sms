@@ -384,6 +384,31 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: 
                   Detected duration {durationMs >= 600_000 ? formatMediaDuration(durationMs) : `${(durationMs / 1000).toFixed(1)}s`}
                 </p>
               )}
+              {projectIntent === 'find' && upload?.state === 'complete' ? (
+                <div
+                  className="rounded-xl border border-primary/30 bg-primary/5 p-4"
+                  data-testid="get-clips-cta"
+                >
+                  <p className="text-sm font-medium">Upload complete</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Start one run to find Story and Continuous clips from this video.
+                  </p>
+                  <PrimaryButton
+                    className="mt-3 w-full"
+                    disabled={!uploadId || submitting}
+                    onClick={() => void submitUpload()}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" aria-hidden />
+                        Creating project…
+                      </>
+                    ) : (
+                      'Get clips'
+                    )}
+                  </PrimaryButton>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="flex flex-col gap-3">
