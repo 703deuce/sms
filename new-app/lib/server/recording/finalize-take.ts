@@ -117,7 +117,7 @@ export async function finalizeRecordingTakeToProject(
   })
 
   const clipsUrl = `/app/clips/${projectId}`
-  const scriptUrl = `/app/clips/${projectId}/script`
+  const scriptUrl = `/app/video-editor/${projectId}/script`
   return {
     projectId,
     clipsUrl,

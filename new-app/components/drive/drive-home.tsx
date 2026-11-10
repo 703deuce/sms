@@ -236,7 +236,7 @@ export function DriveHome({
     try {
       const project = await createProjectFromPrompt({ prompt: text })
       router.push(
-        isScriptEditorEnabled() ? `/app/clips/${project.id}/script` : `/app/clips/${project.id}`,
+        isScriptEditorEnabled() ? `/app/video-editor/${project.id}/script` : `/app/clips/${project.id}`,
       )
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create project')
@@ -307,13 +307,13 @@ export function DriveHome({
           </Link>
         ) : null}
         {isT2vFeatureEnabled() ? (
-          <Link href="/app/clips/video/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          <Link href="/app/ai-video/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             <Clapperboard className="mr-1 size-4" />
             AI Video
           </Link>
         ) : null}
         <Link
-          href="/app/clips/new?intent=full"
+          href="/app/video-editor/new"
           className={buttonVariants({ variant: 'outline', size: 'sm' })}
           data-testid="drive-edit-full-video"
         >
@@ -383,7 +383,7 @@ export function DriveHome({
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           {pageView !== 'trash' ? (
             <Link
-              href="/app/clips/new?intent=full"
+              href="/app/video-editor/new"
               className="inline-flex h-8 items-center gap-1.5 rounded-full border border-primary/50 bg-primary/8 px-3 text-[13px] font-medium hover:bg-primary/15"
               data-testid="drive-chip-edit-full-video"
             >

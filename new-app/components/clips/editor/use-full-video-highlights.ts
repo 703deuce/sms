@@ -257,7 +257,7 @@ export function useFullVideoHighlights(
           toast.success('Clip created', {
             action: {
               label: 'Open',
-              onClick: () => router.push(`/app/clips/${res.projectId}/edit/${res.clipId}`),
+              onClick: () => router.push(`/app/video-editor/${res.projectId}/edit/${res.clipId}`),
             },
           })
           return
@@ -265,11 +265,11 @@ export function useFullVideoHighlights(
         if (!foundProjectId) return
         const res = await makeClipFromPick(foundProjectId, pick, range)
         if (res.navigated === 'existing') {
-          router.push(`/app/clips/${foundProjectId}/edit/${res.clipId}`)
+          router.push(`/app/video-editor/${foundProjectId}/edit/${res.clipId}`)
           return
         }
         toast.success('New clip created', {
-          action: { label: 'Open', onClick: () => router.push(`/app/clips/${foundProjectId}/edit/${res.clipId}`) },
+          action: { label: 'Open', onClick: () => router.push(`/app/video-editor/${foundProjectId}/edit/${res.clipId}`) },
         })
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Make clip failed')
@@ -312,7 +312,7 @@ export function useFullVideoHighlights(
     (pick: HighlightPick) => {
       if (pick.origin === 'find') return
       if (!foundProjectId) return
-      router.push(`/app/clips/${foundProjectId}/edit/${pick.clipId}`)
+      router.push(`/app/video-editor/${foundProjectId}/edit/${pick.clipId}`)
     },
     [foundProjectId, router],
   )

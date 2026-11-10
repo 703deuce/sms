@@ -23,7 +23,7 @@ describe('project-editor-link', () => {
         editorProjectId: null,
         clipId: 'clip_1',
       }),
-    ).toBe('/app/clips/proj_a342ad46984345f786014b7f8526fb4c/edit/clip_1')
+    ).toBe('/app/video-editor/proj_a342ad46984345f786014b7f8526fb4c/edit/clip_1')
 
     expect(
       buildOpenInEditorHref({

@@ -1,10 +1,10 @@
 /**
- * T6.3 acceptance on the REAL editor route (/app/clips/<projectId>/edit/<clipId>), not /dev/t6-2.
+ * T6.3 acceptance on the REAL editor route (/app/video-editor/<projectId>/edit/<clipId>), not /dev/t6-2.
  *
  * Needs a seeded or real gaming clip with a detected facecam (e.g. the round-9 clip A) and an
  * IRL crowd clip (clip B), on a deployment with NEXT_PUBLIC_T6_TEMPLATES=1 and
  * NEXT_PUBLIC_T6_TITLE_AUTO=1:
- *   T63_CLIP_A_PATH=/app/clips/proj_x/edit/clip_a  T63_CLIP_B_PATH=/app/clips/proj_y/edit/clip_b \
+ *   T63_CLIP_A_PATH=/app/video-editor/proj_x/edit/clip_a  T63_CLIP_B_PATH=/app/video-editor/proj_y/edit/clip_b \
  *   CLIPPER_E2E_BASE_URL=... npx playwright test e2e/t6-3-editor.spec.ts
  * Screenshots: test-results/ (attach to the report).
  */

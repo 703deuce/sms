@@ -113,7 +113,7 @@ export function T2vStoryboard({ draftId, projectId, document: doc, revision, onD
             Build video
           </PrimaryButton>
           <Link
-            href={`/app/clips/${projectId}/script`}
+            href={`/app/video-editor/${projectId}/script`}
             className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 text-sm hover:bg-muted"
           >
             Open in editor

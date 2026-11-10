@@ -2,7 +2,7 @@
  * Legacy MC slide against a live clip path. Prefer local fixture e2e:
  *   e2e/timeline-slide-prod-fixture.spec.ts (clip_5f19e510: split @4641, cut @29215–29695).
  *
- *   SLIDE_MC_CLIP_PATH=/app/clips/<project>/edit/<clip> … e2e/timeline-slide-mc.spec.ts
+ *   SLIDE_MC_CLIP_PATH=/app/video-editor/<project>/edit/<clip> … e2e/timeline-slide-mc.spec.ts
  */
 import { test, expect, chromium } from '@playwright/test'
 import { clipperE2eBaseUrl, clipperE2eStorageStatePath } from './helpers/clipper-e2e-env'

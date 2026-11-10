@@ -24,17 +24,19 @@ export function AppBreadcrumbs() {
 
   const crumbs: { label: string; href?: string }[] = []
 
-  if (pathname === '/app/clips') {
+  if (pathname === '/app') {
+    crumbs.push({ label: 'Home' })
+  } else if (pathname === '/app/clips') {
     crumbs.push({ label: 'Projects' })
-  } else if (pathname === '/app/clips/new') {
+  } else if (pathname === '/app/clips/new' || pathname === '/app/video-editor/new') {
     crumbs.push({ label: 'Projects', href: '/app/clips' }, { label: 'New project' })
-  } else if (pathname.startsWith('/app/clips/templates') || pathname.startsWith('/app/clips/video/templates')) {
+  } else if (pathname.startsWith('/app/clips/templates') || pathname.startsWith('/app/ai-video/templates')) {
     crumbs.push({ label: 'Templates' })
   } else if (pathname.startsWith('/app/clips/media')) {
     crumbs.push({ label: 'Media' })
   } else if (pathname === '/app/clips/trash') {
     crumbs.push({ label: 'Projects', href: '/app/clips' }, { label: 'Trash' })
-  } else if (pathname === '/app/editor') {
+  } else if (pathname === '/app/video-editor') {
     crumbs.push({ label: 'Editor' })
   } else if (clipsProjectId(pathname) && /^\/app\/clips\/[^/]+$/.test(pathname)) {
     crumbs.push({ label: 'Projects', href: '/app/clips' })
@@ -53,9 +55,9 @@ export function AppBreadcrumbs() {
     crumbs.push({ label: tab === 'templates' ? 'Templates' : 'Brand kit' })
   } else if (pathname === '/app/exports' || pathname.startsWith('/app/clips/exports')) {
     crumbs.push({ label: 'Exports' })
-  } else if (pathname === '/app/clips/video/new') {
+  } else if (pathname === '/app/ai-video/new') {
     crumbs.push({ label: 'AI Video', href: '/app/clips?kind=video' }, { label: 'Create' })
-  } else if (pathname.startsWith('/app/clips/video/templates')) {
+  } else if (pathname.startsWith('/app/ai-video/templates')) {
     crumbs.push({ label: 'AI Video', href: '/app/clips?kind=video' }, { label: 'Templates' })
   } else if (pathname.match(/^\/app\/clips\/[^/]+\/video/)) {
     crumbs.push({ label: 'AI Video projects', href: '/app/clips?kind=video' })
