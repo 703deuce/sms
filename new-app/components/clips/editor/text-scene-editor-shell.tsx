@@ -346,7 +346,7 @@ export function TextSceneEditorShell(props: Props) {
     const tb = timebaseFor(preview)
     const seeded = edits.markers?.length
       ? [...edits.markers]
-      : scenes.slice(1).map((row, index) => ({
+      : scenes.filter((row) => Math.abs(row.start - edits.trim.in) > 1).map((row, index) => ({
           id: 'scene_seed_' + index + '_' + Math.round(row.start),
           ms: sourceToOutputSnapped(tb, row.start),
           color: 'blue' as const,
@@ -493,7 +493,7 @@ export function TextSceneEditorShell(props: Props) {
             <h1 className="max-w-[300px] truncate text-sm font-semibold">{title}</h1>
           </div>
           <Button size="sm" variant="ghost" render={<Link href={routes.project(projectId)} />} className="hidden sm:inline-flex">All clips</Button>
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground" aria-live="polite">{saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Save failed' : 'Saving…'}</span>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground" aria-live="polite">{styleAudition ? 'Preview' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Save failed' : 'Saving…'}</span>
           {saveState === 'error' && <Button size="sm" variant="outline" onClick={() => void flushSave().catch(() => toast.error('Save retry failed'))}>Retry save</Button>}
           <Button variant="ghost" size="icon" disabled={!canUndo} aria-label="Undo" onClick={() => { undo(); console.info('[editor:text] undo', { projectId, clipId }) }}><Undo2 className="size-4" /></Button>
           <Button variant="ghost" size="icon" disabled={!canRedo} aria-label="Redo" onClick={() => { redo(); console.info('[editor:text] redo', { projectId, clipId }) }}><Redo2 className="size-4" /></Button>
