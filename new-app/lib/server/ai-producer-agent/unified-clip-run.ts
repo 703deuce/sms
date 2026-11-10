@@ -16,8 +16,8 @@ export type {
 } from '@/lib/ai-producer-agent/clip-mode/unified-run-input'
 
 /** One job, one pass: Story + continuous on the same transcript.
- * Regular upload clipping calls this now. Stream clipping can call it later
- * with kind: 'stream' (or a prepared window project). */
+ * Upload and stream ingest both call this after the source project is READY
+ * (`kind: 'upload'` or `kind: 'stream'`, including an existing window project). */
 export async function startUnifiedClipRun(
   workspaceId: string,
   opts: UnifiedClipRunRequest,
