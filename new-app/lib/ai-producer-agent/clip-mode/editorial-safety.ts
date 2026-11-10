@@ -191,8 +191,14 @@ function lastSentenceStart(words:readonly TimedWord[],beforeMs:number,floorMs:nu
   }
   return Math.round(region[0]!.s*1000)
 }
+const CONTINUATION_PRONOUN_OPEN=/^(?:(?:uh|um|ah|er)[,.]?\s*)*(?:and|but|so)\s+(?:he|she|they|him|her|his|their|it|this|that)\b/i
+/** "And he was a great student" is a failure even when the previous word ends a sentence. */
+function isContinuationPronounOpen(opening:string):boolean{
+  return CONTINUATION_PRONOUN_OPEN.test(stripLeadingFiller(opening))
+}
 function isStrongContinuation(opening:string):boolean{
   const t=stripLeadingFiller(opening)
+  if(isContinuationPronounOpen(t))return true
   if(/^(?:also|which|because|anyway|again)\b/i.test(t))return true
   if(/^(?:but|and|so)\s+also\b/i.test(t))return true
   return false
@@ -393,9 +399,55 @@ export function repairClipBoundaries(
     if(kept.length>=2&&kept.reduce((n,c)=>n+c.endMs-c.startMs,0)>=8000){
       notes.push('Dropped an unrelated passage that did not connect to the later payoff')
       valid=kept
+      // Dropping an early passage can leave "And he…" as the new opening.
+      // Re-snap using source words so the antecedent can be pulled back in.
+      applyOpeningRepairs(valid,words,earlier,notes)
     }
   }
+  for(let i=0;i<valid.length;i++){
+    const ceiling=i+1<valid.length?valid[i+1]!.startMs:valid[i]!.endMs+later
+    ensureMinTail(valid[i]!,words,ceiling)
+  }
   return {cuts:valid,repaired:notes.length>0,notes,contextBridges}
+}
+
+const MIN_CLIP_TAIL_MS=300
+/** Keep at least 300ms of source after the last spoken word. */
+function ensureMinTail(cut:ClipSpan,words:readonly TimedWord[],ceiling:number):void{
+  const inside=at(words,cut.startMs,cut.endMs)
+  if(!inside.length)return
+  const lastEnd=Math.round(inside.at(-1)!.e*1000)
+  const want=lastEnd+MIN_CLIP_TAIL_MS
+  if(cut.endMs>=want)return
+  if(ceiling>cut.endMs)cut.endMs=Math.min(ceiling,want)
+}
+
+function applyOpeningRepairs(
+  cuts:ClipSpan[],
+  words:readonly TimedWord[],
+  earlier:number,
+  notes:string[],
+):void{
+  for(let i=0;i<cuts.length;i++){
+    const cut=cuts[i]!
+    const prevEnd=i>0?cuts[i-1]!.endMs:cut.startMs-earlier
+    const floor=i===0?cut.startMs-earlier:Math.max(prevEnd,cut.startMs-earlier)
+    const opening=stripLeadingFiller(phrase(at(words,cut.startMs,cut.startMs+8000)))
+    const priorText=phrase(cuts.slice(0,i).flatMap(c=>at(words,c.startMs,c.endMs)))
+    const needsOpenFix=startsMidPhrase(words,cut.startMs)||FALSE_START.test(opening)||FILLER_OPEN.test(opening)||isStrongContinuation(opening)||(isSoftContinuation(opening)&&i===0)||(DANGLING_PRONOUN_OPEN.test(opening)&&!pronounHasAntecedent(opening,priorText))||(i===0&&REF_OPEN.test(opening.toLowerCase()))
+    if(!needsOpenFix)continue
+    const snapped=snapToSelfContainedStart(words,cut.startMs,floor,cut.endMs)
+    if(snapped!=null&&snapped<cut.startMs){
+      cut.startMs=snapped
+      notes.push('Snapped opening back to a self-contained sentence start')
+    }else{
+      const start=nextSentenceStart(words,cut.startMs,Math.min(cut.startMs+earlier,cut.endMs-3000))
+      if(start!=null&&start>cut.startMs&&start<cut.endMs-3000){
+        notes.push('Trimmed a mid-phrase, continuation, or referential opening to a self-contained sentence')
+        cut.startMs=start
+      }
+    }
+  }
 }
 
 /** Brief crossfades on stitched joins, keyed by the following segment's source in-point. */
@@ -482,13 +534,13 @@ export function clipEditorialInstructions():string{
     'CLIP EDITORIAL CONTRACT — applies to this clip only:',
     'Before selecting or shortening any footage, state the intended POINT in ONE clear sentence (claim, story or joke), and preserve that same point through every cut.',
     'A first line starting with “that’s why”, “so”, “and”, “also”, “but”, “which”, “this”, “her/his/they” without an antecedent, “like I said”, “I mean,” or another backward reference, continuation, dangling pronoun, or mid-phrase start is NOT self-contained. Snap to the sentence start (including a short identifier like “My grandmother.” if it supplies the antecedent). Never add a long preamble or dead air.',
-    'Check EVERY stitched segment opening, not only the first. “also coming to understand” or “but also…” is a continuation of an omitted thought and must be repaired or rejected.',
+    'Check EVERY stitched segment opening, not only the first. “also coming to understand” or “but also…” is a continuation of an omitted thought and must be repaired or rejected. A first line such as “And he was a great student,” “But she…,” or “So they…” is not self-contained even if the previous source word ends a sentence: snap back to the antecedent or reject the opening.',
     'Hook with the strongest authentic line that raises a question or tension, but do not move the payoff before its explanation or fabricate/reorder spoken meaning.',
     'For stitched stories, every section must be understandable from the earlier sections in the OUTPUT, not from unplayed original source, and must belong to the same story as the later payoff. If an early passage (for example a childhood anecdote) does not serve the ending, drop it. If an answer refers to a removed interviewer exchange, include that question or do not use the answer.',
     'Smooth jump cuts at stitch joins with a brief crossfade (and optional punch-in), but never use a transition to hide a broken sentence or missing antecedent. A brief intentional crossfade is not itself a failure. If no rendered audio was supplied, list acoustic joins as a listening warning and do not fail the review for that reason alone.',
     'Never remove a but, only if, unless, exception, caveat, negation or qualifier when it changes the speaker’s actual meaning.',
     'Inspect at least the NEXT 6.5 SECONDS of original source after every proposed END for a late qualifier or concluding thought, and INCLUDE it when materially needed.',
-    'End exactly after the authentic full conclusion or joke landing. Mid-sentence endings are a failure. Short is fine; never pad to the target duration. Cut filler and search detours, not meaning.',
+    'End exactly after the authentic full conclusion or joke landing. Mid-sentence endings are a failure. Keep at least 300 milliseconds of tail after the last spoken word. Short is fine; never pad to the target duration. Cut filler and search detours, not meaning.',
     'Every distinct clip must stand alone, have its own reason to exist, and not be a near-duplicate.',
     'QA must explicitly FAIL a meaning-changing omission, a stammered or referential opening, a mid-sentence ending, or payoff-before-setup and identify the original words/source times to repair. Fix at the source word IDs, not via generated dialogue. Never cut a recorded ending or concluding sentence to honor a duration request.',
     'Check proper-name spelling in visible text against evidence; ASR alone is NOT proof of a name spelling. Flag uncertain names instead of inventing corrections.',

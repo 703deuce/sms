@@ -230,3 +230,37 @@ describe('non-blocking editorial QA warnings',()=>{
     expect(isNonBlockingEditorialQaIssue('Ending is mid-sentence and must be extended to the next complete sentence.')).toBe(false)
   })
 })
+
+describe('VQ PR #1081 draft openings and tails (clip_30f9ea02)',()=>{
+  it('flags And-he on a sentence boundary as a continuation-plus-pronoun opening',()=>{
+    const risk=clipEditorialAudit([{startMs:773840,endMs:786495}],publishedWords)
+    expect(risk.some(x=>x.code==='continuation_opening'||x.code==='dangling_pronoun_opening')).toBe(true)
+  })
+  it('snaps And he was a great student back to the dad antecedent',()=>{
+    const repaired=repairClipBoundaries([{startMs:773840,endMs:786495}],publishedWords)
+    expect(repaired.cuts[0]!.startMs).toBeLessThanOrEqual(769105)
+    const opening=publishedWords.filter(w=>w.e*1000>repaired.cuts[0]!.startMs&&w.s*1000<repaired.cuts[0]!.startMs+4000).map(w=>w.w).join(' ')
+    expect(opening.toLowerCase()).toMatch(/dad|grandmother/)
+    expect(opening.toLowerCase().startsWith('and he')).toBe(false)
+  })
+  it('re-snaps And-he if an earlier passage was dropped',()=>{
+    const repaired=repairClipBoundaries([
+      {startMs:761105,endMs:773280},
+      {startMs:773840,endMs:786495},
+      {startMs:910595,endMs:924840},
+    ],publishedWords)
+    const first=repaired.cuts[0]!
+    const opening=publishedWords.filter(w=>w.e*1000>first.startMs&&w.s*1000<first.startMs+4000).map(w=>w.w).join(' ').toLowerCase()
+    expect(opening.startsWith('and he')).toBe(false)
+  })
+  it('keeps at least 300ms of tail after the last word of the Corvette landing',()=>{
+    const repaired=repairClipBoundaries([{startMs:777120,endMs:806030}],publishedWords)
+    const landing=publishedWords.filter(w=>w.e*1000<=806030+20 && /[.!?]"?$/.test(w.w)).at(-1)
+    expect(landing?.w).toMatch(/Corvette\.?/)
+    expect(repaired.cuts[0]!.endMs).toBeGreaterThanOrEqual(Math.round(landing!.e*1000)+300)
+  })
+  it('does not treat a later And-without-pronoun sentence as a pronoun continuation',()=>{
+    const risk=clipEditorialAudit(publishedCuts,publishedWords)
+    expect(risk.some(x=>x.code==='continuation_opening'&&x.passageIndex===3)).toBe(false)
+  })
+})
