@@ -42,6 +42,14 @@ import { clipsFetch, patchClip } from '@/lib/clips-api'
 import { useOpenInFullVideo } from '@/components/clips/editor/open-in-full-video-button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
+function oneLineClipWhy(text: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) return ''
+  const sentence = normalized.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? normalized
+  if (sentence.length <= 140) return sentence
+  return `${sentence.slice(0, 137).trimEnd()}…`
+}
+
 export function ClipCard({
   clip,
   projectId,
@@ -78,11 +86,20 @@ export function ClipCard({
   }
   const why = clipWhySummary(aiMeta)
   const agentWhy = typeof aiMeta.whyThisClip === 'string' ? aiMeta.whyThisClip.trim() : ''
-  const shortWhy = agentWhy || why || (clip.reason && clip.reason !== 'ai_producer' ? clip.reason.trim() : '')
+  const fullWhy = agentWhy || why || (clip.reason && clip.reason !== 'ai_producer' ? clip.reason.trim() : '')
+  const shortWhy = oneLineClipWhy(fullWhy)
+  if (fullWhy && fullWhy !== shortWhy) {
+    console.info('[clips:cards] why_collapsed', {
+      clipId: clip.id,
+      fullChars: fullWhy.length,
+      summaryChars: shortWhy.length,
+    })
+  }
   const detailNotes = Array.from(new Set([
+    ...(fullWhy && fullWhy !== shortWhy ? [fullWhy] : []),
     ...(Array.isArray(aiMeta.editorialIssues) ? aiMeta.editorialIssues : []),
     ...(Array.isArray(aiMeta.needsReviewReasons) ? aiMeta.needsReviewReasons : []),
-    ...(clip.reason && clip.reason !== 'ai_producer' && clip.reason !== shortWhy ? [clip.reason] : []),
+    ...(clip.reason && clip.reason !== 'ai_producer' && clip.reason !== fullWhy ? [clip.reason] : []),
   ].map((note) => String(note).trim()).filter(Boolean)))
   const layoutChip = clipLayoutChip(aiMeta)
   const clipTypeLabel = clipTypeBadge(aiMeta)
