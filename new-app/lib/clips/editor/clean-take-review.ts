@@ -213,9 +213,11 @@ export function parseCleanTakeMeta(payload: unknown): {
 } | null {
   if (!payload || typeof payload !== 'object') return null
   const root = payload as Record<string, unknown>
-  const aiMeta = (root.aiMeta ?? root.clip && typeof root.clip === 'object'
-    ? (root.clip as Record<string, unknown>).aiMeta
-    : undefined) as Record<string, unknown> | undefined
+  const fromClip =
+    root.clip && typeof root.clip === 'object'
+      ? (root.clip as Record<string, unknown>).aiMeta
+      : undefined
+  const aiMeta = (root.aiMeta ?? fromClip) as Record<string, unknown> | undefined
   const source = aiMeta ?? root
   const cleanTake = source.cleanTake
   if (!cleanTake || typeof cleanTake !== 'object') return null
