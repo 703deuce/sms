@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ProductFrame } from '@/components/marketing/product-frame'
+import { ProductFrame } from './product-frame'
 
 export function ClipsHeroMock() {
   return (

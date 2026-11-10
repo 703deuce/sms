@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { hrefs } from '@/components/marketing/links'
-import { MarketingLogo } from '@/components/marketing/logo'
+import { hrefs } from './links'
+import { MarketingLogo } from './logo'
 
 const cols = [
   {

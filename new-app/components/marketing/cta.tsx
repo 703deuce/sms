@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '../../lib/utils'
 
 const base =
   'inline-flex items-center justify-center gap-2 rounded-xl px-5 text-sm font-medium outline-none transition-all focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px'

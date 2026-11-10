@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { Menu } from 'lucide-react'
-import { hrefs } from '@/components/marketing/links'
-import { MarketingLogo } from '@/components/marketing/logo'
-import { PrimaryCta } from '@/components/marketing/cta'
-import { cn } from '@/lib/utils'
+import { hrefs } from './links'
+import { MarketingLogo } from './logo'
+import { PrimaryCta } from './cta'
+import { cn } from '../../lib/utils'
 
 const links = [
   { href: hrefs.aiClips, label: 'AI Clips' },

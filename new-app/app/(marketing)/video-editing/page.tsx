@@ -11,13 +11,13 @@ import {
   Type,
   Wand2,
 } from 'lucide-react'
-import { PrimaryCta, SecondaryCta, TextCta } from '@/components/marketing/cta'
-import { FaqList, faqJsonLd, type FaqItem } from '@/components/marketing/faq'
-import { FinalCta } from '@/components/marketing/final-cta'
-import { hrefs, siteOrigin } from '@/components/marketing/links'
-import { CaptionBrandMock, EditorHeroMock } from '@/components/marketing/mocks'
-import { MarketingNav } from '@/components/marketing/nav'
-import { CreditChip, Section } from '@/components/marketing/section'
+import { PrimaryCta, SecondaryCta, TextCta } from '../../../components/marketing/cta'
+import { FaqList, faqJsonLd, type FaqItem } from '../../../components/marketing/faq'
+import { FinalCta } from '../../../components/marketing/final-cta'
+import { hrefs, siteOrigin } from '../../../components/marketing/links'
+import { CaptionBrandMock, EditorHeroMock } from '../../../components/marketing/mocks'
+import { MarketingNav } from '../../../components/marketing/nav'
+import { CreditChip, Section } from '../../../components/marketing/section'
 
 const title = 'Video Editing'
 const description =

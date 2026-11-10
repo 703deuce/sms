@@ -1,6 +1,6 @@
 import { ArrowRight } from 'lucide-react'
-import { PrimaryCta, SecondaryCta } from '@/components/marketing/cta'
-import { CreditChip } from '@/components/marketing/section'
+import { PrimaryCta, SecondaryCta } from './cta'
+import { CreditChip } from './section'
 
 export function FinalCta({
   title,

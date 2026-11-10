@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { hrefs } from '@/components/marketing/links'
-import { cn } from '@/lib/utils'
+import { hrefs } from './links'
+import { cn } from '../../lib/utils'
 
 /** Theme-aware Transovo lettermark (from public/icon.svg paths) plus wordmark. */
 export function MarketingLogo({

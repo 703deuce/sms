@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
-import { MarketingFooter } from '@/components/marketing/footer'
-import { siteOrigin } from '@/components/marketing/links'
+import { MarketingFooter } from '../../components/marketing/footer'
+import { siteOrigin } from '../../components/marketing/links'
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteOrigin),
