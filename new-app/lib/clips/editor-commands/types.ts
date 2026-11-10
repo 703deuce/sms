@@ -13,6 +13,10 @@ import type { CleanupProposal } from '../editor/cleanup-proposals'
 import type { ItemRef, OpCtx } from '../editor/clip-timeline'
 import type { TextItem } from '../editor/text-items'
 
+/** Contract version for this registry. Bump when a breaking param/result change ships. */
+export const EDITOR_COMMAND_REGISTRY_VERSION = 1 as const
+export type EditorCommandRegistryVersion = typeof EDITOR_COMMAND_REGISTRY_VERSION
+
 export const PHASE_1_COMMAND_NAMES = [
   'trim',
   'split',

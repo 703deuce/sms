@@ -92,6 +92,7 @@ export function applyEditorCommand(
 
 export {
   PHASE_1_COMMAND_NAMES,
+  EDITOR_COMMAND_REGISTRY_VERSION,
   isEditorCommandName,
   editorCommandDefinitions,
   editorCommandJsonSchemas,
@@ -99,6 +100,7 @@ export {
 }
 
 export type {
+  EditorCommandRegistryVersion,
   CommandPreconditions,
   DiffSummary,
   EditorCommandContext,
