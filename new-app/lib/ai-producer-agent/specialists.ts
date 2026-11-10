@@ -1036,7 +1036,17 @@ async function specialistEvent(
   diagnostic: Record<string, unknown>, error?: string,
 ) {
   const payload = { runId: ctx.runId, role, event, ...diagnostic }
-  console.info('[ai-producer:specialist]', JSON.stringify(payload))
+  // YouTube audit is count/range based; never print ASR words, quotes or
+  // model request bodies. Existing Producer specialist logs are unchanged.
+  if (ctx.config.youtubeLongForm) {
+    const counts = Object.fromEntries(Object.entries(diagnostic).filter(([,v]) =>
+      typeof v === 'number' || typeof v === 'boolean'))
+    console.info('[ai-producer:specialist]', JSON.stringify({
+      runId:ctx.runId,role,event,...counts,
+    }))
+  } else {
+    console.info('[ai-producer:specialist]', JSON.stringify(payload))
+  }
   await logAiProducerStep({
     runId: ctx.runId, stepIndex: budget.steps,
     phase: 'plan', tool: `specialist_${role}_${event}`, kind: 'validate',
