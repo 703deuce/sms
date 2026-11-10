@@ -19,9 +19,23 @@ import {
   trimItem,
   type OpCtx,
 } from '@/lib/clips/editor/clip-timeline'
-import { defaultEdits, editsPayloadForSave, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
-import { moveVideoSegment, moveVideoSegmentWithGap, shiftVideoSegmentWithinSlot } from '@/lib/clips/editor/timeline-edit-ops'
+import { canonicalEditsJson, defaultEdits, editsPayloadForSave, normalizeEdits, subtractRangeFromCuts, type ClipEditsV2 } from '@/lib/clips/edits'
+import { deleteRange, moveVideoSegment, moveVideoSegmentWithGap, shiftVideoSegmentWithinSlot } from '@/lib/clips/editor/timeline-edit-ops'
 import { exportTimeMap, toExportMs } from '@/lib/clips/editor/export-time'
+
+import { applyBrandTemplateToEdits } from '../lib/clips/apply-brand'
+import { applyProposalsToEdits, pruneCutCleanupKinds, pruneCutQualityMeta } from '../lib/clips/editor/cleanup-proposals'
+import { clampTrimToExtendedBounds } from '../lib/clips/trim-bounds'
+import {
+  PHASE_1_COMMAND_NAMES,
+  applyEditorCommand,
+  invertEditorCommand,
+  serializeEditorState,
+  validateEditorCommand,
+  listEditorCommands,
+  editorCommandJsonSchemas,
+} from '../lib/clips/editor-commands'
+
 
 const bounds = { clipStartMs: 0, clipEndMs: 10000, trimMinMs: 0, trimMaxMs: 20000 }
 
@@ -345,5 +359,163 @@ describe('B1 retest: Magnet-off sub-slot main-video movement', () => {
     const e = base({ videoSplits: [5000] })
     expect(shiftVideoSegmentWithinSlot(ctxOf(e), 'seg:5000', -500)).toBeNull()
     expect(shiftVideoSegmentWithinSlot(ctxOf(e), 'seg:5000', 0)).toBeNull()
+  })
+})
+
+
+describe('Phase 1 editor command registry (PR-B1 / #1115)', () => {
+  const ctx = { bounds }
+
+  it('registers every Phase 1 command and validates fixtures', () => {
+    expect(listEditorCommands().map((c) => c.name)).toEqual([...PHASE_1_COMMAND_NAMES])
+    const fixtures: Record<(typeof PHASE_1_COMMAND_NAMES)[number], unknown> = {
+      trim: { inMs: 1000, outMs: 8000 },
+      split: { atMs: 4000 },
+      delete_range: { startMs: 2000, endMs: 3000 },
+      apply_cleanup: {
+        proposals: [{ id: 'p1', kind: 'filler', range: [1000, 1400], label: 'um' }],
+      },
+      restore_cut: { startMs: 1000, endMs: 1400 },
+      set_captions: { enabled: true, presetId: 'bold_pop' },
+      set_layout: { mode: 'fit_blur' },
+      add_or_edit_text: { id: 'txt_1', text: 'Hello', startMs: 0, durationMs: 2000, kind: 'title_card' },
+      apply_brand: { id: 'brand_1', settings: { defaultLayoutMode: 'speaker_follow' } },
+      reorder_segment: { segId: 'seg:0', beforeId: null },
+    }
+    for (const name of PHASE_1_COMMAND_NAMES) {
+      expect(editorCommandJsonSchemas[name]).toBeTruthy()
+      const result = validateEditorCommand({ name, params: fixtures[name] })
+      expect(result.ok, `${name} fixture should validate: ${JSON.stringify(result)}`).toBe(true)
+    }
+  })
+
+  it('rejects an unknown command name', () => {
+    const result = validateEditorCommand({ name: 'generate_music', params: {} })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.code).toBe('unknown_command')
+      expect(result.message).toContain('generate_music')
+    }
+    const applied = applyEditorCommand(base(), { name: 'generate_music', params: {} }, ctx)
+    expect(applied.ok).toBe(false)
+    if (!applied.ok) {
+      expect(applied.code).toBe('unknown_command')
+    }
+  })
+
+  it('parity: trim — registry apply equals the manual setTrim clamp path', () => {
+    const start = base()
+    const trim = { in: 1500, out: 7200 }
+    const media = { minMs: bounds.trimMinMs!, maxMs: bounds.trimMaxMs! }
+    const manual = {
+      ...start,
+      trim: clampTrimToExtendedBounds(bounds.clipStartMs, bounds.clipEndMs, trim, media),
+    }
+    const via = applyEditorCommand(start, { name: 'trim', params: { inMs: 1500, outMs: 7200 } }, ctx)
+    expect(via.ok).toBe(true)
+    if (!via.ok) return
+    expect(serializeEditorState(via.edits)).toBe(serializeEditorState(manual))
+    expect(serializeEditorState(via.edits)).toBe(canonicalEditsJson(manual))
+    expect(serializeEditorState(invertEditorCommand(via))).toBe(serializeEditorState(start))
+  })
+
+  it('parity: split and delete_range — registry apply equals splitAt / deleteRange', () => {
+    const start = base()
+    const manualSplit = splitAt(ctxOf(start), [{ lane: 'video', id: '' }], 4000)
+    const viaSplit = applyEditorCommand(start, { name: 'split', params: { atMs: 4000 } }, ctx)
+    expect(manualSplit).toBeTruthy()
+    expect(viaSplit.ok).toBe(true)
+    if (!viaSplit.ok || !manualSplit) return
+    expect(serializeEditorState(viaSplit.edits)).toBe(serializeEditorState(manualSplit))
+
+    const cutStart = base({ cutRanges: [] })
+    const manualDel = deleteRange(ctxOf(cutStart), [2000, 3500])
+    const viaDel = applyEditorCommand(cutStart, { name: 'delete_range', params: { startMs: 2000, endMs: 3500 } }, ctx)
+    expect(manualDel).toBeTruthy()
+    expect(viaDel.ok).toBe(true)
+    if (!viaDel.ok || !manualDel) return
+    expect(serializeEditorState(viaDel.edits)).toBe(serializeEditorState(manualDel))
+    expect(viaDel.destructive).toBe(true)
+  })
+
+  it('parity: apply_cleanup and restore_cut — registry equals the exported cleanup helpers', () => {
+    const start = base()
+    const proposals = [{ id: 'p1', kind: 'filler' as const, range: [1000, 1400] as [number, number], label: 'um' }]
+    const manual = applyProposalsToEdits(start, proposals, [])
+    const via = applyEditorCommand(start, { name: 'apply_cleanup', params: { proposals } }, ctx)
+    expect(via.ok).toBe(true)
+    if (!via.ok) return
+    expect(serializeEditorState(via.edits)).toBe(serializeEditorState(manual))
+
+    const cuts = via.edits
+    const range: [number, number] = [1000, 1400]
+    const manualRestore = {
+      ...cuts,
+      cutRanges: subtractRangeFromCuts(cuts.cutRanges, range),
+      cutCleanupKinds: pruneCutCleanupKinds(cuts.cutCleanupKinds, subtractRangeFromCuts(cuts.cutRanges, range)),
+      cutQualityMeta: pruneCutQualityMeta(cuts.cutQualityMeta, subtractRangeFromCuts(cuts.cutRanges, range)),
+    }
+    const viaRestore = applyEditorCommand(cuts, { name: 'restore_cut', params: { startMs: 1000, endMs: 1400 } }, ctx)
+    expect(viaRestore.ok).toBe(true)
+    if (!viaRestore.ok) return
+    expect(serializeEditorState(viaRestore.edits)).toBe(serializeEditorState(manualRestore))
+  })
+
+  it('parity: set_captions, set_layout, apply_brand, reorder_segment, add_or_edit_text', () => {
+    const start = base()
+    const capPatch = { enabled: false, presetId: 'clean_white', wordsPerLine: 3 }
+    const manualCap = { ...start, captions: { ...start.captions, ...capPatch } }
+    const viaCap = applyEditorCommand(start, { name: 'set_captions', params: capPatch }, ctx)
+    expect(viaCap.ok).toBe(true)
+    if (!viaCap.ok) return
+    expect(serializeEditorState(viaCap.edits)).toBe(serializeEditorState(manualCap))
+
+    const viaLayout = applyEditorCommand(start, { name: 'set_layout', params: { mode: 'fit_blur' } }, ctx)
+    expect(viaLayout.ok).toBe(true)
+    if (!viaLayout.ok) return
+    expect(viaLayout.edits.layout.mode).toBe('fit_blur')
+    expect(viaLayout.edits.layout.userPicked).toBe(true)
+
+    const brand = { id: 'brand_t2', settings: { defaultLayoutMode: 'facecam_stack' as const } }
+    const manualBrand = applyBrandTemplateToEdits(start, brand)
+    const viaBrand = applyEditorCommand(start, { name: 'apply_brand', params: brand }, ctx)
+    expect(viaBrand.ok).toBe(true)
+    if (!viaBrand.ok) return
+    expect(serializeEditorState(viaBrand.edits)).toBe(serializeEditorState(manualBrand))
+    expect(viaBrand.bulk).toBe(true)
+
+    const splitEdits = base({ videoSplits: [3000, 6000] })
+    const manualMove = moveVideoSegment(ctxOf(splitEdits), 'seg:0', null)
+    const viaMove = applyEditorCommand(
+      splitEdits,
+      { name: 'reorder_segment', params: { segId: 'seg:0', beforeId: null } },
+      ctx,
+    )
+    expect(manualMove).toBeTruthy()
+    expect(viaMove.ok).toBe(true)
+    if (!viaMove.ok || !manualMove) return
+    expect(serializeEditorState(viaMove.edits)).toBe(serializeEditorState(manualMove))
+
+    const viaText = applyEditorCommand(
+      start,
+      {
+        name: 'add_or_edit_text',
+        params: { id: 'txt_fixed', text: 'Hello there', kind: 'title_card', startMs: 0, durationMs: 2500 },
+      },
+      ctx,
+    )
+    expect(viaText.ok).toBe(true)
+    if (!viaText.ok) return
+    expect(viaText.edits.textItems?.[0]?.id).toBe('txt_fixed')
+    expect(viaText.edits.textItems?.[0]?.text).toBe('Hello there')
+    const edited = applyEditorCommand(
+      viaText.edits,
+      { name: 'add_or_edit_text', params: { id: 'txt_fixed', text: 'Updated' } },
+      ctx,
+    )
+    expect(edited.ok).toBe(true)
+    if (!edited.ok) return
+    expect(edited.edits.textItems?.[0]?.text).toBe('Updated')
+    expect(serializeEditorState(invertEditorCommand(edited))).toBe(serializeEditorState(viaText.edits))
   })
 })
