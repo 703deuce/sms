@@ -498,7 +498,11 @@ export function TextSceneEditorShell(props: Props) {
           <Button variant="ghost" size="icon" disabled={!canUndo} aria-label="Undo" onClick={() => { undo(); console.info('[editor:text] undo', { projectId, clipId }) }}><Undo2 className="size-4" /></Button>
           <Button variant="ghost" size="icon" disabled={!canRedo} aria-label="Redo" onClick={() => { redo(); console.info('[editor:text] redo', { projectId, clipId }) }}><Redo2 className="size-4" /></Button>
           <Button size="sm" variant={chatOpen ? 'secondary' : 'outline'} aria-expanded={chatOpen} aria-controls="editor-chat-mode" onClick={() => void openChat()}><MessageSquare className="mr-1 size-4" />Chat / Producer</Button>
-          <Button size="sm" variant="outline" onClick={() => { setExportOpen(true); console.info('[editor:text] export-opened', { projectId, clipId }) }}><Download className="mr-1 size-4" />Export</Button>
+          <Button size="sm" variant="outline" onClick={() => {
+            setExportOpen(true)
+            console.info('[editor:text] export-opened', { projectId, clipId })
+            if (chatOpen) console.info('[editor:chat-mode] export-opened', { projectId, clipId })
+          }}><Download className="mr-1 size-4" />Export</Button>
           <Button size="sm" variant="outline" onClick={() => void openStoryBlocks()}>Story blocks</Button>
           <Button size="sm" variant="outline" onClick={() => void openTemplates()}><Palette className="mr-1 size-4" />Templates</Button>
           <Button size="sm" variant="outline" onClick={() => void openGenerateMode()}>Change this shot</Button>
@@ -762,6 +766,7 @@ export function TextSceneEditorShell(props: Props) {
             <div id="editor-chat-mode" role="dialog" aria-modal={chatOpen ? true : undefined} aria-label="Edit with AI" className={chatOpen ? 'fixed inset-y-0 right-0 z-50 w-[min(420px,100vw)] shadow-xl 2xl:static 2xl:z-auto 2xl:w-[360px] 2xl:shrink-0 2xl:shadow-none' : 'hidden'}>
               <EditorChatRail
                 open={chatOpen} clipId={clipId} projectId={projectId} bounds={bounds} edits={edits} saveState={saveState} scope={chatScope} canUndo={canUndo}
+                fullVideo={props.fullVideo} playheadSourceMs={playhead} projectMedia={projectMedia}
                 onClose={() => { setChatOpen(false); setChatAudition(null) }}
                 onUseSelection={useChatSelection}
                 onUseScene={() => {
@@ -772,7 +777,11 @@ export function TextSceneEditorShell(props: Props) {
                 }}
                 onClearScope={() => { setChatScope({ kind: 'whole' }); console.info('[editor:chat-mode] whole-context', { projectId, clipId }) }}
                 onSeek={seekSource} onAudition={setChatAudition}
-                onBeforeSend={async () => { await flushSave() }}
+                onBeforeSend={async () => {
+                  console.info('[editor:chat-mode] save-before-prompt', { projectId, clipId })
+                  await flushSave()
+                  console.info('[editor:chat-mode] save-before-prompt-complete', { projectId, clipId })
+                }}
                 onAccept={acceptChatProposal} onUndo={undo} onRetrySave={flushSave}
               />
             </div>

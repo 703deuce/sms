@@ -17,18 +17,23 @@ export function HighlightsListPanel({
   onMakeAll,
   jobRunning,
   onClose,
+  readOnly = false,
+  defaultOpen = false,
 }: {
   picks: HighlightPick[]
   ranges: HighlightRange[]
   selectedClipId: string | null
   onSelect: (clipId: string) => void
-  onMakeClip: (pick: HighlightPick, range: HighlightRange) => void
-  onMakeAll: () => void
+  onMakeClip?: (pick: HighlightPick, range: HighlightRange) => void
+  onMakeAll?: () => void
   jobRunning?: boolean
   onClose?: () => void
+  /** Find-results rail: seek/review only, never auto-create clips. */
+  readOnly?: boolean
+  defaultOpen?: boolean
 }) {
   const [sort, setSort] = useState<'score' | 'time'>('score')
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   const byId = useMemo(() => new Map(ranges.map((r) => [r.pick.clipId, r])), [ranges])
 
   const rows = useMemo(() => {
@@ -103,24 +108,26 @@ export function HighlightsListPanel({
                     {reasonTagLabel(pick.reasonTag)}
                   </span>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="shrink-0"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onMakeClip(pick, range)
-                  }}
-                >
-                  Make clip
-                </Button>
+                {!readOnly && onMakeClip ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onMakeClip(pick, range)
+                    }}
+                  >
+                    Make clip
+                  </Button>
+                ) : null}
               </button>
             </li>
           )
         })}
       </ul>
-      {open && rows.length ? (
+      {open && rows.length && !readOnly && onMakeAll ? (
         <Button type="button" size="sm" className="w-full" onClick={() => onMakeAll()} data-testid="highlights-list-make-all">
           Make all
         </Button>

@@ -21,14 +21,24 @@ export function SpeechSearchSection({
   onSeekSource,
   onEdits,
   onAddToSelects,
+  readOnly = false,
+  mainOnly = false,
+  heading = 'Search what was said',
+  placeholder = 'Phrase across this project…',
 }: {
   projectId: string
   edits: ClipEditsV2
   media: ProjectMediaApi
   playheadSourceMs: number
   onSeekSource: (sourceMs: number) => void
-  onEdits: (next: ClipEditsV2) => void
+  onEdits?: (next: ClipEditsV2) => void
   onAddToSelects?: (hit: SpeechSearchHit) => void | Promise<void>
+  /** Chat Find intake: show seekable results without insert/edit actions. */
+  readOnly?: boolean
+  /** Restrict results to the main recording so every visible result can seek the host preview. */
+  mainOnly?: boolean
+  heading?: string
+  placeholder?: string
 }) {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -71,6 +81,8 @@ export function SpeechSearchSection({
     }
   }, [debounced, projectId])
 
+  const visibleHits = useMemo(() => mainOnly ? hits.filter((hit) => hit.kind === 'main') : hits, [hits, mainOnly])
+
   const untranscribedItems = useMemo(
     () =>
       media.items.filter((item) => {
@@ -92,6 +104,7 @@ export function SpeechSearchSection({
   }
 
   const insertHit = (hit: SpeechSearchHit) => {
+    if (readOnly || !onEdits) return
     const item = resolveMediaItem(hit)
     if (!item) return
     const spanMs = Math.max(500, Math.round((hit.endS - hit.startS) * 1000 + 1000))
@@ -110,37 +123,37 @@ export function SpeechSearchSection({
   return (
     <section className="space-y-2 rounded-md border p-2" data-testid="speech-search-section">
       <div className="flex items-center gap-2 text-xs font-semibold">
-        <span>Search what was said</span>
+        <span>{heading}</span>
         <FreeToolBadge />
       </div>
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Phrase across this project…"
+        placeholder={placeholder}
         data-testid="speech-search-input"
         className="h-8 text-xs"
       />
       {loading && debounced.length >= 2 ? (
         <p className="text-[11px] text-muted-foreground">Searching…</p>
       ) : null}
-      {!loading && debounced.length >= 2 && hits.length === 0 ? (
+      {!loading && debounced.length >= 2 && visibleHits.length === 0 ? (
         <p className="text-[11px] text-muted-foreground" data-testid="speech-search-no-matches">
           No matches
         </p>
       ) : null}
-      {untranscribed > 0 ? (
+      {!mainOnly && untranscribed > 0 ? (
         <p className="text-[11px] text-muted-foreground">
           {untranscribed} media not searchable yet
         </p>
       ) : null}
-      {untranscribedItems.slice(0, 3).map((item) => (
+      {!mainOnly ? untranscribedItems.slice(0, 3).map((item) => (
         <div key={item.id} className="flex items-center gap-1">
           <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{item.label}</span>
           <MediaTranscribeControl media={media} item={item} />
         </div>
-      ))}
+      )) : null}
       <ul className="max-h-48 space-y-1 overflow-y-auto">
-        {hits.map((hit, i) => (
+        {visibleHits.map((hit, i) => (
           <li
             key={`${hit.sourceId}-${hit.startS}-${i}`}
             className="flex items-start justify-between gap-2 rounded border border-border/60 px-2 py-1 text-[11px]"
@@ -176,11 +189,11 @@ export function SpeechSearchSection({
                     Go
                   </Button>
                 ) : null
-              ) : (
+              ) : !readOnly ? (
                 <Button type="button" size="xs" variant="outline" onClick={() => insertHit(hit)}>
                   Insert at playhead
                 </Button>
-              )}
+              ) : null}
             </div>
           </li>
         ))}

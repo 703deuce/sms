@@ -106,7 +106,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           }
         })
 
-        if(!dryRun)send('plan', { tools: enrichedTools, reply: llm.reply })
+        if (dryRun) {
+          console.info('[editor:chat-mode] dry-run-plan', { clipId, toolCount: enrichedTools.length })
+          send('plan', { tools: enrichedTools, reply: llm.reply })
+        } else {
+          send('plan', { tools: enrichedTools, reply: llm.reply })
+        }
 
         if (planOnly && !dryRun) {
           send('message', { role: 'assistant',

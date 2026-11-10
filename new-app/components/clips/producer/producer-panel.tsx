@@ -26,6 +26,7 @@ export function ProducerPanel({
   onPendingPaidChange,
   onBeforeSend,
   sendDisabledReason,
+  includeDryRunPlan = false,
 }: {
   clipId: string
   bounds: ClipBounds
@@ -45,6 +46,8 @@ export function ProducerPanel({
   /** Optional safety gate for chat mode, before a billable Producer request. */
   onBeforeSend?: (promptLength: number) => Promise<void>
   sendDisabledReason?: string
+  /** Chat rail only: expose the server's non-mutating dry-run plan event. */
+  includeDryRunPlan?: boolean
 }) {
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
@@ -118,7 +121,7 @@ export function ProducerPanel({
             })
           }
           if (event === 'plan' && Array.isArray(payload.tools) && payload.tools.length) {
-            onPlan?.(payload.tools)
+            if (!dryRun || includeDryRunPlan) onPlan?.(payload.tools)
           }
           if (event === 'tools') {
             lastSummaries = payload.summaries || []

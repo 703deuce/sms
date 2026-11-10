@@ -29,11 +29,14 @@ export function FindClipsInVideoButton({
   durationMs,
   settings,
   onStarted,
+  highlightsOnly = false,
 }: {
   projectId: string
   durationMs: number
   settings?: unknown
   onStarted?: () => void
+  /** Chat intake only: hide the legacy cut-into-project branch. */
+  highlightsOnly?: boolean
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -96,7 +99,7 @@ export function FindClipsInVideoButton({
           type="button"
           variant="outline"
           size="sm"
-          className="h-8 gap-1 rounded-r-none border-r-0"
+          className={highlightsOnly ? 'h-8 gap-1' : 'h-8 gap-1 rounded-r-none border-r-0'}
           onClick={() => void ask('highlights')}
           disabled={busy}
           data-testid="editor-find-clips-in-video"
@@ -105,7 +108,7 @@ export function FindClipsInVideoButton({
           {busy && !confirm ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Sparkles className="size-3.5" aria-hidden />}
           Find clips
         </Button>
-        <DropdownMenu>
+        {!highlightsOnly ? <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               type="button"
@@ -127,7 +130,7 @@ export function FindClipsInVideoButton({
               Cut into a new clips project
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu> : null}
       </div>
       {confirm && typeof document !== 'undefined' ? createPortal(
         <div
