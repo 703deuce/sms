@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { Clapperboard, ImageIcon, Megaphone, Sparkles } from 'lucide-react'
+import { ArrowRight, Clapperboard, ImageIcon, Megaphone, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createAdStudioClient, AdStudioHttpError, type AdStudioClient, type AdStudioConfig } from '../../lib/ad-studio/client'
 import { formatCredits, sanitizeAdStudioMessage, statusLabel } from '../../lib/ad-studio/format'
 import type { AdAspect, AdDuration, AdImageVariant, AdMode, AdProductInput, AdStudioRun } from '../../lib/ad-studio/types'
 import { DEFAULT_T2V_VOICE } from '../../lib/t2v/voice-defaults'
 import { cn } from '../../lib/utils'
+import { Page, PageHeader } from '../app/page-primitives'
 
 type Screen = 'home' | 'brief' | 'run' | 'history'
 type SelectableMode = Exclude<AdMode, 'image_ad_to_commercial'>
@@ -342,54 +343,71 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] min-h-[32rem] flex-col bg-background" data-testid="ad-studio-shell">
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <nav
-          aria-label="Ad Studio"
-          className="flex w-full shrink-0 flex-col gap-3 border-b border-border bg-card/60 px-3 py-4 md:w-56 md:border-r md:border-b-0"
-        >
-          <p className="px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Ad Studio</p>
-          <NavButton active={screen !== 'history' && mode === 'storyline'} onClick={() => openMode('storyline')} icon={Sparkles} label="Storyline" testId="ad-studio-nav-storyline" />
-          <NavButton active={screen !== 'history' && mode === 'image_to_ad'} onClick={() => openMode('image_to_ad')} icon={ImageIcon} label="Image to ad" testId="ad-studio-nav-image-to-ad" />
-          <NavButton active={screen === 'history'} onClick={() => { setScreen('history'); void refreshHistory().catch(showError) }} icon={Clapperboard} label="History" testId="ad-studio-nav-history" />
-        </nav>
+    <Page>
+      <div className="flex min-w-0 flex-col gap-6" data-testid="ad-studio-shell">
+        <PageHeader
+          icon={Megaphone}
+          iconTone="brand"
+          title="Ad Studio"
+          description="Turn a product brief or product image into a planned, reviewable ad, then finish the result in the existing editor."
+        />
 
-        <main className="min-w-0 flex-1 overflow-auto p-5" data-testid="ad-studio-main">
-          {error ? (
-            <p className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert" data-testid="ad-studio-error">
-              <span className="font-medium">{error.code}</span>: {error.message}
-            </p>
-          ) : null}
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
+          <nav
+            aria-label="Ad Studio"
+            className="flex min-w-0 flex-wrap gap-2 rounded-xl border border-border bg-card p-3 shadow-sm lg:sticky lg:top-6 lg:self-start lg:flex-col"
+          >
+            <p className="w-full px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Create</p>
+            <NavButton active={screen !== 'history' && mode === 'storyline'} onClick={() => openMode('storyline')} icon={Sparkles} label="Storyline" testId="ad-studio-nav-storyline" />
+            <NavButton active={screen !== 'history' && mode === 'image_to_ad'} onClick={() => openMode('image_to_ad')} icon={ImageIcon} label="Image to ad" testId="ad-studio-nav-image-to-ad" />
+            <NavButton active={screen === 'history'} onClick={() => { setScreen('history'); void refreshHistory().catch(showError) }} icon={Clapperboard} label="History" testId="ad-studio-nav-history" />
+          </nav>
 
-          {screen === 'home' ? <ModeHome onSelect={openMode} /> : null}
-          {screen === 'brief' ? (
-            <BriefForm
-              mode={mode}
-              input={input}
-              config={config}
-              productImage={productImage}
-              busy={busy}
-              onChange={setInput}
-              onProductImage={setProductImage}
-              onLogoImage={setLogoImage}
-              onSubmit={() => void submitBrief()}
-            />
-          ) : null}
-          {screen === 'run' && run ? (
-            <RunPanel
-              run={run}
-              busy={busy}
-              onConfirm={() => void confirmPlan()}
-              onReplan={() => void replan()}
-              onCancel={() => void cancelRun()}
-              onContinue={() => void continueRun()}
-              onCommercial={(variant) => void makeCommercial(variant)}
-            />
-          ) : null}
-          {screen === 'history' ? <HistoryPanel runs={history} busy={busy} onOpen={(id) => void openHistoryRun(id)} /> : null}
-        </main>
+          <main className="min-w-0" data-testid="ad-studio-main">
+            {error ? (
+              <p className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert" data-testid="ad-studio-error">
+                <span className="font-medium">{error.code}</span>: {error.message}
+              </p>
+            ) : null}
+
+            {screen === 'home' ? (
+              <ModeHome
+                onSelect={openMode}
+                runs={history}
+                busy={busy}
+                onOpen={(id) => void openHistoryRun(id)}
+                onViewHistory={() => { setScreen('history'); void refreshHistory().catch(showError) }}
+              />
+            ) : null}
+            {screen === 'brief' ? (
+              <BriefForm
+                mode={mode}
+                input={input}
+                config={config}
+                productImage={productImage}
+                busy={busy}
+                onChange={setInput}
+                onProductImage={setProductImage}
+                onLogoImage={setLogoImage}
+                onSubmit={() => void submitBrief()}
+              />
+            ) : null}
+            {screen === 'run' && run ? (
+              <RunPanel
+                run={run}
+                busy={busy}
+                onConfirm={() => void confirmPlan()}
+                onReplan={() => void replan()}
+                onCancel={() => void cancelRun()}
+                onContinue={() => void continueRun()}
+                onCommercial={(variant) => void makeCommercial(variant)}
+              />
+            ) : null}
+            {screen === 'history' ? <HistoryPanel runs={history} busy={busy} onOpen={(id) => void openHistoryRun(id)} /> : null}
+          </main>
+        </div>
       </div>
-    </div>
+    </Page>
   )
 }
 
@@ -412,7 +430,7 @@ function NavButton({
       data-testid={testId}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors',
+        'flex min-w-[9rem] flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors lg:min-w-0 lg:flex-none lg:justify-start',
         'focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
         active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
       )}
@@ -424,25 +442,107 @@ function NavButton({
   )
 }
 
-function ModeHome({ onSelect }: { onSelect: (mode: SelectableMode) => void }) {
+function ModeHome({
+  onSelect,
+  runs,
+  busy,
+  onOpen,
+  onViewHistory,
+}: {
+  onSelect: (mode: SelectableMode) => void
+  runs: AdStudioRun[]
+  busy: boolean
+  onOpen: (id: string) => void
+  onViewHistory: () => void
+}) {
+  const recent = runs.slice(0, 4)
+
   return (
-    <div data-testid="ad-studio-mode-home" className="mx-auto max-w-2xl">
-      <h1 className="text-xl font-semibold text-foreground">Ad Studio</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Build a short product ad. Agents choose the models; you review the plan before generation starts.
-      </p>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <button type="button" data-testid="ad-studio-mode-storyline" className="rounded-xl border border-border bg-card p-4 text-left hover:bg-muted/40" onClick={() => onSelect('storyline')}>
-          <Sparkles className="mb-3 size-5" aria-hidden />
-          <p className="text-sm font-medium">Storyline</p>
-          <p className="mt-1 text-xs text-muted-foreground">Hook, problem, solution, and CTA with stock plus generated shots.</p>
+    <div data-testid="ad-studio-mode-home" className="flex min-w-0 flex-col gap-5">
+      <section className="overflow-hidden rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <div className="max-w-3xl">
+          <p className="text-xs font-semibold tracking-wide text-primary uppercase">Product creative, end to end</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">From source material to an editable ad</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Start with a product brief or a real product image. Ad Studio builds the plan first, keeps generation behind explicit confirmation, and hands the finished result to the editors you already use.
+          </p>
+        </div>
+        <ol className="mt-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ad Studio workflow">
+          {['Brief', 'Review plan', 'Generate', 'Edit or export'].map((step, index) => (
+            <li key={step} className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-3">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{index + 1}</span>
+              <span className="text-sm font-medium">{step}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <button
+          type="button"
+          data-testid="ad-studio-mode-storyline"
+          className="group flex min-h-44 flex-col rounded-xl border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-px hover:border-foreground/20 hover:bg-muted/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          onClick={() => onSelect('storyline')}
+        >
+          <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
+            <Sparkles className="size-5" aria-hidden />
+          </span>
+          <p className="mt-5 text-base font-semibold">Storyline</p>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">Build a hook, problem, solution, and CTA from your brief, with stock and generated shots selected for the plan.</p>
+          <span className="mt-auto flex items-center gap-1 pt-5 text-sm font-medium text-primary">Start with a brief <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden /></span>
         </button>
-        <button type="button" data-testid="ad-studio-mode-image-to-ad" className="rounded-xl border border-border bg-card p-4 text-left hover:bg-muted/40" onClick={() => onSelect('image_to_ad')}>
-          <ImageIcon className="mb-3 size-5" aria-hidden />
-          <p className="text-sm font-medium">Image to ad</p>
-          <p className="mt-1 text-xs text-muted-foreground">Upload a real product image and turn it into a 15 or 30 second ad.</p>
+        <button
+          type="button"
+          data-testid="ad-studio-mode-image-to-ad"
+          className="group flex min-h-44 flex-col rounded-xl border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-px hover:border-foreground/20 hover:bg-muted/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          onClick={() => onSelect('image_to_ad')}
+        >
+          <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
+            <ImageIcon className="size-5" aria-hidden />
+          </span>
+          <p className="mt-5 text-base font-semibold">Image to ad</p>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">Upload a real product photo, generate three static ad directions, then carry the selected creative into a 15 or 30 second commercial.</p>
+          <span className="mt-auto flex items-center gap-1 pt-5 text-sm font-medium text-primary">Start with an image <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden /></span>
         </button>
       </div>
+
+      <section className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5" aria-labelledby="ad-studio-recent-heading">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="ad-studio-recent-heading" className="text-sm font-semibold">Recent work</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Real Ad Studio runs from this workspace.</p>
+          </div>
+          <button type="button" className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground" onClick={onViewHistory}>
+            View history
+          </button>
+        </div>
+        {recent.length === 0 ? (
+          <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-8 text-center">
+            <Clapperboard className="mx-auto size-5 text-muted-foreground" aria-hidden />
+            <p className="mt-2 text-sm font-medium">No recent runs yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">Your first planned or generated ad will appear here.</p>
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {recent.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                data-testid="ad-studio-recent-run"
+                disabled={busy}
+                className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border bg-background/50 px-3 py-3 text-left transition-colors hover:bg-muted/40 disabled:opacity-50"
+                onClick={() => onOpen(item.id)}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{item.input.name || 'Untitled ad'}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{item.mode === 'image_to_ad' ? 'Image to ad' : item.mode === 'image_ad_to_commercial' ? 'Image commercial' : 'Storyline'} · {statusLabel(item.status)}</span>
+                </span>
+                <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
@@ -477,13 +577,16 @@ function BriefForm({
   return (
     <form
       data-testid="ad-studio-brief"
-      className="mx-auto flex max-w-2xl flex-col gap-4"
+      className="mx-auto flex w-full max-w-3xl flex-col gap-5 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6"
       onSubmit={(event) => {
         event.preventDefault()
         if (canSubmit) onSubmit()
       }}
     >
-      <h1 className="text-xl font-semibold">{mode === 'storyline' ? 'Storyline brief' : 'Image-to-ad brief'}</h1>
+      <div>
+        <h1 className="text-xl font-semibold">{mode === 'storyline' ? 'Storyline brief' : 'Image-to-ad brief'}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Add the source details for this ad. You will review the generated plan before any confirmed generation starts.</p>
+      </div>
 
       <label className="text-sm font-medium">
         Product name
@@ -543,7 +646,7 @@ function BriefForm({
         </label>
       </div>
 
-      <div className="rounded-lg border border-border p-3">
+      <div className="rounded-lg border border-border bg-background/50 p-4">
         <label className="flex items-center gap-2 text-sm font-medium">
           <input
             data-testid="ad-studio-voiceover-enabled"
@@ -561,7 +664,7 @@ function BriefForm({
       </div>
 
       <p className="text-sm text-muted-foreground" data-testid="ad-studio-credit-estimate">Credits are shown on the generated plan.</p>
-      <button type="submit" data-testid="ad-studio-plan-cta" disabled={!canSubmit} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
+      <button type="submit" data-testid="ad-studio-plan-cta" disabled={!canSubmit} className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
         {busy ? 'Planning…' : 'Get plan'}
       </button>
     </form>
@@ -594,7 +697,7 @@ function RunPanel({
 
   if (run.status === 'failed') {
     return (
-      <div data-testid="ad-studio-failed" className="mx-auto max-w-3xl">
+      <div data-testid="ad-studio-failed" className="mx-auto w-full max-w-3xl rounded-xl border border-destructive/30 bg-card p-4 shadow-sm sm:p-6">
         <h1 className="text-xl font-semibold">Generation failed</h1>
         <p className="mt-2 text-sm text-destructive">{run.error?.code ?? 'FAILED'}: {sanitizeAdStudioMessage(run.error?.message ?? 'Ad Studio could not complete this run.')}</p>
         <ImageAdVariants variants={imageAds} busy={busy} onCommercial={onCommercial} />
@@ -609,7 +712,7 @@ function RunPanel({
 
   if (run.status === 'cancelled') {
     return (
-      <div data-testid="ad-studio-cancelled" className="mx-auto max-w-xl">
+      <div data-testid="ad-studio-cancelled" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <h1 className="text-xl font-semibold">Run cancelled</h1>
         <p className="mt-1 text-sm text-muted-foreground">Start a new Storyline or Image to ad run from the left.</p>
       </div>
@@ -618,7 +721,7 @@ function RunPanel({
 
   if (run.status === 'done') {
     return (
-      <div data-testid="ad-studio-done" className="mx-auto max-w-3xl">
+      <div data-testid="ad-studio-done" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <h1 className="text-xl font-semibold">Ad ready</h1>
         <p className="mt-1 text-sm text-muted-foreground">{run.input.name} · {credits}</p>
         <div className="mt-4 rounded-xl border border-border bg-card p-4" data-testid="ad-studio-video-result">
@@ -645,7 +748,7 @@ function RunPanel({
 
   if (run.status === 'confirming' || run.status === 'generating' || run.status === 'stitching') {
     return (
-      <div data-testid="ad-studio-progress" className="mx-auto max-w-3xl">
+      <div data-testid="ad-studio-progress" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <h1 className="text-xl font-semibold">{statusLabel(run.status)}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{credits}</p>
         <p className="mt-3 text-sm text-muted-foreground">
@@ -660,20 +763,20 @@ function RunPanel({
   }
 
   return (
-    <div data-testid="ad-studio-plan" className="mx-auto max-w-3xl">
+    <div data-testid="ad-studio-plan" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
       <h1 className="text-xl font-semibold">{run.status === 'planning' ? 'Planning…' : run.mode === 'image_ad_to_commercial' ? 'Commercial plan' : 'Plan'}</h1>
       <p className="mt-1 text-sm text-muted-foreground" data-testid="ad-studio-plan-credits">{credits}</p>
       {plan ? (
         <>
-          <dl className="mt-4 grid gap-2 text-sm" data-testid="ad-studio-script">
-            <div><dt className="text-muted-foreground">Hook</dt><dd>{plan.script.hook}</dd></div>
-            <div><dt className="text-muted-foreground">Problem</dt><dd>{plan.script.problem}</dd></div>
-            <div><dt className="text-muted-foreground">Solution</dt><dd>{plan.script.solution}</dd></div>
-            <div><dt className="text-muted-foreground">CTA</dt><dd>{plan.script.cta}</dd></div>
+          <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2" data-testid="ad-studio-script">
+            <div className="rounded-lg border border-border bg-background/50 p-3"><dt className="text-xs font-medium text-muted-foreground">Hook</dt><dd className="mt-1">{plan.script.hook}</dd></div>
+            <div className="rounded-lg border border-border bg-background/50 p-3"><dt className="text-xs font-medium text-muted-foreground">Problem</dt><dd className="mt-1">{plan.script.problem}</dd></div>
+            <div className="rounded-lg border border-border bg-background/50 p-3"><dt className="text-xs font-medium text-muted-foreground">Solution</dt><dd className="mt-1">{plan.script.solution}</dd></div>
+            <div className="rounded-lg border border-border bg-background/50 p-3"><dt className="text-xs font-medium text-muted-foreground">CTA</dt><dd className="mt-1">{plan.script.cta}</dd></div>
           </dl>
           <ul className="mt-4 space-y-2" data-testid="ad-studio-scenes">
             {plan.scenes.map((scene) => (
-              <li key={scene.index} data-testid={`ad-studio-scene-${scene.index}`} data-source={scene.source} className="rounded-md border border-border px-3 py-2 text-sm">
+              <li key={scene.index} data-testid={`ad-studio-scene-${scene.index}`} data-source={scene.source} className="rounded-lg border border-border bg-background/50 px-3 py-3 text-sm">
                 <p className="font-medium capitalize">{scene.role} · {scene.source} · {scene.durationSec}s</p>
                 <p className="text-muted-foreground">{scene.reason}</p>
               </li>
@@ -710,7 +813,7 @@ function ImageAdVariants({
       <h2 id="ad-image-variants-heading" className="text-sm font-semibold">Image ad variants</h2>
       <div className="mt-3 grid gap-3 md:grid-cols-3">
         {variants.map((variant) => (
-          <article key={variant.id} className="overflow-hidden rounded-xl border border-border bg-card" data-testid="ad-studio-image-variant">
+          <article key={variant.id} className="overflow-hidden rounded-xl border border-border bg-background/50 shadow-sm" data-testid="ad-studio-image-variant">
             {variant.downloadUrl ? (
               <img src={variant.downloadUrl} alt={`Generated image ad ${variant.index + 1}`} className="aspect-square w-full object-cover" />
             ) : (
@@ -721,8 +824,13 @@ function ImageAdVariants({
             <div className="p-3">
               <p className="text-sm font-medium">{variant.headline}</p>
               <p className="mt-1 text-xs text-muted-foreground">{variant.cta}</p>
+              {variant.downloadUrl ? (
+                <a href={variant.downloadUrl} download data-testid="ad-studio-download-image" className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted">
+                  Download image
+                </a>
+              ) : null}
               {variant.status === 'ready' ? (
-                <button type="button" data-testid="ad-studio-make-commercial" disabled={busy} className="mt-3 w-full rounded-md border border-border px-3 py-2 text-xs font-medium disabled:opacity-50" onClick={() => onCommercial(variant)}>
+                <button type="button" data-testid="ad-studio-make-commercial" disabled={busy} className="mt-2 w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted disabled:opacity-50" onClick={() => onCommercial(variant)}>
                   Make commercial from image ad
                 </button>
               ) : null}
@@ -736,11 +844,15 @@ function ImageAdVariants({
 
 function HistoryPanel({ runs, busy, onOpen }: { runs: AdStudioRun[]; busy: boolean; onOpen: (id: string) => void }) {
   return (
-    <div data-testid="ad-studio-history" className="mx-auto max-w-2xl">
+    <div data-testid="ad-studio-history" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
       <h1 className="text-xl font-semibold">History</h1>
       <p className="mt-1 text-sm text-muted-foreground">Recent Ad Studio runs from the live backend.</p>
       {runs.length === 0 ? (
-        <p className="mt-4 text-sm text-muted-foreground">No Ad Studio runs yet.</p>
+        <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-8 text-center">
+          <Clapperboard className="mx-auto size-5 text-muted-foreground" aria-hidden />
+          <p className="mt-2 text-sm font-medium">No Ad Studio runs yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">Create a Storyline or Image to ad run and it will appear here.</p>
+        </div>
       ) : (
         <ul className="mt-4 divide-y divide-border rounded-lg border border-border">
           {runs.map((item) => (
