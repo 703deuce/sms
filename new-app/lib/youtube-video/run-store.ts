@@ -20,6 +20,8 @@ export type YoutubeVideoRunRecord = {
   requestHash: string
   sources: YoutubeVideoSource[]
   ingested: YoutubeVideoIngestedSource[]
+  /** Resumable, non-sensitive per-window analyses and approved cuts. */
+  analysisState?: import('@/lib/youtube-video/shared-pipeline').YoutubeSharedCheckpoint | null
   options: YoutubeVideoOption[] | null
   chosenOptionId: string | null
   creditsEstimated: number | null
