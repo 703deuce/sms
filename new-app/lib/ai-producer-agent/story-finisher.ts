@@ -398,7 +398,31 @@ export async function runStoryFinisher(
   footage: EditorialSelection[],
   mode: 'normal' | 'rescue' = 'normal',
   preferredEdits?: FootagePreferredEdit[],
+  options: { youtubeLongForm?: boolean } = {},
 ): Promise<StoryFinisherDecision> {
+  // The existing Finisher is a short-form compression editor. An explicitly
+  // opted-in YouTube story keeps every curated passage and only polishes word
+  // boundaries; no 90-second instructions, duration gate or invented payoff.
+  if (options.youtubeLongForm) {
+    if (!footage.length) throw new Error('youtube_finisher_no_passages')
+    const polished = footage.some((cut) => (ctx.cache.words ?? []).some((word) =>
+      word.e * 1000 > cut.startMs && word.s * 1000 < cut.endMs))
+      ? await runStoryBoundaryFinisher(ctx, budget, outline, footage)
+      : footage
+    const last = polished[polished.length - 1]!
+    const spoken = (ctx.cache.words ?? []).filter((word) =>
+      word.e * 1000 > last.startMs && word.s * 1000 < last.endMs)
+    const payoffWords = spoken.slice(-8)
+    const quote = payoffWords.map((word) => word.w).join(' ')
+    await logAiProducerStep({runId:ctx.runId,stepIndex:budget.steps,phase:'plan',
+      kind:'validate',tool:'youtube_long_form_finisher',
+      resultSummary:`retained ${polished.length} curated passages without a duration target`})
+    return { selections: polished, payoff: {
+      startMs: payoffWords.length ? Math.round(payoffWords[0]!.s * 1000) : last.startMs,
+      endMs: payoffWords.length ? Math.round(payoffWords[payoffWords.length - 1]!.e * 1000) : last.endMs,
+      quote,
+    }, editorialReason: 'YouTube long-form: preserved source-grounded story without short-form compression' }
+  }
   const words = ctx.cache.words ?? []
   const source = ctx.sources[0]
   if (!source?.rangeMs || !words.length || !footage.length) throw new Error('finisher_source_unavailable')
