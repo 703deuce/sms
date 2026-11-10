@@ -154,7 +154,11 @@ jobs:
             tests/app-route-href-grep.test.ts \
             tests/ui/sidebar-nav-model.test.ts \
             tests/project-editor-link.test.ts \
-            tests/t2v-project-link.test.ts
+            tests/t2v-project-link.test.ts \
+            tests/clip-needs-review.test.ts \
+            tests/needs-review-badge.test.tsx \
+            tests/needs-review-share-warning.test.tsx
+
   captions-worker-regression:
     runs-on: ubuntu-latest
     steps:

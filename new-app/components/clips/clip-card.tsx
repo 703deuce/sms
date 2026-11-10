@@ -27,6 +27,7 @@ import { clipReasonTag } from '@/lib/clips/reason-tag'
 import { clipCardAspectClass } from '@/lib/clips/card-aspect'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { ClipPostCopy } from '@/components/clips/clip-post-copy'
+import { NeedsReviewBadge, NeedsReviewReasonList } from './needs-review-badge'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { CLIP_PREVIEW_EXPORT_ASPECT } from '@/lib/clips/export-preview-reuse'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
@@ -330,6 +331,7 @@ export function ClipCard({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <NeedsReviewBadge aiMeta={clip.aiMeta} />
           {fallbackLabel ? (
             <span
               className="rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-200"
@@ -367,6 +369,7 @@ export function ClipCard({
         {why || clip.reason ? (
           <p className="line-clamp-2 text-xs text-muted-foreground">{why || clip.reason}</p>
         ) : null}
+        <NeedsReviewReasonList aiMeta={clip.aiMeta} />
         {!isStreamer ? <ClipPostCopy clipId={clip.id} aiMeta={clip.aiMeta} /> : null}
         <ReasonChips
           score={isStreamer ? clip.score : undefined}
