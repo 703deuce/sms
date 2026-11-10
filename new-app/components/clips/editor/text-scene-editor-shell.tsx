@@ -157,6 +157,7 @@ export function TextSceneEditorShell(props: Props) {
       toast.error('Save edits before switching editors')
       return
     }
+    console.info('[editor:compact-mode] open-from-text-editor', { projectId, clipId, target: props.clipperStudio ? 'studio' : 'edit' })
     window.location.assign(props.clipperStudio ? routes.studio(projectId, clipId) : routes.edit(projectId, clipId))
   }
   const createClip = useCallback(async (start: number, end: number, clipTitle?: string) => {

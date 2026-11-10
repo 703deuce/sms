@@ -375,9 +375,13 @@ export function EditorShell({
   // FIX2 R7: read localStorage after mount (no SSR/hydration mismatch)
   const [timelineOpen, setTimelineOpen] = useState(false)
   useEffect(() => {
+    if (!compact || fullVideo || clipperStudio) return
+    console.info('[editor:compact-mode] route-entry', { projectId, clipId })
+  }, [compact, fullVideo, clipperStudio, projectId, clipId])
+  useEffect(() => {
     if (compact) {
       const store = typeof window === 'undefined' ? null : window.localStorage
-      setTimelineOpen(unifiedWorkspaceActive ? store?.getItem('clipEditor.timelineOpen') !== '0' : readTimelineOpen(store))
+      setTimelineOpen(readTimelineOpen(store))
     }
   }, [compact, unifiedWorkspaceActive])
   const toggleTimeline = useCallback(() => {
@@ -3612,6 +3616,7 @@ export function EditorShell({
           layoutSlot={null}
           versionsSlot={
             <>
+              {compact && !fullVideo && !clipperStudio ? <Badge variant="outline" className="h-6 text-[11px] font-normal" data-testid="compact-editor-mode-label">Clip editor</Badge> : null}
               <Button type="button" size="sm" variant="outline" render={<Link href={routes.text(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} />} onClick={() => console.info('[editor:text] compact-entry', { projectId, clipId })}>Text editor</Button>
               {fullVideo ? (
               <FindClipsInVideoButton
