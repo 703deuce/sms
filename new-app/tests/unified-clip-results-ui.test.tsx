@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // @ts-expect-error root tsc does not resolve the new-app vitest install
 import { afterEach, describe, expect, it, vi } from 'vitest'
+// @ts-expect-error root tsc does not resolve the new-app testing-library install
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MOCK_UNIFIED_CLIPS } from '../lib/clips/unified-clip-results'
 import { UnifiedClipResults } from '../components/clips/unified-clip-results'
@@ -36,7 +37,7 @@ describe('unified clip results UI', () => {
     expect(screen.getByText('The hook that sold the room')).toBeTruthy()
     expect(screen.getByText('Unbroken laugh from the couch')).toBeTruthy()
     expect(screen.getAllByTestId('unified-clip-type-badge').length).toBe(4)
-    expect(screen.getAllByTestId('unified-clip-type-badge').map((el) => el.getAttribute('data-kind')).sort()).toEqual(
+    expect(screen.getAllByTestId('unified-clip-type-badge').map((el: HTMLElement) => el.getAttribute('data-kind')).sort()).toEqual(
       ['continuous', 'continuous', 'story', 'story'],
     )
     expect(screen.getByText(/48s clip|0:48 clip|48\.2/)).toBeTruthy()
@@ -47,7 +48,7 @@ describe('unified clip results UI', () => {
     fireEvent.click(screen.getByTestId('unified-filter-continuous'))
     expect(screen.getByText('Unbroken laugh from the couch')).toBeTruthy()
     expect(screen.queryByText('The hook that sold the room')).toBeNull()
-    expect(screen.getAllByTestId('unified-clip-type-badge').every((el) => el.getAttribute('data-kind') === 'continuous')).toBe(true)
+    expect(screen.getAllByTestId('unified-clip-type-badge').every((el: HTMLElement) => el.getAttribute('data-kind') === 'continuous')).toBe(true)
   })
 
   it('shows designed progress, empty, and error states', () => {
