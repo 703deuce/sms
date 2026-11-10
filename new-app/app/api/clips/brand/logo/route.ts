@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
-import { brandLogoKey, getClipStorage } from '@/lib/storage'
+import { brandLogoKey, getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const ALLOWED = new Set(['image/png', 'image/svg+xml'])
@@ -10,10 +10,18 @@ export async function GET(request: Request) {
   try {
     const workspaceId = await resolveWorkspaceId()
     const key = new URL(request.url).searchParams.get('key')
-    if (!key || !key.startsWith(`brand/${workspaceId}/`)) {
-      return NextResponse.json({ error: 'Invalid key' }, { status: 400 })
+    if (!key) return NextResponse.json({ error: 'Invalid key' }, { status: 400 })
+    if (key.startsWith(`brand/${workspaceId}/`)) {
+      const url = await getClipStorage().createSignedDownloadUrl(key, 3600)
+      return NextResponse.json({ data: { url } })
     }
-    const storage = getClipStorage()
+    const asset = await getPrisma().aiStudioAsset.findFirst({
+      where: { workspaceId, storageKey: key, kind: 'image' },
+      select: { id: true, storageDriver: true },
+    })
+    if (!asset) return NextResponse.json({ error: 'Invalid key' }, { status: 400 })
+    console.info('[clips:brand-logo] sign_workspace_asset', { workspaceId, assetId: asset.id })
+    const storage = await getClipStorageForObjectKey(key, asset.storageDriver)
     const url = await storage.createSignedDownloadUrl(key, 3600)
     return NextResponse.json({ data: { url } })
   } catch (err) {
