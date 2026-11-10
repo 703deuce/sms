@@ -40,7 +40,9 @@ export function parseReplan(body: unknown, previous: AdProductInput, mode: AdMod
   console.info('[ad-studio:validate] replan_begin')
   const patch = adReplanSchema.safeParse(body)
   if (!patch.success) throw adInvalid('Invalid brief updates.')
-  const input = adBriefSchema.parse({ ...previous, ...patch.data })
+  const merged = adBriefSchema.safeParse({ ...previous, ...patch.data })
+  if (!merged.success) throw adInvalid('Revised brief must include a valid product, duration and aspect.')
+  const input = merged.data
   if (mode === 'image_to_ad' && !input.imageAssetIds.length) throw adInvalid('Image-to-ad requires an image.')
   if (mode === 'storyline' && !input.sellingPoints.length) throw adInvalid('Add at least one selling point.')
   console.info('[ad-studio:validate] replan_valid', { durationSec: input.durationSec })
