@@ -137,7 +137,8 @@ jobs:
             tests/motion-graphics-text-adapter.test.ts \
             tests/motion-request-limit.test.ts \
             tests/unified-clip-results.test.ts \
-            tests/unified-clip-results-ui.test.tsx
+            tests/unified-clip-results-ui.test.tsx \
+            tests/streamer-unified-results.test.tsx
 
   captions-worker-regression:
     runs-on: ubuntu-latest

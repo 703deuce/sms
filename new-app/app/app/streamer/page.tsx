@@ -12,6 +12,8 @@ import { StreamerUsageMeter } from '@/components/streamer/usage-meter'
 import { StreamerLiveComingSoon } from '@/components/streamer/streamer-live-coming-soon'
 import { streamerLiveRealtimeEnabled, streamerPublicFlags } from '@/lib/server/streamer/env'
 import { Radio } from 'lucide-react'
+import { listProjectClips } from '../../../lib/server/clips/clips'
+import { StreamerUnifiedResults } from '../../../components/streamer/streamer-unified-results'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Streamer · Clips' }
@@ -24,6 +26,17 @@ export default async function StreamerHubPage() {
     getStreamUsage(workspaceId),
     listStreamerChannels(workspaceId),
   ])
+  const clipIds = vods
+    .filter((v) => v.status === 'READY' || v.status === 'FAILED')
+    .map((v) => v.projectId)
+  const clipLists = await Promise.all(
+    clipIds.map((id) => listProjectClips(workspaceId, id, 'score', { skipTranscriptEnrichment: true })),
+  )
+  const streamClips = clipLists.flatMap((rows) => rows ?? [])
+  const processingVods = vods.filter(
+    (v) => v.status !== 'READY' && v.status !== 'FAILED' && v.status !== 'CANCELED',
+  )
+  const failedVod = vods.find((v) => v.status === 'FAILED')
   return (
     <PageContainer className="max-w-none">
       <PageHeader
@@ -70,9 +83,23 @@ export default async function StreamerHubPage() {
           </section>
           <ObsFallbackDocs />
         </div>
-        <div className="min-w-0 space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">Your VOD imports</h2>
-          <StreamerVodList rows={vods} />
+        <div className="min-w-0 space-y-6">
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">Your VOD imports</h2>
+            <StreamerVodList rows={vods} />
+          </div>
+          <StreamerUnifiedResults
+            clips={streamClips}
+            fallbackProjectId={vods[0]?.projectId ?? ''}
+            processing={processingVods.length > 0}
+            failed={Boolean(failedVod) && streamClips.length === 0}
+            error={failedVod?.error ?? null}
+            retryProjectId={failedVod?.projectId ?? null}
+            etaSec={processingVods[0]?.etaSec ?? 0}
+            stage={processingVods[0]?.stage ?? null}
+            clipsReady={streamClips.length}
+            clipsTotal={Math.max(streamClips.length, processingVods.reduce((n, v) => n + (v.chunkTotal ?? 0), 0))}
+          />
         </div>
       </div>
     </PageContainer>

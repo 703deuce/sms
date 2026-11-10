@@ -8,6 +8,7 @@ import type { UnifiedClipKind } from '../../lib/clips/unified-clip-results'
 
 export type ClipCardData = {
   id: string
+  projectId?: string
   title: string
   score: number
   scores: unknown
@@ -62,7 +63,7 @@ export function ClipGrid({
           </div>
           <ClipCard
             clip={c}
-            projectId={projectId}
+            projectId={c.projectId || projectId}
             onDownload={onDownload}
             onHidden={onHidden}
             onChanged={onChanged}

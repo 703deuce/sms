@@ -187,12 +187,6 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   }, [projectIntent, upload?.state, uploadId, submitting, submitUpload])
 
   const submitLink = async () => {
-    const kind = classifyImportUrl(linkUrl)
-    if (kind === 'kick') {
-      setTab('streamer')
-      toast('Kick links import from the Streamer tab.')
-      return
-    }
     const check = validateImportUrlForSubmit(linkUrl)
     if (!check.ok) {
       toast.error(check.message)
@@ -334,30 +328,6 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           ) : tab === 'upload' ? (
             <div className="flex flex-col gap-4">
               {!upload || upload.state === 'error' ? <Dropzone onFile={onFile} /> : null}
-              {projectIntent === 'find' ? (
-                <div className="flex flex-col gap-2" data-testid="upload-twitch-kick-link">
-                  <Label htmlFor="upload-twitch-kick-link" className="text-xs text-muted-foreground">
-                    Or paste a Twitch or Kick link
-                  </Label>
-                  <div className="flex flex-wrap gap-2">
-                    <Input
-                      id="upload-twitch-kick-link"
-                      value={linkUrl}
-                      onChange={(e) => setLinkUrl(e.target.value)}
-                      placeholder="Twitch VOD or Kick URL"
-                      className="min-w-0 flex-1"
-                    />
-                    <button
-                      type="button"
-                      className="h-9 shrink-0 rounded-md border border-border bg-background px-3 text-sm font-medium"
-                      onClick={() => void submitLink()}
-                      disabled={submitting || !linkUrl.trim()}
-                    >
-                      Import
-                    </button>
-                  </div>
-                </div>
-              ) : null}
               {upload ? (
                 <UploadProgressItem
                   progress={upload}
