@@ -10,6 +10,7 @@ import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import { getClipStorage } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { buildYoutubeStoryEditAssembly } from '@/lib/youtube-video/story-edit-assembly'
+import { advanceYoutubeSharedStory } from '@/lib/youtube-video/shared-pipeline'
 import { traceYoutubeRunStep, youtubeRunEvent } from '@/lib/youtube-video/step-log'
 import { storyCutsInEditorialOrder } from '@/lib/youtube-video/assemble'
 import { cutsFromOption } from '@/lib/youtube-video/story-options'
@@ -92,6 +93,13 @@ export function prismaYoutubeVideoStore(): YoutubeVideoRunStore {
         data: { status: 'running', stage: 'planning', progressPercent: 50 },
       })
       return claimed.count === 1
+    },
+    async heartbeatPlanning(workspaceId, id) {
+      const updated = await db().updateMany({
+        where: { id, workspaceId, status: 'running', stage: 'planning' },
+        data: { updatedAt: new Date() },
+      })
+      return updated.count === 1
     },
     async update(workspaceId, id, patch) {
       const existing = await db().findFirst({ where: { id, workspaceId }, select: { id: true } })
@@ -348,6 +356,7 @@ export function productionPipelineDeps(): YoutubeVideoPipelineDeps {
   return {
     importer: defaultStreamerImporter,
     loadReadySource,
+    planShared: advanceYoutubeSharedStory,
   }
 }
 
