@@ -14,7 +14,7 @@ export async function EditorPayloadSection({
   clipId: string
   clipperStudio?: boolean
 }) {
-  console.info('[editor:story-mode] payload-load', { projectId, clipId })
+  console.log('[editor:story-mode] payload-load', { projectId, clipId })
   let data
   try {
     data = await getClipEditorPayload(workspaceId, clipId)
