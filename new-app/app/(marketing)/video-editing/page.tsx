@@ -16,12 +16,15 @@ import { FaqList, faqJsonLd, type FaqItem } from '../../../components/marketing/
 import { FinalCta } from '../../../components/marketing/final-cta'
 import { hrefs, siteOrigin } from '../../../components/marketing/links'
 import { CaptionBrandMock, EditorHeroMock } from '../../../components/marketing/mocks'
+import { notFoundUnlessMarketingHost } from '../../../components/marketing/enforce-host'
 import { MarketingNav } from '../../../components/marketing/nav'
 import { CreditChip, Section } from '../../../components/marketing/section'
 
 const title = 'Video Editing'
 const description =
   'Edit by transcript, finish on a real timeline. Cut fillers and silence in Script view, refine on a multi-lane timeline, brand the piece, and export ready-to-post MP4s.'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title,
@@ -74,7 +77,8 @@ const faqs: FaqItem[] = [
   },
 ]
 
-export default function VideoEditingPage() {
+export default async function VideoEditingPage() {
+  await notFoundUnlessMarketingHost()
   const jsonLd = faqJsonLd(faqs)
   return (
     <>

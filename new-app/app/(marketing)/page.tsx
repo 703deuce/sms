@@ -18,6 +18,9 @@ import { hrefs, siteOrigin } from '../../components/marketing/links'
 import { CaptionBrandMock, ClipsHeroMock, EditorHeroMock } from '../../components/marketing/mocks'
 import { MarketingNav } from '../../components/marketing/nav'
 import { CreditChip, Section } from '../../components/marketing/section'
+import { redirectNonMarketingRoot } from '../../components/marketing/enforce-host'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Transovo Clips — AI clipping and a real video editor',
@@ -119,7 +122,8 @@ const moreFeatures: {
   },
 ]
 
-export default function HomePage() {
+export default async function HomePage() {
+  await redirectNonMarketingRoot()
   const jsonLd = faqJsonLd(faqs)
   return (
     <>

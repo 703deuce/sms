@@ -1,13 +1,23 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import { isCurrentRequestMarketingHost } from '../../components/marketing/enforce-host'
 import { MarketingFooter } from '../../components/marketing/footer'
 import { siteOrigin } from '../../components/marketing/links'
 
-export const metadata: Metadata = {
-  metadataBase: new URL(siteOrigin),
+export const dynamic = 'force-dynamic'
+
+export async function generateMetadata(): Promise<Metadata> {
+  if (!(await isCurrentRequestMarketingHost())) return {}
+  return { metadataBase: new URL(siteOrigin) }
 }
 
-export default function MarketingLayout({ children }: { children: ReactNode }) {
+export default async function MarketingLayout({ children }: { children: ReactNode }) {
+  // On voice / other app hosts, do not wrap the response in marketing chrome.
+  // The page itself redirects `/` to /app/home or 404s the marketing subpaths.
+  if (!(await isCurrentRequestMarketingHost())) {
+    return children
+  }
+
   return (
     <div data-marketing className="min-h-dvh bg-background text-foreground">
       {/*

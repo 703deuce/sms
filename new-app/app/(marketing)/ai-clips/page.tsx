@@ -17,12 +17,15 @@ import { FaqList, faqJsonLd, type FaqItem } from '../../../components/marketing/
 import { FinalCta } from '../../../components/marketing/final-cta'
 import { hrefs, siteOrigin } from '../../../components/marketing/links'
 import { ClipsHeroMock, LayoutsMock } from '../../../components/marketing/mocks'
+import { notFoundUnlessMarketingHost } from '../../../components/marketing/enforce-host'
 import { MarketingNav } from '../../../components/marketing/nav'
 import { CreditChip, Section } from '../../../components/marketing/section'
 
 const title = 'AI Clips'
 const description =
   'Turn long episodes into short clips that still make sense. Import long-form video, stitch non-contiguous moments into a Story, and export ready-to-post 9:16 clips.'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title,
@@ -126,7 +129,8 @@ const steps = [
   },
 ]
 
-export default function AiClipsPage() {
+export default async function AiClipsPage() {
+  await notFoundUnlessMarketingHost()
   const jsonLd = faqJsonLd(faqs)
   return (
     <>

@@ -195,6 +195,29 @@ if (!homeAlias || homeAlias.redirectTo !== '/app/clips') {
   failures.push(`/app/home should still redirect to /app/clips, got ${JSON.stringify(homeAlias)}`)
 }
 
+out += `## Host policy for /
+
+The same transovo-web app may be served on transovo.ai and voice.transovo.ai.
+Marketing is allow-listed. Implemented in \`components/marketing/hosts.ts\`
+and enforced in the marketing page server components via \`headers()\`
+(\`x-forwarded-host\` or \`host\`), not middleware. \`/\` is \`force-dynamic\`
+so it is never prerendered as marketing HTML for every host.
+
+| Host | \`/\` resolves to | \`/ai-clips\` and \`/video-editing\` |
+| --- | --- | --- |
+| \`transovo.ai\` | marketing home (\`(marketing)/page.tsx\`) | render |
+| \`www.transovo.ai\` | marketing home (\`(marketing)/page.tsx\`) | render |
+| \`voice.transovo.ai\` | redirect \`/app/home\` (today's behavior) | not-found (those routes did not exist on this host) |
+| \`www.voice.transovo.ai\` | redirect \`/app/home\` (today's behavior) | not-found |
+| \`localhost\` / \`127.0.0.1\` / \`::1\` (any port) | marketing home (dev) | render |
+| any other host | redirect \`/app/home\` (today's behavior) | not-found |
+
+Live check (2026-11-09, America/New_York): \`https://transovo.ai/\` returns 307 \`/app/home\` then 307 \`/app/clips\` then 200. \`https://www.transovo.ai/\` 301s to \`https://transovo.ai\` then the same chain. \`https://voice.transovo.ai/\` and \`/app/home\`, \`/app/clips\`, \`/app\` currently return 502 "Bad Gateway" (11 bytes) — the host was not serving Next at probe time. \`https://www.voice.transovo.ai/\` failed TLS. new-app middleware has no host switch; today's *code* behavior for \`/\` on every host is \`redirect('/app/home')\`. This PR preserves that for every host except the marketing allow-list.
+
+See \`tests/marketing-home-routes.test.ts\` for executable assertions of this table.
+
+`
+
 if (failures.length) {
   out += '## FAIL\n'
   for (const f of failures) out += `- ${f}\n`
