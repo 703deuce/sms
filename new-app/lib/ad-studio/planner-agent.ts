@@ -17,6 +17,7 @@ export async function planAdScenes(args: {
   const cards = [script.hook, script.problem, script.solution, script.cta]
   const claims = input.sellingPoints
   const productRef = input.imageAssetIds[0]
+  const fidelity = 'keep the exact product from the reference image: same shape, colors, materials and branding; do not add or invent logos or text'
   const planned: AdScene[] = []
   let cursor = 0
   for (let i = 0; i < segments.length; i++) {
@@ -54,8 +55,8 @@ export async function planAdScenes(args: {
       startMs: cursor, endMs: cursor + durationSec * 1000, onScreenText: cards[i],
       ...(stock ? { providerId: stock.providerId, stockQuery: query, ...stockTrim({ durationSec }, stock) }
         : { modelId: model.id, prompt: mode === 'image_ad_to_commercial'
-          ? `Transovo commercial director. Animate the supplied finished image advertisement for ${input.name}. Decide motion, camera moves, cuts, shot structure and short commercial storytelling autonomously. This scene's narrative beat is ${role}: ${cards[i]}. Preserve the exact product, original logo, text, packaging and colors. Do not invent features, prices, promotions, claims or endorsements.`
-          : `Product: ${input.name}. ${cards[i]}. Maintain real appearance; do not invent features, packaging, logos or claims.`,
+          ? `Transovo commercial director. Animate the supplied finished image advertisement for ${input.name}. Decide motion, camera moves, cuts, shot structure and short commercial storytelling autonomously. This scene's narrative beat is ${role}: ${cards[i]}. Preserve the exact product, original logo, text, packaging and colors. Do not invent features, prices, promotions, claims or endorsements. ${fidelity}`
+          : `Product: ${input.name}. ${cards[i]}. Maintain real appearance; do not invent features, packaging, logos or claims. ${productRef ? fidelity : ''}`.trim(),
           ...(productRef ? { referenceAssetId: productRef } : {}) }),
     }
     // Generated scene length limited by splitting the run into short shots instead of requesting an invalid duration.
