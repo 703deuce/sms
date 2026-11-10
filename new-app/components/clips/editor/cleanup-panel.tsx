@@ -13,6 +13,7 @@ import {
   auditionEditsForProposals,
   clarityProposals,
   fillerProposals,
+  fillersReadyForRemoveAll,
   gapProposals,
   retakeProposals,
   type CleanupProposal,
@@ -37,7 +38,7 @@ import {
 import {
   CLEAN_TAKE_SHOW_CUTS_DEFAULT,
   introOutroLockedRanges,
-  playRemovedOnlyEdits,
+  playRemovedOnlyMatchingExport,
   type LockedRange,
 } from '../../../lib/clips/editor/clean-take-review'
 import { Label } from '@/components/ui/label'
@@ -245,11 +246,7 @@ export function CleanupPanel({
   }
 
   const applyAllFillers = () => {
-    const rows = proposed.filter(
-      (row) =>
-        (row.kind === 'filler' || row.kind === 'repeat') &&
-        row.quality?.confidence === 'ready',
-    )
+    const rows = fillersReadyForRemoveAll(proposed)
     if (!rows.length) return
     if (audioOnly) commitFillerAudio(rows, `Muted ${rows.length} filler sounds · video kept`)
     else if (onApplyPass) onApplyPass(rows, cleanupPassLabel('filler', rows.length))
@@ -455,13 +452,13 @@ export function CleanupPanel({
       onAuditionChange(null)
       return
     }
-    const removed = [...applied, ...proposed].map((row) => row.range)
-    if (!removed.length) {
+    const pending = proposed.filter((row) => !applied.some((a) => a.id === row.id))
+    if (!applied.length && !pending.length) {
       onAuditionChange(null)
       return
     }
-    onAuditionChange(playRemovedOnlyEdits(edits, removed))
-  }, [playRemovedOnly, applied, proposed, edits])
+    onAuditionChange(playRemovedOnlyMatchingExport(edits, pending, wordSpans, rmsSamples))
+  }, [playRemovedOnly, applied, proposed, edits, wordSpans, rmsSamples])
 
   const limits = {
     clipStartMs: bounds.clipStartMs,

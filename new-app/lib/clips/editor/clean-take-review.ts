@@ -3,8 +3,13 @@
 
 import type { ClipEditsV2, CutRange } from '../edits'
 import { displayDurationMs, mergeCutRanges, subtractRangeFromCuts } from '../edits'
-import type { CleanupProposal, CleanupCutKind } from './cleanup-proposals'
-import { proposalId, restoreCleanupProposal } from './cleanup-proposals'
+import {
+  exportCutRangesFromProposals,
+  proposalId,
+  restoreCleanupProposal,
+  type CleanupProposal,
+  type CleanupCutKind,
+} from './cleanup-proposals'
 import { CLEAN_TAKE_DEFAULT_STRENGTH, DEFAULT_CLEANUP_STRENGTH, OPT_IN_FILLER_WORDS, type CleanupStrength } from './cleanup-strength'
 import type { ClipInsert } from './inserts'
 
@@ -428,29 +433,38 @@ export function invertRangesWithin(trim: CutRange, keep: CutRange[]): CutRange[]
   return cuts
 }
 
-/** Build an audition edit that plays only the given removed ranges on a single-source cut list.
- * Each range is expanded by PLAY_REMOVED_ONLY_EDGE_PAD_MS on both sides (clamped to the trim).
- * Short ranges are padded, never omitted.
+/** Invert exact removal ranges inside the main trim (no extra padding).
+ * For editor cleanup / export parity, pass ranges from exportCutRangesFromProposals / playRemovedOnlyMatchingExport.
  */
-export function playRemovedOnlyEdits(
-  edits: ClipEditsV2,
-  removedRanges: CutRange[],
-  padMs: number = PLAY_REMOVED_ONLY_EDGE_PAD_MS,
-): ClipEditsV2 {
+export function playRemovedOnlyEdits(edits: ClipEditsV2, removedRanges: CutRange[]): ClipEditsV2 {
   const trim: CutRange = [edits.trim.in, edits.trim.out]
-  const padded = removedRanges.map((range) => {
-    const lo = Math.min(range[0], range[1])
-    const hi = Math.max(range[0], range[1])
-    const next = padRemovedRange(lo, hi, trim[0], trim[1], padMs)
-    return [next.inMs, next.outMs] as CutRange
-  })
-  const cuts = invertRangesWithin(trim, padded)
+  const cuts = invertRangesWithin(trim, removedRanges)
   return {
     ...edits,
     cutRanges: cuts,
-    // Single-source flip: drop assembled inserts so the preview is the inverted main-source cuts.
     inserts: undefined,
   }
+}
+
+/** Play-removed-only audition from the same refined, exportable cut list that export uses. */
+export function playRemovedOnlyFromExportCuts(edits: ClipEditsV2, exportCuts: CutRange[]): ClipEditsV2 {
+  return playRemovedOnlyEdits(edits, exportCuts)
+}
+
+export function playRemovedOnlyMatchingExport(
+  edits: ClipEditsV2,
+  proposals: CleanupProposal[],
+  wordSpans: { s: number; e: number; w?: string }[],
+  rmsSamples?: Parameters<typeof exportCutRangesFromProposals>[3],
+): ClipEditsV2 {
+  return playRemovedOnlyFromExportCuts(
+    edits,
+    exportCutRangesFromProposals(edits, proposals, wordSpans, rmsSamples),
+  )
+}
+
+export function cleanTakeCleanupPanelStrength(aiMeta: unknown): CleanupStrength | undefined {
+  return isCleanTakeAiMeta(aiMeta) ? CLEAN_TAKE_DEFAULT_STRENGTH : undefined
 }
 
 export function findEditSourceIdForOmission(

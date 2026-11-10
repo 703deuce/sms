@@ -1,5 +1,5 @@
 import type { ClipEditsV2, CutCleanupKind, CutRange } from '@/lib/clips/edits'
-import { mergeCutRanges, subtractRangeFromCuts } from '@/lib/clips/edits'
+import { MIN_SEGMENT_MS, mergeCutRanges, sanitizeCutRangesForTrim, subtractRangeFromCuts } from '@/lib/clips/edits'
 import { listClipGapHits } from '@/lib/clips/gap-shorten'
 import { gapHitIsRmsQuiet, gapShortenCutRangeWithAudio, type GapRmsSample } from '@/lib/clips/gap-audio-trim'
 import type { GapFilterMode } from '@/lib/clips/script-editor/gap-hits'
@@ -20,7 +20,7 @@ import { normalizeToken } from '@/lib/clips/script-editor/enrich-transcript'
 import type { RetakeGroup } from '@/lib/clips/editor/retakes'
 import { retakeCutRange } from '@/lib/clips/editor/retakes'
 
-import { isDefaultRemovableFiller } from '@/lib/clips/cuts-quality/filler-classifier'
+import { isDefaultRemovableFiller, isPlainLightFillerToken, isReactionExclamation } from '@/lib/clips/cuts-quality/filler-classifier'
 import type { CutQualityMeta } from '@/lib/clips/cuts-quality/types'
 import { pauseMiddleRemovalRange, gapKeptForMotion } from '@/lib/clips/cuts-quality/pause-shorten'
 import { refineWordCutWithAudio } from '@/lib/clips/editor/audio-cut-edges'
@@ -62,41 +62,144 @@ export function pruneCutQualityMeta(
   return Object.keys(next).length ? next : undefined
 }
 
+/**
+ * Expand a cut to MIN_SEGMENT_MS with padding if needed, without entering neighbouring
+ * kept-word interiors. Returns null when the cut cannot be exported (and must not be shown).
+ */
+export function exportableCleanupRange(
+  range: CutRange,
+  neighbors?: { prevEndMs?: number; nextStartMs?: number },
+  minMs: number = MIN_SEGMENT_MS,
+): CutRange | null {
+  const lo = Math.min(range[0], range[1])
+  const hi = Math.max(range[0], range[1])
+  if (hi - lo >= minMs) return [lo, hi]
+  const need = minMs - (hi - lo)
+  const padLeft = Math.ceil(need / 2)
+  const padRight = need - padLeft
+  let start = lo - padLeft
+  let end = hi + padRight
+  if (neighbors?.prevEndMs != null) start = Math.max(start, neighbors.prevEndMs)
+  if (neighbors?.nextStartMs != null) end = Math.min(end, neighbors.nextStartMs)
+  if (end - start >= minMs) return [Math.round(start), Math.round(end)]
+  return null
+}
+
+export function fillersReadyForRemoveAll(rows: CleanupProposal[]): CleanupProposal[] {
+  return rows.filter((row) => (row.kind === 'filler' || row.kind === 'repeat') && row.quality?.confidence === 'ready')
+}
+
+function neighborsForRange(
+  range: CutRange,
+  wordSpans: { s: number; e: number }[],
+): { prevEndMs?: number; nextStartMs?: number } {
+  const lo = Math.min(range[0], range[1])
+  const hi = Math.max(range[0], range[1])
+  let prevEndMs: number | undefined
+  let nextStartMs: number | undefined
+  for (const w of wordSpans) {
+    const start = Math.round(w.s * 1000)
+    const end = Math.round(w.e * 1000)
+    if (end <= lo) prevEndMs = prevEndMs == null ? end : Math.max(prevEndMs, end)
+    else if (start >= hi) nextStartMs = nextStartMs == null ? start : Math.min(nextStartMs, start)
+  }
+  return { prevEndMs, nextStartMs }
+}
+
+/** Prefer a refined cut when it still meets the export floor; otherwise keep the already-exportable original. */
+function keepExportableMergeRange(
+  refined: CutRange | null | undefined,
+  original: CutRange,
+  wordSpans: { s: number; e: number }[],
+): CutRange | null {
+  const width = (range: CutRange) => Math.abs(range[1] - range[0])
+  if (refined && width(refined) >= MIN_SEGMENT_MS) return refined
+  if (width(original) >= MIN_SEGMENT_MS) return original
+  if (refined) {
+    const paddedRefined = exportableCleanupRange(refined, neighborsForRange(refined, wordSpans))
+    if (paddedRefined) return paddedRefined
+  }
+  return exportableCleanupRange(original, neighborsForRange(original, wordSpans))
+}
+
+
 function refineFillerRange(
   raw: CutRange,
   orderedWords: EditorWord[],
   wordIndex: number,
-  rmsSamples?: GapRmsSample[] | null,
-): { range: CutRange; quality?: CutQualityMeta } {
+  rmsSamples: GapRmsSample[] | null | undefined,
+  strength: CleanupStrength,
+  deletedSet: Set<string>,
+): { range: CutRange; quality?: CutQualityMeta } | null {
+  const word = orderedWords[wordIndex]
   const prev = orderedWords[wordIndex - 1]
   const next = orderedWords[wordIndex + 1]
-  const contact = (prev != null && raw[0] - prev.t1Ms < 40) ||
-    (next != null && next.t0Ms - raw[1] < 40)
+  const neighbors = {
+    prevEndMs: prev?.t1Ms,
+    nextStartMs: next?.t0Ms,
+  }
+  const exportable = exportableCleanupRange(raw, neighbors)
+  if (!exportable) return null
+  const contact = (prev != null && exportable[0] - prev.t1Ms < 40) ||
+    (next != null && next.t0Ms - exportable[1] < 40)
+  const reaction = Boolean(word && isReactionExclamation(word, prev, next, deletedSet))
+  const plainLight = Boolean(
+    word && strength === 'light' && isPlainLightFillerToken(word.text) && !reaction,
+  )
+
+  if (reaction) {
+    return {
+      range: exportable,
+      quality: {
+        srcStartMs: exportable[0],
+        srcEndMs: exportable[1],
+        confidence: 'needs_review',
+        reason: 'reaction_exclamation',
+      },
+    }
+  }
+
+  // Clean Take / first-pass light: plain um/uh/er/ah are safe for Remove All even when the
+  // file has no fine envelope or the ASR token abuts a neighbour (typical talking-head).
+  if (plainLight) {
+    return {
+      range: exportable,
+      quality: {
+        srcStartMs: exportable[0],
+        srcEndMs: exportable[1],
+        confidence: 'ready',
+        reason: 'light_plain_filler',
+      },
+    }
+  }
+
   if (!rmsSamples?.length) {
     // With no usable audio, ASR word stamps are NOT an acoustic cut boundary.
     // Still show the proposal for individual audition, but don't put it in
     // Remove All until a human has reviewed the potentially clipped syllables.
-    return { range: raw, quality: {
-      srcStartMs: raw[0], srcEndMs: raw[1],
+    return { range: exportable, quality: {
+      srcStartMs: exportable[0], srcEndMs: exportable[1],
       confidence: 'needs_review', reason: 'no_audio_envelope',
     } }
   }
   // SCRIPT_DOC2: the whole audible filler goes (a trailing "m" past the ASR end too); the edge
   // never enters a kept word. No quiet point = needs_review, so "Remove all" skips it.
   const audio = refineWordCutWithAudio(
-    raw,
+    exportable,
     orderedWords.map((x) => ({ s: x.t0Ms / 1000, e: x.t1Ms / 1000 })),
     rmsSamples,
   )
-  if (!audio) return { range: raw, quality: {
-    srcStartMs: raw[0], srcEndMs: raw[1],
+  if (!audio) return { range: exportable, quality: {
+    srcStartMs: exportable[0], srcEndMs: exportable[1],
     confidence: 'needs_review', reason: 'audio_alignment_unavailable',
   } }
+  const audioExportable = exportableCleanupRange(audio.range, neighbors) ?? audio.range
+  if ((audioExportable[1] - audioExportable[0]) < MIN_SEGMENT_MS) return null
   return {
-    range: audio.range,
+    range: audioExportable,
     quality: {
-      srcStartMs: audio.range[0],
-      srcEndMs: audio.range[1],
+      srcStartMs: audioExportable[0],
+      srcEndMs: audioExportable[1],
       confidence: audio.confidence === 'needs_review' || contact ? 'needs_review' : 'ready',
       reason: `filler; ${audio.note}${contact ? '; word boundary touches kept speech' : ''}`,
     },
@@ -353,8 +456,9 @@ export function fillerProposals(
     }
 
     const raw: CutRange = [h.word.t0Ms, h.word.t1Ms]
-    const refined = refineFillerRange(raw, orderedWords, i, opts?.rmsSamples)
+    const refined = refineFillerRange(raw, orderedWords, i, opts?.rmsSamples, strength, deletedSet)
     usedIndices.add(i)
+    if (!refined) continue
     out.push({
       id: proposalId(refined.range),
       kind: 'filler',
@@ -511,21 +615,21 @@ export function mergeCleanupCutRanges(
     // audio instead of fixed pads. The result never enters a kept word, so the worker's
     // sanitize_cut_ranges keeps it as-is and the export cuts where the preview cuts.
     const audio = wordSpans.length > 0 ? refineWordCutWithAudio(range, wordSpans, opts?.rmsSamples) : null
+    let nextRange: CutRange | null = null
     if (audio) {
-      cuts = mergeCutRanges([...cuts, audio.range])
-      continue
+      nextRange = audio.range
+    } else if (wordSpans.length > 0) {
+      const snapped =
+        normalizeCleanupCutRange(range, wordSpans) ?? snapCutRangeToWordGaps(range, wordSpans) ?? range
+      nextRange =
+        sanitizeCleanupCutRanges([snapped], wordSpans)[0] ??
+        sanitizeCutRangesForWords([snapped], wordSpans)[0] ??
+        snapped
+    } else {
+      nextRange = range
     }
-    const snapped =
-      wordSpans.length > 0
-        ? normalizeCleanupCutRange(range, wordSpans) ?? snapCutRangeToWordGaps(range, wordSpans) ?? range
-        : range
-    const nextRange =
-      wordSpans.length > 0
-        ? sanitizeCleanupCutRanges([snapped], wordSpans)[0] ??
-          sanitizeCutRangesForWords([snapped], wordSpans)[0] ??
-          snapped
-        : snapped
-    cuts = mergeCutRanges([...cuts, nextRange])
+    const kept = keepExportableMergeRange(nextRange, range, wordSpans)
+    if (kept) cuts = mergeCutRanges([...cuts, kept])
   }
   return cuts
 }
@@ -547,6 +651,29 @@ export function auditionEditsForProposals(
   rmsSamples?: GapRmsSample[] | null,
 ): ClipEditsV2 {
   return applyProposalsToEdits(edits, proposals, wordSpans, rmsSamples)
+}
+
+/** Removal ranges that export will actually keep (same refine + MIN_SEGMENT_MS floor as apply/export). */
+export function exportCutRangesFromProposals(
+  edits: ClipEditsV2,
+  proposals: CleanupProposal[],
+  wordSpans: { s: number; e: number; w?: string }[],
+  rmsSamples?: GapRmsSample[] | null,
+): CutRange[] {
+  const next = applyProposalsToEdits(edits, proposals, wordSpans, rmsSamples)
+  let cuts = sanitizeCutRangesForTrim(next.cutRanges, edits.trim.in, edits.trim.out)
+  const missing = proposals
+    .map((proposal) => proposal.range)
+    .filter((range) => {
+      const lo = Math.min(range[0], range[1])
+      const hi = Math.max(range[0], range[1])
+      if (hi - lo < MIN_SEGMENT_MS) return false
+      return !cuts.some(([start, end]) => Math.min(end, hi) - Math.max(start, lo) > 0)
+    })
+  if (missing.length) {
+    cuts = sanitizeCutRangesForTrim(mergeCutRanges([...cuts, ...missing]), edits.trim.in, edits.trim.out)
+  }
+  return cuts
 }
 
 export function restoreCleanupProposal(edits: ClipEditsV2, range: CutRange): ClipEditsV2 {

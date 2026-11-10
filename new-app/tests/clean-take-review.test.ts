@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { defaultEdits, displayDurationMs, type ClipBounds, type ClipEditsV2 } from '../lib/clips/edits'
+import { defaultEdits, displayDurationMs, MIN_SEGMENT_MS, sanitizeCutRangesForTrim, type ClipBounds, type ClipEditsV2 } from '../lib/clips/edits'
 import {
   CLEAN_TAKE_COPY,
   CLEAN_TAKE_DEFAULT_STRENGTH,
@@ -25,10 +27,21 @@ import {
   readCleanTakeReview,
   restoreCleanTakeOmission,
   writeCleanTakeReview,
+  cleanTakeCleanupPanelStrength,
+  isCleanTakeAiMeta,
+  playRemovedOnlyMatchingExport,
   type CleanTakeKeptCut,
   type CleanTakeOmission,
 } from '../lib/clips/editor/clean-take-review'
-import { fillerProposals, restoreCleanupProposal } from '../lib/clips/editor/cleanup-proposals'
+import {
+  applyProposalsToEdits,
+  exportableCleanupRange,
+  exportCutRangesFromProposals,
+  fillerProposals,
+  fillersReadyForRemoveAll,
+  restoreCleanupProposal,
+  type CleanupProposal,
+} from '../lib/clips/editor/cleanup-proposals'
 import { DEFAULT_CLEANUP_STRENGTH, OPT_IN_FILLER_WORDS, fillerEligibleAtStrength } from '../lib/clips/editor/cleanup-strength'
 import type { EditorWord } from '../lib/clips/script-editor/to-editor-words'
 
@@ -350,6 +363,7 @@ describe('restore of each omission', () => {
     const extents = [{ sourceId: 'multi_0', startMs: 0, endMs: 60_000 }]
     const initialCuts: CleanTakeKeptCut[] = [
       { sourceId: 'multi_0', startMs: 10_000, endMs: 20_000 },
+      { sourceId: 'multi_0', startMs: 40_000, endMs: 50_000 },
     ]
     const starting = writeCleanTakeReview(
       baseEdits({
@@ -391,7 +405,7 @@ describe('restore of each omission', () => {
 })
 
 describe('play removed only', () => {
-  it('builds an edit of only the removed ranges on a cut list, with documented edge padding', () => {
+  it('builds an edit of only the removed ranges on a cut list', () => {
     const edits = baseEdits({
       trim: { in: 0, out: 10_000 },
       cutRanges: [[1000, 2000], [5000, 7000]],
@@ -400,19 +414,17 @@ describe('play removed only', () => {
       [1000, 2000],
       [5000, 7000],
     ])
-    const pad = PLAY_REMOVED_ONLY_EDGE_PAD_MS
-    expect(pad).toBe(120)
-    expect(invertRangesWithin([0, 10_000], [[1000 - pad, 2000 + pad], [5000 - pad, 7000 + pad]])).toEqual([
-      [0, 1000 - pad],
-      [2000 + pad, 5000 - pad],
-      [7000 + pad, 10_000],
+    expect(invertRangesWithin([0, 10_000], [[1000, 2000], [5000, 7000]])).toEqual([
+      [0, 1000],
+      [2000, 5000],
+      [7000, 10_000],
     ])
     expect(preview.cutRanges).toEqual([
-      [0, 1000 - pad],
-      [2000 + pad, 5000 - pad],
-      [7000 + pad, 10_000],
+      [0, 1000],
+      [2000, 5000],
+      [7000, 10_000],
     ])
-    expect(displayDurationMs(preview)).toBe((2000 + pad) - (1000 - pad) + (7000 + pad) - (5000 - pad))
+    expect(displayDurationMs(preview)).toBe(1000 + 2000)
   })
 
   it('builds a Clean Take preview that plays only omitted takes from the assembled edit', () => {
@@ -493,5 +505,118 @@ describe('locked ranges', () => {
     })
     expect(locked).toHaveLength(1)
     expect(locked[0]?.range).toEqual([8000, 8300])
+  })
+})
+
+
+describe('Clean Take editor-shell CleanupPanel strength', () => {
+  it('opens on light for a Clean Take clip and stays normal for manual cleanup', () => {
+    expect(isCleanTakeAiMeta({ cleanTake: { mode: 'clean_take_v1' } })).toBe(true)
+    expect(cleanTakeCleanupPanelStrength({ cleanTake: { mode: 'clean_take_v1' } })).toBe('light')
+    expect(cleanTakeCleanupPanelStrength({ cleanTake: { mode: 'clean_take_v1' } })).toBe(CLEAN_TAKE_DEFAULT_STRENGTH)
+    expect(cleanTakeCleanupPanelStrength(null)).toBeUndefined()
+    expect(cleanTakeCleanupPanelStrength({ brollIdeas: [] })).toBeUndefined()
+    expect(cleanupPanelDefaultStrength(cleanTakeCleanupPanelStrength({ cleanTake: {} }))).toBe('light')
+    expect(cleanupPanelDefaultStrength(cleanTakeCleanupPanelStrength(null))).toBe('normal')
+    expect(cleanupPanelDefaultStrength(undefined)).toBe('normal')
+  })
+
+  it('editor-shell wires the helper so Clean Take opens CleanupPanel on light', () => {
+    const src = readFileSync(join(__dirname, '../components/clips/editor/editor-shell.tsx'), 'utf8')
+    expect(src).toMatch(/defaultStrength=\{cleanTakeCleanupPanelStrength\(aiMeta\)\}/)
+  })
+})
+
+describe('light Remove All vs reaction Ah.', () => {
+  it('marks plain um/uh/er/ah at light strength ready for Remove All even without an envelope', () => {
+    const words: EditorWord[] = [
+      word({ id: 's', text: 'say', t0Ms: 0, t1Ms: 800 }),
+      word({ id: 'f', text: 'um', t0Ms: 1000, t1Ms: 1200, isFiller: true, fillerKind: 'lexicon' }),
+      word({ id: 'w', text: "we're", t0Ms: 2000, t1Ms: 2400 }),
+    ]
+    const light = fillerProposals(words, new Set(), { strength: 'light' })
+    expect(light).toHaveLength(1)
+    expect(light[0]?.quality?.confidence).toBe('ready')
+    expect(light[0]?.quality?.reason).toBe('light_plain_filler')
+    expect(fillersReadyForRemoveAll(light)).toHaveLength(1)
+
+    const normal = fillerProposals(words, new Set(), { strength: 'normal' })
+    expect(normal[0]?.quality?.confidence).toBe('needs_review')
+    expect(fillersReadyForRemoveAll(normal)).toHaveLength(0)
+  })
+
+  it("keeps a reaction 'Ah.' as needs_review so Remove All does not apply it", () => {
+    const words: EditorWord[] = [
+      word({ id: 's', text: 'camera.', t0Ms: 0, t1Ms: 800 }),
+      word({ id: 'f', text: 'Ah.', t0Ms: 1000, t1Ms: 1200, isFiller: true, fillerKind: 'lexicon' }),
+      word({ id: 'w', text: 'we', t0Ms: 2000, t1Ms: 2400 }),
+    ]
+    const light = fillerProposals(words, new Set(), { strength: 'light' })
+    expect(light).toHaveLength(1)
+    expect(light[0]?.label).toBe('Ah.')
+    expect(light[0]?.quality?.confidence).toBe('needs_review')
+    expect(light[0]?.quality?.reason).toBe('reaction_exclamation')
+    expect(fillersReadyForRemoveAll(light)).toHaveLength(0)
+  })
+})
+
+describe('sub-80 ms fillers are never shown then dropped at export', () => {
+  it('hides 41 ms fillers that cannot be padded without entering a kept word', () => {
+    const words: EditorWord[] = [
+      word({ id: 's0', text: 'say,', t0Ms: 530_000, t1Ms: 530_700 }),
+      word({ id: 'u0', text: 'uh', t0Ms: 530_700, t1Ms: 530_741, isFiller: true, fillerKind: 'lexicon' }),
+      word({ id: 'w0', text: "we're", t0Ms: 530_741, t1Ms: 531_200 }),
+      word({ id: 's1', text: 'and,', t0Ms: 532_000, t1Ms: 532_100 }),
+      word({ id: 'u1', text: 'uh', t0Ms: 532_100, t1Ms: 532_141, isFiller: true, fillerKind: 'lexicon' }),
+      word({ id: 'w1', text: 'then', t0Ms: 532_141, t1Ms: 532_400 }),
+    ]
+    expect(MIN_SEGMENT_MS).toBe(80)
+    expect(exportableCleanupRange([530_700, 530_741], { prevEndMs: 530_700, nextStartMs: 530_741 })).toBeNull()
+    const light = fillerProposals(words, new Set(), { strength: 'light' })
+    expect(light).toEqual([])
+    const edits = baseEdits({ trim: { in: 530_000, out: 533_000 }, cutRanges: [] })
+    const wordSpans = words.map((w) => ({ s: w.t0Ms / 1000, e: w.t1Ms / 1000, w: w.text }))
+    expect(exportCutRangesFromProposals(edits, light, wordSpans)).toEqual([])
+  })
+
+  it('pads a short filler to MIN_SEGMENT_MS when neighbors leave enough room, and exports it', () => {
+    const words: EditorWord[] = [
+      word({ id: 's', text: 'say', t0Ms: 0, t1Ms: 800 }),
+      word({ id: 'f', text: 'uh', t0Ms: 1000, t1Ms: 1041, isFiller: true, fillerKind: 'lexicon' }),
+      word({ id: 'w', text: "we're", t0Ms: 1300, t1Ms: 1600 }),
+    ]
+    const padded = exportableCleanupRange([1000, 1041], { prevEndMs: 800, nextStartMs: 1300 })
+    expect(padded).not.toBeNull()
+    expect(padded![1] - padded![0]).toBeGreaterThanOrEqual(MIN_SEGMENT_MS)
+    const light = fillerProposals(words, new Set(), { strength: 'light' })
+    expect(light).toHaveLength(1)
+    expect(light[0]!.range[1] - light[0]!.range[0]).toBeGreaterThanOrEqual(MIN_SEGMENT_MS)
+    const edits = baseEdits({ trim: { in: 0, out: 60_000 }, cutRanges: [] })
+    const wordSpans = words.map((w) => ({ s: w.t0Ms / 1000, e: w.t1Ms / 1000, w: w.text }))
+    const exported = exportCutRangesFromProposals(edits, light, wordSpans)
+    expect(exported.length).toBeGreaterThan(0)
+    expect(exported.every((range) => range[1] - range[0] >= MIN_SEGMENT_MS)).toBe(true)
+  })
+})
+
+describe('removed-only audition matches export ranges', () => {
+  it('uses the exact refined cut ranges export will keep', () => {
+    const words: EditorWord[] = [
+      word({ id: 's', text: 'say', t0Ms: 0, t1Ms: 800 }),
+      word({ id: 'f', text: 'um', t0Ms: 1000, t1Ms: 1200, isFiller: true, fillerKind: 'lexicon' }),
+      word({ id: 'w', text: "we're", t0Ms: 2000, t1Ms: 2400 }),
+      word({ id: 's2', text: 'and', t0Ms: 3000, t1Ms: 3200 }),
+      word({ id: 'f2', text: 'uh', t0Ms: 3400, t1Ms: 3441, isFiller: true, fillerKind: 'lexicon' }),
+      word({ id: 'w2', text: 'then', t0Ms: 3700, t1Ms: 4000 }),
+    ]
+    const proposals = fillerProposals(words, new Set(), { strength: 'light' })
+    expect(proposals.length).toBeGreaterThan(0)
+    const edits = baseEdits({ trim: { in: 0, out: 60_000 }, cutRanges: [] })
+    const wordSpans = words.map((w) => ({ s: w.t0Ms / 1000, e: w.t1Ms / 1000, w: w.text }))
+    const exportCuts = exportCutRangesFromProposals(edits, proposals, wordSpans)
+    const applied = applyProposalsToEdits(edits, proposals, wordSpans)
+    expect(exportCuts).toEqual(sanitizeCutRangesForTrim(applied.cutRanges, edits.trim.in, edits.trim.out))
+    const audition = playRemovedOnlyMatchingExport(edits, proposals, wordSpans)
+    expect(audition.cutRanges).toEqual(invertRangesWithin([edits.trim.in, edits.trim.out], exportCuts))
   })
 })

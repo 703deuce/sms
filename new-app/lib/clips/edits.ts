@@ -1057,7 +1057,8 @@ export function editMsAtDisplayMs(edits: ClipEditsV2, displayMs: number): number
   return Math.round(lo)
 }
 
-const MIN_SEGMENT_MS = 80
+/** Cuts (and keep segments) shorter than this are dropped at export and must not be shown as removable. */
+export const MIN_SEGMENT_MS = 80
 
 /** Drop or clamp cuts that fall outside the active trim window. */
 export function sanitizeCutRangesForTrim(
