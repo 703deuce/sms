@@ -128,12 +128,13 @@ export function createCaptionsSource(
   return { kind: 'project', projectId: input.projectId }
 }
 
-/** Always the canonical clip-editor captions URL. Do not use result.editorUrl (may still be a legacy /app/clips path). */
+/** Compact clip-editor captions URL, always built from projectId + clipId (do not trust result.editorUrl).
+ *  #1133 308s /app/clips/:projectId/edit/:clipId to /app/video-editor/.../edit/... and preserves the query. */
 export function captionsEditorHref(projectId: string, clipId: string): string | null {
   const project = projectId.trim()
   const clip = clipId.trim()
   if (!project || !clip) return null
-  return `/app/video-editor/${project}/edit/${clip}?tab=captions`
+  return `/app/clips/${project}/edit/${clip}?tab=captions`
 }
 
 export function captionsRedirectFromRun(run: Pick<AiCaptionsRun, 'status' | 'projectId' | 'result'>): string | null {
