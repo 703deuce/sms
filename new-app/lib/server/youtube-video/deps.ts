@@ -36,6 +36,7 @@ function fromRow(row: Record<string, unknown>): YoutubeVideoRunRecord {
     requestHash: String(row.requestHash),
     sources: (row.sources ?? []) as YoutubeVideoRunRecord['sources'],
     ingested: (row.ingested ?? []) as YoutubeVideoRunRecord['ingested'],
+    analysisState: (row.analysisState ?? null) as YoutubeVideoRunRecord['analysisState'],
     options: (row.options ?? null) as YoutubeVideoRunRecord['options'],
     chosenOptionId: (row.chosenOptionId ?? null) as string | null,
     creditsEstimated: (row.creditsEstimated ?? null) as number | null,
@@ -50,7 +51,7 @@ function toData(patch: Partial<YoutubeVideoRunRecord>) {
   const data: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'createdAt' || key === 'updatedAt') continue
-    if (['sources', 'ingested', 'options', 'result'].includes(key)) {
+    if (['sources', 'ingested', 'analysisState', 'options', 'result'].includes(key)) {
       data[key] = value == null ? (key === 'sources' || key === 'ingested' ? [] : null) : toPrismaJson(value)
     } else {
       data[key] = value
