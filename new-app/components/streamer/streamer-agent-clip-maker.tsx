@@ -12,7 +12,47 @@ import { UnifiedClipRunNote } from '../clips/unified-clip-run-note'
 export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'
 type FinishedClip={projectId:string;clipId:string;startMin:number}
 type AgentRunProgress={runId:string;status:string;stage:string;elapsedSec:number;etaSec:number}
+type RememberedAgentRun={runId:string;startMs:number;endMs:number}
+type AgentRunListRow={
+  id:string;status:string;sourceSnapshot?:unknown;createdAt?:string|null
+}
 const WINDOW_MS=MAX_AGENT_SOURCE_WINDOW_MS
+const ACTIVE_AGENT_STATUSES=new Set(['queued','running','planning','applying'])
+
+function rememberedRunKey(projectId:string){return `clips-agent-run:${projectId}`}
+function rememberAgentRun(projectId:string,run:RememberedAgentRun){
+  try{
+    localStorage.setItem(rememberedRunKey(projectId),JSON.stringify(run))
+    console.info('[clips:agent-progress]',{action:'remember_run',projectId,runId:run.runId})
+  }catch(error){
+    console.warn('[clips:agent-progress]',{action:'remember_run_failed',projectId,error:String(error)})
+  }
+}
+function readRememberedAgentRun(projectId:string):RememberedAgentRun|null{
+  try{
+    const raw=localStorage.getItem(rememberedRunKey(projectId))
+    if(!raw)return null
+    const parsed=JSON.parse(raw) as Partial<RememberedAgentRun>
+    if(typeof parsed.runId!=='string'||typeof parsed.startMs!=='number'||typeof parsed.endMs!=='number')return null
+    return {runId:parsed.runId,startMs:parsed.startMs,endMs:parsed.endMs}
+  }catch{return null}
+}
+function forgetAgentRun(projectId:string,runId?:string){
+  try{
+    const current=readRememberedAgentRun(projectId)
+    if(!runId||!current||current.runId===runId)localStorage.removeItem(rememberedRunKey(projectId))
+    console.info('[clips:agent-progress]',{action:'forget_run',projectId,runId:runId??current?.runId??null})
+  }catch{}
+}
+function sourceRangeFromSnapshot(snapshot:unknown):[number,number]|null{
+  if(!Array.isArray(snapshot))return null
+  const first=snapshot[0]
+  if(!first||typeof first!=='object'||Array.isArray(first))return null
+  const range=(first as Record<string,unknown>).rangeMs
+  if(!Array.isArray(range)||range.length!==2)return null
+  const start=Number(range[0]),end=Number(range[1])
+  return Number.isFinite(start)&&Number.isFinite(end)&&end>start?[start,end]:null
+}
 
 function formatAgentTime(seconds:number){
   const total=Math.max(0,Math.round(seconds))
@@ -65,6 +105,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
   const manualRunning=useRef(false)
   const [batchId,setBatchId]=useState<string|null>(null)
   const [agentProgress,setAgentProgress]=useState<AgentRunProgress|null>(null)
+  const [checkingRun,setCheckingRun]=useState(true)
   const progressLogRef=useRef<{stage:string;bucket:number}|null>(null)
   useEffect(()=>()=>{canceled.current=true},[])
   // The entire-VOD batch is durable: project settings and worker jobs survive
@@ -97,6 +138,84 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     void poll()
     return ()=>{stopped=true;if(timer)clearTimeout(timer)}
   },[projectId])
+
+  useEffect(()=>{
+    if(!ready){
+      setCheckingRun(false)
+      return
+    }
+    let stopped=false
+    const restore=async()=>{
+      console.info('[clips:agent-progress]',{action:'restore_begin',projectId})
+      try{
+        const batch=await requestJson('/api/streamer/agent-batches?projectId='+
+          encodeURIComponent(projectId)) as null|{status?:string}
+        if(batch?.status==='running'){
+          console.info('[clips:agent-progress]',{action:'restore_skip_batch',projectId})
+          return
+        }
+      }catch{
+        // Batch lookup is advisory; manual-run recovery still proceeds.
+      }
+
+      let remembered=readRememberedAgentRun(projectId)
+      if(remembered){
+        try{
+          const data=await requestJson('/api/ai-producer-agent/runs/'+encodeURIComponent(remembered.runId)) as {
+            run:{status:string}
+          }
+          if(!ACTIVE_AGENT_STATUSES.has(data.run.status)){
+            forgetAgentRun(projectId,remembered.runId)
+            remembered=null
+          }
+        }catch(error){
+          console.warn('[clips:agent-progress]',{
+            action:'restore_remembered_lookup_failed',projectId,runId:remembered.runId,error:String(error),
+          })
+        }
+      }
+
+      if(!remembered){
+        try{
+          const data=await requestJson('/api/ai-producer-agent/runs?active=1&projectId='+
+            encodeURIComponent(projectId)) as {runs:AgentRunListRow[]}
+          const active=data.runs?.find(run=>ACTIVE_AGENT_STATUSES.has(run.status))
+          if(active){
+            const range=sourceRangeFromSnapshot(active.sourceSnapshot) ??
+              [sourceStartMs,sourceStartMs+Math.min(sourceDurationMs,WINDOW_MS)] as [number,number]
+            remembered={runId:active.id,startMs:range[0],endMs:range[1]}
+            rememberAgentRun(projectId,remembered)
+          }
+        }catch(error){
+          console.warn('[clips:agent-progress]',{action:'restore_active_lookup_failed',projectId,error:String(error)})
+        }
+      }
+
+      if(!remembered||stopped){
+        console.info('[clips:agent-progress]',{action:'restore_none',projectId})
+        return
+      }
+
+      console.info('[clips:agent-progress]',{action:'restore_attach',projectId,runId:remembered.runId})
+      canceled.current=false
+      manualRunning.current=true
+      setRunning(true)
+      setErrors([])
+      setStatus('Agent run: reconnecting')
+      try{
+        const clip=await pollRun(remembered.runId,remembered.startMs,remembered.endMs)
+        if(!stopped)setCompleted(prev=>prev.some(item=>item.clipId===clip.clipId)?prev:[...prev,clip])
+      }catch(error){
+        if(!stopped)setErrors(prev=>[...prev,`Agent run: ${String((error as Error).message)}`])
+      }finally{
+        manualRunning.current=false
+        if(!stopped)setRunning(false)
+        console.info('[clips:agent-progress]',{action:'restore_end',projectId,runId:remembered.runId})
+      }
+    }
+    void restore().finally(()=>{if(!stopped)setCheckingRun(false)})
+    return()=>{stopped=true}
+  },[projectId,ready,sourceDurationMs,sourceStartMs])
   if(!aiProducerAgentPublicEnabled())return null
 
   async function prepareSource(startMs:number,endMs:number){
@@ -120,6 +239,44 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     throw Error('Source preparation did not finish in this session')
   }
 
+  async function pollRun(runId:string,startMs:number,endMs:number){
+    for(let i=0;i<600&&!canceled.current;i++){
+      const data=await requestJson('/api/ai-producer-agent/runs/'+
+        encodeURIComponent(runId)) as {run:{
+          status:string;phase?:string|null;createdAt?:string|null;error?:string|null;
+          resultProjectId?:string|null;resultClipId?:string|null;
+          steps?:Array<{tool?:string|null;phase?:string|null}>}}
+      const run=data.run
+      const lastStep=run.steps?.length?run.steps[run.steps.length-1]:undefined
+      const elapsedSec=run.createdAt&&Number.isFinite(Date.parse(run.createdAt))
+        ?Math.max(0,Math.floor((Date.now()-Date.parse(run.createdAt))/1000))
+        :i*3
+      const stage=agentStageLabel(run.phase,lastStep?.tool)
+      const etaSec=Math.max(0,estimateAgentTotalSec(endMs-startMs)-elapsedSec)
+      const nextProgress={runId,status:run.status,stage,elapsedSec,etaSec}
+      setAgentProgress(nextProgress)
+      const bucket=Math.floor(elapsedSec/30)
+      if(progressLogRef.current?.stage!==stage||progressLogRef.current?.bucket!==bucket){
+        console.info('[clips:agent-progress]',nextProgress)
+        progressLogRef.current={stage,bucket}
+      }
+      setStatus('Agent run: '+run.status)
+      if(['ready','done'].includes(run.status)){
+        forgetAgentRun(projectId,runId)
+        if(!run.resultProjectId||!run.resultClipId)
+          throw Error('Agent completed without an editable clip')
+        return {projectId:run.resultProjectId,clipId:run.resultClipId,
+          startMin:Math.max(0,Math.floor((startMs-sourceStartMs)/60_000))}
+      }
+      if(['failed','capped','canceled'].includes(run.status)){
+        forgetAgentRun(projectId,runId)
+        throw Error(run.error??'Agent did not finish the clip')
+      }
+      await sleep(3000)
+    }
+    throw Error('Agent run did not finish in this session')
+  }
+
   async function runWindow(startMs:number,endMs:number){
     const local=await prepareSource(startMs,endMs)
     if(canceled.current)throw Error('Session closed')
@@ -137,39 +294,9 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
           : 'Build one compelling source-grounded short story from multiple real passages.',
       }),
     }) as {runId:string}
+    rememberAgentRun(projectId,{runId:started.runId,startMs,endMs})
     console.info('[clips:agent-progress]',{action:'run_started',runId:started.runId,sourceWindowMs:endMs-startMs})
-    for(let i=0;i<600&&!canceled.current;i++){
-      const data=await requestJson('/api/ai-producer-agent/runs/'+
-        encodeURIComponent(started.runId)) as {run:{
-          status:string;phase?:string|null;createdAt?:string|null;error?:string|null;
-          resultProjectId?:string|null;resultClipId?:string|null;
-          steps?:Array<{tool?:string|null;phase?:string|null}>}}
-      const run=data.run
-      const lastStep=run.steps?.length?run.steps[run.steps.length-1]:undefined
-      const elapsedSec=run.createdAt&&Number.isFinite(Date.parse(run.createdAt))
-        ?Math.max(0,Math.floor((Date.now()-Date.parse(run.createdAt))/1000))
-        :i*3
-      const stage=agentStageLabel(run.phase,lastStep?.tool)
-      const etaSec=Math.max(0,estimateAgentTotalSec(endMs-startMs)-elapsedSec)
-      const nextProgress={runId:started.runId,status:run.status,stage,elapsedSec,etaSec}
-      setAgentProgress(nextProgress)
-      const bucket=Math.floor(elapsedSec/30)
-      if(progressLogRef.current?.stage!==stage||progressLogRef.current?.bucket!==bucket){
-        console.info('[clips:agent-progress]',nextProgress)
-        progressLogRef.current={stage,bucket}
-      }
-      setStatus('Agent run: '+run.status)
-      if(['ready','done'].includes(run.status)){
-        if(!run.resultProjectId||!run.resultClipId)
-          throw Error('Agent completed without an editable clip')
-        return {projectId:run.resultProjectId,clipId:run.resultClipId,
-          startMin:Math.floor((startMs-sourceStartMs)/60_000)}
-      }
-      if(['failed','capped','canceled'].includes(run.status))
-        throw Error(run.error??'Agent did not finish the clip')
-      await sleep(3000)
-    }
-    throw Error('Agent run did not finish in this session')
+    return pollRun(started.runId,startMs,endMs)
   }
 
   async function create(){
@@ -261,11 +388,11 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         </label>:null}
       {running&&batchId?<Button size="sm" variant="outline"
         onClick={()=>void cancelBatch()}>Stop batch</Button>:null}
-      <Button size="sm" disabled={!ready||running||sourceDurationMs<15_000}
+      <Button size="sm" disabled={!ready||running||checkingRun||sourceDurationMs<15_000}
         onClick={()=>void create()}>
-        {running?<Loader2 className="mr-2 size-4 animate-spin"/>:
+        {running||checkingRun?<Loader2 className="mr-2 size-4 animate-spin"/>:
           <Sparkles className="mr-2 size-4"/>}
-        {running?'Processing…':'Create AI clips'}
+        {checkingRun?'Checking…':running?'Processing…':'Create AI clips'}
       </Button>
     </div>
     </UnifiedClipRunNote>

@@ -47,28 +47,57 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const disabled = aiProducerAgentDisabledResponse()
   if (disabled) return disabled
   try {
     const workspaceId = await resolveWorkspaceId()
+    const url = new URL(request.url)
+    const projectId = url.searchParams.get('projectId')?.trim() || null
+    const activeOnly = url.searchParams.get('active') === '1'
+    console.info('[clips:agent-progress] restore_lookup_begin', { projectId, activeOnly })
     const { getPrisma } = await import('@/lib/server/db')
     const rows = await getPrisma().aiProducerAgentRun.findMany({
-      where: { workspaceId },
+      where: {
+        workspaceId,
+        ...(activeOnly ? { status: { in: ['queued', 'running', 'planning', 'applying'] } } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: 20,
       select: {
         id: true,
         status: true,
+        phase: true,
         outputType: true,
+        config: true,
+        sourceSnapshot: true,
         resultProjectId: true,
         resultClipId: true,
         createdAt: true,
         updatedAt: true,
       },
     })
-    return NextResponse.json({ data: { runs: rows } })
+    const runs = projectId
+      ? rows.filter((row) => {
+          const config = row.config && typeof row.config === 'object' && !Array.isArray(row.config)
+            ? row.config as Record<string, unknown>
+            : {}
+          if (config.storyMode !== 'clip_unified_v1') return false
+          if (!Array.isArray(row.sourceSnapshot)) return false
+          return row.sourceSnapshot.some((source) =>
+            source && typeof source === 'object' && !Array.isArray(source) &&
+            (source as Record<string, unknown>).projectId === projectId)
+        })
+      : rows
+    console.info('[clips:agent-progress] restore_lookup_end', {
+      projectId,
+      activeOnly,
+      matches: runs.length,
+      runId: runs[0]?.id ?? null,
+    })
+    return NextResponse.json({ data: { runs } })
   } catch (err) {
+    console.error('[clips:agent-progress] restore_lookup_failed', { error: String(err) })
     return jsonError(err, 500)
   }
 }
