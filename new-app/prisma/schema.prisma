@@ -10640,6 +10640,7 @@ model YoutubeVideoRun {
   requestHash      String
   sources          Json     @default("[]")
   ingested         Json     @default("[]")
+  analysisState    Json?
   options          Json?
   chosenOptionId   String?
   creditsEstimated Int?
@@ -10651,6 +10652,27 @@ model YoutubeVideoRun {
   @@unique([workspaceId, clientRequestId])
   @@index([workspaceId, status])
   @@map("youtube_video_runs")
+}
+
+/// YouTube-only durable specialist/validator logs. Never shares Producer run FKs.
+model YoutubeVideoRunStep {
+  id            String   @id
+  runId         String
+  stepIndex     Int
+  phase         String?
+  tool          String
+  kind          String?
+  argsSummary   String?
+  resultSummary String?
+  durationMs    Int?
+  tokensIn      Int?
+  tokensOut     Int?
+  estUsd        Float?
+  error         String?
+  createdAt     DateTime @default(now())
+
+  @@index([runId, stepIndex])
+  @@map("youtube_video_run_steps")
 }
 
 /// Standalone AI Captions runs (additive, v1).
