@@ -1,6 +1,6 @@
 import { withAutoContentDetection } from '@/lib/clips/content-detection'
 import { defaultClipSettings } from '@/lib/clips/settings'
-import { sortAndMergeCuts } from '@/lib/youtube-video/assemble'
+import { storyCutsInEditorialOrder } from '@/lib/youtube-video/assemble'
 import { resultStoryFields } from '@/lib/youtube-video/chapters'
 import { estimateYoutubeVideoCredits } from '@/lib/youtube-video/credits'
 import { YoutubeVideoError } from '@/lib/youtube-video/errors'
@@ -100,7 +100,7 @@ export function assembleChosenOption(
   clip: { projectId: string; clipId: string; durationMs?: number; renderId?: string },
   media?: { playbackUrl?: string | null; thumbnailUrl?: string | null; downloadUrl?: string | null },
 ): YoutubeVideoResult {
-  const cuts = sortAndMergeCuts(cutsFromOption(option))
+  const cuts = storyCutsInEditorialOrder(cutsFromOption(option))
   const story = resultStoryFields(option, cuts)
   const durationMs = clip.durationMs ?? story.durationMs
   return {

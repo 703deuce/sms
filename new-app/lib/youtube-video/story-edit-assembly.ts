@@ -28,8 +28,14 @@ export function buildYoutubeStoryEditAssembly(
     if (!Number.isFinite(cut.startMs) || !Number.isFinite(cut.endMs) || cut.endMs <= cut.startMs) {
       throw new Error('youtube_story_invalid_segment_bounds')
     }
+    // Balanced pieces keep the final piece >= INSERT_MIN_MS (200ms).
+    // A simple 10-minute split would silently drop a last 1-199ms fragment.
+    const durationMs = cut.endMs - cut.startMs
+    if (durationMs < 200) throw new Error('youtube_story_insert_too_short')
+    const pieces = Math.ceil(durationMs / MAX_INSERT_MS)
+    const pieceMs = Math.ceil(durationMs / pieces)
     for (let start = cut.startMs; start < cut.endMs;) {
-      const end = Math.min(start + MAX_INSERT_MS, cut.endMs)
+      const end = Math.min(start + pieceMs, cut.endMs)
       rawInserts.push({
         id: `yt_insert_${rawInserts.length}`, sourceId: `yt_source_${i+1}`,
         atSrcMs: first.endMs, append: true, inMs: start, durMs: end - start,

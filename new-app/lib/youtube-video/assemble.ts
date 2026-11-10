@@ -36,3 +36,20 @@ export function sortAndMergeCuts(cuts: YoutubeVideoCut[], overlapThreshold = 0.6
 export function assembledDurationMs(cuts: YoutubeVideoCut[]): number {
   return cuts.reduce((sum, cut) => sum + Math.max(0, cut.endMs - cut.startMs), 0)
 }
+
+/**
+ * Execution order is the order of the approved story beats, NOT media time.
+ * A multi-source story may return to an earlier recording or intentionally
+ * repeat an excerpt. Keep all valid cuts: the renderer, chapters and displayed
+ * plan must consume exactly the same ordered sequence.
+ *
+ * Do not replace this with sortAndMergeCuts: it sorts across sources and
+ * deduplicates legitimate recurring story moments.
+ */
+export function storyCutsInEditorialOrder(cuts: readonly YoutubeVideoCut[]): YoutubeVideoCut[] {
+  return cuts.filter(cut =>
+    typeof cut.sourceId === 'string' && cut.sourceId.length > 0 &&
+    Number.isFinite(cut.startMs) && Number.isFinite(cut.endMs) &&
+    cut.startMs >= 0 && cut.endMs > cut.startMs,
+  )
+}

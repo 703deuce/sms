@@ -11,7 +11,7 @@ import { getClipStorage } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { buildYoutubeStoryEditAssembly } from '@/lib/youtube-video/story-edit-assembly'
 import { traceYoutubeRunStep, youtubeRunEvent } from '@/lib/youtube-video/step-log'
-import { sortAndMergeCuts } from '@/lib/youtube-video/assemble'
+import { storyCutsInEditorialOrder } from '@/lib/youtube-video/assemble'
 import { cutsFromOption } from '@/lib/youtube-video/story-options'
 import { memoryYoutubeVideoStore, type YoutubeVideoRunRecord, type YoutubeVideoRunStore } from '@/lib/youtube-video/run-store'
 import { defaultStreamerImporter } from '@/lib/youtube-video/import-source'
@@ -154,9 +154,11 @@ export async function loadReadySource(workspaceId: string, projectId: string): P
  */
 export const writeYoutubeVideoClip: WriteYoutubeClip = async ({ workspaceId, createdById, runId, option, sources }) => {
   const prisma = getPrisma()
-  const cuts = sortAndMergeCuts(cutsFromOption(option))
+  const cuts = storyCutsInEditorialOrder(cutsFromOption(option))
   if (!cuts.length) throw new YoutubeVideoError('no_story_cuts', 'The chosen story has no usable source footage.', 422)
-  youtubeRunEvent(runId, 'story_assembly', 'start', { sourceCount: sources.length, optionCount: 1 })
+  youtubeRunEvent(runId, 'story_assembly', 'start', {
+    sourceCount: sources.length, optionCount: 1, wordCount: cuts.length,
+  })
   const projectIds = [...new Set(sources.map((s) => s.projectId))]
   const projects = await traceYoutubeRunStep(runId, 'source_media_validation', () => prisma.clipProject.findMany({
     where: { id: { in: projectIds }, workspaceId, deletedAt: null },
@@ -178,6 +180,12 @@ export const writeYoutubeVideoClip: WriteYoutubeClip = async ({ workspaceId, cre
     }
     return upload
   })
+  // This is editorial order, not source timestamp order. Log each selected
+  // segment before writing it, without transcript text or signed media URLs.
+  cuts.forEach((cut, index) => youtubeRunEvent(runId, 'story_cut', 'selected', {
+    sourceCount: index + 1, projectId: bySource.get(cut.sourceId)?.projectId,
+    status: `${cut.startMs}-${cut.endMs}`,
+  }))
   const first = cuts[0]!
   const firstSource = bySource.get(first.sourceId)
   if (!firstSource) throw new YoutubeVideoError('source_not_found', 'Story opening source is unavailable.', 404)

@@ -1,4 +1,4 @@
-import { assembledDurationMs, sortAndMergeCuts } from '@/lib/youtube-video/assemble'
+import { assembledDurationMs, storyCutsInEditorialOrder } from '@/lib/youtube-video/assemble'
 import type {
   YoutubeVideoBeat,
   YoutubeVideoChapter,
@@ -8,24 +8,29 @@ import type {
 } from '@/lib/youtube-video/types'
 
 export function planFromOption(option: YoutubeVideoOption, cuts: YoutubeVideoCut[]): YoutubeVideoPlan {
-  const merged = sortAndMergeCuts(cuts)
-  const beats: YoutubeVideoBeat[] = option.beats.map((beat, index) => {
-    const cut = merged[index]
+  const ordered = storyCutsInEditorialOrder(cuts)
+  const beats: YoutubeVideoBeat[] = ordered.map((cut, index) => {
+    const beat = option.beats.find(candidate =>
+      candidate.sourceId === cut.sourceId &&
+      candidate.startMs === cut.startMs &&
+      candidate.endMs === cut.endMs &&
+      candidate.label === cut.label,
+    ) ?? option.beats[index]
     return {
-      label: beat.label,
-      startMs: cut?.startMs ?? beat.startMs,
-      endMs: cut?.endMs ?? beat.endMs,
-      sourceId: cut?.sourceId ?? beat.sourceId,
-      evidence: beat.evidence,
+      label: cut.label ?? beat?.label ?? `Part ${index + 1}`,
+      startMs: cut.startMs,
+      endMs: cut.endMs,
+      sourceId: cut.sourceId,
+      ...(beat?.evidence ? { evidence: beat.evidence } : {}),
     }
   })
   return { premise: option.premise, beats }
 }
 
 export function chaptersFromCuts(cuts: YoutubeVideoCut[], fallbackLabels: string[]): YoutubeVideoChapter[] {
-  const merged = sortAndMergeCuts(cuts)
+  const ordered = storyCutsInEditorialOrder(cuts)
   let at = 0
-  return merged.map((cut, index) => {
+  return ordered.map((cut, index) => {
     const chapter = { title: cut.label || fallbackLabels[index] || `Part ${index + 1}`, startMs: at }
     at += Math.max(0, cut.endMs - cut.startMs)
     return chapter
@@ -51,9 +56,9 @@ export function formatClock(ms: number): string {
 }
 
 export function resultStoryFields(option: YoutubeVideoOption, cuts: YoutubeVideoCut[]) {
-  const merged = sortAndMergeCuts(cuts)
-  const plan = planFromOption(option, merged)
-  const chapters = chaptersFromCuts(merged, plan.beats.map((beat) => beat.label))
-  const durationMs = assembledDurationMs(merged)
+  const ordered = storyCutsInEditorialOrder(cuts)
+  const plan = planFromOption(option, ordered)
+  const chapters = chaptersFromCuts(ordered, plan.beats.map((beat) => beat.label))
+  const durationMs = assembledDurationMs(ordered)
   return { plan, chapters, chapterText: chapterTextFromChapters(chapters, durationMs), durationMs }
 }
