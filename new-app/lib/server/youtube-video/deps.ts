@@ -148,7 +148,11 @@ export async function loadReadySource(workspaceId: string, projectId: string): P
           return [{ w: word.w, s: word.s, e: word.e, spk: word.spk ?? null }]
         })
     : []
-  if (!words.length) throw new YoutubeVideoError('source_no_transcript', 'The source finished without usable transcript words.', 422)
+  // In shared visual/audio mode, a silent READY video is still legitimate
+  // source material. Legacy transcript-only fallback retains its old guard.
+  if (!words.length && process.env.YOUTUBE_SHARED_PIPELINE === '0') {
+    throw new YoutubeVideoError('source_no_transcript', 'The source finished without usable transcript words.', 422)
+  }
   const durationMs = project.upload?.durationMs
     ?? Math.max(0, (project.rangeEndMs ?? 0) - (project.rangeStartMs ?? 0))
     ?? Math.round((words[words.length - 1]?.e ?? 0) * 1000)
