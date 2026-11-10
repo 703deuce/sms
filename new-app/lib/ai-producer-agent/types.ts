@@ -19,6 +19,8 @@ export type AiProducerRunConfig = {
   roughCutIntent?: 'story' | 'highlights'
   /** Transcript-only A/B baseline or Gemini low-detail frames + source audio + ASR evidence. */
   visualEvidenceMode?: 'transcript_baseline' | 'visual_audio'
+  /** Explicit opt-in; normal Producer and short clip callers retain existing behavior. */
+  youtubeLongForm?: boolean
   targetLengthS: [number, number]
   music: 'none' | 'library'
   memeSfx: 'off' | 'subtle' | 'meme'
