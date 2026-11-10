@@ -374,7 +374,6 @@ export function EditorShell({
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const band = useEditorBand()
   const unifiedWorkspaceActive = band !== 'mobile'
-  const [compactInspectorOpenRequest, setCompactInspectorOpenRequest] = useState(0)
   const compactHandoffInFlight = useRef(false)
   // FIX2 R7: read localStorage after mount (no SSR/hydration mismatch)
   const [timelineOpen, setTimelineOpen] = useState(false)
@@ -386,7 +385,7 @@ export function EditorShell({
   useEffect(() => {
     if (compact) {
       const store = typeof window === 'undefined' ? null : window.localStorage
-      const open = readTimelineOpen(store)
+      const open = unifiedWorkspaceActive ? store?.getItem('clipEditor.timelineOpen') !== '0' : readTimelineOpen(store)
       setTimelineOpen(open)
       if (!fullVideo && !clipperStudio) console.info('[editor:compact-gaps] timeline-state', { projectId, clipId, open })
     }
@@ -454,18 +453,12 @@ export function EditorShell({
     }
     const group = panelToRailGroup(id)
     if (group) writeRailGroupTab(group.id, id)
-    if (unifiedWorkspaceActive) {
-      if (compact && !fullVideo && !clipperStudio) {
-        console.info('[editor:compact-gaps] panel-select', { projectId, clipId, panel: id })
-        setCompactInspectorOpenRequest((request) => request + 1)
-      }
-      return
-    }
+    if (unifiedWorkspaceActive) return
     if (layoutView === 'timeline' && band !== 'mobile') setDockPanelOpenPersist(true)
     else if (band === 'mobile' || band === 'compact') {
       setMobilePanelOpen(true)
     }
-  }, [band, layoutView, setDockPanelOpenPersist, unifiedWorkspaceActive, compact, fullVideo, clipperStudio, projectId, clipId])
+  }, [band, layoutView, setDockPanelOpenPersist, unifiedWorkspaceActive])
   const selectRailGroup = useCallback(
     (groupId: EditorRailGroupId) => {
       const group = editorRailGroups(clipEditorAiExtrasEnabled()).find((g) => g.id === groupId)
@@ -3857,8 +3850,6 @@ export function EditorShell({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <EditorLayout
           unified={unifiedWorkspaceActive}
-          unifiedCompactPreviewFirst={compact && !fullVideo && !clipperStudio}
-          unifiedInspectorOpenRequest={compactInspectorOpenRequest}
           unifiedTimelineView={layoutView}
           unifiedTimelineHidden={compact && !timelineOpen && !timelineFocused}
           unifiedTimelineCollapsed={timelineCollapsed && !timelineFocused}
