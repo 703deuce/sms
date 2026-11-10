@@ -1,5 +1,12 @@
 import { z } from 'zod'
+import { ASR_LANGUAGES } from '@/lib/clips/asr-languages'
 import { CAPTION_PRESETS as CAPTION_PRESET_DEFS, presetSlugToId } from '@/lib/clips/caption-presets'
+
+/** Published transcription languages from asr-languages.ts. Keep in sync with that list. */
+export const ASR_LANGUAGE_SETTING_CODES = ASR_LANGUAGES.map((l) => l.code) as [
+  (typeof ASR_LANGUAGES)[number]['code'],
+  ...(typeof ASR_LANGUAGES)[number]['code'][],
+]
 
 export const CLIP_SETTINGS_VERSION = 2
 
@@ -99,9 +106,7 @@ export const clipProjectSettingsSchema = z.object({
   autoAgentClipMode: z.enum(['clip_moment_v1','clip_story_v1']).optional(),
   autoAgentClipSeconds: z.union([z.literal(30),z.literal(60),z.literal(90)]).optional(),
   /** TX-30: transcription language for new uploads (unset = English). */
-  asrLanguage: z
-    .enum(['auto', 'en', 'es', 'fr', 'de', 'pt', 'it', 'nl'])
-    .optional(),
+  asrLanguage: z.enum(ASR_LANGUAGE_SETTING_CODES).optional(),
 })
 
 export type ClipProjectSettings = z.infer<typeof clipProjectSettingsSchema>

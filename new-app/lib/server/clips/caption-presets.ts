@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client'
+import { normalizeCaptionPresetConfig } from '@/lib/clips/caption-style-config'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 
@@ -13,11 +14,12 @@ export async function listCaptionPresets(workspaceId: string) {
 
 export async function createCaptionPreset(workspaceId: string, name: string, config: Record<string, unknown>) {
   const prisma = getPrisma()
+  const normalized = normalizeCaptionPresetConfig(config)
   const basePresetId =
-    typeof config.basePresetId === 'string'
-      ? config.basePresetId
-      : typeof config.presetId === 'string'
-        ? config.presetId
+    typeof normalized.basePresetId === 'string'
+      ? normalized.basePresetId
+      : typeof normalized.presetId === 'string'
+        ? normalized.presetId
         : null
   return prisma.captionPreset.create({
     data: {
@@ -25,7 +27,7 @@ export async function createCaptionPreset(workspaceId: string, name: string, con
       workspaceId,
       name: name.trim(),
       basePresetId,
-      config: config as Prisma.InputJsonValue,
+      config: normalized as Prisma.InputJsonValue,
     },
   })
 }

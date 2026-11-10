@@ -35,6 +35,7 @@ import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { clipExportMediaReady } from '@/lib/clips/clip-export-media'
 import { isFullVideoSettings } from '@/lib/clips/full-video'
+import { captionSyncExportDecision } from '@/lib/clips/caption-sync-guard'
 
 const resolutionSchema = z.preprocess((v) => {
   if (v === 720 || v === '720') return '720p'
@@ -51,6 +52,8 @@ const bodySchema = z.object({
     .default('9:16'),
   watermark: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
+  /** Editor 'export anyway' acknowledgment when caption timing looks drifted. */
+  captionSyncAck: z.boolean().optional(),
   removeDeadAir: z.boolean().optional(),
   /** Grid download: match preview.mp4 (layout, 9:16, no overlays, no dead-air polish). */
   previewWysiwyg: z.boolean().optional(),
@@ -209,6 +212,30 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       exportSfx,
       skipPolishForPreviewReuse,
     })
+
+    const captionSync = captionSyncExportDecision({
+      words: wordsPayload?.words,
+      edits,
+      durationMs: editedDurationMs,
+      captionSyncAck: body.captionSyncAck,
+      previewWysiwyg,
+      format: body.format ?? deliver?.format ?? 'mp4',
+    })
+    if (captionSync.blocked) {
+      console.info('[clipper:export] caption_sync_blocked', {
+        clipId,
+        workspaceId,
+        codes: captionSync.warnings.map((w) => w.code),
+      })
+      return NextResponse.json(
+        {
+          error: 'Caption timing looks out of sync. Acknowledge the warning to export anyway.',
+          code: 'CAPTION_SYNC_REQUIRED',
+          data: { warnings: captionSync.warnings },
+        },
+        { status: 409 },
+      )
+    }
 
     if (!skipPolishForPreviewReuse) {
       edits = {

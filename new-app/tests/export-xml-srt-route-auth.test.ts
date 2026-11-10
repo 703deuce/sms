@@ -60,6 +60,19 @@ describe('clip export routes without Supabase session', () => {
     expect(requireAuthenticatedUser).not.toHaveBeenCalled()
   })
 
+  it('GET vtt returns 200 text/vtt (workspace scope only)', async () => {
+    const { GET } = await import('@/app/api/clips/clips/[id]/vtt/route')
+    const res = await GET(new Request('http://local/api'), {
+      params: Promise.resolve({ id: mockClip.id }),
+    })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/vtt')
+    const body = await res.text()
+    expect(body.startsWith('WEBVTT')).toBe(true)
+    const { requireAuthenticatedUser } = await import('@/lib/server/auth/session')
+    expect(requireAuthenticatedUser).not.toHaveBeenCalled()
+  })
+
   it('GET export-xml returns 200 application/zip (workspace scope only)', async () => {
     const { GET } = await import('@/app/api/clips/clips/[id]/export-xml/route')
     const res = await GET(new Request('http://local/api'), {

@@ -309,6 +309,8 @@ export function exportClipWithOptions(
     exportPlatform?: 'tiktok' | 'youtube_shorts' | 'instagram_reels'
     watermark?: boolean
     alsoSrt?: boolean
+    /** Required when caption timing is drifted; acknowledges the editor sync warning. */
+    captionSyncAck?: boolean
     removeDeadAir?: boolean
     previewWysiwyg?: boolean
     exportSfx?: 'off' | 'subtle' | 'meme'
