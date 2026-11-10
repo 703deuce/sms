@@ -62,6 +62,15 @@ export type YoutubeVideoResult = {
   plan: YoutubeVideoPlan
   chapters: YoutubeVideoChapter[]
   chapterText: string
+  /** Sanitized long-form planning audit, retained after the final MP4 render. */
+  analysisAudit?: {
+    steps: import('@/lib/youtube-video/pipeline/yt-types').YtStep[]
+    windows: Array<{
+      sourceIndex:number;startMs:number;endMs:number
+      acceptedCuts:Array<{sourceId:string;startMs:number;endMs:number}>
+      rejectedCuts:Array<{startMs:number;endMs:number;code:string}>
+    }>
+  }
 }
 
 export type YoutubeVideoUploadSource = { kind: 'upload'; projectId: string }
