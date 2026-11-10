@@ -424,7 +424,7 @@ export async function reapStaleJobs() {
       status: { in: STUCK_PROJECT_STATUSES },
       updatedAt: { lt: stuckCutoff },
     },
-    select: { id: true, status: true, settings: true },
+    select: { id: true, status: true, stage: true, updatedAt: true, settings: true },
     take: 10,
   })
   for (const project of stuckProjects) {
@@ -435,6 +435,11 @@ export async function reapStaleJobs() {
       })
       continue
     }
+    console.info('[clips:timeout]', {
+      projectId: project.id, runId: null, lastStage: project.stage,
+      idleMs: Math.max(0, Date.now() - project.updatedAt.getTime()),
+      action: 'fail_stuck_project',
+    })
     await prisma.$transaction([
       prisma.clipProject.update({
         where: { id: project.id },

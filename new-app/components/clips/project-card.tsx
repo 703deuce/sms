@@ -9,6 +9,7 @@ import { ProjectKindBadge } from '@/components/clips/ui/kind-badge'
 import { t2vProjectHref, t2vStatusLabel } from '@/lib/t2v/project-link'
 import { ProjectCardQueueHint } from '@/components/clips/project-card-queue'
 import { cn } from '@/lib/utils'
+import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
 
 function isProcessing(status: string) {
   return status !== 'READY' && status !== 'FAILED' && status !== 'CANCELED' && status !== 'DRAFT'
@@ -40,6 +41,8 @@ export function ProjectCard({
   const sourceFrameStartMs = project.sourceFrameStartMs ?? 0
   const isDraft = project.status === 'DRAFT'
   const failed = project.status === 'FAILED'
+  const failureCopy = failed ? describeClipProjectFailure({ status: project.status, error: project.error, stage: project.stage, clipCount }) : null
+  if (failed) console.info('[clips:status-label]', { projectId: project.id, label: 'Failed', suppressedStage: stageLabel })
   const noThumb = !displayThumb && !sourceFrameUrl
   const showThumbOverlay = processing && Boolean(displayThumb || sourceFrameUrl)
   const showPlaceholderStatus = (processing || failed) && noThumb
@@ -105,7 +108,7 @@ export function ProjectCard({
                 {isDraft ? 'Draft' : showPlaceholderStatus ? overlayLabel : 'No preview yet'}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                {isDraft ? 'Add media to start' : showPlaceholderStatus ? stageLabel : 'No preview yet'}
+                {isDraft ? 'Add media to start' : failed ? failureCopy?.message ?? 'Please retry processing.' : showPlaceholderStatus ? stageLabel : 'No preview yet'}
               </p>
             </div>
             {showPlaceholderStatus && processing ? (
@@ -115,7 +118,7 @@ export function ProjectCard({
         )}
         <div className="absolute left-2 top-2 z-10 flex gap-1.5">
           <ProjectKindBadge kind={isT2v ? 'video' : 'clips'} onMedia />
-          {!isT2v || !t2vLabel ? (
+          {failed && noThumb ? null : !isT2v || !t2vLabel ? (
             <ProjectStatusBadge status={project.status} showSpinner={false} onMedia />
           ) : (
             <Badge variant="onMedia">{t2vLabel}</Badge>

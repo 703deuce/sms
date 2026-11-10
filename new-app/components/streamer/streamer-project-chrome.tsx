@@ -91,18 +91,25 @@ export function StreamerProjectChrome({
   }, [etaSec, projectStatus])
 
   const processing = !['READY', 'FAILED', 'CANCELED'].includes(projectStatus)
+  useEffect(() => {
+    if (!processing && (progress > 0 || chunkTotal || etaSec > 0)) {
+      console.info('[streamer:progress]', { projectId, action: 'hide_terminal_chrome_progress', status: projectStatus })
+    }
+  }, [processing, progress, chunkTotal, etaSec, projectId, projectStatus])
   const showRunProgress =
     processing && !waitingForWorker && (progress > 0 || (chunkTotal != null && chunkTotal > 0) || etaSec > 0)
 
   return (
     <div className="mb-4 space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <StreamerStageStepper
-          stage={stage}
-          progress={progress}
-          chunkDone={chunkDone}
-          chunkTotal={chunkTotal}
-        />
+        {processing ? (
+          <StreamerStageStepper
+            stage={stage}
+            progress={progress}
+            chunkDone={chunkDone}
+            chunkTotal={chunkTotal}
+          />
+        ) : null}
         <StreamerLayoutPill projectId={projectId} layout={layout ?? null} />
         <StopAutoPullButton projectId={projectId} initialLive={Boolean(rollingLive)} />
       </div>

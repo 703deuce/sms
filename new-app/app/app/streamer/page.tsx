@@ -12,11 +12,11 @@ import { StreamerUsageMeter } from '@/components/streamer/usage-meter'
 import { StreamerLiveComingSoon } from '@/components/streamer/streamer-live-coming-soon'
 import { streamerLiveRealtimeEnabled, streamerPublicFlags } from '@/lib/server/streamer/env'
 import { Radio } from 'lucide-react'
-import { listProjectClips } from '../../../lib/server/clips/clips'
+import { listStreamerHubProjectClips } from '../../../lib/server/clips/clips'
 import type { StreamerVodRow } from '../../../lib/server/streamer/vod-list'
 import { StreamerUnifiedResults } from '../../../components/streamer/streamer-unified-results'
 
-type ProjectClipList = NonNullable<Awaited<ReturnType<typeof listProjectClips>>>
+type ProjectClipList = Awaited<ReturnType<typeof listStreamerHubProjectClips>>
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Streamer · Clips' }
@@ -24,19 +24,18 @@ export const metadata = { title: 'Streamer · Clips' }
 export default async function StreamerHubPage() {
   const workspaceId = await resolveWorkspaceId()
   const flags = streamerPublicFlags()
+  const queryStart = Date.now()
   const [vods, usage, channels] = await Promise.all([
     listStreamerVodsForWorkspace(workspaceId),
     getStreamUsage(workspaceId),
     listStreamerChannels(workspaceId),
   ])
+  console.info('[page:timing]', { path: '/app/streamer', query: 'vods_usage_channels', elapsedMs: Date.now() - queryStart, rows: vods.length })
   const vodRows: StreamerVodRow[] = vods
   const clipIds: string[] = vodRows
     .filter((v: StreamerVodRow) => v.status === 'READY' || v.status === 'FAILED')
     .map((v: StreamerVodRow) => v.projectId)
-  const clipLists: Array<ProjectClipList | null> = await Promise.all(
-    clipIds.map((id: string) => listProjectClips(workspaceId, id, 'score', { skipTranscriptEnrichment: true })),
-  )
-  const streamClips: ProjectClipList = clipLists.flatMap((rows: ProjectClipList | null) => rows ?? [])
+  const streamClips: ProjectClipList = await listStreamerHubProjectClips(workspaceId, clipIds)
   const processingVods: StreamerVodRow[] = vodRows.filter(
     (v: StreamerVodRow) => v.status !== 'READY' && v.status !== 'FAILED' && v.status !== 'CANCELED',
   )

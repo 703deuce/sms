@@ -81,8 +81,14 @@ const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms))
 async function requestJson(url:string,opts?:RequestInit){
   const response=await fetch(url,{cache:'no-store',...opts})
   const json=await response.json()
-  if(!response.ok)throw Error(typeof json.error==='string'?json.error:
-    json.error?.message??'Request failed')
+  if(!response.ok){
+    const reason=typeof json.error==='string'?json.error:json.error?.message??'Request failed'
+    if(reason==='ai_producer_agent_run_in_progress'||reason==='stream_agent_batch_already_running'){
+      console.info('[clips:double-run]',{action:'rejected',reason})
+      throw Error('AI clips are already processing. Open the current run to follow its progress.')
+    }
+    throw Error(reason)
+  }
   return json.data
 }
 

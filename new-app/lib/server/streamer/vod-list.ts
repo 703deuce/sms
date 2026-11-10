@@ -9,6 +9,33 @@ import {
 
 const TERMINAL: ClipProjectStatus[] = ['READY', 'FAILED', 'CANCELED']
 
+/** Never send raw worker errors, command lines, storage keys, or signed URLs to the browser. */
+function friendlyStreamerError(raw: string | null): string | null {
+  if (!raw) return null
+  const normalized = raw.toLowerCase()
+  let code = 'other'
+  let message = 'Stream processing failed. Please retry the import.'
+  if (normalized.includes('storage_object_missing') || normalized.includes('no such key') || normalized.includes('object not found')) {
+    code = 'storage_missing'
+    message = 'The source video is no longer available. Please import or upload it again.'
+  } else if (normalized.includes('range_outside_media') || normalized.includes('outside media')) {
+    code = 'range_outside_media'
+    message = 'The requested portion of the stream was unavailable. Try importing the VOD again.'
+  } else if (normalized.includes('list index out of range') || normalized.includes('indexerror')) {
+    code = 'index_error'
+    message = 'We had trouble reading the stream. Please retry the import.'
+  } else if (normalized.includes('ffmpeg') || normalized.includes('command failed') || normalized.includes('subprocess')) {
+    code = 'video_processing'
+    message = 'The video could not be processed. Please retry or upload a different recording.'
+  } else if (normalized.includes('timeout') || normalized.includes('timed out') || normalized.includes('stalled')) {
+    code = 'timeout'
+    message = 'Stream processing timed out. Please retry the import.'
+  }
+  console.info('[streamer:error]', { code, mapped: true })
+  return message
+}
+
+
 export type StreamerVodRow = {
   vodId: string
   projectId: string
@@ -136,7 +163,7 @@ function mapStreamerVodRow(
     triggeredBy: v.triggeredBy,
     pipelinePhase: phase,
     pipelineLabel: streamPipelineLabel(phase, { platform: v.platform }),
-    error: err,
+    error: friendlyStreamerError(err),
     canRetry: canRetryClipProject({
       status: v.project.status,
       error: err,
