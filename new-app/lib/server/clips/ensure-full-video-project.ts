@@ -61,35 +61,64 @@ export async function ensureFullVideoProjectForUpload(
     Array.isArray(sourceProject.transcriptWords) && sourceProject.transcriptWords.length
       ? sourceProject.transcriptWords
       : undefined
-  const newId = createId('proj')
   const title = `${sourceProject.title || upload.filename.replace(/\.[^.]+$/, '')} · full`.slice(0, 200)
-  await prisma.clipProject.create({
-    data: {
-      id: newId,
-      workspaceId,
-      title,
+
+  console.info('[clipper:fullvideo-link] ensure_begin', {
+    uploadId: upload.id,
+    sourceProjectId: sourceProject.id,
+    hasTranscriptWords: Boolean(transcriptWords),
+    hasProxy: Boolean(sourceProject.proxyKey),
+  })
+
+  // Deterministic per-upload id makes concurrent creates collide safely on the
+  // primary key. The nested job write is atomic with the project create.
+  const newId = `proj_fv_${upload.id}`
+  try {
+    await prisma.clipProject.create({
+      data: {
+        id: newId,
+        workspaceId,
+        title,
+        uploadId: upload.id,
+        settings: JSON.parse(JSON.stringify(settings)),
+        rangeStartMs: 0,
+        rangeEndMs: settings.rangeEndMs,
+        status: 'QUEUED',
+        stage: 'queued',
+        progress: 0,
+        transcriptKey: projectWordsKey(workspaceId, newId),
+        ...(transcriptWords ? { transcriptWords: JSON.parse(JSON.stringify(transcriptWords)) } : {}),
+        ...(sourceProject.proxyKey ? { proxyKey: sourceProject.proxyKey } : {}),
+        jobs: {
+          create: {
+            id: createId('job'),
+            type: 'PROCESS_PROJECT',
+            status: 'QUEUED',
+            payload: toPrismaJson(buildProcessProjectJobPayload(settings)),
+          },
+        },
+      },
+    })
+    console.info('[clipper:fullvideo-link] ensure_created', {
       uploadId: upload.id,
-      settings: JSON.parse(JSON.stringify(settings)),
-      rangeStartMs: 0,
-      rangeEndMs: settings.rangeEndMs,
-      status: 'QUEUED',
-      stage: 'queued',
-      progress: 0,
-      transcriptKey: projectWordsKey(workspaceId, newId),
-      ...(transcriptWords ? { transcriptWords: JSON.parse(JSON.stringify(transcriptWords)) } : {}),
-      ...(sourceProject.proxyKey ? { proxyKey: sourceProject.proxyKey } : {}),
-    },
-  })
-  await prisma.clipJob.create({
-    data: {
-      id: createId('job'),
       projectId: newId,
-      type: 'PROCESS_PROJECT',
-      status: 'QUEUED',
-      payload: toPrismaJson(buildProcessProjectJobPayload(settings)),
-    },
-  })
-  return newId
+    })
+    return newId
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code
+    if (code === 'P2002') {
+      const concurrent = await findFullVideoProjectForUpload(workspaceId, upload.id)
+      if (concurrent) {
+        console.info('[clipper:fullvideo-link] ensure_reuse', {
+          uploadId: upload.id,
+          projectId: concurrent.id,
+          reason: 'concurrent_create',
+        })
+        return concurrent.id
+      }
+    }
+    throw error
+  }
 }
 
 export async function waitForFullVideoClip(

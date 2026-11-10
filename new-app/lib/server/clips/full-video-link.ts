@@ -5,7 +5,6 @@ import { clipProjectSettingsSchema } from '@/lib/clips/settings'
 import {
   ensureFullVideoProjectForUpload,
   findFullVideoProjectForUpload,
-  waitForFullVideoClip,
 } from '@/lib/server/clips/ensure-full-video-project'
 import { getPrisma } from '@/lib/server/db'
 
@@ -79,14 +78,11 @@ export async function resolveFullVideoLink(
   }
   if (!fvProjectId) return null
 
-  let fvClip = await prisma.clip.findFirst({
+  const fvClip = await prisma.clip.findFirst({
     where: { projectId: fvProjectId, workspaceId, deletedAt: null },
     orderBy: { startMs: 'asc' },
     select: { id: true, title: true },
   })
-  if (!fvClip) {
-    fvClip = await waitForFullVideoClip(workspaceId, fvProjectId, 45_000)
-  }
   if (!fvClip) {
     return {
       preparing: true,
