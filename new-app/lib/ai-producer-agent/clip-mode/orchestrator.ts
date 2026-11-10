@@ -24,6 +24,7 @@ import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_C
 import {candidateWindows,clipCandidateLimit,overlapFraction,rankCandidate,type ClipCandidate} from '@/lib/ai-producer-agent/clip-mode/candidates'
 import {storyCoverage} from '@/lib/ai-producer-agent/clip-mode/story-coverage'
 import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isNonBlockingEditorialQaIssue,publishDisposition,qaTranscriptWindow,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {editVersionFromSnapshot,queueClipExportOnce,shouldAutoExportPublishedClip} from './clip-agent-export'
 import {instructionAsksToCompile,mergeTopicCandidates,topicPassagesFromTranscript,topicQueryFromInstruction,whyThisClip} from '@/lib/ai-producer-agent/clip-mode/topic-search'
 import {createSourceClip,publishClipScore,discardClip} from '@/lib/server/ai-producer-agent/clip-mode-store'
 import {clipAgentHardSteps,clipAgentHardStepsForCandidates,clipAgentWallClockMs,clipAgentWallClockMsForCandidates,clipCandidateHardSteps,clipCandidateWallClockMs,clipQaRetryHardSteps,clipQaRetryWallClockMs} from '@/lib/ai-producer-agent/rough-cut-window'
@@ -272,14 +273,14 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       }
       kept.push(item)
     }
-    // A run never ends with 0 published clips unless the source is empty
-    // or every remaining candidate is unusable. If only critical holds
-    // remain, still publish the best 1–3 flagged needsReview.
+    // A run never publishes a critical draft. If nothing kept is publishable,
+    // fall back to the best 1–3 non-critical held drafts (needsReview). If
+    // only critical drafts remain, the run ends as an honest failure below.
     if(!kept.length){
       const usable=heldDrafts
-        .filter(item=>Boolean(item.out.projectId&&item.out.clipId&&item.out.editorialHandoff?.cutPlan.length))
+        .filter(item=>Boolean(item.out.projectId&&item.out.clipId&&item.out.editorialHandoff?.cutPlan.length)&&!item.critical)
         .sort((a,b)=>b.score-a.score)
-      const fallback=chooseFallbackPublications(usable,0,3)
+      const fallback=chooseFallbackPublications(usable,0,3,(item:{critical:boolean})=>item.critical)
       for(const item of fallback){
         const cuts=item.out.editorialHandoff!.cutPlan
         if(kept.some(k=>overlapFraction(cuts,k.out.editorialHandoff!.cutPlan)>.35))continue
@@ -339,7 +340,7 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
           error:reason})
         item.out.notes.push('Motion graphics unavailable: '+reason)
       }
-      // Exports are queued for every published clip, including needsReview.
+      // Auto-export clean and needsReview clips only; never critical ones.
       if(ctx.config.exportOnFinish)
         await queueClipExport(ctx,item.out,budget)
     }
@@ -355,8 +356,10 @@ async function runAiProducerAgentInner(runId: string): Promise<void> {
       status = 'failed'
       error = 'no valid plan for any output'
     } else if (!anyPublished) {
-      // Held drafts are still a completed run the editor can review.
-      error = undefined
+      const reasons=heldDrafts.flatMap(h=>h.issues)
+      status = 'failed'
+      error = ('No publishable clips; remaining drafts are critical editorial failures'
+        +(reasons.length?': '+[...new Set(reasons)].join('; ').slice(0,1500):'.'))
     }
   } catch (err) {
     status = 'failed'
@@ -547,31 +550,56 @@ async function persistRevisedCuts(ctx:ToolCtx,out:OutputState,cuts:Array<{startM
 
 async function queueClipExport(ctx:ToolCtx,out:OutputState,budget:Budget){
   const clipMode=ctx.config.storyMode==='clip_moment_v1'||ctx.config.storyMode==='clip_story_v1'
-  if(clipMode&&out.projectId&&out.clipId&&out.lastValid){
-    const renderId=createId('render')
-    await getPrisma().$transaction(async tx=>{
-      await tx.clipRender.create({data:{
-        id:renderId,clipId:out.clipId!,workspaceId:ctx.workspaceId,
-        status:'QUEUED',format:'mp4',resolution:'720p',aspectRatio:'9:16',
-        filename:(out.editorialHandoff?.outline.logline??'AI clip').replace(/[\\/\\:*?\"<>|]/g,'').slice(0,80)+'.mp4',
-        watermark:false,
-      }})
-      await tx.clipJob.create({data:{
-        id:createId('job'),projectId:out.projectId!,clipId:out.clipId!,
-        type:'RENDER_CLIP',status:'QUEUED',payload:{renderId},
-      }})
-    })
-    out.notes.push('Finished MP4 export queued: '+renderId)
-    await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
-      phase:'apply',tool:'clip_agent_export_queued',kind:'system',
-      resultSummary:JSON.stringify({renderId,projectId:out.projectId,clipId:out.clipId})})
+  if(!clipMode||!out.lastValid)return
+  if(!shouldAutoExportPublishedClip({
+    clipId:out.clipId,projectId:out.projectId,suppressed:out.suppressed,
+  }))return
+  const prisma=getPrisma()
+  const result=await queueClipExportOnce({
+    workspaceId:ctx.workspaceId,
+    projectId:out.projectId,
+    clipId:out.clipId,
+    filename:(out.editorialHandoff?.outline.logline??'AI clip').replace(/[\\/:*?"<>|]/g,'').slice(0,80)+'.mp4',
+    editVersion:editVersionFromSnapshot(out.lastValid),
+    suppressed:out.suppressed,
+    createId,
+    store:{
+      findByIdempotencyKey:async(key:string)=>{
+        const row=await prisma.clipRender.findFirst({
+          where:{clipId:out.clipId!,workspaceId:ctx.workspaceId,editsVersionHash:key,
+            status:{in:['QUEUED','RENDERING','READY']}},
+          select:{id:true,status:true},
+        })
+        return row
+      },
+      createQueuedExport:async(input)=>{
+        await prisma.$transaction(async tx=>{
+          await tx.clipRender.create({data:{
+            id:input.renderId,clipId:input.clipId,workspaceId:input.workspaceId,
+            status:'QUEUED',format:'mp4',resolution:'720p',aspectRatio:'9:16',
+            filename:input.filename,watermark:false,
+            editsVersionHash:input.idempotencyKey,
+          }})
+          await tx.clipJob.create({data:{
+            id:createId('job'),projectId:input.projectId,clipId:input.clipId,
+            type:'RENDER_CLIP',status:'QUEUED',
+            payload:{renderId:input.renderId,idempotencyKey:input.idempotencyKey},
+          }})
+        })
+      },
+    },
+  })
+  if(!result.queued&&result.reason==='already_queued'){
+    out.notes.push('Finished MP4 export already queued: '+result.renderId)
+    return
   }
+  if(!result.queued)return
+  out.notes.push('Finished MP4 export queued: '+result.renderId)
+  await logAiProducerStep({runId:ctx.runId,stepIndex:++budget.steps,
+    phase:'apply',tool:'clip_agent_export_queued',kind:'system',
+    resultSummary:JSON.stringify({renderId:result.renderId,projectId:out.projectId,clipId:out.clipId,idempotencyKey:result.idempotencyKey})})
 }
 
-/**
- * Deterministically turn approved selections into an actual editor timeline.
- * A model's missing create_project calls must never prevent project creation.
- */
 async function assembleApprovedRoughCut(ctx: ToolCtx, out: OutputState, budget: Budget) {
   const source = ctx.sources[0]
   const proposed = out.editorialHandoff?.cutPlan

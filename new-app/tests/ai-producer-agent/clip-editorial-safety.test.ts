@@ -2,8 +2,15 @@ import {describe,expect,it} from 'vitest'
 import {readFileSync} from 'node:fs'
 import {dirname,join} from 'node:path'
 import {fileURLToPath} from 'node:url'
-import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isNonBlockingEditorialQaIssue,JOIN_ONSET_PAD_MS,MIN_CLIP_TAIL_MS,publishDisposition,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
+import {chooseFallbackPublications,clipEditorialAudit,clipEditorialInstructions,honorTargetDuration,isCriticalEditorialFailure,isNonBlockingEditorialQaIssue,JOIN_ONSET_PAD_MS,MIN_CLIP_TAIL_MS,publishDisposition,repairClipBoundaries,shouldVetoPublish,stitchJoinTransitions,type EditorialRisk} from '@/lib/ai-producer-agent/clip-mode/editorial-safety'
 import {selectMomentFlowTrim} from '@/lib/ai-producer-agent/clip-mode/moment-flow'
+import {
+  clipAgentExportIdempotencyKey,
+  editVersionFromSnapshot,
+  queueClipExportOnce,
+  shouldAutoExportPublishedClip,
+} from '../../lib/ai-producer-agent/clip-mode/clip-agent-export'
+
 const words=(text:string,startMs=0,spacingMs=380)=>
   text.split(' ').map((w,i)=>({w,s:(startMs+i*spacingMs)/1000,e:(startMs+i*spacingMs+320)/1000}))
 
@@ -532,6 +539,24 @@ describe('internal joins land on clause boundaries with onset padding',()=>{
     expect(second.startMs).toBeLessThan(2000)
     expect(second.startMs).toBeGreaterThanOrEqual(1300)
   })
+
+  it('never lets the 100ms onset pad pull in prior speech; clamp at the previous word end',()=>{
+    const w: TranscriptWord[]=[
+      {w:'We',s:0.200,e:0.400},{w:'were',s:0.400,e:0.600},{w:'done.',s:1.000,e:1.300},
+      {w:'Then',s:1.340,e:1.540},{w:'we',s:1.540,e:1.740},{w:'started.',s:1.740,e:2.100},
+    ]
+    // 40ms gap — an unclamped 100ms pad would start at 1240 and include "done."
+    const repaired=repairClipBoundaries([
+      {startMs:200,endMs:1300},
+      {startMs:1340,endMs:2100},
+    ],w)
+    expect(repaired.cuts.length).toBeGreaterThanOrEqual(2)
+    const second=repaired.cuts[1]!
+    expect(second.startMs).toBeGreaterThanOrEqual(1300)
+    expect(second.startMs).toBeLessThanOrEqual(1340)
+    const priorSpeech=w.filter((word: TranscriptWord)=>word.s*1000<1340&&word.e*1000>second.startMs)
+    expect(priorSpeech.map((word: TranscriptWord)=>word.w)).toEqual([])
+  })
 })
 
 describe('ae48f53a 300ms tail after treaty.',()=>{
@@ -578,13 +603,183 @@ describe('held-draft publish policy',()=>{
       qaIssues:[],
     })).toBe('publish')
   })
-  it('never returns an empty fallback when held drafts exist and nothing published',()=>{
-    const held=[{id:'a'},{id:'b'},{id:'c'},{id:'d'}]
-    expect(chooseFallbackPublications(held,0,3).map((x:{id:string})=>x.id)).toEqual(['a','b','c'])
-    expect(chooseFallbackPublications(held,2,3)).toEqual([])
-    expect(chooseFallbackPublications([],0,3)).toEqual([])
+  it('filters critical drafts out of the fallback and returns none if only critical remain',()=>{
+    const held=[{id:'a',critical:true},{id:'b',critical:false},{id:'c',critical:true},{id:'d',critical:false}]
+    const isCritical=(x:{critical:boolean})=>x.critical
+    expect(chooseFallbackPublications(held,0,3,isCritical).map((x:{id:string})=>x.id)).toEqual(['b','d'])
+    expect(chooseFallbackPublications(held.filter((x:{critical:boolean})=>x.critical),0,3,isCritical)).toEqual([])
+    expect(chooseFallbackPublications(held,2,3,isCritical)).toEqual([])
+    expect(chooseFallbackPublications([],0,3,isCritical)).toEqual([])
+  })
+  it('never publishes qaPass===null as clean, treats unknown codes and incoherent_passage as critical',()=>{
+    expect(publishDisposition({
+      risks:[],
+      qaPass:null,
+      qaIssues:[],
+    })).toBe('publish_needs_review')
+    expect(publishDisposition({
+      risks:[{code:'incoherent_passage',detail:'Childhood anecdote does not belong to the later payoff',passageIndex:0}],
+      qaPass:true,
+      qaIssues:[],
+    })).toBe('drop')
+    expect(publishDisposition({
+      risks:[{code:'future_unknown_code' as 'invalid_passage',detail:'not yet classified',passageIndex:0}],
+      qaPass:true,
+      qaIssues:[],
+    })).toBe('drop')
+    expect(publishDisposition({
+      risks:[],
+      qaPass:false,
+      qaIssues:['qa_code_not_yet_classified: a brand new checker failed this draft'],
+    })).toBe('drop')
   })
   it('documents that a listening-only remark is still non-blocking',()=>{
     expect(isNonBlockingEditorialQaIssue('Audio joins are marked as requiring listening review. No waveform was supplied.')).toBe(true)
+  })
+})
+
+describe('clip agent auto-export policy',()=>{
+  it('exports clean and needsReview clips but never critical or suppressed ones',()=>{
+    expect(shouldAutoExportPublishedClip({clipId:'c1',projectId:'p1'})).toBe(true)
+    expect(shouldAutoExportPublishedClip({clipId:'c1',projectId:'p1',suppressed:false})).toBe(true)
+    expect(shouldAutoExportPublishedClip({clipId:'c1',projectId:'p1',critical:true})).toBe(false)
+    expect(shouldAutoExportPublishedClip({clipId:'c1',projectId:'p1',suppressed:true})).toBe(false)
+    expect(shouldAutoExportPublishedClip({clipId:null,projectId:'p1'})).toBe(false)
+  })
+})
+
+describe('clip agent export idempotency',()=>{
+  it('is stable for the same clipId, edit version, and preset, and changes when any part changes',()=>{
+    const a=clipAgentExportIdempotencyKey({clipId:'clip_1',editVersion:'edits_aaa',preset:'mp4:720p:9:16'})
+    const b=clipAgentExportIdempotencyKey({clipId:'clip_1',editVersion:'edits_aaa',preset:'mp4:720p:9:16'})
+    const c=clipAgentExportIdempotencyKey({clipId:'clip_1',editVersion:'edits_bbb',preset:'mp4:720p:9:16'})
+    const d=clipAgentExportIdempotencyKey({clipId:'clip_2',editVersion:'edits_aaa',preset:'mp4:720p:9:16'})
+    const e=clipAgentExportIdempotencyKey({clipId:'clip_1',editVersion:'edits_aaa',preset:'mp4:1080p:9:16'})
+    expect(a).toBe(b)
+    expect(a).not.toBe(c)
+    expect(a).not.toBe(d)
+    expect(a).not.toBe(e)
+    expect(a).toMatch(/^[0-9a-f]{40}$/)
+  })
+
+  it('does not queue a second render when the idempotency key already exists',async()=>{
+    const created:string[]=[]
+    const store={
+      byKey:new Map<string,{id:string;status:string}>(),
+      async findByIdempotencyKey(key:string){return this.byKey.get(key)??null},
+      async createQueuedExport(input:{renderId:string;idempotencyKey:string}){
+        created.push(input.renderId)
+        this.byKey.set(input.idempotencyKey,{id:input.renderId,status:'QUEUED'})
+      },
+    }
+    let n=0
+    const createId=()=>`render_${++n}`
+    const args={
+      workspaceId:'ws_1',projectId:'proj_1',clipId:'clip_1',
+      filename:'clip.mp4',editVersion:editVersionFromSnapshot({cuts:[[0,1000]]}),
+      createId,store,
+    }
+    const first=await queueClipExportOnce(args)
+    const second=await queueClipExportOnce(args)
+    expect(first.queued).toBe(true)
+    expect(second.queued).toBe(false)
+    if(second.queued===false)expect(second.reason).toBe('already_queued')
+    expect(second.renderId).toBe(first.queued?first.renderId:undefined)
+    expect(created).toEqual([first.queued?first.renderId:''])
+  })
+
+  it('refuses to queue a critical or suppressed clip',async()=>{
+    const store={
+      async findByIdempotencyKey(){return null},
+      async createQueuedExport(){throw new Error('must not create')},
+    }
+    const result=await queueClipExportOnce({
+      workspaceId:'ws_1',projectId:'proj_1',clipId:'clip_1',
+      filename:'clip.mp4',editVersion:'v1',critical:true,createId:()=>'render_x',store,
+    })
+    expect(result).toEqual({queued:false,reason:'not_exportable'})
+  })
+})
+
+type Word={w:string;s:number;e:number}
+type Cut={startMs:number;endMs:number}
+type Draft={clipId:string|null;rejected:boolean;cuts:Cut[];qaIssues:string[];words:Word[]}
+type Fixture={runId:string;drafts:Draft[]}
+
+const fixtureDir=dirname(fileURLToPath(import.meta.url))
+
+function loadReplayFixture(name:string):Fixture{
+  return JSON.parse(readFileSync(join(fixtureDir,'fixtures',name),'utf8')) as Fixture
+}
+
+function replayDraft(draft:Draft){
+  if(draft.rejected||!draft.clipId||!draft.cuts.length){
+    return {clipId:draft.clipId,disposition:'skip_rejected' as const,published:false,needsReview:false,dropped:false,critical:false}
+  }
+  const substantive=draft.qaIssues.filter((issue:string)=>!isNonBlockingEditorialQaIssue(issue))
+  const words=draft.words
+  const initialRisks=words.length?clipEditorialAudit(draft.cuts,words):[]
+  let qaPass:boolean|null=false
+  const veto=shouldVetoPublish({risks:initialRisks,qaPass,qaIssues:substantive})
+  let workingCuts=draft.cuts
+  let workingRisks=initialRisks
+  // Historical QA on these runs did not pass clean, so always apply the one
+  // deterministic repair pass (same as orchestrator when qaPass !== true).
+  void veto
+  const revised=repairClipBoundaries(workingCuts,words,{maxEarlierSetupMs:12_000,maxLaterConclusionMs:6_500})
+  if(revised.repaired){
+    workingCuts=revised.cuts
+    workingRisks=words.length?clipEditorialAudit(workingCuts,words):workingRisks
+  }
+  const safetyIssues=workingRisks.map((r:EditorialRisk)=>r.code+': '+r.detail)
+  const combinedIssues=[...new Set([...substantive,...safetyIssues])]
+  const disposition=publishDisposition({risks:workingRisks,qaPass,qaIssues:combinedIssues})
+  const critical=isCriticalEditorialFailure(workingRisks,combinedIssues)
+  return {
+    clipId:draft.clipId,
+    disposition,
+    published:disposition==='publish'||disposition==='publish_needs_review',
+    needsReview:disposition==='publish_needs_review',
+    dropped:disposition==='drop',
+    critical,
+  }
+}
+
+function replayRun(fixture:Fixture){
+  type ReplayRow=ReturnType<typeof replayDraft>
+  const results=fixture.drafts.map((d:Draft)=>replayDraft(d))
+  let published=results.filter((r:ReplayRow)=>r.published)
+  const dropped=results.filter((r:ReplayRow)=>r.dropped)
+  let fallbackUsed=false
+  if(!published.length){
+    const usable=dropped.filter((r:ReplayRow)=>r.clipId&&!r.critical)
+    const fallback=chooseFallbackPublications(usable,0,3,(r:{critical:boolean})=>r.critical)
+    fallbackUsed=fallback.length>0
+    published=fallback.map((r:ReplayRow)=>({...r,published:true,needsReview:true,dropped:false,disposition:'publish_needs_review' as const}))
+  }
+  return {
+    runId:fixture.runId,
+    published:published.length,
+    needsReview:published.filter((r:ReplayRow)=>r.needsReview).length,
+    dropped:fallbackUsed?dropped.length-published.length:dropped.length,
+    skipped:results.filter((r:ReplayRow)=>r.disposition==='skip_rejected').length,
+    fallbackUsed,
+  }
+}
+
+const expectedA3c={published:14,needsReview:14,dropped:1}
+const expected7574={published:16,needsReview:16,dropped:0}
+
+describe('held-draft replay of live 0-published runs',()=>{
+  it('aprun_a3c71b5a: published, needsReview, and dropped counts under the default-closed policy',()=>{
+    const counts=replayRun(loadReplayFixture('aprun_a3c71b5a.replay.json'))
+    expect(counts.runId).toBe('aprun_a3c71b5acee74a5ea52192768053a1ea')
+    expect(counts).toMatchObject(expectedA3c)
+  })
+
+  it('aprun_7574d85f: published, needsReview, and dropped counts under the default-closed policy',()=>{
+    const counts=replayRun(loadReplayFixture('aprun_7574d85f.replay.json'))
+    expect(counts.runId).toBe('aprun_7574d85f5ce64fcdb58a05c2e0b5b8e6')
+    expect(counts).toMatchObject(expected7574)
   })
 })

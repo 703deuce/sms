@@ -293,16 +293,50 @@ export function shouldVetoPublish(input:{
   return false
 }
 
-/** Broken media, reordered source, or unintelligible/wrong content. */
-export const CRITICAL_PUBLISH_CODES=new Set<EditorialRiskCode>(['invalid_passage','chronology'])
+/**
+ * Default-closed publish policy: only these editorial codes may ship
+ * (clean or needsReview). Anything else, including future/unknown codes,
+ * is critical and must never publish or export.
+ */
+export const NON_CRITICAL_PUBLISH_CODES=new Set<EditorialRiskCode>([
+  'referential_opening','missing_qualification','unfinished_ending',
+  'false_start_opening','cut_context_reference','dangling_pronoun_opening',
+  'continuation_opening','mid_phrase_opening',
+])
+/** Explicit critical codes (also implied by absence from the allowlist). */
+export const CRITICAL_PUBLISH_CODES=new Set<EditorialRiskCode>([
+  'invalid_passage','chronology','incoherent_passage',
+])
 const CRITICAL_QA=/broken media|unplayable|no usable (?:audio|video|media)|corrupt(?:ed)? (?:file|media)|wrong (?:source|video) content|unintelligible audio/i
+/** Known non-critical QA phrasing; unknown / future QA codes are critical until classified. */
+const NON_CRITICAL_QA=/qualif|mislead|misrepresent|changed meaning|false impression|missing setup|payoff before|unresolved referen|context missing|mid-sentence|mid sentence|unfinished ending|false start|stammer|broken opening|cut (?:question|exchange|context)|backward refer|not self-contained|dangling|antecedent|continuation opener|unrelated passage|mid-phrase|mid phrase/i
+
+export function isNonCriticalRiskCode(code:string):boolean{
+  return NON_CRITICAL_PUBLISH_CODES.has(code as EditorialRiskCode)
+}
+
+export function isCriticalQaIssue(issue:string):boolean{
+  if(isNonBlockingEditorialQaIssue(issue))return false
+  // Machine QA codes look like snake_case prefixes ("incoherent_passage: ...").
+  // Unknown or future codes are critical until they are added to the allowlist.
+  // Free-form editorial prose is not a "code" and stays non-critical unless it
+  // matches the explicit critical media/content patterns.
+  const prefixed=issue.match(/^([a-z][a-z0-9_]*)\s*:/)
+  if(prefixed){
+    const code=prefixed[1]!
+    if(isNonCriticalRiskCode(code))return false
+    if(CRITICAL_PUBLISH_CODES.has(code as EditorialRiskCode)||/_/.test(code))return true
+  }
+  if(CRITICAL_QA.test(issue))return true
+  return false
+}
 
 export function isCriticalEditorialFailure(
   risks:readonly EditorialRisk[],
   qaIssues:readonly string[]=[],
 ):boolean{
-  if(risks.some(r=>CRITICAL_PUBLISH_CODES.has(r.code)))return true
-  if(qaIssues.some(issue=>CRITICAL_QA.test(issue)))return true
+  if(risks.some(r=>!isNonCriticalRiskCode(r.code)||CRITICAL_PUBLISH_CODES.has(r.code)))return true
+  if(qaIssues.some(issue=>isCriticalQaIssue(issue)))return true
   return false
 }
 
@@ -311,6 +345,7 @@ export type PublishDisposition='publish'|'publish_needs_review'|'drop'
 /**
  * After one executable repair pass: only critical failures are dropped.
  * Remaining non-critical editorial issues publish flagged needsReview.
+ * Incomplete QA (qaPass === null) never publishes as a clean pass.
  */
 export function publishDisposition(input:{
   risks:readonly EditorialRisk[]
@@ -318,14 +353,25 @@ export function publishDisposition(input:{
   qaIssues:readonly string[]
 }):PublishDisposition{
   if(isCriticalEditorialFailure(input.risks,input.qaIssues))return 'drop'
-  if(shouldVetoPublish(input)||input.qaPass===false)return 'publish_needs_review'
+  if(shouldVetoPublish(input)||input.qaPass!==true)return 'publish_needs_review'
   return 'publish'
 }
 
-/** If nothing published, still ship the best 1–3 held drafts (flagged), unless there are none. */
-export function chooseFallbackPublications<T>(held:readonly T[],publishedCount:number,max=3):T[]{
+/**
+ * If nothing published, ship the best 1–3 *non-critical* held drafts flagged
+ * needsReview. Critical drafts are never returned. If only critical drafts
+ * remain, the result is empty and the run should fail honestly.
+ */
+export function chooseFallbackPublications<T>(
+  held:readonly T[],
+  publishedCount:number,
+  max=3,
+  isCritical?:(item:T)=>boolean,
+):T[]{
   if(publishedCount>0||!held.length)return []
-  return held.slice(0,Math.max(1,Math.min(max,held.length)))
+  const eligible=isCritical?held.filter((item:T)=>!isCritical(item)):held
+  if(!eligible.length)return []
+  return eligible.slice(0,Math.max(1,Math.min(max,eligible.length)))
 }
 
 function nextSentenceStart(words:readonly TimedWord[],fromMs:number,limitMs:number):number|null{
@@ -555,9 +601,14 @@ function repairJoinEdges(cuts:ClipSpan[],words:readonly TimedWord[],notes:string
     const inside=at(words,cut.startMs,cut.endMs)
     if(!inside.length)continue
     const firstStart=Math.round(inside[0]!.s*1000)
-    const prevWord=words.filter(w=>Math.round(w.e*1000)<=firstStart+20).at(-1)
-    const afterPrev=prevWord?Math.round(prevWord.e*1000):0
+    let afterPrev=0
+    for(const w of words){
+      const end=Math.round(w.e*1000)
+      if(end<=firstStart&&end>afterPrev)afterPrev=end
+    }
     const padded=firstStart-JOIN_ONSET_PAD_MS
+    // Never pull the 100ms onset pad into prior speech; clamp at the
+    // previous word's end and the previous cut's out-point.
     const floor=Math.max(prevEnd,afterPrev,0)
     const start=Math.max(floor,Math.min(firstStart,padded))
     if(start<cut.startMs||(cut.startMs>firstStart&&start<=firstStart)){
