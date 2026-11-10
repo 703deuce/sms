@@ -11,7 +11,6 @@ import {
   Share2,
   Trash2,
 } from 'lucide-react'
-import { NewFolderDialog } from '@/components/drive/new-folder-dialog'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import {
   SidebarMenu,
@@ -128,7 +127,6 @@ export function ClipsProjectsNav({ active = false }: { active?: boolean }) {
               ))}
             </SidebarMenuSub>
           </CollapsibleContent>
-          <NewFolderDialog variant="sidebar" />
         </SidebarMenuItem>
       </SidebarMenu>
     </Collapsible>

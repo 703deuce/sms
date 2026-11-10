@@ -159,8 +159,10 @@ export function adaptListProjectClip(raw: unknown): UnifiedClipResult | null {
     durationMs,
     startMs,
     endMs,
-    previewUrl: typeof row.previewUrl === 'string' ? row.previewUrl : null,
-    posterUrl: typeof row.posterUrl === 'string' ? row.posterUrl : null,
+    // #1138 run results omit media URLs (backend gap). Accept aliases from the
+    // project clip list or any payload that does include them.
+    previewUrl: firstString(row.previewUrl, row.playbackUrl, row.videoUrl, row.mediaUrl, row.src),
+    posterUrl: firstString(row.posterUrl, row.thumbnailUrl, row.thumbUrl, row.previewImageUrl, row.imageUrl),
     reason: typeof row.reason === 'string' ? row.reason : row.reason == null ? null : undefined,
     aiMeta,
     edits: row.edits,

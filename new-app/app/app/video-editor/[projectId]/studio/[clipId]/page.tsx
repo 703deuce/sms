@@ -10,15 +10,18 @@ export const metadata = { title: 'Clip Studio · Transovo' }
  * The full-length editor retains its own route and its own default layout. */
 export default async function ClipperStudioPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string; clipId: string }>
+  searchParams: Promise<{ tab?: string }>
 }) {
   const { projectId, clipId } = await params
+  const { tab } = await searchParams
   const workspaceId = await resolveWorkspaceId()
   return (
     <Suspense fallback={<EditorPageSkeleton />}>
       <EditorPayloadSection workspaceId={workspaceId} projectId={projectId}
-        clipId={clipId} clipperStudio />
+        clipId={clipId} clipperStudio initialTab={tab} />
     </Suspense>
   )
 }

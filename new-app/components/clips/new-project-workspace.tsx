@@ -334,30 +334,6 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: 
           ) : tab === 'upload' ? (
             <div className="flex flex-col gap-4">
               {!upload || upload.state === 'error' ? <Dropzone onFile={onFile} /> : null}
-              {projectIntent === 'find' ? (
-                <div className="flex flex-col gap-2" data-testid="upload-twitch-kick-link">
-                  <Label htmlFor="upload-twitch-kick-link" className="text-xs text-muted-foreground">
-                    Or paste a Twitch or Kick link
-                  </Label>
-                  <div className="flex flex-wrap gap-2">
-                    <Input
-                      id="upload-twitch-kick-link"
-                      value={linkUrl}
-                      onChange={(e) => setLinkUrl(e.target.value)}
-                      placeholder="Twitch VOD or Kick URL"
-                      className="min-w-0 flex-1"
-                    />
-                    <button
-                      type="button"
-                      className="h-9 shrink-0 rounded-md border border-border bg-background px-3 text-sm font-medium"
-                      onClick={() => void submitLink()}
-                      disabled={submitting || !linkUrl.trim()}
-                    >
-                      Import
-                    </button>
-                  </div>
-                </div>
-              ) : null}
               {upload ? (
                 <UploadProgressItem
                   progress={upload}
@@ -384,6 +360,31 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: 
                   Detected duration {durationMs >= 600_000 ? formatMediaDuration(durationMs) : `${(durationMs / 1000).toFixed(1)}s`}
                 </p>
               )}
+              {projectIntent === 'find' && upload?.state === 'complete' ? (
+                <div
+                  className="rounded-xl border border-primary/30 bg-primary/5 p-4"
+                  data-testid="get-clips-cta"
+                >
+                  <p className="text-sm font-medium">Upload complete</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Start one run to find Story and Continuous clips from this video.
+                  </p>
+                  <PrimaryButton
+                    className="mt-3 w-full"
+                    disabled={!uploadId || submitting}
+                    onClick={() => void submitUpload()}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" aria-hidden />
+                        Creating project…
+                      </>
+                    ) : (
+                      'Get clips'
+                    )}
+                  </PrimaryButton>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="flex flex-col gap-3">

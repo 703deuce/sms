@@ -44,7 +44,7 @@ export function StudioControlRail({
     >
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-4">
         <ModeSelect
-          model={model}
+          models={state.models}
           mode={state.form.mode}
           disabled={generating}
           onChange={(m) => controller.setMode(m)}
@@ -195,12 +195,12 @@ export function StudioControlRail({
 }
 
 function ModeSelect({
-  model,
+  models,
   mode,
   disabled,
   onChange,
 }: {
-  model: StudioModel | null
+  models: StudioModel[]
   mode: StudioMode
   disabled?: boolean
   onChange: (mode: StudioMode) => void
@@ -210,7 +210,7 @@ function ModeSelect({
       <div role="group" aria-label="Generation mode" className="grid grid-cols-1 gap-1" data-testid="studio-mode-select">
         <div className="flex flex-wrap gap-1.5">
           {STUDIO_MODES.map((m) => {
-            const allowed = !model || model.modes.includes(m)
+            const allowed = models.some((item) => item.modes.includes(m))
             const on = mode === m
             const btn = (
               <button

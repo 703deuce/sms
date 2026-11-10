@@ -7,6 +7,7 @@
  *   - `/video-editing` is now a 308 permanentRedirect to `/video-editor`
  * New paths `/ai-clipper` and `/video-editor` are the marketing pages.
  * `/app/studio` is the AI Studio workspace (frontend/ai-studio).
+ * `/app/youtube-video` is the YouTube Video workspace.
  *
  * Usage (from new-app/): node scripts/verify-marketing-home-routes.mjs
  */
@@ -40,6 +41,8 @@ const ALLOWED_NEW = {
   '/ai-clipper': { file: 'new-app/app/(marketing)/ai-clipper/page.tsx', redirectTo: null },
   '/video-editor': { file: 'new-app/app/(marketing)/video-editor/page.tsx', redirectTo: null },
   '/app/studio': { file: 'new-app/app/app/studio/page.tsx', redirectTo: null },
+  '/app/youtube-video': { file: 'new-app/app/app/youtube-video/page.tsx', redirectTo: null },
+  '/app/captions': { file: 'new-app/app/app/captions/page.tsx', redirectTo: null },
 }
 
 const LEGACY_SLUG_REDIRECTS = {

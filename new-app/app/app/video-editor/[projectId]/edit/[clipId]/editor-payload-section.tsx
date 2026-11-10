@@ -2,18 +2,22 @@ import { EditorClipShell } from '../../../../../../components/clips/editor/edito
 import { isFullVideoSettings } from '../../../../../../lib/clips/full-video'
 import { getClipEditorPayload } from '../../../../../../lib/server/clips/clip-detail'
 import { notFound } from 'next/navigation'
+import { editorPanelFromSearchParam } from '../../../../../../lib/clips/editor-initial-panel'
 
 export async function EditorPayloadSection({
   workspaceId,
   projectId,
   clipId,
   clipperStudio = false,
+  initialTab,
 }: {
   workspaceId: string
   projectId: string
   clipId: string
   clipperStudio?: boolean
+  initialTab?: string
 }) {
+  const initialPanel = editorPanelFromSearchParam(initialTab)
   let data
   try {
     data = await getClipEditorPayload(workspaceId, clipId)
@@ -66,6 +70,7 @@ export async function EditorPayloadSection({
       fullVideo={isFullVideoSettings(data.project.settings)}
       editorAssets={data.editorAssets ?? null}
       clipperStudio={clipperStudio}
+      initialPanel={initialPanel}
     />
   )
 }

@@ -27,6 +27,7 @@ export const routes = {
   clips: () => '/app/clips',
   clipsNew: (query?: Record<string, string | undefined>) => withQuery('/app/clips/new', query),
   project: (projectId: string) => `/app/clips/${projectId}`,
+  youtubeVideo: () => '/app/youtube-video',
   videoEditor: () => '/app/video-editor',
   videoEditorNew: (query?: Record<string, string | undefined>) => withQuery('/app/video-editor/new', query),
   edit: (projectId: string, clipId: string, query?: URLSearchParams | string | Record<string, string | string[] | undefined | null>) =>

@@ -1,13 +1,15 @@
 // @vitest-environment happy-dom
 // @ts-expect-error vitest is resolved in new-app; root tsc has no vitest types
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 // @ts-expect-error vitest is resolved in new-app; root tsc has no vitest types
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { AiStudioPage } from '../components/studio/ai-studio-page'
 import { createDevStudioFallback } from '../lib/ai-studio/fallback'
 import { StrictMode } from 'react'
 
 describe('studio layout', () => {
+  afterEach(() => cleanup())
+
   it('renders the rail, category nav, credit generate button, presets, and capability-gated frames', async () => {
     const client = createDevStudioFallback()
     render(<AiStudioPage client={client} listProjects={async () => []} sleep={async () => {}} />)
@@ -26,6 +28,20 @@ describe('studio layout', () => {
     fireEvent.click(screen.getByTestId('studio-category-nav').querySelector('[data-nav-results="models"]') as HTMLElement)
     expect(await screen.findByTestId('studio-model-gallery')).toBeTruthy()
     expect(screen.getAllByText(/from \d+ credits/).length).toBeGreaterThan(0)
+  })
+
+  it('enables the Text to image mode tab once image models have loaded', async () => {
+    const client = createDevStudioFallback()
+    render(<AiStudioPage client={client} listProjects={async () => []} sleep={async () => {}} />)
+    const groups = await screen.findAllByTestId('studio-mode-select')
+    await waitFor(() => {
+      expect(groups.length).toBeGreaterThan(0)
+      for (const group of groups) {
+        const tab = group.querySelector('[data-mode="text_to_image"]') as HTMLButtonElement | null
+        expect(tab).toBeTruthy()
+        expect(tab?.hasAttribute('disabled')).toBe(false)
+      }
+    })
   })
 
   it('loads models after a React Strict Mode remount', async () => {

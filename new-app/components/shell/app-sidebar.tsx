@@ -4,8 +4,10 @@ import Link from 'next/link'
 import { useEffect } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
+  Captions,
   Clapperboard,
   Download,
+  Film,
   FlaskConical,
   GraduationCap,
   House,
@@ -63,9 +65,11 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   clips: Scissors,
   streamer: Radio,
   editor: Clapperboard,
+  youtubeVideo: Film,
   record: Video,
   aiVideo: Sparkles,
   studio: WandSparkles,
+  captions: Captions,
   media: Images,
   brand: Palette,
   templates: LayoutTemplate,

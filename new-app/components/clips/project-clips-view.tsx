@@ -600,7 +600,19 @@ export function ProjectClipsView({
             }
           >
             {clips.length === 0 && autoAgentClipMode ? (
-              <EmptyState icon={Clapperboard} title="AI Agent Clipper" description="Agent clips appear in the AI Agent panel above as the batch finishes. No classic picker clips were created." />
+              <EmptyState
+                icon={Clapperboard}
+                title={failureCopy?.title ?? 'No clips to show'}
+                description={
+                  failureCopy?.message ??
+                  'Processing finished, but no Story or Continuous clips were saved. Retry processing to run again. This does not start a second run until you retry.'
+                }
+                action={
+                  <Button size="sm" variant="outline" onClick={() => retryProcessing()}>
+                    {failureCopy?.retryLabel ?? 'Retry processing'}
+                  </Button>
+                }
+              />
             ) : clips.length === 0 ? (
               <EmptyState
                 icon={Clapperboard}
@@ -608,7 +620,7 @@ export function ProjectClipsView({
                 description={
                   failureCopy?.message ??
                   error ??
-                  'No complete Story or Continuous moments were found in this segment.'
+                  'Processing finished, but no Story or Continuous clips were saved. Retry processing to run again.'
                 }
                 action={
                   <Button
