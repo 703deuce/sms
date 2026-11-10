@@ -35,6 +35,7 @@ import {
   type CleanupStrength,
 } from '@/lib/clips/editor/cleanup-strength'
 import {
+  CLEAN_TAKE_SHOW_CUTS_DEFAULT,
   introOutroLockedRanges,
   playRemovedOnlyEdits,
   type LockedRange,
@@ -75,7 +76,7 @@ export function CleanupPanel({
   onGapSettingsChange,
   mediaOffsetMs = 0,
   defaultStrength,
-  showCutsDefault = true,
+  showCutsDefault = CLEAN_TAKE_SHOW_CUTS_DEFAULT,
 }: {
   clipId: string
   projectId: string
@@ -140,12 +141,14 @@ export function CleanupPanel({
     () => ({ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }),
     [bounds.clipEndMs, bounds.clipStartMs],
   )
+  const lockSourceId = edits.sources?.[0]?.id
   const lockedRanges: LockedRange[] = useMemo(() => {
     const rows = introOutroLockedRanges(
       bounds.clipStartMs,
       bounds.clipEndMs,
       Math.max(0, Math.round(lockIntroSec * 1000)),
       Math.max(0, Math.round(lockOutroSec * 1000)),
+      lockSourceId,
     )
     const start = Number(customLock.startSec)
     const end = Number(customLock.endSec)
@@ -155,10 +158,11 @@ export function CleanupPanel({
         label: 'Locked range',
         startMs: Math.round(start * 1000),
         endMs: Math.round(end * 1000),
+        sourceId: lockSourceId,
       })
     }
     return rows
-  }, [bounds.clipStartMs, bounds.clipEndMs, lockIntroSec, lockOutroSec, customLock.startSec, customLock.endSec])
+  }, [bounds.clipStartMs, bounds.clipEndMs, lockIntroSec, lockOutroSec, customLock.startSec, customLock.endSec, lockSourceId])
   const orderedWords = useMemo(
     () => editorWordsForClipFillerReview(clipId, words, edits, clipBounds),
     [clipId, words, edits.trim.in, edits.trim.out, edits.cutRanges, clipBounds],

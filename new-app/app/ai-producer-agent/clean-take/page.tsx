@@ -3,16 +3,16 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { CleanTakeReviewPanel } from '../../../../components/ai-producer-agent/clean-take-review-panel'
+import { Button } from '../../../components/ui/button'
+import { Label } from '../../../components/ui/label'
+import { Textarea } from '../../../components/ui/textarea'
+import { CleanTakeReviewPanel } from '../../../components/ai-producer-agent/clean-take-review-panel'
 import {
   CLEAN_TAKE_COPY,
   buildCleanTakeRunBody,
   introOutroLockedRanges,
   type LockedRange,
-} from '../../../../lib/clips/editor/clean-take-review'
+} from '../../../lib/clips/editor/clean-take-review'
 
 type Source = { projectId: string; title: string; durationMs: number; hasTranscript: boolean }
 type Run = {
@@ -102,12 +102,18 @@ export default function CleanTakeExperiment() {
     const startSec = Number(customLock.startSec)
     const endSec = Number(customLock.endSec)
     if (Number.isFinite(startSec) && Number.isFinite(endSec) && endSec > startSec) {
-      rows.push({
-        id: 'lock-custom',
-        label: 'Locked range',
-        startMs: Math.round(startSec * 1000),
-        endMs: Math.round(endSec * 1000),
-      })
+      const startMs = Math.round(startSec * 1000)
+      const endMs = Math.round(endSec * 1000)
+      const targets = selected.length ? selected : []
+      for (const projectId of targets) {
+        rows.push({
+          id: `lock-custom-${projectId}`,
+          label: 'Locked range',
+          startMs,
+          endMs,
+          sourceId: projectId,
+        })
+      }
     }
     return rows
   }, [selected, sources, lockIntroSec, lockOutroSec, customLock.startSec, customLock.endSec])

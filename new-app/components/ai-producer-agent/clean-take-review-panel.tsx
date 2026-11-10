@@ -3,32 +3,63 @@
 import { useCallback, useEffect, useMemo, useState, type SyntheticEvent } from 'react'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
-import { Button } from '../../ui/button'
-import { exportClip, getClipEditor, getRenderStatus, patchClip } from '../../../lib/clips-api'
-import { displayDurationMs, type ClipEditsV2 } from '../../../lib/clips/edits'
-import { formatTimecode } from '../../../lib/clips/format'
+import { Button } from '../ui/button'
+import { exportClip, getClipEditor, getRenderStatus, patchClip } from '../../lib/clips-api'
+import { displayDurationMs, type ClipEditsV2 } from '../../lib/clips/edits'
+import { formatTimecode } from '../../lib/clips/format'
 import {
   CLEAN_TAKE_COPY,
+  CLEAN_TAKE_OMISSION_TYPES,
+  CLEAN_TAKE_SHOW_CUTS_DEFAULT,
+  PLAY_REMOVED_ONLY_EDGE_PAD_MS,
   introOutroLockedRanges,
+  listOmissionsFromSavedEdits,
   omissionsOverlappingLocked,
-  omittedRangesFromCleanTakeCuts,
-  omitRestoredOmissions,
   parseCleanTakeMeta,
-  playRemovedOnlyCues,
   playRemovedOnlyFromOmissions,
+  playRemovedOnlySegments,
   restoreCleanTakeOmission,
+  sourceExtentsFromEdits,
+  writeCleanTakeReview,
   type CleanTakeKeptCut,
   type CleanTakeOmission,
+  type CleanTakeOmissionType,
   type CleanTakeSourceExtent,
   type LockedRange,
-} from '../../../lib/clips/editor/clean-take-review'
+  type PlayRemovedOnlySegment,
+} from '../../lib/clips/editor/clean-take-review'
 
 type ReviewState = {
   edits: ClipEditsV2
   cuts: CleanTakeKeptCut[]
   sources: CleanTakeSourceExtent[]
   title?: string
-  mediaUrl?: string | null
+  sourceMediaUrls: Record<string, string>
+}
+
+const TYPE_LABEL: Record<CleanTakeOmissionType, string> = {
+  filler: 'Filler',
+  silence: 'Silence',
+  retake: 'Retakes',
+  manual: 'Manual',
+}
+
+function collectSourceMediaUrls(payload: unknown, edits: ClipEditsV2): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!payload || typeof payload !== 'object') return out
+  const root = payload as Record<string, unknown>
+  const bag = root.sourceMediaUrls
+  if (bag && typeof bag === 'object') {
+    for (const [key, value] of Object.entries(bag as Record<string, unknown>)) {
+      if (typeof value === 'string' && value) out[key] = value
+    }
+  }
+  for (const source of edits.sources ?? []) {
+    const record = source as { id: string; url?: string; mediaUrl?: string }
+    const url = record.url ?? record.mediaUrl
+    if (url && !out[source.id]) out[source.id] = url
+  }
+  return out
 }
 
 export function CleanTakeReviewPanel({
@@ -47,10 +78,9 @@ export function CleanTakeReviewPanel({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [review, setReview] = useState<ReviewState | null>(null)
-  const [showCuts, setShowCuts] = useState(true)
+  const [showCuts, setShowCuts] = useState(CLEAN_TAKE_SHOW_CUTS_DEFAULT)
   const [playRemovedOnly, setPlayRemovedOnly] = useState(false)
-  const [restoredIds, setRestoredIds] = useState<Set<string>>(new Set())
-  const [removedCueIndex, setRemovedCueIndex] = useState(0)
+  const [removedSegmentIndex, setRemovedSegmentIndex] = useState(0)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [exportStatus, setExportStatus] = useState<{ status: string; url?: string | null; error?: string | null; renderId?: string } | null>(null)
@@ -62,39 +92,44 @@ export function CleanTakeReviewPanel({
     try {
       const payload = await getClipEditor(clipId)
       const meta = parseCleanTakeMeta({ ...payload, aiMeta: (payload as { aiMeta?: unknown }).aiMeta })
-      if (!meta || !meta.cuts.length) {
-        setError('The first-pass cut list is not on this project yet. You can still open the editor to review the assembled take.')
-        setReview({
-          edits: payload.edits,
-          cuts: [],
-          sources: [],
-          title: payload.clip?.title,
-          mediaUrl: payload.mediaUrls?.source ?? payload.mediaUrls?.preview ?? null,
-        })
-        return
-      }
+      const extentsFromSources = sourceExtentsFromEdits(payload.edits)
       const extents: CleanTakeSourceExtent[] = []
       const seen = new Set<string>()
-      for (const cut of meta.cuts) {
-        if (seen.has(cut.sourceId)) continue
-        seen.add(cut.sourceId)
-        const media = payload.edits.sources?.find((source, index) =>
-          source.id === cut.sourceId || index === meta.cuts.findIndex((row) => row.sourceId === cut.sourceId),
-        )
-        extents.push({
-          sourceId: cut.sourceId,
-          sourceProjectId: cut.sourceProjectId,
-          startMs: 0,
-          endMs: media?.durationMs ?? Math.max(...meta.cuts.filter((row) => row.sourceId === cut.sourceId).map((row) => row.endMs), 0),
-        })
+      for (const row of extentsFromSources) {
+        if (seen.has(row.sourceId) || row.endMs <= row.startMs) continue
+        seen.add(row.sourceId)
+        extents.push(row)
       }
+      if (meta) {
+        for (const cut of meta.cuts) {
+          if (seen.has(cut.sourceId)) continue
+          seen.add(cut.sourceId)
+          const media = payload.edits.sources?.find((source, index) =>
+            source.id === cut.sourceId || index === meta.cuts.findIndex((row: CleanTakeKeptCut) => row.sourceId === cut.sourceId),
+          )
+          extents.push({
+            sourceId: cut.sourceId,
+            sourceProjectId: cut.sourceProjectId,
+            startMs: 0,
+            endMs: media?.durationMs ?? Math.max(...meta.cuts.filter((row: CleanTakeKeptCut) => row.sourceId === cut.sourceId).map((row: CleanTakeKeptCut) => row.endMs), 0),
+          })
+        }
+      }
+      // Remaining omissions come from the saved edits (persisted review list or current kept ranges),
+      // not from re-deriving leftover spans off aiMeta.cleanTake.cuts.
+      const remaining = listOmissionsFromSavedEdits(payload.edits, extents)
       setReview({
-        edits: payload.edits,
-        cuts: meta.cuts,
+        edits: remaining.length && !((payload.edits as { cleanTakeReview?: unknown }).cleanTakeReview)
+          ? writeCleanTakeReview(payload.edits, remaining)
+          : payload.edits,
+        cuts: meta?.cuts ?? [],
         sources: extents,
-        title: meta.title ?? payload.clip?.title,
-        mediaUrl: payload.mediaUrls?.source ?? payload.mediaUrls?.preview ?? null,
+        title: meta?.title ?? payload.clip?.title,
+        sourceMediaUrls: collectSourceMediaUrls(payload, payload.edits),
       })
+      if (!remaining.length && !meta?.cuts.length) {
+        setError('The first-pass cut list is not on this project yet. You can still open the editor to review the assembled take.')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load the review')
     } finally {
@@ -147,77 +182,76 @@ export function CleanTakeReviewPanel({
 
   const omissions = useMemo(() => {
     if (!review) return []
-    return omitRestoredOmissions(
-      omittedRangesFromCleanTakeCuts(review.cuts, review.sources),
-      restoredIds,
-    )
-  }, [review, restoredIds])
+    return listOmissionsFromSavedEdits(review.edits, review.sources)
+  }, [review])
 
   const lockedOmissions = useMemo(
     () => omissionsOverlappingLocked(omissions, lockedRanges),
     [omissions, lockedRanges],
   )
 
-  const removedCues = useMemo(() => playRemovedOnlyCues(omissions), [omissions])
+  const removedSegments: PlayRemovedOnlySegment[] = useMemo(
+    () => playRemovedOnlySegments(omissions, review?.sources ?? []),
+    [omissions, review?.sources],
+  )
 
   useEffect(() => {
-    setRemovedCueIndex(0)
-  }, [playRemovedOnly, removedCues])
+    setRemovedSegmentIndex(0)
+  }, [playRemovedOnly, removedSegments])
 
   const previewEdits = useMemo(() => {
     if (!review) return null
     if (!playRemovedOnly) return review.edits
-    return playRemovedOnlyFromOmissions(review.edits, omissions, review.cuts)
+    return playRemovedOnlyFromOmissions(review.edits, omissions, review.cuts, review.sources)
   }, [playRemovedOnly, review, omissions])
 
   const durationMs = previewEdits ? displayDurationMs(previewEdits) : 0
+  const activeSegment = removedSegments[removedSegmentIndex]
+  const activeSegmentUrl = activeSegment ? review?.sourceMediaUrls[activeSegment.sourceId] : undefined
 
-  const restoreOne = async (omission: CleanTakeOmission) => {
-    if (!review) return
-    setRestoringId(omission.id)
+  const persistEdits = async (edits: ClipEditsV2, remaining: CleanTakeOmission[], message: string) => {
+    const next = writeCleanTakeReview(edits, remaining)
+    await patchClip(clipId, { edits: next })
+    setReview((current) => current ? { ...current, edits: next } : current)
+    setNotice(message)
+  }
+
+  const restoreMany = async (rows: CleanTakeOmission[]) => {
+    if (!review || !rows.length) return
     setError('')
     setNotice('')
-    const result = restoreCleanTakeOmission(review.edits, omission, review.cuts)
-    if (!result.ok) {
-      setError(
-        result.error === 'source_media_not_on_output'
-          ? 'This omitted take cannot be restored yet because its source was not attached to the output project. The kept edit is unchanged.'
-          : 'Could not restore that take. The kept edit is unchanged.',
-      )
-      setRestoringId(null)
-      return
+    let edits = review.edits
+    const restored: string[] = []
+    for (const omission of rows) {
+      setRestoringId(omission.id)
+      const result = restoreCleanTakeOmission(edits, omission, review.cuts)
+      if (!result.ok) {
+        setError(
+          result.error === 'source_media_not_on_output'
+            ? 'This omitted take cannot be restored yet because its source was not attached to the output project. The kept edit is unchanged.'
+            : 'Could not restore that take. The kept edit is unchanged.',
+        )
+        continue
+      }
+      edits = result.edits
+      restored.push(omission.id)
     }
+    setRestoringId(null)
+    if (!restored.length) return
+    const remaining = listOmissionsFromSavedEdits(edits, review.sources).filter((row) => !restored.includes(row.id))
     try {
-      await patchClip(clipId, { edits: result.edits })
-      setReview((current) => current ? { ...current, edits: result.edits } : current)
-      setRestoredIds((current) => new Set(current).add(omission.id))
-      setNotice(`Restored ${formatTimecode(omission.endMs - omission.startMs)}. Duration is now ${formatTimecode(displayDurationMs(result.edits))}.`)
+      await persistEdits(
+        edits,
+        remaining,
+        `Restored ${restored.length} item${restored.length === 1 ? '' : 's'}. Duration is now ${formatTimecode(displayDurationMs(edits))}.`,
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Restore could not be saved. The kept edit was not deleted.')
-    } finally {
-      setRestoringId(null)
     }
   }
 
-  const restoreLocked = async () => {
-    if (!review || !lockedOmissions.length) return
-    let edits = review.edits
-    for (const omission of lockedOmissions) {
-      const result = restoreCleanTakeOmission(edits, omission, review.cuts)
-      if (result.ok) edits = result.edits
-    }
-    try {
-      await patchClip(clipId, { edits })
-      setReview((current) => current ? { ...current, edits } : current)
-      setRestoredIds((current) => {
-        const next = new Set(current)
-        for (const omission of lockedOmissions) next.add(omission.id)
-        return next
-      })
-      setNotice('Locked intro/outro ranges were restored into the review edit.')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not restore locked ranges')
-    }
+  const restoreOne = async (omission: CleanTakeOmission) => {
+    await restoreMany([omission])
   }
 
   const approveAndExport = async () => {
@@ -257,32 +291,48 @@ export function CleanTakeReviewPanel({
           Current duration {formatTimecode(durationMs)}
           {playRemovedOnly ? ' · previewing removed ranges only (not saved)' : ''}
         </p>
-        {playRemovedOnly && review?.mediaUrl && removedCues.length ? (
-          <div className="mt-3 space-y-2">
-            <video
-              key={removedCues[removedCueIndex]?.id ?? 'removed'}
-              className="aspect-video w-full rounded-lg bg-panel"
-              controls
-              autoPlay
-              data-testid="clean-take-play-removed-video"
-              src={`${review.mediaUrl}#t=${removedCues[removedCueIndex]!.startSec.toFixed(3)},${removedCues[removedCueIndex]!.endSec.toFixed(3)}`}
-              onTimeUpdate={(event: SyntheticEvent<HTMLVideoElement>) => {
-                const cue = removedCues[removedCueIndex]
-                if (!cue) return
-                if (event.currentTarget.currentTime >= cue.endSec - 0.05) {
-                  if (removedCueIndex + 1 < removedCues.length) {
-                    setRemovedCueIndex((index) => index + 1)
-                  } else {
-                    event.currentTarget.pause()
+        {playRemovedOnly ? (
+          <div className="mt-3 space-y-2" data-testid="clean-take-play-removed-assembled">
+            {activeSegment && activeSegmentUrl ? (
+              <video
+                key={activeSegment.id}
+                className="aspect-video w-full rounded-lg bg-panel"
+                controls
+                autoPlay
+                data-testid="clean-take-play-removed-video"
+                src={`${activeSegmentUrl}#t=${(activeSegment.inMs / 1000).toFixed(3)},${(activeSegment.outMs / 1000).toFixed(3)}`}
+                onTimeUpdate={(event: SyntheticEvent<HTMLVideoElement>) => {
+                  const endSec = activeSegment.outMs / 1000
+                  if (event.currentTarget.currentTime >= endSec - 0.05) {
+                    if (removedSegmentIndex + 1 < removedSegments.length) {
+                      setRemovedSegmentIndex((index: number) => index + 1)
+                    } else {
+                      event.currentTarget.pause()
+                    }
                   }
-                }
-              }}
-            >
-              Play removed only previews each omitted range in source time when a source URL is available.
-            </video>
-            <p className="text-xs text-muted-foreground">
-              Removed range {removedCueIndex + 1} of {removedCues.length}. Open the editor for the flip-timeline audition of the assembled cut.
-            </p>
+                }}
+              >
+                Assembled preview of removed ranges.
+              </video>
+            ) : (
+              <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground" data-testid="clean-take-play-removed-missing-media">
+                The assembled removed-only preview is {formatTimecode(removedSegments.length ? removedSegments[removedSegments.length - 1]!.outputEndMs : 0)}
+                {' '}long across {removedSegments.length} segment{removedSegments.length === 1 ? '' : 's'}.
+                Source media for this segment is not attached here; open the editor to audition the same assembled edit.
+              </p>
+            )}
+            {activeSegment ? (
+              <p className="text-xs text-muted-foreground">
+                Assembled preview {removedSegmentIndex + 1} of {removedSegments.length}
+                {' · '}output {formatTimecode(activeSegment.outputStartMs)}–{formatTimecode(activeSegment.outputEndMs)}
+                {' · '}source {activeSegment.sourceId}
+                {activeSegment.paddedShort
+                  ? ` · short cue padded by ${PLAY_REMOVED_ONLY_EDGE_PAD_MS}ms (not skipped)`
+                  : ` · ${PLAY_REMOVED_ONLY_EDGE_PAD_MS}ms edge padding`}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">No removed ranges to preview.</p>
+            )}
           </div>
         ) : null}
       </div>
@@ -294,7 +344,7 @@ export function CleanTakeReviewPanel({
           variant={showCuts ? 'default' : 'outline'}
           aria-pressed={showCuts}
           data-testid="clean-take-show-cuts"
-          onClick={() => setShowCuts((value) => !value)}
+          onClick={() => setShowCuts((value: boolean) => !value)}
         >
           Show cuts
         </Button>
@@ -304,7 +354,7 @@ export function CleanTakeReviewPanel({
           variant={playRemovedOnly ? 'default' : 'outline'}
           aria-pressed={playRemovedOnly}
           data-testid="clean-take-play-removed-only"
-          onClick={() => setPlayRemovedOnly((value) => !value)}
+          onClick={() => setPlayRemovedOnly((value: boolean) => !value)}
         >
           Play removed only
         </Button>
@@ -322,7 +372,7 @@ export function CleanTakeReviewPanel({
             {lockedOmissions.length} omitted range{lockedOmissions.length === 1 ? '' : 's'} overlap a locked intro or outro.
             The planner may still have dropped them; restore them here so they are not left out.
           </p>
-          <Button type="button" size="sm" className="mt-2" onClick={() => void restoreLocked()}>
+          <Button type="button" size="sm" className="mt-2" onClick={() => void restoreMany(lockedOmissions)}>
             Restore locked ranges
           </Button>
         </div>
@@ -335,38 +385,61 @@ export function CleanTakeReviewPanel({
             No omitted source ranges were found on this first pass. Kept takes are listed below when Show cuts is on.
           </p>
         ) : (
-          <ul className="mt-3 space-y-2">
-            {omissions.map((omission) => (
-              <li
-                key={omission.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
-                data-testid="clean-take-omission"
-              >
-                <div className="min-w-0">
-                  {showCuts ? (
-                    <p className="font-mono text-xs tabular-nums text-muted-foreground">
-                      {formatTimecode(omission.startMs)}–{formatTimecode(omission.endMs)}
-                    </p>
-                  ) : null}
-                  <p className="text-sm">
-                    <span className="font-medium capitalize">{omission.type}</span>
-                    {' · '}
-                    {omission.reason}
-                  </p>
+          <div className="mt-3 space-y-5">
+            {CLEAN_TAKE_OMISSION_TYPES.map((type: CleanTakeOmissionType) => {
+              const rows = omissions.filter((row: CleanTakeOmission) => row.type === type)
+              if (!rows.length) return null
+              return (
+                <div key={type} data-testid={`clean-take-omission-group-${type}`}>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-sm font-medium">{TYPE_LABEL[type]} · {rows.length}</h4>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      data-testid={`clean-take-restore-type-${type}`}
+                      onClick={() => void restoreMany(rows)}
+                    >
+                      Restore {TYPE_LABEL[type].toLowerCase()}
+                    </Button>
+                  </div>
+                  <ul className="space-y-2">
+                    {rows.map((omission: CleanTakeOmission) => (
+                      <li
+                        key={omission.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+                        data-testid="clean-take-omission"
+                        data-omission-type={omission.type}
+                      >
+                        <div className="min-w-0">
+                          {showCuts ? (
+                            <p className="font-mono text-xs tabular-nums text-muted-foreground">
+                              {formatTimecode(omission.startMs)}–{formatTimecode(omission.endMs)}
+                            </p>
+                          ) : null}
+                          <p className="text-sm">
+                            <span className="font-medium">{TYPE_LABEL[omission.type]}</span>
+                            {' · '}
+                            {omission.reason}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={restoringId === omission.id}
+                          onClick={() => void restoreOne(omission)}
+                          data-testid={`clean-take-restore-${omission.type}`}
+                        >
+                          {restoringId === omission.id ? 'Restoring…' : 'Restore'}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={restoringId === omission.id}
-                  onClick={() => void restoreOne(omission)}
-                  data-testid="clean-take-restore"
-                >
-                  {restoringId === omission.id ? 'Restoring…' : 'Restore'}
-                </Button>
-              </li>
-            ))}
-          </ul>
+              )
+            })}
+          </div>
         )}
       </div>
 
@@ -374,7 +447,7 @@ export function CleanTakeReviewPanel({
         <div>
           <h3 className="text-sm font-semibold">Kept takes</h3>
           <ul className="mt-3 space-y-1 text-sm">
-            {review.cuts.map((cut, index) => (
+            {review.cuts.map((cut: CleanTakeKeptCut, index: number) => (
               <li key={`${cut.sourceId}-${cut.startMs}-${index}`} className="font-mono text-xs tabular-nums text-muted-foreground">
                 {formatTimecode(cut.startMs)}–{formatTimecode(cut.endMs)}
                 {cut.reason ? ` · ${cut.reason}` : ''}

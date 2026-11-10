@@ -5,10 +5,24 @@ import type { ClipEditsV2, CutRange } from '../edits'
 import { displayDurationMs, mergeCutRanges, subtractRangeFromCuts } from '../edits'
 import type { CleanupProposal, CleanupCutKind } from './cleanup-proposals'
 import { proposalId, restoreCleanupProposal } from './cleanup-proposals'
-import { CLEAN_TAKE_DEFAULT_STRENGTH, OPT_IN_FILLER_WORDS } from './cleanup-strength'
+import { CLEAN_TAKE_DEFAULT_STRENGTH, DEFAULT_CLEANUP_STRENGTH, OPT_IN_FILLER_WORDS, type CleanupStrength } from './cleanup-strength'
 import type { ClipInsert } from './inserts'
 
 export { CLEAN_TAKE_DEFAULT_STRENGTH }
+
+/** Show cuts is on by default in Clean Take review and Cleanup review after a pass. */
+export const CLEAN_TAKE_SHOW_CUTS_DEFAULT = true
+
+/**
+ * Edge padding applied to each side of a play-removed-only cue, in milliseconds.
+ * Pads short omissions instead of skipping them, and gives assembled preview a little context.
+ */
+export const PLAY_REMOVED_ONLY_EDGE_PAD_MS = 120
+
+/** Cues shorter than this are padded (never silently skipped) and marked in the preview. */
+export const PLAY_REMOVED_ONLY_SHORT_CUE_MS = 200
+
+export const CLEAN_TAKE_OMISSION_TYPES = ['filler', 'silence', 'retake', 'manual'] as const
 
 /** The Clean Take experiment page always sends this. Backend still defaults omitted values to true — see issue handoff. */
 export const CLEAN_TAKE_EXPORT_ON_FINISH_DEFAULT = false
@@ -53,7 +67,7 @@ export type CleanTakeSourceExtent = {
   title?: string
 }
 
-export type CleanTakeOmissionType = 'silence' | 'filler' | 'retake' | 'chatter' | 'omission'
+export type CleanTakeOmissionType = 'filler' | 'silence' | 'retake' | 'manual'
 
 export type CleanTakeOmission = {
   id: string
@@ -96,6 +110,8 @@ export type CleanTakeRunBody = {
   }>
   /** Additive; today's runs POST schema strips unknown keys until Backend adds the field. */
   lockedRanges?: LockedRange[]
+  /** Clean Take first-pass default is `'light'`. Sent explicitly; the planner may still ignore it until Backend honors it. */
+  fillerStrength: CleanupStrength
 }
 
 export function buildCleanTakeRunBody(input: {
@@ -103,6 +119,7 @@ export function buildCleanTakeRunBody(input: {
   instruction?: string
   exportOnFinish?: boolean
   lockedRanges?: LockedRange[]
+  fillerStrength?: CleanupStrength
 }): CleanTakeRunBody {
   const instruction = input.instruction?.trim()
   const lockedRanges = (input.lockedRanges ?? []).filter((row) => row.endMs > row.startMs)
@@ -114,6 +131,7 @@ export function buildCleanTakeRunBody(input: {
     music: 'none',
     memeSfx: 'off',
     exportOnFinish: input.exportOnFinish ?? CLEAN_TAKE_EXPORT_ON_FINISH_DEFAULT,
+    fillerStrength: input.fillerStrength ?? CLEAN_TAKE_DEFAULT_STRENGTH,
     ...(instruction ? { instruction } : {}),
     sources: input.sources.map((source, index) => ({
       sourceId: `source_${index}`,
@@ -137,17 +155,83 @@ export type PlayRemovedOnlyCue = {
   id: string
   startSec: number
   endSec: number
+  paddedShort: boolean
 }
 
-/** Source-clock cues for a play-removed-only preview of every remaining omission. */
-export function playRemovedOnlyCues(omissions: CleanTakeOmission[]): PlayRemovedOnlyCue[] {
-  return omissions
-    .filter((row) => row.endMs - row.startMs >= 200)
-    .map((row) => ({
+export type PlayRemovedOnlySegment = {
+  id: string
+  sourceId: string
+  /** Source-timeline in/out after edge padding, used to pull frames from that source. */
+  inMs: number
+  outMs: number
+  /** Assembled preview timeline (concatenated, including padding). */
+  outputStartMs: number
+  outputEndMs: number
+  originalStartMs: number
+  originalEndMs: number
+  /** True when the original omission was shorter than PLAY_REMOVED_ONLY_SHORT_CUE_MS and was padded rather than skipped. */
+  paddedShort: boolean
+}
+
+export function padRemovedRange(
+  startMs: number,
+  endMs: number,
+  extentStartMs: number,
+  extentEndMs: number,
+  padMs: number = PLAY_REMOVED_ONLY_EDGE_PAD_MS,
+): { inMs: number; outMs: number; paddedShort: boolean } {
+  const original = Math.max(0, endMs - startMs)
+  const inMs = Math.max(extentStartMs, startMs - padMs)
+  const outMs = Math.min(extentEndMs, Math.max(endMs, inMs + 1) + padMs)
+  return {
+    inMs,
+    outMs: Math.max(outMs, inMs + 1),
+    paddedShort: original < PLAY_REMOVED_ONLY_SHORT_CUE_MS,
+  }
+}
+
+/**
+ * Assembled play-removed-only segments in output order.
+ * Multi-source omissions stay on their own sourceId. Short cues are padded, never dropped.
+ */
+export function playRemovedOnlySegments(
+  omissions: CleanTakeOmission[],
+  extents: CleanTakeSourceExtent[] = [],
+  padMs: number = PLAY_REMOVED_ONLY_EDGE_PAD_MS,
+): PlayRemovedOnlySegment[] {
+  const extentById = new Map(extents.map((row) => [row.sourceId, row]))
+  const out: PlayRemovedOnlySegment[] = []
+  let cursor = 0
+  for (const row of omissions) {
+    const extent = extentById.get(row.sourceId)
+    const extentStart = extent?.startMs ?? Math.min(row.startMs, 0)
+    const extentEnd = extent?.endMs ?? Math.max(row.endMs, row.startMs + 1)
+    const padded = padRemovedRange(row.startMs, row.endMs, extentStart, extentEnd, padMs)
+    const dur = padded.outMs - padded.inMs
+    out.push({
       id: row.id,
-      startSec: row.startMs / 1000,
-      endSec: row.endMs / 1000,
-    }))
+      sourceId: row.sourceId,
+      inMs: padded.inMs,
+      outMs: padded.outMs,
+      outputStartMs: cursor,
+      outputEndMs: cursor + dur,
+      originalStartMs: row.startMs,
+      originalEndMs: row.endMs,
+      paddedShort: padded.paddedShort,
+    })
+    cursor += dur
+  }
+  return out
+}
+
+/** @deprecated Prefer playRemovedOnlySegments (assembled preview). Kept for clock conversions in tests. */
+export function playRemovedOnlyCues(omissions: CleanTakeOmission[], extents: CleanTakeSourceExtent[] = []): PlayRemovedOnlyCue[] {
+  return playRemovedOnlySegments(omissions, extents).map((row) => ({
+    id: row.id,
+    startSec: row.inMs / 1000,
+    endSec: row.outMs / 1000,
+    paddedShort: row.paddedShort,
+  }))
 }
 
 export function lightStrengthExcludesOptInFillers(): boolean {
@@ -166,9 +250,14 @@ export function rangesOverlapMs(a: CutRange, b: CutRange): boolean {
   return hiA > loB && hiB > loA
 }
 
-export function overlapsAnyLockedRange(range: CutRange, locked: LockedRange[] | CutRange[] | undefined): boolean {
+export function overlapsAnyLockedRange(
+  range: CutRange,
+  locked: LockedRange[] | CutRange[] | undefined,
+  sourceId?: string,
+): boolean {
   if (!locked?.length) return false
   return locked.some((item) => {
+    if (!Array.isArray(item) && item.sourceId && sourceId && item.sourceId !== sourceId) return false
     const other: CutRange = Array.isArray(item) ? item : [item.startMs, item.endMs]
     return rangesOverlapMs(range, other)
   })
@@ -280,9 +369,10 @@ export function omittedRangesFromCleanTakeCuts(
       .sort((a, b) => a[0] - b[0])
     const merged = mergeAdjacent(kept)
     let cursor = source.startMs
-    const emit = (startMs: number, endMs: number, type: CleanTakeOmissionType, reason: string) => {
+    const emit = (startMs: number, endMs: number, betweenKept: boolean, position: 'lead' | 'mid' | 'tail') => {
       if (endMs - startMs < minOmissionMs) return
       const id = `${source.sourceId}:${startMs}:${endMs}`
+      const type = classifyOmissionType({ startMs, endMs, betweenKept, position })
       out.push({
         id,
         sourceId: source.sourceId,
@@ -290,23 +380,19 @@ export function omittedRangesFromCleanTakeCuts(
         startMs,
         endMs,
         type,
-        reason,
+        reason: reasonForOmissionType(type, position),
         accepted: false,
       })
     }
     for (const [start, end] of merged) {
       if (start > cursor) {
         const isLead = cursor <= source.startMs
-        const type: CleanTakeOmissionType = isLead ? 'omission' : 'retake'
-        const reason = isLead
-          ? 'Opening material omitted from the first pass'
-          : 'Earlier take or mid-passage omitted from the first pass'
-        emit(cursor, start, type, reason)
+        emit(cursor, start, !isLead, isLead ? 'lead' : 'mid')
       }
       cursor = Math.max(cursor, end)
     }
     if (source.endMs > cursor) {
-      emit(cursor, source.endMs, 'omission', 'Ending material omitted from the first pass')
+      emit(cursor, source.endMs, false, 'tail')
     }
   }
   return out
@@ -342,14 +428,27 @@ export function invertRangesWithin(trim: CutRange, keep: CutRange[]): CutRange[]
   return cuts
 }
 
-/** Build an audition edit that plays only the given removed ranges on a single-source cut list. */
-export function playRemovedOnlyEdits(edits: ClipEditsV2, removedRanges: CutRange[]): ClipEditsV2 {
+/** Build an audition edit that plays only the given removed ranges on a single-source cut list.
+ * Each range is expanded by PLAY_REMOVED_ONLY_EDGE_PAD_MS on both sides (clamped to the trim).
+ * Short ranges are padded, never omitted.
+ */
+export function playRemovedOnlyEdits(
+  edits: ClipEditsV2,
+  removedRanges: CutRange[],
+  padMs: number = PLAY_REMOVED_ONLY_EDGE_PAD_MS,
+): ClipEditsV2 {
   const trim: CutRange = [edits.trim.in, edits.trim.out]
-  const cuts = invertRangesWithin(trim, removedRanges)
+  const padded = removedRanges.map((range) => {
+    const lo = Math.min(range[0], range[1])
+    const hi = Math.max(range[0], range[1])
+    const next = padRemovedRange(lo, hi, trim[0], trim[1], padMs)
+    return [next.inMs, next.outMs] as CutRange
+  })
+  const cuts = invertRangesWithin(trim, padded)
   return {
     ...edits,
     cutRanges: cuts,
-    // Drop assembled inserts so the preview is only the inverted main-source cuts.
+    // Single-source flip: drop assembled inserts so the preview is the inverted main-source cuts.
     inserts: undefined,
   }
 }
@@ -496,25 +595,34 @@ function spliceAppendInsert(
   return next.slice(0, 50)
 }
 
-/** Play-removed-only for assembled Clean Take: mute the kept main take and append only omissions. */
+/** Play-removed-only for assembled Clean Take: mute the kept main take and append only omissions.
+ * Uses the assembled preview (inserts on each omission's source), not a single source-clock media URL.
+ * Short cues are padded by PLAY_REMOVED_ONLY_EDGE_PAD_MS, never skipped.
+ */
 export function playRemovedOnlyFromOmissions(
   edits: ClipEditsV2,
   omissions: CleanTakeOmission[],
   keptCuts: CleanTakeKeptCut[] = [],
+  extents: CleanTakeSourceExtent[] = [],
+  padMs: number = PLAY_REMOVED_ONLY_EDGE_PAD_MS,
 ): ClipEditsV2 {
   const inserts: ClipInsert[] = []
+  const extentById = new Map(extents.map((row) => [row.sourceId, row]))
   for (const [index, omission] of omissions.entries()) {
     const sourceId = findEditSourceIdForOmission(edits, omission, keptCuts)
     if (!sourceId) continue
-    const durMs = omission.endMs - omission.startMs
-    if (durMs < 200) continue
+    const extent = extentById.get(omission.sourceId)
+    const source = (edits.sources ?? []).find((row) => row.id === sourceId)
+    const extentStart = extent?.startMs ?? 0
+    const extentEnd = extent?.endMs ?? source?.durationMs ?? Math.max(omission.endMs + padMs, omission.startMs + 1)
+    const padded = padRemovedRange(omission.startMs, omission.endMs, extentStart, extentEnd, padMs)
     inserts.push({
       id: `removed_only_${index}`,
       sourceId,
       atSrcMs: edits.trim.out,
       append: true,
-      inMs: omission.startMs,
-      durMs,
+      inMs: padded.inMs,
+      durMs: padded.outMs - padded.inMs,
       audio: 'source',
       fit: 'contain',
     })
@@ -538,7 +646,151 @@ export function omissionsOverlappingLocked(
   omissions: CleanTakeOmission[],
   locked: LockedRange[],
 ): CleanTakeOmission[] {
-  return omissions.filter((item) => overlapsAnyLockedRange([item.startMs, item.endMs], locked))
+  return omissions.filter((item) => overlapsAnyLockedRange([item.startMs, item.endMs], locked, item.sourceId))
 }
 
 export { proposalId }
+
+export function isCleanTakeAiMeta(aiMeta: unknown): boolean {
+  if (!aiMeta || typeof aiMeta !== 'object') return false
+  const cleanTake = (aiMeta as Record<string, unknown>).cleanTake
+  return Boolean(cleanTake && typeof cleanTake === 'object')
+}
+
+export function normalizeOmissionType(raw: unknown): CleanTakeOmissionType | null {
+  if (raw === 'filler' || raw === 'repeat') return 'filler'
+  if (raw === 'silence' || raw === 'gap' || raw === 'pause') return 'silence'
+  if (raw === 'retake') return 'retake'
+  if (raw === 'manual' || raw === 'chatter' || raw === 'omission') return 'manual'
+  return null
+}
+
+export function classifyOmissionType(input: {
+  startMs: number
+  endMs: number
+  betweenKept?: boolean
+  position?: 'lead' | 'mid' | 'tail'
+  hintedType?: unknown
+}): CleanTakeOmissionType {
+  const hinted = normalizeOmissionType(input.hintedType)
+  if (hinted) return hinted
+  if (input.betweenKept || input.position === 'mid') return 'retake'
+  const duration = input.endMs - input.startMs
+  if (duration > 0 && duration < 800) return 'filler'
+  if (duration >= 1000 && duration <= 5000) return 'silence'
+  return 'manual'
+}
+
+export function reasonForOmissionType(type: CleanTakeOmissionType, position: 'lead' | 'mid' | 'tail' | 'unknown' = 'unknown'): string {
+  if (type === 'filler') return 'Short filler-like omission (um/uh-style window)'
+  if (type === 'silence') return 'Silence or pause omitted from the first pass'
+  if (type === 'retake') return 'Earlier take or mid-passage omitted from the first pass'
+  if (position === 'lead') return 'Opening material omitted from the first pass'
+  if (position === 'tail') return 'Ending material omitted from the first pass'
+  return 'Omitted from the first pass'
+}
+
+export type CleanTakeReviewState = {
+  v: 1
+  omissions: CleanTakeOmission[]
+}
+
+type ClipEditsWithCleanTakeReview = ClipEditsV2 & { cleanTakeReview?: CleanTakeReviewState }
+
+/** Persist remaining review omissions on the saved edits (survives normalizeEdits via object spread). */
+export function writeCleanTakeReview(edits: ClipEditsV2, omissions: CleanTakeOmission[]): ClipEditsV2 {
+  const next: ClipEditsWithCleanTakeReview = { ...edits, cleanTakeReview: { v: 1, omissions } }
+  return next
+}
+
+export function readCleanTakeReview(edits: ClipEditsV2): CleanTakeReviewState | null {
+  const raw = (edits as ClipEditsWithCleanTakeReview).cleanTakeReview
+  if (!raw || raw.v !== 1 || !Array.isArray(raw.omissions)) return null
+  const omissions: CleanTakeOmission[] = []
+  for (const row of raw.omissions) {
+    if (!row || typeof row !== 'object') continue
+    const startMs = Number(row.startMs)
+    const endMs = Number(row.endMs)
+    const sourceId = String(row.sourceId ?? '').trim()
+    const type = normalizeOmissionType(row.type) ?? 'manual'
+    if (!sourceId || !Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) continue
+    omissions.push({
+      id: typeof row.id === 'string' && row.id ? row.id : `${sourceId}:${startMs}:${endMs}`,
+      sourceId,
+      sourceProjectId: typeof row.sourceProjectId === 'string' ? row.sourceProjectId : undefined,
+      startMs: Math.round(startMs),
+      endMs: Math.round(endMs),
+      type,
+      reason: typeof row.reason === 'string' && row.reason ? row.reason : reasonForOmissionType(type),
+      accepted: row.accepted === true,
+    })
+  }
+  return { v: 1, omissions }
+}
+
+export function sourceExtentsFromEdits(edits: ClipEditsV2): CleanTakeSourceExtent[] {
+  return (edits.sources ?? []).map((source) => ({
+    sourceId: source.id,
+    startMs: 0,
+    endMs: Math.max(1, Number(source.durationMs) || 0),
+    title: source.label,
+  }))
+}
+
+export function keptRangesFromEdits(edits: ClipEditsV2): Array<{ sourceId: string; startMs: number; endMs: number }> {
+  const out: Array<{ sourceId: string; startMs: number; endMs: number }> = []
+  const mainId = edits.sources?.[0]?.id
+  if (mainId) {
+    const holes = mergeAdjacent((edits.cutRanges ?? []).map((range) => loHi(range)))
+    let cursor = edits.trim.in
+    for (const [start, end] of holes) {
+      if (start > cursor) out.push({ sourceId: mainId, startMs: cursor, endMs: start })
+      cursor = Math.max(cursor, end)
+    }
+    if (edits.trim.out > cursor) out.push({ sourceId: mainId, startMs: cursor, endMs: edits.trim.out })
+  }
+  for (const insert of edits.inserts ?? []) {
+    if (!insert.sourceId || !(insert.durMs > 0)) continue
+    out.push({ sourceId: insert.sourceId, startMs: insert.inMs, endMs: insert.inMs + insert.durMs })
+  }
+  return out
+}
+
+export function omissionCoveredByEdits(edits: ClipEditsV2, omission: CleanTakeOmission, minCoverMs = 200): boolean {
+  const sourceId = findEditSourceIdForOmission(edits, omission) ?? omission.sourceId
+  let covered = 0
+  for (const kept of keptRangesFromEdits(edits)) {
+    if (kept.sourceId !== sourceId && kept.sourceId !== omission.sourceId) continue
+    const lo = Math.max(kept.startMs, omission.startMs)
+    const hi = Math.min(kept.endMs, omission.endMs)
+    if (hi > lo) covered += hi - lo
+  }
+  const duration = omission.endMs - omission.startMs
+  return duration > 0 && covered >= Math.min(duration, Math.max(minCoverMs, duration * 0.8))
+}
+
+/**
+ * Rebuild the remaining omission list from the saved edits.
+ * Prefer the persisted `cleanTakeReview` list (filtered by what is still missing).
+ * Do not re-derive from aiMeta.cleanTake.cuts — restored takes stay gone after load().
+ */
+export function listOmissionsFromSavedEdits(
+  edits: ClipEditsV2,
+  extents?: CleanTakeSourceExtent[],
+): CleanTakeOmission[] {
+  const stored = readCleanTakeReview(edits)
+  if (stored) {
+    return stored.omissions.filter((row) => !omissionCoveredByEdits(edits, row))
+  }
+  const sourceExtents = (extents && extents.length ? extents : sourceExtentsFromEdits(edits)).filter((row) => row.endMs > row.startMs)
+  const kept: CleanTakeKeptCut[] = keptRangesFromEdits(edits).map((row) => ({
+    sourceId: row.sourceId,
+    startMs: row.startMs,
+    endMs: row.endMs,
+  }))
+  return omittedRangesFromCleanTakeCuts(kept, sourceExtents)
+}
+
+export function cleanupPanelDefaultStrength(defaultStrength?: CleanupStrength): CleanupStrength {
+  return defaultStrength ?? DEFAULT_CLEANUP_STRENGTH
+}

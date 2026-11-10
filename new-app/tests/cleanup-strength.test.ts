@@ -6,7 +6,8 @@ import {
   gapPresetForStrength,
   isProtectedFromCleanup,
   OPT_IN_FILLER_WORDS,
-} from '@/lib/clips/editor/cleanup-strength'
+} from '../lib/clips/editor/cleanup-strength'
+import { buildCleanTakeRunBody, cleanupPanelDefaultStrength } from '../lib/clips/editor/clean-take-review'
 
 describe('cleanup-strength', () => {
   it('gap presets match spec defaults', () => {
@@ -42,5 +43,13 @@ describe('Clean Take first-pass default', () => {
     expect(DEFAULT_CLEANUP_STRENGTH).toBe('normal')
     expect(fillerEligibleAtStrength('like', 'lexicon', CLEAN_TAKE_DEFAULT_STRENGTH, new Set())).toBe(false)
     expect(OPT_IN_FILLER_WORDS).toContain('you know')
+  })
+
+  it('puts light on the run body and uses it as the CleanupPanel default when provided', () => {
+    const body = buildCleanTakeRunBody({ sources: [{ projectId: 'proj_1' }] })
+    expect(body.fillerStrength).toBe(CLEAN_TAKE_DEFAULT_STRENGTH)
+    expect(body.fillerStrength).toBe('light')
+    expect(cleanupPanelDefaultStrength(CLEAN_TAKE_DEFAULT_STRENGTH)).toBe('light')
+    expect(cleanupPanelDefaultStrength()).toBe(DEFAULT_CLEANUP_STRENGTH)
   })
 })

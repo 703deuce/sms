@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { excludeLockedProposals, fillerProposals, gapProposals, retakeProposals } from '@/lib/clips/editor/cleanup-proposals'
-import type { CleanupProposal } from '@/lib/clips/editor/cleanup-proposals'
-import type { RetakeGroup } from '@/lib/clips/editor/retakes'
-import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
+import { excludeLockedProposals, fillerProposals, gapProposals, retakeProposals } from '../lib/clips/editor/cleanup-proposals'
+import type { CleanupProposal } from '../lib/clips/editor/cleanup-proposals'
+import type { RetakeGroup } from '../lib/clips/editor/retakes'
+import type { EditorWord } from '../lib/clips/script-editor/to-editor-words'
 
 describe('locked ranges on cleanup proposals', () => {
   it('filters filler, gap, and retake proposals that overlap locked intro/outro', () => {
@@ -18,8 +18,8 @@ describe('locked ranges on cleanup proposals', () => {
     })
     const locked = [[0, 2000]] as [number, number][]
     const open = excludeLockedProposals(gaps, locked)
-    expect(open.every((row) => row.range[1] <= 0 || row.range[0] >= 2000 || row.range[0] >= 2000)).toBe(true)
-    expect(open.every((row) => row.range[1] <= locked[0]![0] || row.range[0] >= locked[0]![1])).toBe(true)
+    expect(open.every((row: CleanupProposal) => row.range[1] <= 0 || row.range[0] >= 2000 || row.range[0] >= 2000)).toBe(true)
+    expect(open.every((row: CleanupProposal) => row.range[1] <= locked[0]![0] || row.range[0] >= locked[0]![1])).toBe(true)
 
     const groups = [
       {
@@ -49,6 +49,6 @@ describe('locked ranges on cleanup proposals', () => {
       { id: 'b', kind: 'gap', range: [100, 900], label: 'pause' },
     ]
     const kept = excludeLockedProposals(rows, [[0, 3000]])
-    expect(kept.map((row) => row.id)).toEqual(['a'])
+    expect(kept.map((row: CleanupProposal) => row.id)).toEqual(['a'])
   })
 })

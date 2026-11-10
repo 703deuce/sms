@@ -117,6 +117,7 @@ import { StudioSoundPreview } from '@/components/script-editor/studio-sound-prev
 import { DEFAULT_STUDIO_SOUND_MIX, normalizeAudioEdits } from '@/lib/clips/audio'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { CleanupPanel } from '@/components/clips/editor/cleanup-panel'
+import { CLEAN_TAKE_DEFAULT_STRENGTH, isCleanTakeAiMeta } from '../../../lib/clips/editor/clean-take-review'
 import type { CleanupProposal } from '@/lib/clips/editor/cleanup-proposals'
 import { singleCleanupApplyLabel } from '@/lib/clips/editor/history-labels'
 import { toggleMarkerAt } from '@/lib/clips/editor/markers'
@@ -2335,6 +2336,7 @@ export function EditorShell({
             onReloadWords={reloadWords}
             onGapSettingsChange={(patch) => setGapToolSettings((s) => ({ ...s, ...patch }))}
             mediaOffsetMs={mediaOffsetMs}
+            defaultStrength={isCleanTakeAiMeta(aiMeta) ? CLEAN_TAKE_DEFAULT_STRENGTH : undefined}
           />
         </EditorPanelErrorBoundary>
       </div>
