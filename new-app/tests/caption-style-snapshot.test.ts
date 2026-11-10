@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '../lib/clips/edits'
 import {
   applyCaptionStyleSnapshot,
   buildCaptionStyleSnapshot,
   captionStyleSnapshotForSave,
   normalizeCaptionStyleSnapshot,
-} from '@/lib/clips/editor/caption-style-snapshot'
-import { captionOptInsAreOff } from '@/lib/clips/editor/caption-style-catalog'
-import { buildNleCaptionsSrt } from '@/lib/clips/export-nle-captions'
+} from '../lib/clips/editor/caption-style-snapshot'
+import { captionOptInsAreOff } from '../lib/clips/editor/caption-style-catalog'
+import { buildNleCaptionsSrt } from '../lib/clips/export-nle-captions'
 
 const bounds = { clipStartMs: 0, clipEndMs: 10_000 }
 

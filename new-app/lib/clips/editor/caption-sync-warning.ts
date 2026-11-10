@@ -1,6 +1,6 @@
-import { buildCaptionWords, type CaptionSourceWord, type CaptionWord } from '@/lib/clips/caption-words'
-import { displayDurationMs, type ClipEditsV2 } from '@/lib/clips/edits'
-import type { CaptionLine } from '@/lib/clips/editor/caption-lines'
+import { buildCaptionWords, type CaptionSourceWord, type CaptionWord } from '../caption-words'
+import { displayDurationMs, type ClipEditsV2 } from '../edits'
+import type { CaptionLine } from './caption-lines'
 
 /** Drift large enough that burned-in captions / SRT would visibly miss the words. */
 export const CAPTION_SYNC_DRIFT_MS = 500
@@ -128,7 +128,7 @@ export function detectCaptionSyncIssues(args: {
 
   const trimIn = args.edits.trim?.in ?? 0
   if (lines.length >= 1 && trimIn > 2000) {
-    const minStart = Math.min(...lines.map((l) => l.startMs))
+    const minStart = Math.min(...lines.map((l: CaptionLine) => l.startMs))
     if (minStart > 2000 && Math.abs(minStart - trimIn) < CAPTION_SYNC_DRIFT_MS) {
       warnings.push({
         level: 'warning',
@@ -141,8 +141,8 @@ export function detectCaptionSyncIssues(args: {
 
   if (lines.length >= 3 && captionWords.length >= 3) {
     const drifts = lines
-      .map((line) => nearestWordDriftMs(line, captionWords))
-      .filter((v): v is number => v !== null)
+      .map((line: CaptionLine) => nearestWordDriftMs(line, captionWords))
+      .filter((v: number | null): v is number => v !== null)
     if (drifts.length >= 3 && median(drifts) > CAPTION_SYNC_DRIFT_MS) {
       warnings.push({
         level: 'warning',

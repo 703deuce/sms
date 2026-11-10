@@ -73,8 +73,8 @@ import {
   type DeliverQuality,
 } from '@/lib/clips/export-deliver'
 import type { InOut } from '@/lib/clips/editor/timeline-edit-ops'
-import { detectCaptionSyncIssues } from '@/lib/clips/editor/caption-sync-warning'
-import { CaptionSyncWarningBanner } from '@/components/clips/editor/caption-sync-warning-banner'
+import { detectCaptionSyncIssues } from '../../../lib/clips/editor/caption-sync-warning'
+import { CaptionSyncWarningBanner } from './caption-sync-warning-banner'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
 
@@ -203,15 +203,6 @@ export function ExportDialog({
     void clipsFetch<{ channels: ClipUserStreamerChannelRow[] }>('/api/clips/my-channels')
       .then((data) => setSavedChannels(data.channels))
       .catch(() => {})
-  }
-
-  const onDownloadNlePack = () => {
-    if (nleExportBusy) return
-    setNleExportBusy(true)
-    void downloadClipNleZip(clipId, title)
-      .then(() => toast.success('NLE pack downloaded'))
-      .catch((err) => toast.error(err instanceof Error ? err.message : 'NLE export failed'))
-      .finally(() => setNleExportBusy(false))
   }
 
   useEffect(() => {
@@ -459,6 +450,14 @@ export function ExportDialog({
     [words, edits],
   )
   const captionSyncBlocksExport = captionSyncWarnings.length > 0 && !captionSyncAck
+  const onDownloadNlePack = () => {
+    if (nleExportBusy || captionSyncBlocksExport) return
+    setNleExportBusy(true)
+    void downloadClipNleZip(clipId, title)
+      .then(() => toast.success('NLE pack downloaded'))
+      .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'NLE export failed'))
+      .finally(() => setNleExportBusy(false))
+  }
   const exportCtaLabel =
     exportButton.label === 'Export MP4'
       ? exportActionLabel(deliverFormat, encoders)
@@ -757,14 +756,30 @@ export function ExportDialog({
         ) : null}
         <div className="mt-3">
           <p className="text-xs font-medium">Other formats</p>
+          {captionSyncWarnings.length ? (
+            <CaptionSyncWarningBanner
+              className="mt-2"
+              warnings={captionSyncWarnings}
+              showAcknowledge
+              acknowledge={captionSyncAck}
+              onAcknowledgeChange={setCaptionSyncAck}
+              testId="caption-sync-warning-nle"
+              ackTestId="caption-sync-export-ack-nle"
+            />
+          ) : null}
           <div className="mt-1 flex flex-wrap gap-2">
             <Button
               type="button"
               size="sm"
               variant="outline"
               data-testid="export-xml-download"
-              disabled={nleExportBusy}
+              disabled={nleExportBusy || captionSyncBlocksExport}
               onClick={onDownloadNlePack}
+              title={
+                captionSyncBlocksExport
+                  ? 'Acknowledge the caption sync warning before exporting'
+                  : undefined
+              }
             >
               Premiere / Resolve / FCP (zip)
             </Button>

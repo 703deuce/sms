@@ -1,4 +1,4 @@
-import { ASR_LANGUAGES, type AsrLanguageCode } from '@/lib/clips/asr-languages'
+import { ASR_LANGUAGES, type AsrLanguageCode } from '../asr-languages'
 
 export { ASR_LANGUAGES }
 export type { AsrLanguageCode }

@@ -2,7 +2,7 @@
 
 import { CAPTION_PRESETS } from '@/lib/clips/settings'
 import { cn } from '@/lib/utils'
-import { captionStyleRole } from '@/lib/clips/editor/caption-style-catalog'
+import { captionStyleRole } from '../../lib/clips/editor/caption-style-catalog'
 
 export function CaptionPresetPicker({
   value,

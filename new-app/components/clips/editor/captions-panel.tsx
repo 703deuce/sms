@@ -48,10 +48,10 @@ import { CAPTION_PROPS } from '@/lib/clips/editor/motion-schema'
 import {
   applyCaptionStyleSnapshot,
   captionStyleSnapshotForSave,
-} from '@/lib/clips/editor/caption-style-snapshot'
-import { captionStyleRole, CAPTION_OPT_IN_COPY } from '@/lib/clips/editor/caption-style-catalog'
-import { detectCaptionSyncIssues } from '@/lib/clips/editor/caption-sync-warning'
-import { CaptionSyncWarningBanner } from '@/components/clips/editor/caption-sync-warning-banner'
+} from '../../../lib/clips/editor/caption-style-snapshot'
+import { captionStyleRole, CAPTION_OPT_IN_COPY } from '../../../lib/clips/editor/caption-style-catalog'
+import { detectCaptionSyncIssues } from '../../../lib/clips/editor/caption-sync-warning'
+import { CaptionSyncWarningBanner } from './caption-sync-warning-banner'
 
 const CAPTION_FONTS = ['Poppins', 'Anton', 'Montserrat Black'] as const
 const CAPTION_FONT_LABELS: Record<string, string> = {

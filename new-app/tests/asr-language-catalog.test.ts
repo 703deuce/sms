@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ASR_LANGUAGES } from '@/lib/clips/asr-languages'
+import { ASR_LANGUAGES } from '../lib/clips/asr-languages'
 import {
   ASR_LANGUAGE_CATALOG_COPY,
   ASR_LANGUAGES_IN_SETTINGS_SCHEMA,
@@ -7,8 +7,8 @@ import {
   isListedAsrLanguage,
   listedAsrLanguageCount,
   listedAsrLanguages,
-} from '@/lib/clips/editor/asr-language-catalog'
-import { captionStyleRole, CAPTION_FEATURED_STYLES, CAPTION_OPT_IN_COPY } from '@/lib/clips/editor/caption-style-catalog'
+} from '../lib/clips/editor/asr-language-catalog'
+import { captionStyleRole, CAPTION_FEATURED_STYLES, CAPTION_OPT_IN_COPY } from '../lib/clips/editor/caption-style-catalog'
 
 describe('honest ASR language catalog', () => {
   it('publishes exactly the languages listed in asr-languages.ts', () => {

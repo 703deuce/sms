@@ -95,4 +95,51 @@ describe('ExportDialog NLE zip', () => {
       expect(toast.error).toHaveBeenCalledWith('Authentication required')
     })
   })
+
+  it('does not download an NLE zip until the caption sync warning is acknowledged', async () => {
+    const drifted = normalizeEdits(
+      {
+        ...defaultEdits(bounds),
+        captionLines: [
+          { id: 'a', text: 'Hello', startMs: 20_000, endMs: 20_600 },
+          { id: 'b', text: 'there', startMs: 20_700, endMs: 21_300 },
+          { id: 'c', text: 'friends', startMs: 21_400, endMs: 22_000 },
+        ],
+      },
+      bounds,
+    )
+    const words = [
+      { i: 0, w: 'Hello', s: 0.2, e: 0.6 },
+      { i: 1, w: 'there', s: 0.6, e: 1.0 },
+      { i: 2, w: 'friends', s: 1.1, e: 1.6 },
+    ]
+    const { findByTestId } = render(
+      <ExportDialog
+        clipId="clip_sync"
+        title="Drifted"
+        edits={drifted}
+        words={words}
+        open
+        onClose={() => {}}
+        layoutMode={drifted.layout.mode}
+        facecamLayout={null}
+        reframeV2Enabled={false}
+      />,
+    )
+    const warning = await findByTestId('caption-sync-warning-nle')
+    expect(warning.textContent).toMatch(/out of sync/i)
+    const btn = await findByTestId('export-xml-download')
+    expect(btn).toHaveProperty('disabled', true)
+    fireEvent.click(btn)
+    expect(downloadClipNleZip).not.toHaveBeenCalled()
+
+    fireEvent.click(await findByTestId('caption-sync-export-ack-nle'))
+    await waitFor(() => {
+      expect(btn).toHaveProperty('disabled', false)
+    })
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(downloadClipNleZip).toHaveBeenCalledWith('clip_sync', 'Drifted')
+    })
+  })
 })

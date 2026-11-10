@@ -1,5 +1,5 @@
-import { presetSlugToId } from '@/lib/clips/caption-presets'
-import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { presetSlugToId } from '../caption-presets'
+import type { ClipEditsV2 } from '../edits'
 
 export type CaptionStyleRole = 'clean' | 'modern'
 

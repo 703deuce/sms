@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { buildSrtFromCaptionWords, defaultEdits, formatSrtTime, normalizeEdits, type ClipEditsV2 } from '../lib/clips/edits'
 import {
   CAPTION_SYNC_DRIFT_MS,
   detectCaptionSyncIssues,
   primaryCaptionSyncWarning,
-} from '@/lib/clips/editor/caption-sync-warning'
-import { buildNleCaptionsSrt } from '@/lib/clips/export-nle-captions'
+} from '../lib/clips/editor/caption-sync-warning'
+import { buildNleCaptionsSrt } from '../lib/clips/export-nle-captions'
 
 const bounds = { clipStartMs: 0, clipEndMs: 10_000 }
 
@@ -83,5 +83,31 @@ describe('caption sync warning', () => {
     const srt = buildNleCaptionsSrt(words, next, bounds)
     expect(srt).toContain('Hello friends today')
     expect(srt).not.toContain('Hello there friends')
+  })
+})
+
+describe('SRT timestamp formatting and empty file', () => {
+  it('formats SRT timestamps with zero-padded hours, minutes, seconds, and milliseconds', () => {
+    expect(formatSrtTime(0)).toBe('00:00:00,000')
+    expect(formatSrtTime(1.5)).toBe('00:00:01,500')
+    expect(formatSrtTime(61.042)).toBe('00:01:01,042')
+    expect(formatSrtTime(3661.5)).toBe('01:01:01,500')
+  })
+
+  it('returns an empty string when there are no caption words or lines', () => {
+    expect(buildSrtFromCaptionWords([])).toBe('')
+    expect(buildNleCaptionsSrt([], edits(), bounds)).toBe('')
+  })
+
+  it('skips blank and inverted cues so the file stays empty or well-formed', () => {
+    expect(
+      buildSrtFromCaptionWords([
+        { text: '   ', s_ms: 0, e_ms: 400 },
+        { text: 'Hi', s_ms: 800, e_ms: 400 },
+      ]),
+    ).toBe('')
+    const srt = buildSrtFromCaptionWords([{ text: 'Hi', s_ms: 0, e_ms: 400 }])
+    expect(srt).toContain('00:00:00,000 --> 00:00:00,400')
+    expect(srt).toContain('Hi')
   })
 })

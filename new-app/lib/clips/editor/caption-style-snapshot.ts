@@ -1,4 +1,4 @@
-import type { ClipEditsV2 } from '@/lib/clips/edits'
+import type { ClipEditsV2 } from '../edits'
 
 /** Workspace-reusable caption style (seed for brand kit). Clip text/timings are not included. */
 export const CAPTION_STYLE_SNAPSHOT_VERSION = 1 as const
