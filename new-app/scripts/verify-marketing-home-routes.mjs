@@ -6,6 +6,8 @@
  *   - `/ai-clips` is now a 308 permanentRedirect to `/ai-clipper`
  *   - `/video-editing` is now a 308 permanentRedirect to `/video-editor`
  * New paths `/ai-clipper` and `/video-editor` are the marketing pages.
+ * `/app` now renders the authenticated Home dashboard (not a clips redirect).
+ * `/app/home` remains the Home alias, redirecting through routes.app() to `/app`.
  * `/app/studio` is the AI Studio workspace (frontend/ai-studio).
  * `/app/youtube-video` is the YouTube Video workspace.
  *
@@ -19,6 +21,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const appRoot = path.join(__dirname, '..', 'app')
 const fixturePath = path.join(__dirname, '..', 'tests/fixtures/app-page-routes-before.json')
 
+console.log('[marketing-home-routes] Step 1: initialize new-app route guard and fixture paths')
+
 const PAGE_RE = /^page\.(tsx|ts|jsx|js)$/
 const REDIRECT_RE = /(?:permanentRedirect|redirect)\(\s*(?:['"]([^'"]+)['"]|`([^`$]+))/g
 
@@ -26,6 +30,14 @@ const ALLOWED_CHANGES = {
   '/': {
     from: { file: 'new-app/app/page.tsx', redirectTo: '/app/home' },
     to: { file: 'new-app/app/(marketing)/page.tsx', redirectTo: null },
+  },
+  '/app': {
+    from: { file: 'new-app/app/app/page.tsx', redirectTo: '/app/clips' },
+    to: { file: 'new-app/app/app/page.tsx', redirectTo: null },
+  },
+  '/app/home': {
+    from: { file: 'new-app/app/app/home/page.tsx', redirectTo: '/app/clips' },
+    to: { file: 'new-app/app/app/home/page.tsx', redirectTo: null },
   },
   '/ai-clips': {
     from: { file: 'new-app/app/(marketing)/ai-clips/page.tsx', redirectTo: null },
@@ -118,13 +130,18 @@ function sortRoutes(routes) {
   return Object.fromEntries(Object.entries(routes).sort(([a], [b]) => a.localeCompare(b)))
 }
 
+console.log('[marketing-home-routes] Step 2: load the frozen pre-home route inventory')
 const before = JSON.parse(fs.readFileSync(fixturePath, 'utf8'))
+console.log('[marketing-home-routes] Step 3: walk and inventory current new-app pages')
 const after = sortRoutes(walkPages(appRoot))
+console.log(`[marketing-home-routes] Inventoried ${Object.keys(before.routes).length} baseline routes and ${Object.keys(after).length} current routes`)
 
 const failures = []
 const rows = []
 
+console.log('[marketing-home-routes] Step 4: verify each existing route and documented exception')
 for (const [url, prev] of Object.entries(before.routes).sort(([a], [b]) => a.localeCompare(b))) {
+  console.log(`[marketing-home-routes] Checking existing route: ${url}`)
   const next = after[url]
   const allowed = ALLOWED_CHANGES[url]
   if (!next) {
@@ -157,8 +174,10 @@ for (const [url, prev] of Object.entries(before.routes).sort(([a], [b]) => a.loc
   }
 }
 
+console.log('[marketing-home-routes] Step 5: verify every new route is explicitly allowed')
 const newPaths = Object.keys(after).filter((u) => !(u in before.routes))
 for (const url of newPaths.sort()) {
+  console.log(`[marketing-home-routes] Checking new route: ${url}`)
   const expected = ALLOWED_NEW[url]
   if (expected) {
     const ok = sameRecord(after[url], expected)
@@ -188,7 +207,7 @@ out += '# Marketing home route check\n'
 out += `\nBefore inventory: ${before.generatedFrom} (${Object.keys(before.routes).length} page routes)\n`
 out += `After tree:      ${appRoot} (${Object.keys(after).length} page routes)\n`
 out += '\nAllowed changes: `/` from `app/page.tsx` redirect `/app/home` → `app/(marketing)/page.tsx` (public home); `/ai-clips` → 308 `/ai-clipper`; `/video-editing` → 308 `/video-editor`.\n'
-out += 'Log in target: `/app` still redirects to `/app/clips` (same as `/app/home`).\n\n'
+out += 'Authenticated home: `/app` renders the dashboard; `/app/home` is its alias and permanently redirects to `/app` through `routes.app()`.\n\n'
 out += '| Status  | Path | Before | After |\n'
 out += '|---------|------|--------|-------|\n'
 for (const r of rows) {
@@ -196,7 +215,7 @@ for (const r of rows) {
 }
 out += '\n'
 
-const login = after['/app']
+const appHome = after['/app']
 const homeAlias = after['/app/home']
 const required = [
   '/',
@@ -223,20 +242,32 @@ const required = [
   '/ai-producer-agent/clean-take',
   '/ai-producer-agent/multi-source',
 ]
+console.log('[marketing-home-routes] Step 6: verify every required deep link')
 for (const p of required) {
+  console.log(`[marketing-home-routes] Checking required deep link: ${p}`)
   if (!after[p]) failures.push(`Required deep link missing after change: ${p}`)
 }
-if (!login || login.redirectTo !== '/app/clips') {
-  failures.push(`Log in target /app should still redirect to /app/clips, got ${JSON.stringify(login)}`)
+console.log('[marketing-home-routes] Step 7: verify real Home dashboard and Home alias semantics')
+if (!appHome || appHome.redirectTo !== null) {
+  failures.push(`/app must render the Home dashboard without redirecting, got ${JSON.stringify(appHome)}`)
 }
-if (!homeAlias || homeAlias.redirectTo !== '/app/clips') {
-  failures.push(`/app/home should still redirect to /app/clips, got ${JSON.stringify(homeAlias)}`)
+if (!homeAlias || homeAlias.redirectTo !== null) {
+  failures.push(`/app/home must resolve to the Home page without redirecting to clips, got ${JSON.stringify(homeAlias)}`)
+}
+if (homeAlias) {
+  const aliasSource = fs.readFileSync(path.join(appRoot, 'app/home/page.tsx'), 'utf8')
+  const pointsToAppHome = /permanentRedirect\s*\(\s*withQuery\s*\(\s*routes\.app\s*\(\s*\)/.test(aliasSource)
+  if (!pointsToAppHome) {
+    failures.push('/app/home must permanently redirect through routes.app() to the Home dashboard')
+  }
 }
 
 out += '## Legacy slug redirects (308)\n\n'
 out += '| From | To | File | Detected target | Status |\n'
 out += '| --- | --- | --- | --- | --- |\n'
+console.log('[marketing-home-routes] Step 8: check legacy marketing slugs still use 308 redirects')
 for (const [from, to] of Object.entries(LEGACY_SLUG_REDIRECTS)) {
+  console.log(`[marketing-home-routes] Checking permanent redirect: ${from} -> ${to}`)
   const rec = after[from]
   const text = rec ? fs.readFileSync(path.join(appRoot, rec.file.replace(/^new-app\/app\//, '')), 'utf8') : ''
   const usesPermanent = /permanentRedirect\s*\(/.test(text)
@@ -248,6 +279,7 @@ for (const [from, to] of Object.entries(LEGACY_SLUG_REDIRECTS)) {
 }
 out += '\n'
 
+console.log(`[marketing-home-routes] Step 9: report ${failures.length} verification failures`)
 if (failures.length) {
   out += '## FAIL\n'
   for (const f of failures) out += `- ${f}\n`
@@ -258,4 +290,5 @@ if (failures.length) {
 out += '## PASS\n'
 out += `All ${Object.keys(before.routes).length} previously existing page paths still resolve to the same page or a documented redirect (home at \`/\`, plus legacy slug 308s).\n`
 out += `${newPaths.length} new path(s) (${Object.keys(ALLOWED_NEW).join(', ')} allowed).\n`
+console.log('[marketing-home-routes] PASS: all preserved and documented routes verified')
 process.stdout.write(out)
