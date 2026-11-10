@@ -18,10 +18,18 @@ describe('marketing home route check', () => {
   it('keeps every pre-home page path resolving to the same page or a documented redirect', () => {
     console.log('[marketing-home-routes.test] Step 1: execute the full route inventory guard')
     const script = path.join(process.cwd(), 'scripts/verify-marketing-home-routes.mjs')
-    const output = execFileSync(process.execPath, [script], {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-    })
+    let output: string
+    try {
+      output = execFileSync(process.execPath, [script], {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+      })
+    } catch (error) {
+      const stdout = (error as { stdout?: Buffer | string }).stdout?.toString() ?? ''
+      console.log('[marketing-home-routes.test] Route guard failure details:')
+      console.log(stdout.split('\n').filter((line) => line.startsWith('- ')).join('\n'))
+      throw error
+    }
     expect(output).toContain('## PASS')
     expect(output).toContain('## Legacy slug redirects (308)')
     expect(output).toContain('`/ai-clips` | `/ai-clipper`')

@@ -8,6 +8,8 @@
  * New paths `/ai-clipper` and `/video-editor` are the marketing pages.
  * `/app` now renders the authenticated Home dashboard (not a clips redirect).
  * `/app/home` remains the Home alias, redirecting through routes.app() to `/app`.
+ * New workspaces and compatibility routes added since the frozen inventory are
+ * explicitly listed in ALLOWED_NEW; unknown additions still fail the guard.
  * `/app/studio` is the AI Studio workspace (frontend/ai-studio).
  * `/app/youtube-video` is the YouTube Video workspace.
  *
@@ -55,6 +57,18 @@ const ALLOWED_NEW = {
   '/app/studio': { file: 'new-app/app/app/studio/page.tsx', redirectTo: null },
   '/app/youtube-video': { file: 'new-app/app/app/youtube-video/page.tsx', redirectTo: null },
   '/app/captions': { file: 'new-app/app/app/captions/page.tsx', redirectTo: null },
+  // Additional legitimate workspaces and compatibility aliases added after the frozen inventory.
+  '/app/ai-video/[projectId]': { file: 'new-app/app/app/ai-video/[projectId]/page.tsx', redirectTo: null },
+  '/app/ai-video/new': { file: 'new-app/app/app/ai-video/new/page.tsx', redirectTo: null },
+  '/app/ai-video/templates': { file: 'new-app/app/app/ai-video/templates/page.tsx', redirectTo: null },
+  '/app/dashboard': { file: 'new-app/app/app/dashboard/page.tsx', redirectTo: null }, // routes.app() alias
+  '/app/editor/[...path]': { file: 'new-app/app/app/editor/[...path]/page.tsx', redirectTo: null }, // dynamic editor redirect
+  '/app/streaming': { file: 'new-app/app/app/streaming/page.tsx', redirectTo: '/app/streamer' },
+  '/app/video-editor': { file: 'new-app/app/app/video-editor/page.tsx', redirectTo: null },
+  '/app/video-editor/[projectId]/edit/[clipId]': { file: 'new-app/app/app/video-editor/[projectId]/edit/[clipId]/page.tsx', redirectTo: null },
+  '/app/video-editor/[projectId]/script': { file: 'new-app/app/app/video-editor/[projectId]/script/page.tsx', redirectTo: null },
+  '/app/video-editor/[projectId]/studio/[clipId]': { file: 'new-app/app/app/video-editor/[projectId]/studio/[clipId]/page.tsx', redirectTo: null },
+  '/app/video-editor/new': { file: 'new-app/app/app/video-editor/new/page.tsx', redirectTo: null },
 }
 
 const LEGACY_SLUG_REDIRECTS = {
