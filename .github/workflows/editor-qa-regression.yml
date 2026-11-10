@@ -135,7 +135,13 @@ jobs:
             tests/streamer-agent-batch-contract.test.ts \
             tests/motion-graphics-contract.test.ts \
             tests/motion-graphics-text-adapter.test.ts \
-            tests/motion-request-limit.test.ts
+            tests/motion-request-limit.test.ts \
+            tests/studio-error-mapping.test.ts \
+            tests/studio-contract-adapter.test.ts \
+            tests/studio-generate-guard.test.ts \
+            tests/studio-job-polling.test.ts \
+            tests/studio-history-and-timeline.test.ts \
+            tests/studio-ui-layout.test.tsx
 
   captions-worker-regression:
     runs-on: ubuntu-latest
