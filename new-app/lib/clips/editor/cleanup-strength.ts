@@ -8,6 +8,9 @@ export type CleanupStrength = 'light' | 'normal' | 'aggressive'
 
 export const DEFAULT_CLEANUP_STRENGTH: CleanupStrength = 'normal'
 
+/** Clean Take / first-pass default: um/uh-style only. Manual cleanup stays `'normal'`. */
+export const CLEAN_TAKE_DEFAULT_STRENGTH: CleanupStrength = 'light'
+
 export const OPT_IN_FILLER_WORDS = [
   'like',
   'so',
