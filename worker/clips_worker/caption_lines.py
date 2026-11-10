@@ -8,6 +8,7 @@ length, tagged with its line index "ln" so captions_ass.chunk_words shows one li
 Line-for-line mirror of new-app/lib/clips/editor/caption-lines.ts (captionLineWords).
 """
 from __future__ import annotations
+import math
 
 LINE_ID_BASE = 1_000_000
 MAX_LINES = 2000
@@ -120,6 +121,111 @@ def _split_lines(tokens: list[dict]) -> list[list[dict]]:
     return segs
 
 
+
+def _plain_len(tokens: list[dict]) -> int:
+    return sum((1 if k else 0) + len(t["w"]) for k, t in enumerate(tokens))
+
+
+def _token_span_chars(tokens: list[dict]) -> int:
+    """Visible characters plus separators, matching serialize_tokens / tokenSpanChars."""
+    return _plain_len(tokens)
+
+
+def _js_round(x: float) -> int:
+    """Match Math.round (half away from zero / half up for positives)."""
+    return int(math.floor(x + 0.5)) if x >= 0 else int(math.ceil(x - 0.5))
+
+
+def _proportional_spans(weights: list[int], start_ms: int, end_ms: int) -> list[tuple[int, int]]:
+    """Time-slice groups by character weight, matching caption-lines.ts proportionalSpans."""
+    total = sum(weights) or 1
+    dur = end_ms - start_ms
+    out: list[tuple[int, int]] = []
+    acc = 0
+    for i, w in enumerate(weights):
+        s = start_ms + _js_round((dur * acc) / total)
+        acc += w
+        e = end_ms if i == len(weights) - 1 else start_ms + _js_round((dur * acc) / total)
+        out.append((s, max(e, s)))
+    return out
+
+
+def _split_tokens_max_chars(tokens: list[dict], max_chars: int = MAX_CHARS) -> list[list[dict]]:
+    """Pack tokens into groups of at most max_chars visible characters.
+
+    Never cuts inside a token. A single token longer than max_chars stays
+    intact as its own group. Mirror of caption-lines.ts splitTokensByMaxChars.
+    """
+    groups: list[list[dict]] = []
+    current: list[dict] = []
+    for t in tokens:
+        if not current:
+            current = [{**t, "br": False}]
+            continue
+        nxt = current + [t]
+        if _token_span_chars(nxt) > max_chars:
+            groups.append(current)
+            current = [{**t, "br": False}]
+        else:
+            current = nxt
+    if current:
+        groups.append(current)
+    return groups
+
+
+def _merge_text(prev: dict, nxt: dict) -> str:
+    return serialize_tokens(line_tokens(prev["text"]) + line_tokens(nxt["text"]))
+
+
+def _merge_short_pieces(pieces: list[dict]) -> list[dict]:
+    """Merge any piece under MIN_MS into its neighbor, the way rechunkCaptionLines does.
+    Also merge a leading short piece into the next neighbor so words are never dropped."""
+    merged: list[dict] = []
+    for x in pieces:
+        prev = merged[-1] if merged else None
+        if prev is not None and x["endMs"] - x["startMs"] < MIN_MS and prev["endMs"] == x["startMs"]:
+            merged[-1] = {**prev, "text": _merge_text(prev, x), "endMs": x["endMs"]}
+        else:
+            merged.append(x)
+    out: list[dict] = []
+    i = 0
+    while i < len(merged):
+        x = merged[i]
+        nxt = merged[i + 1] if i + 1 < len(merged) else None
+        if nxt is not None and x["endMs"] - x["startMs"] < MIN_MS and x["endMs"] == nxt["startMs"]:
+            out.append({**x, "text": _merge_text(x, nxt), "endMs": nxt["endMs"], "glue_left": x.get("glue_left")})
+            i += 2
+            continue
+        out.append(x)
+        i += 1
+    return out
+
+
+def _split_oversized_line(line: dict) -> list[dict]:
+    """If a cue's plain text exceeds MAX_CHARS, split on word boundaries and time-slice
+    like rechunkCaptionLines / splitTokensByMaxChars. A single over-long token stays whole.
+    Pieces under MIN_MS are merged into a neighbor; words are never dropped."""
+    toks = line_tokens(line["text"])
+    if _plain_len(toks) <= MAX_CHARS:
+        return [line]
+    chunks = _split_tokens_max_chars(toks)
+    if len(chunks) <= 1:
+        return [line]
+    weights = [max(1, _token_span_chars(part)) for part in chunks]
+    spans = _proportional_spans(weights, line["startMs"], line["endMs"])
+    base_id = str(line.get("id") or "")
+    pieces: list[dict] = []
+    for i, part in enumerate(chunks):
+        a, b = spans[i]
+        pieces.append({
+            "id": base_id if i == 0 or not base_id else f"{base_id}~{i}",
+            "text": serialize_tokens(part),
+            "startMs": a,
+            "endMs": b,
+        })
+    return _merge_short_pieces(pieces)
+
+
 def normalize_caption_lines(raw) -> list[dict]:
     """Valid lines, sorted by start, overlaps trimmed (a line starts no earlier than the previous end)."""
     if not isinstance(raw, list):
@@ -128,7 +234,8 @@ def normalize_caption_lines(raw) -> list[dict]:
     for r in raw:
         if not isinstance(r, dict):
             continue
-        text = serialize_tokens(line_tokens(str(r.get("text") or "")), MAX_CHARS)
+        # Keep the full text here; oversized cues are split below instead of truncated.
+        text = serialize_tokens(line_tokens(str(r.get("text") or "")))
         a, b = _num(r.get("startMs")), _num(r.get("endMs"))
         if not text or a is None or b is None:
             continue
@@ -139,11 +246,29 @@ def normalize_caption_lines(raw) -> list[dict]:
         if len(rows) >= MAX_LINES:
             break
     rows.sort(key=lambda x: (x["startMs"], x["endMs"]))
+    split: list[dict] = []
+    for line in rows:
+        for piece in _split_oversized_line(line):
+            split.append(piece)
+            if len(split) >= MAX_LINES:
+                break
+        if len(split) >= MAX_LINES:
+            break
+    split = _merge_short_pieces(split)
     out: list[dict] = []
     prev_end = 0
-    for x in rows:
+    for x in split:
         s = max(x["startMs"], prev_end)
         if x["endMs"] - s < MIN_MS:
+            # After overlap trim, merge a leftover under 100 ms into its neighbor
+            # instead of dropping it, matching caption-lines.ts.
+            if out:
+                prev = out[-1]
+                out[-1] = {**prev, "text": _merge_text(prev, x), "endMs": max(prev["endMs"], x["endMs"])}
+                prev_end = max(prev_end, x["endMs"])
+            else:
+                out.append(dict(x))
+                prev_end = x["endMs"]
             continue
         out.append({**x, "startMs": s})
         prev_end = x["endMs"]

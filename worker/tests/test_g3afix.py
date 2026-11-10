@@ -82,10 +82,12 @@ def test_forced_breaks_win_over_fit_and_only_shrink():
 
 
 def test_plain_lines_unchanged():
-    # Old (G3a) single-line text normalizes exactly as before: one space between words, 200-char cut.
+    # Spaces still collapse; oversized cues are split instead of a 200-char cut.
     long = "word " * 60
-    got = normalize_caption_lines([{"id": "a", "text": long, "startMs": 0, "endMs": 1000}])[0]["text"]
-    assert got == " ".join(long.split())[:200]
+    rows = normalize_caption_lines([{"id": "a", "text": long, "startMs": 0, "endMs": 1000}])
+    kept = " ".join(r["text"].replace("\n", " ") for r in rows)
+    assert kept == " ".join(long.split())
+    assert all(r["endMs"] - r["startMs"] >= 100 for r in rows)
     assert serialize_tokens(line_tokens("  a   b  ")) == "a b"
     assert serialize_tokens(line_tokens("1\n2\n3\n4\n5")) == "1\n2\n3 4 5"
 
