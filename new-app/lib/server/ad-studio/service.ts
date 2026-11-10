@@ -1,5 +1,5 @@
 import 'server-only'
-import { Prisma } from '@prisma/client'
+import { Prisma, type AdStudioRun as DbAdStudioRun } from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 import { searchVideos, findCachedHit, ensureStockAsset } from '@/lib/server/ai/pixabay'
@@ -14,8 +14,16 @@ const prisma = () => getPrisma()
 const activeStatuses = ['planning','plan_ready','confirming','generating','stitching']
 const maxActive = 5
 const jsonValue = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
-type Row = Awaited<ReturnType<ReturnType<typeof prisma>['adStudioRun']['findFirst']>> & {}
-type Existing = NonNullable<Row>
+type Existing = DbAdStudioRun
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
 
 /** Confirmation metadata is private in plan JSON until a dedicated field is added in B3. */
 type SavedPlan = AdPlan & { _confirmKey?: string }
@@ -112,7 +120,7 @@ export async function createAdRun(workspaceId: string, userId: string, body: unk
   const { mode, input, key } = parseCreate(body, headerKey)
   let previous = await prisma().adStudioRun.findUnique({ where: { workspaceId_idempotencyKey: { workspaceId, idempotencyKey: key } } })
   if (previous) {
-    if (previous.mode !== mode || JSON.stringify(previous.input) !== JSON.stringify(input))
+    if (previous.mode !== mode || canonicalJson(previous.input) !== canonicalJson(input))
       throw new AdStudioError('INVALID_PARAMS', 'The idempotency key was already used for another brief.', 409)
     console.info('[ad-studio:create] idempotent_replay', { runId: previous.id })
     return { run: toView(previous), created: false }
@@ -128,7 +136,7 @@ export async function createAdRun(workspaceId: string, userId: string, body: unk
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       const existing = await prisma().adStudioRun.findUnique({ where: { workspaceId_idempotencyKey: { workspaceId, idempotencyKey: key } } })
-      if (!existing || existing.mode !== mode || JSON.stringify(existing.input) !== JSON.stringify(input))
+      if (!existing || existing.mode !== mode || canonicalJson(existing.input) !== canonicalJson(input))
         throw new AdStudioError('INVALID_PARAMS', 'That idempotency key is already in use.', 409)
       console.info('[ad-studio:create] concurrent_replay', { runId: existing.id })
       return { run: toView(existing), created: false }
