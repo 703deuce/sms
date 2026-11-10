@@ -37,7 +37,10 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
   if(!source.transcriptWords&&!source.transcriptKey)
     throw Error('agent_clip_batch_requires_source_transcript')
   const current=readStreamerAgentBatch(source.settings)
-  if(current?.status==='running')throw Error('stream_agent_batch_already_running')
+  if(current?.status==='running') {
+    console.info('[clips:double-run]', { projectId, existingRunId: current.id, action: 'attached_batch' })
+    return current
+  }
   if(opts?.onlyIfAbsent && asSettings(source.settings).agentClipBatch)
     throw Error('agent_clip_batch_already_exists')
   const windows=streamerAgentWindows(source.rangeStartMs,
@@ -50,6 +53,7 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
     sourceDurationMs:source.rangeEndMs-source.rangeStartMs,
     completed:[],errors:[],startedAt:new Date().toISOString(),
   }
+  try {
   await prisma.$transaction(async (tx:Pick<typeof prisma,'clipProject'|'clipJob'|'$executeRaw'>)=>{
     if(opts?.onlyIfAbsent){
       const n=await tx.$executeRaw`
@@ -60,15 +64,31 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
       `
       if(n!==1)throw Error('agent_clip_batch_already_exists')
     }else{
-      await tx.clipProject.update({where:{id:projectId},data:{
-        settings:JSON.parse(JSON.stringify({...asSettings(source.settings),agentClipBatch:batch})),
-      }})
+      const changed=await tx.$executeRaw`
+        UPDATE clip_projects
+        SET settings=jsonb_set(COALESCE(settings,'{}'::jsonb),'{agentClipBatch}',${JSON.stringify(batch)}::jsonb),
+            "updatedAt"=NOW()
+        WHERE id=${projectId}
+          AND COALESCE(settings->'agentClipBatch'->>'status','') <> 'running'
+      `
+      if(changed!==1)throw Error('stream_agent_batch_already_running')
     }
     await tx.clipJob.create({data:{
       id:createId('job'),projectId,type:'STREAM_AGENT_BATCH',
       status:'QUEUED',priority:10,maxAttempts:2,payload:{batchId:batch.id},
     }})
   })
+  } catch (error) {
+    if (String((error as Error).message) === 'stream_agent_batch_already_running') {
+      const latest = await prisma.clipProject.findUnique({ where: { id: projectId }, select: { settings: true } })
+      const existing = readStreamerAgentBatch(latest?.settings)
+      if (existing?.status === 'running') {
+        console.info('[clips:double-run]', { projectId, existingRunId: existing.id, action: 'attached_race_batch' })
+        return existing
+      }
+    }
+    throw error
+  }
   return batch
 }
 /** Safe to call after ingest marks a project READY (PROCESS_PROJECT,
