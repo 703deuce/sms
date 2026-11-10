@@ -35,6 +35,7 @@ export function EditorHeadlineField({
   layers,
   setLayers,
   onSyncEditsSaveVersion,
+  previewOnly = false,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -44,6 +45,8 @@ export function EditorHeadlineField({
   layers?: Layer[]
   setLayers?: (layers: Layer[]) => void
   onSyncEditsSaveVersion?: (version: number) => void
+  /** Template-mode guard: keep headline edits local and disable server-side AI generation. */
+  previewOnly?: boolean
 }) {
   const tpl = edits.exportTemplate ?? {}
   const layoutMode = edits.layout.mode
@@ -53,6 +56,10 @@ export function EditorHeadlineField({
   const [genBusy, setGenBusy] = useState(false)
 
   const generate = async () => {
+    if (previewOnly) {
+      toast.message('AI headline generation is unavailable while previewing a reusable style')
+      return
+    }
     if (gens >= EXPORT_HEADLINE_MAX_REGENERATIONS) {
       toast.error(`Max ${EXPORT_HEADLINE_MAX_REGENERATIONS} AI headlines per clip`)
       return
@@ -164,14 +171,17 @@ export function EditorHeadlineField({
           type="button"
           size="sm"
           variant={displayText ? 'outline' : 'default'}
-          disabled={genBusy || gens >= EXPORT_HEADLINE_MAX_REGENERATIONS}
+          disabled={previewOnly || genBusy || gens >= EXPORT_HEADLINE_MAX_REGENERATIONS}
+          title={previewOnly ? 'AI generation is disabled in preview-only template customization' : undefined}
           onClick={() => void generate()}
         >
           {genBusy ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : <Sparkles className="mr-1 size-3.5" />}
           {genBusy ? 'Generating…' : 'Generate headline'}
         </Button>
         <span className="text-xs text-muted-foreground">
-          {gens}/{EXPORT_HEADLINE_MAX_REGENERATIONS} AI generations
+          {previewOnly
+            ? 'AI generation stays disabled until the style is applied'
+            : `${gens}/${EXPORT_HEADLINE_MAX_REGENERATIONS} AI generations`}
         </span>
       </div>
       {t6TitleAutoEnabled() ? (

@@ -24,9 +24,12 @@ type TemplateRow = {
 export function BrandPanel({
   edits,
   onEdits,
+  previewOnly = false,
 }: {
   edits: ClipEditsV2
   onEdits: (edits: ClipEditsV2) => void
+  /** Template-mode guard: preview/apply kit fields locally without uploading brand assets. */
+  previewOnly?: boolean
 }) {
   const [templates, setTemplates] = useState<TemplateRow[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
@@ -66,6 +69,10 @@ export function BrandPanel({
   const appliedTemplate = templates.find((t) => t.id === brand.templateId)
 
   const uploadBumper = async (kind: 'intro' | 'outro', file: File | undefined) => {
+    if (previewOnly) {
+      toast.message('Upload brand assets from Manage templates; this customizer is preview-only')
+      return
+    }
     if (!file || !appliedTemplate) return
     if (file.size > 80 * 1024 * 1024) {
       toast.error('Bumper MP4 must be under 80 MB')
@@ -97,7 +104,9 @@ export function BrandPanel({
   return (
     <div className="space-y-3 p-3 text-sm">
       <p className="text-xs text-muted-foreground">
-        Pick a brand kit for this clip. Intro/outro apply on export when enabled.
+        {previewOnly
+          ? 'Preview a saved brand kit locally. Asset uploads stay in Manage templates.'
+          : 'Pick a brand kit for this clip. Intro/outro apply on export when enabled.'}
       </p>
       <Label className="text-xs font-medium">Template</Label>
       <Select
@@ -145,7 +154,7 @@ export function BrandPanel({
       {appliedTemplate && (!appliedTemplate.introVideoKey || !appliedTemplate.outroVideoKey) ? (
         <p className="text-xs text-muted-foreground" data-testid="brand-bumper-upload-hint">Bumper switches require an uploaded Intro/Outro MP4 on this template. Use Manage templates to upload the missing videos first.</p>
       ) : null}
-      {appliedTemplate ? (
+      {appliedTemplate && !previewOnly ? (
         <div className="flex flex-wrap gap-3" data-testid="brand-bumper-uploads">
           {(['intro', 'outro'] as const).map((kind) => (
             <label key={kind} className="cursor-pointer text-xs text-primary underline">

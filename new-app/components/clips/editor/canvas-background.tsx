@@ -50,6 +50,7 @@ export function CanvasBackgroundControls({
   projectId,
   clipId,
   showApplyAll,
+  allowUpload = true,
 }: {
   edits: ClipEditsV2
   onCommit: (next: ClipEditsV2) => void
@@ -59,6 +60,8 @@ export function CanvasBackgroundControls({
   projectId?: string
   clipId?: string
   showApplyAll?: boolean
+  /** Preview-only surfaces can edit existing backgrounds without creating new media. */
+  allowUpload?: boolean
 }) {
   const [uploading, setUploading] = useState(false)
   const [hexDraft, setHexDraft] = useState('')
@@ -131,7 +134,7 @@ export function CanvasBackgroundControls({
 
   const onUpload = useCallback(
     async (files: FileList | null) => {
-      if (readOnly || !files?.length) return
+      if (!allowUpload || readOnly || !files?.length) return
       setUploading(true)
       try {
         const created = await media.uploadFiles([files[0]!])
@@ -144,7 +147,7 @@ export function CanvasBackgroundControls({
         setUploading(false)
       }
     },
-    [edits, media, onCommit, readOnly],
+    [allowUpload, edits, media, onCommit, readOnly],
   )
 
   const applyToAll = useCallback(async () => {
@@ -274,7 +277,9 @@ export function CanvasBackgroundControls({
       {activeType === 'image' ? (
         <div className="space-y-2">
           {images.length === 0 && !uploading ? (
-            <p className="text-[11px] text-muted-foreground">Upload an image</p>
+            <p className="text-[11px] text-muted-foreground">
+              {allowUpload ? 'Upload an image' : 'No existing project images are available in preview-only mode'}
+            </p>
           ) : null}
           <div className="grid grid-cols-3 gap-1.5">
             {images.map((item) => (
@@ -288,16 +293,20 @@ export function CanvasBackgroundControls({
                 <MediaThumb item={item} className="h-14 w-full" />
               </button>
             ))}
-            <button
-              type="button"
-              disabled={readOnly || uploading}
-              className="flex h-14 flex-col items-center justify-center rounded border border-dashed border-border text-[11px] text-muted-foreground"
-              onClick={() => fileRef.current?.click()}
-            >
-              {uploading ? 'Uploading…' : 'Upload'}
-            </button>
+            {allowUpload ? (
+              <button
+                type="button"
+                disabled={readOnly || uploading}
+                className="flex h-14 flex-col items-center justify-center rounded border border-dashed border-border text-[11px] text-muted-foreground"
+                onClick={() => fileRef.current?.click()}
+              >
+                {uploading ? 'Uploading…' : 'Upload'}
+              </button>
+            ) : null}
           </div>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => void onUpload(e.target.files)} />
+          {allowUpload ? (
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => void onUpload(e.target.files)} />
+          ) : null}
           {selectedImageId && !mediaUrlFor(media.items, selectedImageId) ? (
             <p className="text-[11px] text-amber-600">Image missing</p>
           ) : null}
