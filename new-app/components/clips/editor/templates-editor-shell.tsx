@@ -466,6 +466,14 @@ export function TemplatesEditorShell(props: Props) {
     )
   }
 
+  const openStoryBlocks = async () => {
+    console.log('[editor:story-mode] templates-handoff', { projectId, clipId })
+    try { await flushSave() } catch {
+      toast.error('Save edits before switching editors')
+      return
+    }
+    window.location.assign(routes.story(projectId, clipId, props.clipperStudio ? { from: 'studio' } : undefined))
+  }
   const openClipEditor = async () => {
     console.info('[editor:templates-mode] open-in-clip-editor', { projectId, clipId })
     try {
@@ -526,6 +534,7 @@ export function TemplatesEditorShell(props: Props) {
           <button type="button" className={editorToolbarTextBtn} onClick={() => void openTextEditor()}>
             <FileText />Open in text editor
           </button>
+          <Button size="sm" variant="outline" onClick={() => void openStoryBlocks()}>Story blocks</Button>
           <Button size="sm" onClick={() => void openClipEditor()}>
             <Clapperboard className="mr-1 size-4" />Open in clip editor
           </Button>
