@@ -1,7 +1,4 @@
 import { createId } from '../supabase/id'
-import { getClipForWorkspace } from '../server/clips/clips'
-import { getClipStorageForObjectKey } from '../storage'
-import { createCachedSignedDownloadUrl } from '../storage/signed-download-cache'
 import { StudioError } from './errors'
 import { buildKieCreateRequest, contentTypeForKind, getStudioModel, outputKindForModel, resolveStudioCreateInput } from './models'
 import { serializeStudioJob } from './serialize'
@@ -66,6 +63,10 @@ async function resolveAssetUrl(
   try {
     const sourceInfo = parseSourceVideoKind(asset.kind)
     if (sourceInfo) {
+      const [{ getClipStorageForObjectKey }, { createCachedSignedDownloadUrl }] = await Promise.all([
+        import('../storage'),
+        import('../storage/signed-download-cache'),
+      ])
       const storage = await getClipStorageForObjectKey(asset.storageKey, asset.storageDriver)
       return await createCachedSignedDownloadUrl(storage, asset.storageKey, { versionHint: asset.id }, 3600)
     }
@@ -370,6 +371,10 @@ export async function createStudioClipSourceAsset(
   if (!input.clipId || !Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
     throw new StudioError('INVALID_PARAMS', 'A valid clip range is required')
   }
+  const [{ getClipForWorkspace }, { getClipStorageForObjectKey }] = await Promise.all([
+    import('../server/clips/clips'),
+    import('../storage'),
+  ])
   const clip = await getClipForWorkspace(input.workspaceId, input.clipId)
   if (!clip) throw new StudioError('INVALID_PARAMS', 'Clip not found')
   const segStart = clip.sourceSegStartMs == null ? null : Math.round(Number(clip.sourceSegStartMs))
