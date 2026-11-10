@@ -233,7 +233,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           if(!window.cuts.length)throw Error('yt_no_grounded_window_cuts')
           window.stage='commit'
           log('specialist_qa','window_qa_soft_fail',{...fields,code:ytErrorCode(error),
-            accepted:window.cuts.length})
+            accepted:window.cuts.length,issues:window.qaIssues})
         }
         break
       }
@@ -254,7 +254,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           if(!window.cuts.length)throw Error('yt_no_grounded_window_cuts')
           window.stage='commit'
           log('specialist_qa','window_qa_soft_fail',{...fields,accepted:window.cuts.length,
-            code:'yt_qa_rejected_story'})
+            code:'yt_qa_rejected_story',issues:review.issues})
         }
         break
       }
@@ -265,6 +265,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           outline:window.outline,cuts:window.cuts,
           rejected:window.rejected??[],
           coarseCount:window.coarse?.length??0,focusedCount:window.focused?.length??0,
+          qaIssues:window.qaIssues,
         }
         checkpoint.finished.push(current)
         checkpoint.active=null
@@ -306,7 +307,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
         checkpoint.final={...revised,qaPassed:true}
         log('global_qa',second.pass?'passed':'global_qa_soft_fail',{
           count:second.issues.length,windowCount:all.length,
-          ...(second.pass?{}:{code:'yt_global_qa_rejected'}),
+          ...(second.pass?{}:{code:'yt_global_qa_rejected',issues:second.issues}),
         })
       }catch(error){
         checkpoint.final.qaPassed=true
