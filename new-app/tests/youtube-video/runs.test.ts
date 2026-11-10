@@ -179,6 +179,25 @@ describe('youtube-video runs', () => {
     expect(run.view.result?.clipId).toBe('clip_out')
   })
 
+  it('fails closed for a source over 20 minutes when the isolated planner is unavailable', async () => {
+    const longSource = {
+      sourceId: 'proj_long',
+      projectId: 'proj_long',
+      title: 'Long source',
+      durationMs: 21 * 60_000,
+      words: [{ w: 'Long source evidence', s: 0, e: 1, spk: null }],
+    }
+    const deps = testDeps(new Map([['proj_long', longSource]]))
+    const run = await createYoutubeVideoRun(
+      'ws_long_guard', null,
+      { sources: [{ kind: 'upload', projectId: 'proj_long' }], clientRequestId: 'req_long_guard' },
+      null, deps,
+    )
+    expect(run.view.status).toBe('failed')
+    expect(run.view.failureCode).toBe('yt_isolated_pipeline_required')
+    expect(run.view.failureMessage).toMatch(/isolated full-source planner/i)
+  })
+
   it('waits for the actual render and returns signed media URLs only once READY', async () => {
     const source = sourceFromWords('proj_render_source', podcastScript)
     const deps = testDeps(new Map([['proj_render_source', source]]))

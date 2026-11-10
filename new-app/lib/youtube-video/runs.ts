@@ -193,6 +193,18 @@ async function advanceRun(
       }
       throw err
     }
+    const requiresIsolatedLongForm = ingested.some((source) => source.durationMs > 20 * 60_000)
+    if (requiresIsolatedLongForm && !deps.pipeline.planLongForm) {
+      youtubeRunEvent(current.id, 'isolated_long_form', 'planner_unavailable', {
+        sourceCount: ingested.length,
+      })
+      throw new YoutubeVideoError(
+        'yt_isolated_pipeline_required',
+        'Long YouTube sources require the isolated full-source planner.',
+        503,
+      )
+    }
+
     const claimed = await traceYoutubeRunStep(
       current.id, 'planning_claim',
       () => deps.store.claimPlanning(current.workspaceId, current.id, staleBefore),
