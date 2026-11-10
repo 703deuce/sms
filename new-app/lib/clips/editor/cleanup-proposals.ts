@@ -109,6 +109,30 @@ export function proposalId(range: CutRange): string {
   return `${lo}:${hi}`
 }
 
+/** True when a proposal range overlaps any locked intro/outro/custom range. */
+export function proposalOverlapsLockedRanges(
+  range: CutRange,
+  locked: Array<CutRange | { startMs: number; endMs: number }> | undefined,
+): boolean {
+  if (!locked?.length) return false
+  const lo = Math.min(range[0], range[1])
+  const hi = Math.max(range[0], range[1])
+  return locked.some((item) => {
+    const other = Array.isArray(item) ? item : [item.startMs, item.endMs]
+    const a = Math.min(other[0], other[1])
+    const b = Math.max(other[0], other[1])
+    return hi > a && b > lo
+  })
+}
+
+export function excludeLockedProposals<T extends { range: CutRange }>(
+  proposals: T[],
+  locked: Array<CutRange | { startMs: number; endMs: number }> | undefined,
+): T[] {
+  if (!locked?.length) return proposals
+  return proposals.filter((row) => !proposalOverlapsLockedRanges(row.range, locked))
+}
+
 export function kindForAppliedCut(
   range: CutRange,
   edits: Pick<ClipEditsV2, 'cutCleanupKinds'>,
@@ -258,6 +282,7 @@ export function fillerProposals(
     strength?: CleanupStrength
     enabledOptInFillers?: ReadonlySet<string>
     rmsSamples?: GapRmsSample[] | null
+    lockedRanges?: Array<CutRange | { startMs: number; endMs: number }>
   },
 ): CleanupProposal[] {
   const strength = opts?.strength ?? DEFAULT_CLEANUP_STRENGTH
@@ -338,12 +363,13 @@ export function fillerProposals(
       quality: refined.quality,
     })
   }
-  return out
+  return excludeLockedProposals(out, opts?.lockedRanges)
 }
 
 export function retakeProposals(
   groups: RetakeGroup[],
   existingCuts: CutRange[] = [],
+  opts?: { lockedRanges?: Array<CutRange | { startMs: number; endMs: number }> },
 ): CleanupProposal[] {
   const out: CleanupProposal[] = []
   for (const group of groups) {
@@ -359,7 +385,7 @@ export function retakeProposals(
       label,
     })
   }
-  return out
+  return excludeLockedProposals(out, opts?.lockedRanges)
 }
 
 export function clarityProposals(
@@ -394,6 +420,7 @@ export function gapProposals(
     strength?: CleanupStrength
     rmsSamples?: GapRmsSample[] | null
     motionSamples?: { tMs: number; lumaDiff: number }[] | null
+    lockedRanges?: Array<CutRange | { startMs: number; endMs: number }>
   },
 ): CleanupProposal[] {
   const preset = opts.strength ? gapPresetForStrength(opts.strength) : null
@@ -401,7 +428,7 @@ export function gapProposals(
   // SCRIPT_DOC2: the user's "keep pauses at least" length is a floor; a strength preset never goes below it.
   const targetGapMs = Math.max(opts.targetGapMs, preset?.targetGapMs ?? 0)
   const hits = listClipGapHits(orderedWords, cutRanges, { ...opts, minGapMs, targetGapMs, rmsSamples: opts.rmsSamples })
-  return hits
+  const filtered = hits
     .map((hit) => {
       if (gapKeptForMotion(opts.motionSamples?.filter((s) => s.tMs >= hit.prevWord.t1Ms && s.tMs <= hit.word.t0Ms))) {
         return null
@@ -439,6 +466,7 @@ export function gapProposals(
     }
   })
     .filter((p): p is CleanupProposal => p != null)
+  return excludeLockedProposals(filtered, opts.lockedRanges)
 }
 
 export function appliedCutProposals(

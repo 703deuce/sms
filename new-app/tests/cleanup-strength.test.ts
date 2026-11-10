@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CLEAN_TAKE_DEFAULT_STRENGTH,
   DEFAULT_CLEANUP_STRENGTH,
   fillerEligibleAtStrength,
   gapPresetForStrength,
   isProtectedFromCleanup,
+  OPT_IN_FILLER_WORDS,
 } from '@/lib/clips/editor/cleanup-strength'
 
 describe('cleanup-strength', () => {
@@ -31,5 +33,14 @@ describe('cleanup-strength', () => {
     expect(isProtectedFromCleanup({ text: '[laughter]', conf: 1 })).toBe(true)
     expect(isProtectedFromCleanup({ text: 'name', conf: 0.3 })).toBe(true)
     expect(isProtectedFromCleanup({ text: 'hello', conf: 0.9 })).toBe(false)
+  })
+})
+
+describe('Clean Take first-pass default', () => {
+  it('uses light without changing the manual cleanup default', () => {
+    expect(CLEAN_TAKE_DEFAULT_STRENGTH).toBe('light')
+    expect(DEFAULT_CLEANUP_STRENGTH).toBe('normal')
+    expect(fillerEligibleAtStrength('like', 'lexicon', CLEAN_TAKE_DEFAULT_STRENGTH, new Set())).toBe(false)
+    expect(OPT_IN_FILLER_WORDS).toContain('you know')
   })
 })

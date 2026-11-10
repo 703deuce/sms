@@ -34,6 +34,11 @@ import {
   OPT_IN_FILLER_WORDS,
   type CleanupStrength,
 } from '@/lib/clips/editor/cleanup-strength'
+import {
+  introOutroLockedRanges,
+  playRemovedOnlyEdits,
+  type LockedRange,
+} from '@/lib/clips/editor/clean-take-review'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
@@ -69,6 +74,8 @@ export function CleanupPanel({
   onReloadWords,
   onGapSettingsChange,
   mediaOffsetMs = 0,
+  defaultStrength,
+  showCutsDefault = true,
 }: {
   clipId: string
   projectId: string
@@ -93,6 +100,10 @@ export function CleanupPanel({
   onGapSettingsChange?: (patch: Partial<ClipGapToolSettings>) => void
   /** SCRIPT_DOC2: media file time 0 = this source ms (peaks are in media time). */
   mediaOffsetMs?: number
+  /** Clean Take review passes `'light'`. Manual cleanup keeps DEFAULT_CLEANUP_STRENGTH. */
+  defaultStrength?: CleanupStrength
+  /** Show cuts is on by default in cleanup review. */
+  showCutsDefault?: boolean
 }) {
   const [auditionIds, setAuditionIds] = useState<Set<string>>(new Set())
   const [fillerMode, setFillerMode] = useState<'audio' | 'ripple'>('audio')
@@ -114,7 +125,12 @@ export function CleanupPanel({
   const [clarityRows, setClarityRows] = useState<CleanupProposal[]>([])
   const [clarityLoading, setClarityLoading] = useState(false)
   const [clarityEmpty, setClarityEmpty] = useState<string | null>(null)
-  const [strength, setStrength] = useState<CleanupStrength>(DEFAULT_CLEANUP_STRENGTH)
+  const [strength, setStrength] = useState<CleanupStrength>(defaultStrength ?? DEFAULT_CLEANUP_STRENGTH)
+  const [showCuts, setShowCuts] = useState(showCutsDefault)
+  const [playRemovedOnly, setPlayRemovedOnly] = useState(false)
+  const [lockIntroSec, setLockIntroSec] = useState(0)
+  const [lockOutroSec, setLockOutroSec] = useState(0)
+  const [customLock, setCustomLock] = useState<{ startSec: string; endSec: string }>({ startSec: '', endSec: '' })
   const [enabledOptIn, setEnabledOptIn] = useState<Set<string>>(new Set())
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set())
   const [retranscribeBusy, setRetranscribeBusy] = useState(false)
@@ -124,6 +140,25 @@ export function CleanupPanel({
     () => ({ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }),
     [bounds.clipEndMs, bounds.clipStartMs],
   )
+  const lockedRanges: LockedRange[] = useMemo(() => {
+    const rows = introOutroLockedRanges(
+      bounds.clipStartMs,
+      bounds.clipEndMs,
+      Math.max(0, Math.round(lockIntroSec * 1000)),
+      Math.max(0, Math.round(lockOutroSec * 1000)),
+    )
+    const start = Number(customLock.startSec)
+    const end = Number(customLock.endSec)
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+      rows.push({
+        id: 'lock-custom',
+        label: 'Locked range',
+        startMs: Math.round(start * 1000),
+        endMs: Math.round(end * 1000),
+      })
+    }
+    return rows
+  }, [bounds.clipStartMs, bounds.clipEndMs, lockIntroSec, lockOutroSec, customLock.startSec, customLock.endSec])
   const orderedWords = useMemo(
     () => editorWordsForClipFillerReview(clipId, words, edits, clipBounds),
     [clipId, words, edits.trim.in, edits.trim.out, edits.cutRanges, clipBounds],
@@ -169,8 +204,9 @@ export function CleanupPanel({
   const filler = useMemo(
     () => fillerProposals(orderedWords, deletedSet, {
       strength, enabledOptInFillers: enabledOptIn, rmsSamples: fineSpeechEnvelope,
+      lockedRanges,
     }),
-    [orderedWords, deletedSet, strength, enabledOptIn, fineSpeechEnvelope],
+    [orderedWords, deletedSet, strength, enabledOptIn, fineSpeechEnvelope, lockedRanges],
   )
   const gaps = useMemo(
     () =>
@@ -183,8 +219,9 @@ export function CleanupPanel({
         wordSpans,
         strength,
         rmsSamples,
+        lockedRanges,
       }),
-    [orderedWords, edits.cutRanges, gapSettings, maxPlausibleGapMs, wordSpans, strength, rmsSamples],
+    [orderedWords, edits.cutRanges, gapSettings, maxPlausibleGapMs, wordSpans, strength, rmsSamples, lockedRanges],
   )
   const applied = useMemo(
     () => appliedCutProposals(edits, orderedWords, deletedSet),
@@ -275,7 +312,7 @@ export function CleanupPanel({
   const keepPauseSec = Math.round(Math.max(0, gapSettings.targetGapSec) * 100) / 100
 
   const retakeRemovalMs = useMemo(() => {
-    return retakeProposals(retakeGroups, edits.cutRanges ?? []).reduce(
+    return retakeProposals(retakeGroups, edits.cutRanges ?? [], { lockedRanges }).reduce(
       (sum, p) => sum + Math.abs(p.range[1] - p.range[0]),
       0,
     )
@@ -318,7 +355,7 @@ export function CleanupPanel({
           setRetakeUnverified(true)
         }
       }
-      const props = retakeProposals(groups, edits.cutRanges ?? [])
+      const props = retakeProposals(groups, edits.cutRanges ?? [], { lockedRanges })
       setRetakeGroups(groups)
       setRetakeExtras(props)
       if (!props.length) toast.message('No retakes found')
@@ -331,8 +368,8 @@ export function CleanupPanel({
 
   useEffect(() => {
     if (!retakeGroups.length) return
-    setRetakeExtras(retakeProposals(retakeGroups, edits.cutRanges ?? []))
-  }, [edits.cutRanges, retakeGroups])
+    setRetakeExtras(retakeProposals(retakeGroups, edits.cutRanges ?? [], { lockedRanges }))
+  }, [edits.cutRanges, retakeGroups, lockedRanges])
 
   const pollRetranscribeUntilReady = async () => {
     const deadline = Date.now() + 15 * 60 * 1000
@@ -409,6 +446,19 @@ export function CleanupPanel({
     onSeek(p.range[0])
   }
 
+  useEffect(() => {
+    if (!playRemovedOnly) {
+      onAuditionChange(null)
+      return
+    }
+    const removed = [...applied, ...proposed].map((row) => row.range)
+    if (!removed.length) {
+      onAuditionChange(null)
+      return
+    }
+    onAuditionChange(playRemovedOnlyEdits(edits, removed))
+  }, [playRemovedOnly, applied, proposed, edits])
+
   const limits = {
     clipStartMs: bounds.clipStartMs,
     clipEndMs: bounds.clipEndMs,
@@ -434,6 +484,94 @@ export function CleanupPanel({
               <AiCreditBadge credits={2} />
             </span>
           </Button>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-border bg-card p-3" data-testid="cleanup-review-controls">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={showCuts ? 'default' : 'outline'}
+            aria-pressed={showCuts}
+            data-testid="cleanup-show-cuts"
+            onClick={() => setShowCuts((value) => !value)}
+          >
+            Show cuts
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={playRemovedOnly ? 'default' : 'outline'}
+            aria-pressed={playRemovedOnly}
+            data-testid="cleanup-play-removed-only"
+            onClick={() => setPlayRemovedOnly((value) => !value)}
+          >
+            Play removed only
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Show cuts is on for review. Play removed only previews proposed and applied deletions without changing the saved edit.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2" data-testid="cleanup-locked-ranges">
+          <label className="flex items-center gap-2 text-xs font-medium">
+            <span className="w-20 shrink-0">Lock intro</span>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={lockIntroSec}
+              onChange={(e) => setLockIntroSec(Math.max(0, Number(e.target.value) || 0))}
+              className="h-8 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              aria-label="Lock intro seconds"
+              data-testid="cleanup-lock-intro"
+            />
+            <span className="text-muted-foreground">sec</span>
+          </label>
+          <label className="flex items-center gap-2 text-xs font-medium">
+            <span className="w-20 shrink-0">Lock outro</span>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={lockOutroSec}
+              onChange={(e) => setLockOutroSec(Math.max(0, Number(e.target.value) || 0))}
+              className="h-8 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              aria-label="Lock outro seconds"
+              data-testid="cleanup-lock-outro"
+            />
+            <span className="text-muted-foreground">sec</span>
+          </label>
+          <label className="flex items-center gap-2 text-xs font-medium sm:col-span-2">
+            <span className="w-20 shrink-0">Lock range</span>
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              placeholder="Start"
+              value={customLock.startSec}
+              onChange={(e) => setCustomLock((prev) => ({ ...prev, startSec: e.target.value }))}
+              className="h-8 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              aria-label="Locked range start seconds"
+              data-testid="cleanup-lock-custom-start"
+            />
+            <span className="text-muted-foreground">to</span>
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              placeholder="End"
+              value={customLock.endSec}
+              onChange={(e) => setCustomLock((prev) => ({ ...prev, endSec: e.target.value }))}
+              className="h-8 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs tabular-nums focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              aria-label="Locked range end seconds"
+              data-testid="cleanup-lock-custom-end"
+            />
+            <span className="text-muted-foreground">sec</span>
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Locked intro, outro, and custom ranges are never auto-proposed or auto-applied. Laughter, music, and low-confidence words stay protected.
+        </p>
       </div>
 
       <div
@@ -673,7 +811,7 @@ export function CleanupPanel({
             ) : null}
           </div>
           {retakeGroups.map((group, gi) => {
-            const groupProposal = retakeProposals([group], edits.cutRanges ?? [])[0]
+            const groupProposal = retakeProposals([group], edits.cutRanges ?? [], { lockedRanges })[0]
             return (
             <div key={gi} className="space-y-1 rounded bg-muted/40 p-2 text-xs">
               {groupProposal ? (
@@ -752,6 +890,7 @@ export function CleanupPanel({
                 onAudition={() => toggleAudition(p)}
                 onPreview={() => previewCutAudition(p)}
                 onSkip={() => setSkippedIds((s) => new Set(s).add(p.id))}
+                showCuts={showCuts}
                 onApply={() => {
                   if (audioOnly && (p.kind === 'filler' || p.kind === 'repeat')) commitFillerAudio([p], `Muted “${p.label}” · video kept`)
                   else onApplyProposal(p)
@@ -764,6 +903,22 @@ export function CleanupPanel({
                   })
                   if (p.kind === 'clarity') setClarityRows((rows) => rows.filter((r) => r.id !== p.id))
                 }}
+                onDelete={() => {
+                  onApplyProposal(p)
+                  setRetakeExtras((rows) => rows.filter((r) => r.id !== p.id))
+                  setAuditionIds((s) => {
+                    const n = new Set(s)
+                    n.delete(p.id)
+                    onAuditionChange(null)
+                    return n
+                  })
+                  if (p.kind === 'clarity') setClarityRows((rows) => rows.filter((r) => r.id !== p.id))
+                }}
+                onLeaveGap={onCommitEdits && audioMuteAllowed(edits) ? () => {
+                  commitFillerAudio([p], `Muted “${p.label}” · video kept`)
+                  setRetakeExtras((rows) => rows.filter((r) => r.id !== p.id))
+                  if (p.kind === 'clarity') setClarityRows((rows) => rows.filter((r) => r.id !== p.id))
+                } : undefined}
                 testId={p.kind === 'clarity' ? 'clarity-proposal' : undefined}
               />
             ))
@@ -923,6 +1078,9 @@ function ProposalRow({
   onPreview,
   onSkip,
   onApply,
+  onDelete,
+  onLeaveGap,
+  showCuts = true,
   testId,
 }: {
   proposal: CleanupProposal
@@ -934,6 +1092,9 @@ function ProposalRow({
   onPreview: () => void
   onSkip: () => void
   onApply: () => void
+  onDelete: () => void
+  onLeaveGap?: () => void
+  showCuts?: boolean
   testId?: string
 }) {
   const clarityParts =
@@ -950,12 +1111,14 @@ function ProposalRow({
         className="flex min-w-0 flex-1 items-start gap-2 text-left hover:opacity-90"
         onClick={onSeekMain}
       >
+        {showCuts ? (
         <span
           className="mt-0.5 shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono tabular-nums text-[11px] text-foreground"
           data-testid="cleanup-proposal-time"
         >
           {formatTimecode(outputTimeMs)}
         </span>
+        ) : null}
         {proposal.quality?.confidence === 'needs_review' ? (
           <span
             className="mt-0.5 shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
@@ -990,10 +1153,18 @@ function ProposalRow({
         <Button type="button" size="sm" variant={auditioning ? 'default' : 'outline'} onClick={onAudition}>
           Audition
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onSkip}>
-          Skip
+        <Button type="button" size="sm" variant="ghost" onClick={onSkip} data-testid="cleanup-keep">
+          Keep
         </Button>
-        <Button type="button" size="sm" onClick={onApply}>
+        <Button type="button" size="sm" variant="outline" onClick={onDelete} data-testid="cleanup-delete">
+          Delete
+        </Button>
+        {onLeaveGap ? (
+          <Button type="button" size="sm" variant="outline" onClick={onLeaveGap} data-testid="cleanup-leave-gap">
+            Leave gap
+          </Button>
+        ) : null}
+        <Button type="button" size="sm" onClick={onApply} data-testid="cleanup-apply">
           Apply
         </Button>
       </div>
