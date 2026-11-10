@@ -7,6 +7,9 @@ import {selectMomentFlowTrim} from '@/lib/ai-producer-agent/clip-mode/moment-flo
 const words=(text:string,startMs=0,spacingMs=380)=>
   text.split(' ').map((w,i)=>({w,s:(startMs+i*spacingMs)/1000,e:(startMs+i*spacingMs+320)/1000}))
 
+type EditorialFinding = {code: string; passageIndex?: number; detail?: string}
+type TranscriptWord = {w: string; s: number; e: number}
+
 describe('clip-only editorial policy from video review',()=>{
  it('flags a first line referencing context the viewer never heard',()=>{
   const w=words('that is why we had to stop and rethink the answer')
@@ -259,7 +262,7 @@ describe('VQ PR #1081 draft openings and tails (clip_30f9ea02)',()=>{
     expect(landing?.w).toMatch(/Corvette\.?/)
     // "Corvette." ends at the same instant "And for the car lovers" begins.
     expect(repaired.cuts[0]!.endMs).toBeLessThanOrEqual(Math.round(landing!.e*1000))
-    const spilled=publishedWords.filter(w=>w.s*1000>=806030&&w.s*1000<806330).map(w=>w.w).join(' ').toLowerCase()
+    const spilled=publishedWords.filter((w: TranscriptWord)=>w.s*1000>=806030&&w.s*1000<806330).map((w: TranscriptWord)=>w.w).join(' ').toLowerCase()
     expect(spilled).toMatch(/^and for/)
     expect(repaired.cuts[0]!.endMs).toBeLessThanOrEqual(806030)
   })
@@ -280,15 +283,15 @@ describe('And/But/So + demonstrative or it is not a strong continuation',()=>{
     const andHe=words('And he was a great student after all that work.')
     andHe[andHe.length-1]!.w='work.'
     expect(clipEditorialAudit([{startMs:0,endMs:8000}],andHe)
-      .some(x=>x.code==='continuation_opening')).toBe(true)
+      .some((x: EditorialFinding)=>x.code==='continuation_opening')).toBe(true)
     const butShe=words('But she never gave up on the family after that.')
     butShe[butShe.length-1]!.w='that.'
     expect(clipEditorialAudit([{startMs:0,endMs:8000}],butShe)
-      .some(x=>x.code==='continuation_opening')).toBe(true)
+      .some((x: EditorialFinding)=>x.code==='continuation_opening')).toBe(true)
     const soThey=words('So they decided to start over with a new plan.')
     soThey[soThey.length-1]!.w='plan.'
     expect(clipEditorialAudit([{startMs:0,endMs:8000}],soThey)
-      .some(x=>x.code==='continuation_opening')).toBe(true)
+      .some((x: EditorialFinding)=>x.code==='continuation_opening')).toBe(true)
   })
   it('does not flag And that, So this, or But it as a continuation in a later passage',()=>{
     const setup=words('My grandmother taught the family a real lesson here.',0,400)
@@ -300,21 +303,26 @@ describe('And/But/So + demonstrative or it is not a strong continuation',()=>{
     const butIt=words('But it did not matter once the work was finished.',60000,400)
     butIt[butIt.length-1]!.w='finished.'
     const firstEnd=Math.round(setup[setup.length-1]!.e*1000)
-    for(const [later,label] of [[andThat,'that'],[soThis,'this'],[butIt,'it']] as const){
+    const laterPassages: Array<{later: TranscriptWord[]; label: string}> = [
+      {later: andThat, label: 'that'},
+      {later: soThis, label: 'this'},
+      {later: butIt, label: 'it'},
+    ]
+    for(const {later, label} of laterPassages){
       const start=Math.round(later[0]!.s*1000)
       const end=Math.round(later[later.length-1]!.e*1000)
       const risk=clipEditorialAudit(
         [{startMs:0,endMs:firstEnd},{startMs:start,endMs:end}],
         [...setup,...later],
       )
-      expect(risk.some(x=>x.code==='continuation_opening'&&x.passageIndex===1),label).toBe(false)
+      expect(risk.some((x: EditorialFinding)=>x.code==='continuation_opening'&&x.passageIndex===1),label).toBe(false)
     }
   })
   it('may still treat a first-passage And that as a soft continuation',()=>{
     const w=words('And that was the whole point of the story today.')
     w[w.length-1]!.w='today.'
     expect(clipEditorialAudit([{startMs:0,endMs:8000}],w)
-      .some(x=>x.code==='continuation_opening')).toBe(true)
+      .some((x: EditorialFinding)=>x.code==='continuation_opening')).toBe(true)
   })
 })
 
