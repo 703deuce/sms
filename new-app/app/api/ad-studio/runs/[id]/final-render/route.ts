@@ -34,7 +34,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     console.info('[ad-studio:api:final-render] complete', {
       runId: id, renderId: render.id, download, filename,
     })
-    return NextResponse.json({ url, filename })
+    return NextResponse.json({ url, filename }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err) {
     return adStudioJsonError(err)
   }
