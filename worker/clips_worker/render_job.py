@@ -307,13 +307,12 @@ def load_source_words(ctx: dict, work_dir: Path) -> tuple[list[dict], bool]:
             words_fallback = True
             print("[clipper:words] words_fallback source=clip_words", flush=True)
         except Exception as exc:
-            missing = (
-                isinstance(exc, RuntimeError)
-                and str(exc).startswith("storage_object_missing:")
-            ) or (
-                isinstance(exc, urllib.error.HTTPError)
-                and exc.code == 404
-            )
+            missing = isinstance(exc, urllib.error.HTTPError) and exc.code == 404
+            if isinstance(exc, RuntimeError) and str(exc).startswith("storage_object_missing:"):
+                cause = exc.__cause__
+                # S3-miss → Supabase-fallback can wrap any HTTPError as storage_object_missing.
+                # Only a real 404 is safe to reinterpret as an intentionally transcript-free clip.
+                missing = not isinstance(cause, urllib.error.HTTPError) or cause.code == 404
             if not missing:
                 raise
             print("[clipper:words] clip_words_missing -> empty", flush=True)
