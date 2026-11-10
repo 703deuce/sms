@@ -29,7 +29,7 @@ import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-filmstrip-frames'
 import type { EditorClipShell } from '@/components/clips/editor/editor-clip-shell'
 import { editorMediaLoadFallbacks } from '@/lib/server/clips/editor-clip-media'
-import { editorIconBtn, editorIconBtnActive } from '@/lib/clips/editor/editor-chrome-tokens'
+import { editorToolbarRow } from '@/lib/clips/editor/editor-chrome-tokens'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { outputToSource, sourceToOutputSnapped, timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
@@ -189,6 +189,7 @@ export function TextSceneEditorShell(props: Props) {
     }
     try {
       await flushSave()
+      setRailPanel(null)
       setChatMounted(true)
       setChatOpen(true)
       console.info('[editor:chat-mode] open', { projectId, clipId })
@@ -487,7 +488,7 @@ export function TextSceneEditorShell(props: Props) {
   return (
     <ClipperSurfaceErrorBoundary surface="Text editor">
       <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground" data-testid="text-scene-editor">
-        <header className="relative z-50 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-4">
+        <header className={editorToolbarRow + ' relative z-50'}>
           <Button variant="ghost" size="icon" aria-label="Back to project" render={<Link href={routes.project(projectId)} />}><ArrowLeft className="size-4" /></Button>
           <div className="min-w-0">
             <p className="truncate text-[11px] text-muted-foreground">{props.projectTitle}</p>
@@ -773,7 +774,8 @@ export function TextSceneEditorShell(props: Props) {
               <button key={id} type="button" className="relative flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={label} title={label} onClick={() => {
                   console.info('[editor:text-gaps] rail-open', { projectId, clipId, tool: id })
-                  if (id === 'ai') { void openChat(); return }
+                  if (id === 'ai') { setRailPanel(null); void openChat(); return }
+                  if (chatOpen) { setChatOpen(false); setChatAudition(null) }
                   if (id === 'broll' || id === 'transitions') { setRailPanel(id); return }
                   setRailPanel('style')
                   setStyleTab(id === 'brand' ? 'logos' : id === 'upload' ? 'images' : id)
