@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import {
   Clapperboard,
   Download,
+  Film,
   FlaskConical,
   GraduationCap,
   House,
@@ -63,6 +64,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   clips: Scissors,
   streamer: Radio,
   editor: Clapperboard,
+  youtubeVideo: Film,
   record: Video,
   aiVideo: Sparkles,
   studio: WandSparkles,
