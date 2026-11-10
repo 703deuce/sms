@@ -224,6 +224,7 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
       })
     }
 
+    console.info('[ai-captions:runs] transcription_check', { runId: current.id, projectId: current.ingestedProjectId })
     const resolved = await loadOrTranscribe(
       current.workspaceId,
       current.source,
@@ -241,6 +242,7 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
 
     const durationMs = Math.max(resolved.durationMs, Math.round((resolved.words.at(-1)?.e ?? 0) * 1000))
     const built = captionsFromTranscript(durationMs, resolved.words, styleId, saved)
+    console.info('[ai-captions:runs] caption_lines_built', { runId: current.id, words: built.words.length, lines: built.lines.length, durationMs })
     const written = await deps.pipeline.writeClip({
       workspaceId: current.workspaceId,
       projectId: resolved.projectId,
@@ -249,6 +251,7 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
       title: 'Captions',
       edits: built.edits,
     })
+    console.info('[ai-captions:runs] clip_written', { runId: current.id, clipId: written.clipId })
     const result = buildResult({
       runId: current.id,
       clipId: written.clipId,
@@ -262,6 +265,7 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
       downloadUrl: null,
     })
     await deps.prefs.setLastStyleId(current.workspaceId, styleId)
+    console.info('[ai-captions:runs] ready', { runId: current.id, clipId: written.clipId })
     return deps.store.update(current.workspaceId, current.id, {
       status: 'ready',
       stage: 'ready',
@@ -277,11 +281,11 @@ async function advanceRun(row: AiCaptionsRunRecord, deps: AiCaptionsRunDeps): Pr
       (row.source.kind === 'upload' || err.message.includes('did not return any words'))
     console.info('[ai-captions:runs] advance_result', { runId: row.id, pendingTranscript, error: err instanceof Error ? err.message : String(err) })
     if (pendingTranscript) {
-      const upload = row.source.kind === 'upload'
+      const preparing = row.source.kind === 'upload' && !row.ingestedProjectId
       return deps.store.update(row.workspaceId, row.id, {
-        status: upload ? 'preparing' : 'transcribing',
-        stage: upload ? 'prepare' : 'transcribe',
-        progressPercent: upload ? 25 : 30,
+        status: preparing ? 'preparing' : 'transcribing',
+        stage: preparing ? 'prepare' : 'transcribe',
+        progressPercent: preparing ? 25 : 30,
         failureCode: null,
         failureMessage: null,
       })
@@ -355,7 +359,7 @@ export async function getAiCaptionsSrt(
   const { srtFromLines } = await import('@/lib/ai-captions/srt')
   const row = await deps.store.get(workspaceId, runId)
   if (!row) throw new AiCaptionsError('run_not_found', 'That captions run was not found.', 404)
-  if (row.status !== 'ready' || !row.result) {
+  if ((row.status !== 'ready' && row.status !== 'exporting') || !row.result) {
     throw new AiCaptionsError('srt_not_ready', 'The SRT file is not ready yet.', 409)
   }
   const lines = deps.pipeline.getCaptionLines

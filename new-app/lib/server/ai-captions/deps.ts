@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { sourceAspectRatio } from '@/lib/clips/full-video'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
@@ -231,6 +232,9 @@ const productionPipeline = (): AiCaptionsPipelineDeps => ({
   async writeClip(args) {
     const prisma = getPrisma()
     const clipId = createId('clip')
+    console.info('[ai-captions:clip] create_begin', { projectId: args.projectId, runId: args.runId })
+    const project = await prisma.clipProject.findFirst({ where: { id: args.projectId, workspaceId: args.workspaceId }, include: { upload: { select: { width: true, height: true } } } })
+    const aspectRatio = sourceAspectRatio(project?.upload?.width, project?.upload?.height)
     await prisma.clip.create({
       data: {
         id: clipId,
@@ -240,13 +244,14 @@ const productionPipeline = (): AiCaptionsPipelineDeps => ({
         reason: 'ai_captions',
         startMs: 0,
         endMs: args.durationMs,
-        edits: toPrismaJson(args.edits),
+        edits: toPrismaJson({ ...args.edits, aspectRatio }),
         editsSaveVersion: 1,
         aiMeta: { aiCaptionsRunId: args.runId, aiOriginalEdits: args.edits },
         score: 0,
         scores: {},
       },
     })
+    console.info('[ai-captions:clip] create_complete', { clipId, aspectRatio })
     return { clipId, projectId: args.projectId, editsSaveVersion: 1 }
   },
   async updateClipEdits(args) {
@@ -276,7 +281,7 @@ const productionPipeline = (): AiCaptionsPipelineDeps => ({
     const edits = normalizeEdits(clip.edits, bounds)
     const queued = await enqueueRenderClip(args.workspaceId, args.clipId, {
       resolution: '1080p',
-      aspect: '16:9',
+      aspect: edits.aspectRatio || '16:9',
       watermark: false,
       edits,
       clipStartMs: clip.startMs,
