@@ -5,10 +5,10 @@ import type { YtCheckpoint, YtStep } from '@/lib/youtube-video/pipeline/yt-types
  * Never send ASR text, model arguments, signed URLs or upload storage keys. */
 export function ytLog(
   runId: string, checkpoint: YtCheckpoint, stage: string, event: string,
-  fields: Partial<Pick<YtStep, 'sourceIndex' | 'windowIndex' | 'count' | 'accepted' | 'rejected' | 'code'>> = {},
+  fields: Partial<Pick<YtStep, 'sourceIndex' | 'windowIndex' | 'windowCount' | 'count' | 'accepted' | 'rejected' | 'code'>> = {},
 ): void {
   const step: YtStep = { at: new Date().toISOString(), stage, event }
-  for (const key of ['sourceIndex','windowIndex','count','accepted','rejected'] as const) {
+  for (const key of ['sourceIndex','windowIndex','windowCount','count','accepted','rejected'] as const) {
     const value = fields[key]
     if (typeof value === 'number' && Number.isSafeInteger(value)) step[key] = value
   }
@@ -20,6 +20,8 @@ export function ytLog(
     wordCount: step.count,
     optionCount: step.accepted,
     reason: step.code,
+    windowIndex: step.windowIndex,
+    windowCount: step.windowCount,
   })
 }
 
