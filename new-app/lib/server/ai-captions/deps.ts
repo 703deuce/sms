@@ -305,6 +305,13 @@ const productionPipeline = (): AiCaptionsPipelineDeps => ({
     console.info('[ai-captions:export] poll_ready', { renderId })
     return { status: 'ready', downloadUrl }
   },
+  async getEditsVersion(workspaceId, clipId) {
+    console.info('[ai-captions:export] edits_version_request', { workspaceId, clipId })
+    const clip = await getPrisma().clip.findFirst({ where: { workspaceId, id: clipId, deletedAt: null }, select: { editsSaveVersion: true } })
+    if (!clip) throw new AiCaptionsError('run_not_found', 'That caption clip could not be found.', 404)
+    console.info('[ai-captions:export] edits_version_ready', { clipId, version: clip.editsSaveVersion })
+    return clip.editsSaveVersion
+  },
   async getCaptionLines(workspaceId, clipId) {
     console.info('[ai-captions:subtitles] load_clip_lines', { workspaceId, clipId })
     const clip = await getPrisma().clip.findFirst({ where: { id: clipId, workspaceId, deletedAt: null }, select: { edits: true, startMs: true, endMs: true } })

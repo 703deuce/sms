@@ -72,6 +72,7 @@ export type AiCaptionsResult = {
   thumbnailUrl: string | null
   downloadUrl: string | null
   renderId?: string | null
+  exportedEditsVersion?: number | null
   srtUrl: string
 }
 
