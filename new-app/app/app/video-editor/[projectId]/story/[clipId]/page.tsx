@@ -13,7 +13,7 @@ export default async function StoryBlocksEditorPage({
   searchParams: Promise<{ from?: string }>
 }) {
   const { projectId, clipId } = await params
-  console.info('[editor:story-mode] route-entry', { projectId, clipId })
+  console.log('[editor:story-mode] route-entry', { projectId, clipId })
   const { from } = await searchParams
   const workspaceId = await resolveWorkspaceId()
   return (
