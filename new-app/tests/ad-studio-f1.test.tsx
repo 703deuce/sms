@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { AdStudioPage } from '../components/ad-studio/ad-studio-page'
 import { createMockAdStudioClient } from '../lib/ad-studio/mock-client'
+import { AdStudioHttpError, type AdStudioClient } from '../lib/ad-studio/client'
 import { formatCredits, sanitizeAdStudioMessage } from '../lib/ad-studio/format'
 import { buildSidebarNav } from '../lib/sidebar-nav'
 
@@ -58,6 +59,70 @@ describe('Ad Studio live-contract UI', () => {
     const listed = await client.listRuns()
     expect(listed.runs[0]?.input.imageAssetIds[0]).toMatch(/^asset_mock_/)
     expect(listed.runs[0]?.input.imageAssetIds).not.toContain('asset_local_1')
+  })
+
+  it('keeps successful history when the initial config GET fails and lets config retry independently', async () => {
+    const base = createMockAdStudioClient({ autoAdvance: false })
+    await base.createRun({
+      mode: 'storyline',
+      idempotencyKey: 'seed-history',
+      input: {
+        name: 'Seed campaign',
+        sellingPoints: ['A real saved run'],
+        aspect: '9:16',
+        durationSec: 15,
+        imageAssetIds: [],
+      },
+    })
+    let configCalls = 0
+    const client: AdStudioClient = {
+      ...base,
+      async getConfig() {
+        configCalls += 1
+        if (configCalls === 1) throw new AdStudioHttpError(502, 'REQUEST_FAILED', 'Temporary gateway failure')
+        return base.getConfig()
+      },
+    }
+
+    render(<AdStudioPage client={client} sleep={noWait} pollMs={0} />)
+
+    expect(await screen.findByTestId('ad-studio-recent-run')).toBeTruthy()
+    expect(screen.getByTestId('ad-studio-read-recovery').textContent).toContain('safe creation defaults')
+    fireEvent.click(screen.getByTestId('ad-studio-retry-config'))
+    await waitFor(() => expect(screen.queryByTestId('ad-studio-read-recovery')).toBeNull())
+    expect(configCalls).toBe(2)
+  })
+
+  it('recovers from one transient polling GET without repeating the paid confirmation action', async () => {
+    const base = createMockAdStudioClient()
+    let getRunCalls = 0
+    let confirmCalls = 0
+    const client: AdStudioClient = {
+      ...base,
+      async getRun(runId) {
+        getRunCalls += 1
+        if (getRunCalls === 1) throw new AdStudioHttpError(502, 'REQUEST_FAILED', 'Temporary gateway failure')
+        return base.getRun(runId)
+      },
+      async confirm(runId, key) {
+        confirmCalls += 1
+        return base.confirm(runId, key)
+      },
+    }
+
+    render(<AdStudioPage client={client} sleep={noWait} pollMs={0} />)
+    fireEvent.click(screen.getByTestId('ad-studio-mode-storyline'))
+    fireEvent.change(screen.getByTestId('ad-studio-product-name'), { target: { value: 'AeroBottle' } })
+    fireEvent.change(screen.getByTestId('ad-studio-selling-points'), { target: { value: 'Stays cold all day' } })
+    fireEvent.click(screen.getByTestId('ad-studio-plan-cta'))
+
+    await waitFor(() => expect(screen.getByTestId('ad-studio-confirm').hasAttribute('disabled')).toBe(false))
+    expect(getRunCalls).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByTestId('ad-studio-poll-recovery')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('ad-studio-confirm'))
+    await screen.findByTestId('ad-studio-done', {}, { timeout: 3000 })
+    expect(confirmCalls).toBe(1)
   })
 
   it('runs brief → plan → confirm → poll → image ads → done using backend-provided editor URLs', async () => {

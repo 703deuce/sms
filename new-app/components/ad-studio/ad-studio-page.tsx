@@ -39,6 +39,12 @@ const DEFAULT_INPUT: AdProductInput = {
 }
 
 const ACTIVE_STATUSES = new Set(['planning', 'confirming', 'generating', 'stitching'])
+const POLL_READ_RETRY_LIMIT = 4
+
+function pollDelayMs(baseMs: number, failureCount: number) {
+  if (failureCount === 0) return baseMs
+  return Math.min(Math.max(baseMs, 250) * (2 ** (failureCount - 1)), 15_000)
+}
 
 function newIdempotencyKey() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
@@ -67,6 +73,12 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
   const [run, setRun] = useState<AdStudioRun | null>(null)
   const [history, setHistory] = useState<AdStudioRun[]>([])
   const [error, setError] = useState<UiError | null>(null)
+  const [configError, setConfigError] = useState<UiError | null>(null)
+  const [historyError, setHistoryError] = useState<UiError | null>(null)
+  const [configLoading, setConfigLoading] = useState(true)
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [pollRecovery, setPollRecovery] = useState<{ attempt: number; paused: boolean; error: UiError } | null>(null)
+  const [pollRetryToken, setPollRetryToken] = useState(0)
   const [busy, setBusy] = useState(false)
   const [createKey, setCreateKey] = useState(newIdempotencyKey)
   const [confirmKey, setConfirmKey] = useState(newIdempotencyKey)
@@ -79,61 +91,142 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
 
   const refreshHistory = useCallback(async () => {
     console.log('[ad-studio:ui] load', { step: 'history_begin' })
-    const result = await liveClient.listRuns({ limit: 20 })
-    setHistory(result.runs)
-    console.log('[ad-studio:ui] load', { step: 'history_complete', count: result.runs.length, hasNext: Boolean(result.nextCursor) })
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      const result = await liveClient.listRuns({ limit: 20 })
+      setHistory(result.runs)
+      console.log('[ad-studio:ui] load', { step: 'history_complete', count: result.runs.length, hasNext: Boolean(result.nextCursor) })
+    } catch (err) {
+      const safe = errorOf(err)
+      console.log('[ad-studio:ui] load', { step: 'history_error', code: safe.code })
+      setHistoryError(safe)
+      throw err
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [liveClient])
+
+  const retryConfig = useCallback(async () => {
+    console.log('[ad-studio:ui] load', { step: 'config_retry_begin' })
+    setConfigLoading(true)
+    setConfigError(null)
+    try {
+      const nextConfig = await liveClient.getConfig()
+      setConfig(nextConfig)
+      console.log('[ad-studio:ui] load', { step: 'config_retry_complete', modes: nextConfig.modes.length })
+    } catch (err) {
+      const safe = errorOf(err)
+      console.log('[ad-studio:ui] load', { step: 'config_retry_error', code: safe.code })
+      setConfigError(safe)
+    } finally {
+      setConfigLoading(false)
+    }
   }, [liveClient])
 
   useEffect(() => {
     let cancelled = false
     console.log('[ad-studio:ui] load', { step: 'begin' })
-    void (async () => {
-      try {
-        const [nextConfig, listed] = await Promise.all([liveClient.getConfig(), liveClient.listRuns({ limit: 20 })])
+    setConfigLoading(true)
+    setHistoryLoading(true)
+    setConfigError(null)
+    setHistoryError(null)
+
+    void liveClient.getConfig()
+      .then((nextConfig) => {
         if (cancelled) return
         setConfig(nextConfig)
+        console.log('[ad-studio:ui] load', { step: 'config_complete', modes: nextConfig.modes.length })
+      })
+      .catch((err) => {
+        if (cancelled) return
+        const safe = errorOf(err)
+        console.log('[ad-studio:ui] load', { step: 'config_error', code: safe.code })
+        setConfigError(safe)
+      })
+      .finally(() => {
+        if (!cancelled) setConfigLoading(false)
+      })
+
+    void liveClient.listRuns({ limit: 20 })
+      .then((listed) => {
+        if (cancelled) return
         setHistory(listed.runs)
         console.log('[ad-studio:ui] load', {
-          step: 'complete',
-          modes: nextConfig.modes.length,
+          step: 'history_complete',
           history: listed.runs.length,
           hasNext: Boolean(listed.nextCursor),
         })
-      } catch (err) {
-        if (!cancelled) showError(err)
-      }
-    })()
+      })
+      .catch((err) => {
+        if (cancelled) return
+        const safe = errorOf(err)
+        console.log('[ad-studio:ui] load', { step: 'history_error', code: safe.code })
+        setHistoryError(safe)
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false)
+      })
+
     return () => {
       cancelled = true
     }
-  }, [liveClient, showError])
+  }, [liveClient])
 
   useEffect(() => {
-    if (!run || !ACTIVE_STATUSES.has(run.status)) return
+    if (!run || !ACTIVE_STATUSES.has(run.status)) {
+      setPollRecovery(null)
+      return
+    }
+
+    const runId = run.id
     let cancelled = false
+    let failureCount = 0
+
     void (async () => {
-      await sleepFn(pollMs)
-      if (cancelled) return
-      try {
-        const next = await liveClient.getRun(run.id)
-        console.log('[ad-studio:ui] poll', {
-          runId: next.id,
-          status: next.status,
-          imageAds: next.imageAds?.length ?? 0,
-        })
+      while (!cancelled) {
+        const delayMs = pollDelayMs(pollMs, failureCount)
+        await sleepFn(delayMs)
         if (cancelled) return
-        setRun(next)
-        if (next.status === 'done' || next.status === 'failed' || next.status === 'cancelled') {
-          void refreshHistory().catch(showError)
+
+        try {
+          const next = await liveClient.getRun(runId)
+          console.log('[ad-studio:ui] poll', {
+            step: 'complete',
+            runId: next.id,
+            status: next.status,
+            imageAds: next.imageAds?.length ?? 0,
+          })
+          if (cancelled) return
+          failureCount = 0
+          setPollRecovery(null)
+          setRun((current) => current?.id === runId ? next : current)
+          if (next.status === 'done' || next.status === 'failed' || next.status === 'cancelled') {
+            void refreshHistory().catch(showError)
+            return
+          }
+        } catch (err) {
+          if (cancelled) return
+          failureCount += 1
+          const safe = errorOf(err)
+          const paused = failureCount >= POLL_READ_RETRY_LIMIT
+          console.log('[ad-studio:ui] poll', {
+            step: paused ? 'paused' : 'retry',
+            runId,
+            attempt: failureCount,
+            code: safe.code,
+            retryInMs: paused ? null : pollDelayMs(pollMs, failureCount),
+          })
+          setPollRecovery({ attempt: failureCount, paused, error: safe })
+          if (paused) return
         }
-      } catch (err) {
-        if (!cancelled) showError(err)
       }
     })()
+
     return () => {
       cancelled = true
     }
-  }, [liveClient, pollMs, refreshHistory, run, showError, sleepFn])
+  }, [liveClient, pollMs, pollRetryToken, refreshHistory, run?.id, run?.status, showError, sleepFn])
 
   function openMode(next: SelectableMode) {
     console.log('[ad-studio:ui] load', { step: 'mode', mode: next })
@@ -370,11 +463,63 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
               </p>
             ) : null}
 
+            {configError || historyError ? (
+              <div className="mb-4 flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between" role="status" data-testid="ad-studio-read-recovery">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Some Ad Studio data could not refresh.</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {configError ? 'Using safe creation defaults until configuration reconnects. ' : ''}
+                    {historyError ? 'Keeping any previously loaded recent work while history reconnects.' : ''}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  {configError ? (
+                    <button type="button" data-testid="ad-studio-retry-config" disabled={configLoading} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50" onClick={() => void retryConfig()}>
+                      {configLoading ? 'Retrying…' : 'Retry config'}
+                    </button>
+                  ) : null}
+                  {historyError ? (
+                    <button type="button" data-testid="ad-studio-retry-history" disabled={historyLoading} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50" onClick={() => void refreshHistory().catch(() => undefined)}>
+                      {historyLoading ? 'Retrying…' : 'Retry history'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {pollRecovery ? (
+              <div className="mb-4 flex flex-col gap-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" role="status" data-testid="ad-studio-poll-recovery">
+                <div>
+                  <p className="text-sm font-medium">{pollRecovery.paused ? 'Live status updates are paused.' : 'Connection interrupted. Reconnecting…'}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {pollRecovery.paused
+                      ? 'The latest run state is preserved. Retry only checks status; it does not restart or confirm generation.'
+                      : `Read retry ${pollRecovery.attempt} of ${POLL_READ_RETRY_LIMIT} · ${pollRecovery.error.code}`}
+                  </p>
+                </div>
+                {pollRecovery.paused ? (
+                  <button
+                    type="button"
+                    data-testid="ad-studio-retry-poll"
+                    className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                    onClick={() => {
+                      setPollRecovery(null)
+                      setPollRetryToken((value) => value + 1)
+                    }}
+                  >
+                    Retry status
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
             {screen === 'home' ? (
               <ModeHome
                 onSelect={openMode}
                 runs={history}
                 busy={busy}
+                historyLoading={historyLoading}
+                historyUnavailable={Boolean(historyError)}
                 onOpen={(id) => void openHistoryRun(id)}
                 onViewHistory={() => { setScreen('history'); void refreshHistory().catch(showError) }}
               />
@@ -403,7 +548,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
                 onCommercial={(variant) => void makeCommercial(variant)}
               />
             ) : null}
-            {screen === 'history' ? <HistoryPanel runs={history} busy={busy} onOpen={(id) => void openHistoryRun(id)} /> : null}
+            {screen === 'history' ? <HistoryPanel runs={history} busy={busy} loading={historyLoading} unavailable={Boolean(historyError)} onOpen={(id) => void openHistoryRun(id)} /> : null}
           </main>
         </div>
       </div>
@@ -446,12 +591,16 @@ function ModeHome({
   onSelect,
   runs,
   busy,
+  historyLoading,
+  historyUnavailable,
   onOpen,
   onViewHistory,
 }: {
   onSelect: (mode: SelectableMode) => void
   runs: AdStudioRun[]
   busy: boolean
+  historyLoading: boolean
+  historyUnavailable: boolean
   onOpen: (id: string) => void
   onViewHistory: () => void
 }) {
@@ -516,7 +665,18 @@ function ModeHome({
             View history
           </button>
         </div>
-        {recent.length === 0 ? (
+        {historyLoading && recent.length === 0 ? (
+          <div className="mt-4 rounded-lg border border-border bg-background/50 px-4 py-8 text-center" data-testid="ad-studio-recent-loading">
+            <p className="text-sm font-medium">Loading recent work…</p>
+            <p className="mt-1 text-xs text-muted-foreground">Checking your latest Ad Studio runs.</p>
+          </div>
+        ) : historyUnavailable && recent.length === 0 ? (
+          <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-8 text-center">
+            <Clapperboard className="mx-auto size-5 text-muted-foreground" aria-hidden />
+            <p className="mt-2 text-sm font-medium">Recent work is temporarily unavailable</p>
+            <p className="mt-1 text-xs text-muted-foreground">Retry history above. Creation remains available with the data already loaded.</p>
+          </div>
+        ) : recent.length === 0 ? (
           <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-8 text-center">
             <Clapperboard className="mx-auto size-5 text-muted-foreground" aria-hidden />
             <p className="mt-2 text-sm font-medium">No recent runs yet</p>
@@ -842,12 +1002,35 @@ function ImageAdVariants({
   )
 }
 
-function HistoryPanel({ runs, busy, onOpen }: { runs: AdStudioRun[]; busy: boolean; onOpen: (id: string) => void }) {
+function HistoryPanel({
+  runs,
+  busy,
+  loading,
+  unavailable,
+  onOpen,
+}: {
+  runs: AdStudioRun[]
+  busy: boolean
+  loading: boolean
+  unavailable: boolean
+  onOpen: (id: string) => void
+}) {
   return (
     <div data-testid="ad-studio-history" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
       <h1 className="text-xl font-semibold">History</h1>
       <p className="mt-1 text-sm text-muted-foreground">Recent Ad Studio runs from the live backend.</p>
-      {runs.length === 0 ? (
+      {loading && runs.length === 0 ? (
+        <div className="mt-4 rounded-lg border border-border bg-background/50 px-4 py-8 text-center" data-testid="ad-studio-history-loading">
+          <p className="text-sm font-medium">Loading history…</p>
+          <p className="mt-1 text-xs text-muted-foreground">Checking recent Ad Studio runs.</p>
+        </div>
+      ) : unavailable && runs.length === 0 ? (
+        <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-8 text-center">
+          <Clapperboard className="mx-auto size-5 text-muted-foreground" aria-hidden />
+          <p className="mt-2 text-sm font-medium">History is temporarily unavailable</p>
+          <p className="mt-1 text-xs text-muted-foreground">Use Retry history above to reconnect without affecting any run.</p>
+        </div>
+      ) : runs.length === 0 ? (
         <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-8 text-center">
           <Clapperboard className="mx-auto size-5 text-muted-foreground" aria-hidden />
           <p className="mt-2 text-sm font-medium">No Ad Studio runs yet</p>
