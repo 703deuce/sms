@@ -39,6 +39,8 @@ export type YoutubeVideoRunStore = {
   update(workspaceId: string, id: string, patch: Partial<YoutubeVideoRunRecord>): Promise<YoutubeVideoRunRecord>
   /** Atomic claim; a stale planning run can be resumed after a web restart. */
   claimPlanning(workspaceId: string, id: string, staleBeforeIso: string): Promise<boolean>
+  /** Optional CAS lease renewal for long Gemini windows. */
+  heartbeatPlanning?: (workspaceId: string, id: string) => Promise<boolean>
 }
 
 const ACTIVE: YoutubeVideoStatus[] = ['queued', 'importing', 'waiting_for_source', 'running', 'awaiting_choice']
@@ -82,6 +84,12 @@ export function memoryYoutubeVideoStore(): YoutubeVideoRunStore {
         ...current, status: 'running', stage: 'planning', progressPercent: 50,
         updatedAt: new Date().toISOString(),
       })
+      return true
+    },
+    async heartbeatPlanning(workspaceId, id) {
+      const current = rows.get(key(workspaceId, id))
+      if (!current || current.status !== 'running' || current.stage !== 'planning') return false
+      rows.set(key(workspaceId, id), { ...current, updatedAt: new Date().toISOString() })
       return true
     },
     async update(workspaceId, id, patch) {
