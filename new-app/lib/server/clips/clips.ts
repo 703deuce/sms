@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client'
 import { isClipUserHidden } from '@/lib/clips/clip-results-chips'
 import { attachReasonTagsToClips, projectTranscriptToSourceWords } from '@/lib/server/clips/clip-reason-tags'
 import { clipSpokenFirstLine } from '@/lib/clips/clip-spoken-line'
@@ -14,12 +15,16 @@ export type ListProjectClipsProjectContext = {
   upload: { storageDriver: string | null; key?: string | null } | null
 }
 
+export type ClipListRow = Prisma.ClipGetPayload<{ select: typeof listClipSelect }>
+
 export type ListProjectClipsOpts = {
   includeHidden?: boolean
   /** Skip S3 transcript download on SSR list (client API can enrich later). */
   skipTranscriptEnrichment?: boolean
   /** When the caller already loaded project fields, skip the extra findFirst. */
   project?: ListProjectClipsProjectContext
+  /** Internal batch-load fast path: rows already fetched for this project. */
+  prefetchedClips?: ClipListRow[]
 }
 
 const listClipSelect = {
@@ -62,11 +67,19 @@ export async function listProjectClips(
     })
   }
   if (!project) return null
-  const clips = await prisma.clip.findMany({
-    where: { projectId, deletedAt: null },
-    orderBy: sort === 'timeline' ? { startMs: 'asc' } : { score: 'desc' },
-    select: listClipSelect,
-  })
+  const clips = opts?.prefetchedClips ?? await (async () => {
+    const started = Date.now()
+    const found = await prisma.clip.findMany({
+      where: { projectId, deletedAt: null },
+      orderBy: sort === 'timeline' ? { startMs: 'asc' } : { score: 'desc' },
+      select: listClipSelect,
+    })
+    console.info('[page:timing]', {
+      path: '/app/clips/[projectId]', query: 'clip_rows', projectId,
+      elapsedMs: Date.now() - started, rows: found.length,
+    })
+    return found
+  })()
   const storage = getClipStorage()
   const visible = opts?.includeHidden
     ? clips
@@ -175,6 +188,58 @@ export async function listProjectClips(
   }
 
   return rows
+}
+
+
+/** Hub fast path: two DB reads instead of one project + one clip query per VOD.
+ * Still signs and displays all clips in original VOD order and per-project score order.
+ */
+export async function listStreamerHubProjectClips(workspaceId: string, projectIds: string[]) {
+  const ids = [...new Set(projectIds)]
+  if (!ids.length) return []
+  const prisma = getPrisma()
+  const started = Date.now()
+  const [projects, clips] = await Promise.all([
+    prisma.clipProject.findMany({
+      where: { id: { in: ids }, workspaceId, deletedAt: null },
+      select: {
+        id: true, settings: true, transcriptKey: true, proxyKey: true, rangeStartMs: true,
+        upload: { select: { storageDriver: true, key: true } },
+      },
+    }),
+    prisma.clip.findMany({
+      where: { projectId: { in: ids }, deletedAt: null },
+      orderBy: { score: 'desc' },
+      select: listClipSelect,
+    }),
+  ])
+  console.info('[page:timing]', {
+    path: '/app/streamer', query: 'batched_project_and_clip_rows',
+    elapsedMs: Date.now() - started, rows: clips.length, projects: projects.length,
+  })
+  const projectById = new Map(projects.map((project) => [project.id, project]))
+  const clipsById = new Map<string, ClipListRow[]>()
+  for (const clip of clips) {
+    const group = clipsById.get(clip.projectId) ?? []
+    group.push(clip)
+    clipsById.set(clip.projectId, group)
+  }
+  const signStarted = Date.now()
+  const lists = await Promise.all(projectIds.map((projectId) => {
+    const project = projectById.get(projectId)
+    return project
+      ? listProjectClips(workspaceId, projectId, 'score', {
+          skipTranscriptEnrichment: true, project,
+          prefetchedClips: clipsById.get(projectId) ?? [],
+        })
+      : Promise.resolve(null)
+  }))
+  const visible = lists.flatMap((rows) => rows ?? [])
+  console.info('[page:timing]', {
+    path: '/app/streamer', query: 'clip_url_signing',
+    elapsedMs: Date.now() - signStarted, rows: visible.length,
+  })
+  return visible
 }
 
 export async function getClipForWorkspace(workspaceId: string, clipId: string) {
