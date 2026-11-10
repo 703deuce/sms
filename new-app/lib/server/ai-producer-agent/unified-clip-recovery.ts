@@ -8,7 +8,7 @@ import { clipperStageLog } from '@/lib/ai-producer-agent/clip-mode/clipper-stage
 
 const ACTIVE_PROJECT_STATUSES = ['QUEUED', 'PREPARING', 'TRANSCRIBING', 'SCANNING', 'FINDING_CLIPS', 'REFRAMING', 'RENDERING'] as const
 const ACTIVE_RUN_STATUSES = ['queued', 'running', 'planning', 'applying', 'recovering', 'capped'] as const
-const FRIENDLY_INTERRUPTED = 'Clipping was interrupted before any usable clips were saved. Select Retry processing to try again.'
+const FRIENDLY_INTERRUPTED = 'Clipping stopped making progress before usable clips were saved. Select Retry processing to try again.'
 
 export function unifiedRunIdFromSettings(settings: unknown): string | null {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null
@@ -55,27 +55,20 @@ export async function recoverUnifiedProject(projectId: string, now = new Date())
   runLog(projectId, runId, 'inspect_start', { projectStatus: project.status })
   const run = await prisma.aiProducerAgentRun.findFirst({
     where: { id: runId, workspaceId: project.workspaceId },
-    select: { id: true, status: true, updatedAt: true, producerNotes: true },
+    select: { id: true, status: true, createdAt: true, updatedAt: true, producerNotes: true },
   })
   const cutoff = new Date(now.getTime() - unifiedRunStaleMs())
   const terminal = run?.status === 'ready' || run?.status === 'done' ||
     run?.status === 'failed' || run?.status === 'canceled' || run?.status === 'capped'
 
-  if (run && !terminal) {
-    if (run.updatedAt >= cutoff) {
-      runLog(projectId, runId, 'still_active', { ageMs: now.getTime() - run.updatedAt.getTime() })
-      return false
-    }
-    // Latest persisted agent tool step is a better liveness signal than the
-    // run's phase; one LLM candidate can be processing for several minutes.
-    const recentStep = await prisma.aiProducerAgentStep.findFirst({
-      where: { runId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true },
-    })
-    if (recentStep && recentStep.createdAt >= cutoff) {
-      runLog(projectId, runId, 'recent_agent_step', { ageMs: now.getTime() - recentStep.createdAt.getTime() })
-      return false
-    }
-  }
+  // Heartbeat writes update run.updatedAt even when neither the stage nor the
+  // actual work advances. Only a persisted agent step or saved clip (or the
+  // initial run creation) counts as forward progress for this timeout.
+  const recentStep = run && !terminal
+    ? await prisma.aiProducerAgentStep.findFirst({
+        where: { runId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true },
+      })
+    : null
   if (run?.status === 'canceled') {
     const changed = await prisma.clipProject.updateMany({
       where: { id: projectId, status: { in: [...ACTIVE_PROJECT_STATUSES] } },
@@ -96,8 +89,16 @@ export async function recoverUnifiedProject(projectId: string, now = new Date())
     },
     take: 200,
   }) as ClipRow[]
-  if (run && !terminal && clips.some((clip) => clip.updatedAt >= cutoff)) {
-    runLog(projectId, runId, 'recent_clip_update', { clipCount: clips.length })
+  const lastProgressAt = new Date(Math.max(
+    run?.createdAt.getTime() ?? 0,
+    recentStep?.createdAt.getTime() ?? 0,
+    ...clips.map((clip) => clip.updatedAt.getTime()),
+  ))
+  const progressIdleMs = Math.max(0, now.getTime() - lastProgressAt.getTime())
+  if (run && !terminal && lastProgressAt >= cutoff) {
+    runLog(projectId, runId, 'meaningful_progress_active', {
+      idleMs: progressIdleMs, stage: project.stage, clipCount: clips.length,
+    })
     return false
   }
 
@@ -108,7 +109,9 @@ export async function recoverUnifiedProject(projectId: string, now = new Date())
     const claimed = await prisma.aiProducerAgentRun.updateMany({
       where: {
         id: runId, status: { in: [...ACTIVE_RUN_STATUSES] },
-        updatedAt: { lt: cutoff },
+        // Optimistic lock against a concurrent agent write; heartbeats must not
+        // indefinitely exempt an otherwise frozen run from recovery.
+        updatedAt: run.updatedAt,
       },
       data: { status: 'recovering', phase: 'recovery' },
     })
@@ -140,8 +143,8 @@ export async function recoverUnifiedProject(projectId: string, now = new Date())
     if (failed.count) {
       console.info('[clips:timeout]', {
         projectId, runId, lastStage: project.stage,
-        idleMs: run ? Math.max(0, now.getTime() - run.updatedAt.getTime()) : unifiedRunStaleMs(),
-        action: 'failed_stale_unified_run',
+        idleMs: progressIdleMs,
+        action: 'fail_stale_progress',
       })
     }
     runLog(projectId, runId, 'failed_no_usable_clips', {
