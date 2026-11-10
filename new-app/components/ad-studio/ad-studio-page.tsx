@@ -7,6 +7,7 @@ import { createAdStudioClient, AdStudioHttpError, type AdStudioClient, type AdSt
 import { formatCredits, sanitizeAdStudioMessage, statusLabel } from '../../lib/ad-studio/format'
 import type { AdAspect, AdDuration, AdImageVariant, AdMode, AdProductInput, AdStudioRun } from '../../lib/ad-studio/types'
 import { DEFAULT_T2V_VOICE } from '../../lib/t2v/voice-defaults'
+import { getStudioModel } from '../../lib/studio/models'
 import { cn } from '../../lib/utils'
 import { Page, PageHeader } from '../app/page-primitives'
 
@@ -82,6 +83,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
   const [busy, setBusy] = useState(false)
   const [createKey, setCreateKey] = useState(newIdempotencyKey)
   const [confirmKey, setConfirmKey] = useState(newIdempotencyKey)
+  const [retryRenderKey, setRetryRenderKey] = useState(newIdempotencyKey)
 
   const showError = useCallback((err: unknown) => {
     const safe = errorOf(err)
@@ -240,6 +242,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
     setError(null)
     setCreateKey(newIdempotencyKey())
     setConfirmKey(newIdempotencyKey())
+    setRetryRenderKey(newIdempotencyKey())
     setScreen('brief')
   }
 
@@ -377,6 +380,23 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
       const next = await liveClient.continueRun(run.id)
       console.log('[ad-studio:ui] continue', { step: 'complete', runId: next.id, status: next.status })
       setRun(next)
+    } catch (err) {
+      showError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function retryFinalRender() {
+    if (!run || busy || run.status !== 'failed' || run.error?.code !== 'RENDER_ERROR' || run.canRetryRender !== true) return
+    setBusy(true)
+    setError(null)
+    console.log('[ad-studio:ui] retry_render', { step: 'begin', runId: run.id })
+    try {
+      const next = await liveClient.retryRender(run.id, retryRenderKey)
+      console.log('[ad-studio:ui] retry_render', { step: 'complete', runId: next.id, status: next.status })
+      setRun(next)
+      setRetryRenderKey(newIdempotencyKey())
     } catch (err) {
       showError(err)
     } finally {
@@ -547,6 +567,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
                 onReplan={() => void replan()}
                 onCancel={() => void cancelRun()}
                 onContinue={() => void continueRun()}
+                onRetryRender={() => void retryFinalRender()}
                 onCommercial={(variant) => void makeCommercial(variant)}
               />
             ) : null}
@@ -833,6 +854,13 @@ function BriefForm({
   )
 }
 
+function formatAdSceneModel(scene: AdStudioRun['plan'] extends infer _Plan ? NonNullable<AdStudioRun['plan']>['scenes'][number] : never): string {
+  const model = scene.modelId ? getStudioModel(scene.modelId) : null
+  const label = model?.label ?? scene.modelId ?? 'Generated video'
+  const resolution = model?.defaultResolution
+  return resolution ? `${label} · ${resolution}` : label
+}
+
 function RunPanel({
   run,
   busy,
@@ -840,6 +868,7 @@ function RunPanel({
   onReplan,
   onCancel,
   onContinue,
+  onRetryRender,
   onCommercial,
 }: {
   run: AdStudioRun
@@ -848,6 +877,7 @@ function RunPanel({
   onReplan: () => void
   onCancel: () => void
   onContinue: () => void
+  onRetryRender: () => void
   onCommercial: (variant: AdImageVariant) => void
 }) {
   const plan = run.plan
@@ -856,6 +886,9 @@ function RunPanel({
   const canContinue = run.status === 'failed'
     && run.error?.code === 'KIE_ERROR'
     && !imageAds.some((variant) => variant.status === 'failed')
+  const canRetryRender = run.status === 'failed'
+    && run.error?.code === 'RENDER_ERROR'
+    && run.canRetryRender === true
 
   if (run.status === 'failed') {
     return (
@@ -867,6 +900,14 @@ function RunPanel({
           <button type="button" data-testid="ad-studio-continue" className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" disabled={busy} onClick={onContinue}>
             Continue without failed video scene
           </button>
+        ) : null}
+        {canRetryRender ? (
+          <div className="mt-4">
+            <button type="button" data-testid="ad-studio-retry-render" className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={busy} onClick={onRetryRender}>
+              {busy ? 'Retrying final render…' : 'Retry final render'}
+            </button>
+            <p className="mt-2 text-xs text-muted-foreground">Uses the existing generated scenes, image ads, and voiceover. No additional credits are charged.</p>
+          </div>
         ) : null}
       </div>
     )
@@ -928,6 +969,7 @@ function RunPanel({
     <div data-testid="ad-studio-plan" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
       <h1 className="text-xl font-semibold">{run.status === 'planning' ? 'Planning…' : run.mode === 'image_ad_to_commercial' ? 'Commercial plan' : 'Plan'}</h1>
       <p className="mt-1 text-sm text-muted-foreground" data-testid="ad-studio-plan-credits">{credits}</p>
+      <p className="mt-1 text-sm text-muted-foreground" data-testid="ad-studio-final-render-resolution">Final render · 720p</p>
       {plan ? (
         <>
           <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2" data-testid="ad-studio-script">
@@ -940,6 +982,11 @@ function RunPanel({
             {plan.scenes.map((scene) => (
               <li key={scene.index} data-testid={`ad-studio-scene-${scene.index}`} data-source={scene.source} className="rounded-lg border border-border bg-background/50 px-3 py-3 text-sm">
                 <p className="font-medium capitalize">{scene.role} · {scene.source} · {scene.durationSec}s</p>
+                {scene.source === 'generated' ? (
+                  <p className="text-muted-foreground" data-testid={`ad-studio-scene-model-${scene.index}`}>
+                    {formatAdSceneModel(scene)}
+                  </p>
+                ) : null}
                 <p className="text-muted-foreground">{scene.reason}</p>
               </li>
             ))}
