@@ -1,0 +1,58 @@
+name: YouTube Video maker regression
+
+on:
+  push:
+    branches: [master, "cursor/**"]
+    paths:
+      - "new-app/lib/youtube-video/**"
+      - "new-app/lib/youtube-video-ui/**"
+      - "new-app/lib/server/youtube-video/**"
+      - "new-app/lib/server/ai-captions/create-project.ts"
+      - "new-app/lib/server/ai-producer-agent/create-output-project.ts"
+      - "new-app/lib/server/clips/projects.ts"
+      - "new-app/components/youtube-video/**"
+      - "new-app/tests/youtube-video/**"
+      - ".github/workflows/youtube-video-regression.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "new-app/lib/youtube-video/**"
+      - "new-app/lib/youtube-video-ui/**"
+      - "new-app/lib/server/youtube-video/**"
+      - "new-app/lib/server/ai-captions/create-project.ts"
+      - "new-app/lib/server/ai-producer-agent/create-output-project.ts"
+      - "new-app/lib/server/clips/projects.ts"
+      - "new-app/components/youtube-video/**"
+      - "new-app/tests/youtube-video/**"
+  workflow_dispatch:
+
+jobs:
+  youtube-video-regression:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: new-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm exec prisma generate --schema=prisma/schema.prisma
+      - name: Run YouTube Video maker regression tests
+        run: pnpm exec vitest run tests/youtube-video
+      - name: Scoped Next.js TypeScript check for YouTube Video maker
+        run: |
+          NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false > /tmp/youtube-video-tsc.txt 2>&1 || true
+          if grep -E '^(lib/server/(youtube-video/|ai-captions/create-project|ai-producer-agent/create-output-project|clips/projects)|lib/youtube-video/|lib/youtube-video-ui/|components/youtube-video/|tests/youtube-video/|app/api/youtube-video/).*error TS' /tmp/youtube-video-tsc.txt; then
+            echo 'YouTube Video maker introduced TypeScript errors' >&2
+            exit 1
+          fi
+          echo 'No scoped YouTube Video maker TypeScript errors'
