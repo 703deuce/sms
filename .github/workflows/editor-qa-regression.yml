@@ -170,7 +170,8 @@ jobs:
             tests/studio-ui-layout.test.tsx \
             tests/unified-clip-results.test.ts \
             tests/unified-clip-results-ui.test.tsx \
-            tests/youtube-video/page-adapter.test.ts
+            tests/youtube-video/page-adapter.test.ts \
+            tests/streamer-unified-results.test.tsx
 
   captions-worker-regression:
     runs-on: ubuntu-latest
