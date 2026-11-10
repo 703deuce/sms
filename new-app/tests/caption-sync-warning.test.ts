@@ -64,14 +64,26 @@ describe('caption sync warning', () => {
   })
 
   it('warns on invalid or out-of-order cues', () => {
-    const next = edits({
-      captionLines: [
-        { id: 'a', text: 'b', startMs: 1200, endMs: 800 },
-        { id: 'c', text: 'd', startMs: 100, endMs: 400 },
-      ],
+    // Check the raw cues. normalizeEdits drops inverted times and sorts lines,
+    // which would hide the condition the export warning is meant to catch.
+    const base = edits()
+    const invalid = detectCaptionSyncIssues({
+      words,
+      edits: { ...base, captionLines: [{ id: 'a', text: 'b', startMs: 1200, endMs: 800 }] },
     })
-    const codes = detectCaptionSyncIssues({ words, edits: next }).map((w) => w.code)
-    expect(codes).toContain('invalid_times')
+    expect(invalid.map((w) => w.code)).toContain('invalid_times')
+
+    const unordered = detectCaptionSyncIssues({
+      words,
+      edits: {
+        ...base,
+        captionLines: [
+          { id: 'a', text: 'later', startMs: 1200, endMs: 1800 },
+          { id: 'c', text: 'earlier', startMs: 100, endMs: 400 },
+        ],
+      },
+    })
+    expect(unordered.map((w) => w.code)).toContain('non_monotonic')
   })
 
   it('word and line edits still flow into SRT when timings are valid', () => {
