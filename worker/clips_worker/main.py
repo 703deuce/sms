@@ -163,6 +163,13 @@ def _progress_retryable(exc: BaseException) -> bool:
 
 
 def post_progress(job_id: str, payload: dict, *, must_succeed: bool = False) -> None:
+    from clips_worker.job_reliability import commit_before_progress
+
+    stage = str(payload.get("stage") or payload.get("projectStatus") or "unknown")
+    # All worker callback variants funnel through here. Commit any SQL writes
+    # before the first network attempt, including terminal callbacks and retries.
+    commit_before_progress(job_id, stage)
+    log(f"[clipper:progress] http_send_begin job={job_id} stage={stage[:120]}")
     terminal = payload.get("jobStatus") in ("DONE", "FAILED")
     must = must_succeed or terminal
     if "workerId" not in payload:
@@ -180,11 +187,13 @@ def post_progress(job_id: str, payload: dict, *, must_succeed: bool = False) -> 
         for base in urls:
             try:
                 _post_progress_once(job_id, payload, base)
+                log(f"[clipper:progress] http_send_ok job={job_id} stage={stage[:120]} attempt={attempt + 1}")
                 if attempt > 0:
                     log(f"progress post ok job={job_id} after attempt={attempt + 1} base={base}")
                 return
             except Exception as exc:
                 last_err = exc
+                log(f"[clipper:progress] http_send_error job={job_id} stage={stage[:120]} attempt={attempt + 1} exception={type(exc).__name__}")
                 if not _progress_retryable(exc):
                     if must:
                         raise

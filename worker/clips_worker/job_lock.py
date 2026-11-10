@@ -211,7 +211,13 @@ def run_job_with_lock_heartbeat(
     from clips_worker.job_contract import run_job
 
     from clips_worker.export_progress import cancel_active
+    from clips_worker.job_reliability import bind_job_connection, unbind_job_connection
 
     instance = worker_instance_id()
-    with JobLockHeartbeat(dsn, job["id"], instance, on_lost=lambda: cancel_active("claim_lost")):
-        run_job(conn, job, handler, post_progress_fn=post_progress_fn, on_success_mark_done=False)
+    token = bind_job_connection(job["id"], conn)
+    try:
+        with JobLockHeartbeat(dsn, job["id"], instance, on_lost=lambda: cancel_active("claim_lost")):
+            run_job(conn, job, handler, post_progress_fn=post_progress_fn, on_success_mark_done=False)
+    finally:
+        # Never leak a previous job connection into the next job in this slot.
+        unbind_job_connection(token)
