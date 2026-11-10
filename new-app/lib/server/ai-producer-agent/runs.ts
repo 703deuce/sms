@@ -124,7 +124,7 @@ export async function createAiProducerAgentRun(workspaceId: string, userId: stri
           const snapshots = Array.isArray(run.sourceSnapshot) ? run.sourceSnapshot : []
           return snapshots.some((entry) =>
             entry != null && typeof entry === 'object' &&
-            !Array.isArray(entry) && entry.projectId === anchorProjectId)
+            !Array.isArray(entry) && (entry as Record<string, unknown>).projectId === anchorProjectId)
         })
         if (sameProject) {
           attached = true
