@@ -40,6 +40,8 @@ export type YoutubeVideoRunStore = {
   /** Atomic claim; a stale planning run can be resumed after a web restart. */
   claimPlanning(workspaceId: string, id: string, staleBeforeIso: string): Promise<boolean>
   heartbeatPlanning?: (workspaceId: string, id: string) => Promise<boolean>
+  /** Atomic first choice prevents concurrent HTTP requests creating two clips. */
+  claimAssemblyChoice?: (workspaceId: string, id: string, chosenOptionId: string) => Promise<boolean>
   claimAssembling?: (workspaceId: string, id: string, chosenOptionId: string, staleBeforeIso: string) => Promise<boolean>
   heartbeatAssembling?: (workspaceId: string, id: string) => Promise<boolean>
 }
@@ -91,6 +93,13 @@ export function memoryYoutubeVideoStore(): YoutubeVideoRunStore {
       const current=rows.get(key(workspaceId,id))
       if(!current||current.status!=='running'||current.stage!=='planning')return false
       rows.set(key(workspaceId,id),{...current,updatedAt:new Date().toISOString()})
+      return true
+    },
+    async claimAssemblyChoice(workspaceId,id,chosenOptionId) {
+      const current=rows.get(key(workspaceId,id))
+      if(!current||current.status!=='awaiting_choice'||current.chosenOptionId!==null)return false
+      rows.set(key(workspaceId,id),{...current,chosenOptionId,
+        status:'running',stage:'assembling',progressPercent:80,updatedAt:new Date().toISOString()})
       return true
     },
     async claimAssembling(workspaceId,id,chosenOptionId,staleBeforeIso) {
