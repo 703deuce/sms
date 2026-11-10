@@ -512,8 +512,8 @@ describe('AI Studio v1 backend', () => {
     const start = { startFrameUrl: 'https://img.example.test/start.png' }
     const shapes: Array<{
       modelId: string
-      mode: 'text_to_video' | 'image_to_video' | 'text_to_image'
-      urls?: typeof start & { endFrameUrl?: string; referenceUrl?: string }
+      mode: 'text_to_video' | 'image_to_video' | 'text_to_image' | 'source_video_edit'
+      urls?: { startFrameUrl?: string; endFrameUrl?: string; referenceUrl?: string; sourceVideoUrl?: string }
       assert: (req: KieCreateRequest) => void
     }> = [
       {
@@ -571,6 +571,22 @@ describe('AI Studio v1 backend', () => {
         },
       },
       {
+        modelId: 'wan-2.7-video-edit',
+        mode: 'source_video_edit',
+        urls: { sourceVideoUrl: 'https://video.example.test/source.mp4' },
+        assert: (req) => {
+          expect(req.api).toBe('jobs')
+          expect(req.model).toBe('wan/2-7-videoedit')
+          expect(req.input).toMatchObject({
+            video_url: 'https://video.example.test/source.mp4',
+            duration: 2,
+            resolution: '720p',
+            audio_setting: 'origin',
+          })
+          expect(req.input.aspect_ratio).toBeUndefined()
+        },
+      },
+      {
         modelId: 'nano-banana',
         mode: 'text_to_image',
         urls: { startFrameUrl: '', referenceUrl: 'https://img.example.test/ref.png' } as never,
@@ -594,12 +610,13 @@ describe('AI Studio v1 backend', () => {
         mode: row.mode,
         prompt: 'a cat walks',
         startFrameAssetId: row.mode === 'image_to_video' ? 'asset_start' : undefined,
+        sourceVideoAssetId: row.mode === 'source_video_edit' ? 'asset_source' : undefined,
         endFrameAssetId: row.urls?.endFrameUrl ? 'asset_end' : undefined,
         referenceAssetId: row.modelId.startsWith('nano-banana') && row.urls && 'referenceUrl' in (row.urls ?? {}) ? 'asset_ref' : undefined,
       })
       row.assert(buildKieCreateRequest(resolved, row.urls ?? {}))
     }
-    expect(STUDIO_MODELS).toHaveLength(8)
+    expect(STUDIO_MODELS).toHaveLength(9)
   })
 
   it('maps hailuo 720p to 768P', () => {
