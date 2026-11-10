@@ -132,7 +132,7 @@ export async function retryIdempotentRequest<T>(opts: {
     } catch (error) {
       if (isAbortError(error)) throw error
       lastError = error
-      if (attempt === maxAttempts) throw error
+      if (!isRetryableError(error) || attempt === maxAttempts) throw error
     }
     await delayWithSignal(baseDelayMs * 2 ** (attempt - 1), opts.signal)
   }
