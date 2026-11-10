@@ -32,6 +32,8 @@ import { Clapperboard, Globe, Link2, Loader2, Radio, UploadCloud } from 'lucide-
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { UNIFIED_AUTO_AGENT_CLIP_MODE } from '../../lib/clips/unified-clip-results'
+import { UnifiedClipRunNote } from './unified-clip-run-note'
 
 export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Enabled?: boolean }) {
   const router = useRouter()
@@ -53,7 +55,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
     if (tabParam === 'streamer' || tabParam === 'link' || tabParam === 'upload') setTab(tabParam)
   }, [tabParam])
   const [projectIntent, setProjectIntent] = useState<'find' | 'byo' | 'full'>(fullIntentParam ? 'full' : 'find')
-  const [agentClipMode, setAgentClipMode] = useState<'clip_moment_v1'|'clip_story_v1'>('clip_moment_v1')
+  const agentClipMode = UNIFIED_AUTO_AGENT_CLIP_MODE
   const [agentClipSeconds, setAgentClipSeconds] = useState<30|60|90>(60)
   const [sourceAspect, setSourceAspect] = useState<ReturnType<typeof sourceAspectRatio> | null>(null)
   const [settings, setSettings] = useState<ClipProjectSettings>(initial)
@@ -265,21 +267,13 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
         </fieldset>
       ) : null}
       {tab==='upload'&&projectIntent==='find'&&aiProducerAgentPublicEnabled()?(
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-border p-3" data-testid="upload-agent-mode">
-          <label className="text-sm font-medium" htmlFor="upload-agent-mode">Agent clip mode</label>
-          <select id="upload-agent-mode" value={agentClipMode}
-            onChange={e=>setAgentClipMode(e.target.value as 'clip_moment_v1'|'clip_story_v1')}
-            className="h-9 rounded-md border border-border bg-background px-2 text-sm">
-            <option value="clip_moment_v1">Single continuous moment</option>
-            <option value="clip_story_v1">AI story from multiple moments</option>
-          </select>
+        <UnifiedClipRunNote testId="upload-agent-mode" className="mb-4">
           <select aria-label="Agent target length" value={agentClipSeconds}
             onChange={e=>setAgentClipSeconds(Number(e.target.value) as 30|60|90)}
             className="h-9 rounded-md border border-border bg-background px-2 text-sm">
             <option value={30}>30 seconds</option><option value={60}>60 seconds</option><option value={90}>90 seconds</option>
           </select>
-          <span className="text-xs text-muted-foreground">The same Story, Footage, Flow and QA agents run when the upload is ready.</span>
-        </div>
+        </UnifiedClipRunNote>
       ):null}
       <BlankProjectCard />
       {/* FVfix: ONE source row (was shown twice: link cards + "Import source" radios). */}

@@ -36,6 +36,8 @@ import {
   streamerClipLengthFields,
   type ClipLengthChoice as ClipLengthChoiceValue,
 } from '@/lib/clips/clip-length'
+import { UNIFIED_AUTO_AGENT_CLIP_MODE } from '../../lib/clips/unified-clip-results'
+import { UnifiedClipRunNote } from '../clips/unified-clip-run-note'
 import {
   streamerUploadResumeAction,
   type PendingUploadMeta,
@@ -89,7 +91,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [rangeStart, setRangeStart] = useState('0:00')
   const [rangeEnd, setRangeEnd] = useState('15:00')
   const [clipLength, setClipLength] = useState<ClipLengthChoiceValue>('auto')
-  const [agentClipMode,setAgentClipMode]=useState<'clip_moment_v1'|'clip_story_v1'>('clip_moment_v1')
+  const agentClipMode=UNIFIED_AUTO_AGENT_CLIP_MODE
   const [agentClipSeconds,setAgentClipSeconds]=useState<30|60|90>(60)
 
   useEffect(() => {
@@ -611,20 +613,13 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
           />
         ) : null}
         {aiProducerAgentPublicEnabled()?(
-          <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="streamer-upload-agent-mode">
-            <label htmlFor="streamer-upload-agent-mode" className="text-sm">AI clip mode</label>
-            <select id="streamer-upload-agent-mode" value={agentClipMode}
-              onChange={e=>setAgentClipMode(e.target.value as 'clip_moment_v1'|'clip_story_v1')}
-              className="h-9 rounded-md border border-border bg-background px-2 text-sm">
-              <option value="clip_moment_v1">Single continuous moment</option>
-              <option value="clip_story_v1">AI story from multiple moments</option>
-            </select>
+          <UnifiedClipRunNote testId="streamer-upload-agent-mode" className="mt-3 mb-0">
             <select aria-label="Streamer upload agent target length" value={agentClipSeconds}
               onChange={e=>setAgentClipSeconds(Number(e.target.value) as 30|60|90)}
               className="h-9 rounded-md border border-border bg-background px-2 text-sm">
               <option value={30}>30 seconds</option><option value={60}>60 seconds</option><option value={90}>90 seconds</option>
             </select>
-          </div>
+          </UnifiedClipRunNote>
         ):null}
         <PrimaryButton
           className="mt-3"
