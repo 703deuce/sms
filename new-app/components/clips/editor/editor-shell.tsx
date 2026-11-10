@@ -3714,7 +3714,7 @@ export function EditorShell({
               <Button type="button" size="sm" variant="outline" render={<Link href={routes.text(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.info('[editor:text] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'text') }} />}>Text editor</Button>
               <Button type="button" size="sm" variant="outline" render={<Link href={routes.story(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.log('[editor:story-mode] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'story') }} />}>Story blocks</Button>
               <Button type="button" size="sm" variant="outline" render={<Link href={routes.templateMode(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.info('[editor:templates-mode] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'templates') }} />}>Templates</Button>
-              <Button type="button" size="sm" variant="outline" data-testid="editor-change-this-shot" onClick={() => void openGenerateMode()}>Change this shot</Button>
+              <Button type="button" size="sm" variant="outline" data-testid="editor-change-this-shot" aria-label="Change this shot with AI" title="Edit selected footage with the source-video Change this shot workspace" onClick={() => void openGenerateMode()}>Change this shot</Button>
               {fullVideo ? (
               <FindClipsInVideoButton
                 projectId={projectId}
