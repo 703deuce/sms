@@ -3332,6 +3332,25 @@ export function EditorShell({
       }
     })()
   }
+  const openGenerateMode = async () => {
+    if (compactHandoffInFlight.current) return
+    compactHandoffInFlight.current = true
+    const range = selectedVideo && selectedVideo.srcOutMs > selectedVideo.srcInMs
+      ? { startMs: String(Math.round(selectedVideo.srcInMs)), endMs: String(Math.round(selectedVideo.srcOutMs)) }
+      : { atMs: String(Math.round(playheadSourceMs)) }
+    console.info('[editor:generate-mode] handoff-start', { projectId, clipId, hasSelectedRange: Boolean(selectedVideo) })
+    try {
+      await flushSave()
+      console.info('[editor:generate-mode] handoff-saved', { projectId, clipId })
+      window.location.assign(routes.generate(projectId, clipId, { ...range, ...(clipperStudio ? { from: 'studio' } : {}) }))
+    } catch {
+      console.error('[editor:generate-mode] handoff-save-failed', { projectId, clipId })
+      toast.error('Save edits before switching editors. Retry the save and try again.')
+    } finally {
+      compactHandoffInFlight.current = false
+    }
+  }
+
   const needSel = canvasSel ? null : 'Select a clip first'
   const needBroll = canvasSel?.target.startsWith('broll:') ? null : 'Select a B-roll clip first'
   const needFull = fullVideo ? null : 'Available on full-length videos'
@@ -3654,6 +3673,7 @@ export function EditorShell({
               {compact && !fullVideo && !clipperStudio ? <Badge variant="outline" className="h-6 text-[11px] font-normal" data-testid="compact-editor-mode-label">Clip editor</Badge> : null}
               <Button type="button" size="sm" variant="outline" render={<Link href={routes.text(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.info('[editor:text] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'text') }} />}>Text editor</Button>
               <Button type="button" size="sm" variant="outline" render={<Link href={routes.templateMode(projectId, clipId, clipperStudio ? { from: 'studio' } : undefined)} onClick={(event) => { console.info('[editor:templates-mode] compact-entry', { projectId, clipId }); handleCompactHandoff(event, 'templates') }} />}>Templates</Button>
+              <Button type="button" size="sm" variant="outline" data-testid="editor-change-this-shot" onClick={() => void openGenerateMode()}>Change this shot</Button>
               {fullVideo ? (
               <FindClipsInVideoButton
                 projectId={projectId}

@@ -204,14 +204,6 @@ export function TextSceneEditorShell(props: Props) {
     }
     window.location.assign(routes.templateMode(projectId, clipId, props.clipperStudio ? { from: 'studio' } : undefined))
   }
-  const openStoryBlocks = async () => {
-    console.log('[editor:story-mode] text-handoff', { projectId, clipId })
-    try { await flushSave() } catch {
-      toast.error('Save edits before switching editors')
-      return
-    }
-    window.location.assign(routes.story(projectId, clipId, props.clipperStudio ? { from: 'studio' } : undefined))
-  }
   const openClipEditor = async () => {
     console.info('[editor:text] open-in-clip-editor', { projectId, clipId })
     try { await flushSave() } catch {
@@ -221,6 +213,21 @@ export function TextSceneEditorShell(props: Props) {
     console.info('[editor:compact-mode] open-from-text-editor', { projectId, clipId, target: props.clipperStudio ? 'studio' : 'edit' })
     window.location.assign(props.clipperStudio ? routes.studio(projectId, clipId) : routes.edit(projectId, clipId))
   }
+  const openGenerateMode = async () => {
+    console.info('[editor:generate-mode] text-handoff-start', { projectId, clipId, atMs: Math.round(playhead) })
+    try {
+      await flushSave()
+      console.info('[editor:generate-mode] text-handoff-saved', { projectId, clipId })
+      window.location.assign(routes.generate(projectId, clipId, {
+        atMs: String(Math.round(playhead)),
+        ...(props.clipperStudio ? { from: 'studio' } : {}),
+      }))
+    } catch {
+      console.error('[editor:generate-mode] text-handoff-save-failed', { projectId, clipId })
+      toast.error('Save edits before switching editors.')
+    }
+  }
+
   const createClip = useCallback(async (start: number, end: number, clipTitle?: string) => {
     console.info('[editor:text] create-clip-started', { projectId, clipId, startMs: start, endMs: end })
     try {
@@ -262,8 +269,8 @@ export function TextSceneEditorShell(props: Props) {
           <Button variant="ghost" size="icon" disabled={!canRedo} aria-label="Redo" onClick={() => { redo(); console.info('[editor:text] redo', { projectId, clipId }) }}><Redo2 className="size-4" /></Button>
           <Button size="sm" variant={chatOpen ? 'secondary' : 'outline'} aria-expanded={chatOpen} aria-controls="editor-chat-mode" onClick={() => void openChat()}><MessageSquare className="mr-1 size-4" />Chat / Producer</Button>
           <Button size="sm" variant="outline" onClick={() => { setExportOpen(true); console.info('[editor:text] export-opened', { projectId, clipId }) }}><Download className="mr-1 size-4" />Export</Button>
-          <Button size="sm" variant="outline" onClick={() => void openStoryBlocks()}>Story blocks</Button>
           <Button size="sm" variant="outline" onClick={() => void openTemplates()}><Palette className="mr-1 size-4" />Templates</Button>
+          <Button size="sm" variant="outline" onClick={() => void openGenerateMode()}>Change this shot</Button>
           <Button size="sm" onClick={() => void openClipEditor()}><Clapperboard className="mr-1 size-4" />Open in clip editor</Button>
         </header>
         <div className="flex min-h-0 flex-1">
