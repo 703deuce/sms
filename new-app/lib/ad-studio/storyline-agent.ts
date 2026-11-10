@@ -25,8 +25,8 @@ export function writeAdStoryline(input: AdProductInput, mode: AdMode, choice: St
     ? [
         ...core,
         `Take a closer look at ${name}.`,
-        first ? `Keep this approved detail in mind: ${first.replace(/[.!?]+$/, '')}.` : '',
-        second ? `And one more approved detail: ${second.replace(/[.!?]+$/, '')}.` : '',
+        first ? `One thing to remember: ${first.replace(/[.!?]+$/, '')}.` : '',
+        second ? `Also worth knowing: ${second.replace(/[.!?]+$/, '')}.` : '',
         `See ${name} for yourself.`,
         cta,
       ].filter(Boolean).join(' ')
