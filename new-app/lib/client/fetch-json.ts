@@ -6,13 +6,20 @@ export class FetchJsonError extends Error {
   readonly status?: number
   readonly retryable: boolean
   readonly conflictData?: unknown
+  readonly code?: string
+  readonly data?: unknown
 
-  constructor(message: string, opts?: { status?: number; retryable?: boolean; conflictData?: unknown }) {
+  constructor(
+    message: string,
+    opts?: { status?: number; retryable?: boolean; conflictData?: unknown; code?: string; data?: unknown },
+  ) {
     super(message)
     this.name = 'FetchJsonError'
     this.status = opts?.status
     this.retryable = opts?.retryable ?? false
     this.conflictData = opts?.conflictData
+    this.code = opts?.code
+    this.data = opts?.data
   }
 }
 
@@ -109,6 +116,8 @@ export async function fetchJson<T = unknown>(url: string, options: FetchJsonOpti
       const conflictBody = body as { code?: string; data?: unknown } | null
       throw new FetchJsonError(msg, {
         status: res.status,
+        code: conflictBody?.code,
+        data: conflictBody?.data,
         conflictData: conflictBody?.code === 'EDITS_CONFLICT' ? conflictBody.data : undefined,
       })
     }

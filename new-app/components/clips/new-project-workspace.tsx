@@ -33,12 +33,12 @@ import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
-export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Enabled?: boolean }) {
+export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: { reframeV2Enabled?: boolean; forcedIntent?: 'full' }) {
   const router = useRouter()
   const params = useSearchParams()
   const preset = params.get('preset')
-  // FV1: /app/clips/new?intent=full opens "Edit a full video" (Home links here).
-  const fullIntentParam = params.get('intent') === 'full'
+  // FV1: /app/video-editor/new opens "Edit a full video" (Home links here).
+  const fullIntentParam = forcedIntent === 'full' || params.get('intent') === 'full'
   const initial = useMemo(() => {
     // FIX2 R1: default layout = Auto variety (see lib/clips/new-project-initial.ts)
     return initialNewProjectSettings(preset, Boolean(fullIntentParam))
@@ -312,7 +312,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           </OptionCard>
         ))}
         {isT2vFeatureEnabled() ? (
-          <Link href="/app/clips/video/new" className="block min-h-[72px]" data-testid="new-project-t2v-card">
+          <Link href="/app/ai-video/new" className="block min-h-[72px]" data-testid="new-project-t2v-card">
             <OptionCard
               selected={false}
               icon={Clapperboard}

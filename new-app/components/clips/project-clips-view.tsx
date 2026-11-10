@@ -421,7 +421,7 @@ export function ProjectClipsView({
                   /* ignore */
                 }
               }}
-              render={<Link href={`/app/clips/${projectId}/script`} />}
+              render={<Link href={`/app/video-editor/${projectId}/script`} />}
             >
               <FileText className="mr-1 size-4" />
               Edit transcript
@@ -604,7 +604,7 @@ export function ProjectClipsView({
                     projectId={projectId}
                     editorHref={
                       clips[0]
-                        ? `/app/clips/${editorProjectId ?? projectId}/edit/${clips[0]!.id}?panel=media`
+                        ? `/app/video-editor/${editorProjectId ?? projectId}/edit/${clips[0]!.id}?panel=media`
                         : viewOnFullVideoUrl
                           ? `${viewOnFullVideoUrl.split('?')[0]}?panel=media`
                           : null

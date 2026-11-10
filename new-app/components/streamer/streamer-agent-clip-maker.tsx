@@ -232,7 +232,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
       {completed.map((clip,i)=>
         <Link key={clip.projectId+clip.clipId}
           className="rounded-md border border-border px-3 py-2 text-xs underline"
-          href={`/app/clips/${clip.projectId}/studio/${clip.clipId}`}>
+          href={`/app/video-editor/${clip.projectId}/studio/${clip.clipId}`}>
           Clip {i+1} · Source {clip.startMin}m · Edit
         </Link>)}
     </div>:null}

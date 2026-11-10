@@ -6,7 +6,7 @@ import { OpenInFullVideoButton } from '@/components/clips/editor/open-in-full-vi
 import { defaultEdits } from '@/lib/clips/edits'
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/app/clips/project/edit/clip',
+  usePathname: () => '/app/video-editor/project/edit/clip',
   useRouter: () => ({ push: vi.fn() }),
 }))
 afterEach(() => cleanup())

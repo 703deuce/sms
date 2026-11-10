@@ -133,7 +133,7 @@ export function T2vScriptReview({ draftId, projectId, initialRevision, initialDo
     return (
       <div className="mx-auto max-w-3xl space-y-4 py-12 text-center">
         <p className="text-sm text-muted-foreground">No script yet — generate from the create flow or paste narration in Script mode.</p>
-        <PrimaryButton type="button" onClick={() => router.push(`/app/clips/${projectId}/video?mode=storyboard`)}>
+        <PrimaryButton type="button" onClick={() => router.push(`/app/ai-video/${projectId}?mode=storyboard`)}>
           Go to storyboard
         </PrimaryButton>
       </div>
@@ -143,7 +143,7 @@ export function T2vScriptReview({ draftId, projectId, initialRevision, initialDo
   return (
     <div className="mx-auto max-w-3xl space-y-6 py-6">
       <div className="flex justify-end">
-        <PrimaryButton type="button" onClick={() => router.push(`/app/clips/${projectId}/video?mode=storyboard`)}>
+        <PrimaryButton type="button" onClick={() => router.push(`/app/ai-video/${projectId}?mode=storyboard`)}>
           Make storyboard →
         </PrimaryButton>
       </div>

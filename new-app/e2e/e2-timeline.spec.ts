@@ -1,10 +1,10 @@
 /**
- * E2 multi-track timeline acceptance on the REAL editor route (/app/clips/<projectId>/edit/<clipId>).
+ * E2 multi-track timeline acceptance on the REAL editor route (/app/video-editor/<projectId>/edit/<clipId>).
  *
  * Use a DISPOSABLE clip: these steps save edits (each test undoes what it changes, but a failed run
  * can leave edits behind). Best fixture: a clip with >= 1 transcript cut, >= 1 B-roll item, music and
  * one SFX (add them in the editor first), so every lane has an item.
- *   E2_CLIP_PATH=/app/clips/proj_x/edit/clip_y CLIPPER_E2E_BASE_URL=... npx playwright test e2e/e2-timeline.spec.ts
+ *   E2_CLIP_PATH=/app/video-editor/proj_x/edit/clip_y CLIPPER_E2E_BASE_URL=... npx playwright test e2e/e2-timeline.spec.ts
  * Screenshots go to test-results/ (attach them to the report).
  */
 import { test, expect, chromium, type Page, type Locator } from '@playwright/test'

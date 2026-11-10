@@ -322,6 +322,8 @@ export function exportClipWithOptions(
     softSubs?: boolean
     stems?: boolean
     edits?: unknown
+    /** Required when caption timing is drifted. Optional so pre-#1110 backends ignore it. */
+    captionSyncAck?: boolean
   },
 ) {
   return clipsFetch<{

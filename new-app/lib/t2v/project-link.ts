@@ -1,12 +1,13 @@
+import { routes } from '../routes'
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 
 export function t2vProjectHref(project: Pick<ClipProjectListItem, 'id' | 'sourceKind' | 'status' | 't2vDraftStatus'>): string {
-  if (project.sourceKind !== 't2v') return `/app/clips/${project.id}`
+  if (project.sourceKind !== 't2v') return routes.project(project.id)
   const ready =
     project.status === 'READY' ||
     project.t2vDraftStatus === 'READY' ||
     project.t2vDraftStatus === 'ASSEMBLED'
-  return ready ? `/app/clips/${project.id}/script` : `/app/clips/${project.id}/video`
+  return ready ? routes.script(project.id) : routes.aiVideo(project.id)
 }
 
 export function t2vStatusLabel(project: Pick<ClipProjectListItem, 'sourceKind' | 'status' | 't2vDraftStatus' | 't2vDraftProgress'>): string | null {

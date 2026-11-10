@@ -9,6 +9,13 @@ PRISMA_GENERATE_SKIP_AUTOINSTALL = "true"
 
 [phases.setup]
 nixPkgs = ["nodejs_22"]
+# Override Nixpacks Node provider defaults (curl, wget). Those apt packages
+# forced `apt-get update && apt-get install` on every image build; deploy 5071
+# spent ~15m15s on Ubuntu archive.ubuntu.com. curl is already in the
+# nixpacks Ubuntu base image; wget is unused (build is pnpm/node, Coolify
+# health check is HTTP GET /api/health). Omitting "..." replaces, not extends,
+# the provider apt list.
+aptPkgs = []
 
 [phases.install]
 cacheDirectories = ["/root/.local/share/pnpm/store"]

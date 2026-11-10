@@ -9,13 +9,13 @@ describe('t2vProjectHref', () => {
   it('routes draft t2v to studio', () => {
     expect(
       t2vProjectHref({ id: 'p2', sourceKind: 't2v', status: 'DRAFT', t2vDraftStatus: 'DRAFT' }),
-    ).toBe('/app/clips/p2/video')
+    ).toBe('/app/ai-video/p2')
   })
 
   it('routes ready t2v to script editor', () => {
     expect(
       t2vProjectHref({ id: 'p3', sourceKind: 't2v', status: 'READY', t2vDraftStatus: 'READY' }),
-    ).toBe('/app/clips/p3/script')
+    ).toBe('/app/video-editor/p3/script')
   })
 })
 

@@ -58,3 +58,25 @@ export function isDefaultRemovableFiller(
   if (isMeaningfulLeadIn(word, next, deletedSet)) return false
   return true
 }
+
+/** "Ah." / "Oh." after a finished sentence (or with its own period) is a reaction, not a filled pause. */
+export function isReactionExclamation(
+  word: EditorWord,
+  prev: EditorWord | undefined,
+  next: EditorWord | undefined,
+  deletedSet: Set<string>,
+): boolean {
+  const t = normalizeToken(word.text)
+  if (t !== 'ah' && t !== 'oh') return false
+  if (/[.!?]$/.test(word.text.trim())) return true
+  if (prev && /[.!?]$/.test(prev.text.trim())) return true
+  if (isMeaningfulLeadIn(word, next, deletedSet)) return true
+  return false
+}
+
+/** um / uh / er / ah family used by the Clean Take light default. */
+export function isPlainLightFillerToken(text: string): boolean {
+  const t = normalizeToken(text)
+  return /^(um+|uh+|er+|ah+)$/i.test(t)
+}
+

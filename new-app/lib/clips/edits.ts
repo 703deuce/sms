@@ -36,7 +36,13 @@ import { normalizeStabilize, type StabilizeRange } from '@/lib/clips/editor/stab
 import { normalizeVideoReverse, type VideoReverseRange } from '@/lib/clips/editor/video-reverse'
 import { normalizeBlurRegions, type BlurRegion } from '@/lib/clips/editor/blur-regions'
 import { normalizeTextItems, type TextItem } from '@/lib/clips/editor/text-items'
-import { normalizeCaptionLinesEdits, type CaptionLine } from '@/lib/clips/editor/caption-lines'
+import {
+  mergeCaptionLineNormalizeReports,
+  normalizeCaptionLinesEditsWithReport,
+  parseCaptionLineNormalizeReport,
+  type CaptionLine,
+  type CaptionLineNormalizeReport,
+} from '@/lib/clips/editor/caption-lines'
 import {
   normalizeMediaSources,
   normalizeMulticam,
@@ -72,6 +78,23 @@ export type ClipLayoutFacecam = {
   pipCorner?: 'TL' | 'TR' | 'BL' | 'BR'
 }
 
+export const CLEAN_TAKE_OMISSION_TYPES = ['filler', 'silence', 'retake', 'manual'] as const
+export type CleanTakeOmissionType = (typeof CLEAN_TAKE_OMISSION_TYPES)[number]
+
+export type ClipEditsCleanTakeReview = {
+  v: 1
+  omissions: Array<{
+    id: string
+    sourceId: string
+    sourceProjectId?: string
+    startMs: number
+    endMs: number
+    type: CleanTakeOmissionType
+    reason: string
+    accepted?: boolean
+  }>
+}
+
 export type ClipEditsV2 = {
   v: 2
   trim: { in: number; out: number }
@@ -85,6 +108,10 @@ export type ClipEditsV2 = {
     string,
     { srcStartMs: number; srcEndMs: number; confidence: 'ready' | 'needs_review'; reason: string }
   >
+  /** Clean Take remaining-omission list. Kept by normalizeEdits / mergeEditsPatch (clip PATCH). */
+  cleanTakeReview?: ClipEditsCleanTakeReview
+  /** Export-refined AI / Clean Take cut ranges, kept apart from the user's manual cuts. Additive. */
+  cleanTakeAiRanges?: CutRange[]
   wordFixes: Record<string, string>
   /** Stable source-time + original text for export parity when word indices differ. */
   wordFixMeta?: Record<string, WordFixMetaEntry>
@@ -233,6 +260,11 @@ export type ClipEditsV2 = {
   motionPlan?: MotionPlan
   /** G3a manual caption lines (typed / SRT-VTT import), output ms; replace transcript words in the burned captions. */
   captionLines?: CaptionLine[]
+  /**
+   * Serializable record of cues dropped or reordered by normalizeCaptionLines.
+   * Survives JSON clone and a second normalizeEdits so the sync warning is not lost.
+   */
+  captionLineNormalizeReport?: CaptionLineNormalizeReport
   /** E4 color looks (Adjust + Filters): whole video, per Video item (source range), per B-roll id. */
   color?: ClipColorEdits
   /** G4a adjustment layers (output ms): grade everything below them (lib/clips/editor/adjust-layers.ts). */
@@ -400,6 +432,51 @@ function normalizeCutQualityMeta(
     out[k] = { srcStartMs: Math.round(srcStartMs), srcEndMs: Math.round(srcEndMs), confidence, reason }
   }
   return Object.keys(out).length ? out : undefined
+}
+
+const CLEAN_TAKE_OMISSION_TYPE_SET = new Set<CleanTakeOmissionType>(CLEAN_TAKE_OMISSION_TYPES)
+
+/** Keep a valid Clean Take review list through normalizeEdits / mergeEditsPatch (clip PATCH). */
+export function normalizeCleanTakeReview(raw: unknown): ClipEditsCleanTakeReview | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as { v?: unknown; omissions?: unknown }
+  if (o.v !== 1 || !Array.isArray(o.omissions)) return undefined
+  const omissions: ClipEditsCleanTakeReview['omissions'] = []
+  for (const row of o.omissions) {
+    if (!row || typeof row !== 'object') continue
+    const r = row as Record<string, unknown>
+    const startMs = Number(r.startMs)
+    const endMs = Number(r.endMs)
+    const sourceId = typeof r.sourceId === 'string' ? r.sourceId.trim() : ''
+    const type = r.type
+    if (!sourceId || !Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) continue
+    if (typeof type !== 'string' || !CLEAN_TAKE_OMISSION_TYPE_SET.has(type as CleanTakeOmissionType)) continue
+    omissions.push({
+      id: typeof r.id === 'string' && r.id ? r.id : `${sourceId}:${Math.round(startMs)}:${Math.round(endMs)}`,
+      sourceId,
+      sourceProjectId: typeof r.sourceProjectId === 'string' ? r.sourceProjectId : undefined,
+      startMs: Math.round(startMs),
+      endMs: Math.round(endMs),
+      type: type as CleanTakeOmissionType,
+      reason: typeof r.reason === 'string' ? r.reason : '',
+      accepted: r.accepted === true ? true : undefined,
+    })
+  }
+  return { v: 1, omissions }
+}
+
+export function normalizeCleanTakeAiRanges(raw: unknown): CutRange[] | undefined {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw)) return undefined
+  const out: CutRange[] = []
+  for (const row of raw) {
+    if (!Array.isArray(row) || row.length < 2) continue
+    const a = Number(row[0])
+    const b = Number(row[1])
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) continue
+    out.push([Math.round(a), Math.round(b)])
+  }
+  return out
 }
 
 function normalizeCaptions(
@@ -592,6 +669,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.textItems?.length) payload.textItems = null
   if (!edits.motionPlan) payload.motionPlan = null
   if (!edits.captionLines?.length) payload.captionLines = null
+  if (!edits.captionLineNormalizeReport) payload.captionLineNormalizeReport = null
   if (!edits.color) payload.color = null
   if (!edits.adjustLayers?.length) payload.adjustLayers = null
   if (!edits.layerFx?.length) payload.layerFx = null
@@ -615,6 +693,10 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.canvasBg) payload.canvasBg = null
   if (!edits.bgRemoval) payload.bgRemoval = null
   if (!edits.speakerNames) payload.speakerNames = null
+  if (!edits.cleanTakeReview) payload.cleanTakeReview = null
+  // Persist an empty list so a completed restore does not fall back to leftover manual cuts.
+  if (edits.cleanTakeAiRanges !== undefined) payload.cleanTakeAiRanges = edits.cleanTakeAiRanges
+  else payload.cleanTakeAiRanges = null
   return payload
 }
 
@@ -679,6 +761,8 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     ),
     cutCleanupKinds: normalizeCutCleanupKinds(o.cutCleanupKinds),
     cutQualityMeta: normalizeCutQualityMeta(o.cutQualityMeta),
+    cleanTakeReview: normalizeCleanTakeReview(o.cleanTakeReview),
+    cleanTakeAiRanges: normalizeCleanTakeAiRanges(o.cleanTakeAiRanges),
     wordFixes: (o.wordFixes as Record<string, string>) || {},
     wordFixMeta: normalizeWordFixMeta(o.wordFixMeta, (o.wordFixes as Record<string, string>) || {}),
     captions: normalizeCaptions(o.captions, base.captions),
@@ -738,7 +822,18 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       const checked = validateMotionPlan(o.motionPlan)
       return checked.ok ? checked.plan : undefined
     })(),
-    captionLines: normalizeCaptionLinesEdits(o.captionLines),
+    ...(() => {
+      const normalizedLines = normalizeCaptionLinesEditsWithReport(o.captionLines)
+      const report = mergeCaptionLineNormalizeReports(
+        parseCaptionLineNormalizeReport(o.captionLineNormalizeReport),
+        normalizedLines.report,
+      )
+      return {
+        captionLines: normalizedLines.lines,
+        captionLineNormalizeReport:
+          report.droppedInvalid > 0 || report.reordered ? report : undefined,
+      }
+    })(),
     color: normalizeColorEdits(o.color),
     adjustLayers: normalizeAdjustLayers(o.adjustLayers),
     layerFx: normalizeLayerFx(o.layerFx),
@@ -1057,7 +1152,8 @@ export function editMsAtDisplayMs(edits: ClipEditsV2, displayMs: number): number
   return Math.round(lo)
 }
 
-const MIN_SEGMENT_MS = 80
+/** Cuts (and keep segments) shorter than this are dropped at export and must not be shown as removable. */
+export const MIN_SEGMENT_MS = 80
 
 /** Drop or clamp cuts that fall outside the active trim window. */
 export function sanitizeCutRangesForTrim(
