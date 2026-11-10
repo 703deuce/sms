@@ -20,8 +20,20 @@ export function writeAdStoryline(input: AdProductInput, mode: AdMode, choice: St
   const solution = first || `Discover ${name}.`
   const cta = `Explore ${name}.`
   const details = second ? ` ${second}.` : ''
-  const voiceover = [hook, problem, `${solution.replace(/[.!?]+$/, '')}.${details}`, cta].join(' ')
+  const core = [hook, problem, `${solution.replace(/[.!?]+$/, '')}.${details}`]
+  const voiceover = input.durationSec === 30
+    ? [
+        ...core,
+        `Take a closer look at ${name}.`,
+        first ? `Keep this approved detail in mind: ${first.replace(/[.!?]+$/, '')}.` : '',
+        second ? `And one more approved detail: ${second.replace(/[.!?]+$/, '')}.` : '',
+        `See ${name} for yourself.`,
+        cta,
+      ].filter(Boolean).join(' ')
+    : [...core, cta].join(' ')
   const script = { hook, problem, solution, cta, voiceover, onScreenText: [hook, solution, ...(second ? [second] : []), cta] }
-  console.info('[ad-studio:storyline] complete', { mode, textCards: script.onScreenText.length })
+  console.info('[ad-studio:storyline] complete', {
+    mode, textCards: script.onScreenText.length, voiceWords: voiceover.trim().split(/\s+/).filter(Boolean).length,
+  })
   return script
 }
