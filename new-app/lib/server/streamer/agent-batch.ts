@@ -4,6 +4,8 @@ import {getPrisma} from '@/lib/server/db'
 import {streamerAgentWindows} from '@/lib/streamer/agent-windows'
 import {createAgentVideoWindow} from '@/lib/server/streamer/agent-window-source'
 import {createAiProducerAgentRun} from '@/lib/server/ai-producer-agent/runs'
+import {startUnifiedClipRun} from '@/lib/server/ai-producer-agent/unified-clip-run'
+import {storyTargetFromAgentSeconds} from '@/lib/ai-producer-agent/clip-mode/unified-run-input'
 import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
 import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
   type StreamerAgentBatch as AgentBatch,type StreamerAgentMode as Mode}
@@ -72,27 +74,48 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
 export async function maybeAutoStartUploadAgentBatch(projectId:string){
   const prisma=getPrisma()
   const p=await prisma.clipProject.findUnique({where:{id:projectId},
-    select:{workspaceId:true,status:true,deletedAt:true,uploadId:true,settings:true}})
+    select:{workspaceId:true,status:true,deletedAt:true,uploadId:true,settings:true,
+      rangeStartMs:true,rangeEndMs:true,title:true}})
   if(!p||p.deletedAt||p.status!=='READY'||!p.uploadId)return null
   const settings=asSettings(p.settings)
   const mode=settings.autoAgentClipMode
+  // Regular upload clipper: any auto-agent mode starts one unified job.
+  // Stream clipping uses startStreamerAgentBatch / startUnifiedClipRun later.
   if(mode!=='clip_moment_v1'&&mode!=='clip_story_v1'&&mode!=='clip_unified_v1')return null
-  if(settings.agentClipBatch)return null
+  if(settings.agentClipBatch||settings.unifiedClipRunId)return null
   const value=Number(settings.autoAgentClipSeconds)
-  const seconds=(value===30||value===90?value:60) as 30|60|90
+  const rangeMs:[number,number]=[p.rangeStartMs,p.rangeEndMs]
+  if(!(rangeMs[1]-rangeMs[0]>=15_000))return null
   try{
-    return await startStreamerAgentBatch(p.workspaceId,projectId,mode,seconds,
-      {onlyIfAbsent:true})
+    const run=await startUnifiedClipRun(p.workspaceId,{
+      source:{
+        sourceId:'uploaded_recording',kind:'upload',projectId,
+        rangeMs,durationMs:rangeMs[1]-rangeMs[0],title:p.title,
+      },
+      targetLengthS:storyTargetFromAgentSeconds(value),
+    })
+    const saved=await prisma.$executeRaw`
+      UPDATE clip_projects
+      SET settings=jsonb_set(COALESCE(settings,'{}'::jsonb),'{unifiedClipRunId}',
+        ${JSON.stringify(run.id)}::jsonb),
+          "updatedAt"=NOW()
+      WHERE id=${projectId}
+        AND (settings->'unifiedClipRunId') IS NULL
+        AND (settings->'agentClipBatch') IS NULL
+    `
+    if(saved!==1)return null
+    return run
   }catch(error){
     const reason=String((error as Error).message)
-    if(reason==='agent_clip_batch_already_exists')return null
+    if(reason==='agent_clip_batch_already_exists'||reason==='ai_producer_agent_run_in_progress')return null
     console.error('[clipper:agent] auto_start_failed',{projectId,reason})
-    // Never overwrite an independently started batch or newer settings.
     await prisma.$executeRaw`
       UPDATE clip_projects
       SET settings=jsonb_set(COALESCE(settings,'{}'::jsonb),'{autoAgentClipError}',
         ${JSON.stringify(reason.slice(0,200))}::jsonb)
-      WHERE id=${projectId} AND (settings->'agentClipBatch') IS NULL
+      WHERE id=${projectId}
+        AND (settings->'unifiedClipRunId') IS NULL
+        AND (settings->'agentClipBatch') IS NULL
     `.catch(()=>null)
     return null
   }
@@ -162,18 +185,21 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
     })
     if(prepared?.status==='READY'&&prepared.uploadId){
       try{
-        const run=await createAiProducerAgentRun(p.workspaceId,null,{
+        const run=next.mode==='clip_unified_v1'
+          ? await startUnifiedClipRun(p.workspaceId,{
+              source:{sourceId:'stream_recording',kind:'stream',
+                projectId:next.preparedProjectId,rangeMs:[0,prepared.rangeEndMs]},
+              targetLengthS:storyTargetFromAgentSeconds(next.seconds),
+            })
+          : await createAiProducerAgentRun(p.workspaceId,null,{
           sources:[{sourceId:'stream_recording',kind:'stream',
             projectId:next.preparedProjectId,rangeMs:[0,prepared.rangeEndMs]}],
           outputType:'story',storyMode:next.mode,
-          targetLengthS:[Math.max(15,next.seconds-10),
-            Math.min(105,next.seconds+10)],
+          targetLengthS:storyTargetFromAgentSeconds(next.seconds),
           visualEvidenceMode:'visual_audio',exportOnFinish:true,
           instruction:next.mode==='clip_moment_v1'
             ? 'Choose a continuous streamer action with genuine setup and reaction.'
-            : next.mode==='clip_unified_v1'
-              ? 'Find both stitched story clips and continuous 15-30 second moments from the same source. Prefer complete multi-beat stories; use continuous clips to fill in distinct moments.'
-              : 'Create one short narrative from distinct source-grounded beats.',
+            : 'Create one short narrative from distinct source-grounded beats.',
         })
         next.runId=run.id
       }catch(err){
@@ -195,17 +221,21 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
     // Uploaded videos already have real video and transcript; no VOD fetch or
     // STREAM_AGENT_PREPARE job is necessary. Use the same specialist run.
     try{
-      const run=await createAiProducerAgentRun(p.workspaceId,null,{
+      const run=next.mode==='clip_unified_v1'
+        ? await startUnifiedClipRun(p.workspaceId,{
+            source:{sourceId:'uploaded_recording',kind:'upload',projectId,
+              rangeMs:[start,end]},
+            targetLengthS:storyTargetFromAgentSeconds(next.seconds),
+          })
+        : await createAiProducerAgentRun(p.workspaceId,null,{
         sources:[{sourceId:'uploaded_recording',kind:'upload',projectId,
           rangeMs:[start,end]}],
         outputType:'story',storyMode:next.mode,
-        targetLengthS:[Math.max(15,next.seconds-10),Math.min(105,next.seconds+10)],
+        targetLengthS:storyTargetFromAgentSeconds(next.seconds),
         visualEvidenceMode:'visual_audio',exportOnFinish:true,
         instruction:next.mode==='clip_moment_v1'
           ? 'Choose one genuine continuous moment with setup, action and reaction.'
-          : next.mode==='clip_unified_v1'
-            ? 'Find both stitched story clips and continuous 15-30 second moments from the same source. Prefer complete multi-beat stories; use continuous clips to fill in distinct moments.'
-            : 'Create one coherent narrative from distinct original source beats.',
+          : 'Create one coherent narrative from distinct original source beats.',
       })
       next.runId=run.id
     }catch(err){

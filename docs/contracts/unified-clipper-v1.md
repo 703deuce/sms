@@ -46,6 +46,13 @@ Legacy `clip_moment_v1` and `clip_story_v1` remain accepted so older clients do 
 
 The job is a single `aiProducerAgentRun`. It is not two runs and not two worker jobs. Both candidate passes run inside that one job, on the same transcript, before the merge.
 
+### Upload first, stream later
+
+Regular **upload** clipping is wired to this contract now. After a PROCESS_PROJECT job marks an upload project READY, `maybeAutoStartUploadAgentBatch` starts **one** unified job on the project's full source range via `startUnifiedClipRun` (see `new-app/lib/server/ai-producer-agent/unified-clip-run.ts`). It does not start a per-window streamer batch and does not honor a Story-vs-continuous mode choice.
+
+Stream clipping (Twitch/Kick) is not switched over as the default yet. The same `startUnifiedClipRun` entry point already accepts `kind: 'stream'` (including a prepared window project) so stream can call it later without a second API.
+
+
 Job states are the existing producer-run states: `queued` → `running` (or `planning` / `applying`) → `done` | `failed` | `capped` | `canceled`. Frontend polls `GET /api/ai-producer-agent/runs/:id` and the results list below.
 
 ## Results
