@@ -2,6 +2,7 @@ import { createId } from '@/lib/supabase/id'
 import { assembleChosenOption, ingestSources, prepareFromReadyYoutubeSources, type YoutubeVideoPipelineDeps } from '@/lib/youtube-video/pipeline'
 import { YoutubeVideoError } from '@/lib/youtube-video/errors'
 import { traceYoutubeRunStep, youtubeRunEvent } from '@/lib/youtube-video/step-log'
+import { ytLog, ytErrorCode } from '@/lib/youtube-video/pipeline/yt-audit'
 import type { YoutubeVideoRunRecord, YoutubeVideoRunStore } from '@/lib/youtube-video/run-store'
 import { requestHash, resolveIdempotencyKey, validateCreateInput } from '@/lib/youtube-video/request'
 import type {
@@ -120,12 +121,13 @@ async function advanceRun(
 ): Promise<YoutubeVideoRunRecord> {
   if (record.status === 'running' && record.stage === 'rendering') return advanceRender(record, deps)
   if (['ready', 'failed', 'canceled', 'awaiting_choice'].includes(record.status) || record.chosenOptionId) return record
-  const staleBefore = new Date(Date.now() - STALE_PLANNING_MS).toISOString()
+  const staleBefore = new Date(Date.now() - (deps.pipeline.planLongForm ? 10 * 60_000 : STALE_PLANNING_MS)).toISOString()
+  const importStaleBefore = new Date(Date.now() - STALE_PLANNING_MS).toISOString()
   if (record.status === 'running' && record.stage === 'planning' && record.updatedAt >= staleBefore) {
     youtubeRunEvent(record.id, 'planning', 'claimed_by_another_request')
     return record
   }
-  if (record.status === 'importing' && !creating && record.updatedAt >= staleBefore) {
+  if (record.status === 'importing' && !creating && record.updatedAt >= importStaleBefore) {
     youtubeRunEvent(record.id, 'importing', 'waiting_for_import')
     return record
   }
@@ -184,9 +186,68 @@ async function advanceRun(
       youtubeRunEvent(current.id, 'planning', 'already_claimed')
       return (await deps.store.get(current.workspaceId, current.id)) ?? current
     }
+    let sharedOptions: YoutubeVideoOption[] | undefined
+    if (deps.pipeline.planLongForm) {
+      let timer: ReturnType<typeof setInterval> | undefined
+      try {
+        youtubeRunEvent(current.id, 'isolated_long_form', 'planning_start', {
+          sourceCount: ingested.length,
+        })
+        if (deps.store.heartbeatPlanning) {
+          timer = setInterval(() => {
+            void deps.store.heartbeatPlanning!(current.workspaceId, current.id)
+              .catch(() => youtubeRunEvent(current.id, 'isolated_long_form', 'heartbeat_error'))
+          }, 20_000)
+        }
+        const progressed = await traceYoutubeRunStep(current.id, 'isolated_long_form',
+          () => deps.pipeline.planLongForm!({
+            runId: current.id, workspaceId: current.workspaceId,
+            createdById: current.createdById,
+            instruction: current.instruction, sources: ingested,
+            checkpoint: current.analysisState ?? null,
+            save: async (checkpoint) => {
+              current = await deps.store.update(current.workspaceId, current.id, {
+                analysisState: checkpoint, status: 'running',
+                stage: 'planning', progressPercent: 55,
+              })
+              youtubeRunEvent(current.id, 'isolated_long_form', 'checkpoint_saved', {
+                sourceCount: checkpoint.finished.length,
+              })
+            },
+          }), { sourceCount: ingested.length })
+        if (!progressed.done) {
+          // Release the claim only AFTER the checkpoint is committed. The next
+          // GET advances the next bounded stage, never requeues the same job.
+          return deps.store.update(current.workspaceId, current.id, {
+            status: 'queued', stage: 'planning', progressPercent: 55,
+          })
+        }
+        sharedOptions = progressed.options
+        youtubeRunEvent(current.id, 'isolated_long_form', 'validated', {
+          optionCount: sharedOptions.length,
+        })
+      } catch (error) {
+        const fallbackCode = ytErrorCode(error)
+        const checkpoint = current.analysisState
+        if (checkpoint) {
+          ytLog(current.id, checkpoint, 'isolated_long_form', 'transcript_only_fallback',
+            { code: fallbackCode })
+          current = await deps.store.update(current.workspaceId, current.id, {
+            analysisState: checkpoint, status: 'running',
+            stage: 'planning', progressPercent: 55,
+          })
+        }
+        youtubeRunEvent(current.id, 'isolated_long_form', 'transcript_only_fallback', {
+          reason: fallbackCode,
+        })
+      } finally {
+        if (timer) clearInterval(timer)
+      }
+    }
     const prepared = await traceYoutubeRunStep(
       current.id, 'planning',
-      () => prepareFromReadyYoutubeSources(ingested, deps.pipeline.proposeOptions),
+      () => prepareFromReadyYoutubeSources(ingested,
+        sharedOptions ? () => sharedOptions : deps.pipeline.proposeOptions),
       { sourceCount: ingested.length, wordCount: ingested.reduce((sum, source) => sum + source.words.length, 0) },
     )
     const planned = await traceYoutubeRunStep(
@@ -296,6 +357,17 @@ export async function chooseYoutubeVideoOption(
         workspaceId, createdById: record.createdById, runId, option, sources: record.ingested,
       }), { sourceCount: record.ingested.length })
     const result: YoutubeVideoResult = await traceYoutubeRunStep(runId, 'applying', () => assembleChosenOption(option, written))
+    if (record.analysisState) {
+      result.analysisAudit = {
+        steps: record.analysisState.steps,
+        windows: record.analysisState.finished.map(window => ({
+          sourceIndex: window.sourceIndex, startMs: window.startMs, endMs: window.endMs,
+          acceptedCuts: window.cuts.map(cut => ({
+            sourceId: cut.sourceId, startMs: cut.startMs, endMs: cut.endMs,
+          })), rejectedCuts: window.rejected,
+        })),
+      }
+    }
     if (written.renderId && deps.resolveRender) {
       // The renderer owns the real output. Do not claim video READY while it is
       // QUEUED / RENDERING and no signed MP4 URL exists yet.
