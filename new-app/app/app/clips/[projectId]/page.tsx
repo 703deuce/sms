@@ -61,21 +61,30 @@ export default async function ClipProjectPage({
     projectP,
     // Upload duration is already selected by projectP; avoid a redundant DB read.
     projectP.then((p) => p?.upload ?? null),
-    projectP.then((p) => (p ? prisma.streamVod.findUnique({ where: { projectId: p.id } }) : null)),
+    projectP.then(async (p) => {
+      if (!p) return null
+      const started = Date.now()
+      const vod = await prisma.streamVod.findUnique({
+        where: { projectId: p.id },
+        select: {
+          id: true, platform: true, title: true, category: true, url: true,
+          chatSource: true, chatMessages: true, sourceDeletedAt: true,
+          sourceType: true, state: true,
+        },
+      })
+      console.info('[page:timing]', { path: '/app/clips/[projectId]', query: 'stream_vod', elapsedMs: Date.now() - started, rows: vod ? 1 : 0 })
+      return vod
+    }),
     projectP.then(async (p) => {
       if (!p) return null
       if (p.status === 'READY') {
-        return listProjectClips(workspaceId, p.id, 'score', {
-          ...listOpts,
-          project: {
-            settings: p.settings,
-            transcriptKey: p.transcriptKey,
-            upload: p.upload ? { storageDriver: p.upload.storageDriver } : null,
-          },
-        })
+        console.info('[page:timing]', { path: '/app/clips/[projectId]', query: 'ready_clip_urls_deferred', elapsedMs: 0, rows: 0 })
+        return null
       }
       if (p.status === 'FAILED') {
+        const started = Date.now()
         const n = await prisma.clip.count({ where: { projectId: p.id, deletedAt: null } })
+        console.info('[page:timing]', { path: '/app/clips/[projectId]', query: 'failed_clip_count', elapsedMs: Date.now() - started, rows: n })
         if (n > 0) {
           return listProjectClips(workspaceId, p.id, 'score', {
             ...listOpts,
@@ -90,10 +99,20 @@ export default async function ClipProjectPage({
       return null
     }),
     projectP.then((p) =>
-      p ? resolveViewOnFullVideoUrl(workspaceId, p.id, p.settings, p.uploadId) : Promise.resolve(null),
+      p ? (async () => {
+        const started = Date.now()
+        const url = await resolveViewOnFullVideoUrl(workspaceId, p.id, p.settings, p.uploadId, p.createdAt)
+        console.info('[page:timing]', { path: '/app/clips/[projectId]', query: 'view_on_full_video', elapsedMs: Date.now() - started, rows: url ? 1 : 0 })
+        return url
+      })() : Promise.resolve(null),
     ),
     projectP.then((p) =>
-      p && !['READY', 'FAILED', 'CANCELED'].includes(p.status) ? getProjectStatus(workspaceId, p.id) : Promise.resolve(null),
+      p && !['READY', 'FAILED', 'CANCELED'].includes(p.status) ? (async () => {
+        const started = Date.now()
+        const status = await getProjectStatus(workspaceId, p.id)
+        console.info('[page:timing]', { path: '/app/clips/[projectId]', query: 'live_status', elapsedMs: Date.now() - started, rows: status ? 1 : 0 })
+        return status
+      })() : Promise.resolve(null),
     ),
   ])
   console.info('[page:timing]', {

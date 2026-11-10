@@ -12,11 +12,8 @@ import { StreamerUsageMeter } from '@/components/streamer/usage-meter'
 import { StreamerLiveComingSoon } from '@/components/streamer/streamer-live-coming-soon'
 import { streamerLiveRealtimeEnabled, streamerPublicFlags } from '@/lib/server/streamer/env'
 import { Radio } from 'lucide-react'
-import { listStreamerHubProjectClips } from '../../../lib/server/clips/clips'
 import type { StreamerVodRow } from '../../../lib/server/streamer/vod-list'
 import { StreamerUnifiedResults } from '../../../components/streamer/streamer-unified-results'
-
-type ProjectClipList = Awaited<ReturnType<typeof listStreamerHubProjectClips>>
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Streamer · Clips' }
@@ -32,10 +29,9 @@ export default async function StreamerHubPage() {
   ])
   console.info('[page:timing]', { path: '/app/streamer', query: 'vods_usage_channels', elapsedMs: Date.now() - queryStart, rows: vods.length })
   const vodRows: StreamerVodRow[] = vods
-  const clipIds: string[] = vodRows
-    .filter((v: StreamerVodRow) => v.status === 'READY' || v.status === 'FAILED')
-    .map((v: StreamerVodRow) => v.projectId)
-  const streamClips: ProjectClipList = await listStreamerHubProjectClips(workspaceId, clipIds)
+  // Sign clips only when the grid mounts in the browser. The VOD list and
+  // existing clip ranking remain unchanged, but SSR no longer waits on S3 URLs.
+  console.info('[page:timing]', { path: '/app/streamer', query: 'clip_url_signing_deferred', elapsedMs: 0, rows: 0 })
   const processingVods: StreamerVodRow[] = vodRows.filter(
     (v: StreamerVodRow) => v.status !== 'READY' && v.status !== 'FAILED' && v.status !== 'CANCELED',
   )
@@ -92,16 +88,17 @@ export default async function StreamerHubPage() {
             <StreamerVodList rows={vods} />
           </div>
           <StreamerUnifiedResults
-            clips={streamClips}
+            clips={[]}
+            loadAfterPaint
             fallbackProjectId={vods[0]?.projectId ?? ''}
             processing={processingVods.length > 0}
-            failed={Boolean(failedVod) && streamClips.length === 0}
+            failed={Boolean(failedVod)}
             error={failedVod?.error ?? null}
             retryProjectId={failedVod?.projectId ?? null}
             etaSec={processingVods[0]?.etaSec ?? 0}
             stage={processingVods[0]?.stage ?? null}
-            clipsReady={streamClips.length}
-            clipsTotal={Math.max(streamClips.length, processingVods.reduce((n: number, v: StreamerVodRow) => n + (v.chunkTotal ?? 0), 0))}
+            clipsReady={0}
+            clipsTotal={Math.max(0, processingVods.reduce((n: number, v: StreamerVodRow) => n + (v.chunkTotal ?? 0), 0))}
           />
         </div>
       </div>

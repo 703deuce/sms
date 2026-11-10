@@ -175,6 +175,7 @@ function mapStreamerVodRow(
 
 export async function listStreamerVodsForWorkspace(workspaceId: string): Promise<StreamerVodRow[]> {
   const prisma = getPrisma()
+  const queryStarted = Date.now()
   const rows = await prisma.streamVod.findMany({
     where: { workspaceId },
     orderBy: { createdAt: 'desc' },
@@ -205,13 +206,17 @@ export async function listStreamerVodsForWorkspace(workspaceId: string): Promise
       },
     },
   })
+  console.info('[page:timing]', { path: '/app/streamer', query: 'vod_rows', elapsedMs: Date.now() - queryStarted, rows: rows.length })
   const projectIds = rows.map((r) => r.projectId)
-  const autopullPending = await pendingAutopullProjectIds(projectIds)
+  const relatedStarted = Date.now()
+  const autopullPendingP = pendingAutopullProjectIds(projectIds)
   const clipCounts = await prisma.clip.groupBy({
     by: ['projectId'],
     where: { projectId: { in: projectIds }, deletedAt: null },
     _count: { _all: true },
   })
+  const autopullPending = await autopullPendingP
+  console.info('[page:timing]', { path: '/app/streamer', query: 'vod_counts_and_pending', elapsedMs: Date.now() - relatedStarted, rows: clipCounts.length, pending: autopullPending.size })
   const countByProject = new Map(clipCounts.map((c) => [c.projectId, c._count._all]))
   return rows.map((v) => {
     const st = (v.state ?? {}) as Record<string, unknown>

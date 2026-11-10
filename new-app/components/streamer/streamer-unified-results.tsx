@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { clipsFetch } from '../../lib/clips-api'
 import { UnifiedClipResults } from '../clips/unified-clip-results'
 import {
   adaptStreamerClipsForUnifiedGrid,
@@ -20,6 +21,7 @@ export function StreamerUnifiedResults({
   stage = null,
   clipsReady = 0,
   clipsTotal = 0,
+  loadAfterPaint = false,
 }: {
   /** Existing list-project-clips rows (or already-adapted unified clips). */
   clips: unknown[]
@@ -33,11 +35,33 @@ export function StreamerUnifiedResults({
   stage?: string | null
   clipsReady?: number
   clipsTotal?: number
+  loadAfterPaint?: boolean
 }) {
-  const unified = useMemo(() => adaptStreamerClipsForUnifiedGrid(clips), [clips])
+  const [loaded, setLoaded] = useState<unknown[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!loadAfterPaint) return
+    let active = true
+    const started = Date.now()
+    console.info('[page:timing]', { path: '/app/streamer', query: 'client_clip_load_start' })
+    void clipsFetch<{ clips: unknown[] }>('/api/streamer/clips-hub')
+      .then((data) => {
+        if (!active) return
+        setLoaded(data.clips)
+        console.info('[page:timing]', { path: '/app/streamer', query: 'client_clip_load_done', elapsedMs: Date.now() - started, rows: data.clips.length })
+      })
+      .catch((err) => {
+        if (!active) return
+        console.warn('[page:timing]', { path: '/app/streamer', query: 'client_clip_load_failed', elapsedMs: Date.now() - started, error: String(err) })
+        setLoadError('Could not load your clips. Refresh this page to try again.')
+      })
+    return () => { active = false }
+  }, [loadAfterPaint])
+  const pending = loadAfterPaint && loaded === null && loadError === null
+  const unified = useMemo(() => adaptStreamerClipsForUnifiedGrid(loadAfterPaint ? loaded ?? [] : clips), [clips, loadAfterPaint, loaded])
   const [typeFilter, setTypeFilter] = useState<UnifiedClipTypeFilter>('all')
   const [sort, setSort] = useState<UnifiedClipSort>('score')
-  const status = streamerUnifiedGridStatus({
+  const status = loadError ? 'error' : pending ? 'loading' : streamerUnifiedGridStatus({
     clipCount: unified.length,
     processing,
     failed,
@@ -54,7 +78,7 @@ export function StreamerUnifiedResults({
         onTypeFilterChange={setTypeFilter}
         onSortChange={setSort}
         status={status}
-        error={error}
+        error={loadError ?? error}
         onRetry={
           retryProjectId
             ? () => {
@@ -65,7 +89,7 @@ export function StreamerUnifiedResults({
         isStreamer
         etaSec={etaSec}
         stage={stage}
-        clipsReady={clipsReady}
+        clipsReady={Math.max(clipsReady, unified.length)}
         clipsTotal={clipsTotal}
       />
     </div>

@@ -1,6 +1,5 @@
 import 'server-only'
 
-import { isFullVideoSettings } from '@/lib/clips/full-video'
 import { clipProjectSettingsSchema } from '@/lib/clips/settings'
 import { getPrisma } from '@/lib/server/db'
 
@@ -10,6 +9,7 @@ export async function resolveViewOnFullVideoUrl(
   foundProjectId: string,
   projectSettings: unknown,
   uploadId: string | null,
+  foundProjectCreatedAt?: Date,
 ): Promise<string | null> {
   const parsed = clipProjectSettingsSchema.safeParse(projectSettings)
   let fvId = parsed.success ? parsed.data.fromFullVideoProjectId : null
@@ -22,19 +22,22 @@ export async function resolveViewOnFullVideoUrl(
     if (!linked) fvId = null
   }
   if (!fvId && uploadId) {
-    const [candidates, foundCreated] = await Promise.all([
-      prisma.clipProject.findMany({
-        where: { workspaceId, uploadId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, settings: true, createdAt: true },
-      }),
-      prisma.clipProject.findUnique({
-        where: { id: foundProjectId },
+    const foundCreatedAt = foundProjectCreatedAt ??
+      (await prisma.clipProject.findFirst({
+        where: { id: foundProjectId, workspaceId },
         select: { createdAt: true },
-      }),
-    ])
-    const foundCreatedAt = foundCreated?.createdAt ?? new Date()
-    const fv = candidates.find((p) => isFullVideoSettings(p.settings) && p.createdAt < foundCreatedAt)
+      }))?.createdAt ?? new Date()
+    const started = Date.now()
+    const fv = await prisma.clipProject.findFirst({
+      where: {
+        workspaceId, uploadId, deletedAt: null,
+        createdAt: { lt: foundCreatedAt },
+        settings: { path: ['fullVideo'], equals: true },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    console.info('[page:timing]', { path: '/app/clips/[projectId]', query: 'full_video_indexed_lookup', elapsedMs: Date.now() - started, rows: fv ? 1 : 0 })
     fvId = fv?.id ?? null
   }
   if (!fvId) return null

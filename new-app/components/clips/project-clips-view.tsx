@@ -328,7 +328,7 @@ export function ProjectClipsView({
   })
 
   useEffect(() => {
-    if (readyFromServer) return
+    if (readyFromServer || initialStatus === 'READY') return
     let stop = false
     let failStreak = 0
     const pollMs = isStreamer ? 2500 : 4000
@@ -397,7 +397,7 @@ export function ProjectClipsView({
     return () => {
       stop = true
     }
-  }, [projectId, hydrateReady, readyFromServer, isStreamer, refreshClipsList])
+  }, [projectId, hydrateReady, readyFromServer, initialStatus, isStreamer, refreshClipsList])
 
   const failureCopy = describeClipProjectFailure({
     status,
