@@ -8,7 +8,7 @@ import { CLIPS_EDITOR_MEDIA_TTL_SEC, createCachedSignedDownloadUrl } from '@/lib
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 import { loadProjectSourceWords } from '@/lib/server/clips/transcript'
-import { enqueueRenderClip } from '@/lib/server/clips/renders'
+import { enqueueRenderClip, getRenderForWorkspace } from '@/lib/server/clips/renders'
 import type { AiCaptionsPipelineDeps, ResolvedCaptionsSource } from '@/lib/ai-captions/pipeline'
 import type { AiCaptionsPrefs, AiCaptionsRunRecord, AiCaptionsRunStore } from '@/lib/ai-captions/run-store'
 import type { SavedCaptionStyle } from '@/lib/ai-captions/styles'
@@ -255,7 +255,15 @@ const productionPipeline = (): AiCaptionsPipelineDeps => ({
       where: { id: args.clipId },
       select: { projectId: true, editsSaveVersion: true },
     })
-    const res = await writeClipEditsOrThrow(args.clipId, args.bounds, clip.editsSaveVersion, () => args.edits)
+    const previous = await prisma.clip.findUniqueOrThrow({ where: { id: args.clipId }, select: { edits: true } })
+    const current = normalizeEdits(previous.edits, args.bounds)
+    const merged: ClipEditsV2 = {
+      ...current,
+      captions: { ...current.captions, ...args.edits.captions },
+      captionLines: current.captionLines?.length ? current.captionLines : args.edits.captionLines,
+    }
+    console.info('[ai-captions:style] preserving_existing_clip_edits', { clipId: args.clipId, version: clip.editsSaveVersion })
+    const res = await writeClipEditsOrThrow(args.clipId, args.bounds, clip.editsSaveVersion, () => merged)
     return { clipId: args.clipId, projectId: clip.projectId, editsSaveVersion: res.editsSaveVersion }
   },
   async exportMp4(args) {
@@ -276,7 +284,28 @@ const productionPipeline = (): AiCaptionsPipelineDeps => ({
       previewKey: clip.previewKey,
       title: clip.title,
     })
-    return { downloadUrl: queued.downloadUrl }
+    console.info('[ai-captions:export] enqueued', { clipId: args.clipId, renderId: queued.render.id, cached: Boolean(queued.downloadUrl) })
+    return { downloadUrl: queued.downloadUrl, renderId: queued.render.id }
+  },
+  async pollExport(workspaceId, renderId) {
+    console.info('[ai-captions:export] poll_begin', { workspaceId, renderId })
+    const render = await getRenderForWorkspace(workspaceId, renderId)
+    if (!render) return { status: 'failed', downloadUrl: null, error: 'The export could not be found. Please retry.' }
+    if (render.status === 'FAILED') return { status: 'failed', downloadUrl: null, error: 'The video could not be exported. Please retry.' }
+    if (render.status !== 'READY' || !render.outputKey) return { status: 'processing', downloadUrl: null }
+    const downloadUrl = await createCachedSignedDownloadUrl(getClipStorage(), render.outputKey, {
+      downloadFilename: render.filename || 'captions.mp4',
+      versionHint: `render:${renderId}`,
+    })
+    console.info('[ai-captions:export] poll_ready', { renderId })
+    return { status: 'ready', downloadUrl }
+  },
+  async getCaptionLines(workspaceId, clipId) {
+    console.info('[ai-captions:subtitles] load_clip_lines', { workspaceId, clipId })
+    const clip = await getPrisma().clip.findFirst({ where: { id: clipId, workspaceId, deletedAt: null }, select: { edits: true, startMs: true, endMs: true } })
+    if (!clip) throw new AiCaptionsError('run_not_found', 'The caption clip was not found.', 404)
+    const edits = normalizeEdits(clip.edits, { clipStartMs: clip.startMs, clipEndMs: clip.endMs })
+    return (edits.captionLines ?? []).map(line => ({ id: line.id, text: line.text, startMs: line.startMs, endMs: line.endMs }))
   },
   async listSavedStyles(workspaceId): Promise<SavedCaptionStyle[]> {
     const prisma = getPrisma()

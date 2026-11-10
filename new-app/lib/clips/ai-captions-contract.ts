@@ -80,6 +80,7 @@ export type AiCaptionsResult = {
   playbackUrl: string | null
   thumbnailUrl: string | null
   downloadUrl: string | null
+  renderId?: string | null
   srtUrl: string
 }
 
