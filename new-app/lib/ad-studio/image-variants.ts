@@ -15,6 +15,7 @@ export function adVariantPrompt(input: AdProductInput, index: number): string {
     `Approved claims only: ${input.sellingPoints.join('; ') || 'the product name'}.`,
     input.brandNotes ? `Brand notes: ${input.brandNotes}.` : '',
     'Use the supplied reference photo when available. Preserve actual product, logos, packaging and colors.',
+    input.imageAssetIds[0] ? 'keep the exact product from the reference image: same shape, colors, materials and branding; do not add or invent logos or text' : '',
     'Do not invent prices, features, discounts, claims, endorsements or new branding.',
     `Visual variation ${index + 1} of 3.`,
   ]
