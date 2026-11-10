@@ -11,7 +11,32 @@ import { UnifiedClipRunNote } from '../clips/unified-clip-run-note'
 
 export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'
 type FinishedClip={projectId:string;clipId:string;startMin:number}
+type AgentRunProgress={runId:string;status:string;stage:string;elapsedSec:number;etaSec:number}
 const WINDOW_MS=MAX_AGENT_SOURCE_WINDOW_MS
+
+function formatAgentTime(seconds:number){
+  const total=Math.max(0,Math.round(seconds))
+  const minutes=Math.floor(total/60)
+  const secs=total%60
+  return minutes>0?`${minutes}m ${String(secs).padStart(2,'0')}s`:`${secs}s`
+}
+function estimateAgentTotalSec(windowMs:number){
+  const sourceSec=Math.max(15,windowMs/1000)
+  return Math.min(20*60,Math.max(6*60,Math.round(180+sourceSec*3)))
+}
+function agentStageLabel(phase?:string|null,lastTool?:string|null){
+  const tool=(lastTool??'').toLowerCase()
+  if(phase==='publishing'||tool.includes('publish'))return 'Publishing clips'
+  if(phase==='finish'||tool.includes('ranked_outputs'))return 'Finishing'
+  if(tool.includes('motion'))return 'Motion graphics'
+  if(tool.includes('export'))return 'Queuing export'
+  if(tool.includes('validate')||tool.includes('review')||tool.includes('qa'))return 'QA review'
+  if(tool.includes('rough_cut')||tool.includes('footage')||tool.includes('story'))return 'Editing clips'
+  if(tool.includes('candidate')||tool.includes('find_moments'))return 'Finding clips'
+  if(phase==='apply')return 'Applying edits'
+  if(phase==='plan')return 'Editing clips'
+  return 'Analyzing source'
+}
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms))
 async function requestJson(url:string,opts?:RequestInit){
   const response=await fetch(url,{cache:'no-store',...opts})
@@ -39,6 +64,8 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
   const canceled=useRef(false)
   const manualRunning=useRef(false)
   const [batchId,setBatchId]=useState<string|null>(null)
+  const [agentProgress,setAgentProgress]=useState<AgentRunProgress|null>(null)
+  const progressLogRef=useRef<{stage:string;bucket:number}|null>(null)
   useEffect(()=>()=>{canceled.current=true},[])
   // The entire-VOD batch is durable: project settings and worker jobs survive
   // refresh, logout and browser closure. Reattach to it when reopening the page.
@@ -110,11 +137,27 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
           : 'Build one compelling source-grounded short story from multiple real passages.',
       }),
     }) as {runId:string}
+    console.info('[clips:agent-progress]',{action:'run_started',runId:started.runId,sourceWindowMs:endMs-startMs})
     for(let i=0;i<600&&!canceled.current;i++){
       const data=await requestJson('/api/ai-producer-agent/runs/'+
         encodeURIComponent(started.runId)) as {run:{
-          status:string;error?:string|null;resultProjectId?:string|null;resultClipId?:string|null}}
+          status:string;phase?:string|null;createdAt?:string|null;error?:string|null;
+          resultProjectId?:string|null;resultClipId?:string|null;
+          steps?:Array<{tool?:string|null;phase?:string|null}>}}
       const run=data.run
+      const lastStep=run.steps?.length?run.steps[run.steps.length-1]:undefined
+      const elapsedSec=run.createdAt&&Number.isFinite(Date.parse(run.createdAt))
+        ?Math.max(0,Math.floor((Date.now()-Date.parse(run.createdAt))/1000))
+        :i*3
+      const stage=agentStageLabel(run.phase,lastStep?.tool)
+      const etaSec=Math.max(0,estimateAgentTotalSec(endMs-startMs)-elapsedSec)
+      const nextProgress={runId:started.runId,status:run.status,stage,elapsedSec,etaSec}
+      setAgentProgress(nextProgress)
+      const bucket=Math.floor(elapsedSec/30)
+      if(progressLogRef.current?.stage!==stage||progressLogRef.current?.bucket!==bucket){
+        console.info('[clips:agent-progress]',nextProgress)
+        progressLogRef.current={stage,bucket}
+      }
       setStatus('Agent run: '+run.status)
       if(['ready','done'].includes(run.status)){
         if(!run.resultProjectId||!run.resultClipId)
@@ -132,7 +175,9 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
   async function create(){
     if(running)return
     canceled.current=false
-    setRunning(true);setCompleted([]);setErrors([])
+    setRunning(true);setCompleted([]);setErrors([]);setAgentProgress(null)
+    progressLogRef.current=null
+    console.info('[clips:agent-progress]',{action:'create_begin',projectId,allWindows,seconds})
     let durableStarted=false
     try{
       if(allWindows){
@@ -161,7 +206,13 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         }
       }
       if(!canceled.current)setStatus('Complete')
-    }finally{manualRunning.current=false;if(!durableStarted)setRunning(false)}
+    }finally{
+      manualRunning.current=false
+      if(!durableStarted){
+        console.info('[clips:agent-progress]',{action:'create_end',projectId,canceled:canceled.current})
+        setRunning(false)
+      }
+    }
   }
 
   async function cancelBatch(){
@@ -225,7 +276,11 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
       {allWindows?' This full-VOD batch continues after you close the page.':''}
     </p>
     {!ready?<p className="mt-2 text-xs">Finish processing the source before generating agent clips.</p>:null}
-    {running?<p className="mt-2 text-xs" role="status">{status}</p>:null}
+    {running?<p className="mt-2 text-xs" role="status">
+      {agentProgress
+        ? `Agent run: ${agentProgress.status} · ${agentProgress.stage} · elapsed ${formatAgentTime(agentProgress.elapsedSec)} · ETA ~${formatAgentTime(agentProgress.etaSec)}`
+        : status}
+    </p>:null}
     {completed.length?<div className="mt-3 flex flex-wrap gap-2">
       {completed.map((clip,i)=>
         <Link key={clip.projectId+clip.clipId}
