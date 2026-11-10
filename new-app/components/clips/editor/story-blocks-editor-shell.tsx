@@ -16,7 +16,7 @@ import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-filmstrip-frames'
 import { editorMediaLoadFallbacks } from '@/lib/server/clips/editor-clip-media'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
-import { displayDurationMs, displayPositionMs, normalizeSectionOrder, wordDisplayText, type ClipEditsV2 } from '@/lib/clips/edits'
+import { displayDurationMs, displayPositionMs, wordDisplayText, type ClipEditsV2 } from '@/lib/clips/edits'
 import { outputToSource, outputToSourceEnd, timebaseFor, videoLaneSegments, type Timebase } from '@/lib/clips/editor/clip-timeline'
 import { deleteRange, moveVideoSegment } from '@/lib/clips/editor/timeline-edit-ops'
 import { videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
@@ -122,10 +122,10 @@ export function StoryBlocksEditorShell(props: Props) {
   const { words, wordsLoading, reloadWords } = useEditorWords(clipId, baseWords, bounds, edits.trim)
   useEffect(() => { syncWordsForCuts(words) }, [words, syncWordsForCuts])
   useEffect(() => {
-    console.info('[editor:story-mode] route-hydrate', { projectId, clipId, saveVersion: props.editsSaveVersion })
+    console.log('[editor:story-mode] route-hydrate', { projectId, clipId, saveVersion: props.editsSaveVersion })
   }, [projectId, clipId, props.editsSaveVersion])
   useEffect(() => {
-    console.info('[editor:story-mode] save-state', { projectId, clipId, state: saveState })
+    console.log('[editor:story-mode] save-state', { projectId, clipId, state: saveState })
   }, [projectId, clipId, saveState])
 
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
@@ -136,7 +136,7 @@ export function StoryBlocksEditorShell(props: Props) {
   const selectedIndex = selected ? scenes.findIndex((s) => s.id === selected.id) : -1
   useEffect(() => { setLabelDraft(selected?.label ?? '') }, [selected?.id, selected?.label])
   useEffect(() => {
-    console.info('[editor:story-mode] scenes-built', { projectId, clipId, count: scenes.length, outputMs: tb.durationMs })
+    console.log('[editor:story-mode] scenes-built', { projectId, clipId, count: scenes.length, outputMs: tb.durationMs })
   }, [projectId, clipId, scenes.length, tb.durationMs])
   const framesAt = useMemo(() => scenes.map((s) => Math.max(0, outputToSource(tb, s.startMs + Math.min(150, (s.endMs - s.startMs) / 2)) - offset)), [scenes, tb, offset])
   const framesKey = framesAt.join(',')
@@ -146,7 +146,7 @@ export function StoryBlocksEditorShell(props: Props) {
   }, [extractor, framesKey, framesAt])
   const frameCount = extractor ? framesAt.filter((f) => !!extractor.get(f, 1000)).length : 0
   useEffect(() => {
-    console.info('[editor:story-mode] frames-state', { projectId, clipId, available: frameCount, total: framesAt.length, failed: extractor?.failed ?? false })
+    console.log('[editor:story-mode] frames-state', { projectId, clipId, available: frameCount, total: framesAt.length, failed: extractor?.failed ?? false })
   }, [projectId, clipId, frameCount, framesAt.length, extractor?.failed])
 
   const simpleEdlReason = edits.inserts?.length ? 'Scene mutations with inserted clips require the full editor.'
@@ -164,7 +164,7 @@ export function StoryBlocksEditorShell(props: Props) {
     setPlayheadOut(s.startMs)
     const v = videoRef.current
     if (v) v.currentTime = videoTimeFromSourceMs(s.sourceStartMs, offset)
-    console.info('[editor:story-mode] scene-selected', { projectId, clipId, startMs: s.startMs, endMs: s.endMs })
+    console.log('[editor:story-mode] scene-selected', { projectId, clipId, startMs: s.startMs, endMs: s.endMs })
   }, [projectId, clipId, offset])
   const onMediaError = useCallback(() => {
     if (media?.url) tried.current.add(media.url)
@@ -172,7 +172,7 @@ export function StoryBlocksEditorShell(props: Props) {
     if (next) {
       tried.current.add(next.url)
       setMedia(next)
-      console.info('[editor:story-mode] media-fallback', { projectId, clipId, found: true })
+      console.log('[editor:story-mode] media-fallback', { projectId, clipId, found: true })
     } else {
       console.error('[editor:story-mode] media-fallback', { projectId, clipId, found: false })
     }
@@ -187,7 +187,7 @@ export function StoryBlocksEditorShell(props: Props) {
     if (!next) return reportError(action, new Error('The current edit cannot represent that scene operation safely.'))
     setMutationError(null)
     setEdits(next)
-    console.info('[editor:story-mode] mutation', { projectId, clipId, action, sceneStartMs: selected?.startMs ?? null })
+    console.log('[editor:story-mode] mutation', { projectId, clipId, action, sceneStartMs: selected?.startMs ?? null })
   }
   const splitScene = () => {
     if (!selected || selected.endMs - selected.startMs < 1200 || (edits.markers?.length ?? 0) >= MAX_MARKERS)
@@ -222,7 +222,7 @@ export function StoryBlocksEditorShell(props: Props) {
       return reportError('reorder', new Error('The section-order normalizer could not preserve this scene move.'))
     commit('reorder-sectionOrder', next)
     setSelectedStart(null)
-    console.info('[editor:story-mode] reorder', { projectId, clipId, from, before })
+    console.log('[editor:story-mode] reorder', { projectId, clipId, from, before })
   }
   const saveLabel = () => {
     if (!selected || !labelDraft.trim() || labelDraft.trim() === selected.label) return
@@ -232,10 +232,10 @@ export function StoryBlocksEditorShell(props: Props) {
     const markers = normalizeMarkers([...(edits.markers ?? []).filter((m) => m.id !== id),
       { id, color: current?.color ?? 'blue', ms: at, label: labelDraft.trim().slice(0, 80), chapter: current?.chapter }])
     commit('scene-label-only', { ...edits, markers })
-    console.info('[editor:story-mode] scope', { projectId, clipId, kind: 'metadata-only', sceneStartMs: at })
+    console.log('[editor:story-mode] scope', { projectId, clipId, kind: 'metadata-only', sceneStartMs: at })
   }
   const openOther = async (target: 'edit' | 'text' | 'templates') => {
-    console.info('[editor:story-mode] handoff-start', { projectId, clipId, target })
+    console.log('[editor:story-mode] handoff-start', { projectId, clipId, target })
     try { await flushSave() } catch {
       reportError('handoff', new Error('Save edits before changing editors'))
       return
@@ -244,7 +244,7 @@ export function StoryBlocksEditorShell(props: Props) {
     const url = target === 'text' ? routes.text(projectId, clipId, query)
       : target === 'templates' ? routes.templateMode(projectId, clipId, query)
         : props.clipperStudio ? routes.studio(projectId, clipId) : routes.edit(projectId, clipId)
-    console.info('[editor:story-mode] handoff-complete', { projectId, clipId, target })
+    console.log('[editor:story-mode] handoff-complete', { projectId, clipId, target })
     window.location.assign(url)
   }
   const stockAttachReason = !selected ? 'Select a scene first.'
@@ -257,7 +257,7 @@ export function StoryBlocksEditorShell(props: Props) {
     if (!selected || stockAttachReason) throw new Error(stockAttachReason ?? 'Select a scene first.')
     const startMs = Math.round(selected.startMs)
     const endMs = Math.round(selected.endMs)
-    console.info('[editor:story-mode] visual-attach-start', { projectId, clipId, startMs, endMs })
+    console.log('[editor:story-mode] visual-attach-start', { projectId, clipId, startMs, endMs })
     try {
       const data = await clipsFetch<{ assetId: string; url?: string; thumbUrl?: string; previewUrl?: string }>(
         '/api/clips/clips/' + clipId + '/broll', {
@@ -266,7 +266,7 @@ export function StoryBlocksEditorShell(props: Props) {
       const id = crypto.randomUUID()
       setBrollMedia((rows) => [...rows, { id, source: 'stock', assetId: data.assetId, startMs, endMs, url: data.url || data.previewUrl || null, thumbUrl: data.thumbUrl }])
       commit('attach-visual-only', { ...edits, broll: [...(edits.broll ?? []), { id, source: 'stock', assetId: data.assetId, startMs, endMs, placement: 'manual' }] })
-      console.info('[editor:story-mode] visual-attach-complete', { projectId, clipId, startMs, endMs, assetId: data.assetId })
+      console.log('[editor:story-mode] visual-attach-complete', { projectId, clipId, startMs, endMs, assetId: data.assetId })
       toast.success('Visual added; original narration preserved')
     } catch (e) { reportError('visual-attach', e); throw e }
   }
@@ -299,9 +299,9 @@ export function StoryBlocksEditorShell(props: Props) {
         <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-medium">Story blocks</span>
         <span className="ml-auto text-xs text-muted-foreground" aria-live="polite">{saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Save failed' : 'Saving…'}</span>
         {saveState === 'error' && <Button variant="outline" size="sm" onClick={() => void flushSave().catch((e) => reportError('save-retry', e))}><RefreshCw className="mr-1 size-3" />Retry</Button>}
-        <Button variant="ghost" size="icon" aria-label="Undo" disabled={!canUndo} onClick={() => { undo(); setSelectedStart(null); console.info('[editor:story-mode] undo', { projectId, clipId }) }}><Undo2 className="size-4" /></Button>
-        <Button variant="ghost" size="icon" aria-label="Redo" disabled={!canRedo} onClick={() => { redo(); setSelectedStart(null); console.info('[editor:story-mode] redo', { projectId, clipId }) }}><Redo2 className="size-4" /></Button>
-        <Button size="sm" variant="outline" onClick={() => { setExportOpen(true); console.info('[editor:story-mode] export-open', { projectId, clipId }) }}><Download className="mr-1 size-4" />Export</Button>
+        <Button variant="ghost" size="icon" aria-label="Undo" disabled={!canUndo} onClick={() => { undo(); setSelectedStart(null); console.log('[editor:story-mode] undo', { projectId, clipId }) }}><Undo2 className="size-4" /></Button>
+        <Button variant="ghost" size="icon" aria-label="Redo" disabled={!canRedo} onClick={() => { redo(); setSelectedStart(null); console.log('[editor:story-mode] redo', { projectId, clipId }) }}><Redo2 className="size-4" /></Button>
+        <Button size="sm" variant="outline" onClick={() => { setExportOpen(true); console.log('[editor:story-mode] export-open', { projectId, clipId }) }}><Download className="mr-1 size-4" />Export</Button>
         <Button variant="outline" size="sm" onClick={() => void openOther('text')}>Text editor</Button>
         <Button variant="outline" size="sm" onClick={() => void openOther('templates')}>Templates</Button>
         <Button size="sm" onClick={() => void openOther('edit')}>Clip editor</Button>
@@ -309,7 +309,7 @@ export function StoryBlocksEditorShell(props: Props) {
       <div className="flex min-h-0 flex-1">
         <nav className="flex w-[76px] shrink-0 flex-col border-r border-border bg-card/50 py-3" aria-label="Story tools">
           {rail.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => {
-            setTab(id); console.info('[editor:story-mode] tool-selected', { projectId, clipId, tool: id })
+            setTab(id); console.log('[editor:story-mode] tool-selected', { projectId, clipId, tool: id })
           }} aria-current={tab === id ? 'page' : undefined} className={'flex flex-col items-center gap-1 px-1 py-3 text-[10px] ' + (tab === id ? 'bg-primary/10 font-semibold text-primary' : 'text-muted-foreground hover:bg-muted')}>
             <Icon className="size-5" />{label}
           </button>)}
@@ -360,7 +360,7 @@ export function StoryBlocksEditorShell(props: Props) {
               <Button variant="outline" disabled={Boolean(stockAttachReason)} title={stockAttachReason ?? undefined} onClick={() => setPickerOpen(true)}>Replace selected visual</Button>
               {stockAttachReason && <p className="text-xs text-muted-foreground">{stockAttachReason}</p>}
               <Button variant="outline" size="sm" onClick={() => setLayoutOpen((v) => !v)} aria-expanded={layoutOpen}>Layout / aspect</Button>
-              {layoutOpen && <LayoutQuickPicker value={edits.layout.mode} edits={edits} facecamLayout={props.facecamLayout} reframeV2Enabled={props.reframeV2Enabled} onPick={(mode, facecam) => { setLayoutMode(mode, facecam); console.info('[editor:story-mode] layout', { projectId, clipId, mode }) }} onAspectChange={(aspect) => { commit('aspect-global', { ...edits, aspectRatio: aspect }) }} />}
+              {layoutOpen && <LayoutQuickPicker value={edits.layout.mode} edits={edits} facecamLayout={props.facecamLayout} reframeV2Enabled={props.reframeV2Enabled} onPick={(mode, facecam) => { setLayoutMode(mode, facecam); console.log('[editor:story-mode] layout', { projectId, clipId, mode }) }} onAspectChange={(aspect) => { commit('aspect-global', { ...edits, aspectRatio: aspect }) }} />}
             </> : tab === 'audio' ? <>
               <p className="text-xs text-muted-foreground">This recording uses its current audio. Changing narration or generating voice cannot be scoped safely from a scene label.</p>
               <Button size="sm" variant="outline" onClick={() => void openOther('edit')}>Open audio tools in clip editor</Button>
@@ -396,7 +396,7 @@ export function StoryBlocksEditorShell(props: Props) {
                 if (scene) setSelectedStart(scene.startMs)
               }
             }} /> :
-              <div className="space-y-3 text-center text-xs text-muted-foreground"><p>Media unavailable. The source edit is preserved.</p><Button size="sm" variant="outline" onClick={() => { tried.current.clear(); setMedia(props.primaryMedia); console.info('[editor:story-mode] media-retry', { projectId, clipId }) }}>Retry media</Button></div>}
+              <div className="space-y-3 text-center text-xs text-muted-foreground"><p>Media unavailable. The source edit is preserved.</p><Button size="sm" variant="outline" onClick={() => { tried.current.clear(); setMedia(props.primaryMedia); console.log('[editor:story-mode] media-retry', { projectId, clipId }) }}>Retry media</Button></div>}
           </div>
           <div className="flex items-center justify-center gap-3 border-t border-border p-2">
             <Button variant="ghost" size="icon" aria-label={playing ? 'Pause' : 'Play'} onClick={() => {
@@ -435,7 +435,7 @@ export function StoryBlocksEditorShell(props: Props) {
       </div>
       <StockBrollPicker open={pickerOpen} onClose={() => setPickerOpen(false)} defaultQuery={selected?.label.split(' ').slice(0, 3).join(' ') ?? ''} clipEndMs={selected?.endMs ?? 0} playheadMs={selected?.startMs ?? 0} onInsert={(id) => attachStock(id)} />
       <ExportDialog clipId={clipId} title={props.initialTitle} edits={edits} words={words} open={exportOpen} onClose={() => setExportOpen(false)} onBeforeExport={async () => {
-        console.info('[editor:story-mode] export-flush', { projectId, clipId })
+        console.log('[editor:story-mode] export-flush', { projectId, clipId })
         await flushSave()
       }} onEdits={setEdits} onAspectChange={(aspect) => commit('export-aspect', { ...edits, aspectRatio: aspect })} layoutMode={edits.layout.mode} onLayoutModeChange={setLayoutMode} facecamLayout={props.facecamLayout} reframeV2Enabled={props.reframeV2Enabled} posterUrl={props.posterUrl} aiMeta={props.aiMeta} fullVideo={props.fullVideo} />
     </div>
