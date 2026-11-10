@@ -8,8 +8,8 @@ export const hrefs = {
   rooms: '/app/rooms',
   record: '/app/record',
   help: '/app/help',
-  aiClips: '/ai-clips',
-  videoEditing: '/video-editing',
+  aiClipper: '/ai-clipper',
+  videoEditor: '/video-editor',
 } as const
 
 export const siteOrigin = 'https://transovo.ai'

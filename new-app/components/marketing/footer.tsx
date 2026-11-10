@@ -7,8 +7,8 @@ const cols = [
     title: 'Product',
     links: [
       { href: hrefs.home, label: 'Home' },
-      { href: hrefs.aiClips, label: 'AI Clips' },
-      { href: hrefs.videoEditing, label: 'Video Editing' },
+      { href: hrefs.aiClipper, label: 'AI Clips' },
+      { href: hrefs.videoEditor, label: 'Video Editing' },
       { href: hrefs.streamer, label: 'Streamer' },
     ],
   },

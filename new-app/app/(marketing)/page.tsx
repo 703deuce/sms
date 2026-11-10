@@ -18,9 +18,6 @@ import { hrefs, siteOrigin } from '../../components/marketing/links'
 import { CaptionBrandMock, ClipsHeroMock, EditorHeroMock } from '../../components/marketing/mocks'
 import { MarketingNav } from '../../components/marketing/nav'
 import { CreditChip, Section } from '../../components/marketing/section'
-import { redirectNonMarketingRoot } from '../../components/marketing/enforce-host'
-
-export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Transovo Clips — AI clipping and a real video editor',
@@ -122,8 +119,7 @@ const moreFeatures: {
   },
 ]
 
-export default async function HomePage() {
-  await redirectNonMarketingRoot()
+export default function HomePage() {
   const jsonLd = faqJsonLd(faqs)
   return (
     <>
@@ -181,13 +177,13 @@ export default async function HomePage() {
         </div>
 
         <Section
-          id="ai-clips"
+          id="ai-clipper"
           eyebrow="AI Clips"
           title="The clipper comes first."
           description="Import a long episode, stitch a Story from non-contiguous moments, and review why each clip was chosen. Layouts include auto, speaker-follow, split, and grid."
         >
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <PrimaryCta href={hrefs.aiClips}>
+            <PrimaryCta href={hrefs.aiClipper}>
               Explore AI Clips
               <ArrowRight className="size-4" aria-hidden />
             </PrimaryCta>
@@ -197,14 +193,14 @@ export default async function HomePage() {
 
         <Section
           tone="raised"
-          id="video-editing"
+          id="video-editor"
           eyebrow="Video editing"
           title="Every AI cut lands on a real timeline."
           description="Script view for speed, a multi-lane timeline for control. Cut fillers and silence, put back anything cleanup got wrong, then caption, brand, and export MP4s at 720 or 1080."
         >
           <EditorHeroMock />
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <PrimaryCta href={hrefs.videoEditing}>
+            <PrimaryCta href={hrefs.videoEditor}>
               Explore Video Editing
               <ArrowRight className="size-4" aria-hidden />
             </PrimaryCta>

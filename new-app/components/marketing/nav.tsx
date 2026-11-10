@@ -6,12 +6,12 @@ import { PrimaryCta } from './cta'
 import { cn } from '../../lib/utils'
 
 const links = [
-  { href: hrefs.aiClips, label: 'AI Clips' },
-  { href: hrefs.videoEditing, label: 'Video Editing' },
+  { href: hrefs.aiClipper, label: 'AI Clips' },
+  { href: hrefs.videoEditor, label: 'Video Editing' },
   { href: hrefs.help, label: 'Help' },
 ] as const
 
-export function MarketingNav({ current }: { current?: 'home' | 'ai-clips' | 'video-editing' }) {
+export function MarketingNav({ current }: { current?: 'home' | 'ai-clipper' | 'video-editor' }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
@@ -19,8 +19,8 @@ export function MarketingNav({ current }: { current?: 'home' | 'ai-clips' | 'vid
         <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
           {links.map((link) => {
             const active =
-              (current === 'ai-clips' && link.href === hrefs.aiClips) ||
-              (current === 'video-editing' && link.href === hrefs.videoEditing)
+              (current === 'ai-clipper' && link.href === hrefs.aiClipper) ||
+              (current === 'video-editor' && link.href === hrefs.videoEditor)
             return (
               <Link
                 key={link.href}
