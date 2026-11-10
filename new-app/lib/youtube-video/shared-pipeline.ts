@@ -162,6 +162,7 @@ export async function advanceYoutubeSharedStory(args: SharedArgs): Promise<
       // Deepgram words keep absolute source timestamps, including for windows
       // beyond the first 20 minutes. Never write transcript text to the step log.
       ctx.cache.words = source.words.filter(w => w.e*1000 > startMs && w.s*1000 < endMs)
+        .map(w => ({w:w.w,s:w.s,e:w.e}))
       const found = await findMoments(ctx,budget,{mode:'best_moments',youtubeLongForm:true,
         targetClipLenS:Math.max(106,Math.ceil((endMs-startMs)/1000))})
       if (!found.ok) throw Error('youtube_shared_analysis_failed')
