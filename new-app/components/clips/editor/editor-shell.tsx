@@ -532,6 +532,8 @@ export function EditorShell({
     restoreWord,
     restoreCutRange,
     restoreCutRanges,
+    restoreCleanupProposalCut,
+    restoreCleanupProposalCuts,
     setLayoutMode,
     setShotOverride,
     setTrim: setTrimRaw,
@@ -641,12 +643,9 @@ export function EditorShell({
         label,
         count: proposals.length,
       })
-      restoreCutRanges(
-        proposals.map((p) => p.range),
-        label,
-      )
+      restoreCleanupProposalCuts(proposals, label)
     },
-    [clipId, restoreCutRanges],
+    [clipId, restoreCleanupProposalCuts],
   )
 
   const onRestoreCleanupProposal = useCallback(
@@ -656,9 +655,9 @@ export function EditorShell({
         kind: proposal.kind,
         range: proposal.range,
       })
-      restoreCutRange(proposal.range)
+      restoreCleanupProposalCut(proposal)
     },
-    [clipId, restoreCutRange],
+    [clipId, restoreCleanupProposalCut],
   )
 
   const onStickerMove = useCallback(

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 // @ts-expect-error root tsc does not resolve the new-app vitest install
 import { describe, expect, it } from 'vitest'
-import { defaultEdits, displayDurationMs, MIN_SEGMENT_MS, sanitizeCutRangesForTrim, type ClipBounds, type ClipEditsV2 } from '../lib/clips/edits'
+import { defaultEdits, displayDurationMs, editsPayloadForSave, mergeEditsPatch, MIN_SEGMENT_MS, normalizeEdits, sanitizeCutRangesForTrim, type ClipBounds, type ClipEditsV2 } from '../lib/clips/edits'
 import {
   CLEAN_TAKE_COPY,
   CLEAN_TAKE_DEFAULT_STRENGTH,
@@ -38,9 +38,11 @@ import {
   applyProposalsToEdits,
   exportableCleanupRange,
   exportCutRangesFromProposals,
+  exportRefinedRangeForProposal,
   fillerProposals,
   fillersReadyForRemoveAll,
   restoreCleanupProposal,
+  restoreCleanupProposalMatchingExport,
   type CleanupProposal,
 } from '../lib/clips/editor/cleanup-proposals'
 import { DEFAULT_CLEANUP_STRENGTH, OPT_IN_FILLER_WORDS, fillerEligibleAtStrength } from '../lib/clips/editor/cleanup-strength'
@@ -526,6 +528,14 @@ describe('Clean Take editor-shell CleanupPanel strength', () => {
     const src = readFileSync(join(__dirname, '../components/clips/editor/editor-shell.tsx'), 'utf8')
     expect(src).toMatch(/defaultStrength=\{cleanTakeCleanupPanelStrength\(aiMeta\)\}/)
   })
+
+  it('re-syncs CleanupPanel defaultStrength if aiMeta arrives after mount', () => {
+    expect(cleanupPanelDefaultStrength(undefined)).toBe(DEFAULT_CLEANUP_STRENGTH)
+    expect(cleanupPanelDefaultStrength('light')).toBe('light')
+    const src = readFileSync(join(__dirname, '../components/clips/editor/cleanup-panel.tsx'), 'utf8')
+    expect(src).toMatch(/setStrength\(cleanupPanelDefaultStrength\(defaultStrength\)\)/)
+    expect(src).toMatch(/\[defaultStrength\]/)
+  })
 })
 
 describe('light Remove All vs reaction Ah.', () => {
@@ -619,5 +629,173 @@ describe('removed-only audition matches export ranges', () => {
     expect(exportCuts).toEqual(sanitizeCutRangesForTrim(applied.cutRanges, edits.trim.in, edits.trim.out))
     const audition = playRemovedOnlyMatchingExport(edits, proposals, wordSpans)
     expect(audition.cutRanges).toEqual(invertRangesWithin([edits.trim.in, edits.trim.out], exportCuts))
+  })
+})
+
+describe('cleanTakeReview survives the clip PATCH path', () => {
+  it('keeps the review list and types after restore, then normalizeEdits/mergeEditsPatch, then load', () => {
+    const extents = [{ sourceId: 'multi_0', startMs: 0, endMs: 60_000 }]
+    const initialCuts: CleanTakeKeptCut[] = [
+      { sourceId: 'multi_0', startMs: 10_000, endMs: 20_000 },
+      { sourceId: 'multi_0', startMs: 40_000, endMs: 50_000 },
+    ]
+    const starting = writeCleanTakeReview(
+      baseEdits({
+        sources: [
+          {
+            id: 'multi_0',
+            ref: 'upload',
+            refId: 'upl_main',
+            mediaType: 'video',
+            label: 'take-a',
+            durationMs: 60_000,
+          },
+        ],
+      }),
+      omittedRangesFromCleanTakeCuts(initialCuts, extents),
+    )
+    const beforeLoad = listOmissionsFromSavedEdits(starting, extents)
+    expect(beforeLoad.map((row: CleanTakeOmission) => row.type).sort()).toEqual(['manual', 'manual', 'retake'].sort())
+    const lead = beforeLoad.find((row: CleanTakeOmission) => row.startMs === 0)
+    expect(lead).toBeTruthy()
+    const result = restoreCleanTakeOmission(starting, lead!, initialCuts)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const remaining = beforeLoad.filter((row: CleanTakeOmission) => row.id !== lead!.id)
+    const saved = writeCleanTakeReview(result.edits, remaining)
+
+    // Clip PATCH path: serialize, mergeEditsPatch (normalizeEdits whitelist), then load().
+    const payload = editsPayloadForSave(saved)
+    const patched = mergeEditsPatch(defaultEdits(bounds), payload, bounds)
+    const normalized = normalizeEdits(saved, bounds)
+    expect(normalized.cleanTakeReview?.omissions.map((row) => row.type)).toEqual(remaining.map((row) => row.type))
+    expect(readCleanTakeReview(patched)?.omissions.map((row) => [row.id, row.type])).toEqual(
+      remaining.map((row) => [row.id, row.type]),
+    )
+    const reloaded = listOmissionsFromSavedEdits(patched, extents)
+    expect(reloaded.map((row: CleanTakeOmission) => [row.id, row.type, row.startMs, row.endMs])).toEqual(
+      remaining.map((row) => [row.id, row.type, row.startMs, row.endMs]),
+    )
+    expect(reloaded.some((row: CleanTakeOmission) => row.id === lead!.id)).toBe(false)
+    expect(reloaded.map((row: CleanTakeOmission) => row.type).sort()).toEqual(remaining.map((row) => row.type).sort())
+  })
+})
+
+function rmsEvery(startMs: number, endMs: number, stepMs: number, valueAt: (tMs: number) => number) {
+  const samples: { tMs: number; rms: number }[] = []
+  for (let tMs = startMs; tMs <= endMs; tMs += stepMs) samples.push({ tMs, rms: valueAt(tMs) })
+  return samples
+}
+
+describe('restore clears the exact export-refined cut', () => {
+  it('returns cutRanges to the pre-removal state for padded and VQ-style refined proposals', () => {
+    const vqBounds: ClipBounds = {
+      clipStartMs: 0,
+      clipEndMs: 1_200_000,
+      trimMinMs: 0,
+      trimMaxMs: 1_200_000,
+    }
+    const edits: ClipEditsV2 = { ...defaultEdits(vqBounds), trim: { in: 0, out: 1_200_000 }, cutRanges: [] }
+    const preRemoval = edits.cutRanges
+
+    const padded: CleanupProposal = {
+      id: 'pad-uh',
+      kind: 'filler',
+      range: [1000, 1041],
+      label: 'uh',
+    }
+    const paddedWords = [
+      { s: 0, e: 0.8, w: 'say' },
+      { s: 1.0, e: 1.041, w: 'uh' },
+      { s: 1.3, e: 1.6, w: "we're" },
+    ]
+
+    const okami: CleanupProposal = {
+      id: 'okami-um',
+      kind: 'filler',
+      range: [173_470, 173_630],
+      label: 'um,',
+    }
+    const okamiWords = [
+      { s: 173.000, e: 173.363, w: 'generation,' },
+      { s: 173.470, e: 173.630, w: 'um,' },
+      { s: 173.800, e: 174.200, w: 'processors' },
+    ]
+    // Tight sample window so p90 in refineWordCutWithAudio is speech, not the long quiet floor.
+    const okamiRms = rmsEvery(173_163, 173_830, 5, (tMs) => {
+      if (tMs >= 173_323 && tMs < 173_403) return 0.005
+      if (tMs >= 173_363 && tMs <= 173_630) return 0.35
+      return 0.08
+    })
+
+    const cinestudy: CleanupProposal = {
+      id: 'cine-uh',
+      kind: 'filler',
+      range: [987_725, 987_965],
+      label: 'uh,',
+    }
+    const cineWords = [
+      { s: 987.400, e: 987.688, w: 'alone,' },
+      { s: 987.725, e: 987.965, w: 'uh,' },
+      { s: 988.100, e: 988.400, w: "you'll" },
+    ]
+    const cineRms = rmsEvery(987_488, 988_165, 5, (tMs) => {
+      if (tMs >= 987_648 && tMs < 987_728) return 0.005
+      if (tMs >= 987_688 && tMs <= 987_963) return 0.35
+      return 0.08
+    })
+
+    const cases: Array<{
+      proposal: CleanupProposal
+      wordSpans: { s: number; e: number; w: string }[]
+      rms?: { tMs: number; rms: number }[]
+    }> = [
+      { proposal: padded, wordSpans: paddedWords },
+      { proposal: okami, wordSpans: okamiWords, rms: okamiRms },
+      { proposal: cinestudy, wordSpans: cineWords, rms: cineRms },
+    ]
+
+    for (const row of cases) {
+      const exported = exportCutRangesFromProposals(edits, [row.proposal], row.wordSpans, row.rms)
+      expect(exported.length).toBe(1)
+      expect(exported[0]![1] - exported[0]![0]).toBeGreaterThanOrEqual(MIN_SEGMENT_MS)
+      const refined = exportRefinedRangeForProposal(edits, row.proposal, row.wordSpans, row.rms)
+      expect(refined).toEqual(exported[0])
+
+      const removed = applyProposalsToEdits(edits, [row.proposal], row.wordSpans, row.rms)
+      expect(removed.cutRanges).toEqual(exported)
+      expect(removed.cutRanges).not.toEqual(preRemoval)
+
+      // Displayed proposal.range is tighter than export: subtracting it must not be how Restore works
+      // when the leftover stump is still kept (subtractRangeFromCuts drops remnants under 40ms).
+      const leftoverMs = Math.max(0, row.proposal.range[0] - exported[0]![0]) + Math.max(0, exported[0]![1] - row.proposal.range[1])
+      if (leftoverMs >= 40) {
+        const leftStump = restoreCleanupProposal(removed, row.proposal.range)
+        expect(leftStump.cutRanges).not.toEqual(preRemoval)
+      }
+
+      const restored = restoreCleanupProposalMatchingExport(
+        removed,
+        row.proposal,
+        row.wordSpans,
+        row.rms,
+      )
+      expect(restored.cutRanges).toEqual(preRemoval)
+    }
+
+    // One pass: remove all three, then restore each, back to the pre-removal cuts.
+    const allProposals = cases.map((row) => row.proposal)
+    // Apply one at a time with each case's own word/rms context, then restore in reverse.
+    let current = edits
+    const appliedRanges: Array<{ proposal: CleanupProposal; wordSpans: typeof cases[number]['wordSpans']; rms?: typeof cases[number]['rms'] }> = []
+    for (const row of cases) {
+      current = applyProposalsToEdits(current, [row.proposal], row.wordSpans, row.rms)
+      appliedRanges.push(row)
+    }
+    expect(current.cutRanges.length).toBeGreaterThan(0)
+    for (const row of appliedRanges) {
+      current = restoreCleanupProposalMatchingExport(current, row.proposal, row.wordSpans, row.rms)
+    }
+    expect(current.cutRanges).toEqual(preRemoval)
   })
 })

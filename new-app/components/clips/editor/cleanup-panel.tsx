@@ -37,6 +37,7 @@ import {
 } from '@/lib/clips/editor/cleanup-strength'
 import {
   CLEAN_TAKE_SHOW_CUTS_DEFAULT,
+  cleanupPanelDefaultStrength,
   introOutroLockedRanges,
   playRemovedOnlyMatchingExport,
   type LockedRange,
@@ -128,6 +129,10 @@ export function CleanupPanel({
   const [clarityLoading, setClarityLoading] = useState(false)
   const [clarityEmpty, setClarityEmpty] = useState<string | null>(null)
   const [strength, setStrength] = useState<CleanupStrength>(defaultStrength ?? DEFAULT_CLEANUP_STRENGTH)
+  // Re-sync if aiMeta / defaultStrength arrives after first mount.
+  useEffect(() => {
+    setStrength(cleanupPanelDefaultStrength(defaultStrength))
+  }, [defaultStrength])
   const [showCuts, setShowCuts] = useState(showCutsDefault)
   const [playRemovedOnly, setPlayRemovedOnly] = useState(false)
   const [lockIntroSec, setLockIntroSec] = useState(0)

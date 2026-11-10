@@ -711,7 +711,7 @@ export type CleanTakeReviewState = {
 
 type ClipEditsWithCleanTakeReview = ClipEditsV2 & { cleanTakeReview?: CleanTakeReviewState }
 
-/** Persist remaining review omissions on the saved edits (survives normalizeEdits via object spread). */
+/** Persist remaining review omissions on the saved edits (`cleanTakeReview` is kept by normalizeEdits / mergeEditsPatch). */
 export function writeCleanTakeReview(edits: ClipEditsV2, omissions: CleanTakeOmission[]): ClipEditsV2 {
   const next: ClipEditsWithCleanTakeReview = { ...edits, cleanTakeReview: { v: 1, omissions } }
   return next

@@ -72,6 +72,23 @@ export type ClipLayoutFacecam = {
   pipCorner?: 'TL' | 'TR' | 'BL' | 'BR'
 }
 
+export const CLEAN_TAKE_OMISSION_TYPES = ['filler', 'silence', 'retake', 'manual'] as const
+export type CleanTakeOmissionType = (typeof CLEAN_TAKE_OMISSION_TYPES)[number]
+
+export type ClipEditsCleanTakeReview = {
+  v: 1
+  omissions: Array<{
+    id: string
+    sourceId: string
+    sourceProjectId?: string
+    startMs: number
+    endMs: number
+    type: CleanTakeOmissionType
+    reason: string
+    accepted?: boolean
+  }>
+}
+
 export type ClipEditsV2 = {
   v: 2
   trim: { in: number; out: number }
@@ -85,6 +102,8 @@ export type ClipEditsV2 = {
     string,
     { srcStartMs: number; srcEndMs: number; confidence: 'ready' | 'needs_review'; reason: string }
   >
+  /** Clean Take remaining-omission list. Kept by normalizeEdits / mergeEditsPatch (clip PATCH). */
+  cleanTakeReview?: ClipEditsCleanTakeReview
   wordFixes: Record<string, string>
   /** Stable source-time + original text for export parity when word indices differ. */
   wordFixMeta?: Record<string, WordFixMetaEntry>
@@ -402,6 +421,37 @@ function normalizeCutQualityMeta(
   return Object.keys(out).length ? out : undefined
 }
 
+const CLEAN_TAKE_OMISSION_TYPE_SET = new Set<CleanTakeOmissionType>(CLEAN_TAKE_OMISSION_TYPES)
+
+/** Keep a valid Clean Take review list through normalizeEdits / mergeEditsPatch (clip PATCH). */
+export function normalizeCleanTakeReview(raw: unknown): ClipEditsCleanTakeReview | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as { v?: unknown; omissions?: unknown }
+  if (o.v !== 1 || !Array.isArray(o.omissions)) return undefined
+  const omissions: ClipEditsCleanTakeReview['omissions'] = []
+  for (const row of o.omissions) {
+    if (!row || typeof row !== 'object') continue
+    const r = row as Record<string, unknown>
+    const startMs = Number(r.startMs)
+    const endMs = Number(r.endMs)
+    const sourceId = typeof r.sourceId === 'string' ? r.sourceId.trim() : ''
+    const type = r.type
+    if (!sourceId || !Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) continue
+    if (typeof type !== 'string' || !CLEAN_TAKE_OMISSION_TYPE_SET.has(type as CleanTakeOmissionType)) continue
+    omissions.push({
+      id: typeof r.id === 'string' && r.id ? r.id : `${sourceId}:${Math.round(startMs)}:${Math.round(endMs)}`,
+      sourceId,
+      sourceProjectId: typeof r.sourceProjectId === 'string' ? r.sourceProjectId : undefined,
+      startMs: Math.round(startMs),
+      endMs: Math.round(endMs),
+      type: type as CleanTakeOmissionType,
+      reason: typeof r.reason === 'string' ? r.reason : '',
+      accepted: r.accepted === true ? true : undefined,
+    })
+  }
+  return { v: 1, omissions }
+}
+
 function normalizeCaptions(
   raw: unknown,
   base: ClipEditsV2['captions'],
@@ -615,6 +665,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.canvasBg) payload.canvasBg = null
   if (!edits.bgRemoval) payload.bgRemoval = null
   if (!edits.speakerNames) payload.speakerNames = null
+  if (!edits.cleanTakeReview) payload.cleanTakeReview = null
   return payload
 }
 
@@ -679,6 +730,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     ),
     cutCleanupKinds: normalizeCutCleanupKinds(o.cutCleanupKinds),
     cutQualityMeta: normalizeCutQualityMeta(o.cutQualityMeta),
+    cleanTakeReview: normalizeCleanTakeReview(o.cleanTakeReview),
     wordFixes: (o.wordFixes as Record<string, string>) || {},
     wordFixMeta: normalizeWordFixMeta(o.wordFixMeta, (o.wordFixes as Record<string, string>) || {}),
     captions: normalizeCaptions(o.captions, base.captions),

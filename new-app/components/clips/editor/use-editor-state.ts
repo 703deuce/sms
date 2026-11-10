@@ -49,6 +49,7 @@ import {
   pruneCutQualityMeta,
   reconcileCutCleanupKinds,
   pruneCutCleanupKinds,
+  exportRefinedRangeForProposal,
   type CleanupProposal,
 } from '@/lib/clips/editor/cleanup-proposals'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -644,6 +645,32 @@ export function useEditorState(
     [bumpLocalRevision, rippleFrom],
   )
 
+  const restoreCleanupProposalCut = useCallback(
+    (proposal: CleanupProposal) => {
+      const refined = exportRefinedRangeForProposal(
+        editsRef.current,
+        proposal,
+        wordSpans(),
+        getCutAudioSamples(clipId),
+      )
+      restoreCutRange(refined)
+    },
+    [clipId, restoreCutRange, wordSpans],
+  )
+
+  const restoreCleanupProposalCuts = useCallback(
+    (proposals: CleanupProposal[], passLabel?: string) => {
+      if (!proposals.length) return
+      const spans = wordSpans()
+      const audioSamples = getCutAudioSamples(clipId)
+      const ranges = proposals.map((proposal) =>
+        exportRefinedRangeForProposal(editsRef.current, proposal, spans, audioSamples),
+      )
+      restoreCutRanges(ranges, passLabel)
+    },
+    [clipId, restoreCutRanges, wordSpans],
+  )
+
   const setLayoutMode = useCallback(
     (
       mode: ClipEditsV2['layout']['mode'],
@@ -1192,6 +1219,8 @@ export function useEditorState(
     restoreWord,
     restoreCutRange,
     restoreCutRanges,
+    restoreCleanupProposalCut,
+    restoreCleanupProposalCuts,
     setLayoutMode,
     setShotOverride,
     setTrim,

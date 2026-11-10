@@ -679,3 +679,32 @@ export function exportCutRangesFromProposals(
 export function restoreCleanupProposal(edits: ClipEditsV2, range: CutRange): ClipEditsV2 {
   return { ...edits, cutRanges: subtractRangeFromCuts(edits.cutRanges, range) }
 }
+
+/** Export-refined (padded) range for one proposal — the same cut audition and export keep. */
+export function exportRefinedRangeForProposal(
+  edits: ClipEditsV2,
+  proposal: CleanupProposal,
+  wordSpans: { s: number; e: number; w?: string }[],
+  rmsSamples?: GapRmsSample[] | null,
+): CutRange {
+  const cuts = exportCutRangesFromProposals(
+    { ...edits, cutRanges: [] },
+    [proposal],
+    wordSpans,
+    rmsSamples,
+  )
+  return cuts[0] ?? proposal.range
+}
+
+/** Restore by subtracting the export-refined range, not the tighter displayed proposal range. */
+export function restoreCleanupProposalMatchingExport(
+  edits: ClipEditsV2,
+  proposal: CleanupProposal,
+  wordSpans: { s: number; e: number; w?: string }[],
+  rmsSamples?: GapRmsSample[] | null,
+): ClipEditsV2 {
+  return restoreCleanupProposal(
+    edits,
+    exportRefinedRangeForProposal(edits, proposal, wordSpans, rmsSamples),
+  )
+}
