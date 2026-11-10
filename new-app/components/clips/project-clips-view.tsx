@@ -359,10 +359,7 @@ export function ProjectClipsView({
         baseDelayMs: 500,
         timeoutMs: 8_000,
         load: async (signal) => {
-          const data = await listProjectClips(projectId, 'score', {
-            signal,
-            maxGatewayRetries: 0,
-          })
+          const data = await listProjectClips(projectId, 'score', { signal })
           return data.clips as ClipCardData[]
         },
       })
