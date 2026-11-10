@@ -78,7 +78,7 @@ describe('resolveFullVideoLink', () => {
     expect(mockEnsureFv).not.toHaveBeenCalled()
   })
 
-  it('creates full-video project on demand when none exists', async () => {
+  it('creates the full-video project on demand and returns preparing without blocking for a clip', async () => {
     mockFindFirst
       .mockResolvedValueOnce({
         startMs: 5000,
@@ -101,12 +101,15 @@ describe('resolveFullVideoLink', () => {
         },
       })
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'clip_fv_new', title: 'Full' })
-    mockWaitFvClip.mockResolvedValueOnce({ id: 'clip_fv_new' })
     const { resolveFullVideoLink } = await import('@/lib/server/clips/full-video-link')
     const link = await resolveFullVideoLink('ws', 'clip_a')
     expect(mockEnsureFv).toHaveBeenCalledOnce()
-    expect(link?.projectId).toBe('proj_fv_new')
-    expect(link?.url).toContain('momentIn=5000')
+    expect(link).toEqual({
+      preparing: true,
+      stage: 'clip',
+      message: 'Preparing full video editor (rendering clip)…',
+      projectId: 'proj_fv_new',
+    })
+    expect(mockWaitFvClip).not.toHaveBeenCalled()
   })
 })
