@@ -237,7 +237,7 @@ describe('non-blocking editorial QA warnings',()=>{
 describe('VQ PR #1081 draft openings and tails (clip_30f9ea02)',()=>{
   it('flags And-he on a sentence boundary as a continuation-plus-pronoun opening',()=>{
     const risk=clipEditorialAudit([{startMs:773840,endMs:786495}],publishedWords)
-    expect(risk.some(x=>x.code==='continuation_opening'||x.code==='dangling_pronoun_opening')).toBe(true)
+    expect(risk.some((x: EditorialFinding)=>x.code==='continuation_opening'||x.code==='dangling_pronoun_opening')).toBe(true)
   })
   it('snaps And he was a great student back to the dad antecedent',()=>{
     const repaired=repairClipBoundaries([{startMs:773840,endMs:786495}],publishedWords)
@@ -268,7 +268,7 @@ describe('VQ PR #1081 draft openings and tails (clip_30f9ea02)',()=>{
   })
   it('does not treat a later And-without-pronoun sentence as a pronoun continuation',()=>{
     const risk=clipEditorialAudit(publishedCuts,publishedWords)
-    expect(risk.some(x=>x.code==='continuation_opening'&&x.passageIndex===3)).toBe(false)
+    expect(risk.some((x: EditorialFinding)=>x.code==='continuation_opening'&&x.passageIndex===3)).toBe(false)
   })
 })
 
