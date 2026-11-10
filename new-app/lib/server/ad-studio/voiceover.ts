@@ -3,8 +3,8 @@ import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import { storageDriverName } from '@/lib/storage/driver-name'
 import { ttsWithTimestamps } from '@/lib/server/ai/elevenlabs-tts'
-import { durationMsFromAlignment } from '@/lib/server/t2v/tts-alignment'
-import { adVoiceSettings } from '@/lib/ad-studio/voice'
+import { durationMsFromAlignment, wordsFromAlignment } from '@/lib/server/t2v/tts-alignment'
+import { adVoiceSettings, adVoiceWordsKey } from '@/lib/ad-studio/voice'
 import type { AdPlan, AdProductInput } from '@/lib/ad-studio/types'
 
 /**
@@ -46,17 +46,26 @@ export async function ensureAdVoiceover(
   if (!claimed.count) return { status: 'pending' }
   console.info('[ad-studio:b3] voice_tts_start', { runId, textLength: text.length, customVoice: Boolean(input.voiceId || plan?.voiceId) })
   try {
-    const generated = await ttsWithTimestamps({ text, voice: adVoiceSettings(input.voiceId ?? plan?.voiceId) })
+    const generated = await ttsWithTimestamps({
+      text,
+      voice: adVoiceSettings(input.voiceId ?? plan?.voiceId, { durationSec: input.durationSec, text }),
+    })
     const durationMs = durationMsFromAlignment(generated.alignment)
+    const words = wordsFromAlignment(generated.alignment, { offsetS: 0, sceneSlot: 0, spk: 0 })
     if (durationMs <= 0 || !generated.audio.length) throw new Error('Empty voiceover')
     // Keep the planned timeline fixed. A too-long narration must never be
     // silently truncated by the editor or exporter.
     if (durationMs > input.durationSec * 1000) throw new Error('Voiceover exceeds the planned commercial duration')
     const storageKey = `ws/${workspaceId}/ad-studio/${runId}/voiceover.mp3`
-    await getClipStorage().putBytes(storageKey, generated.audio, 'audio/mpeg')
+    const storage = getClipStorage()
+    await storage.putBytes(storageKey, generated.audio, 'audio/mpeg')
+    await storage.putJson(adVoiceWordsKey(workspaceId, runId), words)
     await db.adStudioRun.updateMany({ where: { id: runId, workspaceId, voiceoverStatus: 'generating' },
       data: { voiceoverStatus: 'ready', voiceoverStorageKey: storageKey, voiceoverDurationMs: durationMs } })
-    console.info('[ad-studio:b3] voice_stored', { runId, durationMs, storageDriver: storageDriverName(), audioPresent: true })
+    console.info('[ad-studio:b3] voice_stored', {
+      runId, durationMs, storageDriver: storageDriverName(), audioPresent: true, wordCount: words.length,
+      tailMs: Math.max(0, input.durationSec * 1000 - durationMs),
+    })
     return { status: 'ready', storageKey, durationMs }
   } catch (err) {
     await db.adStudioRun.updateMany({ where: { id: runId, workspaceId, voiceoverStatus: 'generating' },
