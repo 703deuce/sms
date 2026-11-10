@@ -55,7 +55,16 @@ def _probe_duration(video: Path) -> float:
     return max(0.04, float(out.decode().strip() or "1"))
 
 
-def overlay_image(video: Path, out: Path, image: Path, pos: str, size_pct: float, opacity: float) -> None:
+def overlay_image(
+    video: Path,
+    out: Path,
+    image: Path,
+    pos: str,
+    size_pct: float,
+    opacity: float,
+    start_ms: int | None = None,
+    end_ms: int | None = None,
+) -> None:
     """Pure ffmpeg overlay. Width = size_pct of the MAIN video width (matches web brandOverlayExpr)."""
     w, _h = _probe_wh(video)
     dur = _probe_duration(video)
@@ -63,7 +72,13 @@ def overlay_image(video: Path, out: Path, image: Path, pos: str, size_pct: float
     px -= px % 2
     x, y = _xy(pos)
     op = min(1.0, max(0.0, float(opacity)))
-    vf = f"[1:v]format=rgba,scale={px}:-1,colorchannelmixer=aa={op:.3f}[lg];[0:v][lg]overlay={x}:{y}"
+    enable = ""
+    if start_ms is not None and end_ms is not None and end_ms > start_ms:
+        start_s = max(0.0, float(start_ms) / 1000.0)
+        end_s = min(dur, float(end_ms) / 1000.0)
+        if end_s > start_s:
+            enable = f":enable='between(t,{start_s:.3f},{end_s:.3f})'"
+    vf = f"[1:v]format=rgba,scale={px}:-1,colorchannelmixer=aa={op:.3f}[lg];[0:v][lg]overlay=x={x}:y={y}{enable}"
     subprocess.check_call(
         [
             "ffmpeg",
@@ -118,6 +133,8 @@ def apply_brand_logo(video: Path, out: Path, logo_key: str, brand: dict, work_di
         resolve_logo_position(brand, video),
         float(brand.get("logoSizePct") or 12),
         float(brand.get("logoOpacity") or 0.9),
+        int(brand["logoStartMs"]) if brand.get("logoStartMs") is not None else None,
+        int(brand["logoEndMs"]) if brand.get("logoEndMs") is not None else None,
     )
 
 
