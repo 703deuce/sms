@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+// @ts-ignore root tsc does not resolve the new-app vitest install
 import { describe, expect, it } from 'vitest'
 import { defaultEdits, displayDurationMs, MIN_SEGMENT_MS, sanitizeCutRangesForTrim, type ClipBounds, type ClipEditsV2 } from '../lib/clips/edits'
 import {

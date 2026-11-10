@@ -1,3 +1,4 @@
+// @ts-ignore root tsc does not resolve the new-app vitest install
 import { describe, expect, it } from 'vitest'
 import { excludeLockedProposals, fillerProposals, gapProposals, retakeProposals } from '../lib/clips/editor/cleanup-proposals'
 import type { CleanupProposal } from '../lib/clips/editor/cleanup-proposals'
