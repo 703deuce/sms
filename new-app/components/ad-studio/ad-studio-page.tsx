@@ -998,7 +998,8 @@ function RunPanel({
               src={finalMedia.url}
               controls
               preload="metadata"
-              className="mt-3 aspect-video w-full rounded-lg bg-black object-contain"
+              className="mt-3 max-h-[34rem] w-full rounded-lg bg-black object-contain"
+              style={{ aspectRatio: run.input.aspect.replace(':', ' / ') }}
               data-testid="ad-studio-final-video"
             />
           ) : (
