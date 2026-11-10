@@ -20,6 +20,7 @@ const baseClip = {
   id: 'clip_nr',
   title: 'Payoff moment',
   score: 80,
+  scores: { hook: 'A', flow: 'B', value: 'A' },
   durationMs: 12_000,
   startMs: 10_000,
   endMs: 22_000,
