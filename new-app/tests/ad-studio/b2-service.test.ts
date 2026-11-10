@@ -80,7 +80,7 @@ const fakeDb = {
   aiStudioAsset: { async count({ where }: { where: DbRow }) {
     return where.id.in.filter((id: string) => id === 'stast_owned').length
   } },
-  async $transaction<T>(callback: (db: typeof fakeDb) => Promise<T>) { return callback(fakeDb) },
+  async $transaction<T>(callback: (db: any) => Promise<T>) { return callback(fakeDb) },
 }
 
 vi.mock('server-only', () => ({}))
