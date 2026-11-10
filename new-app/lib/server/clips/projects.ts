@@ -178,7 +178,7 @@ export async function createClipProject(
       projectId: project.id,
       type: 'PROCESS_PROJECT',
       status: 'QUEUED',
-      payload: buildProcessProjectJobPayload(settings),
+      payload: buildProcessProjectJobPayload(settings) as Prisma.InputJsonValue,
     },
   })
   return project
@@ -242,7 +242,7 @@ export async function createBlankClipProject(
       projectId: project.id,
       type: 'PROCESS_PROJECT',
       status: 'QUEUED',
-      payload: buildProcessProjectJobPayload(settings, { blankMs: durationMs }),
+      payload: buildProcessProjectJobPayload(settings, { blankMs: durationMs }) as Prisma.InputJsonValue,
     },
   })
   return project
@@ -413,7 +413,7 @@ export async function attachUploadToClipProject(
       projectId,
       type: 'PROCESS_PROJECT',
       status: 'QUEUED',
-      payload: buildProcessProjectJobPayload(nextSettings),
+      payload: buildProcessProjectJobPayload(nextSettings) as Prisma.InputJsonValue,
     },
   })
 

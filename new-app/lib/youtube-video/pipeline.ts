@@ -97,7 +97,7 @@ export function prepareFromReadyYoutubeSources(
 
 export function assembleChosenOption(
   option: YoutubeVideoOption,
-  clip: { projectId: string; clipId: string; durationMs?: number },
+  clip: { projectId: string; clipId: string; durationMs?: number; renderId?: string },
   media?: { playbackUrl?: string | null; thumbnailUrl?: string | null; downloadUrl?: string | null },
 ): YoutubeVideoResult {
   const cuts = sortAndMergeCuts(cutsFromOption(option))
@@ -106,6 +106,7 @@ export function assembleChosenOption(
   return {
     clipId: clip.clipId,
     projectId: clip.projectId,
+    renderId: clip.renderId ?? null,
     editorUrl: `/app/clips/${clip.projectId}/edit/${clip.clipId}`,
     durationMs,
     durationSeconds: Math.round(durationMs / 1000),

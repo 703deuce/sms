@@ -1,4 +1,3 @@
-// @ts-expect-error vitest is resolved in new-app; root tsc has no vitest types
 import { describe, expect, it, vi } from 'vitest'
 import { YOUTUBE_VIDEO_PATHS } from '../../lib/youtube-video-ui/paths'
 import { createYoutubeVideoClient } from '../../lib/youtube-video-ui/client'

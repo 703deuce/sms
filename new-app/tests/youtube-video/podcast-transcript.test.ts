@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { packTranscripts } from '@/lib/youtube-video/transcript-packer'
 import { proposeOptionsFromPacked, YOUTUBE_VIDEO_STORY_SYSTEM } from '@/lib/youtube-video/story-options'
-import { createYoutubeVideoRun, chooseYoutubeVideoOption } from '@/lib/youtube-video/runs'
+import { createYoutubeVideoRun } from '@/lib/youtube-video/runs'
 import { podcastScript, sourceFromWords, testDeps } from './helpers'
 
 describe('youtube-video podcast-style transcript', () => {
@@ -29,7 +29,10 @@ describe('youtube-video podcast-style transcript', () => {
       null,
       deps,
     )
-    const chosen = await chooseYoutubeVideoOption('ws_pod', created.view.runId, created.view.options![0]!.id, deps)
+    // The only supported story gets selected and assembled automatically.
+    expect(created.view.status).toBe('ready')
+    expect(created.view.options).toBeNull()
+    const chosen = created.view
     expect(chosen.result?.plan.premise).toBe(option.premise)
     expect(chosen.result?.durationMs).toBeGreaterThan(10_000)
     // No length cap: a longer source may assemble well past 90s, and we never clamp it.
