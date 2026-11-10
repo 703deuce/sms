@@ -10,6 +10,7 @@ import { CaptionPresetPicker } from '@/components/clips/caption-preset-picker'
 import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import { clipAspectRatios, clipLayoutModes, type ClipProjectSettings } from '@/lib/clips/settings'
 import { ASR_LANGUAGES } from '@/lib/clips/asr-languages'
+import { ASR_LANGUAGE_CATALOG_COPY, listedAsrLanguageCount } from '../../lib/clips/editor/asr-language-catalog'
 import { applyClipLengthChoice, clipLengthChoiceFromSettings } from '@/lib/clips/clip-length'
 import { ClipLengthChoice as ClipLengthChoiceControl } from '@/components/clips/clip-length-choice'
 import { cn } from '@/lib/utils'
@@ -203,12 +204,15 @@ export function ProjectSettingsForm({
         <label className="text-sm font-medium" htmlFor="asr-language">
           Spoken language
         </label>
-        <p className="mb-2 text-xs text-muted-foreground">Used when transcribing this upload. Does not re-transcribe later.</p>
+        <p className="mb-2 text-xs text-muted-foreground">
+          Used when transcribing this upload. Does not re-transcribe later. {listedAsrLanguageCount()} languages
+          plus auto-detect. {ASR_LANGUAGE_CATALOG_COPY}
+        </p>
         <Select
           value={settings.asrLanguage ?? 'en'}
           onValueChange={(v) => v && onChange({ ...settings, asrLanguage: v as ClipProjectSettings['asrLanguage'] })}
         >
-          <SelectTrigger id="asr-language" data-testid="asr-language">
+          <SelectTrigger id="asr-language" data-testid="asr-language" className="focus-visible:ring-2 focus-visible:ring-ring">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

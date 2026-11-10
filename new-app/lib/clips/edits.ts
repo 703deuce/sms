@@ -36,7 +36,13 @@ import { normalizeStabilize, type StabilizeRange } from '@/lib/clips/editor/stab
 import { normalizeVideoReverse, type VideoReverseRange } from '@/lib/clips/editor/video-reverse'
 import { normalizeBlurRegions, type BlurRegion } from '@/lib/clips/editor/blur-regions'
 import { normalizeTextItems, type TextItem } from '@/lib/clips/editor/text-items'
-import { normalizeCaptionLinesEdits, type CaptionLine } from '@/lib/clips/editor/caption-lines'
+import {
+  mergeCaptionLineNormalizeReports,
+  normalizeCaptionLinesEditsWithReport,
+  parseCaptionLineNormalizeReport,
+  type CaptionLine,
+  type CaptionLineNormalizeReport,
+} from '@/lib/clips/editor/caption-lines'
 import {
   normalizeMediaSources,
   normalizeMulticam,
@@ -233,6 +239,11 @@ export type ClipEditsV2 = {
   motionPlan?: MotionPlan
   /** G3a manual caption lines (typed / SRT-VTT import), output ms; replace transcript words in the burned captions. */
   captionLines?: CaptionLine[]
+  /**
+   * Serializable record of cues dropped or reordered by normalizeCaptionLines.
+   * Survives JSON clone and a second normalizeEdits so the sync warning is not lost.
+   */
+  captionLineNormalizeReport?: CaptionLineNormalizeReport
   /** E4 color looks (Adjust + Filters): whole video, per Video item (source range), per B-roll id. */
   color?: ClipColorEdits
   /** G4a adjustment layers (output ms): grade everything below them (lib/clips/editor/adjust-layers.ts). */
@@ -592,6 +603,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.textItems?.length) payload.textItems = null
   if (!edits.motionPlan) payload.motionPlan = null
   if (!edits.captionLines?.length) payload.captionLines = null
+  if (!edits.captionLineNormalizeReport) payload.captionLineNormalizeReport = null
   if (!edits.color) payload.color = null
   if (!edits.adjustLayers?.length) payload.adjustLayers = null
   if (!edits.layerFx?.length) payload.layerFx = null
@@ -738,7 +750,18 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       const checked = validateMotionPlan(o.motionPlan)
       return checked.ok ? checked.plan : undefined
     })(),
-    captionLines: normalizeCaptionLinesEdits(o.captionLines),
+    ...(() => {
+      const normalizedLines = normalizeCaptionLinesEditsWithReport(o.captionLines)
+      const report = mergeCaptionLineNormalizeReports(
+        parseCaptionLineNormalizeReport(o.captionLineNormalizeReport),
+        normalizedLines.report,
+      )
+      return {
+        captionLines: normalizedLines.lines,
+        captionLineNormalizeReport:
+          report.droppedInvalid > 0 || report.reordered ? report : undefined,
+      }
+    })(),
     color: normalizeColorEdits(o.color),
     adjustLayers: normalizeAdjustLayers(o.adjustLayers),
     layerFx: normalizeLayerFx(o.layerFx),

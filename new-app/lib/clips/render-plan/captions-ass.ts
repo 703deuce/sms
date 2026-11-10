@@ -12,6 +12,7 @@ import { hex2, pyFixedPad, pyFloat, pyInt, pyRound, pyRoundN } from '@/lib/clips
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { assFontForCaptionSample } from '@/lib/clips/caption-intl'
 import { captionAssMotionTags, captionMotionAt } from '@/lib/clips/editor/caption-keyframes'
+import { formatCaptionWord, isSentenceBoundary } from '../caption-case'
 
 /** G3a: `ln` = manual caption line index (captionLines) — one caption per line. */
 /** G3afix: `br` = starts a new line of a manual caption line; `it`/`bo` = <i>/<b> from SRT/VTT/typed. */
@@ -79,18 +80,11 @@ function assSafeHighlightHex(hex: string): string {
   return `#${h}`
 }
 
-function sentenceBoundary(prev: string | null | undefined): boolean {
-  if (!prev) return true
-  return /[.!?]["')\]]*$/.test(prev.trim())
-}
-
-/** Python str.upper()/lower() ≈ JS for the Latin text captions carry. */
+/** Shared caption-case transform, after ASS-specific brace escaping. */
 function disp(text: string, caseMode: string, sentenceStart = false): string {
   const t = text.replace(/\{/g, '(').replace(/\}/g, ')')
   if (!t) return t
-  if (caseMode === 'upper') return t.toUpperCase()
-  const lower = t.toLowerCase()
-  return sentenceStart ? lower.slice(0, 1).toUpperCase() + lower.slice(1) : lower
+  return formatCaptionWord(t, caseMode, sentenceStart)
 }
 
 /** G3afix: <i>/<b> from manual caption lines (py captions_ass._styled). */
@@ -109,7 +103,7 @@ export function dispWordsPy(chunk: readonly AssWord[], caseMode: string, styled 
     let start = true
     for (const w of chunk) {
       out.push(disp(w.w, caseMode, start))
-      start = sentenceBoundary(String(w.w ?? ''))
+      start = isSentenceBoundary(String(w.w ?? ''))
     }
   }
   return styled ? out.map((t, k) => styledWord(chunk[k]!, t)) : out

@@ -87,6 +87,13 @@ jobs:
             tests/layers-actual-stack.test.tsx \
             tests/preview-stage-e3.test.tsx \
             tests/e8-caption-size-parity.test.ts \
+            tests/caption-case.test.ts \
+            tests/caption-style-snapshot.test.ts \
+            tests/caption-sync-warning.test.ts \
+            tests/asr-language-catalog.test.ts \
+            tests/export-nle-captions-srt.test.ts \
+            tests/export-dialog-nle-download.test.tsx \
+            tests/export-dialog-caption-sync.test.tsx \
             tests/ef24-bg-removal-edits.test.ts \
             tests/stock-audio-picker-placement.test.tsx \
             tests/batch5-template-full-video.test.tsx \
@@ -135,7 +142,8 @@ jobs:
             tests/streamer-agent-batch-contract.test.ts \
             tests/motion-graphics-contract.test.ts \
             tests/motion-graphics-text-adapter.test.ts \
-            tests/motion-request-limit.test.ts
+            tests/motion-request-limit.test.ts \
+            tests/caption-line-max-chars.test.ts
 
   captions-worker-regression:
     runs-on: ubuntu-latest
