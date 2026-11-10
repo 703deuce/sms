@@ -10,6 +10,7 @@ import { summarizeToolResult } from '@/lib/ai-producer-agent/summarize'
 import type { Budget } from '@/lib/ai-producer-agent/budget'
 import { logAiProducerStep, redactArgs } from '@/lib/ai-producer-agent/log'
 import { FILM_EDITING_THEORY, SPECIALIST_ROLES } from '@/lib/ai-producer-agent/film-theory'
+import { YOUTUBE_VIDEO_STORY_SYSTEM } from '@/lib/youtube-video/story-options'
 import { JUST_CHATTING_EDITORIAL_DIRECTION, JUST_CHATTING_ROLE_DIRECTION, JUST_CHATTING_REVIEW_CHECKS } from '@/lib/ai-producer-agent/just-chatting-direction'
 import type { OutputState } from '@/lib/ai-producer-agent/orchestrator'
 import { WORD_GUARD_MS, wordAtUnsafeBoundary } from '@/lib/ai-producer-agent/validate'
@@ -1072,7 +1073,8 @@ export async function runEditorialRole(
   const wordFootage=role==='footage' && context.fullTranscriptWordIndexed===true
   const agentMoment=ctx.config.storyMode==='clip_moment_v1'
   const agentStory=ctx.config.storyMode==='clip_story_v1'
-  const storyObservation=ctx.config.editMode==='just_chatting_rough_cut' && !highlightsMode && !agentMoment && !agentStory && ctx.config.targetLengthS[1]<=105
+  const youtubeLongForm = ctx.config.youtubeLongForm === true
+  const storyObservation=youtubeLongForm || (ctx.config.editMode==='just_chatting_rough_cut' && !highlightsMode && !agentMoment && !agentStory && ctx.config.targetLengthS[1]<=105)
   const storyBaseline=storyObservation||agentStory
   const clipTarget=ctx.config.targetLengthS.join('–')
   const visualStory=(storyObservation||agentStory) && ctx.config.visualEvidenceMode==='visual_audio' && Boolean(ctx.cache.visualEvidence)
@@ -1085,6 +1087,8 @@ export async function runEditorialRole(
   const messages: LunaMessage[] = [
     { role: 'system', content: [
       FILM_EDITING_THEORY, SPECIALIST_ROLES[role],
+      ...(youtubeLongForm ? [YOUTUBE_VIDEO_STORY_SYSTEM,
+        'YOUTUBE LONG-FORM ONLY: Do not enforce a runtime, genre, Just Chatting rules, or short-form cuts. Choose one truthful beginning, development and natural recorded ending. Include observed visual-only moments when useful; verify all source evidence.'] : []),
       ...(ctx.config.visualEvidenceMode==='visual_audio' && (role==='story'||role==='footage') && ctx.cache.visualEvidence ? [
         'VISUAL+AUDIO STORY EXPERIMENT: You have time-aligned Gemini observations from low-resolution video frames and the ORIGINAL audio, alongside authoritative ASR. Frame observations are uncertain, not confirmed ground truth. Look for physical comedy, visual reveals, genuine reactions, frustrations and payoffs even when the transcript is thin. Story: visual beats are FIRST-CLASS optional narrative candidates; explicitly choose observed candidate IDs with whyFunnyToWatch and narrativePurpose, rather than fitting every event into a preselected speech plot. Do not force unrelated events. Footage: select word IDs for speech AND optional observed visual-only source intervals in visualActions. Choose the action start/end within the referenced evidence timestamp range; maintain complete visible actions where possible and avoid cutting through spoken words. Do not invent visual events or source timestamps. Original audio remains attached. Flow edits dialogue only; visual range selection is independently validated and preserved.',
       ] : []),
@@ -1134,7 +1138,7 @@ export async function runEditorialRole(
           : storyObservation ? 'For this baseline, IGNORE runtime. Find the complete spoken passages that tell ONE compelling story from opening to resolution. Cut irrelevant digressions and repeated points, but never trim for a duration target. Select accurate starts and endings from the transcript and report exactly those word IDs.'
           : 'For short Story, selections are the ACTUAL EDIT roughly within the target seconds, not hundreds of seconds of candidate footage. Cut whole irrelevant phrases and tangents; keep the setup, development and payoff. Do not pad or cut mid-thought. If truly insufficient material exists, submit the most coherent short edit.' }
         : {}),
-      ...(role === 'qa' && ctx.config.editMode === 'just_chatting_rough_cut'
+      ...(role === 'qa' && ctx.config.editMode === 'just_chatting_rough_cut' && !youtubeLongForm
         ? { requiredReviewChecks: JUST_CHATTING_REVIEW_CHECKS } : {}),
     }) },
   ]
@@ -1563,7 +1567,7 @@ export async function createEditorialHandoff(
     excludeAsides: (story.excludeAsides as string[]).slice(0, 10),
     endingRule: String(story.endingRule),
     highlightCriteria: String(story.highlightCriteria),
-    ...(ctx.config.visualEvidenceMode==='visual_audio' && !highlightsMode && ctx.config.targetLengthS[1]<=105 ? {
+    ...(ctx.config.visualEvidenceMode==='visual_audio' && !highlightsMode && (ctx.config.targetLengthS[1]<=105 || ctx.config.youtubeLongForm) ? {
       visualBeats: (story.visualBeats as StoryVisualBeat[] | undefined)??[],
     } : {}),
   }
@@ -1576,13 +1580,16 @@ export async function createEditorialHandoff(
     found = await runEditorialRole(ctx, out, budget, 'footage', {
       ...base, storyOutline: outline,
       transcriptSamples:undefined,
-      fullTranscriptWordIndexed:!highlightsMode && ctx.config.editMode==='just_chatting_rough_cut' && ctx.config.targetLengthS[1]<=105,
+      fullTranscriptWordIndexed:!highlightsMode && (ctx.config.youtubeLongForm === true ||
+        (ctx.config.editMode==='just_chatting_rough_cut' && ctx.config.targetLengthS[1]<=105)),
       fullTranscriptFormat:'[originalWordId, startMs, endMs, spokenWord] — FULL original source in chronological order',
       fullTranscript:completeTranscriptWords(ctx.cache.words,true),
       instruction: storyClip
         ? [clipBrief,'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source and Story plan. Choose actual final passages by FIRST/LAST WORD IDS. Tell ONE complete narrative from recorded setup through the genuine payoff, trimming irrelevant tangents. Select complete sentences, not mid-phrase edges. Each selection\'s seconds are (endMs-startMs)/1000 from the indexed transcript; report the running total in each reason. The sum must approach '+ctx.config.targetLengthS.join('–')+' seconds.'].join(' ')
         : clipBrief ?? (highlightsMode
         ? 'HIGHLIGHTS SCOUT: Compare the strongest memorable moments from across the full authorized recording. Select 2+ distinct moments for short edits and ideally 3+ for one to two minutes. Moments must offer new entertainment/information, not simply adjacent speech separated by a pause. Each moment needs just enough setup and its own landing; order chronologically, preserve meaning, and avoid unrelated filler. Do not take a continuous 90-second stretch as a highlights reel.'
+        : ctx.config.youtubeLongForm
+        ? 'YOUTUBE LONG-FORM STORY: Select all needed complete speech passages by first/last word IDs. Keep a truthful opening, development and real ending. No runtime target, invented angle or genre restriction. Select observed silent visual actions independently when supported.'
         : ctx.config.targetLengthS[1] <= 105
         ? 'STORY COHERENCE BASELINE: You have the COMPLETE word-indexed source, Story plan, and every spoken word. Choose actual final passages by FIRST/LAST WORD IDS. IGNORE 90 seconds and ALL runtime targets. Tell ONE complete narrative from beginning through genuine recorded resolution, trimming irrelevant tangents but not the story for length. Select complete sentences, not mid-phrase edges. No later Finisher or Dialogue recut will repair your boundaries.'
         : 'Select coherent source intervals; evidence first, then editorial value.'),
