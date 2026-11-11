@@ -17,6 +17,7 @@ const vocabEntrySchema = z.object({
 const patchSchema = z.object({
   removeDeadAir: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
+  alsoVtt: z.boolean().optional(),
   exportSfx: z.enum(['off', 'subtle', 'meme']).optional(),
   headlineBarEnabled: z.boolean().optional(),
   platformBadgeEnabled: z.boolean().optional(),

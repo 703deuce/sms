@@ -92,7 +92,7 @@ function safeId(v: unknown): string {
   return /^[A-Za-z0-9_:.~-]{1,120}$/.test(s) ? s : ''
 }
 
-export function normalizeMediaSources(raw: unknown): ClipMediaSource[] | undefined {
+export function normalizeMediaSources(raw: unknown, youtubeLongForm = false): ClipMediaSource[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const out: ClipMediaSource[] = []
   const seen = new Set<string>()
@@ -117,7 +117,7 @@ export function normalizeMediaSources(raw: unknown): ClipMediaSource[] | undefin
       ...(durationMs !== undefined && durationMs > 0 ? { durationMs } : {}),
       ...(syncMs !== undefined && mediaType !== 'image' ? { syncMs } : {}),
     })
-    if (out.length >= MAX_SOURCES) break
+    if (!youtubeLongForm && out.length >= MAX_SOURCES) break
   }
   return out.length ? out : undefined
 }

@@ -86,3 +86,48 @@ describe('YouTube story assembly', () => {
     expect(edits.inserts?.reduce((n, ins) => n + ins.durMs, 0)).toBe(600100)
   })
 })
+
+
+describe('YT02 extended long-form normalization contract', () => {
+  it('keeps 62 selected cuts, 62 sources and 61 append pieces through save and reload', () => {
+    const manyCuts = Array.from({ length: 62 }, (_, i) => ({
+      sourceId: `project_${i}`, startMs: 1000, endMs: 2200,
+    }))
+    const manyUploads = manyCuts.map((_, i) => ({
+      id: `upl_${i}`, label: `Recording ${i}`, durationMs: 5000,
+    }))
+    const longBounds = { clipStartMs: 1000, clipEndMs: 2200, trimMinMs: 0, trimMaxMs: 5000 }
+    const edits = buildYoutubeStoryEditAssembly(defaultEdits(longBounds), manyCuts, manyUploads)
+    expect(edits.youtubeLongFormAssembly).toBe(1)
+    expect(edits.sources).toHaveLength(62)
+    expect(edits.inserts).toHaveLength(61)
+    const saved = JSON.parse(JSON.stringify(normalizeEdits(edits, longBounds)))
+    const reloaded = normalizeEdits(saved, longBounds)
+    expect(reloaded.sources).toHaveLength(62)
+    expect(reloaded.inserts).toHaveLength(61)
+    expect(reloaded.inserts?.at(-1)?.sourceId).toBe('yt_source_61')
+    expect(reloaded.inserts?.every(piece => piece.audio !== 'mute')).toBe(true)
+    expect(reloaded.trim.out - reloaded.trim.in +
+      (reloaded.inserts?.reduce((sum, piece) => sum + piece.durMs, 0) ?? 0)).toBe(62 * 1200)
+  })
+
+  it('preserves the unchanged legacy 50-source/50-insert limits without a YouTube flag', () => {
+    const longBounds = { clipStartMs: 1000, clipEndMs: 2200, trimMinMs: 0, trimMaxMs: 5000 }
+    const sources = Array.from({ length: 62 }, (_, i) => ({
+      id: `src_${i}`, ref: 'upload' as const, refId: `upl_${i}`, mediaType: 'video' as const,
+      durationMs: 5000,
+    }))
+    const inserts = Array.from({ length: 61 }, (_, i) => ({
+      id: `ins_${i}`, sourceId: 'src_0', atSrcMs: 2200,
+      append: true as const, inMs: 1000, durMs: 1200,
+    }))
+    const legacy = normalizeEdits({ ...defaultEdits(longBounds), sources, inserts }, longBounds)
+    const truncatedBaseline = normalizeEdits({
+      ...defaultEdits(longBounds), sources: sources.slice(0, 50), inserts: inserts.slice(0, 50),
+    }, longBounds)
+    expect(legacy.youtubeLongFormAssembly).toBeUndefined()
+    expect(legacy.sources).toHaveLength(50)
+    expect(legacy.inserts).toHaveLength(50)
+    expect(JSON.stringify(legacy)).toBe(JSON.stringify(truncatedBaseline))
+  })
+})

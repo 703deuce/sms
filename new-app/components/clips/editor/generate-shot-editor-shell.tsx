@@ -37,6 +37,8 @@ import { replaceVideoRange, type ProjectMediaItem } from '@/lib/clips/editor/med
 import { routes } from '@/lib/routes'
 import { editorToolbarRow } from '@/lib/clips/editor/editor-chrome-tokens'
 import { EditorModeSwitcher } from '@/components/clips/editor/editor-mode-switcher'
+import { StandaloneEditorChrome } from '@/components/clips/editor/standalone-editor-chrome'
+import { generatePreviewCandidates, clampGeneratePreviewSeek } from '@/lib/clips/editor/generate-preview-media'
 
 type EditorProps = Parameters<typeof EditorClipShell>[0]
 type Props = Pick<
@@ -207,6 +209,20 @@ export function GenerateShotEditorShell(props: Props) {
   const [playing, setPlaying] = useState(false)
   const [mediaFailure, setMediaFailure] = useState(false)
   const [mediaReady, setMediaReady] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState(0)
+  const [previewAttempt, setPreviewAttempt] = useState(0)
+  const previewCandidates = useMemo(() => generatePreviewCandidates({
+    authorizedSegment: source?.kind === 'segment' ? source : null,
+    authorizedSource: source?.kind === 'source' ? source : null,
+    urls: props.mediaUrls,
+    segmentStartMs: props.sourceSegStartMs,
+    segmentEndMs: props.sourceSegEndMs,
+    clipStartMs: props.bounds.clipStartMs,
+    clipEndMs: props.bounds.clipEndMs,
+  }), [source, props.mediaUrls, props.sourceSegStartMs, props.sourceSegEndMs, props.bounds.clipStartMs, props.bounds.clipEndMs])
+  const preview = previewCandidates[previewIndex] ?? null
+  const previewRef = useRef(preview)
+  previewRef.current = preview
   const [exportOpen, setExportOpen] = useState(false)
   const [navigating, setNavigating] = useState(false)
   const [models, setModels] = useState<StudioModel[]>([])
@@ -331,6 +347,37 @@ export function GenerateShotEditorShell(props: Props) {
       : activeSpend
         ? 'A source-video generation is already in progress.'
         : null)
+
+  // Playback-only fallback: provider authorization always uses `source`, never `preview`.
+  useEffect(() => {
+    setPreviewIndex(0)
+    setPreviewAttempt(0)
+    setMediaReady(false)
+    setMediaFailure(false)
+  }, [source?.url, props.mediaUrls.proxy, props.mediaUrls.preview])
+
+  useEffect(() => {
+    if (!source || !preview || mediaReady || mediaFailure) return
+    const timeout = window.setTimeout(() => {
+      setPreviewIndex((current) => {
+        if (current + 1 < previewCandidates.length) return current + 1
+        setMediaFailure(true)
+        return current
+      })
+    }, 12000)
+    return () => window.clearTimeout(timeout)
+  }, [source, preview, previewCandidates.length, previewIndex, previewAttempt, mediaReady, mediaFailure])
+
+  const failPreview = useCallback(() => {
+    setMediaReady(false)
+    setPlaying(false)
+    setPreviewIndex((current) => {
+      if (current + 1 < previewCandidates.length) return current + 1
+      setMediaFailure(true)
+      return current
+    })
+    console.warn('[editor:generate-mode] preview-fallback', { projectId, clipId, stage: previewIndex + 1 })
+  }, [previewCandidates.length, previewIndex, projectId, clipId])
 
   const mediaFrameMs = source ? Math.max(0, playheadMs - source.offsetMs) : 0
   const frameExtractor = useFilmstripFrames(source?.url)
@@ -525,7 +572,7 @@ export function GenerateShotEditorShell(props: Props) {
       const ms = Math.round(Math.max(minMs, Math.min(maxMs, requestedMs)))
       setPlayheadMs(ms)
       if (videoRef.current) {
-        videoRef.current.currentTime = Math.max(0, (ms - source.offsetMs) / 1000)
+        videoRef.current.currentTime = clampGeneratePreviewSeek(ms, previewRef.current, videoRef.current.duration)
       }
       console.info('[editor:generate-mode] seek', {
         projectId,
@@ -1256,7 +1303,8 @@ export function GenerateShotEditorShell(props: Props) {
                 <div className="w-full max-w-4xl">
                   <video
                     ref={videoRef}
-                    src={source.url}
+                    key={previewIndex + ':' + previewAttempt}
+                    src={preview?.url}
                     poster={props.posterUrl || undefined}
                     preload="metadata"
                     controls
@@ -1264,10 +1312,10 @@ export function GenerateShotEditorShell(props: Props) {
                     className="mx-auto max-h-[48vh] w-full object-contain"
                     onLoadedMetadata={() => {
                       setMediaReady(true)
+                      setMediaFailure(false)
                       if (videoRef.current) {
-                        videoRef.current.currentTime = Math.max(
-                          0,
-                          (playheadMs - source.offsetMs) / 1000,
+                        videoRef.current.currentTime = clampGeneratePreviewSeek(
+                          playheadMs, previewRef.current, videoRef.current.duration,
                         )
                       }
                       console.info('[editor:generate-mode] source-ready', {
@@ -1275,20 +1323,12 @@ export function GenerateShotEditorShell(props: Props) {
                         clipId,
                       })
                     }}
-                    onError={() => {
-                      setMediaFailure(true)
-                      console.error(
-                        '[editor:generate-mode] source-playback-failed',
-                        { projectId, clipId },
-                      )
-                    }}
+                    onError={failPreview}
                     onTimeUpdate={(event) =>
-                      setPlayheadMs(
-                        Math.round(
-                          event.currentTarget.currentTime * 1000 +
-                            source.offsetMs,
-                        ),
-                      )
+                      setPlayheadMs(Math.max(minMs, Math.min(maxMs, Math.round(
+                        event.currentTarget.currentTime * 1000 +
+                          (previewRef.current?.offsetMs ?? source.offsetMs),
+                      ))))
                     }
                     onPlay={() => setPlaying(true)}
                     onPause={() => setPlaying(false)}
@@ -1299,13 +1339,16 @@ export function GenerateShotEditorShell(props: Props) {
                     </p>
                   ) : null}
                   {mediaFailure ? (
-                    <p
-                      role="alert"
-                      className="mt-2 text-center text-xs text-red-300"
-                    >
-                      The original video could not be loaded. No changes were
-                      made.
-                    </p>
+                    <div role="alert" className="mt-2 flex items-center justify-center gap-2 text-xs text-red-300">
+                      <span>Original preview unavailable. No changes were made.</span>
+                      <Button type="button" size="sm" variant="outline" onClick={() => {
+                        setPreviewIndex(0)
+                        setMediaReady(false)
+                        setMediaFailure(false)
+                        setPreviewAttempt((value) => value + 1)
+                        console.info('[editor:generate-mode] preview-retry', { projectId, clipId })
+                      }}>Retry preview</Button>
+                    </div>
                   ) : null}
                 </div>
               ) : view === 'result' && selectedJob ? (

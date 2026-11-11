@@ -2,9 +2,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { PreviewStage } from '@/components/clips/editor/preview-stage'
+import { isCrossOriginUrl } from '@/components/clips/editor/g4/media-cors'
 import { stageBoxForZoom } from '@/lib/clips/editor/preview-view'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { setPropertyAt } from '@/lib/clips/editor/keyframes'
+import { editorPosterUrl } from '@/lib/server/clips/editor-clip-media'
 
 const bounds = { clipStartMs: 0, clipEndMs: 20000 }
 
@@ -12,6 +14,12 @@ const bounds = { clipStartMs: 0, clipEndMs: 20000 }
 afterEach(cleanup)
 
 describe('PreviewStage E3 layers', () => {
+  it('ED12 keeps the editor poster same-origin so it does not require bucket CORS', () => {
+    const poster = editorPosterUrl('clip_1', 'ws/w/projects/p/clips/clip_1/poster.jpg')
+    expect(poster).toBe('/api/clips/clips/clip_1/poster')
+    expect(isCrossOriginUrl(poster!)).toBe(false)
+  })
+
   it('F1 mutes the separate J/L-cut speech element when the Voice lane is muted', () => {
     const edits = normalizeEdits({
       v: 2, trim: { in: 0, out: 20_000 },
