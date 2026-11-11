@@ -4110,6 +4110,9 @@ export function EditorShell({
                   videoUrl={videoUrl}
                   posterUrl={posterUrl}
                   editorAssets={editorAssets}
+                  sourceUrls={sourceUrls}
+                  selectedSourceSegmentId={selectedSourceSegmentId}
+                  onSelectSourceSegment={onSelectSourceSegment}
                   onSeekOutput={seekOutput}
                 />
               }
