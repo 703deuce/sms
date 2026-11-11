@@ -110,9 +110,11 @@ export async function submitUserTemplateForReview(workspaceId:string,actorUserId
   const moderationFlags=flagsFor(publicTitle,publicDescription,tags.join(' '))
   const durationMs=Math.max(1,definition.snapshot.clipEndMs-definition.snapshot.clipStartMs)
   const existing=await getPrisma().clipTemplatePublication.findFirst({where:{
-    templateId,revisionId:loaded.revision.id,state:'submitted',
-  },select:{id:true}})
-  if(existing) throw new Error('This revision is already awaiting review')
+    templateId,revisionId:loaded.revision.id,state:{in:['submitted','published']},
+  },select:{id:true,state:true}})
+  if(existing) throw new Error(existing.state==='published'
+    ? 'This exact revision is already published'
+    : 'This revision is already awaiting review')
   const publicationId=createId('utpub')
   const bundle={v:1,definition,manifest}
   const preview={
@@ -235,18 +237,22 @@ export async function withdrawCommunityPublication(workspaceId:string,actorUserI
 }
 
 export async function listModerationQueue(){
-  return getPrisma().clipTemplatePublication.findMany({where:{state:'submitted'},orderBy:{submittedAt:'asc'},
-    take:100,select:{id:true,title:true,description:true,creatorName:true,creatorUserId:true,category:true,tags:true,
-      aspect:true,clipCount:true,durationMs:true,licenseTerms:true,publicDefinition:true,publicPreview:true,
-      rightsAttestation:true,moderationFlags:true,submittedAt:true,
-      reports:{where:{status:'open'},select:{id:true,reason:true,details:true,createdAt:true}}}})
+  return getPrisma().clipTemplatePublication.findMany({where:{
+      OR:[{state:'submitted'},{state:'published',reports:{some:{status:'open'}}}],
+    },orderBy:[{submittedAt:'asc'},{createdAt:'asc'}],
+    take:100,select:{id:true,templateId:true,title:true,description:true,creatorName:true,creatorUserId:true,state:true,
+      category:true,tags:true,aspect:true,clipCount:true,durationMs:true,licenseTerms:true,publicDefinition:true,
+      publicPreview:true,rightsAttestation:true,moderationFlags:true,submittedAt:true,publishedAt:true,
+      reports:{where:{status:'open'},select:{id:true,reason:true,details:true,createdAt:true,reporterUserId:true}},
+      audit:{orderBy:{createdAt:'desc'},take:20,select:{id:true,actorUserId:true,actorRole:true,action:true,reason:true,createdAt:true}},
+    }})
 }
 
 export async function moderateCommunityTemplate(moderatorUserId:string,publicationId:string,input:{
   action:'approve'|'reject'|'hide'|'unpublish'|'restore';reason?:string
 }){
   const pub=await getPrisma().clipTemplatePublication.findUnique({where:{id:publicationId},
-    select:{id:true,state:true,creatorUserId:true,publicDefinition:true,publishedAt:true}})
+    select:{id:true,templateId:true,state:true,creatorUserId:true,publicDefinition:true,publishedAt:true}})
   if(!pub) throw new Error('Publication not found')
   if(pub.creatorUserId===moderatorUserId) throw new Error('Creators cannot approve or moderate their own publication')
   const reason=(input.reason??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,1000)
@@ -276,6 +282,19 @@ export async function moderateCommunityTemplate(moderatorUserId:string,publicati
     action='restored'
   }
   return getPrisma().$transaction(async tx=>{
+    if(action==='approved'){
+      const older=await tx.clipTemplatePublication.findMany({where:{
+        templateId:pub.templateId,id:{not:publicationId},state:'published',
+      },select:{id:true}})
+      if(older.length){
+        await tx.clipTemplatePublication.updateMany({where:{id:{in:older.map(x=>x.id)}},
+          data:{state:'superseded',hiddenAt:now}})
+        await tx.clipTemplateModerationEvent.createMany({data:older.map(old=>({
+          id:createId('utaudit'),publicationId:old.id,actorUserId:moderatorUserId,actorRole:'moderator',
+          action:'superseded',reason:'Replaced by approved revision '+publicationId,
+        }))})
+      }
+    }
     const row=await tx.clipTemplatePublication.update({where:{id:publicationId},data})
     await tx.clipTemplateModerationEvent.create({data:{id:createId('utaudit'),publicationId,
       actorUserId:moderatorUserId,actorRole:'moderator',action,reason:reason||null}})
