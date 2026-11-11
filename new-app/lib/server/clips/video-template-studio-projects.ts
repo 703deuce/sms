@@ -3,6 +3,8 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
+import { defaultEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { compileTemplate, validateTemplateDesign, validateTemplateFamily, type TemplateAsset } from '@/lib/clips/real-video-templates/sequence-contract'
 import { defaultClipSettings } from '@/lib/clips/settings'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/releases'
@@ -33,7 +35,7 @@ function draftMeta(settings: unknown): { version: number; draft: StudioDraft } |
     return null
   return { version: value.version as number, draft: value.draft as StudioDraft }
 }
-async function assertDraftAssets(workspaceId: string, draft: StudioDraft) {
+export async function assertDraftAssets(workspaceId: string, draft: StudioDraft) {
   const selected = [
     ...Object.values(draft.slots).flatMap(s => [s.asset, ...(s.holdAsset ? [s.holdAsset] : [])]),
     ...(draft.music ? [draft.music] : []),
@@ -59,7 +61,7 @@ async function assertDraftAssets(workspaceId: string, draft: StudioDraft) {
       throw new TemplateInstanceNotFound()
   }
 }
-function validDraft(releaseId: string, raw: unknown): StudioDraft {
+export function validDraft(releaseId: string, raw: unknown): StudioDraft {
   if (!object(raw) || raw.v !== 1 || raw.releaseId !== releaseId ||
       typeof raw.draftId !== 'string' || !KEY.test(raw.draftId) ||
       !object(raw.slots) || Object.keys(raw.slots).length > 120 ||
@@ -101,7 +103,9 @@ export async function createVideoTemplateDraft(workspaceId: string, releaseId: s
       data: { id, workspaceId, title: release.title, sourceKind: 'video_template_draft',
         stage: 'template_slots', status: 'DRAFT', rangeStartMs: 0,
         rangeEndMs: Math.round(release.family.totalFrames * 1000 / 30),
-        settings: toPrismaJson({ ...defaultClipSettings(), videoTemplateDraft: { version: 0, draft: initial } }),
+        settings: toPrismaJson({ ...defaultClipSettings(),
+          videoTemplateOriginal: { family: release.family, design: release.design },
+          videoTemplateDraft: { version: 0, draft: initial } }),
       },
     })
   } catch (e) {
@@ -182,4 +186,113 @@ export async function discardVideoTemplateDraft(workspaceId: string, projectId: 
     where: { id: projectId, workspaceId, status: 'DRAFT', deletedAt: null },
     data: { deletedAt: new Date() },
   })
+}
+
+/**
+ * Standalone template editing (no editor timeline integration).
+ * This atomically saves the pinned ClipEditsV2 video/text/graphics/music lanes and
+ * corresponding workspace draft. Any independent editor save permanently blocks this
+ * template-owned recompile, protecting manual full/Compact changes.
+ */
+export async function savePublishedStudioDraft(
+  workspaceId: string,
+  projectId: string,
+  expectedVersion: number,
+  expectedEditsSaveVersion: number,
+  raw: unknown,
+): Promise<{ version: number; editsSaveVersion: number }> {
+  const state = await getVideoTemplateDraft(workspaceId, projectId)
+  if (!state || !state.clipId) throw new TemplateInstanceNotFound()
+  if (state.status !== 'READY' || state.version !== expectedVersion) throw new TemplateInstanceConflict()
+  const draft = validDraft(state.draft.releaseId, raw)
+  if (draft.draftId !== state.draft.draftId || draft.musicTiming === 'resync')
+    throw new Error('Music re-sync requires an approved beat map; choose Keep timing until analysis is available')
+  await assertDraftAssets(workspaceId, draft)
+  try {
+    return await getPrisma().$transaction(async tx => {
+      const project = await tx.clipProject.findFirst({
+        where: { id: projectId, workspaceId, status: 'READY', deletedAt: null },
+        select: { settings: true, clips: { where: { id: state.clipId!, deletedAt: null },
+          select: { id: true, edits: true, aiMeta: true, editsSaveVersion: true } } },
+      })
+      const clip = project?.clips[0]
+      const settings = project?.settings
+      const saved = draftMeta(settings)
+      if (!clip || !saved || saved.version !== expectedVersion ||
+          !object(settings) || !object(settings.videoTemplateOriginal) ||
+          clip.editsSaveVersion !== expectedEditsSaveVersion)
+        throw new TemplateInstanceConflict()
+      const original = settings.videoTemplateOriginal
+      const family = validateTemplateFamily(original.family)
+      const design = validateTemplateDesign(original.design, family)
+      const aiMeta = object(clip.aiMeta) ? structuredClone(clip.aiMeta) : {}
+      const templateMeta = aiMeta.videoTemplate
+      if (!object(templateMeta) || templateMeta.instanceId !== templateInstanceId(workspaceId, draft.draftId) ||
+          templateMeta.studioEditsSaveVersion !== expectedEditsSaveVersion)
+        throw new TemplateInstanceConflict()
+      const materialized = materializeStudioDraft(family, draft, String(templateMeta.instanceId))
+      const durationMs = Math.round(family.totalFrames * 1000 / 30)
+      const compiled = compileTemplate(materialized.family, design, materialized.choices,
+        { durationFrames: family.totalFrames, edits: defaultEdits({ clipStartMs: 0, clipEndMs: durationMs }) })
+      // Retain every unknown/legacy field; only the studio-authoritative lanes are changed.
+      const old = clip.edits as unknown as ClipEditsV2
+      const next: ClipEditsV2 = {
+        ...old,
+        sources: compiled.edits.sources,
+        sourceSegments: compiled.edits.sourceSegments,
+        videoSplits: compiled.edits.videoSplits,
+        transitions: compiled.edits.transitions,
+        keyframes: compiled.edits.keyframes,
+        textItems: compiled.edits.textItems,
+        audio: { ...old.audio, music: compiled.edits.audio.music },
+        templateProvenance: compiled.edits.templateProvenance,
+      }
+      // Selected uploads are always revalidated within the transaction as well.
+      const assets = new Map<string, TemplateAsset>()
+      Object.values(materialized.choices.media).forEach(a => assets.set(a.id, a))
+      if (materialized.choices.music) assets.set(materialized.choices.music.id, materialized.choices.music)
+      const rows = await tx.clipUpload.findMany({
+        where: { workspaceId, status: 'COMPLETE', id: { in: [...assets.keys()] } },
+        select: { id: true, mime: true, durationMs: true, width: true, height: true },
+      })
+      if (rows.length !== assets.size) throw new TemplateInstanceNotFound()
+      for (const row of rows) {
+        const asset = assets.get(row.id)!
+        if (!row.mime.startsWith(asset.kind + '/') ||
+            (asset.kind !== 'image' && (!row.durationMs || !asset.durationFrames ||
+              Math.ceil(asset.durationFrames * 1000 / 30) > row.durationMs + 33)))
+          throw new TemplateInstanceNotFound()
+        await tx.clipProjectMedia.upsert({
+          where: { projectId_uploadId: { projectId, uploadId: row.id } },
+          create: { id: 'pm_tpl_' + digest(projectId, row.id).slice(0, 28),
+            projectId, workspaceId, uploadId: row.id, mediaType: asset.kind,
+            label: row.id, durationMs: row.durationMs, width: row.width, height: row.height },
+          update: {},
+        })
+      }
+      templateMeta.snapshot = { family: materialized.family, design }
+      templateMeta.authoringState = { media: materialized.choices.media, texts: materialized.choices.texts,
+        ...(materialized.choices.music ? { music: materialized.choices.music } : {}) }
+      templateMeta.authoringVersion = Number(templateMeta.authoringVersion ?? 0) + 1
+      templateMeta.slotToItemIds = compiled.slotToItemIds
+      templateMeta.studioEditsSaveVersion = expectedEditsSaveVersion + 1
+      aiMeta.videoTemplate = templateMeta
+      const written = await tx.clip.updateMany({
+        where: { id: clip.id, workspaceId, editsSaveVersion: expectedEditsSaveVersion },
+        data: { edits: toPrismaJson(next), aiMeta: toPrismaJson(aiMeta),
+          editsSaveVersion: { increment: 1 } },
+      })
+      if (written.count !== 1) throw new TemplateInstanceConflict()
+      await tx.clipProject.update({ where: { id: projectId },
+        data: { settings: toPrismaJson({ ...settings, videoTemplateDraft: {
+          version: expectedVersion + 1, draft,
+        } }) },
+      })
+      return { version: expectedVersion + 1, editsSaveVersion: expectedEditsSaveVersion + 1 }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  } catch (error) {
+    if (error instanceof TemplateInstanceConflict || error instanceof TemplateInstanceNotFound) throw error
+    if (object(error) && error.code === 'P2034') throw new TemplateInstanceConflict()
+    throw error
+  }
 }

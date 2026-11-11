@@ -226,6 +226,7 @@ export async function publishTemplateProject(
           snapshot,
           authoringState: structuredClone(choicesRaw),
           authoringVersion: 0,
+          studioEditsSaveVersion: 0,
           slotToItemIds: compiled.slotToItemIds,
         },
       }
@@ -256,7 +257,8 @@ export async function publishTemplateProject(
         title: title?.trim().slice(0, 200) || family.title,
         uploadId: ids.uploadId,
         settings: toPrismaJson({ ...settings,
-          ...(preserved.videoTemplateDraft ? { videoTemplateDraft: preserved.videoTemplateDraft } : {}) }),
+          ...(preserved.videoTemplateDraft ? { videoTemplateDraft: preserved.videoTemplateDraft } : {}),
+          ...(preserved.videoTemplateOriginal ? { videoTemplateOriginal: preserved.videoTemplateOriginal } : {}) }),
         rangeStartMs: 0,
         rangeEndMs: durationMs,
         status: 'QUEUED' as const,
