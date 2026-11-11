@@ -45,8 +45,8 @@ export function listAiCaptionsRuns(): Promise<AiCaptionsRun[]> {
   return captionsFetch<AiCaptionsRun[]>('/api/ai-captions/runs')
 }
 
-export function getAiCaptionsRun(runId: string): Promise<AiCaptionsRun> {
-  return captionsFetch<AiCaptionsRun>(`/api/ai-captions/runs/${runId}`)
+export function getAiCaptionsRun(runId: string, signal?: AbortSignal): Promise<AiCaptionsRun> {
+  return captionsFetch<AiCaptionsRun>(`/api/ai-captions/runs/${runId}`, signal ? { signal } : undefined)
 }
 
 export function listAiCaptionsStyles(): Promise<AiCaptionsStylesData> {
