@@ -97,3 +97,6 @@ describe('B3 exact source/output/item-local frame clock', () => {
     expect(() => itemLocalToSequenceFrame(seq, 'unknown', 0)).toThrow(/unknown sequence item/)
   })
 })
+
+// Server-side ownership/CAS regression is also in the explicit editor CI test gate.
+import './real-video-template-instance.test'
