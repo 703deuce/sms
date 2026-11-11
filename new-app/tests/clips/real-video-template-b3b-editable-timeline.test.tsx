@@ -62,6 +62,8 @@ describe('Batch 3B machine-readable editable timeline proof', () => {
     expect(json.schema).toBe('transovo.real-video-template.editable-timeline-proof.v1')
     expect(json.cases).toHaveLength(3)
     expect(json.cases.every((c: { matches: boolean }) => c.matches)).toBe(true)
+    expect(json.editedReload.edits.audio.music).toMatchObject({ generationId: 'replacement_music', volume: 0.35 })
+    expect(json.editedReload.structure.mediaItems).toHaveLength(3)
   })
 
   it('fails closed when an authoritative transition object is lost', () => {
@@ -183,10 +185,11 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
     next = setPropertyAt(next, `text:${text.id}`, 'x', 0, 7)
 
     const musicId = next.audio!.music!.generationId
-    next = patchAudioClip(next, 'music', musicId, { volume: 0 })!
+    const muted = patchAudioClip(next, 'music', musicId, { volume: 0 })!
+    expect(muted.audio?.music?.volume).toBe(0)
     next = {
-      ...next,
-      audio: { ...next.audio!, music: { ...next.audio!.music!, generationId: 'replacement_music', uploadId: 'replacement_music', volume: 0 } },
+      ...muted,
+      audio: { ...muted.audio!, music: { ...muted.audio!.music!, generationId: 'replacement_music', uploadId: 'replacement_music', volume: 0.35 } },
     }
 
     next = {
@@ -220,7 +223,7 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
     expect(segmentMediaMs(reloaded.sourceSegments![1]!, mappedSource, 1100)).toBe(551)
     expect(reloaded.transitions?.find((t) => t.srcMs === 1033)?.type).toBe('wipe_left')
     expect(reloaded.textItems?.find((item) => item.id === text.id)).toMatchObject({ text: 'Edited after publish' })
-    expect(reloaded.audio?.music).toMatchObject({ generationId: 'replacement_music', volume: 0 })
+    expect(reloaded.audio?.music).toMatchObject({ generationId: 'replacement_music', uploadId: 'replacement_music', volume: 0.35 })
     expect(reloaded.captionLines).toEqual([{ id: 'caption_all', startMs: 0, endMs: 3000, text: 'CAPTION THROUGH EVERY SLOT' }])
 
     // Undo/redo uses the ordinary edit snapshots; stable item/layer ids survive both directions.
