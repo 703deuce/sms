@@ -214,6 +214,18 @@ describe('B3 transactional template project publishing', () => {
       .rejects.toBeInstanceOf(TemplateInstanceConflict)
   })
 
+  it('rejects the same idempotency key with different media choices instead of silently reusing', async () => {
+    state.uploads.push({
+      id: 'owned_photo_b', workspaceId: 'ws_a', status: 'COMPLETE', mime: 'image/png',
+      durationMs: null, width: 1200, height: 1600,
+    })
+    await publishTemplateProject('ws_a', 'request_key_123', family, design, choices)
+    await expect(publishTemplateProject(
+      'ws_a', 'request_key_123', family, design,
+      { media: { first: { ...photo, id: 'owned_photo_b' } } },
+    )).rejects.toBeInstanceOf(TemplateInstanceConflict)
+  })
+
   it('pins revisions across idempotent retries and rejects a different definition', async () => {
     await publishTemplateProject('ws_a', 'request_key_123', family, design, choices)
     await expect(publishTemplateProject(
