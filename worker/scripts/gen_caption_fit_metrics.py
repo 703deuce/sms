@@ -39,6 +39,11 @@ FONTS = {
     "Caveat": T6 / "Caveat.ttf",
     "Space Grotesk": T6 / "SpaceGrotesk.ttf",
     "Space Mono": T6 / "SpaceMono-Regular.ttf",
+    "Noto Sans Arabic": T6 / "NotoSansArabic.ttf",
+    "Noto Sans Devanagari": T6 / "NotoSansDevanagari.ttf",
+    "Noto Sans Thai": T6 / "NotoSansThai.ttf",
+    "Noto Sans JP": T6 / "NotoSansJP.ttf",
+    "Noto Emoji": T6 / "NotoEmoji.ttf",
 }
 MAX_CP = 0x250  # Latin + Latin-1 + Latin Extended-A/B; anything else uses defaultAdv
 OUTS = [
