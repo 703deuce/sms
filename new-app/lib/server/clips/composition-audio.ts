@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { deriveEdl } from '@/lib/clips/script-edl/derive-edl'
+import { deriveEdl, sourceMsToOutputTime } from '@/lib/clips/script-edl/derive-edl'
 import { outputDurationMs } from '@/lib/clips/script-edl/edl-playback'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { toEditorWords, resolveSourceMediaId } from '@/lib/clips/script-editor/to-editor-words'
@@ -52,6 +52,11 @@ export async function getCompositionAudioContext(workspaceId: string, compositio
 
   const keptIds = new Set(document.keptWordIds)
   const keptWords = editorWords.filter((w) => keptIds.has(w.id))
+  // The chapter model needs the edited OUTPUT clock, not un-timed source transcript text.
+  const timedKeptWords = keptWords.flatMap((w) => {
+    const mapped = sourceMsToOutputTime(w.t0Ms, edl)
+    return mapped == null ? [] : [{ text: w.text, outMs: Math.round(mapped) }]
+  }).sort((a, b) => a.outMs - b.outMs)
 
   return {
     composition: row,
@@ -60,5 +65,6 @@ export async function getCompositionAudioContext(workspaceId: string, compositio
     lengthMs,
     transcriptText,
     keptWords,
+    timedKeptWords,
   }
 }
