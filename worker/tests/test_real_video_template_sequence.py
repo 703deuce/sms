@@ -9,6 +9,7 @@ import pytest
 
 from clips_worker.audio_render import apply_audio_mix
 from clips_worker.blank_project import make_template_carrier
+from clips_worker.byo_clip_job import template_project_canceled
 from clips_worker.media_sources import apply_full_render_sources, source_transition_boundaries
 from clips_worker.text_items import apply_text_items, text_items_ass
 
@@ -166,3 +167,29 @@ def test_template_carrier_is_exact_for_non_integer_second_frame_budget(tmp_path:
     make_template_carrier(carrier, "9:16", 73)
     assert frames(carrier) == 73
     assert duration(carrier) == pytest.approx(73 / 30, abs=0.04)
+
+
+class _StatusCursor:
+    def __init__(self, status: str | None):
+        self.status = status
+    def __enter__(self):
+        return self
+    def __exit__(self, *_args):
+        return False
+    def execute(self, _sql, _params):
+        return None
+    def fetchone(self):
+        return None if self.status is None else (self.status,)
+
+
+class _StatusConn:
+    def __init__(self, status: str | None):
+        self.status = status
+    def cursor(self):
+        return _StatusCursor(self.status)
+
+
+def test_template_carrier_cancellation_guard_is_fail_closed() -> None:
+    assert template_project_canceled(_StatusConn("CANCELED"), "project_a") is True
+    assert template_project_canceled(_StatusConn("READY"), "project_a") is False
+    assert template_project_canceled(_StatusConn(None), "missing_project") is True
