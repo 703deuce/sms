@@ -7,6 +7,8 @@ export type StreamerAgentBatch={
   mode:StreamerAgentMode;seconds:30|60|90;index:number;total:number
   sourceStartMs:number;sourceDurationMs:number
   preparedProjectId?:string;runId?:string
+  /** Absent on legacy batches: keep their original window count/boundaries. */
+  windowPolicy?:'fold_short_tail_v1'
   completed:StreamerAgentBatchResult[];errors:string[];startedAt:string
 }
 export function streamerAgentSettings(raw:unknown):Record<string,unknown>{
