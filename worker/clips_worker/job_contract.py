@@ -53,6 +53,50 @@ def release_job_lock(conn, job_id: str, instance_id: str | None = None) -> None:
     conn.commit()
 
 
+# Only jobs that create substantial local media should be stopped for disk pressure.
+# In particular STREAM_AGENT_BATCH coordinates other jobs and must always run.
+STREAM_DISK_GUARD_HEAVY_TYPES = frozenset({
+    "STREAM_IMPORT",
+    "STREAM_AGENT_PREPARE",
+    "STREAM_ANALYZE",
+    "STREAM_RENDER",
+    "STREAM_RELAYOUT",
+    "STREAM_MONTAGE",
+    "STREAM_AUTOPULL",
+})
+
+
+def stream_job_needs_disk_guard(job_type: str) -> bool:
+    return job_type in STREAM_DISK_GUARD_HEAVY_TYPES
+
+
+def defer_job_for_disk_pressure(conn, job: dict, *, delay_seconds: int = 60) -> None:
+    """Undo only the claim's attempt increment, then retry after disk pressure clears.
+
+    claim_job has already incremented attempts exactly once. Do not invoke the
+    normal drain/retry release path, which deliberately counts attempts.
+    """
+    if delay_seconds < 1:
+        raise ValueError("disk guard backoff must be positive")
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE clip_jobs
+            SET status = 'QUEUED',
+                "lockedBy" = NULL,
+                "lockedAt" = NULL,
+                "runAfter" = (NOW() AT TIME ZONE 'UTC') + (%s || ' seconds')::interval,
+                attempts = GREATEST(0, attempts - 1)
+            WHERE id = %s AND status = 'RUNNING' AND "lockedBy" = %s
+            """,
+            (str(delay_seconds), job["id"], job["lockedBy"]),
+        )
+        if cur.rowcount != 1:
+            raise RuntimeError(f"disk guard deferral lost job claim: {job['id']}")
+    conn.commit()
+    _log(f"[clipper:disk-guard] deferred job={job['id']} type={job.get('type')} delay_s={delay_seconds}")
+
+
 def requeue_job_immediate(conn, job: dict, *, note: str = "requeued") -> None:
     """Release lock and set QUEUED immediately (deploy drain / interrupt)."""
     job_id = job["id"]
