@@ -69,7 +69,7 @@ export function buildEditableTimelineProofCases(): EditableTimelineProofCase[] {
       { id: 'intro', ordinal: 1, role: 'hero', media: 'image', startFrame: 0, durationFrames: 30, handles: { headFrames: 0, tailFrames: 6 },
         fit: 'cover', sourceAudio: 'mute', transition: 'cut' },
       { id: 'video', ordinal: 2, role: 'support', media: 'video', startFrame: 30, durationFrames: 30, sourceInFrame: 12,
-        handles: { headFrames: 6, tailFrames: 0 }, fit: 'cover', sourceAudio: 'source',
+        handles: { headFrames: 9, tailFrames: 0 }, fit: 'cover', sourceAudio: 'source', speed: 1.5,
         transition: { type: 'crossfade', durationFrames: 12 }, motion: { from: { x: -4, scale: 103 }, to: { x: 3, scale: 108 }, ease: 'inOut' },
         fx: { contrast: 8, saturation: 6 } },
       { id: 'close', ordinal: 3, role: 'closing', media: 'image', startFrame: 60, durationFrames: 30,
