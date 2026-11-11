@@ -366,9 +366,15 @@ export function compileBatch7Primitives(
       )
       const localEnd = Math.max(1, durationMs - 1)
       switch (primitive.kind) {
-        case 'photo_frame':
+        case 'photo_frame': {
+          const window = context.slotWindows[primitive.slotId]
+          if (!window || primitive.startFrame !== window.startFrame || primitive.durationFrames !== window.durationFrames)
+            throw new Error('photo_frame_window_mismatch:' + primitive.slotId)
+          if (context.slotToMediaKind[primitive.slotId] !== 'image')
+            throw new Error('photo_frame_requires_image:' + primitive.slotId)
           frameBorder(primitive)
           break
+        }
         case 'collage_card': {
           setComposite(primitive, primitive.slotIds[0]!, primitive.slotIds.slice(1), primitive.slotIds.length === 2 ? 'side_by_side' : 'grid')
           const border = { x: 0.015, y: 0.015, width: 0.97, height: 0.97 }

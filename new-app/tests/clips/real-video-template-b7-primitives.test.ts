@@ -123,6 +123,14 @@ describe('Batch 7 standalone reusable primitives', () => {
     expect(reloaded.textItems?.some((i) => i.id === 'manual_note')).toBe(true)
   })
 
+  it('rejects a photo frame authored over the wrong slot window', () => {
+    const f = family(2)
+    f.primitives = [{ kind: 'photo_frame', id: 'bad_frame', startFrame: 60, durationFrames: 60, slotId: 'shot_1',
+      box: { x: .05, y: .05, width: .9, height: .9 }, thickness: 12, style }]
+    expect(() => compileTemplate(f, design, choices(2), carrier(f.totalFrames)))
+      .toThrow(/photo_frame_window_mismatch/)
+  })
+
   it('fails closed at textItems capacity instead of dropping manual items', () => {
     const f = family(1)
     f.primitives = [{ kind: 'photo_frame', id: 'frame', startFrame: 0, durationFrames: 60, slotId: 'shot_1',
