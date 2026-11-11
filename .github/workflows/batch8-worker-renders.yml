@@ -103,13 +103,13 @@ jobs:
         with:
           name: b8-worker-contract
           path: build
-      - name: Render 100 real worker designs
+      - name: Render 100 designs through production export orchestration
         run: |
           python worker/scripts/render_batch8_factory_certification.py \
             --contract build/b8-worker-contract.json \
             --music build/b8-cert-music.wav \
             --out build/b8-worker-renders/shard-${{ matrix.shard }} \
-            --shard ${{ matrix.shard }} --shards 20
+            --shard ${{ matrix.shard }} --shards 20 --production-smoke
       - uses: actions/upload-artifact@v4
         if: always()
         with:
