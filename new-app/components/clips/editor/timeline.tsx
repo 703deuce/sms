@@ -2967,7 +2967,7 @@ export function Timeline({
         tabIndex={item.lane === 'video' || dimmed ? undefined : 0}
         onKeyDown={(e) => {
           if (item.lane === 'video' || dimmed) return
-          if (e.key === 'Enter' || e.key === ' ') {
+          if (e.key === 'Enter') {
             e.preventDefault()
             e.stopPropagation()
             setSelected(expandToGroups(edits, [{ lane: item.lane, id: item.id }], (lane, id) => ({ lane: lane as LaneId, id }), openCompound))
