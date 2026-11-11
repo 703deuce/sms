@@ -93,6 +93,8 @@ export type TemplateFamilyV1 = {
   graphics?: TemplateGraphic[]
   beatAnchors: number[]
   phraseAnchors?: TemplatePhraseAnchor[]
+  /** B3B editorial timing policy used by first-party release validation. */
+  timingMode?: 'beat' | 'semantic'
 }
 export type TemplateDesignV1 = {
   schemaVersion: 1
@@ -281,7 +283,7 @@ function validateTransition(raw: unknown, index: number): 'cut' | TemplateTransi
 
 export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   if (!own(raw)) throw new Error('family: expected JSON object')
-  exact(raw, ['schemaVersion','familyId','revision','title','tags','aspects','fps','totalFrames','slots','texts','graphics','beatAnchors','phraseAnchors'], 'family')
+  exact(raw, ['schemaVersion','familyId','revision','title','tags','aspects','fps','totalFrames','slots','texts','graphics','beatAnchors','phraseAnchors','timingMode'], 'family')
   if (raw.schemaVersion !== 1 || raw.fps !== 30) throw new Error('family: unsupported schema/fps')
   id(raw.familyId, 'family')
   integer(raw.revision, 1, 1_000_000, 'family revision')
@@ -428,8 +430,41 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     title: raw.title.trim(), tags: [...raw.tags] as string[], aspects: [...raw.aspects] as TemplateFamilyV1['aspects'],
     fps: 30, totalFrames: total, slots, texts, ...(graphics?.length ? { graphics } : {}),
     beatAnchors, ...(phraseAnchors?.length ? { phraseAnchors } : {}),
+    ...(raw.timingMode != null ? { timingMode: oneOf(raw.timingMode, ['beat','semantic'] as const, 'family.timingMode') } : {}),
   }
 }
+
+export function validateTemplateEditorialTiming(family: TemplateFamilyV1): void {
+  if (!family.timingMode) throw new Error('family: first-party release requires explicit timingMode')
+  const phraseFrames = new Set((family.phraseAnchors ?? []).map((a) => a.frame))
+  const beatFrames = new Set(family.beatAnchors)
+  const near = (frame: number, set: Set<number>) => [...set].some((v) => Math.abs(v - frame) <= 1)
+
+  if (family.timingMode === 'beat') {
+    if (!beatFrames.size) throw new Error('family: beat-driven release requires beat anchors')
+    for (const slot of family.slots.slice(1)) {
+      if (!near(slot.startFrame, beatFrames) && !near(slot.startFrame, phraseFrames))
+        throw new Error(`family: beat-driven cut ${slot.id} is not on an authored beat/phrase accent`)
+    }
+    for (const text of family.texts) {
+      if (text.animation?.in && !near(text.startFrame, beatFrames) && !near(text.startFrame, phraseFrames))
+        throw new Error(`family: text entrance ${text.id} is not synchronized to an authored accent`)
+      if (text.animation?.out) {
+        const cue = text.startFrame + text.durationFrames - text.animation.out.durationFrames
+        if (!near(cue, beatFrames) && !near(cue, phraseFrames))
+          throw new Error(`family: text exit ${text.id} is not synchronized to an authored accent`)
+      }
+    }
+  } else {
+    if (!phraseFrames.size) throw new Error('family: semantic release requires phrase anchors')
+    for (const text of family.texts) {
+      if (text.durationFrames < 15) throw new Error(`family: semantic text ${text.id} has insufficient reading time`)
+      const own = (family.phraseAnchors ?? []).some((a) => a.textFieldId === text.id)
+      if (!own) throw new Error(`family: semantic text ${text.id} needs an explicit phrase anchor`)
+    }
+  }
+}
+export function validateTemplateDesign
 export function validateTemplateDesign(raw: unknown, family: TemplateFamilyV1): TemplateDesignV1 {
   if (!own(raw)) throw new Error('design: expected object')
   exact(raw, ['schemaVersion','designId','revision','stylePackId','familyId','familyRevision','musicPolicy'], 'design')
