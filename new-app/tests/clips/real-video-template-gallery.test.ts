@@ -32,6 +32,13 @@ describe('standalone real video gallery', () => {
       x.certificationStatus==='preview' && !x.reviewed && !x.previewRenderVerified &&
       x.musicRequired && x.defaultMusic?.sha256 === BATCH9A_DEFAULT_MUSIC.sha256
     )).toBe(true)
+    expect(FIRST_PARTY_VIDEO_TEMPLATES.every(x =>
+      x.previewMedia?.frames===4 && x.previewMedia.columns===4 &&
+      x.previewMedia.spritePath.startsWith('/clips/template-previews/') &&
+      /^[a-f0-9]{64}$/.test(x.previewMedia.sha256)
+    )).toBe(true)
+    expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.previewMedia?.spritePath)).size).toBe(10)
+    expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.previewMedia?.sha256)).size).toBe(10)
   })
   it('keeps all ten Preview anchors above the Batch 9A authoring-quality floor', () => {
     expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.design.stylePackId)).size).toBe(10)
@@ -111,6 +118,20 @@ describe('standalone real video gallery', () => {
     expect(() => validateVideoTemplateRelease({ ...fixture('one'), demoPath: 'https://remote.example/demo.mp4' })).toThrow('local demo')
     expect(() => validateVideoTemplateRelease({ ...fixture('one'), authoredDimensions: ['font-hierarchy', 'color','aspect'] })).toThrow('three')
   })
+  it('accepts only bounded local rendered preview sprites', () => {
+    const sprite = {spritePath:'/clips/template-previews/sample.webp',frames:4,columns:4,sha256:'a'.repeat(64)}
+    expect(validateVideoTemplateRelease({...fixture('sprite'),previewMedia:sprite}).previewMedia).toEqual(sprite)
+    expect(() => validateVideoTemplateRelease({
+      ...fixture('remote-sprite'),previewMedia:{...sprite,spritePath:'https://example.com/sample.webp'},
+    })).toThrow('local WebP')
+    expect(() => validateVideoTemplateRelease({
+      ...fixture('bad-sprite'),previewMedia:{...sprite,frames:5,columns:4},
+    })).toThrow('Invalid preview sprite')
+    expect(() => validateVideoTemplateRelease({
+      ...fixture('bad-hash'),previewMedia:{...sprite,sha256:'not-a-hash'},
+    })).toThrow('Invalid preview sprite')
+  })
+
   it('checks duplicate IDs and family/treatment pairs', () => {
     expect(() => validateVideoTemplateGallery([fixture('one'),fixture('one')])).toThrow('Duplicate')
   })
