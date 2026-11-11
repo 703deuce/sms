@@ -42,6 +42,7 @@ export function VideoTemplatesGallery() {
   const [mineTotal, setMineTotal] = useState(0)
   const [mineError, setMineError] = useState<string | null>(null)
   const [mineRefresh, setMineRefresh] = useState(0)
+  const [mineFilter, setMineFilter] = useState('')
   const [community, setCommunity] = useState<CommunityTemplateListItem[]>([])
   const [communityPages, setCommunityPages] = useState(1)
   const [communityTotal, setCommunityTotal] = useState(0)
@@ -55,6 +56,7 @@ export function VideoTemplatesGallery() {
     let live = true
     const qs = new URLSearchParams({ page: String(page) })
     if (query.trim()) qs.set('q', query.trim())
+    if (mineFilter) qs.set('state', mineFilter)
     Promise.all([
       fetch('/api/clips/user-templates?' + qs.toString(), { cache: 'no-store' }).then(async response => {
         const body = await response.json() as { data?: { items:UserTemplateListItem[];pages:number;total:number }; error?: string }
@@ -71,7 +73,7 @@ export function VideoTemplatesGallery() {
       setMine(saved.items);setMinePages(saved.pages);setMineTotal(saved.total);setDrafts(projectDrafts);setMineError(null)
     }).catch(error => { if (live) setMineError(error instanceof Error ? error.message : 'Load failed') })
     return () => { live = false }
-  }, [scope, query, page, mineRefresh])
+  }, [scope, query, page, mineRefresh, mineFilter])
 
   useEffect(() => {
     if (scope !== 'community') return
@@ -247,10 +249,20 @@ export function VideoTemplatesGallery() {
           <button type="button" disabled={result.page === result.pages} onClick={() => setPage(p => Math.min(result.pages, p + 1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Next</button>
         </nav>}
       </> : scope === 'mine' ? <section role="tabpanel" aria-label="My templates" className="space-y-5">
-        <section className="rounded-2xl border bg-card p-4">
-          <label className="block max-w-md space-y-1 text-xs font-medium">Search My templates
+        <section className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-2">
+          <label className="block space-y-1 text-xs font-medium">Search My templates
             <input type="search" value={query} onChange={e => changeFilters(setQuery, e.target.value)}
               placeholder="Search saved templates" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" />
+          </label>
+          <label className="block space-y-1 text-xs font-medium">Publication state
+            <select value={mineFilter} onChange={e=>{setMineFilter(e.target.value);setPage(1)}}
+              className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+              <option value="">All private templates</option>
+              <option value="never-submitted">Never submitted</option>
+              <option value="pending">Pending review</option>
+              <option value="published">Published</option>
+              <option value="rejected">Rejected</option>
+            </select>
           </label>
         </section>
         {mineError && <p role="alert" className="rounded-xl border p-4 text-sm text-destructive">{mineError}</p>}
@@ -321,12 +333,15 @@ export function VideoTemplatesGallery() {
                     .catch(e=>setMineError(e instanceof Error?e.message:'Duplicate failed'))
                 }}>Duplicate</button>
                 <button type="button" className="rounded-lg border px-3 py-2 text-xs" onClick={() => {
-                  const next=window.prompt('Rename template',item.title)?.trim()
-                  if(!next||next===item.title)return
-                  void fetch('/api/clips/user-templates/'+encodeURIComponent(item.id),{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({title:next})})
-                    .then(async r=>{if(!r.ok){const b=await r.json() as {error?:string};throw new Error(b.error??'Rename failed')}setMineRefresh(x=>x+1)})
-                    .catch(e=>setMineError(e instanceof Error?e.message:'Rename failed'))
-                }}>Rename</button>
+                  const nextTitle=window.prompt('Template title',item.title)?.trim()
+                  if(!nextTitle)return
+                  const nextDescription=window.prompt('Template description',item.description) 
+                  if(nextDescription===null)return
+                  void fetch('/api/clips/user-templates/'+encodeURIComponent(item.id),{method:'PATCH',headers:{'content-type':'application/json'},
+                    body:JSON.stringify({title:nextTitle,description:nextDescription})})
+                    .then(async r=>{if(!r.ok){const b=await r.json() as {error?:string};throw new Error(b.error??'Metadata update failed')}setMineRefresh(x=>x+1)})
+                    .catch(e=>setMineError(e instanceof Error?e.message:'Metadata update failed'))
+                }}>Edit metadata</button>
                 {item.publications?.find(p=>p.state==='submitted'||p.state==='published') ? <button type="button"
                   className="rounded-lg border px-3 py-2 text-xs" onClick={() => {
                     const pub=item.publications?.find(p=>p.state==='submitted'||p.state==='published')
