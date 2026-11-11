@@ -326,7 +326,7 @@ export async function listPrivateUserTemplates(workspaceId:string,q:string,page:
     getPrisma().clipUserTemplate.count({where}),
     getPrisma().clipUserTemplate.findMany({where,orderBy:{updatedAt:'desc'},take,skip:(safePage-1)*take,
       select:{id:true,title:true,description:true,currentRevision:true,updatedAt:true,
-        revisions:{orderBy:{revision:'desc'},take:1,select:{definition:true,assetManifest:true,revision:true}}}},
+        revisions:{orderBy:{revision:'desc'},take:1,select:{definition:true,assetManifest:true,revision:true}}}}),
   ])
   return {items:rows,total,page:safePage,pages:Math.max(1,Math.ceil(total/take))}
 }
