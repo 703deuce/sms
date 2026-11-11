@@ -184,7 +184,6 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
       select:{status:true,resultProjectId:true,resultClipId:true,outputProjectIds:true,producerNotes:true,error:true},
     })
     if(run&&['ready','done','failed','canceled','capped'].includes(run.status)){
-      {
         const ids=publishedBatchClipIds(run)
         // Never trust producer notes alone: enforce this workspace, the
         // published output project, and live clip rows before exposing links.
@@ -213,7 +212,6 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
         }else if(!published.length){
           next.errors.push(`Window ${next.index+1}: No published clips available`)
         }
-      }
       next.runId=undefined;next.preparedProjectId=undefined
       next.index++
       if(next.index>=windows.length)next.status='done'
