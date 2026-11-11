@@ -59,7 +59,9 @@ export function assignSelectionInOrder(
     if (asset.kind === 'audio' || (slot.media !== 'either' && slot.media !== asset.kind)) {
       rejected.push(asset); continue
     }
-    slots[slot.id] = { ...defaultFill(asset), fit: slot.fit, muteSourceAudio: slot.sourceAudio === 'mute' }
+    slots[slot.id] = { ...defaultFill(asset), fit: slot.fit,
+      sourceInFrame: asset.kind === 'video' ? slot.handles?.headFrames ?? 0 : 0,
+      muteSourceAudio: slot.sourceAudio === 'mute' }
     index++
   }
   return { draft: { ...draft, slots }, used: assets.length - rejected.length, rejected }

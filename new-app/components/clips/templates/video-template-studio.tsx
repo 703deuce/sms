@@ -40,7 +40,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
   return json.data
 }
 /** Capture an actual frame, then upload it as an independent workspace-owned still. */
-async function frameHoldFile(url: string, durationMs: number): Promise<File> {
+async function frameHoldFile(url: string, holdAtMs: number): Promise<File> {
   const video = document.createElement('video')
   video.crossOrigin = 'anonymous'
   video.preload = 'auto'
@@ -52,7 +52,7 @@ async function frameHoldFile(url: string, durationMs: number): Promise<File> {
       video.onloadedmetadata = () => resolve()
       video.onerror = () => reject(new Error('Could not load source video for frame hold'))
     })
-    video.currentTime = Math.max(0, Math.min(video.duration - 0.04, (durationMs - 50) / 1000))
+    video.currentTime = Math.max(0, Math.min(video.duration - 0.04, (holdAtMs - 40) / 1000))
     await new Promise<void>((resolve, reject) => {
       video.onseeked = () => resolve()
       video.onerror = () => reject(new Error('Could not seek source video'))
@@ -255,7 +255,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         ids.push({ id: result.uploadId, kind,
           license: { id: 'user_owned', provenance: 'user-owned', reference: 'workspace_upload' } })
       }
-      const all = await refreshMedia(1, mediaSearch, mediaKind)
+      const all = await refreshMedia(1, '', 'all')
       const withMeta = ids.map(item => all.items.find(a => a.asset.id === item.id)?.asset ?? item)
       setSelectedUploads(prev => [...prev, ...withMeta])
       setNotice(withMeta.length + ' files uploaded. Place them in the numbered slots.')
@@ -293,7 +293,13 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     if (!fill || !source?.url || !source.durationMs) { setError('Selected video must be accessible to capture a still'); return }
     setBusy(true);setError('')
     try {
-      const still = await frameHoldFile(source.url, source.durationMs)
+      const slot = release.family.slots.find(s => s.id === id)!
+      const speed = slot.speed ?? 1
+      const visible = Math.floor(((fill.asset.durationFrames ?? 0) - fill.sourceInFrame -
+        (slot.handles?.tailFrames ?? 0)) / speed)
+      if (!visible || visible < 3) throw new Error('Not enough video frames for a hold')
+      const still = await frameHoldFile(source.url, Math.round((fill.sourceInFrame +
+        Math.min(slot.durationFrames - 3, visible) * speed) * 1000 / 30))
       const created = await uploadClipFile(still, setUploadStatus, { kind: 'media' })
       patchFill(id, { holdAsset: {
         id: created.uploadId, kind: 'image',

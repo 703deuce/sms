@@ -24,7 +24,7 @@ describe('standalone real video gallery', () => {
   })
   it('requires real local demos and three visible authored dimensions', () => {
     expect(validateVideoTemplateRelease(fixture('one')).id).toBe('one')
-    expect(() => validateVideoTemplateRelease({ ...fixture('one'), reviewed: false })).toThrow('Unreviewed')
+    expect(() => validateVideoTemplateRelease({ ...fixture('one'), reviewed: false } as unknown as VideoTemplateRelease)).toThrow('Unreviewed')
     expect(() => validateVideoTemplateRelease({ ...fixture('one'), demoPath: 'https://remote.example/demo.mp4' })).toThrow('local demo')
     expect(() => validateVideoTemplateRelease({ ...fixture('one'), authoredDimensions: ['font-hierarchy', 'color','aspect'] })).toThrow('three')
   })
