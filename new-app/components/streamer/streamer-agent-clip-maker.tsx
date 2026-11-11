@@ -409,7 +409,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     </div>
     </UnifiedClipRunNote>
     <p className="mt-2 text-xs text-muted-foreground">
-      {sourceKind==='stream'?'Twitch/Kick sources are fetched as bounded video windows when needed.':'Your uploaded video is used directly without another download.'}
+      {sourceKind==='stream'?'Twitch/Kick replay/VOD sources are fetched as bounded video windows when needed; this is not real-time live clipping.':'Your uploaded video is used directly without another download.'}
       Each batch runs the same specialist agents and produces an editable Clip Studio result.
       Your long-form editing mode is unchanged.
       {allWindows?' This full-VOD batch continues after you close the page.':''}
