@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CAPTION_PRESETS, presetSlugToId, resolveCaptionPreset, resolvePreset } from '@/lib/clips/caption-presets'
+import { PREMIUM_CAPTION_STYLES, applyPremiumCaptionStyle, clearPremiumCaptionStyle } from '@/lib/clips/premium-caption-styles'
 import { CAPTION_PRESETS_V2 } from '@/lib/clips/templates/registry'
 import { resolveT6CaptionPreset } from '@/lib/clips/caption-v2-bridge'
 import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
@@ -208,6 +209,17 @@ export function CaptionsPanel({
   }
 
   const patch = (partial: Partial<ClipEditsV2['captions']>) => onChange({ ...cap, ...partial })
+  const [premiumFontBusy, setPremiumFontBusy] = useState(false)
+  const selectPremiumCaption = (id: string) => {
+    const style = PREMIUM_CAPTION_STYLES.find(s => s.id === id)
+    if (!style || premiumFontBusy) return
+    setPremiumFontBusy(true)
+    void waitForClipFont(style.font)
+      .then(() => onChange(applyPremiumCaptionStyle(cap, id)))
+      .catch((error: unknown) => toast.error('Caption font unavailable: ' +
+        (error instanceof Error ? error.message : String(error))))
+      .finally(() => setPremiumFontBusy(false))
+  }
   const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
   const exportPlatform = (edits.exportTemplate?.exportPlatformId ?? 'tiktok') as ExportPlatformId
   const marginVPct = previewCaptionBottomPct(cap, 1920)
@@ -283,9 +295,13 @@ export function CaptionsPanel({
           <label className="block space-y-1 text-xs font-medium">
             <span>Template</span>
             <select data-testid="compact-caption-template" className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-              value={cap.customPresetId ? `custom:${cap.customPresetId}` : presetId}
+              value={cap.customPresetId ? `custom:${cap.customPresetId}` : cap.presetConfig?.typographyPresetId ? `premium:${String(cap.presetConfig.typographyPresetId)}` : presetId}
               onChange={(event) => {
                 const id = event.target.value
+                if (id.startsWith('premium:')) {
+                  selectPremiumCaption(id.slice(8))
+                  return
+                }
                 if (id.startsWith('custom:')) {
                   const saved = customPresets.find((p) => p.id === id.slice(7))
                   if (saved) onChange({ ...applyCaptionStyleSnapshot(cap, saved.config), customPresetId: saved.id })
@@ -293,13 +309,16 @@ export function CaptionsPanel({
                 }
                 const classic = CAPTION_PRESETS.find((p) => presetSlugToId(p.slug) === id)
                 if (classic) {
-                  onChange({ ...cap, enabled: cap.enabled !== false, presetId: id, customPresetId: undefined, animation: classic.animation, size: cap.size ?? classic.sizePct, userSizePct: undefined })
+                  onChange({ ...clearPremiumCaptionStyle(cap), enabled: cap.enabled !== false, presetId: id, customPresetId: undefined, animation: classic.animation, size: cap.size ?? classic.sizePct, userSizePct: undefined })
                 } else if (id in CAPTION_PRESETS_V2 && t6CaptionPresetsEnabled()) {
                   onChange({ enabled: cap.enabled !== false, presetId: id, emphasis: cap.emphasis, size: cap.size, position: cap.position })
                 }
               }}>
               {CAPTION_PRESETS.map((p) => <option key={p.slug} value={presetSlugToId(p.slug)}>{p.name}</option>)}
               {t6CaptionPresetsEnabled() ? Object.entries(CAPTION_PRESETS_V2).filter(([id, p]) => id.startsWith('cp') && !(p as { deferred?: boolean }).deferred).map(([id, p]) => <option key={id} value={id}>{(p as { name?: string }).name ?? id}</option>) : null}
+              <optgroup label="Premium typography">
+                {PREMIUM_CAPTION_STYLES.map(s => <option key={s.id} value={`premium:${s.id}`}>{s.name}</option>)}
+              </optgroup>
               {customPresets.map((p) => <option key={p.id} value={`custom:${p.id}`}>{p.name}</option>)}
             </select>
           </label>
@@ -581,14 +600,14 @@ export function CaptionsPanel({
         </p>
         {CAPTION_PRESETS.map((p) => {
           const id = presetSlugToId(p.slug)
-          const active = id === presetId
+          const active = id === presetId && !cap.presetConfig?.typographyPresetId
           return (
             <button
               key={p.slug}
               type="button"
               onClick={() =>
                 onChange({
-                  ...cap,
+                  ...clearPremiumCaptionStyle(cap),
                   enabled: cap.enabled !== false,
                   presetId: id,
                   animation: p.animation,
@@ -614,6 +633,28 @@ export function CaptionsPanel({
           )
         })}
       </div>
+
+      <section className="space-y-2" data-testid="premium-caption-styles" aria-label="Premium caption typography">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Premium caption typography</p>
+        <div className="grid grid-cols-2 gap-2">
+          {PREMIUM_CAPTION_STYLES.map(style => (
+            <button
+              key={style.id}
+              type="button"
+              disabled={premiumFontBusy}
+              data-testid={`premium-caption-${style.id}`}
+              aria-label={`Apply ${style.name} caption style`}
+              aria-pressed={cap.presetConfig?.typographyPresetId === style.id}
+              onClick={() => selectPremiumCaption(style.id)}
+              className={cn('min-h-14 rounded-lg border p-2 text-left text-xs focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40',
+                cap.presetConfig?.typographyPresetId === style.id ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:bg-muted/40')}
+            >
+              <span className="block font-semibold">{style.name}</span>
+              <span className="text-[11px] text-muted-foreground">{style.font} · {style.wordsPerLine} words/line</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       </>
       ) : null}
