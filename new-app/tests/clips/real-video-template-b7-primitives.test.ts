@@ -9,7 +9,6 @@ import {
 import {
   BATCH7_DEPTH_CAPABILITIES,
   depthDerivedCacheKey,
-  planSuppliedLayerParallax,
 } from '@/lib/clips/real-video-templates/batch7-depth'
 import { addTextBackedMotionPlan } from '@/lib/clips/motion-graphics/text-adapter'
 import type { MotionPlan } from '@/lib/clips/motion-graphics/contract'
@@ -208,7 +207,7 @@ describe('Batch 7 count-up gating and existing font propagation', () => {
   })
 })
 
-describe('Batch 7 F05 depth honesty and supplied-layer planning', () => {
+describe('Batch 7 F05 depth honesty and fallback gating', () => {
   it('keeps ordinary-photo true depth hidden and records the exact existing RVM revision/license', () => {
     expect(BATCH7_DEPTH_CAPABILITIES.ordinaryPhotoTrueDepth.defaultEligible).toBe(false)
     expect(BATCH7_DEPTH_CAPABILITIES.ordinaryPhotoTrueDepth.status).toBe('unsupported_hidden')
@@ -226,27 +225,20 @@ describe('Batch 7 F05 depth honesty and supplied-layer planning', () => {
     expect(depthDerivedCacheKey({ ...base, sourceAssetId: 'photo2' })).not.toBe(depthDerivedCacheKey(base))
   })
 
-  it('plans four independent supplied-layer photo scenes without flattening unrelated edits', () => {
-    let edits = carrier(240, {
-      keyframes: [{ target: 'video', prop: 'scale', points: [{ tMs: 0, v: 100 }, { tMs: 7999, v: 105 }] }],
-    }).edits
-    const keys = new Set<string>()
-    for (let i = 0; i < 4; i++) {
-      const planned = planSuppliedLayerParallax(edits, {
-        id: 'scene' + i, workspaceId: 'ws1', sourceAssetId: 'photo' + i,
-        backgroundPlateUploadId: 'bg' + i, foregroundAlphaUploadId: 'fg' + i,
-        startMs: i * 2000, endMs: (i + 1) * 2000,
+  it('keeps four-photo F05 unavailable while producing independent future cache identities', () => {
+    expect(BATCH7_DEPTH_CAPABILITIES.suppliedAlphaForeground.status).toBe('unsupported_current_renderer')
+    expect(BATCH7_DEPTH_CAPABILITIES.suppliedLayeredParallax.defaultEligible).toBe(false)
+    expect(BATCH7_DEPTH_CAPABILITIES.ordinaryPhotoTrueDepth.fallbackChoices)
+      .toEqual(['photo_frame', 'collage_card', 'before_after'])
+    const keys = new Set(
+      Array.from({ length: 4 }, (_, i) => depthDerivedCacheKey({
+        workspaceId: 'ws1',
+        sourceAssetId: 'photo' + i,
+        model: 'future_depth_model',
+        revision: 'r1',
         crop: { x: 0, y: 0, width: 1, height: 1 },
-      })
-      expect(planned.ok).toBe(true)
-      if (!planned.ok) throw new Error(planned.detail)
-      expect(planned.releaseReady).toBe(false)
-      keys.add(planned.cacheKey)
-      edits = planned.edits
-    }
+      })),
+    )
     expect(keys.size).toBe(4)
-    expect(edits.broll).toHaveLength(8)
-    expect(edits.keyframes?.some((k) => k.target === 'video')).toBe(true)
-    expect(edits.keyframes?.filter((k) => k.target.startsWith('broll:b7depth_'))).toHaveLength(16)
   })
 })

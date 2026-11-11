@@ -5,23 +5,24 @@
  * static-photo cutout/depth + hole-fill pipeline has preview/export proof.
  * The existing RVM path is video person matting on Modal and is not that proof.
  */
-import type { ClipEditsV2 } from '@/lib/clips/edits'
-
 export const BATCH7_DEPTH_CAPABILITIES = {
   ordinaryPhotoTrueDepth: {
     status: 'unsupported_hidden',
     defaultEligible: false,
+    fallbackChoices: ['photo_frame', 'collage_card', 'before_after'],
     reason: 'No proven licensed local static-photo depth + hole-fill pipeline exists in the repo.',
   },
   suppliedAlphaForeground: {
-    status: 'supported_composite_only',
+    status: 'unsupported_current_renderer',
     defaultEligible: false,
-    reason: 'A supplied alpha foreground can be composited, but alpha alone is not true depth or a hole-filled background.',
+    fallbackChoices: ['photo_frame', 'collage_card'],
+    reason: 'Existing upload-still B-roll is rendered through opaque yuv420p unless an explicit mask/key creates alpha, so a raw alpha PNG is not a faithful foreground layer.',
   },
   suppliedLayeredParallax: {
-    status: 'proof_required',
+    status: 'unsupported_current_renderer',
     defaultEligible: false,
-    reason: 'Requires both a user-supplied hole-filled background plate and alpha foreground; decoded preview/export parity is still required before F05 release.',
+    fallbackChoices: ['photo_frame', 'collage_card', 'before_after'],
+    reason: 'The current still-image overlay path does not preserve supplied PNG alpha; layered parallax therefore lacks preview/export occlusion parity.',
   },
   existingVideoMatte: {
     status: 'not_f05_static_depth',
@@ -34,20 +35,6 @@ export const BATCH7_DEPTH_CAPABILITIES = {
 } as const
 
 export type DepthCrop = { x: number; y: number; width: number; height: number }
-export type SuppliedLayerParallaxRequest = {
-  id: string
-  workspaceId: string
-  sourceAssetId: string
-  backgroundPlateUploadId: string
-  foregroundAlphaUploadId: string
-  startMs: number
-  endMs: number
-  crop: DepthCrop
-  reducedMotion?: boolean
-}
-export type SuppliedLayerParallaxPlan =
-  | { ok: true; edits: ClipEditsV2; cacheKey: string; releaseReady: false; proofRequired: true }
-  | { ok: false; code: string; detail: string }
 
 const SAFE = /^[A-Za-z0-9_-]{1,120}$/
 function fnv(parts: readonly string[]) {
@@ -64,9 +51,9 @@ function cropKey(crop: DepthCrop) {
 }
 
 /**
- * Workspace-scoped deterministic key shape for future derived assets.
- * Includes source, model/revision and crop so replacing one source invalidates
- * only that source's derivation.
+ * Workspace-scoped deterministic key shape reserved for a future licensed
+ * derived-depth implementation. Including source/model/revision/crop means a
+ * source or crop change invalidates only that source's future derivation.
  */
 export function depthDerivedCacheKey(input: {
   workspaceId: string
@@ -80,60 +67,4 @@ export function depthDerivedCacheKey(input: {
   return 'b7depth_' + fnv([
     input.workspaceId, input.sourceAssetId, input.model, input.revision, cropKey(input.crop),
   ])
-}
-
-/**
- * Editable supplied-layer proof plan. This is deliberately NOT release-ready F05:
- * it requires a user-supplied hole-filled background plate plus alpha foreground.
- * Both remain ordinary upload B-roll layers with editable item-local keyframes.
- */
-export function planSuppliedLayerParallax(
-  edits: ClipEditsV2,
-  request: SuppliedLayerParallaxRequest,
-): SuppliedLayerParallaxPlan {
-  if (!SAFE.test(request.id) || !SAFE.test(request.workspaceId) || !SAFE.test(request.sourceAssetId) ||
-      !SAFE.test(request.backgroundPlateUploadId) || !SAFE.test(request.foregroundAlphaUploadId))
-    return { ok: false, code: 'invalid_identity', detail: 'Supplied-layer IDs must be safe workspace asset IDs' }
-  if (!Number.isFinite(request.startMs) || !Number.isFinite(request.endMs) ||
-      request.startMs < 0 || request.endMs - request.startMs < 1000)
-    return { ok: false, code: 'invalid_window', detail: 'Supplied-layer parallax needs a >=1s output window' }
-  try { cropKey(request.crop) } catch {
-    return { ok: false, code: 'invalid_crop', detail: 'Crop must fit normalized source bounds' }
-  }
-  const bgId = 'b7depth_' + request.id + '_bg'
-  const fgId = 'b7depth_' + request.id + '_fg'
-  const occupied = new Set((edits.broll ?? []).map((item) => item.id))
-  if (occupied.has(bgId) || occupied.has(fgId))
-    return { ok: false, code: 'id_collision', detail: 'Depth layer ID already exists' }
-
-  const broll = [
-    ...(edits.broll ?? []),
-    { id: bgId, source: 'upload' as const, uploadId: request.backgroundPlateUploadId, still: true as const,
-      startMs: Math.round(request.startMs), endMs: Math.round(request.endMs), placement: 'manual' as const },
-    { id: fgId, source: 'upload' as const, uploadId: request.foregroundAlphaUploadId, still: true as const,
-      startMs: Math.round(request.startMs), endMs: Math.round(request.endMs), placement: 'manual' as const },
-  ]
-  const span = Math.max(1, Math.round(request.endMs - request.startMs) - 1)
-  const keyframes = [...(edits.keyframes ?? [])]
-  if (!request.reducedMotion) {
-    keyframes.push(
-      { target: `broll:${bgId}` as const, prop: 'x', points: [{ tMs: 0, v: -1, ease: 'inOut' }, { tMs: span, v: 1 }] },
-      { target: `broll:${bgId}` as const, prop: 'scale', points: [{ tMs: 0, v: 102, ease: 'inOut' }, { tMs: span, v: 104 }] },
-      { target: `broll:${fgId}` as const, prop: 'x', points: [{ tMs: 0, v: 1, ease: 'inOut' }, { tMs: span, v: -1 }] },
-      { target: `broll:${fgId}` as const, prop: 'scale', points: [{ tMs: 0, v: 106, ease: 'inOut' }, { tMs: span, v: 110 }] },
-    )
-  }
-  return {
-    ok: true,
-    edits: { ...edits, broll, keyframes },
-    cacheKey: depthDerivedCacheKey({
-      workspaceId: request.workspaceId,
-      sourceAssetId: request.sourceAssetId,
-      model: 'supplied_layers',
-      revision: 'v1',
-      crop: request.crop,
-    }),
-    releaseReady: false,
-    proofRequired: true,
-  }
 }
