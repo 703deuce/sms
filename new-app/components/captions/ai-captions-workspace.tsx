@@ -228,7 +228,7 @@ export function AiCaptionsWorkspace() {
           setPhase('ready')
           setHistoryVersion((n) => n + 1)
           void listAiCaptionsStyles()
-            .then((list: AiCaptionsStylesData) => { if (active()) setStyles(list.styles) })
+            .then((list: AiCaptionsStylesData) => setStyles(list.styles))
             .catch(() => {})
           return
         }
