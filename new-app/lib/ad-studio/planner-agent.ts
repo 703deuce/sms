@@ -33,9 +33,7 @@ export async function planAdScenes(args: {
       || mode === 'image_ad_to_commercial'
       || (Boolean(productRef) && (role === 'solution' || role === 'cta'))
     const generationMode = productShot && productRef ? 'image_to_video' : 'text_to_video'
-    const query = role === 'problem'
-      ? (input.audience || input.name)
-      : (claims[0] || input.name)
+    const query = input.audience?.trim() || 'lifestyle environment'
     let hits: AdStockHit[] = []
     if (!productShot) {
       console.info('[ad-studio:planner] stock_search_begin', { runId, sceneIndex: i })
@@ -55,10 +53,10 @@ export async function planAdScenes(args: {
     const scene: AdScene = {
       index: i, role, durationSec, source: useStock ? 'stock' : 'generated',
       reason: useStock
-        ? 'Suitable real stock footage covers this narrative beat.'
-        : productRef
+        ? 'Suitable real stock footage covers this non-product narrative beat.'
+        : productShot && productRef
           ? 'This beat needs the actual product reference; generic stock must not impersonate it.'
-          : 'No suitable real stock footage available; generation is proposed only, pending confirmation.',
+          : 'No suitable non-product stock footage was available; a context-only generated shot is proposed.',
       startMs: cursor, endMs: cursor + durationSec * 1000, onScreenText: cards[i],
       ...(stock ? { providerId: stock.providerId, stockQuery: query, ...stockTrim({ durationSec }, stock) }
         : {
