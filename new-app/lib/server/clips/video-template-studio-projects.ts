@@ -92,7 +92,14 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
   const validAsset = (rawAsset: unknown, kind: 'image' | 'video' | 'audio'): boolean => {
     if (!object(rawAsset) || rawAsset.kind !== kind ||
         typeof rawAsset.id !== 'string' || !/^[A-Za-z0-9_-]{1,120}$/.test(rawAsset.id) ||
-        !object(rawAsset.license) || rawAsset.license.provenance !== 'user-owned') return false
+        !object(rawAsset.license)) return false
+    const provenance = rawAsset.license.provenance
+    const userOwned = provenance === 'user-owned'
+    const approvedFirstPartyMusic = kind === 'audio' && provenance === 'first-party' &&
+      release.defaultMusic != null &&
+      rawAsset.license.id === 'batch9a_first_party' &&
+      rawAsset.license.reference === release.defaultMusic.revision
+    if (!userOwned && !approvedFirstPartyMusic) return false
     if (kind !== 'image' && (typeof rawAsset.durationFrames !== 'number' ||
         !Number.isSafeInteger(rawAsset.durationFrames) ||
         Number(rawAsset.durationFrames) < 1)) return false
