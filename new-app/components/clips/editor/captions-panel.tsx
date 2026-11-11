@@ -155,6 +155,7 @@ export function CaptionsPanel({
   const presetId = cap.presetId || 'bold_pop'
   const preset = resolveT6CaptionPreset(cap, t6CaptionPresetsEnabled())
   const captionFontValue = cap.font ?? preset.font ?? 'Poppins'
+  const [previewFonts, setPreviewFonts] = useState<Set<string>>(() => new Set())
   const captionFontItems: Record<string, string> = {
     ...CAPTION_FONT_LABELS,
     ...Object.fromEntries(userFonts.fonts.map((f) => [`user:${f.id}`, f.family])),
@@ -332,6 +333,55 @@ export function CaptionsPanel({
         </div>
       )}
       <p className="text-xs text-muted-foreground">{CAPTION_OPT_IN_COPY}</p>
+      <label className="text-xs font-medium text-muted-foreground">Font</label>
+      <Select
+        items={captionFontItems}
+        value={captionFontValue}
+        onValueChange={(font) => {
+          if (!font || typeof font !== 'string') return
+          if (font === UPLOAD_FONT) return fontFileRef.current?.click()
+          if (font.startsWith('user:')) return patch({ font })
+          setFontSelectionBusy(true)
+          void waitForClipFont(font)
+            .then(() => patch({ font }))
+            .catch((error: unknown) => toast.error('Font unavailable: ' + (error instanceof Error ? error.message : String(error))))
+            .finally(() => setFontSelectionBusy(false))
+        }}
+      >
+        <SelectTrigger disabled={fontSelectionBusy} className="h-9" data-testid="caption-font">
+          <SelectValue>{captionFontDisplayLabel(captionFontValue, userFonts.fonts, CAPTION_FONT_LABELS)}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {CAPTION_FONTS.map((f) => (
+            <SelectItem key={f} value={f}>
+              <span
+                style={previewFonts.has(f) ? { fontFamily: '"' + f.replace(/"/g, '') + '"' } : undefined}
+                onMouseEnter={() => {
+                  if (!previewFonts.has(f)) void waitForClipFont(f).then(() => setPreviewFonts(p => new Set(p).add(f))).catch(() => {})
+                }}
+                onFocus={() => {
+                  if (!previewFonts.has(f)) void waitForClipFont(f).then(() => setPreviewFonts(p => new Set(p).add(f))).catch(() => {})
+                }}
+              >{f}</span>
+            </SelectItem>
+          ))}
+          {userFonts.fonts.length ? (
+            <>
+              <div className="px-2 py-1.5 text-[11px] font-semibold uppercase text-muted-foreground">Your fonts</div>
+              {userFonts.fonts.map((f) => (
+                <SelectItem key={f.id} value={`user:${f.id}`} data-testid={`caption-font-user-${f.id}`}>
+                  {f.family}
+                </SelectItem>
+              ))}
+            </>
+          ) : null}
+          <SelectItem value={UPLOAD_FONT} data-testid="caption-font-upload">
+            <span className="inline-flex items-center gap-1">
+              <Upload className="size-3.5" aria-hidden /> Upload font…
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
       {syncWarnings.length ? <CaptionSyncWarningBanner warnings={syncWarnings} /> : null}
 
       {onWordFix && words.length > 0 ? (
@@ -906,47 +956,7 @@ export function CaptionsPanel({
         ))}
       </div>
 
-      <label className="text-xs font-medium text-muted-foreground">Font</label>
-      <Select
-        items={captionFontItems}
-        value={captionFontValue}
-        onValueChange={(font) => {
-          if (!font || typeof font !== 'string') return
-          if (font === UPLOAD_FONT) return fontFileRef.current?.click()
-          if (font.startsWith('user:')) return patch({ font })
-          setFontSelectionBusy(true)
-          void waitForClipFont(font)
-            .then(() => patch({ font }))
-            .catch((error: unknown) => toast.error('Font unavailable: ' + (error instanceof Error ? error.message : String(error))))
-            .finally(() => setFontSelectionBusy(false))
-        }}
-      >
-        <SelectTrigger disabled={fontSelectionBusy} className="h-9" data-testid="caption-font">
-          <SelectValue>{captionFontDisplayLabel(captionFontValue, userFonts.fonts, CAPTION_FONT_LABELS)}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {CAPTION_FONTS.map((f) => (
-            <SelectItem key={f} value={f}>
-              {f}
-            </SelectItem>
-          ))}
-          {userFonts.fonts.length ? (
-            <>
-              <div className="px-2 py-1.5 text-[11px] font-semibold uppercase text-muted-foreground">Your fonts</div>
-              {userFonts.fonts.map((f) => (
-                <SelectItem key={f.id} value={`user:${f.id}`} data-testid={`caption-font-user-${f.id}`}>
-                  {f.family}
-                </SelectItem>
-              ))}
-            </>
-          ) : null}
-          <SelectItem value={UPLOAD_FONT} data-testid="caption-font-upload">
-            <span className="inline-flex items-center gap-1">
-              <Upload className="size-3.5" aria-hidden /> Upload font…
-            </span>
-          </SelectItem>
-        </SelectContent>
-      </Select>
+
       <input
         ref={fontFileRef}
         type="file"
