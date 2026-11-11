@@ -153,6 +153,7 @@ export function ExportDialog({
   aiMeta?: unknown
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
+  const [alsoVtt, setAlsoVtt] = useState(false)
   const [captionSyncAck, setCaptionSyncAck] = useState(false)
   const [serverCaptionSyncWarnings, setServerCaptionSyncWarnings] = useState<CaptionSyncWarning[]>([])
   const [removeDeadAir, setRemoveDeadAir] = useState(false)
@@ -229,6 +230,7 @@ export function ExportDialog({
     void loadMergedExportDialogPreferences().then((prefs) => {
       setRemoveDeadAir(Boolean(edits.silenceTrim?.enabled))
       setAlsoSrt(prefs.alsoSrt)
+      setAlsoVtt(Boolean(prefs.alsoVtt))
       setExportSfx(prefs.exportSfx)
       const resumed = resumeRef.current
       if (resumed) {
@@ -589,6 +591,7 @@ export function ExportDialog({
         exportToast.rendering()
       }
       if (alsoSrt) window.open(`/api/clips/clips/${clipId}/srt`, '_blank')
+      if (alsoVtt) window.open(`/api/clips/clips/${clipId}/vtt`, '_blank')
     } catch (e) {
       if (isCaptionSyncRequiredError(e)) {
         const fromServer = captionSyncWarningsFromError(e)
@@ -1149,6 +1152,24 @@ export function ExportDialog({
               const on = Boolean(checked)
               setAlsoSrt(on)
               persistExportDialogPreferences({ alsoSrt: on })
+            }}
+          />
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <div>
+            <Label className="text-sm">Also download .vtt</Label>
+            <p className="text-xs text-muted-foreground">
+              WebVTT uses the same saved caption text, cuts, speed-adjusted timings, and language as SRT.
+            </p>
+          </div>
+          <Switch
+            data-testid="export-vtt-toggle"
+            checked={alsoVtt}
+            disabled={edits.captions?.enabled === false}
+            onCheckedChange={(checked) => {
+              const on = Boolean(checked)
+              setAlsoVtt(on)
+              persistExportDialogPreferences({ alsoVtt: on })
             }}
           />
         </div>

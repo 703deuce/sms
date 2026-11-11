@@ -12,6 +12,7 @@ import { CLIPS_EDITOR_MEDIA_TTL_SEC, createCachedSignedDownloadUrl } from '@/lib
 import { resolveLayers } from '@/lib/clips/layers'
 import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
 import {
+  editorPosterUrl,
   resolveEditorClipMedia,
   streamerPrefersClipSegmentMedia,
 } from '@/lib/server/clips/editor-clip-media'
@@ -226,7 +227,6 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     uploadSourceSize,
     streamVod,
     signedPreview,
-    signedPoster,
     signedProxy,
     signedSource,
     words,
@@ -247,9 +247,6 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     }),
     previewKey
       ? createCachedSignedDownloadUrl(storage, previewKey, signClip, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
-      : Promise.resolve(null),
-    clip.posterKey
-      ? createCachedSignedDownloadUrl(storage, clip.posterKey, signClip, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
       : Promise.resolve(null),
     proxyKey
       ? createCachedSignedDownloadUrl(storage, proxyKey, signProject, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
@@ -376,7 +373,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     crop: { shots, track: cropTrack },
     mediaUrls: {
       preview: signedPreview,
-      poster: signedPoster,
+      poster: editorPosterUrl(clip.id, clip.posterKey),
       proxy: signedProxy,
       source: preferClipSegment && segmentExists ? null : signedSource,
       segment: signedSourceSeg,

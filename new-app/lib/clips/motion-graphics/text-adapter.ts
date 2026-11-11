@@ -11,6 +11,7 @@ import type { TextAnim, TextAnimEdge } from '@/lib/clips/render-plan/text-anim'
 import { validateMotionPlan, type MotionPlan, type MotionGraphic } from './contract'
 import { expandedShapeGraphic, isGraphicItemId } from './primitives'
 import { motionKeyframeTracks } from './keyframe-adapter'
+import { fitMotionTextToBox } from './text-fit'
 
 /** Existing worker's two engines use the same `edits.textItems` schema. */
 export const TEXT_BACKED_TEMPLATES = [
@@ -40,20 +41,30 @@ function animation(g: MotionGraphic): TextAnim | undefined {
   if (outro) value.out = outro
   return Object.keys(value).length ? value : undefined
 }
-function asText(g: MotionGraphic): TextItem {
+function asText(g: MotionGraphic, format: MotionPlan['format']): TextItem {
   // Only fonts shipped in BOTH the browser and CPU worker can be used here.
   const permitted = new Set(['Montserrat', 'Anton', 'Poppins', 'Bangers', 'Bebas Neue', 'Archivo Black', 'Luckiest Guy'])
   const font = permitted.has(g.style.fontFamily) ? g.style.fontFamily as TextItem['style']['font'] : 'Montserrat'
   const align = g.templateId === 'lower_third' ? 'left' : 'center'
+  const boxed = g.templateId === 'lower_third' || g.templateId === 'callout'
+  const fit = fitMotionTextToBox({
+    text: g.text!,
+    fontFamily: font,
+    format,
+    box: g.box,
+    preferredSize: g.box.height * 1920 * 0.45,
+    edgeInsetPx: boxed ? 18 : 12,
+  })
+  if (!fit.fits) throw new Error('motion_text_does_not_fit:' + g.id)
   return {
-    id: 'mg_' + g.id, text: g.text!,
+    id: 'mg_' + g.id, text: fit.text,
     startMs: g.startMs, endMs: g.endMs,
     x: Math.round((g.box.x + g.box.width / 2) * 1000) / 10,
     y: Math.round((g.box.y + g.box.height / 2) * 1000) / 10,
     style: {
-      font, size: Math.max(24, Math.min(240, Math.round(g.box.height * 1920 * 0.45))),
+      font, size: fit.size,
       color: g.style.textColor, align, case: 'none',
-      ...(g.templateId === 'lower_third' || g.templateId === 'callout'
+      ...(boxed
         ? { box: { color: g.style.backgroundColor ?? '#0F172A', opacity: 78, pad: 12 } }
         : { stroke: { color: '#000000', width: 5 } }),
     },
@@ -96,7 +107,7 @@ export function addTextBackedMotionPlan(
   try {
     const groups = plan.graphics.map(g => ({ graphic: g,
       items: g.templateId === 'diagram' || g.templateId === 'bar_chart'
-        ? expandedShapeGraphic(g, plan.format) : [asText(g)] }))
+        ? expandedShapeGraphic(g, plan.format) : [asText(g, plan.format)] }))
     generated = groups.flatMap(group => group.items)
     generatedKeyframes = groups.flatMap(group =>
       motionKeyframeTracks(group.graphic, group.items.map(item => item.id)))
