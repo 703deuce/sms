@@ -78,7 +78,7 @@ describe('B3 editor slot clips', () => {
     )
     const slots = ui.getAllByTestId('script-compact-source-segment')
     expect(slots).toHaveLength(2)
-    expect(slots[0]?.style.height).toBe('44px')
+    expect(slots[0]?.classList.contains('h-[44px]')).toBe(true)
     const fixedLane = ui.container.querySelector('.h-\\[calc\\(44px\\+18px\\+36px\\+8px\\)\\]')
     expect(fixedLane).not.toBeNull()
     fireEvent.click(slots[1]!)

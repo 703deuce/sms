@@ -775,7 +775,9 @@ def build_sources_filtergraph(
             speed = float(w.get("speed") or 1.0)
             media_dur = dur * speed
             inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{media_dur + 0.25:.3f}", "-i", str(p)]
-            chain = (f"[{in_idx}:v]trim=0:{media_dur:.3f},setpts=(PTS-STARTPTS)/{speed:.6f},fps={fps:g},"
+            # Preserve the legacy filtergraph exactly for absent/1x speed (golden parity).
+            pts = "setpts=PTS-STARTPTS" if speed == 1.0 else f"setpts=(PTS-STARTPTS)/{speed:.6f}"
+            chain = (f"[{in_idx}:v]trim=0:{media_dur:.3f},{pts},fps={fps:g},"
                      f"{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)}{source_fx_filter(w.get('fx'))},format=yuv420p")
             v_in = in_idx
             in_idx += 1

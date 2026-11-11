@@ -134,6 +134,14 @@ describe('real-video template B3 production contract', () => {
     expect(() => validateTemplateFamily(f)).toThrow(/images do not support playback speed/)
   })
 
+  it('rejects a photo assigned to an either slot with video playback speed', () => {
+    const f = family(1)
+    f.slots[0] = { ...f.slots[0]!, media: 'either', speed: 2 }
+    expect(validateTemplateFamily(f).slots[0]?.speed).toBe(2)
+    expect(() => compileTemplatePrototype(f, design, choices(1), carrier(1)))
+      .toThrow(/playback speed requires video media/)
+  })
+
   it('is deterministic, including source reuse and stable slot IDs', () => {
     const a = compileTemplatePrototype(family(2), design, choices(2), carrier(2))
     const b = compileTemplatePrototype(family(2), design, choices(2), carrier(2))
