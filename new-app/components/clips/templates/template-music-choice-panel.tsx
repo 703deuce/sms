@@ -29,10 +29,21 @@ export function TemplateMusicChoicePanel({
   const [candidate, setCandidate] = useState<TemplateMusicDecisionV1 | undefined>(saved)
   const [choice, setChoice] = useState<'keep-timing' | 're-sync'>('keep-timing')
   const [acceptLoop, setAcceptLoop] = useState(false)
+  const [manualTargets, setManualTargets] = useState<Record<string, number>>({})
+  const [approvedTargets, setApprovedTargets] = useState<Record<string, boolean>>({})
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState('')
   const decision: TemplateMusicDecisionV1 | undefined = candidate ? {
     ...candidate, choice, acceptLoop,
+    schedule: {
+      ...candidate.schedule,
+      manualOverrides: [
+        ...(candidate.schedule.manualOverrides ?? []),
+        ...Object.entries(approvedTargets).filter(([,yes])=>yes).map(([id])=>({
+          id, frame: manualTargets[id] ?? 0, approved: true as const,
+        })),
+      ],
+    },
     ...(originalSchedule ? { originalSchedule } : {}),
   } : undefined
   const result = useMemo(() => {
@@ -123,6 +134,30 @@ export function TemplateMusicChoicePanel({
               <span><strong>Re-sync to this music</strong> — move cuts and timed layers to the approved beat grid</span>
             </label>
           </fieldset>
+          {choice === 're-sync' && originalSchedule?.protectedAnchors.length ? (
+            <fieldset className="space-y-2 rounded-lg border border-border p-3">
+              <legend className="text-sm font-medium">Protected beat/phrase anchors</legend>
+              <p className="text-xs text-muted-foreground">
+                Re-sync preserves each protected anchor. Approve a replacement frame explicitly; nothing is auto-moved around protected narration.
+              </p>
+              {originalSchedule.protectedAnchors.map(anchor => (
+                <div key={anchor.id} className="flex flex-wrap items-center gap-3 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={approvedTargets[anchor.id] ?? false}
+                      onChange={e=>setApprovedTargets(prev=>({...prev,[anchor.id]:e.target.checked}))} />
+                    Approve {anchor.id} (old frame {anchor.frame})
+                  </label>
+                  <label className="flex items-center gap-2">
+                    New frame
+                    <input type="number" min={0} step={1} value={manualTargets[anchor.id] ?? ''}
+                      onChange={e=>setManualTargets(prev=>({...prev,[anchor.id]:Number(e.target.value)}))}
+                      aria-label={'Replacement frame for ' + anchor.id}
+                      className="w-24 rounded-lg border border-border bg-background p-2" />
+                  </label>
+                </div>
+              ))}
+            </fieldset>
+          ) : null}
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" checked={acceptLoop} onChange={e=>setAcceptLoop(e.target.checked)} />
             I approve looping the song if needed to cover the complete video
