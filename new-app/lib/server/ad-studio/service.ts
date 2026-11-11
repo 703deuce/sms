@@ -522,8 +522,9 @@ export async function retryAdVoiceover(
       await advanceAdRender(workspaceId, id)
       console.info('[ad-studio:b4] retry_voice_render_queued', { runId: id, clipId })
     } catch (err) {
-      const message = err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200)
-      console.warn('[ad-studio:b4] retry_voice_stitch_failed', { runId: id, message })
+      console.warn('[ad-studio:b4] retry_voice_stitch_failed', {
+        runId: id, type: err instanceof Error ? err.name : typeof err,
+      })
       await prisma().adStudioRun.updateMany({
         where: { id, workspaceId, status: 'stitching' },
         data: {
