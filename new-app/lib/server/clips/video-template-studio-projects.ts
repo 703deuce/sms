@@ -66,7 +66,8 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
       typeof raw.draftId !== 'string' || !KEY.test(raw.draftId) ||
       !object(raw.slots) || Object.keys(raw.slots).length > 120 ||
       !object(raw.texts) || Object.keys(raw.texts).length > 60 ||
-      (raw.musicTiming !== 'keep' && raw.musicTiming !== 'resync'))
+      (raw.musicTiming !== 'keep' && raw.musicTiming !== 'resync') ||
+      (raw.brandColor != null && (typeof raw.brandColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(raw.brandColor))))
     throw new Error('Invalid template draft')
   const release = releaseFor(releaseId)
   if (!release) throw new TemplateInstanceNotFound()
@@ -77,7 +78,8 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
         !['cover','contain'].includes(String(fill.fit)) ||
         !['replace','loop','hold'].includes(String(fill.remedy)) ||
         (typeof fill.sourceInFrame !== 'number' || !Number.isInteger(fill.sourceInFrame)) || Number(fill.sourceInFrame) < 0 ||
-        !Number.isFinite(fill.focalX) || !Number.isFinite(fill.focalY) ||
+        (typeof fill.focalX !== 'number' || !Number.isFinite(fill.focalX)) ||
+        (typeof fill.focalY !== 'number' || !Number.isFinite(fill.focalY)) ||
         typeof fill.muteSourceAudio !== 'boolean') throw new Error('Invalid slot fill')
   }
   for (const [id, text] of Object.entries(raw.texts)) {
@@ -86,7 +88,7 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
       throw new Error('Invalid template text')
   }
   if (JSON.stringify(raw).length > 120_000) throw new Error('Template draft too large')
-  return raw as StudioDraft
+  return raw as unknown as StudioDraft
 }
 export async function createVideoTemplateDraft(workspaceId: string, releaseId: string, key: string): Promise<DraftRecord> {
   const release = releaseFor(releaseId)

@@ -24,6 +24,7 @@ export type StudioDraft = {
   texts: Record<string, string>
   music?: TemplateAsset
   musicTiming: 'keep' | 'resync'
+  brandColor?: string
 }
 export type StudioMaterialized = {
   family: TemplateFamilyV1
@@ -159,7 +160,11 @@ export function materializeStudioDraft(
   }
   if (parts.length > 120) throw new Error('Template expands beyond 120 supported source segments')
   const normalizedSlots = parts.map((p, i) => ({ ...p.slot, ordinal: i + 1 }))
-  const instancedFamily = validateTemplateFamily({ ...family, slots: normalizedSlots })
+  const recolor = draft.brandColor
+  if (recolor && !/^#[0-9a-fA-F]{6}$/.test(recolor)) throw new Error('Invalid brand color')
+  const instancedFamily = validateTemplateFamily({ ...family, slots: normalizedSlots,
+    texts: recolor ? family.texts.map(text => ({ ...text, color: recolor })) : family.texts,
+    graphics: recolor ? family.graphics?.map(graphic => ({ ...graphic, color: recolor })) : family.graphics })
   const choices: TemplateChoices = { instanceId, media: {}, texts: draft.texts,
     ...(draft.music ? { music: draft.music } : {}) }
   const originalSlotIds: Record<string, string> = {}
