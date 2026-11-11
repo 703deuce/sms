@@ -23,7 +23,7 @@ const schedule={
 }
 const decision:TemplateMusicDecisionV1={v:1,rights,schedule,choice:'keep-timing'}
 const license={id:'batch9a_first_party_qa',provenance:'first-party' as const,
-  reference:'checked-in Batch 9A preview sprites / generated QA motion'}
+  reference:'batch9a_first_party_qa_v1'}
 const music:TemplateAsset={id:musicId,kind:'audio',durationFrames:1800,license}
 
 const designs=generateB8Candidates().map(candidate=>{
