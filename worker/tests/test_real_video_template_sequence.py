@@ -168,6 +168,17 @@ def test_template_carrier_is_exact_for_non_integer_second_frame_budget(tmp_path:
     assert frames(carrier) == 73
     assert duration(carrier) == pytest.approx(73 / 30, abs=0.04)
 
+    photo = tmp_path / "photo_73.png"
+    run([FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=green:s=90x160",
+         "-frames:v", "1", str(photo)])
+    end_ms = round(73 * 1000 / 30)
+    edits = {
+        "sources": [{"id": "src", "ref": "upload", "refId": "photo73", "mediaType": "image"}],
+        "sourceSegments": [{"id": "slot", "sourceId": "src", "startMs": 0, "endMs": end_ms, "fit": "cover"}],
+    }
+    sourced = apply_full_render_sources(carrier, edits, 0, end_ms, tmp_path, {"photo73": photo})
+    assert frames(sourced) == 73
+
 
 class _StatusCursor:
     def __init__(self, status: str | None):
