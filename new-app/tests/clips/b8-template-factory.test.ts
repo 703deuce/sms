@@ -1,0 +1,102 @@
+import { describe,expect,it } from 'vitest'
+import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
+import { B8_TARGET,generateB8Candidates,proveB8Structure,reportB8Quality,
+  auditB8Evidence,scoreB8Review,shardB8Jobs,locallyApprovedB8Releases,
+  type B8Evidence } from '@/lib/clips/real-video-templates/b8-factory'
+import { validateTemplateFamily } from '@/lib/clips/real-video-templates/sequence-contract'
+const candidates=generateB8Candidates()
+const hash='a'.repeat(64)
+function evidence(id:string):B8Evidence{
+  return {
+    id,reference:{url:'https://www.canva.com/templates/',accessDate:'2026-11-11',mediaKind:'photo_video'},
+    fixtures:{images:['original_image'],videos:['original_video'],licenseHashes:[hash]},
+    outputs:{previewMp4:'/templates/real-preview.mp4',renderMp4:'/templates/real-render.mp4',
+      poster:'/templates/real-poster.webp',previewSha256:hash,renderSha256:hash,posterSha256:hash},
+    checks:{fullFrameStructure:true,durationMatch:true,audioParity:true,beatAligned:true,
+      firstLastNotBlack:true,boundariesNotBlack:true,sampledFrameParity:true,
+      glyphsPresent:true,contrastReadable:true,safeZones:true,layerRetention:true,
+      rightsCleared:true,noExcessFlashing:true,actualWorkerRender:true},
+    reviewer:'Fixture reviewer only',reviewDate:'2026-11-11',
+    scores:{pacing:5,beatSemantic:5,transition:5,typography:5,motion:5,color:5},
+  }
+}
+describe('Batch 8 candidate-only authoring and release QA',()=>{
+  it('has exactly 50 authored structural schedules and 25+15 explicit treatments',()=>{
+    expect(FACTORY_FAMILY_SEEDS).toHaveLength(50)
+    expect(FACTORY_TREATMENTS.filter(t=>t.kind==='core')).toHaveLength(25)
+    expect(FACTORY_TREATMENTS.filter(t=>t.kind==='alternate')).toHaveLength(15)
+    expect(candidates).toHaveLength(B8_TARGET.candidateTotal)
+    expect(new Set(candidates.map(c=>c.id)).size).toBe(2000)
+    expect(candidates.every(c=>c.status==='draft'&&c.authoringOrigin==='provisional')).toBe(true)
+  })
+  it('preserves authored family rhythms and the thirty-slot variant',()=>{
+    const first=candidates.find(c=>c.id==='f01_bold')!
+    const long=candidates.find(c=>c.id==='f50_bold')!
+    expect(first.family.slots.map(x=>x.durationFrames)).toEqual([45,45,60,60])
+    expect(first.family.slots.map(x=>x.role)).toEqual(['hero','support','detail','closing'])
+    expect(long.family.slots).toHaveLength(30)
+    expect(long.family.totalFrames).toBe(540)
+  })
+  it('compiles every generated candidate into original media cuts, native transitions and layers',()=>{
+    for(const c of candidates){
+      const proof=proveB8Structure(c)
+      expect(proof.slotItems,c.id).toBe(c.family.slots.length)
+      expect(proof.videoCuts,c.id).toBe(c.family.slots.length-1)
+      expect(proof.textItems,c.id).toBe(c.family.texts.length+(c.family.graphics?.length??0))
+      expect(proof.musicPresent).toBe(false)
+      expect(proof.compilationHash).toMatch(/^[a-f0-9]{64}$/)
+    }
+  })
+  it('requires alternate text hierarchy, placement and choreography to be visually authored',()=>{
+    for(const alt of FACTORY_TREATMENTS.filter(t=>t.kind==='alternate')){
+      const parent=FACTORY_TREATMENTS.find(t=>t.id===alt.parentId)!
+      const differences=[
+        alt.headingFont!==parent.headingFont||alt.supportFont!==parent.supportFont,
+        alt.x!==parent.x||alt.y!==parent.y,alt.enter!==parent.enter,
+        alt.graphic!==parent.graphic||alt.gx!==parent.gx||alt.gy!==parent.gy,
+        alt.transition!==parent.transition,
+      ].filter(Boolean).length
+      expect(differences,alt.id).toBeGreaterThanOrEqual(3)
+    }
+  })
+  it('accepts only pinned vendored fonts, never arbitrarily supplied names',()=>{
+    const first=candidates[0]!
+    expect(validateTemplateFamily(first.family)).toBeTruthy()
+    expect(()=>validateTemplateFamily({...first.family,
+      texts:first.family.texts.map((t,i)=>i? t:{...t,font:'file:///tmp/arbitrary.ttf'})}))
+      .toThrow('pinned licensed font')
+  })
+  it('fails closed with no actual video/QA evidence and never advertises 2000 releases',()=>{
+    const report=reportB8Quality(candidates,[])
+    expect(report.defined).toBe(2000)
+    expect(report.familyCount).toBe(50)
+    expect(report.released).toBe(0)
+    expect(report.community).toBe(0)
+    expect(locallyApprovedB8Releases(candidates,[])).toHaveLength(0)
+  })
+  it('requires all first 10 anchors, 9/10 overall and >=4 in every rubric dimension',()=>{
+    const c=candidates[0]!,e=evidence(c.id)
+    expect(scoreB8Review(e)).toEqual({score:10,minimum:true})
+    expect(auditB8Evidence(c,e)).toEqual([])
+    expect(reportB8Quality(candidates,[e]).released).toBe(0)
+    expect(reportB8Quality(candidates,[e]).blockers[c.id]).toContain('first_ten_anchor_gate')
+    e.scores.transition=3.99
+    expect(auditB8Evidence(c,e)).toContain('qa_score_below_nine_or_dimension_below_four')
+    e.scores.transition=5
+    e.checks.actualWorkerRender=false
+    expect(auditB8Evidence(c,e)).toContain('unverified_render_quality_or_rights')
+  })
+  it('invalidates cache keys on fixture or renderer revisions; limits sharding',()=>{
+    const fixture={hashes:[hash],rendererRevision:'worker-v1'}
+    const a=shardB8Jobs(candidates,fixture,16)
+    const b=shardB8Jobs(candidates,fixture,16)
+    expect(a).toEqual(b)
+    expect(a).toHaveLength(2000)
+    expect(new Set(a.map(j=>j.id)).size).toBe(2000)
+    expect(a.every(j=>j.shard>=0&&j.shard<16&&j.maxAttempts===3)).toBe(true)
+    const c=shardB8Jobs(candidates,{...fixture,rendererRevision:'worker-v2'},16)
+    expect(a[0]?.cacheKey).not.toBe(c.find(x=>x.id===a[0]?.id)?.cacheKey)
+    expect(()=>shardB8Jobs(candidates,fixture,0)).toThrow()
+    expect(()=>shardB8Jobs(candidates,{hashes:[],rendererRevision:'worker-v1'})).toThrow()
+  })
+})
