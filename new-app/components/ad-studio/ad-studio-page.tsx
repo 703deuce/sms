@@ -1278,42 +1278,70 @@ function RunPanel({
 function ImageAdVariants({
   variants,
   busy,
+  aspect,
+  mode,
   onCommercial,
+  onRegenerate,
 }: {
   variants: AdImageVariant[]
   busy: boolean
+  aspect: AdAspect
+  mode: AdMode
   onCommercial: (variant: AdImageVariant) => void
+  onRegenerate: (variant: AdImageVariant) => void
 }) {
   if (!variants.length) return null
   return (
     <section className="mt-6" aria-labelledby="ad-image-variants-heading">
-      <h2 id="ad-image-variants-heading" className="text-sm font-semibold">Image ad variants</h2>
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
-        {variants.map((variant) => (
-          <article key={variant.id} className="overflow-hidden rounded-xl border border-border bg-background/50 shadow-sm" data-testid="ad-studio-image-variant">
-            {variant.downloadUrl ? (
-              <img src={variant.downloadUrl} alt={`Generated image ad ${variant.index + 1}`} className="aspect-square w-full object-cover" />
-            ) : (
-              <div className="flex aspect-square items-center justify-center bg-muted text-xs text-muted-foreground">
-                {variant.status === 'ready' ? 'Image ready' : statusLabel(variant.status)}
-              </div>
-            )}
-            <div className="p-3">
-              <p className="text-sm font-medium">{variant.headline}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{variant.cta}</p>
+      <h2 id="ad-image-variants-heading" className="text-sm font-semibold">
+        {mode === 'image_to_ad' ? 'Finished photo ads' : 'Image ad variants'}
+      </h2>
+      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {variants.map((variant) => {
+          const flagged = variant.qc && variant.qc.decision !== 'pass'
+          return (
+            <article key={variant.id} className="overflow-hidden rounded-xl border border-border bg-background/50 shadow-sm" data-testid="ad-studio-image-variant">
               {variant.downloadUrl ? (
-                <a href={variant.downloadUrl} download data-testid="ad-studio-download-image" className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted">
-                  Download image
-                </a>
-              ) : null}
-              {variant.status === 'ready' ? (
-                <button type="button" data-testid="ad-studio-make-commercial" disabled={busy} className="mt-2 w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted disabled:opacity-50" onClick={() => onCommercial(variant)}>
-                  Make commercial from image ad
-                </button>
-              ) : null}
-            </div>
-          </article>
-        ))}
+                <img
+                  src={variant.downloadUrl}
+                  alt={`Generated image ad ${variant.index + 1}`}
+                  className="w-full bg-muted object-contain"
+                  style={{ aspectRatio: aspect.replace(':', ' / ') }}
+                />
+              ) : (
+                <div className="flex min-h-48 items-center justify-center bg-muted text-xs text-muted-foreground">
+                  {variant.status === 'ready' ? 'Image ready' : statusLabel(variant.status)}
+                </div>
+              )}
+              <div className="p-3">
+                <p className="text-sm font-medium">{variant.headline}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{variant.cta}</p>
+                {variant.qc ? (
+                  <div className={cn('mt-2 rounded-md border px-2 py-2 text-xs', flagged ? 'border-warning/40 bg-warning/10' : 'border-border bg-muted/30')} data-testid="ad-studio-still-qc">
+                    <p className="font-medium">QC {variant.qc.decision} · {variant.qc.weightedScore.toFixed(2)}/10</p>
+                    <p className="mt-1 text-muted-foreground">{variant.qc.reason}</p>
+                    {variant.qc.issues.length ? <p className="mt-1 text-muted-foreground">{variant.qc.issues.join(' · ')}</p> : null}
+                  </div>
+                ) : null}
+                {variant.downloadUrl ? (
+                  <a href={variant.downloadUrl} download data-testid="ad-studio-download-image" className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted">
+                    Download still
+                  </a>
+                ) : null}
+                {mode === 'image_to_ad' && (flagged || variant.status === 'failed') ? (
+                  <button type="button" data-testid="ad-studio-regenerate-still" disabled={busy} className="mt-2 w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted disabled:opacity-50" onClick={() => onRegenerate(variant)}>
+                    {busy ? 'Regenerating…' : 'Regenerate this still'}
+                  </button>
+                ) : null}
+                {variant.status === 'ready' ? (
+                  <button type="button" data-testid="ad-studio-make-commercial" disabled={busy} className="mt-2 w-full rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50" onClick={() => onCommercial(variant)}>
+                    {mode === 'image_to_ad' ? 'Animate → 15s commercial' : 'Make commercial from image ad'}
+                  </button>
+                ) : null}
+              </div>
+            </article>
+          )
+        })}
       </div>
     </section>
   )
