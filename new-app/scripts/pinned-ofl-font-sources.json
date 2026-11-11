@@ -81,5 +81,57 @@
       "size": 99356,
       "licenseBlobSha": "a72b0a7845bec3214559673ffeba60c816a21841"
     }
+  ],
+  "fallbackFonts": [
+    {
+      "slug": "notosansarabic",
+      "upstream": "NotoSansArabic[wdth,wght].ttf",
+      "local": "NotoSansArabic.ttf",
+      "blobSha": "f1d01edce4ebaedcbe9a06fc75fec07b304ec3df",
+      "assFamily": "Noto Sans Arabic",
+      "weight": 400,
+      "size": 844676,
+      "licenseBlobSha": "14c589f6384505ede3f8e52627d397513af3662d"
+    },
+    {
+      "slug": "notosansdevanagari",
+      "upstream": "NotoSansDevanagari[wdth,wght].ttf",
+      "local": "NotoSansDevanagari.ttf",
+      "blobSha": "163f04bddc5a96fc523e4080466cac5c588f6594",
+      "assFamily": "Noto Sans Devanagari",
+      "weight": 400,
+      "size": 641944,
+      "licenseBlobSha": "cd2cc5c94b4151933eba6ee508e3975274d6fa07"
+    },
+    {
+      "slug": "notosansthai",
+      "upstream": "NotoSansThai[wdth,wght].ttf",
+      "local": "NotoSansThai.ttf",
+      "blobSha": "34b48ab6f74867dbfce19410a2f452abef34e3ff",
+      "assFamily": "Noto Sans Thai",
+      "weight": 400,
+      "size": 218652,
+      "licenseBlobSha": "7fa8dcb08ce4d2667b683ac4a8e79166e44e5277"
+    },
+    {
+      "slug": "notosansjp",
+      "upstream": "NotoSansJP[wght].ttf",
+      "local": "NotoSansJP.ttf",
+      "blobSha": "cdd8f083c1f5928ff3361f8cda4d3fc9462cbe89",
+      "assFamily": "Noto Sans JP",
+      "weight": 400,
+      "size": 9589900,
+      "licenseBlobSha": "1c9f43281b8f216c5461fe9ac729afbade7724e4"
+    },
+    {
+      "slug": "notoemoji",
+      "upstream": "NotoEmoji[wght].ttf",
+      "local": "NotoEmoji.ttf",
+      "blobSha": "c2c26ab612a88a8610ff9cfbb89299bf2aea6c7a",
+      "assFamily": "Noto Emoji",
+      "weight": 400,
+      "size": 1982596,
+      "licenseBlobSha": "d09d3d0e09169f6747754e6b25faf5ba5ef6402d"
+    }
   ]
 }
