@@ -22,6 +22,7 @@ ENV PORT=3000
 COPY --from=builder /app/new-app/.next/standalone ./
 COPY --from=builder /app/new-app/.next/static ./.next/static
 COPY --from=builder /app/new-app/public ./public
+COPY --from=builder /app/new-app/lib/server/ad-studio/style-refs ./lib/server/ad-studio/style-refs
 COPY --from=builder /app/new-app/scripts/start-production.mjs ./scripts/start-production.mjs
 COPY --from=builder /app/new-app/scripts/run-db-migrations.mjs ./scripts/run-db-migrations.mjs
 COPY --from=builder /app/scripts/deploy-db-migrations.sh ./scripts/deploy-db-migrations.sh

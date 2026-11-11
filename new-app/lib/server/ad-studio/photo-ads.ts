@@ -13,6 +13,8 @@ import {
 } from '@/lib/server/ad-studio/legacy-photo-ad-prompts'
 
 const PREFIX = 'Think step-by-step: 1) spatial physics 2) text rendering 3) lighting coherence before generating.'
+/** Legacy Kimi writer: product (+ logo) first, then at most six style reference images. */
+const MAX_STYLE_REFERENCE_IMAGES = 6
 const STYLE_NAMES = ['kka.png','assss.png','r1.png','r2.png','H1.png','h2.png','h3.png','yt1.png','yt2.png','yt3.png'] as const
 const STYLE_TAGS = [
   'signature-premium-product','human-lifestyle','illustrated-graphic','clean-white-packshot',
@@ -52,7 +54,7 @@ async function styleParts(): Promise<GeminiContentPart[]> {
   const dir = path.join(process.cwd(), 'lib/server/ad-studio/style-refs')
   const out: GeminiContentPart[] = []
   for (const name of STYLE_NAMES) {
-    if (out.length >= 6) break
+    if (out.length >= MAX_STYLE_REFERENCE_IMAGES) break
     try {
       const bytes = await fs.readFile(path.join(dir, name))
       out.push({ inlineData: { mimeType: 'image/png', data: bytes.toString('base64') } })
@@ -136,10 +138,15 @@ export async function generatePhotoAdConcepts(workspaceId: string, input: AdProd
   console.info('[ad-studio:r5] concepts_begin', { aspect: input.aspect, hasLogo: Boolean(input.logoAssetId) })
   const product = await inlineAsset(workspaceId, input.imageAssetIds[0])
   const logo = input.logoAssetId ? await inlineAsset(workspaceId, input.logoAssetId) : null
-  const refs = await styleParts()
-  const user = renderLegacyUserMessage(input, refs.length)
+  const styleRefs = await styleParts()
+  const user = renderLegacyUserMessage(input, styleRefs.length)
   const systemInstruction = LEGACY_PHOTO_ADS_SYSTEM_PROMPT.split(token('PHOTO_ADS_PROMPT_COUNT')).join(String(PHOTO_ADS_PROMPT_COUNT))
-  const parts: GeminiContentPart[] = [product, ...(logo ? [logo] : []), ...refs, { text: user }]
+  const parts: GeminiContentPart[] = [
+    product,
+    ...(logo ? [logo] : []),
+    ...styleRefs.slice(0, MAX_STYLE_REFERENCE_IMAGES),
+    { text: user },
+  ]
   const { value, model } = await geminiJson<AdPhotoConcept[]>(parts, conceptSchema, systemInstruction)
   if (!Array.isArray(value) || value.length !== PHOTO_ADS_PROMPT_COUNT) throw new Error('Gemini did not return exactly five photo-ad concepts')
   const concepts = value.map((item, index) => {
@@ -150,8 +157,8 @@ export async function generatePhotoAdConcepts(workspaceId: string, input: AdProd
     return { prompt: prompt.startsWith(PREFIX) ? prompt : PREFIX + ' ' + prompt, style, layoutNotes }
   })
   if (new Set(concepts.map((item) => item.prompt)).size !== PHOTO_ADS_PROMPT_COUNT) throw new Error('Photo-ad concepts must be distinct')
-  console.info('[ad-studio:r5] concepts_complete', { count: concepts.length, model, styleReferenceCount: refs.length })
-  return { concepts, model, styleReferenceCount: refs.length }
+  console.info('[ad-studio:r5] concepts_complete', { count: concepts.length, model, styleReferenceCount: styleRefs.length })
+  return { concepts, model, styleReferenceCount: styleRefs.length }
 }
 
 function clampScore(value: unknown): number {

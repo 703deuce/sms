@@ -18,6 +18,9 @@ const nextConfig = {
   },
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   output: "standalone",
+  outputFileTracingIncludes: {
+    "/api/ad-studio/**": ["./lib/server/ad-studio/style-refs/**/*"],
+  },
   serverExternalPackages: ["@prisma/client", "prisma", "livekit-server-sdk"],
   typescript: {
     ignoreBuildErrors: isCoolifyBuild || true,
