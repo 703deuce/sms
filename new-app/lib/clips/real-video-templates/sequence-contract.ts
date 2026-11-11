@@ -18,6 +18,12 @@ export type TemplateAsset = {
   durationFrames?: number
 }
 export type TemplateTransition = { type: TransitionType; durationFrames: number }
+export type TemplateMotionState = { x?: number; y?: number; scale?: number; rotation?: number }
+export type TemplateMotion = {
+  from?: TemplateMotionState
+  to: TemplateMotionState
+  ease?: 'linear' | 'in' | 'out' | 'inOut'
+}
 export type TemplateSlot = {
   id: string
   ordinal: number
@@ -34,6 +40,8 @@ export type TemplateSlot = {
   speed?: number
   /** Incoming edge. First slot must be cut. */
   transition: 'cut' | TemplateTransition
+  /** Output-clock animation compiled to ordinary target=video keyframes. */
+  motion?: TemplateMotion
   transform?: SourceSegmentTransform
   fx?: SourceSegmentFx
 }
@@ -189,6 +197,28 @@ function validateFx(raw: unknown): SourceSegmentFx | undefined {
     if (raw[k] != null) out[k] = finite(raw[k], -100, 100, `slot.fx.${k}`)
   return Object.keys(out).length ? out : undefined
 }
+function validateMotionState(raw: unknown, context: string): TemplateMotionState | undefined {
+  if (raw == null) return undefined
+  if (!own(raw)) throw new Error(`${context}: expected object`)
+  exact(raw, ['x','y','scale','rotation'], context)
+  const out: TemplateMotionState = {}
+  if (raw.x != null) out.x = finite(raw.x, -100, 100, context + '.x')
+  if (raw.y != null) out.y = finite(raw.y, -100, 100, context + '.y')
+  if (raw.scale != null) out.scale = finite(raw.scale, 25, 400, context + '.scale')
+  if (raw.rotation != null) out.rotation = finite(raw.rotation, -360, 360, context + '.rotation')
+  return Object.keys(out).length ? out : undefined
+}
+function validateMotion(raw: unknown): TemplateMotion | undefined {
+  if (raw == null) return undefined
+  if (!own(raw)) throw new Error('slot.motion: expected object')
+  exact(raw, ['from','to','ease'], 'slot.motion')
+  const from = validateMotionState(raw.from, 'slot.motion.from')
+  const to = validateMotionState(raw.to, 'slot.motion.to')
+  if (!to) throw new Error('slot.motion: to state requires at least one property')
+  const ease = raw.ease == null ? undefined : oneOf(raw.ease, ['linear','in','out','inOut'] as const, 'slot.motion.ease')
+  return { ...(from ? { from } : {}), to, ...(ease && ease !== 'linear' ? { ease } : {}) }
+}
+
 function validateTransition(raw: unknown, index: number): 'cut' | TemplateTransition {
   if (raw === 'cut') return 'cut'
   if (!own(raw)) throw new Error('slot.transition: unsupported capability')
@@ -214,7 +244,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   let cursor = 0
   const slots: TemplateSlot[] = raw.slots.map((value: unknown, index: number) => {
     if (!own(value)) throw new Error('slot: expected object')
-    exact(value, ['id','ordinal','role','media','startFrame','durationFrames','sourceInFrame','handles','fit','sourceAudio','speed','transition','transform','fx'], 'slot')
+    exact(value, ['id','ordinal','role','media','startFrame','durationFrames','sourceInFrame','handles','fit','sourceAudio','speed','transition','motion','transform','fx'], 'slot')
     const sid = id(value.id, 'slot')
     unique(sid, seen, 'slot')
     if (integer(value.ordinal, 1, MAX_SLOTS, 'ordinal') !== index + 1) throw new Error('slot: ordinals must be sequential')
@@ -253,6 +283,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
       ...(handles ? { handles } : {}),
       fit: oneOf(value.fit, ['cover','contain'] as const, 'fit'),
       sourceAudio, ...(speed != null && Math.abs(speed - 1) >= 0.0001 ? { speed } : {}), transition,
+      ...(validateMotion(value.motion) ? { motion: validateMotion(value.motion) } : {}),
       ...(validateTransform(value.transform) ? { transform: validateTransform(value.transform) } : {}),
       ...(validateFx(value.fx) ? { fx: validateFx(value.fx) } : {}),
     }
@@ -450,6 +481,29 @@ export function compileTemplate(
     })
   }
 
+  const motionKeyframes: NonNullable<ClipEditsV2['keyframes']> = []
+  if (family.slots.some((slot) => slot.motion)) {
+    const defaults = { x: 0, y: 0, scale: 100, rotation: 0 } as const
+    for (const prop of ['x','y','scale','rotation'] as const) {
+      const points: NonNullable<ClipEditsV2['keyframes']>[number]['points'] = []
+      let used = false
+      for (const slot of family.slots) {
+        const startMs = templateFrameToMs(slot.startFrame)
+        const endMs = Math.max(startMs, templateFrameToMs(slot.startFrame + slot.durationFrames) - 1)
+        const from = slot.motion?.from?.[prop] ?? defaults[prop]
+        const to = slot.motion?.to?.[prop] ?? (slot.motion ? from : defaults[prop])
+        if (from !== defaults[prop] || to !== defaults[prop]) used = true
+        points.push({
+          tMs: startMs,
+          v: from,
+          ...(slot.motion?.ease ? { ease: slot.motion.ease } : {}),
+        })
+        if (endMs > startMs) points.push({ tMs: endMs, v: to })
+      }
+      if (used) motionKeyframes.push({ target: 'video', prop, points })
+    }
+  }
+
   const textItems: NonNullable<ClipEditsV2['textItems']> = family.texts.map(t => {
     const text = choices.texts?.[t.id] ?? t.defaultText
     if (typeof text !== 'string' || !text.trim() || Array.from(text).length > t.maxChars) throw new Error(`text ${t.id}: limit ${t.maxChars} characters`)
@@ -478,6 +532,7 @@ export function compileTemplate(
     ...structuredClone(carrier.edits),
     sources, sourceSegments, videoSplits: videoSplits.length ? videoSplits : undefined,
     transitions: transitions.length ? transitions : undefined,
+    keyframes: motionKeyframes.length ? motionKeyframes : carrier.edits.keyframes,
     textItems: textItems.length ? textItems : undefined,
     audio: { music, sfx: [] },
     captions: { ...carrier.edits.captions, enabled: false },
