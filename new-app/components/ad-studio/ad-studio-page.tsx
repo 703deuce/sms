@@ -1057,6 +1057,7 @@ function RunPanel({
   downloadBusy,
   onDownload,
   onCommercial,
+  onRegenerateStill,
 }: {
   run: AdStudioRun
   busy: boolean
@@ -1071,10 +1072,11 @@ function RunPanel({
   downloadBusy: boolean
   onDownload: () => void
   onCommercial: (variant: AdImageVariant) => void
+  onRegenerateStill: (variant: AdImageVariant) => void
 }) {
   const plan = run.plan
   const credits = formatCredits(run.creditEstimate ?? plan?.creditEstimate)
-  const imageAds = (run.imageAds ?? []).slice(0, 3)
+  const imageAds = (run.imageAds ?? []).slice(0, 5)
   const canContinue = run.status === 'failed'
     && run.error?.code === 'KIE_ERROR'
     && !imageAds.some((variant) => variant.status === 'failed')
@@ -1089,7 +1091,7 @@ function RunPanel({
       <div data-testid="ad-studio-failed" className="mx-auto w-full max-w-3xl rounded-xl border border-destructive/30 bg-card p-4 shadow-sm sm:p-6">
         <h1 className="text-xl font-semibold">Generation failed</h1>
         <p className="mt-2 text-sm text-destructive">{run.error?.code ?? 'FAILED'}: {sanitizeAdStudioMessage(run.error?.message ?? 'Ad Studio could not complete this run.')}</p>
-        <ImageAdVariants variants={imageAds} busy={busy} onCommercial={onCommercial} />
+        <ImageAdVariants variants={imageAds} busy={busy} aspect={run.input.aspect} mode={run.mode} onCommercial={onCommercial} onRegenerate={onRegenerateStill} />
         {canContinue ? (
           <button type="button" data-testid="ad-studio-continue" className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" disabled={busy} onClick={onContinue}>
             Continue without failed video scene
@@ -1120,6 +1122,30 @@ function RunPanel({
       <div data-testid="ad-studio-cancelled" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <h1 className="text-xl font-semibold">Run cancelled</h1>
         <p className="mt-1 text-sm text-muted-foreground">Start a new Storyline or Image to ad run from the left.</p>
+      </div>
+    )
+  }
+
+  if (run.status === 'done' && run.mode === 'image_to_ad') {
+    return (
+      <div data-testid="ad-studio-photo-ads-ready" className="mx-auto w-full max-w-5xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
+        <h1 className="text-xl font-semibold">5 photo ads ready</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pick any finished still to download or animate into one native-audio 15s commercial · Credits TBD
+        </p>
+        {plan?.photoAds ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Art director: {plan.photoAds.conceptModel} · style references loaded: {plan.photoAds.styleReferenceCount}
+          </p>
+        ) : null}
+        <ImageAdVariants
+          variants={imageAds}
+          busy={busy}
+          aspect={run.input.aspect}
+          mode={run.mode}
+          onCommercial={onCommercial}
+          onRegenerate={onRegenerateStill}
+        />
       </div>
     )
   }
@@ -1157,7 +1183,7 @@ function RunPanel({
           </button>
           <p className="mt-2 text-xs text-muted-foreground">Use the compact editor for a quick pass or open the full editor for the complete timeline.</p>
         </div>
-        <ImageAdVariants variants={imageAds} busy={busy} onCommercial={onCommercial} />
+        <ImageAdVariants variants={imageAds} busy={busy} aspect={run.input.aspect} mode={run.mode} onCommercial={onCommercial} onRegenerate={onRegenerateStill} />
         <div className="mt-5 flex flex-wrap gap-3">
           {run.compactEditorUrl ? (
             <Link href={run.compactEditorUrl} data-testid="ad-studio-open-compact-editor" className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
@@ -1180,11 +1206,15 @@ function RunPanel({
         <h1 className="text-xl font-semibold">{statusLabel(run.status)}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{credits}</p>
         <p className="mt-3 text-sm text-muted-foreground">
-          {run.status === 'stitching'
-            ? 'Image ads are ready. Voiceover and final stitching are finishing now.'
-            : 'Generating image-ad variants and video scenes from the approved plan.'}
+          {run.mode === 'image_to_ad'
+            ? 'Generating five 2K finished stills. QC flags issues but never regenerates automatically.'
+            : run.mode === 'image_ad_to_commercial'
+              ? 'Animating the selected still as one native-audio 15s commercial.'
+              : run.status === 'stitching'
+                ? 'Image ads are ready. Voiceover and final stitching are finishing now.'
+                : 'Generating image-ad variants and video scenes from the approved plan.'}
         </p>
-        <ImageAdVariants variants={imageAds} busy={busy} onCommercial={onCommercial} />
+        <ImageAdVariants variants={imageAds} busy={busy} aspect={run.input.aspect} mode={run.mode} onCommercial={onCommercial} onRegenerate={onRegenerateStill} />
         <button type="button" data-testid="ad-studio-cancel" className="mt-4 rounded-md border border-border px-3 py-2 text-sm" onClick={onCancel} disabled={busy}>Cancel</button>
       </div>
     )
@@ -1203,6 +1233,19 @@ function RunPanel({
             <div className="rounded-lg border border-border bg-background/50 p-3"><dt className="text-xs font-medium text-muted-foreground">Solution</dt><dd className="mt-1">{plan.script.solution}</dd></div>
             <div className="rounded-lg border border-border bg-background/50 p-3"><dt className="text-xs font-medium text-muted-foreground">CTA</dt><dd className="mt-1">{plan.script.cta}</dd></div>
           </dl>
+          {plan.photoAds?.concepts?.length ? (
+            <div className="mt-5" data-testid="ad-studio-photo-concepts">
+              <h2 className="text-sm font-semibold">Five legacy art directions</h2>
+              <ol className="mt-2 grid gap-2 sm:grid-cols-2">
+                {plan.photoAds.concepts.map((concept, index) => (
+                  <li key={index} className="rounded-lg border border-border bg-background/50 p-3 text-sm">
+                    <p className="font-medium">{index + 1}. {concept.style}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{concept.layoutNotes}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
           <ul className="mt-4 space-y-2" data-testid="ad-studio-scenes">
             {plan.scenes.map((scene) => (
               <li key={scene.index} data-testid={`ad-studio-scene-${scene.index}`} data-source={scene.source} className="rounded-lg border border-border bg-background/50 px-3 py-3 text-sm">
