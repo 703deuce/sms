@@ -433,11 +433,21 @@ export function replaceSourceSegmentMedia(
   if (!current || source.mediaType === 'audio') return edits
   const upserted = upsertSource(edits.sources, source).sources
   const { inMs: oldIn, audio: oldAudio, speed: oldSpeed, ...base } = current
+  const speed = oldSpeed ?? 1
+  const incoming = (edits.transitions ?? []).find((tr) => Math.abs(tr.srcMs - current.startMs) <= 1)
+  const outgoing = (edits.transitions ?? []).find((tr) => Math.abs(tr.srcMs - current.endMs) <= 1)
+  const headMs = source.mediaType === 'video' ? Math.ceil((incoming?.durMs ?? 0) * 0.5 * speed) : 0
+  const tailMs = source.mediaType === 'video' ? Math.ceil((outgoing?.durMs ?? 0) * 0.5 * speed) : 0
+  const inMs = source.mediaType === 'video' ? Math.max(oldIn ?? 0, headMs) : undefined
+  if (source.mediaType === 'video' && source.durationMs != null) {
+    const visibleMediaMs = (current.endMs - current.startMs) * speed
+    if ((inMs ?? 0) + visibleMediaMs + tailMs > source.durationMs) return edits
+  }
   const replacement: SourceSegment = {
     ...base,
     sourceId: source.id,
     ...(source.mediaType === 'video' ? {
-      ...(oldIn != null ? { inMs: oldIn } : { inMs: 0 }),
+      inMs: inMs ?? 0,
       ...(oldAudio ? { audio: oldAudio } : { audio: 'main' as const }),
       ...(oldSpeed ? { speed: oldSpeed } : {}),
     } : {}),
@@ -471,15 +481,35 @@ export function moveSourceSegmentBoundary(
   const left = segments[li]!, right = segments[ri]!
   const old = right.startMs
   if (Math.abs(left.endMs - old) > 1) return edits
-  const next = Math.round(Math.max(left.startMs + SOURCE_SEG_MIN_MS, Math.min(right.endMs - SOURCE_SEG_MIN_MS, nextSrcMs)))
+
+  const transition = (edits.transitions ?? []).find((tr) => Math.abs(tr.srcMs - old) <= 1)
+  const edgeMin = Math.max(SOURCE_SEG_MIN_MS, Math.ceil(transition?.durMs ?? 0))
+  const next = Math.round(Math.max(left.startMs + edgeMin, Math.min(right.endMs - edgeMin, nextSrcMs)))
   if (next === old) return edits
   const delta = next - old
+  const rightSpeed = right.speed ?? 1
   const rightIn = right.inMs
+  const nextRightIn = rightIn != null ? Math.round(rightIn + delta * rightSpeed) : undefined
+  const half = (transition?.durMs ?? 0) / 2
+  if (nextRightIn != null && nextRightIn - half * rightSpeed < -0.01) return edits
+
+  const leftSource = sourceById(edits.sources, left.sourceId)
+  if (leftSource?.mediaType === 'video' && leftSource.durationMs != null) {
+    const mediaAtTransitionTail = segmentMediaMs(left, leftSource, Math.round(next + half))
+    if (mediaAtTransitionTail > leftSource.durationMs + 1) return edits
+  }
+  const rightSource = sourceById(edits.sources, right.sourceId)
+  if (rightSource?.mediaType === 'video' && rightSource.durationMs != null && nextRightIn != null) {
+    const nextRight = { ...right, startMs: next, inMs: nextRightIn }
+    const mediaAtEnd = segmentMediaMs(nextRight, rightSource, right.endMs)
+    if (mediaAtEnd > rightSource.durationMs + 1) return edits
+  }
+
   segments[li] = { ...left, endMs: next }
   segments[ri] = {
     ...right,
     startMs: next,
-    ...(rightIn != null ? { inMs: Math.max(0, Math.round(rightIn + delta * (right.speed ?? 1))) } : {}),
+    ...(nextRightIn != null ? { inMs: nextRightIn } : {}),
   }
   const splits = (edits.videoSplits ?? []).map((ms) => Math.abs(ms - old) <= 1 ? next : ms)
   const transitions = edits.transitions?.map((tr) => Math.abs(tr.srcMs - old) <= 1 ? { ...tr, srcMs: next } : tr)
