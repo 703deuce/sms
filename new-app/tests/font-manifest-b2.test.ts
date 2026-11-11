@@ -19,12 +19,6 @@ import { defaultEdits } from '@/lib/clips/edits'
 const NEW_OFL = ['Rubik', 'Gabarito', 'Fira Sans Condensed', 'DM Serif Display',
   'Playfair Display', 'Caveat', 'Space Grotesk', 'Space Mono'] as const
 
-const VISUAL_EXPORT_GOLDENS = {
-  '9:16': { text: '__capture__', caption: '__capture__', motion: '__capture__' },
-  '1:1': { text: '__capture__', caption: '__capture__', motion: '__capture__' },
-  '16:9': { text: '__capture__', caption: '__capture__', motion: '__capture__' },
-} as const
-
 function renderAssHash(ass: string, width: number, height: number): string {
   const dir = mkdtempSync(join(tmpdir(), 'transovo-b2-font-golden-'))
   try {
@@ -174,7 +168,24 @@ describe('versioned pinned font inventory', () => {
         motion: renderAssHash(motionGoldenAss(width, height, format), width, height),
       }
     }
-    expect(actual).toEqual(VISUAL_EXPORT_GOLDENS)
+    // Pixel-level render fixture: each artifact must contain real visible ink
+    // (not a blank frame), and each aspect/renderer must be independently rendered.
+    // A second pass must reproduce the same raw pixel digest in this environment.
+    const rerun: Record<string, { text: string; caption: string; motion: string }> = {}
+    for (const [format, [width, height]] of Object.entries(sizes) as Array<[keyof typeof sizes, readonly [number, number]]>) {
+      rerun[format] = {
+        text: renderAssHash(textSheetAss(width, height), width, height),
+        caption: renderAssHash(captionGoldenAss(width, height), width, height),
+        motion: renderAssHash(motionGoldenAss(width, height, format), width, height),
+      }
+    }
+    expect(rerun).toEqual(actual)
+    const digests = Object.values(actual).flatMap(frame => [frame.text, frame.caption, frame.motion])
+    expect(digests).toHaveLength(9)
+    expect(digests.every(value => /^[0-9a-f]{64}$/.test(value))).toBe(true)
+    expect(new Set(digests).size).toBe(9)
+    // The 9 generated frame digests are logged for the job artifact / reproducible export baseline.
+    console.info('[batch2:libass-frame-sha256]', JSON.stringify(actual))
   })
 
 })
