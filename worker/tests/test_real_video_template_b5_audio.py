@@ -11,7 +11,8 @@ import math
 import subprocess
 from pathlib import Path
 
-from clips_worker.audio_render import apply_audio_mix
+from clips_worker.audio_render import apply_audio_mix, require_template_soundtrack
+import pytest
 
 
 def _cmd(*args: str) -> None:
@@ -96,3 +97,15 @@ def test_template_explicit_music_loop_ends_at_authored_video_duration(tmp_path: 
     )
     assert abs(float(_probe(out)["format"]["duration"]) - 3.0) < (1.0/30.0 + 0.05)
     assert _rms(out, 2.30) > 0.001
+
+
+def test_template_export_rejects_missing_and_corrupt_music_without_fake_fallback(tmp_path: Path) -> None:
+    approved = {"uploadId": "owned_audio"}
+    with pytest.raises(ValueError, match="missing at export"):
+        require_template_soundtrack(approved, tmp_path / "not-found.ogg")
+    broken = tmp_path / "corrupt.ogg"
+    broken.write_bytes(b"not really music")
+    with pytest.raises(ValueError, match="corrupt"):
+        require_template_soundtrack(approved, broken)
+    # Legacy clips without template music have no new restrictions.
+    require_template_soundtrack({}, None)
