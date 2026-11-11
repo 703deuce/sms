@@ -1328,7 +1328,7 @@ function ImageAdVariants({
                     Download still
                   </a>
                 ) : null}
-                {mode === 'image_to_ad' && (flagged || variant.status === 'failed') ? (
+                {mode === 'image_to_ad' && (variant.status === 'ready' || variant.status === 'failed') ? (
                   <button type="button" data-testid="ad-studio-regenerate-still" disabled={busy} className="mt-2 w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted disabled:opacity-50" onClick={() => onRegenerate(variant)}>
                     {busy ? 'Regenerating…' : 'Regenerate this still'}
                   </button>
