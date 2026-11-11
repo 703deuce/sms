@@ -56,6 +56,10 @@ describe('standalone real video gallery', () => {
   it('keeps all ten Preview anchors above the Batch 9A authoring-quality floor', () => {
     expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.design.stylePackId)).size).toBe(10)
     expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.family.texts[0]?.defaultText)).size).toBe(10)
+    expect(FIRST_PARTY_VIDEO_TEMPLATES.every(x=>x.family.texts.every(text=>
+      Boolean(text.finish?.shadow) &&
+      (Boolean(text.finish?.stroke) || text.finish?.letterSpacing != null)
+    ))).toBe(true)
     const transitionTypes=new Set(FIRST_PARTY_VIDEO_TEMPLATES.flatMap(x=>
       x.family.slots.slice(1).map(slot=>slot.transition==='cut'?'cut':slot.transition.type)))
     expect(transitionTypes.size).toBeGreaterThanOrEqual(6)
@@ -137,6 +141,15 @@ describe('standalone real video gallery', () => {
       expect(edits.transitions).toEqual(expectedTransitions)
       expect(edits.textItems).toHaveLength(release.family.texts.length+(release.family.graphics?.length??0))
       expect(edits.textItems?.every(layer=>Boolean(layer.anim))).toBe(true)
+      for(const [index,text] of release.family.texts.entries()){
+        const layer=edits.textItems?.[index]
+        expect(layer?.style.font,release.id+':'+text.id).toBe(text.font)
+        expect(layer?.style.size,release.id+':'+text.id).toBe(text.size)
+        expect(layer?.style.color,release.id+':'+text.id).toBe(text.color)
+        expect(layer?.style.stroke,release.id+':'+text.id).toEqual(text.finish?.stroke)
+        expect(layer?.style.shadow,release.id+':'+text.id).toEqual(text.finish?.shadow)
+        expect(layer?.style.letterSpacing,release.id+':'+text.id).toBe(text.finish?.letterSpacing)
+      }
       expect(edits.textItems?.filter(layer=>layer.kind==='shape')).toHaveLength(release.family.graphics?.length??0)
       expect(edits.keyframes?.some(track=>track.target==='video'&&track.points.length>=2)).toBe(true)
       expect(edits.audio?.music).toMatchObject({
@@ -183,6 +196,32 @@ describe('standalone real video gallery', () => {
     expect(() => validateVideoTemplateRelease({
       ...fixture('bad-hash'),previewMedia:{...sprite,sha256:'not-a-hash'},
     })).toThrow('Invalid preview sprite')
+  })
+
+  it('keeps authored text finishes editable and rejects unsafe finish fields', () => {
+    const item=fixture('finish')
+    item.family.texts=[{
+      id:'headline',defaultText:'Readable',maxChars:40,startFrame:0,durationFrames:90,
+      x:50,y:20,font:'Anton',size:72,color:'#FFFFFF',
+      finish:{stroke:{color:'#000000',width:2},shadow:{color:'#000000',opacity:80,dist:4},letterSpacing:1.2},
+      anim:{in:{type:'fade',unit:'block',durMs:300}},
+    }]
+    const checked=validateVideoTemplateRelease(item)
+    const compiled=compileTemplate(checked.family,checked.design,{
+      instanceId:'finish_instance',media:{slot1:{
+        id:'photo_finish',kind:'image',
+        license:{id:'owned',provenance:'user-owned',reference:'workspace_upload'},
+      }},
+    },{durationFrames:90,edits:defaultEdits({clipStartMs:0,clipEndMs:3000})})
+    expect(compiled.edits.textItems?.[0]?.style).toMatchObject({
+      stroke:{color:'#000000',width:2},shadow:{color:'#000000',opacity:80,dist:4},letterSpacing:1.2,
+    })
+    expect(()=>validateVideoTemplateRelease({...item,family:{...item.family,texts:[{
+      ...item.family.texts[0]!,finish:{stroke:{color:'#000000',width:17}},
+    }]}})).toThrow('text.finish.stroke.width')
+    expect(()=>validateVideoTemplateRelease({...item,family:{...item.family,texts:[{
+      ...item.family.texts[0]!,finish:{shadow:{color:'black',opacity:80,dist:4}},
+    }]}})).toThrow('invalid color')
   })
 
   it('checks duplicate IDs and family/treatment pairs', () => {
