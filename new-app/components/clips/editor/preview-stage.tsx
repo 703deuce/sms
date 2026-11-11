@@ -808,7 +808,8 @@ export function PreviewStage({
             if (Math.abs(el.currentTime - t) > 0.15) el.currentTime = t
             const muted = segmentAudio(sseg, s) === 'main' || voiceOutputMutedRef.current
             if (el.muted !== muted) el.muted = muted
-            if (v && el.playbackRate !== v.playbackRate) el.playbackRate = v.playbackRate
+            const sourceRate = (v?.playbackRate ?? rate) * (sseg.speed ?? 1)
+            if (el.playbackRate !== sourceRate) el.playbackRate = sourceRate
             if (v && !v.paused && el.paused) void el.play().catch(() => {})
             if (v && v.paused && !el.paused) el.pause()
           } else {
@@ -1063,6 +1064,7 @@ export function PreviewStage({
               transform: transform.transform,
               clipPath: transform.clipPath,
               filter: sourceSegmentFxCss(seg.fx),
+              rateMultiplier: seg.speed ?? 1,
             }
           },
           exportW: (() => {
