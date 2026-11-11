@@ -92,7 +92,11 @@ export async function ensureAdVoiceover(
   const initialVoice = adVoiceSettings(input.voiceId ?? plan?.voiceId, { durationSec: input.durationSec, text })
 
   try {
-    const first = await ttsWithTimestamps({ text, voice: initialVoice })
+    const first = await ttsWithTimestamps({
+      text,
+      voice: initialVoice,
+      allowModelFallback: maxTakes !== 1,
+    })
     const firstDurationMs = takeDurationMs(first)
     if (firstDurationMs <= 0 || !first.audio.length) throw new Error('Empty voiceover')
     selected = first
