@@ -83,6 +83,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
   const [createKey, setCreateKey] = useState(newIdempotencyKey)
   const [confirmKey, setConfirmKey] = useState(newIdempotencyKey)
   const [retryRenderKey, setRetryRenderKey] = useState(newIdempotencyKey)
+  const [retryVoiceoverKey, setRetryVoiceoverKey] = useState(newIdempotencyKey)
   const [finalMedia, setFinalMedia] = useState<AdStudioFinalRender | null>(null)
   const [finalMediaLoading, setFinalMediaLoading] = useState(false)
   const [downloadBusy, setDownloadBusy] = useState(false)
@@ -434,6 +435,23 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
     }
   }
 
+  async function retryVoiceoverAndRender() {
+    if (!run || busy || run.status !== 'failed' || run.canRetryVoiceover !== true) return
+    setBusy(true)
+    setError(null)
+    console.log('[ad-studio:ui] retry_voice', { step: 'begin', runId: run.id })
+    try {
+      const next = await liveClient.retryVoiceover(run.id, retryVoiceoverKey)
+      console.log('[ad-studio:ui] retry_voice', { step: 'complete', runId: next.id, status: next.status })
+      setRun(next)
+      setRetryVoiceoverKey(newIdempotencyKey())
+    } catch (err) {
+      showError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function downloadFinalRender() {
     if (!run || run.status !== 'done' || downloadBusy) return
     setDownloadBusy(true)
@@ -620,6 +638,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
                 onCancel={() => void cancelRun()}
                 onContinue={() => void continueRun()}
                 onRetryRender={() => void retryFinalRender()}
+                onRetryVoiceover={() => void retryVoiceoverAndRender()}
                 finalMedia={finalMedia}
                 finalMediaLoading={finalMediaLoading}
                 downloadBusy={downloadBusy}
@@ -924,6 +943,7 @@ function RunPanel({
   onCancel,
   onContinue,
   onRetryRender,
+  onRetryVoiceover,
   finalMedia,
   finalMediaLoading,
   downloadBusy,
@@ -937,6 +957,7 @@ function RunPanel({
   onCancel: () => void
   onContinue: () => void
   onRetryRender: () => void
+  onRetryVoiceover: () => void
   finalMedia: AdStudioFinalRender | null
   finalMediaLoading: boolean
   downloadBusy: boolean
@@ -952,6 +973,8 @@ function RunPanel({
   const canRetryRender = run.status === 'failed'
     && run.error?.code === 'RENDER_ERROR'
     && run.canRetryRender === true
+  const canRetryVoiceover = run.status === 'failed'
+    && run.canRetryVoiceover === true
 
   if (run.status === 'failed') {
     return (
@@ -970,6 +993,14 @@ function RunPanel({
               {busy ? 'Retrying final render…' : 'Retry final render'}
             </button>
             <p className="mt-2 text-xs text-muted-foreground">Uses the existing generated scenes, image ads, and voiceover. No additional credits are charged.</p>
+          </div>
+        ) : null}
+        {canRetryVoiceover ? (
+          <div className="mt-4">
+            <button type="button" data-testid="ad-studio-retry-voiceover" className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={busy} onClick={onRetryVoiceover}>
+              {busy ? 'Retrying voiceover & render…' : 'Retry voiceover & render'}
+            </button>
+            <p className="mt-2 text-xs text-muted-foreground">Regenerates only the voiceover, then reuses the existing video scenes and image ads for the final render.</p>
           </div>
         ) : null}
       </div>
