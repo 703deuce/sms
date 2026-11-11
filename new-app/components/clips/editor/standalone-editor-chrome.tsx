@@ -1,7 +1,7 @@
 'use client'
 
-import type { ComponentType, ReactNode } from 'react'
-import { ArrowLeft, Download, Redo2, Undo2 } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { ArrowLeft, Download, Redo2, Undo2, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -166,7 +166,7 @@ export function StandaloneEditorChrome({
 export type StandaloneEditorRailItem = {
   id: string
   label: string
-  icon: ComponentType<{ className?: string }>
+  icon: LucideIcon
   active?: boolean
   disabled?: boolean
   title?: string
