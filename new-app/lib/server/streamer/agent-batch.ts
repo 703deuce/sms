@@ -9,7 +9,7 @@ import {shouldAutoStartUploadAgentBatch} from '@/lib/ai-captions/auto-agent-guar
 import {storyTargetFromAgentSeconds} from '@/lib/ai-producer-agent/clip-mode/unified-run-input'
 import {planAutoStartUnifiedClip} from '@/lib/streamer/auto-start-unified'
 import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
-import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
+import {readStreamerAgentBatch,publishedBatchClipIds,streamerAgentSettings as asSettings,
   type StreamerAgentBatch as AgentBatch,type StreamerAgentMode as Mode}
   from '@/lib/streamer/agent-batch-contract'
 export {readStreamerAgentBatch} from '@/lib/streamer/agent-batch-contract'
@@ -49,6 +49,7 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
   if(windows.length>32)throw Error('stream_agent_batch_exceeds_32_windows')
   const batch:AgentBatch={
     id:createId('sagent'),status:'running',mode,seconds,
+    windowPolicy:'fold_short_tail_v1',
     index:0,total:windows.length,sourceStartMs:source.rangeStartMs,
     sourceDurationMs:source.rangeEndMs-source.rangeStartMs,
     completed:[],errors:[],startedAt:new Date().toISOString(),
@@ -169,7 +170,8 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
   if(!p||!batch||batch.id!==batchId||batch.status!=='running')
     return {status:'not_active'}
   const windows=streamerAgentWindows(batch.sourceStartMs,
-    batch.sourceDurationMs,true)
+    batch.sourceDurationMs,true,0,
+    batch.windowPolicy==='fold_short_tail_v1'?'fold':'legacy')
   const next:AgentBatch={...batch,completed:[...batch.completed],
     errors:[...batch.errors]}
   if(next.index>=windows.length){
@@ -181,16 +183,37 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
   if(next.runId){
     const run=await prisma.aiProducerAgentRun.findFirst({
       where:{id:next.runId,workspaceId:p.workspaceId},
-      select:{status:true,resultProjectId:true,resultClipId:true,error:true},
+      select:{status:true,resultProjectId:true,resultClipId:true,outputProjectIds:true,producerNotes:true,error:true},
     })
     if(run&&['ready','done','failed','canceled','capped'].includes(run.status)){
-      if(['ready','done'].includes(run.status)&&run.resultClipId&&run.resultProjectId){
-        next.completed.push({clipId:run.resultClipId,
-          projectId:run.resultProjectId,
-          startMin:Math.floor((start-next.sourceStartMs)/60_000)})
-      }else{
-        next.errors.push(`Window ${next.index+1}: ${run?.error??'No valid clip'}`)
-      }
+        const ids=publishedBatchClipIds(run)
+        // Never trust producer notes alone: enforce this workspace, the
+        // published output project, and live clip rows before exposing links.
+        const outputProjects=[...new Set([
+          run.resultProjectId,
+          ...(Array.isArray(run.outputProjectIds)?run.outputProjectIds:[]),
+        ].filter((id):id is string=>typeof id==='string'&&id.length>0))]
+        const published:Array<{id:string;projectId:string}>=outputProjects.length&&ids.length
+          ?await prisma.clip.findMany({where:{
+              id:{in:ids},projectId:{in:outputProjects},
+              workspaceId:p.workspaceId,deletedAt:null,
+            },select:{id:true,projectId:true}}):[]
+        const seen=new Set(next.completed.map(item=>item.clipId))
+        const publishedById=new Map(published.map(clip=>[clip.id,clip]))
+        for(const id of ids){
+          const clip=publishedById.get(id)
+          if(!clip||seen.has(clip.id))continue
+          next.completed.push({clipId:clip.id,projectId:clip.projectId,
+            startMin:Math.floor((start-next.sourceStartMs)/60_000)})
+          seen.add(clip.id)
+        }
+        if(!['ready','done'].includes(run.status)){
+          // A failed/canceled run may already have durable, authorized clips.
+          // Preserve them for manual review without presenting the run as a success.
+          next.errors.push(`Window ${next.index+1}: ${run.error??'Run did not finish'}`)
+        }else if(!published.length){
+          next.errors.push(`Window ${next.index+1}: No published clips available`)
+        }
       next.runId=undefined;next.preparedProjectId=undefined
       next.index++
       if(next.index>=windows.length)next.status='done'

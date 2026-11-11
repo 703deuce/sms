@@ -6,12 +6,13 @@ import {Sparkles,Loader2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {aiProducerAgentPublicEnabled} from '@/lib/ai-producer-agent/flags'
 import {streamerAgentWindows,MAX_AGENT_SOURCE_WINDOW_MS} from '@/lib/streamer/agent-windows'
+import {streamerBatchStatusText} from '@/lib/streamer/agent-batch-contract'
 import { UNIFIED_AUTO_AGENT_CLIP_MODE } from '../../lib/clips/unified-clip-results'
 import { UnifiedClipRunNote } from '../clips/unified-clip-run-note'
 
 export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'
 type FinishedClip={projectId:string;clipId:string;startMin:number}
-type AgentRunProgress={runId:string;status:string;stage:string;elapsedSec:number;etaSec:number}
+type AgentRunProgress={runId:string;status:string;stage:string;elapsedSec:number;etaSec:number|null}
 type RememberedAgentRun={runId:string;startMs:number;endMs:number}
 type AgentRunListRow={
   id:string;status:string;sourceSnapshot?:unknown;createdAt?:string|null
@@ -112,6 +113,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
   const [batchId,setBatchId]=useState<string|null>(null)
   const [agentProgress,setAgentProgress]=useState<AgentRunProgress|null>(null)
   const [checkingRun,setCheckingRun]=useState(true)
+  const [batchLookupError,setBatchLookupError]=useState(false)
   const progressLogRef=useRef<{stage:string;bucket:number}|null>(null)
   useEffect(()=>()=>{canceled.current=true},[])
   // The entire-VOD batch is durable: project settings and worker jobs survive
@@ -124,20 +126,21 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         const data=await requestJson('/api/streamer/agent-batches?projectId='+
           encodeURIComponent(projectId)) as null|{
           id:string;status:string;index:number;total:number
-          completed:FinishedClip[];errors:string[]
+          completed:FinishedClip[];errors:string[];startedAt?:string|null
         }
         if(stopped)return
+        setBatchLookupError(false)
         if(data?.id&&!manualRunning.current){
           setBatchId(data.id)
           setCompleted(data.completed??[])
           setErrors(data.errors??[])
-          setStatus(data.status==='running'?
-            `Batch window ${Math.min(data.total,data.index+1)}/${data.total}`:
-            data.status==='done'?'Complete':data.status)
+          setStatus(streamerBatchStatusText(data,Date.now()))
           setRunning(data.status==='running')
         }
       }catch{
-        // A transient status lookup failure cannot cancel queued worker jobs.
+        // An unreachable status endpoint is not a completed/empty batch.
+        // Preserve rendered clip links and let the next poll reconnect.
+        if(!stopped)setBatchLookupError(true)
       }
       if(!stopped)timer=setTimeout(poll,5000)
     }
@@ -166,6 +169,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
 
       let remembered=readRememberedAgentRun(projectId)
       if(remembered){
+        const rememberedRunId=remembered.runId
         try{
           const data=await requestJson('/api/ai-producer-agent/runs/'+encodeURIComponent(remembered.runId)) as {
             run:{status:string}
@@ -176,7 +180,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
           }
         }catch(error){
           console.warn('[clips:agent-progress]',{
-            action:'restore_remembered_lookup_failed',projectId,runId:remembered.runId,error:String(error),
+            action:'restore_remembered_lookup_failed',projectId,runId:rememberedRunId,error:String(error),
           })
         }
       }
@@ -258,7 +262,10 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         ?Math.max(0,Math.floor((Date.now()-Date.parse(run.createdAt))/1000))
         :i*3
       const stage=agentStageLabel(run.phase,lastStep?.tool)
-      const etaSec=Math.max(0,estimateAgentTotalSec(endMs-startMs)-elapsedSec)
+      const remaining=estimateAgentTotalSec(endMs-startMs)-elapsedSec
+      // This is a heuristic, not a worker deadline. Once exceeded, give an
+      // unknown ETA rather than promising zero while model work continues.
+      const etaSec=remaining>0?remaining:null
       const nextProgress={runId,status:run.status,stage,elapsedSec,etaSec}
       setAgentProgress(nextProgress)
       const bucket=Math.floor(elapsedSec/30)
@@ -403,7 +410,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     </div>
     </UnifiedClipRunNote>
     <p className="mt-2 text-xs text-muted-foreground">
-      {sourceKind==='stream'?'Twitch/Kick sources are fetched as bounded video windows when needed.':'Your uploaded video is used directly without another download.'}
+      {sourceKind==='stream'?'Twitch/Kick replay/VOD sources are fetched as bounded video windows when needed; this is not real-time live clipping.':'Your uploaded video is used directly without another download.'}
       Each batch runs the same specialist agents and produces an editable Clip Studio result.
       Your long-form editing mode is unchanged.
       {allWindows?' This full-VOD batch continues after you close the page.':''}
@@ -411,8 +418,11 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     {!ready?<p className="mt-2 text-xs">Finish processing the source before generating agent clips.</p>:null}
     {running?<p className="mt-2 text-xs" role="status">
       {agentProgress
-        ? `Agent run: ${agentProgress.status} · ${agentProgress.stage} · elapsed ${formatAgentTime(agentProgress.elapsedSec)} · ETA ~${formatAgentTime(agentProgress.etaSec)}`
+        ? `Agent run: ${agentProgress.status} · ${agentProgress.stage} · elapsed ${formatAgentTime(agentProgress.elapsedSec)} · ${agentProgress.etaSec===null?'ETA unavailable (taking longer than estimated)':`ETA ~${formatAgentTime(agentProgress.etaSec)}`}`
         : status}
+    </p>:null}
+    {batchLookupError&&batchId?<p role="status" className="mt-2 text-xs text-muted-foreground">
+      Batch status temporarily unavailable · reconnecting. Saved clips remain accessible; no new run started.
     </p>:null}
     {completed.length?<div className="mt-3 flex flex-wrap gap-2">
       {completed.map((clip,i)=>
