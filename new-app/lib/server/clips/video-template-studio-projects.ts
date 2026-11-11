@@ -309,16 +309,32 @@ export async function savePublishedStudioDraft(
       if (!object(templateMeta) || templateMeta.instanceId !== templateInstanceId(workspaceId, draft.draftId) ||
           templateMeta.studioEditsSaveVersion !== expectedEditsSaveVersion)
         throw new TemplateInstanceConflict()
-      const materialized = materializeStudioDraft(family, draft, String(templateMeta.instanceId))
-      const musicPlan = draft.templateMusic
-        ? planTemplateMusic(materialized.family, draft.templateMusic, materialized.choices.texts) : null
-      if (musicPlan && musicPlan.durationFrames !== family.totalFrames)
-        throw new Error('Re-sync changes the carrier duration; create a new template project instead')
-      const durationMs = Math.round(family.totalFrames * 1000 / 30)
+      // A previously accepted re-sync changed the carrier output clock. Reconstruct that
+      // pinned family before editing; reapplying its beat mapping would double-shift every cut.
+      const preceding = object(templateMeta.authoringState) ? templateMeta.authoringState : {}
+      const priorMusic = preceding.templateMusic as StudioDraft['templateMusic'] | undefined
+      const effectiveBase = priorMusic
+        ? planTemplateMusic(family, priorMusic,
+            object(preceding.texts) ? preceding.texts as Record<string, string> : undefined).family
+        : family
+      const materialized = materializeStudioDraft(effectiveBase, draft, String(templateMeta.instanceId))
+      const sameAcceptedSong = Boolean(priorMusic && draft.templateMusic &&
+        priorMusic.rights.assetId === draft.templateMusic.rights.assetId &&
+        priorMusic.rights.sha256 === draft.templateMusic.rights.sha256 &&
+        priorMusic.schedule.sha256 === draft.templateMusic.schedule.sha256 &&
+        draft.templateMusic.choice === 're-sync')
+      const decision = sameAcceptedSong
+        ? { ...draft.templateMusic!, choice: 'keep-timing' as const }
+        : draft.templateMusic
+      const musicPlan = decision
+        ? planTemplateMusic(materialized.family, decision, materialized.choices.texts) : null
+      if (musicPlan && musicPlan.durationFrames !== effectiveBase.totalFrames)
+        throw new Error('Re-sync changes the existing carrier duration; create a new template project instead')
+      const durationMs = Math.round(effectiveBase.totalFrames * 1000 / 30)
       const choices = { ...materialized.choices,
-        ...(draft.templateMusic ? { templateMusic: draft.templateMusic } : {}) }
+        ...(decision ? { templateMusic: decision } : {}) }
       const compiled = compileTemplateWithMusic(materialized.family, design, choices,
-        { durationFrames: family.totalFrames, edits: defaultEdits({ clipStartMs: 0, clipEndMs: durationMs }) })
+        { durationFrames: effectiveBase.totalFrames, edits: defaultEdits({ clipStartMs: 0, clipEndMs: durationMs }) })
       await loadAndValidateAssets(tx, workspaceId, musicPlan?.family ?? materialized.family, design, choices)
       // Retain every unknown/legacy field; only the studio-authoritative lanes are changed.
       const old = clip.edits as unknown as ClipEditsV2
