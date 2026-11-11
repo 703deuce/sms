@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { formatTimecode } from '@/lib/clips/format'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
 import { MEDIA_ACCEPT, type ProjectMediaApi } from '@/components/clips/editor/use-project-media'
@@ -424,6 +425,67 @@ export function MediaPanel({
                 {f === 'cover' ? 'Fill' : 'Fit'}
               </Button>
             ))}
+          </div>
+          <div className="space-y-1.5" data-testid="media-seg-transform-controls">
+            <Label className="text-[11px]">Transform</Label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {([
+                ['x', 'X %', -100, 100, 0],
+                ['y', 'Y %', -100, 100, 0],
+                ['scale', 'Scale %', 25, 400, 100],
+                ['rotation', 'Rotate °', -360, 360, 0],
+                ['cropL', 'Crop L %', 0, 90, 0],
+                ['cropT', 'Crop T %', 0, 90, 0],
+                ['cropR', 'Crop R %', 0, 90, 0],
+                ['cropB', 'Crop B %', 0, 90, 0],
+              ] as const).map(([key, label, min, max, identity]) => (
+                <label key={key} className="space-y-0.5 text-[10px] text-muted-foreground">
+                  <span>{label}</span>
+                  <Input
+                    type="number"
+                    min={min}
+                    max={max}
+                    step={1}
+                    value={seg.transform?.[key] ?? identity}
+                    className="h-7 px-2 text-xs"
+                    data-testid={`media-seg-transform-${key}`}
+                    onChange={(event) => {
+                      const value = Number(event.currentTarget.value)
+                      if (!Number.isFinite(value)) return
+                      patchSeg({ transform: { ...(seg.transform ?? {}), [key]: value } })
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5" data-testid="media-seg-fx-controls">
+            <Label className="text-[11px]">Slot look</Label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {([
+                ['brightness', 'Bright'],
+                ['contrast', 'Contrast'],
+                ['saturation', 'Saturation'],
+              ] as const).map(([key, label]) => (
+                <label key={key} className="space-y-0.5 text-[10px] text-muted-foreground">
+                  <span>{label}</span>
+                  <Input
+                    type="number"
+                    min={-100}
+                    max={100}
+                    step={1}
+                    value={seg.fx?.[key] ?? 0}
+                    className="h-7 px-2 text-xs"
+                    data-testid={`media-seg-fx-${key}`}
+                    onChange={(event) => {
+                      const value = Number(event.currentTarget.value)
+                      if (!Number.isFinite(value)) return
+                      patchSeg({ fx: { ...(seg.fx ?? {}), [key]: value } })
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
           </div>
           <div className="flex flex-wrap gap-1">
             <Button size="xs" variant="outline" disabled={playheadSourceMs <= seg.startMs + 100 || playheadSourceMs >= seg.endMs} onClick={() => patchSeg({ endMs: Math.round(playheadSourceMs) })}>
