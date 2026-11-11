@@ -110,6 +110,7 @@ export type TemplateSequenceItem = {
   sourceAudio: 'mute' | 'source'
   speed?: number
   transition: 'cut' | TemplateTransition
+  motion?: TemplateMotion
   transform?: SourceSegmentTransform
   fx?: SourceSegmentFx
 }
@@ -476,6 +477,7 @@ export function compileTemplate(
       id: itemId, slotId: slot.id, assetId: asset.id,
       outputStartFrame: slot.startFrame, outputEndFrame: slot.startFrame + slot.durationFrames,
       mediaInFrame: inFrame, fit: slot.fit, sourceAudio: slot.sourceAudio, ...(slot.speed ? { speed: slot.speed } : {}), transition: slot.transition,
+      ...(slot.motion ? { motion: slot.motion } : {}),
       ...(slot.transform ? { transform: slot.transform } : {}),
       ...(slot.fx ? { fx: slot.fx } : {}),
     })
