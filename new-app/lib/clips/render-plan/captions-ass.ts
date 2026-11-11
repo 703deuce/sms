@@ -6,6 +6,7 @@
  * rasteriser from the same bytes as the burned-in export.
  */
 import { byId as LEGACY_PRESETS } from '@/lib/clips/caption-presets'
+import { CLIP_FONT_MANIFEST } from '@/lib/clips/font-manifest'
 import { CAPTION_PRESETS_V2 } from '@/lib/clips/templates/registry'
 import { captionSafeWidthPx, fitCaptionLine, fitReferenceFrame, roundHalfUp } from '@/lib/clips/caption-fit'
 import { hex2, pyFixedPad, pyFloat, pyInt, pyRound, pyRoundN } from '@/lib/clips/render-plan/py'
@@ -33,9 +34,13 @@ export const BOUNCE_TAG = String.raw`\fscy70\t(0,90,\fscy118)\t(90,180,\fscy100)
 const GLOW_TAG_INNER = String.raw`\blur4\t(0,200,\blur9)\t(200,400,\blur4)`
 
 /** Mirror of captions_ass._ASS_FONT_FILES keys (all bundled) + _ASS_FONT_ALIASES. */
-const ASS_FONT_FILES = new Set([
+const ASS_FONT_FILES = new Set<string>([
   'Poppins ExtraBold', 'Anton', 'Montserrat Black', 'Bangers', 'Inter', 'Lato', 'Lato Black', 'Bebas Neue', 'Luckiest Guy', 'Archivo Black', 'Oswald',
   'Noto Sans', 'Noto Sans Arabic', 'Noto Sans CJK JP', 'Noto Sans Devanagari', 'Noto Sans Thai',
+  // All pinned browser/worker fonts are legal ASS faces. Keep the legacy
+  // worker/system aliases above for historical documents and Unicode fallback.
+  // A new manifest family must never silently export as Poppins ExtraBold.
+  ...CLIP_FONT_MANIFEST.map((font) => font.assFamily),
 ])
 const ASS_FONT_ALIASES: Record<string, string> = {
   Poppins: 'Poppins ExtraBold', Anton: 'Anton', 'Montserrat Black': 'Montserrat Black', Montserrat: 'Montserrat Black',

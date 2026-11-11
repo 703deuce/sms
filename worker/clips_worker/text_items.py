@@ -30,6 +30,14 @@ TEXT_FONTS = {
     "Bebas Neue": "Bebas Neue",
     "Archivo Black": "Archivo Black",
     "Luckiest Guy": "Luckiest Guy",
+    "Rubik": "Rubik",
+    "Gabarito": "Gabarito",
+    "Fira Sans Condensed": "Fira Sans Condensed",
+    "DM Serif Display": "DM Serif Display",
+    "Playfair Display": "Playfair Display",
+    "Caveat": "Caveat",
+    "Space Grotesk": "Space Grotesk",
+    "Space Mono": "Space Mono",
 }
 REF_H = 1920
 _AN = {"left": 4, "center": 5, "right": 6}

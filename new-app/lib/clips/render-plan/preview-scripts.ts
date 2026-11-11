@@ -5,6 +5,7 @@
  *   title/headline + badge text (clip_export_template / stream_frame).
  */
 import { buildCaptionsAss, type AssWord } from '@/lib/clips/render-plan/captions-ass'
+import { CLIP_FONT_MANIFEST } from '@/lib/clips/font-manifest'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { resolveWordFixText } from '@/lib/clips/edits'
 import { hookAssForEdits } from '@/lib/clips/render-plan/hook-ass'
@@ -192,22 +193,18 @@ export function assFontFamilies(ass: string): string[] {
 }
 
 /** Canonical family → the pinned file under /fonts/clip (same bytes as the worker's). */
-export const CLIP_FONT_FILES: Record<string, string> = {
-  anton: 'Anton-Regular.ttf',
-  'montserrat black': 'Montserrat-Black.ttf',
-  montserrat: 'Montserrat-Black.ttf',
-  'poppins extrabold': 'Poppins-ExtraBold.ttf',
-  poppins: 'Poppins-ExtraBold.ttf',
-  'archivo black': 'ArchivoBlack.ttf',
-  bangers: 'Bangers.ttf',
-  'bebas neue': 'BebasNeue.ttf',
-  inter: 'Inter.ttf',
-  'lato black': 'Lato.ttf',
-  lato: 'Lato.ttf',
-  'luckiest guy': 'LuckiestGuy.ttf',
-  oswald: 'Oswald.ttf',
-  'dejavu sans': 'DejaVuSans-Bold.ttf',
-}
+export const CLIP_FONT_FILES: Record<string, string> = Object.fromEntries([
+  ...CLIP_FONT_MANIFEST.flatMap(row => [
+    [row.id.toLowerCase(), row.browserFile.split('/').at(-1)!],
+    [row.assFamily.toLowerCase(), row.browserFile.split('/').at(-1)!],
+  ]),
+  // Retain historical aliases for existing serialized documents and libass.
+  ['montserrat black', 'Montserrat-Black.ttf'],
+  ['poppins extrabold', 'Poppins-ExtraBold.ttf'],
+  ['lato black', 'Lato.ttf'],
+  // DejaVu is a system/worker fallback, not a repository-pinned worker pair.
+  ['dejavu sans', 'DejaVuSans-Bold.ttf'],
+])
 
 /** G3b: workspace fonts (family, lower-case → same-origin file URL) — use-workspace-fonts fills it. */
 const USER_FONT_URLS = new Map<string, string>()
@@ -225,5 +222,22 @@ export function fontUrlsForAss(ass: string, base = '/fonts/clip/'): string[] {
       if (user) files.add(user)
     }
   }
+  // JASSUB uses a sealed WASM fontset, unlike browser CSS's system fallback.
+  // Load a pinned Unicode face when dialogue contains glyphs outside basic
+  // Latin. This extends coverage without altering any historical ASCII ASS.
+  const dialogue = ass.split(String.fromCharCode(10))
+    .filter(line => line.startsWith('Dialogue: ')).join(' ')
+  const codepoints = Array.from(dialogue, ch => ch.codePointAt(0) ?? 0)
+  const hasGlyph = (lo: number, hi: number) =>
+    codepoints.some(cp => cp >= lo && cp <= hi)
+  if (codepoints.some(cp => cp > 127)) files.add(base + 'DejaVuSans-Bold.ttf')
+  if (hasGlyph(0x0600, 0x06ff) || hasGlyph(0x0750, 0x077f) || hasGlyph(0x08a0, 0x08ff))
+    files.add(base + 'NotoSansArabic.ttf')
+  if (hasGlyph(0x0900, 0x097f)) files.add(base + 'NotoSansDevanagari.ttf')
+  if (hasGlyph(0x0e00, 0x0e7f)) files.add(base + 'NotoSansThai.ttf')
+  if (hasGlyph(0x3040, 0x30ff) || hasGlyph(0x3400, 0x9fff))
+    files.add(base + 'NotoSansJP.ttf')
+  if (hasGlyph(0x2600, 0x27bf) || hasGlyph(0x1f300, 0x1faff))
+    files.add(base + 'NotoEmoji.ttf')
   return [...files]
 }
