@@ -14,6 +14,9 @@ import {
   type TemplateFamilyV1,
 } from '@/lib/clips/real-video-templates/sequence-contract'
 import { getPrisma } from '@/lib/server/db'
+import { getClipStorage } from '@/lib/storage'
+import { assertAudioLicense } from '@/lib/clips/real-video-templates/music-timing'
+import { compileTemplateWithMusic, planTemplateMusic, type TemplateMusicDecisionV1 } from '@/lib/clips/real-video-templates/music-sequence'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { storageDriverName, uploadSourceKey } from '@/lib/storage'
@@ -26,7 +29,7 @@ export class TemplateInstanceConflict extends Error { constructor() { super('Tem
 export class TemplateAssetUnavailable extends Error { constructor() { super('Selected media is unavailable in this workspace') } }
 
 export type TemplateSnapshot = { family: TemplateFamilyV1; design: TemplateDesignV1 }
-export type TemplateAuthoringState = Omit<TemplateChoices, 'instanceId'>
+export type TemplateAuthoringState = Omit<TemplateChoices, 'instanceId'> & { templateMusic?: TemplateMusicDecisionV1 }
 export type PublishedTemplateProject = {
   instanceId: string
   projectId: string
@@ -127,7 +130,7 @@ async function loadAndValidateAssets(
   const ids = [...new Set(selected.map((x) => x.asset.id))]
   const rows = await tx.clipUpload.findMany({
     where: { workspaceId, status: 'COMPLETE', id: { in: ids } },
-    select: { id: true, mime: true, durationMs: true, width: true, height: true },
+    select: { id: true, mime: true, durationMs: true, width: true, height: true, key: true, storageDriver: true, bytes: true },
   })
   if (rows.length !== ids.length) throw new TemplateAssetUnavailable()
   const byId = new Map(rows.map((row) => [row.id, row]))
@@ -140,6 +143,30 @@ async function loadAndValidateAssets(
           !asset.durationFrames || asset.durationFrames < minimumFrames)
         throw new TemplateAssetUnavailable()
     }
+  }
+  if (choices.music) {
+    const authorization = choices.templateMusic
+    if (!authorization) throw new Error('Template soundtrack requires verified rights and a pinned beat schedule')
+    const row = byId.get(choices.music.id)
+    if (!row) throw new TemplateAssetUnavailable()
+    assertAudioLicense(authorization.rights)
+    if (authorization.rights.assetId !== choices.music.id ||
+        authorization.schedule.sha256 !== authorization.rights.sha256 ||
+        authorization.schedule.musicAssetId !== choices.music.id)
+      throw new Error('Template music identity does not match its approved schedule')
+    // Do not trust supplied public-stock metadata. Only user-owned music with an explicit
+    // acknowledgment can use this route until cleared stock bytes are pinned in a manifest.
+    if (choices.music.license.provenance !== 'user-owned' ||
+        !/^(user-owned|user-upload)$/i.test(authorization.rights.license))
+      throw new Error('Stock music is not verified for template export; upload a rights-cleared song')
+    if (Math.abs((row.durationMs ?? 0) - Math.round(authorization.rights.verifiedDurationFrames * 1000 / 30)) > 34)
+      throw new Error('Music duration has changed since its schedule was approved')
+    if (!row.key || !row.bytes || row.bytes > BigInt(100 * 1024 * 1024))
+      throw new Error('Music source missing or too large to verify securely')
+    const bytes = await getClipStorage(row.storageDriver).getObjectBytes(row.key)
+    if (BigInt(bytes.byteLength) !== row.bytes ||
+        createHash('sha256').update(bytes).digest('hex') !== authorization.rights.sha256.toLowerCase())
+      throw new Error('Music asset changed since beat detection; re-approve rights and timing')
   }
   return byId
 }
@@ -164,7 +191,13 @@ export async function publishTemplateProject(
   const snapshot = { family, design }
   const defHash = definitionHash(snapshot)
   const requestHash = digest(stableJson({ snapshot, choices: choicesRaw }))
-  const durationMs = Math.round(family.totalFrames * 1000 / 30)
+  if (!choicesRaw.music && choicesRaw.templateMusic) throw new Error('Cannot approve missing template music')
+  const musicPlan = choicesRaw.music && choicesRaw.templateMusic
+    ? planTemplateMusic(family, choicesRaw.templateMusic, choicesRaw.texts)
+    : null
+  if (choicesRaw.music && !musicPlan) throw new Error('Template music rights and timing required')
+  const compiledFrameCount = musicPlan?.durationFrames ?? family.totalFrames
+  const durationMs = Math.round(compiledFrameCount * 1000 / 30)
   const prisma = getPrisma()
 
   const existing = await prisma.clipProject.findFirst({
@@ -187,7 +220,7 @@ export async function publishTemplateProject(
 
   try {
     return await prisma.$transaction(async (tx) => {
-      const assetRows = await loadAndValidateAssets(tx, workspaceId, family, design, choicesRaw)
+      const assetRows = await loadAndValidateAssets(tx, workspaceId, musicPlan?.family ?? family, design, choicesRaw)
       const selectedAspect = choicesRaw.aspect ?? family.aspects[0]!
       if (!family.aspects.includes(selectedAspect)) throw new Error('Selected template aspect is not authored by this family')
       const settings = clipProjectSettingsSchema.parse({
@@ -200,12 +233,12 @@ export async function publishTemplateProject(
         rangeEndMs: durationMs,
       })
       const base = defaultEdits({ clipStartMs: 0, clipEndMs: durationMs })
-      const compiled = compileTemplate(
+      const compiled = compileTemplateWithMusic(
         family,
         design,
         { instanceId: ids.instanceId, ...choicesRaw },
         {
-          durationFrames: family.totalFrames,
+          durationFrames: compiledFrameCount,
           edits: {
             ...base,
             trim: { in: 0, out: durationMs },
@@ -319,7 +352,7 @@ export async function publishTemplateProject(
           payload: toPrismaJson(buildProcessProjectJobPayload(settings, {
             blankMs: durationMs,
             templateCarrier: true,
-            templateCarrierFrames: family.totalFrames,
+            templateCarrierFrames: compiledFrameCount,
             preseededFullVideo: true,
           })),
         },
