@@ -193,6 +193,7 @@ export function buildAdTimelineEdits(input: {
         durMs: Math.min(input.durationMs, input.voice.durationMs),
         volume: 1,
         kind: 'audio',
+        voiceover: true,
       }] : [],
     },
   }
