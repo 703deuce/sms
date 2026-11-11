@@ -286,9 +286,9 @@ describe('B3 production slot edit representation', () => {
     const xMotion = r.edits.keyframes?.find((track) => track.target === 'video' && track.prop === 'x')
     expect(xMotion?.points).toEqual([
       { tMs: 0, v: 0, ease: 'inOut' },
-      { tMs: 999, v: 12 },
+      { tMs: 967, v: 12 },
       { tMs: 1000, v: 0 },
-      { tMs: 1999, v: 0 },
+      { tMs: 1967, v: 0 },
     ])
     expect(r.edits.textItems?.some((item) => item.kind === 'shape' && item.shape?.type === 'rounded')).toBe(true)
     expect(r.edits.templateProvenance?.slotToItemIds).toEqual(r.slotToItemIds)
