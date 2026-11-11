@@ -26,27 +26,48 @@ const COMMUNITY_CATEGORIES = ['gaming','podcast','social','business','education'
 const MAX_PAGE_SIZE = 24
 const STORAGE_KEY = 'transovo.videoTemplates.favorites.v1'
 function AnimatedTemplateCardPreview({ item }: { item: (typeof FIRST_PARTY_VIDEO_TEMPLATES)[number] }) {
+  const [active,setActive]=useState(0)
+  const slots=item.family.slots
+  const slot=slots[active] ?? slots[0]
   const accent=item.previewStyle?.accent ?? '#FACC15'
   const foreground=item.previewStyle?.foreground ?? '#FFFFFF'
-  const slotCount=Math.max(1,item.family.slots.length)
-  return <div className="relative aspect-video overflow-hidden bg-neutral-950" aria-label={'Animated preview ' + item.title}>
+  const closing=active===slots.length-1
+  const text=closing ? item.family.texts[1] : item.family.texts[0]
+  useEffect(()=>{
+    if(slots.length<2)return
+    const ms=Math.max(650,Math.min(1300,Math.round((slot?.durationFrames??30)*15)))
+    const timer=window.setTimeout(()=>setActive(index=>(index+1)%slots.length),ms)
+    return()=>window.clearTimeout(timer)
+  },[active,item.id,slot?.durationFrames,slots.length])
+  const shift=(active%3-1)*5
+  return <div className="relative aspect-video overflow-hidden bg-neutral-950" aria-label={'Animated preview '+item.title}>
     <div className="absolute inset-0 opacity-90" style={{background:
-      'radial-gradient(circle at 20% 20%, '+accent+'33, transparent 34%), linear-gradient(135deg,#09090b,#18181b 58%,#020617)'}} />
-    <div className="absolute left-1/2 top-1/2 aspect-[9/16] h-[88%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-white/15 bg-black shadow-2xl">
-      <div className="absolute inset-0 grid" style={{gridTemplateColumns:'repeat('+slotCount+',minmax(0,1fr))'}}>
-        {item.family.slots.map((slot,index)=><div key={slot.id} className="relative overflow-hidden border-r border-white/10 last:border-r-0"
-          style={{background:'linear-gradient('+(120+index*17)+'deg,'+accent+(index%2?'28':'18')+',#111827 75%)'}}>
-          <div className="absolute inset-x-1 bottom-1 h-1 rounded-full bg-white/20" />
-        </div>)}
+      'radial-gradient(circle at 18% 20%,'+accent+'30,transparent 34%),linear-gradient(135deg,#09090b,#18181b 58%,#020617)'}} />
+    <div className="absolute left-1/2 top-1/2 aspect-[9/16] h-[90%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-white/15 bg-black shadow-2xl">
+      <div className="absolute -inset-3 transition-all duration-500 ease-out"
+        style={{
+          background:'linear-gradient('+(125+active*31)+'deg,'+accent+'66 0%,#111827 42%,#020617 100%)',
+          transform:'translate3d('+shift+'%,0,0) scale('+(1.03+active*.008)+')',
+        }} />
+      <div className="absolute inset-0 opacity-70" style={{background:
+        'linear-gradient(to bottom,transparent 35%,rgba(0,0,0,.18) 58%,rgba(0,0,0,.78) 100%)'}} />
+      <div className="absolute left-3 top-3 rounded-full border border-white/20 bg-black/35 px-2 py-1 text-[9px] font-semibold text-white/85">
+        {String(active+1).padStart(2,'0')} / {String(slots.length).padStart(2,'0')}
       </div>
-      <div className="absolute inset-x-3 top-[18%] animate-pulse text-center font-black uppercase tracking-tight"
-        style={{color:foreground,fontFamily:item.previewStyle?.headingFont}}>
-        {item.title}
+      <div className="absolute inset-x-4 transition-all duration-500"
+        style={{top:(text?.y??24)+'%',transform:'translateY(-50%)'}}>
+        <div className="text-center font-semibold leading-[.94] tracking-tight drop-shadow-lg"
+          style={{color:foreground,fontFamily:text?.font??item.previewStyle?.headingFont,
+            fontSize:Math.max(15,Math.min(28,(text?.size??60)/2.5))}}>
+          {text?.defaultText ?? item.title}
+        </div>
       </div>
-      <div className="absolute h-10 w-20 animate-pulse rounded-xl opacity-80"
-        style={{left:'12%',bottom:'16%',background:accent,animationDelay:'350ms'}} />
+      <div className="absolute h-2.5 rounded-full opacity-90 transition-all duration-500"
+        style={{left:(12+active*3%40)+'%',bottom:'17%',width:(28+(active%3)*11)+'%',background:accent}} />
       <div className="absolute inset-x-3 bottom-4 flex gap-1">
-        {item.family.slots.map(slot=><span key={slot.id} className="h-1 flex-1 rounded-full bg-white/50" />)}
+        {slots.map((itemSlot,index)=><span key={itemSlot.id}
+          className={'h-1 rounded-full transition-opacity '+(index===active?'bg-white':'bg-white/25')}
+          style={{flexGrow:itemSlot.durationFrames}} />)}
       </div>
     </div>
     <span className="absolute left-3 top-3 rounded-full border border-amber-300/40 bg-amber-300/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
@@ -54,7 +75,6 @@ function AnimatedTemplateCardPreview({ item }: { item: (typeof FIRST_PARTY_VIDEO
     </span>
   </div>
 }
-
 export function VideoTemplatesGallery() {
   const [scope, setScope] = useState<Scope>('first-party')
   const [query, setQuery] = useState('')
