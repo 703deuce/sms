@@ -282,7 +282,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         }
         const beats=Array.from({length:Math.floor((music.durationFrames-1)/music.beatEveryFrames)+1},
           (_,index)=>index*music.beatEveryFrames)
-        setCurrentDraft({...latest,music,templateMusic:{
+        setCurrentDraft({...latest,music:asset,templateMusic:{
           v:1,choice:'keep-timing',acceptLoop:false,
           rights:{
             assetId:uploaded.uploadId,origin:'first-party-generated',author:music.author,
