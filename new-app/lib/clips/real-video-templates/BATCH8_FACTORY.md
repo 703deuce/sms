@@ -190,3 +190,14 @@ requests. Only queued jobs are prepared; completed, canceled, running and
 failed jobs are not reclaimed. The prepared manifest is a worker handoff,
 not an MP4 renderer or automatic publication. Existing worker execution,
 real posters, glyph/flash QA and independent 9/10 reviews remain mandatory.
+
+## Audio and sampled color QA
+
+For Batch 8's full-motion previews, both the actual preview MP4 and the
+worker-rendered MP4 must contain audio; two silent files are not evidence of
+a correctly rendered separate soundtrack lane. The FFmpeg sampling probe now
+compares RGB frames (not grayscale) at the first/last frame and each cut
+boundary, and persists measured hashes/durations in the QA sidecar. It remains
+sampled evidence only: full-motion flash, fine glyphs, readable text on moving
+footage, specific music identity, and real visual parity still require actual
+inspection and the human release gates.

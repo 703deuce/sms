@@ -130,6 +130,7 @@ async function verifiedEvidence(requireMeasuredQA=true):Promise<B8Evidence[]> {
       measurement.previewSha256===values.previewSha256&&
       measurement.renderSha256===values.renderSha256&&
       measurement.expectedFrames===candidate.family.totalFrames&&
+      measurement.previewHasAudio===true&&measurement.renderHasAudio===true&&
       measurement.sampledFrameCount>=2*candidate.family.slots.length)
     const valid=Boolean(matched&&measurement&&measurement.durationMatch&&
       measurement.audioStreamParity&&measurement.blackSampleFrames.length===0&&
@@ -177,11 +178,11 @@ function probe(file:string):{durationFrames:number;hasAudio:boolean;hasVideo:boo
 function framePixels(file:string,atFrame:number,durationFrames:number):Buffer{
   const ss=Math.max(0,Math.min((durationFrames-1)/30,atFrame/30))
   const output=spawnSync('ffmpeg',['-nostdin','-v','error','-ss',ss.toFixed(6),
-    '-i',file,'-frames:v','1','-vf','scale=64:64:flags=lanczos,format=gray',
-    '-f','rawvideo','-pix_fmt','gray','-'],{
+    '-i',file,'-frames:v','1','-vf','scale=64:64:flags=lanczos,format=rgb24',
+    '-f','rawvideo','-pix_fmt','rgb24','-'],{
       encoding:null,timeout:30000,maxBuffer:65536,
     })
-  if(output.status!==0||!Buffer.isBuffer(output.stdout)||output.stdout.length!==4096)
+  if(output.status!==0||!Buffer.isBuffer(output.stdout)||output.stdout.length!==12288)
     throw new Error('FFmpeg cannot decode a QA sample frame at '+atFrame)
   return output.stdout
 }
@@ -214,7 +215,7 @@ async function qaMedia(candidate:B8Candidate,evidence:B8Evidence){
   const parity=actual.every(row=>row.difference<=12)
   const durationMatch=Math.abs(pp.durationFrames-expected)<=1&&
     Math.abs(pr.durationFrames-expected)<=1
-  const audioStreamParity=pp.hasAudio===pr.hasAudio
+  const audioStreamParity=pp.hasAudio&&pr.hasAudio
   const data={id:candidate.id,definitionHash:candidate.definitionHash,
     previewSha256:output.previewSha256,renderSha256:output.renderSha256,
     expectedFrames:expected,previewFrames:pp.durationFrames,
@@ -222,7 +223,7 @@ async function qaMedia(candidate:B8Candidate,evidence:B8Evidence){
     durationMatch,audioStreamParity,blackSampleFrames:black,frameSampleParity:parity,
     sampledFrameCount:actual.length,maxSampleDifference:Math.max(...actual.map(x=>x.difference)),
     samples:actual,
-    cautions:['Grayscale comparison is not glyph/color validation',
+    cautions:['RGB downsample parity is not full-resolution glyph/contrast validation',
       'Check flashes at full frame rate, license rights, beat timestamps and full-motion typography manually',
       'Sampling cannot prove all 30 fps frames or source-specific audio ducking parity'],
   }
@@ -336,7 +337,7 @@ async function execute(){
       rendererRevision:fixtures.rendererRevision},settings.shardCount)
     const expected=new Map(planned.map(j=>[j.id,j]))
     const available=queue.filter(j=>j.runStatus==='queued'&&(all||j.shard===shard))
-    const limit=Number(argument('--limit',String(available.length)))
+    const limit=Number(argument('--limit',String(Math.max(available.length,1))))
     if(!Number.isInteger(limit)||limit<1||limit>2000)
       throw new Error('Request batch limit must be an integer 1..2000')
     const selected=available.slice(0,limit)
