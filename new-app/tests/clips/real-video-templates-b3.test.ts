@@ -100,3 +100,36 @@ describe('B3 exact source/output/item-local frame clock', () => {
 
 // Server-side ownership/CAS regression is also in the explicit editor CI test gate.
 import './real-video-template-instance.test'
+
+describe('B3 source audio and absent legacy controls', () => {
+  it('keeps a single image first project possible without any video upload or ASR', () => {
+    const r = compileTemplatePrototype(family(1), design, choices(1), carrier(1))
+    expect(r.edits.sources?.[0]?.mediaType).toBe('image')
+    expect(r.edits.sources).toHaveLength(1)
+    expect(r.edits.sourceSegments).toHaveLength(1)
+    expect(r.edits.trim).toEqual({ in: 0, out: 1000 })
+  })
+  it('maps source/mute audio per slot without inventing speech on silent carrier', () => {
+    const f = family(2)
+    f.slots[0].media = 'video'
+    f.slots[0].sourceAudio = 'source'
+    f.slots[1].media = 'video'
+    f.slots[1].sourceAudio = 'mute'
+    const c = choices(2)
+    c.media.shot_1 = asset('video_a', 'video')
+    c.media.shot_2 = asset('video_a', 'video')
+    const r = compileTemplatePrototype(f, design, c, carrier(2))
+    expect(r.edits.sourceSegments?.map(s => s.audio)).toEqual(['source', 'main'])
+    expect(r.sequence.items.map(x => x.sourceAudio)).toEqual(['source', 'mute'])
+  })
+  it('does not add sequence metadata or inserts to untouched existing edits', async () => {
+    const { defaultEdits, normalizeEdits, canonicalEditsJson } = await import('@/lib/clips/edits')
+    const bounds = { clipStartMs: 0, clipEndMs: 30000 }
+    const old = defaultEdits(bounds)
+    const original = canonicalEditsJson(normalizeEdits(old, bounds))
+    compileTemplatePrototype(family(1), design, choices(1), carrier(1))
+    expect(canonicalEditsJson(normalizeEdits(old, bounds))).toBe(original)
+    expect('templateSequence' in normalizeEdits(old, bounds)).toBe(false)
+    expect('inserts' in normalizeEdits(old, bounds)).toBe(false)
+  })
+})
