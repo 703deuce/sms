@@ -192,12 +192,17 @@ export function syncClone(
       const media = box.querySelector('video, img') as HTMLVideoElement | HTMLImageElement | null
       if (media) media.style.objectFit = sf.fit
       if (media instanceof HTMLVideoElement) {
-        if (Math.abs(media.currentTime - sf.mediaTimeSec) > (playing ? 0.12 : 0.02)) {
+        const driftLimit = sf.rateMultiplier === 0 ? 0.015 : sf.rateMultiplier !== 1 ? 0.04 : (playing ? 0.12 : 0.02)
+        if (Math.abs(media.currentTime - sf.mediaTimeSec) > driftLimit) {
           try { media.currentTime = sf.mediaTimeSec } catch { /* metadata not ready */ }
         }
-        media.playbackRate = rate * sf.rateMultiplier
-        if (playing && media.paused) void media.play().catch(() => {})
-        if (!playing && !media.paused) media.pause()
+        if (sf.rateMultiplier > 0) {
+          media.playbackRate = rate * sf.rateMultiplier
+          if (playing && media.paused) void media.play().catch(() => {})
+          if (!playing && !media.paused) media.pause()
+        } else if (!media.paused) {
+          media.pause()
+        }
       }
     })
   }

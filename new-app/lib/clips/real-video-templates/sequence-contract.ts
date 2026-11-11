@@ -8,8 +8,15 @@
  * are forbidden for template assembly.
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import type { SourceSegmentFx, SourceSegmentTransform } from '@/lib/clips/editor/sources'
-import type { TransitionType } from '@/lib/clips/editor/motion-schema'
+import type { SourceSegmentFx, SourceSegmentPlayback, SourceSegmentTransform } from '@/lib/clips/editor/sources'
+import { TRANSITION_TYPES, type TransitionType } from '@/lib/clips/editor/motion-schema'
+import {
+  compileTemplatePlayback,
+  playbackRequiredHandleFrames,
+  playbackSourceBounds,
+  validateTemplatePlaybackSpec,
+  type TemplateSlotPlaybackSpec,
+} from '@/lib/clips/real-video-templates/slot-playback'
 import { compileBatch7Primitives, validateBatch7Primitives, type Batch7TemplatePrimitive } from './batch7-primitives'
 
 export type TemplateAsset = {
@@ -39,6 +46,8 @@ export type TemplateSlot = {
   sourceAudio: 'mute' | 'source'
   /** Fixed output duration; source media advances at this rate. */
   speed?: number
+  /** B6 output-local piecewise speed/hold plan. Mutually exclusive with speed. */
+  playback?: TemplateSlotPlaybackSpec
   /** Incoming edge. First slot must be cut. */
   transition: 'cut' | TemplateTransition
   /** Output-clock animation compiled to ordinary target=video keyframes. */
@@ -115,6 +124,7 @@ export type TemplateSequenceItem = {
   fit: 'cover' | 'contain'
   sourceAudio: 'mute' | 'source'
   speed?: number
+  playback?: SourceSegmentPlayback
   transition: 'cut' | TemplateTransition
   motion?: TemplateMotion
   transform?: SourceSegmentTransform
@@ -147,13 +157,17 @@ const MAX_FRAMES = 30 * 60 * 30
 const MAX_SLOTS = 120
 const MAX_TEXTS = 60
 const MAX_GRAPHICS = 60
-/** Cross-source template transitions with exact browser/ffmpeg shared math in Batch 3. */
+/** B6 launch-safe cross-source set. Hard cut is represented by the literal "cut". */
 export const TEMPLATE_TRANSITION_TYPES = [
-  'crossfade', 'dip_black', 'dip_white',
+  'crossfade', 'dip_white',
   'push_left', 'push_right', 'push_up', 'push_down',
   'wipe_left', 'wipe_right', 'wipe_up', 'wipe_down',
-  'zoom_in', 'zoom_out', 'blur',
+  'zoom_blur', 'whip_pan', 'glitch',
 ] as const satisfies readonly TransitionType[]
+/** Catalog entries stay visible to callers but cannot be authored until cross-source output is proven. */
+export const TEMPLATE_UNAVAILABLE_TRANSITION_TYPES = TRANSITION_TYPES.filter(
+  (type) => !(TEMPLATE_TRANSITION_TYPES as readonly TransitionType[]).includes(type),
+)
 const GRAPHICS = new Set(['rect','rounded','circle','triangle','star','heart','arrow'])
 const own = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const exact = (o: Record<string, unknown>, keys: readonly string[], context: string) => {
@@ -252,7 +266,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   let cursor = 0
   const slots: TemplateSlot[] = rawSlots.map((value: unknown, index: number) => {
     if (!own(value)) throw new Error('slot: expected object')
-    exact(value, ['id','ordinal','role','media','startFrame','durationFrames','sourceInFrame','handles','fit','sourceAudio','speed','transition','motion','transform','fx'], 'slot')
+    exact(value, ['id','ordinal','role','media','startFrame','durationFrames','sourceInFrame','handles','fit','sourceAudio','speed','playback','transition','motion','transform','fx'], 'slot')
     const sid = id(value.id, 'slot')
     unique(sid, seen, 'slot')
     if (integer(value.ordinal, 1, MAX_SLOTS, 'ordinal') !== index + 1) throw new Error('slot: ordinals must be sequential')
@@ -277,7 +291,9 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     const speed = rawSpeed == null ? undefined : Math.round(rawSpeed * 1000) / 1000
     if (rawSpeed != null && Math.abs(rawSpeed - speed!) > 1e-9)
       throw new Error('slot.speed: maximum precision is 3 decimals')
-    if (media === 'image' && speed != null && Math.abs(speed - 1) >= 0.0001)
+    const playback = value.playback == null ? undefined : validateTemplatePlaybackSpec(value.playback, durationFrames)
+    if (speed != null && playback) throw new Error('slot: speed and playback are mutually exclusive')
+    if (media === 'image' && ((speed != null && Math.abs(speed - 1) >= 0.0001) || playback))
       throw new Error('slot.speed: images do not support playback speed')
     const transition = validateTransition(value.transition, index)
     if (transition !== 'cut' && transition.durationFrames > Math.min(durationFrames, index ? integer((rawSlots[index - 1] as Record<string, unknown>).durationFrames, 3, total, 'previous.durationFrames') : durationFrames))
@@ -290,7 +306,10 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
       ...(value.sourceInFrame != null ? { sourceInFrame: integer(value.sourceInFrame, 0, MAX_FRAMES, 'sourceInFrame') } : {}),
       ...(handles ? { handles } : {}),
       fit: oneOf(value.fit, ['cover','contain'] as const, 'fit'),
-      sourceAudio, ...(speed != null && Math.abs(speed - 1) >= 0.0001 ? { speed } : {}), transition,
+      sourceAudio,
+      ...(speed != null && Math.abs(speed - 1) >= 0.0001 ? { speed } : {}),
+      ...(playback ? { playback } : {}),
+      transition,
       ...(validateMotion(value.motion) ? { motion: validateMotion(value.motion) } : {}),
       ...(validateTransform(value.transform) ? { transform: validateTransform(value.transform) } : {}),
       ...(validateFx(value.fx) ? { fx: validateFx(value.fx) } : {}),
@@ -303,8 +322,18 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     const incoming = slots[i]!.transition
     if (incoming === 'cut') continue
     const need = Math.ceil(incoming.durationFrames / 2)
-    const leftNeed = Math.ceil(need * (slots[i - 1]!.speed ?? 1))
-    const rightNeed = Math.ceil(need * (slots[i]!.speed ?? 1))
+    const leftPlan = slots[i - 1]!.playback
+      ? compileTemplatePlayback(slots[i - 1]!.playback, slots[i - 1]!.durationFrames)
+      : undefined
+    const rightPlan = slots[i]!.playback
+      ? compileTemplatePlayback(slots[i]!.playback, slots[i]!.durationFrames)
+      : undefined
+    const leftNeed = leftPlan
+      ? playbackRequiredHandleFrames(leftPlan, 'tail', need)
+      : Math.ceil(need * (slots[i - 1]!.speed ?? 1))
+    const rightNeed = rightPlan
+      ? playbackRequiredHandleFrames(rightPlan, 'head', need)
+      : Math.ceil(need * (slots[i]!.speed ?? 1))
     if ((slots[i - 1]!.handles?.tailFrames ?? 0) < leftNeed ||
         (slots[i]!.handles?.headFrames ?? 0) < rightNeed)
       throw new Error(`slot.transition: ${slots[i]!.id} requires source handles (left ${leftNeed}, right ${rightNeed} frames)`)
@@ -456,12 +485,19 @@ export function compileTemplate(
     const asset = validateAsset(choices.media[slot.id], slot.media === 'either' ? ['image','video'] : [slot.media], slot.id)
     const inFrame = slot.sourceInFrame ?? 0
     const head = slot.handles?.headFrames ?? 0, tail = slot.handles?.tailFrames ?? 0
+    const playback = slot.playback ? compileTemplatePlayback(slot.playback, slot.durationFrames) : undefined
     if (asset.kind === 'video') {
-      const rate = slot.speed ?? 1
-      const visibleSourceFrames = Math.ceil(slot.durationFrames * rate)
-      if (inFrame < head || inFrame + visibleSourceFrames + tail > (asset.durationFrames ?? 0))
-        throw new Error(`slot ${slot.ordinal} (${slot.id}): video too short for required handles/speed; choose a longer clip, reduce speed, or shorten the slot`)
-    } else if (slot.speed != null && Math.abs(slot.speed - 1) >= 0.0001) {
+      if (playback) {
+        const bounds = playbackSourceBounds(playback, inFrame)
+        if (inFrame < head || bounds.minFrame < 0 || bounds.maxFrame + tail >= (asset.durationFrames ?? 0))
+          throw new Error(`slot ${slot.ordinal} (${slot.id}): video too short for required handles/playback; choose a longer clip or reduce the ramp/hold handles`)
+      } else {
+        const rate = slot.speed ?? 1
+        const visibleSourceFrames = Math.ceil(slot.durationFrames * rate)
+        if (inFrame < head || inFrame + visibleSourceFrames + tail > (asset.durationFrames ?? 0))
+          throw new Error(`slot ${slot.ordinal} (${slot.id}): video too short for required handles/speed; choose a longer clip, reduce speed, or shorten the slot`)
+      }
+    } else if ((slot.speed != null && Math.abs(slot.speed - 1) >= 0.0001) || playback) {
       throw new Error(`slot ${slot.id}: playback speed requires video media`)
     }
     if (slot.sourceAudio === 'source' && asset.kind !== 'video') throw new Error(`slot ${slot.id}: missing video audio`)
@@ -486,6 +522,7 @@ export function compileTemplate(
       ...(asset.kind === 'video' ? { inMs: templateFrameToMs(inFrame), audio: slot.sourceAudio === 'source' ? 'source' as const : 'main' as const } : {}),
       fit: slot.fit,
       ...(slot.speed ? { speed: slot.speed } : {}),
+      ...(playback ? { playback } : {}),
       ...(slot.transform ? { transform: slot.transform } : {}),
       ...(slot.fx ? { fx: slot.fx } : {}),
     })
@@ -506,6 +543,7 @@ export function compileTemplate(
       id: itemId, slotId: slot.id, assetId: asset.id,
       outputStartFrame: slot.startFrame, outputEndFrame: slot.startFrame + slot.durationFrames,
       mediaInFrame: inFrame, fit: slot.fit, sourceAudio: slot.sourceAudio, ...(slot.speed ? { speed: slot.speed } : {}), transition: effectiveTransition,
+      ...(playback ? { playback } : {}),
       ...(!reducedMotion && slot.motion ? { motion: slot.motion } : {}),
       ...(slot.transform ? { transform: slot.transform } : {}),
       ...(slot.fx ? { fx: slot.fx } : {}),
