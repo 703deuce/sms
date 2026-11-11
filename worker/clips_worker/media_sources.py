@@ -34,6 +34,39 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return min(hi, max(lo, v))
 
 
+def _finite(raw, default: float = 0.0) -> float:
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return default if v != v or v in (float("inf"), float("-inf")) else v
+
+
+def _normalize_source_transform(raw) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    out: dict = {}
+    x = _clamp(_finite(raw.get("x")), -100.0, 100.0)
+    y = _clamp(_finite(raw.get("y")), -100.0, 100.0)
+    scale = _clamp(_finite(raw.get("scale"), 100.0), 25.0, 400.0)
+    rotation = _clamp(_finite(raw.get("rotation")), -360.0, 360.0)
+    l = _clamp(_finite(raw.get("cropL")), 0.0, 90.0)
+    r = _clamp(_finite(raw.get("cropR")), 0.0, 90.0)
+    t = _clamp(_finite(raw.get("cropT")), 0.0, 90.0)
+    b = _clamp(_finite(raw.get("cropB")), 0.0, 90.0)
+    if l + r > 95.0:
+        r = max(0.0, 95.0 - l)
+    if t + b > 95.0:
+        b = max(0.0, 95.0 - t)
+    for key, value, identity in (
+        ("x", x, 0.0), ("y", y, 0.0), ("scale", scale, 100.0), ("rotation", rotation, 0.0),
+        ("cropL", l, 0.0), ("cropR", r, 0.0), ("cropT", t, 0.0), ("cropB", b, 0.0),
+    ):
+        if abs(value - identity) >= 0.001:
+            out[key] = round(value, 2)
+    return out or None
+
+
 def _resolve_with_id(raw, sources: dict, own_id: str) -> str | None:
     if raw in ("main", MAIN_ANGLE):
         return "main"
@@ -175,6 +208,9 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
             seg["fit"] = "contain"
         if r.get("auto") is True:
             seg["auto"] = True
+        transform = _normalize_source_transform(r.get("transform"))
+        if transform:
+            seg["transform"] = transform
         layout = _normalize_segment_layout(r.get("layout"), by_id, src["id"])
         if layout:
             seg["layout"] = layout
@@ -392,6 +428,43 @@ def fit_filter(fit: str, w: int, h: int) -> str:
         return (f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,"
                 f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
     return f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
+
+
+def source_transform_filter(transform: dict | None, w: int, h: int) -> str:
+    """B3 mirror of sourceSegmentTransformCss: crop mask, scale/rotate, then translate on black."""
+    t = _normalize_source_transform(transform)
+    if not t:
+        return ""
+    parts: list[str] = []
+    l, r = float(t.get("cropL", 0)) / 100.0, float(t.get("cropR", 0)) / 100.0
+    top, bot = float(t.get("cropT", 0)) / 100.0, float(t.get("cropB", 0)) / 100.0
+    if l or r or top or bot:
+        cw = max(2, int(round(w * (1.0 - l - r))) // 2 * 2)
+        ch = max(2, int(round(h * (1.0 - top - bot))) // 2 * 2)
+        cx = max(0, min(w - cw, int(round(w * l))))
+        cy = max(0, min(h - ch, int(round(h * top))))
+        # Keep the crop at its original frame position rather than stretching it.
+        parts.append(f"crop={cw}:{ch}:{cx}:{cy}")
+        parts.append(f"pad={w}:{h}:{cx}:{cy}:color=black")
+    scale = float(t.get("scale", 100.0)) / 100.0
+    if abs(scale - 1.0) >= 0.0001:
+        sw = max(2, int(round(w * scale)) // 2 * 2)
+        sh = max(2, int(round(h * scale)) // 2 * 2)
+        parts.append(f"scale={sw}:{sh}")
+        if scale >= 1.0:
+            parts.append(f"crop={w}:{h}:(iw-{w})/2:(ih-{h})/2")
+        else:
+            parts.append(f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black")
+    rotation = float(t.get("rotation", 0.0))
+    if abs(rotation) >= 0.0001:
+        parts.append(f"rotate={rotation}*PI/180:ow=iw:oh=ih:c=black")
+    dx = int(round(float(t.get("x", 0.0)) * w / 100.0))
+    dy = int(round(float(t.get("y", 0.0)) * h / 100.0))
+    if dx or dy:
+        ax, ay = abs(dx), abs(dy)
+        parts.append(f"pad={w + 2 * ax}:{h + 2 * ay}:{ax}:{ay}:color=black")
+        parts.append(f"crop={w}:{h}:{ax - dx}:{ay - dy}")
+    return "," + ",".join(parts) if parts else ""
 
 
 def still_to_video(image: Path, out: Path, duration_s: float, fps: float = 30.0) -> Path:
@@ -612,7 +685,7 @@ def build_sources_filtergraph(
         dur = max(0.04, t1 - t0)
         if w["mediaType"] == "image":
             inputs += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{dur + 0.1:.3f}", "-i", str(p)]
-            chain = f"[{in_idx}:v]{fit_filter(w['fit'], width, height)},fps={fps:g},format=yuv420p"
+            chain = f"[{in_idx}:v]{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)},fps={fps:g},format=yuv420p"
             in_idx += 1
         elif w["mediaType"] == "audio":
             inputs += ["-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps}:d={dur + 0.1:.3f}"]
@@ -637,7 +710,7 @@ def build_sources_filtergraph(
         else:
             inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{dur + 0.25:.3f}", "-i", str(p)]
             chain = (f"[{in_idx}:v]trim=0:{dur:.3f},setpts=PTS-STARTPTS,fps={fps:g},"
-                     f"{fit_filter(w['fit'], width, height)},format=yuv420p")
+                     f"{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)},format=yuv420p")
             v_in = in_idx
             in_idx += 1
             layout = w.get("layout")
