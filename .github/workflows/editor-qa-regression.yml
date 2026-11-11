@@ -221,6 +221,7 @@ jobs:
             tests/clips/real-video-template-b3b-editable-timeline.test.tsx \
             tests/clips/real-video-template-b3b-save-reload.test.ts \
             tests/clips/real-video-template-typecheck.test.ts \
+            tests/e5-model.test.ts \
             tests/script-view-compact-timeline.test.tsx \
             tests/timeline-e2-render.test.tsx
       - name: Batch 3B scoped TypeScript
