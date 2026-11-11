@@ -141,7 +141,7 @@ export function generateB8Candidates(): B8Candidate[] {
       out.push({id,familyId:seed.id,treatmentId:r.id,status:'draft',
         authoringOrigin:'provisional',
         authoredDimensions:['font-hierarchy','text-placement','animation-choreography',
-          'graphic-composition','transition-treatment','source-motion'],
+          'graphic-composition','transition-treatment'],
         family,design,fingerprint,definitionHash:sha([B8_ENGINE_REVISION,family,design])})
     }
   }
@@ -283,7 +283,7 @@ export function locallyApprovedB8Releases(candidates:readonly B8Candidate[],
   evidence:readonly B8Evidence[]):VideoTemplateRelease[]{
   const report=reportB8Quality(candidates,evidence)
   const byID=new Map(evidence.map(e=>[e.id,e]))
-  return candidates.filter(c=>report.releasedIds.includes(c.id)).map(c=>{
+  return candidates.filter(c=>report.releasedIds.includes(c.id)).map((c):VideoTemplateRelease=>{
     const e=byID.get(c.id)!
     return {id:c.id,title:c.family.title+' · '+c.treatmentId,
       category:FACTORY_FAMILY_SEEDS.find(f=>f.id===c.familyId)!.category,
