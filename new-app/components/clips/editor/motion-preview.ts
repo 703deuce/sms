@@ -129,6 +129,7 @@ export type TransitionSourceFrame = {
   transform: string
   clipPath: string
   filter: string
+  rateMultiplier: number
 }
 
 export function syncClone(
@@ -193,7 +194,7 @@ export function syncClone(
         if (Math.abs(media.currentTime - sf.mediaTimeSec) > (playing ? 0.12 : 0.02)) {
           try { media.currentTime = sf.mediaTimeSec } catch { /* metadata not ready */ }
         }
-        media.playbackRate = rate
+        media.playbackRate = rate * sf.rateMultiplier
         if (playing && media.paused) void media.play().catch(() => {})
         if (!playing && !media.paused) media.pause()
       }
