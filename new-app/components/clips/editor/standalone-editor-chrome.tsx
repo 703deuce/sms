@@ -1,6 +1,6 @@
 'use client'
 
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import { ArrowLeft, Download, Redo2, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -57,7 +57,7 @@ function ChromeMenu({
 }: {
   id: 'file' | 'edit' | 'view'
   label: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <DropdownMenu>
@@ -107,7 +107,7 @@ export function StandaloneEditorChrome({
   canUndo: boolean
   canRedo: boolean
   disabled?: boolean
-  contextSlot?: React.ReactNode
+  contextSlot?: ReactNode
   onBack: () => void
   onUndo: () => void
   onRedo: () => void
