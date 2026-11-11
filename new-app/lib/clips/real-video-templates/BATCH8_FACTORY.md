@@ -282,3 +282,13 @@ and writes an MP4, poster, SHA-256 and frame/audio/duration checks per design.
 The dedicated `Batch 8 worker renders` workflow shards the matrix 20 ways and
 uploads the actual outputs as artifacts. These artifacts prove worker renderability;
 they do not fabricate browser-preview parity or human 9/10 competitor review.
+
+## Pinned competitor review catalog
+
+`b8-reference-catalog.ts` pins one exact CapCut/Canva template-detail reference
+for every F01-F50 family, accessed 2026-11-11. Evidence is rejected when a
+review cites a different/unpinned URL. `templates:b8 review-packet` joins those
+references to the actual render/poster hashes and machine checks for all 2,000
+designs, leaving reviewer names and rubric scores blank unless real evidence
+already contains them. This is intentionally a review workflow, not automatic
+9/10 scoring.

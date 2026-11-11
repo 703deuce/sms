@@ -5,6 +5,7 @@ import { summarizeB8AudioEnvelopeQA,summarizeB8FrameQA } from '@/lib/clips/real-
 import { syncB8FamilyToMusic } from '@/lib/clips/real-video-templates/b8-music-sync'
 import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
 import { lintB8Legibility } from '@/lib/clips/real-video-templates/b8-legibility'
+import { B8_REFERENCE_CATALOG,b8ReferenceForFamily,validateB8ReferenceCatalog } from '@/lib/clips/real-video-templates/b8-reference-catalog'
 import { B8_TARGET,generateB8Candidates,proveB8Structure,reportB8Quality,
   auditB8EditableOutput,auditB8Evidence,scoreB8Review,shardB8Jobs,reconcileB8Queue,locallyApprovedB8Releases,
   type B8Evidence } from '@/lib/clips/real-video-templates/b8-factory'
@@ -16,7 +17,8 @@ const candidates=generateB8Candidates()
 const hash='a'.repeat(64)
 function evidence(id:string):B8Evidence{
   return {
-    id,reference:{url:'https://www.canva.com/templates/',accessDate:'2026-11-11',mediaKind:'photo_video'},
+    id,reference:{url:b8ReferenceForFamily(candidates.find(c=>c.id===id)?.familyId??'f01').url,
+      accessDate:'2026-11-11',mediaKind:'photo_video'},
     fixtures:{images:['original_image'],videos:['original_video'],licenseHashes:[hash]},
     outputs:{previewMp4:'/templates/real-preview.mp4',renderMp4:'/templates/real-render.mp4',
       poster:'/templates/real-poster.webp',previewSha256:hash,renderSha256:hash,posterSha256:hash},
@@ -32,6 +34,11 @@ function evidence(id:string):B8Evidence{
   }
 }
 describe('Batch 8 candidate-only authoring and release QA',()=>{
+  it('pins one exact same-type CapCut/Canva reference for every family',()=>{
+    expect(validateB8ReferenceCatalog()).toHaveLength(50)
+    expect(new Set(B8_REFERENCE_CATALOG.map(row=>row.familyId)).size).toBe(50)
+    expect(B8_REFERENCE_CATALOG.every(row=>/\/template-detail\//.test(row.url))).toBe(true)
+  })
   it('has exactly 50 authored structural schedules and 25+15 explicit treatments',()=>{
     expect(FACTORY_FAMILY_SEEDS).toHaveLength(50)
     expect(FACTORY_TREATMENTS.filter(t=>t.kind==='core')).toHaveLength(25)

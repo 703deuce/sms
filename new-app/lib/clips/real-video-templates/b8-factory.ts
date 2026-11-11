@@ -15,6 +15,7 @@ import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS,
   type FactoryFamilySeed, type FactoryTreatmentRecipe } from './b8-authoring-catalog'
 import type { VideoTemplateRelease } from './gallery'
 import { lintB8Legibility } from './b8-legibility'
+import { b8ReferenceForFamily } from './b8-reference-catalog'
 
 export const B8_ENGINE_REVISION = 'b8-factory-v2' as const
 export const B8_TARGET = { families: 50, treatmentsPerFamily: 40,
@@ -295,8 +296,10 @@ export function auditB8Evidence(c:B8Candidate,e:B8Evidence|undefined):string[] {
   if(e.id!==c.id)issues.push('design_identity_mismatch')
   if(lintB8Legibility(c).some(finding=>finding.severity==='block'))
     issues.push('unresolved_static_legibility')
-  if(!e.reference || !/^https:\/\/(?:www\.)?(?:capcut\.com|canva\.com)\//i.test(e.reference.url) ||
-     !/^20\d\d-\d\d-\d\d$/.test(e.reference.accessDate))issues.push('unreviewed_same_type_reference')
+  const pinnedReference=b8ReferenceForFamily(c.familyId)
+  if(!e.reference || e.reference.url!==pinnedReference.url ||
+     e.reference.accessDate!==pinnedReference.accessDate)
+    issues.push('unreviewed_same_type_reference')
   if(!e.fixtures || !e.fixtures.images?.length || !e.fixtures.videos?.length ||
     !e.fixtures.licenseHashes?.length ||
     e.fixtures.licenseHashes.some(hash=>!HASH.test(hash)))issues.push('missing_licensed_real_media')

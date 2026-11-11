@@ -12,6 +12,7 @@ import { performance } from 'node:perf_hooks'
 import { spawnSync } from 'node:child_process'
 import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS } from '../lib/clips/real-video-templates/b8-authoring-catalog'
 import { lintB8Legibility } from '../lib/clips/real-video-templates/b8-legibility'
+import { b8ReferenceForFamily } from '../lib/clips/real-video-templates/b8-reference-catalog'
 import { generateB8Candidates, proveB8Structure, reportB8Quality,
   locallyApprovedB8Releases, shardB8Jobs, auditB8EditableOutput, auditB8Evidence,
   B8_ENGINE_REVISION, reconcileB8Queue,
@@ -388,7 +389,8 @@ function machineEvidenceBase(
   outputs:B8Evidence['outputs'],
 ):B8Evidence{
   return {
-    id:c.id,reference:{url:'',accessDate:'',mediaKind:'photo_video'},
+    id:c.id,reference:{url:b8ReferenceForFamily(c.familyId).url,
+      accessDate:b8ReferenceForFamily(c.familyId).accessDate,mediaKind:'photo_video'},
     fixtures:{
       images:request.footage.filter(row=>row.kind==='image').map(row=>row.id),
       videos:request.footage.filter(row=>row.kind==='video').map(row=>row.id),
@@ -741,6 +743,26 @@ async function execute(){
       save(join(directory,'jobs.json'),jobs)
       console.log(command+' checkpoint saved')
     })
+  }else if(command==='review-packet'){
+    const evidence=await verifiedEvidence(false)
+    const byId=new Map(evidence.map(row=>[row.id,row]))
+    const packet=candidates.map(c=>{
+      const ref=b8ReferenceForFamily(c.familyId),e=byId.get(c.id)
+      return {id:c.id,familyId:c.familyId,treatmentId:c.treatmentId,
+        reference:ref,
+        render:e?.outputs?.renderMp4??null,poster:e?.outputs?.poster??null,
+        renderSha256:e?.outputs?.renderSha256??null,
+        machineChecks:e?.checks??null,
+        review:{
+          reviewer:e?.reviewer??'',reviewDate:e?.reviewDate??'',
+          scores:e?.scores??{pacing:null,beatSemantic:null,transition:null,typography:null,motion:null,color:null},
+          independentReviewer:e?.independentReviewer??'',
+          threshold:'>=9/10 overall and every dimension >=4/5',
+        }}
+    })
+    save(join(directory,'review-packet.json'),{v:1,generatedAt:new Date().toISOString(),
+      designs:packet.length,packet})
+    console.log('Wrote '+packet.length+' pinned competitor review rows; no score was fabricated.')
   }else if(command==='quality-report'||command==='release-manifest'||command==='contact-sheet'){
     const evidence=await verifiedEvidence()
     const report=reportB8Quality(candidates,evidence)
@@ -804,7 +826,7 @@ async function execute(){
       warning:'Use benchmark-real after render-queue for measured worker timings.'})
     console.log('Compiler-only '+candidates.length+' designs in '+ms+'ms')
   }else{
-    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | jobs --fixtures <file> [--shards N] | prepare-shard (--all | --shard N) [--limit N] | render-queue (--all | --shard N) [--limit N] --base-url <app> | qa-media <id> | qa-all | claim/cancel/fail/retry/resume/complete <id> | quality-report | contact-sheet | release-manifest | benchmark | benchmark-real')
+    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | jobs --fixtures <file> [--shards N] | prepare-shard (--all | --shard N) [--limit N] | render-queue (--all | --shard N) [--limit N] --base-url <app> | qa-media <id> | qa-all | claim/cancel/fail/retry/resume/complete <id> | review-packet | quality-report | contact-sheet | release-manifest | benchmark | benchmark-real')
   }
 }
 void execute().catch(e=>{console.error(e instanceof Error?e.message:String(e));process.exitCode=1})
