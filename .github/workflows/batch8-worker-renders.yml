@@ -11,8 +11,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: batch8-worker-renders-${{ github.sha }}
-  cancel-in-progress: false
+  group: batch8-worker-renders-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   contract:
@@ -42,8 +42,42 @@ jobs:
           path: build/b8-worker-contract.json
           retention-days: 14
 
-  render:
+  smoke:
     needs: contract
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: worker
+      CLIP_FONTS_DIR: ${{ github.workspace }}/worker/v3/fonts/t6
+      LIBGL_ALWAYS_SOFTWARE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install FFmpeg and software GL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libegl1 libgl1-mesa-dri mesa-utils
+          python -m pip install --quiet moderngl glcontext
+      - uses: actions/download-artifact@v4
+        with:
+          name: b8-worker-contract
+          path: build
+      - name: Render one real worker design
+        run: |
+          python worker/scripts/render_batch8_factory_certification.py \
+            --contract build/b8-worker-contract.json \
+            --out build/b8-worker-smoke \
+            --shard 0 --shards 1 --limit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: b8-worker-smoke
+          path: build/b8-worker-smoke
+          compression-level: 1
+          retention-days: 14
+
+  render:
+    needs: [contract, smoke]
     strategy:
       fail-fast: false
       matrix:
