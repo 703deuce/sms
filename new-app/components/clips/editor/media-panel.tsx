@@ -8,6 +8,8 @@ import { AudioLines, Film, Image as ImageIcon, Plus, RefreshCw, Upload, Video, X
 import { toast } from 'sonner'
 import { formatTimecode } from '@/lib/clips/format'
 import { Button } from '@/components/ui/button'
+import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
+import { sourceSegmentTarget } from '@/lib/clips/editor/keyframes'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -479,6 +481,20 @@ export function MediaPanel({
               ))}
             </div>
           </div>
+          {seg ? (
+            <div className="space-y-1.5" data-testid="media-seg-motion-keyframes">
+              <Label className="text-[11px]">Clip motion</Label>
+              <KeyframeInspector
+                edits={edits}
+                target={sourceSegmentTarget(seg.id)}
+                label="Clip motion"
+                localMs={Math.max(0, playheadSourceMs - seg.startMs)}
+                onCommit={onEdits}
+                onSeekLocal={(t) => onSeekSource(seg.startMs + t)}
+                props={['x', 'y', 'scale', 'rotation']}
+              />
+            </div>
+          ) : null}
           <div className="space-y-1.5" data-testid="media-seg-fx-controls">
             <Label className="text-[11px]">Slot look</Label>
             <div className="grid grid-cols-3 gap-1.5">
