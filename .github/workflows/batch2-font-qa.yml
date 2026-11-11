@@ -65,3 +65,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Full new-app TypeScript (no baseline filtering)
         run: pnpm exec tsc --noEmit --pretty false
+
+  worker-ofl-export-fonts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install libass/ffmpeg/fontconfig and international fallback fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fontconfig ffmpeg fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji
+          python -m pip install 'pytest==8.4.2' 'fonttools==4.60.2'
+      - name: Install exact pinned faces in fontconfig search path
+        run: |
+          mkdir -p "$HOME/.local/share/fonts/transovo"
+          cp worker/prototype/v3/fonts/*.ttf worker/v3/fonts/t6/*.ttf "$HOME/.local/share/fonts/transovo/"
+          fc-cache -f
+      - name: Assert all eight OFL TTFs, ASS names, licenses and Unicode fallback
+        run: PYTHONPATH=worker python -m pytest -q worker/tests/test_ofl_font_parity.py
