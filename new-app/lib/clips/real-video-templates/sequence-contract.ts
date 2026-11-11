@@ -491,7 +491,7 @@ export function compileTemplate(
       let used = false
       for (const slot of family.slots) {
         const startMs = templateFrameToMs(slot.startFrame)
-        const endMs = Math.max(startMs, templateFrameToMs(slot.startFrame + slot.durationFrames) - 1)
+        const endMs = templateFrameToMs(slot.startFrame + slot.durationFrames - 1)
         const from = slot.motion?.from?.[prop] ?? defaults[prop]
         const to = slot.motion?.to?.[prop] ?? (slot.motion ? from : defaults[prop])
         if (from !== defaults[prop] || to !== defaults[prop]) used = true
