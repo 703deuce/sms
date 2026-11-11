@@ -100,9 +100,10 @@ function authorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRecipe): 
     phraseAnchors: [{id:'opening',frame:0,textFieldId:'headline'},
       {id:'closing',frame:total-outroTime,textFieldId:'closing_line'}],
     texts: [
-      { id:'headline', defaultText:'A moment worth sharing', maxChars:70,
+      { id:'headline', defaultText:'Your story', maxChars:70,
         startFrame:0, durationFrames:textTime, x:titleX,y:titleY,
-        font:recipe.headingFont, size:recipe.headingFont === 'Press Start 2P' ? 48 : 74,
+        font:recipe.headingFont, size:recipe.headingFont === 'Press Start 2P' ? 48 :
+          (titleX < 40 || titleX > 60 ? 60 : 74),
         color:recipe.foreground,
         anim:{in:{type:recipe.enter,unit:'block',durMs:360},
           out:{type:'fade',unit:'block',durMs:260}} },
@@ -236,6 +237,8 @@ export function auditB8Evidence(c:B8Candidate,e:B8Evidence|undefined):string[] {
     const s=scoreB8Review(e)
     if(s.score<9 || !s.minimum)issues.push('qa_score_below_nine_or_dimension_below_four')
   }
+  if(e.independentReviewer?.trim() && e.independentReviewer.trim()===e.reviewer?.trim())
+    issues.push('independent_reviewer_must_differ')
   if(e.flagged && !e.independentReviewer?.trim())issues.push('flagged_variant_needs_independent_review')
   return issues
 }
@@ -259,7 +262,9 @@ export function reportB8Quality(candidates:readonly B8Candidate[],
     else valid.add(c.id)
   }
   const anchors=FACTORY_FAMILY_SEEDS.slice(0,10).map(f=>f.id+'_bold')
-  const anchorsReady=anchors.every(id=>valid.has(id))
+  const anchorsReady=anchors.every(id=>valid.has(id) &&
+    Boolean(map.get(id)?.independentReviewer?.trim()) &&
+    map.get(id)?.independentReviewer?.trim()!==map.get(id)?.reviewer?.trim())
   const independent=[...valid].filter(id=>map.get(id)?.independentReviewer?.trim()).length
   const independentReady=independent>=Math.ceil(valid.size*.1)
   const stylesReady=FACTORY_TREATMENTS.every(r=>[...valid].some(id=>
