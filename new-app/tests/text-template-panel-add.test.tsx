@@ -8,6 +8,28 @@ import { defaultEdits } from '@/lib/clips/edits'
 afterEach(cleanup)
 
 describe('TextPanel multi-part templates', () => {
+  it('HG09 gives selected text a direct jump to the existing Font/Bold/Italic controls', () => {
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 60000 })
+    edits.textItems = [{
+      id: 'fixture_text', text: 'Welcome', startMs: 0, endMs: 5000,
+      x: 50, y: 50, w: 80, h: 20, style: {
+        font: 'Montserrat', size: 60, color: '#ffffff', align: 'center',
+      },
+    }] as typeof edits.textItems
+    const ui = render(<TextPanel edits={edits} onEdits={vi.fn()} playheadMs={3000}
+      durationMs={60000} selectedId="fixture_text" onSelect={vi.fn()} />)
+    const jump = ui.getByTestId('text-jump-to-styles')
+    const inspector = ui.getByTestId('text-inspector')
+    expect(inspector.id).toBe('text-selected-style-controls')
+    expect(ui.getByTestId('text-bold')).toBeTruthy()
+    expect(ui.getByTestId('text-italic')).toBeTruthy()
+    expect(ui.getByTestId('text-font')).toBeTruthy()
+    const scroll = vi.fn()
+    inspector.scrollIntoView = scroll
+    fireEvent.click(jump)
+    expect(scroll).toHaveBeenCalledWith({ block: 'nearest' })
+  })
+
   it('D3: adding a text item and typing is two history steps regardless of typing pauses', () => {
     const commits: boolean[] = []
     const original = defaultEdits({ clipStartMs: 0, clipEndMs: 60000 })
