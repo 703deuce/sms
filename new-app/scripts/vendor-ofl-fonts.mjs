@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '../..')
-const { revision, fonts } = JSON.parse(await readFile(path.join(here, 'pinned-ofl-font-sources.json'), 'utf8'))
+const { revision, fonts, fallbackFonts = [] } = JSON.parse(await readFile(path.join(here, 'pinned-ofl-font-sources.json'), 'utf8'))
 const browser = path.join(root, 'new-app/public/fonts/clip')
 const worker = path.join(root, 'worker/v3/fonts/t6')
 const hash = data => createHash('sha1').update('blob ' + data.length + String.fromCharCode(0)).update(data).digest('hex')
@@ -36,7 +36,7 @@ async function saveVerified(dir, name, bytes, expected) {
   if (hash(await readFile(tmp)) !== expected) throw new Error('disk integrity mismatch: ' + dst)
   await rename(tmp, dst)
 }
-for (const font of fonts) {
+for (const font of [...fonts, ...fallbackFonts]) {
   const bytes = await pinnedBlob(font.slug, font.upstream, font.blobSha)
   if (bytes.length !== font.size) throw new Error('font size mismatch: ' + font.slug)
   const license = await pinnedBlob(font.slug, 'OFL.txt', font.licenseBlobSha)
@@ -49,4 +49,4 @@ for (const font of fonts) {
   if (!a.equals(b)) throw new Error('browser / worker binary mismatch: ' + font.slug)
   console.log('[font-vendor] verified', font.slug, font.assFamily, font.blobSha)
 }
-console.log('[font-vendor] all eight font families and notices verified at', revision)
+console.log('[font-vendor] all eight design families plus pinned fallback fonts and notices verified at', revision)
