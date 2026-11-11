@@ -10,6 +10,8 @@ import pytest
 from clips_worker.audio_render import apply_audio_mix
 from clips_worker.blank_project import make_template_carrier
 from clips_worker.byo_clip_job import template_project_canceled
+from clips_worker.caption_lines import caption_line_render_words
+from clips_worker.captions_ass import build_ass
 from clips_worker.media_sources import apply_full_render_sources, source_transition_boundaries
 from clips_worker.motion_render import apply_motion_after_cut
 from clips_worker.text_items import apply_text_items, text_items_ass
@@ -75,7 +77,10 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
         "trim": {"in": 0, "out": 3000},
         "cutRanges": [],
         "wordFixes": {},
-        "captions": {"enabled": False},
+        "captions": {"enabled": True, "presetId": "bold_pop", "position": "bottom", "size": 6},
+        "captionLines": [{
+            "id": "caption_all", "text": "CAPTION THROUGH EVERY SLOT", "startMs": 0, "endMs": 3000,
+        }],
         "layout": {"mode": "full_frame", "shotOverrides": []},
         "sources": [
             {"id": "src_photo", "ref": "upload", "refId": "photo_asset", "mediaType": "image"},
@@ -165,14 +170,27 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
     assert "TEXT THROUGH EVERY SLOT" in ass
     assert "0:00:03.00" in ass
     assert "graphic_all" not in ass  # IDs are metadata; the rendered ASS contains the shape drawing, not opaque item ids.
-    assert "\\p1" in ass or "m " in ass
+    assert r"\p1" in ass or "m " in ass
     texted = tmp_path / "texted.mp4"
     apply_text_items(moved, texted, edits, play_w=160, play_h=90)
     assert frames(texted) == 90
 
+    caption_ass = tmp_path / "captions.ass"
+    build_ass(caption_line_render_words(edits), edits["captions"], caption_ass, play_w=160, play_h=90, edits=edits)
+    caption_text = caption_ass.read_text()
+    assert "CAPTION THROUGH EVERY SLOT" in caption_text
+    assert "0:00:03.00" in caption_text
+    captioned = tmp_path / "captioned.mp4"
+    run([
+        FFMPEG, "-y", "-v", "error", "-i", str(texted),
+        "-vf", f"ass={caption_ass}", "-map", "0:v:0", "-map", "0:a?",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy", str(captioned),
+    ])
+    assert frames(captioned) == 90
+
     mixed = tmp_path / "mixed.mp4"
     apply_audio_mix(
-        texted, mixed, music, [],
+        captioned, mixed, music, [],
         length_s=3.0,
         volume=0.4,
         duck_depth=0.0,
