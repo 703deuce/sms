@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: transovo-b2b-vendor-font-library
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   vendor-and-verify:
@@ -50,19 +50,17 @@ jobs:
       - name: Install app dependencies
         working-directory: new-app
         run: pnpm install --frozen-lockfile
-      - name: Require no new TypeScript error count beyond 456 existing master failures
-        working-directory: new-app
+      - name: Full head-vs-master TypeScript diagnostics gate (baseline 456)
         run: |
           set +e
-          pnpm exec tsc --noEmit --pretty false > /tmp/b2b-typecheck.log 2>&1
-          code=$?
+          (cd new-app && pnpm exec tsc --noEmit --pretty false) > /tmp/b2b-head-tsc.log 2>&1
           set -e
-          count=$(grep -Ec 'error TS[0-9]+:' /tmp/b2b-typecheck.log || true)
-          echo "tsc exit=$code errors=$count baseline=456"
-          if [ "$count" -gt 456 ]; then
-            tail -100 /tmp/b2b-typecheck.log
-            exit 1
-          fi
+          git worktree add --detach /tmp/b2b-master origin/master
+          ln -s "$GITHUB_WORKSPACE/new-app/node_modules" /tmp/b2b-master/new-app/node_modules
+          set +e
+          (cd /tmp/b2b-master/new-app && pnpm exec tsc --noEmit --pretty false) > /tmp/b2b-master-tsc.log 2>&1
+          set -e
+          node new-app/scripts/b2b-compare-tsc.mjs /tmp/b2b-master-tsc.log /tmp/b2b-head-tsc.log
       - name: Batch 2 + B2B font, caption and protected editor Vitest
         working-directory: new-app
         run: |
@@ -70,6 +68,7 @@ jobs:
             tests/font-manifest-b2.test.ts \
             tests/clip-font-exact-readiness.test.ts \
             tests/caption-presets-b2b.test.ts \
+            tests/b2b-caption-apply.test.ts \
             tests/premium-caption-styles-b2.test.ts \
             tests/typography-treatments-b2.test.ts \
             tests/typography-panel-b2.test.tsx \
@@ -110,5 +109,7 @@ jobs:
           git diff --cached --check
           test "$(git diff --cached --name-only | grep -Ec '\.ttf$')" -ge 124
           git commit -m "feat(clips): vendor 62 pinned OFL font families for browser and worker"
+          git fetch origin templates-b2b-font-library-captions
+          git rebase origin/templates-b2b-font-library-captions
           git push origin HEAD:templates-b2b-font-library-captions
           gh pr ready 1180 --repo 703deuce/sms
