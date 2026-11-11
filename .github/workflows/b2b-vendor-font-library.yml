@@ -4,6 +4,10 @@ on:
     branches: [templates-b2b-font-library-captions]
     paths:
       - 'new-app/scripts/vendor-b2b-fonts.py'
+      - 'new-app/components/clips/editor/caption-overlay.tsx'
+      - 'new-app/lib/clips/editor/text-items.ts'
+      - 'worker/clips_worker/text_items.py'
+      - 'new-app/lib/clips/render-plan/text-items-ass.ts'
       - '.github/workflows/b2b-vendor-font-library.yml'
   workflow_dispatch:
 

@@ -397,7 +397,7 @@ export function CaptionMiniPreview({ preset, label = 'CLIP' }: { preset: Caption
       {(!isB2B || ready) && visible ? (
         <CaptionOverlay
           words={words as ClipWord[]}
-          currentTimeSec={0.6}
+          currentTimeSec={isB2B ? 0.6 : 0.25}
           edits={edits}
           boxHeightPx={64}
           outputDurationSec={2}
