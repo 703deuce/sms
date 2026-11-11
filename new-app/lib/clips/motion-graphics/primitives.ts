@@ -31,13 +31,13 @@ function shape(
 }
 function label(
   g: MotionGraphic, suffix: string, text: string, x: number, y: number,
-  fontSize: number,
+  fontSize: number, font: TextItem['style']['font'] = 'Montserrat',
 ): TextItem {
   return {
     id: 'mg_' + g.id + '__' + suffix,
     startMs: g.startMs, endMs: g.endMs, text,
     x, y, style: {
-      font: 'Montserrat', size: Math.max(24, Math.min(240, Math.round(fontSize))),
+      font, size: Math.max(24, Math.min(240, Math.round(fontSize))),
       color: g.style.textColor, align: 'center', case: 'none',
       stroke: { color: '#000000', width: 3 },
     }, anim: timing(g),
@@ -46,6 +46,7 @@ function label(
 
 export function expandedShapeGraphic(
   g: MotionGraphic, format: MotionPlan['format'],
+  font: TextItem['style']['font'] = 'Montserrat',
 ): TextItem[] {
   const x0 = g.box.x * 100, y0 = g.box.y * 100
   const boxW = g.box.width * 100, boxH = g.box.height * 100
@@ -62,7 +63,7 @@ export function expandedShapeGraphic(
       out.push(shape(g, 'node_' + i, 'rounded', x0 + boxW / 2, y,
         pixW * .85, pixH / n * .72, g.style.backgroundColor ?? '#0F172A'))
       out.push(label(g, 'step_' + i, text, x0 + boxW / 2, y,
-        Math.min(65, (pixH / n) * .28)))
+        Math.min(65, (pixH / n) * .28), font))
       if (i < n - 1) out.push(shape(g, 'arrow_' + i, 'arrow',
         x0 + boxW * .92, y0 + perH * (i + 1), pixW * .07, pixH / n * .27,
         g.style.accentColor))
@@ -88,9 +89,9 @@ export function expandedShapeGraphic(
         g.style.accentColor))
       out.push(label(g, 'value_' + i, String(bar.value), cx,
         Math.max(y0 + 3, bottom - hFrac - boxH * .1),
-        Math.min(54, pixH * .11)))
+        Math.min(54, pixH * .11), font))
       out.push(label(g, 'label_' + i, bar.label, cx,
-        y0 + boxH * .93, Math.min(48, pixH * .105)))
+        y0 + boxH * .93, Math.min(48, pixH * .105), font))
     })
     return out
   }
