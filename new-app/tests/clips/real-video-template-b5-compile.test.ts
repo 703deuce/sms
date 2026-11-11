@@ -103,6 +103,16 @@ describe('Batch 5 template music preview and shared renderer compiler',()=>{
     expect(r.edits.sourceSegments?.every(x=>x.speed===undefined)).toBe(true)
     expect(r.edits.audio?.music?.duckDepth).toBe(0.65)
   })
+  it('lets ambient or silent licensed beds keep fixed time, never fake a beat resync',()=>{
+    const ambient={...family(2),beatAnchors:[]}
+    const silent=pinMusicSchedule({assetId:'upload_music',license:rights,
+      mode:'fixed-time',grid:{bpm:0,beatsMs:[]}})
+    const d:TemplateMusicDecisionV1={v:1,rights,schedule:silent,choice:'keep-timing'}
+    expect(planTemplateMusic(ambient,d).durationFrames).toBe(60)
+    expect(()=>planTemplateMusic(ambient,{...d,choice:'re-sync',originalSchedule:makeSchedule(120)}))
+      .toThrow(/beat-time/)
+    expect(()=>planTemplateMusic(family(2),d)).toThrow(/Beat-driven/)
+  })
   it('refuses no rights, inconsistent hashes, short songs, and unapproved loops',()=>{
     const input=choices(2,decision())
     expect(()=>compileTemplateWithMusic(family(2),design,{...input,templateMusic:undefined},carrier(60)))
