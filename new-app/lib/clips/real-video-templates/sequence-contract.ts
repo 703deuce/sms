@@ -57,6 +57,11 @@ export type TemplateSlot = {
   transform?: SourceSegmentTransform
   fx?: SourceSegmentFx
 }
+export type TemplateTextFinish = {
+  stroke?: { color: string; width: number }
+  shadow?: { color: string; opacity: number; dist: number }
+  letterSpacing?: number
+}
 export type TemplateText = {
   id: string
   defaultText: string
@@ -68,6 +73,8 @@ export type TemplateText = {
   font: string
   size: number
   color: string
+  /** Authored readability treatment preserved as ordinary editable TextItem style. */
+  finish?: TemplateTextFinish
   /** Real ASS/worker/libass text choreography, not preview-only CSS. */
   anim?: TextAnim
 }
@@ -239,6 +246,35 @@ function validateMotionState(raw: unknown, context: string): TemplateMotionState
   return Object.keys(out).length ? out : undefined
 }
 /** Strict authored animation: no silently clamped timing, unknown effects or arbitrary commands. */
+function validateTextFinish(raw: unknown): TemplateTextFinish | undefined {
+  if (raw == null) return undefined
+  if (!own(raw)) throw new Error('text.finish: expected object')
+  exact(raw, ['stroke','shadow','letterSpacing'], 'text.finish')
+  const out: TemplateTextFinish = {}
+  if (raw.stroke != null) {
+    if (!own(raw.stroke)) throw new Error('text.finish.stroke: expected object')
+    exact(raw.stroke, ['color','width'], 'text.finish.stroke')
+    const color = String(raw.stroke.color ?? '')
+    if (!COLOR.test(color)) throw new Error('text.finish.stroke: invalid color')
+    out.stroke = { color, width: finite(raw.stroke.width, 0, 16, 'text.finish.stroke.width') }
+  }
+  if (raw.shadow != null) {
+    if (!own(raw.shadow)) throw new Error('text.finish.shadow: expected object')
+    exact(raw.shadow, ['color','opacity','dist'], 'text.finish.shadow')
+    const color = String(raw.shadow.color ?? '')
+    if (!COLOR.test(color)) throw new Error('text.finish.shadow: invalid color')
+    out.shadow = {
+      color,
+      opacity: finite(raw.shadow.opacity, 0, 100, 'text.finish.shadow.opacity'),
+      dist: finite(raw.shadow.dist, 0, 32, 'text.finish.shadow.dist'),
+    }
+  }
+  if (raw.letterSpacing != null)
+    out.letterSpacing = finite(raw.letterSpacing, -20, 40, 'text.finish.letterSpacing')
+  if (!Object.keys(out).length) throw new Error('text.finish: no style specified')
+  return out
+}
+
 function validateAuthoredAnim(raw: unknown, context: string, graphic = false): TextAnim | undefined {
   if (raw == null) return undefined
   if (!own(raw)) throw new Error(`${context}.anim: expected object`)
@@ -396,7 +432,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   const textIds = new Set<string>()
   const texts: TemplateText[] = raw.texts.map((value: unknown) => {
     if (!own(value)) throw new Error('text: expected object')
-    exact(value, ['id','defaultText','maxChars','startFrame','durationFrames','x','y','font','size','color','anim'], 'text')
+    exact(value, ['id','defaultText','maxChars','startFrame','durationFrames','x','y','font','size','color','finish','anim'], 'text')
     const tid = id(value.id, 'text'); unique(tid, textIds, 'text')
     const maxChars = integer(value.maxChars, 1, 200, 'text.maxChars')
     if (typeof value.defaultText !== 'string' || !value.defaultText.trim() || Array.from(value.defaultText).length > maxChars) throw new Error('text: invalid default')
@@ -411,6 +447,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
       font: typeof value.font === 'string' && TEMPLATE_FONTS.has(value.font)
         ? value.font : (() => { throw new Error('text.font: missing from the pinned licensed font manifest') })(),
       size: integer(value.size, 24, 240, 'text.size'), color,
+      ...(validateTextFinish(value.finish) ? { finish: validateTextFinish(value.finish) } : {}),
       ...(validateAuthoredAnim(value.anim, 'text') ? { anim: validateAuthoredAnim(value.anim, 'text') } : {}),
     }
   })
@@ -625,7 +662,12 @@ export function compileTemplate(
     return {
       id: templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'text', t.id),
       text, startMs: templateFrameToMs(t.startFrame), endMs: templateFrameToMs(t.startFrame + t.durationFrames),
-      x: t.x, y: t.y, style: { font: t.font, size: t.size, color: t.color, align: 'center' as const, case: 'none' as const },
+      x: t.x, y: t.y, style: {
+        font: t.font, size: t.size, color: t.color, align: 'center' as const, case: 'none' as const,
+        ...(t.finish?.stroke ? { stroke: t.finish.stroke } : {}),
+        ...(t.finish?.shadow ? { shadow: t.finish.shadow } : {}),
+        ...(t.finish?.letterSpacing != null ? { letterSpacing: t.finish.letterSpacing } : {}),
+      },
       ...(t.anim ? { anim: t.anim } : {}),
     }
   })
