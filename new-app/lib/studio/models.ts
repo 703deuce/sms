@@ -425,10 +425,19 @@ export function buildKieCreateRequest(resolved: ResolvedStudioCreate, urls: Stud
       resolution: resolution || '480p',
       generate_audio: false,
     }
-    if (startUrl && !referenceUrl) input.first_frame_url = startUrl
+    // Seedance treats first/last-frame conditioning and reference_image_urls as mutually exclusive.
+    // For image-to-video, a lone reference image is the actual first frame; previously startUrl
+    // aliased referenceUrl and both branches were skipped, so KIE received no product image at all.
+    if (urls.startFrameUrl) input.first_frame_url = urls.startFrameUrl
+    else if (mode === 'image_to_video' && referenceUrl) input.first_frame_url = referenceUrl
+    else if (referenceUrl) input.reference_image_urls = [referenceUrl]
     if (endUrl) input.last_frame_url = endUrl
-    if (referenceUrl && !startUrl && !endUrl) input.reference_image_urls = [referenceUrl]
-    // Start/end and reference_* are mutually exclusive on this model.
+    console.info('[studio:kie] seedance_reference_mode', {
+      mode,
+      hasFirstFrame: Boolean(input.first_frame_url),
+      hasLastFrame: Boolean(input.last_frame_url),
+      referenceImageCount: Array.isArray(input.reference_image_urls) ? input.reference_image_urls.length : 0,
+    })
     return { api: 'jobs', model: model.providerModel, input }
   }
 
