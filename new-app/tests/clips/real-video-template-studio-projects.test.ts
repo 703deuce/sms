@@ -198,6 +198,50 @@ describe('Batch 4 workspace draft and standalone project lifecycle', () => {
       ;(release.design as any).musicPolicy = policy
     }
   })
+  it('accepts only the exact pinned Batch 9A first-party soundtrack provenance', async () => {
+    const releases = (await import('@/lib/clips/real-video-templates/releases')).FIRST_PARTY_VIDEO_TEMPLATES as any[]
+    const release = releases[0]!
+    const previousPolicy = release.design.musicPolicy
+    const previousDefaultMusic = release.defaultMusic
+    const hash = '4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e'
+    release.design.musicPolicy = 'licensed-only'
+    release.defaultMusic = {
+      id:'batch9a_anchor_bed_v1',generator:'batch9a-pulse-v1',sha256:hash,
+      durationFrames:480,bpm:150,beatEveryFrames:3,author:'Transovo AI',
+      license:'Transovo first-party original template music',revision:'batch9a-audio-v1',
+    }
+    try {
+      const project = await createVideoTemplateDraft('ws_one','one_reviewed','request_01234')
+      const music = {
+        id:'generated_audio',kind:'audio' as const,durationFrames:480,
+        license:{id:'batch9a_first_party',provenance:'first-party' as const,reference:'batch9a-audio-v1'},
+      }
+      const rights = {
+        assetId:'generated_audio',origin:'first-party-generated',author:'Transovo AI',
+        license:'Transovo first-party original template music',revision:'batch9a-audio-v1',
+        sha256:hash,commercialUse:true,exportAllowed:true,redistributionAllowed:true,
+        verifiedDurationFrames:480,verifiedAt:'batch9a-audio-v1',
+      }
+      const templateMusic = {
+        v:1 as const,choice:'keep-timing' as const,acceptLoop:false,rights,
+        schedule:{v:1 as const,mode:'beat-time' as const,musicAssetId:'generated_audio',
+          sha256:hash,bpm:150,confidence:'manual' as const,offsetFrames:0,durationFrames:480,
+          beats:Array.from({length:160},(_,i)=>i*3),phrases:[],protectedAnchors:[]},
+      }
+      expect(() => validDraft('one_reviewed',{
+        ...project.draft,music,templateMusic,musicRightsConfirmed:true,musicTiming:'keep',
+      })).not.toThrow()
+      expect(() => validDraft('one_reviewed',{
+        ...project.draft,music:{...music,license:{...music.license,reference:'other-revision'}},
+        templateMusic,musicRightsConfirmed:true,musicTiming:'keep',
+      })).toThrow('unavailable or unapproved')
+    } finally {
+      release.design.musicPolicy = previousPolicy
+      if (previousDefaultMusic === undefined) delete release.defaultMusic
+      else release.defaultMusic = previousDefaultMusic
+    }
+  })
+
   it('only discards DRAFT projects, preserving a published clip', async () => {
     const a=await createVideoTemplateDraft('ws_one','one_reviewed','request_01234')
     await discardVideoTemplateDraft('ws_one',a.id)
