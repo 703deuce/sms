@@ -15,6 +15,19 @@ const KEY = /^[A-Za-z0-9_-]{8,120}$/
 type DraftRecord = { id: string; status: string; version: number; draft: StudioDraft; clipId: string | null }
 const releaseFor = (id: string) => FIRST_PARTY_VIDEO_TEMPLATES.find(item => item.id === id)
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+/** Compare persisted JSON drafts independent of JSONB/object key order. */
+function equivalentDraft(a: unknown, b: unknown): boolean {
+  const normalize = (value: unknown, depth = 0): unknown => {
+    if (depth > 24) throw new Error('Template draft too deeply nested')
+    if (Array.isArray(value)) return value.map(item => normalize(item, depth + 1))
+    if (!object(value)) return value
+    const ordered: Record<string, unknown> = {}
+    for (const key of Object.keys(value).sort())
+      ordered[key] = normalize(value[key], depth + 1)
+    return ordered
+  }
+  return JSON.stringify(normalize(a)) === JSON.stringify(normalize(b))
+}
 function digest(...parts: string[]) {
   return createHash('sha256').update(parts.map(p => String(p.length) + ':' + p).join('|')).digest('hex')
 }
@@ -158,9 +171,15 @@ export async function saveVideoTemplateDraft(
 ): Promise<DraftRecord> {
   const current = await getVideoTemplateDraft(workspaceId, projectId)
   if (!current) throw new TemplateInstanceNotFound()
-  if (current.status !== 'DRAFT' || expectedVersion !== current.version) throw new TemplateInstanceConflict()
+  if (current.status !== 'DRAFT') throw new TemplateInstanceConflict()
   const draft = validDraft(current.draft.releaseId, raw)
   if (draft.draftId !== current.draft.draftId) throw new TemplateInstanceConflict()
+  // A retry after an uncertain network response is safe only for the exact
+  // immediately previous payload. Never silently accept a stale *different* edit.
+  const same = equivalentDraft(current.draft, draft)
+  if (same && (expectedVersion === current.version ||
+      expectedVersion + 1 === current.version)) return current
+  if (expectedVersion !== current.version) throw new TemplateInstanceConflict()
   await assertDraftAssets(workspaceId, draft)
   try {
     await getPrisma().$transaction(async tx => {
@@ -228,10 +247,23 @@ export async function savePublishedStudioDraft(
 ): Promise<{ version: number; editsSaveVersion: number }> {
   const state = await getVideoTemplateDraft(workspaceId, projectId)
   if (!state || !state.clipId) throw new TemplateInstanceNotFound()
-  if (state.status !== 'READY' || state.version !== expectedVersion) throw new TemplateInstanceConflict()
+  if (state.status !== 'READY') throw new TemplateInstanceConflict()
   const draft = validDraft(state.draft.releaseId, raw)
   if (draft.draftId !== state.draft.draftId || draft.musicTiming === 'resync')
     throw new Error('Music re-sync requires an approved beat map; choose Keep timing until analysis is available')
+  if (state.version !== expectedVersion) {
+    if (state.version === expectedVersion + 1 && equivalentDraft(state.draft, draft)) {
+      const clip = await getPrisma().clip.findFirst({
+        where: { id: state.clipId, workspaceId, deletedAt: null },
+        select: { editsSaveVersion: true, aiMeta: true },
+      })
+      const metadata = object(clip?.aiMeta) ? clip.aiMeta.videoTemplate : null
+      if (clip?.editsSaveVersion === expectedEditsSaveVersion + 1 && object(metadata) &&
+          metadata.studioEditsSaveVersion === clip.editsSaveVersion)
+        return { version: state.version, editsSaveVersion: clip.editsSaveVersion }
+    }
+    throw new TemplateInstanceConflict()
+  }
   await assertDraftAssets(workspaceId, draft)
   try {
     return await getPrisma().$transaction(async tx => {

@@ -37,6 +37,9 @@ const { state, db, publish } = vi.hoisted(() => {
     return create
   }) }
   const clip = {
+    findFirst: vi.fn(async ({ where }: any) =>
+      state.clips.find(c => c.id === where.id && c.workspaceId === where.workspaceId &&
+        !c.deletedAt) ?? null),
     updateMany: vi.fn(async ({ where, data }: any) => {
       const row = state.clips.find(c => c.id === where.id && c.workspaceId === where.workspaceId &&
         c.editsSaveVersion === where.editsSaveVersion)
@@ -123,7 +126,10 @@ describe('Batch 4 workspace draft and standalone project lifecycle', () => {
       fit: 'cover' as const, muteSourceAudio: true, focalX: 50, focalY: 50, remedy: 'replace' as const } } }
     const saved = await saveVideoTemplateDraft('ws_one',project.id,0,next)
     expect(saved.version).toBe(1)
-    await expect(saveVideoTemplateDraft('ws_one',project.id,0,next)).rejects.toThrow()
+    expect((await saveVideoTemplateDraft('ws_one',project.id,0,next)).version).toBe(1)
+    expect((await saveVideoTemplateDraft('ws_one',project.id,1,next)).version).toBe(1)
+    await expect(saveVideoTemplateDraft('ws_one',project.id,0,
+      { ...next, texts: { title: 'A different change' } })).rejects.toThrow()
     await expect(saveVideoTemplateDraft('ws_other',project.id,1,next)).rejects.toThrow()
     const foreign = { ...next, slots: { first: { ...next.slots.first, asset: { ...photo, id: 'foreign' } } } }
     await expect(saveVideoTemplateDraft('ws_one',project.id,1,foreign)).rejects.toThrow()
@@ -143,7 +149,11 @@ describe('Batch 4 workspace draft and standalone project lifecycle', () => {
     expect((state.clips[0]?.edits as any).unknownPersistedField).toBe('keep')
     expect((state.clips[0]?.edits as any).textItems[0].text).toBe('My new headline')
     expect((await getVideoTemplateDraft('ws_one',project.id))?.draft.texts.title).toBe('My new headline')
-    await expect(savePublishedStudioDraft('ws_one',project.id,1,0,edited)).rejects.toThrow()
+    expect(await savePublishedStudioDraft('ws_one',project.id,1,0,edited))
+      .toEqual({version:2,editsSaveVersion:1})
+    expect((await getVideoTemplateDraft('ws_one',project.id))?.version).toBe(2)
+    await expect(savePublishedStudioDraft('ws_one',project.id,1,0,
+      { ...edited, texts: { title: 'Stale and different' } })).rejects.toThrow()
   })
   it('rejects unsupported music re-sync and unapproved audio without persisting a draft', async () => {
     const project = await createVideoTemplateDraft('ws_one','one_reviewed','request_01234')
