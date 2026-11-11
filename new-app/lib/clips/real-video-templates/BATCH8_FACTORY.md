@@ -191,7 +191,11 @@ real-render or reference-review requirements.
 
 `prepare-shard --all` (or `--shard N`) compiles the queued candidate
 matrix to one content-addressed JSON request per candidate using the same
-standalone Batch 3/B5 path as `preview`. It checks the current fixture,
+standalone Batch 3/B5 path as `preview`. Every request is rejected unless
+the resulting ClipEditsV2 still has one editable source segment per slot,
+every slot-boundary cut, every authored cross-source transition, every
+animated text/shape layer, source-motion keyframes, template provenance and
+the licensed soundtrack on its own audio track. It checks the current fixture,
 music-schedule and renderer hashes against `jobs.json` **before writing**
 requests. Only queued jobs are prepared; completed, canceled, running and
 failed jobs are not reclaimed. The prepared manifest is a worker handoff,

@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process'
 import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS } from '../lib/clips/real-video-templates/b8-authoring-catalog'
 import { lintB8Legibility } from '../lib/clips/real-video-templates/b8-legibility'
 import { generateB8Candidates, proveB8Structure, reportB8Quality,
-  locallyApprovedB8Releases, shardB8Jobs, auditB8Evidence,
+  locallyApprovedB8Releases, shardB8Jobs, auditB8EditableOutput, auditB8Evidence,
   B8_ENGINE_REVISION, reconcileB8Queue,
   type B8Candidate, type B8Evidence, type B8QueueJobState } from '../lib/clips/real-video-templates/b8-factory'
 import { templateFrameToMs, type TemplateAsset } from '../lib/clips/real-video-templates/sequence-contract'
@@ -289,12 +289,25 @@ function preparePreviewRequest(c:B8Candidate,fixtures:FixtureManifest,cacheKey:s
       templateMusic:fixtures.soundtrack.decision,
     },{durationFrames:c.family.totalFrames,
       edits:defaultEdits({clipStartMs:0,clipEndMs:duration})})
-    if(!edits.edits.audio?.music)
-      throw new Error('Music compiler lost the separate soundtrack lane')
+    const editableIssues=auditB8EditableOutput(c,edits,{
+      requireMusic:true,expectedMusicAssetId:fixtures.soundtrack.asset.id,
+    })
+    if(editableIssues.length)
+      throw new Error('Prepared edit lost native template structure: '+editableIssues.join(','))
     const dest=join(directory,'preview-requests',c.id+'.json')
     save(dest,{v:1,cacheKey,status:'worker_render_required',designId:c.id,definitionHash:c.definitionHash,
       footage:fixtures.media.filter(f=>Object.values(media).some(a=>a.id===f.id)),
-      soundtrack:fixtures.soundtrack,edits:edits.edits,expected:proveB8Structure(c),
+      soundtrack:fixtures.soundtrack,edits:edits.edits,
+      structuralProof:proveB8Structure(c),
+      editableProof:{
+        slotSegments:edits.edits.sourceSegments?.length??0,
+        cutBoundaries:edits.edits.videoSplits?.length??0,
+        transitions:edits.edits.transitions?.length??0,
+        animatedLayers:edits.edits.textItems?.filter(layer=>Boolean(layer.anim)).length??0,
+        videoMotionTracks:edits.edits.keyframes?.filter(track=>track.target==='video').length??0,
+        separateMusicTrack:Boolean(edits.edits.audio?.music),
+        issues:editableIssues,
+      },
       expectedAudioTrack:true,expectedMusicSourceSha256:fixtures.soundtrack.sha256,
       message:'Submit registered assets and this ClipEditsV2 plan to the existing worker. No MP4 is claimed by this command.'})
     return dest
