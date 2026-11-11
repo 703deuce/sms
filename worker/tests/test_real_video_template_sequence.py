@@ -50,6 +50,16 @@ def center_rgb(path: Path, at_s: float) -> tuple[int, int, int]:
     return tuple(raw[:3])
 
 
+def half_rgb(path: Path, at_s: float, side: str) -> tuple[int, int, int]:
+    x = "0" if side == "left" else "iw/2"
+    raw = subprocess.run([
+        FFMPEG, "-v", "error", "-ss", f"{at_s:.3f}", "-i", str(path),
+        "-vf", f"crop=iw/2:ih:{x}:0,scale=1:1",
+        "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+    ], capture_output=True, check=True).stdout
+    return tuple(raw[:3])
+
+
 @pytest.mark.skipif(not FFMPEG or not FFPROBE, reason="ffmpeg/ffprobe required")
 def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_path: Path) -> None:
     carrier = tmp_path / "carrier.mp4"
@@ -172,6 +182,36 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
         "-f", "null", "-",
     ], capture_output=True, text=True, check=True).stderr
     assert "silence_start" not in silence
+
+
+
+
+@pytest.mark.skipif(not FFMPEG or not FFPROBE, reason="ffmpeg/ffprobe required")
+def test_template_image_source_layout_exports_real_side_by_side_collage(tmp_path: Path) -> None:
+    carrier = tmp_path / "carrier_collage.mp4"
+    make_template_carrier(carrier, "16:9", 30)
+    red = tmp_path / "red.png"
+    blue = tmp_path / "blue.png"
+    run([FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=160x90", "-frames:v", "1", str(red)])
+    run([FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=160x90", "-frames:v", "1", str(blue)])
+    edits = {
+        "sources": [
+            {"id": "src_red", "ref": "upload", "refId": "red_asset", "mediaType": "image"},
+            {"id": "src_blue", "ref": "upload", "refId": "blue_asset", "mediaType": "image"},
+        ],
+        "sourceSegments": [{
+            "id": "slot_red", "sourceId": "src_red", "startMs": 0, "endMs": 1000, "fit": "cover",
+            "layout": {"kind": "side_by_side", "withSourceId": "src_blue", "split": 0.5},
+        }],
+    }
+    sourced = apply_full_render_sources(
+        carrier, edits, 0, 1000, tmp_path, {"red_asset": red, "blue_asset": blue},
+    )
+    assert frames(sourced) == 30
+    left = half_rgb(sourced, 0.5, "left")
+    right = half_rgb(sourced, 0.5, "right")
+    assert left[0] > left[2] + 80
+    assert right[2] > right[0] + 80
 
 
 @pytest.mark.skipif(not FFMPEG or not FFPROBE, reason="ffmpeg/ffprobe required")

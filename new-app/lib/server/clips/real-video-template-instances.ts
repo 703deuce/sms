@@ -188,12 +188,14 @@ export async function publishTemplateProject(
   try {
     return await prisma.$transaction(async (tx) => {
       const assetRows = await loadAndValidateAssets(tx, workspaceId, family, design, choicesRaw)
+      const selectedAspect = choicesRaw.aspect ?? family.aspects[0]!
+      if (!family.aspects.includes(selectedAspect)) throw new Error('Selected template aspect is not authored by this family')
       const settings = clipProjectSettingsSchema.parse({
         ...defaultClipSettings(),
         byo: true,
         fullVideo: true,
         blank: true,
-        aspectRatio: family.aspects[0],
+        aspectRatio: selectedAspect,
         rangeStartMs: 0,
         rangeEndMs: durationMs,
       })
@@ -208,7 +210,7 @@ export async function publishTemplateProject(
             ...base,
             trim: { in: 0, out: durationMs },
             layout: { ...base.layout, mode: 'full_frame' },
-            aspectRatio: family.aspects[0],
+            aspectRatio: selectedAspect,
             captions: { ...base.captions, enabled: false },
           },
         },
