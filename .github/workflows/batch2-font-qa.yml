@@ -35,6 +35,8 @@ jobs:
         run: |
           pnpm exec vitest run \
             tests/font-manifest-b2.test.ts \
+            tests/clip-font-exact-readiness.test.ts \
+            tests/caption-presets-b2b.test.ts \
             tests/premium-caption-styles-b2.test.ts \
             tests/typography-treatments-b2.test.ts \
             tests/typography-panel-b2.test.tsx \
@@ -85,4 +87,4 @@ jobs:
           cp worker/prototype/v3/fonts/*.ttf worker/v3/fonts/t6/*.ttf "$HOME/.local/share/fonts/transovo/"
           fc-cache -f
       - name: Assert all eight OFL TTFs, ASS names, licenses and Unicode fallback
-        run: PYTHONPATH=worker python -m pytest -q worker/tests/test_ofl_font_parity.py worker/tests/test_ofl_render_samples.py
+        run: PYTHONPATH=worker python -m pytest -q worker/tests/test_ofl_font_parity.py worker/tests/test_ofl_render_samples.py worker/tests/test_caption_presets_b2b.py

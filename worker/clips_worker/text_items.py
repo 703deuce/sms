@@ -37,6 +37,9 @@ TEXT_FONTS = {
     "Playfair Display": "Playfair Display",
     "Caveat": "Caveat",
     "Space Grotesk": "Space Grotesk",
+    "Inter": "Inter",
+    "Lato": "Lato Black",
+    "Oswald": "Oswald",
     "Space Mono": "Space Mono",
 }
 REF_H = 1920
