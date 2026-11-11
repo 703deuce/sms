@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.typecheck.json",
+  "compilerOptions": {
+    "incremental": false,
+    "plugins": []
+  },
+  "files": [
+    "./lib/clips/real-video-templates/review-evidence.ts",
+    "./scripts/template-review-evidence.ts",
+    "./tests/clips/template-review-evidence.test.ts"
+  ],
+  "include": []
+}

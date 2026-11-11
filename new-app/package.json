@@ -72,7 +72,9 @@
     "typecheck:templates:b9": "bash scripts/typecheck-templates-b9.sh",
     "test:templates:b9": "vitest run tests/clips/real-video-template-batch9-phase-b.test.ts",
     "templates:b9:phase-b:worker-contract": "npx tsx scripts/batch9-phase-b-contract.ts",
-    "templates:review-evidence": "npx tsx scripts/template-review-evidence.ts"
+    "templates:review-evidence": "npx tsx scripts/template-review-evidence.ts",
+    "typecheck:templates:review": "bash scripts/typecheck-template-review-evidence.sh",
+    "test:templates:review": "vitest run tests/clips/template-review-evidence.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
