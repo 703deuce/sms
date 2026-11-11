@@ -49,6 +49,7 @@ export async function startStreamerAgentBatch(workspaceId:string,projectId:strin
   if(windows.length>32)throw Error('stream_agent_batch_exceeds_32_windows')
   const batch:AgentBatch={
     id:createId('sagent'),status:'running',mode,seconds,
+    windowPolicy:'fold_short_tail_v1',
     index:0,total:windows.length,sourceStartMs:source.rangeStartMs,
     sourceDurationMs:source.rangeEndMs-source.rangeStartMs,
     completed:[],errors:[],startedAt:new Date().toISOString(),
@@ -169,7 +170,8 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
   if(!p||!batch||batch.id!==batchId||batch.status!=='running')
     return {status:'not_active'}
   const windows=streamerAgentWindows(batch.sourceStartMs,
-    batch.sourceDurationMs,true)
+    batch.sourceDurationMs,true,0,
+    batch.windowPolicy==='fold_short_tail_v1'?'fold':'legacy')
   const next:AgentBatch={...batch,completed:[...batch.completed],
     errors:[...batch.errors]}
   if(next.index>=windows.length){
