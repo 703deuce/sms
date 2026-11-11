@@ -104,6 +104,14 @@ describe('versioned pinned font inventory', () => {
       expect(row.browserGitBlobSha1).toMatch(/^[0-9a-f]{40}$/)
       expect(row.assFamily.length).toBeGreaterThan(1)
       expect(findClipFont(row.id)).toEqual(row)
+      expect(row.licenseNoticeRevision).toMatch(/^[0-9a-f]{40}$/)
+      const browserNotice = readFileSync(resolve(process.cwd(), 'public', row.licenseFile.slice(1)))
+      const workerNotice = readFileSync(resolve(process.cwd(), '..', 'worker/v3/fonts/t6/licenses',
+        row.licenseFile.split('/').at(-1)!))
+      expect(browserNotice.equals(workerNotice)).toBe(true)
+      expect(browserNotice.toString('utf8')).toContain(
+        row.licenseStatus === 'Apache-2.0' ? 'Apache License' : 'SIL OPEN FONT LICENSE')
+
       const browser = readFileSync(resolve(process.cwd(), 'public', row.browserFile.slice(1)))
       const worker = readFileSync(resolve(process.cwd(), '..', row.workerFile))
       expect(Buffer.compare(browser, worker), row.id + ': worker/browser bytes').toBe(0)
