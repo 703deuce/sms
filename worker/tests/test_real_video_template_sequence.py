@@ -88,7 +88,7 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
             },
             {
                 "id": "slot_2", "sourceId": "src_video", "startMs": 1000, "endMs": 2000,
-                "inMs": 300, "audio": "source", "fit": "cover", "speed": 1.25, "speed": 1.5,
+                "inMs": 300, "audio": "source", "fit": "cover", "speed": 1.5,
                 "transform": {"x": 4, "scale": 105}, "fx": {"brightness": 5},
             },
             {
@@ -104,16 +104,33 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
             "slotToItemIds": {"one": "slot_1", "two": "slot_2", "three": "slot_3"},
         },
         "keyframes": [
-            {"target": "video", "prop": "x", "points": [
-                {"tMs": 0, "v": 0, "ease": "inOut"}, {"tMs": 999, "v": 8},
-                {"tMs": 1000, "v": 0}, {"tMs": 2999, "v": 0},
+            {"target": "source:slot_2", "prop": "x", "points": [
+                {"tMs": 0, "v": -8, "ease": "inOut"}, {"tMs": 967, "v": 8},
+            ]},
+            {"target": "source:slot_2", "prop": "scale", "points": [
+                {"tMs": 0, "v": 92, "ease": "out"}, {"tMs": 967, "v": 108},
+            ]},
+            {"target": "text:title_all", "prop": "x", "points": [
+                {"tMs": 0, "v": -4, "ease": "inOut"}, {"tMs": 2967, "v": 4},
             ]},
         ],
-        "textItems": [{
-            "id": "title_all", "text": "TEXT THROUGH EVERY SLOT", "startMs": 0, "endMs": 3000,
-            "x": 50, "y": 18,
-            "style": {"font": "Montserrat", "size": 72, "color": "#FFFFFF", "align": "center", "case": "none"},
-        }],
+        "textItems": [
+            {
+                "id": "title_all", "text": "TEXT THROUGH EVERY SLOT", "startMs": 0, "endMs": 3000,
+                "x": 50, "y": 18,
+                "style": {"font": "Montserrat", "size": 72, "color": "#FFFFFF", "align": "center", "case": "none"},
+                "anim": {
+                    "in": {"type": "fade", "unit": "block", "durMs": 200},
+                    "out": {"type": "fade", "unit": "block", "durMs": 200},
+                },
+            },
+            {
+                "id": "graphic_all", "text": "", "kind": "shape", "shape": {"type": "rounded", "w": 80, "h": 12},
+                "startMs": 0, "endMs": 3000, "x": 50, "y": 82,
+                "style": {"font": "Montserrat", "size": 24, "color": "#FFD166", "align": "center", "case": "none"},
+                "anim": {"in": {"type": "pop", "unit": "block", "durMs": 200}},
+            },
+        ],
         "audio": {
             "music": {
                 "generationId": "music_asset", "uploadId": "music_asset",
@@ -137,15 +154,18 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
     assert blue[2] > blue[0] + 80
     assert red_again[0] > red_again[2] + 80
 
-    # Source transitions were consumed above; production then applies ordinary Video keyframes.
+    # Source-item keyframes were already consumed inside source composition / A-B transition sides.
+    # Keep one ordinary main-video pass in the fixture to prove shared motion remains compatible.
     moved = apply_motion_after_cut(
-        sourced, sourced, {**edits, "transitions": None}, [(0, 3000)], 0, tmp_path, {},
+        sourced, sourced, {**edits, "keyframes": [], "transitions": None}, [(0, 3000)], 0, tmp_path, {},
     )
     assert frames(moved) == 90
 
     ass = text_items_ass(edits, w=160, h=90)
     assert "TEXT THROUGH EVERY SLOT" in ass
     assert "0:00:03.00" in ass
+    assert "graphic_all" not in ass  # IDs are metadata; the rendered ASS contains the shape drawing, not opaque item ids.
+    assert "\\p1" in ass or "m " in ass
     texted = tmp_path / "texted.mp4"
     apply_text_items(moved, texted, edits, play_w=160, play_h=90)
     assert frames(texted) == 90
@@ -162,7 +182,7 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
         music_loop=True,
     )
     assert frames(mixed) == 90
-    assert duration(mixed) == pytest.approx(3.0, abs=0.05)
+    assert abs(duration(mixed) - 3.0) <= (1 / 30) + 0.002
     streams = json.loads(run([
         FFPROBE, "-v", "error", "-show_streams", "-of", "json", str(mixed),
     ]))["streams"]
@@ -179,7 +199,7 @@ def test_template_carrier_is_exact_for_non_integer_second_frame_budget(tmp_path:
     carrier = tmp_path / "carrier_73.mp4"
     make_template_carrier(carrier, "9:16", 73)
     assert frames(carrier) == 73
-    assert duration(carrier) == pytest.approx(73 / 30, abs=0.04)
+    assert abs(duration(carrier) - (73 / 30)) <= (1 / 30) + 0.002
 
     photo = tmp_path / "photo_73.png"
     run([FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=green:s=90x160",
