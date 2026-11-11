@@ -223,7 +223,9 @@ export async function getClipUploadProgress(workspaceId: string, uploadId: strin
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
   if (!row) throw new Error('Upload not found')
   const totalBytes = Number(row.bytes)
-  const storage = getClipStorage()
+  // Interrupted uploads must resume/progress against the storage driver selected
+  // when their PENDING row was created, not today's workspace default.
+  const storage = getClipStorage(row.storageDriver)
   let received = 0
   if (row.status === 'COMPLETE') {
     received = totalBytes

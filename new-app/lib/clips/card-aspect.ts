@@ -8,10 +8,14 @@ export function clipCardAspectClass(aspect: ExportAspect = '9:16'): string {
       return 'aspect-[4/5]'
     case '1:1':
       return 'aspect-square'
+    case '3:4':
+      return 'aspect-[3/4]'
     case '16:9':
-    case '4:3':
-    case '21:9':
       return 'aspect-video'
+    case '4:3':
+      return 'aspect-[4/3]'
+    case '21:9':
+      return 'aspect-[21/9]'
     default:
       if (typeof aspect === 'string' && aspect.startsWith('custom:')) {
         return `aspect-[${aspectCss(aspect).replace(/\s+/g, '')}]`

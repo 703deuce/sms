@@ -22,9 +22,15 @@ type Props = {
 
 function reframeLabel(stage: string | null | undefined): string | null {
   const m = (stage ?? '').match(/^reframe_(\d+)_of_(\d+)$/i)
-  if (m) return `Reframing clip ${m[1]} of ${m[2]}`
+  if (m) {
+    const index = Number(m[1]), total = Number(m[2])
+    return index >= 1 && total >= index ? `Reframing clip ${index} of ${total}` : 'Reframing clips…'
+  }
   const render = (stage ?? '').match(/^Rendering\s+(\d+)\/(\d+)$/i)
-  if (render) return `Rendering clip ${render[1]} of ${render[2]}`
+  if (render) {
+    const index = Number(render[1]), total = Number(render[2])
+    return index >= 1 && total >= index ? `Rendering clip ${index} of ${total}` : 'Rendering clips…'
+  }
   return null
 }
 
