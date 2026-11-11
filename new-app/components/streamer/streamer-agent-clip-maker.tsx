@@ -169,6 +169,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
 
       let remembered=readRememberedAgentRun(projectId)
       if(remembered){
+        const rememberedRunId=remembered.runId
         try{
           const data=await requestJson('/api/ai-producer-agent/runs/'+encodeURIComponent(remembered.runId)) as {
             run:{status:string}
@@ -179,7 +180,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
           }
         }catch(error){
           console.warn('[clips:agent-progress]',{
-            action:'restore_remembered_lookup_failed',projectId,runId:remembered.runId,error:String(error),
+            action:'restore_remembered_lookup_failed',projectId,runId:rememberedRunId,error:String(error),
           })
         }
       }
