@@ -49,6 +49,11 @@ const ASS_FONT_ALIASES: Record<string, string> = {
   Caveat: 'Caveat',
   'Space Grotesk': 'Space Grotesk',
   'Space Mono': 'Space Mono',
+  'Noto Sans Arabic': 'Noto Sans Arabic',
+  'Noto Sans Devanagari': 'Noto Sans Devanagari',
+  'Noto Sans Thai': 'Noto Sans Thai',
+  'Noto Sans JP': 'Noto Sans JP',
+  'Noto Emoji': 'Noto Emoji',
 }
 
 export function roundHalfUp(x: number): number {
