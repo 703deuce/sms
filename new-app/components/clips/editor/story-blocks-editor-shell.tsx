@@ -378,8 +378,10 @@ export function StoryBlocksEditorShell(props: Props) {
         title={props.initialTitle}
         current="story"
         saveState={saveState}
+        statusText={fullVideoMode.progress ?? undefined}
         canUndo={canUndo}
         canRedo={canRedo}
+        disabled={fullVideoMode.loading}
         contextSlot={<>
           <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-medium">Story blocks</span>
           <button type="button" className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted" onClick={() => { setTab('layouts'); console.log('[editor:story-mode] header-aspect-open', { projectId, clipId, aspect: edits.aspectRatio ?? '9:16' }) }}>{aspectName(edits.aspectRatio)}</button>
