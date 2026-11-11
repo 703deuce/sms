@@ -18,7 +18,10 @@ export async function GET(req:Request){
   try{
     const workspaceId=await resolveWorkspaceId()
     const q=new URL(req.url).searchParams
-    return NextResponse.json({data:await listPrivateUserTemplates(workspaceId,q.get('q')??'',Number(q.get('page')??1))})
+    const state=q.get('state')??''
+    if(state&&!['pending','published','rejected','never-submitted'].includes(state))
+      return NextResponse.json({error:'Invalid template state filter'},{status:400})
+    return NextResponse.json({data:await listPrivateUserTemplates(workspaceId,q.get('q')??'',Number(q.get('page')??1),state)})
   }catch(e){return jsonError(e,500)}
 }
 export async function POST(req:Request){
