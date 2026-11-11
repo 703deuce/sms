@@ -11,6 +11,7 @@ import { resolve, dirname, join, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { spawnSync } from 'node:child_process'
 import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS } from '../lib/clips/real-video-templates/b8-authoring-catalog'
+import { lintB8Legibility } from '../lib/clips/real-video-templates/b8-legibility'
 import { generateB8Candidates, proveB8Structure, reportB8Quality,
   locallyApprovedB8Releases, shardB8Jobs, auditB8Evidence,
   B8_ENGINE_REVISION, type B8Candidate, type B8Evidence } from '../lib/clips/real-video-templates/b8-factory'
@@ -214,14 +215,28 @@ async function execute(){
   }else if(command==='validate'){
     const start=performance.now()
     const errors:Array<{id:string;message:string}>=[]
-    for(const c of candidates)try{proveB8Structure(c)}catch(e){
-      errors.push({id:c.id,message:e instanceof Error?e.message:String(e)})
+    const lint:Record<string,ReturnType<typeof lintB8Legibility>>={}
+    let blocked=0,warnings=0
+    for(const c of candidates){
+      try{proveB8Structure(c)}catch(e){
+        errors.push({id:c.id,message:e instanceof Error?e.message:String(e)})
+      }
+      const findings=lintB8Legibility(c)
+      if(findings.length)lint[c.id]=findings
+      blocked+=findings.filter(f=>f.severity==='block').length
+      warnings+=findings.filter(f=>f.severity==='review').length
     }
+    save(join(directory,'legibility-report.json'),{engine:B8_ENGINE_REVISION,
+      candidates:candidates.length,hardFailures:blocked,reviewWarnings:warnings,
+      findings:lint,requiresRenderedGlyphAndContrastQA:true})
     save(join(directory,'structural-report.json'),{engine:B8_ENGINE_REVISION,defined:candidates.length,
       compiled:candidates.length-errors.length,rendered:0,released:0,
+      hardLegibilityFailures:blocked,unresolvedLegibilityReviewWarnings:warnings,
       ms:Math.round(performance.now()-start),errors})
-    console.log('Compiled '+(candidates.length-errors.length)+'/'+candidates.length+' candidates, '+errors.length+' errors.')
-    if(errors.length)process.exitCode=1
+    console.log('Compiled '+(candidates.length-errors.length)+'/'+candidates.length+
+      ' candidate structures. '+blocked+' static blockers, '+warnings+
+      ' rendered-legibility reviews needed.')
+    if(errors.length||blocked)process.exitCode=1
   }else if(command==='preview'){
     const c=requiredCandidate(),fixtures=await verifiedFixtures()
     const images=fixtures.media.filter(m=>m.kind==='image')
