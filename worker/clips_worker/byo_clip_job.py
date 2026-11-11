@@ -170,6 +170,15 @@ def finalize_byo_clip(
     blank = is_blank_job(settings, payload)
     template_carrier = isinstance(payload, dict) and payload.get("templateCarrier") is True
     if template_carrier and template_project_canceled(conn, project_id):
+        post_progress(
+            job_id,
+            {
+                "projectStatus": "CANCELED",
+                "stage": "canceled",
+                "jobStatus": "FAILED",
+                "error": "canceled",
+            },
+        )
         print(f"[clipper:template] canceled_before_finalize project={project_id}", flush=True)
         return
     try:
