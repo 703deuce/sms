@@ -87,8 +87,8 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
   const titleFrames = Math.min(totalFrames,Math.max(66,Math.round(seed.frames[0]! * 1.5)))
   const outroFrames = Math.min(totalFrames,Math.max(72,seed.frames[seed.frames.length-1]!))
   const secondaryY = recipe.y > 59 ? recipe.y - 13 : recipe.y + 13
-  // The pulse bed exposes an audible subdivision every 3 frames. All F01-F10
-  // authored shot lengths are multiples of 3, so every cut lands on a pulse.
+  // The first-party groove exposes a rhythmic subdivision every 3 frames. All
+  // F01-F10 authored shot lengths are multiples of 3, so every cut lands on-grid.
   if (slots.some(slot => slot.startFrame % BATCH9A_DEFAULT_MUSIC.beatEveryFrames !== 0 ||
       slot.durationFrames % BATCH9A_DEFAULT_MUSIC.beatEveryFrames !== 0))
     throw new Error('Batch 9A anchor cut is off the first-party music grid: ' + seed.id)
@@ -144,7 +144,7 @@ export const BATCH9A_ANCHOR_RELEASES: readonly VideoTemplateRelease[] =
       category:seed.category,
       description:direction[3],
       family,design,
-      rights:'Preview release. Slot media remains user-owned; default soundtrack is an original Transovo first-party procedural composition copied into the workspace for preview/export.',
+      rights:'Preview release. Gallery preview imagery is first-party sample media; slot media remains user-owned. The default soundtrack is an original Transovo first-party procedural composition copied into the workspace for preview/export.',
       requiredCapabilities:['clip_edits_v2','source_transforms','text_layers','music_track',
         'cross_source_transitions','frame_accurate_slots'],
       authoredDimensions:['font-hierarchy','text-placement','animation-choreography',
