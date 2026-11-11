@@ -31,7 +31,7 @@ def run(args: list[str]) -> str:
 
 
 def ass_plain_text(value: str) -> str:
-    return re.sub(r"\\{[^}]*\\}", "", value).replace(r"\\N", " ")
+    return re.sub(r"\{[^}]*\}", "", value).replace(r"\N", " ")
 
 
 def frames(path: Path) -> int:
