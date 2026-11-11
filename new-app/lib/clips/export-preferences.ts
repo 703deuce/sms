@@ -7,6 +7,7 @@ const STORAGE_KEY = 'clips.exportDialog.v1'
 export type ExportDialogPreferences = {
   removeDeadAir: boolean
   alsoSrt: boolean
+  alsoVtt: boolean
   exportSfx: ExportSfxMode
   headlineBarEnabled: boolean
   platformBadgeEnabled: boolean
@@ -19,6 +20,7 @@ export type ExportDialogPreferences = {
 const DEFAULTS: ExportDialogPreferences = {
   removeDeadAir: false,
   alsoSrt: false,
+  alsoVtt: false,
   exportSfx: 'off',
   headlineBarEnabled: false,
   platformBadgeEnabled: false,
