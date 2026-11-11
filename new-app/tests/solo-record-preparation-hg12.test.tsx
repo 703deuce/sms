@@ -30,7 +30,7 @@ vi.mock('@/components/app/page-primitives', () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }))
 vi.mock('@/components/recording/editor/editor-recorder-bar', () => ({
-  EditorRecorderBar: ({ onTeleprompter }: { onTeleprompter: () => void }) => <div data-testid="recorder-controls">Recorder controls<button type="button" onClick={onTeleprompter}>Teleprompter</button></div>,
+  EditorRecorderBar: ({ onTeleprompter, onStart }: { onTeleprompter: () => void; onStart: () => void }) => <div data-testid="recorder-controls">Recorder controls<button type="button" onClick={onTeleprompter}>Teleprompter</button><button type="button" onClick={onStart}>Start recording</button></div>,
 }))
 vi.mock('@/components/recording/rooms/upload-card', () => ({ RoomsUploadCard: () => null }))
 
@@ -75,6 +75,36 @@ describe('solo recorder preparation states (HG12)', () => {
     expect(getUserMedia).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Close teleprompter' }))
     expect(screen.queryByTestId('solo-teleprompter')).toBeNull()
+  })
+
+  it('does not start recording when mediaDevices is absent, and gives a clear HTTPS/permission message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ data: { projectId: 'fixture_project', sessionId: 'fixture_session' } }),
+    }))
+    vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { mediaDevices: undefined }))
+    render(<SoloRecordClient />)
+    await screen.findByTestId('recorder-controls')
+    fireEvent.click(screen.getByRole('button', { name: 'Start recording' }))
+    expect(screen.getByTestId('solo-device-error').textContent).toContain('secure HTTPS origin')
+    expect(recorder.startRecording).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a denied device permission and permits manual Start retry', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ data: { projectId: 'fixture_project', sessionId: 'fixture_session' } }),
+    }))
+    vi.stubGlobal('navigator', Object.assign(Object.create(navigator), {
+      mediaDevices: { getUserMedia: vi.fn() },
+    }))
+    recorder.startRecording.mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError')).mockResolvedValueOnce(undefined)
+    render(<SoloRecordClient />)
+    await screen.findByTestId('recorder-controls')
+    fireEvent.click(screen.getByRole('button', { name: 'Start recording' }))
+    expect((await screen.findByTestId('solo-device-error')).textContent).toContain('access was denied')
+    expect(recorder.startRecording).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Start recording' }))
+    await waitFor(() => expect(screen.queryByTestId('solo-device-error')).toBeNull())
+    expect(recorder.startRecording).toHaveBeenCalledTimes(2)
   })
 
   it('does not arm the recorder on an incomplete preparation response', async () => {
