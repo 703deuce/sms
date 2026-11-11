@@ -1433,7 +1433,11 @@ export function Timeline({
     if (!editable) return false
     const src = selCompound
     const r = duplicateItems(opCtx(), selection)
-    if (!r) { toast.message('This clip cannot be duplicated here', { id: 'timeline-clipboard' }); return false }
+    if (!r) {
+      toast.message('Select a supported main-video or overlay clip to duplicate', { id: 'timeline-clipboard' })
+      // The editor handled Ctrl/Cmd+D with truthful feedback; do not open browser bookmarks.
+      return true
+    }
     const wrapped =
       src && r.refs.length >= 2
         ? createCompound(r.edits, r.refs, `c_${Date.now().toString(36)}`, undefined, `${src.compound.name} copy`)
