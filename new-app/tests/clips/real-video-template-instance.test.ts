@@ -182,6 +182,14 @@ describe('B3 transactional template project publishing', () => {
     })
   })
 
+  it('publishes the selected authored aspect instead of silently forcing the family default', async () => {
+    const multiAspect = { ...family, aspects: ['9:16', '1:1'] }
+    const selected = { ...choices, aspect: '1:1' as const }
+    await publishTemplateProject('ws_a', 'request_key_asp1', multiAspect, design, selected)
+    expect(state.projects[0]?.settings.aspectRatio).toBe('1:1')
+    expect(state.clips[0]?.edits.aspectRatio).toBe('1:1')
+  })
+
   it('rejects foreign/unavailable assets before exposing a partial project', async () => {
     state.uploads.splice(0)
     await expect(publishTemplateProject('ws_a', 'request_key_123', family, design, choices))
