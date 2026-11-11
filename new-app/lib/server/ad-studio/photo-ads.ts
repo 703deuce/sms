@@ -7,7 +7,7 @@ import { getPrisma } from '@/lib/server/db'
 import type { AdPhotoConcept, AdPhotoQc, AdProductInput } from '@/lib/ad-studio/types'
 import {
   PHOTO_ADS_PROMPT_COUNT,
-  LEGACY_PHOTO_ADS_SYSTEM_PROMPT,
+  LEGACY_KIMI_PHOTO_ADS_SYSTEM_PROMPT,
   LEGACY_PHOTO_ADS_USER_TEMPLATE,
   LEGACY_PHOTO_AD_QC_SYSTEM_PROMPT,
 } from '@/lib/server/ad-studio/legacy-photo-ad-prompts'
@@ -162,7 +162,7 @@ export async function generatePhotoAdConcepts(workspaceId: string, input: AdProd
   const logo = input.logoAssetId ? await inlineAsset(workspaceId, input.logoAssetId) : null
   const styleRefs = await styleParts()
   const user = renderLegacyUserMessage(input, styleRefs.length)
-  const systemInstruction = LEGACY_PHOTO_ADS_SYSTEM_PROMPT.split(token('PHOTO_ADS_PROMPT_COUNT')).join(String(PHOTO_ADS_PROMPT_COUNT))
+  const systemInstruction = LEGACY_KIMI_PHOTO_ADS_SYSTEM_PROMPT
   let parts: GeminiContentPart[] = [
     product,
     ...(logo ? [logo] : []),
