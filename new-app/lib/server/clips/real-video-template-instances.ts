@@ -193,7 +193,7 @@ export async function publishTemplateProject(
   const requestHash = digest(stableJson({ snapshot, choices: choicesRaw }))
   if (!choicesRaw.music && choicesRaw.templateMusic) throw new Error('Cannot approve missing template music')
   const musicPlan = choicesRaw.music && choicesRaw.templateMusic
-    ? planTemplateMusic(family, choicesRaw.templateMusic)
+    ? planTemplateMusic(family, choicesRaw.templateMusic, choicesRaw.texts)
     : null
   if (choicesRaw.music && !musicPlan) throw new Error('Template music rights and timing required')
   const compiledFrameCount = musicPlan?.durationFrames ?? family.totalFrames
