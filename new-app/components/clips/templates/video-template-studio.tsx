@@ -31,33 +31,23 @@ const buttonClass = 'rounded-xl border border-border bg-card px-3 py-2 text-sm f
 const primaryClass = 'rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
 
 function batch9aPulseFile(music: NonNullable<VideoTemplateRelease['defaultMusic']>): File {
-  if (music.generator !== 'batch9a-pulse-v1') throw new Error('Unsupported first-party soundtrack generator')
-  const sampleRate=8000
-  const seconds=music.durationFrames / 30
-  const sampleCount=Math.round(sampleRate * seconds)
-  const buffer=new ArrayBuffer(44 + sampleCount * 2)
-  const view=new DataView(buffer)
-  const ascii=(offset:number,value:string)=>{for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i))}
-  ascii(0,'RIFF');view.setUint32(4,36+sampleCount*2,true);ascii(8,'WAVE');ascii(12,'fmt ')
-  view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true)
-  view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*2,true)
-  view.setUint16(32,2,true);view.setUint16(34,16,true);ascii(36,'data');view.setUint32(40,sampleCount*2,true)
-  const subdivision=Math.floor(sampleRate/10)
-  const pulseFrames=Math.floor(sampleRate/50)
-  const barFrames=Math.floor(sampleRate*1.6)
-  for(let i=0;i<sampleCount;i++){
-    const base=i%72<36?900:-900
-    const sub=i%subdivision
-    let pulse=0
-    if(sub<pulseFrames){
-      const strong=Math.floor(i/subdivision)%4===0
-      const amp=strong?9000:4500
-      pulse=i%8<4?amp:-amp
-    }
-    const bar=i%barFrames
-    const lift=bar<Math.floor(sampleRate/20)?(i%36<18?1400:-1400):0
-    const value=Math.max(-32768,Math.min(32767,base+pulse+lift))
-    view.setInt16(44+i*2,value,true)
+  if (music.generator !== 'batch9a-groove-v2') throw new Error('Unsupported first-party soundtrack generator')
+  const sr=24000,n=Math.round(sr*music.durationFrames/30),buffer=new ArrayBuffer(44+n*2),v=new DataView(buffer)
+  const ascii=(o:number,x:string)=>{for(let i=0;i<x.length;i++)v.setUint8(o+i,x.charCodeAt(i))}
+  ascii(0,'RIFF');v.setUint32(4,36+n*2,true);ascii(8,'WAVE');ascii(12,'fmt ')
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true)
+  v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);ascii(36,'data');v.setUint32(40,n*2,true)
+  const beat=9600,sub=2400,bar=beat*4,bass=[436,367,327,490] as const,pad=[218,183,164,245] as const
+  const tri=(i:number,p:number)=>{const x=i%p,h=p>>1;return x<h?-32768+Math.floor(65535*x/h):32767-Math.floor(65535*(x-h)/(p-h))}
+  const noise=(i:number)=>{let x=Math.imul((i^0x9e37)>>>0,1103515245)>>>0;x^=x>>>11;return (x&65535)-32768}
+  const sc=(x:number,g:number)=>Math.trunc(x*g/32768)
+  for(let i=0;i<n;i++){
+    const bp=i%beat,sp=i%sub,bi=Math.floor(i/beat)%4,ch=Math.floor(i/bar)%4
+    let m=sc(tri(i,bass[ch]!),6000)+sc(tri(i,pad[ch]!),900)
+    if(bp<2100)m+=sc(tri(bp,120+Math.floor(bp/25)),12000-Math.floor(bp*12000/2100))
+    if((bi===1||bi===3)&&bp<1500)m+=sc(noise(i),5000-Math.floor(bp*5000/1500))
+    if(sp<420)m+=sc(noise(i*7+3),2200-Math.floor(sp*1800/420))
+    v.setInt16(44+i*2,Math.max(-29000,Math.min(29000,m)),true)
   }
   return new File([buffer],music.id+'.wav',{type:'audio/wav'})
 }
