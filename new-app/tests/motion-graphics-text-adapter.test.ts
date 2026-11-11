@@ -135,3 +135,25 @@ describe('motion plan adapter to existing editor & FFmpeg text layers', () => {
     if (!result.ok) expect(result.code).toBe('invalid_shape_data')
   })
 })
+
+
+describe('motion graphic requested font fidelity', () => {
+  it('preserves a licensed shipped family through ordinary text and editable chart labels', () => {
+    const custom = { ...plan, graphics: [{ ...plan.graphics[0], style: { ...plan.graphics[0]!.style, fontFamily: 'Bangers' } }] }
+    const text = addTextBackedMotionPlan(base, custom)
+    expect(text.ok).toBe(true)
+    if (text.ok) expect(text.edits.textItems?.[0]?.style.font).toBe('Bangers')
+    const chart = { ...custom, graphics: [{ ...custom.graphics[0]!, templateId: 'bar_chart' as const,
+      text: undefined, bars: [{ label: 'Revenue', value: 42 }] }] }
+    const result = addTextBackedMotionPlan(base, chart)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.edits.textItems?.filter(t => t.text).every(t => t.style.font === 'Bangers')).toBe(true)
+  })
+
+  it('refuses unavailable faces rather than silently changing the user requested family', () => {
+    const unshipped = { ...plan, graphics: [{ ...plan.graphics[0]!, style: { ...plan.graphics[0]!.style, fontFamily: 'Not Installed' } }] }
+    const result = addTextBackedMotionPlan(base, unshipped)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.detail).toContain('motion_font_unavailable:Not Installed')
+  })
+})
