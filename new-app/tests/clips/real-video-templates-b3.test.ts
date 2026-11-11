@@ -133,3 +133,6 @@ describe('B3 source audio and absent legacy controls', () => {
     expect('inserts' in normalizeEdits(old, bounds)).toBe(false)
   })
 })
+
+// CI uses this scoped actual compiler run instead of relying on a green Vitest transpile.
+import './real-video-template-typecheck.test'
