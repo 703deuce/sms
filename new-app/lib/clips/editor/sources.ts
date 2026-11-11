@@ -80,6 +80,8 @@ export type SourceSegment = {
   audio?: SourceAudio
   /** Mixed sizes: crop to fill (default) or fit with padding. */
   fit?: SourceFit
+  /** B3 fixed-duration source playback rate; output span stays unchanged. */
+  speed?: number
   /** B3 template-slot transform; also editable on ordinary source segments. */
   transform?: SourceSegmentTransform
   /** B3 small, worker-mirrored per-slot look. */
@@ -248,6 +250,10 @@ export function normalizeSourceSegments(
     if (b - a < SOURCE_SEG_MIN_MS || a < 0) continue
     const inMs = int(o.inMs)
     const layout = normalizeSegmentLayout(o.layout, sources, src.id)
+    const rawSpeed = finite(o.speed)
+    const speed = rawSpeed != null && src.mediaType === 'video' && Math.abs(rawSpeed - 1) >= 0.0001
+      ? Math.round(clamp(rawSpeed, 0.25, 4) * 1000) / 1000
+      : undefined
     const transform = normalizeSourceSegmentTransform(o.transform)
     const fx = normalizeSourceSegmentFx(o.fx)
     out.push({
@@ -260,6 +266,7 @@ export function normalizeSourceSegments(
       ...(src.mediaType === 'audio' ? { audio: 'source' as const } : {}),
       ...(o.fit === 'contain' ? { fit: 'contain' as const } : {}),
       ...(o.auto === true ? { auto: true as const } : {}),
+      ...(speed ? { speed } : {}),
       ...(transform ? { transform } : {}),
       ...(fx ? { fx } : {}),
       ...(layout ? { layout } : {}),
@@ -316,14 +323,14 @@ export function sourceSegmentAt(segs: readonly SourceSegment[] | undefined, srcM
 }
 
 export function isSynced(seg: SourceSegment, source: ClipMediaSource | undefined): boolean {
-  return Boolean(source && source.mediaType === 'video' && source.syncMs !== undefined && seg.inMs === undefined)
+  return Boolean(source && source.mediaType === 'video' && source.syncMs !== undefined && seg.inMs === undefined && seg.speed === undefined)
 }
 
 /** Media ms of `source` shown at main source ms `srcMs` inside `seg`. */
 export function segmentMediaMs(seg: SourceSegment, source: ClipMediaSource | undefined, srcMs: number): number {
   if (!source || source.mediaType === 'image') return 0
   if (isSynced(seg, source)) return Math.max(0, srcMs + (source.syncMs ?? 0))
-  return Math.max(0, (seg.inMs ?? 0) + (srcMs - seg.startMs))
+  return Math.max(0, (seg.inMs ?? 0) + (srcMs - seg.startMs) * (seg.speed ?? 1))
 }
 
 export function segmentAudio(seg: SourceSegment, source: ClipMediaSource | undefined): SourceAudio {
@@ -378,7 +385,7 @@ export function removeSourceSegment(segs: readonly SourceSegment[] | undefined, 
 export function patchSourceSegment(
   segs: readonly SourceSegment[] | undefined,
   id: string,
-  patch: Partial<Pick<SourceSegment, 'audio' | 'fit' | 'inMs' | 'startMs' | 'endMs' | 'layout' | 'transform' | 'fx'>>,
+  patch: Partial<Pick<SourceSegment, 'audio' | 'fit' | 'inMs' | 'startMs' | 'endMs' | 'layout' | 'transform' | 'fx' | 'speed'>>,
   sources: readonly ClipMediaSource[] | undefined,
 ): SourceSegment[] | undefined {
   const cur = (segs ?? []).find((s) => s.id === id)
