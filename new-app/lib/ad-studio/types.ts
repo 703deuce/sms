@@ -11,7 +11,15 @@ export interface AdScript { hook: string; problem: string; solution: string; cta
 export interface AdImagery { imageJobIds: string[]; preservedSourceAssetIds: string[] }
 export interface AdScene { index: number; role: "hook" | "problem" | "solution" | "cta" | "other"; durationSec: number; source: "stock" | "generated"; reason: string; providerId?: string; stockAssetId?: string; sourceInMs?: number; sourceOutMs?: number; stockQuery?: string; studioJobId?: string; modelId?: string; prompt?: string; generationDurationSec?: number; trimInMs?: number; trimOutMs?: number; referenceAssetId?: string; startMs: number; endMs: number; onScreenText?: string }
 export interface AdPhotoConcept { prompt: string; style: string; layoutNotes: string }
-export interface AdPhotoQc { decision: "PASS" | "RETRY"; score: number; issues: string[]; retryReason?: string; reviewerModel: string }
+export interface AdPhotoQc {
+  decision: "pass" | "edit" | "regenerate"
+  reason: string
+  issues: string[]
+  weightedScore: number
+  editPrompt?: string
+  regeneratedPrompt?: string
+  reviewerModel: string
+}
 export interface AdPhotoAdsPlan { conceptModel: string; styleReferenceCount: number; concepts: AdPhotoConcept[]; qcByIndex?: Record<string, AdPhotoQc> }
 export interface AdPlan { script: AdScript; imagery: AdImagery; scenes: AdScene[]; creditEstimate: number | null; modelStrategy: string; voiceId?: string; voiceoverEnabled?: boolean; photoAds?: AdPhotoAdsPlan; directCommercial?: { modelId: AdCommercialModelId; prompt: string; nativeAudio: true } }
 export interface AdImageVariant { id: string; index: number; headline: string; cta: string; modelId: string; studioJobId: string | null; status: "planned" | "ready" | "failed"; downloadUrl: string | null; qc?: AdPhotoQc | null }
