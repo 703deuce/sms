@@ -1,0 +1,132 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/releases'
+import { filterVideoTemplates } from '@/lib/clips/real-video-templates/gallery'
+
+type Scope = 'first-party' | 'community' | 'mine'
+const MAX_PAGE_SIZE = 24
+const STORAGE_KEY = 'transovo.videoTemplates.favorites.v1'
+export function VideoTemplatesGallery() {
+  const [scope, setScope] = useState<Scope>('first-party')
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('')
+  const [aspect, setAspect] = useState('')
+  const [slots, setSlots] = useState('')
+  const [duration, setDuration] = useState('')
+  const [page, setPage] = useState(1)
+  const [favorites, setFavorites] = useState<string[]>([])
+  const [onlyFavorites, setOnlyFavorites] = useState(false)
+  const [sound, setSound] = useState<string | null>(null)
+  useEffect(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
+      if (Array.isArray(saved)) setFavorites(saved.filter((x): x is string => typeof x === 'string').slice(0, 3000))
+    } catch { /* corrupt preference does not affect gallery */ }
+  }, [])
+  const toggleFavorite = (id: string) => {
+    setFavorites(previous => {
+      const next = previous.includes(id) ? previous.filter(x => x !== id) : [...previous, id]
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch { /* storage optional */ }
+      return next
+    })
+  }
+  const categories = useMemo(() => [...new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x => x.category))].sort(), [])
+  const result = useMemo(() => filterVideoTemplates(
+    onlyFavorites ? FIRST_PARTY_VIDEO_TEMPLATES.filter(x => favorites.includes(x.id)) : FIRST_PARTY_VIDEO_TEMPLATES,
+    { query, category, aspect, minSlots: slots ? Number(slots) : undefined,
+      maxDurationSeconds: duration ? Number(duration) : undefined },
+    page, MAX_PAGE_SIZE,
+  ), [query, category, aspect, slots, duration, page, onlyFavorites, favorites])
+  const changeFilters = (setter: (s: string) => void, value: string) => { setter(value); setPage(1) }
+  return (
+    <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6" data-testid="video-template-gallery">
+      <header className="space-y-2">
+        <div className="text-xs font-semibold uppercase tracking-widest text-primary">Clip Studio</div>
+        <h1 className="text-3xl font-semibold tracking-tight">Video templates</h1>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Ready-made video sequences with defined clip and photo slots, timed cuts, text, graphics and music.
+          Only fully reviewed designs are available to use.
+        </p>
+        <Link href="/app/clips/templates?tab=layouts" className="inline-block text-sm text-primary underline-offset-4 hover:underline">
+          Browse Layouts and caption styles
+        </Link>
+      </header>
+      <div role="tablist" aria-label="Template source" className="flex flex-wrap gap-2">
+        {([['first-party', 'Video templates'], ['community', 'Community'], ['mine', 'My templates']] as const).map(([id, label]) =>
+          <button key={id} type="button" role="tab" aria-selected={scope === id}
+            className={`rounded-full border px-4 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${scope === id ? 'border-primary bg-primary/10' : 'border-border'}`}
+            onClick={() => { setScope(id); setPage(1) }}>{label}</button>)}
+      </div>
+      {scope === 'first-party' ? <>
+        <section aria-label="Filter video templates" className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
+          <label className="space-y-1 text-xs font-medium">Search
+            <input type="search" value={query} onChange={e => changeFilters(setQuery, e.target.value)}
+              placeholder="Search styles and families" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" />
+          </label>
+          <label className="space-y-1 text-xs font-medium">Category
+            <select value={category} onChange={e => changeFilters(setCategory, e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+              <option value="">All categories</option>{categories.map(x => <option key={x} value={x}>{x}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-medium">Aspect
+            <select value={aspect} onChange={e => changeFilters(setAspect, e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+              <option value="">All aspects</option><option value="9:16">Vertical 9:16</option><option value="16:9">Wide 16:9</option><option value="1:1">Square 1:1</option>
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-medium">Minimum slots
+            <select value={slots} onChange={e => changeFilters(setSlots, e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+              <option value="">Any</option><option value="3">3+</option><option value="10">10+</option><option value="20">20+</option><option value="30">30+</option>
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-medium">Maximum length
+            <select value={duration} onChange={e => changeFilters(setDuration, e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+              <option value="">Any</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option><option value="120">2 minutes</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2 lg:col-span-5">
+            <input type="checkbox" checked={onlyFavorites} onChange={e => { setOnlyFavorites(e.target.checked); setPage(1) }} />
+            Favorites only
+          </label>
+        </section>
+        <p className="text-sm text-muted-foreground" role="status">{result.total} reviewed templates</p>
+        {result.items.length ? <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {result.items.map(item => <article key={item.id} className="overflow-hidden rounded-2xl border bg-card" data-testid="video-template-card">
+            <video controls playsInline preload="none" muted={sound !== item.id} poster={item.demoPosterPath}
+              src={item.demoPath} className="aspect-video w-full bg-black object-cover"
+              aria-label={`Preview ${item.title}`} />
+            <div className="space-y-2 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-semibold">{item.title}</h2>
+                <button type="button" aria-pressed={favorites.includes(item.id)}
+                  aria-label={favorites.includes(item.id) ? 'Remove favorite' : 'Add favorite'}
+                  onClick={() => toggleFavorite(item.id)} className="rounded-md border px-2 py-1 text-xs">{favorites.includes(item.id) ? 'Saved' : 'Save'}</button>
+              </div>
+              <p className="text-xs text-muted-foreground">{item.family.aspects.join(', ')} · {item.family.slots.length} slots · {item.family.totalFrames / 30}s</p>
+              <p className="text-sm">{item.description}</p>
+              <p className="text-xs text-muted-foreground">{item.rights}</p>
+              <button type="button" onClick={() => setSound(sound === item.id ? null : item.id)}
+                className="rounded-lg border px-3 py-2 text-xs">{sound === item.id ? 'Mute demo' : 'Enable demo sound'}</button>
+              <Link className="block rounded-lg bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground"
+                href={`/app/clips/video-templates/${encodeURIComponent(item.id)}`}>Use template</Link>
+            </div>
+          </article>)}
+        </div> : <div className="rounded-2xl border border-dashed p-10 text-center">
+          <h2 className="font-medium">No released templates match</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {FIRST_PARTY_VIDEO_TEMPLATES.length === 0 ? 'First-party video templates are awaiting real demo and render verification. Layouts remain available.' : 'Try clearing some filters.'}
+          </p>
+        </div>}
+        {result.pages > 1 && <nav aria-label="Gallery pages" className="flex items-center justify-center gap-3">
+          <button type="button" disabled={result.page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Previous</button>
+          <span className="text-sm">Page {result.page} of {result.pages}</span>
+          <button type="button" disabled={result.page === result.pages} onClick={() => setPage(p => Math.min(result.pages, p + 1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Next</button>
+        </nav>}
+      </> : <section role="tabpanel" className="rounded-2xl border border-dashed p-10 text-center">
+        <h2 className="font-semibold">{scope === 'community' ? 'Community gallery is not published yet' : 'Private template library is not available yet'}</h2>
+        <p className="mt-2 text-sm text-muted-foreground">No public sharing or private templates are implied until their workspace-safe workflows are implemented.</p>
+      </section>}
+    </main>
+  )
+}
