@@ -264,8 +264,11 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     const leftNeed = Math.ceil(need * (slots[i - 1]!.speed ?? 1))
     const rightNeed = Math.ceil(need * (slots[i]!.speed ?? 1))
     if ((slots[i - 1]!.handles?.tailFrames ?? 0) < leftNeed ||
-        (slots[i]!.handles?.headFrames ?? 0) < rightNeed)
+        (slots[i]!.handles?.headFrames ?? 0) < rightNeed) {
+      if (leftNeed === rightNeed)
+        throw new Error(`slot.transition: ${slots[i]!.id} requires ${leftNeed}-frame source handles on both sides`)
       throw new Error(`slot.transition: ${slots[i]!.id} requires source handles (left ${leftNeed}, right ${rightNeed} frames)`)
+    }
   }
   for (let i = 0; i < slots.length; i++) {
     const incomingHalf = i > 0 && slots[i]!.transition !== 'cut'
