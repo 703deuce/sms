@@ -73,6 +73,7 @@ Worker files changed in Batch 3:
 - `worker/clips_worker/blank_project.py`
 - `worker/clips_worker/media_sources.py`
 - `worker/clips_worker/edits_render.py`
+- `worker/clips_worker/byo_clip_job.py`
 - `worker/tests/test_real_video_template_sequence.py`
 
 ## "Analysis errored" investigation
