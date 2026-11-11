@@ -5,7 +5,8 @@
  * every motion profile already works.
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { normalizeTextItems, TEXT_MAX_ITEMS, TEXT_MAX_CHARS } from '@/lib/clips/editor/text-items'
+import { normalizeTextItems, TEXT_FONTS, TEXT_MAX_ITEMS, TEXT_MAX_CHARS } from '@/lib/clips/editor/text-items'
+import { findClipFont } from '@/lib/clips/font-manifest'
 import type { TextItem } from '@/lib/clips/editor/text-items'
 import type { TextAnim, TextAnimEdge } from '@/lib/clips/render-plan/text-anim'
 import { validateMotionPlan, type MotionPlan, type MotionGraphic } from './contract'
@@ -41,7 +42,7 @@ function animation(g: MotionGraphic): TextAnim | undefined {
   if (outro) value.out = outro
   return Object.keys(value).length ? value : undefined
 }
-const MOTION_RENDER_FONTS = new Set(['Montserrat', 'Anton', 'Poppins', 'Bangers', 'Bebas Neue', 'Archivo Black', 'Luckiest Guy'])
+const MOTION_RENDER_FONTS = new Set(TEXT_FONTS.map(face => face.id).filter(id => findClipFont(id)))
 /** Reject unshipped families rather than silently exporting Montserrat in their place. */
 function motionFont(g: MotionGraphic): TextItem['style']['font'] {
   if (!MOTION_RENDER_FONTS.has(g.style.fontFamily)) throw new Error('motion_font_unavailable:' + g.style.fontFamily)
