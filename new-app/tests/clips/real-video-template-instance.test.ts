@@ -75,7 +75,7 @@ describe('B3 isolated template instance persistence', () => {
     const retry = await createTemplateAuthoringDraft('ws_a', 'request_key_123', family, design)
     expect(retry.id).toBe(first.id)
     expect(db.clipVideoTemplateInstance.create).toHaveBeenCalledTimes(1)
-    expect(first.snapshot.family.revision).toBe(1)
+    expect((first.snapshot as unknown as { family: { revision: number } }).family.revision).toBe(1)
     await expect(createTemplateAuthoringDraft('ws_a', 'request_key_123',
       { ...family, revision: 2 }, { ...design, familyRevision: 2 })).rejects.toThrow(/revision conflict/)
   })
@@ -91,7 +91,7 @@ describe('B3 isolated template instance persistence', () => {
     const chosen = { instanceId: 'vti_fixed', media: { first: photo } } as never
     const saved = await saveTemplateAuthoringDraft('ws_a', 'vti_fixed', 0, chosen)
     expect(saved.authoringVersion).toBe(1)
-    expect(saved.authoringState.media.first.id).toBe('owned_photo')
+    expect((saved.authoringState as unknown as { media: { first: { id: string } } }).media.first.id).toBe('owned_photo')
     await expect(saveTemplateAuthoringDraft('ws_a', 'vti_fixed', 0, chosen)).rejects.toThrow(/revision conflict/)
     await expect(saveTemplateAuthoringDraft('ws_foreign', 'vti_fixed', 0, chosen)).rejects.toThrow('Not found')
   })
