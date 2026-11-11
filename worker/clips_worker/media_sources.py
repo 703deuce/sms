@@ -1111,6 +1111,8 @@ def apply_full_render_sources(
     """Composite E5 source segments onto full_render (source time). Returns full_render if none."""
     windows = source_windows(edits, clip_start_ms, clip_end_ms)
     if not windows or not media:
+        if isinstance(edits.get("templateProvenance"), dict) and edits.get("sourceSegments"):
+            raise RuntimeError("template source media unavailable; refusing black carrier fallback")
         return full_render
     usable: list[dict] = []
     paths: list[Path] = []
@@ -1124,6 +1126,8 @@ def apply_full_render_sources(
         usable.append(w)
         paths.append(Path(p))
     if not usable:
+        if isinstance(edits.get("templateProvenance"), dict):
+            raise RuntimeError("template source windows unavailable; refusing black carrier fallback")
         return full_render
     width, height = probe_size(full_render)
     fps = probe_fps(full_render)

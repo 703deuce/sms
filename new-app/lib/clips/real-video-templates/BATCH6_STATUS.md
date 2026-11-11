@@ -48,3 +48,17 @@ old media_sources.py code.
 - The worker requires a 30fps template carrier for playback plans.
 - Shader decoded-frame CI is conditional on the runner having the existing EGL/moderngl/llvmpipe stack;
   absence is reported as a skip, while production rendering fails rather than degrading silently.
+
+
+## Independent follow-up QA
+
+A direct FFmpeg reproduction found the earlier duration-based `tpad` could produce too
+few decoded pictures at the end of a hold. B6 now uses an explicit frame-count hold,
+two-frame codec-boundary rounding guard for play pieces, exact 30fps output timestamps
+and a decoded-frame count assertion. Missing uploaded template media and invalid
+playback payloads fail closed instead of returning the black carrier or 1x speed.
+Regression tests cover a 15-frame silent-source hold, invalid plans and absent media.
+
+The requested full TypeScript diagnostic comparison (master baseline: 456), scoped
+Vitest and worker pytest require a checked-out repository/CI runner. GitHub Actions
+were queued during this work; a queued check is not a passing check.

@@ -190,3 +190,25 @@ def test_photo_video_no_audio_source_and_half_second_shots(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="head handles"):
         render_playback_window(mute_video, short_plan, 0, 3000, -3, 15, 30.0, out, include_audio=False)
+
+
+def test_malformed_playback_does_not_fall_back_to_normal_speed() -> None:
+    from clips_worker.media_sources import normalize_source_segments
+
+    sources = [{"id": "sa", "ref": "upload", "refId": "a", "mediaType": "video", "durationMs": 3000}]
+    bad = {"id": "item", "sourceId": "sa", "startMs": 0, "endMs": 1000,
+           "playback": {**PLAYBACK, "outputFrames": 29}}
+    with pytest.raises(ValueError, match="source playback"):
+        normalize_source_segments([bad], sources)
+
+
+def test_template_missing_assigned_media_fails_closed(tmp_path: Path) -> None:
+    carrier = tmp_path / "carrier_empty.mp4"
+    _make_carrier(carrier)
+    edits = {
+        "sources": [{"id": "sa", "ref": "upload", "refId": "a", "mediaType": "video", "durationMs": 3000}],
+        "sourceSegments": [{"id": "item", "sourceId": "sa", "startMs": 0, "endMs": 1000, "playback": PLAYBACK}],
+        "templateProvenance": {"familyId": "b6"},
+    }
+    with pytest.raises(RuntimeError, match="black carrier fallback"):
+        apply_full_render_sources(carrier, edits, 0, 1000, tmp_path, {})

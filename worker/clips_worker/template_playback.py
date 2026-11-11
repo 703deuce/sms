@@ -13,13 +13,13 @@ PLAYBACK_FPS = 30
 
 
 def normalize_source_playback(raw) -> dict | None:
-    if not isinstance(raw, dict) or raw.get("v") != 1 or raw.get("fps") != PLAYBACK_FPS:
+    if not isinstance(raw, dict) or type(raw.get("v")) is not int or raw.get("v") != 1 or raw.get("fps") != PLAYBACK_FPS or set(raw) != {"v", "fps", "outputFrames", "pieces"}:
         return None
     output_frames = raw.get("outputFrames")
     pieces = raw.get("pieces")
     if not isinstance(output_frames, int) or isinstance(output_frames, bool) or output_frames < 1:
         return None
-    if not isinstance(pieces, list) or not pieces:
+    if not isinstance(pieces, list) or not pieces or len(pieces) > 256:
         return None
     out: list[dict] = []
     total = 0
@@ -30,13 +30,17 @@ def normalize_source_playback(raw) -> dict | None:
         if not isinstance(frames, int) or isinstance(frames, bool) or frames < 1:
             return None
         if raw_piece.get("kind") == "hold":
+            if set(raw_piece) != {"kind", "frames"}:
+                return None
             piece = {"kind": "hold", "frames": frames}
         elif raw_piece.get("kind") == "play":
+            if set(raw_piece) != {"kind", "frames", "rate"} or type(raw_piece.get("rate")) not in (int, float):
+                return None
             try:
                 rate = float(raw_piece.get("rate"))
             except (TypeError, ValueError):
                 return None
-            if not math.isfinite(rate) or not 0.25 <= rate <= 4.0:
+            if not math.isfinite(rate) or not 0.25 <= rate <= 4.0 or abs(rate - round(rate, 3)) > 1e-9:
                 return None
             piece = {"kind": "play", "frames": frames, "rate": round(rate, 3)}
         else:
@@ -190,7 +194,8 @@ def render_playback_window(
             ]
             filters.append(
                 f"[{idx}:v]setpts=(PTS-STARTPTS)/{rate:.6f},fps={PLAYBACK_FPS},"
-                f"trim=end_frame={frames},setsar=1,format=yuv420p,setpts=N/({PLAYBACK_FPS}*TB)[v{idx}]"
+                f"tpad=stop_mode=clone:stop=2,"
+                f"trim=end_frame={frames},setsar=1,format=yuv420p[v{idx}]"
             )
             if include_audio:
                 filters.append(

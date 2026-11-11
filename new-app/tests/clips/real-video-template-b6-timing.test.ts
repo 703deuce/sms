@@ -13,7 +13,7 @@ import {
   sampleTemplatePlayback,
 } from '@/lib/clips/real-video-templates/slot-playback'
 import { outputToSequenceFrame, sourceToSequenceFrames } from '@/lib/clips/real-video-templates/sequence-timebase'
-import { segmentMediaMs, sourceSegmentPlaybackRate } from '@/lib/clips/editor/sources'
+import { normalizeSourceSegments, segmentMediaMs, sourceSegmentPlaybackRate } from '@/lib/clips/editor/sources'
 
 const asset = (id: string, kind: 'image' | 'video' | 'audio', frames = 180): TemplateAsset => ({
   id,
@@ -153,6 +153,19 @@ describe('real-video template B6 slot-local playback', () => {
     expect(repeated.map((x) => x.outputFrame)).toEqual([4, 5, 6, 7])
     expect(segmentMediaMs(first!, result.edits.sources?.[0], 200)).toBeGreaterThanOrEqual(0)
     expect(sourceSegmentPlaybackRate(first!, result.edits.sources?.[0], 200)).toBe(0)
+  })
+
+  it('refuses corrupt playback plans instead of silently rendering at 1x', () => {
+    const result = compileTemplatePrototype(family, design, choices, carrier)
+    const seg = result.edits.sourceSegments![0]!
+    const sources = result.edits.sources
+    expect(() => normalizeSourceSegments([{ ...seg, playback: { ...seg.playback, outputFrames: 14 } }], sources))
+      .toThrow(/source playback/)
+    expect(() => normalizeSourceSegments([{ ...seg, playback: { ...seg.playback, pieces: [{ kind: 'hold', frames: 15, unexpected: true }] } }], sources))
+      .toThrow(/source playback/)
+    expect(() => normalizeSourceSegments([{ ...seg, playback: seg.playback, speed: 2 }], sources))
+      .toThrow(/source playback/)
+    expect(normalizeSourceSegments([{ ...seg, playback: undefined }], sources)?.[0]?.playback).toBeUndefined()
   })
 
   it('keeps shader variants explicit and rejects unproven catalog variants', () => {
