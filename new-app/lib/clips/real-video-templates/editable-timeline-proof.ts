@@ -198,6 +198,11 @@ export function proveEditableTimelineStructure(
     const a = actual.mediaItems.find((x) => x.id === e.id)
     if (!a) { errors.push(`missing media item ${e.id}`); continue }
     if (!numEq(a.startMs, e.startMs) || !numEq(a.endMs, e.endMs)) errors.push(`media timing mismatch ${e.id}`)
+    const slotId = Object.entries(compiled.slotToItemIds).find(([, itemId]) => itemId === e.id)?.[0]
+    const selected = slotId ? choices.media[slotId] : undefined
+    const source = a.sourceId ? actualEdits.sources?.find((row) => row.id === a.sourceId) : undefined
+    if (!slotId || !selected || !source || source.ref !== 'upload' || source.refId !== selected.id)
+      errors.push(`source assignment mismatch ${e.id}`)
   }
   for (const e of expected.cuts) {
     const a = actual.cuts.find((x) => x.id === e.id)
