@@ -8,6 +8,7 @@
  * Font matching uses family NAME ID 1 (Lato.ttf identifies as Lato Black).
  */
 export const CLIP_FONT_MANIFEST_VERSION = 1 as const
+export type FontGlyphCoverage = 'latin' | 'greek' | 'cyrillic' | 'arabic' | 'devanagari' | 'thai' | 'cjk' | 'emoji'
 export type ClipFontManifestRow = {
   id: string
   assFamily: string
@@ -19,6 +20,8 @@ export type ClipFontManifestRow = {
   sourceRevision: string
   licenseStatus: 'existing_repository_asset_provenance_unverified' | 'OFL-1.1'
   fallback: string
+  /** Scripts whose representative glyph set exists in this exact pinned face. */
+  glyphCoverage: readonly FontGlyphCoverage[]
 }
 export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
   {
@@ -31,7 +34,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "metricsKey": "Anton",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
     "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
+    "fallback": "DejaVu Sans","glyphCoverage":["latin"]
   },
   {
     "id": "Montserrat",
@@ -43,7 +46,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "metricsKey": "Montserrat Black",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
     "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
+    "fallback": "DejaVu Sans","glyphCoverage":["latin","cyrillic"]
   },
   {
     "id": "Poppins",
@@ -55,7 +58,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "metricsKey": "Poppins ExtraBold",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
     "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
+    "fallback": "DejaVu Sans","glyphCoverage":["latin","devanagari"]
   },
   {
     "id": "Bangers",
@@ -67,7 +70,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "metricsKey": "Bangers",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
     "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
+    "fallback": "DejaVu Sans","glyphCoverage":["latin"]
   },
   {
     "id": "Bebas Neue",
@@ -79,7 +82,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "metricsKey": "Bebas Neue",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
     "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
+    "fallback": "DejaVu Sans","glyphCoverage":["latin"]
   },
   {
     "id": "Archivo Black",
@@ -91,7 +94,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "metricsKey": "Archivo Black",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
     "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
+    "fallback": "DejaVu Sans","glyphCoverage":["latin"]
   },
   {
     "id": "Luckiest Guy",
@@ -103,7 +106,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "metricsKey": "Luckiest Guy",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
     "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
+    "fallback": "DejaVu Sans","glyphCoverage":["latin"]
   },
   {
     "id": "Inter",
@@ -115,7 +118,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "metricsKey": "Inter",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
     "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
+    "fallback": "DejaVu Sans","glyphCoverage":["latin","greek","cyrillic"]
   },
   {
     "id": "Lato",
@@ -127,7 +130,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "metricsKey": "Lato",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
     "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
+    "fallback": "DejaVu Sans","glyphCoverage":["latin","greek","cyrillic"]
   },
   {
     "id": "Oswald",
@@ -139,16 +142,16 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "metricsKey": "Oswald",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
     "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
+    "fallback": "DejaVu Sans","glyphCoverage":["latin","cyrillic"]
   },
-  {"id":"Rubik","assFamily":"Rubik","cssWeight":400,"browserFile":"/fonts/clip/Rubik.ttf","workerFile":"worker/v3/fonts/t6/Rubik.ttf","browserGitBlobSha1":"a59aeb632df494345a542697c357f608875481b0","metricsKey":"Rubik","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
-  {"id":"Gabarito","assFamily":"Gabarito","cssWeight":400,"browserFile":"/fonts/clip/Gabarito.ttf","workerFile":"worker/v3/fonts/t6/Gabarito.ttf","browserGitBlobSha1":"f048f3b6527b2aff1adb92bd682acb1d8adcdc9c","metricsKey":"Gabarito","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
-  {"id":"Fira Sans Condensed","assFamily":"Fira Sans Condensed","cssWeight":700,"browserFile":"/fonts/clip/FiraSansCondensed-Bold.ttf","workerFile":"worker/v3/fonts/t6/FiraSansCondensed-Bold.ttf","browserGitBlobSha1":"c18ac23ad51eee0df2fd905cce40047189ad6f77","metricsKey":"Fira Sans Condensed","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
-  {"id":"DM Serif Display","assFamily":"DM Serif Display","cssWeight":400,"browserFile":"/fonts/clip/DMSerifDisplay-Regular.ttf","workerFile":"worker/v3/fonts/t6/DMSerifDisplay-Regular.ttf","browserGitBlobSha1":"bc5ed0cea657f264ea9c2a11a54da62ed619c5da","metricsKey":"DM Serif Display","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
-  {"id":"Playfair Display","assFamily":"Playfair Display","cssWeight":400,"browserFile":"/fonts/clip/PlayfairDisplay.ttf","workerFile":"worker/v3/fonts/t6/PlayfairDisplay.ttf","browserGitBlobSha1":"7a09eb71f10622fd083134ac9ed46f59b21bee18","metricsKey":"Playfair Display","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
-  {"id":"Caveat","assFamily":"Caveat","cssWeight":400,"browserFile":"/fonts/clip/Caveat.ttf","workerFile":"worker/v3/fonts/t6/Caveat.ttf","browserGitBlobSha1":"f84acf2ce2d1b3329b194749530dbaec047e6df6","metricsKey":"Caveat","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
-  {"id":"Space Grotesk","assFamily":"Space Grotesk","cssWeight":400,"browserFile":"/fonts/clip/SpaceGrotesk.ttf","workerFile":"worker/v3/fonts/t6/SpaceGrotesk.ttf","browserGitBlobSha1":"a1b2e6c26093066510a31147e7aec9abdc8d6c5e","metricsKey":"Space Grotesk","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
-  {"id":"Space Mono","assFamily":"Space Mono","cssWeight":400,"browserFile":"/fonts/clip/SpaceMono-Regular.ttf","workerFile":"worker/v3/fonts/t6/SpaceMono-Regular.ttf","browserGitBlobSha1":"1cfa3653dc8ddb7aa9f4ef1c9c581e9516137e6e","metricsKey":"Space Mono","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"}  {"id":"Noto Sans Arabic","assFamily":"Noto Sans Arabic","cssWeight":400,"browserFile":"/fonts/clip/NotoSansArabic.ttf","workerFile":"worker/v3/fonts/t6/NotoSansArabic.ttf","browserGitBlobSha1":"f1d01edce4ebaedcbe9a06fc75fec07b304ec3df","metricsKey":"Noto Sans Arabic","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
+  {"id":"Rubik","assFamily":"Rubik","cssWeight":400,"browserFile":"/fonts/clip/Rubik.ttf","workerFile":"worker/v3/fonts/t6/Rubik.ttf","browserGitBlobSha1":"a59aeb632df494345a542697c357f608875481b0","metricsKey":"Rubik","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans","glyphCoverage":["latin","cyrillic","arabic"]},
+  {"id":"Gabarito","assFamily":"Gabarito","cssWeight":400,"browserFile":"/fonts/clip/Gabarito.ttf","workerFile":"worker/v3/fonts/t6/Gabarito.ttf","browserGitBlobSha1":"f048f3b6527b2aff1adb92bd682acb1d8adcdc9c","metricsKey":"Gabarito","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans","glyphCoverage":["latin"]},
+  {"id":"Fira Sans Condensed","assFamily":"Fira Sans Condensed","cssWeight":700,"browserFile":"/fonts/clip/FiraSansCondensed-Bold.ttf","workerFile":"worker/v3/fonts/t6/FiraSansCondensed-Bold.ttf","browserGitBlobSha1":"c18ac23ad51eee0df2fd905cce40047189ad6f77","metricsKey":"Fira Sans Condensed","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans","glyphCoverage":["latin","greek","cyrillic"]},
+  {"id":"DM Serif Display","assFamily":"DM Serif Display","cssWeight":400,"browserFile":"/fonts/clip/DMSerifDisplay-Regular.ttf","workerFile":"worker/v3/fonts/t6/DMSerifDisplay-Regular.ttf","browserGitBlobSha1":"bc5ed0cea657f264ea9c2a11a54da62ed619c5da","metricsKey":"DM Serif Display","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans","glyphCoverage":["latin"]},
+  {"id":"Playfair Display","assFamily":"Playfair Display","cssWeight":400,"browserFile":"/fonts/clip/PlayfairDisplay.ttf","workerFile":"worker/v3/fonts/t6/PlayfairDisplay.ttf","browserGitBlobSha1":"7a09eb71f10622fd083134ac9ed46f59b21bee18","metricsKey":"Playfair Display","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans","glyphCoverage":["latin","cyrillic"]},
+  {"id":"Caveat","assFamily":"Caveat","cssWeight":400,"browserFile":"/fonts/clip/Caveat.ttf","workerFile":"worker/v3/fonts/t6/Caveat.ttf","browserGitBlobSha1":"f84acf2ce2d1b3329b194749530dbaec047e6df6","metricsKey":"Caveat","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans","glyphCoverage":["latin","cyrillic"]},
+  {"id":"Space Grotesk","assFamily":"Space Grotesk","cssWeight":400,"browserFile":"/fonts/clip/SpaceGrotesk.ttf","workerFile":"worker/v3/fonts/t6/SpaceGrotesk.ttf","browserGitBlobSha1":"a1b2e6c26093066510a31147e7aec9abdc8d6c5e","metricsKey":"Space Grotesk","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans","glyphCoverage":["latin"]},
+  {"id":"Space Mono","assFamily":"Space Mono","cssWeight":400,"browserFile":"/fonts/clip/SpaceMono-Regular.ttf","workerFile":"worker/v3/fonts/t6/SpaceMono-Regular.ttf","browserGitBlobSha1":"1cfa3653dc8ddb7aa9f4ef1c9c581e9516137e6e","metricsKey":"Space Mono","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans","glyphCoverage":["latin"]}  {"id":"Noto Sans Arabic","assFamily":"Noto Sans Arabic","cssWeight":400,"browserFile":"/fonts/clip/NotoSansArabic.ttf","workerFile":"worker/v3/fonts/t6/NotoSansArabic.ttf","browserGitBlobSha1":"f1d01edce4ebaedcbe9a06fc75fec07b304ec3df","metricsKey":"Noto Sans Arabic","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
   {"id":"Noto Sans Devanagari","assFamily":"Noto Sans Devanagari","cssWeight":400,"browserFile":"/fonts/clip/NotoSansDevanagari.ttf","workerFile":"worker/v3/fonts/t6/NotoSansDevanagari.ttf","browserGitBlobSha1":"163f04bddc5a96fc523e4080466cac5c588f6594","metricsKey":"Noto Sans Devanagari","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
   {"id":"Noto Sans Thai","assFamily":"Noto Sans Thai","cssWeight":400,"browserFile":"/fonts/clip/NotoSansThai.ttf","workerFile":"worker/v3/fonts/t6/NotoSansThai.ttf","browserGitBlobSha1":"34b48ab6f74867dbfce19410a2f452abef34e3ff","metricsKey":"Noto Sans Thai","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
   {"id":"Noto Sans JP","assFamily":"Noto Sans JP","cssWeight":400,"browserFile":"/fonts/clip/NotoSansJP.ttf","workerFile":"worker/v3/fonts/t6/NotoSansJP.ttf","browserGitBlobSha1":"cdd8f083c1f5928ff3361f8cda4d3fc9462cbe89","metricsKey":"Noto Sans JP","sourceRevision":"5bb28733cec313b63fbd415b574b5ae35c8aa8b8","licenseStatus":"OFL-1.1","fallback":"DejaVu Sans"},
