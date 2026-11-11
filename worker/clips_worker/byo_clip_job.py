@@ -135,6 +135,17 @@ def _start_full_video_proxy(src: Path, workspace_id: str, project_id: str, dur_m
         print(f"[clipper:fullvideo] proxy_skip err={type(exc).__name__}", flush=True)
 
 
+def template_project_canceled(conn, project_id: str) -> bool:
+    """B3: a claimed carrier job must never resurrect a user-canceled template project."""
+    with conn.cursor() as cur:
+        cur.execute('SELECT status FROM clip_projects WHERE id=%s', (project_id,))
+        row = cur.fetchone()
+    if not row:
+        return True
+    status = row[0] if isinstance(row, (tuple, list)) else row.get("status")
+    return str(status or "").upper() == "CANCELED"
+
+
 def finalize_byo_clip(
     conn,
     job: dict,
@@ -157,6 +168,10 @@ def finalize_byo_clip(
     if isinstance(payload, str):
         payload = json.loads(payload)
     blank = is_blank_job(settings, payload)
+    template_carrier = isinstance(payload, dict) and payload.get("templateCarrier") is True
+    if template_carrier and template_project_canceled(conn, project_id):
+        print(f"[clipper:template] canceled_before_finalize project={project_id}", flush=True)
+        return
     try:
         dur_ms = int(round(probe_duration(src) * 1000))
         if full:
@@ -265,6 +280,18 @@ def finalize_byo_clip(
             print(f"[clipper:fullvideo] step=seed_enriched clip={clip_id} assets={bool(editor_assets)}", flush=True)
         else:
             insert_clips_batch(conn, [row])
+        if template_carrier and template_project_canceled(conn, project_id):
+            post_progress(
+                job_id,
+                {
+                    "projectStatus": "CANCELED",
+                    "stage": "canceled",
+                    "jobStatus": "FAILED",
+                    "error": "canceled",
+                },
+            )
+            print(f"[clipper:template] canceled_before_ready project={project_id}", flush=True)
+            return
         mark_project_ready(conn, project_id)
         post_progress(
             job_id,
