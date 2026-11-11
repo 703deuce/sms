@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { generatePreviewCandidates, clampGeneratePreviewSeek } from '@/lib/clips/editor/generate-preview-media'
 
@@ -20,5 +22,18 @@ describe('Generate preview (playback only)', () => {
       urls, segmentStartMs: null, segmentEndMs: null, clipStartMs:0, clipEndMs:20000 })
     expect(candidates.map((x) => x.url)).toEqual(['source','proxy','preview'])
     expect(clampGeneratePreviewSeek(-100, candidates[0]!, Number.NaN)).toBe(0)
+  })
+})
+
+describe('Generate editor source and playback contracts', () => {
+  it('preserves provider range guard and keeps preview candidates out of generation', () => {
+    const root = process.cwd().endsWith('/new-app') ? process.cwd() : join(process.cwd(), 'new-app')
+    const shell = readFileSync(join(root, 'components/clips/editor/generate-shot-editor-shell.tsx'), 'utf8')
+    expect(shell).toContain("mode: 'source_video_edit'")
+    expect(shell).toContain('sourceConfig')
+    expect(shell).toContain('previewCandidates')
+    expect(shell).toContain('Retry preview')
+    expect(shell).toContain('window.setTimeout')
+    expect(shell).toContain('<StandaloneEditorChrome')
   })
 })

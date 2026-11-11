@@ -3,18 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
-  ArrowLeft,
   Check,
-  Download,
   ImagePlus,
   Loader2,
   Pause,
   Play,
   Plus,
-  Redo2,
   RotateCcw,
   Sparkles,
-  Undo2,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -35,9 +31,7 @@ import { loadSourceWords } from '@/lib/clips/source-words'
 import { normalizeEditSpeed, orderedKeepSegments, type ClipEditsV2 } from '@/lib/clips/edits'
 import { replaceVideoRange, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { routes } from '@/lib/routes'
-import { editorToolbarRow } from '@/lib/clips/editor/editor-chrome-tokens'
-import { EditorModeSwitcher } from '@/components/clips/editor/editor-mode-switcher'
-import { StandaloneEditorChrome } from '@/components/clips/editor/standalone-editor-chrome'
+import { StandaloneEditorChrome, finishStandaloneLayoutHandoff } from '@/components/clips/editor/standalone-editor-chrome'
 import { generatePreviewCandidates, clampGeneratePreviewSeek } from '@/lib/clips/editor/generate-preview-media'
 
 type EditorProps = Parameters<typeof EditorClipShell>[0]
@@ -1014,109 +1008,36 @@ export function GenerateShotEditorShell(props: Props) {
         className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground"
         data-testid="generate-shot-editor"
       >
-        <header className={editorToolbarRow + ' relative z-50'}>
-          <Button
-            size="sm"
-            variant="ghost"
-            aria-label="Back to clip editor"
-            disabled={navigating}
-            onClick={() => void navigate(editorHref, 'edit')}
-          >
-            <ArrowLeft className="size-4" />
-          </Button>
-          <div className="mr-2 min-w-0">
-            <p className="max-w-44 truncate text-[11px] text-muted-foreground">
-              {props.projectTitle}
-            </p>
-            <h1 className="max-w-64 truncate text-sm font-semibold">
-              Change this shot · {props.initialTitle}
-            </h1>
-          </div>
-          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium">
-            Change this shot
-          </span>
-          <span className="text-xs text-muted-foreground" aria-live="polite">
-            {saveState === 'saved'
-              ? 'Saved'
-              : saveState === 'error'
-                ? 'Save failed'
-                : 'Saving…'}
-          </span>
-          {saveState === 'error' ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                void flushSave().catch(() => toast.error('Save retry failed'))
-              }
-            >
-              Retry save
-            </Button>
-          ) : null}
-          <div className="ml-auto flex flex-wrap items-center gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={!canUndo}
-              aria-label="Undo"
-              onClick={() => {
-                undo()
-                console.info('[editor:generate-mode] undo', { projectId, clipId })
-              }}
-            >
-              <Undo2 className="size-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={!canRedo}
-              aria-label="Redo"
-              onClick={() => {
-                redo()
-                console.info('[editor:generate-mode] redo', { projectId, clipId })
-              }}
-            >
-              <Redo2 className="size-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setExportOpen(true)
-                console.info('[editor:generate-mode] export-open', {
-                  projectId,
-                  clipId,
-                })
-              }}
-            >
-              <Download className="mr-1 size-4" />
-              Export
-            </Button>
-            <EditorModeSwitcher
-              current="generate"
-              disabled={navigating}
-              onSelect={(mode) => {
-                console.info('[editor:generate-mode] mode-selected', { projectId, clipId, mode })
-                if (mode === 'generate') return
-                const query = props.fromStudio ? { from: 'studio' } : undefined
-                if (mode === 'clip') { void navigate(editorHref, 'clip'); return }
-                if (mode === 'producer') { void navigate(routes.chat(projectId, clipId, query), 'producer'); return }
-                if (mode === 'story') { void navigate(routes.story(projectId, clipId, query), 'story'); return }
-                if (mode === 'templates') void navigate(routes.templateMode(projectId, clipId, query), 'templates')
-              }}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={navigating}
-              onClick={() =>
-                void navigate(routes.studio(projectId, clipId), 'studio')
-              }
-            >
-              Studio
-            </Button>
-          </div>
-        </header>
+        <StandaloneEditorChrome
+          projectTitle={props.projectTitle}
+          title={'Change this shot · ' + props.initialTitle}
+          current="generate"
+          saveState={saveState}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          disabled={navigating}
+          contextSlot={<span className="hidden shrink-0 text-[11px] text-muted-foreground xl:inline">Change this shot</span>}
+          onBack={() => void navigate(editorHref, 'edit')}
+          onUndo={() => { undo(); console.info('[editor:generate-mode] undo', { projectId, clipId }) }}
+          onRedo={() => { redo(); console.info('[editor:generate-mode] redo', { projectId, clipId }) }}
+          onExport={() => { setExportOpen(true); console.info('[editor:generate-mode] export-open', { projectId, clipId }) }}
+          onRetrySave={() => { void flushSave().catch(() => toast.error('Save retry failed')) }}
+          onModeSelect={(mode) => {
+            console.info('[editor:generate-mode] mode-selected', { projectId, clipId, mode })
+            if (mode === 'generate') return
+            const query = props.fromStudio ? { from: 'studio' } : undefined
+            if (mode === 'clip') { void navigate(editorHref, 'clip'); return }
+            if (mode === 'producer') { void navigate(routes.chat(projectId, clipId, query), 'producer'); return }
+            if (mode === 'story') { void navigate(routes.story(projectId, clipId, query), 'story'); return }
+            if (mode === 'templates') void navigate(routes.templateMode(projectId, clipId, query), 'templates')
+          }}
+          onLayoutSelect={(layout) => {
+            void finishStandaloneLayoutHandoff({
+              view: layout, projectId, clipId, flushSave,
+              navigate: (href) => window.location.assign(href),
+            }).catch(() => toast.error('Save edits before switching editors.'))
+          }}
+        />
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-1 overflow-y-auto bg-background p-1 lg:grid-cols-[240px_minmax(0,1fr)_280px] lg:overflow-hidden">
           <aside
@@ -1311,8 +1232,6 @@ export function GenerateShotEditorShell(props: Props) {
                     playsInline
                     className="mx-auto max-h-[48vh] w-full object-contain"
                     onLoadedMetadata={() => {
-                      setMediaReady(true)
-                      setMediaFailure(false)
                       if (videoRef.current) {
                         videoRef.current.currentTime = clampGeneratePreviewSeek(
                           playheadMs, previewRef.current, videoRef.current.duration,
@@ -1323,6 +1242,7 @@ export function GenerateShotEditorShell(props: Props) {
                         clipId,
                       })
                     }}
+                    onCanPlay={() => { setMediaReady(true); setMediaFailure(false) }}
                     onError={failPreview}
                     onTimeUpdate={(event) =>
                       setPlayheadMs(Math.max(minMs, Math.min(maxMs, Math.round(
