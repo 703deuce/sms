@@ -13,14 +13,14 @@ describe('LG10 explicit draft project filter', () => {
       where: expect.objectContaining({ workspaceId: 'fixture_ws', status: 'DRAFT', deletedAt: null }),
     }))
     await listClipProjects('fixture_ws', { status: 'all' })
-    const where = findMany.mock.calls.at(-1)?.[0]?.where as Record<string, unknown>
+    const where = (findMany.mock.calls.at(-1)?.[0] as { where: Record<string, unknown> }).where
     expect(where).not.toHaveProperty('status')
     expect(where).toHaveProperty('deletedAt', null)
   })
   it('keeps existing processing filter exclusive of draft and failed', async () => {
     const { listClipProjects } = await import('@/lib/server/clips/projects')
     await listClipProjects('fixture_ws', { status: 'processing' })
-    expect(findMany.mock.calls.at(-1)?.[0]?.where.status.notIn).toContain('DRAFT')
-    expect(findMany.mock.calls.at(-1)?.[0]?.where.status.notIn).toContain('FAILED')
+    expect((findMany.mock.calls.at(-1)?.[0] as { where: { status: { notIn: string[] } } }).where.status.notIn).toContain('DRAFT')
+    expect((findMany.mock.calls.at(-1)?.[0] as { where: { status: { notIn: string[] } } }).where.status.notIn).toContain('FAILED')
   })
 })
