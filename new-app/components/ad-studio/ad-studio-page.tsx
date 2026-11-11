@@ -555,7 +555,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
           icon={Megaphone}
           iconTone="brand"
           title="Ad Studio"
-          description="Turn a product brief or product image into a planned, reviewable ad, then finish the result in the existing editor."
+          description="Create five finished photo ads from a real product image, then animate the strongest creative into a native-audio 15s commercial. Storyline remains available for stitched multi-scene ads."
         />
 
         <div className="grid min-w-0 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
@@ -565,7 +565,8 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
           >
             <p className="w-full px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Create</p>
             <NavButton active={screen !== 'history' && mode === 'storyline'} onClick={() => openMode('storyline')} icon={Sparkles} label="Storyline" testId="ad-studio-nav-storyline" />
-            <NavButton active={screen !== 'history' && mode === 'image_to_ad'} onClick={() => openMode('image_to_ad')} icon={ImageIcon} label="Image to ad" testId="ad-studio-nav-image-to-ad" />
+            <NavButton active={screen !== 'history' && mode === 'image_to_ad'} onClick={() => openMode('image_to_ad')} icon={ImageIcon} label="Photo ads → video" testId="ad-studio-nav-image-to-ad" />
+            <NavButton active={screen !== 'history' && mode === 'image_ad_to_commercial'} onClick={() => openMode('image_ad_to_commercial')} icon={Clapperboard} label="Animate ad still" testId="ad-studio-nav-animate-still" />
             <NavButton active={screen === 'history'} onClick={() => { setScreen('history'); void refreshHistory().catch(showError) }} icon={Clapperboard} label="History" testId="ad-studio-nav-history" />
           </nav>
 
@@ -745,7 +746,7 @@ function ModeHome({
         </ol>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <button
           type="button"
           data-testid="ad-studio-mode-storyline"
@@ -768,9 +769,20 @@ function ModeHome({
           <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
             <ImageIcon className="size-5" aria-hidden />
           </span>
-          <p className="mt-5 text-base font-semibold">Image to ad</p>
-          <p className="mt-1 text-sm leading-5 text-muted-foreground">Upload a real product photo, generate three static ad directions, then carry the selected creative into a 15 or 30 second commercial.</p>
-          <span className="mt-auto flex items-center gap-1 pt-5 text-sm font-medium text-primary">Start with an image <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden /></span>
+          <p className="mt-5 text-base font-semibold">Photo ads → 15s video</p>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">Generate five 2K finished ad stills from your real product photo, pick a winner, then animate it as one native-audio 15s commercial.</p>
+          <span className="mt-auto flex items-center gap-1 pt-5 text-sm font-medium text-primary">Create five ads <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden /></span>
+        </button>
+        <button
+          type="button"
+          data-testid="ad-studio-mode-animate-still"
+          className="group flex min-h-44 flex-col rounded-xl border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-px hover:border-foreground/20 hover:bg-muted/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          onClick={() => onSelect('image_ad_to_commercial')}
+        >
+          <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary"><Clapperboard className="size-5" aria-hidden /></span>
+          <p className="mt-5 text-base font-semibold">Animate finished ad</p>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">Already have a finished ad still? Upload it and go straight to a single 15s Wan 3.0 or Seedance 2.5 native-audio video.</p>
+          <span className="mt-auto flex items-center gap-1 pt-5 text-sm font-medium text-primary">Animate still <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden /></span>
         </button>
       </div>
 
