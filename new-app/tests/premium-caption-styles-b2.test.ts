@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { applyPremiumCaptionStyle, clearPremiumCaptionStyle, PREMIUM_CAPTION_STYLES } from '@/lib/clips/premium-caption-styles'
 import { CAPTION_PRESETS, resolveCaptionPreset } from '@/lib/clips/caption-presets'
-import { buildCaptionsAss } from '@/lib/clips/render-plan/captions-ass'
+import { buildCaptionsAss, resolveAssFontName } from '@/lib/clips/render-plan/captions-ass'
+import { findClipFont } from '@/lib/clips/font-manifest'
 import { CLIP_FONT_FILES } from '@/lib/clips/render-plan/preview-scripts'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 
@@ -20,10 +21,13 @@ describe('premium OFL captions are opt-in and exportable', () => {
     expect(applied.font).toBe(style.font)
     expect(applied.presetConfig?.existingUnknown).toEqual({ retained: true })
     expect(resolveCaptionPreset(applied).font).toBe(style.font)
+    expect(findClipFont(style.font)?.assFamily).toBe(style.font)
+    expect(resolveAssFontName({ font: style.font }, resolveCaptionPreset(applied))).toBe(style.font)
     expect(CLIP_FONT_FILES[style.font.toLowerCase()]).toMatch(/\.ttf$/)
     const ass = buildCaptionsAss([{ w: 'Premium', s: 0, e: 0.5, i: 0 }, { w: 'captions', s: 0.5, e: 1, i: 1 }],
       applied, 720, 1280)
     expect(ass).toContain('Style: Cap,' + style.font + ',')
+    expect(ass).toContain('Style: Box,' + style.font + ',')
     expect(ass).not.toContain('Style: Cap,Poppins ExtraBold,')
     const cleared = clearPremiumCaptionStyle(applied)
     expect(cleared.font).toBeUndefined()

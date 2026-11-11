@@ -21,12 +21,13 @@ RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small.en',
 
 # Kenney CC0 export SFX live under assets/sfx/ (see clips_worker/export_sfx.py).
 COPY worker/assets /app/assets
-COPY worker/v3/fonts/t6 /app/v3/fonts/t6
 COPY worker/prototype/v3 /app/v3
+# Overlay the exact pinned font bundle LAST, so prototype assets cannot shadow it.
+COPY worker/v3/fonts/t6 /app/v3/fonts/t6
 # EP1: fonts are PINNED to the repo copies (worker/prototype/v3/fonts → /app/v3/fonts), byte-identical
 # to new-app/public/fonts/clip (the editor preview's libass-wasm fonts). Was curl from GitHub master,
 # which could change the export without a commit. Bookworm has no fonts-montserrat apt package.
-# Japanese and emoji retain Debian Noto CJK / Color Emoji until pinned full assets land.
+# Pinned JP and emoji faces are shipped too; Debian Noto remains an international fallback.
 RUN set -eux; \
     mkdir -p /usr/share/fonts/truetype/montserrat /usr/share/fonts/truetype/anton; \
     cp /app/v3/fonts/Montserrat-Black.ttf /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf; \
@@ -47,6 +48,8 @@ RUN set -eux; \
     test -s /app/v3/fonts/t6/NotoSansArabic.ttf; \
     test -s /app/v3/fonts/t6/NotoSansDevanagari.ttf; \
     test -s /app/v3/fonts/t6/NotoSansThai.ttf; \
+    test -s /app/v3/fonts/t6/NotoSansJP.ttf; \
+    test -s /app/v3/fonts/t6/NotoEmoji.ttf; \
     fc-cache -f; \
     fc-list | grep -i montserrat | head -3; \
     fc-match -f '%{file}\n' 'Montserrat Black' | grep -q Montserrat-Black.ttf; \
@@ -74,6 +77,24 @@ RUN set -eux; \
     test -s /app/v3/fonts/intl/NotoSansCJK.ttc
 COPY worker/scripts/download-brand-google-fonts.sh /tmp/download-brand-google-fonts.sh
 RUN chmod +x /tmp/download-brand-google-fonts.sh && bash /tmp/download-brand-google-fonts.sh /usr/share/fonts/truetype/transovo-brand /app/v3
+# Run AFTER all brand fonts are installed, not before: system or downloaded
+# duplicates must never silently outrank pinned export fonts in fontconfig.
+RUN set -eu; \
+    fc-cache -f; \
+    cmp -s "$(fc-match -f '%{file}' 'Rubik')" "/app/v3/fonts/t6/Rubik.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Gabarito')" "/app/v3/fonts/t6/Gabarito.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Fira Sans Condensed')" "/app/v3/fonts/t6/FiraSansCondensed-Bold.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'DM Serif Display')" "/app/v3/fonts/t6/DMSerifDisplay-Regular.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Playfair Display')" "/app/v3/fonts/t6/PlayfairDisplay.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Caveat')" "/app/v3/fonts/t6/Caveat.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Space Grotesk')" "/app/v3/fonts/t6/SpaceGrotesk.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Space Mono')" "/app/v3/fonts/t6/SpaceMono-Regular.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Noto Sans Arabic')" "/app/v3/fonts/t6/NotoSansArabic.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Noto Sans Devanagari')" "/app/v3/fonts/t6/NotoSansDevanagari.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Noto Sans Thai')" "/app/v3/fonts/t6/NotoSansThai.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Noto Sans JP')" "/app/v3/fonts/t6/NotoSansJP.ttf"; \
+    cmp -s "$(fc-match -f '%{file}' 'Noto Emoji')" "/app/v3/fonts/t6/NotoEmoji.ttf"
+
 COPY worker/prototype /app/prototype
 COPY worker/scripts/download-models.sh /tmp/download-models.sh
 RUN chmod +x /tmp/download-models.sh && bash /tmp/download-models.sh /app/v3
