@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import {
   Activity,
@@ -133,6 +133,8 @@ export type TimelineToolbarChromeProps = {
 }
 
 export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
+  // HG02: nested Takes buttons need to dismiss their owning dropdown after action.
+  const [moreOpen, setMoreOpen] = useState(false)
   const activeToolRow = TOOL_ROWS.find((r) => r.id === p.tool) ?? TOOL_ROWS[0]!
   const ActiveIcon = toolIcon(p.tool)
 
@@ -336,7 +338,7 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
         </button>
         </div>
         <span className={editorToolbarDivider} aria-hidden />
-        <DropdownMenu>
+        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
           <DropdownMenuTrigger
             render={
               <button type="button" className={editorIconBtn} aria-label="More timeline tools" title="More" data-testid="timeline-more-menu">
@@ -351,7 +353,10 @@ export function TimelineToolbarChrome(p: TimelineToolbarChromeProps) {
                 <Square className="size-4" />
                 Gap
               </DropdownMenuItem>
-              <div role="group" aria-label="Takes" data-testid="timeline-takes-menu">
+              <div role="group" aria-label="Takes" data-testid="timeline-takes-menu" onClick={(event) => {
+                const action = (event.target as HTMLElement).closest<HTMLElement>('[data-testid^="timeline-toolbar-"]')
+                if (action && /timeline-toolbar-(group-takes|next-take|prev-take|ungroup-takes)/.test(action.dataset.testid ?? '')) setMoreOpen(false)
+              }}>
                 {p.editable ? p.takesMenuBody : null}
               </div>
               <DropdownMenuItem
