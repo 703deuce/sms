@@ -9,7 +9,7 @@ import {shouldAutoStartUploadAgentBatch} from '@/lib/ai-captions/auto-agent-guar
 import {storyTargetFromAgentSeconds} from '@/lib/ai-producer-agent/clip-mode/unified-run-input'
 import {planAutoStartUnifiedClip} from '@/lib/streamer/auto-start-unified'
 import {aiProducerAgentServerEnabled} from '@/lib/ai-producer-agent/flags'
-import {readStreamerAgentBatch,streamerAgentSettings as asSettings,
+import {readStreamerAgentBatch,publishedBatchClipIds,streamerAgentSettings as asSettings,
   type StreamerAgentBatch as AgentBatch,type StreamerAgentMode as Mode}
   from '@/lib/streamer/agent-batch-contract'
 export {readStreamerAgentBatch} from '@/lib/streamer/agent-batch-contract'
@@ -181,13 +181,26 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
   if(next.runId){
     const run=await prisma.aiProducerAgentRun.findFirst({
       where:{id:next.runId,workspaceId:p.workspaceId},
-      select:{status:true,resultProjectId:true,resultClipId:true,error:true},
+      select:{status:true,resultProjectId:true,resultClipId:true,producerNotes:true,error:true},
     })
     if(run&&['ready','done','failed','canceled','capped'].includes(run.status)){
-      if(['ready','done'].includes(run.status)&&run.resultClipId&&run.resultProjectId){
-        next.completed.push({clipId:run.resultClipId,
-          projectId:run.resultProjectId,
-          startMin:Math.floor((start-next.sourceStartMs)/60_000)})
+      if(['ready','done'].includes(run.status)){
+        const ids=publishedBatchClipIds(run)
+        // Never trust producer notes alone: enforce this workspace, the
+        // published output project, and live clip rows before exposing links.
+        const published=run.resultProjectId&&ids.length
+          ?await prisma.clip.findMany({where:{
+              id:{in:ids},projectId:run.resultProjectId,
+              workspaceId:p.workspaceId,deletedAt:null,
+            },select:{id:true,projectId:true}}):[]
+        const seen=new Set(next.completed.map(item=>item.clipId))
+        for(const clip of published){
+          if(seen.has(clip.id))continue
+          next.completed.push({clipId:clip.id,projectId:clip.projectId,
+            startMin:Math.floor((start-next.sourceStartMs)/60_000)})
+          seen.add(clip.id)
+        }
+        if(!published.length)next.errors.push(`Window ${next.index+1}: No published clips available`)
       }else{
         next.errors.push(`Window ${next.index+1}: ${run?.error??'No valid clip'}`)
       }
