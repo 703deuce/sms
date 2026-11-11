@@ -1,0 +1,36 @@
+name: Batch 9 Phase B
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "new-app/lib/clips/real-video-templates/batch9-phase-b*.ts"
+      - "new-app/scripts/batch9-phase-b*.ts"
+      - "new-app/tests/clips/real-video-template-batch9-phase-b.test.ts"
+      - "new-app/tsconfig.real-video-templates-b9.json"
+      - "new-app/scripts/typecheck-templates-b9.sh"
+      - ".github/workflows/batch9-phase-b.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: batch9-phase-b-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 12.3.4 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: new-app
+      - run: pnpm typecheck:templates:b9
+        working-directory: new-app
+      - run: pnpm test:templates:b9
+        working-directory: new-app
