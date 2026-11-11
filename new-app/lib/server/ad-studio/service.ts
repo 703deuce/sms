@@ -503,7 +503,7 @@ export async function cancelAdRun(workspaceId: string, id: string): Promise<AdSt
 }
 
 export const adStudioConfig = () => ({
-  version: 1 as const, aspects: ['9:16','16:9','1:1'] as const,
+  version: 1 as const, aspects: ['9:16','16:9','1:1','3:4'] as const,
   durationsSec: [15,30] as const, modes: ['storyline','image_to_ad','image_ad_to_commercial'] as const,
   costs: AD_STUDIO_COSTS,
 })
