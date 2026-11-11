@@ -1,64 +1,92 @@
 # Real video templates — Batch 3 sequence boundary (2026-11-11)
 
-## Status: experimental, NOT launchable
-The data-contract and compile prototype are intentionally not connected to project creation, PATCH,
-ClipEditsV2 save, preview, export, or customer-facing template lists. `renderable: false` is a
-hard gate. No generated carrier is uploaded to customer projects. An additive migration now creates an isolated template-instance table; it changes no existing rows or edit payloads.
+## Status: production representation implemented
 
-## Proven representation
-- Immutable family/design snapshots addressed by (ID, revision); family output slots are a
-  gap-free, zero-based 30fps frame clock. Source choices use trusted registered IDs plus
-  explicit license metadata. Validation fails closed on unknown operations and oversized
-  inputs, without clamping or silently truncating.
-- Deterministic per-instance slot/source/text identifiers and a v1 sequence manifest record
-  output frame positions and media in-points. Ordinary ClipEditsV2 sourceSegments/textItems/audio
-  are produced as **a prototype only**, not persisted.
-- Existing sourceSegments use main-source times; a purpose-made neutral silent carrier is
-  required to hold the entire output clock. Existing `inserts` are NOT used.
-- `scripts/prove-real-video-template-carrier.sh` demonstrates a neutral silent carrier,
-  one still-photo span, one video span, a single text overlay spanning both, and continuous
-  music. It asserts exact 60-frame / 2-second output with FFmpeg and ffprobe. This demonstrates
-  only an isolated filtergraph approach; it is NOT the worker implementation.
+Batch 3 uses the existing ClipEditsV2/editor/export stack rather than a parallel player or a flattened
+template movie. A template compiles to ordinary editable lanes on a neutral, silent, exact-frame
+carrier. The carrier is only the source/output clock; user photos/videos remain registered media and
+are editable after publishing.
 
-## Not proven — do not enable
-1. No shared opt-in sequence adapter in current ClipEditsV2 preview/export pipeline.
-   SourceSegments are normalized as main-time replacement video spans; the worker currently
-   renders replacements differently from the FFmpeg fixture. It is NOT proven that all overlay
-   lanes and audio remain continuous through a photo-only first project.
-2. Cross-source dissolve/blending, per-slot transform and speed, source/output/item-local
-   timing roundtrip and transitions are not proven or enabled. Only `cut` is valid in v1.
-3. No permission-checked asset resolver or ownership-bound new project creation. The JSON
-   asset/license object is an assertion supplied by the caller, not a substitute for the DB's
-   ownership and rights checks.
-4. No transactional template-instance persistence, idempotent creation, cancellation,
-   CAS write integration, live editor roundtrip, or versioned snapshots in the DB.
-5. No production end-to-end render test, worker changes, preview/export parity or CI build
-   verification in this branch. Zero worker files changed.
+The implementation is intentionally opt-in through template provenance. Legacy clips with no template
+provenance retain their existing normalization, timeline, preview, cache-hash and worker behavior.
 
-## Future migration boundary
-Introduce a versioned, opt-in **sequence** representation in the existing normalization,
-preview and shared-clips worker export adapter. Explicitly map media-in vs output frames.
-Keep existing sourceSegments/inserts and all absent legacy fields unchanged when the opt-in
-flag is absent; old cache hashes remain untouched. Reject unsupported transitions, never
-silently downgrade to hard cuts. Verify 1 photo, 30 slots, all-source audio modes, speed,
-layered text and continuous music in both preview and final exported media, then enable
-new-project-only transactional template creation. Do NOT wire the prototype into saves
-before that validation.
+## Authoritative representation
 
+- Family/design definitions are immutable revisioned JSON. Unknown fields, unsupported operations,
+  invalid rights metadata and budget overflow fail closed instead of being clamped or dropped.
+- The authored sequence is a gap-free 30fps frame clock. `sequence-timebase.ts` maps output frame,
+  item-local frame and media frame exactly, including repeated-source ambiguity.
+- Each media slot compiles to a real `sources` + `sourceSegments` Video-lane record, with a seeded
+  stable item ID, media in-point, fit, source-audio policy, per-slot transform and per-slot FX.
+- Slot boundaries compile to ordinary `videoSplits`. Supported cross-source transitions compile to
+  ordinary `transitions` records; required A/B source handles are validated and transition windows
+  may not overlap.
+- Text/shape layers remain `textItems`; music remains the normal `audio.music` lane. Their authored
+  time ranges are not burned into slot media, so full-sequence overlays/audio survive every slot.
+- `inserts` are not used for template assembly.
+- `templateProvenance` is non-authoritative lineage/slot lookup only. It survives edit
+  normalization/patching but is excluded from render cache hashes.
 
-## Additional B3 verification after merging master aeb973bb (#1177)
-- `sequence-timebase.ts` explicitly maps output → item-local → media frames, and returns
-  every matching output for repeated media rather than guessing a unique position.
-- `tests/clips/real-video-templates-b3.test.ts` runs through the existing
-  editor regression's `batch5-template-full-video.test.tsx` import and covers
-  exhaustive 30-slot frame roundtrips.
-- `scripts/prove-real-video-template-30-slots.sh` is a second, no-network FFmpeg
-  fixture. A matching 160×90, 30fps filtergraph was executed locally and
-  ffprobe confirmed exactly 900 frames, 30.000000 seconds, with video and audio.
-  This exercises repeating photo/video sources, one full-span text graphic
-  and a full-span music channel. It does not exercise worker/preview parity.
-- Worker `edits_render.py` applies `apply_full_render_sources` to the base
-  before color/cut and before `_legacy_compose` burns text, so the
-  full-length-carrier architecture has a plausible existing cut-only path.
-  The code path still has no proven cross-source dissolve/individual transforms.
-\n## New additive DB boundary\n\nMigration `20261111150000_real_video_template_instances` adds one independent table\nwith workspace+idempotency uniqueness, immutable snapshot JSON, separate authoring JSON,\noptimistic authoringVersion and nullable project/clip links. It does not touch existing\nclips.edits or editor save versions. The only server helper is unexposed (no API route).\nUntil worker/preview parity and a transactional project creation path exist,\nno template instance can be published by this code.\n
+## Preview and editor parity
+
+- PreviewStage resolves the same source segment, media time, fit, transform and FX used by export.
+- Transition A/B clones are pinned to the outgoing/incoming slot at the split and seek the registered
+  source handles instead of cloning the carrier frame.
+- Compact draws every slot over its existing 44px Video filmstrip and selects it through the existing
+  Media inspector; no Compact geometry changed.
+- Full Timeline uses the existing source-segment Video-lane filmstrips/selection and transition
+  handles. Slot records remain editable after template creation.
+- Authoring state is metadata only after publish. Normal editor saves remain authoritative and are
+  never regenerated from the template snapshot.
+
+## Worker/export parity
+
+Required shared-clips changes are limited to:
+
+- `worker/clips_worker/blank_project.py` — exact authored 30fps neutral carrier generation.
+- `worker/clips_worker/media_sources.py` — mirrored source-segment transforms/FX and direct
+  cross-source transition windows rendered from the registered A/B media handles.
+- `worker/clips_worker/edits_render.py` — prevents template source transitions already consumed by
+  the source adapter from being rendered a second time.
+- `worker/tests/test_real_video_template_sequence.py` — low-resolution FFmpeg/ffprobe proof for
+  exact frames, mixed photo/video slots, source transforms/FX, a cross-source transition,
+  full-span text and continuous music/audio.
+
+The production path keeps text and music after source composition; no slot footage is flattened into
+the carrier.
+
+## Transactional publishing boundary
+
+`publishTemplateProject` creates a NEW workspace-owned full-video project only. Inside one
+Serializable transaction it validates all selected COMPLETE uploads, registers project media, stores
+the compiled editable ClipEditsV2 payload and pinned family/design snapshot, creates the exact-frame
+carrier upload record, and queues the existing PROCESS_PROJECT worker path.
+
+IDs are deterministic from workspace + idempotency key. A retry returns the original project when the
+pinned definition matches and conflicts when it does not. Foreign/missing media returns a non-leaking
+not-found style failure. Mid-transaction failures expose no partial project. Cancellation stops pending
+carrier work without deleting the user's timeline.
+
+`saveTemplateAuthoringState` uses an optimistic authoring version in clip metadata. It does not
+rewrite `clips.edits`; Compact/Timeline edits remain authoritative.
+
+No Batch 3 database migration is required.
+
+## Regression gates
+
+The existing Editor QA workflow now runs:
+
+- deterministic compiler/validation/timebase/legacy-golden tests,
+- transactional publish/idempotency/ownership/CAS/cancellation/rollback tests,
+- Compact + full Timeline slot-editor regressions,
+- a scoped real TypeScript compiler gate covering every Batch 3 web/API integration,
+- the FFmpeg worker sequence parity test above.
+
+The standalone 2-slot and 30-slot proof scripts remain as reproducible offline fixtures.
+
+## Intentional boundary for later batches
+
+Batch 3 does not create a React component per template, a proprietary timeline/player, arbitrary
+executable template code, arbitrary remote asset URLs, or a new render service. The transition set is
+limited to the types proven through the shared browser/FFmpeg transition math; unsupported types are
+rejected rather than silently downgraded.
