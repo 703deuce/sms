@@ -41,8 +41,8 @@ function toTiming(f: TemplateFamilyV1, decision: TemplateMusicDecisionV1): Templ
     ...(f.graphics ?? []).map(g => ({ id: 'graphic:' + g.id, kind: 'fx' as const,
       startFrame: g.startFrame, endFrame: g.startFrame + g.durationFrames })),
   ]
-  const fadeIn = decision.fadeInFrames ?? Math.min(15, f.totalFrames)
-  const fadeOut = decision.fadeOutFrames ?? Math.min(30, f.totalFrames)
+  const fadeIn = decision.fadeInFrames ?? Math.min(15, Math.floor(f.totalFrames / 3))
+  const fadeOut = decision.fadeOutFrames ?? Math.min(30, f.totalFrames - fadeIn)
   frame(fadeIn, 'fadeInFrames')
   frame(fadeOut, 'fadeOutFrames')
   if (fadeIn > 300 || fadeOut > 300 || fadeIn + fadeOut > f.totalFrames)
