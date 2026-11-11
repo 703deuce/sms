@@ -1,0 +1,32 @@
+# Legacy ad-to-video default prompt
+#
+# Source: 703deuce/headshot
+#   src/app/api/suite/generate/ad-to-video/route.ts
+# Last committed version: 1e26a5a325294f2dff5bd41e6f0f2c9cbb9b2584 (May 12, 2026)
+#   identical at 210842673050a54ab880405daffefc774911717f (parent of the May 16, 2026 deletion commit 2315567da64634e5140a4297f0162f407544c8d9)
+# The Photo Ads UI and this route are not on current headshot master (deleted May 16, 2026).
+# The UI "Turn into video" modal did not expose a prompt field; this default was always sent unless an API caller passed body.prompt.
+#
+# ===== DEFAULT PROMPT (verbatim) =====
+Smooth, subtle motion. Professional broadcast ad aesthetic. Cinematic, Gentle movement that brings the scene to life.
+# ===== END DEFAULT PROMPT =====
+#
+# Assembly in route.ts (also verbatim behavior, do not invent a new prompt):
+# 1) Start with the default above, or body.prompt trimmed and sliced to 2000 chars if provided.
+# 2) If noText is not explicitly false (UI default was true), append:
+#    " No text, titles, or captions in the video. No on-screen text."
+# 3) Then always append a speech-end instruction:
+#    For duration "15":
+#    " All spoken dialogue or narration in this video must be complete by 10 seconds. No speech or talking after 10 seconds; only visuals and silence until the end."
+#    For duration "10":
+#    " All spoken dialogue or narration in this video must be complete by 5 seconds. No speech or talking after 5 seconds; only visuals and silence until the end."
+#
+# Transovo port note (do not rewrite the default prompt text itself):
+# The designed Nano Banana still already has headline/CTA baked in. Rick wants that type kept
+# exactly as-is and static in the 15s commercial. The legacy noText=true default existed because
+# Sora often garbled on-screen text ("Text may have misspellings" when unchecked). For Ad Studio,
+# use the verbatim default motion/aesthetic prompt and the 15s speech-end instruction, and tell
+# the model to keep existing on-screen text from the still exactly as-is and static — do not
+# invent new text, and do not use the "No text..." clause in a way that erases the designed ad type.
+# generate_audio / native audio must be ON for Seedance 2.0, Wan, and Veo.
+
