@@ -122,7 +122,8 @@ describe('Batch 7 standalone reusable primitives', () => {
     expect(result.edits.groups).toEqual(extra.groups)
     const persisted = JSON.parse(JSON.stringify(result.edits)) as ClipEditsV2
     const reloaded = normalizeEdits(persisted, { clipStartMs: 0, clipEndMs: 2000 })
-    expect(reloaded.textItems).toHaveLength(result.edits.textItems?.length)
+    expect(result.edits.textItems).toBeDefined()
+    expect(reloaded.textItems).toHaveLength(result.edits.textItems!.length)
     expect(reloaded.textItems?.some((i) => i.id === 'manual_note')).toBe(true)
   })
 
@@ -263,7 +264,9 @@ describe('Batch 7 standalone reusable primitives', () => {
       f, design, { ...choices(2), accessibility: { reducedMotion: true } }, carrier(f.totalFrames),
     )
     expect(reducedMotionResult.edits.transitions).toBeUndefined()
-    expect(reducedMotionResult.edits.keyframes?.some((k) => k.target === 'video')).toBe(false)
+    expect((reducedMotionResult.edits.keyframes ?? []).filter((k) =>
+      k.target === 'video' || String(k.target).startsWith('source:'),
+    )).toEqual([])
     expect(reducedMotionResult.sequence.items[1]?.transition).toBe('cut')
     expect(reducedMotionResult.sequence.items.some((item) => item.motion)).toBe(false)
 
