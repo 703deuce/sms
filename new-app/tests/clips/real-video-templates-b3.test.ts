@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { compileTemplatePrototype, validateTemplateFamily, type TemplateChoices, type TemplateAsset, type TemplateFamilyV1, type TemplateSlot } from '@/lib/clips/real-video-templates/sequence-contract'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -47,6 +49,60 @@ describe('real-video template B3 experimental contract', () => {
     expect(r.edits.audio?.music).toMatchObject({ startMs: 0, endMs: 30000, loop: true })
     expect(new Set(r.edits.sources?.map(s => s.id)).size).toBe(1)
   })
+  it('emits real editable slot clips with cross-source transitions and transforms', () => {
+    const f = family(2)
+    Object.assign(f.slots[0] as Record<string, unknown>, {
+      media: 'video',
+      handles: { headFrames: 0, tailFrames: 15 },
+      transform: { scale: 110, cropR: 4 },
+      fx: { contrast: 12 },
+    })
+    Object.assign(f.slots[1] as Record<string, unknown>, {
+      media: 'video',
+      sourceInFrame: 15,
+      handles: { headFrames: 15, tailFrames: 0 },
+      transition: { type: 'crossfade', durationFrames: 30 },
+      transform: { x: 6, y: -3, scale: 105 },
+      fx: { brightness: 5, saturation: -8 },
+    })
+    const c = choices(2)
+    c.media.shot_1 = asset('video_a', 'video', 90)
+    c.media.shot_2 = asset('video_b', 'video', 90)
+
+    const r = compileTemplatePrototype(f, design, c, carrier(2))
+    expect(r.renderable).toBe(true)
+    expect(r.edits.videoSplits).toEqual([1000])
+    expect(r.edits.transitions).toEqual([{ srcMs: 1000, type: 'crossfade', durMs: 1000 }])
+    expect(r.edits.sourceSegments).toHaveLength(2)
+    expect(r.edits.sourceSegments?.[0]).toMatchObject({
+      id: r.slotToItemIds.shot_1,
+      startMs: 0,
+      endMs: 1000,
+      transform: { scale: 110, cropR: 4 },
+      fx: { contrast: 12 },
+    })
+    expect(r.edits.sourceSegments?.[1]).toMatchObject({
+      id: r.slotToItemIds.shot_2,
+      startMs: 1000,
+      endMs: 2000,
+      inMs: 500,
+      transform: { x: 6, y: -3, scale: 105 },
+      fx: { brightness: 5, saturation: -8 },
+    })
+    expect(r.edits.textItems?.[0]).toMatchObject({ startMs: 0, endMs: 2000 })
+    expect(r.edits.audio?.music).toMatchObject({ startMs: 0, endMs: 2000, loop: true })
+    expect(r.edits.inserts).toBeUndefined()
+    expect(r.edits.templateProvenance?.slotToItemIds).toEqual(r.slotToItemIds)
+  })
+
+  it('requires real source handles for cross-source transitions instead of degrading to cuts', () => {
+    const f = family(2)
+    Object.assign(f.slots[1] as Record<string, unknown>, {
+      transition: { type: 'crossfade', durationFrames: 30 },
+    })
+    expect(() => validateTemplateFamily(f)).toThrow(/requires 15-frame source handles/)
+  })
+
   it('is deterministic, including source reuse and stable slot IDs', () => {
     const a = compileTemplatePrototype(family(2), design, choices(2), carrier(2))
     const b = compileTemplatePrototype(family(2), design, choices(2), carrier(2))
@@ -131,6 +187,21 @@ describe('B3 source audio and absent legacy controls', () => {
     expect(canonicalEditsJson(normalizeEdits(old, bounds))).toBe(original)
     expect('templateSequence' in normalizeEdits(old, bounds)).toBe(false)
     expect('inserts' in normalizeEdits(old, bounds)).toBe(false)
+  })
+})
+
+describe('B3 production editor sequence adapter', () => {
+  it('exposes every compiled slot through both existing editor timelines without flattening', () => {
+    const fullTimeline = readFileSync(join(process.cwd(), 'components/clips/editor/timeline.tsx'), 'utf8')
+    const compactTimeline = readFileSync(join(process.cwd(), 'components/clips/editor/script-view-compact-timeline.tsx'), 'utf8')
+    const preview = readFileSync(join(process.cwd(), 'components/clips/editor/preview-stage.tsx'), 'utf8')
+
+    expect(fullTimeline).toContain('data-testid="timeline-source-segment"')
+    expect(fullTimeline).toContain('onSelectSourceSegment?.(c.id)')
+    expect(compactTimeline).toContain('data-testid="script-compact-source-segment"')
+    expect(compactTimeline).toContain('onSelectSourceSegment?.(chip.id)')
+    expect(preview).toContain('sourceFrameAt:')
+    expect(preview).toContain('segmentMediaMs(seg, source, targetSrcMs)')
   })
 })
 
