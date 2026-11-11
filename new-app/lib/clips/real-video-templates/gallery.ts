@@ -25,7 +25,7 @@ export type VideoTemplateRelease = {
   musicRequired?: boolean
   defaultMusic?: {
     id: string
-    generator: 'batch9a-pulse-v1'
+    generator: 'batch9a-pulse-v1' | 'batch9a-groove-v2'
     sha256: string
     durationFrames: number
     bpm: number
