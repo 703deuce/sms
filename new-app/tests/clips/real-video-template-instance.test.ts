@@ -1,50 +1,108 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { rows, uploads, db } = vi.hoisted(() => {
-  const rows: Record<string, any>[] = []
-  const uploads: Record<string, any>[] = []
-  const db = {
-    clipVideoTemplateInstance: {
-      findUnique: vi.fn(async ({ where }: any) => rows.find(r => r.workspaceId === where.workspaceId_idempotencyKey.workspaceId &&
-        r.idempotencyKey === where.workspaceId_idempotencyKey.idempotencyKey) ?? null),
-      create: vi.fn(async ({ data }: any) => {
-        const r = { ...data, authoringVersion: 0 }
-        rows.push(r)
-        return r
-      }),
-      findFirst: vi.fn(async ({ where }: any) => rows.find(r => r.id === where.id && r.workspaceId === where.workspaceId &&
-        (!where.status || where.status === r.status)) ?? null),
-      findFirstOrThrow: vi.fn(async ({ where }: any) => {
-        const r = rows.find(x => x.id === where.id && x.workspaceId === where.workspaceId)
-        if (!r) throw new Error('Not found')
-        return r
-      }),
-      updateMany: vi.fn(async ({ where, data }: any) => {
-        const r = rows.find(x => x.id === where.id && x.workspaceId === where.workspaceId &&
-          (!where.status || where.status === x.status) &&
-          (where.authoringVersion === undefined || where.authoringVersion === x.authoringVersion))
-        if (!r) return { count: 0 }
-        if (data.authoringState) r.authoringState = data.authoringState
-        if (data.authoringVersion?.increment) r.authoringVersion += data.authoringVersion.increment
-        if (data.status) r.status = data.status
-        return { count: 1 }
-      }),
-    },
-    clipUpload: {
-      findMany: vi.fn(async ({ where }: any) => uploads.filter(x => x.workspaceId === where.workspaceId &&
-        x.status === 'COMPLETE' && where.id.in.includes(x.id))),
-    },
+const { state, db } = vi.hoisted(() => {
+  const state = {
+    uploads: [] as Record<string, any>[],
+    projects: [] as Record<string, any>[],
+    clips: [] as Record<string, any>[],
+    media: [] as Record<string, any>[],
+    jobs: [] as Record<string, any>[],
   }
-  return { rows, uploads, db }
+  const clipProject = {
+    findFirst: vi.fn(async ({ where }: any) => {
+      const p = state.projects.find((x) => x.id === where.id && x.workspaceId === where.workspaceId && !x.deletedAt)
+      if (!p) return null
+      const clips = state.clips
+        .filter((c) => c.projectId === p.id && (!where.clips?.where?.id || c.id === where.clips.where.id) && !c.deletedAt)
+        .map((c) => ({ id: c.id, editsSaveVersion: c.editsSaveVersion, aiMeta: c.aiMeta }))
+      return { id: p.id, status: p.status, clips }
+    }),
+    create: vi.fn(async ({ data }: any) => {
+      const row = { ...data, deletedAt: null }
+      state.projects.push(row)
+      return row
+    }),
+    update: vi.fn(async ({ where, data }: any) => {
+      const row = state.projects.find((x) => x.id === where.id)
+      Object.assign(row!, data)
+      return row
+    }),
+  }
+  const clipUpload = {
+    findMany: vi.fn(async ({ where }: any) =>
+      state.uploads.filter((x) => x.workspaceId === where.workspaceId && x.status === where.status && where.id.in.includes(x.id))
+        .map(({ id, mime, durationMs, width, height }) => ({ id, mime, durationMs, width, height }))),
+    create: vi.fn(async ({ data }: any) => {
+      const row = { ...data }
+      state.uploads.push(row)
+      return row
+    }),
+  }
+  const clipProjectMedia = {
+    create: vi.fn(async ({ data }: any) => {
+      state.media.push({ ...data })
+      return data
+    }),
+  }
+  const clip = {
+    create: vi.fn(async ({ data }: any) => {
+      const row = { ...data, deletedAt: null }
+      state.clips.push(row)
+      return row
+    }),
+    findFirst: vi.fn(async ({ where }: any) => {
+      const row = state.clips.find((x) => x.id === where.id && x.workspaceId === where.workspaceId && !x.deletedAt)
+      return row ? { id: row.id, aiMeta: row.aiMeta } : null
+    }),
+    update: vi.fn(async ({ where, data }: any) => {
+      const row = state.clips.find((x) => x.id === where.id)
+      if (!row) throw new Error('missing clip')
+      Object.assign(row, data)
+      return row
+    }),
+  }
+  const clipJob = {
+    create: vi.fn(async ({ data }: any) => {
+      const row = { ...data }
+      state.jobs.push(row)
+      return row
+    }),
+    updateMany: vi.fn(async ({ where, data }: any) => {
+      let count = 0
+      for (const row of state.jobs) {
+        if (row.projectId === where.projectId && row.status === where.status) {
+          Object.assign(row, data)
+          count += 1
+        }
+      }
+      return { count }
+    }),
+  }
+  const tx = { clipProject, clipUpload, clipProjectMedia, clip, clipJob }
+  const db: any = {
+    ...tx,
+    $transaction: vi.fn(async (arg: any) => {
+      if (typeof arg === 'function') return arg(tx)
+      return Promise.all(arg)
+    }),
+  }
+  return { state, db }
 })
+
 vi.mock('server-only', () => ({}))
 vi.mock('@/lib/server/db', () => ({ getPrisma: () => db }))
-vi.mock('@/lib/supabase/id', () => ({ createId: () => 'vti_fixed' }))
+vi.mock('@/lib/storage', () => ({
+  storageDriverName: () => 's3',
+  uploadSourceKey: (workspaceId: string, uploadId: string, ext: string) =>
+    'ws/' + workspaceId + '/uploads/' + uploadId + '/source.' + ext,
+}))
 
 import {
-  createTemplateAuthoringDraft,
-  saveTemplateAuthoringDraft,
-  cancelTemplateAuthoringDraft,
+  cancelTemplateProject,
+  publishTemplateProject,
+  saveTemplateAuthoringState,
+  TemplateAssetUnavailable,
+  TemplateInstanceConflict,
 } from '@/lib/server/clips/real-video-template-instances'
 
 const family = {
@@ -63,44 +121,83 @@ const design = {
 const photo = {
   id: 'owned_photo', kind: 'image',
   license: { id: 'license_a', provenance: 'user-owned', reference: 'library_a' },
-}
+} as const
+const choices = { media: { first: photo } }
+
 beforeEach(() => {
-  rows.splice(0)
-  uploads.splice(0)
+  state.uploads.splice(0)
+  state.projects.splice(0)
+  state.clips.splice(0)
+  state.media.splice(0)
+  state.jobs.splice(0)
+  state.uploads.push({
+    id: 'owned_photo', workspaceId: 'ws_a', status: 'COMPLETE', mime: 'image/png',
+    durationMs: null, width: 1200, height: 1600,
+  })
   vi.clearAllMocks()
 })
-describe('B3 isolated template instance persistence', () => {
-  it('creates once, returning original pinned snapshot on idempotent retry', async () => {
-    const first = await createTemplateAuthoringDraft('ws_a', 'request_key_123', family, design)
-    const retry = await createTemplateAuthoringDraft('ws_a', 'request_key_123', family, design)
-    expect(retry.id).toBe(first.id)
-    expect(db.clipVideoTemplateInstance.create).toHaveBeenCalledTimes(1)
-    expect((first.snapshot as unknown as { family: { revision: number } }).family.revision).toBe(1)
-    await expect(createTemplateAuthoringDraft('ws_a', 'request_key_123',
-      { ...family, revision: 2 }, { ...design, familyRevision: 2 })).rejects.toThrow(/revision conflict/)
+
+describe('B3 transactional template project publishing', () => {
+  it('atomically publishes a new editable clip and makes retries idempotent', async () => {
+    const first = await publishTemplateProject('ws_a', 'request_key_123', family, design, choices)
+    const retry = await publishTemplateProject('ws_a', 'request_key_123', family, design, choices)
+    expect(retry).toEqual(first)
+    expect(db.clipProject.create).toHaveBeenCalledTimes(1)
+    expect(db.clip.create).toHaveBeenCalledTimes(1)
+    expect(db.clipJob.create).toHaveBeenCalledTimes(1)
+    expect(state.media).toHaveLength(1)
+
+    const clip = state.clips[0]!
+    expect(clip.edits.sourceSegments).toHaveLength(1)
+    expect(clip.edits.textItems?.[0]).toMatchObject({ startMs: 0, endMs: 1000 })
+    expect(clip.edits.inserts).toBeUndefined()
+    expect(clip.edits.templateProvenance).toMatchObject({
+      v: 1, familyId: 'one_shot', familyRevision: 1, designId: 'minimal', designRevision: 1,
+    })
+    expect(clip.aiMeta.videoTemplate.snapshot.family.revision).toBe(1)
+    expect(state.jobs[0]?.payload).toMatchObject({
+      blank: true, fullVideo: true, preseededFullVideo: true,
+      templateCarrier: true, templateCarrierFrames: 30,
+    })
   })
-  it('rejects foreign uploads without revealing existence or writing a draft', async () => {
-    await createTemplateAuthoringDraft('ws_a', 'request_key_123', family, design)
-    await expect(saveTemplateAuthoringDraft('ws_a', 'vti_fixed', 0,
-      { instanceId: 'vti_fixed', media: { first: photo } } as never)).rejects.toThrow(/unavailable/)
-    expect(db.clipVideoTemplateInstance.updateMany).not.toHaveBeenCalled()
+
+  it('rejects foreign/unavailable assets before exposing a partial project', async () => {
+    state.uploads.splice(0)
+    await expect(publishTemplateProject('ws_a', 'request_key_123', family, design, choices))
+      .rejects.toBeInstanceOf(TemplateAssetUnavailable)
+    expect(state.projects).toHaveLength(0)
+    expect(state.clips).toHaveLength(0)
+    expect(state.jobs).toHaveLength(0)
   })
-  it('saves with CAS and blocks stale versions while leaving clip edits untouched', async () => {
-    await createTemplateAuthoringDraft('ws_a', 'request_key_123', family, design)
-    uploads.push({ workspaceId: 'ws_a', id: 'owned_photo', status: 'COMPLETE', mime: 'image/png' })
-    const chosen = { instanceId: 'vti_fixed', media: { first: photo } } as never
-    const saved = await saveTemplateAuthoringDraft('ws_a', 'vti_fixed', 0, chosen)
+
+  it('keeps authoring state separate from the authoritative timeline and enforces CAS', async () => {
+    const published = await publishTemplateProject('ws_a', 'request_key_123', family, design, choices)
+    const originalEdits = structuredClone(state.clips[0]!.edits)
+    const saved = await saveTemplateAuthoringState('ws_a', published.clipId, 0, choices)
     expect(saved.authoringVersion).toBe(1)
-    expect((saved.authoringState as unknown as { media: { first: { id: string } } }).media.first.id).toBe('owned_photo')
-    await expect(saveTemplateAuthoringDraft('ws_a', 'vti_fixed', 0, chosen)).rejects.toThrow(/revision conflict/)
-    await expect(saveTemplateAuthoringDraft('ws_foreign', 'vti_fixed', 0, chosen)).rejects.toThrow('Not found')
+    expect(state.clips[0]!.edits).toEqual(originalEdits)
+    expect(state.clips[0]!.aiMeta.videoTemplate.authoringVersion).toBe(1)
+    await expect(saveTemplateAuthoringState('ws_a', published.clipId, 0, choices))
+      .rejects.toBeInstanceOf(TemplateInstanceConflict)
   })
-  it('makes cancel idempotent and prevents edits after cancel', async () => {
-    await createTemplateAuthoringDraft('ws_a', 'request_key_123', family, design)
-    await cancelTemplateAuthoringDraft('ws_a', 'vti_fixed')
-    await cancelTemplateAuthoringDraft('ws_a', 'vti_fixed')
-    expect(rows[0].status).toBe('CANCELED')
-    await expect(saveTemplateAuthoringDraft('ws_a', 'vti_fixed', 0,
-      { instanceId: 'vti_fixed', media: {} })).rejects.toThrow('Not found')
+
+  it('pins revisions across idempotent retries and rejects a different definition', async () => {
+    await publishTemplateProject('ws_a', 'request_key_123', family, design, choices)
+    await expect(publishTemplateProject(
+      'ws_a', 'request_key_123',
+      { ...family, revision: 2 },
+      { ...design, familyRevision: 2 },
+      choices,
+    )).rejects.toBeInstanceOf(TemplateInstanceConflict)
+  })
+
+  it('cancels pending carrier work idempotently without deleting the timeline', async () => {
+    const published = await publishTemplateProject('ws_a', 'request_key_123', family, design, choices)
+    const edits = structuredClone(state.clips[0]!.edits)
+    await cancelTemplateProject('ws_a', published.projectId)
+    await cancelTemplateProject('ws_a', published.projectId)
+    expect(state.projects[0]!.status).toBe('CANCELED')
+    expect(state.jobs[0]!.status).toBe('FAILED')
+    expect(state.clips[0]!.edits).toEqual(edits)
   })
 })
