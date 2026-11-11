@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "music": {
+    "generator": "batch9a-groove-v2",
+    "sha256": "c418b398ea7dc14a92a16596b7687d190735e1f14947bc954e357d62ba6f1482",
+    "durationFrames": 480
+  },
+  "anchors": [
+    {"id":"f01_bold","familyId":"f01","totalFrames":210,"slotFrames":[45,45,60,60],"slotStarts":[0,45,90,150],"transitions":[{"atFrame":45,"type":"whip_pan","durationFrames":5},{"atFrame":90,"type":"whip_pan","durationFrames":5},{"atFrame":150,"type":"crossfade","durationFrames":8}],"headline":"WAIT FOR IT","closing":"THE REVEAL"},
+    {"id":"f02_bold","familyId":"f02","totalFrames":240,"slotFrames":[60,60,45,75],"slotStarts":[0,60,120,165],"transitions":[{"atFrame":60,"type":"dip_white","durationFrames":5},{"atFrame":120,"type":"dip_white","durationFrames":5},{"atFrame":165,"type":"crossfade","durationFrames":8}],"headline":"BEFORE","closing":"AFTER"},
+    {"id":"f03_bold","familyId":"f03","totalFrames":240,"slotFrames":[36,45,45,54,60],"slotStarts":[0,36,81,126,180],"transitions":[{"atFrame":36,"type":"zoom_blur","durationFrames":5},{"atFrame":81,"type":"zoom_blur","durationFrames":5},{"atFrame":126,"type":"zoom_blur","durationFrames":5},{"atFrame":180,"type":"crossfade","durationFrames":8}],"headline":"NEW DROP","closing":"DETAILS THAT HIT"},
+    {"id":"f04_bold","familyId":"f04","totalFrames":300,"slotFrames":[60,60,48,48,84],"slotStarts":[0,60,120,168,216],"transitions":[{"atFrame":60,"type":"crossfade","durationFrames":5},{"atFrame":120,"type":"crossfade","durationFrames":5},{"atFrame":168,"type":"crossfade","durationFrames":5},{"atFrame":216,"type":"crossfade","durationFrames":8}],"headline":"A SMALL MOMENT","closing":"WORTH REMEMBERING"},
+    {"id":"f05_bold","familyId":"f05","totalFrames":300,"slotFrames":[60,45,45,60,90],"slotStarts":[0,60,105,150,210],"transitions":[{"atFrame":60,"type":"push_left","durationFrames":5},{"atFrame":105,"type":"push_left","durationFrames":5},{"atFrame":150,"type":"push_left","durationFrames":5},{"atFrame":210,"type":"crossfade","durationFrames":8}],"headline":"ADD DEPTH","closing":"LAYER THE STORY"},
+    {"id":"f06_bold","familyId":"f06","totalFrames":270,"slotFrames":[30,36,42,48,54,60],"slotStarts":[0,30,66,108,156,210],"transitions":[{"atFrame":30,"type":"wipe_left","durationFrames":5},{"atFrame":66,"type":"wipe_left","durationFrames":5},{"atFrame":108,"type":"wipe_left","durationFrames":5},{"atFrame":156,"type":"wipe_left","durationFrames":5},{"atFrame":210,"type":"crossfade","durationFrames":8}],"headline":"WEEKEND","closing":"ON REPEAT"},
+    {"id":"f07_bold","familyId":"f07","totalFrames":240,"slotFrames":[75,60,45,60],"slotStarts":[0,75,135,180],"transitions":[{"atFrame":75,"type":"push_up","durationFrames":5},{"atFrame":135,"type":"push_up","durationFrames":5},{"atFrame":180,"type":"crossfade","durationFrames":8}],"headline":"YOU'RE INVITED","closing":"SAVE THE DATE"},
+    {"id":"f08_bold","familyId":"f08","totalFrames":300,"slotFrames":[48,48,60,60,84],"slotStarts":[0,48,96,156,216],"transitions":[{"atFrame":48,"type":"crossfade","durationFrames":5},{"atFrame":96,"type":"crossfade","durationFrames":5},{"atFrame":156,"type":"crossfade","durationFrames":5},{"atFrame":216,"type":"crossfade","durationFrames":8}],"headline":"TONIGHT'S TABLE","closing":"STAY FOR DESSERT"},
+    {"id":"f09_bold","familyId":"f09","totalFrames":300,"slotFrames":[48,48,48,60,96],"slotStarts":[0,48,96,144,204],"transitions":[{"atFrame":48,"type":"whip_pan","durationFrames":5},{"atFrame":96,"type":"whip_pan","durationFrames":5},{"atFrame":144,"type":"whip_pan","durationFrames":5},{"atFrame":204,"type":"crossfade","durationFrames":8}],"headline":"DAY ONE","closing":"NOW"},
+    {"id":"f10_bold","familyId":"f10","totalFrames":420,"slotFrames":[60,75,75,75,60,75],"slotStarts":[0,60,135,210,285,345],"transitions":[{"atFrame":60,"type":"push_left","durationFrames":5},{"atFrame":135,"type":"push_left","durationFrames":5},{"atFrame":210,"type":"push_left","durationFrames":5},{"atFrame":285,"type":"push_left","durationFrames":5},{"atFrame":345,"type":"crossfade","durationFrames":8}],"headline":"STEP BY STEP","closing":"TRY THIS NEXT"}
+  ]
+}
