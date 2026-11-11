@@ -249,6 +249,8 @@ jobs:
           sudo apt-get install -y -qq ffmpeg
           python -m pip install pytest
       - name: Batch 3B worker FFmpeg proof
+        env:
+          B3B_EDITABLE_PROOF: editable-timeline-structure-proof.json
         run: PYTHONPATH=worker python -m pytest -q -rs --tb=short worker/tests/test_real_video_template_sequence.py
 
   captions-worker-regression:
