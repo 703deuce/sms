@@ -2045,6 +2045,11 @@ def render_edited_clip(
     music_env = _volume_expr(edits, "music", origin_s=(music_win or {}).get("startMs", 0) / 1000.0)
     voice_env = None if _voice_muted(edits) else _volume_expr(edits, "voice")
     music_path = (audio_assets or {}).get("music_path") if audio_assets else None
+    # B5 fail-closed template audio: an approved soundtrack must be present at export.
+    # Legacy projects and templates without music retain their existing audio behavior.
+    if isinstance(edits.get("templateProvenance"), dict) and music_edits.get("uploadId"):
+        from clips_worker.audio_render import require_template_soundtrack
+        require_template_soundtrack(music_edits, music_path)
     sfx_paths = (audio_assets or {}).get("sfx_paths") or [] if audio_assets else []
     # G1b3: per-SFX volume envelopes (`sfx:<id>` keyframes, local ms from the SFX start).
     sfx_ids = (audio_assets or {}).get("sfx_ids") or [] if audio_assets else []
