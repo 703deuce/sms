@@ -475,11 +475,16 @@ def source_fx_filter(fx: dict | None) -> str:
     n = _normalize_source_fx(fx)
     if not n:
         return ""
-    # ffmpeg eq: brightness -1..1; contrast/saturation 0..2 for our -100..100 contract.
-    brightness = float(n.get("brightness", 0.0)) / 100.0
+    # Browser preview uses CSS brightness(multiplier) -> contrast -> saturate, in that order.
+    # Mirror brightness with channel multipliers (not eq's additive brightness), then eq's
+    # center-relative contrast and saturation. Keeping the operation order is important for parity.
+    brightness = 1.0 + float(n.get("brightness", 0.0)) / 100.0
     contrast = 1.0 + float(n.get("contrast", 0.0)) / 100.0
     saturation = 1.0 + float(n.get("saturation", 0.0)) / 100.0
-    return f",eq=brightness={brightness:.6f}:contrast={contrast:.6f}:saturation={saturation:.6f}"
+    return (
+        f",colorchannelmixer=rr={brightness:.6f}:gg={brightness:.6f}:bb={brightness:.6f},"
+        f"eq=contrast={contrast:.6f}:saturation={saturation:.6f}"
+    )
 
 
 def source_transform_filter(transform: dict | None, w: int, h: int) -> str:
