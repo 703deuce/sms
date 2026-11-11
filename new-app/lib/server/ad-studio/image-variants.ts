@@ -1,5 +1,6 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
+import { Prisma } from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
 import { createDefaultStudioService } from '@/lib/studio/runtime'
 import { createStudioJob, refreshStudioJob, type StudioService } from '@/lib/studio/jobs'
@@ -159,6 +160,6 @@ export async function reviewReadyPhotoAds(workspaceId: string, runId: string, sv
   }
   if (!changed) return
   const nextPlan: AdPlan = { ...plan, photoAds: { ...plan.photoAds, qcByIndex } }
-  await db.adStudioRun.updateMany({ where: { id: runId, workspaceId }, data: { plan: nextPlan as never } })
+  await db.adStudioRun.updateMany({ where: { id: runId, workspaceId }, data: { plan: JSON.parse(JSON.stringify(nextPlan)) as Prisma.InputJsonValue } })
   console.info('[ad-studio:r5] still_qc_persisted', { runId, reviewed: Object.keys(qcByIndex).length })
 }
