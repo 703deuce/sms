@@ -192,9 +192,15 @@ export async function createStudioJob(
 
   let taskId: string
   try {
+    const referenceUrls: string[] = []
+    for (const assetId of resolved.referenceAssetIds) {
+      const url = await resolveAssetUrl(svc, input.workspaceId, assetId)
+      if (url) referenceUrls.push(url)
+    }
     const urls = {
       sourceVideoUrl: await resolveAssetUrl(svc, input.workspaceId, resolved.sourceVideoAssetId),
-      referenceUrl: await resolveAssetUrl(svc, input.workspaceId, resolved.referenceAssetId),
+      referenceUrl: referenceUrls[0] ?? await resolveAssetUrl(svc, input.workspaceId, resolved.referenceAssetId),
+      referenceUrls,
       startFrameUrl: await resolveAssetUrl(svc, input.workspaceId, resolved.startFrameAssetId),
       endFrameUrl: await resolveAssetUrl(svc, input.workspaceId, resolved.endFrameAssetId),
     }
