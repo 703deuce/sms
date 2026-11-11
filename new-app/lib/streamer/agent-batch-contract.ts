@@ -25,3 +25,16 @@ export function readStreamerAgentBatch(raw:unknown):StreamerAgentBatch|null{
     !Array.isArray(b.errors))return null
   return b
 }
+
+/** Only explicitly published clip ids are eligible for batch bookkeeping.
+ * Run outputs are still checked against workspace/project ownership in the DB. */
+export function publishedBatchClipIds(run:{
+  resultClipId?:string|null;producerNotes?:unknown
+}):string[]{
+  const notes=run.producerNotes&&typeof run.producerNotes==='object'&&
+    !Array.isArray(run.producerNotes)
+    ?run.producerNotes as Record<string,unknown>:{}
+  const listed=Array.isArray(notes.publishedClipIds)?notes.publishedClipIds:[]
+  return [...new Set([run.resultClipId,...listed].filter(
+    (id):id is string=>typeof id==='string'&&id.length>0))]
+}
