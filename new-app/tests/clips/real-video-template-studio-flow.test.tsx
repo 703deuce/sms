@@ -50,7 +50,7 @@ const provisionedMusic = {
   id: 'tpl_audio_fixture',
   kind: 'audio' as const,
   durationFrames: 480,
-  license: { id: 'batch9a_first_party', provenance: 'first-party' as const, reference: 'batch9a-audio-v1' },
+  license: { id: 'batch9a_first_party', provenance: 'first-party' as const, reference: 'batch9a-audio-v2' },
 }
 vi.mock('@/components/clips/editor/preview-stage', () => ({
   PreviewStage: ({ edits }: { edits: { textItems?: Array<{ text?: string }> } }) =>
@@ -61,7 +61,7 @@ import { VideoTemplateStudio } from '@/components/clips/templates/video-template
 import { uploadClipFile } from '@/lib/clips/upload'
 
 const license = { id: 'owned', provenance: 'user-owned', reference: 'workspace_upload' }
-const BATCH9A_HASH = '4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e'
+const BATCH9A_HASH = 'c418b398ea7dc14a92a16596b7687d190735e1f14947bc954e357d62ba6f1482'
 const media = [
   { asset: { id: 'photo_a', kind: 'image', license }, label: 'Photo A', durationMs: null,
     width: 800, height: 1200, url: '/photo-a.png', available: true },
@@ -119,13 +119,13 @@ beforeEach(() => {
             origin: 'first-party-generated',
             author: 'Transovo AI',
             license: 'Transovo first-party original template music',
-            revision: 'batch9a-audio-v1',
+            revision: 'batch9a-audio-v2',
             sha256: BATCH9A_HASH,
             commercialUse: true,
             exportAllowed: true,
             redistributionAllowed: true,
             verifiedDurationFrames: 480,
-            verifiedAt: 'batch9a-audio-v1',
+            verifiedAt: 'batch9a-audio-v2',
           },
           schedule: {
             v: 1,
@@ -280,11 +280,11 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
     media.push(audio as any)
     media.push({
       asset: provisionedMusic,
-      label: 'Batch 9A pulse bed',
+      label: 'Batch 9A groove bed',
       durationMs: 16000,
       width: null,
       height: null,
-      url: '/batch9a-pulse.wav',
+      url: '/batch9a-groove-v2.wav',
       available: true,
     } as any)
     try {
