@@ -26,6 +26,7 @@ COPY worker/prototype/v3 /app/v3
 # EP1: fonts are PINNED to the repo copies (worker/prototype/v3/fonts → /app/v3/fonts), byte-identical
 # to new-app/public/fonts/clip (the editor preview's libass-wasm fonts). Was curl from GitHub master,
 # which could change the export without a commit. Bookworm has no fonts-montserrat apt package.
+# Japanese and emoji retain Debian Noto CJK / Color Emoji until pinned full assets land.
 RUN set -eux; \
     mkdir -p /usr/share/fonts/truetype/montserrat /usr/share/fonts/truetype/anton; \
     cp /app/v3/fonts/Montserrat-Black.ttf /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf; \
@@ -46,8 +47,6 @@ RUN set -eux; \
     test -s /app/v3/fonts/t6/NotoSansArabic.ttf; \
     test -s /app/v3/fonts/t6/NotoSansDevanagari.ttf; \
     test -s /app/v3/fonts/t6/NotoSansThai.ttf; \
-    # Japanese and emoji retain the existing Debian Noto CJK / Color Emoji fallback
-    # until their optional large pinned assets have been successfully vendored. \
     fc-cache -f; \
     fc-list | grep -i montserrat | head -3; \
     fc-match -f '%{file}\n' 'Montserrat Black' | grep -q Montserrat-Black.ttf; \
