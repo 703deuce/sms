@@ -52,6 +52,7 @@ vi.mock('@/components/clips/editor/preview-stage', () => ({
 }))
 import { VideoTemplatesGallery } from '@/components/clips/templates/video-templates-gallery'
 import { VideoTemplateStudio } from '@/components/clips/templates/video-template-studio'
+import { uploadClipFile } from '@/lib/clips/upload'
 
 const license = { id: 'owned', provenance: 'user-owned', reference: 'workspace_upload' }
 const media = [
@@ -65,7 +66,10 @@ const media = [
 const ok = (data: unknown) => Response.json({ data })
 const detail = () => ({
   clip: { editsSaveVersion: backend.project?.editsSaveVersion ?? 0 },
-  edits: { v: 2, trim: { in: 0, out: 2000 }, audio: { music: null },
+  edits: { v: 2, trim: { in: 0, out: 2000 }, audio: { music: backend.draft?.music ? {
+      generationId: backend.draft.music.id, uploadId: backend.draft.music.id,
+      startMs: 0, endMs: 2000, loop: false, volume: 0.35, fadeInMs: 200, fadeOutMs: 300,
+    } : null },
     textItems: [{ text: backend.draft?.texts.headline || 'Original headline' }] },
   mediaUrls: { source: '/silent-carrier.mp4', proxy: null, preview: null, poster: null },
   media: null, crop: { track: null },
@@ -78,6 +82,7 @@ beforeEach(() => {
   backend.exportCalls = 0
   router.push.mockClear()
   router.replace.mockClear()
+  vi.mocked(uploadClipFile).mockImplementation(async () => { throw new Error('Uploads are not needed in this library-media fixture') })
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
@@ -195,5 +200,68 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
     expect(backend.exportCalls).toBe(1)
     expect(backend.renderCalls).toBeGreaterThan(0)
     resumed.unmount()
+  })
+
+  it('provisions the Batch 9A first-party beat bed before composed preview and worker export', async () => {
+    const release = released[0] as any
+    const previous = {
+      policy: release.design.musicPolicy,
+      defaultMusic: release.defaultMusic,
+      musicRequired: release.musicRequired,
+      certificationStatus: release.certificationStatus,
+      reviewed: release.reviewed,
+      verified: release.previewRenderVerified,
+    }
+    const hash='4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e'
+    const audio = {
+      asset:{id:'generated_audio',kind:'audio',durationFrames:480,license},
+      label:'Batch 9A pulse bed',durationMs:16000,width:null,height:null,
+      url:'/batch9a-pulse.wav',available:true,
+    }
+    release.design.musicPolicy='licensed-only'
+    release.defaultMusic={
+      id:'batch9a_anchor_bed_v1',generator:'batch9a-pulse-v1',sha256:hash,
+      durationFrames:480,bpm:150,beatEveryFrames:3,author:'Transovo AI',
+      license:'Transovo first-party original template music',revision:'batch9a-audio-v1',
+    }
+    release.musicRequired=true
+    release.certificationStatus='preview'
+    release.reviewed=false
+    release.previewRenderVerified=false
+    media.push(audio as any)
+    vi.mocked(uploadClipFile).mockResolvedValue({uploadId:'generated_audio'} as any)
+    const digest=Uint8Array.from(hash.match(/../g)!.map((byte:string)=>parseInt(byte,16))).buffer
+    vi.stubGlobal('crypto',{
+      randomUUID:()=> '11111111-2222-4333-8444-555555555555',
+      subtle:{digest:vi.fn(async()=>digest)},
+    })
+    try {
+      render(<VideoTemplateStudio release={release as VideoTemplateRelease} />)
+      await screen.findByText('First-party beat-synced soundtrack ready')
+      expect(uploadClipFile).toHaveBeenCalled()
+      await screen.findByRole('button',{name:'Use Photo A'})
+      fireEvent.click(screen.getByRole('button',{name:'Use Photo A'}))
+      const slots=within(screen.getByRole('group',{name:'Select a template slot'})).getAllByRole('button')
+      fireEvent.click(slots[1]!)
+      fireEvent.click(screen.getByRole('button',{name:'Use Photo B'}))
+      await waitFor(()=>expect(screen.getByRole('button',{name:'Prepare full preview and project'}).hasAttribute('disabled')).toBe(false))
+      fireEvent.click(screen.getByRole('button',{name:'Prepare full preview and project'}))
+      expect(await screen.findByTestId('template-native-preview')).toBeTruthy()
+      expect(backend.draft?.templateMusic?.rights.sha256).toBe(hash)
+      expect(backend.draft?.templateMusic?.schedule.beats.slice(0,4)).toEqual([0,3,6,9])
+      expect(screen.getByLabelText('Template soundtrack preview')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button',{name:/Save and export video/}))
+      expect((await screen.findByRole('link',{name:'Download video'})).getAttribute('href'))
+        .toBe('/signed-template.mp4')
+      expect(backend.exportCalls).toBe(1)
+    } finally {
+      media.pop()
+      release.design.musicPolicy=previous.policy
+      release.defaultMusic=previous.defaultMusic
+      release.musicRequired=previous.musicRequired
+      release.certificationStatus=previous.certificationStatus
+      release.reviewed=previous.reviewed
+      release.previewRenderVerified=previous.verified
+    }
   })
 })
