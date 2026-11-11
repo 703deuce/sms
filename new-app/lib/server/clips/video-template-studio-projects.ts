@@ -307,7 +307,10 @@ export async function savePublishedStudioDraft(
         transitions: compiled.edits.transitions,
         keyframes: compiled.edits.keyframes,
         textItems: compiled.edits.textItems,
-        audio: { ...old.audio, music: compiled.edits.audio.music },
+        audio: {
+          ...(old.audio ?? { music: null, sfx: [] }),
+          music: compiled.edits.audio?.music ?? null,
+        },
         templateProvenance: compiled.edits.templateProvenance,
       }
       // Selected uploads are always revalidated within the transaction as well.

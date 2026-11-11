@@ -52,6 +52,21 @@ def probe_audio_duration_s(path: Path) -> float | None:
         return None
 
 
+def require_template_soundtrack(music_edits: dict, music_path: Path | str | None) -> None:
+    """B5 export gate: a declared template soundtrack must not disappear silently.
+
+    This guard is invoked only for videoTemplate provenance in edits_render;
+    legacy MP3/audio exports and clips without a soundtrack are unchanged.
+    """
+    if not isinstance(music_edits, dict) or not music_edits.get("uploadId"):
+        return
+    if not music_path or not Path(music_path).is_file() or Path(music_path).stat().st_size <= 0:
+        raise ValueError("Template music missing at export; restore the rights-approved upload")
+    duration_s = probe_audio_duration_s(Path(music_path))
+    if duration_s is None or duration_s <= 0:
+        raise ValueError("Template music is corrupt or has no decodable duration")
+
+
 MUSIC_LOOP_XFADE_S = 1.5
 
 
