@@ -36,6 +36,17 @@ def probe(path:Path)->dict:
         FFPROBE,"-v","error","-show_entries","format=duration:stream=codec_type",
         "-of","json",str(path)],text=True,timeout=30))
 
+def video_frames(path:Path)->int:
+    data=json.loads(subprocess.check_output([
+        FFPROBE,"-v","error","-select_streams","v:0","-count_frames",
+        "-show_entries","stream=nb_read_frames,nb_frames","-of","json",str(path)
+    ],text=True,timeout=30))
+    streams=data.get("streams") or []
+    if not streams:return 0
+    raw=streams[0].get("nb_read_frames") or streams[0].get("nb_frames") or 0
+    try:return int(raw)
+    except (TypeError,ValueError):return 0
+
 def frame_mean(path:Path,frame:int,total:int)->float:
     sec=max(.01,min((total-2)/30.0,frame/30.0))
     data=subprocess.check_output([
@@ -138,18 +149,22 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
         work=Path(td); edits=row["edits"]
         src=carrier(cache,out_root/"_carrier_cache",total)
         sourced=apply_full_render_sources(src,edits,0,duration_ms,work,media)
+        stage_frames={"carrier":video_frames(src),"sources":video_frames(sourced)}
         consumed=source_transition_boundaries(edits)
         transitions=[tr for tr in (edits.get("transitions") or [])
                      if int(round(float(tr.get("srcMs",-1)))) not in consumed]
         motion={**edits,"transitions":transitions or None}
         if motion.get("keyframes") or motion.get("transitions"):
             sourced=apply_motion_after_cut(sourced,sourced,motion,[(0,duration_ms)],0,work,{})
+        stage_frames["motion"]=video_frames(sourced)
         text_out=work/"text.mp4"
         with_text=apply_text_items(sourced,text_out,edits,play_w=W,play_h=H)
+        stage_frames["text"]=video_frames(with_text)
         require_template_soundtrack((edits.get("audio") or {}).get("music") or {},music)
         final=target/"render.mp4"
         apply_audio_mix(with_text,final,music,[],length_s=total/30.0,volume=.35,
             duck_depth=.55,fade_in_s=.5,fade_out_s=1.0,music_loop=False)
+        stage_frames["audioMix"]=video_frames(final)
         poster=target/"poster.jpg"
         run(FFMPEG,"-y","-v","error","-ss",f"{total/60:.3f}","-i",str(final),
             "-frames:v","1","-vf","scale=360:-2:flags=lanczos",str(poster))
@@ -167,6 +182,7 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
         "transitions":len(row["edits"].get("transitions") or []),
         "textItems":len(row["edits"].get("textItems") or []),
         "musicTrack":bool((row["edits"].get("audio") or {}).get("music")),
+        "expectedFrames":total,"stageFrames":stage_frames,
     }
     expected_slots=len(boundaries)-1
     ok=(checks["video"] and checks["audio"] and checks["duration"] and not black and
@@ -206,7 +222,12 @@ def main()->int:
             result={"id":row["id"],"definitionHash":row["definitionHash"],"ok":False,
                 "error":f"{type(exc).__name__}: {str(exc)[:500]}"}
         results.append(result)
-        print(f"[b8-render] {n}/{len(rows)} {row['id']} ok={result['ok']}",flush=True)
+        if result.get("ok"):
+            print(f"[b8-render] {n}/{len(rows)} {row['id']} ok=True",flush=True)
+        else:
+            print(f"[b8-render] {n}/{len(rows)} {row['id']} ok=False "
+                  f"checks={json.dumps(result.get('checks') or {})} "
+                  f"error={result.get('error','')}",flush=True)
     manifest={"v":1,"shard":args.shard,"shards":args.shards,"expected":len(rows),
         "passed":sum(1 for r in results if r["ok"]),"failed":sum(1 for r in results if not r["ok"]),
         "results":results}
