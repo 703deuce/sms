@@ -5,9 +5,10 @@ import { editorToolbarTextBtn } from '@/lib/clips/editor/editor-chrome-tokens'
 
 export const EDITOR_MODE_SWITCHER_ITEMS = [
   { id: 'clip', label: 'Clip editor' },
+  { id: 'full-video', label: 'Full video' },
   { id: 'producer', label: 'AI Producer' },
   { id: 'story', label: 'Story blocks' },
-  { id: 'templates', label: 'Templates' },
+  { id: 'templates', label: 'Layouts' },
   { id: 'generate', label: 'Change this shot' },
 ] as const
 
