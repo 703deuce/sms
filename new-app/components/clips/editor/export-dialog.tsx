@@ -1309,7 +1309,7 @@ export function ExportDialog({
             onAcknowledgeChange={setCaptionSyncAck}
           />
         ) : null}
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-4 flex flex-wrap gap-2 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-6px_16px_-12px_rgba(0,0,0,0.35)]" data-testid="export-dialog-actions">
           {!downloadUrl ? (
             <Button
               onClick={() => void startExport()}
