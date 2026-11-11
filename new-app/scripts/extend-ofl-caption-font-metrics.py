@@ -19,6 +19,11 @@ NEW = {
     "Caveat": "Caveat.ttf",
     "Space Grotesk": "SpaceGrotesk.ttf",
     "Space Mono": "SpaceMono-Regular.ttf",
+    "Noto Sans Arabic": "NotoSansArabic.ttf",
+    "Noto Sans Devanagari": "NotoSansDevanagari.ttf",
+    "Noto Sans Thai": "NotoSansThai.ttf",
+    "Noto Sans JP": "NotoSansJP.ttf",
+    "Noto Emoji": "NotoEmoji.ttf",
 }
 
 data = json.loads(DEST.read_text(encoding="utf-8"))
