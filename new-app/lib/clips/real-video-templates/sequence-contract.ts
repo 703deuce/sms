@@ -473,6 +473,7 @@ export function compileTemplate(
     const itemId = templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'slot', slot.id)
     slotToItemIds[slot.id] = itemId
     slotToSourceIds[slot.id] = sourceId
+    if (asset.kind === 'audio') throw new Error('slot ' + slot.id + ': audio-only media is unsupported')
     slotToMediaKind[slot.id] = asset.kind
     slotWindows[slot.id] = { startFrame: slot.startFrame, durationFrames: slot.durationFrames }
     const startMs = templateFrameToMs(slot.startFrame), endMs = templateFrameToMs(slot.startFrame + slot.durationFrames)

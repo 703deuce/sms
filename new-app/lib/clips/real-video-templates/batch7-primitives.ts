@@ -178,8 +178,8 @@ export function validateBatch7Primitives(
         box: parseBox(value.box, kind + '.box'), thickness: integer(value.thickness, 4, 40, kind + '.thickness') })
     } else if (kind === 'collage_card') {
       exact(value, ['kind','id','startFrame','durationFrames','style','slotIds','title'], kind)
-      if (!Array.isArray(value.slotIds) || value.slotIds.length < 2 || value.slotIds.length > 4)
-        throw new Error(kind + ': requires 2..4 slots')
+      if (!Array.isArray(value.slotIds) || (value.slotIds.length !== 2 && value.slotIds.length !== 4))
+        throw new Error(kind + ': requires 2 or 4 slots')
       const refs = value.slotIds.map((s) => slotId(s, slotIds, kind + '.slotIds'))
       if (new Set(refs).size !== refs.length) throw new Error(kind + ': duplicate slot')
       const title = value.title == null ? undefined : text(value.title, 70, kind + '.title')
@@ -262,7 +262,7 @@ export function compileBatch7Primitives(
     points: Array<{ tMs: number; v: number; ease?: 'in' | 'out' | 'inOut' }>,
   ) => {
     if (!reducedMotion && points.length > 1)
-      generatedTracks.push({ target: 'text:' + itemId, prop, points })
+      generatedTracks.push({ target: `text:${itemId}` as const, prop, points })
   }
   const shape = (
     primitive: Batch7TemplatePrimitive,

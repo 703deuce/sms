@@ -69,7 +69,7 @@ describe('Batch 7 standalone reusable primitives', () => {
       { kind: 'photo_frame', id: 'frame', startFrame: 0, durationFrames: 60, slotId: 'shot_1',
         box: { x: .05, y: .05, width: .9, height: .9 }, thickness: 12, style },
       { kind: 'collage_card', id: 'collage', startFrame: 60, durationFrames: 60,
-        slotIds: ['shot_2', 'shot_3', 'shot_4'], title: 'Weekend', style },
+        slotIds: ['shot_2', 'shot_3'], title: 'Weekend', style },
       { kind: 'confetti', id: 'confetti', startFrame: 120, durationFrames: 60,
         box: { x: .05, y: .05, width: .9, height: .75 }, count: 6, style },
       { kind: 'countdown', id: 'countdown', startFrame: 0, from: 3, stepFrames: 10,
@@ -95,7 +95,7 @@ describe('Batch 7 standalone reusable primitives', () => {
     expect(result.edits.textItems?.filter((i) => /b7_countdown__n_/.test(i.id))).toHaveLength(3)
     expect(result.edits.textItems?.some((i) => i.id === 'b7_glow__text' && i.style.shadow?.color === '#22D3EE')).toBe(true)
     expect(result.edits.keyframes?.some((k) => k.target.startsWith('text:b7_route__arrow'))).toBe(true)
-    expect(result.edits.sourceSegments?.find((s) => s.id === result.slotToItemIds.shot_2)?.layout?.kind).toBe('grid')
+    expect(result.edits.sourceSegments?.find((s) => s.id === result.slotToItemIds.shot_2)?.layout?.kind).toBe('side_by_side')
     expect(result.edits.sourceSegments?.find((s) => s.id === result.slotToItemIds.shot_4)?.layout?.kind).toBe('side_by_side')
   })
 
@@ -146,6 +146,18 @@ describe('Batch 7 standalone reusable primitives', () => {
     expect(item?.text).toBeTruthy()
     expect(item?.style.size).toBeGreaterThanOrEqual(24)
     expect(item?.style.size).toBeLessThanOrEqual(240)
+  })
+
+  it('compiles a four-photo collage to the existing 2x2 source grid without flattening photos', () => {
+    const f = family(4)
+    f.primitives = [{ kind: 'collage_card', id: 'four_up', startFrame: 0, durationFrames: 60,
+      slotIds: ['shot_1', 'shot_2', 'shot_3', 'shot_4'], title: 'Four moments', style }]
+    const result = compileTemplate(f, design, choices(4), carrier(f.totalFrames))
+    const seg = result.edits.sourceSegments?.find((s) => s.id === result.slotToItemIds.shot_1)
+    expect(seg?.layout).toMatchObject({ kind: 'grid' })
+    expect(new Set([
+      seg?.sourceId, seg?.layout?.withSourceId, seg?.layout?.withSourceId2, seg?.layout?.withSourceId3,
+    ]).size).toBe(4)
   })
 
   it('keeps the same source usable in independent slots and preserves authored crop transforms', () => {

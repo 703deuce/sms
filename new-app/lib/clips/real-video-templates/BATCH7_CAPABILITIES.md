@@ -8,7 +8,7 @@ export consume the existing text/shape, keyframe and source-composite paths.
 | Primitive / capability | Status | Authoritative representation | Reduced-motion / flash behavior |
 | --- | --- | --- | --- |
 | Photo frame | supported | four editable shape \`textItems\` | static |
-| Collage card (2–4 sources) | supported | existing \`sourceSegments[].layout\` + editable frame/title | static composite |
+| Collage card (2 or 4 photo sources) | supported | existing \`sourceSegments[].layout\` + editable frame/title | static composite |
 | Confetti | supported | bounded editable shape items + item-local keyframes | static confetti with reduced motion; no flicker with reduced flash |
 | Countdown | supported | discrete timed text items | static number changes; no fake \`count_up\` |
 | Before / after | supported | existing side-by-side source layout + labels/divider | static |

@@ -117,10 +117,10 @@ export function planSuppliedLayerParallax(
   const keyframes = [...(edits.keyframes ?? [])]
   if (!request.reducedMotion) {
     keyframes.push(
-      { target: 'broll:' + bgId, prop: 'x', points: [{ tMs: 0, v: -1, ease: 'inOut' }, { tMs: span, v: 1 }] },
-      { target: 'broll:' + bgId, prop: 'scale', points: [{ tMs: 0, v: 102, ease: 'inOut' }, { tMs: span, v: 104 }] },
-      { target: 'broll:' + fgId, prop: 'x', points: [{ tMs: 0, v: 1, ease: 'inOut' }, { tMs: span, v: -1 }] },
-      { target: 'broll:' + fgId, prop: 'scale', points: [{ tMs: 0, v: 106, ease: 'inOut' }, { tMs: span, v: 110 }] },
+      { target: `broll:${bgId}` as const, prop: 'x', points: [{ tMs: 0, v: -1, ease: 'inOut' }, { tMs: span, v: 1 }] },
+      { target: `broll:${bgId}` as const, prop: 'scale', points: [{ tMs: 0, v: 102, ease: 'inOut' }, { tMs: span, v: 104 }] },
+      { target: `broll:${fgId}` as const, prop: 'x', points: [{ tMs: 0, v: 1, ease: 'inOut' }, { tMs: span, v: -1 }] },
+      { target: `broll:${fgId}` as const, prop: 'scale', points: [{ tMs: 0, v: 106, ease: 'inOut' }, { tMs: span, v: 110 }] },
     )
   }
   return {
