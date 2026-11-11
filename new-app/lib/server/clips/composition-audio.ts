@@ -42,7 +42,8 @@ export async function getCompositionAudioContext(workspaceId: string, compositio
   const wordsById = new Map(editorWords.map((w) => [w.id, w]))
   const document = (row.document ?? { v: 1, keptWordIds: [], deletedWordIds: [] }) as ScriptDocumentV1
   const edl = deriveEdl(document, wordsById, { padMs: 0 })
-  const lengthMs = Math.max(3000, Math.min(300_000, outputDurationMs(edl) || project.rangeEndMs - project.rangeStartMs))
+  const outputLengthMs = outputDurationMs(edl) || project.rangeEndMs - project.rangeStartMs
+  const lengthMs = Math.max(3000, Math.min(300_000, outputLengthMs))
 
   const transcriptText = editorWords
     .filter((w) => document.keptWordIds.includes(w.id))
@@ -63,6 +64,8 @@ export async function getCompositionAudioContext(workspaceId: string, compositio
     projectId: row.projectId,
     clipId: row.clipId,
     lengthMs,
+    // Chapter generation uses the full edited output; audio processing keeps its existing 5-minute cap.
+    chapterDurationMs: Math.max(0, outputLengthMs),
     transcriptText,
     keptWords,
     timedKeptWords,
