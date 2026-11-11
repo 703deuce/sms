@@ -96,6 +96,39 @@ export type TemplateFamilyV1 = {
   /** B3B editorial timing policy used by first-party release validation. */
   timingMode?: 'beat' | 'semantic'
 }
+export type TemplateDesignTextTreatment = {
+  id: string
+  font?: TemplateText['font']
+  size?: number
+  x?: number
+  y?: number
+  color?: string
+  animation?: TemplateAnimation
+  motion?: TemplateMotion
+}
+export type TemplateDesignGraphicTreatment = {
+  id: string
+  type?: TemplateGraphic['type']
+  x?: number
+  y?: number
+  w?: number
+  h?: number
+  color?: string
+  animation?: TemplateAnimation
+  motion?: TemplateMotion
+}
+export type TemplateDesignSlotTreatment = {
+  id: string
+  transition?: 'cut' | TemplateTransition
+  motion?: TemplateMotion
+  transform?: SourceSegmentTransform
+  fx?: SourceSegmentFx
+}
+export type TemplateDesignTreatment = {
+  texts?: TemplateDesignTextTreatment[]
+  graphics?: TemplateDesignGraphicTreatment[]
+  slots?: TemplateDesignSlotTreatment[]
+}
 export type TemplateDesignV1 = {
   schemaVersion: 1
   designId: string
@@ -104,6 +137,8 @@ export type TemplateDesignV1 = {
   familyId: string
   familyRevision: number
   musicPolicy: 'none' | 'licensed-only'
+  /** B3B: authored, DATA-only treatment that changes the actual compiled editable timeline. */
+  treatment?: TemplateDesignTreatment
 }
 export type TemplateChoices = {
   instanceId: string
@@ -464,17 +499,135 @@ export function validateTemplateEditorialTiming(family: TemplateFamilyV1): void 
     }
   }
 }
-export function validateTemplateDesign
+function validateDesignTreatment(raw: unknown, family: TemplateFamilyV1): TemplateDesignTreatment | undefined {
+  if (raw == null) return undefined
+  if (!own(raw)) throw new Error('design.treatment: expected object')
+  exact(raw, ['texts','graphics','slots'], 'design.treatment')
+  const out: TemplateDesignTreatment = {}
+
+  if (raw.texts != null) {
+    if (!Array.isArray(raw.texts) || raw.texts.length > family.texts.length) throw new Error('design.treatment.texts: invalid budget')
+    const seen = new Set<string>()
+    out.texts = raw.texts.map((value: unknown) => {
+      if (!own(value)) throw new Error('design.treatment.text: expected object')
+      exact(value, ['id','font','size','x','y','color','animation','motion'], 'design.treatment.text')
+      const tid = id(value.id, 'design.treatment.text')
+      unique(tid, seen, 'design.treatment.text')
+      const base = family.texts.find((t) => t.id === tid)
+      if (!base) throw new Error('design.treatment.text: unknown text field')
+      const color = value.color == null ? undefined : String(value.color)
+      if (color != null && !COLOR.test(color)) throw new Error('design.treatment.text: invalid color')
+      const animation = value.animation == null ? undefined : validateTemplateAnimation(value.animation, base.durationFrames, false)
+      const motion = value.motion == null ? undefined : validateMotion(value.motion)
+      return {
+        id: tid,
+        ...(value.font != null ? { font: oneOf(value.font, ['Montserrat','Anton','Poppins'] as const, 'design.treatment.text.font') } : {}),
+        ...(value.size != null ? { size: integer(value.size, 24, 240, 'design.treatment.text.size') } : {}),
+        ...(value.x != null ? { x: finite(value.x, 0, 100, 'design.treatment.text.x') } : {}),
+        ...(value.y != null ? { y: finite(value.y, 0, 100, 'design.treatment.text.y') } : {}),
+        ...(color != null ? { color } : {}),
+        ...(animation ? { animation } : {}),
+        ...(motion ? { motion } : {}),
+      }
+    })
+  }
+
+  if (raw.graphics != null) {
+    if (!Array.isArray(raw.graphics) || raw.graphics.length > (family.graphics?.length ?? 0)) throw new Error('design.treatment.graphics: invalid budget')
+    const seen = new Set<string>()
+    out.graphics = raw.graphics.map((value: unknown) => {
+      if (!own(value)) throw new Error('design.treatment.graphic: expected object')
+      exact(value, ['id','type','x','y','w','h','color','animation','motion'], 'design.treatment.graphic')
+      const gid = id(value.id, 'design.treatment.graphic')
+      unique(gid, seen, 'design.treatment.graphic')
+      const base = family.graphics?.find((g) => g.id === gid)
+      if (!base) throw new Error('design.treatment.graphic: unknown graphic')
+      const color = value.color == null ? undefined : String(value.color)
+      if (color != null && !COLOR.test(color)) throw new Error('design.treatment.graphic: invalid color')
+      const type = value.type == null ? undefined : String(value.type)
+      if (type != null && !GRAPHICS.has(type)) throw new Error('design.treatment.graphic: unsupported type')
+      const animation = value.animation == null ? undefined : validateTemplateAnimation(value.animation, base.durationFrames, true)
+      const motion = value.motion == null ? undefined : validateMotion(value.motion)
+      return {
+        id: gid,
+        ...(type != null ? { type: type as TemplateGraphic['type'] } : {}),
+        ...(value.x != null ? { x: finite(value.x, 0, 100, 'design.treatment.graphic.x') } : {}),
+        ...(value.y != null ? { y: finite(value.y, 0, 100, 'design.treatment.graphic.y') } : {}),
+        ...(value.w != null ? { w: integer(value.w, 8, 1920, 'design.treatment.graphic.w') } : {}),
+        ...(value.h != null ? { h: integer(value.h, 8, 1920, 'design.treatment.graphic.h') } : {}),
+        ...(color != null ? { color } : {}),
+        ...(animation ? { animation } : {}),
+        ...(motion ? { motion } : {}),
+      }
+    })
+  }
+
+  if (raw.slots != null) {
+    if (!Array.isArray(raw.slots) || raw.slots.length > family.slots.length) throw new Error('design.treatment.slots: invalid budget')
+    const seen = new Set<string>()
+    out.slots = raw.slots.map((value: unknown) => {
+      if (!own(value)) throw new Error('design.treatment.slot: expected object')
+      exact(value, ['id','transition','motion','transform','fx'], 'design.treatment.slot')
+      const sid = id(value.id, 'design.treatment.slot')
+      unique(sid, seen, 'design.treatment.slot')
+      const index = family.slots.findIndex((slot) => slot.id === sid)
+      if (index < 0) throw new Error('design.treatment.slot: unknown slot')
+      const transition = value.transition == null ? undefined : validateTransition(value.transition, index)
+      const motion = value.motion == null ? undefined : validateMotion(value.motion)
+      const transform = value.transform == null ? undefined : validateTransform(value.transform)
+      const fx = value.fx == null ? undefined : validateFx(value.fx)
+      return {
+        id: sid,
+        ...(transition ? { transition } : {}),
+        ...(motion ? { motion } : {}),
+        ...(transform ? { transform } : {}),
+        ...(fx ? { fx } : {}),
+      }
+    })
+  }
+
+  const normalized = {
+    ...(out.texts?.length ? { texts: out.texts } : {}),
+    ...(out.graphics?.length ? { graphics: out.graphics } : {}),
+    ...(out.slots?.length ? { slots: out.slots } : {}),
+  }
+  return Object.keys(normalized).length ? normalized : undefined
+}
+
+export function applyTemplateDesignTreatment(family: TemplateFamilyV1, design: Pick<TemplateDesignV1, 'treatment'>): TemplateFamilyV1 {
+  if (!design.treatment) return family
+  const textById = new Map((design.treatment.texts ?? []).map((row) => [row.id, row]))
+  const graphicById = new Map((design.treatment.graphics ?? []).map((row) => [row.id, row]))
+  const slotById = new Map((design.treatment.slots ?? []).map((row) => [row.id, row]))
+  const patched = {
+    ...structuredClone(family),
+    texts: family.texts.map((row) => ({ ...row, ...(textById.get(row.id) ?? {}) })),
+    ...(family.graphics ? { graphics: family.graphics.map((row) => ({ ...row, ...(graphicById.get(row.id) ?? {}) })) } : {}),
+    slots: family.slots.map((row) => ({ ...row, ...(slotById.get(row.id) ?? {}) })),
+  }
+  // Re-run the family validator so treatment transitions/animation/motion cannot bypass handles,
+  // overlap, duration, rights-safe data or operation constraints.
+  return validateTemplateFamily(patched)
+}
+
 export function validateTemplateDesign(raw: unknown, family: TemplateFamilyV1): TemplateDesignV1 {
   if (!own(raw)) throw new Error('design: expected object')
-  exact(raw, ['schemaVersion','designId','revision','stylePackId','familyId','familyRevision','musicPolicy'], 'design')
+  exact(raw, ['schemaVersion','designId','revision','stylePackId','familyId','familyRevision','musicPolicy','treatment'], 'design')
   if (raw.schemaVersion !== 1) throw new Error('design: unsupported version')
   const designId = id(raw.designId, 'design'), stylePackId = id(raw.stylePackId, 'stylePack')
   const revision = integer(raw.revision, 1, 1_000_000, 'design revision')
   if (raw.familyId !== family.familyId || raw.familyRevision !== family.revision) throw new Error('design: family revision mismatch')
-  return { schemaVersion: 1, designId, revision, stylePackId, familyId: family.familyId, familyRevision: family.revision,
-    musicPolicy: oneOf(raw.musicPolicy, ['none','licensed-only'] as const, 'music') }
+  const treatment = validateDesignTreatment(raw.treatment, family)
+  const design: TemplateDesignV1 = {
+    schemaVersion: 1, designId, revision, stylePackId, familyId: family.familyId, familyRevision: family.revision,
+    musicPolicy: oneOf(raw.musicPolicy, ['none','licensed-only'] as const, 'music'),
+    ...(treatment ? { treatment } : {}),
+  }
+  // Validate the fully treated family now, not only when compiled.
+  applyTemplateDesignTreatment(family, design)
+  return design
 }
+
 function validateAsset(asset: unknown, kind: TemplateAsset['kind'][], context: string): TemplateAsset {
   if (!own(asset)) throw new Error(`${context}: missing registered asset`)
   exact(asset, ['id','kind','license','durationFrames'], context)
@@ -503,8 +656,9 @@ export function compileTemplate(
   rawFamily: unknown, rawDesign: unknown, choices: TemplateChoices,
   carrier: { durationFrames: number; edits: ClipEditsV2 },
 ): TemplateCompileResult {
-  const family = validateTemplateFamily(rawFamily)
-  const design = validateTemplateDesign(rawDesign, family)
+  const baseFamily = validateTemplateFamily(rawFamily)
+  const design = validateTemplateDesign(rawDesign, baseFamily)
+  const family = applyTemplateDesignTreatment(baseFamily, design)
   id(choices?.instanceId, 'instance')
   if (carrier.durationFrames !== family.totalFrames) throw new Error('carrier: exact frame count required')
   if (carrier.edits.inserts?.length) throw new Error('carrier: post-composite inserts not permitted')
