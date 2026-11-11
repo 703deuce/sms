@@ -44,3 +44,20 @@ silently downgrade to hard cuts. Verify 1 photo, 30 slots, all-source audio mode
 layered text and continuous music in both preview and final exported media, then enable
 new-project-only transactional template creation. Do NOT wire the prototype into saves
 before that validation.
+
+
+## Additional B3 verification after merging master aeb973bb (#1177)
+- `sequence-timebase.ts` explicitly maps output → item-local → media frames, and returns
+  every matching output for repeated media rather than guessing a unique position.
+- `tests/clips/real-video-templates-b3.test.ts` runs through the existing
+  editor regression's `batch5-template-full-video.test.tsx` import and covers
+  exhaustive 30-slot frame roundtrips.
+- `scripts/prove-real-video-template-30-slots.sh` is a second, no-network FFmpeg
+  fixture. A matching 160×90, 30fps filtergraph was executed locally and
+  ffprobe confirmed exactly 900 frames, 30.000000 seconds, with video and audio.
+  This exercises repeating photo/video sources, one full-span text graphic
+  and a full-span music channel. It does not exercise worker/preview parity.
+- Worker `edits_render.py` applies `apply_full_render_sources` to the base
+  before color/cut and before `_legacy_compose` burns text, so the
+  full-length-carrier architecture has a plausible existing cut-only path.
+  The code path still has no proven cross-source dissolve/individual transforms.
