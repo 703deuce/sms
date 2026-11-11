@@ -3,7 +3,7 @@ export const STUDIO_REGISTRY_VERSION = 1 as const
 export type StudioJobStatus = 'queued' | 'running' | 'done' | 'failed'
 export type StudioMediaKind = 'video' | 'image'
 export type StudioMode = 'text_to_video' | 'image_to_video' | 'text_to_image' | 'source_video_edit'
-export type StudioAspect = '9:16' | '16:9' | '1:1'
+export type StudioAspect = '9:16' | '16:9' | '1:1' | '3:4'
 
 export type StudioModelPublic = {
   id: string
@@ -40,6 +40,8 @@ export type StudioCreateJobInput = {
   endFrameAssetId?: string
   sourceVideoAssetId?: string
   projectId?: string
+  /** Ad Studio direct-commercial opt-in. Existing Studio jobs remain silent where the provider default was silent. */
+  nativeAudio?: boolean
 }
 
 export type StudioJobOutput = {
