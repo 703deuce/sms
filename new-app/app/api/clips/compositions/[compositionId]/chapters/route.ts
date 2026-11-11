@@ -22,12 +22,12 @@ export async function POST(_request: Request, ctx: { params: Promise<{ compositi
     const started = Date.now()
     const result = await scriptEditorOpenAiJson<{ chapters: { outMs: number; label: string }[] }>(
       SYSTEM,
-      JSON.stringify({ durationMs: ctxAudio.lengthMs, transcript: timedTranscript }),
+      JSON.stringify({ durationMs: ctxAudio.chapterDurationMs, transcript: timedTranscript }),
     )
     logEditor('chapters', 'ok', { compositionId, count: result.chapters?.length ?? 0, latencyMs: Date.now() - started })
     const chapters = (result.chapters ?? [])
       .map((c) => ({
-        outMs: Math.max(0, Math.min(ctxAudio.lengthMs, Math.round(Number(c.outMs) || 0))),
+        outMs: Math.max(0, Math.min(ctxAudio.chapterDurationMs, Math.round(Number(c.outMs) || 0))),
         label: String(c.label || 'Chapter').slice(0, 80),
       }))
       .filter((c, i, arr) => i === 0 || c.outMs > arr[i - 1].outMs)
