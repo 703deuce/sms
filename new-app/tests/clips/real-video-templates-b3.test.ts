@@ -37,7 +37,7 @@ const choices = (count: number): TemplateChoices => ({
 describe('real-video template B3 experimental contract', () => {
   it('compiles 30 ordered slots without inserts and holds text/music end-to-end', () => {
     const r = compileTemplatePrototype(family(30), design, choices(30), carrier(30))
-    expect(r.renderable).toBe(false)
+    expect(r.renderable).toBe(true)
     expect(r.sequence.items).toHaveLength(30)
     expect(r.sequence.totalFrames).toBe(900)
     expect(r.sequence.items[29].outputEndFrame).toBe(900)
@@ -63,7 +63,7 @@ describe('real-video template B3 experimental contract', () => {
     const c = choices(1)
     c.media.shot_1 = asset('short_video', 'video', 15)
     expect(() => compileTemplatePrototype(family(1), design, c, carrier(1)))
-      .toThrow(/video too short; choose a longer clip or shorten the slot/)
+      .toThrow(/video too short for required handles/)
   })
   it('rejects unsupported operations, unknown fields, overlaps and invalid text', () => {
     expect(() => validateTemplateFamily({ ...family(1), script: 'alert(1)' })).toThrow(/unsupported field/)
@@ -136,3 +136,74 @@ describe('B3 source audio and absent legacy controls', () => {
 
 // CI uses this scoped actual compiler run instead of relying on a green Vitest transpile.
 import './real-video-template-typecheck.test'
+
+describe('B3 production slot edit representation', () => {
+  it('compiles cross-source transitions, transforms, FX and graphics as ordinary editable edit records', () => {
+    const f = family(2)
+    f.graphics = [{
+      id: 'plate', type: 'rounded', startFrame: 0, durationFrames: 60,
+      x: 50, y: 50, w: 320, h: 180, color: '#112233',
+    }]
+    f.slots[0] = {
+      ...f.slots[0],
+      media: 'video',
+      handles: { headFrames: 0, tailFrames: 6 },
+      transform: { scale: 110, x: 4, cropL: 3 },
+      fx: { brightness: 5, saturation: -10 },
+    }
+    f.slots[1] = {
+      ...f.slots[1],
+      media: 'video',
+      handles: { headFrames: 6, tailFrames: 0 },
+      sourceInFrame: 6,
+      transition: { type: 'crossfade', durationFrames: 12 },
+    }
+    const c = choices(2)
+    c.media.shot_1 = asset('video_a', 'video', 60)
+    c.media.shot_2 = asset('video_b', 'video', 60)
+    const r = compileTemplatePrototype(f, design, c, carrier(2))
+    expect(r.edits.videoSplits).toEqual([1000])
+    expect(r.edits.transitions).toEqual([{ srcMs: 1000, type: 'crossfade', durMs: 400 }])
+    expect(r.edits.sourceSegments?.[0]).toMatchObject({
+      startMs: 0, endMs: 1000,
+      transform: { scale: 110, x: 4, cropL: 3 },
+      fx: { brightness: 5, saturation: -10 },
+    })
+    expect(r.edits.sourceSegments?.[1]).toMatchObject({ startMs: 1000, endMs: 2000, inMs: 200 })
+    expect(r.edits.textItems?.some((item) => item.kind === 'shape' && item.shape?.type === 'rounded')).toBe(true)
+    expect(r.edits.templateProvenance?.slotToItemIds).toEqual(r.slotToItemIds)
+  })
+
+  it('rejects transitions without declared A/B source handles and overlapping windows', () => {
+    const missing = family(2)
+    missing.slots[1] = { ...missing.slots[1], transition: { type: 'crossfade', durationFrames: 12 } }
+    expect(() => validateTemplateFamily(missing)).toThrow(/requires 6-frame source handles/)
+
+    const overlap = family(3)
+    overlap.slots[0] = { ...overlap.slots[0], handles: { headFrames: 0, tailFrames: 18 } }
+    overlap.slots[1] = {
+      ...overlap.slots[1],
+      handles: { headFrames: 18, tailFrames: 18 },
+      transition: { type: 'crossfade', durationFrames: 36 },
+    }
+    overlap.slots[2] = {
+      ...overlap.slots[2],
+      handles: { headFrames: 18, tailFrames: 0 },
+      transition: { type: 'crossfade', durationFrames: 36 },
+    }
+    expect(() => validateTemplateFamily(overlap)).toThrow(/transition windows overlap/)
+  })
+
+  it('keeps non-authoritative provenance out of render hashes', async () => {
+    const { editsVersionHash } = await import('@/lib/clips/edits-version-hash')
+    const r = compileTemplatePrototype(family(1), design, choices(1), carrier(1))
+    const withOtherLineage = {
+      ...r.edits,
+      templateProvenance: {
+        ...r.edits.templateProvenance!,
+        instanceId: 'instance_other',
+      },
+    }
+    expect(editsVersionHash(r.edits)).toBe(editsVersionHash(withOtherLineage))
+  })
+})
