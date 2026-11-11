@@ -73,7 +73,7 @@ describe('real video template B5 music rights and frame timing',()=>{
     expect(timing).toEqual(before)
   })
   it('does not silently move off-grid cuts or fade windows',()=>{
-    const bad={...timing,boundaries:[0,31,...timing.boundaries.slice(2)]}
+    const bad={...timing,boundaries:[0,32,...timing.boundaries.slice(2)]}
     expect(()=>previewMusicReplacement({timing:bad,previous:pinned(120),
       replacement:pinned(90),license,choice:'re-sync'})).toThrow(/Off-grid/)
     const aligned=previewMusicReplacement({timing,previous:pinned(120),
