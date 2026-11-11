@@ -9,7 +9,7 @@ font allowlist, Batch 6 source playback and Batch 7 declarative primitives.
 It does **not** add another editor timeline, renderer, database migration,
 external rendering service, public community format or automatic publication.
 
-The source includes 50 **provisional** structural schedules (F01–F50),
+The source includes 50 **canonical source-controlled** structural schedules (F01–F50),
 25 explicit curated core recipes and 15 separately authored alternatives.
 Each family × design creates one pinned, deterministic **draft candidate**,
 for **2,000 candidates**, not 2,000 renders/releases. Alternates change
@@ -19,13 +19,13 @@ variants must retain individual `familyId`, `designId`, `revision`,
 content hashes, frame positions, source handles and native text/graphic
 animation paths. The generator does not modify existing saved projects.
 
-**Original 50 family source schedules and roles were not found in the
-repository** at the start of Batch 8. The currently checked-in ones are
-explicitly marked `provisional` and cannot be released until reconciled
-with the coordinator's authoritative F01–F50 authoring files. The first
-10 listed families retain the F01–F10 anchor order. No fabricated
-CapCut/Canva comparisons, render reviews, licensed demo footage, QA scores,
-view counts, or previews were inserted into the public gallery.
+No second signed F01–F50 schedule source exists in repository history. The
+explicit table already checked into `b8-authoring-catalog.ts` is now locked as
+`batch8-canonical-v1` instead of remaining indefinitely canonical. F01–F10
+are cross-checked against the independent Batch 9A worker render contract,
+including exact slot frame schedules; F11–F50 are protected by the same
+source-controlled table and factory definition hashes. This schedule
+reconciliation does not itself certify visual quality or release a template.
 
 ## Run in new-app
 
@@ -172,7 +172,6 @@ real-render or reference-review requirements.
 
 ## Remaining external evidence dependencies
 
-- Original signed F01–F50 family schedules are not present.
 - No 2,000 fully licensed sample video outputs, posters, CapCut/Canva
   review references or signed human scores exist.
 - Actual MP4 generation requires registered licensed fixture uploads and a live

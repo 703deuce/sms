@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe,expect,it } from 'vitest'
 import { summarizeB8AudioEnvelopeQA,summarizeB8FrameQA } from '@/lib/clips/real-video-templates/b8-render-qa'
 import { syncB8FamilyToMusic } from '@/lib/clips/real-video-templates/b8-music-sync'
@@ -36,7 +38,23 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     expect(FACTORY_TREATMENTS.filter(t=>t.kind==='alternate')).toHaveLength(15)
     expect(candidates).toHaveLength(B8_TARGET.candidateTotal)
     expect(new Set(candidates.map(c=>c.id)).size).toBe(2000)
-    expect(candidates.every(c=>c.status==='draft'&&c.authoringOrigin==='provisional')).toBe(true)
+    expect(candidates.every(c=>c.status==='draft'&&c.authoringOrigin==='canonical')).toBe(true)
+  })
+  it('locks the canonical F01-F50 schedule set and reconciles F01-F10 to the Batch 9A worker contract',()=>{
+    expect(FACTORY_FAMILY_SEEDS).toHaveLength(50)
+    expect(new Set(FACTORY_FAMILY_SEEDS.map(seed=>seed.scheduleRevision)))
+      .toEqual(new Set(['batch8-canonical-v1']))
+    const contract=JSON.parse(readFileSync(resolve(process.cwd(),
+      'tests/fixtures/batch9a-anchor-render-contract.json'),'utf8')) as {
+      anchors:Array<{familyId:string;slotFrames:number[]}>
+    }
+    expect(contract.anchors).toHaveLength(10)
+    for(const row of contract.anchors){
+      const seed=FACTORY_FAMILY_SEEDS.find(item=>item.id===row.familyId)
+      expect(seed,row.familyId).toBeTruthy()
+      expect(seed?.frames,row.familyId).toEqual(row.slotFrames)
+    }
+    expect(FACTORY_FAMILY_SEEDS[49]?.frames).toHaveLength(30)
   })
   it('preserves authored family rhythms and the thirty-slot variant',()=>{
     const first=candidates.find(c=>c.id==='f01_bold')!

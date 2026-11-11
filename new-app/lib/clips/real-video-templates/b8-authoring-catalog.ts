@@ -1,8 +1,9 @@
 /**
- * Batch 8 authoring source. Explicit family timing/role schedules and curated visible
- * treatments. These are CANDIDATES, not released templates. Originals F01–F50
- * must be checked against the coordinator's signed schedule before anchor QA.
- * Never import this module into the public gallery or count its rows as released.
+ * Batch 8 canonical first-party authoring source. Explicit family timing/role
+ * schedules and curated visible treatments. These are CANDIDATES, not released
+ * templates. The checked-in F01-F50 table is the source-controlled schedule
+ * authority for Batch 8 v1; F01-F10 are independently cross-checked against the
+ * Batch 9A worker contract. Never count these rows as released without render QA.
  */
 import type { TemplateGraphic, TemplateSlot } from './sequence-contract'
 import type { TextAnimType } from '@/lib/clips/render-plan/text-anim'
@@ -13,7 +14,8 @@ export type FactoryFamilySeed = {
   category: string
   roles: readonly TemplateSlot['role'][]
   frames: readonly number[]
-  status: 'provisional'
+  status: 'canonical'
+  scheduleRevision: 'batch8-canonical-v1'
 }
 type RoleChar = 'H' | 'S' | 'D' | 'C'
 const roleMap: Record<RoleChar, TemplateSlot['role']> = {
@@ -75,10 +77,12 @@ const authoredFamilyData: readonly [string, string, string, string, readonly num
 export const FACTORY_FAMILY_SEEDS: readonly FactoryFamilySeed[] = authoredFamilyData.map(([id,title,category,roles,frames]) => {
   if (roles.length !== frames.length || !roles.startsWith('H') || !roles.endsWith('C') ||
       frames.some(n => !Number.isSafeInteger(n) || n < 9))
-    throw new Error('Invalid provisional family sequence: ' + id)
+    throw new Error('Invalid canonical family sequence: ' + id)
   return { id: id.toLowerCase(), title, category,
-    roles: [...roles].map(c => roleMap[c as RoleChar]), frames, status: 'provisional' }
+    roles: [...roles].map(c => roleMap[c as RoleChar]), frames, status: 'canonical',
+    scheduleRevision: 'batch8-canonical-v1' as const }
 })
+export const B8_CANONICAL_SCHEDULE_REVISION = 'batch8-canonical-v1' as const
 
 export type FactoryTreatmentRecipe = {
   id: string

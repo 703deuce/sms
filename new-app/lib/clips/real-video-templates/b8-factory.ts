@@ -16,7 +16,7 @@ import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS,
 import type { VideoTemplateRelease } from './gallery'
 import { lintB8Legibility } from './b8-legibility'
 
-export const B8_ENGINE_REVISION = 'b8-factory-v1' as const
+export const B8_ENGINE_REVISION = 'b8-factory-v2' as const
 export const B8_TARGET = { families: 50, treatmentsPerFamily: 40,
   coreTreatments: 25, authoredAlternates: 15, candidateTotal: 2000 } as const
 const HASH = /^[a-f\d]{64}$/i
@@ -29,7 +29,7 @@ export type B8Candidate = {
   familyId: string
   treatmentId: string
   status: 'draft'
-  authoringOrigin: 'provisional'
+  authoringOrigin: 'canonical'
   authoredDimensions: readonly string[]
   family: TemplateFamilyV1
   design: TemplateDesignV1
@@ -50,7 +50,7 @@ function ensureRecipes() {
       throw new Error('Treatment references an unpinned font: ' + r.id)
     if (!(r.x >= 18 && r.x <= 82 && r.y >= 16 && r.y <= 75 &&
           r.gx >= 12 && r.gx <= 85 && r.gy >= 12 && r.gy <= 85))
-      throw new Error('Treatment violates the provisional safe-zone margins: ' + r.id)
+      throw new Error('Treatment violates the canonical safe-zone margins: ' + r.id)
     if (!/^#[0-9a-fA-F]{6}$/.test(r.foreground) || !/^#[0-9a-fA-F]{6}$/.test(r.accent))
       throw new Error('Invalid treatment color')
     if (r.kind === 'alternate') {
@@ -142,7 +142,7 @@ export function generateB8Candidates(): B8Candidate[] {
         r.gx,r.gy,r.transition,seed.roles,seed.frames]
       const fingerprint = sha(visual)
       out.push({id,familyId:seed.id,treatmentId:r.id,status:'draft',
-        authoringOrigin:'provisional',
+        authoringOrigin:'canonical',
         authoredDimensions:['font-hierarchy','text-placement','animation-choreography',
           'graphic-composition','transition-treatment'],
         family,design,fingerprint,definitionHash:sha([B8_ENGINE_REVISION,family,design])})

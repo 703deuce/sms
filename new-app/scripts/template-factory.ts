@@ -523,9 +523,9 @@ async function runRemoteWorkerJob(
 
 async function execute(){
   if(command==='author'){
-    save(join(directory,'family-schedules.json'),{v:1,source:'provisional',families:FACTORY_FAMILY_SEEDS})
+    save(join(directory,'family-schedules.json'),{v:1,source:'batch8-canonical-v1',families:FACTORY_FAMILY_SEEDS})
     save(join(directory,'curated-treatments.json'),{v:1,treatments:FACTORY_TREATMENTS})
-    console.log('Authored 50 provisional families and 40 explicit treatments; none released.')
+    console.log('Authored 50 canonical families and 40 explicit treatments; none released.')
   }else if(command==='expand'){
     for(const c of candidates)save(join(directory,'candidates',c.familyId,c.id+'.json'),c)
     console.log('Wrote '+candidates.length+' deterministic DRAFT candidates; no public releases.')
