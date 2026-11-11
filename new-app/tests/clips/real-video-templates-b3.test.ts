@@ -199,8 +199,6 @@ describe('B3 exact source/output/item-local frame clock', () => {
   })
 })
 
-// Server-side ownership/CAS regression is also in the explicit editor CI test gate.
-import './real-video-template-instance.test'
 
 describe('B3 source audio and absent legacy controls', () => {
   it('keeps a single image first project possible without any video upload or ASR', () => {
@@ -250,8 +248,6 @@ describe('B3 production editor sequence adapter', () => {
   })
 })
 
-// CI uses this scoped actual compiler run instead of relying on a green Vitest transpile.
-import './real-video-template-typecheck.test'
 
 describe('B3 production slot edit representation', () => {
   it('compiles cross-source transitions, transforms, FX and graphics as ordinary editable edit records', () => {
