@@ -1,0 +1,137 @@
+{
+  "revision": "5bb28733cec313b63fbd415b574b5ae35c8aa8b8",
+  "fonts": [
+    {
+      "slug": "rubik",
+      "upstream": "Rubik[wght].ttf",
+      "local": "Rubik.ttf",
+      "blobSha": "a59aeb632df494345a542697c357f608875481b0",
+      "assFamily": "Rubik",
+      "weight": 400,
+      "size": 359804,
+      "licenseBlobSha": "03af63b533942ef3bb9919f81138fde8824d4554"
+    },
+    {
+      "slug": "gabarito",
+      "upstream": "Gabarito[wght].ttf",
+      "local": "Gabarito.ttf",
+      "blobSha": "f048f3b6527b2aff1adb92bd682acb1d8adcdc9c",
+      "assFamily": "Gabarito",
+      "weight": 400,
+      "size": 158144,
+      "licenseBlobSha": "b3fef63ddc518006d477f3ad102eb0c8fec09bb2"
+    },
+    {
+      "slug": "firasanscondensed",
+      "upstream": "FiraSansCondensed-Bold.ttf",
+      "local": "FiraSansCondensed-Bold.ttf",
+      "blobSha": "c18ac23ad51eee0df2fd905cce40047189ad6f77",
+      "assFamily": "Fira Sans Condensed",
+      "weight": 700,
+      "size": 489176,
+      "licenseBlobSha": "a2c1ae225f24bc345413e0764c0ddcf2a0e6d4da"
+    },
+    {
+      "slug": "dmserifdisplay",
+      "upstream": "DMSerifDisplay-Regular.ttf",
+      "local": "DMSerifDisplay-Regular.ttf",
+      "blobSha": "bc5ed0cea657f264ea9c2a11a54da62ed619c5da",
+      "assFamily": "DM Serif Display",
+      "weight": 400,
+      "size": 76580,
+      "licenseBlobSha": "be384f0ec9b54c6fed236106d3f6dfa029780b1b"
+    },
+    {
+      "slug": "playfairdisplay",
+      "upstream": "PlayfairDisplay[wght].ttf",
+      "local": "PlayfairDisplay.ttf",
+      "blobSha": "7a09eb71f10622fd083134ac9ed46f59b21bee18",
+      "assFamily": "Playfair Display",
+      "weight": 400,
+      "size": 300724,
+      "licenseBlobSha": "13153890847ba9bde8a852596d1515261156e474"
+    },
+    {
+      "slug": "caveat",
+      "upstream": "Caveat[wght].ttf",
+      "local": "Caveat.ttf",
+      "blobSha": "f84acf2ce2d1b3329b194749530dbaec047e6df6",
+      "assFamily": "Caveat",
+      "weight": 400,
+      "size": 403648,
+      "licenseBlobSha": "6e5220c9576d98dfc684e550ddf0d87f68b3edc5"
+    },
+    {
+      "slug": "spacegrotesk",
+      "upstream": "SpaceGrotesk[wght].ttf",
+      "local": "SpaceGrotesk.ttf",
+      "blobSha": "a1b2e6c26093066510a31147e7aec9abdc8d6c5e",
+      "assFamily": "Space Grotesk",
+      "weight": 400,
+      "size": 136676,
+      "licenseBlobSha": "cb512b9af44ff61e75e1aad387b7424cdfab36a3"
+    },
+    {
+      "slug": "spacemono",
+      "upstream": "SpaceMono-Regular.ttf",
+      "local": "SpaceMono-Regular.ttf",
+      "blobSha": "1cfa3653dc8ddb7aa9f4ef1c9c581e9516137e6e",
+      "assFamily": "Space Mono",
+      "weight": 400,
+      "size": 99356,
+      "licenseBlobSha": "a72b0a7845bec3214559673ffeba60c816a21841"
+    }
+  ],
+  "fallbackFonts": [
+    {
+      "slug": "notosansarabic",
+      "upstream": "NotoSansArabic[wdth,wght].ttf",
+      "local": "NotoSansArabic.ttf",
+      "blobSha": "f1d01edce4ebaedcbe9a06fc75fec07b304ec3df",
+      "assFamily": "Noto Sans Arabic",
+      "weight": 400,
+      "size": 844676,
+      "licenseBlobSha": "14c589f6384505ede3f8e52627d397513af3662d"
+    },
+    {
+      "slug": "notosansdevanagari",
+      "upstream": "NotoSansDevanagari[wdth,wght].ttf",
+      "local": "NotoSansDevanagari.ttf",
+      "blobSha": "163f04bddc5a96fc523e4080466cac5c588f6594",
+      "assFamily": "Noto Sans Devanagari",
+      "weight": 400,
+      "size": 641944,
+      "licenseBlobSha": "cd2cc5c94b4151933eba6ee508e3975274d6fa07"
+    },
+    {
+      "slug": "notosansthai",
+      "upstream": "NotoSansThai[wdth,wght].ttf",
+      "local": "NotoSansThai.ttf",
+      "blobSha": "34b48ab6f74867dbfce19410a2f452abef34e3ff",
+      "assFamily": "Noto Sans Thai",
+      "weight": 400,
+      "size": 218652,
+      "licenseBlobSha": "7fa8dcb08ce4d2667b683ac4a8e79166e44e5277"
+    },
+    {
+      "slug": "notosansjp",
+      "upstream": "NotoSansJP[wght].ttf",
+      "local": "NotoSansJP.ttf",
+      "blobSha": "cdd8f083c1f5928ff3361f8cda4d3fc9462cbe89",
+      "assFamily": "Noto Sans JP",
+      "weight": 400,
+      "size": 9589900,
+      "licenseBlobSha": "1c9f43281b8f216c5461fe9ac729afbade7724e4"
+    },
+    {
+      "slug": "notoemoji",
+      "upstream": "NotoEmoji[wght].ttf",
+      "local": "NotoEmoji.ttf",
+      "blobSha": "c2c26ab612a88a8610ff9cfbb89299bf2aea6c7a",
+      "assFamily": "Noto Emoji",
+      "weight": 400,
+      "size": 1982596,
+      "licenseBlobSha": "d09d3d0e09169f6747754e6b25faf5ba5ef6402d"
+    }
+  ]
+}

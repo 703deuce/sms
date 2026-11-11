@@ -145,4 +145,21 @@ describe('TextPanel multi-part templates', () => {
     expect(second[0]!.y - second[1]!.y).toBe(first[0]!.y - first[1]!.y)
   })
 
+  it('B2 exposes keyboard reachable paired typography without changing any existing text on mount', () => {
+    const onEdits = vi.fn()
+    const edits = defaultEdits({ clipStartMs: 0, clipEndMs: 60000 })
+    const ui = render(<TextPanel edits={edits} onEdits={onEdits}
+      playheadMs={3000} durationMs={60000} selectedId={null} onSelect={vi.fn()} />)
+    const section = ui.getByTestId('text-typography-treatments')
+    expect(section.getAttribute('aria-label')).toBe('Paired typography')
+    for (const name of ['editorial-contrast', 'kinetic-punch', 'minimal-interview', 'neon-signal']) {
+      const button = ui.getByTestId('text-typography-' + name) as HTMLButtonElement
+      expect(button.tagName).toBe('BUTTON')
+      expect(button.disabled).toBe(false)
+      expect(button.getAttribute('aria-label')).toContain('paired typography')
+    }
+    expect(onEdits).not.toHaveBeenCalled()
+    expect(edits.textItems).toBeUndefined()
+  })
+
 })

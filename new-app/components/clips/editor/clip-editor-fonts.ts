@@ -27,6 +27,14 @@ export const CLIP_EDITOR_CAPTION_FONT_FAMILIES = [
   'Inter',
   'Lato',
   'Oswald',
+  'Rubik',
+  'Gabarito',
+  'Fira Sans Condensed',
+  'DM Serif Display',
+  'Playfair Display',
+  'Caveat',
+  'Space Grotesk',
+  'Space Mono',
 ] as const
 
 /** Class names that define every `--font-clip-*` display-font variable (put on the editor root). */

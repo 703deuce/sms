@@ -860,6 +860,8 @@ def build_sources_filtergraph(
             continue
 
         speed = float(w.get("speed") or 1.0)
+        # Keep absent/1x source timing identical to the legacy filtergraph.
+        pts = "setpts=PTS-STARTPTS" if speed == 1.0 else f"setpts=(PTS-STARTPTS)/{speed:.6f}"
         media_dur = dur * speed
         inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{media_dur + 0.25:.3f}", "-i", str(p)]
         v_in = in_idx
@@ -867,7 +869,7 @@ def build_sources_filtergraph(
             edits, w["id"], w.get("localStartMs", 0), f"{v_in}:v", f"sm{i}",
             fit=w["fit"], transform=w.get("transform"), fx=w.get("fx"),
             width=width, height=height, fps=fps, duration_s=dur + 0.1,
-            prefix=f"trim=0:{media_dur:.3f},setpts=(PTS-STARTPTS)/{speed:.6f},fps={fps:g},",
+            prefix=f"trim=0:{media_dur:.3f},{pts},fps={fps:g},",
         )
         in_idx += 1
         layout = w.get("layout")
@@ -884,7 +886,7 @@ def build_sources_filtergraph(
             parts.append(f"[sm{i}]setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
         else:
             parts.append(
-                f"[{v_in}:v]trim=0:{media_dur:.3f},setpts=(PTS-STARTPTS)/{speed:.6f},fps={fps:g},"
+                f"[{v_in}:v]trim=0:{media_dur:.3f},{pts},fps={fps:g},"
                 f"{fit_filter(w['fit'], width, height)}"
                 f"{source_transform_filter(w.get('transform'), width, height)}"
                 f"{source_fx_filter(w.get('fx'))},format=yuv420p,"

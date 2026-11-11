@@ -5,6 +5,7 @@
  * handle frames the export's xfade uses; the real main layer keeps playing (audio, clock) hidden.
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import type { Timebase } from '@/lib/clips/editor/clip-timeline'
 import { videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { brollFrame, hookFrame, mainFrame, type FrameStyle } from '@/lib/clips/editor/motion-frame'
 import { SHADER_TRANSITIONS, TRANSITION_INFO, transitionMaskAlpha, type LayerCss } from '@/lib/clips/editor/transitions'
@@ -400,7 +401,7 @@ function shaderNoticeText(type: ShaderType, reason: string): string {
 export function applyMotionFrame(
   dom: MotionDom,
   edits: ClipEditsV2,
-  tb: { segs: [number, number][]; starts: number[] },
+  tb: Timebase,
   outMs: number,
   opts: {
     boxW: number

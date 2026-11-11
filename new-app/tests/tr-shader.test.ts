@@ -52,7 +52,7 @@ describe('TR-SHADER web', () => {
       ...defaultEdits({ clipStartMs: 0, clipEndMs: 20000, trimMinMs: 0, trimMaxMs: 40000 }),
       transitions: [{ srcMs: 5000, type: 'spin' as const, durMs: 400 }],
     }
-    const tb = { segs: [[0, 5000], [5000, 10000]] as [number, number][], starts: [0, 5000] }
+    const tb = { segs: [[0, 5000], [5000, 10000]] as [number, number][], starts: [0, 5000], durationMs: 10000 }
     const mid = mainFrame(edits, tb, 4900, 320)
     expect(mid.cut?.shader?.type).toBe('spin')
     const n = mid.cut?.win.frames ?? 12

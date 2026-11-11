@@ -113,8 +113,6 @@ jobs:
             tests/clips/real-video-template-editor.test.tsx \
             tests/clips/real-video-template-b3b-editable-timeline.test.tsx \
             tests/clips/real-video-template-b3b-save-reload.test.ts \
-            tests/clips/real-video-template-b3b-save-reload.test.ts \
-            tests/clips/real-video-template-b3b-save-reload.test.ts \
             tests/clips/real-video-template-typecheck.test.ts \
             tests/fullsuite-batch2.test.ts \
             tests/fullsuite-batch3.test.ts \
@@ -253,7 +251,7 @@ jobs:
       - name: Batch 3B worker FFmpeg proof
         env:
           B3B_EDITABLE_PROOF: editable-timeline-structure-proof.json
-        run: PYTHONPATH=worker python -m pytest -q -rs --tb=short worker/tests/test_real_video_template_sequence.py
+        run: PYTHONPATH=worker python -m pytest -q -rs --tb=short worker/tests/test_real_video_template_sequence.py worker/tests/test_media_sources_layouts.py
 
   captions-worker-regression:
     runs-on: ubuntu-latest

@@ -77,7 +77,7 @@ describe('G1a preview frame: crop + flip match the export order', () => {
   it('main video: clip-path inset + flip as the last transform function', () => {
     let e = setCropAt(base(), 'video', 0, { l: 10, t: 5 })
     e = setLayerFlip(e, 'video', 'h', true)
-    const f = mainFrame(e, { segs: [[0, 10000]], starts: [0] }, 0, 360)
+    const f = mainFrame(e, { segs: [[0, 10000]], starts: [0], durationMs: 10000 }, 0, 360)
     expect(f.kf.clipPath).toBe('inset(5% 0% 0% 10%)')
     expect(f.kf.transform).toBe('scale(-1, 1)')
   })

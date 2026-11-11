@@ -1,6 +1,25 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
+// next/font/google is a Next build-time transform, not a callable Node runtime module.
+// The imported editor components transitively evaluate their font declarations at module scope.
+// Keep the production font selection untouched; only provide stable variables to this DOM test.
+vi.mock('next/font/google', () => {
+  const nextFont = () => ({ className: 'test-font', variable: '--test-font', style: { fontFamily: 'Test font' } })
+  return {
+  Anton: nextFont,
+  Montserrat: nextFont,
+  Poppins: nextFont,
+  Archivo_Black: nextFont,
+  Bangers: nextFont,
+  Bebas_Neue: nextFont,
+  Inter: nextFont,
+  Lato: nextFont,
+  Luckiest_Guy: nextFont,
+  Oswald: nextFont,
+  }
+})
+
 import { TextItemsPreview } from '@/components/clips/editor/text-items-preview'
 import { CanvasSelectionOverlay, type CanvasLayerDom } from '@/components/clips/editor/canvas-selection-overlay'
 import { PropertiesPanel, tabsFor } from '@/components/clips/editor/properties-panel'
