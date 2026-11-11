@@ -158,19 +158,52 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
 export function findClipFont(id: string): ClipFontManifestRow | undefined {
   return CLIP_FONT_MANIFEST.find(f => f.id === id || f.assFamily === id)
 }
-/** Must explicitly resolve availability before geometry/pixel snapshot. */
+/**
+ * Opt-in verified local face loader. A FontFace created from the exact pinned
+ * browser bytes is installed before any typography geometry is measured.
+ * No network font fallback can turn a missing font into an apparently ready face.
+ * Requires a secure-context crypto.subtle; callers must surface errors in the UI.
+ */
+const loaded = new Map<string, Promise<void>>()
+async function verifyPinnedFont(row: ClipFontManifestRow): Promise<ArrayBuffer> {
+  const response = await fetch(row.browserFile, { cache: 'force-cache', credentials: 'same-origin' })
+  if (!response.ok) throw new Error('clip_font_http_' + response.status + ':' + row.id)
+  const data = await response.arrayBuffer()
+  if (!data.byteLength) throw new Error('clip_font_empty:' + row.id)
+  if (!globalThis.crypto?.subtle) throw new Error('clip_font_crypto_unavailable:' + row.id)
+  const prefix = new TextEncoder().encode('blob ' + data.byteLength + '\\0')
+  const blobBytes = new Uint8Array(data)
+  const combined = new Uint8Array(prefix.byteLength + blobBytes.byteLength)
+  combined.set(prefix)
+  combined.set(blobBytes, prefix.byteLength)
+  const digest = await crypto.subtle.digest('SHA-1', combined)
+  const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+  if (hash !== row.browserGitBlobSha1) throw new Error('clip_font_integrity_mismatch:' + row.id)
+  return data
+}
+
 export async function waitForClipFont(id: string, timeoutMs = 5000): Promise<void> {
-  const font = findClipFont(id)
-  if (!font) throw new Error('clip_font_not_in_manifest:' + id)
-  if (typeof document === 'undefined' || !document.fonts) throw new Error('clip_font_document_unavailable')
-  const cssFamily = '"' + font.assFamily.replace(/["\\]/g, '') + '"'
-  const ready = Promise.resolve(document.fonts.load(font.cssWeight + ' 24px ' + cssFamily))
-    .then(result => { if (!result.length || !document.fonts.check(font.cssWeight + ' 24px ' + cssFamily))
-      throw new Error('clip_font_missing:' + id) })
+  const row = findClipFont(id)
+  if (!row) throw new Error('clip_font_not_in_manifest:' + id)
+  if (typeof document === 'undefined' || !document.fonts || typeof FontFace === 'undefined')
+    throw new Error('clip_font_document_unavailable:' + id)
+  let task = loaded.get(row.id)
+  if (!task) {
+    task = (async () => {
+      const bytes = await verifyPinnedFont(row)
+      const face = new FontFace(row.assFamily, bytes, { weight: String(row.cssWeight), style: 'normal' })
+      await face.load()
+      document.fonts.add(face)
+      if (!document.fonts.check(row.cssWeight + ' 24px "' + row.assFamily + '"'))
+        throw new Error('clip_font_missing:' + row.id)
+    })()
+    loaded.set(row.id, task)
+    void task.catch(() => { if (loaded.get(row.id) === task) loaded.delete(row.id) })
+  }
   let timeout: ReturnType<typeof setTimeout> | undefined
   try {
-    await Promise.race([ready, new Promise<never>((_, reject) => {
-      timeout = setTimeout(() => reject(new Error('clip_font_timeout:' + id)), timeoutMs)
+    await Promise.race([task, new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error('clip_font_timeout:' + row.id)), timeoutMs)
     })])
   } finally { if (timeout !== undefined) clearTimeout(timeout) }
 }
