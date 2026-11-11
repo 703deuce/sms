@@ -1,7 +1,7 @@
 import type { TemplateSequenceItem, TemplateSequenceV1 } from './sequence-contract'
 
 /**
- * B3 frame clock. All values are integer frames at the authored FPS.
+ * B3 output/item clock is integer authored frames; mediaFrame may be fractional under slot speed.
  * This is a pure mapping helper, not a render capability. Never infer a unique
  * output position from a repeated source without the item ID.
  */
@@ -26,7 +26,8 @@ function assertValidSequence(sequence: TemplateSequenceV1) {
     itemIds.add(item.id)
     if (!Number.isInteger(item.outputStartFrame) || !Number.isInteger(item.outputEndFrame) ||
       !Number.isInteger(item.mediaInFrame) || item.mediaInFrame < 0 ||
-      item.outputStartFrame !== cursor || item.outputEndFrame <= cursor)
+      item.outputStartFrame !== cursor || item.outputEndFrame <= cursor ||
+      !Number.isFinite(item.speed ?? 1) || (item.speed ?? 1) < 0.25 || (item.speed ?? 1) > 4)
       throw new Error('sequence has a gap, overlap or invalid media in-point')
     cursor = item.outputEndFrame
   }
@@ -39,7 +40,7 @@ export function outputToSequenceFrame(sequence: TemplateSequenceV1, outputFrame:
   const local = outputFrame - item.outputStartFrame
   return {
     itemId: item.id, slotId: item.slotId, sourceId: item.assetId,
-    outputFrame, itemLocalFrame: local, mediaFrame: item.mediaInFrame + local,
+    outputFrame, itemLocalFrame: local, mediaFrame: item.mediaInFrame + local * (item.speed ?? 1),
   }
 }
 export function itemLocalToSequenceFrame(sequence: TemplateSequenceV1, itemId: string, itemFrame: number): SequenceFrameLocation {
@@ -52,11 +53,16 @@ export function itemLocalToSequenceFrame(sequence: TemplateSequenceV1, itemId: s
 /** A reused asset may appear in many items; return ALL matching output positions. */
 export function sourceToSequenceFrames(sequence: TemplateSequenceV1, assetId: string, mediaFrame: number): SequenceFrameLocation[] {
   assertValidSequence(sequence)
-  if (!Number.isInteger(mediaFrame) || mediaFrame < 0) throw new RangeError('invalid media frame')
-  return sequence.items
-    .filter(i => i.assetId === assetId && mediaFrame >= i.mediaInFrame &&
-      mediaFrame < i.mediaInFrame + (i.outputEndFrame - i.outputStartFrame))
-    .map(i => itemLocalToSequenceFrame(sequence, i.id, mediaFrame - i.mediaInFrame))
+  if (!Number.isFinite(mediaFrame) || mediaFrame < 0) throw new RangeError('invalid media frame')
+  const out: SequenceFrameLocation[] = []
+  for (const item of sequence.items) {
+    if (item.assetId !== assetId) continue
+    const local = (mediaFrame - item.mediaInFrame) / (item.speed ?? 1)
+    const rounded = Math.round(local)
+    if (rounded < 0 || rounded >= item.outputEndFrame - item.outputStartFrame || Math.abs(local - rounded) > 1e-7) continue
+    out.push(itemLocalToSequenceFrame(sequence, item.id, rounded))
+  }
+  return out
 }
 export function frameToMs(frameIndex: number, fps = 30): number {
   if (!Number.isInteger(frameIndex) || frameIndex < 0 || fps !== 30) throw new Error('unsupported frame conversion')
