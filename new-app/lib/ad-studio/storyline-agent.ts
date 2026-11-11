@@ -55,9 +55,13 @@ function fitNarrationToBudget(parts: string[], cta: string, targetWords: number,
 }
 
 function onScreenCards(input: AdProductInput, name: string, first?: string, second?: string): string[] {
-  const hook = shortCard(first ? `${name}: ${first}` : `${name} up close`)
-  const problem = shortCard(second || (input.audience ? `For ${input.audience}` : 'Take a closer look'))
-  const solution = shortCard(first || `Discover ${name}`)
+  const hook = shortCard(`${name} up close`)
+  const problem = shortCard(second
+    ? `Why it matters: ${second}`
+    : input.audience
+      ? `For ${input.audience}`
+      : 'See the details')
+  const solution = shortCard(first ? `Key benefit: ${first}` : `${name} in focus`)
   const cta = shortCard(`See ${name}`)
   return [hook, problem, solution, cta]
 }
