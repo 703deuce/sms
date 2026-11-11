@@ -1,21 +1,146 @@
 {
-  "Poppins": { "unitsPerEm": 1000, "winAscent": 1050, "winDescent": 350, "cssEmPerAssFontsize": 0.714286 },
-  "Montserrat": { "unitsPerEm": 1000, "winAscent": 1100, "winDescent": 274, "cssEmPerAssFontsize": 0.714286 },
-  "Montserrat Black": { "unitsPerEm": 1000, "winAscent": 1100, "winDescent": 274, "cssEmPerAssFontsize": 0.714286 },
-  "Anton": { "unitsPerEm": 1000, "winAscent": 1175, "winDescent": 355, "cssEmPerAssFontsize": 0.714286 },
-  "Bangers": { "unitsPerEm": 1000, "winAscent": 920, "winDescent": 280, "cssEmPerAssFontsize": 0.714286 },
-  "Inter": { "unitsPerEm": 1000, "winAscent": 1100, "winDescent": 274, "cssEmPerAssFontsize": 0.714286 },
-  "Lato": { "unitsPerEm": 1000, "winAscent": 1010, "winDescent": 225, "cssEmPerAssFontsize": 0.714286 },
-  "Bebas Neue": { "unitsPerEm": 1000, "winAscent": 950, "winDescent": 250, "cssEmPerAssFontsize": 0.714286 },
-  "Archivo Black": { "unitsPerEm": 1000, "winAscent": 1100, "winDescent": 274, "cssEmPerAssFontsize": 0.714286 },
-  "Oswald": { "unitsPerEm": 1000, "winAscent": 1100, "winDescent": 274, "cssEmPerAssFontsize": 0.714286 },
-  "Luckiest Guy": { "unitsPerEm": 1000, "winAscent": 920, "winDescent": 280, "cssEmPerAssFontsize": 0.714286 },
-  "Rubik": { "unitsPerEm": 1000, "winAscent": 935, "winDescent": 250, "cssEmPerAssFontsize": 0.843882 },
-  "Gabarito": { "unitsPerEm": 1000, "winAscent": 940, "winDescent": 260, "cssEmPerAssFontsize": 0.833333 },
-  "Fira Sans Condensed": { "unitsPerEm": 1000, "winAscent": 935, "winDescent": 265, "cssEmPerAssFontsize": 0.833333 },
-  "DM Serif Display": { "unitsPerEm": 1000, "winAscent": 1036, "winDescent": 335, "cssEmPerAssFontsize": 0.729395 },
-  "Playfair Display": { "unitsPerEm": 1000, "winAscent": 1082, "winDescent": 251, "cssEmPerAssFontsize": 0.750188 },
-  "Caveat": { "unitsPerEm": 1000, "winAscent": 960, "winDescent": 300, "cssEmPerAssFontsize": 0.793651 },
-  "Space Grotesk": { "unitsPerEm": 1000, "winAscent": 984, "winDescent": 292, "cssEmPerAssFontsize": 0.783699 },
-  "Space Mono": { "unitsPerEm": 1000, "winAscent": 1120, "winDescent": 361, "cssEmPerAssFontsize": 0.675219 }
+  "Poppins": {
+    "unitsPerEm": 1000,
+    "winAscent": 1050,
+    "winDescent": 350,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Montserrat": {
+    "unitsPerEm": 1000,
+    "winAscent": 1100,
+    "winDescent": 274,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Montserrat Black": {
+    "unitsPerEm": 1000,
+    "winAscent": 1100,
+    "winDescent": 274,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Anton": {
+    "unitsPerEm": 1000,
+    "winAscent": 1175,
+    "winDescent": 355,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Bangers": {
+    "unitsPerEm": 1000,
+    "winAscent": 920,
+    "winDescent": 280,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Inter": {
+    "unitsPerEm": 1000,
+    "winAscent": 1100,
+    "winDescent": 274,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Lato": {
+    "unitsPerEm": 1000,
+    "winAscent": 1010,
+    "winDescent": 225,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Bebas Neue": {
+    "unitsPerEm": 1000,
+    "winAscent": 950,
+    "winDescent": 250,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Archivo Black": {
+    "unitsPerEm": 1000,
+    "winAscent": 1100,
+    "winDescent": 274,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Oswald": {
+    "unitsPerEm": 1000,
+    "winAscent": 1100,
+    "winDescent": 274,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Luckiest Guy": {
+    "unitsPerEm": 1000,
+    "winAscent": 920,
+    "winDescent": 280,
+    "cssEmPerAssFontsize": 0.714286
+  },
+  "Rubik": {
+    "unitsPerEm": 1000,
+    "winAscent": 935,
+    "winDescent": 250,
+    "cssEmPerAssFontsize": 0.843882
+  },
+  "Gabarito": {
+    "unitsPerEm": 1000,
+    "winAscent": 940,
+    "winDescent": 260,
+    "cssEmPerAssFontsize": 0.833333
+  },
+  "Fira Sans Condensed": {
+    "unitsPerEm": 1000,
+    "winAscent": 935,
+    "winDescent": 265,
+    "cssEmPerAssFontsize": 0.833333
+  },
+  "DM Serif Display": {
+    "unitsPerEm": 1000,
+    "winAscent": 1036,
+    "winDescent": 335,
+    "cssEmPerAssFontsize": 0.729395
+  },
+  "Playfair Display": {
+    "unitsPerEm": 1000,
+    "winAscent": 1082,
+    "winDescent": 251,
+    "cssEmPerAssFontsize": 0.750188
+  },
+  "Caveat": {
+    "unitsPerEm": 1000,
+    "winAscent": 960,
+    "winDescent": 300,
+    "cssEmPerAssFontsize": 0.793651
+  },
+  "Space Grotesk": {
+    "unitsPerEm": 1000,
+    "winAscent": 984,
+    "winDescent": 292,
+    "cssEmPerAssFontsize": 0.783699
+  },
+  "Space Mono": {
+    "unitsPerEm": 1000,
+    "winAscent": 1120,
+    "winDescent": 361,
+    "cssEmPerAssFontsize": 0.675219
+  },
+  "Noto Sans Arabic": {
+    "unitsPerEm": 1000,
+    "winAscent": 1374,
+    "winDescent": 738,
+    "cssEmPerAssFontsize": 0.473485
+  },
+  "Noto Sans Devanagari": {
+    "unitsPerEm": 1000,
+    "winAscent": 896,
+    "winDescent": 408,
+    "cssEmPerAssFontsize": 0.766871
+  },
+  "Noto Sans Thai": {
+    "unitsPerEm": 1000,
+    "winAscent": 1061,
+    "winDescent": 450,
+    "cssEmPerAssFontsize": 0.661813
+  },
+  "Noto Sans JP": {
+    "unitsPerEm": 1000,
+    "winAscent": 880,
+    "winDescent": 120,
+    "cssEmPerAssFontsize": 1.0
+  },
+  "Noto Emoji": {
+    "unitsPerEm": 2048,
+    "winAscent": 1900,
+    "winDescent": 500,
+    "cssEmPerAssFontsize": 0.853333
+  }
 }
