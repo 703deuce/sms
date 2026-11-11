@@ -480,6 +480,7 @@ export function LayoutPanel({
               {beta ? <span className="ml-1 text-xs font-normal text-muted-foreground">(beta)</span> : null}
             </p>
             <p className="text-xs text-muted-foreground">{l.hint}</p>
+            {disabled && disabledTip ? <p className="mt-1 text-xs font-medium text-muted-foreground" data-testid={`layout-disabled-reason-${l.id}`}>Unavailable: {disabledTip}</p> : null}
           </button>
           )
         })}
