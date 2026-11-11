@@ -90,7 +90,7 @@ export type MainFrame = {
 
 export function mainFrame(
   edits: ClipEditsV2,
-  tb: { segs: [number, number][]; starts: number[] },
+  tb: { segs: [number, number][]; starts: number[]; durationMs: number },
   outMs: number,
   boxW: number,
   preRollMs = 1500,

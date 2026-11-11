@@ -241,9 +241,10 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   for (const x of raw.aspects) oneOf(x, ['9:16','16:9','1:1'] as const, 'aspect')
   const total = integer(raw.totalFrames, 1, MAX_FRAMES, 'totalFrames')
   if (!Array.isArray(raw.slots) || !raw.slots.length || raw.slots.length > MAX_SLOTS) throw new Error('family: slot budget exceeded')
+  const rawSlots = raw.slots
   const seen = new Set<string>()
   let cursor = 0
-  const slots: TemplateSlot[] = raw.slots.map((value: unknown, index: number) => {
+  const slots: TemplateSlot[] = rawSlots.map((value: unknown, index: number) => {
     if (!own(value)) throw new Error('slot: expected object')
     exact(value, ['id','ordinal','role','media','startFrame','durationFrames','sourceInFrame','handles','fit','sourceAudio','speed','transition','motion','transform','fx'], 'slot')
     const sid = id(value.id, 'slot')
@@ -273,7 +274,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     if (media === 'image' && speed != null && Math.abs(speed - 1) >= 0.0001)
       throw new Error('slot.speed: images do not support playback speed')
     const transition = validateTransition(value.transition, index)
-    if (transition !== 'cut' && transition.durationFrames > Math.min(durationFrames, index ? integer((raw.slots[index - 1] as Record<string, unknown>).durationFrames, 3, total, 'previous.durationFrames') : durationFrames))
+    if (transition !== 'cut' && transition.durationFrames > Math.min(durationFrames, index ? integer((rawSlots[index - 1] as Record<string, unknown>).durationFrames, 3, total, 'previous.durationFrames') : durationFrames))
       throw new Error('slot.transition: longer than adjacent slot')
     return {
       id: sid,

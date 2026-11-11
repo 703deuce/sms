@@ -130,7 +130,7 @@ describe('real-video template B3 production contract', () => {
 
   it('rejects playback speed on still-image slots', () => {
     const f = family(1)
-    f.slots[0] = { ...f.slots[0]!, speed: 2 }
+    f.slots[0] = { ...f.slots[0]!, media: 'image', speed: 2 }
     expect(() => validateTemplateFamily(f)).toThrow(/images do not support playback speed/)
   })
 
@@ -309,16 +309,20 @@ describe('B3 production slot edit representation', () => {
     expect(() => validateTemplateFamily(missing)).toThrow(/requires source handles \(left 6, right 6 frames\)/)
 
     const overlap = family(3)
+    // Two 29-frame transitions each require 15 frames on the 29-frame middle slot.
+    // Neither transition exceeds its neighboring slot, but their windows overlap.
+    overlap.totalFrames = 87
+    overlap.slots = overlap.slots.map((s, i) => ({ ...s, startFrame: i * 29, durationFrames: 29 }))
     overlap.slots[0] = { ...overlap.slots[0], handles: { headFrames: 0, tailFrames: 18 } }
     overlap.slots[1] = {
       ...overlap.slots[1],
       handles: { headFrames: 18, tailFrames: 18 },
-      transition: { type: 'crossfade', durationFrames: 36 },
+      transition: { type: 'crossfade', durationFrames: 29 },
     }
     overlap.slots[2] = {
       ...overlap.slots[2],
       handles: { headFrames: 18, tailFrames: 0 },
-      transition: { type: 'crossfade', durationFrames: 36 },
+      transition: { type: 'crossfade', durationFrames: 29 },
     }
     expect(() => validateTemplateFamily(overlap)).toThrow(/transition windows overlap/)
   })

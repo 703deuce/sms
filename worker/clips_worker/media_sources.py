@@ -744,6 +744,13 @@ def build_sources_filtergraph(
             inputs += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{dur + 0.1:.3f}", "-i", str(p)]
             chain = f"[{in_idx}:v]{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)}{source_fx_filter(w.get('fx'))},fps={fps:g},format=yuv420p"
             in_idx += 1
+            # Still sources must be placed on the carrier clock and composited just like video.
+            # Without this overlay, image-only template slots render as the black carrier.
+            parts.append(f"{chain},setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
+            nxt = f"vb{i + 1}"
+            parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
+            cur = nxt
+            continue
         elif w["mediaType"] == "audio":
             inputs += ["-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps}:d={dur + 0.1:.3f}"]
             v_in = in_idx
