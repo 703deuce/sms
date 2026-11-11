@@ -33,7 +33,7 @@ function finishedWindow(
 }
 
 describe('YouTube grounded chapter titles',()=>{
-  beforeEach(()=>structuredDecision.mockReset())
+  beforeEach(() => { structuredDecision.mockReset() })
 
   it('repairs generic/missing labels, including a cut added to cover an unselected window',async()=>{
     structuredDecision.mockImplementation(async(name:string)=>{
@@ -46,12 +46,7 @@ describe('YouTube grounded chapter titles',()=>{
       if(name==='yt_submit_chapter_title_repair'){
         return {titles:['Beat 1: still generic','Part 2']}
       }
-      const calls = structuredDecision.mock.calls.map(args => ({
-        argc: args.length,
-        types: args.map(v => typeof v),
-        stage: typeof args[0] === 'string' && args[0].startsWith('yt_submit_') ? args[0] : null,
-      }))
-      throw new Error('unexpected structured decision '+name+' call-shapes='+JSON.stringify(calls))
+      throw new Error('unexpected structured decision '+name)
     })
     const result=await ytFinishWholeSourceStory([
       finishedWindow(0,0,20*60_000,
@@ -71,7 +66,7 @@ describe('YouTube grounded chapter titles',()=>{
 
 
 describe('YT02 scalable selection schemas', () => {
-  beforeEach(() => structuredDecision.mockReset())
+  beforeEach(() => { structuredDecision.mockReset() })
 
   it('allows over 36 vetted cuts in one window', async () => {
     const cuts = Array.from({ length: 40 }, (_, i) => ({
