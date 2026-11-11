@@ -4,6 +4,7 @@ import {
   effectiveAudioDeliverFormat,
   exportActionLabel,
   exportDownloadLabel,
+  exportDownloadLabelForFilename,
   mp3EncoderAvailable,
 } from '@/lib/clips/export-format-labels'
 
@@ -22,6 +23,18 @@ describe('PR7 XE01: explicit format and honest encoder capabilities', () => {
     expect(mp3EncoderAvailable([])).toBe(true)
     expect(mp3EncoderAvailable(undefined)).toBe(true)
     expect(mp3EncoderAvailable(['libmp3lame'])).toBe(true)
+  })
+
+  it('XE06 labels the actual READY output even after switching the next selected format', () => {
+    expect(exportDownloadLabelForFilename('clip-123.mp3', 'mov')).toBe('Download MP3')
+    expect(exportDownloadLabelForFilename('clip-123.m4a', 'mp3')).toBe('Download M4A')
+    expect(exportDownloadLabelForFilename('clip-123.MOV', 'mp4')).toBe('Download MOV')
+    expect(exportDownloadLabelForFilename('clip-123.flac', 'mp4')).toBe('Download FLAC')
+    expect(exportDownloadLabelForFilename('clip-123.wav', 'mp4')).toBe('Download WAV')
+    expect(exportDownloadLabelForFilename('clip-123.png', 'mp4')).toBe('Download PNG')
+    expect(exportDownloadLabelForFilename('clip-123.gif', 'mp4')).toBe('Download GIF')
+    expect(exportDownloadLabelForFilename('clip-123.mp4', 'mp3')).toBe('Download MP4')
+    expect(exportDownloadLabelForFilename('clip-123', 'mp3')).toBe('Download MP3')
   })
 
   it('never changes the labels for other requested formats', () => {
