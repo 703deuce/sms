@@ -9,7 +9,7 @@
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { SourceSegmentFx, SourceSegmentTransform } from '@/lib/clips/editor/sources'
-import { TRANSITION_TYPES, type TransitionType } from '@/lib/clips/editor/motion-schema'
+import type { TransitionType } from '@/lib/clips/editor/motion-schema'
 
 export type TemplateAsset = {
   id: string
@@ -129,6 +129,13 @@ const MAX_FRAMES = 30 * 60 * 30
 const MAX_SLOTS = 120
 const MAX_TEXTS = 60
 const MAX_GRAPHICS = 60
+/** Cross-source template transitions with exact browser/ffmpeg shared math in Batch 3. */
+export const TEMPLATE_TRANSITION_TYPES = [
+  'crossfade', 'dip_black', 'dip_white',
+  'push_left', 'push_right', 'push_up', 'push_down',
+  'wipe_left', 'wipe_right', 'wipe_up', 'wipe_down',
+  'zoom_in', 'zoom_out', 'blur',
+] as const satisfies readonly TransitionType[]
 const GRAPHICS = new Set(['rect','rounded','circle','triangle','star','heart','arrow'])
 const own = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const exact = (o: Record<string, unknown>, keys: readonly string[], context: string) => {
@@ -184,7 +191,7 @@ function validateTransition(raw: unknown, index: number): 'cut' | TemplateTransi
   if (!own(raw)) throw new Error('slot.transition: unsupported capability')
   exact(raw, ['type','durationFrames'], 'slot.transition')
   if (index === 0) throw new Error('slot.transition: first slot must be cut')
-  const type = oneOf(raw.type, TRANSITION_TYPES, 'slot.transition.type')
+  const type = oneOf(raw.type, TEMPLATE_TRANSITION_TYPES, 'slot.transition.type')
   return { type, durationFrames: integer(raw.durationFrames, 3, 60, 'slot.transition.durationFrames') }
 }
 
