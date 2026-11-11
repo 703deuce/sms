@@ -1,10 +1,11 @@
+import { BATCH9A_ANCHOR_RELEASES } from './batch9a-anchors'
 import { validateVideoTemplateGallery, type VideoTemplateRelease } from './gallery'
 
 /**
- * Only insert records once footage demos, licensed assets and actual frame-level
- * preview/export review exist. Batch 3's schema/compiler alone is not a release.
- * Keeping this empty avoids advertising fabricated "2,000" first-party templates.
+ * Batch 9A preview anchors are intentionally visible before certification so users can
+ * fill and render them now. Their Preview badge must remain truthful until the existing
+ * independent demo/render certification gate is completed.
  */
-const reviewedFirstPartyReleases: VideoTemplateRelease[] = []
+const firstPartyReleases: VideoTemplateRelease[] = [...BATCH9A_ANCHOR_RELEASES]
 
-export const FIRST_PARTY_VIDEO_TEMPLATES = validateVideoTemplateGallery(reviewedFirstPartyReleases)
+export const FIRST_PARTY_VIDEO_TEMPLATES = validateVideoTemplateGallery(firstPartyReleases)

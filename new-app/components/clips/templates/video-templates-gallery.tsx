@@ -25,6 +25,36 @@ type DraftTemplateProject = {id:string;title:string;releaseId:string;status:stri
 const COMMUNITY_CATEGORIES = ['gaming','podcast','social','business','education','lifestyle','other'] as const
 const MAX_PAGE_SIZE = 24
 const STORAGE_KEY = 'transovo.videoTemplates.favorites.v1'
+function AnimatedTemplateCardPreview({ item }: { item: (typeof FIRST_PARTY_VIDEO_TEMPLATES)[number] }) {
+  const accent=item.previewStyle?.accent ?? '#FACC15'
+  const foreground=item.previewStyle?.foreground ?? '#FFFFFF'
+  const slotCount=Math.max(1,item.family.slots.length)
+  return <div className="relative aspect-video overflow-hidden bg-neutral-950" aria-label={'Animated preview ' + item.title}>
+    <div className="absolute inset-0 opacity-90" style={{background:
+      'radial-gradient(circle at 20% 20%, '+accent+'33, transparent 34%), linear-gradient(135deg,#09090b,#18181b 58%,#020617)'}} />
+    <div className="absolute left-1/2 top-1/2 aspect-[9/16] h-[88%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-white/15 bg-black shadow-2xl">
+      <div className="absolute inset-0 grid" style={{gridTemplateColumns:'repeat('+slotCount+',minmax(0,1fr))'}}>
+        {item.family.slots.map((slot,index)=><div key={slot.id} className="relative overflow-hidden border-r border-white/10 last:border-r-0"
+          style={{background:'linear-gradient('+(120+index*17)+'deg,'+accent+(index%2?'28':'18')+',#111827 75%)'}}>
+          <div className="absolute inset-x-1 bottom-1 h-1 rounded-full bg-white/20" />
+        </div>)}
+      </div>
+      <div className="absolute inset-x-3 top-[18%] animate-pulse text-center font-black uppercase tracking-tight"
+        style={{color:foreground,fontFamily:item.previewStyle?.headingFont}}>
+        {item.title}
+      </div>
+      <div className="absolute h-10 w-20 animate-pulse rounded-xl opacity-80"
+        style={{left:'12%',bottom:'16%',background:accent,animationDelay:'350ms'}} />
+      <div className="absolute inset-x-3 bottom-4 flex gap-1">
+        {item.family.slots.map(slot=><span key={slot.id} className="h-1 flex-1 rounded-full bg-white/50" />)}
+      </div>
+    </div>
+    <span className="absolute left-3 top-3 rounded-full border border-amber-300/40 bg-amber-300/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
+      {item.certificationStatus === 'certified' ? 'Certified' : 'Preview'}
+    </span>
+  </div>
+}
+
 export function VideoTemplatesGallery() {
   const [scope, setScope] = useState<Scope>('first-party')
   const [query, setQuery] = useState('')
@@ -130,7 +160,7 @@ export function VideoTemplatesGallery() {
         <h1 className="text-3xl font-semibold tracking-tight">Video templates</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           Ready-made video sequences with defined clip and photo slots, timed cuts, text, graphics and music.
-          Only fully reviewed designs are available to use.
+          Preview templates are usable immediately; certification remains visible as a separate status badge.
         </p>
         <Link href="/app/clips/templates?tab=layouts" className="inline-block text-sm text-primary underline-offset-4 hover:underline">
           Browse Layouts and caption styles
@@ -173,21 +203,26 @@ export function VideoTemplatesGallery() {
             Favorites only
           </label>
         </section>
-        <p className="text-sm text-muted-foreground" role="status">{result.total} reviewed templates</p>
+        <p className="text-sm text-muted-foreground" role="status">
+          {result.total} templates · {result.items.filter(item=>item.certificationStatus !== 'certified').length} Preview on this page ·
+          {' '}{FIRST_PARTY_VIDEO_TEMPLATES.filter(item=>item.certificationStatus === 'certified').length} Certified
+        </p>
         {result.items.length ? <div className="space-y-7">
           {groups.map(group => <section key={group.id} className="space-y-3" aria-label={group.title + ' variants'}>
             <h2 className="text-lg font-semibold">{group.title} <span className="ml-2 text-xs font-normal text-muted-foreground">{group.items.length} on this page</span></h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {group.items.map(item => <article key={item.id} className="overflow-hidden rounded-2xl border bg-card" data-testid="video-template-card">
-            <video controls playsInline preload="none" muted={sound !== item.id} poster={item.demoPosterPath}
-              src={item.demoPath} onMouseEnter={event => {
-                if (event.currentTarget.muted) void event.currentTarget.play().catch(() => {})
-              }}
-              onMouseLeave={event => {
-                event.currentTarget.pause()
-                try { event.currentTarget.currentTime = 0 } catch { /* not seekable yet */ }
-              }} className="aspect-video w-full bg-black object-cover"
-              aria-label={`Preview ${item.title}`} />
+            {item.certificationStatus === 'certified' && item.demoPath
+              ? <video controls playsInline preload="none" muted={sound !== item.id} poster={item.demoPosterPath}
+                  src={item.demoPath} onMouseEnter={event => {
+                    if (event.currentTarget.muted) void event.currentTarget.play().catch(() => {})
+                  }}
+                  onMouseLeave={event => {
+                    event.currentTarget.pause()
+                    try { event.currentTarget.currentTime = 0 } catch { /* not seekable yet */ }
+                  }} className="aspect-video w-full bg-black object-cover"
+                  aria-label={`Preview ${item.title}`} />
+              : <AnimatedTemplateCardPreview item={item} />}
             <div className="space-y-2 p-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="font-semibold">{item.title}</h2>
@@ -227,8 +262,8 @@ export function VideoTemplatesGallery() {
               {!!item.requiredCapabilities.length && <p className="text-xs text-muted-foreground">
                 Requires {item.requiredCapabilities.join(', ')}
               </p>}
-              <button type="button" onClick={() => setSound(sound === item.id ? null : item.id)}
-                className="rounded-lg border px-3 py-2 text-xs">{sound === item.id ? 'Mute demo' : 'Enable demo sound'}</button>
+              {item.certificationStatus === 'certified' && item.demoPath ? <button type="button" onClick={() => setSound(sound === item.id ? null : item.id)}
+                className="rounded-lg border px-3 py-2 text-xs">{sound === item.id ? 'Mute demo' : 'Enable demo sound'}</button> : null}
               <Link href={'/app/clips/video-templates/' + encodeURIComponent(item.id)}
                 className="block rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground">
                 Use template
@@ -238,10 +273,8 @@ export function VideoTemplatesGallery() {
             </div>
           </section>)}
         </div> : <div className="rounded-2xl border border-dashed p-10 text-center">
-          <h2 className="font-medium">No released templates match</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {FIRST_PARTY_VIDEO_TEMPLATES.length === 0 ? 'First-party video templates are awaiting real demo and render verification. Layouts remain available.' : 'Try clearing some filters.'}
-          </p>
+          <h2 className="font-medium">No templates match</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Try clearing some filters.</p>
         </div>}
         {result.pages > 1 && <nav aria-label="Gallery pages" className="flex items-center justify-center gap-3">
           <button type="button" disabled={result.page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Previous</button>

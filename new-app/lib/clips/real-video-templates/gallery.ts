@@ -11,15 +11,37 @@ export type VideoTemplateRelease = {
   category: string
   title: string
   description: string
-  demoPath: string
-  demoPosterPath: string
+  /** Certified releases use real reviewed demo media; Preview releases may use authored animated cards instead. */
+  demoPath?: string
+  demoPosterPath?: string
   family: TemplateFamilyV1
   design: TemplateDesignV1
   rights: string
   requiredCapabilities: string[]
   authoredDimensions: string[]
-  reviewed: true
-  previewRenderVerified: true
+  reviewed: boolean
+  previewRenderVerified: boolean
+  certificationStatus?: 'preview' | 'certified'
+  musicRequired?: boolean
+  defaultMusic?: {
+    id: string
+    generator: 'batch9a-pulse-v1'
+    sha256: string
+    durationFrames: number
+    bpm: number
+    beatEveryFrames: number
+    author: string
+    license: string
+    revision: string
+  }
+  previewStyle?: {
+    foreground: string
+    accent: string
+    headingFont: string
+    supportFont: string
+    graphic: string
+    enter: string
+  }
 }
 export type VideoTemplateFilters = {
   query?: string
@@ -43,11 +65,21 @@ const allowedDimensions = new Set([
 ])
 export function validateVideoTemplateRelease(input: VideoTemplateRelease): VideoTemplateRelease {
   if (!releaseId.test(input.id)) throw new Error('Invalid video template release ID')
-  if (!input.reviewed || !input.previewRenderVerified)
-    throw new Error('Unreviewed templates must not enter the released gallery')
-  if (!localMediaPath.test(input.demoPath) || !/\.(mp4|webm)$/i.test(input.demoPath) ||
-      !localMediaPath.test(input.demoPosterPath))
-    throw new Error('A reviewed local demo video and poster are required')
+  const certificationStatus = input.certificationStatus ??
+    (input.reviewed && input.previewRenderVerified ? 'certified' : 'preview')
+  if (certificationStatus === 'certified' && (!input.reviewed || !input.previewRenderVerified))
+    throw new Error('Certified templates require completed review and preview/render verification')
+  if (certificationStatus === 'preview' && (input.reviewed || input.previewRenderVerified))
+    throw new Error('Preview templates must not claim completed certification')
+  if (certificationStatus === 'certified' &&
+      (!input.demoPath || !input.demoPosterPath ||
+       !localMediaPath.test(input.demoPath) || !/\.(mp4|webm)$/i.test(input.demoPath) ||
+       !localMediaPath.test(input.demoPosterPath)))
+    throw new Error('A certified local demo video and poster are required')
+  if (certificationStatus === 'preview' &&
+      ((input.demoPath && !localMediaPath.test(input.demoPath)) ||
+       (input.demoPosterPath && !localMediaPath.test(input.demoPosterPath))))
+    throw new Error('Preview media paths must remain local')
   if (!input.rights.trim()) throw new Error('Music and demo rights must be described')
   const family = validateTemplateFamily(input.family)
   const design = validateTemplateDesign(input.design, family)
@@ -61,7 +93,16 @@ export function validateVideoTemplateRelease(input: VideoTemplateRelease): Video
     'music_track', 'cross_source_transitions', 'frame_accurate_slots'])
   if (input.requiredCapabilities.some(x => !supported.has(x)))
     throw new Error('This first-party release requires an unimplemented capability')
-  return { ...input, family, design }
+  if (input.musicRequired && design.musicPolicy === 'none')
+    throw new Error('Music-required template cannot forbid music')
+  if (input.defaultMusic) {
+    if (!/^[a-f0-9]{64}$/i.test(input.defaultMusic.sha256) ||
+        input.defaultMusic.durationFrames < family.totalFrames ||
+        input.defaultMusic.beatEveryFrames < 1 ||
+        input.defaultMusic.bpm <= 0 || input.defaultMusic.bpm > 300)
+      throw new Error('Invalid first-party default music definition')
+  }
+  return { ...input, certificationStatus, family, design }
 }
 export function validateVideoTemplateGallery(releases: readonly VideoTemplateRelease[]): VideoTemplateRelease[] {
   const ids = new Set<string>()
