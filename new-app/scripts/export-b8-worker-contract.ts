@@ -19,7 +19,7 @@ const rights={
 const schedule={
   v:1 as const,mode:'beat-time' as const,musicAssetId:musicId,sha256:musicSha,
   bpm:150,confidence:'high' as const,offsetFrames:0,durationFrames:1800,
-  beats:Array.from({length:151},(_,i)=>i*12),phrases:[],protectedAnchors:[],
+  beats:Array.from({length:150},(_,i)=>i*12),phrases:[],protectedAnchors:[],
 }
 const decision:TemplateMusicDecisionV1={v:1,rights,schedule,choice:'keep-timing'}
 const license={id:'batch9a_first_party_qa',provenance:'first-party' as const,
