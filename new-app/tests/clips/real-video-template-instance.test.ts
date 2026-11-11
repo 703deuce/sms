@@ -7,6 +7,7 @@ const { state, db } = vi.hoisted(() => {
     clips: [] as Record<string, any>[],
     media: [] as Record<string, any>[],
     jobs: [] as Record<string, any>[],
+    failClipCreate: false,
   }
   const clipProject = {
     findFirst: vi.fn(async ({ where }: any) => {
@@ -46,6 +47,7 @@ const { state, db } = vi.hoisted(() => {
   }
   const clip = {
     create: vi.fn(async ({ data }: any) => {
+      if (state.failClipCreate) throw new Error('simulated clip create failure')
       const row = { ...data, deletedAt: null }
       state.clips.push(row)
       return row
@@ -82,7 +84,25 @@ const { state, db } = vi.hoisted(() => {
   const db: any = {
     ...tx,
     $transaction: vi.fn(async (arg: any) => {
-      if (typeof arg === 'function') return arg(tx)
+      if (typeof arg === 'function') {
+        const snapshot = {
+          uploads: structuredClone(state.uploads),
+          projects: structuredClone(state.projects),
+          clips: structuredClone(state.clips),
+          media: structuredClone(state.media),
+          jobs: structuredClone(state.jobs),
+        }
+        try {
+          return await arg(tx)
+        } catch (error) {
+          state.uploads.splice(0, state.uploads.length, ...snapshot.uploads)
+          state.projects.splice(0, state.projects.length, ...snapshot.projects)
+          state.clips.splice(0, state.clips.length, ...snapshot.clips)
+          state.media.splice(0, state.media.length, ...snapshot.media)
+          state.jobs.splice(0, state.jobs.length, ...snapshot.jobs)
+          throw error
+        }
+      }
       return Promise.all(arg)
     }),
   }
@@ -130,6 +150,7 @@ beforeEach(() => {
   state.clips.splice(0)
   state.media.splice(0)
   state.jobs.splice(0)
+  state.failClipCreate = false
   state.uploads.push({
     id: 'owned_photo', workspaceId: 'ws_a', status: 'COMPLETE', mime: 'image/png',
     durationMs: null, width: 1200, height: 1600,
@@ -168,6 +189,18 @@ describe('B3 transactional template project publishing', () => {
     expect(state.projects).toHaveLength(0)
     expect(state.clips).toHaveLength(0)
     expect(state.jobs).toHaveLength(0)
+  })
+
+  it('rolls back every publish row when a mid-transaction write fails', async () => {
+    state.failClipCreate = true
+    await expect(publishTemplateProject('ws_a', 'request_key_123', family, design, choices))
+      .rejects.toThrow(/simulated clip create failure/)
+    expect(state.projects).toHaveLength(0)
+    expect(state.clips).toHaveLength(0)
+    expect(state.media).toHaveLength(0)
+    expect(state.jobs).toHaveLength(0)
+    expect(state.uploads.filter((row) => row.status === 'PENDING')).toHaveLength(0)
+    expect(state.uploads.filter((row) => row.id === 'owned_photo')).toHaveLength(1)
   })
 
   it('keeps authoring state separate from the authoritative timeline and enforces CAS', async () => {
