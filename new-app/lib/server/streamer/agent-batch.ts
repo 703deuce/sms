@@ -184,7 +184,7 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
       select:{status:true,resultProjectId:true,resultClipId:true,outputProjectIds:true,producerNotes:true,error:true},
     })
     if(run&&['ready','done','failed','canceled','capped'].includes(run.status)){
-      if(['ready','done'].includes(run.status)){
+      {
         const ids=publishedBatchClipIds(run)
         // Never trust producer notes alone: enforce this workspace, the
         // published output project, and live clip rows before exposing links.
@@ -206,9 +206,13 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
             startMin:Math.floor((start-next.sourceStartMs)/60_000)})
           seen.add(clip.id)
         }
-        if(!published.length)next.errors.push(`Window ${next.index+1}: No published clips available`)
-      }else{
-        next.errors.push(`Window ${next.index+1}: ${run?.error??'No valid clip'}`)
+        if(!['ready','done'].includes(run.status)){
+          // A failed/canceled run may already have durable, authorized clips.
+          // Preserve them for manual review without presenting the run as a success.
+          next.errors.push(`Window ${next.index+1}: ${run.error??'Run did not finish'}`)
+        }else if(!published.length){
+          next.errors.push(`Window ${next.index+1}: No published clips available`)
+        }
       }
       next.runId=undefined;next.preparedProjectId=undefined
       next.index++
