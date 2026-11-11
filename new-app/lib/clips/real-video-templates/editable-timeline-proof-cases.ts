@@ -157,7 +157,7 @@ export function buildEditedReloadProofCase(): {
         ...edits.audio!.music!,
         generationId: 'replacement_music',
         uploadId: 'replacement_music',
-        volume: 0,
+        volume: 0.35,
       },
     },
     sourceSegments: patchSourceSegment(
