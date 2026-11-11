@@ -238,7 +238,11 @@ export async function withdrawCommunityPublication(workspaceId:string,actorUserI
 
 export async function listModerationQueue(){
   return getPrisma().clipTemplatePublication.findMany({where:{
-      OR:[{state:'submitted'},{state:'published',reports:{some:{status:'open'}}}],
+      OR:[
+        {state:'submitted'},
+        {state:'published',reports:{some:{status:'open'}}},
+        {state:{in:['hidden','takedown']}},
+      ],
     },orderBy:[{submittedAt:'asc'},{createdAt:'asc'}],
     take:100,select:{id:true,templateId:true,title:true,description:true,creatorName:true,creatorUserId:true,state:true,
       category:true,tags:true,aspect:true,clipCount:true,durationMs:true,licenseTerms:true,publicDefinition:true,
@@ -249,7 +253,7 @@ export async function listModerationQueue(){
 }
 
 export async function moderateCommunityTemplate(moderatorUserId:string,publicationId:string,input:{
-  action:'approve'|'reject'|'hide'|'unpublish'|'restore';reason?:string
+  action:'approve'|'reject'|'hide'|'unpublish'|'takedown'|'restore';reason?:string
 }){
   const pub=await getPrisma().clipTemplatePublication.findUnique({where:{id:publicationId},
     select:{id:true,templateId:true,state:true,creatorUserId:true,publicDefinition:true,publishedAt:true}})
@@ -272,12 +276,12 @@ export async function moderateCommunityTemplate(moderatorUserId:string,publicati
     if(pub.state!=='submitted') throw new Error('Only submitted templates can be rejected')
     data={state:'rejected',rejectedAt:now}
     action='rejected'
-  }else if(input.action==='hide'||input.action==='unpublish'){
-    if(pub.state!=='published') throw new Error('Only published templates can be hidden')
-    data={state:'hidden',hiddenAt:now}
-    action=input.action==='hide'?'hidden':'unpublished'
+  }else if(input.action==='hide'||input.action==='unpublish'||input.action==='takedown'){
+    if(pub.state!=='published') throw new Error('Only published templates can be removed from discovery')
+    data={state:input.action==='takedown'?'takedown':'hidden',hiddenAt:now}
+    action=input.action==='hide'?'hidden':input.action==='takedown'?'takedown':'unpublished'
   }else{
-    if(pub.state!=='hidden') throw new Error('Only hidden templates can be restored')
+    if(!['hidden','takedown'].includes(pub.state)) throw new Error('Only hidden/taken-down templates can be restored')
     data={state:'published',hiddenAt:null,publishedAt:pub.publishedAt ?? now}
     action='restored'
   }
@@ -298,7 +302,7 @@ export async function moderateCommunityTemplate(moderatorUserId:string,publicati
     const row=await tx.clipTemplatePublication.update({where:{id:publicationId},data})
     await tx.clipTemplateModerationEvent.create({data:{id:createId('utaudit'),publicationId,
       actorUserId:moderatorUserId,actorRole:'moderator',action,reason:reason||null}})
-    if(['hidden','unpublished'].includes(action))
+    if(['hidden','unpublished','takedown'].includes(action))
       await tx.clipTemplateReport.updateMany({where:{publicationId,status:'open'},data:{status:'reviewed'}})
     return row
   })
