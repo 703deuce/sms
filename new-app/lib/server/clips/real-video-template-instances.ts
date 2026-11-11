@@ -148,9 +148,11 @@ async function checkAssignedWorkspaceMedia(
     const row = byId.get(asset.id)
     if (!row || !imageOrVideo(asset.kind, row.mime)) throw new TemplateAssetUnavailable()
     if (asset.kind !== 'image') {
+      const availableFrames = asset.durationFrames
       if (!row.durationMs || row.durationMs < Math.round(minimumFrames * 1000 / 30) ||
-        !Number.isInteger(asset.durationFrames) || asset.durationFrames < minimumFrames ||
-        row.durationMs < Math.round(asset.durationFrames * 1000 / 30))
+        typeof availableFrames !== 'number' || !Number.isInteger(availableFrames) ||
+        availableFrames < minimumFrames ||
+        row.durationMs < Math.round(availableFrames * 1000 / 30))
         throw new TemplateAssetUnavailable()
     }
   }
