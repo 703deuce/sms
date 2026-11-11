@@ -4,10 +4,18 @@ import { cleanup, render } from '@testing-library/react'
 // next/font/google is a Next build-time transform, not a callable Node runtime module.
 // The imported editor components transitively evaluate their font declarations at module scope.
 // Keep the production font selection untouched; only provide stable variables to this DOM test.
-vi.mock('next/font/google', () => new Proxy({}, {
-  get: (_target, key) => key === '__esModule' ? true : typeof key !== 'string' || key === 'then' ? undefined : () => ({
-    className: 'test-font', variable: '--test-font', style: { fontFamily: 'Test font' },
-  }),
+const nextFont = () => ({ className: 'test-font', variable: '--test-font', style: { fontFamily: 'Test font' } })
+vi.mock('next/font/google', () => ({
+  Anton: nextFont,
+  Montserrat: nextFont,
+  Poppins: nextFont,
+  Archivo_Black: nextFont,
+  Bangers: nextFont,
+  Bebas_Neue: nextFont,
+  Inter: nextFont,
+  Lato: nextFont,
+  Luckiest_Guy: nextFont,
+  Oswald: nextFont,
 }))
 
 import { PreviewStage } from '@/components/clips/editor/preview-stage'

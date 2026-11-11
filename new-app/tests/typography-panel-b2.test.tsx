@@ -5,9 +5,10 @@ import { TextPanel } from '@/components/clips/editor/text-panel'
 import { defaultEdits } from '@/lib/clips/edits'
 import { waitForClipFont } from '@/lib/clips/font-manifest'
 
-vi.mock('@/lib/clips/font-manifest', () => ({
-  waitForClipFont: vi.fn(async () => {}),
-}))
+vi.mock('@/lib/clips/font-manifest', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/clips/font-manifest')>()
+  return { ...actual, waitForClipFont: vi.fn(async () => {}) }
+})
 
 afterEach(() => { cleanup(); vi.mocked(waitForClipFont).mockReset().mockResolvedValue() })
 
