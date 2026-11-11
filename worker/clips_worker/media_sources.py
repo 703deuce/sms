@@ -219,6 +219,12 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
             seg["fit"] = "contain"
         if r.get("auto") is True:
             seg["auto"] = True
+        try:
+            rate = float(r.get("speed", 1))
+        except (TypeError, ValueError):
+            rate = 1.0
+        if src["mediaType"] == "video" and 0.25 <= rate <= 4.0 and abs(rate - 1.0) >= 0.0001:
+            seg["speed"] = round(rate, 3)
         transform = _normalize_source_transform(r.get("transform"))
         if transform:
             seg["transform"] = transform
@@ -243,7 +249,7 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
 
 
 def _is_synced(seg: dict, src: dict | None) -> bool:
-    return bool(src and src["mediaType"] == "video" and "syncMs" in src and "inMs" not in seg)
+    return bool(src and src["mediaType"] == "video" and "syncMs" in src and "inMs" not in seg and "speed" not in seg)
 
 
 def segment_media_ms(seg: dict, src: dict | None, src_ms: int) -> int:
@@ -251,7 +257,7 @@ def segment_media_ms(seg: dict, src: dict | None, src_ms: int) -> int:
         return 0
     if _is_synced(seg, src):
         return max(0, src_ms + int(src.get("syncMs") or 0))
-    return max(0, int(seg.get("inMs") or 0) + (src_ms - int(seg["startMs"])))
+    return max(0, int(round(int(seg.get("inMs") or 0) + (src_ms - int(seg["startMs"])) * float(seg.get("speed") or 1.0))))
 
 
 def segment_audio(seg: dict, src: dict | None) -> str:
@@ -290,6 +296,8 @@ def source_windows(edits: dict, window_start_ms: int, window_end_ms: int) -> lis
                 "fit": s.get("fit") or "cover",
                 "mediaType": src["mediaType"],
             }
+        if s.get("speed"):
+            row["speed"] = s["speed"]
         if s.get("transform"):
             row["transform"] = s["transform"]
         if s.get("fx"):
@@ -446,6 +454,21 @@ def fit_filter(fit: str, w: int, h: int) -> str:
         return (f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,"
                 f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
     return f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
+
+
+def atempo_filter(rate: float) -> str:
+    """FFmpeg atempo supports 0.5..2 per stage; chain for the B3 0.25..4 range."""
+    r = max(0.25, min(4.0, float(rate or 1.0)))
+    parts: list[float] = []
+    while r > 2.0 + 1e-9:
+        parts.append(2.0)
+        r /= 2.0
+    while r < 0.5 - 1e-9:
+        parts.append(0.5)
+        r /= 0.5
+    if abs(r - 1.0) >= 1e-9:
+        parts.append(r)
+    return ",".join(f"atempo={x:.6f}" for x in parts)
 
 
 def source_fx_filter(fx: dict | None) -> str:
@@ -737,8 +760,10 @@ def build_sources_filtergraph(
             mute.append(f"between(t,{t0:.3f},{t1:.3f})")
             continue
         else:
-            inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{dur + 0.25:.3f}", "-i", str(p)]
-            chain = (f"[{in_idx}:v]trim=0:{dur:.3f},setpts=PTS-STARTPTS,fps={fps:g},"
+            speed = float(w.get("speed") or 1.0)
+            media_dur = dur * speed
+            inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{media_dur + 0.25:.3f}", "-i", str(p)]
+            chain = (f"[{in_idx}:v]trim=0:{media_dur:.3f},setpts=(PTS-STARTPTS)/{speed:.6f},fps={fps:g},"
                      f"{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)}{source_fx_filter(w.get('fx'))},format=yuv420p")
             v_in = in_idx
             in_idx += 1
@@ -770,8 +795,10 @@ def build_sources_filtergraph(
             mode = w["audio"]
             if mode in ("source", "mix") and w["mediaType"] == "video" and source_has_audio[i]:
                 ms = int(round(t0 * 1000))
+                tempo = atempo_filter(speed)
+                tempo_part = (tempo + ",") if tempo else ""
                 audio_parts.append(
-                    f"[{v_in}:a]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
+                    f"[{v_in}:a]atrim=0:{media_dur:.3f},asetpts=PTS-STARTPTS,{tempo_part}aresample=48000,"
                     f"aformat=sample_fmts=fltp:channel_layouts=stereo,adelay={ms}|{ms}[sa{i}]"
                 )
                 a_labels.append(f"[sa{i}]")
@@ -903,8 +930,11 @@ def _render_source_transition_side(
     fps: float,
     out: Path,
 ) -> None:
+    speed = float(seg.get("speed") or 1.0)
+    speed_prefix = f"setpts=(PTS-STARTPTS)/{speed:.6f}," if source["mediaType"] == "video" and abs(speed - 1.0) >= 0.0001 else ""
     vf = (
-        fit_filter(seg.get("fit") or "cover", width, height)
+        speed_prefix
+        + fit_filter(seg.get("fit") or "cover", width, height)
         + source_transform_filter(seg.get("transform"), width, height)
         + source_fx_filter(seg.get("fx"))
         + f",fps={fps:g},format=yuv420p"
