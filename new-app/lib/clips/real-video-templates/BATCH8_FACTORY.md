@@ -40,6 +40,8 @@ pnpm templates:b8 benchmark
 # fixture manifest with exact SHA-256, durations and legal source records:
 pnpm templates:b8 preview f01_bold --fixtures build/real-video-templates/b8/fixtures.json
 pnpm templates:b8 jobs --fixtures build/real-video-templates/b8/fixtures.json --shards 16
+# Prepare all queued candidates (or --shard 0 ... --shard 15 in parallel):
+pnpm templates:b8 prepare-shard --all --fixtures build/real-video-templates/b8/fixtures.json
 pnpm templates:b8 claim f01_bold
 # The EXISTING app/worker produces the actual QA MP4 and poster; the CLI
 # preview command only produces a native edits/asset render-request JSON.
@@ -177,3 +179,14 @@ counts do not satisfy real-render or reference-review requirements.
   sanitization/moderation contract and must never bypass review.
 - Compact/full Timeline integration stays deferred per the 12:27 PM
   standalone-template override.
+
+## Worker request fan-out
+
+`prepare-shard --all` (or `--shard N`) compiles the queued candidate
+matrix to one content-addressed JSON request per candidate using the same
+standalone Batch 3/B5 path as `preview`. It checks the current fixture,
+music-schedule and renderer hashes against `jobs.json` **before writing**
+requests. Only queued jobs are prepared; completed, canceled, running and
+failed jobs are not reclaimed. The prepared manifest is a worker handoff,
+not an MP4 renderer or automatic publication. Existing worker execution,
+real posters, glyph/flash QA and independent 9/10 reviews remain mandatory.

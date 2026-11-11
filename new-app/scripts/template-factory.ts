@@ -230,6 +230,55 @@ async function qaMedia(candidate:B8Candidate,evidence:B8Evidence){
   return data
 }
 
+/**
+ * Stable, worker-ready edits and pinned media handoff; does not claim to render.
+ * A shard and a single preview use the exact same Batch 3/B5 compiler path.
+ */
+function preparePreviewRequest(c:B8Candidate,fixtures:FixtureManifest,cacheKey:string):string {
+    const images=fixtures.media.filter(m=>m.kind==='image')
+    const videos=fixtures.media.filter(m=>m.kind==='video')
+    if(!images.length||!videos.length)throw new Error('Preview needs both real photos and video fixtures')
+    const media:Record<string,TemplateAsset>={}
+    c.family.slots.forEach((slot,i)=>{
+      const required=slot.durationFrames+(slot.handles?.headFrames??0)+
+        (slot.handles?.tailFrames??0)
+      const video=videos.find(v=>(v.durationFrames??0)>=required)
+      const source=i%2===0||!video?images[i%images.length]!:video
+      media[slot.id]={id:source.id,kind:source.kind,license:source.license,
+        ...(source.durationFrames?{durationFrames:source.durationFrames}:{})}
+    })
+    if(!Object.values(media).some(asset=>asset.kind==='video'))
+      throw new Error('No verified video is long enough for an authored slot and both handles; mixed-media QA cannot proceed')
+    // Video sources must begin after authored incoming source handles; images can hold
+    // without advancing media time. Never render a clip at 0 with missing handles.
+    const sampledFamily={...c.family,slots:c.family.slots.map(slot=>({
+      ...slot,...(media[slot.id]?.kind==='video'
+        ? {sourceInFrame:slot.handles?.headFrames??0} : {}),
+    }))}
+    if(!fixtures.soundtrack)
+      throw new Error('Batch 8 full-motion preview needs licensed pinned beat-time music')
+    const duration=templateFrameToMs(c.family.totalFrames)
+    const edits=compileTemplateWithMusic(sampledFamily,c.design,{
+      instanceId:'b8_qa_'+c.familyId,media,music:fixtures.soundtrack.asset,
+      templateMusic:fixtures.soundtrack.decision,
+    },{durationFrames:c.family.totalFrames,
+      edits:defaultEdits({clipStartMs:0,clipEndMs:duration})})
+    if(!edits.edits.audio?.music)
+      throw new Error('Music compiler lost the separate soundtrack lane')
+    const dest=join(directory,'preview-requests',c.id+'.json')
+    save(dest,{v:1,cacheKey,status:'worker_render_required',designId:c.id,definitionHash:c.definitionHash,
+      footage:fixtures.media.filter(f=>Object.values(media).some(a=>a.id===f.id)),
+      soundtrack:fixtures.soundtrack,edits:edits.edits,expected:proveB8Structure(c),
+      expectedAudioTrack:true,expectedMusicSourceSha256:fixtures.soundtrack.sha256,
+      message:'Submit registered assets and this ClipEditsV2 plan to the existing worker. No MP4 is claimed by this command.'})
+    return dest
+}
+function pinnedHashes(fixtures:FixtureManifest):string[] {
+  return [...fixtures.media.map(m=>m.sha256),
+    ...(fixtures.soundtrack?[fixtures.soundtrack.sha256,
+      createHash('sha256').update(JSON.stringify(fixtures.soundtrack.decision)).digest('hex')]:[])]
+}
+
 async function execute(){
   if(command==='author'){
     save(join(directory,'family-schedules.json'),{v:1,source:'provisional',families:FACTORY_FAMILY_SEEDS})
@@ -265,43 +314,49 @@ async function execute(){
     if(errors.length||blocked)process.exitCode=1
   }else if(command==='preview'){
     const c=requiredCandidate(),fixtures=await verifiedFixtures()
-    const images=fixtures.media.filter(m=>m.kind==='image')
-    const videos=fixtures.media.filter(m=>m.kind==='video')
-    if(!images.length||!videos.length)throw new Error('Preview needs both real photos and video fixtures')
-    const media:Record<string,TemplateAsset>={}
-    c.family.slots.forEach((slot,i)=>{
-      const required=slot.durationFrames+(slot.handles?.headFrames??0)+
-        (slot.handles?.tailFrames??0)
-      const video=videos.find(v=>(v.durationFrames??0)>=required)
-      const source=i%2===0||!video?images[i%images.length]!:video
-      media[slot.id]={id:source.id,kind:source.kind,license:source.license,
-        ...(source.durationFrames?{durationFrames:source.durationFrames}:{})}
-    })
-    if(!Object.values(media).some(asset=>asset.kind==='video'))
-      throw new Error('No verified video is long enough for an authored slot and both handles; mixed-media QA cannot proceed')
-    // Video sources must begin after authored incoming source handles; images can hold
-    // without advancing media time. Never render a clip at 0 with missing handles.
-    const sampledFamily={...c.family,slots:c.family.slots.map(slot=>({
-      ...slot,...(media[slot.id]?.kind==='video'
-        ? {sourceInFrame:slot.handles?.headFrames??0} : {}),
-    }))}
-    if(!fixtures.soundtrack)
-      throw new Error('Batch 8 full-motion preview needs licensed pinned beat-time music')
-    const duration=templateFrameToMs(c.family.totalFrames)
-    const edits=compileTemplateWithMusic(sampledFamily,c.design,{
-      instanceId:'b8_qa_'+c.familyId,media,music:fixtures.soundtrack.asset,
-      templateMusic:fixtures.soundtrack.decision,
-    },{durationFrames:c.family.totalFrames,
-      edits:defaultEdits({clipStartMs:0,clipEndMs:duration})})
-    if(!edits.edits.audio?.music)
-      throw new Error('Music compiler lost the separate soundtrack lane')
-    const dest=join(directory,'preview-requests',c.id+'.json')
-    save(dest,{v:1,status:'worker_render_required',designId:c.id,definitionHash:c.definitionHash,
-      footage:fixtures.media.filter(f=>Object.values(media).some(a=>a.id===f.id)),
-      soundtrack:fixtures.soundtrack,edits:edits.edits,expected:proveB8Structure(c),
-      expectedAudioTrack:true,expectedMusicSourceSha256:fixtures.soundtrack.sha256,
-      message:'Submit registered assets and this ClipEditsV2 plan to the existing worker. No MP4 is claimed by this command.'})
+    const cacheKey=shardB8Jobs([c],{hashes:pinnedHashes(fixtures),
+      rendererRevision:fixtures.rendererRevision})[0]!.cacheKey
+    const dest=preparePreviewRequest(c,fixtures,cacheKey)
     console.log('Wrote compiler/worker preview request '+dest+' (NOT an MP4).')
+  }else if(command==='prepare-shard'){
+    // Emit one immutable worker request per queued job. Never claim a render
+    // succeeded or mutate the running/failed/done checkpoint in this operation.
+    const fixtures=await verifiedFixtures()
+    if(!fixtures.soundtrack)throw new Error('Pinned licensed soundtrack required')
+    const settings=readJSON<{shardCount:number}>(join(directory,'limits.json'))
+    const queue=loadQueue()
+    const all=args.includes('--all')
+    const hasShard=args.includes('--shard')
+    const shard=Number(argument('--shard','-1'))
+    if(all===hasShard||!Number.isInteger(settings.shardCount)||
+       settings.shardCount<1||settings.shardCount>256||
+       (hasShard&&(!Number.isInteger(shard)||shard<0||shard>=settings.shardCount)))
+      throw new Error('Choose --all or --shard N within the queued shard range')
+    const planned=shardB8Jobs(candidates,{hashes:pinnedHashes(fixtures),
+      rendererRevision:fixtures.rendererRevision},settings.shardCount)
+    const expected=new Map(planned.map(j=>[j.id,j]))
+    const available=queue.filter(j=>j.runStatus==='queued'&&(all||j.shard===shard))
+    const limit=Number(argument('--limit',String(available.length)))
+    if(!Number.isInteger(limit)||limit<1||limit>2000)
+      throw new Error('Request batch limit must be an integer 1..2000')
+    const selected=available.slice(0,limit)
+    // Fail the whole requested batch on a stale cache key BEFORE writing files.
+    for(const job of selected){
+      const plan=expected.get(job.id)
+      if(!plan||plan.cacheKey!==job.cacheKey||plan.definitionHash!==job.definitionHash)
+        throw new Error('Job inputs changed since checkpoint; re-run jobs first: '+job.id)
+    }
+    const prepared=selected.map(job=>{
+      const c=index.get(job.id)!
+      const request=preparePreviewRequest(c,fixtures,job.cacheKey)
+      return {id:job.id,shard:job.shard,cacheKey:job.cacheKey,request,
+        status:'worker_render_required' as const}
+    })
+    const manifest=join(directory,'prepared',all?'all.json':'shard-'+shard+'.json')
+    save(manifest,{v:1,rendererRevision:fixtures.rendererRevision,
+      prepared:prepared.length,requests:prepared,
+      note:'Compiled worker requests only; no MP4, frame QA, render completion or release is implied.'})
+    console.log('Prepared '+prepared.length+' pinned worker requests: '+manifest)
   }else if(command==='qa-media'){
     const c=requiredCandidate()
     const evidence=await verifiedEvidence(false)
@@ -316,10 +371,8 @@ async function execute(){
   }else if(command==='jobs'){
     const fixtures=await verifiedFixtures()
     const shardCount=Number(argument('--shards','16'))
-    const hashes=[...fixtures.media.map(m=>m.sha256),
-      ...(fixtures.soundtrack?[fixtures.soundtrack.sha256,
-        createHash('sha256').update(JSON.stringify(fixtures.soundtrack.decision)).digest('hex')]:[])]
-    const planned=shardB8Jobs(candidates,{hashes,
+    if(!fixtures.soundtrack)throw new Error('Cannot prepare full-motion jobs without pinned licensed music')
+    const planned=shardB8Jobs(candidates,{hashes:pinnedHashes(fixtures),
       rendererRevision:fixtures.rendererRevision},shardCount)
     const jobs=withQueueLock(()=>{
       const existing=existsSync(join(directory,'jobs.json'))?loadQueue():[]
@@ -403,7 +456,7 @@ async function execute(){
       warning:'Actual FFmpeg incremental rerender benchmark requires worker output and fixtures.'})
     console.log('Compiler-only '+candidates.length+' designs in '+ms+'ms')
   }else{
-    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | qa-media <id> | jobs --fixtures <file> [--shards N] | claim/cancel/fail/retry/resume <id> | quality-report | contact-sheet | release-manifest | benchmark')
+    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | jobs --fixtures <file> [--shards N] | prepare-shard (--all | --shard N) [--limit N] | qa-media <id> | claim/cancel/fail/retry/resume <id> | quality-report | contact-sheet | release-manifest | benchmark')
   }
 }
 void execute().catch(e=>{console.error(e instanceof Error?e.message:String(e));process.exitCode=1})
