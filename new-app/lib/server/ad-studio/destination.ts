@@ -2,7 +2,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
-import { clipWordsKey, getClipStorage, uploadSourceKey, storageDriverName } from '@/lib/storage'
+import { clipWordsKey, getClipStorage, getClipStorageForObjectKey, uploadSourceKey, storageDriverName } from '@/lib/storage'
 import { defaultClipSettings } from '@/lib/clips/settings'
 import { buildAdTimelineEdits, type AdTimelineScene } from '@/lib/ad-studio/timeline'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
@@ -341,6 +341,9 @@ export async function materializeDirectAdCommercial(workspaceId: string, runId: 
   if (job.outputKind !== 'video' || !job.outputStorageKey || !job.outputContentType) return false
 
   const durationMs = 15_000
+  const directStorage = await getClipStorageForObjectKey(job.outputStorageKey, job.outputStorageDriver)
+  const sourceBytes = await directStorage.getObjectSizeBytes(job.outputStorageKey)
+  if (sourceBytes == null) throw new Error('Direct commercial output size is unavailable')
   const uploadId = stableId('upl_ad_direct_', runId)
   const projectId = stableId('proj_ad_direct_', runId)
   const clipId = stableId('clip_ad_direct_', runId)
@@ -368,7 +371,7 @@ export async function materializeDirectAdCommercial(workspaceId: string, runId: 
       where: { id: uploadId },
       create: {
         id: uploadId, workspaceId, key: job.outputStorageKey!, filename: (input.name + ' 15s commercial.mp4').slice(0, 180),
-        bytes: BigInt(0), mime: job.outputContentType!, durationMs,
+        bytes: BigInt(sourceBytes), mime: job.outputContentType!, durationMs,
         width: job.outputWidth, height: job.outputHeight, status: 'COMPLETE',
         storageDriver: job.outputStorageDriver, kind: 'source',
       },
