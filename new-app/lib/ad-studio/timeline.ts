@@ -89,13 +89,22 @@ export function buildAdTimelineEdits(input: {
           endMs: Math.round(originalScene.endMs * timeScale),
         }
       : originalScene
-    if (scene.status === 'skipped' || scene.startMs >= input.durationMs) {
+    const ctaFallback = scene.status === 'skipped' && scene.role === 'cta' ? input.productPhotos[0] : undefined
+    if ((scene.status === 'skipped' && !ctaFallback) || scene.startMs >= input.durationMs) {
       console.info('[ad-studio:b3] timeline_scene_skipped', { index: scene.index, status: scene.status })
       continue
     }
     const endMs = Math.min(scene.endMs, input.durationMs)
     if (endMs <= scene.startMs) throw new Error('Invalid Ad Studio scene bounds')
-    if (scene.source === 'stock') {
+    if (ctaFallback) {
+      sourceSegments.push({
+        id: `adcta_${scene.index}`, sourceId: ctaFallback.uploadId,
+        startMs: scene.startMs, endMs, inMs: 0, audio: 'main', fit: 'contain',
+      })
+      console.info('[ad-studio:b3] timeline_cta_product_fallback', {
+        index: scene.index, startMs: scene.startMs, endMs, source: 'primary_product_photo',
+      })
+    } else if (scene.source === 'stock') {
       if (!scene.stockAssetId) throw new Error('Ad Studio stock source missing')
       broll.push({
         id: `ads_${scene.index}`, source: 'stock', assetId: scene.stockAssetId,
@@ -135,8 +144,11 @@ export function buildAdTimelineEdits(input: {
       console.info('[ad-studio:b3] timeline_cta_overlay', { index: scene.index, startMs: scene.startMs, endMs })
     }
     console.info('[ad-studio:b3] timeline_scene_attached', {
-      index: scene.index, source: scene.source, startMs: scene.startMs, endMs,
-      inMs: scene.source === 'stock' ? scene.sourceInMs : scene.trimInMs,
+      index: scene.index,
+      source: ctaFallback ? 'primary_product_photo' : scene.source,
+      startMs: scene.startMs,
+      endMs,
+      inMs: ctaFallback ? 0 : scene.source === 'stock' ? scene.sourceInMs : scene.trimInMs,
       hasText: Boolean(overlay),
     })
   }
