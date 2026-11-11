@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { filterVideoTemplates, validateVideoTemplateGallery, validateVideoTemplateRelease, type VideoTemplateRelease } from '@/lib/clips/real-video-templates/gallery'
 import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/releases'
 import { compileTemplate } from '@/lib/clips/real-video-templates/sequence-contract'
+import { compileTemplateWithMusic } from '@/lib/clips/real-video-templates/music-sequence'
+import { BATCH9A_DEFAULT_MUSIC } from '@/lib/clips/real-video-templates/batch9a-anchors'
 import { defaultEdits } from '@/lib/clips/edits'
 
 function fixture(id: string): VideoTemplateRelease {
@@ -31,6 +33,49 @@ describe('standalone real video gallery', () => {
       x.musicRequired && x.defaultMusic?.sha256 === '4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e'
     )).toBe(true)
   })
+  it('compiles every Batch 9A anchor with beat cuts, transitions, animated layers and music', () => {
+    const musicAsset = {
+      id:'batch9a_test_music',kind:'audio' as const,durationFrames:BATCH9A_DEFAULT_MUSIC.durationFrames,
+      license:{id:'batch9a_first_party',provenance:'first-party' as const,reference:BATCH9A_DEFAULT_MUSIC.revision},
+    }
+    const rights = {
+      assetId:musicAsset.id,origin:'first-party-generated',author:BATCH9A_DEFAULT_MUSIC.author,
+      license:BATCH9A_DEFAULT_MUSIC.license,revision:BATCH9A_DEFAULT_MUSIC.revision,
+      sha256:BATCH9A_DEFAULT_MUSIC.sha256,commercialUse:true,exportAllowed:true,redistributionAllowed:true,
+      verifiedDurationFrames:BATCH9A_DEFAULT_MUSIC.durationFrames,verifiedAt:BATCH9A_DEFAULT_MUSIC.revision,
+    }
+    const schedule = {
+      v:1 as const,mode:'beat-time' as const,musicAssetId:musicAsset.id,sha256:BATCH9A_DEFAULT_MUSIC.sha256,
+      bpm:BATCH9A_DEFAULT_MUSIC.bpm,confidence:'manual' as const,offsetFrames:0,
+      durationFrames:BATCH9A_DEFAULT_MUSIC.durationFrames,
+      beats:Array.from({length:Math.ceil(BATCH9A_DEFAULT_MUSIC.durationFrames/BATCH9A_DEFAULT_MUSIC.beatEveryFrames)},
+        (_,i)=>i*BATCH9A_DEFAULT_MUSIC.beatEveryFrames).filter(x=>x<BATCH9A_DEFAULT_MUSIC.durationFrames),
+      phrases:[],protectedAnchors:[],
+    }
+    for(const release of FIRST_PARTY_VIDEO_TEMPLATES){
+      expect(release.family.slots.every(slot =>
+        slot.startFrame % BATCH9A_DEFAULT_MUSIC.beatEveryFrames === 0)).toBe(true)
+      expect(release.family.slots.slice(1).every(slot => slot.transition !== 'cut')).toBe(true)
+      expect(release.family.texts.every(text => Boolean(text.anim?.in))).toBe(true)
+      expect(release.family.graphics?.every(graphic => Boolean(graphic.anim))).toBe(true)
+      const media=Object.fromEntries(release.family.slots.map((slot,index)=>[slot.id,{
+        id:'photo_'+release.id+'_'+index,kind:'image' as const,
+        license:{id:'owned',provenance:'user-owned' as const,reference:'workspace_upload'},
+      }]))
+      const compiled=compileTemplateWithMusic(release.family,release.design,{
+        instanceId:'instance_'+release.id,media,music:musicAsset,
+        templateMusic:{v:1,rights,schedule,choice:'keep-timing',acceptLoop:false},
+      } as any,{
+        durationFrames:release.family.totalFrames,
+        edits:defaultEdits({clipStartMs:0,clipEndMs:Math.round(release.family.totalFrames*1000/30)}),
+      })
+      expect(compiled.edits.sourceSegments).toHaveLength(release.family.slots.length)
+      expect(compiled.edits.transitions).toHaveLength(release.family.slots.length-1)
+      expect(compiled.edits.textItems).toHaveLength(release.family.texts.length+(release.family.graphics?.length??0))
+      expect(compiled.edits.audio?.music).toMatchObject({uploadId:musicAsset.id})
+    }
+  })
+
   it('requires real local demos and three visible authored dimensions', () => {
     expect(validateVideoTemplateRelease(fixture('one')).id).toBe('one')
     expect(() => validateVideoTemplateRelease({ ...fixture('one'), reviewed: false } as unknown as VideoTemplateRelease))
