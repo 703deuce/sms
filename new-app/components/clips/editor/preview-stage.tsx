@@ -790,6 +790,14 @@ export function PreviewStage({
         const on = Boolean(sseg && sseg.sourceId === s.id)
         const vis = on ? 'visible' : 'hidden'
         if (box.style.visibility !== vis) box.style.visibility = vis
+        if (on && sseg) {
+          const tf = sourceSegmentTransformCss(sseg.transform)
+          if (box.style.transform !== tf.transform) box.style.transform = tf.transform
+          if (box.style.clipPath !== tf.clipPath) box.style.clipPath = tf.clipPath
+          const filter = sourceSegmentFxCss(sseg.fx)
+          if (box.style.filter !== filter) box.style.filter = filter
+          if (box.style.transformOrigin !== '50% 50%') box.style.transformOrigin = '50% 50%'
+        }
         if (el && on && sseg) {
           const fit = sseg.fit === 'contain' ? 'contain' : 'cover'
           if (el.style.objectFit !== fit) el.style.objectFit = fit
