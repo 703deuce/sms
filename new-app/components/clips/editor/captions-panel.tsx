@@ -5,6 +5,7 @@ import { Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { CaptionMiniPreview } from '@/components/clips/editor/caption-overlay'
 import { CLIP_EDITOR_CAPTION_FONT_FAMILIES } from '@/components/clips/editor/clip-editor-fonts'
+import { waitForClipFont } from '@/lib/clips/font-manifest'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -146,6 +147,7 @@ export function CaptionsPanel({
   const userFonts = useWorkspaceFonts()
   const fontFileRef = useRef<HTMLInputElement | null>(null)
   const [fontUploadBusy, setFontUploadBusy] = useState(false)
+  const [fontSelectionBusy, setFontSelectionBusy] = useState(false)
   const [fontUploadMsg, setFontUploadMsg] = useState<string | null>(null)
   const [editingWordI, setEditingWordI] = useState<number | null>(null)
   const wordFixCommittedRef = useRef(false)
@@ -870,10 +872,15 @@ export function CaptionsPanel({
         onValueChange={(font) => {
           if (!font || typeof font !== 'string') return
           if (font === UPLOAD_FONT) return fontFileRef.current?.click()
-          patch({ font })
+          if (font.startsWith('user:')) return patch({ font })
+          setFontSelectionBusy(true)
+          void waitForClipFont(font)
+            .then(() => patch({ font }))
+            .catch((error: unknown) => toast.error('Font unavailable: ' + (error instanceof Error ? error.message : String(error))))
+            .finally(() => setFontSelectionBusy(false))
         }}
       >
-        <SelectTrigger className="h-9" data-testid="caption-font">
+        <SelectTrigger disabled={fontSelectionBusy} className="h-9" data-testid="caption-font">
           <SelectValue>{captionFontDisplayLabel(captionFontValue, userFonts.fonts, CAPTION_FONT_LABELS)}</SelectValue>
         </SelectTrigger>
         <SelectContent>
