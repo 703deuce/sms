@@ -91,7 +91,7 @@ export function batch9PhaseBReleaseGate(evidence:readonly B8Evidence[]):Batch9Ph
   const byId=new Map(evidence.map(row=>[row.id,row]))
   const eligible=eligibleBatch9PhaseBVariants(evidence)
   const independent=eligible.filter(candidate=>Boolean(byId.get(candidate.id)?.independentReviewer?.trim()))
-  const minimumIndependent=Math.ceil(eligible.length*.1)
+  const minimumIndependent=Math.ceil(BATCH9_PHASE_B_VARIANT_TARGET*.1)
   const covered=new Set(independent.map(candidate=>candidate.treatmentId))
   const missingTreatmentAudits=FACTORY_TREATMENTS
     .filter(row=>row.id!=='bold'&&!covered.has(row.id)).map(row=>row.id)
@@ -100,8 +100,9 @@ export function batch9PhaseBReleaseGate(evidence:readonly B8Evidence[]):Batch9Ph
     return Boolean(row?.flagged&&!row.independentReviewer?.trim())
   }).map(candidate=>candidate.id)
   return {
-    ready:phaseA.ready&&eligible.length>0&&independent.length>=minimumIndependent&&
-      missingTreatmentAudits.length===0&&flaggedWithoutIndependent.length===0,
+    ready:phaseA.ready&&eligible.length===BATCH9_PHASE_B_VARIANT_TARGET&&
+      independent.length>=minimumIndependent&&missingTreatmentAudits.length===0&&
+      flaggedWithoutIndependent.length===0,
     independentCount:independent.length,minimumIndependent,
     missingTreatmentAudits,flaggedWithoutIndependent,
   }
