@@ -268,27 +268,6 @@ export async function publishTemplateProject(
       const project = existingDraft
         ? await tx.clipProject.update({ where: { id: ids.projectId }, data: projectData })
         : await tx.clipProject.create({ data: { id: ids.projectId, ...projectData } })
-      /* previous creation fields replaced by the shared draft/new-project path */
-      /*
-      const projectUnused = await tx.clipProject.create({
-        data: {
-          id: ids.projectId,
-          workspaceId,
-          title: title?.trim().slice(0, 200) || family.title,
-          uploadId: ids.uploadId,
-          settings: toPrismaJson(settings),
-          rangeStartMs: 0,
-          rangeEndMs: durationMs,
-          status: 'QUEUED',
-          stage: 'queued',
-          progress: 0,
-          transcriptWords: toPrismaJson([]),
-          sourceKind: 'upload',
-        },
-      })
-
-      */
-      
       const uniqueAssets = new Map<string, TemplateAsset>()
       for (const asset of Object.values(choicesRaw.media)) uniqueAssets.set(asset.id, asset)
       if (choicesRaw.music) uniqueAssets.set(choicesRaw.music.id, choicesRaw.music)

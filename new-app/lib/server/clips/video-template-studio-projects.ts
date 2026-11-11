@@ -27,7 +27,7 @@ function templateInstanceId(workspaceId: string, key: string) {
 function draftMeta(settings: unknown): { version: number; draft: StudioDraft } | null {
   if (!object(settings) || !object(settings.videoTemplateDraft)) return null
   const value = settings.videoTemplateDraft
-  if (!Number.isSafeInteger(value.version) || (value.version as number) < 0 ||
+  if ((typeof value.version !== 'number' || !Number.isSafeInteger(value.version)) || value.version < 0 ||
       !object(value.draft) || value.draft.v !== 1 ||
       typeof value.draft.releaseId !== 'string' || typeof value.draft.draftId !== 'string')
     return null
@@ -74,7 +74,7 @@ function validDraft(releaseId: string, raw: unknown): StudioDraft {
     if (!allowedSlots.has(id) || !object(fill) ||
         !['cover','contain'].includes(String(fill.fit)) ||
         !['replace','loop','hold'].includes(String(fill.remedy)) ||
-        !Number.isInteger(fill.sourceInFrame) || Number(fill.sourceInFrame) < 0 ||
+        (typeof fill.sourceInFrame !== 'number' || !Number.isInteger(fill.sourceInFrame)) || Number(fill.sourceInFrame) < 0 ||
         !Number.isFinite(fill.focalX) || !Number.isFinite(fill.focalY) ||
         typeof fill.muteSourceAudio !== 'boolean') throw new Error('Invalid slot fill')
   }
