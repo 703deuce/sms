@@ -68,6 +68,20 @@ describe('CL12 actual durable streamer batch tick',()=>{
     expect(startUnifiedClipRun).not.toHaveBeenCalled()
     expect(createAiProducerAgentRun).not.toHaveBeenCalled()
   })
+  it('salvages explicitly published clips from a failed run without declaring success',async()=>{
+    findFirst.mockResolvedValueOnce({
+      status:'failed',resultProjectId:'output_1',outputProjectIds:['output_1'],
+      resultClipId:'lead',producerNotes:{publishedClipIds:['lead','story']},
+      error:'partial failure',
+    })
+    expect(await tickStreamerAgentBatch('source','batch_1'))
+      .toMatchObject({status:'done'})
+    const saved=update.mock.calls[0]?.[0]?.data?.settings?.agentClipBatch
+    expect(saved.completed.map((item:{clipId:string})=>item.clipId))
+      .toEqual(['lead','story'])
+    expect(saved.errors).toContain('Window 1: partial failure')
+    expect(startUnifiedClipRun).not.toHaveBeenCalled()
+  })
   it('retains saved clips when run terminates with no extra published output',async()=>{
     findFirst.mockResolvedValueOnce({status:'failed',error:'agent_failed'})
     findUnique.mockResolvedValueOnce({
