@@ -102,6 +102,15 @@ export function isGenericClipTitle(text: string | null | undefined): boolean {
   return GENERIC_CLIP_TITLES.has(t)
 }
 
+/** Card fallback copy is constrained without clipping a spoken word in half. */
+function clipHeadlineOnWordBoundary(text: string, maxLen = 120): string {
+  const normalized = text.trim()
+  if (normalized.length <= maxLen) return normalized
+  const prefix = normalized.slice(0, maxLen + 1)
+  const cut = prefix.lastIndexOf(' ')
+  return cut > 0 ? prefix.slice(0, cut).trimEnd() : ''
+}
+
 const CLIP_TITLE_MAX_WORDS = 6
 
 /** Short headline from spoken transcript (first words, trimmed at a word boundary). */
@@ -216,22 +225,32 @@ export function clipDisplayTitle(clip: {
       !isInternalClipReasoningText(titleAfterStrip) &&
       !isGenericClipTitle(titleAfterStrip)
     ) {
-      return titleAfterStrip.slice(0, 120)
+      const headline = clipHeadlineOnWordBoundary(titleAfterStrip)
+      if (headline) return headline
     }
   }
 
   const why = clipWhySummary(meta)
-  if (why) return why.slice(0, 120)
+  if (why) {
+    const headline = clipHeadlineOnWordBoundary(why)
+    if (headline) return headline
+  }
 
   const reason = clip.reason?.trim()
   if (reason && !FALLBACK_REASON_RE.test(reason)) {
     const cleaned = stripClipTitleTimestampPrefix(reason)
-    if (cleaned && !isInternalClipReasoningText(cleaned)) return cleaned.slice(0, 120)
+    if (cleaned && !isInternalClipReasoningText(cleaned)) {
+      const headline = clipHeadlineOnWordBoundary(cleaned)
+      if (headline) return headline
+    }
   }
 
   if (typeof meta.hook === 'string') {
     const hook = stripClipTitleTimestampPrefix(meta.hook.trim())
-    if (hook && !isInternalClipReasoningText(hook) && !isGenericClipTitle(hook)) return hook.slice(0, 120)
+    if (hook && !isInternalClipReasoningText(hook) && !isGenericClipTitle(hook)) {
+      const headline = clipHeadlineOnWordBoundary(hook)
+      if (headline) return headline
+    }
   }
 
   const fromTranscript = clipTitleFromTranscriptWords(clip.spokenFirstLine)
