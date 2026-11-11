@@ -8907,7 +8907,6 @@ model ClipProject {
   folder             ClipProjectFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
   t2vDraft           T2vDraft?
   projectMedia       ClipProjectMedia[]
-  videoTemplateInstance ClipVideoTemplateInstance?
   mediaTranscripts   ClipMediaTranscript[]
   speechSelects      ClipProjectSelect[]
 
@@ -9745,43 +9744,10 @@ model Clip {
   dubTracks DubTrack[]
   scriptCompositions ScriptComposition[]
   versions ClipEditVersion[]
-  videoTemplateInstance ClipVideoTemplateInstance?
 
   @@index([projectId])
   @@index([projectId, segmentKey])
   @@map("clips")
-}
-
-/** B3: template authoring is independent of authoritative clips.edits.
- * Snapshots pin published family/design revisions; idempotency and CAS are workspace-scoped.
- * Until the versioned sequence render adapter passes preview/export parity, no API exposes
- * these rows as playable projects and no worker jobs are enqueued by this model.
- */
-model ClipVideoTemplateInstance {
-  id                  String      @id
-  workspaceId         String
-  idempotencyKey      String
-  projectId           String?     @unique
-  clipId              String?     @unique
-  familyId            String
-  familyRevision      Int
-  designId            String
-  designRevision      Int
-  snapshot            Json
-  authoringState      Json
-  authoringVersion    Int         @default(0)
-  appliedEditsSaveVersion Int?
-  status              String      @default("PENDING")
-  error               String?
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
-
-  project             ClipProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  clip                Clip?        @relation(fields: [clipId], references: [id], onDelete: Cascade)
-
-  @@unique([workspaceId, idempotencyKey], map: "clip_template_instances_ws_idempotency_key")
-  @@index([workspaceId, status], map: "clip_template_instances_ws_status_idx")
-  @@map("clip_video_template_instances")
 }
 
 model ClipEditVersion {
