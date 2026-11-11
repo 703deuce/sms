@@ -115,6 +115,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const history = useRef<StudioDraft[]>([])
   const future = useRef<StudioDraft[]>([])
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null)
   const setCurrentProject = (value: Project | null) => { projectRef.current = value; setProject(value) }
   const setCurrentDraft = (value: StudioDraft | null) => { draftRef.current = value; setDraft(value) }
   const commitDraft = (value: StudioDraft) => {
@@ -409,6 +410,36 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const activeSlot = release.family.slots.find(s => s.id === selectedSlot)
   const activeFill = activeSlot && draft?.slots[activeSlot.id]
   const activeMedia = activeFill ? knownMedia[activeFill.asset.id] : undefined
+  const musicMedia = draft?.music ? knownMedia[draft.music.id] : undefined
+  const musicConfig = clip?.edits.audio?.music ?? null
+  const syncMusicPreview = (outputMs: number, play: boolean) => {
+    const audio = musicAudioRef.current
+    const config = musicConfig
+    if (!audio || !config || !musicMedia?.url) return
+    const startMs = config.startMs ?? 0
+    const endMs = config.endMs ?? clip?.edits.clipEndMs ?? release.family.totalFrames * 1000 / 30
+    if (outputMs < startMs || outputMs >= endMs) {
+      if (!audio.paused) audio.pause()
+      return
+    }
+    let sourceMs = (config.inMs ?? 0) + outputMs - startMs
+    const durationMs = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration * 1000 : 0
+    if (config.loop && durationMs > 1) sourceMs = ((sourceMs % durationMs) + durationMs) % durationMs
+    else if (durationMs > 1) sourceMs = Math.min(sourceMs, Math.max(0, durationMs - 20))
+    if (Math.abs(audio.currentTime * 1000 - sourceMs) > 120) audio.currentTime = Math.max(0, sourceMs / 1000)
+    const localMs = outputMs - startMs
+    const remainingMs = endMs - outputMs
+    const fadeIn = Math.max(0, config.fadeInMs ?? 0)
+    const fadeOut = Math.max(0, config.fadeOutMs ?? 0)
+    const fadeGain = Math.min(
+      1,
+      fadeIn ? localMs / fadeIn : 1,
+      fadeOut ? remainingMs / fadeOut : 1,
+    )
+    audio.volume = Math.max(0, Math.min(1, (config.volume ?? 0.35) * Math.max(0, fadeGain)))
+    if (play && audio.paused) void audio.play().catch(() => {})
+    else if (!play && !audio.paused) audio.pause()
+  }
   const ready = project?.status === 'READY' && Boolean(clip && project.clipId)
   const canPublish = progress.filled === progress.total && project?.status === 'DRAFT' && !busy
   return (
@@ -447,15 +478,37 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
               <PreviewStage clipId={project?.clipId} edits={clip.edits} videoUrl={clip.mediaUrls.source ?? clip.mediaUrls.proxy}
                 posterUrl={clip.mediaUrls.poster} media={clip.media} cropTrack={clip.crop.track}
                 words={[]} videoRef={videoRef} sourceUrls={sourceUrls}
-                onTick={tick => { const frame = Math.floor(tick.outputMs / 100); if (frame !== lastClockRounded.current) {
+                onTick={tick => {
+                  syncMusicPreview(tick.outputMs, videoRef.current?.paused === false)
+                  const frame = Math.floor(tick.outputMs / 100); if (frame !== lastClockRounded.current) {
                     lastClockRounded.current = frame; setClockMs(tick.outputMs)
-                  } }} />
+                  }
+                }} />
+              {musicMedia?.url && musicConfig ? <audio
+                ref={musicAudioRef}
+                src={musicMedia.url}
+                preload="auto"
+                aria-label="Template soundtrack preview"
+                onLoadedMetadata={() => syncMusicPreview(clockMs, videoRef.current?.paused === false)}
+                className="hidden"
+              /> : null}
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button type="button" className={buttonClass} onClick={() => void videoRef.current?.play()}>Play</button>
-                <button type="button" className={buttonClass} onClick={() => videoRef.current?.pause()}>Pause</button>
+                <button type="button" className={buttonClass} onClick={() => {
+                  void videoRef.current?.play()
+                  syncMusicPreview(clockMs, true)
+                }}>Play</button>
+                <button type="button" className={buttonClass} onClick={() => {
+                  videoRef.current?.pause()
+                  syncMusicPreview(clockMs, false)
+                }}>Pause</button>
                 <input aria-label="Seek template preview" type="range" className="min-w-36 flex-1" min={0}
-                  max={release.family.totalFrames * 1000 / 30} value={Math.min(clockMs, release.family.totalFrames * 1000 / 30)}
-                  onChange={e => { if (videoRef.current) videoRef.current.currentTime = Number(e.target.value) / 1000 }} />
+                  max={(clip.edits.clipEndMs ?? release.family.totalFrames * 1000 / 30)}
+                  value={Math.min(clockMs, clip.edits.clipEndMs ?? release.family.totalFrames * 1000 / 30)}
+                  onChange={e => {
+                    const nextMs = Number(e.target.value)
+                    if (videoRef.current) videoRef.current.currentTime = nextMs / 1000
+                    syncMusicPreview(nextMs, videoRef.current?.paused === false)
+                  }} />
                 <span className="text-xs tabular-nums">{(clockMs / 1000).toFixed(1)}s</span>
               </div>
             </> : <>
