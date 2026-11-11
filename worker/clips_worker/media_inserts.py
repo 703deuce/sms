@@ -46,7 +46,7 @@ GAP_SOURCE_ID = "gap"  # TC1: gap clip — black picture + silence (lavfi color 
 RESERVED_SOURCE_IDS = (FREEZE_SOURCE_ID, GAP_SOURCE_ID)
 
 
-def normalize_inserts(raw, sources: list[dict] | None) -> list[dict] | None:
+def normalize_inserts(raw, sources: list[dict] | None, allow_youtube_long_form: bool = False) -> list[dict] | None:
     if not isinstance(raw, list):
         return None
     by_id = {s["id"]: s for s in (sources or [])}
@@ -69,7 +69,7 @@ def normalize_inserts(raw, sources: list[dict] | None) -> list[dict] | None:
                 item["append"] = True
             item.update({"inMs": 0, "durMs": min(dur, INSERT_MAX_MS), "audio": "mute"})
             out.append(item)
-            if len(out) >= MAX_INSERTS:
+            if not allow_youtube_long_form and len(out) >= MAX_INSERTS:
                 break
             continue
         if not iid or iid in seen or not src or src["mediaType"] == "audio" or at is None or dur is None:
@@ -91,7 +91,7 @@ def normalize_inserts(raw, sources: list[dict] | None) -> list[dict] | None:
         if r.get("fit") == "contain":
             item["fit"] = "contain"
         out.append(item)
-        if len(out) >= MAX_INSERTS:
+        if not allow_youtube_long_form and len(out) >= MAX_INSERTS:
             break
     return out or None
 
@@ -141,10 +141,11 @@ def insert_windows(segs, inserts: list[dict] | None) -> list[dict]:
 
 
 def edits_insert_windows(edits: dict, keep_segs=None) -> list[dict]:
-    from clips_worker.media_sources import normalize_media_sources
+    from clips_worker.media_sources import normalize_media_sources, youtube_long_form_enabled
 
-    sources = normalize_media_sources(edits.get("sources")) or []
-    inserts = normalize_inserts(edits.get("inserts"), sources)
+    extended = youtube_long_form_enabled(edits)
+    sources = normalize_media_sources(edits.get("sources"), extended) or []
+    inserts = normalize_inserts(edits.get("inserts"), sources, extended)
     if not inserts:
         return []
     if keep_segs is None:
@@ -292,13 +293,13 @@ def splice_inserts(
     insert_words: list[dict] | None = None,
 ) -> tuple[Path, str, int]:
     """Returns (new mp4, new srt, added ms). No inserts / no media → unchanged."""
-    from clips_worker.media_sources import has_audio_stream, media_path_for, normalize_media_sources
+    from clips_worker.media_sources import has_audio_stream, media_path_for, normalize_media_sources, youtube_long_form_enabled
 
     keep = (render_meta or {}).get("keep_segs_src")
     windows = edits_insert_windows(edits, keep)
     if not windows:
         return out_mp4, srt_body, 0
-    sources = {s["id"]: s for s in (normalize_media_sources(edits.get("sources")) or [])}
+    sources = {s["id"]: s for s in (normalize_media_sources(edits.get("sources"), youtube_long_form_enabled(edits)) or [])}
     usable = []
     for win in windows:
         if win.get("freeze") or win.get("gap"):
@@ -306,6 +307,8 @@ def splice_inserts(
             continue
         path = media_path_for(edits, win["sourceId"], media_paths or {})
         if not path or not Path(path).is_file():
+            if youtube_long_form_enabled(edits):
+                raise RuntimeError("youtube_long_form_insert_media_missing")
             print(f"[clipper:inserts] skip {win['id']} (media missing)", flush=True)
             continue
         usable.append((win, Path(path)))

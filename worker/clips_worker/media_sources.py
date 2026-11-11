@@ -110,7 +110,12 @@ def _safe_id(v) -> str:
     return s if _ID_RE.match(s) else ""
 
 
-def normalize_media_sources(raw) -> list[dict] | None:
+def youtube_long_form_enabled(edits: dict) -> bool:
+    """Versioned YouTube Story opt-in; legacy payloads retain the default limit."""
+    return isinstance(edits, dict) and type(edits.get("youtubeLongFormAssembly")) is int and edits["youtubeLongFormAssembly"] == 1
+
+
+def normalize_media_sources(raw, allow_youtube_long_form: bool = False) -> list[dict] | None:
     if not isinstance(raw, list):
         return None
     out: list[dict] = []
@@ -136,7 +141,7 @@ def normalize_media_sources(raw) -> list[dict] | None:
         if sync is not None and mt != "image":
             item["syncMs"] = sync
         out.append(item)
-        if len(out) >= MAX_SOURCES:
+        if not allow_youtube_long_form and len(out) >= MAX_SOURCES:
             break
     return out or None
 
@@ -213,7 +218,7 @@ def segment_audio(seg: dict, src: dict | None) -> str:
 
 def source_windows(edits: dict, window_start_ms: int, window_end_ms: int) -> list[dict]:
     """Segments over a source-time render window (ms relative to the window start)."""
-    sources = normalize_media_sources(edits.get("sources")) or []
+    sources = normalize_media_sources(edits.get("sources"), youtube_long_form_enabled(edits)) or []
     segs = normalize_source_segments(edits.get("sourceSegments"), sources) or []
     by_id = {s["id"]: s for s in sources}
     out: list[dict] = []
@@ -275,7 +280,7 @@ def _ext(key: str, mime: str | None) -> str:
 def referenced_media(edits: dict) -> list[tuple[str, str]]:
     """(ref, refId) pairs the export needs: source segments, upload B-roll, upload music / SFX."""
     refs: list[tuple[str, str]] = []
-    sources = normalize_media_sources(edits.get("sources")) or []
+    sources = normalize_media_sources(edits.get("sources"), youtube_long_form_enabled(edits)) or []
     by_id = {s["id"]: s for s in sources}
     for s in normalize_source_segments(edits.get("sourceSegments"), sources) or []:
         src = by_id.get(s["sourceId"])
@@ -298,7 +303,7 @@ def referenced_media(edits: dict) -> list[tuple[str, str]]:
     # E5b: inserted clips.
     from clips_worker.media_inserts import normalize_inserts
 
-    for ins in normalize_inserts(edits.get("inserts"), sources) or []:
+    for ins in normalize_inserts(edits.get("inserts"), sources, youtube_long_form_enabled(edits)) or []:
         src = by_id.get(ins["sourceId"])
         if src:
             refs.append((src["ref"], src["refId"]))
@@ -331,7 +336,7 @@ def load_media_assets(conn, edits: dict, work_dir: Path, workspace_id: str, proj
 
 
 def media_path_for(edits: dict, source_id: str, media: dict[str, Path]) -> Path | None:
-    for s in normalize_media_sources(edits.get("sources")) or []:
+    for s in normalize_media_sources(edits.get("sources"), youtube_long_form_enabled(edits)) or []:
         if s["id"] == source_id:
             return media.get(s["refId"])
     return None
@@ -450,7 +455,7 @@ def _append_layout_composite(
     kind = layout["kind"]
     split = float(layout.get("split") or 0.5)
     lo_s = w["windowStartMs"] / 1000.0
-    by_id = {s["id"]: s for s in normalize_media_sources(edits.get("sources")) or []}
+    by_id = {s["id"]: s for s in normalize_media_sources(edits.get("sources"), youtube_long_form_enabled(edits)) or []}
     seg = w.get("segment") or {}
 
     def resolve_pane(source_id: str) -> tuple[int | None, str]:

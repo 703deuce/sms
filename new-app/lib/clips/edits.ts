@@ -281,6 +281,8 @@ export type ClipEditsV2 = {
   videoReverse?: VideoReverseRange[]
   /** G4c: blur regions on the main video (output ms; manual mask or auto faces) — blur-regions.ts. */
   blurRegions?: BlurRegion[]
+  /** YT02: explicit, versioned opt-in for long-form YouTube Story media. */
+  youtubeLongFormAssembly?: 1
   /** E5 media this clip uses besides the main source (uploads, Rooms angles). */
   sources?: ClipMediaSource[]
   /** E5 Video-lane segments from another source (MAIN SOURCE ms spans; transcript stays main). */
@@ -991,10 +993,11 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
 function normalizeSourceFields(
   o: Record<string, unknown>,
 ): Pick<ClipEditsV2, 'sources' | 'sourceSegments' | 'multicam' | 'inserts'> {
-  const sources = normalizeMediaSources(o.sources)
+  const youtubeLongForm = o.youtubeLongFormAssembly === 1
+  const sources = normalizeMediaSources(o.sources, youtubeLongForm)
   const sourceSegments = normalizeSourceSegments(o.sourceSegments, sources)
   const multicam = normalizeMulticam(o.multicam)
-  const inserts = normalizeInserts(o.inserts, sources)
+  const inserts = normalizeInserts(o.inserts, sources, youtubeLongForm)
   return {
     ...(sources ? { sources } : {}),
     ...(sourceSegments ? { sourceSegments } : {}),
