@@ -100,6 +100,7 @@ export async function listClipProjects(
       where.status = { notIn: ['READY', 'FAILED', 'CANCELED', 'DRAFT'] as ClipProjectStatus[] }
     } else if (opts.status === 'ready') where.status = 'READY'
     else if (opts.status === 'failed') where.status = 'FAILED'
+    else if (opts.status === 'draft') where.status = 'DRAFT'
   }
   return prisma.clipProject.findMany({
     where,
