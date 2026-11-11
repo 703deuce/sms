@@ -409,7 +409,7 @@ export function shardB8Jobs(candidates:readonly B8Candidate[],
     const cacheKey=sha([c.definitionHash,CLIP_FONT_MANIFEST_VERSION,
       fixtures.hashes,fixtures.rendererRevision,B8_ENGINE_REVISION])
     return {id:c.id,shard:parseInt(cacheKey.slice(0,8),16)%shardCount,
-      cacheKey,definitionHash:c.definitionHash,status:'queued',maxAttempts:3}
+      cacheKey,definitionHash:c.definitionHash,status:'queued' as const,maxAttempts:3}
   }).sort((a,b)=>a.shard-b.shard||a.id.localeCompare(b.id))
 }
 

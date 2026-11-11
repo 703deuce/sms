@@ -195,7 +195,7 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     const broken={...result,edits:{...result.edits,
       videoSplits:result.edits.videoSplits?.slice(1),
       textItems:result.edits.textItems?.map((layer,i)=>i?layer:{...layer,anim:undefined}),
-      audio:{...result.edits.audio,music:null},
+      audio:{...result.edits.audio,music:null,sfx:result.edits.audio?.sfx??[]},
     }}
     expect(auditB8EditableOutput(c,broken,{
       requireMusic:true,expectedMusicAssetId:'music_fixture',

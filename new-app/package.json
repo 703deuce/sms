@@ -65,7 +65,7 @@
     "test:voice-v3:golden-parity": "pnpm run sync:voice-v3-authority && NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/verify-golden-runtime-parity.ts",
     "templates:b8": "npx tsx scripts/template-factory.ts",
     "templates:stock-audit": "npx tsx scripts/audit-template-stock-music.ts",
-    "typecheck:templates:b8": "tsc -p tsconfig.real-video-templates-b8.json --noEmit",
+    "typecheck:templates:b8": "bash scripts/typecheck-templates-b8.sh",
     "test:templates:b8": "vitest run tests/clips/b8-template-factory.test.ts",
     "templates:b8:worker-contract": "npx tsx scripts/export-b8-worker-contract.ts",
     "templates:b9:phase-b": "npx tsx scripts/batch9-phase-b.ts"
