@@ -104,7 +104,7 @@ const LibassPreviewLayers = lazy(() =>
   import('@/components/clips/editor/libass-overlay').then((m) => ({ default: m.LibassPreviewLayers })),
 )
 import { PreviewSegmentLayout, segmentLayoutAtSourceMs } from '@/components/clips/editor/segment-layout-preview'
-import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt, sourceSegmentTransformCss } from '@/lib/clips/editor/sources'
+import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt, sourceSegmentFxCss, sourceSegmentTransformCss } from '@/lib/clips/editor/sources'
 import type { SourceSegmentLayout } from '@/lib/clips/editor/segment-layout'
 
 function clamp(n: number, lo: number, hi: number) {
@@ -1785,6 +1785,7 @@ export function PreviewStage({
           if (!url) return null
           const showSourceLayer = !segmentLayoutActive && activeSourceSegment?.sourceId === s.id
           const slotTransform = sourceSegmentTransformCss(showSourceLayer ? activeSourceSegment?.transform : undefined)
+          const slotFilter = sourceSegmentFxCss(showSourceLayer ? activeSourceSegment?.fx : undefined)
           return (
             <div
               key={`${s.id}:${url}`}
@@ -1797,6 +1798,7 @@ export function PreviewStage({
                 transform: slotTransform.transform || undefined,
                 clipPath: slotTransform.clipPath || undefined,
                 transformOrigin: '50% 50%',
+                filter: slotFilter || undefined,
               }}
               data-testid="preview-source"
               data-source-id={s.id}
