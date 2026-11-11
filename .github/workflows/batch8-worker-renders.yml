@@ -1,0 +1,72 @@
+name: Batch 8 worker renders
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "new-app/lib/clips/real-video-templates/b8-**"
+      - "new-app/scripts/export-b8-worker-contract.ts"
+      - "worker/scripts/render_batch8_factory_certification.py"
+      - ".github/workflows/batch8-worker-renders.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: batch8-worker-renders-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 12.3.4 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: new-app
+      - run: pnpm templates:b8:worker-contract ../build/b8-worker-contract.json
+        working-directory: new-app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b8-worker-contract
+          path: build/b8-worker-contract.json
+          retention-days: 14
+
+  render:
+    needs: contract
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: worker
+      CLIP_FONTS_DIR: ${{ github.workspace }}/worker/v3/fonts/t6
+      LIBGL_ALWAYS_SOFTWARE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install FFmpeg and software GL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libegl1-mesa libgl1-mesa-dri mesa-utils
+          python -m pip install --quiet moderngl glcontext
+      - uses: actions/download-artifact@v4
+        with:
+          name: b8-worker-contract
+          path: build
+      - name: Render 100 real worker designs
+        run: |
+          python worker/scripts/render_batch8_factory_certification.py             --contract build/b8-worker-contract.json             --out build/b8-worker-renders/shard-${{ matrix.shard }}             --shard ${{ matrix.shard }} --shards 20
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: b8-worker-renders-${{ matrix.shard }}
+          path: build/b8-worker-renders/shard-${{ matrix.shard }}
+          compression-level: 1
+          retention-days: 14

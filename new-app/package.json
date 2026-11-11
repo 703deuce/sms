@@ -66,7 +66,8 @@
     "templates:b8": "npx tsx scripts/template-factory.ts",
     "templates:stock-audit": "npx tsx scripts/audit-template-stock-music.ts",
     "typecheck:templates:b8": "tsc -p tsconfig.real-video-templates-b8.json --noEmit",
-    "test:templates:b8": "vitest run tests/clips/b8-template-factory.test.ts"
+    "test:templates:b8": "vitest run tests/clips/b8-template-factory.test.ts",
+    "templates:b8:worker-contract": "npx tsx scripts/export-b8-worker-contract.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",

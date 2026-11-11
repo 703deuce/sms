@@ -269,3 +269,16 @@ factory, its shared template contracts pulled transitively, the runner, and
 its tests; it does not add Compact/full Timeline files to this gate. Beat-synced
 worker requests are also re-run through blocking legibility lint after retiming,
 so music synchronization cannot silently make authored titles unreadably short.
+
+## Full 2,000-design worker render harness
+
+`pnpm templates:b8:worker-contract <path>` exports the exact compiled native
+ClipEditsV2 for all 2,000 canonical family×treatment designs after beat sync.
+`worker/scripts/render_batch8_factory_certification.py` consumes that contract
+with real decodable first-party sample imagery (the checked-in Batch 9A preview
+sprites), derives actual video sources, renders source transitions, video motion,
+animated text/graphics and the independent music lane through worker modules,
+and writes an MP4, poster, SHA-256 and frame/audio/duration checks per design.
+The dedicated `Batch 8 worker renders` workflow shards the matrix 20 ways and
+uploads the actual outputs as artifacts. These artifacts prove worker renderability;
+they do not fabricate browser-preview parity or human 9/10 competitor review.

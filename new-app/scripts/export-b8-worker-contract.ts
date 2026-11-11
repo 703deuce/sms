@@ -1,0 +1,60 @@
+#!/usr/bin/env tsx
+import { mkdirSync,writeFileSync } from 'node:fs'
+import { dirname,resolve } from 'node:path'
+import { defaultEdits } from '../lib/clips/edits'
+import { generateB8Candidates,B8_ENGINE_REVISION } from '../lib/clips/real-video-templates/b8-factory'
+import { syncB8FamilyToMusic } from '../lib/clips/real-video-templates/b8-music-sync'
+import { compileTemplateWithMusic,type TemplateMusicDecisionV1 } from '../lib/clips/real-video-templates/music-sequence'
+import { templateFrameToMs,type TemplateAsset } from '../lib/clips/real-video-templates/sequence-contract'
+
+const out=resolve(process.cwd(),process.argv[2]??'../build/real-video-templates/b8/worker-contract.json')
+const musicId='b8_factory_cert_music'
+const musicSha='6'.repeat(64)
+const rights={
+  assetId:musicId,origin:'first-party-generated',author:'Transovo AI',
+  license:'Transovo first-party internal certification fixture',revision:'b8-cert-v1',
+  sha256:musicSha,commercialUse:true,exportAllowed:true,redistributionAllowed:false,
+  verifiedDurationFrames:1800,verifiedAt:'2026-11-11',
+}
+const schedule={
+  v:1 as const,mode:'beat-time' as const,musicAssetId:musicId,sha256:musicSha,
+  bpm:150,confidence:'high' as const,offsetFrames:0,durationFrames:1800,
+  beats:Array.from({length:151},(_,i)=>i*12),phrases:[],protectedAnchors:[],
+}
+const decision:TemplateMusicDecisionV1={v:1,rights,schedule,choice:'keep-timing'}
+const license={id:'batch9a_first_party_qa',provenance:'first-party' as const,
+  reference:'checked-in Batch 9A preview sprites / generated QA motion'}
+const music:TemplateAsset={id:musicId,kind:'audio',durationFrames:1800,license}
+
+const designs=generateB8Candidates().map(candidate=>{
+  const beat=syncB8FamilyToMusic(candidate.family,schedule)
+  const media:Record<string,TemplateAsset>={}
+  const slots=beat.family.slots.map((slot,index)=>{
+    const video=index%3===1
+    const asset:TemplateAsset=video
+      ? {id:'b8_video_'+String(index%10),kind:'video',durationFrames:1800,license}
+      : {id:'b8_image_'+String(index%10),kind:'image',license}
+    media[slot.id]=asset
+    return video?{...slot,sourceInFrame:slot.handles?.headFrames??0}:slot
+  })
+  const family={...beat.family,slots}
+  const durationMs=templateFrameToMs(family.totalFrames)
+  const compiled=compileTemplateWithMusic(family,candidate.design,{
+    instanceId:'b8_worker_'+candidate.id,media,music,templateMusic:decision,
+  },{durationFrames:family.totalFrames,
+    edits:defaultEdits({clipStartMs:0,clipEndMs:durationMs})})
+  return {
+    id:candidate.id,familyId:candidate.familyId,treatmentId:candidate.treatmentId,
+    definitionHash:candidate.definitionHash,totalFrames:family.totalFrames,
+    boundaries:[0,...family.slots.map(slot=>slot.startFrame+slot.durationFrames)],
+    edits:compiled.edits,
+  }
+})
+if(designs.length!==2000)throw new Error('Batch 8 worker contract must contain 2000 designs')
+mkdirSync(dirname(out),{recursive:true})
+writeFileSync(out,JSON.stringify({
+  v:1,engine:B8_ENGINE_REVISION,source:'batch8-canonical-v1',fps:30,
+  fixture:{musicId,musicSha,mediaOrigin:'Batch 9A first-party preview sprites'},
+  designs,
+})+'\n')
+console.log('Wrote '+designs.length+' Batch 8 worker contracts to '+out)
