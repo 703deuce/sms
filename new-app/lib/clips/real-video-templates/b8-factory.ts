@@ -263,6 +263,9 @@ export type B8Evidence = {
   fixtures:{images:readonly string[];videos:readonly string[];licenseHashes:readonly string[]}
   outputs:{previewMp4:string;renderMp4:string;poster:string;
     previewSha256:string;renderSha256:string;posterSha256:string}
+  renderTiming:{
+    v:1;totalFrames:number;boundaries:readonly number[];musicScheduleSha256:string
+  }
   checks:{
     fullFrameStructure:boolean;durationMatch:boolean;audioParity:boolean;
     beatAligned:boolean;firstLastNotBlack:boolean;boundariesNotBlack:boolean;
@@ -297,6 +300,14 @@ export function auditB8Evidence(c:B8Candidate,e:B8Evidence|undefined):string[] {
   if(!e.fixtures || !e.fixtures.images?.length || !e.fixtures.videos?.length ||
     !e.fixtures.licenseHashes?.length ||
     e.fixtures.licenseHashes.some(hash=>!HASH.test(hash)))issues.push('missing_licensed_real_media')
+  const timing=e.renderTiming
+  if(!timing||timing.v!==1||!Number.isInteger(timing.totalFrames)||timing.totalFrames<1||
+     !HASH.test(timing.musicScheduleSha256)||!Array.isArray(timing.boundaries)||
+     timing.boundaries.length!==c.family.slots.length+1||timing.boundaries[0]!==0||
+     timing.boundaries[timing.boundaries.length-1]!==timing.totalFrames||
+     timing.boundaries.some((frame,i)=>!Number.isInteger(frame)||frame<0||
+       (i>0&&frame<=timing.boundaries[i-1]!)))
+    issues.push('missing_pinned_render_timing')
   const out=e.outputs
   if(!out || !credibleLocal(out.previewMp4,/\.mp4$/i) ||
     !credibleLocal(out.renderMp4,/\.mp4$/i) ||

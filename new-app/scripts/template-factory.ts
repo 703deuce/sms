@@ -139,9 +139,9 @@ async function verifiedEvidence(requireMeasuredQA=true):Promise<B8Evidence[]> {
       measurement.definitionHash===candidate.definitionHash&&
       measurement.previewSha256===values.previewSha256&&
       measurement.renderSha256===values.renderSha256&&
-      measurement.expectedFrames===candidate.family.totalFrames&&
+      e.renderTiming?.v===1&&measurement.expectedFrames===e.renderTiming.totalFrames&&
       measurement.previewHasAudio===true&&measurement.renderHasAudio===true&&
-      measurement.checkedFrameCount>=candidate.family.totalFrames-1)
+      measurement.checkedFrameCount>=e.renderTiming.totalFrames-1)
     const valid=Boolean(matched&&measurement&&measurement.durationMatch&&
       measurement.audioStreamParity&&measurement.audioContentParity&&
       measurement.firstLastNotBlack&&measurement.boundariesNotBlack&&
@@ -225,8 +225,9 @@ async function qaMedia(candidate:B8Candidate,evidence:B8Evidence){
   const preview=fileInPublic(output.previewMp4)
   const rendered=fileInPublic(output.renderMp4)
   const pp=probe(preview),pr=probe(rendered)
-  const expected=candidate.family.totalFrames
-  const boundaries=candidate.family.slots.slice(1).map(slot=>slot.startFrame)
+  const expected=evidence.renderTiming?.totalFrames??candidate.family.totalFrames
+  const boundaries=evidence.renderTiming?.boundaries?.slice(1,-1)??
+    candidate.family.slots.slice(1).map(slot=>slot.startFrame)
   const frameQA=summarizeB8FrameQA({
     previewRgb:decodeAllFrames(preview),renderRgb:decodeAllFrames(rendered),
     width:QA_WIDTH,height:QA_HEIGHT,expectedFrames:expected,boundaryFrames:boundaries,
@@ -302,6 +303,9 @@ function preparePreviewRequest(c:B8Candidate,fixtures:FixtureManifest,cacheKey:s
       footage:fixtures.media.filter(f=>Object.values(media).some(a=>a.id===f.id)),
       soundtrack:fixtures.soundtrack,edits:edits.edits,
       authoredStructuralProof:proveB8Structure(c),
+      renderTiming:{v:1,totalFrames:sampledFamily.totalFrames,
+        boundaries:beatSync.newBoundaries,
+        musicScheduleSha256:fixtures.soundtrack.decision.schedule.sha256},
       beatSync:{oldBoundaries:beatSync.oldBoundaries,newBoundaries:beatSync.newBoundaries,
         movedBoundaries:beatSync.movedBoundaries,allCutsOnPinnedBeats:true},
       authoring:{family:sampledFamily,design:c.design,choices:{
