@@ -612,8 +612,8 @@ export function sourceRenderWindows(
   edits: { sources?: ClipMediaSource[]; sourceSegments?: SourceSegment[] },
   windowStartMs: number,
   windowEndMs: number,
-): { id: string; sourceId: string; t0Ms: number; t1Ms: number; mediaInMs: number; audio: SourceAudio; fit: SourceFit; mediaType: MediaType }[] {
-  const out: { id: string; sourceId: string; t0Ms: number; t1Ms: number; mediaInMs: number; audio: SourceAudio; fit: SourceFit; mediaType: MediaType }[] = []
+): { id: string; sourceId: string; t0Ms: number; t1Ms: number; mediaInMs: number; audio: SourceAudio; fit: SourceFit; mediaType: MediaType; transform?: SourceSegmentTransform; fx?: SourceSegmentFx }[] {
+  const out: { id: string; sourceId: string; t0Ms: number; t1Ms: number; mediaInMs: number; audio: SourceAudio; fit: SourceFit; mediaType: MediaType; transform?: SourceSegmentTransform; fx?: SourceSegmentFx }[] = []
   for (const s of edits.sourceSegments ?? []) {
     const src = sourceById(edits.sources, s.sourceId)
     if (!src) continue
@@ -629,6 +629,8 @@ export function sourceRenderWindows(
       audio: segmentAudio(s, src),
       fit: s.fit ?? 'cover',
       mediaType: src.mediaType,
+      ...(s.transform ? { transform: s.transform } : {}),
+      ...(s.fx ? { fx: s.fx } : {}),
     })
   }
   return out
