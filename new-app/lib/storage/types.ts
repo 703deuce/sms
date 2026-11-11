@@ -58,6 +58,8 @@ export interface ClipStorageDriver {
     expiresInSec: number,
     options?: { downloadFilename?: string },
   ): Promise<string>
+  /** Server-side read for workers (avoid presigned HTTP fetch / hairpin issues). */
+  getObjectBytes(objectKey: string): Promise<Buffer>
   getObjectSizeBytes(objectKey: string): Promise<number | null>
   /** ETag or size token for stable presigned URL caching. */
   getObjectVersionToken?(objectKey: string): Promise<string>

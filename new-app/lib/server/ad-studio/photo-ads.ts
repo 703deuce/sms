@@ -1,9 +1,9 @@
 import 'server-only'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { discoverVisionFlashLiteModel, geminiGenerateJson, type GeminiContentPart } from '@/lib/server/ai/gemini-flash-lite'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorageForObjectKey } from '@/lib/storage'
 import type { AdPhotoConcept, AdPhotoQc, AdProductInput } from '@/lib/ad-studio/types'
 import {
   PHOTO_ADS_PROMPT_COUNT,
@@ -11,10 +11,17 @@ import {
   LEGACY_PHOTO_ADS_USER_TEMPLATE,
   LEGACY_PHOTO_AD_QC_SYSTEM_PROMPT,
 } from '@/lib/server/ad-studio/legacy-photo-ad-prompts'
+import {
+  bufferToGeminiPart,
+  readStorageImageBytes,
+  tightenGeminiVisionParts,
+} from '@/lib/server/ad-studio/gemini-inline-image'
+import { safeAdStudioLogMessage } from '@/lib/server/ad-studio/log-safe'
 
 const PREFIX = 'Think step-by-step: 1) spatial physics 2) text rendering 3) lighting coherence before generating.'
 /** Legacy Kimi writer: product (+ logo) first, then at most six style reference images. */
 const MAX_STYLE_REFERENCE_IMAGES = 6
+const STYLE_REFS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'style-refs')
 const STYLE_NAMES = ['kka.png','assss.png','r1.png','r2.png','H1.png','h2.png','h3.png','yt1.png','yt2.png','yt3.png'] as const
 const STYLE_TAGS = [
   'signature-premium-product','human-lifestyle','illustrated-graphic','clean-white-packshot',
@@ -33,34 +40,31 @@ function outputSpec(aspect: AdProductInput['aspect']): string {
   return '1:1 square (social feed), shortest edge >= 2048px.'
 }
 
-async function fetchInline(url: string, mimeHint?: string): Promise<GeminiContentPart> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
-  if (!res.ok) throw new Error('Could not read image for Gemini vision')
-  return { inlineData: {
-    mimeType: mimeHint || res.headers.get('content-type') || 'image/png',
-    data: Buffer.from(await res.arrayBuffer()).toString('base64'),
-  } }
-}
-
 async function inlineAsset(workspaceId: string, assetId: string): Promise<GeminiContentPart> {
   const asset = await getPrisma().aiStudioAsset.findFirst({ where: { id: assetId, workspaceId, kind: 'image' } })
   if (!asset) throw new Error('Ad Studio image asset was not found')
-  const storage = await getClipStorageForObjectKey(asset.storageKey, asset.storageDriver)
-  const signed = await storage.createSignedDownloadUrl(asset.storageKey, 300)
-  return fetchInline(signed, asset.contentType)
+  try {
+    const bytes = await readStorageImageBytes(asset.storageKey, asset.storageDriver)
+    console.info('[ad-studio:r5] product_image_loaded', { assetId, bytes: bytes.length })
+    return bufferToGeminiPart(bytes, asset.contentType || 'image/png')
+  } catch (err) {
+    const log = safeAdStudioLogMessage(err)
+    console.warn('[ad-studio:r5] product_image_load_failed', { assetId, ...log })
+    throw new Error('Could not read image for Gemini vision')
+  }
 }
 
 async function styleParts(): Promise<GeminiContentPart[]> {
-  const dir = path.join(process.cwd(), 'lib/server/ad-studio/style-refs')
   const out: GeminiContentPart[] = []
   for (const name of STYLE_NAMES) {
     if (out.length >= MAX_STYLE_REFERENCE_IMAGES) break
     try {
-      const bytes = await fs.readFile(path.join(dir, name))
-      out.push({ inlineData: { mimeType: 'image/png', data: bytes.toString('base64') } })
+      const bytes = await fs.readFile(path.join(STYLE_REFS_DIR, name))
+      out.push(bufferToGeminiPart(bytes, 'image/png'))
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.warn('[ad-studio:r5] style_ref_read_failed', { name, type: err instanceof Error ? err.name : typeof err })
+        const log = safeAdStudioLogMessage(err)
+        console.warn('[ad-studio:r5] style_ref_read_failed', { name, ...log })
       }
     }
   }
@@ -117,16 +121,34 @@ async function geminiJson<T>(
     try {
       console.info('[ad-studio:r5] gemini_attempt', { model })
       const out = await geminiGenerateJson({ model, parts, responseSchema, systemInstruction, timeoutMs: 120_000 })
-      return { value: JSON.parse(out.text) as T, model }
+      let value: T
+      try {
+        value = JSON.parse(out.text) as T
+      } catch (parseErr) {
+        const log = safeAdStudioLogMessage(parseErr)
+        console.warn('[ad-studio:r5] gemini_json_parse_failed', { model, ...log, textLen: out.text.length })
+        throw parseErr
+      }
+      return { value, model }
     } catch (err) {
       last = err
-      console.warn('[ad-studio:r5] gemini_attempt_failed', { model, type: err instanceof Error ? err.name : typeof err })
+      const log = safeAdStudioLogMessage(err)
+      console.warn('[ad-studio:r5] gemini_attempt_failed', { model, ...log })
     }
   }
   const model = await discoverVisionFlashLiteModel()
-  console.warn('[ad-studio:r5] gemini_flash_lite_fallback', { model, priorFailure: last instanceof Error ? last.name : typeof last })
+  const log = safeAdStudioLogMessage(last)
+  console.warn('[ad-studio:r5] gemini_flash_lite_fallback', { model, priorFailure: log.name })
   const out = await geminiGenerateJson({ model, parts, responseSchema, systemInstruction, timeoutMs: 120_000 })
-  return { value: JSON.parse(out.text) as T, model }
+  let value: T
+  try {
+    value = JSON.parse(out.text) as T
+  } catch (parseErr) {
+    const parseLog = safeAdStudioLogMessage(parseErr)
+    console.warn('[ad-studio:r5] gemini_json_parse_failed', { model, ...parseLog, textLen: out.text.length })
+    throw parseErr
+  }
+  return { value, model }
 }
 
 export async function generatePhotoAdConcepts(workspaceId: string, input: AdProductInput): Promise<{
@@ -141,12 +163,13 @@ export async function generatePhotoAdConcepts(workspaceId: string, input: AdProd
   const styleRefs = await styleParts()
   const user = renderLegacyUserMessage(input, styleRefs.length)
   const systemInstruction = LEGACY_PHOTO_ADS_SYSTEM_PROMPT.split(token('PHOTO_ADS_PROMPT_COUNT')).join(String(PHOTO_ADS_PROMPT_COUNT))
-  const parts: GeminiContentPart[] = [
+  let parts: GeminiContentPart[] = [
     product,
     ...(logo ? [logo] : []),
     ...styleRefs.slice(0, MAX_STYLE_REFERENCE_IMAGES),
     { text: user },
   ]
+  parts = await tightenGeminiVisionParts(parts)
   const { value, model } = await geminiJson<AdPhotoConcept[]>(parts, conceptSchema, systemInstruction)
   if (!Array.isArray(value) || value.length !== PHOTO_ADS_PROMPT_COUNT) throw new Error('Gemini did not return exactly five photo-ad concepts')
   const concepts = value.map((item, index) => {
@@ -167,9 +190,8 @@ function clampScore(value: unknown): number {
 }
 
 export async function inlineStoredImage(storageKey: string, storageDriver: string | null): Promise<GeminiContentPart> {
-  const storage = await getClipStorageForObjectKey(storageKey, storageDriver)
-  const signed = await storage.createSignedDownloadUrl(storageKey, 300)
-  return fetchInline(signed)
+  const bytes = await readStorageImageBytes(storageKey, storageDriver)
+  return bufferToGeminiPart(bytes, 'image/png')
 }
 
 export async function reviewPhotoAdForQc(input: {

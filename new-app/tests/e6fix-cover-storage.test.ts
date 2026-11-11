@@ -13,6 +13,10 @@ const mkDriver = (name: 's3' | 'supabase', objs: Set<string>, host: string) => (
   async createSignedDownloadUrl(k: string) {
     return `https://${host}/${k}?sig`
   },
+  async getObjectBytes(k: string) {
+    if (!objs.has(k)) throw new Error('missing')
+    return Buffer.from('x')
+  },
   async putBytes(k: string) {
     objs.add(k)
   },

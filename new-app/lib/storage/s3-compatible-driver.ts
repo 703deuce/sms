@@ -116,6 +116,17 @@ export function createS3CompatibleStorageDriver(
       if (!cfg) throw new Error('S3 not configured')
       return getObjectJson<T>(getInternalS3Client(cfg), cfg.bucket, objectKey)
     },
+    async getObjectBytes(objectKey: string): Promise<Buffer> {
+      const cfg = getConfig()
+      if (!cfg) throw new Error('S3 not configured')
+      const { GetObjectCommand } = await import('@aws-sdk/client-s3')
+      const out = await getInternalS3Client(cfg).send(
+        new GetObjectCommand({ Bucket: cfg.bucket, Key: objectKey }),
+      )
+      const raw = await out.Body?.transformToByteArray()
+      if (!raw?.length) throw new Error('Empty S3 object')
+      return Buffer.from(raw)
+    },
     async createSignedDownloadUrl(
       objectKey: string,
       expiresInSec: number,

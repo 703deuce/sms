@@ -13,6 +13,7 @@ function mockStorage(): ClipStorageDriver {
     putStream: vi.fn(),
     getJson: vi.fn(),
     createSignedDownloadUrl: vi.fn(async (key: string) => `https://signed.example/${key}?t=${Date.now()}`),
+    getObjectBytes: vi.fn(async () => Buffer.from('x')),
     getObjectSizeBytes: vi.fn(async () => 123),
     getObjectVersionToken: vi.fn(async () => 'etag:abc'),
   }
