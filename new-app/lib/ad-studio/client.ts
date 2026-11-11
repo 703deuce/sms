@@ -1,4 +1,4 @@
-import type { AdAspect, AdDuration, AdMode, AdProductInput, AdStudioRun } from './types'
+import type { AdAspect, AdCommercialModelId, AdDuration, AdMode, AdProductInput, AdStudioRun } from './types'
 import { sanitizeAdStudioMessage } from './format'
 
 export type AdStudioConfig = {
@@ -71,7 +71,7 @@ export type AdStudioClient = {
   getFinalRender: (runId: string, download?: boolean) => Promise<AdStudioFinalRender>
   createCommercial: (
     runId: string,
-    body: { variantId: string; idempotencyKey: string; voiceId?: string; voiceoverEnabled?: boolean },
+    body: { variantId: string; idempotencyKey: string; voiceId?: string; voiceoverEnabled?: boolean; modelId?: AdCommercialModelId },
   ) => Promise<CommercialEnvelope>
   uploadImage: (file: File) => Promise<string>
 }
