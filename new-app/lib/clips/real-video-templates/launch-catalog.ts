@@ -50,7 +50,7 @@ function stable(value: unknown): string {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => JSON.stringify(k) + ':' + stable(v)).join(',')}}`
   }
-  return JSON.stringify(value)
+  return JSON.stringify(value) ?? 'null'
 }
 
 export function designTreatmentDimensions(treatment: TemplateDesignTreatment | undefined): VisibleTemplateDimension[] {
