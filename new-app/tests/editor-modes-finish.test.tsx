@@ -50,7 +50,7 @@ describe('finished editor modes', () => {
     const text = source(path)
     expect(text).toContain('useEditorState(clipId')
     expect(text).toContain('await flushSave()')
-    expect(text).toContain('<EditorModeSwitcher')
+    expect(text).toContain(path.includes('generate-shot') ? '<StandaloneEditorChrome' : '<EditorModeSwitcher')
     expect(text).not.toContain('routes.text(')
   })
 

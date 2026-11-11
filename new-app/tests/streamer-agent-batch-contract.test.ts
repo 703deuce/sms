@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest'
-import {readStreamerAgentBatch,streamerAgentSettings} from '@/lib/streamer/agent-batch-contract'
+import {readStreamerAgentBatch,publishedBatchClipIds,streamerAgentSettings} from '@/lib/streamer/agent-batch-contract'
 
 describe('durable streamer agent batch state',()=>{
   const state={
@@ -20,6 +20,19 @@ describe('durable streamer agent batch state',()=>{
   it('accepts a unified clipper batch mode',()=>{
     const unified={...state,mode:'clip_unified_v1' as const}
     expect(readStreamerAgentBatch({agentClipBatch:unified})).toEqual(unified)
+  })
+  it('dedupes only explicit published output IDs without changing their order',()=>{
+    expect(publishedBatchClipIds({resultClipId:'c1',producerNotes:{
+      publishedClipIds:['c1','c2','c2','c3',null,123],
+    }})).toEqual(['c1','c2','c3'])
+    expect(publishedBatchClipIds({resultClipId:null,producerNotes:{
+      draftClipIds:['draft'],publishedClipIds:[],
+    }})).toEqual([])
+  })
+  it('keeps old batches parseable when the window policy version is absent',()=>{
+    expect(readStreamerAgentBatch({agentClipBatch:state})?.windowPolicy).toBeUndefined()
+    expect(readStreamerAgentBatch({agentClipBatch:{...state,windowPolicy:'fold_short_tail_v1'}})?.windowPolicy)
+      .toBe('fold_short_tail_v1')
   })
   it('does not interpret unrelated project settings as an active batch',()=>{
     expect(readStreamerAgentBatch({streamer:{}})).toBeNull()

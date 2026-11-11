@@ -35,6 +35,7 @@ export function EditorTopBar({
   historySlot,
   onExport,
   onOpenProducer,
+  showStandaloneProducerButton = true,
   onRetrySave,
   producerOpen = false,
   producerStrip,
@@ -59,6 +60,8 @@ export function EditorTopBar({
   onExport: () => void
   onRetrySave?: () => void
   onOpenProducer?: () => void
+  /** The mode switcher already supplies this entry on standard editor surfaces. */
+  showStandaloneProducerButton?: boolean
   producerOpen?: boolean
   producerStrip?: { changeCount: number; onUndo: () => void } | null
   pendingPaidCount?: number
@@ -185,7 +188,7 @@ export function EditorTopBar({
         {historySlot}
         <Separator orientation="vertical" className="mx-1 h-6" />
         {layoutViewSlot}
-        {onOpenProducer ? (
+        {onOpenProducer && showStandaloneProducerButton ? (
           <Button
             type="button"
             size="sm"
