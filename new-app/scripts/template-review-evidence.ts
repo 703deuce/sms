@@ -27,5 +27,6 @@ if(result.rejected.length){
     writeFileSync(temp,JSON.stringify(result.evidence,null,2)+'\n','utf8')
     renameSync(temp,evidencePath)
   }finally{rmSync(temp,{force:true})}
-  console.log(JSON.stringify({reviewed:result.reviewed,fullyPassing:result.fullyPassing},null,2))
+  console.log(JSON.stringify({reviewed:result.reviewed,evidencePassing:result.evidencePassing,
+    releaseEligible:result.releaseEligible},null,2))
 }

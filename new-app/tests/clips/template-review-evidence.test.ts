@@ -35,6 +35,8 @@ describe('template human review evidence import',()=>{
     }])
     expect(result.rejected).toEqual([])
     expect(result.reviewed).toBe(1)
+    expect(result.evidencePassing).toBe(1)
+    expect(result.releaseEligible).toBe(0)
     expect(result.evidence[0]?.outputs.renderSha256).toBe(hash)
     expect(result.evidence[0]?.independentReviewer).toBe('Reviewer Two')
   })

@@ -1,4 +1,6 @@
-import { auditB8Evidence,generateB8Candidates,scoreB8Review,type B8Evidence } from './b8-factory'
+import {
+  auditB8Evidence,generateB8Candidates,reportB8Quality,scoreB8Review,type B8Evidence,
+} from './b8-factory'
 import { b8ReferenceForFamily } from './b8-reference-catalog'
 
 export type TemplateHumanReview={
@@ -15,7 +17,8 @@ export type TemplateHumanReview={
 export type TemplateReviewImportResult={
   evidence:B8Evidence[]
   reviewed:number
-  fullyPassing:number
+  evidencePassing:number
+  releaseEligible:number
   rejected:Array<{id:string;reason:string}>
 }
 const DATE=/^20\d\d-\d\d-\d\d$/
@@ -74,13 +77,14 @@ export function applyTemplateHumanReviews(
     }
   }
   const evidence=[...evidenceById.values()].sort((a,b)=>a.id.localeCompare(b.id))
-  let fullyPassing=0
+  let evidencePassing=0
   for(const row of evidence){
     const candidate=candidates.get(row.id)
     if(candidate&&!auditB8Evidence(candidate,row).length){
       const score=scoreB8Review(row)
-      if(score.score>=9&&score.minimum)fullyPassing++
+      if(score.score>=9&&score.minimum)evidencePassing++
     }
   }
-  return {evidence,reviewed,fullyPassing,rejected}
+  const releaseEligible=reportB8Quality([...candidates.values()],evidence).released
+  return {evidence,reviewed,evidencePassing,releaseEligible,rejected}
 }
