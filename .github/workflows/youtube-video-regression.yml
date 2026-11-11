@@ -56,3 +56,9 @@ jobs:
             exit 1
           fi
           echo 'No scoped YouTube Video maker TypeScript errors'
+      - name: Verify worker YouTube and legacy insert parity
+        run: |
+          python3 -m pip install pytest
+          PYTHONPATH=../worker python3 -m pytest -q ../worker/tests/test_youtube_long_form_limits.py
+      - name: Production Next.js build
+        run: pnpm run build
