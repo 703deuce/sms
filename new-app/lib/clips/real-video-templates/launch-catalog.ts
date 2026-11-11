@@ -53,34 +53,77 @@ function stable(value: unknown): string {
   return JSON.stringify(value) ?? 'null'
 }
 
-export function designTreatmentDimensions(treatment: TemplateDesignTreatment | undefined): VisibleTemplateDimension[] {
-  if (!treatment) return []
-  const dims = new Set<VisibleTemplateDimension>()
+function eq(a: unknown, b: unknown): boolean {
+  return stable(a ?? null) === stable(b ?? null)
+}
 
-  for (const row of treatment.texts ?? []) {
-    if (row.font != null || row.size != null) dims.add('font-hierarchy')
-    if (row.x != null || row.y != null) dims.add('text-placement')
-    if (row.animation != null || row.motion != null) dims.add('animation-choreography')
+function meaningfulTreatmentRecipe(family: TemplateFamilyV1, treatment: TemplateDesignTreatment | undefined) {
+  if (!treatment) return { texts: [], graphics: [], slots: [] }
+  const texts = (treatment.texts ?? []).flatMap((row) => {
+    const base = family.texts.find((item) => item.id === row.id)
+    if (!base) return []
+    const delta: Record<string, unknown> = { id: row.id }
+    if (row.font != null && row.font !== base.font) delta.font = row.font
+    if (row.size != null && row.size !== base.size) delta.size = row.size
+    if (row.x != null && row.x !== base.x) delta.x = row.x
+    if (row.y != null && row.y !== base.y) delta.y = row.y
+    if (row.animation != null && !eq(row.animation, base.animation)) delta.animation = row.animation
+    if (row.motion != null && !eq(row.motion, base.motion)) delta.motion = row.motion
+    return Object.keys(delta).length > 1 ? [delta] : []
+  })
+  const graphics = (treatment.graphics ?? []).flatMap((row) => {
+    const base = family.graphics?.find((item) => item.id === row.id)
+    if (!base) return []
+    const delta: Record<string, unknown> = { id: row.id }
+    if (row.type != null && row.type !== base.type) delta.type = row.type
+    if (row.x != null && row.x !== base.x) delta.x = row.x
+    if (row.y != null && row.y !== base.y) delta.y = row.y
+    if (row.w != null && row.w !== base.w) delta.w = row.w
+    if (row.h != null && row.h !== base.h) delta.h = row.h
+    if (row.animation != null && !eq(row.animation, base.animation)) delta.animation = row.animation
+    if (row.motion != null && !eq(row.motion, base.motion)) delta.motion = row.motion
+    return Object.keys(delta).length > 1 ? [delta] : []
+  })
+  const slots = (treatment.slots ?? []).flatMap((row) => {
+    const base = family.slots.find((item) => item.id === row.id)
+    if (!base) return []
+    const delta: Record<string, unknown> = { id: row.id }
+    if (row.transition != null && !eq(row.transition, base.transition)) delta.transition = row.transition
+    if (row.motion != null && !eq(row.motion, base.motion)) delta.motion = row.motion
+    if (row.transform != null && !eq(row.transform, base.transform)) delta.transform = row.transform
+    return Object.keys(delta).length > 1 ? [delta] : []
+  })
+  return { texts, graphics, slots }
+}
+
+export function designTreatmentDimensions(
+  family: TemplateFamilyV1,
+  treatment: TemplateDesignTreatment | undefined,
+): VisibleTemplateDimension[] {
+  const recipe = meaningfulTreatmentRecipe(family, treatment)
+  const dims = new Set<VisibleTemplateDimension>()
+  for (const row of recipe.texts) {
+    if ('font' in row || 'size' in row) dims.add('font-hierarchy')
+    if ('x' in row || 'y' in row) dims.add('text-placement')
+    if ('animation' in row || 'motion' in row) dims.add('animation-choreography')
   }
-  for (const row of treatment.graphics ?? []) {
-    if (row.type != null || row.x != null || row.y != null || row.w != null || row.h != null)
-      dims.add('graphics')
-    if (row.animation != null || row.motion != null) dims.add('animation-choreography')
+  for (const row of recipe.graphics) {
+    if ('type' in row || 'x' in row || 'y' in row || 'w' in row || 'h' in row) dims.add('graphics')
+    if ('animation' in row || 'motion' in row) dims.add('animation-choreography')
   }
-  for (const row of treatment.slots ?? []) {
-    if (row.transition != null) dims.add('transition-treatment')
-    if (row.motion != null || row.transform != null) dims.add('source-safe-motion')
+  for (const row of recipe.slots) {
+    if ('transition' in row) dims.add('transition-treatment')
+    if ('motion' in row || 'transform' in row) dims.add('source-safe-motion')
   }
-  // Color/name/stylePack/aspect/resolution/FX-only changes intentionally do not create a launch dimension.
   return [...dims].sort()
 }
 
-function treatmentSignature(treatment: TemplateDesignTreatment | undefined): string {
-  if (!treatment) return '{}'
+function treatmentSignature(family: TemplateFamilyV1, treatment: TemplateDesignTreatment | undefined): string {
+  const recipe = meaningfulTreatmentRecipe(family, treatment)
   return stable({
-    texts: [...(treatment.texts ?? [])].sort((a, b) => a.id.localeCompare(b.id)),
-    graphics: [...(treatment.graphics ?? [])].sort((a, b) => a.id.localeCompare(b.id)),
-    slots: [...(treatment.slots ?? [])].sort((a, b) => a.id.localeCompare(b.id)),
+    texts: [...recipe.texts].sort((a, b) => String(a.id).localeCompare(String(b.id))),
+    graphics: [...recipe.graphics].sort((a, b) => String(a.id).localeCompare(String(b.id))),
+    slots: [...recipe.slots].sort((a, b) => String(a.id).localeCompare(String(b.id))),
   })
 }
 
@@ -112,14 +155,14 @@ export function assertFirstPartyLaunchCatalog(
     if (seenDesign.has(designKey)) throw new Error(`launch catalog: duplicate released design ${designKey}`)
     seenDesign.add(designKey)
 
-    const dimensions = designTreatmentDimensions(design.treatment)
+    const dimensions = designTreatmentDimensions(baseFamily, design.treatment)
     if (dimensions.length < 3)
       throw new Error(`launch catalog: ${design.designId} must differ on at least three visible authored dimensions`)
     if (row.treatmentKind === 'authored-alternate' &&
         !dimensions.some((d) => d === 'font-hierarchy' || d === 'animation-choreography' || d === 'graphics'))
       throw new Error(`launch catalog: authored alternate ${design.designId} needs separately authored font/choreography/graphic work`)
 
-    const signature = treatmentSignature(design.treatment)
+    const signature = treatmentSignature(baseFamily, design.treatment)
     const signatures = seenTreatmentByFamily.get(key) ?? new Set<string>()
     if (signatures.has(signature))
       throw new Error(`launch catalog: duplicate treatment recipe in ${key}; design names/style packs do not create a new variant`)
