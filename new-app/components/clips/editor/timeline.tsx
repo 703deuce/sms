@@ -151,6 +151,7 @@ import { useDismiss } from '@/components/clips/editor/use-dismiss'
 import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
 import { TimelineRuler } from '@/components/clips/editor/timeline/timeline-ruler'
 import { TimelineWaveform } from '@/components/clips/editor/timeline/timeline-waveform'
+import { keyframeTimes, sourceSegmentTarget } from '@/lib/clips/editor/keyframes'
 import { SourceSegmentFilmstrip, TimelineFilmstrip } from '@/components/clips/editor/timeline/timeline-filmstrip'
 import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-filmstrip-frames'
 import type { EditorAssets } from '@/lib/clips/editor/editor-assets'
@@ -3986,9 +3987,18 @@ export function Timeline({
                           }}
                           title={`${c.label} (other source)`}
                           data-testid="timeline-source-segment"
+                          data-item-id={c.id}
                           data-source-id={c.sourceId}
                         >
                           {(c.endMs - c.startMs) * pxPerMs >= TIMELINE_MIN_LABEL_PX ? c.label : null}
+                          {keyframeTimes(edits, sourceSegmentTarget(c.id)).map((t) => (
+                            <span
+                              key={t}
+                              data-testid="timeline-source-keyframe"
+                              className="pointer-events-none absolute top-[2px] size-1.5 -translate-x-1/2 rotate-45 bg-white"
+                              style={{ left: `${Math.max(0, Math.min(100, (t / Math.max(1, c.endMs - c.startMs)) * 100))}%` }}
+                            />
+                          ))}
                         </button>
                       ))
                     : null}
