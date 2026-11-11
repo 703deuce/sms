@@ -29,7 +29,7 @@ export const B8_STRESS_TEXTS={
 type Probe=LegibilityFinding['probe']
 function glyphScripts(text:string):FontGlyphCoverage[] {
   const found=scripts.filter(([,regex])=>regex.test(text)).map(([id])=>id)
-  if(/[a-zA-Z\p{Latin}]/u.test(text))found.unshift('latin')
+  if(/[a-zA-Z\p{Script=Latin}]/u.test(text))found.unshift('latin')
   return [...new Set(found)]
 }
 const estimatedLineCapacity=(fontSize:number,widthPercent:number)=>
