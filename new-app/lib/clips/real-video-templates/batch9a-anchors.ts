@@ -7,7 +7,7 @@ import type { VideoTemplateRelease } from './gallery'
 const bold = FACTORY_TREATMENTS.find(recipe => recipe.id === 'bold')
 if (!bold) throw new Error('Batch 9A requires the authored bold treatment')
 
-const defaultMusic = {
+export const BATCH9A_DEFAULT_MUSIC = {
   id: 'batch9a_anchor_bed_v1',
   generator: 'batch9a-pulse-v1' as const,
   sha256: '4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e',
@@ -48,8 +48,8 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
   const secondaryY = recipe.y > 59 ? recipe.y - 13 : recipe.y + 13
   // The pulse bed exposes an audible subdivision every 3 frames. All F01-F10
   // authored shot lengths are multiples of 3, so every cut lands on a pulse.
-  if (slots.some(slot => slot.startFrame % defaultMusic.beatEveryFrames !== 0 ||
-      slot.durationFrames % defaultMusic.beatEveryFrames !== 0))
+  if (slots.some(slot => slot.startFrame % BATCH9A_DEFAULT_MUSIC.beatEveryFrames !== 0 ||
+      slot.durationFrames % BATCH9A_DEFAULT_MUSIC.beatEveryFrames !== 0))
     throw new Error('Batch 9A anchor cut is off the first-party music grid: ' + seed.id)
   return validateTemplateFamily({
     schemaVersion:1,
@@ -110,7 +110,7 @@ export const BATCH9A_ANCHOR_RELEASES: readonly VideoTemplateRelease[] =
       previewRenderVerified:false,
       certificationStatus:'preview' as const,
       musicRequired:true,
-      defaultMusic,
+      defaultMusic:BATCH9A_DEFAULT_MUSIC,
       previewStyle:{
         foreground:bold.foreground,accent:bold.accent,headingFont:bold.headingFont,
         supportFont:bold.supportFont,graphic:bold.graphic,enter:bold.enter,
