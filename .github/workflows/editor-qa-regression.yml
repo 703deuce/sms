@@ -111,6 +111,7 @@ jobs:
             tests/clips/real-video-templates-b3.test.ts \
             tests/clips/real-video-template-instance.test.ts \
             tests/clips/real-video-template-editor.test.tsx \
+            tests/clips/real-video-template-b3b-editable-timeline.test.tsx \
             tests/clips/real-video-template-typecheck.test.ts \
             tests/fullsuite-batch2.test.ts \
             tests/fullsuite-batch3.test.ts \
