@@ -440,6 +440,8 @@ export function compileTemplate(
     captions: { ...carrier.edits.captions, enabled: false },
     trim: { in: 0, out: templateFrameToMs(family.totalFrames) },
     cutRanges: [],
+    templateProvenance: { v: 1, instanceId: choices.instanceId, familyId: family.familyId, familyRevision: family.revision,
+      designId: design.designId, designRevision: design.revision, slotToItemIds },
   }
   return {
     edits,
