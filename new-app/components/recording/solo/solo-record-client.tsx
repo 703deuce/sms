@@ -18,6 +18,7 @@ export function SoloRecordClient() {
   const [projectId, setProjectId] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [prepareError, setPrepareError] = useState<string | null>(null)
+  const [prepareAttempt, setPrepareAttempt] = useState(0)
   const [importing, setImporting] = useState(false)
   const [recoverySessions, setRecoverySessions] = useState<string[]>([])
 
@@ -45,28 +46,47 @@ export function SoloRecordClient() {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
+    let timedOut = false
+    const timeout = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 20_000)
+    setPrepareError(null)
     void (async () => {
       try {
         const res = await fetch('/api/recording/solo/prepare', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ title: 'Recording' }),
+          signal: controller.signal,
         })
+        if (cancelled) return
         const json = await res.json()
         if (!res.ok) throw new Error(json.error ?? 'Could not prepare recording')
+        if (!json?.data?.projectId || !json?.data?.sessionId) {
+          throw new Error('Recording preparation returned an incomplete response')
+        }
         if (cancelled) return
         setProjectId(json.data.projectId as string)
         setSessionId(json.data.sessionId as string)
         recorder.setArmed(true)
       } catch (e) {
-        if (!cancelled) setPrepareError(e instanceof Error ? e.message : 'Could not prepare recording')
+        if (cancelled) return
+        setPrepareError(timedOut
+          ? 'Recording preparation timed out. Check your connection and try again.'
+          : e instanceof Error ? e.message : 'Could not prepare recording')
+      } finally {
+        clearTimeout(timeout)
       }
     })()
     return () => {
       cancelled = true
+      clearTimeout(timeout)
+      controller.abort()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- prepare once on mount
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- retry only on explicit user action
+  }, [prepareAttempt])
 
   const handleStop = useCallback(async () => {
     setImporting(true)
@@ -91,7 +111,8 @@ export function SoloRecordClient() {
     return (
       <div className="mx-auto flex max-w-lg flex-col gap-4 p-6">
         <PageHeader icon={Video} iconTone="record" title="Record" />
-        <p className="text-sm text-destructive">{prepareError}</p>
+        <p role="alert" className="text-sm text-destructive">{prepareError}</p>
+        <Button type="button" onClick={() => setPrepareAttempt((n) => n + 1)}>Retry preparation</Button>
         <Button variant="outline" render={<Link href="/app/clips" />}>Back to projects</Button>
       </div>
     )
@@ -101,7 +122,7 @@ export function SoloRecordClient() {
     return (
       <div className="mx-auto flex max-w-lg flex-col gap-4 p-6">
         <PageHeader icon={Video} iconTone="record" title="Record" />
-        <p className="text-sm text-muted-foreground">Preparing camera and microphone…</p>
+        <p className="text-sm text-muted-foreground">Preparing recording workspace…</p>
       </div>
     )
   }
