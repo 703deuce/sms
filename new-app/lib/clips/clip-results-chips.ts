@@ -148,6 +148,7 @@ function looksLikeSegmentPlanningNotes(text: string): boolean {
   if (NUMERIC_SPAN_RE.test(text)) return true
   if (LOWERCASE_FRAGMENT_TITLE_RE.test(text.trim())) return true
   if (looksTruncatedPlanningTitle(text)) return true
+  BARE_SEGMENT_REF_RE.lastIndex = 0
   if (!BARE_SEGMENT_REF_RE.test(text)) return false
   BARE_SEGMENT_REF_RE.lastIndex = 0
   return (
@@ -174,6 +175,7 @@ export function isInternalClipReasoningText(text: string): boolean {
   const raw = text.trim()
   if (!raw) return true
   if (isTimestampPrefixedClipTitle(raw)) return true
+  SENTENCE_REF_RE.lastIndex = 0
   if (SENTENCE_REF_RE.test(raw)) return true
   if (looksLikeSegmentPlanningNotes(raw)) return true
   const trimmed = stripInternalSentenceRefs(raw)
