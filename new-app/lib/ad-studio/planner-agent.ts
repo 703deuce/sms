@@ -19,7 +19,8 @@ export async function planAdScenes(args: {
     ? script.onScreenText.slice(0, 4)
     : narration.map(line => line.split(/\s+/).slice(0, 6).join(' '))
   const productRef = input.imageAssetIds[0]
-  const fidelity = 'keep the exact product from the reference image: same shape, colors, materials and branding; do not add or invent logos or text'
+  const fidelity = 'keep the exact product from the reference image: same shape, colors, materials and branding; do not add or invent logos or text. no text, no letters, no logos, no brand names anywhere except what is already on the product in the reference image'
+  const productMotion = 'Use simple product motion only: a slow orbit or gentle push-in. Avoid fast turns, morphing, redraws, or camera moves that hide and reconstruct product details.'
   const planned: AdScene[] = []
   let cursor = 0
   for (let i = 0; i < segments.length; i++) {
@@ -62,8 +63,8 @@ export async function planAdScenes(args: {
           modelId: model.id,
           prompt: productShot && productRef
             ? mode === 'image_ad_to_commercial'
-              ? `Transovo commercial director. Animate the supplied finished image advertisement for ${input.name}. Decide motion, camera moves, cuts, shot structure and short commercial storytelling autonomously. This scene's narrative beat is ${role}: ${narration[i]}. Preserve the exact product, original logo, text, packaging and colors. Do not invent features, prices, promotions, claims or endorsements. ${fidelity}`
-              : `Animate the supplied product reference for ${input.name}. This scene's narrative beat is ${role}: ${narration[i]}. Keep the reference product visible and recognizable. Maintain real appearance; do not invent features, packaging, logos or claims. ${fidelity}`
+              ? `Transovo commercial director. Animate the supplied finished image advertisement for ${input.name}. Decide motion, camera moves, cuts, shot structure and short commercial storytelling autonomously. This scene's narrative beat is ${role}: ${narration[i]}. Preserve the exact product, original logo, text, packaging and colors. Do not invent features, prices, promotions, claims or endorsements. ${fidelity}. ${productMotion}`
+              : `Animate the supplied product reference for ${input.name}. This scene's narrative beat is ${role}: ${narration[i]}. Keep the reference product visible and recognizable. Maintain real appearance; do not invent features, packaging, logos or claims. ${fidelity}. ${productMotion}`
             : `Cinematic ${role} context shot for ${input.audience?.trim() || 'a consumer advertisement'}. Do not show any product, packaging, brand marks, logos or readable text. Keep the shot environmental or lifestyle-only and do not imply a specific product.`,
           ...(productShot && productRef ? { referenceAssetId: productRef } : {}),
         }),
