@@ -3,7 +3,8 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/react'
 import { ScriptViewCompactTimeline } from '@/components/clips/editor/script-view-compact-timeline'
 import { Timeline } from '@/components/clips/editor/timeline'
-import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { compileTemplate, type TemplateDesignV1 } from '@/lib/clips/real-video-templates/sequence-contract'
 import {
   moveSourceSegmentBoundary,
   patchSourceSegment,
@@ -247,8 +248,72 @@ describe('Batch 3B professional timing gate', () => {
   })
 })
 
+describe('Batch 3B compiler-applied design treatments', () => {
+  it('changes real editable text, graphic, transition and source-motion objects and still proves structure', () => {
+    const c = buildEditableTimelineProofCases()[1]!
+    const design: TemplateDesignV1 = {
+      ...c.design,
+      designId: 'treated_mixed',
+      stylePackId: 'treated_pack',
+      treatment: {
+        texts: [{
+          id: 'headline', font: 'Anton', size: 70, x: 42,
+          animation: { in: { type: 'pop', unit: 'block', durationFrames: 6 } },
+        }],
+        graphics: [{
+          id: 'accent', type: 'star', x: 82,
+          animation: { in: { type: 'fade', unit: 'block', durationFrames: 6 } },
+        }],
+        slots: [{
+          id: 'video',
+          transition: { type: 'wipe_left', durationFrames: 12 },
+          motion: { from: { x: -6, scale: 96 }, to: { x: 5, scale: 109 }, ease: 'inOut' },
+        }],
+      },
+    }
+    const base = defaultEdits({ clipStartMs: 0, clipEndMs: 3000 })
+    const compiled = compileTemplate(c.family, design, c.choices, {
+      durationFrames: 90,
+      edits: { ...base, trim: { in: 0, out: 3000 }, layout: { ...base.layout, mode: 'full_frame' } },
+    })
+    const text = compiled.edits.textItems?.find((item) => item.kind !== 'shape')
+    const graphic = compiled.edits.textItems?.find((item) => item.kind === 'shape')
+    expect(text).toMatchObject({ x: 42, style: { font: 'Anton', size: 70 }, anim: { in: { type: 'pop' } } })
+    expect(graphic).toMatchObject({ x: 82, shape: { type: 'star' }, anim: { in: { type: 'fade' } } })
+    expect(compiled.edits.transitions).toEqual([{ srcMs: 1000, type: 'wipe_left', durMs: 400 }])
+    const slotId = compiled.slotToItemIds.video
+    expect(compiled.edits.keyframes?.filter((k) => k.target === `source:${slotId}`).map((k) => k.prop).sort())
+      .toEqual(['scale', 'x'])
+    expect(proveEditableTimelineStructure(c.family, design, c.choices, compiled).matches).toBe(true)
+  })
+})
+
 describe('Batch 3B first-party launch target gate', () => {
-  it('requires 50 families x 40 released authored treatments; community/draft rows never count', () => {
+  const designFor = (familyId: string, i: number): TemplateDesignV1 => ({
+    schemaVersion: 1,
+    designId: `design_${i + 1}`,
+    revision: 1,
+    stylePackId: i < 25 ? `core_pack_${i + 1}` : `core_pack_${((i - 25) % 25) + 1}`,
+    familyId,
+    familyRevision: 1,
+    musicPolicy: 'licensed-only',
+    treatment: {
+      texts: [{
+        id: 'title',
+        font: i % 3 === 0 ? 'Anton' : i % 3 === 1 ? 'Poppins' : 'Montserrat',
+        size: 48 + i,
+        x: 20 + i,
+        animation: { in: { type: i % 2 ? 'fade' : 'pop', unit: 'block', durationFrames: 3 } },
+      }],
+      graphics: [{
+        id: 'bar',
+        x: 18 + i,
+        w: 420 + i * 4,
+      }],
+    },
+  })
+
+  it('requires 50 families x 40 real released treatments; community/draft rows never count', () => {
     const base = buildEditableTimelineProofCases()[0]!.family
     const families = Array.from({ length: FIRST_PARTY_LAUNCH_FAMILIES }, (_, i) => ({
       ...base,
@@ -257,40 +322,49 @@ describe('Batch 3B first-party launch target gate', () => {
     }))
     const rows: FirstPartyLaunchTreatment[] = families.flatMap((family) =>
       Array.from({ length: FIRST_PARTY_TREATMENTS_PER_FAMILY }, (_, i) => ({
-        familyId: family.familyId,
-        familyRevision: family.revision,
-        designId: `design_${i + 1}`,
-        designRevision: 1,
+        design: designFor(family.familyId, i),
         origin: 'first-party' as const,
         status: 'released' as const,
         treatmentKind: i < 25 ? 'core' as const : 'authored-alternate' as const,
-        visibleDimensions: i % 2
-          ? ['font-hierarchy','animation-choreography','graphics'] as const
-          : ['text-placement','transition-treatment','source-safe-motion'] as const,
       })),
     )
     rows.push({
-      familyId: families[0]!.familyId, familyRevision: 1, designId: 'community_extra', designRevision: 1,
+      design: { ...designFor(families[0]!.familyId, 0), designId: 'community_extra' },
       origin: 'community', status: 'released', treatmentKind: 'authored-alternate',
-      visibleDimensions: ['font-hierarchy','graphics','source-safe-motion'],
     })
     rows.push({
-      familyId: families[0]!.familyId, familyRevision: 1, designId: 'draft_extra', designRevision: 1,
+      design: { ...designFor(families[0]!.familyId, 1), designId: 'draft_extra' },
       origin: 'first-party', status: 'draft', treatmentKind: 'core',
-      visibleDimensions: ['font-hierarchy','graphics','source-safe-motion'],
     })
     const result = assertFirstPartyLaunchCatalog(families, rows)
     expect(result.eligibleFamilies).toBe(50)
     expect(result.releasedFirstParty).toBe(2000)
+    expect(Object.values(result.familyCounts).every((c) =>
+      c.released === 40 && c.core === 25 && c.authoredAlternates === 15 && c.coreStylePacks === 25,
+    )).toBe(true)
   })
 
-  it('rejects color/name-only style variants that lack three visible authored dimensions', () => {
+  it('rejects color/name/style-pack-only variants that lack three real authored dimensions', () => {
     const base = buildEditableTimelineProofCases()[0]!.family
     const family = { ...base, familyId: 'weak_family' }
+    const weak: TemplateDesignV1 = {
+      schemaVersion: 1, designId: 'weak', revision: 1, stylePackId: 'renamed_pack',
+      familyId: family.familyId, familyRevision: 1, musicPolicy: 'licensed-only',
+      treatment: { texts: [{ id: 'title', color: '#00FF00' }] },
+    }
     expect(() => assertFirstPartyLaunchCatalog([family], [{
-      familyId: family.familyId, familyRevision: 1, designId: 'weak', designRevision: 1,
-      origin: 'first-party', status: 'released', treatmentKind: 'core',
-      visibleDimensions: ['font-hierarchy','text-placement'],
+      design: weak, origin: 'first-party', status: 'released', treatmentKind: 'core',
     }])).toThrow(/at least three visible authored dimensions/)
+  })
+
+  it('rejects duplicate treatment recipes even when design IDs and style-pack names differ', () => {
+    const base = buildEditableTimelineProofCases()[0]!.family
+    const family = { ...base, familyId: 'duplicate_family' }
+    const a = designFor(family.familyId, 0)
+    const b = { ...structuredClone(a), designId: 'renamed_duplicate', stylePackId: 'another_pack' }
+    expect(() => assertFirstPartyLaunchCatalog([family], [
+      { design: a, origin: 'first-party', status: 'released', treatmentKind: 'core' },
+      { design: b, origin: 'first-party', status: 'released', treatmentKind: 'core' },
+    ])).toThrow(/duplicate treatment recipe/)
   })
 })
