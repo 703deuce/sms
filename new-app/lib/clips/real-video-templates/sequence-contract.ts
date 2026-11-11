@@ -447,6 +447,8 @@ export function compileTemplate(
   const slotWindows: Record<string, { startFrame: number; durationFrames: number }> = {}
   const transitions: NonNullable<ClipEditsV2['transitions']> = []
   const videoSplits: number[] = []
+  const reducedMotion = choices.accessibility?.reducedMotion === true
+  const reducedFlash = choices.accessibility?.reducedFlash === true
 
   for (const [index, slot] of family.slots.entries()) {
     const asset = validateAsset(choices.media[slot.id], slot.media === 'either' ? ['image','video'] : [slot.media], slot.id)
@@ -485,24 +487,31 @@ export function compileTemplate(
       ...(slot.transform ? { transform: slot.transform } : {}),
       ...(slot.fx ? { fx: slot.fx } : {}),
     })
+    const effectiveTransition: 'cut' | TemplateTransition = slot.transition === 'cut'
+      ? 'cut'
+      : reducedMotion
+        ? 'cut'
+        : reducedFlash && slot.transition.type === 'dip_white'
+          ? { ...slot.transition, type: 'crossfade' }
+          : slot.transition
     if (index > 0) {
       videoSplits.push(startMs)
-      if (slot.transition !== 'cut') transitions.push({
-        srcMs: startMs, type: slot.transition.type, durMs: templateFrameToMs(slot.transition.durationFrames),
+      if (effectiveTransition !== 'cut') transitions.push({
+        srcMs: startMs, type: effectiveTransition.type, durMs: templateFrameToMs(effectiveTransition.durationFrames),
       })
     }
     sequence.push({
       id: itemId, slotId: slot.id, assetId: asset.id,
       outputStartFrame: slot.startFrame, outputEndFrame: slot.startFrame + slot.durationFrames,
-      mediaInFrame: inFrame, fit: slot.fit, sourceAudio: slot.sourceAudio, ...(slot.speed ? { speed: slot.speed } : {}), transition: slot.transition,
-      ...(slot.motion ? { motion: slot.motion } : {}),
+      mediaInFrame: inFrame, fit: slot.fit, sourceAudio: slot.sourceAudio, ...(slot.speed ? { speed: slot.speed } : {}), transition: effectiveTransition,
+      ...(!reducedMotion && slot.motion ? { motion: slot.motion } : {}),
       ...(slot.transform ? { transform: slot.transform } : {}),
       ...(slot.fx ? { fx: slot.fx } : {}),
     })
   }
 
   const motionKeyframes: NonNullable<ClipEditsV2['keyframes']> = []
-  if (family.slots.some((slot) => slot.motion)) {
+  if (!reducedMotion && family.slots.some((slot) => slot.motion)) {
     const defaults = { x: 0, y: 0, scale: 100, rotation: 0 } as const
     for (const prop of ['x','y','scale','rotation'] as const) {
       const points: NonNullable<ClipEditsV2['keyframes']>[number]['points'] = []

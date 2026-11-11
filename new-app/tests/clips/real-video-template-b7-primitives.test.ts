@@ -180,6 +180,34 @@ describe('Batch 7 standalone reusable primitives', () => {
     expect(result.edits.sourceSegments?.[0]?.sourceId).toBe(result.edits.sourceSegments?.[1]?.sourceId)
   })
 
+  it('reduces slot motion and flashing transitions at the shared compiler boundary', () => {
+    const f = family(2)
+    f.slots[0] = {
+      ...f.slots[0],
+      handles: { headFrames: 0, tailFrames: 5 },
+      motion: { to: { scale: 108 }, ease: 'inOut' },
+    }
+    f.slots[1] = {
+      ...f.slots[1],
+      handles: { headFrames: 5, tailFrames: 0 },
+      transition: { type: 'dip_white', durationFrames: 10 },
+      motion: { from: { x: -4 }, to: { x: 4 }, ease: 'inOut' },
+    }
+    const reducedMotionResult = compileTemplate(
+      f, design, { ...choices(2), accessibility: { reducedMotion: true } }, carrier(f.totalFrames),
+    )
+    expect(reducedMotionResult.edits.transitions).toBeUndefined()
+    expect(reducedMotionResult.edits.keyframes?.some((k) => k.target === 'video')).toBe(false)
+    expect(reducedMotionResult.sequence.items[1]?.transition).toBe('cut')
+    expect(reducedMotionResult.sequence.items.some((item) => item.motion)).toBe(false)
+
+    const reducedFlashResult = compileTemplate(
+      f, design, { ...choices(2), accessibility: { reducedFlash: true } }, carrier(f.totalFrames),
+    )
+    expect(reducedFlashResult.edits.transitions?.[0]?.type).toBe('crossfade')
+    expect(reducedFlashResult.sequence.items[1]?.transition).toMatchObject({ type: 'crossfade' })
+  })
+
   it('provides reduced-motion / reduced-flash alternatives without changing static structure', () => {
     const f = family(1)
     f.primitives = [
