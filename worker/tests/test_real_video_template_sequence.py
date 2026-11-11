@@ -11,6 +11,7 @@ from clips_worker.audio_render import apply_audio_mix
 from clips_worker.blank_project import make_template_carrier
 from clips_worker.byo_clip_job import template_project_canceled
 from clips_worker.media_sources import apply_full_render_sources, source_transition_boundaries
+from clips_worker.motion_render import apply_motion_after_cut
 from clips_worker.text_items import apply_text_items, text_items_ass
 
 
@@ -102,6 +103,12 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
             "designId": "design_a", "designRevision": 1,
             "slotToItemIds": {"one": "slot_1", "two": "slot_2", "three": "slot_3"},
         },
+        "keyframes": [
+            {"target": "video", "prop": "x", "points": [
+                {"tMs": 0, "v": 0, "ease": "inOut"}, {"tMs": 999, "v": 8},
+                {"tMs": 1000, "v": 0}, {"tMs": 2999, "v": 0},
+            ]},
+        ],
         "textItems": [{
             "id": "title_all", "text": "TEXT THROUGH EVERY SLOT", "startMs": 0, "endMs": 3000,
             "x": 50, "y": 18,
@@ -130,11 +137,17 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
     assert blue[2] > blue[0] + 80
     assert red_again[0] > red_again[2] + 80
 
+    # Source transitions were consumed above; production then applies ordinary Video keyframes.
+    moved = apply_motion_after_cut(
+        sourced, sourced, {**edits, "transitions": None}, [(0, 3000)], 0, tmp_path, {},
+    )
+    assert frames(moved) == 90
+
     ass = text_items_ass(edits, w=160, h=90)
     assert "TEXT THROUGH EVERY SLOT" in ass
     assert "0:00:03.00" in ass
     texted = tmp_path / "texted.mp4"
-    apply_text_items(sourced, texted, edits, play_w=160, play_h=90)
+    apply_text_items(moved, texted, edits, play_w=160, play_h=90)
     assert frames(texted) == 90
 
     mixed = tmp_path / "mixed.mp4"
