@@ -257,7 +257,8 @@ export async function savePublishedStudioDraft(
         where: { id: state.clipId, workspaceId, deletedAt: null },
         select: { editsSaveVersion: true, aiMeta: true },
       })
-      const metadata = object(clip?.aiMeta) ? clip.aiMeta.videoTemplate : null
+      const aiMeta = clip?.aiMeta
+      const metadata = object(aiMeta) ? aiMeta.videoTemplate : null
       if (clip?.editsSaveVersion === expectedEditsSaveVersion + 1 && object(metadata) &&
           metadata.studioEditsSaveVersion === clip.editsSaveVersion)
         return { version: state.version, editsSaveVersion: clip.editsSaveVersion }
