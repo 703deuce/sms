@@ -62,6 +62,8 @@ async function ttsWithTimestampsOnce(input: {
   previousText?: string
   nextText?: string
   seed?: number
+  /** Disable model fallback when the caller requires exactly one provider request. */
+  allowModelFallback?: boolean
 }): Promise<{
   audio: Buffer
   alignment: TtsAlignment
@@ -127,7 +129,9 @@ export async function ttsWithTimestamps(input: {
   modelUsed: T2vVoiceSettings['modelId']
   usage: { provider: 'elevenlabs'; model: string; units: number; unitType: 'characters'; costUsdMicros: number }
 }> {
-  const order = ttsModelAttemptOrder(input.voice.modelId)
+  const order = input.allowModelFallback === false
+    ? [input.voice.modelId]
+    : ttsModelAttemptOrder(input.voice.modelId)
   let last: unknown
   for (const modelId of order) {
     try {
