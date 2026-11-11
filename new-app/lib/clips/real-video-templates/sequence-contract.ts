@@ -235,7 +235,10 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
         tailFrames: integer(value.handles.tailFrames, 0, MAX_FRAMES, 'slot.handles.tailFrames'),
       }
     }
-    const speed = value.speed == null ? undefined : finite(value.speed, 0.25, 4, 'slot.speed')
+    const rawSpeed = value.speed == null ? undefined : finite(value.speed, 0.25, 4, 'slot.speed')
+    const speed = rawSpeed == null ? undefined : Math.round(rawSpeed * 1000) / 1000
+    if (rawSpeed != null && Math.abs(rawSpeed - speed!) > 1e-9)
+      throw new Error('slot.speed: maximum precision is 3 decimals')
     if (media === 'image' && speed != null && Math.abs(speed - 1) >= 0.0001)
       throw new Error('slot.speed: images do not support playback speed')
     const transition = validateTransition(value.transition, index)
