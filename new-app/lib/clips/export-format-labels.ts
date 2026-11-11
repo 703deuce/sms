@@ -5,9 +5,9 @@ export function mp3EncoderAvailable(encoders: string[] | undefined): boolean {
   return encoders.includes('libmp3lame')
 }
 
-/** Effective audio deliver format when worker lacks libmp3lame. */
+/** Preserve the requested format. Capability errors must never silently substitute another codec. */
 export function effectiveAudioDeliverFormat(format: DeliverFormat, encoders: string[] | undefined): DeliverFormat {
-  if (format === 'mp3' && !mp3EncoderAvailable(encoders)) return 'm4a'
+  void encoders
   return format
 }
 
@@ -36,7 +36,6 @@ export function exportDownloadLabel(format: DeliverFormat, encoders?: string[]):
 }
 
 export function audioFormatOptionLabel(format: 'mp3' | 'm4a', encoders?: string[]): string {
-  if (format === 'mp3' && !mp3EncoderAvailable(encoders)) return 'Audio (M4A)'
   if (format === 'mp3') return 'MP3'
   if (format === 'm4a') return 'M4A'
   return format.toUpperCase()
