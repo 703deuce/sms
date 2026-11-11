@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 
 const { state, db } = vi.hoisted(() => {
   const state = {
@@ -32,7 +33,7 @@ const { state, db } = vi.hoisted(() => {
   const clipUpload = {
     findMany: vi.fn(async ({ where }: any) =>
       state.uploads.filter((x) => x.workspaceId === where.workspaceId && x.status === where.status && where.id.in.includes(x.id))
-        .map(({ id, mime, durationMs, width, height }) => ({ id, mime, durationMs, width, height }))),
+        .map(({ id, mime, durationMs, width, height, key, storageDriver, bytes }) => ({ id, mime, durationMs, width, height, key, storageDriver, bytes }))),
     create: vi.fn(async ({ data }: any) => {
       const row = { ...data }
       state.uploads.push(row)
@@ -113,6 +114,7 @@ vi.mock('server-only', () => ({}))
 vi.mock('@/lib/server/db', () => ({ getPrisma: () => db }))
 vi.mock('@/lib/storage', () => ({
   storageDriverName: () => 's3',
+  getClipStorage: () => ({ getObjectBytes: async () => Buffer.from('original-creator-owned-song-bytes') }),
   uploadSourceKey: (workspaceId: string, uploadId: string, ext: string) =>
     'ws/' + workspaceId + '/uploads/' + uploadId + '/source.' + ext,
 }))
@@ -180,6 +182,42 @@ describe('B3 transactional template project publishing', () => {
       blank: true, fullVideo: true, preseededFullVideo: true,
       templateCarrier: true, templateCarrierFrames: 30,
     })
+  })
+
+  it('requires user acknowledged music bytes, verified SHA-256, duration and commercial export rights before publishing', async () => {
+    const bytes = Buffer.from('original-creator-owned-song-bytes')
+    const sha256 = createHash('sha256').update(bytes).digest('hex')
+    state.uploads.push({
+      id:'owned_music',workspaceId:'ws_a',status:'COMPLETE',mime:'audio/wav',
+      durationMs:120000,key:'ws/ws_a/music.wav',storageDriver:'s3',
+      bytes:BigInt(bytes.length),width:null,height:null,
+    })
+    const licensedDesign={ ...design, musicPolicy:'licensed-only' }
+    const music={
+      id:'owned_music',kind:'audio',durationFrames:3600,
+      license:{id:'license_music',provenance:'user-owned',reference:'creator_ack'},
+    }
+    const rights={
+      assetId:'owned_music',origin:'user-upload',author:'Creator',
+      license:'user-owned',revision:'ack:2026-11-11',sha256,
+      commercialUse:true,exportAllowed:true,redistributionAllowed:false,
+      verifiedDurationFrames:3600,verifiedAt:'2026-11-11T12:00:00Z',
+    }
+    const schedule={v:1,mode:'fixed-time',musicAssetId:'owned_music',sha256,
+      bpm:null,offsetFrames:0,durationFrames:3600,beats:[],phrases:[],protectedAnchors:[]}
+    const request={...choices,music,templateMusic:{v:1,rights,schedule}}
+    const published=await publishTemplateProject('ws_a','music_license_123',family,licensedDesign,request as any)
+    expect(published.projectId).toMatch(/^proj_tpl_/)
+    expect(state.clips[0]!.edits.audio.music).toMatchObject({uploadId:'owned_music',loop:false})
+    await expect(publishTemplateProject('ws_a','music_license_bad',family,licensedDesign,{
+      ...request, templateMusic:{...request.templateMusic,rights:{...rights,sha256:'b'.repeat(64)}},
+    } as any)).rejects.toThrow(/hash|schedule/)
+    expect(state.projects).toHaveLength(1)
+    expect(state.clips).toHaveLength(1)
+    await expect(publishTemplateProject('ws_a','music_license_forbidden',family,licensedDesign,{
+      ...request,templateMusic:{...request.templateMusic,rights:{...rights,exportAllowed:false}},
+    } as any)).rejects.toThrow(/rights/)
+    expect(state.projects).toHaveLength(1)
   })
 
   it('rejects foreign/unavailable assets before exposing a partial project', async () => {
