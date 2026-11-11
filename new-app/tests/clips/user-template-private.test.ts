@@ -92,7 +92,7 @@ const originalEdits=()=>({
     id:'headline',text:'Original headline',startMs:200,endMs:2200,x:50,y:20,
     style:{font:'Montserrat',size:96,color:'#FFFFFF',align:'center',case:'none'},
   }],
-  keyframes:[{target:'text:headline',prop:'x',frames:[{ms:200,value:45},{ms:700,value:50}]}],
+  keyframes:[{target:'text:headline',prop:'x',points:[{tMs:0,v:45},{tMs:500,v:50}]}],
   broll:[],
   audio:{music:null,sfx:[]},
   aspectRatio:'9:16',
