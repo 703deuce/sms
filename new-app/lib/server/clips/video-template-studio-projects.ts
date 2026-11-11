@@ -31,6 +31,7 @@ function draftMeta(settings: unknown): { version: number; draft: StudioDraft } |
   const value = settings.videoTemplateDraft
   if ((typeof value.version !== 'number' || !Number.isSafeInteger(value.version)) || value.version < 0 ||
       !object(value.draft) || value.draft.v !== 1 ||
+      typeof value.draft.draftId !== 'string' || !KEY.test(value.draft.draftId) ||
       typeof value.draft.releaseId !== 'string' || typeof value.draft.draftId !== 'string')
     return null
   return { version: value.version as number, draft: value.draft as StudioDraft }
@@ -227,7 +228,7 @@ export async function savePublishedStudioDraft(
       const original = settings.videoTemplateOriginal
       const family = validateTemplateFamily(original.family)
       const design = validateTemplateDesign(original.design, family)
-      const aiMeta = object(clip.aiMeta) ? structuredClone(clip.aiMeta) : {}
+      const aiMeta: Record<string, unknown> = object(clip.aiMeta) ? structuredClone(clip.aiMeta) : {}
       const templateMeta = aiMeta.videoTemplate
       if (!object(templateMeta) || templateMeta.instanceId !== templateInstanceId(workspaceId, draft.draftId) ||
           templateMeta.studioEditsSaveVersion !== expectedEditsSaveVersion)
