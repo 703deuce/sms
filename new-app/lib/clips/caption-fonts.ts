@@ -24,6 +24,8 @@ export function captionFontStack(font: string, resolveUser?: UserFontResolver): 
   if (font === 'Archivo Black') return 'var(--font-clip-archivo), "Archivo Black", sans-serif'
   if (font === 'Oswald') return 'var(--font-clip-oswald), Oswald, sans-serif'
   if (font === 'Luckiest Guy') return 'var(--font-clip-luckiest), "Luckiest Guy", cursive'
+  if (['Rubik', 'Gabarito', 'Fira Sans Condensed', 'DM Serif Display', 'Playfair Display', 'Caveat', 'Space Grotesk', 'Space Mono'].includes(font))
+    return '"' + font.replace(/"/g, '') + '", sans-serif'
   return font
 }
 
