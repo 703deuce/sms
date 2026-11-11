@@ -34,7 +34,10 @@ function glyphScripts(text:string):FontGlyphCoverage[] {
 }
 const estimatedLineCapacity=(fontSize:number,widthPercent:number)=>
   Math.max(3,Math.floor((1080*widthPercent/100)/(fontSize*0.54)))
-export function lintB8Legibility(candidate:B8Candidate):LegibilityFinding[] {
+/** A preflight of authored or user-supplied words; actual rendered frames still require review. */
+export function lintB8Legibility(
+  candidate:B8Candidate, userTexts:Readonly<Record<string,string>>={},
+):LegibilityFinding[] {
   const findings:LegibilityFinding[]=[]
   const add=(field:string,probe:Probe,severity:LegibilityFinding['severity'],
     code:string,detail:string)=>findings.push({field,probe,severity,code,detail})
@@ -49,14 +52,28 @@ export function lintB8Legibility(candidate:B8Candidate):LegibilityFinding[] {
     }
     if(field.size<30) add(field.id,'authored','block','optical_font_too_small',
       'Less than 30px at 1080px authoring width')
-    const capacity=estimatedLineCapacity(field.size,80)
-    const text=Array.from(field.defaultText)
+    const visibleText=Object.prototype.hasOwnProperty.call(userTexts,field.id)
+      ? userTexts[field.id]! : field.defaultText
+    if(typeof visibleText!=='string'||!visibleText.trim()){
+      add(field.id,'authored','block','empty_text','Template text must not be blank')
+      continue
+    }
+    const text=Array.from(visibleText)
+    if(text.length>field.maxChars)
+      add(field.id,'authored','block','text_over_max_chars',
+        'User text exceeds the authored character limit; do not silently truncate')
+    // Off-center titles have less room than the nominal 80% width. Model the
+    // horizontal platform-safe bounds before estimating wraps/reading height.
+    const usablePercent=Math.min(80,2*Math.min(field.x-7,93-field.x))
+    if(usablePercent<=0)
+      add(field.id,'authored','block','text_outside_safe_zone','Text center is outside the safe zone')
+    const capacity=estimatedLineCapacity(field.size,Math.max(1,usablePercent))
     const estimatedLines=Math.ceil(text.length/capacity)
     if(estimatedLines>3)add(field.id,'authored','block','default_overflow',
       'Authored default text may exceed three lines')
     if(field.durationFrames/30<(text.length/15))
       add(field.id,'authored','block','reading_time','Default text too fast for 15 chars/second')
-    const inkWidth=Math.min(width*0.8,text.length*field.size*0.54)
+    const inkWidth=Math.min(width*Math.max(1,usablePercent)/100,text.length*field.size*0.54)
     const left=field.x/100*width-inkWidth/2
     const right=field.x/100*width+inkWidth/2
     const estimatedHeight=Math.max(1,estimatedLines)*field.size*1.25
@@ -65,13 +82,14 @@ export function lintB8Legibility(candidate:B8Candidate):LegibilityFinding[] {
     if(left<width*0.07||right>width*0.93||top<height*.09||bottom>height*.89)
       add(field.id,'authored','review','possible_safe_zone_overflow',
         'Text bounding estimate exceeds 7% horizontal/9–11% vertical safe area; inspect real frames')
-    for(const script of glyphScripts(field.defaultText)){
+    for(const script of glyphScripts(visibleText)){
       if(!font.glyphCoverage.includes(script))
         add(field.id,'authored','block','missing_default_glyphs','Font lacks authored '+script+' glyphs')
     }
     const long=B8_STRESS_TEXTS.long_name
     const longest=long.split(/\s+/).sort((a,b)=>b.length-a.length)[0]!
-    if(longest.length*field.size*.52>width*.8 || Array.from(long).length>field.maxChars ||
+    if(longest.length*field.size*.52>width*Math.max(1,usablePercent)/100 ||
+        Array.from(long).length>field.maxChars ||
         Math.ceil(Array.from(long).length/capacity)>3)
       add(field.id,'long_name','review','stress_overflow',
         'Long-word/name text requires rendered overflow/line-break review')
@@ -80,6 +98,19 @@ export function lintB8Legibility(candidate:B8Candidate):LegibilityFinding[] {
         add(field.id,'unicode','review','unicode_fallback_required',
           'Rendered frame must prove '+script+' glyph fallback, bidi direction and emoji')
     }
+    // WCAG relative luminance catches obvious foreground/background collisions,
+    // but a moving background cannot be certified without rendered-frame tests.
+    const srgb=[1,3,5].map(i=>parseInt(field.color.slice(i,i+2),16)/255)
+      .map(v=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4)
+    const ink=srgb[0]!*0.2126+srgb[1]!*0.7152+srgb[2]!*0.0722
+    const onWhite=1.05/(ink+0.05)
+    const onBlack=(ink+0.05)/0.05
+    if(onWhite<4.5)
+      add(field.id,'busy_background','review','low_contrast_on_light_media',
+        'Foreground needs an outline/backing on bright frames (under 4.5:1)')
+    if(onBlack<4.5)
+      add(field.id,'busy_background','review','low_contrast_on_dark_media',
+        'Foreground needs an outline/backing on dark frames (under 4.5:1)')
     add(field.id,'busy_background','review','rendered_contrast_needed',
       'Static font color is not evidence of 4.5:1 contrast over light/dark moving media')
   }

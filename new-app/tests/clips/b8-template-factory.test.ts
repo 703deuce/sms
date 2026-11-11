@@ -96,6 +96,12 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     const altered={...candidate,family:{...candidate.family,texts:candidate.family.texts.map(
       (text,i)=>i===0?{...text,defaultText:'A'.repeat(70)}:text)}}
     expect(lintB8Legibility(altered).some(c=>c.code==='default_overflow')).toBe(true)
+    const userText=lintB8Legibility(candidate,{headline:'A'.repeat(100)})
+    expect(userText.some(c=>c.code==='text_over_max_chars'&&c.severity==='block')).toBe(true)
+    expect(userText.some(c=>c.code==='default_overflow')).toBe(true)
+    expect(lintB8Legibility(candidate,{headline:''}).some(c=>c.code==='empty_text')).toBe(true)
+    expect(lintB8Legibility(candidate).some(c=>c.code.startsWith('low_contrast_on_'))).toBe(true)
+    expect(auditB8Evidence(altered,evidence(altered.id))).toContain('unresolved_static_legibility')
   })
   it('preserves running/done checkpoints on repeated queue generation without erasing work',()=>{
     const first=shardB8Jobs(candidates,{hashes:[hash],rendererRevision:'worker-v1'},8)
