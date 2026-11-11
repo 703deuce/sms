@@ -9,9 +9,10 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync,
   rmSync, openSync, closeSync, writeFileSync } from 'node:fs'
 import { resolve, dirname, join, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import { spawnSync } from 'node:child_process'
 import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS } from '../lib/clips/real-video-templates/b8-authoring-catalog'
 import { generateB8Candidates, proveB8Structure, reportB8Quality,
-  locallyApprovedB8Releases, shardB8Jobs, auditB8Evidence, B8_TARGET,
+  locallyApprovedB8Releases, shardB8Jobs, auditB8Evidence,
   B8_ENGINE_REVISION, type B8Candidate, type B8Evidence } from '../lib/clips/real-video-templates/b8-factory'
 import { compileTemplate, templateFrameToMs, type TemplateAsset } from '../lib/clips/real-video-templates/sequence-contract'
 import { defaultEdits } from '../lib/clips/edits'
@@ -105,6 +106,73 @@ function withQueueLock<T>(fn:()=>T):T {
   try{return fn()}finally{closeSync(handle);rmSync(lock,{force:true})}
 }
 function loadQueue():QueueJob[] {return readJSON<QueueJob[]>(join(directory,'jobs.json'))}
+type FFProbeResult={format?:{duration?:string};streams?:Array<{codec_type?:string}>}
+function probe(file:string):{durationFrames:number;hasAudio:boolean}{
+  const output=spawnSync('ffprobe',['-v','error','-show_entries','format=duration',
+    '-show_entries','stream=codec_type','-of','json',file],{
+      encoding:'utf8',timeout:30000,maxBuffer:1024*1024,
+    })
+  if(output.status!==0)throw new Error('ffprobe failed on real worker output: '+file)
+  const data=JSON.parse(output.stdout) as FFProbeResult
+  const duration=Number(data.format?.duration)
+  if(!Number.isFinite(duration)||duration<=0)throw new Error('Video metadata has no duration')
+  return {durationFrames:Math.round(duration*30),
+    hasAudio:Boolean(data.streams?.some(stream=>stream.codec_type==='audio'))}
+}
+function framePixels(file:string,atFrame:number,durationFrames:number):Buffer{
+  const ss=Math.max(0,Math.min((durationFrames-1)/30,atFrame/30))
+  const output=spawnSync('ffmpeg',['-nostdin','-v','error','-ss',ss.toFixed(6),
+    '-i',file,'-frames:v','1','-vf','scale=64:64:flags=lanczos,format=gray',
+    '-f','rawvideo','-pix_fmt','gray','-'],{
+      encoding:null,timeout:30000,maxBuffer:65536,
+    })
+  if(output.status!==0||!Buffer.isBuffer(output.stdout)||output.stdout.length!==4096)
+    throw new Error('FFmpeg cannot decode a QA sample frame at '+atFrame)
+  return output.stdout
+}
+const mean=(pixels:Buffer)=>pixels.reduce((a,b)=>a+b,0)/pixels.length
+const difference=(a:Buffer,b:Buffer)=>{
+  let sum=0
+  for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]!-b[i]!)
+  return sum/a.length
+}
+async function qaMedia(candidate:B8Candidate,evidence:B8Evidence){
+  const output=evidence.outputs
+  if(!output||!await verifyPublic(output.previewMp4,output.previewSha256)||
+      !await verifyPublic(output.renderMp4,output.renderSha256))
+    throw new Error('No actual hashed preview+render MP4 available for analysis')
+  const preview=fileInPublic(output.previewMp4)
+  const rendered=fileInPublic(output.renderMp4)
+  const pp=probe(preview),pr=probe(rendered)
+  const expected=candidate.family.totalFrames
+  const boundaries=candidate.family.slots.slice(1).map(slot=>slot.startFrame)
+  const samples=[0,expected-1,...boundaries.flatMap(frame=>[frame-1,frame])]
+    .filter(frame=>frame>=0&&frame<expected)
+  const unique=[...new Set(samples)].sort((a,b)=>a-b)
+  const actual:Array<{frame:number;previewMean:number;renderMean:number;difference:number}>=[]
+  for(const frame of unique){
+    const a=framePixels(preview,frame,pp.durationFrames)
+    const b=framePixels(rendered,frame,pr.durationFrames)
+    actual.push({frame,previewMean:mean(a),renderMean:mean(b),difference:difference(a,b)})
+  }
+  const black=actual.filter(row=>row.renderMean<=7||row.previewMean<=7).map(row=>row.frame)
+  const parity=actual.every(row=>row.difference<=12)
+  const durationMatch=Math.abs(pp.durationFrames-expected)<=1&&
+    Math.abs(pr.durationFrames-expected)<=1
+  const audioStreamParity=pp.hasAudio===pr.hasAudio
+  const data={id:candidate.id,expectedFrames:expected,previewFrames:pp.durationFrames,
+    renderFrames:pr.durationFrames,previewHasAudio:pp.hasAudio,renderHasAudio:pr.hasAudio,
+    durationMatch,audioStreamParity,blackSampleFrames:black,frameSampleParity:parity,
+    sampledFrameCount:actual.length,maxSampleDifference:Math.max(...actual.map(x=>x.difference)),
+    samples:actual,
+    cautions:['Grayscale comparison is not glyph/color validation',
+      'Check flashes at full frame rate, license rights, beat timestamps and full-motion typography manually',
+      'Sampling cannot prove all 30 fps frames or source-specific audio ducking parity'],
+  }
+  save(join(directory,'media-qa',candidate.id+'.json'),data)
+  return data
+}
+
 async function execute(){
   if(command==='author'){
     save(join(directory,'family-schedules.json'),{v:1,source:'provisional',families:FACTORY_FAMILY_SEEDS})
@@ -151,6 +219,17 @@ async function execute(){
       edits:edits.edits,expected:proveB8Structure(c),
       message:'Submit registered assets and this ClipEditsV2 plan to the existing worker. No MP4 is claimed by this command.'})
     console.log('Wrote compiler/worker preview request '+dest+' (NOT an MP4).')
+  }else if(command==='qa-media'){
+    const c=requiredCandidate()
+    const evidence=await verifiedEvidence()
+    const e=evidence.find(item=>item.id===c.id)
+    if(!e)throw new Error('Real render and preview evidence are required')
+    const report=await qaMedia(c,e)
+    console.log(JSON.stringify({id:c.id,durationMatch:report.durationMatch,
+      audioStreamParity:report.audioStreamParity,blackFrames:report.blackSampleFrames,
+      sampledParity:report.frameSampleParity,samples:report.sampledFrameCount},null,2))
+    if(!report.durationMatch||!report.audioStreamParity||
+       report.blackSampleFrames.length||!report.frameSampleParity)process.exitCode=1
   }else if(command==='jobs'){
     const fixtures=await verifiedFixtures()
     const shardCount=Number(argument('--shards','16'))
@@ -232,7 +311,7 @@ async function execute(){
       warning:'Actual FFmpeg incremental rerender benchmark requires worker output and fixtures.'})
     console.log('Compiler-only '+candidates.length+' designs in '+ms+'ms')
   }else{
-    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | jobs --fixtures <file> [--shards N] | claim/cancel/fail/retry/resume <id> | quality-report | contact-sheet | release-manifest | benchmark')
+    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | qa-media <id> | jobs --fixtures <file> [--shards N] | claim/cancel/fail/retry/resume <id> | quality-report | contact-sheet | release-manifest | benchmark')
   }
 }
 void execute().catch(e=>{console.error(e instanceof Error?e.message:String(e));process.exitCode=1})
