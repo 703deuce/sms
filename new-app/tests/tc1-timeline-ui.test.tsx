@@ -158,6 +158,25 @@ describe('TC1 timeline UI', () => {
     expect(onOpenExport).toHaveBeenCalledTimes(1)
   })
 
+  it('HG04 Ctrl+R opens speed controls for the main clip and ignores text-field focus', () => {
+    const t = setup()
+    const field = document.createElement('input')
+    document.body.appendChild(field)
+    field.focus()
+    fireEvent.keyDown(field, { key: 'r', ctrlKey: true })
+    expect(t.queryByTestId('timeline-speed-slot')).toBeNull()
+    field.remove()
+    t.key({ key: 'r', ctrlKey: true })
+    const chip = t.getByTestId('timeline-speed-chip')
+    expect(chip.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('HG05 Ctrl+D without an eligible selection does not create footage', () => {
+    const t = setup()
+    t.key({ key: 'd', ctrlKey: true })
+    expect(t.onCommitEdits).not.toHaveBeenCalled()
+  })
+
   it('preview speed buttons drive the shared store', () => {
     const t = setup()
     fireEvent.click(t.getByTestId('timeline-preview-rate-0.5'))
