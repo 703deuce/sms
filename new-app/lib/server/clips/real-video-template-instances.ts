@@ -106,8 +106,19 @@ async function checkAssignedWorkspaceMedia(
   if (!choices || typeof choices !== 'object' || !choices.media ||
     typeof choices.media !== 'object' || Array.isArray(choices.media))
     throw new Error('Invalid template assignments')
+  for (const key of Object.keys(choices)) {
+    if (!['instanceId', 'media', 'texts', 'music'].includes(key)) throw new Error('Unsupported template assignment field')
+  }
+  if (choices.texts !== undefined && (!choices.texts || typeof choices.texts !== 'object' || Array.isArray(choices.texts)))
+    throw new Error('Invalid template text assignments')
+  for (const key of Object.keys(choices.texts ?? {})) {
+    const field = snapshot.family.texts.find(t => t.id === key)
+    const text = choices.texts?.[key]
+    if (!field || typeof text !== 'string' || !text.trim() || Array.from(text).length > field.maxChars)
+      throw new Error('Unknown or oversized text assignment')
+  }
   const bySlot = new Map(snapshot.family.slots.map(s => [s.id, s]))
-  const chosen: TemplateAsset[] = []
+  const chosen: Array<{ asset: TemplateAsset; minimumFrames: number }> = []
   for (const [slotId, asset] of Object.entries(choices.media)) {
     const slot = bySlot.get(slotId)
     if (!slot) throw new Error('Unknown media slot')
@@ -117,15 +128,15 @@ async function checkAssignedWorkspaceMedia(
     if (asset.kind !== 'image' && asset.kind !== 'video') throw new Error('Invalid slot media type')
     if (!asset.license || asset.license.provenance !== 'user-owned')
       throw new TemplateAssetUnavailable()
-    chosen.push(asset)
+    chosen.push({ asset, minimumFrames: (slot.sourceInFrame ?? 0) + slot.durationFrames })
   }
   if (choices.music) {
     if (snapshot.design.musicPolicy !== 'licensed-only') throw new Error('Music not permitted')
-    if (!choices.music.license || choices.music.license.provenance !== 'user-owned')
+    if (choices.music.kind !== 'audio' || !choices.music.license || choices.music.license.provenance !== 'user-owned')
       throw new TemplateAssetUnavailable()
-    chosen.push(choices.music)
+    chosen.push({ asset: choices.music, minimumFrames: 1 })
   }
-  const ids = [...new Set(chosen.map(x => x.id))]
+  const ids = [...new Set(chosen.map(x => x.asset.id))]
   if (!ids.length) return
   const uploads = await getPrisma().clipUpload.findMany({
     where: { workspaceId, status: 'COMPLETE', id: { in: ids } },
@@ -133,11 +144,13 @@ async function checkAssignedWorkspaceMedia(
   })
   if (uploads.length !== ids.length) throw new TemplateAssetUnavailable()
   const byId = new Map(uploads.map(x => [x.id, x]))
-  for (const choice of chosen) {
-    const row = byId.get(choice.id)
-    if (!row || !imageOrVideo(choice.kind, row.mime)) throw new TemplateAssetUnavailable()
-    if (choice.kind !== 'image') {
-      if (!row.durationMs || row.durationMs < Math.round((choice.durationFrames ?? 0) * 1000 / 30))
+  for (const { asset, minimumFrames } of chosen) {
+    const row = byId.get(asset.id)
+    if (!row || !imageOrVideo(asset.kind, row.mime)) throw new TemplateAssetUnavailable()
+    if (asset.kind !== 'image') {
+      if (!row.durationMs || row.durationMs < Math.round(minimumFrames * 1000 / 30) ||
+        !Number.isInteger(asset.durationFrames) || asset.durationFrames < minimumFrames ||
+        row.durationMs < Math.round(asset.durationFrames * 1000 / 30))
         throw new TemplateAssetUnavailable()
     }
   }
